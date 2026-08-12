@@ -5,6 +5,8 @@ use ratatui::{Terminal, backend::Backend};
 
 use super::{
     activos::{self, AccionActivos, ActivosState},
+    contratistas::{self, AccionContratistas, ContratistasState},
+    historial::{self, AccionHistorial, HistorialState},
     login,
     login::LoginState,
 };
@@ -15,6 +17,8 @@ const EVENT_POLL: Duration = Duration::from_millis(50);
 pub enum Vista {
     Login,
     IngresosActivos,
+    Historial,
+    Contratistas,
 }
 
 #[derive(Debug)]
@@ -22,6 +26,8 @@ pub struct App {
     vista: Vista,
     login: LoginState,
     activos: ActivosState,
+    historial: HistorialState,
+    contratistas: ContratistasState,
     salir: bool,
 }
 
@@ -31,6 +37,8 @@ impl Default for App {
             vista: Vista::Login,
             login: LoginState::default(),
             activos: ActivosState::default(),
+            historial: HistorialState::default(),
+            contratistas: ContratistasState::default(),
             salir: false,
         }
     }
@@ -45,6 +53,10 @@ impl App {
             terminal.draw(|frame| match self.vista {
                 Vista::Login => login::render(frame, frame.area(), &self.login),
                 Vista::IngresosActivos => activos::render(frame, frame.area(), &self.activos),
+                Vista::Historial => historial::render(frame, frame.area(), &self.historial),
+                Vista::Contratistas => {
+                    contratistas::render(frame, frame.area(), &self.contratistas)
+                }
             })?;
 
             if event::poll(EVENT_POLL)?
@@ -64,9 +76,20 @@ impl App {
                                 self.login.handle_key(key);
                             }
                         }
-                        Vista::IngresosActivos => {
-                            if self.activos.handle_key(key) == AccionActivos::Volver {
-                                self.vista = Vista::Login;
+                        Vista::IngresosActivos => match self.activos.handle_key(key) {
+                            AccionActivos::Volver => self.vista = Vista::Login,
+                            AccionActivos::IrHistorial => self.vista = Vista::Historial,
+                            AccionActivos::IrContratistas => self.vista = Vista::Contratistas,
+                            AccionActivos::Ninguna => {}
+                        },
+                        Vista::Historial => {
+                            if self.historial.handle_key(key) == AccionHistorial::Volver {
+                                self.vista = Vista::IngresosActivos;
+                            }
+                        }
+                        Vista::Contratistas => {
+                            if self.contratistas.handle_key(key) == AccionContratistas::Volver {
+                                self.vista = Vista::IngresosActivos;
                             }
                         }
                     }

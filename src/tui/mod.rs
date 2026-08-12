@@ -1,5 +1,10 @@
 pub mod activos;
 pub mod app;
+pub mod contratistas;
+pub mod contratistas_mock;
+pub mod historial;
+pub mod historial_mock;
+mod layout;
 pub mod login;
 pub mod mock;
 pub mod theme;
