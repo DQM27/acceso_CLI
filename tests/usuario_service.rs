@@ -191,3 +191,87 @@ fn cedula_duplicada_devuelve_database_sin_crear_otro_usuario() {
     ));
     assert_eq!(servicio.listar().unwrap().len(), 2);
 }
+
+#[test]
+fn cambio_password_respeta_limite_de_ocho_caracteres() {
+    let connection = base();
+    inicializar(&connection);
+    let repository = SqliteUsuarioRepository::new(&connection);
+    let servicio = UsuarioService::new(&repository);
+    let id = servicio
+        .crear(input("2001", RolUsuario::Operador, true))
+        .unwrap();
+
+    assert!(matches!(
+        servicio.cambiar_password(id, "1234567"),
+        Err(UsuarioServiceError::PasswordDemasiadoCorto)
+    ));
+    servicio.cambiar_password(id, "12345678").unwrap();
+    assert!(
+        AutenticacionService::new(&repository)
+            .autenticar("2001", "12345678")
+            .is_ok()
+    );
+}
+
+#[test]
+fn actualizar_rechaza_cedula_y_nombre_vacios() {
+    let connection = base();
+    inicializar(&connection);
+    let repository = SqliteUsuarioRepository::new(&connection);
+    let servicio = UsuarioService::new(&repository);
+    let id = servicio
+        .crear(input("2001", RolUsuario::Operador, true))
+        .unwrap();
+
+    assert!(matches!(
+        servicio.actualizar(
+            id,
+            ActualizarUsuarioInput {
+                cedula: " ".to_string(),
+                nombre: "Nombre".to_string(),
+                rol: RolUsuario::Operador,
+            }
+        ),
+        Err(UsuarioServiceError::CedulaVacia)
+    ));
+    assert!(matches!(
+        servicio.actualizar(
+            id,
+            ActualizarUsuarioInput {
+                cedula: "2001".to_string(),
+                nombre: " ".to_string(),
+                rol: RolUsuario::Operador,
+            }
+        ),
+        Err(UsuarioServiceError::NombreVacio)
+    ));
+}
+
+#[test]
+fn actualizar_con_cedula_duplicada_conserva_registro_original() {
+    let connection = base();
+    inicializar(&connection);
+    let repository = SqliteUsuarioRepository::new(&connection);
+    let servicio = UsuarioService::new(&repository);
+    servicio
+        .crear(input("2001", RolUsuario::Operador, true))
+        .unwrap();
+    let segundo = servicio
+        .crear(input("2002", RolUsuario::Administrador, false))
+        .unwrap();
+    let original = servicio.buscar_por_id(segundo).unwrap();
+
+    assert!(matches!(
+        servicio.actualizar(
+            segundo,
+            ActualizarUsuarioInput {
+                cedula: "2001".to_string(),
+                nombre: "Modificado".to_string(),
+                rol: RolUsuario::Root,
+            }
+        ),
+        Err(UsuarioServiceError::Database(_))
+    ));
+    assert_eq!(servicio.buscar_por_id(segundo).unwrap(), original);
+}

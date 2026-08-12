@@ -114,7 +114,10 @@ fn flujo_completo_praind_libera_y_reutiliza_gafete() {
             fecha_ingreso(),
         )
         .unwrap();
-    let primer_ingreso = registros.buscar_por_id(primer_ingreso_id).unwrap().unwrap();
+    let primer_ingreso = registros
+        .buscar_por_id(primer_ingreso_id.registro_id)
+        .unwrap()
+        .unwrap();
     assert_eq!(primer_ingreso.contratista_id, primer_contratista_id);
     assert_eq!(primer_ingreso.empresa_id, empresa_id);
     assert_eq!(primer_ingreso.tipo_ingreso, TipoIngreso::Praind);
@@ -125,7 +128,7 @@ fn flujo_completo_praind_libera_y_reutiliza_gafete() {
             .buscar_ingreso_activo_por_gafete(5)
             .unwrap()
             .id,
-        primer_ingreso_id
+        primer_ingreso_id.registro_id
     );
 
     assert!(matches!(
@@ -162,7 +165,10 @@ fn flujo_completo_praind_libera_y_reutiliza_gafete() {
     ingreso_service
         .registrar_salida_por_gafete(5, fecha_salida(), usuario_id)
         .unwrap();
-    let cerrado = registros.buscar_por_id(primer_ingreso_id).unwrap().unwrap();
+    let cerrado = registros
+        .buscar_por_id(primer_ingreso_id.registro_id)
+        .unwrap()
+        .unwrap();
     assert_eq!(cerrado.fecha_hora_salida, Some(fecha_salida()));
     assert_eq!(cerrado.usuario_salida_id, Some(usuario_id));
     assert!(
@@ -190,7 +196,7 @@ fn flujo_completo_praind_libera_y_reutiliza_gafete() {
             .buscar_ingreso_activo_por_gafete(5)
             .unwrap()
             .id,
-        segundo_ingreso_id
+        segundo_ingreso_id.registro_id
     );
 }
 
@@ -226,7 +232,7 @@ fn comprobar_flujo_sin_gafete(
 
     assert_eq!(
         registros
-            .buscar_por_id(ingreso_id)
+            .buscar_por_id(ingreso_id.registro_id)
             .unwrap()
             .unwrap()
             .gafete_numero,
@@ -286,7 +292,10 @@ fn flujo_por_correo_exige_y_persiste_gafete() {
             fecha_ingreso(),
         )
         .unwrap();
-    let ingreso = registros.buscar_por_id(ingreso_id).unwrap().unwrap();
+    let ingreso = registros
+        .buscar_por_id(ingreso_id.registro_id)
+        .unwrap()
+        .unwrap();
     assert_eq!(ingreso.empresa_id, empresa_id);
     assert_eq!(ingreso.contratista_id, contratista_id);
     assert_eq!(ingreso.tipo_ingreso, TipoIngreso::PorCorreo);

@@ -190,6 +190,8 @@ pub enum RegistroIngresoServiceError {
     GafeteRequerido,
     GafeteOcupado,
     GafeteNoAsignado,
+    RegistroNoActivo,
+    SalidaAnteriorAIngreso,
     Database(DatabaseError),
 }
 
@@ -204,6 +206,10 @@ impl std::fmt::Display for RegistroIngresoServiceError {
             Self::GafeteRequerido => write!(formatter, "El contratista requiere gafete"),
             Self::GafeteOcupado => write!(formatter, "El gafete ya está asignado"),
             Self::GafeteNoAsignado => write!(formatter, "El gafete no está asignado actualmente"),
+            Self::RegistroNoActivo => write!(formatter, "El registro de ingreso no está activo"),
+            Self::SalidaAnteriorAIngreso => {
+                write!(formatter, "La salida no puede ser anterior al ingreso")
+            }
             Self::Database(error) => write!(formatter, "{error}"),
         }
     }

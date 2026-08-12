@@ -1,56 +1,28 @@
-use control_acceso::domain::registro_ingreso::verificar_registro_entrada;
-use control_acceso::domain::resultado_acceso::{MotivoDenegacion, ResultadoAcceso};
+use chrono::NaiveDateTime;
+use control_acceso::domain::registro_ingreso::salida_es_cronologicamente_valida;
 
-#[test]
-fn debe_denegar_si_ya_tiene_un_ingreso_activo() {
-    let resultado_acceso = ResultadoAcceso::Permitido;
-
-    let resultado = verificar_registro_entrada(&resultado_acceso, true);
-
-    assert_eq!(
-        resultado,
-        ResultadoAcceso::Denegado(MotivoDenegacion::IngresoActivo)
-    );
+fn fecha(valor: &str) -> NaiveDateTime {
+    NaiveDateTime::parse_from_str(valor, "%Y-%m-%d %H:%M:%S").unwrap()
 }
 
 #[test]
-fn debe_permitir_si_no_tiene_ingreso_activo() {
-    let resultado_acceso = ResultadoAcceso::Permitido;
-
-    let resultado = verificar_registro_entrada(&resultado_acceso, false);
-
-    assert_eq!(resultado, ResultadoAcceso::Permitido);
+fn salida_posterior_es_valida() {
+    assert!(salida_es_cronologicamente_valida(
+        fecha("2026-08-11 08:00:00"),
+        fecha("2026-08-11 17:00:00")
+    ));
 }
 
 #[test]
-fn debe_conservar_advertencia_si_no_tiene_ingreso_activo() {
-    let resultado_acceso = ResultadoAcceso::PermitidoConAdvertencia;
-
-    let resultado = verificar_registro_entrada(&resultado_acceso, false);
-
-    assert_eq!(resultado, ResultadoAcceso::PermitidoConAdvertencia);
+fn salida_igual_al_ingreso_es_valida() {
+    let instante = fecha("2026-08-11 08:00:00");
+    assert!(salida_es_cronologicamente_valida(instante, instante));
 }
 
 #[test]
-fn debe_conservar_denegacion_por_sin_acceso() {
-    let resultado_acceso = ResultadoAcceso::Denegado(MotivoDenegacion::SinAcceso);
-
-    let resultado = verificar_registro_entrada(&resultado_acceso, false);
-
-    assert_eq!(
-        resultado,
-        ResultadoAcceso::Denegado(MotivoDenegacion::SinAcceso)
-    );
-}
-
-#[test]
-fn debe_conservar_denegacion_por_praind_vencido() {
-    let resultado_acceso = ResultadoAcceso::Denegado(MotivoDenegacion::PraindVencido);
-
-    let resultado = verificar_registro_entrada(&resultado_acceso, false);
-
-    assert_eq!(
-        resultado,
-        ResultadoAcceso::Denegado(MotivoDenegacion::PraindVencido)
-    );
+fn salida_anterior_es_invalida() {
+    assert!(!salida_es_cronologicamente_valida(
+        fecha("2026-08-11 08:00:00"),
+        fecha("2026-08-11 07:59:59")
+    ));
 }

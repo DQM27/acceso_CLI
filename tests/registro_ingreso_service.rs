@@ -8,7 +8,7 @@ use control_acceso::database::repositories::registro_ingreso_repository::{
     RegistroIngresoRepository, SqliteRegistroIngresoRepository,
 };
 use control_acceso::database::schema::initialize_database;
-use control_acceso::domain::resultado_acceso::MotivoDenegacion;
+use control_acceso::domain::resultado_acceso::{MotivoDenegacion, ResultadoAcceso};
 use control_acceso::models::contratista::Contratista;
 use control_acceso::models::medio_ingreso::MedioIngreso;
 use control_acceso::models::tipo_ingreso::TipoIngreso;
@@ -75,6 +75,69 @@ fn praind_vigente() -> NaiveDate {
     NaiveDate::from_ymd_opt(2027, 12, 31).unwrap()
 }
 
+fn resultado_praind_con_vencimiento(
+    vencimiento: NaiveDate,
+) -> Result<ResultadoAcceso, RegistroIngresoServiceError> {
+    let (connection, empresa_id, usuario_id) = preparar_base();
+    let id = guardar_contratista(
+        &connection,
+        &contratista("2001", empresa_id, TipoIngreso::Praind, Some(vencimiento)),
+    );
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let registros = SqliteRegistroIngresoRepository::new(&connection);
+    RegistroIngresoService::new(&contratistas, &registros)
+        .registrar_entrada(
+            id,
+            MedioIngreso::Caminando,
+            Some(10),
+            usuario_id,
+            fecha_ingreso(),
+        )
+        .map(|resultado| resultado.resultado_acceso)
+}
+
+#[test]
+fn praind_con_mas_de_30_dias_propaga_permitido() {
+    assert_eq!(
+        resultado_praind_con_vencimiento(NaiveDate::from_ymd_opt(2026, 9, 11).unwrap()).unwrap(),
+        ResultadoAcceso::Permitido
+    );
+}
+
+#[test]
+fn praind_en_30_dias_propaga_advertencia() {
+    assert_eq!(
+        resultado_praind_con_vencimiento(NaiveDate::from_ymd_opt(2026, 9, 10).unwrap()).unwrap(),
+        ResultadoAcceso::PermitidoConAdvertencia
+    );
+}
+
+#[test]
+fn praind_que_vence_hoy_propaga_advertencia() {
+    assert_eq!(
+        resultado_praind_con_vencimiento(NaiveDate::from_ymd_opt(2026, 8, 11).unwrap()).unwrap(),
+        ResultadoAcceso::PermitidoConAdvertencia
+    );
+}
+
+#[test]
+fn praind_en_31_dias_propaga_permitido() {
+    assert_eq!(
+        resultado_praind_con_vencimiento(NaiveDate::from_ymd_opt(2026, 9, 11).unwrap()).unwrap(),
+        ResultadoAcceso::Permitido
+    );
+}
+
+#[test]
+fn praind_vencido_sigue_siendo_denegado() {
+    assert!(matches!(
+        resultado_praind_con_vencimiento(NaiveDate::from_ymd_opt(2026, 8, 10).unwrap()),
+        Err(RegistroIngresoServiceError::AccesoDenegado(
+            MotivoDenegacion::PraindVencido
+        ))
+    ));
+}
+
 #[test]
 fn praind_normal_con_gafete_libre_crea_ingreso() {
     let (connection, empresa_id, usuario_id) = preparar_base();
@@ -103,7 +166,7 @@ fn praind_normal_con_gafete_libre_crea_ingreso() {
 
     assert_eq!(
         registros
-            .buscar_por_id(registro_id)
+            .buscar_por_id(registro_id.registro_id)
             .unwrap()
             .unwrap()
             .gafete_numero,
@@ -164,7 +227,7 @@ fn por_correo_con_gafete_libre_crea_ingreso() {
 
     assert_eq!(
         registros
-            .buscar_por_id(registro_id)
+            .buscar_por_id(registro_id.registro_id)
             .unwrap()
             .unwrap()
             .gafete_numero,
@@ -207,7 +270,7 @@ fn probar_ingreso_sin_gafete(
 
     assert_eq!(
         registros
-            .buscar_por_id(registro_id)
+            .buscar_por_id(registro_id.registro_id)
             .unwrap()
             .unwrap()
             .gafete_numero,
@@ -242,7 +305,7 @@ fn personal_de_ruta_con_praind_vigente_guarda_none() {
 
     assert_eq!(
         registros
-            .buscar_por_id(registro_id)
+            .buscar_por_id(registro_id.registro_id)
             .unwrap()
             .unwrap()
             .gafete_numero,
@@ -411,7 +474,10 @@ fn empresa_y_tipo_salen_del_contratista() {
             fecha_ingreso(),
         )
         .unwrap();
-    let registro = registros.buscar_por_id(registro_id).unwrap().unwrap();
+    let registro = registros
+        .buscar_por_id(registro_id.registro_id)
+        .unwrap()
+        .unwrap();
 
     assert_eq!(registro.empresa_id, empresa_id);
     assert_eq!(registro.tipo_ingreso, TipoIngreso::PorCorreo);
@@ -438,10 +504,76 @@ fn salida_por_id_funciona() {
         .unwrap();
 
     servicio
-        .registrar_salida(registro_id, fecha_salida(), usuario_id)
+        .registrar_salida(registro_id.registro_id, fecha_salida(), usuario_id)
         .unwrap();
 
     assert!(registros.buscar_ingreso_activo(id).unwrap().is_none());
+}
+
+#[test]
+fn salida_igual_al_ingreso_es_permitida_y_conserva_usuario() {
+    let (connection, empresa_id, usuario_id) = preparar_base();
+    let id = guardar_contratista(
+        &connection,
+        &contratista("2001", empresa_id, TipoIngreso::Swat, None),
+    );
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let registros = SqliteRegistroIngresoRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let entrada = servicio
+        .registrar_entrada(
+            id,
+            MedioIngreso::Caminando,
+            None,
+            usuario_id,
+            fecha_ingreso(),
+        )
+        .unwrap();
+
+    servicio
+        .registrar_salida(entrada.registro_id, fecha_ingreso(), usuario_id)
+        .unwrap();
+
+    let cerrado = registros
+        .buscar_por_id(entrada.registro_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(cerrado.fecha_hora_salida, Some(fecha_ingreso()));
+    assert_eq!(cerrado.usuario_salida_id, Some(usuario_id));
+}
+
+#[test]
+fn salida_anterior_es_rechazada_y_no_modifica_sqlite() {
+    let (connection, empresa_id, usuario_id) = preparar_base();
+    let id = guardar_contratista(
+        &connection,
+        &contratista("2001", empresa_id, TipoIngreso::Swat, None),
+    );
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let registros = SqliteRegistroIngresoRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let entrada = servicio
+        .registrar_entrada(
+            id,
+            MedioIngreso::Caminando,
+            None,
+            usuario_id,
+            fecha_ingreso(),
+        )
+        .unwrap();
+    let salida_anterior =
+        NaiveDateTime::parse_from_str("2026-08-11 07:59:59", "%Y-%m-%d %H:%M:%S").unwrap();
+
+    assert!(matches!(
+        servicio.registrar_salida(entrada.registro_id, salida_anterior, usuario_id),
+        Err(RegistroIngresoServiceError::SalidaAnteriorAIngreso)
+    ));
+    let registro = registros
+        .buscar_por_id(entrada.registro_id)
+        .unwrap()
+        .unwrap();
+    assert!(registro.fecha_hora_salida.is_none());
+    assert!(registro.usuario_salida_id.is_none());
 }
 
 #[test]

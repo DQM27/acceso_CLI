@@ -3,11 +3,18 @@ use chrono::NaiveDateTime;
 use crate::database::repositories::contratista_repository::ContratistaRepository;
 use crate::database::repositories::registro_ingreso_repository::RegistroIngresoRepository;
 use crate::domain::acceso::verificar_acceso;
+use crate::domain::registro_ingreso::salida_es_cronologicamente_valida;
 use crate::domain::resultado_acceso::ResultadoAcceso;
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::models::registro_ingreso::RegistroIngreso;
 
 use super::error::RegistroIngresoServiceError;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResultadoRegistroEntrada {
+    pub registro_id: i64,
+    pub resultado_acceso: ResultadoAcceso,
+}
 
 pub struct RegistroIngresoService<'a, C, R>
 where
@@ -37,15 +44,15 @@ where
         gafete_numero: Option<i64>,
         usuario_ingreso_id: i64,
         fecha_hora_ingreso: NaiveDateTime,
-    ) -> Result<i64, RegistroIngresoServiceError> {
+    ) -> Result<ResultadoRegistroEntrada, RegistroIngresoServiceError> {
         let contratista = self
             .contratistas
             .buscar_por_id(contratista_id)?
             .ok_or(RegistroIngresoServiceError::ContratistaNoEncontrado)?;
 
-        if let ResultadoAcceso::Denegado(motivo) =
-            verificar_acceso(&contratista, fecha_hora_ingreso.date())
-        {
+        let resultado_acceso = verificar_acceso(&contratista, fecha_hora_ingreso.date());
+
+        if let ResultadoAcceso::Denegado(motivo) = resultado_acceso {
             return Err(RegistroIngresoServiceError::AccesoDenegado(motivo));
         }
 
@@ -86,7 +93,12 @@ where
             usuario_salida_id: None,
         };
 
-        Ok(self.registros.crear(&registro)?)
+        let registro_id = self.registros.crear(&registro)?;
+
+        Ok(ResultadoRegistroEntrada {
+            registro_id,
+            resultado_acceso,
+        })
     }
 
     pub fn registrar_salida(
@@ -95,6 +107,19 @@ where
         fecha_hora_salida: NaiveDateTime,
         usuario_salida_id: i64,
     ) -> Result<(), RegistroIngresoServiceError> {
+        let registro = self
+            .registros
+            .buscar_por_id(registro_id)?
+            .ok_or(RegistroIngresoServiceError::RegistroNoActivo)?;
+
+        if registro.fecha_hora_salida.is_some() {
+            return Err(RegistroIngresoServiceError::RegistroNoActivo);
+        }
+
+        if !salida_es_cronologicamente_valida(registro.fecha_hora_ingreso, fecha_hora_salida) {
+            return Err(RegistroIngresoServiceError::SalidaAnteriorAIngreso);
+        }
+
         Ok(self
             .registros
             .registrar_salida(registro_id, fecha_hora_salida, usuario_salida_id)?)

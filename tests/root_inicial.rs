@@ -142,6 +142,21 @@ fn root_inactivo_no_cuenta_como_activo() {
     assert_eq!(r.contar_roots_activos().unwrap(), 1);
 }
 
+#[test]
+fn activar_root_inactivo_lo_incluye_en_conteo() {
+    let c = base();
+    let r = SqliteUsuarioRepository::new(&c);
+    let s = UsuarioService::new(&r);
+    s.crear_root_inicial(root("ROOT1")).unwrap();
+    let segundo = s.crear(usuario("ROOT2", RolUsuario::Root, false)).unwrap();
+    assert_eq!(r.contar_roots_activos().unwrap(), 1);
+
+    s.activar(segundo).unwrap();
+
+    assert_eq!(r.contar_roots_activos().unwrap(), 2);
+    assert!(s.buscar_por_id(segundo).unwrap().activo);
+}
+
 #[cfg(feature = "dev-auth")]
 #[test]
 fn dev_auth_es_solo_memoria_y_no_modifica_sqlite() {
@@ -153,4 +168,8 @@ fn dev_auth_es_solo_memoria_y_no_modifica_sqlite() {
     assert!(u.activo);
     assert!(u.password_hash.is_empty());
     assert_eq!(r.contar_usuarios().unwrap(), 0);
+    assert!(matches!(
+        control_acceso::services::dev_auth::actor_persistido(&u),
+        Err(control_acceso::services::dev_auth::DevAuthError::ActorPersistidoRequerido)
+    ));
 }

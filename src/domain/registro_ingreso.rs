@@ -1,12 +1,8 @@
-use super::resultado_acceso::{MotivoDenegacion, ResultadoAcceso};
+use chrono::NaiveDateTime;
 
-pub fn verificar_registro_entrada(
-    resultado_acceso: &ResultadoAcceso,
-    tiene_ingreso_activo: bool,
-) -> ResultadoAcceso {
-    if tiene_ingreso_activo {
-        return ResultadoAcceso::Denegado(MotivoDenegacion::IngresoActivo);
-    }
-
-    resultado_acceso.clone()
+pub fn salida_es_cronologicamente_valida(
+    fecha_hora_ingreso: NaiveDateTime,
+    fecha_hora_salida: NaiveDateTime,
+) -> bool {
+    fecha_hora_salida >= fecha_hora_ingreso
 }
