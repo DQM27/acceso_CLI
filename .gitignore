@@ -1,0 +1,23 @@
+# Rust
+/target/
+
+# Bases de datos locales
+*.db
+*.sqlite
+*.sqlite3
+
+# Variables de entorno y secretos
+.env
+.env.*
+
+# IDE / editores
+.vscode/
+.idea/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos temporales
+*.tmp
+*.temp
