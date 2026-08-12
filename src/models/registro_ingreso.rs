@@ -15,6 +15,12 @@ pub struct RegistroIngreso {
     pub medio_ingreso: MedioIngreso,
     pub tipo_ingreso: TipoIngreso,
 
+    /// Número de gafete asignado durante este ingreso.
+    ///
+    /// `Some(numero)` = tiene gafete.
+    /// `None` = sin gafete (S/G).
+    pub gafete_numero: Option<i64>,
+
     pub usuario_ingreso_id: i64,
 
     pub fecha_hora_salida: Option<NaiveDateTime>,

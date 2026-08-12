@@ -10,5 +10,16 @@ pub struct Contratista {
     pub empresa_id: i64,
     pub tipo_ingreso: TipoIngreso,
     pub fecha_vencimiento_praind: Option<NaiveDate>,
+    pub es_personal_ruta: bool,
     pub tiene_acceso: bool,
+}
+
+impl Contratista {
+    pub fn requiere_praind(&self) -> bool {
+        self.es_personal_ruta || self.tipo_ingreso.requiere_praind()
+    }
+
+    pub fn requiere_gafete(&self) -> bool {
+        !self.es_personal_ruta && self.tipo_ingreso.requiere_gafete()
+    }
 }

@@ -44,6 +44,10 @@ pub fn initialize_database(connection: &Connection) -> rusqlite::Result<()> {
 
             fecha_vencimiento_praind TEXT,
 
+            es_personal_ruta INTEGER NOT NULL DEFAULT 0 CHECK (
+                es_personal_ruta IN (0, 1)
+            ),
+
             tiene_acceso INTEGER NOT NULL CHECK (
                 tiene_acceso IN (0, 1)
             ),
@@ -79,6 +83,8 @@ pub fn initialize_database(connection: &Connection) -> rusqlite::Result<()> {
                 )
             ),
 
+            gafete_numero INTEGER,
+
             usuario_ingreso_id INTEGER NOT NULL,
 
             fecha_hora_salida TEXT,
@@ -105,6 +111,14 @@ pub fn initialize_database(connection: &Connection) -> rusqlite::Result<()> {
 
         CREATE INDEX IF NOT EXISTS idx_registro_ingresos_fecha_ingreso
         ON registro_ingresos(fecha_hora_ingreso);
+
+        CREATE INDEX IF NOT EXISTS idx_registro_ingresos_gafete
+        ON registro_ingresos(gafete_numero);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_registro_ingresos_gafete_activo
+        ON registro_ingresos(gafete_numero)
+        WHERE gafete_numero IS NOT NULL
+          AND fecha_hora_salida IS NULL;
         ",
     )?;
 

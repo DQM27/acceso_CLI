@@ -22,6 +22,15 @@ pub trait RegistroIngresoRepository {
         contratista_id: i64,
     ) -> Result<Option<RegistroIngreso>, DatabaseError>;
 
+    /// Busca quién tiene actualmente asignado un gafete.
+    ///
+    /// Solo considera ingresos activos, es decir,
+    /// registros que todavía no tienen fecha de salida.
+    fn buscar_ingreso_activo_por_gafete(
+        &self,
+        gafete_numero: i64,
+    ) -> Result<Option<RegistroIngreso>, DatabaseError>;
+
     fn registrar_salida(
         &self,
         id: i64,
@@ -98,8 +107,14 @@ fn convertir_fila(
         }
     };
 
+    // El gafete es opcional.
+    //
+    // NULL = S/G
+    // número = gafete asignado
+    let gafete_numero: Option<i64> = row.get(6)?;
+
     let fecha_hora_salida_texto: Option<String> =
-        row.get(7)?;
+        row.get(8)?;
 
     let fecha_hora_salida =
         fecha_hora_salida_texto
@@ -110,7 +125,7 @@ fn convertir_fila(
                 )
                 .map_err(|error| {
                     rusqlite::Error::FromSqlConversionFailure(
-                        7,
+                        8,
                         rusqlite::types::Type::Text,
                         Box::new(error),
                     )
@@ -125,9 +140,10 @@ fn convertir_fila(
         fecha_hora_ingreso,
         medio_ingreso,
         tipo_ingreso,
-        usuario_ingreso_id: row.get(6)?,
+        gafete_numero,
+        usuario_ingreso_id: row.get(7)?,
         fecha_hora_salida,
-        usuario_salida_id: row.get(8)?,
+        usuario_salida_id: row.get(9)?,
     })
 }
 
@@ -164,11 +180,12 @@ impl<'a> RegistroIngresoRepository
                 fecha_hora_ingreso,
                 medio_ingreso,
                 tipo_ingreso,
+                gafete_numero,
                 usuario_ingreso_id,
                 fecha_hora_salida,
                 usuario_salida_id
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
             ",
             params![
                 registro.contratista_id,
@@ -176,14 +193,13 @@ impl<'a> RegistroIngresoRepository
                 fecha_hora_ingreso,
                 medio_ingreso,
                 tipo_ingreso,
+                registro.gafete_numero,
                 registro.usuario_ingreso_id,
-                registro
-                    .fecha_hora_salida
-                    .map(|fecha| {
-                        fecha
-                            .format("%Y-%m-%d %H:%M:%S")
-                            .to_string()
-                    }),
+                registro.fecha_hora_salida.map(|fecha| {
+                    fecha
+                        .format("%Y-%m-%d %H:%M:%S")
+                        .to_string()
+                }),
                 registro.usuario_salida_id,
             ],
         )?;
@@ -204,6 +220,7 @@ impl<'a> RegistroIngresoRepository
                 fecha_hora_ingreso,
                 medio_ingreso,
                 tipo_ingreso,
+                gafete_numero,
                 usuario_ingreso_id,
                 fecha_hora_salida,
                 usuario_salida_id
@@ -241,6 +258,7 @@ impl<'a> RegistroIngresoRepository
                 fecha_hora_ingreso,
                 medio_ingreso,
                 tipo_ingreso,
+                gafete_numero,
                 usuario_ingreso_id,
                 fecha_hora_salida,
                 usuario_salida_id
@@ -254,6 +272,47 @@ impl<'a> RegistroIngresoRepository
 
         match statement.query_row(
             params![contratista_id],
+            convertir_fila,
+        ) {
+            Ok(registro) => Ok(Some(registro)),
+
+            Err(
+                rusqlite::Error::QueryReturnedNoRows
+            ) => Ok(None),
+
+            Err(error) => {
+                Err(DatabaseError::from(error))
+            }
+        }
+    }
+
+    fn buscar_ingreso_activo_por_gafete(
+        &self,
+        gafete_numero: i64,
+    ) -> Result<Option<RegistroIngreso>, DatabaseError> {
+        let mut statement = self.connection.prepare(
+            "
+            SELECT
+                id,
+                contratista_id,
+                empresa_id,
+                fecha_hora_ingreso,
+                medio_ingreso,
+                tipo_ingreso,
+                gafete_numero,
+                usuario_ingreso_id,
+                fecha_hora_salida,
+                usuario_salida_id
+            FROM registro_ingresos
+            WHERE gafete_numero = ?1
+              AND fecha_hora_salida IS NULL
+            ORDER BY fecha_hora_ingreso DESC
+            LIMIT 1
+            ",
+        )?;
+
+        match statement.query_row(
+            params![gafete_numero],
             convertir_fila,
         ) {
             Ok(registro) => Ok(Some(registro)),
@@ -309,6 +368,7 @@ impl<'a> RegistroIngresoRepository
                 fecha_hora_ingreso,
                 medio_ingreso,
                 tipo_ingreso,
+                gafete_numero,
                 usuario_ingreso_id,
                 fecha_hora_salida,
                 usuario_salida_id

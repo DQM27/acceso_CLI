@@ -1,4 +1,3 @@
-
 use chrono::NaiveDate;
 use rusqlite::{params, Connection, Row};
 
@@ -89,7 +88,8 @@ fn convertir_fila(
         empresa_id: row.get(3)?,
         tipo_ingreso,
         fecha_vencimiento_praind,
-        tiene_acceso: row.get::<_, i64>(6)? != 0,
+        es_personal_ruta: row.get::<_, i64>(6)? != 0,
+        tiene_acceso: row.get::<_, i64>(7)? != 0,
     })
 }
 
@@ -121,9 +121,10 @@ impl<'a> ContratistaRepository
                 empresa_id,
                 tipo_ingreso,
                 fecha_vencimiento_praind,
+                es_personal_ruta,
                 tiene_acceso
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
             ",
             params![
                 contratista.cedula,
@@ -131,6 +132,7 @@ impl<'a> ContratistaRepository
                 contratista.empresa_id,
                 tipo_ingreso,
                 fecha_vencimiento,
+                contratista.es_personal_ruta as i64,
                 contratista.tiene_acceso as i64,
             ],
         )?;
@@ -151,6 +153,7 @@ impl<'a> ContratistaRepository
                 empresa_id,
                 tipo_ingreso,
                 fecha_vencimiento_praind,
+                es_personal_ruta,
                 tiene_acceso
             FROM contratistas
             WHERE cedula = ?1
@@ -186,6 +189,7 @@ impl<'a> ContratistaRepository
                 empresa_id,
                 tipo_ingreso,
                 fecha_vencimiento_praind,
+                es_personal_ruta,
                 tiene_acceso
             FROM contratistas
             WHERE id = ?1
@@ -234,8 +238,9 @@ impl<'a> ContratistaRepository
                 empresa_id = ?3,
                 tipo_ingreso = ?4,
                 fecha_vencimiento_praind = ?5,
-                tiene_acceso = ?6
-            WHERE id = ?7
+                es_personal_ruta = ?6,
+                tiene_acceso = ?7
+            WHERE id = ?8
             ",
             params![
                 contratista.cedula,
@@ -243,6 +248,7 @@ impl<'a> ContratistaRepository
                 contratista.empresa_id,
                 tipo_ingreso,
                 fecha_vencimiento,
+                contratista.es_personal_ruta as i64,
                 contratista.tiene_acceso as i64,
                 contratista.id,
             ],
@@ -263,6 +269,7 @@ impl<'a> ContratistaRepository
                 empresa_id,
                 tipo_ingreso,
                 fecha_vencimiento_praind,
+                es_personal_ruta,
                 tiene_acceso
             FROM contratistas
             ORDER BY nombre
@@ -276,4 +283,3 @@ impl<'a> ContratistaRepository
         Ok(contratistas)
     }
 }
-
