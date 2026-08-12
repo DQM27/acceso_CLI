@@ -8,6 +8,10 @@ pub trait EmpresaRepository {
 
     fn buscar_por_id(&self, id: i64) -> Result<Option<Empresa>, DatabaseError>;
 
+    fn buscar_por_nombre(&self, nombre: &str) -> Result<Option<Empresa>, DatabaseError>;
+
+    fn actualizar(&self, empresa: &Empresa) -> Result<(), DatabaseError>;
+
     fn listar(&self) -> Result<Vec<Empresa>, DatabaseError>;
 }
 
@@ -61,6 +65,39 @@ impl<'a> EmpresaRepository for SqliteEmpresaRepository<'a> {
 
             Err(error) => Err(DatabaseError::from(error)),
         }
+    }
+
+    fn buscar_por_nombre(&self, nombre: &str) -> Result<Option<Empresa>, DatabaseError> {
+        let mut statement = self.connection.prepare(
+            "
+            SELECT
+                id,
+                nombre
+            FROM empresas
+            WHERE nombre = ?1
+            ",
+        )?;
+
+        match statement.query_row(params![nombre], convertir_fila) {
+            Ok(empresa) => Ok(Some(empresa)),
+
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+
+            Err(error) => Err(DatabaseError::from(error)),
+        }
+    }
+
+    fn actualizar(&self, empresa: &Empresa) -> Result<(), DatabaseError> {
+        self.connection.execute(
+            "
+            UPDATE empresas
+            SET nombre = ?1
+            WHERE id = ?2
+            ",
+            params![empresa.nombre, empresa.id],
+        )?;
+
+        Ok(())
     }
 
     fn listar(&self) -> Result<Vec<Empresa>, DatabaseError> {
