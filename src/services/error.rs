@@ -2,6 +2,117 @@ use crate::database::error::DatabaseError;
 use crate::domain::resultado_acceso::MotivoDenegacion;
 
 #[derive(Debug)]
+pub enum PasswordError {
+    GeneracionHash,
+    HashInvalido,
+}
+
+impl std::fmt::Display for PasswordError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::GeneracionHash => write!(formatter, "No se pudo generar el hash"),
+            Self::HashInvalido => write!(formatter, "El hash almacenado no es válido"),
+        }
+    }
+}
+
+impl std::error::Error for PasswordError {}
+
+#[derive(Debug)]
+pub enum UsuarioServiceError {
+    CedulaVacia,
+    NombreVacio,
+    PasswordDemasiadoCorto,
+    UsuarioNoEncontrado,
+    ConfiguracionInicialRequerida,
+    ConfiguracionInicialYaRealizada,
+    UltimoRootActivo,
+    Password(PasswordError),
+    Database(DatabaseError),
+}
+
+impl std::fmt::Display for UsuarioServiceError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::CedulaVacia => write!(formatter, "La cédula es obligatoria"),
+            Self::NombreVacio => write!(formatter, "El nombre es obligatorio"),
+            Self::PasswordDemasiadoCorto => {
+                write!(formatter, "La contraseña debe tener al menos 8 caracteres")
+            }
+            Self::UsuarioNoEncontrado => write!(formatter, "Usuario no encontrado"),
+            Self::ConfiguracionInicialRequerida => {
+                write!(formatter, "Se requiere crear el usuario ROOT inicial")
+            }
+            Self::ConfiguracionInicialYaRealizada => {
+                write!(formatter, "La configuración inicial ya fue realizada")
+            }
+            Self::UltimoRootActivo => write!(
+                formatter,
+                "No se puede desactivar o degradar al último ROOT activo"
+            ),
+            Self::Password(error) => write!(formatter, "{error}"),
+            Self::Database(error) => write!(formatter, "{error}"),
+        }
+    }
+}
+
+impl std::error::Error for UsuarioServiceError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Password(error) => Some(error),
+            Self::Database(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
+impl From<PasswordError> for UsuarioServiceError {
+    fn from(error: PasswordError) -> Self {
+        Self::Password(error)
+    }
+}
+
+impl From<DatabaseError> for UsuarioServiceError {
+    fn from(error: DatabaseError) -> Self {
+        Self::Database(error)
+    }
+}
+
+#[derive(Debug)]
+pub enum AutenticacionError {
+    CredencialesInvalidas,
+    UsuarioInactivo,
+    HashInvalido,
+    Database(DatabaseError),
+}
+
+impl std::fmt::Display for AutenticacionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::CredencialesInvalidas => write!(formatter, "Credenciales inválidas"),
+            Self::UsuarioInactivo => write!(formatter, "Usuario inactivo"),
+            Self::HashInvalido => write!(formatter, "El hash almacenado no es válido"),
+            Self::Database(error) => write!(formatter, "{error}"),
+        }
+    }
+}
+
+impl std::error::Error for AutenticacionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Database(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
+impl From<DatabaseError> for AutenticacionError {
+    fn from(error: DatabaseError) -> Self {
+        Self::Database(error)
+    }
+}
+
+#[derive(Debug)]
 pub enum ContratistaServiceError {
     ContratistaNoEncontrado,
     EmpresaNoEncontrada,

@@ -1,4 +1,9 @@
+pub mod autenticacion_service;
 pub mod contratista_service;
+#[cfg(feature = "dev-auth")]
+pub mod dev_auth;
 pub mod empresa_service;
 pub mod error;
+pub mod password;
 pub mod registro_ingreso_service;
+pub mod usuario_service;

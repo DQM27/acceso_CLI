@@ -13,6 +13,10 @@ pub trait UsuarioRepository {
     fn actualizar(&self, usuario: &Usuario) -> Result<(), DatabaseError>;
 
     fn listar(&self) -> Result<Vec<Usuario>, DatabaseError>;
+
+    fn contar_usuarios(&self) -> Result<i64, DatabaseError>;
+
+    fn contar_roots_activos(&self) -> Result<i64, DatabaseError>;
 }
 
 pub struct SqliteUsuarioRepository<'a> {
@@ -178,5 +182,19 @@ impl<'a> UsuarioRepository for SqliteUsuarioRepository<'a> {
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(usuarios)
+    }
+
+    fn contar_usuarios(&self) -> Result<i64, DatabaseError> {
+        Ok(self
+            .connection
+            .query_row("SELECT COUNT(*) FROM usuarios", [], |row| row.get(0))?)
+    }
+
+    fn contar_roots_activos(&self) -> Result<i64, DatabaseError> {
+        Ok(self.connection.query_row(
+            "SELECT COUNT(*) FROM usuarios WHERE rol = 'ROOT' AND activo = 1",
+            [],
+            |row| row.get(0),
+        )?)
     }
 }

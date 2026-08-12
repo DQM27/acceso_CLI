@@ -1,0 +1,193 @@
+use rusqlite::Connection;
+
+use control_acceso::database::repositories::usuario_repository::SqliteUsuarioRepository;
+use control_acceso::database::schema::initialize_database;
+use control_acceso::models::usuario::RolUsuario;
+use control_acceso::services::autenticacion_service::AutenticacionService;
+use control_acceso::services::error::{AutenticacionError, UsuarioServiceError};
+use control_acceso::services::usuario_service::{
+    ActualizarUsuarioInput, CrearRootInicialInput, CrearUsuarioInput, UsuarioService,
+};
+
+fn base() -> Connection {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    connection
+}
+
+fn inicializar(connection: &Connection) -> i64 {
+    let repository = SqliteUsuarioRepository::new(connection);
+    UsuarioService::new(&repository)
+        .crear_root_inicial(CrearRootInicialInput {
+            cedula: "ROOT1".to_string(),
+            nombre: "Usuario Root".to_string(),
+            password: "password1".to_string(),
+        })
+        .unwrap()
+}
+
+fn input(cedula: &str, rol: RolUsuario, activo: bool) -> CrearUsuarioInput {
+    CrearUsuarioInput {
+        cedula: cedula.to_string(),
+        nombre: "Usuario Nuevo".to_string(),
+        password: "password2".to_string(),
+        rol,
+        activo,
+    }
+}
+
+#[test]
+fn crea_usuario_normalizado_y_nunca_guarda_password_plano() {
+    let connection = base();
+    inicializar(&connection);
+    let repository = SqliteUsuarioRepository::new(&connection);
+    let servicio = UsuarioService::new(&repository);
+    let mut entrada = input("  2001  ", RolUsuario::Operador, true);
+    entrada.nombre = "  Persona Dos  ".to_string();
+    let id = servicio.crear(entrada).unwrap();
+    let usuario = servicio.buscar_por_id(id).unwrap();
+    assert_eq!(usuario.cedula, "2001");
+    assert_eq!(usuario.nombre, "Persona Dos");
+    assert_ne!(usuario.password_hash, "password2");
+    assert_eq!(usuario.rol, RolUsuario::Operador);
+    assert!(usuario.activo);
+}
+
+#[test]
+fn valida_campos_obligatorios_y_password_corto() {
+    let connection = base();
+    inicializar(&connection);
+    let repository = SqliteUsuarioRepository::new(&connection);
+    let servicio = UsuarioService::new(&repository);
+    let mut entrada = input(" ", RolUsuario::Operador, true);
+    assert!(matches!(
+        servicio.crear(entrada),
+        Err(UsuarioServiceError::CedulaVacia)
+    ));
+    entrada = input("2001", RolUsuario::Operador, true);
+    entrada.nombre = " ".to_string();
+    assert!(matches!(
+        servicio.crear(entrada),
+        Err(UsuarioServiceError::NombreVacio)
+    ));
+    entrada = input("2001", RolUsuario::Operador, true);
+    entrada.password = "corta".to_string();
+    assert!(matches!(
+        servicio.crear(entrada),
+        Err(UsuarioServiceError::PasswordDemasiadoCorto)
+    ));
+}
+
+#[test]
+fn busca_por_id_y_cedula_normalizada_y_reporta_inexistentes() {
+    let connection = base();
+    inicializar(&connection);
+    let repository = SqliteUsuarioRepository::new(&connection);
+    let servicio = UsuarioService::new(&repository);
+    let id = servicio
+        .crear(input("2001", RolUsuario::Operador, true))
+        .unwrap();
+    assert_eq!(servicio.buscar_por_id(id).unwrap().id, id);
+    assert_eq!(servicio.buscar_por_cedula(" 2001 ").unwrap().id, id);
+    assert!(matches!(
+        servicio.buscar_por_id(999),
+        Err(UsuarioServiceError::UsuarioNoEncontrado)
+    ));
+}
+
+#[test]
+fn actualizar_preserva_hash_y_activo_y_cambia_datos_y_rol() {
+    let connection = base();
+    inicializar(&connection);
+    let repository = SqliteUsuarioRepository::new(&connection);
+    let servicio = UsuarioService::new(&repository);
+    let id = servicio
+        .crear(input("2001", RolUsuario::Operador, false))
+        .unwrap();
+    let anterior = servicio.buscar_por_id(id).unwrap();
+    servicio
+        .actualizar(
+            id,
+            ActualizarUsuarioInput {
+                cedula: " 3001 ".to_string(),
+                nombre: " Nombre Nuevo ".to_string(),
+                rol: RolUsuario::Administrador,
+            },
+        )
+        .unwrap();
+    let nuevo = servicio.buscar_por_id(id).unwrap();
+    assert_eq!(nuevo.cedula, "3001");
+    assert_eq!(nuevo.nombre, "Nombre Nuevo");
+    assert_eq!(nuevo.rol, RolUsuario::Administrador);
+    assert_eq!(nuevo.password_hash, anterior.password_hash);
+    assert!(!nuevo.activo);
+}
+
+#[test]
+fn cambiar_password_invalida_anterior_y_habilita_nueva() {
+    let connection = base();
+    inicializar(&connection);
+    let repository = SqliteUsuarioRepository::new(&connection);
+    let servicio = UsuarioService::new(&repository);
+    let id = servicio
+        .crear(input("2001", RolUsuario::Operador, true))
+        .unwrap();
+    servicio.cambiar_password(id, "password3").unwrap();
+    let auth = AutenticacionService::new(&repository);
+    assert!(matches!(
+        auth.autenticar("2001", "password2"),
+        Err(AutenticacionError::CredencialesInvalidas)
+    ));
+    assert!(auth.autenticar("2001", "password3").is_ok());
+}
+
+#[test]
+fn activar_y_desactivar_usuario_no_root() {
+    let connection = base();
+    inicializar(&connection);
+    let repository = SqliteUsuarioRepository::new(&connection);
+    let servicio = UsuarioService::new(&repository);
+    let id = servicio
+        .crear(input("2001", RolUsuario::Operador, true))
+        .unwrap();
+    servicio.desactivar(id).unwrap();
+    assert!(!servicio.buscar_por_id(id).unwrap().activo);
+    servicio.activar(id).unwrap();
+    assert!(servicio.buscar_por_id(id).unwrap().activo);
+}
+
+#[test]
+fn operaciones_sobre_id_inexistente_fallan() {
+    let connection = base();
+    inicializar(&connection);
+    let repository = SqliteUsuarioRepository::new(&connection);
+    let servicio = UsuarioService::new(&repository);
+    assert!(matches!(
+        servicio.cambiar_password(999, "password3"),
+        Err(UsuarioServiceError::UsuarioNoEncontrado)
+    ));
+    assert!(matches!(
+        servicio.activar(999),
+        Err(UsuarioServiceError::UsuarioNoEncontrado)
+    ));
+    assert!(matches!(
+        servicio.desactivar(999),
+        Err(UsuarioServiceError::UsuarioNoEncontrado)
+    ));
+}
+
+#[test]
+fn cedula_duplicada_devuelve_database_sin_crear_otro_usuario() {
+    let connection = base();
+    inicializar(&connection);
+    let repository = SqliteUsuarioRepository::new(&connection);
+    let servicio = UsuarioService::new(&repository);
+    servicio
+        .crear(input("2001", RolUsuario::Operador, true))
+        .unwrap();
+    assert!(matches!(
+        servicio.crear(input("2001", RolUsuario::Administrador, true)),
+        Err(UsuarioServiceError::Database(_))
+    ));
+    assert_eq!(servicio.listar().unwrap().len(), 2);
+}
