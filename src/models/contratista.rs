@@ -16,10 +16,18 @@ pub struct Contratista {
 
 impl Contratista {
     pub fn requiere_praind(&self) -> bool {
-        self.es_personal_ruta || self.tipo_ingreso.requiere_praind()
+        self.es_personal_ruta
+            || matches!(
+                self.tipo_ingreso,
+                TipoIngreso::Praind | TipoIngreso::InHouse
+            )
     }
 
     pub fn requiere_gafete(&self) -> bool {
-        !self.es_personal_ruta && self.tipo_ingreso.requiere_gafete()
+        !self.es_personal_ruta
+            && matches!(
+                self.tipo_ingreso,
+                TipoIngreso::Praind | TipoIngreso::PorCorreo
+            )
     }
 }

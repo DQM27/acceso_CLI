@@ -1,6 +1,8 @@
 use rusqlite::Connection;
 
 pub fn initialize_database(connection: &Connection) -> rusqlite::Result<()> {
+    connection.execute_batch("PRAGMA foreign_keys = ON;")?;
+
     connection.execute_batch(
         "
         CREATE TABLE IF NOT EXISTS empresas (
@@ -111,6 +113,10 @@ pub fn initialize_database(connection: &Connection) -> rusqlite::Result<()> {
 
         CREATE INDEX IF NOT EXISTS idx_registro_ingresos_fecha_ingreso
         ON registro_ingresos(fecha_hora_ingreso);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_registro_ingresos_contratista_activo
+        ON registro_ingresos(contratista_id)
+        WHERE fecha_hora_salida IS NULL;
 
         CREATE INDEX IF NOT EXISTS idx_registro_ingresos_gafete
         ON registro_ingresos(gafete_numero);

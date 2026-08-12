@@ -1,32 +1,18 @@
-use rusqlite::{params, Connection, Row};
+use rusqlite::{Connection, Row, params};
 
 use crate::database::error::DatabaseError;
 use crate::models::usuario::{RolUsuario, Usuario};
 
 pub trait UsuarioRepository {
-    fn crear(
-        &self,
-        usuario: &Usuario,
-    ) -> Result<i64, DatabaseError>;
+    fn crear(&self, usuario: &Usuario) -> Result<i64, DatabaseError>;
 
-    fn buscar_por_cedula(
-        &self,
-        cedula: &str,
-    ) -> Result<Option<Usuario>, DatabaseError>;
+    fn buscar_por_cedula(&self, cedula: &str) -> Result<Option<Usuario>, DatabaseError>;
 
-    fn buscar_por_id(
-        &self,
-        id: i64,
-    ) -> Result<Option<Usuario>, DatabaseError>;
+    fn buscar_por_id(&self, id: i64) -> Result<Option<Usuario>, DatabaseError>;
 
-    fn actualizar(
-        &self,
-        usuario: &Usuario,
-    ) -> Result<(), DatabaseError>;
+    fn actualizar(&self, usuario: &Usuario) -> Result<(), DatabaseError>;
 
-    fn listar(
-        &self,
-    ) -> Result<Vec<Usuario>, DatabaseError>;
+    fn listar(&self) -> Result<Vec<Usuario>, DatabaseError>;
 }
 
 pub struct SqliteUsuarioRepository<'a> {
@@ -48,13 +34,11 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<Usuario> {
         "OPERADOR" => RolUsuario::Operador,
 
         _ => {
-            return Err(
-                rusqlite::Error::InvalidColumnType(
-                    4,
-                    "rol".to_string(),
-                    rusqlite::types::Type::Text,
-                )
-            );
+            return Err(rusqlite::Error::InvalidColumnType(
+                4,
+                "rol".to_string(),
+                rusqlite::types::Type::Text,
+            ));
         }
     };
 
@@ -77,10 +61,7 @@ fn rol_a_texto(rol: RolUsuario) -> &'static str {
 }
 
 impl<'a> UsuarioRepository for SqliteUsuarioRepository<'a> {
-    fn crear(
-        &self,
-        usuario: &Usuario,
-    ) -> Result<i64, DatabaseError> {
+    fn crear(&self, usuario: &Usuario) -> Result<i64, DatabaseError> {
         self.connection.execute(
             "
             INSERT INTO usuarios (
@@ -104,10 +85,7 @@ impl<'a> UsuarioRepository for SqliteUsuarioRepository<'a> {
         Ok(self.connection.last_insert_rowid())
     }
 
-    fn buscar_por_cedula(
-        &self,
-        cedula: &str,
-    ) -> Result<Option<Usuario>, DatabaseError> {
+    fn buscar_por_cedula(&self, cedula: &str) -> Result<Option<Usuario>, DatabaseError> {
         let mut statement = self.connection.prepare(
             "
             SELECT
@@ -122,26 +100,16 @@ impl<'a> UsuarioRepository for SqliteUsuarioRepository<'a> {
             ",
         )?;
 
-        match statement.query_row(
-            params![cedula],
-            convertir_fila,
-        ) {
+        match statement.query_row(params![cedula], convertir_fila) {
             Ok(usuario) => Ok(Some(usuario)),
 
-            Err(
-                rusqlite::Error::QueryReturnedNoRows
-            ) => Ok(None),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
 
-            Err(error) => Err(
-                DatabaseError::from(error)
-            ),
+            Err(error) => Err(DatabaseError::from(error)),
         }
     }
 
-    fn buscar_por_id(
-        &self,
-        id: i64,
-    ) -> Result<Option<Usuario>, DatabaseError> {
+    fn buscar_por_id(&self, id: i64) -> Result<Option<Usuario>, DatabaseError> {
         let mut statement = self.connection.prepare(
             "
             SELECT
@@ -156,26 +124,16 @@ impl<'a> UsuarioRepository for SqliteUsuarioRepository<'a> {
             ",
         )?;
 
-        match statement.query_row(
-            params![id],
-            convertir_fila,
-        ) {
+        match statement.query_row(params![id], convertir_fila) {
             Ok(usuario) => Ok(Some(usuario)),
 
-            Err(
-                rusqlite::Error::QueryReturnedNoRows
-            ) => Ok(None),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
 
-            Err(error) => Err(
-                DatabaseError::from(error)
-            ),
+            Err(error) => Err(DatabaseError::from(error)),
         }
     }
 
-    fn actualizar(
-        &self,
-        usuario: &Usuario,
-    ) -> Result<(), DatabaseError> {
+    fn actualizar(&self, usuario: &Usuario) -> Result<(), DatabaseError> {
         self.connection.execute(
             "
             UPDATE usuarios
@@ -200,9 +158,7 @@ impl<'a> UsuarioRepository for SqliteUsuarioRepository<'a> {
         Ok(())
     }
 
-    fn listar(
-        &self,
-    ) -> Result<Vec<Usuario>, DatabaseError> {
+    fn listar(&self) -> Result<Vec<Usuario>, DatabaseError> {
         let mut statement = self.connection.prepare(
             "
             SELECT

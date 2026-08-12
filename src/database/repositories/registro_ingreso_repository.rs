@@ -1,5 +1,5 @@
 use chrono::NaiveDateTime;
-use rusqlite::{params, Connection, Row};
+use rusqlite::{Connection, Row, params};
 
 use crate::database::error::DatabaseError;
 use crate::models::medio_ingreso::MedioIngreso;
@@ -7,15 +7,9 @@ use crate::models::registro_ingreso::RegistroIngreso;
 use crate::models::tipo_ingreso::TipoIngreso;
 
 pub trait RegistroIngresoRepository {
-    fn crear(
-        &self,
-        registro: &RegistroIngreso,
-    ) -> Result<i64, DatabaseError>;
+    fn crear(&self, registro: &RegistroIngreso) -> Result<i64, DatabaseError>;
 
-    fn buscar_por_id(
-        &self,
-        id: i64,
-    ) -> Result<Option<RegistroIngreso>, DatabaseError>;
+    fn buscar_por_id(&self, id: i64) -> Result<Option<RegistroIngreso>, DatabaseError>;
 
     fn buscar_ingreso_activo(
         &self,
@@ -38,9 +32,7 @@ pub trait RegistroIngresoRepository {
         usuario_salida_id: i64,
     ) -> Result<(), DatabaseError>;
 
-    fn listar(
-        &self,
-    ) -> Result<Vec<RegistroIngreso>, DatabaseError>;
+    fn listar(&self) -> Result<Vec<RegistroIngreso>, DatabaseError>;
 }
 
 pub struct SqliteRegistroIngresoRepository<'a> {
@@ -53,23 +45,16 @@ impl<'a> SqliteRegistroIngresoRepository<'a> {
     }
 }
 
-fn convertir_fila(
-    row: &Row,
-) -> rusqlite::Result<RegistroIngreso> {
+fn convertir_fila(row: &Row) -> rusqlite::Result<RegistroIngreso> {
     let fecha_hora_ingreso_texto: String = row.get(3)?;
 
-    let fecha_hora_ingreso =
-        NaiveDateTime::parse_from_str(
-            &fecha_hora_ingreso_texto,
-            "%Y-%m-%d %H:%M:%S",
-        )
-        .map_err(|error| {
-            rusqlite::Error::FromSqlConversionFailure(
-                3,
-                rusqlite::types::Type::Text,
-                Box::new(error),
-            )
-        })?;
+    let fecha_hora_ingreso = NaiveDateTime::parse_from_str(
+        &fecha_hora_ingreso_texto,
+        "%Y-%m-%d %H:%M:%S",
+    )
+    .map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, Box::new(error))
+    })?;
 
     let medio_ingreso_texto: String = row.get(4)?;
 
@@ -78,13 +63,11 @@ fn convertir_fila(
         "VEHICULO" => MedioIngreso::Vehiculo,
 
         _ => {
-            return Err(
-                rusqlite::Error::InvalidColumnType(
-                    4,
-                    "medio_ingreso".to_string(),
-                    rusqlite::types::Type::Text,
-                ),
-            );
+            return Err(rusqlite::Error::InvalidColumnType(
+                4,
+                "medio_ingreso".to_string(),
+                rusqlite::types::Type::Text,
+            ));
         }
     };
 
@@ -97,13 +80,11 @@ fn convertir_fila(
         "SWAT" => TipoIngreso::Swat,
 
         _ => {
-            return Err(
-                rusqlite::Error::InvalidColumnType(
-                    5,
-                    "tipo_ingreso".to_string(),
-                    rusqlite::types::Type::Text,
-                ),
-            );
+            return Err(rusqlite::Error::InvalidColumnType(
+                5,
+                "tipo_ingreso".to_string(),
+                rusqlite::types::Type::Text,
+            ));
         }
     };
 
@@ -113,25 +94,19 @@ fn convertir_fila(
     // número = gafete asignado
     let gafete_numero: Option<i64> = row.get(6)?;
 
-    let fecha_hora_salida_texto: Option<String> =
-        row.get(8)?;
+    let fecha_hora_salida_texto: Option<String> = row.get(8)?;
 
-    let fecha_hora_salida =
-        fecha_hora_salida_texto
-            .map(|fecha| {
-                NaiveDateTime::parse_from_str(
-                    &fecha,
-                    "%Y-%m-%d %H:%M:%S",
+    let fecha_hora_salida = fecha_hora_salida_texto
+        .map(|fecha| {
+            NaiveDateTime::parse_from_str(&fecha, "%Y-%m-%d %H:%M:%S").map_err(|error| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    8,
+                    rusqlite::types::Type::Text,
+                    Box::new(error),
                 )
-                .map_err(|error| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        8,
-                        rusqlite::types::Type::Text,
-                        Box::new(error),
-                    )
-                })
             })
-            .transpose()?;
+        })
+        .transpose()?;
 
     Ok(RegistroIngreso {
         id: row.get(0)?,
@@ -147,18 +122,12 @@ fn convertir_fila(
     })
 }
 
-impl<'a> RegistroIngresoRepository
-    for SqliteRegistroIngresoRepository<'a>
-{
-    fn crear(
-        &self,
-        registro: &RegistroIngreso,
-    ) -> Result<i64, DatabaseError> {
-        let fecha_hora_ingreso =
-            registro
-                .fecha_hora_ingreso
-                .format("%Y-%m-%d %H:%M:%S")
-                .to_string();
+impl<'a> RegistroIngresoRepository for SqliteRegistroIngresoRepository<'a> {
+    fn crear(&self, registro: &RegistroIngreso) -> Result<i64, DatabaseError> {
+        let fecha_hora_ingreso = registro
+            .fecha_hora_ingreso
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string();
 
         let medio_ingreso = match registro.medio_ingreso {
             MedioIngreso::Caminando => "CAMINANDO",
@@ -195,11 +164,9 @@ impl<'a> RegistroIngresoRepository
                 tipo_ingreso,
                 registro.gafete_numero,
                 registro.usuario_ingreso_id,
-                registro.fecha_hora_salida.map(|fecha| {
-                    fecha
-                        .format("%Y-%m-%d %H:%M:%S")
-                        .to_string()
-                }),
+                registro
+                    .fecha_hora_salida
+                    .map(|fecha| { fecha.format("%Y-%m-%d %H:%M:%S").to_string() }),
                 registro.usuario_salida_id,
             ],
         )?;
@@ -207,10 +174,7 @@ impl<'a> RegistroIngresoRepository
         Ok(self.connection.last_insert_rowid())
     }
 
-    fn buscar_por_id(
-        &self,
-        id: i64,
-    ) -> Result<Option<RegistroIngreso>, DatabaseError> {
+    fn buscar_por_id(&self, id: i64) -> Result<Option<RegistroIngreso>, DatabaseError> {
         let mut statement = self.connection.prepare(
             "
             SELECT
@@ -229,19 +193,12 @@ impl<'a> RegistroIngresoRepository
             ",
         )?;
 
-        match statement.query_row(
-            params![id],
-            convertir_fila,
-        ) {
+        match statement.query_row(params![id], convertir_fila) {
             Ok(registro) => Ok(Some(registro)),
 
-            Err(
-                rusqlite::Error::QueryReturnedNoRows
-            ) => Ok(None),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
 
-            Err(error) => {
-                Err(DatabaseError::from(error))
-            }
+            Err(error) => Err(DatabaseError::from(error)),
         }
     }
 
@@ -270,19 +227,12 @@ impl<'a> RegistroIngresoRepository
             ",
         )?;
 
-        match statement.query_row(
-            params![contratista_id],
-            convertir_fila,
-        ) {
+        match statement.query_row(params![contratista_id], convertir_fila) {
             Ok(registro) => Ok(Some(registro)),
 
-            Err(
-                rusqlite::Error::QueryReturnedNoRows
-            ) => Ok(None),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
 
-            Err(error) => {
-                Err(DatabaseError::from(error))
-            }
+            Err(error) => Err(DatabaseError::from(error)),
         }
     }
 
@@ -311,19 +261,12 @@ impl<'a> RegistroIngresoRepository
             ",
         )?;
 
-        match statement.query_row(
-            params![gafete_numero],
-            convertir_fila,
-        ) {
+        match statement.query_row(params![gafete_numero], convertir_fila) {
             Ok(registro) => Ok(Some(registro)),
 
-            Err(
-                rusqlite::Error::QueryReturnedNoRows
-            ) => Ok(None),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
 
-            Err(error) => {
-                Err(DatabaseError::from(error))
-            }
+            Err(error) => Err(DatabaseError::from(error)),
         }
     }
 
@@ -333,11 +276,9 @@ impl<'a> RegistroIngresoRepository
         fecha_hora_salida: NaiveDateTime,
         usuario_salida_id: i64,
     ) -> Result<(), DatabaseError> {
-        let fecha_hora_salida = fecha_hora_salida
-            .format("%Y-%m-%d %H:%M:%S")
-            .to_string();
+        let fecha_hora_salida = fecha_hora_salida.format("%Y-%m-%d %H:%M:%S").to_string();
 
-        self.connection.execute(
+        let rows_affected = self.connection.execute(
             "
             UPDATE registro_ingresos
             SET
@@ -346,19 +287,17 @@ impl<'a> RegistroIngresoRepository
             WHERE id = ?3
               AND fecha_hora_salida IS NULL
             ",
-            params![
-                fecha_hora_salida,
-                usuario_salida_id,
-                id,
-            ],
+            params![fecha_hora_salida, usuario_salida_id, id,],
         )?;
+
+        if rows_affected == 0 {
+            return Err(DatabaseError::RegistroNoActivo);
+        }
 
         Ok(())
     }
 
-    fn listar(
-        &self,
-    ) -> Result<Vec<RegistroIngreso>, DatabaseError> {
+    fn listar(&self) -> Result<Vec<RegistroIngreso>, DatabaseError> {
         let mut statement = self.connection.prepare(
             "
             SELECT

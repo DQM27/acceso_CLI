@@ -1,34 +1,20 @@
 use chrono::NaiveDate;
-use rusqlite::{params, Connection, Row};
+use rusqlite::{Connection, Row, params};
 
 use crate::database::error::DatabaseError;
 use crate::models::contratista::Contratista;
 use crate::models::tipo_ingreso::TipoIngreso;
 
 pub trait ContratistaRepository {
-    fn crear(
-        &self,
-        contratista: &Contratista,
-    ) -> Result<i64, DatabaseError>;
+    fn crear(&self, contratista: &Contratista) -> Result<i64, DatabaseError>;
 
-    fn buscar_por_cedula(
-        &self,
-        cedula: &str,
-    ) -> Result<Option<Contratista>, DatabaseError>;
+    fn buscar_por_cedula(&self, cedula: &str) -> Result<Option<Contratista>, DatabaseError>;
 
-    fn buscar_por_id(
-        &self,
-        id: i64,
-    ) -> Result<Option<Contratista>, DatabaseError>;
+    fn buscar_por_id(&self, id: i64) -> Result<Option<Contratista>, DatabaseError>;
 
-    fn actualizar(
-        &self,
-        contratista: &Contratista,
-    ) -> Result<(), DatabaseError>;
+    fn actualizar(&self, contratista: &Contratista) -> Result<(), DatabaseError>;
 
-    fn listar(
-        &self,
-    ) -> Result<Vec<Contratista>, DatabaseError>;
+    fn listar(&self) -> Result<Vec<Contratista>, DatabaseError>;
 }
 
 pub struct SqliteContratistaRepository<'a> {
@@ -41,9 +27,7 @@ impl<'a> SqliteContratistaRepository<'a> {
     }
 }
 
-fn convertir_fila(
-    row: &Row,
-) -> rusqlite::Result<Contratista> {
+fn convertir_fila(row: &Row) -> rusqlite::Result<Contratista> {
     let tipo_ingreso_texto: String = row.get(4)?;
 
     let tipo_ingreso = match tipo_ingreso_texto.as_str() {
@@ -53,13 +37,11 @@ fn convertir_fila(
         "SWAT" => TipoIngreso::Swat,
 
         _ => {
-            return Err(
-                rusqlite::Error::InvalidColumnType(
-                    4,
-                    "tipo_ingreso".to_string(),
-                    rusqlite::types::Type::Text,
-                ),
-            );
+            return Err(rusqlite::Error::InvalidColumnType(
+                4,
+                "tipo_ingreso".to_string(),
+                rusqlite::types::Type::Text,
+            ));
         }
     };
 
@@ -67,11 +49,7 @@ fn convertir_fila(
 
     let fecha_vencimiento_praind = fecha_texto
         .map(|fecha| {
-            NaiveDate::parse_from_str(
-                &fecha,
-                "%Y-%m-%d",
-            )
-            .map_err(|error| {
+            NaiveDate::parse_from_str(&fecha, "%Y-%m-%d").map_err(|error| {
                 rusqlite::Error::FromSqlConversionFailure(
                     5,
                     rusqlite::types::Type::Text,
@@ -93,18 +71,11 @@ fn convertir_fila(
     })
 }
 
-impl<'a> ContratistaRepository
-    for SqliteContratistaRepository<'a>
-{
-    fn crear(
-        &self,
-        contratista: &Contratista,
-    ) -> Result<i64, DatabaseError> {
+impl<'a> ContratistaRepository for SqliteContratistaRepository<'a> {
+    fn crear(&self, contratista: &Contratista) -> Result<i64, DatabaseError> {
         let fecha_vencimiento = contratista
             .fecha_vencimiento_praind
-            .map(|fecha| {
-                fecha.format("%Y-%m-%d").to_string()
-            });
+            .map(|fecha| fecha.format("%Y-%m-%d").to_string());
 
         let tipo_ingreso = match contratista.tipo_ingreso {
             TipoIngreso::Praind => "PRAIND",
@@ -140,10 +111,7 @@ impl<'a> ContratistaRepository
         Ok(self.connection.last_insert_rowid())
     }
 
-    fn buscar_por_cedula(
-        &self,
-        cedula: &str,
-    ) -> Result<Option<Contratista>, DatabaseError> {
+    fn buscar_por_cedula(&self, cedula: &str) -> Result<Option<Contratista>, DatabaseError> {
         let mut statement = self.connection.prepare(
             "
             SELECT
@@ -160,26 +128,16 @@ impl<'a> ContratistaRepository
             ",
         )?;
 
-        match statement.query_row(
-            params![cedula],
-            convertir_fila,
-        ) {
+        match statement.query_row(params![cedula], convertir_fila) {
             Ok(contratista) => Ok(Some(contratista)),
 
-            Err(
-                rusqlite::Error::QueryReturnedNoRows
-            ) => Ok(None),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
 
-            Err(error) => Err(
-                DatabaseError::from(error)
-            ),
+            Err(error) => Err(DatabaseError::from(error)),
         }
     }
 
-    fn buscar_por_id(
-        &self,
-        id: i64,
-    ) -> Result<Option<Contratista>, DatabaseError> {
+    fn buscar_por_id(&self, id: i64) -> Result<Option<Contratista>, DatabaseError> {
         let mut statement = self.connection.prepare(
             "
             SELECT
@@ -196,31 +154,19 @@ impl<'a> ContratistaRepository
             ",
         )?;
 
-        match statement.query_row(
-            params![id],
-            convertir_fila,
-        ) {
+        match statement.query_row(params![id], convertir_fila) {
             Ok(contratista) => Ok(Some(contratista)),
 
-            Err(
-                rusqlite::Error::QueryReturnedNoRows
-            ) => Ok(None),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
 
-            Err(error) => Err(
-                DatabaseError::from(error)
-            ),
+            Err(error) => Err(DatabaseError::from(error)),
         }
     }
 
-    fn actualizar(
-        &self,
-        contratista: &Contratista,
-    ) -> Result<(), DatabaseError> {
+    fn actualizar(&self, contratista: &Contratista) -> Result<(), DatabaseError> {
         let fecha_vencimiento = contratista
             .fecha_vencimiento_praind
-            .map(|fecha| {
-                fecha.format("%Y-%m-%d").to_string()
-            });
+            .map(|fecha| fecha.format("%Y-%m-%d").to_string());
 
         let tipo_ingreso = match contratista.tipo_ingreso {
             TipoIngreso::Praind => "PRAIND",
@@ -257,9 +203,7 @@ impl<'a> ContratistaRepository
         Ok(())
     }
 
-    fn listar(
-        &self,
-    ) -> Result<Vec<Contratista>, DatabaseError> {
+    fn listar(&self) -> Result<Vec<Contratista>, DatabaseError> {
         let mut statement = self.connection.prepare(
             "
             SELECT

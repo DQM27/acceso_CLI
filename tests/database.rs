@@ -1,14 +1,11 @@
-
 use chrono::NaiveDate;
 
 use control_acceso::database::connection::open_database;
 use control_acceso::database::repositories::contratista_repository::{
-    ContratistaRepository,
-    SqliteContratistaRepository,
+    ContratistaRepository, SqliteContratistaRepository,
 };
 use control_acceso::database::repositories::empresa_repository::{
-    EmpresaRepository,
-    SqliteEmpresaRepository,
+    EmpresaRepository, SqliteEmpresaRepository,
 };
 use control_acceso::database::schema::initialize_database;
 use control_acceso::models::contratista::Contratista;
@@ -16,11 +13,9 @@ use control_acceso::models::empresa::Empresa;
 use control_acceso::models::tipo_ingreso::TipoIngreso;
 
 fn preparar_base() -> rusqlite::Connection {
-    let connection = open_database(":memory:")
-        .expect("No se pudo abrir la base de datos");
+    let connection = open_database(":memory:").expect("No se pudo abrir la base de datos");
 
-    initialize_database(&connection)
-        .expect("No se pudo inicializar la base de datos");
+    initialize_database(&connection).expect("No se pudo inicializar la base de datos");
 
     connection
 }
@@ -29,8 +24,7 @@ fn preparar_base() -> rusqlite::Connection {
 fn debe_crear_y_recuperar_empresa() {
     let connection = preparar_base();
 
-    let repository =
-        SqliteEmpresaRepository::new(&connection);
+    let repository = SqliteEmpresaRepository::new(&connection);
 
     let empresa = Empresa {
         id: 0,
@@ -54,8 +48,7 @@ fn debe_crear_y_recuperar_empresa() {
 fn debe_retornar_none_si_la_cedula_no_existe() {
     let connection = preparar_base();
 
-    let repository =
-        SqliteContratistaRepository::new(&connection);
+    let repository = SqliteContratistaRepository::new(&connection);
 
     let resultado = repository
         .buscar_por_cedula("999999999")
@@ -68,11 +61,9 @@ fn debe_retornar_none_si_la_cedula_no_existe() {
 fn debe_actualizar_un_contratista() {
     let connection = preparar_base();
 
-    let empresa_repository =
-        SqliteEmpresaRepository::new(&connection);
+    let empresa_repository = SqliteEmpresaRepository::new(&connection);
 
-    let contratista_repository =
-        SqliteContratistaRepository::new(&connection);
+    let contratista_repository = SqliteContratistaRepository::new(&connection);
 
     let empresa = Empresa {
         id: 0,
@@ -89,10 +80,8 @@ fn debe_actualizar_un_contratista() {
         nombre: "Juan Pérez".to_string(),
         empresa_id,
         tipo_ingreso: TipoIngreso::Praind,
-        fecha_vencimiento_praind: Some(
-            NaiveDate::from_ymd_opt(2026, 12, 31)
-                .unwrap(),
-        ),
+        fecha_vencimiento_praind: Some(NaiveDate::from_ymd_opt(2026, 12, 31).unwrap()),
+        es_personal_ruta: false,
         tiene_acceso: true,
     };
 
@@ -106,10 +95,8 @@ fn debe_actualizar_un_contratista() {
         nombre: "Juan Pérez Actualizado".to_string(),
         empresa_id,
         tipo_ingreso: TipoIngreso::InHouse,
-        fecha_vencimiento_praind: Some(
-            NaiveDate::from_ymd_opt(2027, 12, 31)
-                .unwrap(),
-        ),
+        fecha_vencimiento_praind: Some(NaiveDate::from_ymd_opt(2027, 12, 31).unwrap()),
+        es_personal_ruta: false,
         tiene_acceso: false,
     };
 
@@ -122,22 +109,13 @@ fn debe_actualizar_un_contratista() {
         .expect("Error buscando contratista")
         .expect("El contratista no fue encontrado");
 
-    assert_eq!(
-        recuperado.nombre,
-        "Juan Pérez Actualizado"
-    );
+    assert_eq!(recuperado.nombre, "Juan Pérez Actualizado");
 
-    assert_eq!(
-        recuperado.tipo_ingreso,
-        TipoIngreso::InHouse
-    );
+    assert_eq!(recuperado.tipo_ingreso, TipoIngreso::InHouse);
 
     assert_eq!(
         recuperado.fecha_vencimiento_praind,
-        Some(
-            NaiveDate::from_ymd_opt(2027, 12, 31)
-                .unwrap()
-        )
+        Some(NaiveDate::from_ymd_opt(2027, 12, 31).unwrap())
     );
 
     assert!(!recuperado.tiene_acceso);
@@ -147,11 +125,9 @@ fn debe_actualizar_un_contratista() {
 fn debe_guardar_los_cuatro_tipos_de_ingreso() {
     let connection = preparar_base();
 
-    let empresa_repository =
-        SqliteEmpresaRepository::new(&connection);
+    let empresa_repository = SqliteEmpresaRepository::new(&connection);
 
-    let contratista_repository =
-        SqliteContratistaRepository::new(&connection);
+    let contratista_repository = SqliteContratistaRepository::new(&connection);
 
     let empresa = Empresa {
         id: 0,
@@ -166,37 +142,15 @@ fn debe_guardar_los_cuatro_tipos_de_ingreso() {
         (
             "100000001",
             TipoIngreso::Praind,
-            Some(
-                NaiveDate::from_ymd_opt(
-                    2026,
-                    12,
-                    31,
-                )
-                .unwrap(),
-            ),
+            Some(NaiveDate::from_ymd_opt(2026, 12, 31).unwrap()),
         ),
         (
             "100000002",
             TipoIngreso::InHouse,
-            Some(
-                NaiveDate::from_ymd_opt(
-                    2026,
-                    12,
-                    31,
-                )
-                .unwrap(),
-            ),
+            Some(NaiveDate::from_ymd_opt(2026, 12, 31).unwrap()),
         ),
-        (
-            "100000003",
-            TipoIngreso::PorCorreo,
-            None,
-        ),
-        (
-            "100000004",
-            TipoIngreso::Swat,
-            None,
-        ),
+        ("100000003", TipoIngreso::PorCorreo, None),
+        ("100000004", TipoIngreso::Swat, None),
     ];
 
     for (cedula, tipo_ingreso, fecha) in casos {
@@ -207,6 +161,7 @@ fn debe_guardar_los_cuatro_tipos_de_ingreso() {
             empresa_id,
             tipo_ingreso,
             fecha_vencimiento_praind: fecha,
+            es_personal_ruta: false,
             tiene_acceso: true,
         };
 
@@ -220,77 +175,59 @@ fn debe_guardar_los_cuatro_tipos_de_ingreso() {
         .unwrap()
         .unwrap();
 
-    assert_eq!(
-        praind.tipo_ingreso,
-        TipoIngreso::Praind
-    );
+    assert_eq!(praind.tipo_ingreso, TipoIngreso::Praind);
 
-    assert!(
-        praind.fecha_vencimiento_praind.is_some()
-    );
+    assert!(praind.fecha_vencimiento_praind.is_some());
 
     let in_house = contratista_repository
         .buscar_por_cedula("100000002")
         .unwrap()
         .unwrap();
 
-    assert_eq!(
-        in_house.tipo_ingreso,
-        TipoIngreso::InHouse
-    );
+    assert_eq!(in_house.tipo_ingreso, TipoIngreso::InHouse);
 
-    assert!(
-        in_house.fecha_vencimiento_praind.is_some()
-    );
+    assert!(in_house.fecha_vencimiento_praind.is_some());
 
     let por_correo = contratista_repository
         .buscar_por_cedula("100000003")
         .unwrap()
         .unwrap();
 
-    assert_eq!(
-        por_correo.tipo_ingreso,
-        TipoIngreso::PorCorreo
-    );
+    assert_eq!(por_correo.tipo_ingreso, TipoIngreso::PorCorreo);
 
-    assert!(
-        por_correo
-            .fecha_vencimiento_praind
-            .is_none()
-    );
+    assert!(por_correo.fecha_vencimiento_praind.is_none());
 
     let swat = contratista_repository
         .buscar_por_cedula("100000004")
         .unwrap()
         .unwrap();
 
-    assert_eq!(
-        swat.tipo_ingreso,
-        TipoIngreso::Swat
-    );
+    assert_eq!(swat.tipo_ingreso, TipoIngreso::Swat);
 
-    assert!(
-        swat.fecha_vencimiento_praind
-            .is_none()
-    );
+    assert!(swat.fecha_vencimiento_praind.is_none());
 }
 
 #[test]
 fn debe_identificar_si_un_tipo_requiere_praind() {
-    assert!(
-        TipoIngreso::Praind.requiere_praind()
-    );
+    let empresa_id = 1;
 
-    assert!(
-        TipoIngreso::InHouse.requiere_praind()
-    );
+    for (tipo_ingreso, esperado) in [
+        (TipoIngreso::Praind, true),
+        (TipoIngreso::InHouse, true),
+        (TipoIngreso::PorCorreo, false),
+        (TipoIngreso::Swat, false),
+    ] {
+        let contratista = Contratista {
+            id: 0,
+            cedula: String::new(),
+            nombre: String::new(),
+            empresa_id,
+            tipo_ingreso,
+            fecha_vencimiento_praind: None,
+            es_personal_ruta: false,
+            tiene_acceso: true,
+        };
 
-    assert!(
-        !TipoIngreso::PorCorreo.requiere_praind()
-    );
-
-    assert!(
-        !TipoIngreso::Swat.requiere_praind()
-    );
+        assert_eq!(contratista.requiere_praind(), esperado);
+    }
 }
-

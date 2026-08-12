@@ -5,9 +5,7 @@ pub fn verificar_registro_entrada(
     tiene_ingreso_activo: bool,
 ) -> ResultadoAcceso {
     if tiene_ingreso_activo {
-        return ResultadoAcceso::Denegado(
-            MotivoDenegacion::IngresoActivo,
-        );
+        return ResultadoAcceso::Denegado(MotivoDenegacion::IngresoActivo);
     }
 
     resultado_acceso.clone()
