@@ -54,6 +54,57 @@ pub fn initialize_database(connection: &Connection) -> rusqlite::Result<()> {
 
         CREATE INDEX IF NOT EXISTS idx_contratistas_empresa
         ON contratistas(empresa_id);
+
+        CREATE TABLE IF NOT EXISTS registro_ingresos (
+            id INTEGER PRIMARY KEY,
+
+            contratista_id INTEGER NOT NULL,
+            empresa_id INTEGER NOT NULL,
+
+            fecha_hora_ingreso TEXT NOT NULL,
+
+            medio_ingreso TEXT NOT NULL CHECK (
+                medio_ingreso IN (
+                    'CAMINANDO',
+                    'VEHICULO'
+                )
+            ),
+
+            tipo_ingreso TEXT NOT NULL CHECK (
+                tipo_ingreso IN (
+                    'PRAIND',
+                    'IN_HOUSE',
+                    'POR_CORREO',
+                    'SWAT'
+                )
+            ),
+
+            usuario_ingreso_id INTEGER NOT NULL,
+
+            fecha_hora_salida TEXT,
+            usuario_salida_id INTEGER,
+
+            FOREIGN KEY (contratista_id)
+                REFERENCES contratistas(id),
+
+            FOREIGN KEY (empresa_id)
+                REFERENCES empresas(id),
+
+            FOREIGN KEY (usuario_ingreso_id)
+                REFERENCES usuarios(id),
+
+            FOREIGN KEY (usuario_salida_id)
+                REFERENCES usuarios(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_registro_ingresos_contratista
+        ON registro_ingresos(contratista_id);
+
+        CREATE INDEX IF NOT EXISTS idx_registro_ingresos_empresa
+        ON registro_ingresos(empresa_id);
+
+        CREATE INDEX IF NOT EXISTS idx_registro_ingresos_fecha_ingreso
+        ON registro_ingresos(fecha_hora_ingreso);
         ",
     )?;
 
