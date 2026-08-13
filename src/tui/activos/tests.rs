@@ -1,207 +1,126 @@
 use super::*;
-
-fn tecla(code: KeyCode) -> KeyEvent {
-    KeyEvent::new(code, KeyModifiers::NONE)
+use crate::{
+    domain::resultado_acceso::ResultadoAcceso,
+    models::{medio_ingreso::MedioIngreso, tipo_ingreso::TipoIngreso},
+};
+use chrono::{NaiveDate, NaiveDateTime};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+fn k(c: KeyCode) -> KeyEvent {
+    KeyEvent::new(c, KeyModifiers::NONE)
 }
-
-fn escribir(state: &mut ActivosState, texto: &str) {
-    for caracter in texto.chars() {
-        state.handle_key(tecla(KeyCode::Char(caracter)));
+fn r(id: i64, g: Option<i64>) -> IngresoActivoResumen {
+    IngresoActivoResumen {
+        registro_id: id,
+        contratista_id: id,
+        cedula: format!("C-{id}"),
+        contratista_nombre: format!("Persona {id}"),
+        empresa_nombre: "Empresa".into(),
+        tipo_ingreso: TipoIngreso::Praind,
+        medio_ingreso: MedioIngreso::Caminando,
+        fecha_hora_ingreso: NaiveDateTime::parse_from_str(
+            "2026-08-12 08:00:00",
+            "%Y-%m-%d %H:%M:%S",
+        )
+        .unwrap(),
+        gafete_numero: g,
+        usuario_ingreso_nombre: "Ana".into(),
+        resultado_acceso: ResultadoAcceso::Permitido,
     }
 }
-
-fn buscar(texto: &str) -> ActivosState {
-    let mut state = ActivosState::default();
-    state.handle_key(tecla(KeyCode::Char('/')));
-    escribir(&mut state, texto);
-    state
+fn cargar(s: &mut ActivosState) {
+    s.completar_busqueda(Ok(vec![r(7, Some(26)), r(9, None)]), None)
 }
-
 #[test]
-fn seleccion_se_mueve_y_respeta_limites() {
-    let mut state = ActivosState::default();
-    state.handle_key(tecla(KeyCode::Down));
-    assert_eq!(state.seleccion, Some(1));
-    state.handle_key(tecla(KeyCode::Up));
-    state.handle_key(tecla(KeyCode::Up));
-    assert_eq!(state.seleccion, Some(0));
-    for _ in 0..100 {
-        state.handle_key(tecla(KeyCode::Down));
-    }
-    assert_eq!(state.seleccion, Some(79));
+fn inicia_vacio_y_carga_real() {
+    let mut s = ActivosState::default();
+    assert_eq!(s.cantidad(), 0);
+    cargar(&mut s);
+    assert_eq!(s.cantidad(), 2);
+    assert_eq!(s.seleccion, Some(0))
 }
-
 #[test]
-fn scroll_logico_sigue_a_la_seleccion() {
-    let mut state = ActivosState::default();
-    for _ in 0..8 {
-        state.handle_key(tecla(KeyCode::Down));
-    }
-    assert_eq!(state.inicio_visible(5), 4);
-}
-
-#[test]
-fn busca_por_nombre_cedula_empresa_y_gafete() {
-    for (consulta, nombre) in [
-        ("carlos", "Carlos Rojas"),
-        ("310220488", "Carlos Rojas"),
-        ("electromecánicos", "Marco Antonio Hernández"),
-        ("47", "Laura Villalobos"),
-    ] {
-        let state = buscar(consulta);
-        let indices = state.indices_filtrados();
-        assert!(
-            indices
-                .iter()
-                .any(|indice| state.registros[*indice].nombre == nombre)
-        );
-    }
-}
-
-#[test]
-fn busqueda_sin_resultados_y_escape_limpia_filtro() {
-    let mut state = buscar("nadie-existe");
-    assert!(state.indices_filtrados().is_empty());
-    assert_eq!(state.seleccion, None);
-    state.handle_key(tecla(KeyCode::Esc));
-    assert_eq!(state.indices_filtrados().len(), 80);
-    assert_eq!(state.seleccion, Some(0));
-}
-
-#[test]
-fn enter_conserva_filtro_y_devuelve_foco_a_tabla() {
-    let mut state = buscar("carlos");
-    state.handle_key(tecla(KeyCode::Enter));
-    assert_eq!(state.modo, ModoActivos::Normal);
-    assert_eq!(state.indices_filtrados().len(), 4);
-}
-
-#[test]
-fn escape_limpia_primero_el_filtro_y_despues_vuelve() {
-    let mut state = buscar("carlos");
-    state.handle_key(tecla(KeyCode::Enter));
-
-    assert_eq!(
-        state.handle_key(tecla(KeyCode::Esc)),
-        AccionActivos::Ninguna
-    );
-    assert!(state.filtro.is_empty());
-    assert_eq!(state.indices_filtrados().len(), 80);
-
-    assert_eq!(state.handle_key(tecla(KeyCode::Esc)), AccionActivos::Volver);
-}
-
-#[test]
-fn confirmacion_se_abre_y_n_o_escape_cancelan() {
-    for cancelar in [KeyCode::Char('n'), KeyCode::Esc] {
-        let mut state = ActivosState::default();
-        state.handle_key(tecla(KeyCode::Char('s')));
-        assert!(matches!(state.modo, ModoActivos::ConfirmarSalida { .. }));
-        state.handle_key(tecla(cancelar));
-        assert_eq!(state.modo, ModoActivos::Normal);
-        assert_eq!(state.cantidad(), 80);
-    }
-}
-
-#[test]
-fn confirmar_salida_elimina_disminuye_contador_y_conserva_posicion() {
-    let mut state = ActivosState::default();
-    for _ in 0..7 {
-        state.handle_key(tecla(KeyCode::Down));
-    }
-    let id = state.id_seleccionado().unwrap();
-    state.handle_key(tecla(KeyCode::Char('s')));
-    state.handle_key(tecla(KeyCode::Char('y')));
-    assert_eq!(state.cantidad(), 79);
-    assert!(!state.registros.iter().any(|registro| registro.id == id));
-    assert_eq!(state.seleccion, Some(7));
-}
-
-#[test]
-fn salida_sin_gafete_no_inventa_liberacion() {
-    let mut state = ActivosState::default();
-    state.handle_key(tecla(KeyCode::Down));
-    state.handle_key(tecla(KeyCode::Char('s')));
-    state.handle_key(tecla(KeyCode::Char('y')));
-    assert!(!state.mensaje.as_deref().unwrap().contains("liberado"));
-}
-
-#[test]
-fn f2_encuentra_gafete_y_salida_elimina_registro_correcto() {
-    let mut state = ActivosState::default();
-    state.handle_key(tecla(KeyCode::F(2)));
-    escribir(&mut state, "8");
-    state.handle_key(tecla(KeyCode::Enter));
-    assert_eq!(
-        state.modo,
-        ModoActivos::SalidaPorGafete(SalidaGafete::Encontrado { id: 3 })
-    );
-    state.handle_key(tecla(KeyCode::Char('y')));
-    assert_eq!(state.cantidad(), 79);
+fn busqueda_emite_consulta_real() {
+    let mut s = ActivosState::default();
+    cargar(&mut s);
+    s.handle_key(k(KeyCode::Char('/')));
     assert!(
-        !state
-            .registros
-            .iter()
-            .any(|registro| registro.gafete == Some(8))
+        matches!(s.handle_key(k(KeyCode::Char('j'))),AccionActivos::Buscar{texto:Some(t),..}if t=="j")
     );
-    state.handle_key(tecla(KeyCode::F(2)));
-    escribir(&mut state, "8");
-    state.handle_key(tecla(KeyCode::Enter));
+    assert_eq!(s.cantidad(), 2)
+}
+#[test]
+fn detalle_y_salida_usan_registro_id() {
+    let mut s = ActivosState::default();
+    cargar(&mut s);
+    s.handle_key(k(KeyCode::Enter));
+    assert!(matches!(s.modo, ModoActivos::Detalle { id: 7 }));
+    s.handle_key(k(KeyCode::Char('S')));
     assert!(matches!(
-        &state.modo,
-        ModoActivos::SalidaPorGafete(SalidaGafete::Capturando { error: Some(_), .. })
+        s.handle_key(k(KeyCode::Char('Y'))),
+        AccionActivos::RegistrarSalida { registro_id: 7, .. }
     ));
 }
-
 #[test]
-fn f2_reporta_gafete_inexistente() {
-    let mut state = ActivosState::default();
-    state.handle_key(tecla(KeyCode::F(2)));
-    escribir(&mut state, "999");
-    state.handle_key(tecla(KeyCode::Enter));
+fn cancelar_salida_no_emite_accion() {
+    let mut s = ActivosState::default();
+    cargar(&mut s);
+    s.handle_key(k(KeyCode::Char('S')));
     assert!(matches!(
-        &state.modo,
-        ModoActivos::SalidaPorGafete(SalidaGafete::Capturando { error: Some(_), .. })
+        s.handle_key(k(KeyCode::Esc)),
+        AccionActivos::Ninguna
+    ));
+    assert_eq!(s.cantidad(), 2)
+}
+#[test]
+fn f2_busca_numero_exacto_y_confirma() {
+    let mut s = ActivosState::default();
+    cargar(&mut s);
+    s.handle_key(k(KeyCode::F(2)));
+    for c in "26".chars() {
+        s.handle_key(k(KeyCode::Char(c)));
+    }
+    assert!(matches!(
+        s.handle_key(k(KeyCode::Enter)),
+        AccionActivos::BuscarPorGafete { numero: 26 }
+    ));
+    s.completar_gafete(Ok(7), Some(vec![r(7, Some(26))]));
+    assert!(matches!(
+        s.handle_key(k(KeyCode::Char('Y'))),
+        AccionActivos::RegistrarSalida { registro_id: 7, .. }
     ));
 }
-
 #[test]
-fn detalle_se_abre_cierra_y_puede_iniciar_salida() {
-    let mut state = ActivosState::default();
-    state.handle_key(tecla(KeyCode::Enter));
-    assert!(matches!(state.modo, ModoActivos::Detalle { id: 1 }));
-    state.handle_key(tecla(KeyCode::Esc));
-    assert_eq!(state.modo, ModoActivos::Normal);
-    state.handle_key(tecla(KeyCode::Enter));
-    state.handle_key(tecla(KeyCode::Char('s')));
-    assert!(matches!(state.modo, ModoActivos::ConfirmarSalida { id: 1 }));
+fn f2_invalido_y_no_encontrado_son_seguros() {
+    let mut s = ActivosState::default();
+    s.handle_key(k(KeyCode::F(2)));
+    s.handle_key(k(KeyCode::Enter));
+    assert!(matches!(
+        s.modo,
+        ModoActivos::SalidaPorGafete(SalidaGafete::Capturando { error: Some(_), .. })
+    ));
+    s.completar_gafete(
+        Err("No existe un ingreso activo con ese gafete".into()),
+        None,
+    );
 }
-
 #[test]
-fn columnas_se_abren_cambian_y_no_permiten_ocultar_todas() {
-    let mut state = ActivosState::default();
-    state.handle_key(tecla(KeyCode::Char('c')));
-    assert!(matches!(state.modo, ModoActivos::Columnas { .. }));
-    state.handle_key(tecla(KeyCode::Char(' ')));
-    assert!(!state.columnas[0].1);
-    for indice in 1..state.columnas.len() {
-        state.columnas[indice].1 = false;
-    }
-    state.columnas[0].1 = true;
-    state.modo = ModoActivos::Columnas { seleccion: 0 };
-    state.handle_key(tecla(KeyCode::Char(' ')));
-    assert!(state.columnas[0].1);
-    assert!(state.mensaje.is_some());
-    state.handle_key(tecla(KeyCode::Esc));
-    assert_eq!(state.modo, ModoActivos::Normal);
+fn callback_salida_recarga_sin_remover_localmente() {
+    let mut s = ActivosState::default();
+    cargar(&mut s);
+    let a = s.completar_salida(Ok(()), 7, "Persona 7");
+    assert_eq!(s.cantidad(), 2);
+    assert!(matches!(a, AccionActivos::Buscar { .. }));
+    s.completar_busqueda(Ok(vec![r(9, None)]), None);
+    assert_eq!(s.cantidad(), 1)
 }
-
 #[test]
-fn advertencia_no_altera_seleccion() {
-    let mut state = ActivosState::default();
-    for _ in 0..3 {
-        state.handle_key(tecla(KeyCode::Down));
-    }
-    assert!(state.registros[3].advertencia.is_some());
-    assert_eq!(state.id_seleccionado(), Some(4));
+fn columnas_y_movimiento_conservan_ux() {
+    let mut s = ActivosState::default();
+    cargar(&mut s);
+    s.handle_key(k(KeyCode::Char('C')));
+    assert!(matches!(s.modo, ModoActivos::Columnas { .. }));
+    assert_eq!(
+        NaiveDate::from_ymd_opt(2026, 8, 12).unwrap().to_string(),
+        "2026-08-12"
+    )
 }

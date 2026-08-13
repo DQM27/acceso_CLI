@@ -103,6 +103,24 @@ where
             .map_err(mapear_escritura_usuario)
     }
 
+    pub fn actualizar_administracion(
+        &self,
+        id: i64,
+        input: ActualizarUsuarioInput,
+        activo: bool,
+    ) -> Result<(), UsuarioServiceError> {
+        let mut usuario = self.buscar_por_id(id)?;
+        usuario.cedula =
+            normalizar_requerido(&input.cedula, UsuarioServiceError::CedulaVacia)?.into();
+        usuario.nombre =
+            normalizar_requerido(&input.nombre, UsuarioServiceError::NombreVacio)?.into();
+        usuario.rol = input.rol;
+        usuario.activo = activo;
+        self.usuarios
+            .actualizar(&usuario)
+            .map_err(mapear_escritura_usuario)
+    }
+
     pub fn cambiar_password(
         &self,
         id: i64,

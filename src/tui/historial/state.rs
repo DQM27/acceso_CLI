@@ -1,22 +1,20 @@
+use crate::{
+    database::queries::ingresos::{
+        EstadoMovimiento, FiltroHistorial, MovimientoIngresoResumen, PaginaHistorial,
+    },
+    models::{empresa::Empresa, tipo_ingreso::TipoIngreso},
+};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Constraint;
-
-use crate::tui::{historial_mock, historial_mock::MovimientoHistorialMock};
-
 #[path = "filtros.rs"]
 mod filtros;
 pub use filtros::*;
-
 #[path = "render.rs"]
 pub(super) mod render;
-
-#[cfg(test)]
-use render::valor;
-
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
-
+const LIMIT: usize = 50;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ColumnaHistorial {
     Fecha,
@@ -31,7 +29,6 @@ enum ColumnaHistorial {
     UsuarioIngreso,
     UsuarioSalida,
 }
-
 impl ColumnaHistorial {
     const TODAS: [Self; 11] = [
         Self::Fecha,
@@ -46,7 +43,6 @@ impl ColumnaHistorial {
         Self::UsuarioIngreso,
         Self::UsuarioSalida,
     ];
-
     fn titulo(self) -> &'static str {
         match self {
             Self::Fecha => "FECHA",
@@ -62,7 +58,6 @@ impl ColumnaHistorial {
             Self::UsuarioSalida => "USUARIO SALIDA",
         }
     }
-
     fn constraint(self) -> Constraint {
         match self {
             Self::Fecha => Constraint::Length(10),
@@ -76,7 +71,6 @@ impl ColumnaHistorial {
         }
     }
 }
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ModoHistorial {
     Normal,
@@ -84,7 +78,7 @@ enum ModoHistorial {
         texto: String,
     },
     Detalle {
-        id: u64,
+        id: i64,
     },
     Filtros {
         seleccion: usize,
@@ -99,16 +93,16 @@ enum ModoHistorial {
         seleccion: usize,
     },
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AccionHistorial {
     Ninguna,
     Volver,
+    Consultar(FiltroHistorial),
 }
-
 #[derive(Debug)]
 pub struct HistorialState {
-    registros: Vec<MovimientoHistorialMock>,
+    registros: Vec<MovimientoIngresoResumen>,
+    total: usize,
     seleccion: Option<usize>,
     modo: ModoHistorial,
     filtro_aplicado: FiltrosHistorial,
@@ -116,17 +110,20 @@ pub struct HistorialState {
     busqueda: String,
     columnas: Vec<(ColumnaHistorial, bool)>,
     mensaje: Option<String>,
+    empresas: Vec<Empresa>,
+    offset: usize,
+    usuario_nombre: String,
 }
-
 impl Default for HistorialState {
     fn default() -> Self {
-        let filtro = FiltrosHistorial::default();
-        let mut state = Self {
-            registros: historial_mock::movimientos_historial(),
-            seleccion: Some(0),
+        let f = FiltrosHistorial::default();
+        Self {
+            registros: vec![],
+            total: 0,
+            seleccion: None,
             modo: ModoHistorial::Normal,
-            filtro_aplicado: filtro.clone(),
-            filtro_edicion: filtro,
+            filtro_aplicado: f.clone(),
+            filtro_edicion: f,
             busqueda: String::new(),
             columnas: ColumnaHistorial::TODAS
                 .into_iter()
@@ -143,43 +140,97 @@ impl Default for HistorialState {
                 })
                 .collect(),
             mensaje: None,
-        };
-        state.ajustar_seleccion();
-        state
+            empresas: vec![],
+            offset: 0,
+            usuario_nombre: "Quintana".into(),
+        }
     }
 }
-
 impl HistorialState {
-    pub fn handle_key(&mut self, key: KeyEvent) -> AccionHistorial {
+    pub fn set_usuario_nombre(&mut self, n: impl Into<String>) {
+        self.usuario_nombre = n.into()
+    }
+    pub fn completar_empresas(&mut self, r: Result<Vec<Empresa>, String>) {
+        match r {
+            Ok(v) => self.empresas = v,
+            Err(e) => self.mensaje = Some(e),
+        }
+    }
+    pub fn solicitud_carga(&self) -> AccionHistorial {
+        self.consulta()
+            .map_or(AccionHistorial::Ninguna, AccionHistorial::Consultar)
+    }
+    pub fn completar(&mut self, r: Result<PaginaHistorial, String>) {
+        match r {
+            Ok(p) => {
+                self.registros = p.items;
+                self.total = p.total;
+                self.seleccion = (!self.registros.is_empty()).then_some(0)
+            }
+            Err(e) => {
+                self.registros.clear();
+                self.total = 0;
+                self.seleccion = None;
+                self.mensaje = Some(e)
+            }
+        }
+    }
+    fn consulta(&self) -> Result<FiltroHistorial, String> {
+        construir(&self.filtro_aplicado, &self.busqueda, LIMIT, self.offset)
+    }
+    fn emitir(&mut self) -> AccionHistorial {
+        match self.consulta() {
+            Ok(f) => AccionHistorial::Consultar(f),
+            Err(e) => {
+                self.mensaje = Some(e);
+                AccionHistorial::Ninguna
+            }
+        }
+    }
+    pub fn handle_key(&mut self, k: KeyEvent) -> AccionHistorial {
         match self.modo.clone() {
-            ModoHistorial::Normal => self.normal(key),
-            ModoHistorial::Busqueda { .. } => self.busqueda_key(key),
+            ModoHistorial::Normal => self.normal(k),
+            ModoHistorial::Busqueda { .. } => self.buscar(k),
             ModoHistorial::Detalle { .. } => {
-                if key.code == KeyCode::Esc {
-                    self.modo = ModoHistorial::Normal;
+                if k.code == KeyCode::Esc {
+                    self.modo = ModoHistorial::Normal
                 }
                 AccionHistorial::Ninguna
             }
             ModoHistorial::Filtros {
                 seleccion,
                 editando,
-            } => self.filtros_key(key, seleccion, editando),
+            } => self.filtros(k, seleccion, editando),
             ModoHistorial::Desplegable {
                 campo,
                 seleccion_filtro,
                 opcion,
-            } => self.desplegable_key(key, campo, seleccion_filtro, opcion),
-            ModoHistorial::Columnas { seleccion } => self.columnas_key(key, seleccion),
+            } => self.desplegable(k, campo, seleccion_filtro, opcion),
+            ModoHistorial::Columnas { seleccion } => {
+                self.columnas(k, seleccion);
+                AccionHistorial::Ninguna
+            }
         }
     }
-
-    fn normal(&mut self, key: KeyEvent) -> AccionHistorial {
-        match key.code {
+    fn normal(&mut self, k: KeyEvent) -> AccionHistorial {
+        match k.code {
             KeyCode::Up => self.mover(-1),
             KeyCode::Down => self.mover(1),
+            KeyCode::PageDown => {
+                if self.offset + LIMIT < self.total {
+                    self.offset += LIMIT;
+                    return self.emitir();
+                }
+            }
+            KeyCode::PageUp => {
+                if self.offset > 0 {
+                    self.offset = self.offset.saturating_sub(LIMIT);
+                    return self.emitir();
+                }
+            }
             KeyCode::Enter => {
-                if let Some(id) = self.id_seleccionado() {
-                    self.modo = ModoHistorial::Detalle { id };
+                if let Some(r) = self.registros.get(self.seleccion.unwrap_or(usize::MAX)) {
+                    self.modo = ModoHistorial::Detalle { id: r.registro_id }
                 }
             }
             KeyCode::Char('/') => {
@@ -192,111 +243,121 @@ impl HistorialState {
                 self.modo = ModoHistorial::Filtros {
                     seleccion: 0,
                     editando: false,
-                };
+                }
             }
             KeyCode::Char('c' | 'C') => self.modo = ModoHistorial::Columnas { seleccion: 0 },
             KeyCode::Esc if !self.busqueda.is_empty() => {
                 self.busqueda.clear();
-                self.ajustar_seleccion();
+                self.offset = 0;
+                return self.emitir();
             }
             KeyCode::Esc => return AccionHistorial::Volver,
             _ => {}
         }
         AccionHistorial::Ninguna
     }
-
-    fn busqueda_key(&mut self, key: KeyEvent) -> AccionHistorial {
-        match key.code {
+    fn buscar(&mut self, k: KeyEvent) -> AccionHistorial {
+        match k.code {
             KeyCode::Esc => {
                 self.busqueda.clear();
+                self.offset = 0;
                 self.modo = ModoHistorial::Normal;
-                self.ajustar_seleccion();
+                self.emitir()
             }
-            KeyCode::Enter => self.modo = ModoHistorial::Normal,
-            KeyCode::Up => self.mover(-1),
-            KeyCode::Down => self.mover(1),
+            KeyCode::Enter => {
+                self.modo = ModoHistorial::Normal;
+                AccionHistorial::Ninguna
+            }
             KeyCode::Backspace => {
                 if let ModoHistorial::Busqueda { texto } = &mut self.modo {
                     texto.pop();
-                    self.busqueda = texto.clone();
+                    self.busqueda = texto.clone()
                 }
-                self.ajustar_seleccion();
+                self.offset = 0;
+                self.emitir()
             }
             KeyCode::Char(c)
-                if !key
+                if !k
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
                 if let ModoHistorial::Busqueda { texto } = &mut self.modo {
                     texto.push(c);
-                    self.busqueda = texto.clone();
+                    self.busqueda = texto.clone()
                 }
-                self.ajustar_seleccion();
+                self.offset = 0;
+                self.emitir()
             }
-            _ => {}
+            _ => AccionHistorial::Ninguna,
         }
-        AccionHistorial::Ninguna
     }
-
-    fn filtros_key(&mut self, key: KeyEvent, seleccion: usize, editando: bool) -> AccionHistorial {
-        let campo = CampoFiltro::TODOS[seleccion];
+    fn filtros(&mut self, k: KeyEvent, s: usize, editando: bool) -> AccionHistorial {
+        let campo = CampoFiltro::TODOS[s];
         if editando {
-            match key.code {
+            match k.code {
                 KeyCode::Enter | KeyCode::Esc => {
                     self.modo = ModoHistorial::Filtros {
-                        seleccion,
+                        seleccion: s,
                         editando: false,
                     }
                 }
                 KeyCode::Backspace => {
-                    self.texto_filtro_mut(campo).map(String::pop);
+                    if let Some(t) = self.texto_mut(campo) {
+                        t.pop();
+                    }
                 }
                 KeyCode::Char(c)
-                    if !key
+                    if !k
                         .modifiers
                         .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
                 {
-                    self.agregar_caracter_filtro(campo, c);
+                    self.agregar(campo, c)
                 }
                 _ => {}
             }
             return AccionHistorial::Ninguna;
         }
-        match key.code {
+        match k.code {
             KeyCode::Up => {
                 self.modo = ModoHistorial::Filtros {
-                    seleccion: seleccion.saturating_sub(1),
+                    seleccion: s.saturating_sub(1),
                     editando: false,
                 }
             }
             KeyCode::Down => {
                 self.modo = ModoHistorial::Filtros {
-                    seleccion: (seleccion + 1).min(6),
+                    seleccion: (s + 1).min(6),
                     editando: false,
                 }
             }
-            KeyCode::Enter => {
+            KeyCode::Enter
                 if matches!(
                     campo,
                     CampoFiltro::Empresa | CampoFiltro::Tipo | CampoFiltro::Estado
-                ) {
-                    self.abrir_desplegable(campo, seleccion);
-                } else {
-                    self.modo = ModoHistorial::Filtros {
-                        seleccion,
-                        editando: true,
-                    };
+                ) =>
+            {
+                self.modo = ModoHistorial::Desplegable {
+                    campo,
+                    seleccion_filtro: s,
+                    opcion: 0,
+                }
+            }
+            KeyCode::Enter => {
+                self.modo = ModoHistorial::Filtros {
+                    seleccion: s,
+                    editando: true,
                 }
             }
             KeyCode::Char('a' | 'A') => {
-                if !fechas_validas(&self.filtro_edicion) {
-                    self.mensaje =
-                        Some("Fechas inválidas. Use DD/MM/YYYY y verifique el rango".into());
-                    return AccionHistorial::Ninguna;
+                match construir(&self.filtro_edicion, &self.busqueda, LIMIT, 0) {
+                    Ok(f) => {
+                        self.filtro_aplicado = self.filtro_edicion.clone();
+                        self.offset = 0;
+                        self.modo = ModoHistorial::Normal;
+                        return AccionHistorial::Consultar(f);
+                    }
+                    Err(e) => self.mensaje = Some(e),
                 }
-                self.filtro_aplicado = self.filtro_edicion.clone();
-                self.modo = ModoHistorial::Normal;
-                self.ajustar_seleccion();
             }
             KeyCode::Char('l' | 'L') => self.filtro_edicion = FiltrosHistorial::default(),
             KeyCode::Esc => self.modo = ModoHistorial::Normal,
@@ -304,77 +365,76 @@ impl HistorialState {
         }
         AccionHistorial::Ninguna
     }
-
-    fn columnas_key(&mut self, key: KeyEvent, seleccion: usize) -> AccionHistorial {
-        match key.code {
-            KeyCode::Up => {
-                self.modo = ModoHistorial::Columnas {
-                    seleccion: seleccion.saturating_sub(1),
-                }
-            }
-            KeyCode::Down => {
-                self.modo = ModoHistorial::Columnas {
-                    seleccion: (seleccion + 1).min(self.columnas.len() - 1),
-                }
-            }
-            KeyCode::Char(' ') => {
-                let visibles = self.columnas.iter().filter(|(_, v)| *v).count();
-                if self.columnas[seleccion].1 && visibles == 1 {
-                    self.mensaje = Some("Debe conservar al menos una columna".into());
-                } else {
-                    self.columnas[seleccion].1 = !self.columnas[seleccion].1;
-                    self.mensaje = None;
-                }
-            }
-            KeyCode::Esc => self.modo = ModoHistorial::Normal,
-            _ => {}
-        }
-        AccionHistorial::Ninguna
-    }
-
-    fn desplegable_key(
+    fn desplegable(
         &mut self,
-        key: KeyEvent,
-        campo: CampoFiltro,
-        seleccion_filtro: usize,
-        opcion: usize,
+        k: KeyEvent,
+        c: CampoFiltro,
+        s: usize,
+        mut o: usize,
     ) -> AccionHistorial {
-        let cantidad = opciones_campo(campo).len();
-        match key.code {
-            KeyCode::Up => {
-                self.modo = ModoHistorial::Desplegable {
-                    campo,
-                    seleccion_filtro,
-                    opcion: opcion.saturating_sub(1),
-                }
-            }
-            KeyCode::Down => {
-                self.modo = ModoHistorial::Desplegable {
-                    campo,
-                    seleccion_filtro,
-                    opcion: (opcion + 1).min(cantidad - 1),
-                }
-            }
+        let n = self.opciones(c);
+        match k.code {
+            KeyCode::Up => o = o.saturating_sub(1),
+            KeyCode::Down => o = (o + 1).min(n.saturating_sub(1)),
             KeyCode::Enter => {
-                self.asignar_opcion(campo, opcion);
+                match c {
+                    CampoFiltro::Empresa => {
+                        self.filtro_edicion.empresa_id = if o == 0 {
+                            None
+                        } else {
+                            Some(self.empresas[o - 1].id)
+                        }
+                    }
+                    CampoFiltro::Tipo => {
+                        self.filtro_edicion.tipo = [
+                            None,
+                            Some(TipoIngreso::Praind),
+                            Some(TipoIngreso::InHouse),
+                            Some(TipoIngreso::PorCorreo),
+                            Some(TipoIngreso::Swat),
+                        ][o]
+                    }
+                    CampoFiltro::Estado => {
+                        self.filtro_edicion.estado = [
+                            EstadoMovimiento::Todos,
+                            EstadoMovimiento::Activos,
+                            EstadoMovimiento::Cerrados,
+                        ][o]
+                    }
+                    _ => {}
+                }
                 self.modo = ModoHistorial::Filtros {
-                    seleccion: seleccion_filtro,
+                    seleccion: s,
                     editando: false,
                 };
+                return AccionHistorial::Ninguna;
             }
             KeyCode::Esc => {
                 self.modo = ModoHistorial::Filtros {
-                    seleccion: seleccion_filtro,
+                    seleccion: s,
                     editando: false,
-                }
+                };
+                return AccionHistorial::Ninguna;
             }
             _ => {}
         }
+        self.modo = ModoHistorial::Desplegable {
+            campo: c,
+            seleccion_filtro: s,
+            opcion: o,
+        };
         AccionHistorial::Ninguna
     }
-
-    fn texto_filtro_mut(&mut self, campo: CampoFiltro) -> Option<&mut String> {
-        match campo {
+    fn opciones(&self, c: CampoFiltro) -> usize {
+        match c {
+            CampoFiltro::Empresa => self.empresas.len() + 1,
+            CampoFiltro::Tipo => 5,
+            CampoFiltro::Estado => 3,
+            _ => 0,
+        }
+    }
+    fn texto_mut(&mut self, c: CampoFiltro) -> Option<&mut String> {
+        match c {
             CampoFiltro::Desde => Some(&mut self.filtro_edicion.desde),
             CampoFiltro::Hasta => Some(&mut self.filtro_edicion.hasta),
             CampoFiltro::NombreCedula => Some(&mut self.filtro_edicion.nombre_cedula),
@@ -382,130 +442,71 @@ impl HistorialState {
             _ => None,
         }
     }
-
-    fn agregar_caracter_filtro(&mut self, campo: CampoFiltro, caracter: char) {
-        let Some(texto) = self.texto_filtro_mut(campo) else {
-            return;
-        };
-        match campo {
-            CampoFiltro::Desde | CampoFiltro::Hasta if caracter.is_ascii_digit() => {
-                let digitos = texto.chars().filter(char::is_ascii_digit).count();
-                if digitos < 8 {
-                    if matches!(digitos, 2 | 4) {
-                        texto.push('/');
+    fn agregar(&mut self, c: CampoFiltro, x: char) {
+        if let Some(t) = self.texto_mut(c) {
+            match c {
+                CampoFiltro::Desde | CampoFiltro::Hasta if x.is_ascii_digit() => {
+                    let n = t.chars().filter(char::is_ascii_digit).count();
+                    if n < 8 {
+                        if matches!(n, 2 | 4) {
+                            t.push('/')
+                        }
+                        t.push(x)
                     }
-                    texto.push(caracter);
+                }
+                CampoFiltro::Gafete if x.is_ascii_digit() => t.push(x),
+                CampoFiltro::NombreCedula if t.chars().count() < 40 => t.push(x),
+                _ => {}
+            }
+        }
+    }
+    fn columnas(&mut self, k: KeyEvent, s: usize) {
+        match k.code {
+            KeyCode::Up => {
+                self.modo = ModoHistorial::Columnas {
+                    seleccion: s.saturating_sub(1),
                 }
             }
-            CampoFiltro::Gafete if caracter.is_ascii_digit() && texto.len() < 3 => {
-                texto.push(caracter)
+            KeyCode::Down => {
+                self.modo = ModoHistorial::Columnas {
+                    seleccion: (s + 1).min(self.columnas.len() - 1),
+                }
             }
-            CampoFiltro::NombreCedula if texto.chars().count() < 40 && !caracter.is_control() => {
-                texto.push(caracter)
+            KeyCode::Char(' ') => {
+                let n = self.columnas.iter().filter(|x| x.1).count();
+                if !(self.columnas[s].1 && n == 1) {
+                    self.columnas[s].1 = !self.columnas[s].1
+                }
             }
+            KeyCode::Esc => self.modo = ModoHistorial::Normal,
             _ => {}
         }
     }
-
-    fn abrir_desplegable(&mut self, campo: CampoFiltro, seleccion_filtro: usize) {
-        let actual = match campo {
-            CampoFiltro::Empresa => self.filtro_edicion.empresa.as_str(),
-            CampoFiltro::Tipo => self.filtro_edicion.tipo.as_str(),
-            CampoFiltro::Estado => estado_texto(self.filtro_edicion.estado),
-            _ => return,
-        };
-        let opcion = opciones_campo(campo)
-            .iter()
-            .position(|valor| *valor == actual)
-            .unwrap_or(0);
-        self.modo = ModoHistorial::Desplegable {
-            campo,
-            seleccion_filtro,
-            opcion,
-        };
-    }
-
-    fn asignar_opcion(&mut self, campo: CampoFiltro, opcion: usize) {
-        let valor = opciones_campo(campo)[opcion];
-        match campo {
-            CampoFiltro::Empresa => self.filtro_edicion.empresa = valor.into(),
-            CampoFiltro::Tipo => self.filtro_edicion.tipo = valor.into(),
-            CampoFiltro::Estado => {
-                self.filtro_edicion.estado = match valor {
-                    "Cerrados" => EstadoFiltro::Cerrados,
-                    "Activos" => EstadoFiltro::Activos,
-                    _ => EstadoFiltro::Todos,
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn indices_filtrados(&self) -> Vec<usize> {
-        let desde = fecha(&self.filtro_aplicado.desde);
-        let hasta = fecha(&self.filtro_aplicado.hasta);
-        let nombre = self.filtro_aplicado.nombre_cedula.to_lowercase();
-        let rapido = self.busqueda.to_lowercase();
-        self.registros
-            .iter()
-            .enumerate()
-            .filter(|(_, r)| {
-                desde.is_none_or(|d| r.fecha >= d)
-                    && hasta.is_none_or(|h| r.fecha <= h)
-                    && (nombre.is_empty()
-                        || r.nombre.to_lowercase().contains(&nombre)
-                        || r.cedula.contains(&nombre))
-                    && (self.filtro_aplicado.empresa == "Todas"
-                        || r.empresa == self.filtro_aplicado.empresa)
-                    && (self.filtro_aplicado.tipo == "Todos" || r.tipo == self.filtro_aplicado.tipo)
-                    && (self.filtro_aplicado.gafete.is_empty()
-                        || r.gafete
-                            .is_some_and(|g| g.to_string().contains(&self.filtro_aplicado.gafete)))
-                    && match self.filtro_aplicado.estado {
-                        EstadoFiltro::Todos => true,
-                        EstadoFiltro::Cerrados => r.salida.is_some(),
-                        EstadoFiltro::Activos => r.salida.is_none(),
-                    }
-                    && (rapido.is_empty()
-                        || r.nombre.to_lowercase().contains(&rapido)
-                        || r.cedula.contains(&rapido)
-                        || r.empresa.to_lowercase().contains(&rapido)
-                        || r.gafete.is_some_and(|g| g.to_string().contains(&rapido)))
-            })
-            .map(|(i, _)| i)
-            .collect()
-    }
-
-    fn mover(&mut self, delta: isize) {
-        let n = self.indices_filtrados().len();
-        self.seleccion = if n == 0 {
-            None
+    fn mover(&mut self, d: isize) {
+        if self.registros.is_empty() {
+            self.seleccion = None
         } else {
-            Some(if delta < 0 {
-                self.seleccion.unwrap_or(0).saturating_sub(1)
+            let i = self.seleccion.unwrap_or(0);
+            self.seleccion = Some(if d < 0 {
+                i.saturating_sub(1)
             } else {
-                (self.seleccion.unwrap_or(0) + 1).min(n - 1)
+                (i + 1).min(self.registros.len() - 1)
             })
-        };
+        }
     }
-    fn ajustar_seleccion(&mut self) {
-        let n = self.indices_filtrados().len();
-        self.seleccion = if n == 0 {
-            None
-        } else {
-            Some(self.seleccion.unwrap_or(0).min(n - 1))
-        };
+    fn registro(&self, id: i64) -> Option<&MovimientoIngresoResumen> {
+        self.registros.iter().find(|r| r.registro_id == id)
     }
-    fn id_seleccionado(&self) -> Option<u64> {
-        let i = *self.indices_filtrados().get(self.seleccion?)?;
-        Some(self.registros[i].id)
-    }
-    fn registro(&self, id: u64) -> Option<&MovimientoHistorialMock> {
-        self.registros.iter().find(|r| r.id == id)
-    }
-    fn inicio_visible(&self, capacidad: usize) -> usize {
+    fn inicio_visible(&self, c: usize) -> usize {
         self.seleccion
             .unwrap_or(0)
-            .saturating_sub(capacidad.saturating_sub(1))
+            .saturating_sub(c.saturating_sub(1))
+    }
+    fn pagina(&self) -> (usize, usize) {
+        if self.total == 0 {
+            (0, 0)
+        } else {
+            (self.offset / LIMIT + 1, self.total.div_ceil(LIMIT))
+        }
     }
 }

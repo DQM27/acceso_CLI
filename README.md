@@ -58,6 +58,12 @@ temporales para cada caso de uso; no contiene reglas de negocio. `cargo run` uti
 `control_acceso.db` en el directorio actual. La variable `CONTROL_ACCESO_DB` permite
 indicar una ruta distinta sin codificar rutas absolutas.
 
+La búsqueda textual usa índices separados SQLite FTS5 con tokenizer `trigram` para
+contratistas, empresas y usuarios. La preparación técnica es compartida, pero cada
+consulta conserva su propio read model y nunca mezcla tipos de resultados. Desde tres
+caracteres la búsqueda es indexada e insensible a mayúsculas y diacríticos; uno o dos
+caracteres usan el `LIKE` existente, siempre limitado por la consulta correspondiente.
+
 Si la base está vacía, el núcleo exige crear el ROOT inicial antes del login. La pantalla
 visual para ese paso aún no forma parte del prototipo; el caso de uso ya está disponible
 mediante `AppCore::crear_root_inicial`.

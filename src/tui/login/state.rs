@@ -54,6 +54,9 @@ impl Default for LoginState {
 }
 
 impl LoginState {
+    pub fn reiniciar(&mut self) {
+        *self = Self::default();
+    }
     pub fn handle_key(&mut self, key: KeyEvent) {
         if matches!(self.estado, EstadoLogin::Validando { .. }) {
             return;

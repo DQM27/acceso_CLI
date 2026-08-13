@@ -7,7 +7,10 @@ use ratatui::{
 };
 
 use super::*;
-use crate::tui::{layout, mock::IngresoActivoMock, theme};
+use crate::{
+    services::registro_ingreso_service::IngresoActivoResumen,
+    tui::{layout, theme},
+};
 
 pub fn render(frame: &mut Frame, area: Rect, state: &ActivosState) {
     frame.render_widget(Block::default().style(theme::texto_normal()), area);
@@ -95,17 +98,26 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ActivosState) {
         .iter()
         .map(|columna| columna.constraint())
         .collect();
-    let indices = state.indices_filtrados();
     let capacidad = interior.height.saturating_sub(2) as usize;
-    let inicio = state.inicio_visible(capacidad).min(indices.len());
-    let filas = indices.iter().skip(inicio).take(capacidad).enumerate().map(
-        |(visible, indice_registro)| {
-            let registro = &state.registros[*indice_registro];
+    let inicio = state.inicio_visible(capacidad).min(state.registros.len());
+    let filas = state
+        .registros
+        .iter()
+        .skip(inicio)
+        .take(capacidad)
+        .enumerate()
+        .map(|(visible, registro)| {
             let seleccionado = state.seleccion == Some(inicio + visible);
             let celdas = columnas.iter().map(|columna| {
                 let estilo = if seleccionado {
                     theme::seleccionado()
-                } else if *columna == Columna::Tipo && registro.advertencia.is_some() {
+                } else if *columna == Columna::Tipo
+                    && matches!(
+                        registro.resultado_acceso,
+                        crate::domain::resultado_acceso::ResultadoAcceso::PermitidoConAdvertencia
+                            | crate::domain::resultado_acceso::ResultadoAcceso::Denegado(_)
+                    )
+                {
                     theme::advertencia()
                 } else {
                     theme::texto_normal()
@@ -117,8 +129,7 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ActivosState) {
             } else {
                 theme::texto_normal()
             })
-        },
-    );
+        });
     let encabezado = Row::new(columnas.iter().map(|columna| columna.titulo()))
         .style(theme::foco())
         .bottom_margin(1);
@@ -128,7 +139,7 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ActivosState) {
             .column_spacing(1),
         interior,
     );
-    if indices.is_empty() {
+    if state.registros.is_empty() {
         frame.render_widget(
             Paragraph::new("No hay ingresos activos que coincidan con la búsqueda.")
                 .style(theme::advertencia())
@@ -138,26 +149,29 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ActivosState) {
     }
 }
 
-fn valor_columna(registro: &IngresoActivoMock, columna: Columna) -> String {
+fn valor_columna(registro: &IngresoActivoResumen, columna: Columna) -> String {
     match columna {
         Columna::Cedula => registro.cedula.clone(),
-        Columna::Nombre => registro.nombre.clone(),
-        Columna::Empresa => registro.empresa.clone(),
+        Columna::Nombre => registro.contratista_nombre.clone(),
+        Columna::Empresa => registro.empresa_nombre.clone(),
         Columna::Tipo => format!(
             "{}{}",
-            registro.tipo,
-            if registro.advertencia.is_some() {
+            texto_tipo(registro.tipo_ingreso),
+            if !matches!(
+                registro.resultado_acceso,
+                crate::domain::resultado_acceso::ResultadoAcceso::Permitido
+            ) {
                 " !"
             } else {
                 ""
             }
         ),
-        Columna::Hora => registro.hora_ingreso.clone(),
+        Columna::Hora => registro.fecha_hora_ingreso.format("%H:%M").to_string(),
         Columna::Gafete => registro
-            .gafete
+            .gafete_numero
             .map_or_else(|| "S/G".to_owned(), |gafete| format!("{gafete:02}")),
-        Columna::Medio => registro.medio.clone(),
-        Columna::Usuario => registro.usuario_ingreso.clone(),
+        Columna::Medio => texto_medio(registro.medio_ingreso).into(),
+        Columna::Usuario => registro.usuario_ingreso_nombre.clone(),
     }
 }
 
@@ -171,7 +185,7 @@ fn render_estado(frame: &mut Frame, area: Rect, state: &ActivosState) {
             Span::styled("FILTRO ACTIVO: ", theme::foco()),
             Span::styled(&state.filtro, theme::texto_normal()),
             Span::styled(
-                format!("    {} resultados    ", state.indices_filtrados().len()),
+                format!("    {} resultados    ", state.registros.len()),
                 theme::texto_secundario(),
             ),
             Span::styled("ESC ", theme::ayuda_tecla()),
@@ -255,11 +269,11 @@ fn render_modo(frame: &mut Frame, area: Rect, state: &ActivosState) {
 fn texto_posicion(state: &ActivosState) -> String {
     state.seleccion.map_or_else(
         || "—/—".to_owned(),
-        |indice| format!("{}/{}", indice + 1, state.indices_filtrados().len()),
+        |indice| format!("{}/{}", indice + 1, state.registros.len()),
     )
 }
 
-fn render_confirmacion(frame: &mut Frame, area: Rect, registro: &IngresoActivoMock) {
+fn render_confirmacion(frame: &mut Frame, area: Rect, registro: &IngresoActivoResumen) {
     layout::render_overlay(
         frame,
         area,
@@ -268,8 +282,8 @@ fn render_confirmacion(frame: &mut Frame, area: Rect, registro: &IngresoActivoMo
         4,
         "REGISTRAR SALIDA",
         vec![
-            Line::from(registro.nombre.clone()).style(theme::titulo()),
-            Line::from(registro.empresa.clone()),
+            Line::from(registro.contratista_nombre.clone()).style(theme::titulo()),
+            Line::from(registro.empresa_nombre.clone()),
             Line::from(format!(
                 "Gafete: {}",
                 valor_columna(registro, Columna::Gafete)
@@ -282,7 +296,7 @@ fn render_confirmacion(frame: &mut Frame, area: Rect, registro: &IngresoActivoMo
     );
 }
 
-fn render_detalle(frame: &mut Frame, area: Rect, registro: &IngresoActivoMock) {
+fn render_detalle(frame: &mut Frame, area: Rect, registro: &IngresoActivoResumen) {
     layout::render_overlay(
         frame,
         area,
@@ -291,23 +305,41 @@ fn render_detalle(frame: &mut Frame, area: Rect, registro: &IngresoActivoMock) {
         4,
         "DETALLE",
         vec![
-            Line::from(registro.nombre.clone()).style(theme::titulo()),
+            Line::from(registro.contratista_nombre.clone()).style(theme::titulo()),
             Line::from(registro.cedula.clone()).style(theme::texto_secundario()),
             Line::from(""),
-            Line::from(format!("Empresa          {}", registro.empresa)),
-            Line::from(format!("Tipo             {}", registro.tipo)),
-            Line::from(format!("Medio            {}", registro.medio)),
+            Line::from(format!("Empresa          {}", registro.empresa_nombre)),
             Line::from(format!(
-                "Ingreso          12/08/2026 {}",
-                registro.hora_ingreso
+                "Tipo             {}",
+                texto_tipo(registro.tipo_ingreso)
+            )),
+            Line::from(format!(
+                "Medio            {}",
+                texto_medio(registro.medio_ingreso)
+            )),
+            Line::from(format!(
+                "Ingreso          {}",
+                registro.fecha_hora_ingreso.format("%d/%m/%Y %H:%M")
             )),
             Line::from(format!(
                 "Gafete           {}",
                 valor_columna(registro, Columna::Gafete)
             )),
-            Line::from(format!("Registrado por   {}", registro.usuario_ingreso)),
-            Line::from(registro.advertencia.clone().unwrap_or_default())
-                .style(theme::advertencia()),
+            Line::from(format!(
+                "Registrado por   {}",
+                registro.usuario_ingreso_nombre
+            )),
+            Line::from(
+                if matches!(
+                    registro.resultado_acceso,
+                    crate::domain::resultado_acceso::ResultadoAcceso::Permitido
+                ) {
+                    ""
+                } else {
+                    "Condición de acceso actual requiere atención"
+                },
+            )
+            .style(theme::advertencia()),
             Line::from(""),
             Line::from("S Salida                         ESC Cerrar").style(theme::foco()),
         ],
@@ -328,13 +360,16 @@ fn render_gafete(frame: &mut Frame, area: Rect, state: &ActivosState, estado: &S
                 return;
             };
             vec![
-                Line::from(registro.nombre.clone()).style(theme::titulo()),
-                Line::from(registro.empresa.clone()),
+                Line::from(registro.contratista_nombre.clone()).style(theme::titulo()),
+                Line::from(registro.empresa_nombre.clone()),
                 Line::from(format!(
                     "Gafete: {}",
                     valor_columna(registro, Columna::Gafete)
                 )),
-                Line::from(format!("Ingreso: {}", registro.hora_ingreso)),
+                Line::from(format!(
+                    "Ingreso: {}",
+                    registro.fecha_hora_ingreso.format("%H:%M")
+                )),
                 Line::from(""),
                 Line::from("¿Registrar salida?"),
                 Line::from("Y Sí        N No        ESC Cancelar").style(theme::foco()),
@@ -342,6 +377,20 @@ fn render_gafete(frame: &mut Frame, area: Rect, state: &ActivosState, estado: &S
         }
     };
     layout::render_overlay(frame, area, 58, 11, 4, "SALIDA POR GAFETE", lineas);
+}
+fn texto_tipo(t: crate::models::tipo_ingreso::TipoIngreso) -> &'static str {
+    match t {
+        crate::models::tipo_ingreso::TipoIngreso::Praind => "PRAIND",
+        crate::models::tipo_ingreso::TipoIngreso::InHouse => "IN HOUSE",
+        crate::models::tipo_ingreso::TipoIngreso::PorCorreo => "POR CORREO",
+        crate::models::tipo_ingreso::TipoIngreso::Swat => "SWAT",
+    }
+}
+fn texto_medio(m: crate::models::medio_ingreso::MedioIngreso) -> &'static str {
+    match m {
+        crate::models::medio_ingreso::MedioIngreso::Caminando => "Caminando",
+        crate::models::medio_ingreso::MedioIngreso::Vehiculo => "Vehículo",
+    }
 }
 
 fn render_columnas(frame: &mut Frame, area: Rect, state: &ActivosState, seleccion: usize) {

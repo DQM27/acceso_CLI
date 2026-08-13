@@ -7,9 +7,10 @@ use ratatui::{
 };
 
 use super::*;
-use crate::tui::{contratistas_mock::ContratistaMock, layout, theme};
-
-const HOY_MOCK: &str = "12/08/2026";
+use crate::{
+    database::queries::contratistas::ContratistaResumen,
+    tui::{layout, theme},
+};
 
 pub fn render(frame: &mut Frame, area: Rect, state: &ContratistasState) {
     frame.render_widget(Block::default().style(theme::texto_normal()), area);
@@ -32,14 +33,14 @@ pub fn render(frame: &mut Frame, area: Rect, state: &ContratistasState) {
             Constraint::Length(3),
         ])
         .split(contenido);
-    render_cabecera(frame, zonas[0]);
+    render_cabecera(frame, zonas[0], state);
     render_estado(frame, zonas[1], state);
     render_tabla(frame, zonas[2], state);
     render_pie(frame, zonas[3], state);
     render_modo(frame, contenido, state);
 }
 
-fn render_cabecera(frame: &mut Frame, area: Rect) {
+fn render_cabecera(frame: &mut Frame, area: Rect, state: &ContratistasState) {
     let bloque = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Plain)
@@ -74,7 +75,7 @@ fn render_cabecera(frame: &mut Frame, area: Rect) {
         centro(cols[1]),
     );
     frame.render_widget(
-        Paragraph::new("Usuario: Quintana ")
+        Paragraph::new(format!("Usuario: {} ", state.usuario_nombre))
             .style(theme::texto_normal())
             .alignment(Alignment::Right),
         centro(cols[2]),
@@ -92,22 +93,21 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ContratistasState) {
         .border_style(theme::borde());
     let interior = marco.inner(area);
     frame.render_widget(marco, area);
-    let indices = state.indices_filtrados();
     let capacidad = interior.height.saturating_sub(2) as usize;
-    let inicio = state.inicio_visible(capacidad).min(indices.len());
-    let filas = indices
+    let inicio = state.inicio_visible(capacidad).min(state.registros.len());
+    let filas = state
+        .registros
         .iter()
         .skip(inicio)
         .take(capacidad)
         .enumerate()
-        .map(|(visible, i)| {
-            let c = &state.registros[*i];
+        .map(|(visible, c)| {
             let seleccionado = state.seleccion == Some(inicio + visible);
             let celdas = columnas.iter().map(|col| {
                 Cell::from(valor(c, *col)).style(if seleccionado {
                     theme::seleccionado()
                 } else {
-                    estilo(c, *col)
+                    estilo(c, *col, state.hoy)
                 })
             });
             Row::new(celdas).style(if seleccionado {
@@ -128,7 +128,7 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ContratistasState) {
         .column_spacing(1),
         interior,
     );
-    if indices.is_empty() {
+    if state.registros.is_empty() {
         frame.render_widget(
             Paragraph::new("No hay contratistas que coincidan con la búsqueda.")
                 .style(theme::advertencia())
@@ -138,33 +138,35 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ContratistasState) {
     }
 }
 
-fn valor(c: &ContratistaMock, col: Columna) -> String {
+fn valor(c: &ContratistaResumen, col: Columna) -> String {
     match col {
         Columna::Cedula => c.cedula.clone(),
         Columna::Nombre => c.nombre.clone(),
-        Columna::Empresa => c.empresa.clone(),
-        Columna::Tipo => c.tipo_ingreso.texto().into(),
-        Columna::Praind => c.fecha_praind.clone().unwrap_or_else(|| "--".into()),
-        Columna::Ruta => si_no(c.personal_ruta).into(),
+        Columna::Empresa => c.empresa_nombre.clone(),
+        Columna::Tipo => texto_tipo(c.tipo_ingreso).into(),
+        Columna::Praind => c
+            .fecha_vencimiento_praind
+            .map(|f| f.format("%d/%m/%Y").to_string())
+            .unwrap_or_else(|| "--".into()),
+        Columna::Ruta => si_no(c.es_personal_ruta).into(),
         Columna::Acceso => si_no(c.tiene_acceso).into(),
     }
 }
 fn si_no(v: bool) -> &'static str {
     if v { "SÍ" } else { "NO" }
 }
-fn estilo(c: &ContratistaMock, col: Columna) -> ratatui::style::Style {
+fn estilo(c: &ContratistaResumen, col: Columna, hoy: NaiveDate) -> ratatui::style::Style {
     match col {
         Columna::Acceso if c.tiene_acceso => theme::exito(),
         Columna::Acceso => theme::error(),
-        Columna::Praind => estilo_fecha(c.fecha_praind.as_deref()),
+        Columna::Praind => estilo_fecha(c.fecha_vencimiento_praind, hoy),
         _ => theme::texto_normal(),
     }
 }
-fn estilo_fecha(fecha: Option<&str>) -> ratatui::style::Style {
-    let Some(fecha) = fecha.and_then(|f| NaiveDate::parse_from_str(f, "%d/%m/%Y").ok()) else {
+fn estilo_fecha(fecha: Option<NaiveDate>, hoy: NaiveDate) -> ratatui::style::Style {
+    let Some(fecha) = fecha else {
         return theme::texto_secundario();
     };
-    let hoy = NaiveDate::parse_from_str(HOY_MOCK, "%d/%m/%Y").expect("fecha mock válida");
     let dias = (fecha - hoy).num_days();
     if dias < 0 {
         theme::error()
@@ -185,12 +187,15 @@ fn render_estado(frame: &mut Frame, area: Rect, state: &ContratistasState) {
             Span::styled("FILTRO ACTIVO: ", theme::foco()),
             Span::styled(&state.filtro, theme::texto_normal()),
             Span::styled(
-                format!("    {} resultados    ", state.indices_filtrados().len()),
+                format!("    {} resultados    ", state.registros.len()),
                 theme::texto_secundario(),
             ),
             Span::styled("ESC ", theme::ayuda_tecla()),
             Span::styled("Limpiar", theme::texto_normal()),
         ]),
+        _ if state.error_carga.is_some() => {
+            Line::from(state.error_carga.clone().unwrap_or_default()).style(theme::error())
+        }
         _ => Line::from(state.mensaje.clone().unwrap_or_default()).style(theme::exito()),
     };
     frame.render_widget(Paragraph::new(linea).alignment(Alignment::Center), area);
@@ -211,7 +216,7 @@ fn render_pie(frame: &mut Frame, area: Rect, state: &ContratistasState) {
         .split(interior);
     let posicion = state.seleccion.map_or_else(
         || "—/—".into(),
-        |i| format!("{}/{}", i + 1, state.indices_filtrados().len()),
+        |i| format!("{}/{}", i + 1, state.registros.len()),
     );
     frame.render_widget(
         Paragraph::new(format!(
@@ -237,12 +242,12 @@ fn render_modo(frame: &mut Frame, area: Rect, state: &ContratistasState) {
                 render_detalle(frame, area, c);
             }
         }
-        ModoContratistas::Formulario(f) => render_formulario(frame, area, f),
+        ModoContratistas::Formulario(f) => render_formulario(frame, area, state, f),
         ModoContratistas::Columnas { seleccion } => render_columnas(frame, area, state, *seleccion),
         _ => {}
     }
 }
-fn render_detalle(frame: &mut Frame, area: Rect, c: &ContratistaMock) {
+fn render_detalle(frame: &mut Frame, area: Rect, c: &ContratistaResumen) {
     layout::render_overlay(
         frame,
         area,
@@ -254,20 +259,33 @@ fn render_detalle(frame: &mut Frame, area: Rect, c: &ContratistaMock) {
             Line::from(c.nombre.clone()).style(theme::titulo()),
             Line::from(""),
             Line::from(format!("Cédula                 {}", c.cedula)),
-            Line::from(format!("Empresa                {}", c.empresa)),
-            Line::from(format!("Tipo de ingreso        {}", c.tipo_ingreso.texto())),
+            Line::from(format!("Empresa                {}", c.empresa_nombre)),
+            Line::from(format!(
+                "Tipo de ingreso        {}",
+                texto_tipo(c.tipo_ingreso)
+            )),
             Line::from(format!(
                 "Fecha PRAIND           {}",
-                c.fecha_praind.as_deref().unwrap_or("No requerida")
+                c.fecha_vencimiento_praind
+                    .map(|f| f.format("%d/%m/%Y").to_string())
+                    .unwrap_or_else(|| "No requerida".into())
             )),
-            Line::from(format!("Personal de ruta       {}", si_no(c.personal_ruta))),
+            Line::from(format!(
+                "Personal de ruta       {}",
+                si_no(c.es_personal_ruta)
+            )),
             Line::from(format!("Tiene acceso           {}", si_no(c.tiene_acceso))),
             Line::from(""),
-            Line::from("ESC Cerrar").style(theme::foco()),
+            Line::from("E Editar                         ESC Cerrar").style(theme::foco()),
         ],
     );
 }
-fn render_formulario(frame: &mut Frame, area: Rect, f: &FormularioContratista) {
+fn render_formulario(
+    frame: &mut Frame,
+    area: Rect,
+    state: &ContratistasState,
+    f: &FormularioContratista,
+) {
     let titulo = match f.modo {
         ModoFormulario::Crear => "NUEVO CONTRATISTA",
         ModoFormulario::Editar { .. } => "EDITAR CONTRATISTA",
@@ -275,8 +293,12 @@ fn render_formulario(frame: &mut Frame, area: Rect, f: &FormularioContratista) {
     let valores = [
         format!("{}{}", f.cedula, cursor(f, 0)),
         format!("{}{}", f.nombre, cursor(f, 1)),
-        EMPRESAS[f.empresa].into(),
-        f.tipo().texto().into(),
+        state
+            .empresas
+            .get(f.empresa)
+            .map_or("Sin empresas", |e| e.nombre.as_str())
+            .into(),
+        texto_tipo(f.tipo).into(),
         if f.requiere_praind() {
             format!("{}{}", f.fecha_praind, cursor(f, 4))
         } else {
@@ -318,18 +340,27 @@ fn render_formulario(frame: &mut Frame, area: Rect, f: &FormularioContratista) {
     );
     layout::render_overlay(frame, area, 76, 24, 4, titulo, lineas);
     if let Some((tipo, opcion)) = f.desplegable {
-        render_desplegable(frame, area, tipo, opcion);
+        render_desplegable(frame, area, state, tipo, opcion);
     }
 }
 fn cursor(f: &FormularioContratista, campo: usize) -> &'static str {
     if f.campo == campo { "_" } else { "" }
 }
-fn render_desplegable(frame: &mut Frame, area: Rect, tipo: Desplegable, opcion: usize) {
+fn render_desplegable(
+    frame: &mut Frame,
+    area: Rect,
+    state: &ContratistasState,
+    tipo: Desplegable,
+    opcion: usize,
+) {
     let (titulo, opciones): (&str, Vec<&str>) = match tipo {
-        Desplegable::Empresa => ("SELECCIONAR EMPRESA", EMPRESAS.to_vec()),
+        Desplegable::Empresa => (
+            "SELECCIONAR EMPRESA",
+            state.empresas.iter().map(|e| e.nombre.as_str()).collect(),
+        ),
         Desplegable::Tipo => (
             "SELECCIONAR TIPO",
-            TipoIngresoMock::TODOS.iter().map(|t| t.texto()).collect(),
+            tipos().iter().map(|t| texto_tipo(*t)).collect(),
         ),
     };
     let mut lineas: Vec<_> = opciones

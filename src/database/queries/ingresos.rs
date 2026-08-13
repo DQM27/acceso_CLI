@@ -2,6 +2,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use rusqlite::{Connection, Row, named_params};
 
 use crate::database::error::DatabaseError;
+use crate::database::search::BusquedaTexto;
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::models::tipo_ingreso::TipoIngreso;
 
@@ -129,30 +130,40 @@ impl IngresosQuery for SqliteIngresosQuery<'_> {
         &self,
         filtro: &FiltroIngresosActivos,
     ) -> Result<Vec<IngresoActivoLectura>, DatabaseError> {
-        let texto = texto_normalizado(filtro.texto.as_deref());
-        let patron = texto.map(|valor| format!("%{valor}%"));
-        let gafete = texto.and_then(|valor| valor.parse::<i64>().ok());
+        let busqueda = BusquedaTexto::preparar(filtro.texto.as_deref());
         let limite = filtro.limite.clamp(1, LIMITE_ACTIVOS_MAXIMO) as i64;
         let offset = offset_sql(filtro.offset);
 
-        let mut statement = self.connection.prepare(ACTIVOS_SQL)?;
+        let (sql, parametros): (&str, Vec<rusqlite::types::Value>) = match busqueda.modo {
+            1 => (
+                ACTIVOS_CORTO_SQL,
+                vec![
+                    busqueda.patron_like.into(),
+                    busqueda.numero_exacto.into(),
+                    limite.into(),
+                    offset.into(),
+                ],
+            ),
+            2 => (
+                ACTIVOS_FTS_SQL,
+                vec![
+                    busqueda.consulta_fts.into(),
+                    busqueda.numero_exacto.into(),
+                    limite.into(),
+                    offset.into(),
+                ],
+            ),
+            _ => (ACTIVOS_SIN_FILTRO_SQL, vec![limite.into(), offset.into()]),
+        };
+        let mut statement = self.connection.prepare(sql)?;
         let items = statement
-            .query_map(
-                named_params! {
-                    ":patron": patron,
-                    ":gafete": gafete,
-                    ":limite": limite,
-                    ":offset": offset,
-                },
-                convertir_activo,
-            )?
+            .query_map(rusqlite::params_from_iter(parametros), convertir_activo)?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(items)
     }
 
     fn buscar_historial(&self, filtro: &FiltroHistorial) -> Result<PaginaHistorial, DatabaseError> {
-        let patron =
-            texto_normalizado(filtro.texto_persona.as_deref()).map(|valor| format!("%{valor}%"));
+        let busqueda = BusquedaTexto::preparar(filtro.texto_persona.as_deref());
         let tipo = filtro.tipo_ingreso.map(tipo_a_texto);
         let estado = estado_a_texto(filtro.estado);
         let desde = fecha_hora_a_texto(filtro.desde);
@@ -166,7 +177,9 @@ impl IngresosQuery for SqliteIngresosQuery<'_> {
             named_params! {
                 ":desde": desde,
                 ":hasta": hasta,
-                ":patron": patron,
+                ":modo_busqueda": busqueda.modo,
+                ":patron": busqueda.patron_like,
+                ":consulta_fts": busqueda.consulta_fts,
                 ":empresa_id": filtro.empresa_id,
                 ":tipo": tipo,
                 ":gafete": filtro.gafete_numero,
@@ -185,7 +198,9 @@ impl IngresosQuery for SqliteIngresosQuery<'_> {
                 named_params! {
                     ":desde": desde,
                     ":hasta": hasta,
-                    ":patron": patron,
+                    ":modo_busqueda": busqueda.modo,
+                    ":patron": busqueda.patron_like,
+                    ":consulta_fts": busqueda.consulta_fts,
                     ":empresa_id": filtro.empresa_id,
                     ":tipo": tipo,
                     ":gafete": filtro.gafete_numero,
@@ -204,7 +219,7 @@ impl IngresosQuery for SqliteIngresosQuery<'_> {
     }
 }
 
-const ACTIVOS_SQL: &str = "
+const ACTIVOS_SIN_FILTRO_SQL: &str = "
     SELECT
         r.id, r.contratista_id, r.empresa_id, c.cedula, c.nombre, e.nombre,
         r.tipo_ingreso, r.medio_ingreso, r.fecha_hora_ingreso, r.gafete_numero,
@@ -214,15 +229,55 @@ const ACTIVOS_SQL: &str = "
     INNER JOIN empresas AS e ON e.id = r.empresa_id
     INNER JOIN usuarios AS ui ON ui.id = r.usuario_ingreso_id
     WHERE r.fecha_hora_salida IS NULL
-      AND (
-          :patron IS NULL
-          OR c.cedula LIKE :patron COLLATE NOCASE
-          OR c.nombre LIKE :patron COLLATE NOCASE
-          OR e.nombre LIKE :patron COLLATE NOCASE
-          OR (:gafete IS NOT NULL AND r.gafete_numero = :gafete)
-      )
     ORDER BY r.fecha_hora_ingreso DESC, r.id DESC
-    LIMIT :limite OFFSET :offset
+    LIMIT ?1 OFFSET ?2
+";
+
+const ACTIVOS_CORTO_SQL: &str = "
+    SELECT
+        r.id, r.contratista_id, r.empresa_id, c.cedula, c.nombre, e.nombre,
+        r.tipo_ingreso, r.medio_ingreso, r.fecha_hora_ingreso, r.gafete_numero,
+        ui.nombre, c.fecha_vencimiento_praind, c.es_personal_ruta, c.tiene_acceso
+    FROM registro_ingresos AS r
+    INNER JOIN contratistas AS c ON c.id = r.contratista_id
+    INNER JOIN empresas AS e ON e.id = r.empresa_id
+    INNER JOIN usuarios AS ui ON ui.id = r.usuario_ingreso_id
+    WHERE r.fecha_hora_salida IS NULL AND (
+        c.cedula LIKE ?1 COLLATE NOCASE OR c.nombre LIKE ?1 COLLATE NOCASE
+        OR e.nombre LIKE ?1 COLLATE NOCASE
+        OR (?2 IS NOT NULL AND r.gafete_numero = ?2)
+    )
+    ORDER BY r.fecha_hora_ingreso DESC, r.id DESC
+    LIMIT ?3 OFFSET ?4
+";
+
+const ACTIVOS_FTS_SQL: &str = "
+    WITH contratistas_coincidentes(id) AS (
+        SELECT rowid FROM contratistas_fts WHERE contratistas_fts MATCH ?1
+        UNION
+        SELECT c.id FROM empresas_fts
+        INNER JOIN contratistas AS c ON c.empresa_id = empresas_fts.rowid
+        WHERE empresas_fts MATCH ?1
+    ), registros_coincidentes(id) AS (
+        SELECT r.id FROM contratistas_coincidentes
+        INNER JOIN registro_ingresos AS r
+            ON r.contratista_id = contratistas_coincidentes.id
+        WHERE r.fecha_hora_salida IS NULL
+        UNION
+        SELECT id FROM registro_ingresos
+        WHERE ?2 IS NOT NULL AND gafete_numero = ?2 AND fecha_hora_salida IS NULL
+    )
+    SELECT
+        r.id, r.contratista_id, r.empresa_id, c.cedula, c.nombre, e.nombre,
+        r.tipo_ingreso, r.medio_ingreso, r.fecha_hora_ingreso, r.gafete_numero,
+        ui.nombre, c.fecha_vencimiento_praind, c.es_personal_ruta, c.tiene_acceso
+    FROM registros_coincidentes
+    INNER JOIN registro_ingresos AS r ON r.id = registros_coincidentes.id
+    INNER JOIN contratistas AS c ON c.id = r.contratista_id
+    INNER JOIN empresas AS e ON e.id = r.empresa_id
+    INNER JOIN usuarios AS ui ON ui.id = r.usuario_ingreso_id
+    ORDER BY r.fecha_hora_ingreso DESC, r.id DESC
+    LIMIT ?3 OFFSET ?4
 ";
 
 const HISTORIAL_COLUMNAS: &str = "
@@ -239,7 +294,16 @@ const HISTORIAL_FROM_WHERE: &str = "
     LEFT JOIN usuarios AS us ON us.id = r.usuario_salida_id
     WHERE r.fecha_hora_ingreso >= :desde
       AND r.fecha_hora_ingreso < :hasta
-      AND (:patron IS NULL OR c.cedula LIKE :patron COLLATE NOCASE OR c.nombre LIKE :patron COLLATE NOCASE)
+      AND (
+          :modo_busqueda = 0
+          OR (:modo_busqueda = 1 AND (
+              c.cedula LIKE :patron COLLATE NOCASE
+              OR c.nombre LIKE :patron COLLATE NOCASE
+          ))
+          OR (:modo_busqueda = 2 AND c.id IN (
+              SELECT rowid FROM contratistas_fts WHERE contratistas_fts MATCH :consulta_fts
+          ))
+      )
       AND (:empresa_id IS NULL OR r.empresa_id = :empresa_id)
       AND (:tipo IS NULL OR r.tipo_ingreso = :tipo)
       AND (:gafete IS NULL OR r.gafete_numero = :gafete)
@@ -365,10 +429,6 @@ fn estado_a_texto(estado: EstadoMovimiento) -> &'static str {
 
 fn fecha_hora_a_texto(fecha: NaiveDateTime) -> String {
     fecha.format("%Y-%m-%d %H:%M:%S").to_string()
-}
-
-fn texto_normalizado(texto: Option<&str>) -> Option<&str> {
-    texto.map(str::trim).filter(|valor| !valor.is_empty())
 }
 
 fn offset_sql(offset: usize) -> i64 {

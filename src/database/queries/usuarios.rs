@@ -1,6 +1,7 @@
-use rusqlite::{Connection, Row, params};
+use rusqlite::{Connection, Row};
 
 use crate::database::error::DatabaseError;
+use crate::database::search::BusquedaTexto;
 use crate::models::usuario::RolUsuario;
 
 const LIMITE_PREDETERMINADO: usize = 100;
@@ -49,27 +50,45 @@ impl<'a> SqliteUsuariosQuery<'a> {
 
 impl UsuariosQuery for SqliteUsuariosQuery<'_> {
     fn buscar(&self, filtro: &FiltroUsuarios) -> Result<Vec<UsuarioResumen>, DatabaseError> {
-        let patron = filtro
-            .texto
-            .as_deref()
-            .map(str::trim)
-            .filter(|texto| !texto.is_empty())
-            .map(|texto| format!("%{texto}%"));
+        let busqueda = BusquedaTexto::preparar(filtro.texto.as_deref());
         let limite = filtro.limite.clamp(1, LIMITE_MAXIMO) as i64;
         let offset = i64::try_from(filtro.offset).unwrap_or(i64::MAX);
-        let mut statement = self.connection.prepare(
-            "
-            SELECT id, cedula, nombre, rol, activo
-            FROM usuarios
-            WHERE ?1 IS NULL
-               OR cedula LIKE ?1 COLLATE NOCASE
-               OR nombre LIKE ?1 COLLATE NOCASE
-            ORDER BY nombre COLLATE NOCASE, id
-            LIMIT ?2 OFFSET ?3
-            ",
-        )?;
+        let (sql, parametros): (&str, Vec<rusqlite::types::Value>) = match busqueda.modo {
+            1 => (
+                "SELECT id,cedula,nombre,rol,activo FROM usuarios
+                 WHERE cedula LIKE ?1 COLLATE NOCASE OR nombre LIKE ?1 COLLATE NOCASE
+                 ORDER BY CASE WHEN cedula=?2 COLLATE NOCASE THEN 0 ELSE 1 END,
+                          nombre COLLATE NOCASE,id LIMIT ?3 OFFSET ?4",
+                vec![
+                    busqueda.patron_like.into(),
+                    busqueda.texto_literal.into(),
+                    limite.into(),
+                    offset.into(),
+                ],
+            ),
+            2 => (
+                "SELECT u.id,u.cedula,u.nombre,u.rol,u.activo
+                 FROM usuarios_fts
+                 INNER JOIN usuarios AS u ON u.id=usuarios_fts.rowid
+                 WHERE usuarios_fts MATCH ?1
+                 ORDER BY CASE WHEN u.cedula=?2 COLLATE NOCASE THEN 0 ELSE 1 END,
+                          u.nombre COLLATE NOCASE,u.id LIMIT ?3 OFFSET ?4",
+                vec![
+                    busqueda.consulta_fts.into(),
+                    busqueda.texto_literal.into(),
+                    limite.into(),
+                    offset.into(),
+                ],
+            ),
+            _ => (
+                "SELECT id,cedula,nombre,rol,activo FROM usuarios
+                 ORDER BY nombre COLLATE NOCASE,id LIMIT ?1 OFFSET ?2",
+                vec![limite.into(), offset.into()],
+            ),
+        };
+        let mut statement = self.connection.prepare(sql)?;
         let items = statement
-            .query_map(params![patron, limite, offset], convertir_fila)?
+            .query_map(rusqlite::params_from_iter(parametros), convertir_fila)?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(items)
     }

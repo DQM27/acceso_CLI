@@ -1,4 +1,5 @@
 use crate::database::error::DatabaseError;
+use crate::database::queries::empresas::{EmpresaResumen, EmpresasQuery, FiltroEmpresas};
 use crate::database::repositories::empresa_repository::EmpresaRepository;
 use crate::models::empresa::Empresa;
 
@@ -9,6 +10,23 @@ where
     R: EmpresaRepository + ?Sized,
 {
     empresas: &'a R,
+}
+
+pub struct EmpresaConsultaService<'a, Q: EmpresasQuery + ?Sized> {
+    query: &'a Q,
+}
+
+impl<'a, Q: EmpresasQuery + ?Sized> EmpresaConsultaService<'a, Q> {
+    pub fn new(query: &'a Q) -> Self {
+        Self { query }
+    }
+
+    pub fn buscar_para_tabla(
+        &self,
+        filtro: &FiltroEmpresas,
+    ) -> Result<Vec<EmpresaResumen>, EmpresaServiceError> {
+        Ok(self.query.buscar(filtro)?)
+    }
 }
 
 impl<'a, R> EmpresaService<'a, R>

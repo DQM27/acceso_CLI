@@ -1,59 +1,33 @@
-use chrono::NaiveDate;
-
-pub(super) const EMPRESAS: &[&str] = &[
-    "Todas",
-    "Brisas",
-    "Constructora Alfa",
-    "Servicios CR",
-    "Ingeniería del Pacífico",
-    "Mantenimiento Industrial Vega",
-    "Transportes del Valle",
-    "Soluciones Técnicas CR",
-    "Servicios Electromecánicos Nacionales",
-    "Proveedores Central",
-    "Construcciones del Este",
-];
-pub(super) const TIPOS: &[&str] = &[
-    "Todos",
-    "PRAIND",
-    "IN HOUSE",
-    "POR CORREO",
-    "SWAT",
-    "PRAIND / RUTA",
-];
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EstadoFiltro {
-    Todos,
-    Cerrados,
-    Activos,
-}
-
+use crate::{
+    database::queries::ingresos::{EstadoMovimiento, FiltroHistorial},
+    models::{empresa::Empresa, tipo_ingreso::TipoIngreso},
+};
+use chrono::{Datelike, Duration, Local, NaiveDate};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FiltrosHistorial {
     pub desde: String,
     pub hasta: String,
     pub nombre_cedula: String,
-    pub empresa: String,
-    pub tipo: String,
+    pub empresa_id: Option<i64>,
+    pub tipo: Option<TipoIngreso>,
     pub gafete: String,
-    pub estado: EstadoFiltro,
+    pub estado: EstadoMovimiento,
 }
-
 impl Default for FiltrosHistorial {
     fn default() -> Self {
+        let h = Local::now().date_naive();
+        let d = NaiveDate::from_ymd_opt(h.year(), h.month(), 1).unwrap();
         Self {
-            desde: "01/08/2026".into(),
-            hasta: "12/08/2026".into(),
+            desde: d.format("%d/%m/%Y").to_string(),
+            hasta: h.format("%d/%m/%Y").to_string(),
             nombre_cedula: String::new(),
-            empresa: "Todas".into(),
-            tipo: "Todos".into(),
+            empresa_id: None,
+            tipo: None,
             gafete: String::new(),
-            estado: EstadoFiltro::Todos,
+            estado: EstadoMovimiento::Todos,
         }
     }
 }
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum CampoFiltro {
     Desde,
@@ -64,7 +38,6 @@ pub(super) enum CampoFiltro {
     Gafete,
     Estado,
 }
-
 impl CampoFiltro {
     pub(super) const TODOS: [Self; 7] = [
         Self::Desde,
@@ -76,27 +49,69 @@ impl CampoFiltro {
         Self::Estado,
     ];
 }
-
-pub(super) fn fecha(valor: &str) -> Option<NaiveDate> {
-    NaiveDate::parse_from_str(valor, "%d/%m/%Y").ok()
+pub(super) fn fecha(v: &str) -> Option<NaiveDate> {
+    NaiveDate::parse_from_str(v, "%d/%m/%Y").ok()
 }
-pub(super) fn fechas_validas(filtros: &FiltrosHistorial) -> bool {
-    matches!((fecha(&filtros.desde), fecha(&filtros.hasta)), (Some(desde), Some(hasta)) if desde <= hasta)
+pub(super) fn construir(
+    f: &FiltrosHistorial,
+    busqueda: &str,
+    limit: usize,
+    offset: usize,
+) -> Result<FiltroHistorial, String> {
+    let d = fecha(&f.desde).ok_or("Fecha Desde inválida. Use DD/MM/YYYY")?;
+    let visual = fecha(&f.hasta).ok_or("Fecha Hasta inválida. Use DD/MM/YYYY")?;
+    let hasta = visual
+        .checked_add_signed(Duration::days(1))
+        .ok_or("El rango de fechas no es válido")?;
+    let desde = d.and_hms_opt(0, 0, 0).unwrap();
+    let hasta = hasta.and_hms_opt(0, 0, 0).unwrap();
+    if desde >= hasta {
+        return Err("El rango de fechas no es válido".into());
+    }
+    let gafete = if f.gafete.trim().is_empty() {
+        None
+    } else {
+        Some(
+            f.gafete
+                .trim()
+                .parse::<i64>()
+                .map_err(|_| "Ingrese un número de gafete válido")?,
+        )
+    };
+    let texto = if busqueda.trim().is_empty() {
+        f.nombre_cedula.trim()
+    } else {
+        busqueda.trim()
+    };
+    Ok(FiltroHistorial {
+        desde,
+        hasta,
+        texto_persona: (!texto.is_empty()).then(|| texto.to_owned()),
+        empresa_id: f.empresa_id,
+        tipo_ingreso: f.tipo,
+        gafete_numero: gafete,
+        estado: f.estado,
+        limite: limit,
+        offset,
+    })
 }
-
-pub(super) fn estado_texto(estado: EstadoFiltro) -> &'static str {
-    match estado {
-        EstadoFiltro::Todos => "Todos",
-        EstadoFiltro::Cerrados => "Cerrados",
-        EstadoFiltro::Activos => "Activos",
+pub(super) fn estado_texto(e: EstadoMovimiento) -> &'static str {
+    match e {
+        EstadoMovimiento::Todos => "Todos",
+        EstadoMovimiento::Activos => "Activos",
+        EstadoMovimiento::Cerrados => "Cerrados",
     }
 }
-
-pub(super) fn opciones_campo(campo: CampoFiltro) -> &'static [&'static str] {
-    match campo {
-        CampoFiltro::Empresa => EMPRESAS,
-        CampoFiltro::Tipo => TIPOS,
-        CampoFiltro::Estado => &["Todos", "Cerrados", "Activos"],
-        _ => &[],
+pub(super) fn empresa_texto(id: Option<i64>, empresas: &[Empresa]) -> String {
+    id.and_then(|x| empresas.iter().find(|e| e.id == x))
+        .map_or("Todas".into(), |e| e.nombre.clone())
+}
+pub(super) fn tipo_texto(t: Option<TipoIngreso>) -> &'static str {
+    match t {
+        None => "Todos",
+        Some(TipoIngreso::Praind) => "PRAIND",
+        Some(TipoIngreso::InHouse) => "IN HOUSE",
+        Some(TipoIngreso::PorCorreo) => "POR CORREO",
+        Some(TipoIngreso::Swat) => "SWAT",
     }
 }

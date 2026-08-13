@@ -1,10 +1,8 @@
-use crate::tui::{mock, mock::IngresoActivoMock};
+use crate::services::registro_ingreso_service::IngresoActivoResumen;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Constraint;
-
 #[path = "render.rs"]
 pub(super) mod render;
-
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
@@ -20,7 +18,6 @@ pub enum Columna {
     Medio,
     Usuario,
 }
-
 impl Columna {
     const TODAS: [Self; 8] = [
         Self::Cedula,
@@ -32,7 +29,6 @@ impl Columna {
         Self::Medio,
         Self::Usuario,
     ];
-
     fn titulo(self) -> &'static str {
         match self {
             Self::Cedula => "CÉDULA",
@@ -45,7 +41,6 @@ impl Columna {
             Self::Usuario => "USUARIO INGRESO",
         }
     }
-
     fn constraint(self) -> Constraint {
         match self {
             Self::Nombre | Self::Empresa => Constraint::Fill(3),
@@ -56,7 +51,6 @@ impl Columna {
         }
     }
 }
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SalidaGafete {
     Capturando {
@@ -64,325 +58,366 @@ pub enum SalidaGafete {
         error: Option<String>,
     },
     Encontrado {
-        id: u64,
+        id: i64,
     },
 }
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModoActivos {
     Normal,
     Busqueda { texto: String },
-    Detalle { id: u64 },
-    ConfirmarSalida { id: u64 },
+    Detalle { id: i64 },
+    ConfirmarSalida { id: i64 },
     SalidaPorGafete(SalidaGafete),
     Columnas { seleccion: usize },
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AccionActivos {
     Ninguna,
     Volver,
-    IrHistorial,
-    IrContratistas,
+    Buscar {
+        texto: Option<String>,
+        seleccionar_id: Option<i64>,
+    },
+    BuscarPorGafete {
+        numero: i64,
+    },
+    RegistrarSalida {
+        registro_id: i64,
+        nombre: String,
+    },
 }
-
 #[derive(Debug)]
 pub struct ActivosState {
-    registros: Vec<IngresoActivoMock>,
+    registros: Vec<IngresoActivoResumen>,
     seleccion: Option<usize>,
     modo: ModoActivos,
     columnas: Vec<(Columna, bool)>,
     mensaje: Option<String>,
-    filtro: String,
+    pub(crate) filtro: String,
+    usuario_nombre: String,
 }
-
 impl Default for ActivosState {
     fn default() -> Self {
         Self {
-            registros: mock::ingresos_activos(),
-            seleccion: Some(0),
+            registros: vec![],
+            seleccion: None,
             modo: ModoActivos::Normal,
             columnas: Columna::TODAS
                 .into_iter()
-                .map(|columna| {
-                    (
-                        columna,
-                        !matches!(columna, Columna::Medio | Columna::Usuario),
-                    )
-                })
+                .map(|c| (c, !matches!(c, Columna::Medio | Columna::Usuario)))
                 .collect(),
             mensaje: None,
             filtro: String::new(),
+            usuario_nombre: "Quintana".into(),
         }
     }
 }
-
 impl ActivosState {
-    pub fn handle_key(&mut self, key: KeyEvent) -> AccionActivos {
-        match self.modo.clone() {
-            ModoActivos::Normal => self.handle_normal(key),
-            ModoActivos::Busqueda { .. } => self.handle_busqueda(key),
-            ModoActivos::Detalle { id } => self.handle_detalle(key, id),
-            ModoActivos::ConfirmarSalida { id } => self.handle_confirmacion(key, id),
-            ModoActivos::SalidaPorGafete(estado) => self.handle_gafete(key, estado),
-            ModoActivos::Columnas { seleccion } => self.handle_columnas(key, seleccion),
+    pub fn set_usuario_nombre(&mut self, n: impl Into<String>) {
+        self.usuario_nombre = n.into()
+    }
+    pub fn solicitud_carga(&self) -> AccionActivos {
+        AccionActivos::Buscar {
+            texto: texto_filtro(&self.filtro),
+            seleccionar_id: self.id_seleccionado(),
         }
     }
-
     pub fn cantidad(&self) -> usize {
         self.registros.len()
     }
-
     pub fn modo(&self) -> &ModoActivos {
         &self.modo
     }
-
-    pub fn indices_filtrados(&self) -> Vec<usize> {
-        let texto = self.filtro.trim().to_lowercase();
-        self.registros
-            .iter()
-            .enumerate()
-            .filter(|(_, registro)| {
-                texto.is_empty()
-                    || registro.nombre.to_lowercase().contains(&texto)
-                    || registro.cedula.to_lowercase().contains(&texto)
-                    || registro.empresa.to_lowercase().contains(&texto)
-                    || registro
-                        .gafete
-                        .is_some_and(|gafete| gafete.to_string().contains(&texto))
-            })
-            .map(|(indice, _)| indice)
-            .collect()
-    }
-
-    pub fn inicio_visible(&self, capacidad: usize) -> usize {
-        if capacidad == 0 {
-            return 0;
+    pub fn completar_busqueda(
+        &mut self,
+        r: Result<Vec<IngresoActivoResumen>, String>,
+        id: Option<i64>,
+    ) {
+        match r {
+            Ok(v) => {
+                self.registros = v;
+                self.seleccion = id
+                    .and_then(|x| self.registros.iter().position(|r| r.registro_id == x))
+                    .or((!self.registros.is_empty()).then_some(0))
+            }
+            Err(e) => {
+                self.registros.clear();
+                self.seleccion = None;
+                self.mensaje = Some(e)
+            }
         }
-        self.seleccion.unwrap_or(0).saturating_sub(capacidad - 1)
     }
-
-    fn handle_normal(&mut self, key: KeyEvent) -> AccionActivos {
+    pub fn completar_gafete(
+        &mut self,
+        r: Result<i64, String>,
+        registros: Option<Vec<IngresoActivoResumen>>,
+    ) {
+        match r {
+            Ok(id) => {
+                if let Some(v) = registros {
+                    self.registros = v;
+                    self.filtro.clear()
+                }
+                self.seleccion = self.registros.iter().position(|x| x.registro_id == id);
+                if self.seleccion.is_some() {
+                    self.modo = ModoActivos::SalidaPorGafete(SalidaGafete::Encontrado { id })
+                } else {
+                    self.modo = ModoActivos::Normal;
+                    self.mensaje = Some("No existe un ingreso activo con ese gafete".into())
+                }
+            }
+            Err(e) => {
+                if let ModoActivos::SalidaPorGafete(SalidaGafete::Capturando { error, .. }) =
+                    &mut self.modo
+                {
+                    *error = Some(e)
+                }
+            }
+        }
+    }
+    pub fn completar_salida(
+        &mut self,
+        r: Result<(), String>,
+        id: i64,
+        nombre: &str,
+    ) -> AccionActivos {
+        self.modo = ModoActivos::Normal;
+        match r {
+            Ok(()) => {
+                self.mensaje = Some(format!("✓ Salida registrada — {nombre}"));
+                AccionActivos::Buscar {
+                    texto: texto_filtro(&self.filtro),
+                    seleccionar_id: Some(id),
+                }
+            }
+            Err(e) => {
+                self.mensaje = Some(e);
+                AccionActivos::Buscar {
+                    texto: texto_filtro(&self.filtro),
+                    seleccionar_id: None,
+                }
+            }
+        }
+    }
+    pub fn handle_key(&mut self, k: KeyEvent) -> AccionActivos {
+        match self.modo.clone() {
+            ModoActivos::Normal => self.normal(k),
+            ModoActivos::Busqueda { .. } => self.busqueda(k),
+            ModoActivos::Detalle { id } => match k.code {
+                KeyCode::Char('s' | 'S') => {
+                    self.modo = ModoActivos::ConfirmarSalida { id };
+                    AccionActivos::Ninguna
+                }
+                KeyCode::Esc => {
+                    self.modo = ModoActivos::Normal;
+                    AccionActivos::Ninguna
+                }
+                _ => AccionActivos::Ninguna,
+            },
+            ModoActivos::ConfirmarSalida { id } => self.confirmar(k, id),
+            ModoActivos::SalidaPorGafete(s) => self.gafete(k, s),
+            ModoActivos::Columnas { seleccion } => {
+                self.columnas(k, seleccion);
+                AccionActivos::Ninguna
+            }
+        }
+    }
+    fn normal(&mut self, k: KeyEvent) -> AccionActivos {
         self.mensaje = None;
-        match key.code {
+        match k.code {
             KeyCode::Up => self.mover(-1),
             KeyCode::Down => self.mover(1),
             KeyCode::Enter => {
                 if let Some(id) = self.id_seleccionado() {
-                    self.modo = ModoActivos::Detalle { id };
+                    self.modo = ModoActivos::Detalle { id }
                 }
             }
-            KeyCode::Char('s' | 'S') => self.abrir_confirmacion(),
+            KeyCode::Char('s' | 'S') => {
+                if let Some(id) = self.id_seleccionado() {
+                    self.modo = ModoActivos::ConfirmarSalida { id }
+                }
+            }
             KeyCode::F(2) => {
                 self.modo = ModoActivos::SalidaPorGafete(SalidaGafete::Capturando {
                     numero: String::new(),
                     error: None,
-                });
+                })
             }
             KeyCode::Char('/') => {
                 self.modo = ModoActivos::Busqueda {
                     texto: self.filtro.clone(),
-                };
-                self.seleccion = (!self.registros.is_empty()).then_some(0);
+                }
             }
             KeyCode::Char('c' | 'C') | KeyCode::F(6) => {
                 self.modo = ModoActivos::Columnas { seleccion: 0 }
             }
-            // Navegación temporal del prototipo; desaparecerá al existir MenuPrincipal.
-            KeyCode::Char('h' | 'H') => return AccionActivos::IrHistorial,
-            // Navegación temporal oculta hacia Base de Contratistas.
-            KeyCode::Char('b' | 'B') => return AccionActivos::IrContratistas,
             KeyCode::Esc if !self.filtro.is_empty() => {
                 self.filtro.clear();
-                self.seleccion = (!self.registros.is_empty()).then_some(0);
+                return AccionActivos::Buscar {
+                    texto: None,
+                    seleccionar_id: None,
+                };
             }
             KeyCode::Esc => return AccionActivos::Volver,
             _ => {}
         }
         AccionActivos::Ninguna
     }
-
-    fn handle_busqueda(&mut self, key: KeyEvent) -> AccionActivos {
-        match key.code {
+    fn busqueda(&mut self, k: KeyEvent) -> AccionActivos {
+        match k.code {
             KeyCode::Esc => {
                 self.filtro.clear();
                 self.modo = ModoActivos::Normal;
-                self.seleccion = (!self.registros.is_empty()).then_some(0);
+                AccionActivos::Buscar {
+                    texto: None,
+                    seleccionar_id: None,
+                }
             }
-            KeyCode::Enter => self.modo = ModoActivos::Normal,
-            KeyCode::Up => self.mover(-1),
-            KeyCode::Down => self.mover(1),
+            KeyCode::Enter => {
+                self.modo = ModoActivos::Normal;
+                AccionActivos::Ninguna
+            }
+            KeyCode::Up => {
+                self.mover(-1);
+                AccionActivos::Ninguna
+            }
+            KeyCode::Down => {
+                self.mover(1);
+                AccionActivos::Ninguna
+            }
             KeyCode::Backspace => {
                 if let ModoActivos::Busqueda { texto } = &mut self.modo {
                     texto.pop();
-                    self.filtro = texto.clone();
+                    self.filtro = texto.clone()
                 }
-                self.ajustar_seleccion_filtro();
+                AccionActivos::Buscar {
+                    texto: texto_filtro(&self.filtro),
+                    seleccionar_id: None,
+                }
             }
-            KeyCode::Char(character)
-                if !key
+            KeyCode::Char(c)
+                if !k
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
                 if let ModoActivos::Busqueda { texto } = &mut self.modo {
-                    texto.push(character);
-                    self.filtro = texto.clone();
+                    texto.push(c);
+                    self.filtro = texto.clone()
                 }
-                self.ajustar_seleccion_filtro();
+                AccionActivos::Buscar {
+                    texto: texto_filtro(&self.filtro),
+                    seleccionar_id: None,
+                }
             }
-            _ => {}
+            _ => AccionActivos::Ninguna,
         }
-        AccionActivos::Ninguna
     }
-
-    fn handle_detalle(&mut self, key: KeyEvent, id: u64) -> AccionActivos {
-        match key.code {
-            KeyCode::Char('s' | 'S') => self.modo = ModoActivos::ConfirmarSalida { id },
-            KeyCode::Esc => self.modo = ModoActivos::Normal,
-            _ => {}
+    fn confirmar(&mut self, k: KeyEvent, id: i64) -> AccionActivos {
+        match k.code {
+            KeyCode::Char('y' | 'Y') => {
+                let nombre = self
+                    .registro(id)
+                    .map(|r| r.contratista_nombre.clone())
+                    .unwrap_or_default();
+                AccionActivos::RegistrarSalida {
+                    registro_id: id,
+                    nombre,
+                }
+            }
+            KeyCode::Char('n' | 'N') | KeyCode::Esc => {
+                self.modo = ModoActivos::Normal;
+                AccionActivos::Ninguna
+            }
+            _ => AccionActivos::Ninguna,
         }
-        AccionActivos::Ninguna
     }
-
-    fn handle_confirmacion(&mut self, key: KeyEvent, id: u64) -> AccionActivos {
-        match key.code {
-            KeyCode::Char('y' | 'Y') => self.eliminar(id),
-            KeyCode::Char('n' | 'N') | KeyCode::Esc => self.modo = ModoActivos::Normal,
-            _ => {}
-        }
-        AccionActivos::Ninguna
-    }
-
-    fn handle_gafete(&mut self, key: KeyEvent, estado: SalidaGafete) -> AccionActivos {
-        match estado {
-            SalidaGafete::Capturando { mut numero, .. } => match key.code {
-                KeyCode::Esc => self.modo = ModoActivos::Normal,
+    fn gafete(&mut self, k: KeyEvent, s: SalidaGafete) -> AccionActivos {
+        match s {
+            SalidaGafete::Capturando { mut numero, .. } => match k.code {
+                KeyCode::Esc => {
+                    self.modo = ModoActivos::Normal;
+                    AccionActivos::Ninguna
+                }
                 KeyCode::Backspace => {
                     numero.pop();
                     self.modo = ModoActivos::SalidaPorGafete(SalidaGafete::Capturando {
                         numero,
                         error: None,
                     });
+                    AccionActivos::Ninguna
                 }
-                KeyCode::Char(character) if character.is_ascii_digit() => {
-                    numero.push(character);
+                KeyCode::Char(c) if c.is_ascii_digit() => {
+                    numero.push(c);
                     self.modo = ModoActivos::SalidaPorGafete(SalidaGafete::Capturando {
                         numero,
                         error: None,
                     });
+                    AccionActivos::Ninguna
                 }
-                KeyCode::Enter => {
-                    let gafete = numero.parse::<u32>().ok();
-                    if let Some(registro) = self.registros.iter().find(|r| r.gafete == gafete) {
-                        self.modo = ModoActivos::SalidaPorGafete(SalidaGafete::Encontrado {
-                            id: registro.id,
-                        });
-                    } else {
-                        let error = format!(
-                            "El gafete {} no está asignado a ningún ingreso activo",
-                            if numero.is_empty() { "—" } else { &numero }
-                        );
+                KeyCode::Enter => match numero.parse::<i64>() {
+                    Ok(n) => AccionActivos::BuscarPorGafete { numero: n },
+                    Err(_) => {
                         self.modo = ModoActivos::SalidaPorGafete(SalidaGafete::Capturando {
                             numero,
-                            error: Some(error),
+                            error: Some("Ingrese un número de gafete válido".into()),
                         });
+                        AccionActivos::Ninguna
                     }
-                }
-                _ => {}
+                },
+                _ => AccionActivos::Ninguna,
             },
-            SalidaGafete::Encontrado { id } => match key.code {
-                KeyCode::Char('y' | 'Y') => self.eliminar(id),
-                KeyCode::Char('n' | 'N') | KeyCode::Esc => self.modo = ModoActivos::Normal,
-                _ => {}
-            },
+            SalidaGafete::Encontrado { id } => self.confirmar(k, id),
         }
-        AccionActivos::Ninguna
     }
-
-    fn handle_columnas(&mut self, key: KeyEvent, seleccion: usize) -> AccionActivos {
-        let ultimo = self.columnas.len() - 1;
-        match key.code {
+    fn columnas(&mut self, k: KeyEvent, s: usize) {
+        let u = self.columnas.len() - 1;
+        match k.code {
             KeyCode::Up => {
                 self.modo = ModoActivos::Columnas {
-                    seleccion: seleccion.saturating_sub(1),
+                    seleccion: s.saturating_sub(1),
                 }
             }
             KeyCode::Down => {
                 self.modo = ModoActivos::Columnas {
-                    seleccion: (seleccion + 1).min(ultimo),
+                    seleccion: (s + 1).min(u),
                 }
             }
             KeyCode::Char(' ') => {
-                let visibles = self.columnas.iter().filter(|(_, visible)| *visible).count();
-                if self.columnas[seleccion].1 && visibles == 1 {
-                    self.mensaje = Some("Debe conservar al menos una columna".to_owned());
+                let n = self.columnas.iter().filter(|x| x.1).count();
+                if self.columnas[s].1 && n == 1 {
+                    self.mensaje = Some("Debe conservar al menos una columna".into())
                 } else {
-                    self.columnas[seleccion].1 = !self.columnas[seleccion].1;
-                    self.mensaje = None;
+                    self.columnas[s].1 = !self.columnas[s].1
                 }
             }
             KeyCode::Esc => self.modo = ModoActivos::Normal,
             _ => {}
         }
-        AccionActivos::Ninguna
     }
-
-    fn mover(&mut self, delta: isize) {
-        let indices = self.indices_filtrados();
-        if indices.is_empty() {
-            self.seleccion = None;
-            return;
-        }
-        let actual = self.seleccion.unwrap_or(0);
-        self.seleccion = Some(if delta < 0 {
-            actual.saturating_sub(1)
+    fn mover(&mut self, d: isize) {
+        if self.registros.is_empty() {
+            self.seleccion = None
         } else {
-            (actual + 1).min(indices.len() - 1)
-        });
-    }
-
-    fn ajustar_seleccion_filtro(&mut self) {
-        let cantidad = self.indices_filtrados().len();
-        self.seleccion = if cantidad == 0 {
-            None
-        } else {
-            Some(self.seleccion.unwrap_or(0).min(cantidad - 1))
-        };
-    }
-
-    fn id_seleccionado(&self) -> Option<u64> {
-        let indice = *self.indices_filtrados().get(self.seleccion?)?;
-        Some(self.registros[indice].id)
-    }
-
-    fn abrir_confirmacion(&mut self) {
-        if let Some(id) = self.id_seleccionado() {
-            self.modo = ModoActivos::ConfirmarSalida { id };
+            let i = self.seleccion.unwrap_or(0);
+            self.seleccion = Some(if d < 0 {
+                i.saturating_sub(1)
+            } else {
+                (i + 1).min(self.registros.len() - 1)
+            })
         }
     }
-
-    fn eliminar(&mut self, id: u64) {
-        let Some(indice) = self.registros.iter().position(|registro| registro.id == id) else {
-            self.modo = ModoActivos::Normal;
-            return;
-        };
-        let eliminado = self.registros.remove(indice);
-        self.mensaje = Some(match eliminado.gafete {
-            Some(gafete) => format!(
-                "✓ Salida registrada — {} — Gafete {:02} liberado",
-                eliminado.nombre, gafete
-            ),
-            None => format!("✓ Salida registrada — {}", eliminado.nombre),
-        });
-        self.modo = ModoActivos::Normal;
-        self.seleccion = if self.registros.is_empty() {
-            None
-        } else {
-            Some(self.seleccion.unwrap_or(0).min(self.registros.len() - 1))
-        };
+    fn id_seleccionado(&self) -> Option<i64> {
+        self.registros.get(self.seleccion?).map(|r| r.registro_id)
     }
-
-    fn registro(&self, id: u64) -> Option<&IngresoActivoMock> {
-        self.registros.iter().find(|registro| registro.id == id)
+    fn registro(&self, id: i64) -> Option<&IngresoActivoResumen> {
+        self.registros.iter().find(|r| r.registro_id == id)
     }
+    pub fn inicio_visible(&self, c: usize) -> usize {
+        self.seleccion
+            .unwrap_or(0)
+            .saturating_sub(c.saturating_sub(1))
+    }
+}
+fn texto_filtro(s: &str) -> Option<String> {
+    (!s.trim().is_empty()).then(|| s.to_owned())
 }

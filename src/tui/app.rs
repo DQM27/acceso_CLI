@@ -4,6 +4,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::{Terminal, backend::Backend};
 
 use crate::application::AppCore;
+use crate::models::usuario::RolUsuario;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::error::UsuarioServiceError;
 use crate::services::usuario_service::CrearRootInicialInput;
@@ -12,20 +13,88 @@ use super::{
     activos::{self, AccionActivos, ActivosState},
     configuracion_inicial::{self, AccionConfiguracion, ConfiguracionInicialState},
     contratistas::{self, AccionContratistas, ContratistasState},
+    empresas::{self, AccionEmpresas, EmpresasState},
     historial::{self, AccionHistorial, HistorialState},
     login,
     login::LoginState,
+    menu_principal::{self, AccionMenu, MenuPrincipalState, OpcionMenu},
+    nuevo_ingreso::{self, AccionNuevoIngreso, NuevoIngresoState},
+    usuarios::{self, AccionUsuarios, UsuariosState},
 };
 
 const EVENT_POLL: Duration = Duration::from_millis(50);
+
+fn mensaje_empresa(error: crate::services::error::EmpresaServiceError) -> String {
+    match error {
+        crate::services::error::EmpresaServiceError::NombreDuplicado => {
+            "Ya existe una empresa con ese nombre".into()
+        }
+        crate::services::error::EmpresaServiceError::NombreEmpresaVacio => {
+            "El nombre es obligatorio".into()
+        }
+        crate::services::error::EmpresaServiceError::EmpresaNoEncontrada => {
+            "La empresa ya no existe".into()
+        }
+        crate::services::error::EmpresaServiceError::Database(_) => {
+            "No se pudo guardar la empresa".into()
+        }
+    }
+}
+
+fn mensaje_contratista(error: crate::services::error::ContratistaServiceError) -> String {
+    use crate::services::error::ContratistaServiceError::*;
+    match error {
+        ContratistaNoEncontrado => "El contratista ya no existe".into(),
+        EmpresaNoEncontrada => "La empresa seleccionada ya no existe".into(),
+        CedulaVacia => "La cédula es obligatoria".into(),
+        NombreVacio => "El nombre es obligatorio".into(),
+        PraindRequerido => "Fecha PRAIND requerida".into(),
+        CedulaDuplicada => "Ya existe un contratista con esa cédula".into(),
+        Database(_) => "No se pudo guardar el contratista".into(),
+    }
+}
+
+fn mensaje_usuario(error: UsuarioServiceError) -> String {
+    match error {
+        UsuarioServiceError::UsuarioNoEncontrado => "El usuario ya no existe".into(),
+        UsuarioServiceError::CedulaVacia => "La cédula es obligatoria".into(),
+        UsuarioServiceError::NombreVacio => "El nombre es obligatorio".into(),
+        UsuarioServiceError::PasswordDemasiadoCorto => {
+            "La contraseña debe tener al menos 8 caracteres".into()
+        }
+        UsuarioServiceError::CedulaDuplicada => "Ya existe un usuario con esa cédula".into(),
+        UsuarioServiceError::UltimoRootActivo => {
+            "Debe existir al menos un usuario ROOT activo".into()
+        }
+        _ => "No se pudo guardar el usuario".into(),
+    }
+}
+fn mensaje_ingreso(error: crate::services::error::RegistroIngresoServiceError) -> String {
+    use crate::{
+        domain::resultado_acceso::MotivoDenegacion, services::error::RegistroIngresoServiceError::*,
+    };
+    match error {
+        ContratistaNoEncontrado => "El contratista ya no existe".into(),
+        IngresoActivo => "El contratista ya tiene un ingreso activo".into(),
+        GafeteRequerido => "El gafete es requerido".into(),
+        GafeteOcupado => "El gafete ya está en uso".into(),
+        AccesoDenegado(MotivoDenegacion::SinAcceso) => "No tiene acceso autorizado".into(),
+        AccesoDenegado(MotivoDenegacion::PraindVencido) => "PRAIND vencido o requerido".into(),
+        _ => "No se pudo registrar el ingreso".into(),
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Vista {
     ConfiguracionInicial,
     Login,
+    MenuPrincipal,
     IngresosActivos,
     Historial,
     Contratistas,
+    Empresas,
+    Usuarios,
+    NuevoIngreso,
 }
 
 #[cfg(test)]
@@ -67,16 +136,516 @@ mod tests {
         assert!(app.sesion().is_none());
         assert!(core.autenticar("ROOT1", "password1").is_ok());
     }
+
+    fn sesion(nombre: &str) -> UsuarioSesion {
+        UsuarioSesion {
+            id: 1,
+            cedula: "1".into(),
+            nombre: nombre.into(),
+            rol: crate::models::usuario::RolUsuario::Root,
+        }
+    }
+
+    fn tecla(codigo: KeyCode) -> KeyEvent {
+        KeyEvent::new(codigo, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn menu_abre_todas_las_pantallas_y_preserva_seleccion_al_volver() {
+        let casos = [
+            ('1', Vista::NuevoIngreso),
+            ('2', Vista::IngresosActivos),
+            ('3', Vista::Historial),
+            ('4', Vista::Contratistas),
+            ('5', Vista::Empresas),
+            ('6', Vista::Usuarios),
+        ];
+        for (atajo, vista) in casos {
+            let mut app = App {
+                vista: Vista::MenuPrincipal,
+                sesion: Some(sesion("Daniel")),
+                ..App::default()
+            };
+            app.procesar_accion_menu(tecla(KeyCode::Char(atajo)));
+            assert_eq!(app.vista, vista);
+            let seleccion = app.menu.seleccion;
+            app.procesar_tecla_vista(tecla(KeyCode::Esc));
+            assert_eq!(app.vista, Vista::MenuPrincipal);
+            assert_eq!(app.menu.seleccion, seleccion);
+        }
+    }
+
+    #[test]
+    fn logout_limpia_sesion_login_y_conserva_estado_mock() {
+        let mut app = App {
+            vista: Vista::MenuPrincipal,
+            sesion: Some(sesion("Usuario A")),
+            ..App::default()
+        };
+        let activos = app.activos.cantidad();
+        app.procesar_accion_menu(tecla(KeyCode::Char('L')));
+        app.procesar_accion_menu(tecla(KeyCode::Char('Y')));
+        assert_eq!(app.vista, Vista::Login);
+        assert!(app.sesion.is_none());
+        assert_eq!(app.login.password_enmascarado(), "");
+        assert_eq!(app.activos.cantidad(), activos);
+        app.sesion = Some(sesion("Usuario B"));
+        app.menu.nueva_sesion();
+        app.vista = Vista::MenuPrincipal;
+        assert_eq!(app.sesion().unwrap().nombre, "Usuario B");
+    }
+
+    #[test]
+    fn salida_confirmada_marca_cierre_normal() {
+        let mut app = App {
+            vista: Vista::MenuPrincipal,
+            sesion: Some(sesion("Daniel")),
+            ..App::default()
+        };
+        app.procesar_accion_menu(tecla(KeyCode::Char('Q')));
+        assert!(!app.salir);
+        app.procesar_accion_menu(tecla(KeyCode::Char('Y')));
+        assert!(app.salir);
+    }
+
+    #[test]
+    fn atajos_provisionales_ya_no_navegan() {
+        let mut app = App::default();
+        assert_eq!(
+            app.activos.handle_key(tecla(KeyCode::Char('B'))),
+            AccionActivos::Ninguna
+        );
+        assert_eq!(
+            app.activos.handle_key(tecla(KeyCode::Char('H'))),
+            AccionActivos::Ninguna
+        );
+        assert_eq!(
+            app.activos.handle_key(tecla(KeyCode::Char('N'))),
+            AccionActivos::Ninguna
+        );
+        assert!(matches!(
+            app.contratistas.handle_key(tecla(KeyCode::Char('P'))),
+            AccionContratistas::Ninguna
+        ));
+        assert_eq!(
+            app.empresas.handle_key(tecla(KeyCode::Char('U'))),
+            AccionEmpresas::Ninguna
+        );
+    }
+
+    #[test]
+    fn escape_raiz_regresa_al_menu_y_estados_internos_se_cierran_primero() {
+        for vista in [
+            Vista::IngresosActivos,
+            Vista::Historial,
+            Vista::Contratistas,
+            Vista::Empresas,
+            Vista::Usuarios,
+        ] {
+            let mut app = App {
+                vista,
+                sesion: Some(sesion("Daniel")),
+                ..App::default()
+            };
+            if vista == Vista::Empresas {
+                app.empresas.completar_busqueda(
+                    Ok(vec![crate::database::queries::empresas::EmpresaResumen {
+                        id: 1,
+                        nombre: "Empresa".into(),
+                        contratistas: 0,
+                    }]),
+                    None,
+                );
+            }
+            if vista == Vista::IngresosActivos {
+                app.activos.completar_busqueda(
+                    Ok(vec![
+                        crate::services::registro_ingreso_service::IngresoActivoResumen {
+                            registro_id: 1,
+                            contratista_id: 1,
+                            cedula: "1".into(),
+                            contratista_nombre: "Persona".into(),
+                            empresa_nombre: "Empresa".into(),
+                            tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::Swat,
+                            medio_ingreso: crate::models::medio_ingreso::MedioIngreso::Caminando,
+                            fecha_hora_ingreso: chrono::NaiveDate::from_ymd_opt(2026, 8, 12)
+                                .unwrap()
+                                .and_hms_opt(8, 0, 0)
+                                .unwrap(),
+                            gafete_numero: None,
+                            usuario_ingreso_nombre: "Ana".into(),
+                            resultado_acceso:
+                                crate::domain::resultado_acceso::ResultadoAcceso::Permitido,
+                        },
+                    ]),
+                    None,
+                );
+            }
+            if vista == Vista::Contratistas {
+                app.contratistas.completar_busqueda(
+                    Ok(vec![
+                        crate::database::queries::contratistas::ContratistaResumen {
+                            id: 1,
+                            empresa_id: 1,
+                            cedula: "1".into(),
+                            nombre: "Contratista".into(),
+                            empresa_nombre: "Empresa".into(),
+                            tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::Swat,
+                            fecha_vencimiento_praind: None,
+                            es_personal_ruta: false,
+                            tiene_acceso: true,
+                        },
+                    ]),
+                    None,
+                );
+            }
+            if vista == Vista::Usuarios {
+                app.usuarios.completar_busqueda(
+                    Ok(vec![crate::database::queries::usuarios::UsuarioResumen {
+                        id: 1,
+                        cedula: "1".into(),
+                        nombre: "Daniel".into(),
+                        rol: RolUsuario::Root,
+                        activo: true,
+                    }]),
+                    None,
+                );
+            }
+            if vista == Vista::Historial {
+                app.historial
+                    .completar(Ok(crate::database::queries::ingresos::PaginaHistorial {
+                        items: vec![
+                            crate::database::queries::ingresos::MovimientoIngresoResumen {
+                                registro_id: 1,
+                                contratista_id: 1,
+                                cedula: "1".into(),
+                                contratista_nombre: "Contratista".into(),
+                                empresa_nombre: "Empresa".into(),
+                                tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::Swat,
+                                medio_ingreso:
+                                    crate::models::medio_ingreso::MedioIngreso::Caminando,
+                                fecha_hora_ingreso: chrono::NaiveDate::from_ymd_opt(2026, 8, 12)
+                                    .unwrap()
+                                    .and_hms_opt(8, 0, 0)
+                                    .unwrap(),
+                                fecha_hora_salida: None,
+                                gafete_numero: None,
+                                usuario_ingreso_nombre: "Ana".into(),
+                                usuario_salida_nombre: None,
+                            },
+                        ],
+                        total: 1,
+                    }));
+            }
+            app.procesar_tecla_vista(tecla(KeyCode::Enter));
+            app.procesar_tecla_vista(tecla(KeyCode::Esc));
+            assert_eq!(
+                app.vista, vista,
+                "el estado interno de {vista:?} debe cerrarse primero"
+            );
+            app.procesar_tecla_vista(tecla(KeyCode::Esc));
+            assert_eq!(app.vista, Vista::MenuPrincipal);
+        }
+
+        let mut app = App {
+            vista: Vista::NuevoIngreso,
+            sesion: Some(sesion("Daniel")),
+            ..App::default()
+        };
+        app.nuevo_ingreso.completar_busqueda(Ok(vec![
+            crate::database::queries::contratistas::ContratistaResumen {
+                id: 1,
+                empresa_id: 1,
+                cedula: "1".into(),
+                nombre: "Persona".into(),
+                empresa_nombre: "Empresa".into(),
+                tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::Swat,
+                fecha_vencimiento_praind: None,
+                es_personal_ruta: false,
+                tiene_acceso: true,
+            },
+        ]));
+        app.procesar_tecla_vista(tecla(KeyCode::Enter));
+        app.nuevo_ingreso.completar_preparacion(Ok(
+            crate::services::registro_ingreso_service::PreparacionIngreso {
+                contratista_id: 1,
+                cedula: "1".into(),
+                nombre: "Persona".into(),
+                empresa_nombre: "Empresa".into(),
+                tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::Swat,
+                resultado_acceso: crate::domain::resultado_acceso::ResultadoAcceso::Permitido,
+                requiere_gafete: false,
+                tiene_ingreso_activo: false,
+            },
+        ));
+        app.procesar_tecla_vista(tecla(KeyCode::Esc));
+        assert_eq!(app.vista, Vista::NuevoIngreso);
+        app.procesar_tecla_vista(tecla(KeyCode::Esc));
+        assert_eq!(app.vista, Vista::MenuPrincipal);
+    }
+
+    #[test]
+    fn login_exitoso_inicia_menu_con_nuevo_ingreso_seleccionado() {
+        let mut app = App::default();
+        app.menu.seleccion = OpcionMenu::Usuarios;
+        app.iniciar_sesion(sesion("Daniel Quintana"));
+        assert_eq!(app.vista, Vista::MenuPrincipal);
+        assert_eq!(app.menu.seleccion, OpcionMenu::NuevoIngreso);
+        assert_eq!(app.sesion().unwrap().nombre, "Daniel Quintana");
+    }
+
+    #[test]
+    fn empresas_tui_crea_busca_edita_y_recarga_desde_appcore_real() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let core = AppCore::new(connection);
+        let mut app = App {
+            vista: Vista::MenuPrincipal,
+            sesion: Some(sesion("Daniel")),
+            ..App::default()
+        };
+        app.procesar_accion_menu_con_core(tecla(KeyCode::Char('5')), Some(&core));
+        assert_eq!(app.vista, Vista::Empresas);
+        assert_eq!(app.empresas.cantidad(), 0);
+
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char('N')), Some(&core));
+        for c in "Empresa Real".chars() {
+            app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core));
+        }
+        app.procesar_tecla_vista_con_core(
+            KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT),
+            Some(&core),
+        );
+        assert_eq!(
+            app.empresas.empresa_seleccionada().unwrap().nombre,
+            "Empresa Real"
+        );
+        assert_eq!(app.empresas.empresa_seleccionada().unwrap().contratistas, 0);
+
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char('E')), Some(&core));
+        for _ in 0.."Empresa Real".len() {
+            app.procesar_tecla_vista_con_core(tecla(KeyCode::Backspace), Some(&core));
+        }
+        for c in "Empresa Renombrada".chars() {
+            app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core));
+        }
+        app.procesar_tecla_vista_con_core(
+            KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT),
+            Some(&core),
+        );
+        assert_eq!(
+            app.empresas.empresa_seleccionada().unwrap().nombre,
+            "Empresa Renombrada"
+        );
+        assert_eq!(
+            core.buscar_empresas(&crate::database::queries::empresas::FiltroEmpresas {
+                texto: Some("renombrada".into()),
+                ..Default::default()
+            })
+            .unwrap()
+            .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn empresas_tui_busca_cancela_y_presenta_duplicado_real() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let core = AppCore::new(connection);
+        core.crear_empresa("Constructora Álvarez").unwrap();
+        core.crear_empresa("Servicios Hernández").unwrap();
+        let mut app = App {
+            vista: Vista::MenuPrincipal,
+            sesion: Some(sesion("Daniel")),
+            ..App::default()
+        };
+        app.procesar_accion_menu_con_core(tecla(KeyCode::Char('5')), Some(&core));
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char('/')), Some(&core));
+        for c in "alvarez".chars() {
+            app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core));
+        }
+        assert_eq!(app.empresas.cantidad(), 1);
+        assert_eq!(
+            app.empresas.empresa_seleccionada().unwrap().nombre,
+            "Constructora Álvarez"
+        );
+
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Enter), Some(&core));
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char('E')), Some(&core));
+        for c in " no persistir".chars() {
+            app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core));
+        }
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Esc), Some(&core));
+        assert_eq!(
+            core.buscar_empresas(&crate::database::queries::empresas::FiltroEmpresas {
+                texto: Some("no persistir".into()),
+                ..Default::default()
+            })
+            .unwrap()
+            .len(),
+            0
+        );
+
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Esc), Some(&core));
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char('N')), Some(&core));
+        for c in "Constructora Álvarez".chars() {
+            app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core));
+        }
+        app.procesar_tecla_vista_con_core(
+            KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT),
+            Some(&core),
+        );
+        assert!(app.empresas.esta_en_formulario());
+        assert_eq!(
+            app.empresas.error_formulario_actual(),
+            Some("Ya existe una empresa con ese nombre")
+        );
+        assert_eq!(
+            core.buscar_empresas(&crate::database::queries::empresas::FiltroEmpresas::default())
+                .unwrap()
+                .len(),
+            2
+        );
+    }
+
+    #[test]
+    fn contratistas_tui_carga_empresas_crea_edita_y_busca_con_appcore_real() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let core = AppCore::new(connection);
+        let empresa_id = core.crear_empresa("Constructora Álvarez").unwrap();
+        let mut app = App {
+            vista: Vista::MenuPrincipal,
+            sesion: Some(sesion("Daniel")),
+            ..App::default()
+        };
+        app.procesar_accion_menu_con_core(tecla(KeyCode::Char('4')), Some(&core));
+        assert_eq!(app.vista, Vista::Contratistas);
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char('N')), Some(&core));
+        for c in "001-ABC".chars() {
+            app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core))
+        }
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Tab), Some(&core));
+        for c in "José Hernández".chars() {
+            app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core))
+        }
+        for _ in 0..3 {
+            app.procesar_tecla_vista_con_core(tecla(KeyCode::Tab), Some(&core))
+        }
+        for c in "31122026".chars() {
+            app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core))
+        }
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Tab), Some(&core));
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char('G')), Some(&core));
+        let items = core
+            .buscar_contratistas(
+                &crate::database::queries::contratistas::FiltroContratistas {
+                    texto: Some("nandez".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].empresa_id, empresa_id);
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char('E')), Some(&core));
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Tab), Some(&core));
+        for _ in 0.."José Hernández".chars().count() {
+            app.procesar_tecla_vista_con_core(tecla(KeyCode::Backspace), Some(&core))
+        }
+        for c in "José Álvarez".chars() {
+            app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core))
+        }
+        for _ in 0..5 {
+            app.procesar_tecla_vista_con_core(tecla(KeyCode::Tab), Some(&core))
+        }
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char('G')), Some(&core));
+        assert!(
+            core.buscar_contratistas(
+                &crate::database::queries::contratistas::FiltroContratistas {
+                    texto: Some("hernandez".into()),
+                    ..Default::default()
+                }
+            )
+            .unwrap()
+            .is_empty()
+        );
+        assert_eq!(
+            core.buscar_contratistas(
+                &crate::database::queries::contratistas::FiltroContratistas {
+                    texto: Some("jose alvarez".into()),
+                    ..Default::default()
+                }
+            )
+            .unwrap()
+            .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn usuarios_self_edit_actualiza_sesion_segura_desde_sqlite() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let core = AppCore::new(connection);
+        let id = core
+            .crear_root_inicial(crate::services::usuario_service::CrearRootInicialInput {
+                cedula: "ROOT-1".into(),
+                nombre: "Ana".into(),
+                password: "password1".into(),
+            })
+            .unwrap();
+        core.crear_usuario(crate::services::usuario_service::CrearUsuarioInput {
+            cedula: "ROOT-2".into(),
+            nombre: "Respaldo".into(),
+            password: "password2".into(),
+            rol: RolUsuario::Root,
+            activo: true,
+        })
+        .unwrap();
+        let mut app = App {
+            vista: Vista::Usuarios,
+            sesion: Some(UsuarioSesion {
+                id,
+                cedula: "ROOT-1".into(),
+                nombre: "Ana".into(),
+                rol: RolUsuario::Root,
+            }),
+            ..App::default()
+        };
+        app.procesar_accion_usuarios(app.usuarios.solicitud_carga(), Some(&core));
+        app.procesar_accion_usuarios(
+            AccionUsuarios::Actualizar {
+                id,
+                input: crate::services::usuario_service::ActualizarUsuarioInput {
+                    cedula: "ROOT-NUEVO".into(),
+                    nombre: "Ana María".into(),
+                    rol: RolUsuario::Administrador,
+                },
+                activo: true,
+                nombre: "Ana María".into(),
+            },
+            Some(&core),
+        );
+        let sesion = app.sesion().unwrap();
+        assert_eq!(sesion.cedula, "ROOT-NUEVO");
+        assert_eq!(sesion.nombre, "Ana María");
+        assert_eq!(sesion.rol, RolUsuario::Administrador);
+    }
 }
 
 #[derive(Debug)]
 pub struct App {
     vista: Vista,
     login: LoginState,
+    menu: MenuPrincipalState,
     configuracion_inicial: ConfiguracionInicialState,
     activos: ActivosState,
     historial: HistorialState,
     contratistas: ContratistasState,
+    empresas: EmpresasState,
+    usuarios: UsuariosState,
+    nuevo_ingreso: NuevoIngresoState,
     salir: bool,
     sesion: Option<UsuarioSesion>,
 }
@@ -86,10 +655,14 @@ impl Default for App {
         Self {
             vista: Vista::Login,
             login: LoginState::default(),
+            menu: MenuPrincipalState::default(),
             configuracion_inicial: ConfiguracionInicialState::default(),
             activos: ActivosState::default(),
             historial: HistorialState::default(),
             contratistas: ContratistasState::default(),
+            empresas: EmpresasState::default(),
+            usuarios: UsuariosState::default(),
+            nuevo_ingreso: NuevoIngresoState::default(),
             salir: false,
             sesion: None,
         }
@@ -134,10 +707,20 @@ impl App {
                     configuracion_inicial::render(frame, frame.area(), &self.configuracion_inicial)
                 }
                 Vista::Login => login::render(frame, frame.area(), &self.login),
+                Vista::MenuPrincipal => {
+                    if let Some(sesion) = &self.sesion {
+                        menu_principal::render(frame, frame.area(), &self.menu, sesion)
+                    }
+                }
                 Vista::IngresosActivos => activos::render(frame, frame.area(), &self.activos),
                 Vista::Historial => historial::render(frame, frame.area(), &self.historial),
                 Vista::Contratistas => {
                     contratistas::render(frame, frame.area(), &self.contratistas)
+                }
+                Vista::Empresas => empresas::render(frame, frame.area(), &self.empresas),
+                Vista::Usuarios => usuarios::render(frame, frame.area(), &self.usuarios),
+                Vista::NuevoIngreso => {
+                    nuevo_ingreso::render(frame, frame.area(), &self.nuevo_ingreso)
                 }
             })?;
 
@@ -152,40 +735,7 @@ impl App {
                 if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
                     self.salir = true;
                 } else {
-                    match self.vista {
-                        Vista::ConfiguracionInicial => {
-                            if self.configuracion_inicial.handle_key(key)
-                                == AccionConfiguracion::Salir
-                            {
-                                self.salir = true;
-                            }
-                        }
-                        Vista::Login => {
-                            if key.code == KeyCode::Enter && self.login.acceso_simulado_exitoso() {
-                                self.vista = Vista::IngresosActivos;
-                            } else if key.code == KeyCode::Esc {
-                                self.salir = true;
-                            } else {
-                                self.login.handle_key(key);
-                            }
-                        }
-                        Vista::IngresosActivos => match self.activos.handle_key(key) {
-                            AccionActivos::Volver => self.vista = Vista::Login,
-                            AccionActivos::IrHistorial => self.vista = Vista::Historial,
-                            AccionActivos::IrContratistas => self.vista = Vista::Contratistas,
-                            AccionActivos::Ninguna => {}
-                        },
-                        Vista::Historial => {
-                            if self.historial.handle_key(key) == AccionHistorial::Volver {
-                                self.vista = Vista::IngresosActivos;
-                            }
-                        }
-                        Vista::Contratistas => {
-                            if self.contratistas.handle_key(key) == AccionContratistas::Volver {
-                                self.vista = Vista::IngresosActivos;
-                            }
-                        }
-                    }
+                    self.procesar_tecla_vista_con_core(key, core);
                 }
             }
 
@@ -196,13 +746,19 @@ impl App {
                 if let Some(core) = core {
                     match core.autenticar(&cedula, &password) {
                         Ok(sesion) => {
-                            self.sesion = Some(sesion);
                             self.login.completar_validacion(None);
+                            self.iniciar_sesion(sesion);
                         }
                         Err(error) => self.login.completar_validacion(Some(error.to_string())),
                     }
                 } else {
                     self.login.completar_validacion(None);
+                    self.iniciar_sesion(UsuarioSesion {
+                        id: 0,
+                        cedula: cedula.clone(),
+                        nombre: cedula,
+                        rol: RolUsuario::Operador,
+                    });
                 }
             }
         }
@@ -210,8 +766,496 @@ impl App {
         Ok(())
     }
 
+    #[cfg(test)]
+    fn procesar_tecla_vista(&mut self, key: crossterm::event::KeyEvent) {
+        self.procesar_tecla_vista_con_core(key, None);
+    }
+
+    fn procesar_tecla_vista_con_core(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+        core: Option<&AppCore>,
+    ) {
+        match self.vista {
+            Vista::ConfiguracionInicial => {
+                if self.configuracion_inicial.handle_key(key) == AccionConfiguracion::Salir {
+                    self.salir = true;
+                }
+            }
+            Vista::Login => {
+                if key.code == KeyCode::Esc {
+                    self.salir = true;
+                } else {
+                    self.login.handle_key(key);
+                }
+            }
+            Vista::MenuPrincipal => self.procesar_accion_menu_con_core(key, core),
+            Vista::IngresosActivos => {
+                let accion = self.activos.handle_key(key);
+                self.procesar_accion_activos(accion, core);
+            }
+            Vista::Historial => {
+                let accion = self.historial.handle_key(key);
+                self.procesar_accion_historial(accion, core);
+            }
+            Vista::Contratistas => {
+                let accion = self.contratistas.handle_key(key);
+                self.procesar_accion_contratistas(accion, core);
+            }
+            Vista::Empresas => {
+                let accion = self.empresas.handle_key(key);
+                self.procesar_accion_empresas(accion, core);
+            }
+            Vista::Usuarios => {
+                let accion = self.usuarios.handle_key(key);
+                self.procesar_accion_usuarios(accion, core);
+            }
+            Vista::NuevoIngreso => {
+                let accion = self.nuevo_ingreso.handle_key(key);
+                self.procesar_accion_nuevo_ingreso(accion, core);
+            }
+        }
+    }
+
     pub fn sesion(&self) -> Option<&UsuarioSesion> {
         self.sesion.as_ref()
+    }
+
+    #[cfg(test)]
+    fn procesar_accion_menu(&mut self, key: crossterm::event::KeyEvent) {
+        self.procesar_accion_menu_con_core(key, None);
+    }
+
+    fn procesar_accion_menu_con_core(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+        core: Option<&AppCore>,
+    ) {
+        match self.menu.handle_key(key) {
+            AccionMenu::Ninguna => {}
+            AccionMenu::Abrir(opcion) => {
+                self.menu.seleccion = opcion;
+                self.vista = match opcion {
+                    OpcionMenu::NuevoIngreso => {
+                        let usuario = self
+                            .sesion
+                            .as_ref()
+                            .map_or("Quintana", |s| s.nombre.as_str());
+                        self.nuevo_ingreso = NuevoIngresoState::new(usuario);
+                        if core.is_some() {
+                            self.procesar_accion_nuevo_ingreso(
+                                self.nuevo_ingreso.solicitud_carga(),
+                                core,
+                            );
+                        }
+                        Vista::NuevoIngreso
+                    }
+                    OpcionMenu::IngresosActivos => {
+                        if core.is_some() {
+                            self.procesar_accion_activos(self.activos.solicitud_carga(), core)
+                        }
+                        Vista::IngresosActivos
+                    }
+                    OpcionMenu::Historial => {
+                        if let Some(core) = core {
+                            self.historial.completar_empresas(
+                                core.listar_empresas()
+                                    .map_err(|_| "No se pudieron cargar las empresas".into()),
+                            );
+                            self.procesar_accion_historial(
+                                self.historial.solicitud_carga(),
+                                Some(core),
+                            );
+                        }
+                        Vista::Historial
+                    }
+                    OpcionMenu::Contratistas => {
+                        if let Some(core) = core {
+                            self.contratistas.completar_empresas(
+                                core.listar_empresas()
+                                    .map_err(|_| "No se pudieron cargar las empresas".into()),
+                            );
+                            self.procesar_accion_contratistas(
+                                self.contratistas.solicitud_carga(),
+                                Some(core),
+                            );
+                        }
+                        Vista::Contratistas
+                    }
+                    OpcionMenu::Empresas => {
+                        if core.is_some() {
+                            self.procesar_accion_empresas(self.empresas.solicitar_carga(), core);
+                        }
+                        Vista::Empresas
+                    }
+                    OpcionMenu::Usuarios => {
+                        if core.is_some() {
+                            self.procesar_accion_usuarios(self.usuarios.solicitud_carga(), core);
+                        }
+                        Vista::Usuarios
+                    }
+                    OpcionMenu::CerrarSesion | OpcionMenu::Salir => Vista::MenuPrincipal,
+                };
+            }
+            AccionMenu::CerrarSesion => {
+                self.sesion = None;
+                self.login.reiniciar();
+                self.vista = Vista::Login;
+            }
+            AccionMenu::Salir => self.salir = true,
+        }
+    }
+
+    fn procesar_accion_empresas(&mut self, accion: AccionEmpresas, core: Option<&AppCore>) {
+        match accion {
+            AccionEmpresas::Ninguna => {}
+            AccionEmpresas::Volver => self.vista = Vista::MenuPrincipal,
+            AccionEmpresas::Buscar {
+                texto,
+                seleccionar_id,
+            } => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudo cargar la base de empresas".to_owned())
+                    .and_then(|core| {
+                        core.buscar_empresas(&crate::database::queries::empresas::FiltroEmpresas {
+                            texto,
+                            ..Default::default()
+                        })
+                        .map_err(|_| "No se pudo cargar la base de empresas".to_owned())
+                    });
+                self.empresas.completar_busqueda(resultado, seleccionar_id);
+            }
+            AccionEmpresas::Crear { nombre } => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudo guardar la empresa".to_owned())
+                    .and_then(|core| core.crear_empresa(&nombre).map_err(mensaje_empresa));
+                let recarga = self.empresas.completar_creacion(resultado, &nombre);
+                if !matches!(recarga, AccionEmpresas::Ninguna) {
+                    self.procesar_accion_empresas(recarga, core);
+                }
+            }
+            AccionEmpresas::Actualizar { id, nombre } => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudo guardar la empresa".to_owned())
+                    .and_then(|core| {
+                        core.actualizar_empresa(id, &nombre)
+                            .map_err(mensaje_empresa)
+                    });
+                let recarga = self
+                    .empresas
+                    .completar_actualizacion(resultado, id, &nombre);
+                if !matches!(recarga, AccionEmpresas::Ninguna) {
+                    self.procesar_accion_empresas(recarga, core);
+                }
+            }
+        }
+    }
+
+    fn procesar_accion_contratistas(&mut self, accion: AccionContratistas, core: Option<&AppCore>) {
+        match accion {
+            AccionContratistas::Ninguna => {}
+            AccionContratistas::Volver => self.vista = Vista::MenuPrincipal,
+            AccionContratistas::Buscar {
+                texto,
+                seleccionar_id,
+            } => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudo cargar la base de contratistas".into())
+                    .and_then(|core| {
+                        core.buscar_contratistas(
+                            &crate::database::queries::contratistas::FiltroContratistas {
+                                texto,
+                                ..Default::default()
+                            },
+                        )
+                        .map_err(|_| "No se pudo cargar la base de contratistas".into())
+                    });
+                self.contratistas
+                    .completar_busqueda(resultado, seleccionar_id);
+            }
+            AccionContratistas::Crear { datos, nombre } => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudo guardar el contratista".into())
+                    .and_then(|core| {
+                        core.crear_contratista(datos)
+                            .map(Some)
+                            .map_err(mensaje_contratista)
+                    });
+                let recarga = self
+                    .contratistas
+                    .completar_guardado(resultado, None, &nombre);
+                if !matches!(recarga, AccionContratistas::Ninguna) {
+                    self.procesar_accion_contratistas(recarga, core);
+                }
+            }
+            AccionContratistas::Actualizar { id, datos, nombre } => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudo guardar el contratista".into())
+                    .and_then(|core| {
+                        core.actualizar_contratista(id, datos)
+                            .map(|_| None)
+                            .map_err(mensaje_contratista)
+                    });
+                let recarga = self
+                    .contratistas
+                    .completar_guardado(resultado, Some(id), &nombre);
+                if !matches!(recarga, AccionContratistas::Ninguna) {
+                    self.procesar_accion_contratistas(recarga, core);
+                }
+            }
+        }
+    }
+
+    fn procesar_accion_usuarios(&mut self, accion: AccionUsuarios, core: Option<&AppCore>) {
+        match accion {
+            AccionUsuarios::Ninguna => {}
+            AccionUsuarios::Volver => self.vista = Vista::MenuPrincipal,
+            AccionUsuarios::Buscar {
+                texto,
+                seleccionar_id,
+            } => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudo cargar la base de usuarios".into())
+                    .and_then(|core| {
+                        core.buscar_usuarios(&crate::database::queries::usuarios::FiltroUsuarios {
+                            texto,
+                            ..Default::default()
+                        })
+                        .map_err(|_| "No se pudo cargar la base de usuarios".into())
+                    });
+                self.usuarios.completar_busqueda(resultado, seleccionar_id);
+            }
+            AccionUsuarios::Crear { input, nombre } => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudo guardar el usuario".into())
+                    .and_then(|core| core.crear_usuario(input).map(Some).map_err(mensaje_usuario));
+                let recarga = self.usuarios.completar_guardado(resultado, None, &nombre);
+                self.procesar_recarga_usuarios(recarga, core);
+            }
+            AccionUsuarios::Actualizar {
+                id,
+                input,
+                activo,
+                nombre,
+            } => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudo guardar el usuario".into())
+                    .and_then(|core| {
+                        core.actualizar_usuario(id, input, activo)
+                            .map_err(mensaje_usuario)
+                    })
+                    .map(|_| None);
+                let recarga = self
+                    .usuarios
+                    .completar_guardado(resultado, Some(id), &nombre);
+                self.procesar_recarga_usuarios(recarga, core);
+                self.actualizar_sesion_desde_tabla(id);
+            }
+            AccionUsuarios::CambiarPassword {
+                id,
+                password,
+                nombre,
+            } => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudo cambiar la contraseña".into())
+                    .and_then(|core| {
+                        core.cambiar_password_usuario(id, &password)
+                            .map_err(mensaje_usuario)
+                    });
+                self.usuarios.completar_password(resultado, &nombre);
+            }
+            AccionUsuarios::EstablecerActivo {
+                id,
+                activar,
+                nombre,
+            } => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudo actualizar el estado del usuario".into())
+                    .and_then(|core| {
+                        if activar {
+                            core.activar_usuario(id)
+                        } else {
+                            core.desactivar_usuario(id)
+                        }
+                        .map_err(mensaje_usuario)
+                    });
+                let recarga = self
+                    .usuarios
+                    .completar_estado(resultado, id, activar, &nombre);
+                self.procesar_recarga_usuarios(recarga, core);
+            }
+        }
+    }
+
+    fn procesar_recarga_usuarios(&mut self, accion: AccionUsuarios, core: Option<&AppCore>) {
+        if !matches!(accion, AccionUsuarios::Ninguna) {
+            self.procesar_accion_usuarios(accion, core);
+        }
+    }
+
+    fn actualizar_sesion_desde_tabla(&mut self, id: i64) {
+        let Some(sesion) = &mut self.sesion else {
+            return;
+        };
+        if sesion.id != id {
+            return;
+        }
+        if let Some(usuario) = self.usuarios.resumen_por_id(id) {
+            sesion.cedula = usuario.cedula.clone();
+            sesion.nombre = usuario.nombre.clone();
+            sesion.rol = usuario.rol;
+            self.usuarios.set_usuario_nombre(sesion.nombre.clone());
+        }
+    }
+
+    fn procesar_accion_nuevo_ingreso(
+        &mut self,
+        accion: AccionNuevoIngreso,
+        core: Option<&AppCore>,
+    ) {
+        match accion {
+            AccionNuevoIngreso::Ninguna => {}
+            AccionNuevoIngreso::Volver => self.vista = Vista::MenuPrincipal,
+            AccionNuevoIngreso::Buscar { texto } => {
+                let r = core
+                    .ok_or_else(|| "No se pudieron cargar los contratistas".into())
+                    .and_then(|c| {
+                        c.buscar_contratistas(
+                            &crate::database::queries::contratistas::FiltroContratistas {
+                                texto,
+                                ..Default::default()
+                            },
+                        )
+                        .map_err(|_| "No se pudieron cargar los contratistas".into())
+                    });
+                self.nuevo_ingreso.completar_busqueda(r);
+            }
+            AccionNuevoIngreso::Preparar { contratista_id } => {
+                let r = core
+                    .ok_or_else(|| "No se pudo preparar el ingreso".into())
+                    .and_then(|c| {
+                        c.preparar_ingreso(contratista_id, chrono::Local::now().date_naive())
+                            .map_err(mensaje_ingreso)
+                    });
+                self.nuevo_ingreso.completar_preparacion(r);
+            }
+            AccionNuevoIngreso::ConsultarGafete { numero } => {
+                let r = core
+                    .ok_or_else(|| "No se pudo consultar el gafete".into())
+                    .and_then(|c| c.gafete_esta_ocupado(numero).map_err(mensaje_ingreso));
+                self.nuevo_ingreso.completar_gafete(r);
+            }
+            AccionNuevoIngreso::Registrar {
+                contratista_id,
+                medio,
+                gafete,
+            } => {
+                let resultado = match (&self.sesion, core) {
+                    (Some(s), _) if s.id == 0 => {
+                        Err("La sesión de desarrollo no puede registrar movimientos reales".into())
+                    }
+                    (Some(s), Some(c)) => c
+                        .registrar_ingreso(
+                            contratista_id,
+                            medio,
+                            gafete,
+                            s.id,
+                            chrono::Local::now().naive_local(),
+                        )
+                        .map(|r| r.registro_id)
+                        .map_err(mensaje_ingreso),
+                    _ => Err("No se pudo registrar el ingreso".into()),
+                };
+                if self.nuevo_ingreso.completar_registro(resultado) {
+                    self.activos.filtro.clear();
+                    self.procesar_accion_activos(
+                        AccionActivos::Buscar {
+                            texto: None,
+                            seleccionar_id: None,
+                        },
+                        core,
+                    );
+                    self.vista = Vista::IngresosActivos;
+                }
+            }
+        }
+    }
+
+    fn procesar_accion_activos(&mut self, accion: AccionActivos, core: Option<&AppCore>) {
+        match accion {
+            AccionActivos::Ninguna => {}
+            AccionActivos::Volver => self.vista = Vista::MenuPrincipal,
+            AccionActivos::Buscar {
+                texto,
+                seleccionar_id,
+            } => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudieron cargar los ingresos activos".into())
+                    .and_then(|c| {
+                        c.listar_ingresos_activos(
+                            &crate::database::queries::ingresos::FiltroIngresosActivos {
+                                texto,
+                                ..Default::default()
+                            },
+                            chrono::Local::now().date_naive(),
+                        )
+                        .map_err(|_| "No se pudieron cargar los ingresos activos".into())
+                    });
+                self.activos.completar_busqueda(resultado, seleccionar_id);
+            }
+            AccionActivos::BuscarPorGafete { numero } => {
+                let resultado = core
+                    .ok_or_else(|| "No existe un ingreso activo con ese gafete".into())
+                    .and_then(|c| {
+                        c.buscar_activo_por_gafete(numero)
+                            .map_err(|_| "No existe un ingreso activo con ese gafete".into())
+                    });
+                let lista = core.and_then(|c| {
+                    c.listar_ingresos_activos(
+                        &Default::default(),
+                        chrono::Local::now().date_naive(),
+                    )
+                    .ok()
+                });
+                self.activos.completar_gafete(resultado, lista);
+            }
+            AccionActivos::RegistrarSalida {
+                registro_id,
+                nombre,
+            } => {
+                let resultado=match(&self.sesion,core){(Some(s),_)if s.id==0=>Err("La sesión de desarrollo no puede registrar movimientos reales".into()),(Some(s),Some(c))=>c.registrar_salida(registro_id,chrono::Local::now().naive_local(),s.id).map_err(|e|match e{crate::services::error::RegistroIngresoServiceError::RegistroNoActivo=>"El ingreso ya no está activo".into(),crate::services::error::RegistroIngresoServiceError::SalidaAnteriorAIngreso=>"La salida no puede ser anterior al ingreso".into(),_=>"No se pudo registrar la salida".into()}),_=>Err("No se pudo registrar la salida".into())};
+                let recarga = self
+                    .activos
+                    .completar_salida(resultado, registro_id, &nombre);
+                self.procesar_accion_activos(recarga, core);
+            }
+        }
+    }
+
+    fn procesar_accion_historial(&mut self, accion: AccionHistorial, core: Option<&AppCore>) {
+        match accion {
+            AccionHistorial::Ninguna => {}
+            AccionHistorial::Volver => self.vista = Vista::MenuPrincipal,
+            AccionHistorial::Consultar(filtro) => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudo cargar el historial".into())
+                    .and_then(|core| {
+                        core.buscar_historial(&filtro)
+                            .map_err(|_| "No se pudo cargar el historial".into())
+                    });
+                self.historial.completar(resultado);
+            }
+        }
+    }
+
+    fn iniciar_sesion(&mut self, sesion: UsuarioSesion) {
+        self.contratistas.set_usuario_nombre(sesion.nombre.clone());
+        self.empresas.set_usuario_nombre(sesion.nombre.clone());
+        self.usuarios.set_usuario_nombre(sesion.nombre.clone());
+        self.historial.set_usuario_nombre(sesion.nombre.clone());
+        self.sesion = Some(sesion);
+        self.menu.nueva_sesion();
+        self.vista = Vista::MenuPrincipal;
     }
 
     fn procesar_configuracion_pendiente(&mut self, core: &AppCore) {

@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 
-pub const SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 3;
 
 pub fn initialize_database(connection: &Connection) -> rusqlite::Result<()> {
     connection.execute_batch("PRAGMA foreign_keys = ON;")?;
@@ -15,6 +15,11 @@ pub fn initialize_database(connection: &Connection) -> rusqlite::Result<()> {
     if version == 1 {
         aplicar_migracion(connection, MIGRACION_2, 2)?;
         version = 2;
+    }
+
+    if version == 2 {
+        aplicar_migracion(connection, MIGRACION_3, 3)?;
+        version = 3;
     }
 
     if version != SCHEMA_VERSION {
@@ -162,4 +167,69 @@ ON registro_ingresos(gafete_numero);
 CREATE UNIQUE INDEX idx_registro_ingresos_gafete_activo
 ON registro_ingresos(gafete_numero)
 WHERE gafete_numero IS NOT NULL AND fecha_hora_salida IS NULL;
+"#;
+
+const MIGRACION_3: &str = r#"
+CREATE VIRTUAL TABLE contratistas_fts USING fts5(
+    cedula, nombre,
+    content='contratistas', content_rowid='id',
+    tokenize='trigram case_sensitive 0 remove_diacritics 1'
+);
+CREATE VIRTUAL TABLE empresas_fts USING fts5(
+    nombre,
+    content='empresas', content_rowid='id',
+    tokenize='trigram case_sensitive 0 remove_diacritics 1'
+);
+CREATE VIRTUAL TABLE usuarios_fts USING fts5(
+    cedula, nombre,
+    content='usuarios', content_rowid='id',
+    tokenize='trigram case_sensitive 0 remove_diacritics 1'
+);
+
+CREATE TRIGGER contratistas_fts_ai AFTER INSERT ON contratistas BEGIN
+    INSERT INTO contratistas_fts(rowid, cedula, nombre)
+    VALUES (new.id, new.cedula, new.nombre);
+END;
+CREATE TRIGGER contratistas_fts_ad AFTER DELETE ON contratistas BEGIN
+    INSERT INTO contratistas_fts(contratistas_fts, rowid, cedula, nombre)
+    VALUES ('delete', old.id, old.cedula, old.nombre);
+END;
+CREATE TRIGGER contratistas_fts_au AFTER UPDATE ON contratistas BEGIN
+    INSERT INTO contratistas_fts(contratistas_fts, rowid, cedula, nombre)
+    VALUES ('delete', old.id, old.cedula, old.nombre);
+    INSERT INTO contratistas_fts(rowid, cedula, nombre)
+    VALUES (new.id, new.cedula, new.nombre);
+END;
+
+CREATE TRIGGER empresas_fts_ai AFTER INSERT ON empresas BEGIN
+    INSERT INTO empresas_fts(rowid, nombre) VALUES (new.id, new.nombre);
+END;
+CREATE TRIGGER empresas_fts_ad AFTER DELETE ON empresas BEGIN
+    INSERT INTO empresas_fts(empresas_fts, rowid, nombre)
+    VALUES ('delete', old.id, old.nombre);
+END;
+CREATE TRIGGER empresas_fts_au AFTER UPDATE ON empresas BEGIN
+    INSERT INTO empresas_fts(empresas_fts, rowid, nombre)
+    VALUES ('delete', old.id, old.nombre);
+    INSERT INTO empresas_fts(rowid, nombre) VALUES (new.id, new.nombre);
+END;
+
+CREATE TRIGGER usuarios_fts_ai AFTER INSERT ON usuarios BEGIN
+    INSERT INTO usuarios_fts(rowid, cedula, nombre)
+    VALUES (new.id, new.cedula, new.nombre);
+END;
+CREATE TRIGGER usuarios_fts_ad AFTER DELETE ON usuarios BEGIN
+    INSERT INTO usuarios_fts(usuarios_fts, rowid, cedula, nombre)
+    VALUES ('delete', old.id, old.cedula, old.nombre);
+END;
+CREATE TRIGGER usuarios_fts_au AFTER UPDATE ON usuarios BEGIN
+    INSERT INTO usuarios_fts(usuarios_fts, rowid, cedula, nombre)
+    VALUES ('delete', old.id, old.cedula, old.nombre);
+    INSERT INTO usuarios_fts(rowid, cedula, nombre)
+    VALUES (new.id, new.cedula, new.nombre);
+END;
+
+INSERT INTO contratistas_fts(contratistas_fts) VALUES ('rebuild');
+INSERT INTO empresas_fts(empresas_fts) VALUES ('rebuild');
+INSERT INTO usuarios_fts(usuarios_fts) VALUES ('rebuild');
 "#;
