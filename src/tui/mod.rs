@@ -1,5 +1,6 @@
 pub mod activos;
 pub mod app;
+pub mod configuracion_inicial;
 pub mod contratistas;
 pub mod contratistas_mock;
 pub mod historial;
