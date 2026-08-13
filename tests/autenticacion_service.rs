@@ -38,6 +38,7 @@ fn credenciales_correctas_devuelven_usuario_y_rol() {
         .unwrap();
     assert_eq!(usuario.id, id);
     assert_eq!(usuario.cedula, "1001");
+    assert_eq!(usuario.nombre, "Usuario Uno");
     assert_eq!(usuario.rol, RolUsuario::Administrador);
 }
 

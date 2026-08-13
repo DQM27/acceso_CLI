@@ -1,3 +1,4 @@
+use crate::database::error::DatabaseError;
 use crate::database::repositories::empresa_repository::EmpresaRepository;
 use crate::models::empresa::Empresa;
 
@@ -25,7 +26,9 @@ where
             nombre: nombre.to_string(),
         };
 
-        Ok(self.empresas.crear(&empresa)?)
+        self.empresas
+            .crear(&empresa)
+            .map_err(mapear_nombre_duplicado)
     }
 
     pub fn buscar_por_id(&self, id: i64) -> Result<Empresa, EmpresaServiceError> {
@@ -51,11 +54,25 @@ where
             nombre: nombre.to_string(),
         };
 
-        Ok(self.empresas.actualizar(&empresa)?)
+        self.empresas
+            .actualizar(&empresa)
+            .map_err(mapear_nombre_duplicado)
     }
 
     pub fn listar(&self) -> Result<Vec<Empresa>, EmpresaServiceError> {
         Ok(self.empresas.listar()?)
+    }
+}
+
+fn mapear_nombre_duplicado(error: DatabaseError) -> EmpresaServiceError {
+    if matches!(
+        &error,
+        DatabaseError::Sqlite(rusqlite::Error::SqliteFailure(codigo, _))
+            if codigo.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
+    ) {
+        EmpresaServiceError::NombreDuplicado
+    } else {
+        EmpresaServiceError::Database(error)
     }
 }
 

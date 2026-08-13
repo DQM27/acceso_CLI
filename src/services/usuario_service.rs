@@ -1,3 +1,5 @@
+use crate::database::error::DatabaseError;
+use crate::database::queries::usuarios::{FiltroUsuarios, UsuarioResumen, UsuariosQuery};
 use crate::database::repositories::usuario_repository::UsuarioRepository;
 use crate::models::usuario::{RolUsuario, Usuario};
 
@@ -5,6 +7,29 @@ use super::error::UsuarioServiceError;
 use super::password::generar_hash;
 
 const LONGITUD_MINIMA_PASSWORD: usize = 8;
+
+pub struct UsuarioConsultaService<'a, Q>
+where
+    Q: UsuariosQuery + ?Sized,
+{
+    consultas: &'a Q,
+}
+
+impl<'a, Q> UsuarioConsultaService<'a, Q>
+where
+    Q: UsuariosQuery + ?Sized,
+{
+    pub fn new(consultas: &'a Q) -> Self {
+        Self { consultas }
+    }
+
+    pub fn buscar_para_tabla(
+        &self,
+        filtro: &FiltroUsuarios,
+    ) -> Result<Vec<UsuarioResumen>, UsuarioServiceError> {
+        Ok(self.consultas.buscar(filtro)?)
+    }
+}
 
 pub struct CrearUsuarioInput {
     pub cedula: String,
@@ -47,7 +72,9 @@ where
         }
 
         let usuario = self.construir_usuario(0, input)?;
-        Ok(self.usuarios.crear(&usuario)?)
+        self.usuarios
+            .crear(&usuario)
+            .map_err(mapear_duplicado_usuario)
     }
 
     pub fn buscar_por_id(&self, id: i64) -> Result<Usuario, UsuarioServiceError> {
@@ -67,22 +94,13 @@ where
         id: i64,
         input: ActualizarUsuarioInput,
     ) -> Result<(), UsuarioServiceError> {
-        let mut usuario = self.buscar_por_id(id)?;
+        self.buscar_por_id(id)?;
         let cedula = normalizar_requerido(&input.cedula, UsuarioServiceError::CedulaVacia)?;
         let nombre = normalizar_requerido(&input.nombre, UsuarioServiceError::NombreVacio)?;
 
-        if usuario.rol == RolUsuario::Root
-            && usuario.activo
-            && input.rol != RolUsuario::Root
-            && self.usuarios.contar_roots_activos()? == 1
-        {
-            return Err(UsuarioServiceError::UltimoRootActivo);
-        }
-
-        usuario.cedula = cedula.to_string();
-        usuario.nombre = nombre.to_string();
-        usuario.rol = input.rol;
-        Ok(self.usuarios.actualizar(&usuario)?)
+        self.usuarios
+            .actualizar_identidad_y_rol(id, cedula, nombre, input.rol)
+            .map_err(mapear_escritura_usuario)
     }
 
     pub fn cambiar_password(
@@ -90,30 +108,26 @@ where
         id: i64,
         nueva_password: &str,
     ) -> Result<(), UsuarioServiceError> {
-        let mut usuario = self.buscar_por_id(id)?;
+        self.buscar_por_id(id)?;
         validar_password(nueva_password)?;
-        usuario.password_hash = generar_hash(nueva_password)?;
-        Ok(self.usuarios.actualizar(&usuario)?)
+        let password_hash = generar_hash(nueva_password)?;
+        self.usuarios
+            .actualizar_password(id, &password_hash)
+            .map_err(mapear_escritura_usuario)
     }
 
     pub fn activar(&self, id: i64) -> Result<(), UsuarioServiceError> {
-        let mut usuario = self.buscar_por_id(id)?;
-        usuario.activo = true;
-        Ok(self.usuarios.actualizar(&usuario)?)
+        self.buscar_por_id(id)?;
+        self.usuarios
+            .establecer_activo(id, true)
+            .map_err(mapear_escritura_usuario)
     }
 
     pub fn desactivar(&self, id: i64) -> Result<(), UsuarioServiceError> {
-        let mut usuario = self.buscar_por_id(id)?;
-
-        if usuario.rol == RolUsuario::Root
-            && usuario.activo
-            && self.usuarios.contar_roots_activos()? == 1
-        {
-            return Err(UsuarioServiceError::UltimoRootActivo);
-        }
-
-        usuario.activo = false;
-        Ok(self.usuarios.actualizar(&usuario)?)
+        self.buscar_por_id(id)?;
+        self.usuarios
+            .establecer_activo(id, false)
+            .map_err(mapear_escritura_usuario)
     }
 
     pub fn listar(&self) -> Result<Vec<Usuario>, UsuarioServiceError> {
@@ -128,10 +142,6 @@ where
         &self,
         input: CrearRootInicialInput,
     ) -> Result<i64, UsuarioServiceError> {
-        if !self.requiere_configuracion_inicial()? {
-            return Err(UsuarioServiceError::ConfiguracionInicialYaRealizada);
-        }
-
         let usuario = self.construir_usuario(
             0,
             CrearUsuarioInput {
@@ -142,7 +152,9 @@ where
                 activo: true,
             },
         )?;
-        Ok(self.usuarios.crear(&usuario)?)
+        self.usuarios
+            .crear_root_inicial_atomico(&usuario)
+            .map_err(mapear_escritura_usuario)
     }
 
     fn construir_usuario(
@@ -165,6 +177,33 @@ where
     }
 }
 
+fn mapear_duplicado_usuario(error: DatabaseError) -> UsuarioServiceError {
+    if es_constraint_unique(&error) {
+        UsuarioServiceError::CedulaDuplicada
+    } else {
+        UsuarioServiceError::Database(error)
+    }
+}
+
+fn mapear_escritura_usuario(error: DatabaseError) -> UsuarioServiceError {
+    match error {
+        DatabaseError::ConfiguracionInicialYaRealizada => {
+            UsuarioServiceError::ConfiguracionInicialYaRealizada
+        }
+        DatabaseError::UsuarioNoEncontrado => UsuarioServiceError::UsuarioNoEncontrado,
+        DatabaseError::UltimoRootActivo => UsuarioServiceError::UltimoRootActivo,
+        error => mapear_duplicado_usuario(error),
+    }
+}
+
+fn es_constraint_unique(error: &DatabaseError) -> bool {
+    matches!(
+        error,
+        DatabaseError::Sqlite(rusqlite::Error::SqliteFailure(codigo, _))
+            if codigo.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
+    )
+}
+
 fn normalizar_requerido(
     valor: &str,
     error: UsuarioServiceError,
@@ -181,4 +220,16 @@ fn validar_password(password: &str) -> Result<(), UsuarioServiceError> {
         return Err(UsuarioServiceError::PasswordDemasiadoCorto);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn error_sqlite_no_relacionado_permanece_tecnico() {
+        let error = mapear_duplicado_usuario(DatabaseError::Sqlite(rusqlite::Error::InvalidQuery));
+
+        assert!(matches!(error, UsuarioServiceError::Database(_)));
+    }
 }

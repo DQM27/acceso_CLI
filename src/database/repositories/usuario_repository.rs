@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Row, params};
+use rusqlite::{Connection, Row, Transaction, TransactionBehavior, params};
 
 use crate::database::error::DatabaseError;
 use crate::models::usuario::{RolUsuario, Usuario};
@@ -6,11 +6,27 @@ use crate::models::usuario::{RolUsuario, Usuario};
 pub trait UsuarioRepository {
     fn crear(&self, usuario: &Usuario) -> Result<i64, DatabaseError>;
 
+    fn crear_root_inicial_atomico(&self, usuario: &Usuario) -> Result<i64, DatabaseError>;
+
     fn buscar_por_cedula(&self, cedula: &str) -> Result<Option<Usuario>, DatabaseError>;
 
     fn buscar_por_id(&self, id: i64) -> Result<Option<Usuario>, DatabaseError>;
 
     fn actualizar(&self, usuario: &Usuario) -> Result<(), DatabaseError>;
+
+    fn actualizar_protegiendo_ultimo_root(&self, usuario: &Usuario) -> Result<(), DatabaseError>;
+
+    fn actualizar_identidad_y_rol(
+        &self,
+        id: i64,
+        cedula: &str,
+        nombre: &str,
+        rol: RolUsuario,
+    ) -> Result<(), DatabaseError>;
+
+    fn establecer_activo(&self, id: i64, activo: bool) -> Result<(), DatabaseError>;
+
+    fn actualizar_password(&self, id: i64, password_hash: &str) -> Result<(), DatabaseError>;
 
     fn listar(&self) -> Result<Vec<Usuario>, DatabaseError>;
 
@@ -64,29 +80,106 @@ fn rol_a_texto(rol: RolUsuario) -> &'static str {
     }
 }
 
+fn insertar_usuario(connection: &Connection, usuario: &Usuario) -> Result<i64, DatabaseError> {
+    connection.execute(
+        "
+        INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo)
+        VALUES (?1, ?2, ?3, ?4, ?5)
+        ",
+        params![
+            usuario.cedula,
+            usuario.nombre,
+            usuario.password_hash,
+            rol_a_texto(usuario.rol),
+            usuario.activo as i64,
+        ],
+    )?;
+    Ok(connection.last_insert_rowid())
+}
+
+fn buscar_usuario_en_transaccion(
+    transaction: &Transaction<'_>,
+    id: i64,
+) -> Result<Usuario, DatabaseError> {
+    let resultado = transaction.query_row(
+        "
+        SELECT id, cedula, nombre, password_hash, rol, activo
+        FROM usuarios
+        WHERE id = ?1
+        ",
+        params![id],
+        convertir_fila,
+    );
+
+    match resultado {
+        Ok(usuario) => Ok(usuario),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Err(DatabaseError::UsuarioNoEncontrado),
+        Err(error) => Err(DatabaseError::from(error)),
+    }
+}
+
+fn actualizacion_reduce_roots(actual: &Usuario, nuevo: &Usuario) -> bool {
+    actual.rol == RolUsuario::Root
+        && actual.activo
+        && (nuevo.rol != RolUsuario::Root || !nuevo.activo)
+}
+
+fn persistir_usuario(
+    transaction: &Transaction<'_>,
+    usuario: &Usuario,
+) -> Result<(), DatabaseError> {
+    transaction.execute(
+        "UPDATE usuarios
+         SET cedula = ?1, nombre = ?2, password_hash = ?3, rol = ?4, activo = ?5
+         WHERE id = ?6",
+        params![
+            usuario.cedula,
+            usuario.nombre,
+            usuario.password_hash,
+            rol_a_texto(usuario.rol),
+            usuario.activo as i64,
+            usuario.id,
+        ],
+    )?;
+    Ok(())
+}
+
+fn validar_y_persistir(
+    transaction: &Transaction<'_>,
+    actual: &Usuario,
+    nuevo: &Usuario,
+) -> Result<(), DatabaseError> {
+    if actualizacion_reduce_roots(actual, nuevo) {
+        let roots_activos: i64 = transaction.query_row(
+            "SELECT COUNT(*) FROM usuarios WHERE rol = 'ROOT' AND activo = 1",
+            [],
+            |row| row.get(0),
+        )?;
+        if roots_activos <= 1 {
+            return Err(DatabaseError::UltimoRootActivo);
+        }
+    }
+    persistir_usuario(transaction, nuevo)
+}
+
 impl<'a> UsuarioRepository for SqliteUsuarioRepository<'a> {
     fn crear(&self, usuario: &Usuario) -> Result<i64, DatabaseError> {
-        self.connection.execute(
-            "
-            INSERT INTO usuarios (
-                cedula,
-                nombre,
-                password_hash,
-                rol,
-                activo
-            )
-            VALUES (?1, ?2, ?3, ?4, ?5)
-            ",
-            params![
-                usuario.cedula,
-                usuario.nombre,
-                usuario.password_hash,
-                rol_a_texto(usuario.rol),
-                usuario.activo as i64,
-            ],
-        )?;
+        insertar_usuario(self.connection, usuario)
+    }
 
-        Ok(self.connection.last_insert_rowid())
+    fn crear_root_inicial_atomico(&self, usuario: &Usuario) -> Result<i64, DatabaseError> {
+        // IMMEDIATE reserva el turno de escritura antes de leer la condición.
+        let transaction =
+            Transaction::new_unchecked(self.connection, TransactionBehavior::Immediate)?;
+        let cantidad: i64 =
+            transaction.query_row("SELECT COUNT(*) FROM usuarios", [], |row| row.get(0))?;
+        if cantidad != 0 {
+            return Err(DatabaseError::ConfiguracionInicialYaRealizada);
+        }
+
+        let id = insertar_usuario(&transaction, usuario)?;
+        transaction.commit()?;
+        Ok(id)
     }
 
     fn buscar_por_cedula(&self, cedula: &str) -> Result<Option<Usuario>, DatabaseError> {
@@ -138,27 +231,58 @@ impl<'a> UsuarioRepository for SqliteUsuarioRepository<'a> {
     }
 
     fn actualizar(&self, usuario: &Usuario) -> Result<(), DatabaseError> {
-        self.connection.execute(
-            "
-            UPDATE usuarios
-            SET
-                cedula = ?1,
-                nombre = ?2,
-                password_hash = ?3,
-                rol = ?4,
-                activo = ?5
-            WHERE id = ?6
-            ",
-            params![
-                usuario.cedula,
-                usuario.nombre,
-                usuario.password_hash,
-                rol_a_texto(usuario.rol),
-                usuario.activo as i64,
-                usuario.id,
-            ],
-        )?;
+        self.actualizar_protegiendo_ultimo_root(usuario)
+    }
 
+    fn actualizar_protegiendo_ultimo_root(&self, usuario: &Usuario) -> Result<(), DatabaseError> {
+        // La lectura de la transición y su escritura comparten la misma reserva de escritor.
+        let transaction =
+            Transaction::new_unchecked(self.connection, TransactionBehavior::Immediate)?;
+        let actual = buscar_usuario_en_transaccion(&transaction, usuario.id)?;
+
+        validar_y_persistir(&transaction, &actual, usuario)?;
+        transaction.commit()?;
+        Ok(())
+    }
+
+    fn actualizar_identidad_y_rol(
+        &self,
+        id: i64,
+        cedula: &str,
+        nombre: &str,
+        rol: RolUsuario,
+    ) -> Result<(), DatabaseError> {
+        let transaction =
+            Transaction::new_unchecked(self.connection, TransactionBehavior::Immediate)?;
+        let actual = buscar_usuario_en_transaccion(&transaction, id)?;
+        let mut nuevo = actual.clone();
+        nuevo.cedula = cedula.to_string();
+        nuevo.nombre = nombre.to_string();
+        nuevo.rol = rol;
+        validar_y_persistir(&transaction, &actual, &nuevo)?;
+        transaction.commit()?;
+        Ok(())
+    }
+
+    fn establecer_activo(&self, id: i64, activo: bool) -> Result<(), DatabaseError> {
+        let transaction =
+            Transaction::new_unchecked(self.connection, TransactionBehavior::Immediate)?;
+        let actual = buscar_usuario_en_transaccion(&transaction, id)?;
+        let mut nuevo = actual.clone();
+        nuevo.activo = activo;
+        validar_y_persistir(&transaction, &actual, &nuevo)?;
+        transaction.commit()?;
+        Ok(())
+    }
+
+    fn actualizar_password(&self, id: i64, password_hash: &str) -> Result<(), DatabaseError> {
+        let filas = self.connection.execute(
+            "UPDATE usuarios SET password_hash = ?1 WHERE id = ?2",
+            params![password_hash, id],
+        )?;
+        if filas == 0 {
+            return Err(DatabaseError::UsuarioNoEncontrado);
+        }
         Ok(())
     }
 

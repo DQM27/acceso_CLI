@@ -57,12 +57,19 @@ fn campos_completos_inician_validacion() {
 }
 
 #[test]
-fn tick_completa_la_validacion_simulada() {
+fn validacion_lista_entrega_credenciales_y_espera_resultado_real() {
     let inicio = Instant::now();
     let mut state = login_completo();
     state.iniciar_validacion_en(inicio);
     state.tick(inicio + DURACION_VALIDACION);
+    assert_eq!(
+        state.credenciales_si_validacion_lista(inicio + DURACION_VALIDACION),
+        Some(("1-1111-1111".to_owned(), "secreto".to_owned()))
+    );
+    assert!(matches!(state.estado(), EstadoLogin::Validando { .. }));
+    state.completar_validacion(None);
     assert_eq!(state.estado(), &EstadoLogin::Exito);
+    assert!(state.password.is_empty());
 }
 
 #[test]

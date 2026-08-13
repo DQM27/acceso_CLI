@@ -3,6 +3,9 @@ use std::{io, time::Duration};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::{Terminal, backend::Backend};
 
+use crate::application::AppCore;
+use crate::services::autenticacion_service::UsuarioSesion;
+
 use super::{
     activos::{self, AccionActivos, ActivosState},
     contratistas::{self, AccionContratistas, ContratistasState},
@@ -29,6 +32,7 @@ pub struct App {
     historial: HistorialState,
     contratistas: ContratistasState,
     salir: bool,
+    sesion: Option<UsuarioSesion>,
 }
 
 impl Default for App {
@@ -40,6 +44,7 @@ impl Default for App {
             historial: HistorialState::default(),
             contratistas: ContratistasState::default(),
             salir: false,
+            sesion: None,
         }
     }
 }
@@ -48,6 +53,22 @@ impl App {
     pub fn run<B: Backend<Error = io::Error>>(
         &mut self,
         terminal: &mut Terminal<B>,
+    ) -> io::Result<()> {
+        self.run_internal(terminal, None)
+    }
+
+    pub fn run_with_core<B: Backend<Error = io::Error>>(
+        &mut self,
+        terminal: &mut Terminal<B>,
+        core: &AppCore,
+    ) -> io::Result<()> {
+        self.run_internal(terminal, Some(core))
+    }
+
+    fn run_internal<B: Backend<Error = io::Error>>(
+        &mut self,
+        terminal: &mut Terminal<B>,
+        core: Option<&AppCore>,
     ) -> io::Result<()> {
         while !self.salir {
             terminal.draw(|frame| match self.vista {
@@ -96,9 +117,27 @@ impl App {
                 }
             }
 
-            self.login.tick(std::time::Instant::now());
+            let ahora = std::time::Instant::now();
+            self.login.tick(ahora);
+            if let Some((cedula, password)) = self.login.credenciales_si_validacion_lista(ahora) {
+                if let Some(core) = core {
+                    match core.autenticar(&cedula, &password) {
+                        Ok(sesion) => {
+                            self.sesion = Some(sesion);
+                            self.login.completar_validacion(None);
+                        }
+                        Err(error) => self.login.completar_validacion(Some(error.to_string())),
+                    }
+                } else {
+                    self.login.completar_validacion(None);
+                }
+            }
         }
 
         Ok(())
+    }
+
+    pub fn sesion(&self) -> Option<&UsuarioSesion> {
+        self.sesion.as_ref()
     }
 }

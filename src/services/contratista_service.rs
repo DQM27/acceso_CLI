@@ -1,11 +1,38 @@
 use chrono::NaiveDate;
 
+use crate::database::error::DatabaseError;
+use crate::database::queries::contratistas::{
+    ContratistaResumen, ContratistasQuery, FiltroContratistas,
+};
 use crate::database::repositories::contratista_repository::ContratistaRepository;
 use crate::database::repositories::empresa_repository::EmpresaRepository;
 use crate::models::contratista::Contratista;
 use crate::models::tipo_ingreso::TipoIngreso;
 
 use super::error::ContratistaServiceError;
+
+pub struct ContratistaConsultaService<'a, Q>
+where
+    Q: ContratistasQuery + ?Sized,
+{
+    consultas: &'a Q,
+}
+
+impl<'a, Q> ContratistaConsultaService<'a, Q>
+where
+    Q: ContratistasQuery + ?Sized,
+{
+    pub fn new(consultas: &'a Q) -> Self {
+        Self { consultas }
+    }
+
+    pub fn buscar_para_tabla(
+        &self,
+        filtro: &FiltroContratistas,
+    ) -> Result<Vec<ContratistaResumen>, ContratistaServiceError> {
+        Ok(self.consultas.buscar(filtro)?)
+    }
+}
 
 pub struct DatosContratista {
     pub cedula: String,
@@ -40,7 +67,9 @@ where
 
     pub fn crear(&self, datos: DatosContratista) -> Result<i64, ContratistaServiceError> {
         let contratista = self.construir_contratista(0, datos)?;
-        Ok(self.contratistas.crear(&contratista)?)
+        self.contratistas
+            .crear(&contratista)
+            .map_err(mapear_cedula_duplicada)
     }
 
     pub fn buscar_por_id(&self, id: i64) -> Result<Contratista, ContratistaServiceError> {
@@ -62,7 +91,9 @@ where
     ) -> Result<(), ContratistaServiceError> {
         self.buscar_por_id(id)?;
         let contratista = self.construir_contratista(id, datos)?;
-        Ok(self.contratistas.actualizar(&contratista)?)
+        self.contratistas
+            .actualizar(&contratista)
+            .map_err(mapear_cedula_duplicada)
     }
 
     pub fn listar(&self) -> Result<Vec<Contratista>, ContratistaServiceError> {
@@ -104,5 +135,17 @@ where
         }
 
         Ok(contratista)
+    }
+}
+
+fn mapear_cedula_duplicada(error: DatabaseError) -> ContratistaServiceError {
+    if matches!(
+        &error,
+        DatabaseError::Sqlite(rusqlite::Error::SqliteFailure(codigo, _))
+            if codigo.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
+    ) {
+        ContratistaServiceError::CedulaDuplicada
+    } else {
+        ContratistaServiceError::Database(error)
     }
 }

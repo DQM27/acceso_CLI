@@ -2,6 +2,9 @@
 pub enum DatabaseError {
     Sqlite(rusqlite::Error),
     RegistroNoActivo,
+    ConfiguracionInicialYaRealizada,
+    UsuarioNoEncontrado,
+    UltimoRootActivo,
 }
 
 impl std::fmt::Display for DatabaseError {
@@ -16,6 +19,14 @@ impl std::fmt::Display for DatabaseError {
                     "No existe un registro de ingreso activo con ese ID"
                 )
             }
+            DatabaseError::ConfiguracionInicialYaRealizada => {
+                write!(formatter, "La configuración inicial ya fue realizada")
+            }
+            DatabaseError::UsuarioNoEncontrado => write!(formatter, "Usuario no encontrado"),
+            DatabaseError::UltimoRootActivo => write!(
+                formatter,
+                "No se puede desactivar o degradar al último ROOT activo"
+            ),
         }
     }
 }

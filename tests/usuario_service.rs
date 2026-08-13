@@ -177,7 +177,7 @@ fn operaciones_sobre_id_inexistente_fallan() {
 }
 
 #[test]
-fn cedula_duplicada_devuelve_database_sin_crear_otro_usuario() {
+fn cedula_duplicada_devuelve_error_semantico_sin_crear_otro_usuario() {
     let connection = base();
     inicializar(&connection);
     let repository = SqliteUsuarioRepository::new(&connection);
@@ -187,7 +187,7 @@ fn cedula_duplicada_devuelve_database_sin_crear_otro_usuario() {
         .unwrap();
     assert!(matches!(
         servicio.crear(input("2001", RolUsuario::Administrador, true)),
-        Err(UsuarioServiceError::Database(_))
+        Err(UsuarioServiceError::CedulaDuplicada)
     ));
     assert_eq!(servicio.listar().unwrap().len(), 2);
 }
@@ -271,7 +271,7 @@ fn actualizar_con_cedula_duplicada_conserva_registro_original() {
                 rol: RolUsuario::Root,
             }
         ),
-        Err(UsuarioServiceError::Database(_))
+        Err(UsuarioServiceError::CedulaDuplicada)
     ));
     assert_eq!(servicio.buscar_por_id(segundo).unwrap(), original);
 }

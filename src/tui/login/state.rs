@@ -88,9 +88,22 @@ impl LoginState {
 
         let transcurrido = ahora.saturating_duration_since(iniciado);
         self.spinner_frame = (transcurrido.as_millis() / DURACION_FRAME.as_millis()) as usize;
-        if transcurrido >= DURACION_VALIDACION {
-            self.estado = EstadoLogin::Exito;
-        }
+    }
+
+    pub fn credenciales_si_validacion_lista(&self, ahora: Instant) -> Option<(String, String)> {
+        let EstadoLogin::Validando { iniciado } = self.estado else {
+            return None;
+        };
+        (ahora.saturating_duration_since(iniciado) >= DURACION_VALIDACION)
+            .then(|| (self.cedula.clone(), self.password.clone()))
+    }
+
+    pub fn completar_validacion(&mut self, error: Option<String>) {
+        self.password.clear();
+        self.estado = match error {
+            Some(error) => EstadoLogin::Error(error),
+            None => EstadoLogin::Exito,
+        };
     }
 
     pub fn password_enmascarado(&self) -> String {

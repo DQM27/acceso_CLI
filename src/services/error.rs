@@ -27,6 +27,7 @@ pub enum UsuarioServiceError {
     ConfiguracionInicialRequerida,
     ConfiguracionInicialYaRealizada,
     UltimoRootActivo,
+    CedulaDuplicada,
     Password(PasswordError),
     Database(DatabaseError),
 }
@@ -50,6 +51,7 @@ impl std::fmt::Display for UsuarioServiceError {
                 formatter,
                 "No se puede desactivar o degradar al último ROOT activo"
             ),
+            Self::CedulaDuplicada => write!(formatter, "La cédula del usuario ya existe"),
             Self::Password(error) => write!(formatter, "{error}"),
             Self::Database(error) => write!(formatter, "{error}"),
         }
@@ -119,6 +121,7 @@ pub enum ContratistaServiceError {
     CedulaVacia,
     NombreVacio,
     PraindRequerido,
+    CedulaDuplicada,
     Database(DatabaseError),
 }
 
@@ -130,6 +133,7 @@ impl std::fmt::Display for ContratistaServiceError {
             Self::CedulaVacia => write!(formatter, "La cédula es obligatoria"),
             Self::NombreVacio => write!(formatter, "El nombre es obligatorio"),
             Self::PraindRequerido => write!(formatter, "La fecha de PRAIND es obligatoria"),
+            Self::CedulaDuplicada => write!(formatter, "La cédula del contratista ya existe"),
             Self::Database(error) => write!(formatter, "{error}"),
         }
     }
@@ -154,6 +158,7 @@ impl From<DatabaseError> for ContratistaServiceError {
 pub enum EmpresaServiceError {
     EmpresaNoEncontrada,
     NombreEmpresaVacio,
+    NombreDuplicado,
     Database(DatabaseError),
 }
 
@@ -162,6 +167,7 @@ impl std::fmt::Display for EmpresaServiceError {
         match self {
             Self::EmpresaNoEncontrada => write!(formatter, "Empresa no encontrada"),
             Self::NombreEmpresaVacio => write!(formatter, "El nombre de la empresa es obligatorio"),
+            Self::NombreDuplicado => write!(formatter, "El nombre de la empresa ya existe"),
             Self::Database(error) => write!(formatter, "{error}"),
         }
     }
@@ -192,6 +198,7 @@ pub enum RegistroIngresoServiceError {
     GafeteNoAsignado,
     RegistroNoActivo,
     SalidaAnteriorAIngreso,
+    RangoFechasInvalido,
     Database(DatabaseError),
 }
 
@@ -209,6 +216,9 @@ impl std::fmt::Display for RegistroIngresoServiceError {
             Self::RegistroNoActivo => write!(formatter, "El registro de ingreso no está activo"),
             Self::SalidaAnteriorAIngreso => {
                 write!(formatter, "La salida no puede ser anterior al ingreso")
+            }
+            Self::RangoFechasInvalido => {
+                write!(formatter, "El rango de fechas del historial no es válido")
             }
             Self::Database(error) => write!(formatter, "{error}"),
         }

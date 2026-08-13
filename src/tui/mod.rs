@@ -7,4 +7,5 @@ pub mod historial_mock;
 mod layout;
 pub mod login;
 pub mod mock;
+pub mod terminal;
 pub mod theme;

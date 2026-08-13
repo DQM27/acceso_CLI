@@ -1,12 +1,18 @@
-use chrono::NaiveDateTime;
+use chrono::{NaiveDate, NaiveDateTime};
 
+use crate::database::error::DatabaseError;
+use crate::database::queries::ingresos::{
+    FiltroHistorial, FiltroIngresosActivos, IngresoActivoLectura, IngresosQuery, PaginaHistorial,
+};
 use crate::database::repositories::contratista_repository::ContratistaRepository;
+use crate::database::repositories::empresa_repository::EmpresaRepository;
 use crate::database::repositories::registro_ingreso_repository::RegistroIngresoRepository;
 use crate::domain::acceso::verificar_acceso;
 use crate::domain::registro_ingreso::salida_es_cronologicamente_valida;
 use crate::domain::resultado_acceso::ResultadoAcceso;
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::models::registro_ingreso::RegistroIngreso;
+use crate::models::tipo_ingreso::TipoIngreso;
 
 use super::error::RegistroIngresoServiceError;
 
@@ -14,6 +20,104 @@ use super::error::RegistroIngresoServiceError;
 pub struct ResultadoRegistroEntrada {
     pub registro_id: i64,
     pub resultado_acceso: ResultadoAcceso,
+}
+
+/// Vista previa del estado actual de un contratista antes de registrar su entrada.
+///
+/// No constituye una autorización cacheada: `registrar_entrada()` vuelve a consultar
+/// y validar todas las reglas inmediatamente antes de persistir.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparacionIngreso {
+    pub contratista_id: i64,
+    pub cedula: String,
+    pub nombre: String,
+    pub empresa_nombre: String,
+    pub tipo_ingreso: TipoIngreso,
+    pub resultado_acceso: ResultadoAcceso,
+    pub requiere_gafete: bool,
+    pub tiene_ingreso_activo: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IngresoActivoResumen {
+    pub registro_id: i64,
+    pub contratista_id: i64,
+    pub cedula: String,
+    pub contratista_nombre: String,
+    pub empresa_nombre: String,
+    pub tipo_ingreso: TipoIngreso,
+    pub medio_ingreso: MedioIngreso,
+    pub fecha_hora_ingreso: NaiveDateTime,
+    pub gafete_numero: Option<i64>,
+    pub usuario_ingreso_nombre: String,
+    pub resultado_acceso: ResultadoAcceso,
+}
+
+pub struct RegistroIngresoConsultaService<'a, Q>
+where
+    Q: IngresosQuery + ?Sized,
+{
+    consultas: &'a Q,
+}
+
+impl<'a, Q> RegistroIngresoConsultaService<'a, Q>
+where
+    Q: IngresosQuery + ?Sized,
+{
+    pub fn new(consultas: &'a Q) -> Self {
+        Self { consultas }
+    }
+
+    pub fn listar_activos(
+        &self,
+        filtro: &FiltroIngresosActivos,
+        hoy: NaiveDate,
+    ) -> Result<Vec<IngresoActivoResumen>, RegistroIngresoServiceError> {
+        Ok(self
+            .consultas
+            .listar_activos(filtro)?
+            .into_iter()
+            .map(|lectura| convertir_activo(lectura, hoy))
+            .collect())
+    }
+
+    pub fn buscar_historial(
+        &self,
+        filtro: &FiltroHistorial,
+    ) -> Result<PaginaHistorial, RegistroIngresoServiceError> {
+        if filtro.desde >= filtro.hasta {
+            return Err(RegistroIngresoServiceError::RangoFechasInvalido);
+        }
+        Ok(self.consultas.buscar_historial(filtro)?)
+    }
+}
+
+fn convertir_activo(lectura: IngresoActivoLectura, hoy: NaiveDate) -> IngresoActivoResumen {
+    let contratista = crate::models::contratista::Contratista {
+        id: lectura.contratista_id,
+        cedula: lectura.cedula.clone(),
+        nombre: lectura.contratista_nombre.clone(),
+        empresa_id: lectura.empresa_id,
+        tipo_ingreso: lectura.tipo_ingreso,
+        fecha_vencimiento_praind: lectura.fecha_vencimiento_praind,
+        es_personal_ruta: lectura.es_personal_ruta,
+        tiene_acceso: lectura.tiene_acceso,
+    };
+    let resultado_acceso = verificar_acceso(&contratista, hoy);
+
+    IngresoActivoResumen {
+        registro_id: lectura.registro_id,
+        contratista_id: lectura.contratista_id,
+        cedula: lectura.cedula,
+        contratista_nombre: lectura.contratista_nombre,
+        empresa_nombre: lectura.empresa_nombre,
+        tipo_ingreso: lectura.tipo_ingreso,
+        medio_ingreso: lectura.medio_ingreso,
+        fecha_hora_ingreso: lectura.fecha_hora_ingreso,
+        gafete_numero: lectura.gafete_numero,
+        usuario_ingreso_nombre: lectura.usuario_ingreso_nombre,
+        resultado_acceso,
+    }
 }
 
 pub struct RegistroIngresoService<'a, C, R>
@@ -35,6 +139,45 @@ where
             contratistas,
             registros,
         }
+    }
+
+    pub fn preparar_ingreso<E>(
+        &self,
+        empresas: &E,
+        contratista_id: i64,
+        hoy: NaiveDate,
+    ) -> Result<PreparacionIngreso, RegistroIngresoServiceError>
+    where
+        E: EmpresaRepository + ?Sized,
+    {
+        let contratista = self
+            .contratistas
+            .buscar_por_id(contratista_id)?
+            .ok_or(RegistroIngresoServiceError::ContratistaNoEncontrado)?;
+        let empresa = empresas
+            .buscar_por_id(contratista.empresa_id)?
+            .ok_or_else(|| {
+                RegistroIngresoServiceError::Database(DatabaseError::Sqlite(
+                    rusqlite::Error::InvalidQuery,
+                ))
+            })?;
+        let resultado_acceso = verificar_acceso(&contratista, hoy);
+        let requiere_gafete = contratista.requiere_gafete();
+        let tiene_ingreso_activo = self
+            .registros
+            .buscar_ingreso_activo(contratista.id)?
+            .is_some();
+
+        Ok(PreparacionIngreso {
+            contratista_id: contratista.id,
+            cedula: contratista.cedula,
+            nombre: contratista.nombre,
+            empresa_nombre: empresa.nombre,
+            tipo_ingreso: contratista.tipo_ingreso,
+            resultado_acceso,
+            requiere_gafete,
+            tiene_ingreso_activo,
+        })
     }
 
     pub fn registrar_entrada(

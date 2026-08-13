@@ -1,8 +1,17 @@
 use crate::database::repositories::usuario_repository::UsuarioRepository;
-use crate::models::usuario::Usuario;
+use crate::models::usuario::RolUsuario;
 
 use super::error::AutenticacionError;
 use super::password::verificar_password;
+
+/// Identidad autenticada que puede cruzar hacia aplicación/presentación sin exponer el hash.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UsuarioSesion {
+    pub id: i64,
+    pub cedula: String,
+    pub nombre: String,
+    pub rol: RolUsuario,
+}
 
 pub struct AutenticacionService<'a, R>
 where
@@ -19,7 +28,11 @@ where
         Self { usuarios }
     }
 
-    pub fn autenticar(&self, cedula: &str, password: &str) -> Result<Usuario, AutenticacionError> {
+    pub fn autenticar(
+        &self,
+        cedula: &str,
+        password: &str,
+    ) -> Result<UsuarioSesion, AutenticacionError> {
         let usuario = self
             .usuarios
             .buscar_por_cedula(cedula.trim())?
@@ -30,7 +43,12 @@ where
         }
 
         match verificar_password(password, &usuario.password_hash) {
-            Ok(true) => Ok(usuario),
+            Ok(true) => Ok(UsuarioSesion {
+                id: usuario.id,
+                cedula: usuario.cedula,
+                nombre: usuario.nombre,
+                rol: usuario.rol,
+            }),
             Ok(false) => Err(AutenticacionError::CredencialesInvalidas),
             Err(_) => Err(AutenticacionError::HashInvalido),
         }

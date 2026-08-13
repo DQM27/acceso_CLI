@@ -187,7 +187,7 @@ fn debe_rechazar_nombre_vacio_al_actualizar() {
 }
 
 #[test]
-fn nombre_duplicado_produce_error_de_database_y_conserva_integridad() {
+fn nombre_duplicado_produce_error_semantico_y_conserva_integridad() {
     let connection = preparar_base();
     let repository = SqliteEmpresaRepository::new(&connection);
     let servicio = EmpresaService::new(&repository);
@@ -196,13 +196,13 @@ fn nombre_duplicado_produce_error_de_database_y_conserva_integridad() {
 
     assert!(matches!(
         servicio.crear("Empresa Uno"),
-        Err(EmpresaServiceError::Database(_))
+        Err(EmpresaServiceError::NombreDuplicado)
     ));
     assert_eq!(servicio.listar().unwrap().len(), 2);
 
     assert!(matches!(
         servicio.actualizar(segundo_id, "Empresa Uno"),
-        Err(EmpresaServiceError::Database(_))
+        Err(EmpresaServiceError::NombreDuplicado)
     ));
     assert_eq!(
         servicio.buscar_por_id(segundo_id).unwrap().nombre,

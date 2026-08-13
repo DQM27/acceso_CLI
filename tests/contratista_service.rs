@@ -402,7 +402,7 @@ fn debe_listar_contratistas() {
 }
 
 #[test]
-fn cedula_duplicada_devuelve_database_y_no_crea_otro_registro() {
+fn cedula_duplicada_devuelve_error_semantico_y_no_crea_otro_registro() {
     let (connection, empresa_id) = preparar_base();
     let contratistas = SqliteContratistaRepository::new(&connection);
     let empresas = SqliteEmpresaRepository::new(&connection);
@@ -415,7 +415,33 @@ fn cedula_duplicada_devuelve_database_y_no_crea_otro_registro() {
 
     assert!(matches!(
         resultado,
-        Err(ContratistaServiceError::Database(_))
+        Err(ContratistaServiceError::CedulaDuplicada)
     ));
     assert_eq!(servicio.listar().unwrap().len(), 1);
+}
+
+#[test]
+fn actualizar_con_cedula_duplicada_devuelve_error_semantico_y_conserva_registro() {
+    let (connection, empresa_id) = preparar_base();
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let empresas = SqliteEmpresaRepository::new(&connection);
+    let servicio = ContratistaService::new(&contratistas, &empresas);
+    servicio
+        .crear(datos(empresa_id, TipoIngreso::Swat))
+        .unwrap();
+    let mut segundo = datos(empresa_id, TipoIngreso::Swat);
+    segundo.cedula = "2002".to_owned();
+    segundo.nombre = "Persona Dos".to_owned();
+    let segundo_id = servicio.crear(segundo).unwrap();
+    let original = servicio.buscar_por_id(segundo_id).unwrap();
+
+    let mut actualizacion = datos(empresa_id, TipoIngreso::Swat);
+    actualizacion.nombre = "Nombre Modificado".to_owned();
+    assert!(matches!(
+        servicio.actualizar(segundo_id, actualizacion),
+        Err(ContratistaServiceError::CedulaDuplicada)
+    ));
+    let conservado = servicio.buscar_por_id(segundo_id).unwrap();
+    assert_eq!(conservado.cedula, original.cedula);
+    assert_eq!(conservado.nombre, original.nombre);
 }

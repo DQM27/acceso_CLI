@@ -43,9 +43,24 @@ Las fechas y horas representan la hora local de Costa Rica y de la instalación.
 persisten como texto con formato `YYYY-MM-DD HH:MM:SS`; actualmente no representan UTC.
 Cambiar esta política requiere una migración de datos explícita.
 
-La protección del último ROOT activo se aplica en el servicio. Antes de permitir varios
-procesos escritores deberá convertirse en una operación transaccional atómica; el diseño
-actual está dirigido a una aplicación local con un único flujo de escritura.
+La creación del ROOT inicial y la protección del último ROOT activo se ejecutan mediante
+transacciones SQLite `IMMEDIATE`, de modo que la lectura de la condición y su escritura
+son una sola operación atómica incluso con varios escritores.
+
+## Arquitectura de arranque
+
+```text
+TUI → AppCore → Services / Queries → Repositories → SQLite
+```
+
+`AppCore` posee la única conexión de la aplicación y compone repositorios y servicios
+temporales para cada caso de uso; no contiene reglas de negocio. `cargo run` utiliza
+`control_acceso.db` en el directorio actual. La variable `CONTROL_ACCESO_DB` permite
+indicar una ruta distinta sin codificar rutas absolutas.
+
+Si la base está vacía, el núcleo exige crear el ROOT inicial antes del login. La pantalla
+visual para ese paso aún no forma parte del prototipo; el caso de uso ya está disponible
+mediante `AppCore::crear_root_inicial`.
 
 ## Prototipo TUI
 

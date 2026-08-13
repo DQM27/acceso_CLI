@@ -8,6 +8,10 @@ use control_acceso::services::usuario_service::{
     ActualizarUsuarioInput, CrearRootInicialInput, CrearUsuarioInput, UsuarioService,
 };
 use rusqlite::Connection;
+use std::path::PathBuf;
+use std::sync::{Arc, Barrier};
+use std::thread;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 fn base() -> Connection {
     let c = Connection::open_in_memory().unwrap();
@@ -29,6 +33,17 @@ fn usuario(cedula: &str, rol: RolUsuario, activo: bool) -> CrearUsuarioInput {
         rol,
         activo,
     }
+}
+
+fn archivo_temporal(nombre: &str) -> PathBuf {
+    let unico = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    std::env::temp_dir().join(format!(
+        "control_acceso_{nombre}_{}_{unico}.sqlite",
+        std::process::id()
+    ))
 }
 
 #[test]
@@ -78,6 +93,25 @@ fn root_inicial_valida_password() {
 }
 
 #[test]
+fn fallo_de_insercion_del_root_inicial_hace_rollback() {
+    let c = base();
+    c.execute_batch(
+        "CREATE TRIGGER impedir_root BEFORE INSERT ON usuarios
+         BEGIN SELECT RAISE(ABORT, 'fallo inducido'); END;",
+    )
+    .unwrap();
+    let r = SqliteUsuarioRepository::new(&c);
+    let s = UsuarioService::new(&r);
+
+    assert!(matches!(
+        s.crear_root_inicial(root("ROOT1")),
+        Err(UsuarioServiceError::Database(_))
+    ));
+    assert_eq!(r.contar_usuarios().unwrap(), 0);
+    assert!(s.requiere_configuracion_inicial().unwrap());
+}
+
+#[test]
 fn no_permite_desactivar_ni_degradar_ultimo_root_activo() {
     let c = base();
     let r = SqliteUsuarioRepository::new(&c);
@@ -99,6 +133,57 @@ fn no_permite_desactivar_ni_degradar_ultimo_root_activo() {
         Err(UsuarioServiceError::UltimoRootActivo)
     ));
     assert_eq!(r.contar_roots_activos().unwrap(), 1);
+}
+
+#[test]
+fn unico_root_no_puede_convertirse_en_operador() {
+    let c = base();
+    let r = SqliteUsuarioRepository::new(&c);
+    let s = UsuarioService::new(&r);
+    let id = s.crear_root_inicial(root("ROOT1")).unwrap();
+
+    assert!(matches!(
+        s.actualizar(
+            id,
+            ActualizarUsuarioInput {
+                cedula: "ROOT1".to_string(),
+                nombre: "Root".to_string(),
+                rol: RolUsuario::Operador,
+            }
+        ),
+        Err(UsuarioServiceError::UltimoRootActivo)
+    ));
+    assert_eq!(r.contar_roots_activos().unwrap(), 1);
+}
+
+#[test]
+fn unico_root_puede_cambiar_identidad_y_password() {
+    let c = base();
+    let r = SqliteUsuarioRepository::new(&c);
+    let s = UsuarioService::new(&r);
+    let id = s.crear_root_inicial(root("ROOT1")).unwrap();
+
+    s.actualizar(
+        id,
+        ActualizarUsuarioInput {
+            cedula: "ROOT-NUEVO".to_string(),
+            nombre: "Nombre Nuevo".to_string(),
+            rol: RolUsuario::Root,
+        },
+    )
+    .unwrap();
+    s.cambiar_password(id, "password-nueva").unwrap();
+
+    let actualizado = s.buscar_por_id(id).unwrap();
+    assert_eq!(actualizado.cedula, "ROOT-NUEVO");
+    assert_eq!(actualizado.nombre, "Nombre Nuevo");
+    assert_eq!(actualizado.rol, RolUsuario::Root);
+    assert!(actualizado.activo);
+    assert!(
+        control_acceso::services::autenticacion_service::AutenticacionService::new(&r)
+            .autenticar("ROOT-NUEVO", "password-nueva")
+            .is_ok()
+    );
 }
 
 #[test]
@@ -130,6 +215,151 @@ fn con_dos_roots_puede_degradar_uno_y_permanece_otro() {
     .unwrap();
     assert_eq!(r.contar_roots_activos().unwrap(), 1);
     assert_eq!(s.buscar_por_id(primero).unwrap().rol, RolUsuario::Operador);
+}
+
+#[test]
+fn con_dos_roots_uno_puede_convertirse_en_administrador() {
+    let c = base();
+    let r = SqliteUsuarioRepository::new(&c);
+    let s = UsuarioService::new(&r);
+    let primero = s.crear_root_inicial(root("ROOT1")).unwrap();
+    s.crear(usuario("ROOT2", RolUsuario::Root, true)).unwrap();
+
+    s.actualizar(
+        primero,
+        ActualizarUsuarioInput {
+            cedula: "ROOT1".to_string(),
+            nombre: "Administrador".to_string(),
+            rol: RolUsuario::Administrador,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(r.contar_roots_activos().unwrap(), 1);
+    assert_eq!(
+        s.buscar_por_id(primero).unwrap().rol,
+        RolUsuario::Administrador
+    );
+}
+
+#[test]
+fn promover_admin_activo_incrementa_roots_y_editar_no_root_no_activa_proteccion() {
+    let c = base();
+    let r = SqliteUsuarioRepository::new(&c);
+    let s = UsuarioService::new(&r);
+    s.crear_root_inicial(root("ROOT1")).unwrap();
+    let admin = s
+        .crear(usuario("ADMIN1", RolUsuario::Administrador, true))
+        .unwrap();
+
+    s.actualizar(
+        admin,
+        ActualizarUsuarioInput {
+            cedula: "ADMIN-EDITADO".to_string(),
+            nombre: "Administrador Editado".to_string(),
+            rol: RolUsuario::Administrador,
+        },
+    )
+    .unwrap();
+    assert_eq!(r.contar_roots_activos().unwrap(), 1);
+
+    s.actualizar(
+        admin,
+        ActualizarUsuarioInput {
+            cedula: "ADMIN-EDITADO".to_string(),
+            nombre: "Nuevo Root".to_string(),
+            rol: RolUsuario::Root,
+        },
+    )
+    .unwrap();
+    assert_eq!(r.contar_roots_activos().unwrap(), 2);
+}
+
+#[test]
+fn dos_conexiones_solo_pueden_crear_un_root_inicial() {
+    let ruta = archivo_temporal("root_inicial");
+    let inicial = Connection::open(&ruta).unwrap();
+    initialize_database(&inicial).unwrap();
+    drop(inicial);
+    let barrera = Arc::new(Barrier::new(2));
+
+    let handles: Vec<_> = ["ROOT-A", "ROOT-B"]
+        .into_iter()
+        .map(|cedula| {
+            let ruta = ruta.clone();
+            let barrera = Arc::clone(&barrera);
+            thread::spawn(move || {
+                let conexion = Connection::open(ruta).unwrap();
+                let repositorio = SqliteUsuarioRepository::new(&conexion);
+                let servicio = UsuarioService::new(&repositorio);
+                barrera.wait();
+                servicio.crear_root_inicial(root(cedula))
+            })
+        })
+        .collect();
+
+    let resultados: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+    assert_eq!(resultados.iter().filter(|r| r.is_ok()).count(), 1);
+    assert_eq!(
+        resultados
+            .iter()
+            .filter(|r| matches!(r, Err(UsuarioServiceError::ConfiguracionInicialYaRealizada)))
+            .count(),
+        1
+    );
+    let verificacion = Connection::open(&ruta).unwrap();
+    let repositorio = SqliteUsuarioRepository::new(&verificacion);
+    assert_eq!(repositorio.contar_usuarios().unwrap(), 1);
+    assert_eq!(repositorio.contar_roots_activos().unwrap(), 1);
+    drop(verificacion);
+    std::fs::remove_file(ruta).unwrap();
+}
+
+#[test]
+fn dos_conexiones_no_pueden_desactivar_ambos_roots() {
+    let ruta = archivo_temporal("ultimo_root");
+    let (primero, segundo) = {
+        let inicial = Connection::open(&ruta).unwrap();
+        initialize_database(&inicial).unwrap();
+        let repositorio = SqliteUsuarioRepository::new(&inicial);
+        let servicio = UsuarioService::new(&repositorio);
+        let primero = servicio.crear_root_inicial(root("ROOT-A")).unwrap();
+        let segundo = servicio
+            .crear(usuario("ROOT-B", RolUsuario::Root, true))
+            .unwrap();
+        (primero, segundo)
+    };
+    let barrera = Arc::new(Barrier::new(2));
+
+    let handles: Vec<_> = [primero, segundo]
+        .into_iter()
+        .map(|id| {
+            let ruta = ruta.clone();
+            let barrera = Arc::clone(&barrera);
+            thread::spawn(move || {
+                let conexion = Connection::open(ruta).unwrap();
+                let repositorio = SqliteUsuarioRepository::new(&conexion);
+                let servicio = UsuarioService::new(&repositorio);
+                barrera.wait();
+                servicio.desactivar(id)
+            })
+        })
+        .collect();
+
+    let resultados: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+    assert_eq!(resultados.iter().filter(|r| r.is_ok()).count(), 1);
+    assert_eq!(
+        resultados
+            .iter()
+            .filter(|r| matches!(r, Err(UsuarioServiceError::UltimoRootActivo)))
+            .count(),
+        1
+    );
+    let verificacion = Connection::open(&ruta).unwrap();
+    let repositorio = SqliteUsuarioRepository::new(&verificacion);
+    assert_eq!(repositorio.contar_roots_activos().unwrap(), 1);
+    drop(verificacion);
+    std::fs::remove_file(ruta).unwrap();
 }
 
 #[test]
@@ -165,8 +395,7 @@ fn dev_auth_es_solo_memoria_y_no_modifica_sqlite() {
     let u = control_acceso::services::dev_auth::usuario_desarrollo();
     assert_eq!(u.id, 0);
     assert_eq!(u.rol, RolUsuario::Root);
-    assert!(u.activo);
-    assert!(u.password_hash.is_empty());
+    assert_eq!(u.nombre, "Usuario Desarrollo");
     assert_eq!(r.contar_usuarios().unwrap(), 0);
     assert!(matches!(
         control_acceso::services::dev_auth::actor_persistido(&u),

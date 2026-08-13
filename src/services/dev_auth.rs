@@ -1,4 +1,6 @@
-use crate::models::usuario::{RolUsuario, Usuario};
+use crate::models::usuario::RolUsuario;
+
+use super::autenticacion_service::UsuarioSesion;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DevAuthError {
@@ -20,14 +22,12 @@ impl std::error::Error for DevAuthError {}
 ///
 /// Su ID no existe en SQLite y por ello no puede utilizarse como `usuario_ingreso_id`
 /// ni `usuario_salida_id`: las claves foráneas rechazarían esos movimientos.
-pub fn usuario_desarrollo() -> Usuario {
-    Usuario {
+pub fn usuario_desarrollo() -> UsuarioSesion {
+    UsuarioSesion {
         id: 0,
         cedula: "DEV".to_string(),
         nombre: "Usuario Desarrollo".to_string(),
-        password_hash: String::new(),
         rol: RolUsuario::Root,
-        activo: true,
     }
 }
 
@@ -35,7 +35,7 @@ pub fn usuario_desarrollo() -> Usuario {
 ///
 /// La identidad de navegación de desarrollo se rechaza explícitamente. La futura CLI
 /// deberá seleccionar o autenticar un usuario persistido antes de registrar movimientos.
-pub fn actor_persistido(usuario: &Usuario) -> Result<i64, DevAuthError> {
+pub fn actor_persistido(usuario: &UsuarioSesion) -> Result<i64, DevAuthError> {
     if usuario.id <= 0 {
         return Err(DevAuthError::ActorPersistidoRequerido);
     }
