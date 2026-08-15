@@ -198,6 +198,7 @@ pub enum RegistroIngresoServiceError {
     GafeteNoAsignado,
     RegistroNoActivo,
     SalidaAnteriorAIngreso,
+    RelojRetrocedido,
     RangoFechasInvalido,
     Database(DatabaseError),
 }
@@ -217,6 +218,10 @@ impl std::fmt::Display for RegistroIngresoServiceError {
             Self::SalidaAnteriorAIngreso => {
                 write!(formatter, "La salida no puede ser anterior al ingreso")
             }
+            Self::RelojRetrocedido => write!(
+                formatter,
+                "El reloj del equipo está atrasado respecto al último movimiento registrado"
+            ),
             Self::RangoFechasInvalido => {
                 write!(formatter, "El rango de fechas del historial no es válido")
             }

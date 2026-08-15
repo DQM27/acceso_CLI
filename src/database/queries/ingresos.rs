@@ -1,11 +1,12 @@
-use chrono::{NaiveDate, NaiveDateTime};
-use rusqlite::{Connection, Row, named_params};
+use chrono::{DateTime, NaiveDate, Utc};
+use rusqlite::{Connection, Row, Transaction, TransactionBehavior, named_params};
 
 use crate::database::error::DatabaseError;
 use crate::database::search::BusquedaTexto;
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::models::registro_ingreso::{MotivoResultadoIngreso, ResultadoIngresoRegistrado};
 use crate::models::tipo_ingreso::TipoIngreso;
+use crate::tiempo::{parsear_utc, serializar_utc};
 
 const LIMITE_HISTORIAL_PREDETERMINADO: usize = 50;
 const LIMITE_HISTORIAL_MAXIMO: usize = 200;
@@ -20,7 +21,7 @@ pub struct IngresoActivoLectura {
     pub empresa_nombre: String,
     pub tipo_ingreso: TipoIngreso,
     pub medio_ingreso: MedioIngreso,
-    pub fecha_hora_ingreso: NaiveDateTime,
+    pub fecha_hora_ingreso: DateTime<Utc>,
     pub gafete_numero: Option<i64>,
     pub usuario_ingreso_nombre: String,
     pub fecha_vencimiento_praind: Option<NaiveDate>,
@@ -48,8 +49,8 @@ pub struct MovimientoIngresoResumen {
     pub empresa_nombre: String,
     pub tipo_ingreso: TipoIngreso,
     pub medio_ingreso: MedioIngreso,
-    pub fecha_hora_ingreso: NaiveDateTime,
-    pub fecha_hora_salida: Option<NaiveDateTime>,
+    pub fecha_hora_ingreso: DateTime<Utc>,
+    pub fecha_hora_salida: Option<DateTime<Utc>>,
     pub gafete_numero: Option<i64>,
     pub usuario_ingreso_nombre: String,
     pub usuario_salida_nombre: Option<String>,
@@ -68,9 +69,9 @@ pub enum EstadoMovimiento {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FiltroHistorial {
     /// Límite inferior inclusivo aplicado a `fecha_hora_ingreso`.
-    pub desde: NaiveDateTime,
+    pub desde: DateTime<Utc>,
     /// Límite superior exclusivo aplicado a `fecha_hora_ingreso`.
-    pub hasta: NaiveDateTime,
+    pub hasta: DateTime<Utc>,
     pub texto_persona: Option<String>,
     pub empresa_id: Option<i64>,
     pub tipo_ingreso: Option<TipoIngreso>,
@@ -78,10 +79,13 @@ pub struct FiltroHistorial {
     pub estado: EstadoMovimiento,
     pub limite: usize,
     pub offset: usize,
+    /// ID máximo visible en esta navegación. Excluye ingresos creados después de
+    /// cargar la primera página para que las páginas no se desplacen.
+    pub corte_id: Option<i64>,
 }
 
 impl FiltroHistorial {
-    pub fn nuevo(desde: NaiveDateTime, hasta: NaiveDateTime) -> Self {
+    pub fn nuevo(desde: DateTime<Utc>, hasta: DateTime<Utc>) -> Self {
         Self {
             desde,
             hasta,
@@ -92,6 +96,7 @@ impl FiltroHistorial {
             estado: EstadoMovimiento::Todos,
             limite: LIMITE_HISTORIAL_PREDETERMINADO,
             offset: 0,
+            corte_id: None,
         }
     }
 }
@@ -100,6 +105,7 @@ impl FiltroHistorial {
 pub struct PaginaHistorial {
     pub items: Vec<MovimientoIngresoResumen>,
     pub total: usize,
+    pub corte_id: i64,
 }
 
 pub trait IngresosQuery {
@@ -172,6 +178,8 @@ impl IngresosQuery for SqliteIngresosQuery<'_> {
     }
 
     fn buscar_historial(&self, filtro: &FiltroHistorial) -> Result<PaginaHistorial, DatabaseError> {
+        let transaction =
+            Transaction::new_unchecked(self.connection, TransactionBehavior::Deferred)?;
         let busqueda = BusquedaTexto::preparar(filtro.texto_persona.as_deref());
         let tipo = filtro.tipo_ingreso.map(tipo_a_texto);
         let estado = estado_a_texto(filtro.estado);
@@ -179,9 +187,17 @@ impl IngresosQuery for SqliteIngresosQuery<'_> {
         let hasta = fecha_hora_a_texto(filtro.hasta);
         let limite = filtro.limite.clamp(1, LIMITE_HISTORIAL_MAXIMO) as i64;
         let offset = offset_sql(filtro.offset);
+        let corte_id = match filtro.corte_id {
+            Some(corte_id) => corte_id,
+            None => transaction.query_row(
+                "SELECT COALESCE(MAX(id), 0) FROM registro_ingresos",
+                [],
+                |row| row.get(0),
+            )?,
+        };
 
         let count_sql = format!("SELECT COUNT(*) {HISTORIAL_FROM_WHERE}");
-        let total: i64 = self.connection.query_row(
+        let total: i64 = transaction.query_row(
             &count_sql,
             named_params! {
                 ":desde": desde,
@@ -193,6 +209,7 @@ impl IngresosQuery for SqliteIngresosQuery<'_> {
                 ":tipo": tipo,
                 ":gafete": filtro.gafete_numero,
                 ":estado": estado,
+                ":corte_id": corte_id,
             },
             |row| row.get(0),
         )?;
@@ -201,7 +218,7 @@ impl IngresosQuery for SqliteIngresosQuery<'_> {
             "SELECT {HISTORIAL_COLUMNAS} {HISTORIAL_FROM_WHERE} \
              ORDER BY r.fecha_hora_ingreso DESC, r.id DESC LIMIT :limite OFFSET :offset"
         );
-        let mut statement = self.connection.prepare(&select_sql)?;
+        let mut statement = transaction.prepare(&select_sql)?;
         let items = statement
             .query_map(
                 named_params! {
@@ -214,16 +231,20 @@ impl IngresosQuery for SqliteIngresosQuery<'_> {
                     ":tipo": tipo,
                     ":gafete": filtro.gafete_numero,
                     ":estado": estado,
+                    ":corte_id": corte_id,
                     ":limite": limite,
                     ":offset": offset,
                 },
                 convertir_movimiento,
             )?
             .collect::<Result<Vec<_>, _>>()?;
+        drop(statement);
+        transaction.commit()?;
 
         Ok(PaginaHistorial {
             items,
             total: usize::try_from(total).unwrap_or(usize::MAX),
+            corte_id,
         })
     }
 }
@@ -304,6 +325,7 @@ const HISTORIAL_FROM_WHERE: &str = "
     FROM registro_ingresos AS r
     WHERE r.fecha_hora_ingreso >= :desde
       AND r.fecha_hora_ingreso < :hasta
+      AND r.id <= :corte_id
       AND (
           :modo_busqueda = 0
           OR (:modo_busqueda = 1 AND (
@@ -416,7 +438,7 @@ fn fecha_desde_fila(row: &Row<'_>, indice: usize) -> rusqlite::Result<Option<Nai
     valor.map(|fecha| parsear_fecha(&fecha, indice)).transpose()
 }
 
-fn fecha_hora_desde_fila(row: &Row<'_>, indice: usize) -> rusqlite::Result<NaiveDateTime> {
+fn fecha_hora_desde_fila(row: &Row<'_>, indice: usize) -> rusqlite::Result<DateTime<Utc>> {
     let valor: String = row.get(indice)?;
     parsear_fecha_hora(&valor, indice)
 }
@@ -424,7 +446,7 @@ fn fecha_hora_desde_fila(row: &Row<'_>, indice: usize) -> rusqlite::Result<Naive
 fn fecha_hora_opcional_desde_fila(
     row: &Row<'_>,
     indice: usize,
-) -> rusqlite::Result<Option<NaiveDateTime>> {
+) -> rusqlite::Result<Option<DateTime<Utc>>> {
     let valor: Option<String> = row.get(indice)?;
     valor
         .map(|fecha| parsear_fecha_hora(&fecha, indice))
@@ -441,8 +463,8 @@ fn parsear_fecha(valor: &str, indice: usize) -> rusqlite::Result<NaiveDate> {
     })
 }
 
-fn parsear_fecha_hora(valor: &str, indice: usize) -> rusqlite::Result<NaiveDateTime> {
-    NaiveDateTime::parse_from_str(valor, "%Y-%m-%d %H:%M:%S").map_err(|error| {
+fn parsear_fecha_hora(valor: &str, indice: usize) -> rusqlite::Result<DateTime<Utc>> {
+    parsear_utc(valor).map_err(|error| {
         rusqlite::Error::FromSqlConversionFailure(
             indice,
             rusqlite::types::Type::Text,
@@ -468,8 +490,8 @@ fn estado_a_texto(estado: EstadoMovimiento) -> &'static str {
     }
 }
 
-fn fecha_hora_a_texto(fecha: NaiveDateTime) -> String {
-    fecha.format("%Y-%m-%d %H:%M:%S").to_string()
+fn fecha_hora_a_texto(fecha: DateTime<Utc>) -> String {
+    serializar_utc(fecha)
 }
 
 fn offset_sql(offset: usize) -> i64 {

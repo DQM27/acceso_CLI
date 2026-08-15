@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use rusqlite::Connection;
 
 use control_acceso::database::repositories::contratista_repository::SqliteContratistaRepository;
@@ -32,12 +32,18 @@ fn preparar_base() -> (Connection, i64) {
     (connection, usuario_id)
 }
 
-fn fecha_ingreso() -> NaiveDateTime {
-    NaiveDateTime::parse_from_str("2026-08-11 08:00:00", "%Y-%m-%d %H:%M:%S").unwrap()
+fn fecha_ingreso() -> DateTime<Utc> {
+    control_acceso::tiempo::local_costa_rica_a_utc(
+        NaiveDateTime::parse_from_str("2026-08-11 08:00:00", "%Y-%m-%d %H:%M:%S").unwrap(),
+    )
+    .unwrap()
 }
 
-fn fecha_salida() -> NaiveDateTime {
-    NaiveDateTime::parse_from_str("2026-08-11 17:00:00", "%Y-%m-%d %H:%M:%S").unwrap()
+fn fecha_salida() -> DateTime<Utc> {
+    control_acceso::tiempo::local_costa_rica_a_utc(
+        NaiveDateTime::parse_from_str("2026-08-11 17:00:00", "%Y-%m-%d %H:%M:%S").unwrap(),
+    )
+    .unwrap()
 }
 
 fn praind_vigente() -> NaiveDate {

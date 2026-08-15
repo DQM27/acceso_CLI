@@ -48,13 +48,13 @@ Cada tarea sólo se considera terminada cuando tiene pruebas y manejo de errores
   historial funcionará como auditoría de seguridad.
 - [ ] **Sesión vigente.** Comprobar que el usuario siga activo antes de cada movimiento,
   cerrar su sesión si es desactivado y añadir bloqueo por inactividad.
-- [ ] **Política horaria explícita.** Centralizar un reloj, usar la zona
+- [x] **Política horaria explícita.** Centralizar un reloj, usar la zona
   `America/Costa_Rica`, persistir UTC/offset y detectar retrocesos del reloj respecto al
   último movimiento.
 - [ ] **Errores observables.** Mantener mensajes sencillos para el operador y escribir
   logs técnicos persistentes con contexto e identificador de incidente, sin secretos.
   No descartar resultados mediante `.ok()`.
-- [ ] **Lecturas paginadas coherentes.** Obtener el total y la página del historial en
+- [x] **Lecturas paginadas coherentes.** Obtener el total y la página del historial en
   la misma lectura de SQLite y navegar con un cursor estable, para no repetir u omitir
   movimientos si los datos cambian entre páginas.
 

@@ -1,4 +1,5 @@
-use chrono::{Local, NaiveDate};
+use crate::tiempo::hora_actual_texto;
+use chrono::NaiveDate;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -227,7 +228,7 @@ fn render_pie(frame: &mut Frame, area: Rect, state: &ContratistasState) {
     );
     frame.render_widget(Paragraph::new("↑↓ Seleccionar │ ENTER Detalle │ N Nuevo │ E Editar │ / Buscar │ C Columnas │ ESC Volver").style(theme::foco()).alignment(Alignment::Center), cols[1]);
     frame.render_widget(
-        Paragraph::new(Local::now().format("%H:%M:%S").to_string())
+        Paragraph::new(hora_actual_texto())
             .style(theme::advertencia())
             .alignment(Alignment::Right)
             .block(Block::default().padding(ratatui::widgets::Padding::right(1))),

@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use rusqlite::Connection;
 
 use control_acceso::database::repositories::contratista_repository::{
@@ -39,12 +39,18 @@ fn preparar_base() -> (Connection, i64, i64) {
     (connection, empresa_id, usuario_id)
 }
 
-fn fecha_ingreso() -> NaiveDateTime {
-    NaiveDateTime::parse_from_str("2026-08-11 08:00:00", "%Y-%m-%d %H:%M:%S").unwrap()
+fn fecha_ingreso() -> DateTime<Utc> {
+    control_acceso::tiempo::local_costa_rica_a_utc(
+        NaiveDateTime::parse_from_str("2026-08-11 08:00:00", "%Y-%m-%d %H:%M:%S").unwrap(),
+    )
+    .unwrap()
 }
 
-fn fecha_salida() -> NaiveDateTime {
-    NaiveDateTime::parse_from_str("2026-08-11 17:00:00", "%Y-%m-%d %H:%M:%S").unwrap()
+fn fecha_salida() -> DateTime<Utc> {
+    control_acceso::tiempo::local_costa_rica_a_utc(
+        NaiveDateTime::parse_from_str("2026-08-11 17:00:00", "%Y-%m-%d %H:%M:%S").unwrap(),
+    )
+    .unwrap()
 }
 
 fn contratista(
@@ -561,8 +567,10 @@ fn salida_anterior_es_rechazada_y_no_modifica_sqlite() {
             fecha_ingreso(),
         )
         .unwrap();
-    let salida_anterior =
-        NaiveDateTime::parse_from_str("2026-08-11 07:59:59", "%Y-%m-%d %H:%M:%S").unwrap();
+    let salida_anterior = control_acceso::tiempo::local_costa_rica_a_utc(
+        NaiveDateTime::parse_from_str("2026-08-11 07:59:59", "%Y-%m-%d %H:%M:%S").unwrap(),
+    )
+    .unwrap();
 
     assert!(matches!(
         servicio.registrar_salida(entrada.registro_id, salida_anterior, usuario_id),

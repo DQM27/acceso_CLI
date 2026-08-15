@@ -1,4 +1,4 @@
-use chrono::Local;
+use crate::tiempo::hora_actual_texto;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -197,7 +197,7 @@ fn render_estado(frame: &mut Frame, area: Rect, state: &LoginState) {
 }
 
 fn render_pie(frame: &mut Frame, area: Rect) {
-    let hora = Local::now().format("%H:%M:%S").to_string();
+    let hora = hora_actual_texto();
     let bloque = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Plain)

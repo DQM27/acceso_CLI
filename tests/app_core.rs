@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use chrono::NaiveDate;
 use rusqlite::Connection;
 
 use control_acceso::application::AppCore;
@@ -142,12 +141,7 @@ fn app_core_compone_query_n1_y_preparacion_n3_sin_persistir() {
     assert_eq!(filas.len(), 1);
     assert_eq!(filas[0].empresa_nombre, "Brisas");
 
-    let preparacion = core
-        .preparar_ingreso(
-            contratista_id,
-            NaiveDate::from_ymd_opt(2026, 8, 12).unwrap(),
-        )
-        .unwrap();
+    let preparacion = core.preparar_ingreso(contratista_id).unwrap();
     assert_eq!(preparacion.empresa_nombre, "Brisas");
     assert!(!preparacion.tiene_ingreso_activo);
 }

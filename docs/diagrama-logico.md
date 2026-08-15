@@ -176,7 +176,8 @@ flowchart TD
     I --> J["Registro cerrado<br/>contratista y gafete quedan libres"]
     J --> K["Historial"]
     K --> L["Filtrar por rango, persona, empresa,<br/>tipo, gafete y estado"]
-    L --> M["Contar total y devolver página ordenada"]
+    L --> M["Abrir lectura transaccional<br/>fijar corte máximo de ID"]
+    M --> N["Contar total y devolver página<br/>sobre el mismo corte"]
 ```
 
 El intervalo del historial es `[desde, hasta)`: incluye `desde`, excluye `hasta` y exige
@@ -186,6 +187,26 @@ La lista operativa de ingresos activos no se pagina ni tiene un tope silencioso.
 filtro puede reducir las filas visibles, pero conserva el total real de personas dentro.
 La búsqueda exacta por gafete consulta el registro completo directamente y no depende de
 que esté presente en las filas filtradas.
+
+El total y las filas del historial se consultan dentro de una misma transacción de
+lectura. La primera página fija el ID máximo visible y las páginas siguientes conservan
+ese corte; por eso un ingreso nuevo no desplaza filas, no produce duplicados y sólo
+aparece al iniciar una navegación nueva.
+
+La política temporal es única para toda la aplicación:
+
+```text
+reloj del sistema → instante UTC → reglas de calendario en America/Costa_Rica
+                                → SQLite: YYYY-MM-DDTHH:MM:SSZ
+                                → TUI: fecha y hora de Costa Rica
+```
+
+`AppCore` toma la hora de entradas y salidas; la TUI ya no entrega fechas obtenidas de la
+zona configurada en Windows. Los filtros escritos como fechas de Costa Rica se convierten
+a límites UTC antes de consultar. La migración convierte los movimientos anteriores,
+que representaban hora local costarricense, y SQLite rechaza nuevos formatos sin zona.
+Antes de cada movimiento se compara el reloj con el último instante persistido; un
+retroceso detiene la operación y solicita corregir la fecha y hora del equipo.
 
 No existe una segunda tabla de historial ni se mueve físicamente el registro. El mismo
 movimiento nace activo con `fecha_hora_salida = NULL`; al registrar la salida se completa
@@ -323,8 +344,8 @@ triggers. Las búsquedas de usuarios nunca exponen el hash de contraseña.
 - El historial conserva el resultado evaluado al ingresar. La lista operativa de activos
   también recalcula el acceso actual para advertir si una autorización fue revocada
   mientras la persona todavía está dentro, sin modificar la fotografía histórica.
-- Las fechas representan hora local y se guardan como texto `YYYY-MM-DD HH:MM:SS`; no son
-  UTC.
+- Las fechas se guardan como instantes UTC canónicos y se presentan en
+  `America/Costa_Rica`; no dependen de la zona horaria configurada en el equipo.
 
 ## Archivos que implementan el flujo
 
@@ -332,5 +353,6 @@ triggers. Las búsquedas de usuarios nunca exponen el hash de contraseña.
 - Máquina de estados: `src/tui/app.rs` y los archivos `src/tui/*/state.rs`.
 - Casos de uso: `src/services/`.
 - Reglas puras: `src/domain/acceso.rs`, `src/domain/registro_ingreso.rs`.
+- Política temporal y reloj: `src/tiempo.rs`.
 - Entidades: `src/models/`.
 - Persistencia, consultas y migraciones: `src/database/`.

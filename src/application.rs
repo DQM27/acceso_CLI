@@ -1,6 +1,6 @@
 use std::path::Path;
+use std::sync::Arc;
 
-use chrono::NaiveDate;
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 use crate::database::connection::open_database;
@@ -34,6 +34,7 @@ use crate::services::usuario_service::{
     ActualizarUsuarioInput, CrearRootInicialInput, CrearUsuarioInput, UsuarioConsultaService,
     UsuarioService,
 };
+use crate::tiempo::{Reloj, RelojSistema, fecha_costa_rica, parsear_utc};
 
 #[derive(Debug)]
 pub enum BootstrapError {
@@ -65,11 +66,16 @@ impl From<rusqlite::Error> for BootstrapError {
 /// Fachada de aplicación y propietario único de la conexión SQLite.
 pub struct AppCore {
     connection: Connection,
+    reloj: Arc<dyn Reloj>,
 }
 
 impl AppCore {
     pub fn new(connection: Connection) -> Self {
-        Self { connection }
+        Self::con_reloj(connection, Arc::new(RelojSistema))
+    }
+
+    pub fn con_reloj(connection: Connection, reloj: Arc<dyn Reloj>) -> Self {
+        Self { connection, reloj }
     }
 
     pub fn abrir(path: impl AsRef<Path>) -> Result<Self, BootstrapError> {
@@ -138,7 +144,6 @@ impl AppCore {
     pub fn preparar_ingreso(
         &self,
         contratista_id: i64,
-        hoy: NaiveDate,
     ) -> Result<PreparacionIngreso, RegistroIngresoServiceError> {
         let contratistas = SqliteContratistaRepository::new(&self.connection);
         let empresas = SqliteEmpresaRepository::new(&self.connection);
@@ -146,7 +151,7 @@ impl AppCore {
         RegistroIngresoService::new(&contratistas, &registros).preparar_ingreso(
             &empresas,
             contratista_id,
-            hoy,
+            fecha_costa_rica(self.reloj.ahora_utc()),
         )
     }
 
@@ -168,14 +173,15 @@ impl AppCore {
         medio: crate::models::medio_ingreso::MedioIngreso,
         gafete: Option<i64>,
         usuario_id: i64,
-        fecha_hora: chrono::NaiveDateTime,
     ) -> Result<ResultadoRegistroEntrada, RegistroIngresoServiceError> {
+        let ahora = self.reloj.ahora_utc();
         // El bloqueo se adquiere antes de la primera lectura definitiva. Así, los
         // repositorios creados sobre esta transacción validan e insertan contra el
         // mismo estado de SQLite.
         let transaction =
             Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
                 .map_err(DatabaseError::from)?;
+        validar_reloj(&transaction, ahora)?;
 
         let resultado = {
             let contratistas = SqliteContratistaRepository::new(&transaction);
@@ -185,7 +191,7 @@ impl AppCore {
                 medio,
                 gafete,
                 usuario_id,
-                fecha_hora,
+                ahora,
             )?
         };
 
@@ -196,10 +202,9 @@ impl AppCore {
     pub fn listar_ingresos_activos(
         &self,
         filtro: &FiltroIngresosActivos,
-        hoy: NaiveDate,
     ) -> Result<ListaIngresosActivosResumen, RegistroIngresoServiceError> {
         RegistroIngresoConsultaService::new(&SqliteIngresosQuery::new(&self.connection))
-            .listar_activos(filtro, hoy)
+            .listar_activos(filtro, fecha_costa_rica(self.reloj.ahora_utc()))
     }
 
     pub fn buscar_historial(
@@ -213,21 +218,29 @@ impl AppCore {
     pub fn buscar_activo_por_gafete(
         &self,
         numero: i64,
-        hoy: NaiveDate,
     ) -> Result<IngresoActivoResumen, RegistroIngresoServiceError> {
         RegistroIngresoConsultaService::new(&SqliteIngresosQuery::new(&self.connection))
-            .buscar_activo_por_gafete(numero, hoy)
+            .buscar_activo_por_gafete(numero, fecha_costa_rica(self.reloj.ahora_utc()))
     }
 
     pub fn registrar_salida(
         &self,
         id: i64,
-        fecha: chrono::NaiveDateTime,
         usuario: i64,
     ) -> Result<(), RegistroIngresoServiceError> {
-        let contratistas = SqliteContratistaRepository::new(&self.connection);
-        let registros = SqliteRegistroIngresoRepository::new(&self.connection);
-        RegistroIngresoService::new(&contratistas, &registros).registrar_salida(id, fecha, usuario)
+        let ahora = self.reloj.ahora_utc();
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        validar_reloj(&transaction, ahora)?;
+        {
+            let contratistas = SqliteContratistaRepository::new(&transaction);
+            let registros = SqliteRegistroIngresoRepository::new(&transaction);
+            RegistroIngresoService::new(&contratistas, &registros)
+                .registrar_salida(id, ahora, usuario)?;
+        }
+        transaction.commit().map_err(DatabaseError::from)?;
+        Ok(())
     }
 
     pub fn buscar_empresas(
@@ -284,4 +297,36 @@ impl AppCore {
         UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection))
             .cambiar_password(id, password)
     }
+}
+
+fn validar_reloj(
+    connection: &Connection,
+    ahora: chrono::DateTime<chrono::Utc>,
+) -> Result<(), RegistroIngresoServiceError> {
+    let ultima: Option<String> = connection
+        .query_row(
+            "SELECT MAX(instante) FROM (
+            SELECT fecha_hora_ingreso AS instante FROM registro_ingresos
+            UNION ALL
+            SELECT fecha_hora_salida FROM registro_ingresos
+            WHERE fecha_hora_salida IS NOT NULL
+         )",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(DatabaseError::from)?;
+    let Some(ultima) = ultima else {
+        return Ok(());
+    };
+    let ultima = parsear_utc(&ultima).map_err(|error| {
+        DatabaseError::Sqlite(rusqlite::Error::FromSqlConversionFailure(
+            0,
+            rusqlite::types::Type::Text,
+            Box::new(error),
+        ))
+    })?;
+    if ahora < ultima {
+        return Err(RegistroIngresoServiceError::RelojRetrocedido);
+    }
+    Ok(())
 }

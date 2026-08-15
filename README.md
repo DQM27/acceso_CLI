@@ -39,9 +39,16 @@ Los usuarios se desactivan, no se eliminan, para conservar las referencias hist�
 El esquema evoluciona mediante migraciones secuenciales y `PRAGMA user_version`. La
 versión solo cambia después de completar la migración dentro de una transacción.
 
-Las fechas y horas representan la hora local de Costa Rica y de la instalación. Se
-persisten como texto con formato `YYYY-MM-DD HH:MM:SS`; actualmente no representan UTC.
-Cambiar esta política requiere una migración de datos explícita.
+El reloj de aplicación usa la zona IANA `America/Costa_Rica` para reglas de calendario,
+filtros y presentación. Los movimientos se manejan internamente como instantes UTC y se
+persisten en formato canónico `YYYY-MM-DDTHH:MM:SSZ`; la zona configurada en Windows no
+cambia su significado. La migración de esquema convierte las fechas locales anteriores
+a UTC. Si el reloj del equipo retrocede respecto al último movimiento, la aplicación
+rechaza nuevas entradas o salidas hasta corregirlo.
+
+El historial devuelve el total y las filas de cada página dentro de la misma lectura de
+SQLite. La primera página fija además un corte por ID que se conserva durante la
+navegación, para que los movimientos nuevos no desplacen ni dupliquen filas.
 
 La creación del ROOT inicial y la protección del último ROOT activo se ejecutan mediante
 transacciones SQLite `IMMEDIATE`, de modo que la lectura de la condición y su escritura

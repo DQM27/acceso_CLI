@@ -1,4 +1,4 @@
-use chrono::Local;
+use crate::tiempo::{a_costa_rica, hora_actual_texto};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout, Rect},
@@ -157,15 +157,20 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &HistorialState) {
 
 pub(super) fn valor(r: &MovimientoIngresoResumen, c: ColumnaHistorial) -> String {
     match c {
-        ColumnaHistorial::Fecha => r.fecha_hora_ingreso.format("%d/%m/%y").to_string(),
+        ColumnaHistorial::Fecha => a_costa_rica(r.fecha_hora_ingreso)
+            .format("%d/%m/%y")
+            .to_string(),
         ColumnaHistorial::Cedula => r.cedula.clone(),
         ColumnaHistorial::Nombre => r.contratista_nombre.clone(),
         ColumnaHistorial::Empresa => r.empresa_nombre.clone(),
         ColumnaHistorial::Tipo => tipo_texto(Some(r.tipo_ingreso)).into(),
-        ColumnaHistorial::Entrada => r.fecha_hora_ingreso.format("%H:%M").to_string(),
-        ColumnaHistorial::Salida => r
-            .fecha_hora_salida
-            .map_or_else(|| "--".into(), |f| f.format("%H:%M").to_string()),
+        ColumnaHistorial::Entrada => a_costa_rica(r.fecha_hora_ingreso)
+            .format("%H:%M")
+            .to_string(),
+        ColumnaHistorial::Salida => r.fecha_hora_salida.map_or_else(
+            || "--".into(),
+            |f| a_costa_rica(f).format("%H:%M").to_string(),
+        ),
         ColumnaHistorial::Gafete => r
             .gafete_numero
             .map_or_else(|| "S/G".into(), |g| g.to_string()),
@@ -225,7 +230,7 @@ fn render_pie(frame: &mut Frame, area: Rect, state: &HistorialState) {
     );
     frame.render_widget(Paragraph::new("↑↓ Seleccionar │ PgUp/PgDn Página │ ENTER Detalle │ / Buscar │ F Filtros │ C Columnas │ ESC Volver").style(theme::foco()).alignment(Alignment::Center), cols[1]);
     frame.render_widget(
-        Paragraph::new(Local::now().format("%H:%M:%S").to_string())
+        Paragraph::new(hora_actual_texto())
             .style(theme::advertencia())
             .alignment(Alignment::Right),
         cols[2],
@@ -236,9 +241,10 @@ fn render_modo(frame: &mut Frame, area: Rect, state: &HistorialState) {
     match &state.modo {
         ModoHistorial::Detalle { id } => {
             if let Some(r) = state.registro(*id) {
-                let salida = r
-                    .fecha_hora_salida
-                    .map_or_else(|| "--".into(), |f| f.format("%d/%m/%Y %H:%M").to_string());
+                let salida = r.fecha_hora_salida.map_or_else(
+                    || "--".into(),
+                    |f| a_costa_rica(f).format("%d/%m/%Y %H:%M").to_string(),
+                );
                 layout::render_overlay(
                     frame,
                     area,
@@ -258,7 +264,7 @@ fn render_modo(frame: &mut Frame, area: Rect, state: &HistorialState) {
                         Line::from(format!("Medio            {:?}", r.medio_ingreso)),
                         Line::from(format!(
                             "Entrada          {}",
-                            r.fecha_hora_ingreso.format("%d/%m/%Y %H:%M")
+                            a_costa_rica(r.fecha_hora_ingreso).format("%d/%m/%Y %H:%M")
                         )),
                         Line::from(format!("Usuario ingreso  {}", r.usuario_ingreso_nombre)),
                         Line::from(format!("Evaluación       {}", texto_evaluacion(r))),

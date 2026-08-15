@@ -3,7 +3,7 @@ use crate::{
     domain::resultado_acceso::ResultadoAcceso,
     models::{medio_ingreso::MedioIngreso, tipo_ingreso::TipoIngreso},
 };
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::NaiveDate;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 fn k(c: KeyCode) -> KeyEvent {
     KeyEvent::new(c, KeyModifiers::NONE)
@@ -17,9 +17,11 @@ fn r(id: i64, g: Option<i64>) -> IngresoActivoResumen {
         empresa_nombre: "Empresa".into(),
         tipo_ingreso: TipoIngreso::Praind,
         medio_ingreso: MedioIngreso::Caminando,
-        fecha_hora_ingreso: NaiveDateTime::parse_from_str(
-            "2026-08-12 08:00:00",
-            "%Y-%m-%d %H:%M:%S",
+        fecha_hora_ingreso: crate::tiempo::local_costa_rica_a_utc(
+            NaiveDate::from_ymd_opt(2026, 8, 12)
+                .unwrap()
+                .and_hms_opt(8, 0, 0)
+                .unwrap(),
         )
         .unwrap(),
         gafete_numero: g,

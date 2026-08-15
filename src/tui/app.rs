@@ -80,6 +80,7 @@ fn mensaje_ingreso(error: crate::services::error::RegistroIngresoServiceError) -
         GafeteOcupado => "El gafete ya está en uso".into(),
         AccesoDenegado(MotivoDenegacion::SinAcceso) => "No tiene acceso autorizado".into(),
         AccesoDenegado(MotivoDenegacion::PraindVencido) => "PRAIND vencido o requerido".into(),
+        RelojRetrocedido => "Revise la fecha y hora del equipo antes de continuar".into(),
         _ => "No se pudo registrar el ingreso".into(),
     }
 }
@@ -271,11 +272,12 @@ mod tests {
                                     tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::Swat,
                                     medio_ingreso:
                                         crate::models::medio_ingreso::MedioIngreso::Caminando,
-                                    fecha_hora_ingreso: chrono::NaiveDate::from_ymd_opt(
-                                        2026, 8, 12,
+                                    fecha_hora_ingreso: crate::tiempo::local_costa_rica_a_utc(
+                                        chrono::NaiveDate::from_ymd_opt(2026, 8, 12)
+                                            .unwrap()
+                                            .and_hms_opt(8, 0, 0)
+                                            .unwrap(),
                                     )
-                                    .unwrap()
-                                    .and_hms_opt(8, 0, 0)
                                     .unwrap(),
                                     gafete_numero: None,
                                     usuario_ingreso_nombre: "Ana".into(),
@@ -332,10 +334,13 @@ mod tests {
                                 tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::Swat,
                                 medio_ingreso:
                                     crate::models::medio_ingreso::MedioIngreso::Caminando,
-                                fecha_hora_ingreso: chrono::NaiveDate::from_ymd_opt(2026, 8, 12)
-                                    .unwrap()
-                                    .and_hms_opt(8, 0, 0)
-                                    .unwrap(),
+                                fecha_hora_ingreso: crate::tiempo::local_costa_rica_a_utc(
+                                    chrono::NaiveDate::from_ymd_opt(2026, 8, 12)
+                                        .unwrap()
+                                        .and_hms_opt(8, 0, 0)
+                                        .unwrap(),
+                                )
+                                .unwrap(),
                                 fecha_hora_salida: None,
                                 gafete_numero: None,
                                 usuario_ingreso_nombre: "Ana".into(),
@@ -346,6 +351,7 @@ mod tests {
                             },
                         ],
                         total: 1,
+                        corte_id: 1,
                     }));
             }
             app.procesar_tecla_vista(tecla(KeyCode::Enter));
@@ -883,10 +889,8 @@ impl App {
                                 core.listar_empresas()
                                     .map_err(|_| "No se pudieron cargar las empresas".into()),
                             );
-                            self.procesar_accion_historial(
-                                self.historial.solicitud_carga(),
-                                Some(core),
-                            );
+                            let accion = self.historial.solicitud_carga();
+                            self.procesar_accion_historial(accion, Some(core));
                         }
                         Vista::Historial
                     }
@@ -1154,10 +1158,7 @@ impl App {
             AccionNuevoIngreso::Preparar { contratista_id } => {
                 let r = core
                     .ok_or_else(|| "No se pudo preparar el ingreso".into())
-                    .and_then(|c| {
-                        c.preparar_ingreso(contratista_id, chrono::Local::now().date_naive())
-                            .map_err(mensaje_ingreso)
-                    });
+                    .and_then(|c| c.preparar_ingreso(contratista_id).map_err(mensaje_ingreso));
                 self.nuevo_ingreso.completar_preparacion(r);
             }
             AccionNuevoIngreso::ConsultarGafete { numero } => {
@@ -1176,13 +1177,7 @@ impl App {
                         Err("La sesión de desarrollo no puede registrar movimientos reales".into())
                     }
                     (Some(s), Some(c)) => c
-                        .registrar_ingreso(
-                            contratista_id,
-                            medio,
-                            gafete,
-                            s.id,
-                            chrono::Local::now().naive_local(),
-                        )
+                        .registrar_ingreso(contratista_id, medio, gafete, s.id)
                         .map(|r| r.registro_id)
                         .map_err(mensaje_ingreso),
                     _ => Err("No se pudo registrar el ingreso".into()),
@@ -1215,7 +1210,6 @@ impl App {
                     .and_then(|c| {
                         c.listar_ingresos_activos(
                             &crate::database::queries::ingresos::FiltroIngresosActivos { texto },
-                            chrono::Local::now().date_naive(),
                         )
                         .map_err(|_| "No se pudieron cargar los ingresos activos".into())
                     });
@@ -1225,7 +1219,7 @@ impl App {
                 let resultado = core
                     .ok_or_else(|| "No existe un ingreso activo con ese gafete".into())
                     .and_then(|c| {
-                        c.buscar_activo_por_gafete(numero, chrono::Local::now().date_naive())
+                        c.buscar_activo_por_gafete(numero)
                             .map_err(|_| "No existe un ingreso activo con ese gafete".into())
                     });
                 self.activos.completar_gafete(resultado);
@@ -1234,7 +1228,7 @@ impl App {
                 registro_id,
                 nombre,
             } => {
-                let resultado=match(&self.sesion,core){(Some(s),_)if s.id==0=>Err("La sesión de desarrollo no puede registrar movimientos reales".into()),(Some(s),Some(c))=>c.registrar_salida(registro_id,chrono::Local::now().naive_local(),s.id).map_err(|e|match e{crate::services::error::RegistroIngresoServiceError::RegistroNoActivo=>"El ingreso ya no está activo".into(),crate::services::error::RegistroIngresoServiceError::SalidaAnteriorAIngreso=>"La salida no puede ser anterior al ingreso".into(),_=>"No se pudo registrar la salida".into()}),_=>Err("No se pudo registrar la salida".into())};
+                let resultado=match(&self.sesion,core){(Some(s),_)if s.id==0=>Err("La sesión de desarrollo no puede registrar movimientos reales".into()),(Some(s),Some(c))=>c.registrar_salida(registro_id,s.id).map_err(|e|match e{crate::services::error::RegistroIngresoServiceError::RegistroNoActivo=>"El ingreso ya no está activo".into(),crate::services::error::RegistroIngresoServiceError::SalidaAnteriorAIngreso=>"La salida no puede ser anterior al ingreso".into(),crate::services::error::RegistroIngresoServiceError::RelojRetrocedido=>"Revise la fecha y hora del equipo antes de continuar".into(),_=>"No se pudo registrar la salida".into()}),_=>Err("No se pudo registrar la salida".into())};
                 let recarga = self
                     .activos
                     .completar_salida(resultado, registro_id, &nombre);

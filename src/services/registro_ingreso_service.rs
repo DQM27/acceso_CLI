@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{DateTime, NaiveDate, Utc};
 
 use crate::database::error::DatabaseError;
 use crate::database::queries::ingresos::{
@@ -16,6 +16,7 @@ use crate::models::registro_ingreso::{
     VERSION_REGLAS_ACCESO,
 };
 use crate::models::tipo_ingreso::TipoIngreso;
+use crate::tiempo::fecha_costa_rica;
 
 use super::error::RegistroIngresoServiceError;
 
@@ -50,7 +51,7 @@ pub struct IngresoActivoResumen {
     pub empresa_nombre: String,
     pub tipo_ingreso: TipoIngreso,
     pub medio_ingreso: MedioIngreso,
-    pub fecha_hora_ingreso: NaiveDateTime,
+    pub fecha_hora_ingreso: DateTime<Utc>,
     pub gafete_numero: Option<i64>,
     pub usuario_ingreso_nombre: String,
     pub resultado_acceso: ResultadoAcceso,
@@ -215,14 +216,14 @@ where
         medio_ingreso: MedioIngreso,
         gafete_numero: Option<i64>,
         usuario_ingreso_id: i64,
-        fecha_hora_ingreso: NaiveDateTime,
+        fecha_hora_ingreso: DateTime<Utc>,
     ) -> Result<ResultadoRegistroEntrada, RegistroIngresoServiceError> {
         let contratista = self
             .contratistas
             .buscar_por_id(contratista_id)?
             .ok_or(RegistroIngresoServiceError::ContratistaNoEncontrado)?;
 
-        let resultado_acceso = verificar_acceso(&contratista, fecha_hora_ingreso.date());
+        let resultado_acceso = verificar_acceso(&contratista, fecha_costa_rica(fecha_hora_ingreso));
 
         if let ResultadoAcceso::Denegado(motivo) = resultado_acceso {
             return Err(RegistroIngresoServiceError::AccesoDenegado(motivo));
@@ -289,7 +290,7 @@ where
     pub fn registrar_salida(
         &self,
         registro_id: i64,
-        fecha_hora_salida: NaiveDateTime,
+        fecha_hora_salida: DateTime<Utc>,
         usuario_salida_id: i64,
     ) -> Result<(), RegistroIngresoServiceError> {
         let registro = self
@@ -322,7 +323,7 @@ where
     pub fn registrar_salida_por_gafete(
         &self,
         gafete_numero: i64,
-        fecha_hora_salida: NaiveDateTime,
+        fecha_hora_salida: DateTime<Utc>,
         usuario_salida_id: i64,
     ) -> Result<(), RegistroIngresoServiceError> {
         let registro = self.buscar_ingreso_activo_por_gafete(gafete_numero)?;

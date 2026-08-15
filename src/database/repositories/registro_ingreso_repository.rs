@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use rusqlite::{Connection, Row, named_params, params};
 
 use crate::database::error::DatabaseError;
@@ -7,6 +7,7 @@ use crate::models::registro_ingreso::{
     NuevoRegistroIngreso, RegistroIngreso, ResultadoIngresoRegistrado,
 };
 use crate::models::tipo_ingreso::TipoIngreso;
+use crate::tiempo::{parsear_utc, serializar_utc};
 
 pub trait RegistroIngresoRepository {
     fn crear(&self, registro: &NuevoRegistroIngreso) -> Result<i64, DatabaseError>;
@@ -30,7 +31,7 @@ pub trait RegistroIngresoRepository {
     fn registrar_salida(
         &self,
         id: i64,
-        fecha_hora_salida: NaiveDateTime,
+        fecha_hora_salida: DateTime<Utc>,
         usuario_salida_id: i64,
     ) -> Result<(), DatabaseError>;
 
@@ -50,11 +51,7 @@ impl<'a> SqliteRegistroIngresoRepository<'a> {
 fn convertir_fila(row: &Row) -> rusqlite::Result<RegistroIngreso> {
     let fecha_hora_ingreso_texto: String = row.get(3)?;
 
-    let fecha_hora_ingreso = NaiveDateTime::parse_from_str(
-        &fecha_hora_ingreso_texto,
-        "%Y-%m-%d %H:%M:%S",
-    )
-    .map_err(|error| {
+    let fecha_hora_ingreso = parsear_utc(&fecha_hora_ingreso_texto).map_err(|error| {
         rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, Box::new(error))
     })?;
 
@@ -100,7 +97,7 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<RegistroIngreso> {
 
     let fecha_hora_salida = fecha_hora_salida_texto
         .map(|fecha| {
-            NaiveDateTime::parse_from_str(&fecha, "%Y-%m-%d %H:%M:%S").map_err(|error| {
+            parsear_utc(&fecha).map_err(|error| {
                 rusqlite::Error::FromSqlConversionFailure(
                     8,
                     rusqlite::types::Type::Text,
@@ -126,10 +123,7 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<RegistroIngreso> {
 
 impl<'a> RegistroIngresoRepository for SqliteRegistroIngresoRepository<'a> {
     fn crear(&self, registro: &NuevoRegistroIngreso) -> Result<i64, DatabaseError> {
-        let fecha_hora_ingreso = registro
-            .fecha_hora_ingreso
-            .format("%Y-%m-%d %H:%M:%S")
-            .to_string();
+        let fecha_hora_ingreso = serializar_utc(registro.fecha_hora_ingreso);
 
         let medio_ingreso = match registro.medio_ingreso {
             MedioIngreso::Caminando => "CAMINANDO",
@@ -314,10 +308,10 @@ impl<'a> RegistroIngresoRepository for SqliteRegistroIngresoRepository<'a> {
     fn registrar_salida(
         &self,
         id: i64,
-        fecha_hora_salida: NaiveDateTime,
+        fecha_hora_salida: DateTime<Utc>,
         usuario_salida_id: i64,
     ) -> Result<(), DatabaseError> {
-        let fecha_hora_salida = fecha_hora_salida.format("%Y-%m-%d %H:%M:%S").to_string();
+        let fecha_hora_salida = serializar_utc(fecha_hora_salida);
 
         let rows_affected = self.connection.execute(
             "

@@ -1,4 +1,4 @@
-use chrono::Local;
+use crate::tiempo::hora_actual_texto;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout, Rect},
@@ -138,7 +138,7 @@ fn pie(frame: &mut Frame, area: Rect) {
         cols[0],
     );
     frame.render_widget(
-        Paragraph::new(Local::now().format("%H:%M:%S").to_string())
+        Paragraph::new(hora_actual_texto())
             .style(theme::advertencia())
             .alignment(Alignment::Right),
         cols[1],

@@ -112,6 +112,7 @@ pub struct HistorialState {
     mensaje: Option<String>,
     empresas: Vec<Empresa>,
     offset: usize,
+    corte_id: Option<i64>,
     usuario_nombre: String,
 }
 impl Default for HistorialState {
@@ -142,6 +143,7 @@ impl Default for HistorialState {
             mensaje: None,
             empresas: vec![],
             offset: 0,
+            corte_id: None,
             usuario_nombre: "Quintana".into(),
         }
     }
@@ -156,13 +158,15 @@ impl HistorialState {
             Err(e) => self.mensaje = Some(e),
         }
     }
-    pub fn solicitud_carga(&self) -> AccionHistorial {
+    pub fn solicitud_carga(&mut self) -> AccionHistorial {
+        self.reiniciar_paginacion();
         self.consulta()
             .map_or(AccionHistorial::Ninguna, AccionHistorial::Consultar)
     }
     pub fn completar(&mut self, r: Result<PaginaHistorial, String>) {
         match r {
             Ok(p) => {
+                self.corte_id = Some(p.corte_id);
                 self.registros = p.items;
                 self.total = p.total;
                 self.seleccion = (!self.registros.is_empty()).then_some(0)
@@ -171,12 +175,19 @@ impl HistorialState {
                 self.registros.clear();
                 self.total = 0;
                 self.seleccion = None;
+                self.corte_id = None;
                 self.mensaje = Some(e)
             }
         }
     }
     fn consulta(&self) -> Result<FiltroHistorial, String> {
-        construir(&self.filtro_aplicado, &self.busqueda, LIMIT, self.offset)
+        construir(
+            &self.filtro_aplicado,
+            &self.busqueda,
+            LIMIT,
+            self.offset,
+            self.corte_id,
+        )
     }
     fn emitir(&mut self) -> AccionHistorial {
         match self.consulta() {
@@ -248,7 +259,7 @@ impl HistorialState {
             KeyCode::Char('c' | 'C') => self.modo = ModoHistorial::Columnas { seleccion: 0 },
             KeyCode::Esc if !self.busqueda.is_empty() => {
                 self.busqueda.clear();
-                self.offset = 0;
+                self.reiniciar_paginacion();
                 return self.emitir();
             }
             KeyCode::Esc => return AccionHistorial::Volver,
@@ -260,7 +271,7 @@ impl HistorialState {
         match k.code {
             KeyCode::Esc => {
                 self.busqueda.clear();
-                self.offset = 0;
+                self.reiniciar_paginacion();
                 self.modo = ModoHistorial::Normal;
                 self.emitir()
             }
@@ -273,7 +284,7 @@ impl HistorialState {
                     texto.pop();
                     self.busqueda = texto.clone()
                 }
-                self.offset = 0;
+                self.reiniciar_paginacion();
                 self.emitir()
             }
             KeyCode::Char(c)
@@ -285,7 +296,7 @@ impl HistorialState {
                     texto.push(c);
                     self.busqueda = texto.clone()
                 }
-                self.offset = 0;
+                self.reiniciar_paginacion();
                 self.emitir()
             }
             _ => AccionHistorial::Ninguna,
@@ -349,10 +360,10 @@ impl HistorialState {
                 }
             }
             KeyCode::Char('a' | 'A') => {
-                match construir(&self.filtro_edicion, &self.busqueda, LIMIT, 0) {
+                match construir(&self.filtro_edicion, &self.busqueda, LIMIT, 0, None) {
                     Ok(f) => {
                         self.filtro_aplicado = self.filtro_edicion.clone();
-                        self.offset = 0;
+                        self.reiniciar_paginacion();
                         self.modo = ModoHistorial::Normal;
                         return AccionHistorial::Consultar(f);
                     }
@@ -508,5 +519,10 @@ impl HistorialState {
         } else {
             (self.offset / LIMIT + 1, self.total.div_ceil(LIMIT))
         }
+    }
+
+    fn reiniciar_paginacion(&mut self) {
+        self.offset = 0;
+        self.corte_id = None;
     }
 }

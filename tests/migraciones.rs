@@ -195,18 +195,32 @@ fn migra_version_1_y_conserva_datos_validos_e_indices() {
         .query_row("SELECT COUNT(*) FROM registro_ingresos", [], |r| r.get(0))
         .unwrap();
     assert_eq!(total, 1);
-    let snapshot: (String, String, String, i64) = connection
+    let snapshot: (String, String, String, i64, String) = connection
         .query_row(
             "SELECT contratista_cedula, contratista_nombre,
-                    resultado_acceso, reglas_version
+                    resultado_acceso, reglas_version, fecha_hora_ingreso
              FROM registro_ingresos WHERE id=1",
             [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
         )
         .unwrap();
     assert_eq!(
         snapshot,
-        ("2001".into(), "Persona".into(), "MIGRADO".into(), 0)
+        (
+            "2001".into(),
+            "Persona".into(),
+            "MIGRADO".into(),
+            0,
+            "2026-08-11T14:00:00Z".into()
+        )
     );
     for indice in [
         "idx_registro_ingresos_contratista_activo",
@@ -224,17 +238,30 @@ fn migra_version_1_y_conserva_datos_validos_e_indices() {
 }
 
 #[test]
+fn esquema_actual_solo_admite_fechas_utc_normalizadas() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    insertar_referencias(&connection);
+
+    assert!(
+        insertar_movimiento_actual(&connection, 1, "2026-08-11 08:00:00", None, None, None)
+            .is_err()
+    );
+    insertar_movimiento_actual(&connection, 1, "2026-08-11T14:00:00Z", None, None, None).unwrap();
+}
+
+#[test]
 fn check_de_salida_acepta_pares_coherentes_y_rechaza_incoherentes() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
     insertar_referencias(&connection);
 
-    insertar_movimiento_actual(&connection, 1, "2026-08-11 08:00:00", None, None, None).unwrap();
+    insertar_movimiento_actual(&connection, 1, "2026-08-11T14:00:00Z", None, None, None).unwrap();
     insertar_movimiento_actual(
         &connection,
         2,
-        "2026-08-10 08:00:00",
-        Some("2026-08-10 17:00:00"),
+        "2026-08-10T14:00:00Z",
+        Some("2026-08-10T23:00:00Z"),
         Some(1),
         Some("Operador"),
     )
@@ -243,8 +270,8 @@ fn check_de_salida_acepta_pares_coherentes_y_rechaza_incoherentes() {
         insertar_movimiento_actual(
             &connection,
             3,
-            "2026-08-09 08:00:00",
-            Some("2026-08-09 17:00:00"),
+            "2026-08-09T14:00:00Z",
+            Some("2026-08-09T23:00:00Z"),
             None,
             None,
         )
@@ -254,7 +281,7 @@ fn check_de_salida_acepta_pares_coherentes_y_rechaza_incoherentes() {
         insertar_movimiento_actual(
             &connection,
             4,
-            "2026-08-09 08:00:00",
+            "2026-08-09T14:00:00Z",
             None,
             Some(1),
             Some("Operador"),

@@ -1,8 +1,9 @@
 use crate::{
     database::queries::ingresos::{EstadoMovimiento, FiltroHistorial},
     models::{empresa::Empresa, tipo_ingreso::TipoIngreso},
+    tiempo::{ahora_costa_rica, inicio_dia_costa_rica_utc},
 };
-use chrono::{Datelike, Duration, Local, NaiveDate};
+use chrono::{Datelike, Duration, NaiveDate};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FiltrosHistorial {
     pub desde: String,
@@ -15,7 +16,7 @@ pub struct FiltrosHistorial {
 }
 impl Default for FiltrosHistorial {
     fn default() -> Self {
-        let h = Local::now().date_naive();
+        let h = ahora_costa_rica().date_naive();
         let d = NaiveDate::from_ymd_opt(h.year(), h.month(), 1).unwrap();
         Self {
             desde: d.format("%d/%m/%Y").to_string(),
@@ -57,14 +58,17 @@ pub(super) fn construir(
     busqueda: &str,
     limit: usize,
     offset: usize,
+    corte_id: Option<i64>,
 ) -> Result<FiltroHistorial, String> {
     let d = fecha(&f.desde).ok_or("Fecha Desde inválida. Use DD/MM/YYYY")?;
     let visual = fecha(&f.hasta).ok_or("Fecha Hasta inválida. Use DD/MM/YYYY")?;
     let hasta = visual
         .checked_add_signed(Duration::days(1))
         .ok_or("El rango de fechas no es válido")?;
-    let desde = d.and_hms_opt(0, 0, 0).unwrap();
-    let hasta = hasta.and_hms_opt(0, 0, 0).unwrap();
+    let desde = inicio_dia_costa_rica_utc(d)
+        .map_err(|_| "La fecha Desde no existe en la zona de Costa Rica")?;
+    let hasta = inicio_dia_costa_rica_utc(hasta)
+        .map_err(|_| "La fecha Hasta no existe en la zona de Costa Rica")?;
     if desde >= hasta {
         return Err("El rango de fechas no es válido".into());
     }
@@ -93,6 +97,7 @@ pub(super) fn construir(
         estado: f.estado,
         limite: limit,
         offset,
+        corte_id,
     })
 }
 pub(super) fn estado_texto(e: EstadoMovimiento) -> &'static str {

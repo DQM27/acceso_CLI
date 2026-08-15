@@ -10,7 +10,6 @@ use std::{
     time::Duration,
 };
 
-use chrono::NaiveDateTime;
 use rusqlite::{Connection, params};
 
 use control_acceso::{
@@ -100,10 +99,6 @@ fn crear_contratista(ruta: &Path, empresa_id: i64, cedula: &str, tipo_ingreso: &
     connection.last_insert_rowid()
 }
 
-fn fecha_ingreso() -> NaiveDateTime {
-    NaiveDateTime::parse_from_str("2026-08-15 08:00:00", "%Y-%m-%d %H:%M:%S").unwrap()
-}
-
 fn ejecutar_en_paralelo(
     ruta: &Path,
     usuario_id: i64,
@@ -123,7 +118,6 @@ fn ejecutar_en_paralelo(
                     MedioIngreso::Caminando,
                     gafete,
                     usuario_id,
-                    fecha_ingreso(),
                 ))
             })
         })
@@ -239,7 +233,6 @@ fn una_revocacion_confirmada_antes_del_bloqueo_impide_el_ingreso() {
             MedioIngreso::Caminando,
             None,
             usuario_id,
-            fecha_ingreso(),
         ));
         resultado_tx.send(resultado).unwrap();
     });
@@ -273,13 +266,7 @@ fn una_revocacion_confirmada_antes_del_bloqueo_impide_el_ingreso() {
 
     AppCore::abrir(&ruta)
         .unwrap()
-        .registrar_ingreso(
-            contratista_id,
-            MedioIngreso::Caminando,
-            None,
-            usuario_id,
-            fecha_ingreso(),
-        )
+        .registrar_ingreso(contratista_id, MedioIngreso::Caminando, None, usuario_id)
         .unwrap();
 
     limpiar_base(&ruta);

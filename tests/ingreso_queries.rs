@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use rusqlite::{Connection, params};
 
 use control_acceso::database::error::DatabaseError;
@@ -61,6 +61,8 @@ fn insertar(
     salida: Option<&str>,
     usuario_salida: Option<i64>,
 ) -> i64 {
+    let ingreso = control_acceso::tiempo::serializar_utc(dt(ingreso));
+    let salida = salida.map(|valor| control_acceso::tiempo::serializar_utc(dt(valor)));
     base.connection
         .execute(
             "INSERT INTO registro_ingresos(
@@ -93,8 +95,11 @@ fn insertar(
     base.connection.last_insert_rowid()
 }
 
-fn dt(valor: &str) -> NaiveDateTime {
-    NaiveDateTime::parse_from_str(valor, "%Y-%m-%d %H:%M:%S").unwrap()
+fn dt(valor: &str) -> DateTime<Utc> {
+    control_acceso::tiempo::local_costa_rica_a_utc(
+        NaiveDateTime::parse_from_str(valor, "%Y-%m-%d %H:%M:%S").unwrap(),
+    )
+    .unwrap()
 }
 
 fn filtro_historial() -> FiltroHistorial {
@@ -551,6 +556,67 @@ fn historial_pagina_en_sql_y_total_no_depende_de_limit_offset() {
     let vacia = query.buscar_historial(&filtro).unwrap();
     assert_eq!(vacia.total, 17);
     assert!(vacia.items.is_empty());
+}
+
+#[test]
+fn historial_conserva_el_mismo_corte_al_navegar_entre_paginas() {
+    let base = preparar_base();
+    for dia in 1..=6 {
+        insertar(
+            &base,
+            base.contratista_uno,
+            base.empresa_uno,
+            &format!("2026-08-{dia:02} 07:00:00"),
+            "CAMINANDO",
+            "PRAIND",
+            Some(dia),
+            Some(&format!("2026-08-{dia:02} 08:00:00")),
+            Some(base.usuario_salida),
+        );
+    }
+    let query = SqliteIngresosQuery::new(&base.connection);
+    let mut filtro = filtro_historial();
+    filtro.limite = 2;
+    let primera = query.buscar_historial(&filtro).unwrap();
+    assert_eq!(primera.total, 6);
+    assert_eq!(primera.corte_id, 6);
+    assert_eq!(
+        primera
+            .items
+            .iter()
+            .map(|item| item.registro_id)
+            .collect::<Vec<_>>(),
+        vec![6, 5]
+    );
+
+    insertar(
+        &base,
+        base.contratista_dos,
+        base.empresa_dos,
+        "2026-08-20 07:00:00",
+        "VEHICULO",
+        "SWAT",
+        None,
+        Some("2026-08-20 08:00:00"),
+        Some(base.usuario_salida),
+    );
+
+    filtro.offset = 2;
+    filtro.corte_id = Some(primera.corte_id);
+    let segunda = query.buscar_historial(&filtro).unwrap();
+    assert_eq!(segunda.total, 6);
+    assert_eq!(
+        segunda
+            .items
+            .iter()
+            .map(|item| item.registro_id)
+            .collect::<Vec<_>>(),
+        vec![4, 3]
+    );
+
+    let nueva_navegacion = query.buscar_historial(&filtro_historial()).unwrap();
+    assert_eq!(nueva_navegacion.total, 7);
+    assert_eq!(nueva_navegacion.items[0].registro_id, 7);
 }
 
 #[test]

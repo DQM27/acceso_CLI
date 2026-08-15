@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use control_acceso::database::error::DatabaseError;
 use control_acceso::database::repositories::registro_ingreso_repository::{
     RegistroIngresoRepository, SqliteRegistroIngresoRepository,
@@ -86,17 +86,19 @@ fn crear_contratista_con_cedula(connection: &Connection, empresa_id: i64, cedula
     connection.last_insert_rowid()
 }
 
-fn fecha_salida() -> NaiveDateTime {
-    NaiveDateTime::parse_from_str("2026-08-11 17:30:00", "%Y-%m-%d %H:%M:%S").unwrap()
+fn fecha_salida() -> DateTime<Utc> {
+    control_acceso::tiempo::local_costa_rica_a_utc(
+        NaiveDateTime::parse_from_str("2026-08-11 17:30:00", "%Y-%m-%d %H:%M:%S").unwrap(),
+    )
+    .unwrap()
 }
 
 fn crear_registro(contratista_id: i64, empresa_id: i64, usuario_id: i64) -> NuevoRegistroIngreso {
     NuevoRegistroIngreso {
         contratista_id,
         empresa_id,
-        fecha_hora_ingreso: NaiveDateTime::parse_from_str(
-            "2026-08-11 08:30:00",
-            "%Y-%m-%d %H:%M:%S",
+        fecha_hora_ingreso: control_acceso::tiempo::local_costa_rica_a_utc(
+            NaiveDateTime::parse_from_str("2026-08-11 08:30:00", "%Y-%m-%d %H:%M:%S").unwrap(),
         )
         .unwrap(),
         medio_ingreso: MedioIngreso::Vehiculo,

@@ -1,8 +1,11 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use control_acceso::domain::registro_ingreso::salida_es_cronologicamente_valida;
 
-fn fecha(valor: &str) -> NaiveDateTime {
-    NaiveDateTime::parse_from_str(valor, "%Y-%m-%d %H:%M:%S").unwrap()
+fn fecha(valor: &str) -> DateTime<Utc> {
+    control_acceso::tiempo::local_costa_rica_a_utc(
+        NaiveDateTime::parse_from_str(valor, "%Y-%m-%d %H:%M:%S").unwrap(),
+    )
+    .unwrap()
 }
 
 #[test]

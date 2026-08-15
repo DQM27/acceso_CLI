@@ -1,6 +1,9 @@
-use rusqlite::{Connection, Transaction, TransactionBehavior};
+use chrono::NaiveDateTime;
+use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 
-pub const SCHEMA_VERSION: i64 = 5;
+use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
+
+pub const SCHEMA_VERSION: i64 = 6;
 
 pub fn initialize_database(connection: &Connection) -> rusqlite::Result<()> {
     connection.execute_batch("PRAGMA foreign_keys = ON;")?;
@@ -33,6 +36,11 @@ pub fn initialize_database(connection: &Connection) -> rusqlite::Result<()> {
         version = 5;
     }
 
+    if version == 5 {
+        aplicar_migracion_6(&transaction)?;
+        version = 6;
+    }
+
     if version != SCHEMA_VERSION {
         return Err(rusqlite::Error::InvalidQuery);
     }
@@ -47,6 +55,57 @@ fn aplicar_migracion(
 ) -> rusqlite::Result<()> {
     transaction.execute_batch(sql)?;
     transaction.execute_batch(&format!("PRAGMA user_version = {nueva_version}"))
+}
+
+fn aplicar_migracion_6(transaction: &Transaction<'_>) -> rusqlite::Result<()> {
+    let movimientos = {
+        let mut statement = transaction
+            .prepare("SELECT id, fecha_hora_ingreso, fecha_hora_salida FROM registro_ingresos")?;
+        statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?
+    };
+    let movimientos = movimientos
+        .into_iter()
+        .map(|(id, ingreso, salida)| {
+            Ok((
+                id,
+                normalizar_fecha_utc_legacy(&ingreso)?,
+                salida
+                    .map(|valor| normalizar_fecha_utc_legacy(&valor))
+                    .transpose()?,
+            ))
+        })
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    transaction.execute_batch(MIGRACION_6_INICIO)?;
+    for (id, ingreso, salida) in movimientos {
+        transaction.execute(
+            "UPDATE registro_ingresos
+             SET fecha_hora_ingreso = ?1, fecha_hora_salida = ?2
+             WHERE id = ?3",
+            params![ingreso, salida, id],
+        )?;
+    }
+    transaction.execute_batch(MIGRACION_6_FINAL)?;
+    transaction.execute_batch("PRAGMA user_version = 6")
+}
+
+fn normalizar_fecha_utc_legacy(valor: &str) -> rusqlite::Result<String> {
+    if let Ok(instante) = parsear_utc(valor) {
+        return Ok(serializar_utc(instante));
+    }
+    let local = NaiveDateTime::parse_from_str(valor, "%Y-%m-%d %H:%M:%S")
+        .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
+    local_costa_rica_a_utc(local)
+        .map(serializar_utc)
+        .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))
 }
 
 const MIGRACION_1: &str = r#"
@@ -406,5 +465,77 @@ CREATE TRIGGER registro_ingresos_no_eliminar
 BEFORE DELETE ON registro_ingresos
 BEGIN
     SELECT RAISE(ABORT, 'Los movimientos de acceso no se pueden eliminar');
+END;
+"#;
+
+// Hasta la versión 5 las fechas se persistían sin zona y correspondían a la hora local
+// de Costa Rica. Desde la versión 6 todos los instantes se guardan en UTC canónico.
+const MIGRACION_6_INICIO: &str = r#"
+DROP TRIGGER registro_ingresos_entrada_inmutable;
+DROP TRIGGER registro_ingresos_salida_unica;
+"#;
+
+const MIGRACION_6_FINAL: &str = r#"
+CREATE TRIGGER registro_ingresos_fecha_utc_insert
+BEFORE INSERT ON registro_ingresos
+WHEN
+    strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_ingreso) IS NOT NEW.fecha_hora_ingreso
+    OR (
+        NEW.fecha_hora_salida IS NOT NULL
+        AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_salida) IS NOT NEW.fecha_hora_salida
+    )
+BEGIN
+    SELECT RAISE(ABORT, 'Las fechas de movimientos deben estar normalizadas en UTC');
+END;
+
+CREATE TRIGGER registro_ingresos_salida_utc
+BEFORE UPDATE OF fecha_hora_salida ON registro_ingresos
+WHEN
+    NEW.fecha_hora_salida IS NOT NULL
+    AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_salida) IS NOT NEW.fecha_hora_salida
+BEGIN
+    SELECT RAISE(ABORT, 'La fecha de salida debe estar normalizada en UTC');
+END;
+
+CREATE TRIGGER registro_ingresos_entrada_inmutable
+BEFORE UPDATE OF
+    contratista_id, empresa_id, fecha_hora_ingreso, medio_ingreso, tipo_ingreso,
+    gafete_numero, usuario_ingreso_id, contratista_cedula, contratista_nombre,
+    empresa_nombre, usuario_ingreso_nombre, fecha_vencimiento_praind,
+    es_personal_ruta, tiene_acceso, resultado_acceso, motivo_resultado,
+    reglas_version
+ON registro_ingresos
+WHEN
+    NEW.contratista_id IS NOT OLD.contratista_id
+    OR NEW.empresa_id IS NOT OLD.empresa_id
+    OR NEW.fecha_hora_ingreso IS NOT OLD.fecha_hora_ingreso
+    OR NEW.medio_ingreso IS NOT OLD.medio_ingreso
+    OR NEW.tipo_ingreso IS NOT OLD.tipo_ingreso
+    OR NEW.gafete_numero IS NOT OLD.gafete_numero
+    OR NEW.usuario_ingreso_id IS NOT OLD.usuario_ingreso_id
+    OR NEW.contratista_cedula IS NOT OLD.contratista_cedula
+    OR NEW.contratista_nombre IS NOT OLD.contratista_nombre
+    OR NEW.empresa_nombre IS NOT OLD.empresa_nombre
+    OR NEW.usuario_ingreso_nombre IS NOT OLD.usuario_ingreso_nombre
+    OR NEW.fecha_vencimiento_praind IS NOT OLD.fecha_vencimiento_praind
+    OR NEW.es_personal_ruta IS NOT OLD.es_personal_ruta
+    OR NEW.tiene_acceso IS NOT OLD.tiene_acceso
+    OR NEW.resultado_acceso IS NOT OLD.resultado_acceso
+    OR NEW.motivo_resultado IS NOT OLD.motivo_resultado
+    OR NEW.reglas_version IS NOT OLD.reglas_version
+BEGIN
+    SELECT RAISE(ABORT, 'Los datos historicos del ingreso son inmutables');
+END;
+
+CREATE TRIGGER registro_ingresos_salida_unica
+BEFORE UPDATE OF fecha_hora_salida, usuario_salida_id, usuario_salida_nombre
+ON registro_ingresos
+WHEN
+    OLD.fecha_hora_salida IS NOT NULL
+    OR NEW.fecha_hora_salida IS NULL
+    OR NEW.usuario_salida_id IS NULL
+    OR NEW.usuario_salida_nombre IS NULL
+BEGIN
+    SELECT RAISE(ABORT, 'La salida solo puede registrarse una vez');
 END;
 "#;

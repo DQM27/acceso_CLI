@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use rusqlite::Connection;
 
 use control_acceso::database::repositories::contratista_repository::{
@@ -67,8 +67,11 @@ fn hoy() -> NaiveDate {
     NaiveDate::from_ymd_opt(2026, 8, 12).unwrap()
 }
 
-fn fecha_hora() -> NaiveDateTime {
-    NaiveDateTime::parse_from_str("2026-08-12 08:00:00", "%Y-%m-%d %H:%M:%S").unwrap()
+fn fecha_hora() -> DateTime<Utc> {
+    control_acceso::tiempo::local_costa_rica_a_utc(
+        NaiveDateTime::parse_from_str("2026-08-12 08:00:00", "%Y-%m-%d %H:%M:%S").unwrap(),
+    )
+    .unwrap()
 }
 
 #[test]

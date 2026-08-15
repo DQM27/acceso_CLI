@@ -1,6 +1,6 @@
 use super::*;
+use crate::tiempo::hora_actual_texto;
 use crate::tui::{layout, theme};
-use chrono::Local;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout, Rect},
@@ -303,7 +303,7 @@ fn pie(frame: &mut Frame, area: Rect, state: &NuevoIngresoState) {
         c[0],
     );
     frame.render_widget(
-        Paragraph::new(Local::now().format("%H:%M:%S").to_string())
+        Paragraph::new(hora_actual_texto())
             .style(theme::advertencia())
             .alignment(Alignment::Right),
         c[1],

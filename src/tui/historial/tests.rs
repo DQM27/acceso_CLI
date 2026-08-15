@@ -19,10 +19,13 @@ fn pagina(cantidad: usize, total: usize) -> PaginaHistorial {
                 empresa_nombre: "Brisas".into(),
                 tipo_ingreso: TipoIngreso::Praind,
                 medio_ingreso: MedioIngreso::Caminando,
-                fecha_hora_ingreso: NaiveDate::from_ymd_opt(2026, 8, 12)
-                    .unwrap()
-                    .and_hms_opt(8, 30, 0)
-                    .unwrap(),
+                fecha_hora_ingreso: crate::tiempo::local_costa_rica_a_utc(
+                    NaiveDate::from_ymd_opt(2026, 8, 12)
+                        .unwrap()
+                        .and_hms_opt(8, 30, 0)
+                        .unwrap(),
+                )
+                .unwrap(),
                 fecha_hora_salida: None,
                 gafete_numero: Some(7),
                 usuario_ingreso_nombre: "Quintana".into(),
@@ -34,6 +37,7 @@ fn pagina(cantidad: usize, total: usize) -> PaginaHistorial {
             })
             .collect(),
         total,
+        corte_id: 100,
     }
 }
 
@@ -44,19 +48,15 @@ fn fechas_visuales_generan_rango_backend_inclusivo_exclusivo() {
         hasta: "12/08/2026".into(),
         ..Default::default()
     };
-    let query = construir(&filtro, "", 50, 0).unwrap();
+    let query = construir(&filtro, "", 50, 0, None).unwrap();
     assert_eq!(
         query.desde,
-        NaiveDate::from_ymd_opt(2026, 8, 1)
-            .unwrap()
-            .and_hms_opt(0, 0, 0)
+        crate::tiempo::inicio_dia_costa_rica_utc(NaiveDate::from_ymd_opt(2026, 8, 1).unwrap())
             .unwrap()
     );
     assert_eq!(
         query.hasta,
-        NaiveDate::from_ymd_opt(2026, 8, 13)
-            .unwrap()
-            .and_hms_opt(0, 0, 0)
+        crate::tiempo::inicio_dia_costa_rica_utc(NaiveDate::from_ymd_opt(2026, 8, 13).unwrap())
             .unwrap()
     );
 }
@@ -71,13 +71,14 @@ fn filtros_mapean_ids_enums_gafete_exacto_y_texto() {
         estado: EstadoMovimiento::Cerrados,
         ..Default::default()
     };
-    let query = construir(&filtro, "", 50, 100).unwrap();
+    let query = construir(&filtro, "", 50, 100, Some(77)).unwrap();
     assert_eq!(query.texto_persona.as_deref(), Some("Ana"));
     assert_eq!(query.empresa_id, Some(8));
     assert_eq!(query.tipo_ingreso, Some(TipoIngreso::PorCorreo));
     assert_eq!(query.gafete_numero, Some(27));
     assert_eq!(query.estado, EstadoMovimiento::Cerrados);
     assert_eq!((query.limite, query.offset), (50, 100));
+    assert_eq!(query.corte_id, Some(77));
 }
 
 #[test]
@@ -128,10 +129,37 @@ fn page_down_y_page_up_emiten_offsets_de_cincuenta() {
         panic!("debía consultar")
     };
     assert_eq!(siguiente.offset, 50);
+    assert_eq!(siguiente.corte_id, Some(100));
     let AccionHistorial::Consultar(anterior) = state.handle_key(tecla(KeyCode::PageUp)) else {
         panic!("debía consultar")
     };
     assert_eq!(anterior.offset, 0);
+    assert_eq!(anterior.corte_id, Some(100));
+}
+
+#[test]
+fn una_busqueda_nueva_descarta_el_corte_de_la_navegacion_anterior() {
+    let mut state = HistorialState::default();
+    state.completar(Ok(pagina(50, 120)));
+    state.handle_key(tecla(KeyCode::Char('/')));
+    let AccionHistorial::Consultar(filtro) = state.handle_key(tecla(KeyCode::Char('a'))) else {
+        panic!("debía iniciar una consulta nueva")
+    };
+    assert_eq!(filtro.offset, 0);
+    assert_eq!(filtro.corte_id, None);
+}
+
+#[test]
+fn volver_a_abrir_historial_inicia_una_fotografia_nueva() {
+    let mut state = HistorialState::default();
+    state.completar(Ok(pagina(50, 120)));
+    state.handle_key(tecla(KeyCode::PageDown));
+
+    let AccionHistorial::Consultar(filtro) = state.solicitud_carga() else {
+        panic!("debía recargar el historial")
+    };
+    assert_eq!(filtro.offset, 0);
+    assert_eq!(filtro.corte_id, None);
 }
 
 #[test]
@@ -144,7 +172,8 @@ fn fechas_y_campos_rechazan_formato_o_caracteres_invalidos() {
             },
             "",
             50,
-            0
+            0,
+            None
         )
         .is_err()
     );

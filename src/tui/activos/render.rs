@@ -1,4 +1,4 @@
-use chrono::Local;
+use crate::tiempo::{a_costa_rica, hora_actual_texto};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -166,7 +166,9 @@ fn valor_columna(registro: &IngresoActivoResumen, columna: Columna) -> String {
                 ""
             }
         ),
-        Columna::Hora => registro.fecha_hora_ingreso.format("%H:%M").to_string(),
+        Columna::Hora => a_costa_rica(registro.fecha_hora_ingreso)
+            .format("%H:%M")
+            .to_string(),
         Columna::Gafete => registro
             .gafete_numero
             .map_or_else(|| "S/G".to_owned(), |gafete| format!("{gafete:02}")),
@@ -209,7 +211,7 @@ fn render_estado(frame: &mut Frame, area: Rect, state: &ActivosState) {
 }
 
 fn render_pie(frame: &mut Frame, area: Rect, state: &ActivosState) {
-    let hora = Local::now().format("%H:%M:%S").to_string();
+    let hora = hora_actual_texto();
     let bloque = Block::default()
         .borders(Borders::ALL)
         .border_style(theme::borde());
@@ -323,7 +325,7 @@ fn render_detalle(frame: &mut Frame, area: Rect, registro: &IngresoActivoResumen
             )),
             Line::from(format!(
                 "Ingreso          {}",
-                registro.fecha_hora_ingreso.format("%d/%m/%Y %H:%M")
+                a_costa_rica(registro.fecha_hora_ingreso).format("%d/%m/%Y %H:%M")
             )),
             Line::from(format!(
                 "Gafete           {}",
@@ -368,7 +370,7 @@ fn render_gafete(frame: &mut Frame, area: Rect, estado: &SalidaGafete) {
             )),
             Line::from(format!(
                 "Ingreso: {}",
-                registro.fecha_hora_ingreso.format("%H:%M")
+                a_costa_rica(registro.fecha_hora_ingreso).format("%H:%M")
             )),
             Line::from(""),
             Line::from("¿Registrar salida?"),

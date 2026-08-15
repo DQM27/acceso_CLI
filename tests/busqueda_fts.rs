@@ -80,7 +80,7 @@ fn activos_busca_persona_empresa_y_gafete_exacto() {
             gafete_numero,usuario_ingreso_id,contratista_cedula,contratista_nombre,
             empresa_nombre,usuario_ingreso_nombre,fecha_vencimiento_praind,
             es_personal_ruta,tiene_acceso,resultado_acceso,motivo_resultado,reglas_version
-         ) VALUES (1,1,'2026-08-12 08:00:00','CAMINANDO','PRAIND',12,1,
+         ) VALUES (1,1,'2026-08-12T14:00:00Z','CAMINANDO','PRAIND',12,1,
             '1001','María Peña','Álvarez Ingeniería','José Hernández','2030-01-01',0,1,
             'PERMITIDO',NULL,1)",
             [],
@@ -110,7 +110,7 @@ fn historial_usa_fts_y_conserva_total_coherente() {
             usuario_ingreso_id,contratista_cedula,contratista_nombre,empresa_nombre,
             usuario_ingreso_nombre,fecha_vencimiento_praind,es_personal_ruta,
             tiene_acceso,resultado_acceso,motivo_resultado,reglas_version
-         ) VALUES (1,1,'2026-08-12 08:00:00','CAMINANDO','PRAIND',1,
+         ) VALUES (1,1,'2026-08-12T14:00:00Z','CAMINANDO','PRAIND',1,
             '1001','María Peña','Álvarez Ingeniería','José Hernández','2030-01-01',0,1,
             'PERMITIDO',NULL,1)",
             [],
@@ -118,14 +118,14 @@ fn historial_usa_fts_y_conserva_total_coherente() {
         .unwrap();
     let query = SqliteIngresosQuery::new(&connection);
     let mut filtro = FiltroHistorial::nuevo(
-        NaiveDate::from_ymd_opt(2026, 8, 1)
-            .unwrap()
-            .and_hms_opt(0, 0, 0)
-            .unwrap(),
-        NaiveDate::from_ymd_opt(2026, 9, 1)
-            .unwrap()
-            .and_hms_opt(0, 0, 0)
-            .unwrap(),
+        control_acceso::tiempo::inicio_dia_costa_rica_utc(
+            NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
+        )
+        .unwrap(),
+        control_acceso::tiempo::inicio_dia_costa_rica_utc(
+            NaiveDate::from_ymd_opt(2026, 9, 1).unwrap(),
+        )
+        .unwrap(),
     );
     filtro.texto_persona = Some("PENA".to_owned());
 

@@ -1,4 +1,4 @@
-use chrono::{Local, NaiveDate};
+use chrono::NaiveDate;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Constraint;
 
@@ -6,6 +6,7 @@ use crate::{
     database::queries::contratistas::ContratistaResumen,
     models::{contratista::Contratista, empresa::Empresa, tipo_ingreso::TipoIngreso},
     services::contratista_service::{DatosActualizacionContratista, DatosContratista},
+    tiempo::ahora_costa_rica,
 };
 
 #[path = "render.rs"]
@@ -212,7 +213,7 @@ impl Default for ContratistasState {
             mensaje: None,
             error_carga: None,
             usuario_nombre: "Quintana".into(),
-            hoy: Local::now().date_naive(),
+            hoy: ahora_costa_rica().date_naive(),
         }
     }
 }

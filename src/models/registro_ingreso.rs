@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 
 use super::medio_ingreso::MedioIngreso;
 use super::tipo_ingreso::TipoIngreso;
@@ -34,7 +34,7 @@ pub struct DatosHistoricosEntrada {
 pub struct NuevoRegistroIngreso {
     pub contratista_id: i64,
     pub empresa_id: i64,
-    pub fecha_hora_ingreso: NaiveDateTime,
+    pub fecha_hora_ingreso: DateTime<Utc>,
     pub medio_ingreso: MedioIngreso,
     pub tipo_ingreso: TipoIngreso,
     pub gafete_numero: Option<i64>,
@@ -49,7 +49,7 @@ pub struct RegistroIngreso {
     pub contratista_id: i64,
     pub empresa_id: i64,
 
-    pub fecha_hora_ingreso: NaiveDateTime,
+    pub fecha_hora_ingreso: DateTime<Utc>,
 
     pub medio_ingreso: MedioIngreso,
     pub tipo_ingreso: TipoIngreso,
@@ -62,6 +62,6 @@ pub struct RegistroIngreso {
 
     pub usuario_ingreso_id: i64,
 
-    pub fecha_hora_salida: Option<NaiveDateTime>,
+    pub fecha_hora_salida: Option<DateTime<Utc>>,
     pub usuario_salida_id: Option<i64>,
 }

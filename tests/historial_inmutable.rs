@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use rusqlite::Connection;
 
 use control_acceso::database::queries::ingresos::{
@@ -20,8 +20,11 @@ use control_acceso::services::registro_ingreso_service::{
     RegistroIngresoConsultaService, RegistroIngresoService,
 };
 
-fn fecha(valor: &str) -> NaiveDateTime {
-    NaiveDateTime::parse_from_str(valor, "%Y-%m-%d %H:%M:%S").unwrap()
+fn fecha(valor: &str) -> DateTime<Utc> {
+    control_acceso::tiempo::local_costa_rica_a_utc(
+        NaiveDateTime::parse_from_str(valor, "%Y-%m-%d %H:%M:%S").unwrap(),
+    )
+    .unwrap()
 }
 
 fn preparar() -> (Connection, i64, i64, i64) {

@@ -5,4 +5,5 @@ pub mod domain;
 pub mod instancia;
 pub mod models;
 pub mod services;
+pub mod tiempo;
 pub mod tui;
