@@ -44,6 +44,15 @@ pub struct DatosContratista {
     pub tiene_acceso: bool,
 }
 
+pub struct DatosActualizacionContratista {
+    pub nombre: String,
+    pub empresa_id: i64,
+    pub tipo_ingreso: TipoIngreso,
+    pub fecha_vencimiento_praind: Option<NaiveDate>,
+    pub es_personal_ruta: bool,
+    pub tiene_acceso: bool,
+}
+
 pub struct ContratistaService<'a, C, E>
 where
     C: ContratistaRepository + ?Sized,
@@ -87,13 +96,11 @@ where
     pub fn actualizar(
         &self,
         id: i64,
-        datos: DatosContratista,
+        datos: DatosActualizacionContratista,
     ) -> Result<(), ContratistaServiceError> {
-        self.buscar_por_id(id)?;
-        let contratista = self.construir_contratista(id, datos)?;
-        self.contratistas
-            .actualizar(&contratista)
-            .map_err(mapear_cedula_duplicada)
+        let actual = self.buscar_por_id(id)?;
+        let contratista = self.construir_actualizacion(actual, datos)?;
+        Ok(self.contratistas.actualizar(&contratista)?)
     }
 
     pub fn listar(&self) -> Result<Vec<Contratista>, ContratistaServiceError> {
@@ -122,6 +129,38 @@ where
         let contratista = Contratista {
             id,
             cedula: cedula.to_string(),
+            nombre: nombre.to_string(),
+            empresa_id: datos.empresa_id,
+            tipo_ingreso: datos.tipo_ingreso,
+            fecha_vencimiento_praind: datos.fecha_vencimiento_praind,
+            es_personal_ruta: datos.es_personal_ruta,
+            tiene_acceso: datos.tiene_acceso,
+        };
+
+        if contratista.requiere_praind() && contratista.fecha_vencimiento_praind.is_none() {
+            return Err(ContratistaServiceError::PraindRequerido);
+        }
+
+        Ok(contratista)
+    }
+
+    fn construir_actualizacion(
+        &self,
+        actual: Contratista,
+        datos: DatosActualizacionContratista,
+    ) -> Result<Contratista, ContratistaServiceError> {
+        let nombre = datos.nombre.trim();
+        if nombre.is_empty() {
+            return Err(ContratistaServiceError::NombreVacio);
+        }
+
+        if self.empresas.buscar_por_id(datos.empresa_id)?.is_none() {
+            return Err(ContratistaServiceError::EmpresaNoEncontrada);
+        }
+
+        let contratista = Contratista {
+            id: actual.id,
+            cedula: actual.cedula,
             nombre: nombre.to_string(),
             empresa_id: datos.empresa_id,
             tipo_ingreso: datos.tipo_ingreso,

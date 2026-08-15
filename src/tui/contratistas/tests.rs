@@ -71,8 +71,25 @@ fn detalle_edicion_precargan_ids_y_datos_reales() {
         panic!()
     };
     assert!(matches!(f.modo, ModoFormulario::Editar { id: 7 }));
+    assert_eq!(f.campo, 1);
+    assert_eq!(f.cedula, "001-2");
     assert_eq!(f.empresa, 0);
     assert_eq!(f.tipo, TipoIngreso::Praind);
+}
+#[test]
+fn edicion_no_permite_enfocar_ni_modificar_cedula() {
+    let mut s = ContratistasState::default();
+    cargar(&mut s);
+    s.handle_key(k(KeyCode::Enter));
+    s.handle_key(k(KeyCode::Char('E')));
+    s.handle_key(k(KeyCode::Up));
+    s.handle_key(k(KeyCode::Char('9')));
+    let ModoContratistas::Formulario(f) = &s.modo else {
+        panic!()
+    };
+    assert_eq!(f.campo, 1);
+    assert_eq!(f.cedula, "001-2");
+    assert_eq!(f.nombre, "José Hernández9");
 }
 #[test]
 fn formulario_valida_y_emite_creacion_tipificada() {

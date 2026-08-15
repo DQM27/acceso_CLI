@@ -557,7 +557,6 @@ mod tests {
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].empresa_id, empresa_id);
         app.procesar_tecla_vista_con_core(tecla(KeyCode::Char('E')), Some(&core));
-        app.procesar_tecla_vista_con_core(tecla(KeyCode::Tab), Some(&core));
         for _ in 0.."José Hernández".chars().count() {
             app.procesar_tecla_vista_con_core(tecla(KeyCode::Backspace), Some(&core))
         }
@@ -582,6 +581,17 @@ mod tests {
             core.buscar_contratistas(
                 &crate::database::queries::contratistas::FiltroContratistas {
                     texto: Some("jose alvarez".into()),
+                    ..Default::default()
+                }
+            )
+            .unwrap()
+            .len(),
+            1
+        );
+        assert_eq!(
+            core.buscar_contratistas(
+                &crate::database::queries::contratistas::FiltroContratistas {
+                    texto: Some("001-ABC".into()),
                     ..Default::default()
                 }
             )

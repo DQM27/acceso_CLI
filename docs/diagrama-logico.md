@@ -194,11 +194,13 @@ flowchart LR
     A["Acción de administración"] --> B{"Tipo"}
 
     B -->|Empresa| E["Normalizar nombre<br/>exigir no vacío y único"]
-    B -->|Contratista| C["Normalizar cédula y nombre<br/>validar empresa existente<br/>fecha PRAIND cuando aplica<br/>cédula única"]
+    B -->|Contratista nuevo| C["Normalizar cédula y nombre<br/>validar empresa existente<br/>fecha PRAIND cuando aplica<br/>cédula única"]
+    B -->|Editar contratista| CE["Cédula inmutable<br/>actualizar nombre, empresa,<br/>tipo, PRAIND, ruta o acceso"]
     B -->|Usuario| U["Normalizar identidad y exigir cédula única<br/>al crear o cambiar clave: mínimo 8 y Argon2"]
 
     E --> DB[("SQLite")]
     C --> DB
+    CE --> DB
     U --> R{"¿La transición elimina<br/>el último ROOT activo?"}
     R -->|Sí| X["Rechazar: UltimoRootActivo"]
     R -->|No| DB

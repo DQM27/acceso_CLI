@@ -103,6 +103,34 @@ fn base_vacia_llega_a_version_actual_y_es_idempotente() {
 }
 
 #[test]
+fn migracion_v4_conserva_datos_y_bloquea_cambio_directo_de_cedula() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    insertar_referencias(&connection);
+    connection
+        .execute_batch(
+            "DROP TRIGGER contratistas_cedula_inmutable;
+             PRAGMA user_version = 3;",
+        )
+        .unwrap();
+
+    initialize_database(&connection).unwrap();
+
+    assert_eq!(version(&connection), SCHEMA_VERSION);
+    assert!(
+        connection
+            .execute("UPDATE contratistas SET cedula = 'OTRA' WHERE id = 1", [],)
+            .is_err()
+    );
+    let cedula: String = connection
+        .query_row("SELECT cedula FROM contratistas WHERE id = 1", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(cedula, "2001");
+}
+
+#[test]
 fn esquema_existente_con_version_cero_migra_sin_perder_datos() {
     let connection = Connection::open_in_memory().unwrap();
     crear_esquema_version_1(&connection);

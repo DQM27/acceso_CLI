@@ -1,6 +1,6 @@
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
-pub const SCHEMA_VERSION: i64 = 3;
+pub const SCHEMA_VERSION: i64 = 4;
 
 pub fn initialize_database(connection: &Connection) -> rusqlite::Result<()> {
     connection.execute_batch("PRAGMA foreign_keys = ON;")?;
@@ -21,6 +21,11 @@ pub fn initialize_database(connection: &Connection) -> rusqlite::Result<()> {
     if version == 2 {
         aplicar_migracion(&transaction, MIGRACION_3, 3)?;
         version = 3;
+    }
+
+    if version == 3 {
+        aplicar_migracion(&transaction, MIGRACION_4, 4)?;
+        version = 4;
     }
 
     if version != SCHEMA_VERSION {
@@ -222,4 +227,13 @@ END;
 INSERT INTO contratistas_fts(contratistas_fts) VALUES ('rebuild');
 INSERT INTO empresas_fts(empresas_fts) VALUES ('rebuild');
 INSERT INTO usuarios_fts(usuarios_fts) VALUES ('rebuild');
+"#;
+
+const MIGRACION_4: &str = r#"
+CREATE TRIGGER contratistas_cedula_inmutable
+BEFORE UPDATE OF cedula ON contratistas
+WHEN NEW.cedula <> OLD.cedula
+BEGIN
+    SELECT RAISE(ABORT, 'La cedula del contratista es inmutable');
+END;
 "#;

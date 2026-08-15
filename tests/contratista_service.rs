@@ -8,7 +8,9 @@ use control_acceso::database::repositories::empresa_repository::{
 use control_acceso::database::schema::initialize_database;
 use control_acceso::models::empresa::Empresa;
 use control_acceso::models::tipo_ingreso::TipoIngreso;
-use control_acceso::services::contratista_service::{ContratistaService, DatosContratista};
+use control_acceso::services::contratista_service::{
+    ContratistaService, DatosActualizacionContratista, DatosContratista,
+};
 use control_acceso::services::error::ContratistaServiceError;
 
 fn preparar_base() -> (Connection, i64) {
@@ -30,6 +32,17 @@ fn fecha_praind() -> NaiveDate {
 fn datos(empresa_id: i64, tipo_ingreso: TipoIngreso) -> DatosContratista {
     DatosContratista {
         cedula: "2001".to_string(),
+        nombre: "Persona Uno".to_string(),
+        empresa_id,
+        tipo_ingreso,
+        fecha_vencimiento_praind: None,
+        es_personal_ruta: false,
+        tiene_acceso: true,
+    }
+}
+
+fn actualizacion(empresa_id: i64, tipo_ingreso: TipoIngreso) -> DatosActualizacionContratista {
+    DatosActualizacionContratista {
         nombre: "Persona Uno".to_string(),
         empresa_id,
         tipo_ingreso,
@@ -287,14 +300,13 @@ fn debe_actualizar_contratista() {
     let contratistas = SqliteContratistaRepository::new(&connection);
     let empresas = SqliteEmpresaRepository::new(&connection);
     let servicio = ContratistaService::new(&contratistas, &empresas);
-    let mut entrada = datos(empresa_id, TipoIngreso::PorCorreo);
-    entrada.cedula = "3001".to_string();
+    let mut entrada = actualizacion(empresa_id, TipoIngreso::PorCorreo);
     entrada.nombre = "Nombre actualizado".to_string();
 
     servicio.actualizar(id, entrada).unwrap();
     let actualizado = servicio.buscar_por_id(id).unwrap();
 
-    assert_eq!(actualizado.cedula, "3001");
+    assert_eq!(actualizado.cedula, "2001");
     assert_eq!(actualizado.nombre, "Nombre actualizado");
 }
 
@@ -304,7 +316,7 @@ fn actualizar_conserva_tipo_ingreso_solicitado() {
     let contratistas = SqliteContratistaRepository::new(&connection);
     let empresas = SqliteEmpresaRepository::new(&connection);
     let servicio = ContratistaService::new(&contratistas, &empresas);
-    let entrada = datos(empresa_id, TipoIngreso::PorCorreo);
+    let entrada = actualizacion(empresa_id, TipoIngreso::PorCorreo);
 
     servicio.actualizar(id, entrada).unwrap();
 
@@ -320,7 +332,7 @@ fn actualizar_conserva_personal_de_ruta_solicitado() {
     let contratistas = SqliteContratistaRepository::new(&connection);
     let empresas = SqliteEmpresaRepository::new(&connection);
     let servicio = ContratistaService::new(&contratistas, &empresas);
-    let mut entrada = datos(empresa_id, TipoIngreso::Swat);
+    let mut entrada = actualizacion(empresa_id, TipoIngreso::Swat);
     entrada.es_personal_ruta = true;
     entrada.fecha_vencimiento_praind = Some(fecha_praind());
 
@@ -335,7 +347,7 @@ fn actualizar_conserva_tiene_acceso_solicitado() {
     let contratistas = SqliteContratistaRepository::new(&connection);
     let empresas = SqliteEmpresaRepository::new(&connection);
     let servicio = ContratistaService::new(&contratistas, &empresas);
-    let mut entrada = datos(empresa_id, TipoIngreso::Swat);
+    let mut entrada = actualizacion(empresa_id, TipoIngreso::Swat);
     entrada.tiene_acceso = false;
 
     servicio.actualizar(id, entrada).unwrap();
@@ -349,8 +361,7 @@ fn debe_rechazar_actualizacion_de_id_inexistente_primero() {
     let contratistas = SqliteContratistaRepository::new(&connection);
     let empresas = SqliteEmpresaRepository::new(&connection);
     let servicio = ContratistaService::new(&contratistas, &empresas);
-    let mut entrada = datos(999, TipoIngreso::Praind);
-    entrada.cedula.clear();
+    let entrada = actualizacion(999, TipoIngreso::Praind);
 
     assert!(matches!(
         servicio.actualizar(999, entrada),
@@ -366,7 +377,7 @@ fn debe_rechazar_actualizacion_con_empresa_inexistente() {
     let servicio = ContratistaService::new(&contratistas, &empresas);
 
     assert!(matches!(
-        servicio.actualizar(id, datos(999, TipoIngreso::Swat)),
+        servicio.actualizar(id, actualizacion(999, TipoIngreso::Swat)),
         Err(ContratistaServiceError::EmpresaNoEncontrada)
     ));
 }
@@ -379,7 +390,7 @@ fn debe_validar_praind_al_actualizar() {
     let servicio = ContratistaService::new(&contratistas, &empresas);
 
     assert!(matches!(
-        servicio.actualizar(id, datos(empresa_id, TipoIngreso::Praind)),
+        servicio.actualizar(id, actualizacion(empresa_id, TipoIngreso::Praind)),
         Err(ContratistaServiceError::PraindRequerido)
     ));
 }
@@ -421,7 +432,7 @@ fn cedula_duplicada_devuelve_error_semantico_y_no_crea_otro_registro() {
 }
 
 #[test]
-fn actualizar_con_cedula_duplicada_devuelve_error_semantico_y_conserva_registro() {
+fn actualizar_conserva_la_cedula_original() {
     let (connection, empresa_id) = preparar_base();
     let contratistas = SqliteContratistaRepository::new(&connection);
     let empresas = SqliteEmpresaRepository::new(&connection);
@@ -435,13 +446,10 @@ fn actualizar_con_cedula_duplicada_devuelve_error_semantico_y_conserva_registro(
     let segundo_id = servicio.crear(segundo).unwrap();
     let original = servicio.buscar_por_id(segundo_id).unwrap();
 
-    let mut actualizacion = datos(empresa_id, TipoIngreso::Swat);
+    let mut actualizacion = actualizacion(empresa_id, TipoIngreso::Swat);
     actualizacion.nombre = "Nombre Modificado".to_owned();
-    assert!(matches!(
-        servicio.actualizar(segundo_id, actualizacion),
-        Err(ContratistaServiceError::CedulaDuplicada)
-    ));
+    servicio.actualizar(segundo_id, actualizacion).unwrap();
     let conservado = servicio.buscar_por_id(segundo_id).unwrap();
     assert_eq!(conservado.cedula, original.cedula);
-    assert_eq!(conservado.nombre, original.nombre);
+    assert_eq!(conservado.nombre, "Nombre Modificado");
 }

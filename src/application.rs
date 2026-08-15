@@ -19,7 +19,7 @@ use crate::database::repositories::registro_ingreso_repository::SqliteRegistroIn
 use crate::database::repositories::usuario_repository::SqliteUsuarioRepository;
 use crate::services::autenticacion_service::{AutenticacionService, UsuarioSesion};
 use crate::services::contratista_service::{
-    ContratistaConsultaService, ContratistaService, DatosContratista,
+    ContratistaConsultaService, ContratistaService, DatosActualizacionContratista, DatosContratista,
 };
 use crate::services::empresa_service::{EmpresaConsultaService, EmpresaService};
 use crate::services::error::{
@@ -120,7 +120,7 @@ impl AppCore {
     pub fn actualizar_contratista(
         &self,
         id: i64,
-        datos: DatosContratista,
+        datos: DatosActualizacionContratista,
     ) -> Result<(), ContratistaServiceError> {
         ContratistaService::new(
             &SqliteContratistaRepository::new(&self.connection),

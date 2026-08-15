@@ -5,7 +5,7 @@ use ratatui::layout::Constraint;
 use crate::{
     database::queries::contratistas::ContratistaResumen,
     models::{contratista::Contratista, empresa::Empresa, tipo_ingreso::TipoIngreso},
-    services::contratista_service::DatosContratista,
+    services::contratista_service::{DatosActualizacionContratista, DatosContratista},
 };
 
 #[path = "render.rs"]
@@ -131,7 +131,7 @@ impl FormularioContratista {
                 .unwrap_or_default(),
             personal_ruta: c.es_personal_ruta,
             tiene_acceso: c.tiene_acceso,
-            campo: 0,
+            campo: 1,
             desplegable: None,
             error: None,
         }
@@ -171,7 +171,7 @@ pub enum AccionContratistas {
     },
     Actualizar {
         id: i64,
-        datos: DatosContratista,
+        datos: DatosActualizacionContratista,
         nombre: String,
     },
 }
@@ -399,9 +399,11 @@ impl ContratistasState {
                         let nombre = datos.nombre.clone();
                         match f.modo {
                             ModoFormulario::Crear => AccionContratistas::Crear { datos, nombre },
-                            ModoFormulario::Editar { id } => {
-                                AccionContratistas::Actualizar { id, datos, nombre }
-                            }
+                            ModoFormulario::Editar { id } => AccionContratistas::Actualizar {
+                                id,
+                                datos: convertir_actualizacion(datos),
+                                nombre,
+                            },
                         }
                     }
                     Err(e) => {
@@ -412,7 +414,7 @@ impl ContratistasState {
                 };
             }
             KeyCode::Backspace => match CampoFormulario::TODOS[f.campo] {
-                CampoFormulario::Cedula => {
+                CampoFormulario::Cedula if matches!(f.modo, ModoFormulario::Crear) => {
                     f.cedula.pop();
                 }
                 CampoFormulario::Nombre => {
@@ -429,7 +431,12 @@ impl ContratistasState {
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
                 match CampoFormulario::TODOS[f.campo] {
-                    CampoFormulario::Cedula if f.cedula.chars().count() < 30 => f.cedula.push(c),
+                    CampoFormulario::Cedula
+                        if matches!(f.modo, ModoFormulario::Crear)
+                            && f.cedula.chars().count() < 30 =>
+                    {
+                        f.cedula.push(c)
+                    }
                     CampoFormulario::Nombre if f.nombre.chars().count() < 60 => f.nombre.push(c),
                     CampoFormulario::FechaPraind if f.requiere_praind() => {
                         agregar_fecha(&mut f.fecha_praind, c)
@@ -585,22 +592,37 @@ fn construir(
         tiene_acceso: f.tiene_acceso,
     })
 }
-fn mover_campo(f: &mut FormularioContratista, d: isize) {
-    let u = CampoFormulario::TODOS.len() - 1;
-    loop {
-        f.campo = if d < 0 {
-            f.campo.saturating_sub(1)
-        } else {
-            (f.campo + 1).min(u)
-        };
-        if CampoFormulario::TODOS[f.campo] != CampoFormulario::FechaPraind
-            || f.requiere_praind()
-            || f.campo == 0
-            || f.campo == u
-        {
-            break;
-        }
+fn convertir_actualizacion(datos: DatosContratista) -> DatosActualizacionContratista {
+    DatosActualizacionContratista {
+        nombre: datos.nombre,
+        empresa_id: datos.empresa_id,
+        tipo_ingreso: datos.tipo_ingreso,
+        fecha_vencimiento_praind: datos.fecha_vencimiento_praind,
+        es_personal_ruta: datos.es_personal_ruta,
+        tiene_acceso: datos.tiene_acceso,
     }
+}
+fn mover_campo(f: &mut FormularioContratista, d: isize) {
+    let habilitados: Vec<usize> = CampoFormulario::TODOS
+        .iter()
+        .enumerate()
+        .filter_map(|(indice, campo)| {
+            let habilitado = !(matches!(f.modo, ModoFormulario::Editar { .. })
+                && *campo == CampoFormulario::Cedula)
+                && (*campo != CampoFormulario::FechaPraind || f.requiere_praind());
+            habilitado.then_some(indice)
+        })
+        .collect();
+    let posicion = habilitados
+        .iter()
+        .position(|indice| *indice == f.campo)
+        .unwrap_or(0);
+    let siguiente = if d < 0 {
+        posicion.saturating_sub(1)
+    } else {
+        (posicion + 1).min(habilitados.len() - 1)
+    };
+    f.campo = habilitados[siguiente];
 }
 fn agregar_fecha(s: &mut String, c: char) {
     if !c.is_ascii_digit() {

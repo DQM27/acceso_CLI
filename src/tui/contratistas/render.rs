@@ -291,7 +291,10 @@ fn render_formulario(
         ModoFormulario::Editar { .. } => "EDITAR CONTRATISTA",
     };
     let valores = [
-        format!("{}{}", f.cedula, cursor(f, 0)),
+        match f.modo {
+            ModoFormulario::Crear => format!("{}{}", f.cedula, cursor(f, 0)),
+            ModoFormulario::Editar { .. } => format!("{}  [no editable]", f.cedula),
+        },
         format!("{}{}", f.nombre, cursor(f, 1)),
         state
             .empresas

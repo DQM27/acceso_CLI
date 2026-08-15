@@ -3,7 +3,8 @@ use control_acceso::{
     application::AppCore,
     database::{connection::open_database, queries::contratistas::FiltroContratistas},
     models::tipo_ingreso::TipoIngreso,
-    services::{contratista_service::DatosContratista, error::ContratistaServiceError},
+    services::contratista_service::{DatosActualizacionContratista, DatosContratista},
+    services::error::ContratistaServiceError,
 };
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -17,6 +18,22 @@ fn datos(
 ) -> DatosContratista {
     DatosContratista {
         cedula: cedula.into(),
+        nombre: nombre.into(),
+        empresa_id,
+        tipo_ingreso: tipo,
+        fecha_vencimiento_praind: fecha,
+        es_personal_ruta: ruta,
+        tiene_acceso: true,
+    }
+}
+fn actualizacion(
+    nombre: &str,
+    empresa_id: i64,
+    tipo: TipoIngreso,
+    fecha: Option<NaiveDate>,
+    ruta: bool,
+) -> DatosActualizacionContratista {
+    DatosActualizacionContratista {
         nombre: nombre.into(),
         empresa_id,
         tipo_ingreso: tipo,
@@ -95,7 +112,7 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
         .unwrap();
     core.actualizar_contratista(
         a,
-        datos("A", "José Álvarez", e, TipoIngreso::PorCorreo, None, false),
+        actualizacion("José Álvarez", e, TipoIngreso::PorCorreo, None, false),
     )
     .unwrap();
     assert!(
@@ -107,13 +124,6 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
         core.buscar_contratistas(&filtro("alvarez")).unwrap()[0].id,
         a
     );
-    assert!(matches!(
-        core.actualizar_contratista(
-            a,
-            datos("B", "José", e, TipoIngreso::PorCorreo, None, false)
-        ),
-        Err(ContratistaServiceError::CedulaDuplicada)
-    ));
     assert!(matches!(
         core.crear_contratista(datos(
             "C",

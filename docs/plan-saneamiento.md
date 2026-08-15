@@ -36,6 +36,9 @@ Cada tarea sólo se considera terminada cuando tiene pruebas y manejo de errores
 
 ## Prioridad 1: auditoría y seguridad de operación
 
+- [x] **Cédula inmutable del contratista.** Tratarla como identidad: no admitirla en
+  actualizaciones normales, mostrarla como sólo lectura y bloquear cambios directos
+  mediante SQLite. Los demás datos editables sólo afectan ingresos futuros.
 - [ ] **Historial inmutable.** Guardar snapshots de cédula/nombre del contratista,
   empresa y operadores, además del resultado de acceso, motivo, PRAIND evaluado y
   versión de reglas. Los cambios posteriores no deben alterar movimientos históricos.
