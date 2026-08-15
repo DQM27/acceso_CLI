@@ -1,24 +1,25 @@
-use rusqlite::Connection;
+use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 pub const SCHEMA_VERSION: i64 = 3;
 
 pub fn initialize_database(connection: &Connection) -> rusqlite::Result<()> {
     connection.execute_batch("PRAGMA foreign_keys = ON;")?;
 
-    let mut version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    let mut version: i64 = transaction.query_row("PRAGMA user_version", [], |row| row.get(0))?;
 
     if version == 0 {
-        aplicar_migracion(connection, MIGRACION_1, 1)?;
+        aplicar_migracion(&transaction, MIGRACION_1, 1)?;
         version = 1;
     }
 
     if version == 1 {
-        aplicar_migracion(connection, MIGRACION_2, 2)?;
+        aplicar_migracion(&transaction, MIGRACION_2, 2)?;
         version = 2;
     }
 
     if version == 2 {
-        aplicar_migracion(connection, MIGRACION_3, 3)?;
+        aplicar_migracion(&transaction, MIGRACION_3, 3)?;
         version = 3;
     }
 
@@ -26,27 +27,16 @@ pub fn initialize_database(connection: &Connection) -> rusqlite::Result<()> {
         return Err(rusqlite::Error::InvalidQuery);
     }
 
-    Ok(())
+    transaction.commit()
 }
 
 fn aplicar_migracion(
-    connection: &Connection,
+    transaction: &Transaction<'_>,
     sql: &str,
     nueva_version: i64,
 ) -> rusqlite::Result<()> {
-    connection.execute_batch("BEGIN IMMEDIATE")?;
-
-    let resultado = connection
-        .execute_batch(sql)
-        .and_then(|_| connection.execute_batch(&format!("PRAGMA user_version = {nueva_version}")));
-
-    match resultado {
-        Ok(()) => connection.execute_batch("COMMIT"),
-        Err(error) => {
-            let _ = connection.execute_batch("ROLLBACK");
-            Err(error)
-        }
-    }
+    transaction.execute_batch(sql)?;
+    transaction.execute_batch(&format!("PRAGMA user_version = {nueva_version}"))
 }
 
 const MIGRACION_1: &str = r#"

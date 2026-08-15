@@ -24,7 +24,7 @@ Cada tarea sólo se considera terminada cuando tiene pruebas y manejo de errores
   consistentes mediante la API de SQLite, definir retención y probar una restauración
   completa con rollback. Debe estar terminado antes de una actualización productiva
   que incluya migraciones.
-- [ ] **Migraciones globalmente atómicas.** Tomar `BEGIN IMMEDIATE` antes de leer
+- [x] **Migraciones globalmente atómicas.** Tomar `BEGIN IMMEDIATE` antes de leer
   `user_version` y ejecutar dentro de la misma transacción todas las migraciones
   pendientes. Probar dos aperturas simultáneas.
 - [ ] **Entrada atómica.** Leer al contratista, validar acceso/PRAIND, comprobar ingreso

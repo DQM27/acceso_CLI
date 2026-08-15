@@ -48,7 +48,7 @@ flowchart TD
     A["main()"] --> B["Resolver ruta de la base<br/>CONTROL_ACCESO_DB o LOCALAPPDATA"]
     B --> BL["Adquirir bloqueo de instancia<br/>para esa base"]
     BL --> C["Abrir SQLite"]
-    C --> D["Activar claves foráneas<br/>y aplicar migraciones pendientes"]
+    C --> D["Activar claves foráneas<br/>y migrar dentro de una sola<br/>transacción IMMEDIATE"]
     D --> E["Crear AppCore"]
     E --> F{"¿La tabla usuarios está vacía?"}
 

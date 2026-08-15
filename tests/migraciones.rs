@@ -1,6 +1,34 @@
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::{
+        Arc, Barrier,
+        atomic::{AtomicU64, Ordering},
+    },
+    thread,
+    time::Duration,
+};
+
 use rusqlite::Connection;
 
 use control_acceso::database::schema::{SCHEMA_VERSION, initialize_database};
+
+static SECUENCIA: AtomicU64 = AtomicU64::new(0);
+
+fn base_temporal(nombre: &str) -> PathBuf {
+    let numero = SECUENCIA.fetch_add(1, Ordering::Relaxed);
+    std::env::temp_dir().join(format!(
+        "control_acceso_migracion_{nombre}_{}_{numero}.db",
+        std::process::id()
+    ))
+}
+
+fn limpiar_base(ruta: &Path) {
+    let _ = fs::remove_file(ruta);
+    let _ = fs::remove_file(ruta.with_extension("db-journal"));
+    let _ = fs::remove_file(ruta.with_extension("db-wal"));
+    let _ = fs::remove_file(ruta.with_extension("db-shm"));
+}
 
 fn version(connection: &Connection) -> i64 {
     connection
@@ -171,6 +199,97 @@ fn migracion_fallida_revierte_tabla_y_version() {
         "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='registro_ingresos_nueva'", [], |r| r.get(0)
     ).unwrap();
     assert_eq!(nueva, 0);
+}
+
+#[test]
+fn fallo_tardio_revierte_todas_las_migraciones_pendientes() {
+    let connection = Connection::open_in_memory().unwrap();
+    crear_esquema_version_1(&connection);
+    insertar_referencias(&connection);
+    connection
+        .execute_batch(
+            "
+            DROP INDEX idx_registro_ingresos_gafete;
+            CREATE TABLE contratistas_fts (id INTEGER PRIMARY KEY);
+            PRAGMA user_version = 0;
+            ",
+        )
+        .unwrap();
+
+    assert!(initialize_database(&connection).is_err());
+
+    assert_eq!(version(&connection), 0);
+    let indice_recreado: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master
+             WHERE type='index' AND name='idx_registro_ingresos_gafete'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(indice_recreado, 0);
+
+    let definicion_registro: String = connection
+        .query_row(
+            "SELECT sql FROM sqlite_master
+             WHERE type='table' AND name='registro_ingresos'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(!definicion_registro.contains("fecha_hora_salida IS NULL"));
+
+    let total: i64 = connection
+        .query_row("SELECT COUNT(*) FROM contratistas", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(total, 1);
+}
+
+#[test]
+fn dos_conexiones_migran_una_base_vacia_sin_reaplicar_pasos() {
+    let ruta = base_temporal("concurrente");
+    limpiar_base(&ruta);
+    let barrera = Arc::new(Barrier::new(3));
+
+    let hilos: Vec<_> = (0..2)
+        .map(|_| {
+            let ruta = ruta.clone();
+            let barrera = Arc::clone(&barrera);
+            thread::spawn(move || -> Result<(), String> {
+                let connection = Connection::open(ruta).map_err(|error| error.to_string())?;
+                connection
+                    .busy_timeout(Duration::from_secs(5))
+                    .map_err(|error| error.to_string())?;
+                barrera.wait();
+                initialize_database(&connection).map_err(|error| error.to_string())
+            })
+        })
+        .collect();
+
+    barrera.wait();
+    for hilo in hilos {
+        hilo.join().unwrap().unwrap();
+    }
+
+    let connection = Connection::open(&ruta).unwrap();
+    assert_eq!(version(&connection), SCHEMA_VERSION);
+    let tablas_fts: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master
+             WHERE type='table'
+             AND name IN ('contratistas_fts', 'empresas_fts', 'usuarios_fts')",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(tablas_fts, 3);
+    let integridad: String = connection
+        .query_row("PRAGMA integrity_check", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(integridad, "ok");
+
+    drop(connection);
+    limpiar_base(&ruta);
 }
 
 #[test]
