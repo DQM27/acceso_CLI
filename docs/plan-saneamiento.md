@@ -30,13 +30,9 @@ Cada tarea sólo se considera terminada cuando tiene pruebas y manejo de errores
 - [x] **Entrada atómica.** Leer al contratista, validar acceso/PRAIND, comprobar ingreso
   y gafete e insertar el movimiento dentro de una sola transacción. Traducir colisiones
   de índices a errores de negocio comprensibles.
-- [ ] **Ediciones sin sobrescribir cambios recientes.** Añadir una versión al registro
-  del contratista y rechazar el guardado si otra operación lo modificó desde que se
-  abrió el formulario. Así, editar un nombre antiguo no puede reactivar por accidente
-  un acceso que ya fue revocado.
 - [ ] **Ingresos activos completos.** Eliminar el límite silencioso de 100, devolver el
-  total real, implementar paginación o listado completo y hacer que la búsqueda por
-  gafete devuelva directamente el registro encontrado.
+  listado completo y hacer que la búsqueda por gafete devuelva directamente el registro
+  encontrado. La vista operativa debe mostrar el total real de personas dentro.
 
 ## Prioridad 1: auditoría y seguridad de operación
 
@@ -77,6 +73,17 @@ Cada tarea sólo se considera terminada cuando tiene pruebas y manejo de errores
   recuperación de respaldo, reloj incorrecto y cierre inesperado.
 - [ ] **Verificación automatizada.** Ejecutar en cada cambio `cargo test`,
   `cargo fmt --check` y Clippy con advertencias tratadas como errores.
+
+## Capacidades futuras condicionadas
+
+Estos puntos no son fallos del modelo actual. Sólo deben implementarse si cambia la
+arquitectura indicada:
+
+- **Ediciones concurrentes de contratistas.** Si en el futuro se permiten varias
+  terminales, conexiones escritoras o procesos en segundo plano, añadir una columna de
+  versión y actualizaciones optimistas para impedir que un formulario antiguo
+  sobrescriba un cambio reciente. Con la instancia única, una sola vista activa y el
+  bucle síncrono actual, este escenario no puede producirse mediante la aplicación.
 
 ## Módulo futuro de actualizaciones
 
