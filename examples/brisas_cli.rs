@@ -1,38 +1,58 @@
-use std::io::{self, stdout};
+#[path = "brisas_cli/app.rs"]
+mod app;
+#[path = "brisas_cli/menu.rs"]
+mod menu;
+#[path = "brisas_cli/terminal.rs"]
+mod terminal;
 
-use control_acceso::tui::app::App;
-use crossterm::{
-    cursor::{Hide, Show},
-    execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
-};
-use ratatui::{Terminal, backend::CrosstermBackend};
+use crossterm::event::Event;
+use ratatui::Frame;
 
-struct TerminalGuard;
+trait PilotScreen {
+    fn is_running(&self) -> bool;
+    fn handle_event(&mut self, event: &Event) -> bool;
+    fn render(&mut self, frame: &mut Frame);
+}
 
-impl TerminalGuard {
-    fn acquire() -> io::Result<Self> {
-        enable_raw_mode()?;
-        if let Err(error) = execute!(stdout(), EnterAlternateScreen, Hide) {
-            let _ = disable_raw_mode();
-            return Err(error);
+impl PilotScreen for app::PilotApp {
+    fn is_running(&self) -> bool {
+        app::PilotApp::is_running(self)
+    }
+
+    fn handle_event(&mut self, event: &Event) -> bool {
+        app::PilotApp::handle_event(self, event)
+    }
+
+    fn render(&mut self, frame: &mut Frame) {
+        app::PilotApp::render(self, frame);
+    }
+}
+
+impl PilotScreen for menu::MenuPilot {
+    fn is_running(&self) -> bool {
+        menu::MenuPilot::is_running(self)
+    }
+
+    fn handle_event(&mut self, event: &Event) -> bool {
+        menu::MenuPilot::handle_event(self, event)
+    }
+
+    fn render(&mut self, frame: &mut Frame) {
+        menu::MenuPilot::render(self, frame);
+    }
+}
+
+fn main() -> std::io::Result<()> {
+    match std::env::args().nth(1).as_deref() {
+        Some("menu") => terminal::run(menu::MenuPilot::default()),
+        None | Some("contratistas") => terminal::run(app::PilotApp::default()),
+        Some("--help" | "-h") => {
+            println!("Uso: cargo run --example brisas_cli -- [contratistas|menu]");
+            Ok(())
         }
-        Ok(Self)
+        Some(view) => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("vista desconocida: {view}"),
+        )),
     }
-}
-
-impl Drop for TerminalGuard {
-    fn drop(&mut self) {
-        let _ = execute!(stdout(), Show, LeaveAlternateScreen);
-        let _ = disable_raw_mode();
-    }
-}
-
-fn main() -> io::Result<()> {
-    let _guard = TerminalGuard::acquire()?;
-    let backend = CrosstermBackend::new(stdout());
-    let mut terminal = Terminal::new(backend)?;
-    let resultado = App::default().run(&mut terminal);
-    terminal.show_cursor()?;
-    resultado
 }

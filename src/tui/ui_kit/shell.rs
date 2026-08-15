@@ -1,0 +1,226 @@
+use ratatui::{
+    Frame,
+    layout::{Alignment, Constraint, Layout, Rect},
+    text::{Line, Span},
+    widgets::{Block, BorderType, Borders, Paragraph},
+};
+
+use super::Theme;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatusKind {
+    Normal,
+    Success,
+    Warning,
+    Error,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CommandHint<'a> {
+    pub key: &'a str,
+    pub label: &'a str,
+}
+
+impl<'a> CommandHint<'a> {
+    pub const fn new(key: &'a str, label: &'a str) -> Self {
+        Self { key, label }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShellAreas {
+    pub body: Rect,
+    pub status: Rect,
+    pub commands: Rect,
+}
+
+/// Marco común de una pantalla: identidad, contexto, estado y comandos.
+pub struct ScreenShell<'a> {
+    pub product: &'a str,
+    pub screen: &'a str,
+    pub context: &'a str,
+    pub clock: &'a str,
+    pub status: &'a str,
+    pub status_kind: StatusKind,
+    pub commands: &'a [CommandHint<'a>],
+}
+
+impl ScreenShell<'_> {
+    pub fn render(&self, frame: &mut Frame, area: Rect, theme: Theme) -> ShellAreas {
+        frame.render_widget(Block::default().style(theme.base()), area);
+
+        let command_lines = self.command_lines(area.width as usize, theme);
+        let command_height = u16::try_from(command_lines.len()).unwrap_or(u16::MAX);
+
+        let rows = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Length(1),
+            Constraint::Min(5),
+            Constraint::Length(1),
+            Constraint::Length(command_height),
+        ])
+        .split(area);
+
+        self.render_header(frame, rows[0], theme);
+        frame.render_widget(
+            Paragraph::new("─".repeat(area.width as usize)).style(theme.border()),
+            rows[1],
+        );
+        self.render_status(frame, rows[3], theme);
+        frame.render_widget(Paragraph::new(command_lines), rows[4]);
+
+        ShellAreas {
+            body: rows[2],
+            status: rows[3],
+            commands: rows[4],
+        }
+    }
+
+    fn render_header(&self, frame: &mut Frame, area: Rect, theme: Theme) {
+        if area.width < 90 {
+            let columns =
+                Layout::horizontal([Constraint::Percentage(58), Constraint::Percentage(42)])
+                    .split(area);
+            frame.render_widget(
+                Paragraph::new(vec![
+                    Line::from(self.product).style(theme.title()),
+                    Line::from(self.screen).style(theme.accent()),
+                ]),
+                columns[0],
+            );
+            frame.render_widget(
+                Paragraph::new(vec![
+                    Line::from(self.context).style(theme.muted()),
+                    Line::from(self.clock).style(theme.warning()),
+                ])
+                .alignment(Alignment::Right),
+                columns[1],
+            );
+            return;
+        }
+
+        let columns = Layout::horizontal([
+            Constraint::Percentage(38),
+            Constraint::Percentage(34),
+            Constraint::Percentage(28),
+        ])
+        .split(area);
+
+        frame.render_widget(
+            Paragraph::new(vec![
+                Line::from(self.product).style(theme.title()),
+                Line::from("CONTROL DE ACCESO").style(theme.muted()),
+            ]),
+            columns[0],
+        );
+        frame.render_widget(
+            Paragraph::new(self.screen)
+                .style(theme.accent())
+                .alignment(Alignment::Center),
+            Rect::new(columns[1].x, columns[1].y + 1, columns[1].width, 1),
+        );
+        frame.render_widget(
+            Paragraph::new(vec![
+                Line::from(self.context).style(theme.muted()),
+                Line::from(self.clock).style(theme.warning()),
+            ])
+            .alignment(Alignment::Right),
+            columns[2],
+        );
+    }
+
+    fn render_status(&self, frame: &mut Frame, area: Rect, theme: Theme) {
+        let style = match self.status_kind {
+            StatusKind::Normal => theme.muted(),
+            StatusKind::Success => theme.success(),
+            StatusKind::Warning => theme.warning(),
+            StatusKind::Error => theme.danger(),
+        };
+        frame.render_widget(Paragraph::new(self.status).style(style), area);
+    }
+
+    fn command_lines(&self, max_width: usize, theme: Theme) -> Vec<Line<'static>> {
+        let mut lines = Vec::new();
+        let mut spans = Vec::new();
+        let mut line_width = 0;
+
+        for command in self.commands {
+            let command_width = Line::from(format!("{} {}", command.key, command.label)).width();
+            let separator_width = usize::from(line_width > 0) * 2;
+            if line_width > 0 && line_width + separator_width + command_width > max_width {
+                lines.push(Line::from(std::mem::take(&mut spans)));
+                line_width = 0;
+            }
+            if line_width > 0 {
+                spans.push(Span::styled("  ", theme.base()));
+                line_width += 2;
+            }
+            spans.push(Span::styled(command.key.to_owned(), theme.accent()));
+            spans.push(Span::styled(format!(" {}", command.label), theme.base()));
+            line_width += command_width;
+        }
+        if !spans.is_empty() {
+            lines.push(Line::from(spans));
+        }
+        if lines.is_empty() {
+            lines.push(Line::default());
+        }
+        lines
+    }
+}
+
+pub fn panel(title: &str, theme: Theme, focused: bool) -> Block<'static> {
+    styled_panel(title, theme, focused, Alignment::Left)
+}
+
+/// Marco de una ventana auxiliar: el título se centra sin centrar su contenido.
+pub fn auxiliary_panel(title: &str, theme: Theme, focused: bool) -> Block<'static> {
+    styled_panel(title, theme, focused, Alignment::Center)
+}
+
+/// Centra horizontalmente una columna cuyo contenido conservará alineación izquierda.
+pub fn centered_content(area: Rect, max_width: u16) -> Rect {
+    let width = max_width.min(area.width);
+    Rect::new(
+        area.x + area.width.saturating_sub(width) / 2,
+        area.y,
+        width,
+        area.height,
+    )
+}
+
+fn styled_panel(
+    title: &str,
+    theme: Theme,
+    focused: bool,
+    title_alignment: Alignment,
+) -> Block<'static> {
+    let style = if focused {
+        theme.accent()
+    } else {
+        theme.border()
+    };
+    Block::default()
+        .title(format!(" {title} "))
+        .title_alignment(title_alignment)
+        .title_style(style)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Plain)
+        .border_style(style)
+        .style(theme.base())
+}
+
+#[cfg(test)]
+mod tests {
+    use ratatui::layout::Rect;
+
+    use super::centered_content;
+
+    #[test]
+    fn centra_una_columna_sin_cambiar_su_alineacion_interna() {
+        let area = Rect::new(10, 4, 30, 8);
+
+        assert_eq!(centered_content(area, 20), Rect::new(15, 4, 20, 8));
+        assert_eq!(centered_content(area, 40), area);
+    }
+}

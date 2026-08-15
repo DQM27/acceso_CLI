@@ -10,4 +10,5 @@ pub mod menu_principal;
 pub mod nuevo_ingreso;
 pub mod terminal;
 pub mod theme;
+pub mod ui_kit;
 pub mod usuarios;
