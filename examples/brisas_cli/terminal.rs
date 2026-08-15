@@ -66,16 +66,16 @@ pub fn run(mut app: impl PilotScreen) -> io::Result<()> {
     terminal.clear()?;
 
     let mut dirty = true;
-    let mut next_clock_tick = Instant::now();
+    let mut next_redraw = Instant::now();
 
     while app.is_running() {
-        if dirty || Instant::now() >= next_clock_tick {
+        if dirty || Instant::now() >= next_redraw {
             terminal.draw(|frame| app.render(frame))?;
             dirty = false;
-            next_clock_tick = Instant::now() + Duration::from_secs(1);
+            next_redraw = Instant::now() + app.redraw_interval();
         }
 
-        let timeout = next_clock_tick.saturating_duration_since(Instant::now());
+        let timeout = next_redraw.saturating_duration_since(Instant::now());
         if event::poll(timeout)? {
             dirty = app.handle_event(&event::read()?);
 

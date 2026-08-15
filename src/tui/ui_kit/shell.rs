@@ -1,6 +1,6 @@
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Layout, Rect},
+    layout::{Alignment, Constraint, Layout, Margin, Rect},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
@@ -48,8 +48,12 @@ pub struct ScreenShell<'a> {
 impl ScreenShell<'_> {
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: Theme) -> ShellAreas {
         frame.render_widget(Block::default().style(theme.base()), area);
+        let viewport = area.inner(Margin {
+            horizontal: 1,
+            vertical: 1,
+        });
 
-        let command_lines = self.command_lines(area.width as usize, theme);
+        let command_lines = self.command_lines(viewport.width as usize, theme);
         let command_height = u16::try_from(command_lines.len()).unwrap_or(u16::MAX);
 
         let rows = Layout::vertical([
@@ -59,11 +63,11 @@ impl ScreenShell<'_> {
             Constraint::Length(1),
             Constraint::Length(command_height),
         ])
-        .split(area);
+        .split(viewport);
 
         self.render_header(frame, rows[0], theme);
         frame.render_widget(
-            Paragraph::new("─".repeat(area.width as usize)).style(theme.border()),
+            Paragraph::new("─".repeat(viewport.width as usize)).style(theme.border()),
             rows[1],
         );
         self.render_status(frame, rows[3], theme);
@@ -189,6 +193,44 @@ pub fn centered_content(area: Rect, max_width: u16) -> Rect {
     )
 }
 
+/// Centra un rectángulo dentro del área disponible y respeta un margen exterior.
+pub fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {
+    let width = width.min(area.width.saturating_sub(2));
+    let height = height.min(area.height.saturating_sub(2));
+    Rect::new(
+        area.x + area.width.saturating_sub(width) / 2,
+        area.y + area.height.saturating_sub(height) / 2,
+        width,
+        height,
+    )
+}
+
+/// Aviso común que congela visualmente una vista cuando no cabe con seguridad.
+pub fn render_terminal_too_small(
+    frame: &mut Frame,
+    area: Rect,
+    min_width: u16,
+    min_height: u16,
+    exit_hint: &str,
+    theme: Theme,
+) {
+    frame.render_widget(Block::default().style(theme.base()), area);
+    let y = area.y + area.height.saturating_sub(3) / 2;
+    frame.render_widget(
+        Paragraph::new(vec![
+            Line::from("TERMINAL DEMASIADO PEQUEÑA").style(theme.warning()),
+            Line::from(format!(
+                "Actual: {}×{} · mínimo: {min_width}×{min_height}",
+                area.width, area.height
+            ))
+            .style(theme.base()),
+            Line::from(format!("Amplíe para continuar · {exit_hint}")).style(theme.muted()),
+        ])
+        .alignment(Alignment::Center),
+        Rect::new(area.x, y, area.width, 3),
+    );
+}
+
 fn styled_panel(
     title: &str,
     theme: Theme,
@@ -212,9 +254,10 @@ fn styled_panel(
 
 #[cfg(test)]
 mod tests {
-    use ratatui::layout::Rect;
+    use ratatui::{Terminal, backend::TestBackend, layout::Rect};
 
-    use super::centered_content;
+    use super::{CommandHint, ScreenShell, StatusKind, centered_content, centered_rect};
+    use crate::tui::ui_kit::ThemePreset;
 
     #[test]
     fn centra_una_columna_sin_cambiar_su_alineacion_interna() {
@@ -222,5 +265,45 @@ mod tests {
 
         assert_eq!(centered_content(area, 20), Rect::new(15, 4, 20, 8));
         assert_eq!(centered_content(area, 40), area);
+    }
+
+    #[test]
+    fn centra_un_rectangulo_y_conserva_un_margen_exterior() {
+        let area = Rect::new(10, 4, 30, 12);
+
+        assert_eq!(centered_rect(area, 20, 6), Rect::new(15, 7, 20, 6));
+        assert_eq!(centered_rect(area, 40, 20), Rect::new(11, 5, 28, 10));
+    }
+
+    #[test]
+    fn marco_de_pantalla_reserva_una_celda_en_los_cuatro_bordes() {
+        let backend = TestBackend::new(60, 20);
+        let mut terminal = Terminal::new(backend).expect("backend de prueba");
+        let commands = [CommandHint::new("ESC", "Salir")];
+        let shell = ScreenShell {
+            product: "BRISAS CLI",
+            screen: "PRUEBA",
+            context: "LOCAL",
+            clock: "12:00:00",
+            status: "Preparado",
+            status_kind: StatusKind::Normal,
+            commands: &commands,
+        };
+
+        terminal
+            .draw(|frame| {
+                shell.render(frame, frame.area(), ThemePreset::Classic.theme());
+            })
+            .expect("el marco debe renderizar");
+
+        let buffer = terminal.backend().buffer();
+        for x in 0..buffer.area.width {
+            assert_eq!(buffer[(x, 0)].symbol(), " ");
+            assert_eq!(buffer[(x, buffer.area.height - 1)].symbol(), " ");
+        }
+        for y in 0..buffer.area.height {
+            assert_eq!(buffer[(0, y)].symbol(), " ");
+            assert_eq!(buffer[(buffer.area.width - 1, y)].symbol(), " ");
+        }
     }
 }

@@ -68,9 +68,10 @@ Cada tarea sólo se considera terminada cuando tiene pruebas y manejo de errores
   necesita, de modo que los estados inválidos no puedan construirse.
 - [ ] **Normalización de identidades.** Definir reglas canónicas para cédulas y nombres
   únicos y reforzarlas en SQLite.
-- [ ] **Configuración SQLite explícita.** Definir tiempo máximo de espera ante bloqueos,
-  política de journal y tratamiento de `SQLITE_BUSY`; comprobar su comportamiento con
-  operaciones largas y cierres inesperados.
+- [ ] **Configuración SQLite explícita.** Seguir la
+  [evaluación y recomendaciones de SQLite](evaluacion-sqlite.md): definir tiempo máximo
+  de espera ante bloqueos, política de journal y tratamiento de `SQLITE_BUSY`; comprobar
+  su comportamiento con operaciones largas y cierres inesperados.
 - [ ] **Capas sin dependencia de SQLite.** Mover los contratos y errores neutrales a
   aplicación/dominio y dejar que el adaptador de base de datos traduzca los errores de
   `rusqlite`.

@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::{
     Frame,
@@ -10,10 +12,47 @@ use tui_input::{Input, InputRequest, backend::crossterm::EventHandler};
 use super::Theme;
 
 /// Entrada de una línea con edición Unicode, desplazamiento y cursor real.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct TextInput {
     input: Input,
     max_chars: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TextInputFocus {
+    focused: bool,
+    cursor_visible: bool,
+}
+
+impl TextInputFocus {
+    pub const fn new(focused: bool, cursor_visible: bool) -> Self {
+        Self {
+            focused,
+            cursor_visible: focused && cursor_visible,
+        }
+    }
+}
+
+struct RenderSpec<'a> {
+    label: &'a str,
+    placeholder: &'a str,
+    focused: bool,
+    cursor_visible: bool,
+    displayed_value: &'a str,
+    visual_cursor: usize,
+    scroll: usize,
+    theme: Theme,
+}
+
+impl fmt::Debug for TextInput {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TextInput")
+            .field("value", &"[REDACTED]")
+            .field("chars", &self.input.value().chars().count())
+            .field("max_chars", &self.max_chars)
+            .finish()
+    }
 }
 
 impl Default for TextInput {
@@ -91,17 +130,122 @@ impl TextInput {
         focused: bool,
         theme: Theme,
     ) {
-        let border_style = if focused {
-            theme.accent()
+        let viewport_width = field_viewport_width(area);
+        self.render_value(
+            frame,
+            area,
+            RenderSpec {
+                label,
+                placeholder,
+                focused,
+                cursor_visible: focused,
+                displayed_value: self.input.value(),
+                visual_cursor: self.input.visual_cursor(),
+                scroll: self.input.visual_scroll(viewport_width),
+                theme,
+            },
+        );
+    }
+
+    /// Variante para pantallas que controlan el parpadeo del cursor real.
+    pub fn render_with_cursor(
+        &self,
+        frame: &mut Frame,
+        area: Rect,
+        label: &str,
+        placeholder: &str,
+        focus: TextInputFocus,
+        theme: Theme,
+    ) {
+        let viewport_width = field_viewport_width(area);
+        self.render_value(
+            frame,
+            area,
+            RenderSpec {
+                label,
+                placeholder,
+                focused: focus.focused,
+                cursor_visible: focus.cursor_visible,
+                displayed_value: self.input.value(),
+                visual_cursor: self.input.visual_cursor(),
+                scroll: self.input.visual_scroll(viewport_width),
+                theme,
+            },
+        );
+    }
+
+    /// Renderiza el contenido como viñetas sin exponer el valor real.
+    pub fn render_masked(
+        &self,
+        frame: &mut Frame,
+        area: Rect,
+        label: &str,
+        placeholder: &str,
+        focused: bool,
+        theme: Theme,
+    ) {
+        let cursor_column = self.input.value().chars().count();
+        let masked = "•".repeat(cursor_column);
+        let viewport_width = field_viewport_width(area);
+        let scroll = cursor_column.saturating_sub(viewport_width);
+        self.render_value(
+            frame,
+            area,
+            RenderSpec {
+                label,
+                placeholder,
+                focused,
+                cursor_visible: focused,
+                displayed_value: &masked,
+                visual_cursor: cursor_column,
+                scroll,
+                theme,
+            },
+        );
+    }
+
+    /// Variante enmascarada para pantallas que controlan el parpadeo real.
+    pub fn render_masked_with_cursor(
+        &self,
+        frame: &mut Frame,
+        area: Rect,
+        label: &str,
+        placeholder: &str,
+        focus: TextInputFocus,
+        theme: Theme,
+    ) {
+        let cursor_column = self.input.value().chars().count();
+        let masked = "•".repeat(cursor_column);
+        let viewport_width = field_viewport_width(area);
+        let scroll = cursor_column.saturating_sub(viewport_width);
+        self.render_value(
+            frame,
+            area,
+            RenderSpec {
+                label,
+                placeholder,
+                focused: focus.focused,
+                cursor_visible: focus.cursor_visible,
+                displayed_value: &masked,
+                visual_cursor: cursor_column,
+                scroll,
+                theme,
+            },
+        );
+    }
+
+    fn render_value(&self, frame: &mut Frame, area: Rect, spec: RenderSpec<'_>) {
+        let border_style = if spec.focused {
+            spec.theme.accent()
         } else {
-            theme.border()
+            spec.theme.border()
         };
         let block = Block::default()
-            .title(format!(" {label} "))
+            .title(format!(" {} ", spec.label))
             .title_style(border_style)
             .borders(Borders::ALL)
             .border_style(border_style)
-            .style(theme.base());
+            .style(spec.theme.base());
         let inner = block.inner(area);
         frame.render_widget(block, area);
 
@@ -112,11 +256,10 @@ impl TextInput {
         // Se reserva una columna vacía para el cursor cuando queda al final del
         // texto; de lo contrario se superpondría al último carácter visible.
         let viewport_width = inner.width.saturating_sub(1) as usize;
-        let scroll = self.input.visual_scroll(viewport_width);
-        let line = if self.input.value().is_empty() && !focused {
-            Line::from(placeholder).style(theme.muted())
+        let line = if self.input.value().is_empty() && !spec.focused {
+            Line::from(spec.placeholder).style(spec.theme.muted())
         } else {
-            Line::from(self.input.value()).style(theme.base())
+            Line::from(spec.displayed_value).style(spec.theme.base())
         };
         let text_area = Rect::new(
             inner.x,
@@ -124,18 +267,22 @@ impl TextInput {
             inner.width.saturating_sub(1),
             inner.height,
         );
-        let scroll = u16::try_from(scroll).unwrap_or(u16::MAX);
+        let scroll = u16::try_from(spec.scroll).unwrap_or(u16::MAX);
         frame.render_widget(Paragraph::new(line).scroll((0, scroll)), text_area);
 
-        if focused {
-            let visual_cursor = self.input.visual_cursor();
-            let cursor_column = visual_cursor
+        if spec.focused && spec.cursor_visible {
+            let cursor_column = spec
+                .visual_cursor
                 .max(scroll as usize)
                 .saturating_sub(scroll as usize)
                 .min(viewport_width);
             frame.set_cursor_position((inner.x + cursor_column as u16, inner.y));
         }
     }
+}
+
+fn field_viewport_width(area: Rect) -> usize {
+    area.width.saturating_sub(3) as usize
 }
 
 fn limited(value: &str, max_chars: usize) -> String {
@@ -196,5 +343,36 @@ mod tests {
         )));
 
         assert_eq!(input.value(), "abcde");
+    }
+
+    #[test]
+    fn mascara_no_renderiza_ni_expone_el_secreto_en_debug() {
+        let input = TextInput::new("secreto界");
+        let backend = TestBackend::new(14, 3);
+        let mut terminal = Terminal::new(backend).expect("backend de prueba");
+
+        terminal
+            .draw(|frame| {
+                input.render_masked(
+                    frame,
+                    Rect::new(0, 0, 14, 3),
+                    "CLAVE",
+                    "",
+                    true,
+                    ThemePreset::Classic.theme(),
+                );
+            })
+            .expect("render");
+
+        let rendered: String = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect();
+        assert!(!rendered.contains("secreto"));
+        assert!(rendered.contains("••••••••"));
+        assert!(!format!("{input:?}").contains("secreto"));
     }
 }

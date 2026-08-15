@@ -1,7 +1,9 @@
 use chrono::Utc;
 use chrono_tz::America::Costa_Rica;
 use control_acceso::tui::ui_kit::{
-    CommandHint, ScreenShell, StatusKind, Theme, ThemePreset, auxiliary_panel, centered_content,
+    CommandHint, HELP_HINT, ScreenShell, StandardCommand, StatusKind, THEME_HINT, Theme,
+    ThemePreset, auxiliary_panel, centered_content, centered_rect, render_terminal_too_small,
+    standard_command,
 };
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
@@ -13,7 +15,6 @@ use ratatui::{
 
 const MIN_WIDTH: u16 = 60;
 const MIN_HEIGHT: u16 = 20;
-const THEME_KEY: KeyCode = KeyCode::F(7);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MenuGroup {
@@ -182,12 +183,13 @@ impl MenuPilot {
         if !matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) {
             return false;
         }
-        if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+        if standard_command(*key) == Some(StandardCommand::EmergencyExit) {
             self.running = false;
             return true;
         }
         if !self.viewport_is_valid() {
-            if key.kind == KeyEventKind::Press && (key.code == KeyCode::Esc || key_char(*key, 'q'))
+            if key.kind == KeyEventKind::Press
+                && (standard_command(*key) == Some(StandardCommand::Cancel) || key_char(*key, 'q'))
             {
                 self.running = false;
                 return true;
@@ -221,31 +223,33 @@ impl MenuPilot {
         if key.kind == KeyEventKind::Repeat && !repeatable {
             return false;
         }
-        match key.code {
-            KeyCode::Up => self.move_selection(-1),
-            KeyCode::Down => self.move_selection(1),
-            KeyCode::Home => self.select(0),
-            KeyCode::End => self.select(MenuItem::ALL.len().saturating_sub(1)),
-            KeyCode::Enter => self.activate_selected(),
-            KeyCode::Char(character @ '1'..='6') => {
-                self.select((character as usize).saturating_sub('1' as usize));
-                self.activate_selected();
-            }
-            KeyCode::Char(character) if character.eq_ignore_ascii_case(&'l') => {
-                self.select_item(MenuItem::Logout);
-                self.activate_selected();
-            }
-            KeyCode::Char(character) if character.eq_ignore_ascii_case(&'q') => {
+        match standard_command(key) {
+            Some(StandardCommand::Primary | StandardCommand::Activate) => self.activate_selected(),
+            Some(StandardCommand::Cancel) => {
                 self.select_item(MenuItem::Quit);
                 self.activate_selected();
             }
-            KeyCode::Esc => {
-                self.select_item(MenuItem::Quit);
-                self.activate_selected();
-            }
-            KeyCode::F(1) => self.help_visible = true,
-            code if code == THEME_KEY => self.toggle_theme(),
-            _ => return false,
+            Some(StandardCommand::Help) => self.help_visible = true,
+            Some(StandardCommand::Theme) => self.toggle_theme(),
+            _ => match key.code {
+                KeyCode::Up => self.move_selection(-1),
+                KeyCode::Down => self.move_selection(1),
+                KeyCode::Home => self.select(0),
+                KeyCode::End => self.select(MenuItem::ALL.len().saturating_sub(1)),
+                KeyCode::Char(character @ '1'..='6') => {
+                    self.select((character as usize).saturating_sub('1' as usize));
+                    self.activate_selected();
+                }
+                KeyCode::Char(character) if character.eq_ignore_ascii_case(&'l') => {
+                    self.select_item(MenuItem::Logout);
+                    self.activate_selected();
+                }
+                KeyCode::Char(character) if character.eq_ignore_ascii_case(&'q') => {
+                    self.select_item(MenuItem::Quit);
+                    self.activate_selected();
+                }
+                _ => return false,
+            },
         }
         true
     }
@@ -254,8 +258,8 @@ impl MenuPilot {
         if key.kind == KeyEventKind::Repeat {
             return false;
         }
-        match key.code {
-            KeyCode::Char(character) if character.eq_ignore_ascii_case(&'s') => {
+        match standard_command(key) {
+            Some(StandardCommand::Primary) => {
                 let confirmation = self.confirmation.take();
                 match confirmation {
                     Some(Confirmation::Quit) => self.running = false,
@@ -267,11 +271,8 @@ impl MenuPilot {
                     None => return false,
                 }
             }
-            KeyCode::Char(character) if character.eq_ignore_ascii_case(&'n') => {
-                self.cancel_confirmation();
-            }
-            KeyCode::Esc => self.cancel_confirmation(),
-            code if code == THEME_KEY => self.toggle_theme(),
+            Some(StandardCommand::Cancel) => self.cancel_confirmation(),
+            Some(StandardCommand::Theme) => self.toggle_theme(),
             _ => return false,
         }
         true
@@ -281,9 +282,9 @@ impl MenuPilot {
         if key.kind == KeyEventKind::Repeat {
             return false;
         }
-        match key.code {
-            KeyCode::Esc | KeyCode::F(1) => self.help_visible = false,
-            code if code == THEME_KEY => self.toggle_theme(),
+        match standard_command(key) {
+            Some(StandardCommand::Cancel | StandardCommand::Help) => self.help_visible = false,
+            Some(StandardCommand::Theme) => self.toggle_theme(),
             _ => return false,
         }
         true
@@ -361,7 +362,7 @@ impl MenuPilot {
         self.terminal_size = (area.width, area.height);
         let theme = self.theme.theme();
         if !self.viewport_is_valid() {
-            render_terminal_too_small(frame, area, theme);
+            render_terminal_too_small(frame, area, MIN_WIDTH, MIN_HEIGHT, "Q/ESC salir", theme);
             return;
         }
 
@@ -399,23 +400,20 @@ impl MenuPilot {
                 CommandHint::new("1–6", "Acceso directo"),
                 CommandHint::new("L", "Cerrar sesión"),
                 CommandHint::new("Q/ESC", "Salir"),
-                CommandHint::new("F1", "Ayuda"),
-                CommandHint::new("F7", "Tema"),
+                HELP_HINT,
+                THEME_HINT,
             ],
             Layer::Confirmation => vec![
-                CommandHint::new("S", "Confirmar"),
-                CommandHint::new("N/ESC", "Cancelar"),
-                CommandHint::new("F7", "Tema"),
+                CommandHint::new("ENTER", "Confirmar"),
+                CommandHint::new("ESC", "Cancelar"),
+                THEME_HINT,
             ],
-            Layer::Help => vec![
-                CommandHint::new("ESC/F1", "Cerrar ayuda"),
-                CommandHint::new("F7", "Tema"),
-            ],
+            Layer::Help => vec![CommandHint::new("ESC/F1", "Cerrar ayuda"), THEME_HINT],
         }
     }
 
     fn render_body(&self, frame: &mut Frame, area: Rect, theme: Theme) {
-        let menu = centered(area, 56, MenuItem::ALL.len() as u16 + 3);
+        let menu = centered_rect(area, 56, MenuItem::ALL.len() as u16 + 3);
         self.render_options(frame, menu, theme);
     }
 
@@ -454,7 +452,7 @@ impl MenuPilot {
             Confirmation::Logout => ("CERRAR SESIÓN", "¿Cerrar la sesión de Daniel Quintana?"),
             Confirmation::Quit => ("SALIR DE BRISAS CLI", "¿Cerrar la aplicación?"),
         };
-        let popup = centered(area, 58, 9);
+        let popup = centered_rect(area, 58, 9);
         frame.render_widget(Clear, popup);
         let block = auxiliary_panel(title, theme, true);
         let inner = block.inner(popup);
@@ -464,15 +462,15 @@ impl MenuPilot {
             Paragraph::new(vec![
                 Line::from(question),
                 Line::from(""),
-                Line::from("S  Confirmar"),
-                Line::from("N / ESC  Cancelar").style(theme.muted()),
+                Line::from("ENTER  Confirmar"),
+                Line::from("ESC    Cancelar").style(theme.muted()),
             ]),
             content,
         );
     }
 
     fn render_help(&self, frame: &mut Frame, area: Rect, theme: Theme) {
-        let popup = centered(area, 68, 14);
+        let popup = centered_rect(area, 68, 14);
         frame.render_widget(Clear, popup);
         let block = auxiliary_panel("AYUDA DEL MENÚ PRINCIPAL", theme, true);
         let inner = block.inner(popup);
@@ -497,41 +495,18 @@ impl MenuPilot {
 }
 
 fn key_char(key: KeyEvent, expected: char) -> bool {
-    matches!(key.code, KeyCode::Char(actual) if actual.eq_ignore_ascii_case(&expected))
-}
-
-fn centered(area: Rect, width: u16, height: u16) -> Rect {
-    let width = width.min(area.width.saturating_sub(2));
-    let height = height.min(area.height.saturating_sub(2));
-    Rect::new(
-        area.x + area.width.saturating_sub(width) / 2,
-        area.y + area.height.saturating_sub(height) / 2,
-        width,
-        height,
-    )
-}
-
-fn render_terminal_too_small(frame: &mut Frame, area: Rect, theme: Theme) {
-    frame.render_widget(
-        Paragraph::new(vec![
-            Line::from("TERMINAL DEMASIADO PEQUEÑA").style(theme.warning()),
-            Line::from(format!(
-                "Actual: {}×{} · mínimo: {}×{}",
-                area.width, area.height, MIN_WIDTH, MIN_HEIGHT
-            )),
-            Line::from("Amplíe para continuar · Q/ESC salir").style(theme.muted()),
-        ])
-        .centered(),
-        area,
-    );
+    !key.modifiers
+        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+        && matches!(key.code, KeyCode::Char(actual) if actual.eq_ignore_ascii_case(&expected))
 }
 
 #[cfg(test)]
 mod tests {
+    use control_acceso::tui::ui_kit::THEME_KEY;
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
     use ratatui::{Terminal, backend::TestBackend};
 
-    use super::{Confirmation, MenuItem, MenuPilot, THEME_KEY, ThemePreset};
+    use super::{Confirmation, MenuItem, MenuPilot, ThemePreset};
 
     fn key(code: KeyCode) -> Event {
         Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
@@ -588,6 +563,16 @@ mod tests {
         app.handle_event(&key(KeyCode::Esc));
         assert!(app.confirmation.is_none());
         assert!(app.is_running());
+    }
+
+    #[test]
+    fn enter_ejecuta_la_accion_principal_de_una_confirmacion() {
+        let mut app = MenuPilot::default();
+
+        app.handle_event(&key(KeyCode::Char('q')));
+        app.handle_event(&key(KeyCode::Enter));
+
+        assert!(!app.is_running());
     }
 
     #[test]

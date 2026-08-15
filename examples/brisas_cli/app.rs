@@ -1,8 +1,9 @@
 use chrono::Utc;
 use chrono_tz::America::Costa_Rica;
 use control_acceso::tui::ui_kit::{
-    CommandHint, ScreenShell, SelectMenu, SelectMenuState, StatusKind, TextInput, Theme,
-    ThemePreset, auxiliary_panel, centered_content, panel,
+    CANCEL_HINT, CommandHint, HELP_HINT, ScreenShell, SelectMenu, SelectMenuState, StandardCommand,
+    StatusKind, THEME_HINT, TextInput, Theme, ThemePreset, auxiliary_panel, centered_content,
+    centered_rect, panel, render_terminal_too_small, standard_command,
 };
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
@@ -76,6 +77,7 @@ enum Action {
     CancelSearch,
     CloseDetail,
     MoveField(bool),
+    PrimaryForm,
     ChangeChoice(bool),
     ToggleChoice,
     MoveDropdown(isize),
@@ -83,7 +85,6 @@ enum Action {
     DropdownLast,
     AcceptDropdown,
     CloseDropdown,
-    SaveForm,
     CancelForm,
     ToggleHelp,
     ToggleTheme,
@@ -92,11 +93,10 @@ enum Action {
 
 #[derive(Debug, Clone, Copy)]
 enum BindingAction {
-    Key(KeyCode, Action),
-    KeyPair(KeyCode, KeyCode, Action),
+    Standard(StandardCommand, Action),
+    StandardPair(StandardCommand, StandardCommand, Action),
     Char(char, Action),
-    CharOrKey(char, KeyCode, Action),
-    CtrlCharOrKey(char, KeyCode, Action),
+    CharOrStandard(char, StandardCommand, Action),
     VerticalSelection,
     PagingSelection,
     EdgeSelection,
@@ -132,19 +132,18 @@ impl Binding {
 
     fn resolve(self, key: KeyEvent) -> Option<Action> {
         match self.on {
-            BindingAction::Key(code, action) => (key.code == code).then_some(action),
-            BindingAction::KeyPair(first, second, action) => {
-                matches!(key.code, code if code == first || code == second).then_some(action)
+            BindingAction::Standard(expected, action) => {
+                (standard_command(key) == Some(expected)).then_some(action)
             }
+            BindingAction::StandardPair(first, second, action) => matches!(
+                standard_command(key),
+                Some(command) if command == first || command == second
+            )
+            .then_some(action),
             BindingAction::Char(expected, action) => key_char(key, expected).then_some(action),
-            BindingAction::CharOrKey(character, code, action) => {
-                (key_char(key, character) || key.code == code).then_some(action)
-            }
-            BindingAction::CtrlCharOrKey(character, code, action) => {
-                ((key.modifiers.contains(KeyModifiers::CONTROL) && key_char(key, character))
-                    || key.code == code)
-                    .then_some(action)
-            }
+            BindingAction::CharOrStandard(character, command, action) => (key_char(key, character)
+                || standard_command(key) == Some(command))
+            .then_some(action),
             BindingAction::VerticalSelection => match key.code {
                 KeyCode::Up => Some(Action::MoveSelection(-1)),
                 KeyCode::Down => Some(Action::MoveSelection(1)),
@@ -161,8 +160,12 @@ impl Binding {
                 _ => None,
             },
             BindingAction::FieldNavigation => match key.code {
-                KeyCode::BackTab | KeyCode::Up => Some(Action::MoveField(true)),
-                KeyCode::Tab | KeyCode::Down => Some(Action::MoveField(false)),
+                _ if standard_command(key) == Some(StandardCommand::FocusPrevious) => {
+                    Some(Action::MoveField(true))
+                }
+                _ if standard_command(key) == Some(StandardCommand::FocusNext) => {
+                    Some(Action::MoveField(false))
+                }
                 _ => None,
             },
             BindingAction::ChoiceNavigation => match key.code {
@@ -170,8 +173,9 @@ impl Binding {
                 KeyCode::Right => Some(Action::ChangeChoice(false)),
                 _ => None,
             },
-            BindingAction::ToggleChoice => matches!(key.code, KeyCode::Enter | KeyCode::Char(' '))
-                .then_some(Action::ToggleChoice),
+            BindingAction::ToggleChoice => (standard_command(key)
+                == Some(StandardCommand::Activate))
+            .then_some(Action::ToggleChoice),
             BindingAction::DropdownNavigation => match key.code {
                 KeyCode::Up => Some(Action::MoveDropdown(-1)),
                 KeyCode::Down => Some(Action::MoveDropdown(1)),
@@ -186,11 +190,10 @@ impl Binding {
     }
 }
 
-const THEME_KEY: KeyCode = KeyCode::F(7);
 const THEME_BINDING: Binding = Binding::new(
-    BindingAction::Key(THEME_KEY, Action::ToggleTheme),
-    "F7",
-    "Tema",
+    BindingAction::Standard(StandardCommand::Theme, Action::ToggleTheme),
+    THEME_HINT.key,
+    THEME_HINT.label,
     false,
 );
 
@@ -199,7 +202,7 @@ const BROWSE_BINDINGS: &[Binding] = &[
     Binding::new(BindingAction::PagingSelection, "PGUP/PGDN", "Página", true),
     Binding::new(BindingAction::EdgeSelection, "HOME/END", "Extremos", true),
     Binding::new(
-        BindingAction::Key(KeyCode::Enter, Action::OpenDetail),
+        BindingAction::Standard(StandardCommand::Primary, Action::OpenDetail),
         "ENTER",
         "Detalle",
         false,
@@ -223,14 +226,14 @@ const BROWSE_BINDINGS: &[Binding] = &[
         false,
     ),
     Binding::new(
-        BindingAction::Key(KeyCode::F(1), Action::ToggleHelp),
-        "F1",
-        "Ayuda",
+        BindingAction::Standard(StandardCommand::Help, Action::ToggleHelp),
+        HELP_HINT.key,
+        HELP_HINT.label,
         false,
     ),
     THEME_BINDING,
     Binding::new(
-        BindingAction::CharOrKey('q', KeyCode::Esc, Action::Quit),
+        BindingAction::CharOrStandard('q', StandardCommand::Cancel, Action::Quit),
         "Q/ESC",
         "Salir",
         false,
@@ -241,21 +244,21 @@ const SEARCH_BINDINGS: &[Binding] = &[
     Binding::new(BindingAction::VerticalSelection, "↑↓", "Mover", true),
     Binding::new(BindingAction::PagingSelection, "PGUP/PGDN", "Página", true),
     Binding::new(
-        BindingAction::Key(KeyCode::Enter, Action::ApplySearch),
+        BindingAction::Standard(StandardCommand::Primary, Action::ApplySearch),
         "ENTER",
         "Aplicar",
         false,
     ),
     Binding::new(
-        BindingAction::Key(KeyCode::Esc, Action::CancelSearch),
-        "ESC",
-        "Cancelar",
+        BindingAction::Standard(StandardCommand::Cancel, Action::CancelSearch),
+        CANCEL_HINT.key,
+        CANCEL_HINT.label,
         false,
     ),
     Binding::new(
-        BindingAction::Key(KeyCode::F(1), Action::ToggleHelp),
-        "F1",
-        "Ayuda",
+        BindingAction::Standard(StandardCommand::Help, Action::ToggleHelp),
+        HELP_HINT.key,
+        HELP_HINT.label,
         false,
     ),
     THEME_BINDING,
@@ -269,45 +272,49 @@ const DETAIL_BINDINGS: &[Binding] = &[
         false,
     ),
     Binding::new(
-        BindingAction::KeyPair(KeyCode::Enter, KeyCode::Esc, Action::CloseDetail),
+        BindingAction::StandardPair(
+            StandardCommand::Primary,
+            StandardCommand::Cancel,
+            Action::CloseDetail,
+        ),
         "ENTER/ESC",
         "Cerrar",
         false,
     ),
     Binding::new(
-        BindingAction::Key(KeyCode::F(1), Action::ToggleHelp),
-        "F1",
-        "Ayuda",
+        BindingAction::Standard(StandardCommand::Help, Action::ToggleHelp),
+        HELP_HINT.key,
+        HELP_HINT.label,
         false,
     ),
     THEME_BINDING,
 ];
 
 const FORM_BINDINGS: &[Binding] = &[
-    Binding::new(BindingAction::FieldNavigation, "TAB/↑↓", "Campo", true),
+    Binding::new(
+        BindingAction::FieldNavigation,
+        "TAB/SHIFT+TAB",
+        "Campo",
+        true,
+    ),
     Binding::new(BindingAction::ChoiceNavigation, "←→", "Cambiar", true),
     Binding::new(
-        BindingAction::ToggleChoice,
-        "ENTER/ESP",
-        "Abrir/alternar",
-        false,
-    ),
-    Binding::new(
-        BindingAction::CtrlCharOrKey('s', KeyCode::F(10), Action::SaveForm),
-        "F10/CTRL+S",
+        BindingAction::Standard(StandardCommand::Primary, Action::PrimaryForm),
+        "ENTER",
         "Guardar",
         false,
     ),
+    Binding::new(BindingAction::ToggleChoice, "ESP", "Activar", false),
     Binding::new(
-        BindingAction::Key(KeyCode::Esc, Action::CancelForm),
-        "ESC",
-        "Cancelar",
+        BindingAction::Standard(StandardCommand::Cancel, Action::CancelForm),
+        CANCEL_HINT.key,
+        CANCEL_HINT.label,
         false,
     ),
     Binding::new(
-        BindingAction::Key(KeyCode::F(1), Action::ToggleHelp),
-        "F1",
-        "Ayuda",
+        BindingAction::Standard(StandardCommand::Help, Action::ToggleHelp),
+        HELP_HINT.key,
+        HELP_HINT.label,
         false,
     ),
     THEME_BINDING,
@@ -317,21 +324,21 @@ const DROPDOWN_BINDINGS: &[Binding] = &[
     Binding::new(BindingAction::DropdownNavigation, "↑↓", "Mover", true),
     Binding::new(BindingAction::DropdownEdges, "HOME/END", "Extremos", true),
     Binding::new(
-        BindingAction::Key(KeyCode::Enter, Action::AcceptDropdown),
+        BindingAction::Standard(StandardCommand::Primary, Action::AcceptDropdown),
         "ENTER",
         "Seleccionar",
         false,
     ),
     Binding::new(
-        BindingAction::Key(KeyCode::Esc, Action::CloseDropdown),
+        BindingAction::Standard(StandardCommand::Cancel, Action::CloseDropdown),
         "ESC",
         "Cerrar",
         false,
     ),
     Binding::new(
-        BindingAction::Key(KeyCode::F(1), Action::ToggleHelp),
-        "F1",
-        "Ayuda",
+        BindingAction::Standard(StandardCommand::Help, Action::ToggleHelp),
+        HELP_HINT.key,
+        HELP_HINT.label,
         false,
     ),
     THEME_BINDING,
@@ -339,7 +346,11 @@ const DROPDOWN_BINDINGS: &[Binding] = &[
 
 const HELP_BINDINGS: &[Binding] = &[
     Binding::new(
-        BindingAction::KeyPair(KeyCode::Esc, KeyCode::F(1), Action::ToggleHelp),
+        BindingAction::StandardPair(
+            StandardCommand::Cancel,
+            StandardCommand::Help,
+            Action::ToggleHelp,
+        ),
         "ESC/F1",
         "Cerrar ayuda",
         false,
@@ -348,7 +359,9 @@ const HELP_BINDINGS: &[Binding] = &[
 ];
 
 fn key_char(key: KeyEvent, expected: char) -> bool {
-    matches!(key.code, KeyCode::Char(actual) if actual.eq_ignore_ascii_case(&expected))
+    !key.modifiers
+        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+        && matches!(key.code, KeyCode::Char(actual) if actual.eq_ignore_ascii_case(&expected))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -540,16 +553,16 @@ impl PilotApp {
             _ => return false,
         };
 
-        if key.is_some_and(|key| {
-            key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL)
-        }) {
+        if key.is_some_and(|key| standard_command(key) == Some(StandardCommand::EmergencyExit)) {
             self.running = false;
             return true;
         }
 
         if !self.viewport_is_valid() {
             if key.is_some_and(|key| {
-                key.kind == KeyEventKind::Press && (key.code == KeyCode::Esc || key_char(key, 'q'))
+                key.kind == KeyEventKind::Press
+                    && (standard_command(key) == Some(StandardCommand::Cancel)
+                        || key_char(key, 'q'))
             }) {
                 self.running = false;
                 return true;
@@ -683,6 +696,9 @@ impl PilotApp {
                 };
                 form.move_focus(backwards);
             }
+            Action::PrimaryForm => {
+                self.save_form();
+            }
             Action::ChangeChoice(backwards) => {
                 let Mode::Form(form) = &mut self.mode else {
                     return false;
@@ -739,7 +755,6 @@ impl PilotApp {
                 };
                 return form.company_dropdown.close();
             }
-            Action::SaveForm => self.save_form(),
             Action::CancelForm => {
                 self.mode = Mode::Browse;
                 self.set_status("Edición cancelada · no hubo cambios", StatusKind::Warning);
@@ -934,7 +949,7 @@ impl PilotApp {
         self.terminal_size = (area.width, area.height);
         let theme = self.theme.theme();
         if !self.viewport_is_valid() {
-            render_terminal_too_small(frame, area, theme);
+            render_terminal_too_small(frame, area, MIN_WIDTH, MIN_HEIGHT, "Q/ESC salir", theme);
             return;
         }
 
@@ -1118,7 +1133,7 @@ impl PilotApp {
         let Some(contractor) = self.selected_contractor() else {
             return;
         };
-        let popup = centered(area, 68, 15);
+        let popup = centered_rect(area, 68, 15);
         frame.render_widget(Clear, popup);
         let block = auxiliary_panel("DETALLE DEL CONTRATISTA", theme, true);
         let inner = block.inner(popup);
@@ -1140,7 +1155,7 @@ impl PilotApp {
         theme: Theme,
         focus_enabled: bool,
     ) {
-        let popup = centered(area, 78, 20);
+        let popup = centered_rect(area, 78, 20);
         frame.render_widget(Clear, popup);
         let title = if form.is_editing() {
             "EDITAR CONTRATISTA · DATOS EN MEMORIA"
@@ -1250,7 +1265,7 @@ impl PilotApp {
     }
 
     fn render_help(&self, frame: &mut Frame, area: Rect, theme: Theme) {
-        let popup = centered(area, 76, 18);
+        let popup = centered_rect(area, 76, 18);
         frame.render_widget(Clear, popup);
         let block = auxiliary_panel("CONTRATO DE INTERACCIÓN DEL PILOTO", theme, true);
         let inner = block.inner(popup);
@@ -1264,6 +1279,7 @@ impl PilotApp {
             Line::from("• Mantener flechas, PageUp/PageDown o Backspace repite."),
             Line::from("• Los comandos que cambian de pantalla se ejecutan una vez."),
             Line::from("• Enter realiza la acción principal del contexto."),
+            Line::from("• Espacio activa la opción que tiene el foco."),
             Line::from("• Esc retrocede exactamente una capa."),
             Line::from("• Tab y Shift+Tab recorren campos del formulario."),
             Line::from("• Ctrl+C queda reservado como salida de emergencia."),
@@ -1342,35 +1358,6 @@ fn labeled<'a>(label: &'a str, value: &'a str, theme: Theme) -> Line<'a> {
     ])
 }
 
-fn centered(area: Rect, width: u16, height: u16) -> Rect {
-    let width = width.min(area.width.saturating_sub(2));
-    let height = height.min(area.height.saturating_sub(2));
-    Rect::new(
-        area.x + area.width.saturating_sub(width) / 2,
-        area.y + area.height.saturating_sub(height) / 2,
-        width,
-        height,
-    )
-}
-
-fn render_terminal_too_small(frame: &mut Frame, area: Rect, theme: Theme) {
-    frame.render_widget(ratatui::widgets::Block::default().style(theme.base()), area);
-    let y = area.y + area.height.saturating_sub(3) / 2;
-    frame.render_widget(
-        Paragraph::new(vec![
-            Line::from("TERMINAL DEMASIADO PEQUEÑA").style(theme.warning()),
-            Line::from(format!(
-                "Actual: {}×{} · mínimo: {}×{}",
-                area.width, area.height, MIN_WIDTH, MIN_HEIGHT
-            ))
-            .style(theme.base()),
-            Line::from("Amplíe para continuar · Q/ESC salir").style(theme.muted()),
-        ])
-        .alignment(Alignment::Center),
-        Rect::new(area.x, y, area.width, 3),
-    );
-}
-
 fn demo_contractors() -> Vec<Contractor> {
     [
         (1, "1-1042-0881", "José Peña", 0, 0, false, true),
@@ -1403,10 +1390,11 @@ fn demo_contractors() -> Vec<Contractor> {
 
 #[cfg(test)]
 mod tests {
+    use control_acceso::tui::ui_kit::THEME_KEY;
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
     use ratatui::{Terminal, backend::TestBackend};
 
-    use super::{COMPANIES, FormField, Mode, PilotApp, THEME_KEY, ThemePreset};
+    use super::{COMPANIES, FormField, Mode, PilotApp, ThemePreset};
 
     fn key(code: KeyCode) -> Event {
         Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
@@ -1456,6 +1444,21 @@ mod tests {
         };
         assert_eq!(form.field(), FormField::Name);
         assert_eq!(form.name.value(), "G");
+    }
+
+    #[test]
+    fn formulario_usa_tab_para_foco_y_enter_como_accion_principal() {
+        let mut app = PilotApp::default();
+        app.handle_event(&key(KeyCode::Char('e')));
+
+        app.handle_event(&key(KeyCode::Down));
+        let Mode::Form(form) = &app.mode else {
+            panic!("debe permanecer en el formulario");
+        };
+        assert_eq!(form.field(), FormField::Name);
+
+        app.handle_event(&key(KeyCode::Enter));
+        assert!(matches!(app.mode, Mode::Browse));
     }
 
     #[test]
@@ -1532,7 +1535,7 @@ mod tests {
         app.handle_event(&key(KeyCode::Tab));
         app.handle_event(&key(KeyCode::Tab));
 
-        app.handle_event(&key(KeyCode::Enter));
+        app.handle_event(&key(KeyCode::Char(' ')));
         app.handle_event(&key(KeyCode::Down));
         app.handle_event(&key(KeyCode::Down));
         app.handle_event(&key(KeyCode::Enter));
@@ -1551,7 +1554,7 @@ mod tests {
         app.handle_event(&key(KeyCode::Tab));
         app.handle_event(&key(KeyCode::Tab));
 
-        app.handle_event(&key(KeyCode::Enter));
+        app.handle_event(&key(KeyCode::Char(' ')));
         app.handle_event(&key(KeyCode::Down));
         app.handle_event(&key(KeyCode::Esc));
 
@@ -1563,14 +1566,14 @@ mod tests {
     }
 
     #[test]
-    fn repeat_de_enter_no_confirma_el_desplegable_que_acaba_de_abrir() {
+    fn repeat_de_espacio_no_confirma_el_desplegable_que_acaba_de_abrir() {
         let mut app = PilotApp::default();
         app.handle_event(&key(KeyCode::Char('n')));
         app.handle_event(&key(KeyCode::Tab));
         app.handle_event(&key(KeyCode::Tab));
 
-        app.handle_event(&key(KeyCode::Enter));
-        app.handle_event(&repeat(KeyCode::Enter));
+        app.handle_event(&key(KeyCode::Char(' ')));
+        app.handle_event(&repeat(KeyCode::Char(' ')));
 
         let Mode::Form(form) = &app.mode else {
             panic!("debe permanecer en el formulario");
@@ -1583,7 +1586,7 @@ mod tests {
         let mut app = PilotApp::default();
         app.handle_event(&key(KeyCode::Char('e')));
         app.handle_event(&key(KeyCode::Tab));
-        app.handle_event(&key(KeyCode::Enter));
+        app.handle_event(&key(KeyCode::Char(' ')));
         let backend = TestBackend::new(60, 20);
         let mut terminal = Terminal::new(backend).expect("backend de prueba");
 
@@ -1640,9 +1643,12 @@ mod tests {
 
         app.handle_event(&Event::Resize(40, 10));
         app.handle_event(&Event::Paste("1-9999".into()));
-        app.handle_event(&key(KeyCode::F(10)));
+        app.handle_event(&key(KeyCode::Enter));
 
         assert_eq!(app.contractors.len(), count);
-        assert!(matches!(app.mode, Mode::Form(_)));
+        let Mode::Form(form) = &app.mode else {
+            panic!("debe permanecer en el formulario");
+        };
+        assert!(form.error.is_none());
     }
 }
