@@ -54,9 +54,12 @@ TUI → AppCore → Services / Queries → Repositories → SQLite
 ```
 
 `AppCore` posee la única conexión de la aplicación y compone repositorios y servicios
-temporales para cada caso de uso; no contiene reglas de negocio. `cargo run` utiliza
-`control_acceso.db` en el directorio actual. La variable `CONTROL_ACCESO_DB` permite
-indicar una ruta distinta sin codificar rutas absolutas.
+temporales para cada caso de uso; no contiene reglas de negocio. En Windows, la ruta
+productiva es `%LOCALAPPDATA%\ControlAcceso\control_acceso.db`; el directorio se crea
+automáticamente y no requiere permisos de administrador. La variable
+`CONTROL_ACCESO_DB` permite una sobreescritura técnica, pero debe contener una ruta
+absoluta. No se ofrece una selección de ubicación en la interfaz para evitar bases
+duplicadas o archivos SQLite en carpetas sincronizadas o de red.
 
 La búsqueda textual usa índices separados SQLite FTS5 con tokenizer `trigram` para
 contratistas, empresas y usuarios. La preparación técnica es compartida, pero cada
@@ -65,8 +68,13 @@ caracteres la búsqueda es indexada e insensible a mayúsculas y diacríticos; u
 caracteres usan el `LIKE` existente, siempre limitado por la consulta correspondiente.
 
 Si la base está vacía, el núcleo exige crear el ROOT inicial antes del login. La pantalla
-visual para ese paso aún no forma parte del prototipo; el caso de uso ya está disponible
-mediante `AppCore::crear_root_inicial`.
+de configuración ejecuta ese caso de uso mediante `AppCore::crear_root_inicial`.
+
+El [diagrama lógico completo](docs/diagrama-logico.md) documenta el arranque, la sesión,
+las reglas de entrada y salida, la administración y las relaciones persistidas.
+
+El [plan de saneamiento técnico](docs/plan-saneamiento.md) mantiene el listado priorizado
+de ajustes y sus criterios de finalización.
 
 ## Prototipo TUI
 
