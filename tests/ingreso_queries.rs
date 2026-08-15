@@ -61,7 +61,35 @@ fn insertar(
     salida: Option<&str>,
     usuario_salida: Option<i64>,
 ) -> i64 {
-    base.connection.execute("INSERT INTO registro_ingresos(contratista_id,empresa_id,fecha_hora_ingreso,medio_ingreso,tipo_ingreso,gafete_numero,usuario_ingreso_id,fecha_hora_salida,usuario_salida_id) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)", params![contratista, empresa, ingreso, medio, tipo, gafete, base.usuario_entrada, salida, usuario_salida]).unwrap();
+    base.connection
+        .execute(
+            "INSERT INTO registro_ingresos(
+        contratista_id,empresa_id,fecha_hora_ingreso,medio_ingreso,tipo_ingreso,
+        gafete_numero,usuario_ingreso_id,fecha_hora_salida,usuario_salida_id,
+        contratista_cedula,contratista_nombre,empresa_nombre,
+        usuario_ingreso_nombre,usuario_salida_nombre,fecha_vencimiento_praind,
+        es_personal_ruta,tiene_acceso,resultado_acceso,motivo_resultado,reglas_version
+    ) SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,
+        c.cedula,c.nombre,e.nombre,ui.nombre,us.nombre,c.fecha_vencimiento_praind,
+        c.es_personal_ruta,c.tiene_acceso,'MIGRADO','DATOS_RECONSTRUIDOS',0
+      FROM contratistas c
+      INNER JOIN empresas e ON e.id=?2
+      INNER JOIN usuarios ui ON ui.id=?7
+      LEFT JOIN usuarios us ON us.id=?9
+      WHERE c.id=?1",
+            params![
+                contratista,
+                empresa,
+                ingreso,
+                medio,
+                tipo,
+                gafete,
+                base.usuario_entrada,
+                salida,
+                usuario_salida
+            ],
+        )
+        .unwrap();
     base.connection.last_insert_rowid()
 }
 

@@ -39,9 +39,11 @@ Cada tarea sólo se considera terminada cuando tiene pruebas y manejo de errores
 - [x] **Cédula inmutable del contratista.** Tratarla como identidad: no admitirla en
   actualizaciones normales, mostrarla como sólo lectura y bloquear cambios directos
   mediante SQLite. Los demás datos editables sólo afectan ingresos futuros.
-- [ ] **Historial inmutable.** Guardar snapshots de cédula/nombre del contratista,
+- [x] **Historial inmutable.** Guardar snapshots de cédula/nombre del contratista,
   empresa y operadores, además del resultado de acceso, motivo, PRAIND evaluado y
-  versión de reglas. Los cambios posteriores no deben alterar movimientos históricos.
+  versión de reglas. Los cambios posteriores no alteran movimientos históricos. Los
+  datos anteriores a esta mejora quedan identificados como reconstruidos durante la
+  migración, porque no es posible recuperar valores que ya fueron sobrescritos.
 - [ ] **Eventos denegados.** Definir y persistir intentos de acceso denegados si el
   historial funcionará como auditoría de seguridad.
 - [ ] **Sesión vigente.** Comprobar que el usuario siga activo antes de cada movimiento,

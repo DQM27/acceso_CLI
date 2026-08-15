@@ -4,6 +4,7 @@ use rusqlite::{Connection, Row, named_params};
 use crate::database::error::DatabaseError;
 use crate::database::search::BusquedaTexto;
 use crate::models::medio_ingreso::MedioIngreso;
+use crate::models::registro_ingreso::{MotivoResultadoIngreso, ResultadoIngresoRegistrado};
 use crate::models::tipo_ingreso::TipoIngreso;
 
 const LIMITE_HISTORIAL_PREDETERMINADO: usize = 50;
@@ -52,6 +53,9 @@ pub struct MovimientoIngresoResumen {
     pub gafete_numero: Option<i64>,
     pub usuario_ingreso_nombre: String,
     pub usuario_salida_nombre: Option<String>,
+    pub resultado_acceso: ResultadoIngresoRegistrado,
+    pub motivo_resultado: Option<MotivoResultadoIngreso>,
+    pub reglas_version: i64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -226,97 +230,89 @@ impl IngresosQuery for SqliteIngresosQuery<'_> {
 
 const ACTIVOS_SIN_FILTRO_SQL: &str = "
     SELECT
-        r.id, r.contratista_id, r.empresa_id, c.cedula, c.nombre, e.nombre,
+        r.id, r.contratista_id, r.empresa_id, r.contratista_cedula,
+        r.contratista_nombre, r.empresa_nombre,
         r.tipo_ingreso, r.medio_ingreso, r.fecha_hora_ingreso, r.gafete_numero,
-        ui.nombre, c.fecha_vencimiento_praind, c.es_personal_ruta, c.tiene_acceso
+        r.usuario_ingreso_nombre, c.fecha_vencimiento_praind,
+        c.es_personal_ruta, c.tiene_acceso
     FROM registro_ingresos AS r
     INNER JOIN contratistas AS c ON c.id = r.contratista_id
-    INNER JOIN empresas AS e ON e.id = r.empresa_id
-    INNER JOIN usuarios AS ui ON ui.id = r.usuario_ingreso_id
     WHERE r.fecha_hora_salida IS NULL
     ORDER BY r.fecha_hora_ingreso DESC, r.id DESC
 ";
 
 const ACTIVOS_CORTO_SQL: &str = "
     SELECT
-        r.id, r.contratista_id, r.empresa_id, c.cedula, c.nombre, e.nombre,
+        r.id, r.contratista_id, r.empresa_id, r.contratista_cedula,
+        r.contratista_nombre, r.empresa_nombre,
         r.tipo_ingreso, r.medio_ingreso, r.fecha_hora_ingreso, r.gafete_numero,
-        ui.nombre, c.fecha_vencimiento_praind, c.es_personal_ruta, c.tiene_acceso
+        r.usuario_ingreso_nombre, c.fecha_vencimiento_praind,
+        c.es_personal_ruta, c.tiene_acceso
     FROM registro_ingresos AS r
     INNER JOIN contratistas AS c ON c.id = r.contratista_id
-    INNER JOIN empresas AS e ON e.id = r.empresa_id
-    INNER JOIN usuarios AS ui ON ui.id = r.usuario_ingreso_id
     WHERE r.fecha_hora_salida IS NULL AND (
-        c.cedula LIKE ?1 COLLATE NOCASE OR c.nombre LIKE ?1 COLLATE NOCASE
-        OR e.nombre LIKE ?1 COLLATE NOCASE
+        r.contratista_cedula LIKE ?1 COLLATE NOCASE
+        OR r.contratista_nombre LIKE ?1 COLLATE NOCASE
+        OR r.empresa_nombre LIKE ?1 COLLATE NOCASE
         OR (?2 IS NOT NULL AND r.gafete_numero = ?2)
     )
     ORDER BY r.fecha_hora_ingreso DESC, r.id DESC
 ";
 
 const ACTIVOS_FTS_SQL: &str = "
-    WITH contratistas_coincidentes(id) AS (
-        SELECT rowid FROM contratistas_fts WHERE contratistas_fts MATCH ?1
-        UNION
-        SELECT c.id FROM empresas_fts
-        INNER JOIN contratistas AS c ON c.empresa_id = empresas_fts.rowid
-        WHERE empresas_fts MATCH ?1
-    ), registros_coincidentes(id) AS (
-        SELECT r.id FROM contratistas_coincidentes
-        INNER JOIN registro_ingresos AS r
-            ON r.contratista_id = contratistas_coincidentes.id
-        WHERE r.fecha_hora_salida IS NULL
+    WITH registros_coincidentes(id) AS (
+        SELECT rowid FROM registro_ingresos_fts
+        WHERE registro_ingresos_fts MATCH ?1
         UNION
         SELECT id FROM registro_ingresos
         WHERE ?2 IS NOT NULL AND gafete_numero = ?2 AND fecha_hora_salida IS NULL
     )
     SELECT
-        r.id, r.contratista_id, r.empresa_id, c.cedula, c.nombre, e.nombre,
+        r.id, r.contratista_id, r.empresa_id, r.contratista_cedula,
+        r.contratista_nombre, r.empresa_nombre,
         r.tipo_ingreso, r.medio_ingreso, r.fecha_hora_ingreso, r.gafete_numero,
-        ui.nombre, c.fecha_vencimiento_praind, c.es_personal_ruta, c.tiene_acceso
+        r.usuario_ingreso_nombre, c.fecha_vencimiento_praind,
+        c.es_personal_ruta, c.tiene_acceso
     FROM registros_coincidentes
     INNER JOIN registro_ingresos AS r ON r.id = registros_coincidentes.id
     INNER JOIN contratistas AS c ON c.id = r.contratista_id
-    INNER JOIN empresas AS e ON e.id = r.empresa_id
-    INNER JOIN usuarios AS ui ON ui.id = r.usuario_ingreso_id
     ORDER BY r.fecha_hora_ingreso DESC, r.id DESC
 ";
 
 const ACTIVO_POR_GAFETE_SQL: &str = "
     SELECT
-        r.id, r.contratista_id, r.empresa_id, c.cedula, c.nombre, e.nombre,
+        r.id, r.contratista_id, r.empresa_id, r.contratista_cedula,
+        r.contratista_nombre, r.empresa_nombre,
         r.tipo_ingreso, r.medio_ingreso, r.fecha_hora_ingreso, r.gafete_numero,
-        ui.nombre, c.fecha_vencimiento_praind, c.es_personal_ruta, c.tiene_acceso
+        r.usuario_ingreso_nombre, c.fecha_vencimiento_praind,
+        c.es_personal_ruta, c.tiene_acceso
     FROM registro_ingresos AS r
     INNER JOIN contratistas AS c ON c.id = r.contratista_id
-    INNER JOIN empresas AS e ON e.id = r.empresa_id
-    INNER JOIN usuarios AS ui ON ui.id = r.usuario_ingreso_id
     WHERE r.fecha_hora_salida IS NULL AND r.gafete_numero = ?1
     LIMIT 1
 ";
 
 const HISTORIAL_COLUMNAS: &str = "
-    r.id, r.contratista_id, c.cedula, c.nombre, e.nombre, r.tipo_ingreso,
+    r.id, r.contratista_id, r.contratista_cedula, r.contratista_nombre,
+    r.empresa_nombre, r.tipo_ingreso,
     r.medio_ingreso, r.fecha_hora_ingreso, r.fecha_hora_salida,
-    r.gafete_numero, ui.nombre, us.nombre
+    r.gafete_numero, r.usuario_ingreso_nombre, r.usuario_salida_nombre,
+    r.resultado_acceso, r.motivo_resultado, r.reglas_version
 ";
 
 const HISTORIAL_FROM_WHERE: &str = "
     FROM registro_ingresos AS r
-    INNER JOIN contratistas AS c ON c.id = r.contratista_id
-    INNER JOIN empresas AS e ON e.id = r.empresa_id
-    INNER JOIN usuarios AS ui ON ui.id = r.usuario_ingreso_id
-    LEFT JOIN usuarios AS us ON us.id = r.usuario_salida_id
     WHERE r.fecha_hora_ingreso >= :desde
       AND r.fecha_hora_ingreso < :hasta
       AND (
           :modo_busqueda = 0
           OR (:modo_busqueda = 1 AND (
-              c.cedula LIKE :patron COLLATE NOCASE
-              OR c.nombre LIKE :patron COLLATE NOCASE
+              r.contratista_cedula LIKE :patron COLLATE NOCASE
+              OR r.contratista_nombre LIKE :patron COLLATE NOCASE
           ))
-          OR (:modo_busqueda = 2 AND c.id IN (
-              SELECT rowid FROM contratistas_fts WHERE contratistas_fts MATCH :consulta_fts
+          OR (:modo_busqueda = 2 AND r.id IN (
+              SELECT rowid FROM registro_ingresos_fts
+              WHERE registro_ingresos_fts MATCH :consulta_fts
           ))
       )
       AND (:empresa_id IS NULL OR r.empresa_id = :empresa_id)
@@ -362,7 +358,37 @@ fn convertir_movimiento(row: &Row<'_>) -> rusqlite::Result<MovimientoIngresoResu
         gafete_numero: row.get(9)?,
         usuario_ingreso_nombre: row.get(10)?,
         usuario_salida_nombre: row.get(11)?,
+        resultado_acceso: resultado_desde_fila(row, 12)?,
+        motivo_resultado: motivo_desde_fila(row, 13)?,
+        reglas_version: row.get(14)?,
     })
+}
+
+fn resultado_desde_fila(
+    row: &Row<'_>,
+    indice: usize,
+) -> rusqlite::Result<ResultadoIngresoRegistrado> {
+    let valor: String = row.get(indice)?;
+    match valor.as_str() {
+        "PERMITIDO" => Ok(ResultadoIngresoRegistrado::Permitido),
+        "PERMITIDO_CON_ADVERTENCIA" => Ok(ResultadoIngresoRegistrado::PermitidoConAdvertencia),
+        "MIGRADO" => Ok(ResultadoIngresoRegistrado::Migrado),
+        _ => Err(tipo_invalido(indice, "resultado_acceso")),
+    }
+}
+
+fn motivo_desde_fila(
+    row: &Row<'_>,
+    indice: usize,
+) -> rusqlite::Result<Option<MotivoResultadoIngreso>> {
+    let valor: Option<String> = row.get(indice)?;
+    valor
+        .map(|motivo| match motivo.as_str() {
+            "PRAIND_PROXIMO_VENCER" => Ok(MotivoResultadoIngreso::PraindProximoVencer),
+            "DATOS_RECONSTRUIDOS" => Ok(MotivoResultadoIngreso::DatosReconstruidos),
+            _ => Err(tipo_invalido(indice, "motivo_resultado")),
+        })
+        .transpose()
 }
 
 fn tipo_desde_fila(row: &Row<'_>, indice: usize) -> rusqlite::Result<TipoIngreso> {

@@ -243,7 +243,7 @@ fn render_modo(frame: &mut Frame, area: Rect, state: &HistorialState) {
                     frame,
                     area,
                     68,
-                    17,
+                    19,
                     2,
                     "DETALLE DE MOVIMIENTO",
                     vec![
@@ -261,6 +261,15 @@ fn render_modo(frame: &mut Frame, area: Rect, state: &HistorialState) {
                             r.fecha_hora_ingreso.format("%d/%m/%Y %H:%M")
                         )),
                         Line::from(format!("Usuario ingreso  {}", r.usuario_ingreso_nombre)),
+                        Line::from(format!("Evaluación       {}", texto_evaluacion(r))),
+                        Line::from(format!(
+                            "Reglas           {}",
+                            if r.reglas_version == 0 {
+                                "Registro migrado".to_owned()
+                            } else {
+                                format!("Versión {}", r.reglas_version)
+                            }
+                        )),
                         Line::from(format!("Salida           {salida}")),
                         Line::from(format!(
                             "Usuario salida   {}",
@@ -291,6 +300,18 @@ fn render_modo(frame: &mut Frame, area: Rect, state: &HistorialState) {
         }
         ModoHistorial::Columnas { seleccion } => render_columnas(frame, area, state, *seleccion),
         _ => {}
+    }
+}
+
+fn texto_evaluacion(r: &MovimientoIngresoResumen) -> &'static str {
+    match r.resultado_acceso {
+        crate::models::registro_ingreso::ResultadoIngresoRegistrado::Permitido => "Permitido",
+        crate::models::registro_ingreso::ResultadoIngresoRegistrado::PermitidoConAdvertencia => {
+            "Permitido con advertencia PRAIND"
+        }
+        crate::models::registro_ingreso::ResultadoIngresoRegistrado::Migrado => {
+            "Datos reconstruidos durante migración"
+        }
     }
 }
 

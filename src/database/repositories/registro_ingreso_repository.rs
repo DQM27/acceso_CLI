@@ -1,13 +1,15 @@
 use chrono::NaiveDateTime;
-use rusqlite::{Connection, Row, params};
+use rusqlite::{Connection, Row, named_params, params};
 
 use crate::database::error::DatabaseError;
 use crate::models::medio_ingreso::MedioIngreso;
-use crate::models::registro_ingreso::RegistroIngreso;
+use crate::models::registro_ingreso::{
+    NuevoRegistroIngreso, RegistroIngreso, ResultadoIngresoRegistrado,
+};
 use crate::models::tipo_ingreso::TipoIngreso;
 
 pub trait RegistroIngresoRepository {
-    fn crear(&self, registro: &RegistroIngreso) -> Result<i64, DatabaseError>;
+    fn crear(&self, registro: &NuevoRegistroIngreso) -> Result<i64, DatabaseError>;
 
     fn buscar_por_id(&self, id: i64) -> Result<Option<RegistroIngreso>, DatabaseError>;
 
@@ -123,7 +125,7 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<RegistroIngreso> {
 }
 
 impl<'a> RegistroIngresoRepository for SqliteRegistroIngresoRepository<'a> {
-    fn crear(&self, registro: &RegistroIngreso) -> Result<i64, DatabaseError> {
+    fn crear(&self, registro: &NuevoRegistroIngreso) -> Result<i64, DatabaseError> {
         let fecha_hora_ingreso = registro
             .fecha_hora_ingreso
             .format("%Y-%m-%d %H:%M:%S")
@@ -141,7 +143,20 @@ impl<'a> RegistroIngresoRepository for SqliteRegistroIngresoRepository<'a> {
             TipoIngreso::Swat => "SWAT",
         };
 
-        self.connection.execute(
+        let fecha_vencimiento_praind = registro
+            .datos_historicos
+            .fecha_vencimiento_praind
+            .map(|fecha| fecha.format("%Y-%m-%d").to_string());
+        let (resultado_acceso, motivo_resultado) = match registro.datos_historicos.resultado_acceso
+        {
+            ResultadoIngresoRegistrado::Permitido => ("PERMITIDO", None),
+            ResultadoIngresoRegistrado::PermitidoConAdvertencia => {
+                ("PERMITIDO_CON_ADVERTENCIA", Some("PRAIND_PROXIMO_VENCER"))
+            }
+            ResultadoIngresoRegistrado::Migrado => ("MIGRADO", Some("DATOS_RECONSTRUIDOS")),
+        };
+
+        let filas = self.connection.execute(
             "
             INSERT INTO registro_ingresos (
                 contratista_id,
@@ -151,25 +166,51 @@ impl<'a> RegistroIngresoRepository for SqliteRegistroIngresoRepository<'a> {
                 tipo_ingreso,
                 gafete_numero,
                 usuario_ingreso_id,
-                fecha_hora_salida,
-                usuario_salida_id
+                contratista_cedula,
+                contratista_nombre,
+                empresa_nombre,
+                usuario_ingreso_nombre,
+                fecha_vencimiento_praind,
+                es_personal_ruta,
+                tiene_acceso,
+                resultado_acceso,
+                motivo_resultado,
+                reglas_version
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            SELECT
+                :contratista_id, :empresa_id, :fecha_hora_ingreso,
+                :medio_ingreso, :tipo_ingreso, :gafete_numero,
+                :usuario_ingreso_id, :contratista_cedula,
+                :contratista_nombre, e.nombre, u.nombre,
+                :fecha_vencimiento_praind, :es_personal_ruta,
+                :tiene_acceso, :resultado_acceso, :motivo_resultado,
+                :reglas_version
+            FROM empresas AS e
+            CROSS JOIN usuarios AS u
+            WHERE e.id = :empresa_id AND u.id = :usuario_ingreso_id
             ",
-            params![
-                registro.contratista_id,
-                registro.empresa_id,
-                fecha_hora_ingreso,
-                medio_ingreso,
-                tipo_ingreso,
-                registro.gafete_numero,
-                registro.usuario_ingreso_id,
-                registro
-                    .fecha_hora_salida
-                    .map(|fecha| { fecha.format("%Y-%m-%d %H:%M:%S").to_string() }),
-                registro.usuario_salida_id,
-            ],
+            named_params! {
+                ":contratista_id": registro.contratista_id,
+                ":empresa_id": registro.empresa_id,
+                ":fecha_hora_ingreso": fecha_hora_ingreso,
+                ":medio_ingreso": medio_ingreso,
+                ":tipo_ingreso": tipo_ingreso,
+                ":gafete_numero": registro.gafete_numero,
+                ":usuario_ingreso_id": registro.usuario_ingreso_id,
+                ":contratista_cedula": registro.datos_historicos.contratista_cedula,
+                ":contratista_nombre": registro.datos_historicos.contratista_nombre,
+                ":fecha_vencimiento_praind": fecha_vencimiento_praind,
+                ":es_personal_ruta": registro.datos_historicos.es_personal_ruta as i64,
+                ":tiene_acceso": registro.datos_historicos.tiene_acceso as i64,
+                ":resultado_acceso": resultado_acceso,
+                ":motivo_resultado": motivo_resultado,
+                ":reglas_version": registro.datos_historicos.reglas_version,
+            },
         )?;
+
+        if filas == 0 {
+            return Err(DatabaseError::Sqlite(rusqlite::Error::QueryReturnedNoRows));
+        }
 
         Ok(self.connection.last_insert_rowid())
     }
@@ -283,7 +324,8 @@ impl<'a> RegistroIngresoRepository for SqliteRegistroIngresoRepository<'a> {
             UPDATE registro_ingresos
             SET
                 fecha_hora_salida = ?1,
-                usuario_salida_id = ?2
+                usuario_salida_id = ?2,
+                usuario_salida_nombre = (SELECT nombre FROM usuarios WHERE id = ?2)
             WHERE id = ?3
               AND fecha_hora_salida IS NULL
             ",

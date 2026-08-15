@@ -128,7 +128,7 @@ flowchart TD
 
     N --> P["Crear registro activo"]
     O --> P
-    P --> P1["Copiar empresa y tipo del contratista<br/>guardar medio, fecha y usuario de entrada"]
+    P --> P1["Tomar fotografía del momento:<br/>identidad, empresa, PRAIND, acceso,<br/>resultado, reglas y operador"]
     P1 --> Q[("registro_ingresos<br/>salida = NULL")]
     Q --> COMMIT["COMMIT"]
     COMMIT --> R["Recargar Ingresos activos"]
@@ -172,7 +172,7 @@ flowchart TD
     D -->|Sí| F{"¿salida >= entrada?"}
     F -->|No| G["Error: SalidaAnteriorAIngreso"]
     F -->|Sí| H["UPDATE condicionado a<br/>fecha_hora_salida IS NULL"]
-    H --> I["Guardar fecha y usuario de salida"]
+    H --> I["Guardar fecha, ID y nombre<br/>del usuario de salida una sola vez"]
     I --> J["Registro cerrado<br/>contratista y gafete quedan libres"]
     J --> K["Historial"]
     K --> L["Filtrar por rango, persona, empresa,<br/>tipo, gafete y estado"]
@@ -186,6 +186,25 @@ La lista operativa de ingresos activos no se pagina ni tiene un tope silencioso.
 filtro puede reducir las filas visibles, pero conserva el total real de personas dentro.
 La búsqueda exacta por gafete consulta el registro completo directamente y no depende de
 que esté presente en las filas filtradas.
+
+No existe una segunda tabla de historial ni se mueve físicamente el registro. El mismo
+movimiento nace activo con `fecha_hora_salida = NULL`; al registrar la salida se completa
+esa misma fila y pasa a verse como cerrado. Desde el ingreso se guardan copias de los
+datos que explican quién entró y bajo qué condiciones:
+
+- cédula y nombre del contratista;
+- nombre de la empresa y tipo de ingreso;
+- PRAIND, condición de personal de ruta y estado de acceso evaluados;
+- resultado (`PERMITIDO` o `PERMITIDO_CON_ADVERTENCIA`), motivo y versión de reglas;
+- nombre de los operadores de entrada y salida.
+
+Los identificadores originales se conservan como referencias, pero el historial se
+muestra y se busca usando esas copias. Por eso renombrar al contratista, cambiarlo de
+empresa o renombrar a un operador no reescribe el pasado. SQLite impide modificar los
+datos de entrada, registrar dos salidas o eliminar movimientos. Los movimientos creados
+antes de esta mejora se copian con los datos disponibles al migrar y se identifican como
+`MIGRADO / DATOS_RECONSTRUIDOS`; no se presentan como una fotografía exacta que nunca
+existió.
 
 ## 5. Administración de datos
 
@@ -250,18 +269,30 @@ erDiagram
         integer id PK
         integer contratista_id FK
         integer empresa_id FK
+        string contratista_cedula_snapshot
+        string contratista_nombre_snapshot
+        string empresa_nombre_snapshot
         datetime fecha_hora_ingreso
         string medio_ingreso
         string tipo_ingreso
         integer gafete_numero
         integer usuario_ingreso_id FK
+        string usuario_ingreso_nombre_snapshot
+        date fecha_vencimiento_praind_snapshot
+        boolean es_personal_ruta_snapshot
+        boolean tiene_acceso_snapshot
+        string resultado_acceso
+        string motivo_resultado
+        integer reglas_version
         datetime fecha_hora_salida
         integer usuario_salida_id FK
+        string usuario_salida_nombre_snapshot
     }
 ```
 
-`registro_ingresos` copia `empresa_id` y `tipo_ingreso` al momento de la entrada. Así, el
-movimiento conserva esos valores aunque después cambie el contratista.
+Las columnas marcadas conceptualmente como `snapshot` son copias históricas; en SQLite
+sus nombres no llevan ese sufijo. Los IDs mantienen integridad referencial y las copias
+mantienen el significado histórico del evento.
 
 ## 7. Lecturas y búsqueda
 
@@ -289,8 +320,9 @@ triggers. Las búsquedas de usuarios nunca exponen el hash de contraseña.
   administración. Actualmente, cualquier usuario autenticado alcanza esas operaciones.
 - La preparación del ingreso es informativa: la autorización definitiva ocurre de nuevo
   al registrar la entrada.
-- El resultado `Permitido` o `PermitidoConAdvertencia` no se guarda en el movimiento. En
-  la lista de activos se recalcula con los datos actuales del contratista.
+- El historial conserva el resultado evaluado al ingresar. La lista operativa de activos
+  también recalcula el acceso actual para advertir si una autorización fue revocada
+  mientras la persona todavía está dentro, sin modificar la fotografía histórica.
 - Las fechas representan hora local y se guardan como texto `YYYY-MM-DD HH:MM:SS`; no son
   UTC.
 

@@ -9,7 +9,9 @@ use control_acceso::database::repositories::registro_ingreso_repository::{
 use control_acceso::database::schema::initialize_database;
 use control_acceso::domain::resultado_acceso::MotivoDenegacion;
 use control_acceso::models::medio_ingreso::MedioIngreso;
-use control_acceso::models::registro_ingreso::RegistroIngreso;
+use control_acceso::models::registro_ingreso::{
+    DatosHistoricosEntrada, NuevoRegistroIngreso, ResultadoIngresoRegistrado, VERSION_REGLAS_ACCESO,
+};
 use control_acceso::models::tipo_ingreso::TipoIngreso;
 use control_acceso::services::contratista_service::{ContratistaService, DatosContratista};
 use control_acceso::services::empresa_service::EmpresaService;
@@ -388,8 +390,7 @@ fn sqlite_impide_ingreso_activo_y_gafete_activo_duplicados() {
         true,
     );
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let registro = |contratista_id, gafete_numero| RegistroIngreso {
-        id: 0,
+    let registro = |contratista_id, gafete_numero| NuevoRegistroIngreso {
         contratista_id,
         empresa_id,
         fecha_hora_ingreso: fecha_ingreso(),
@@ -397,8 +398,15 @@ fn sqlite_impide_ingreso_activo_y_gafete_activo_duplicados() {
         tipo_ingreso: TipoIngreso::Praind,
         gafete_numero: Some(gafete_numero),
         usuario_ingreso_id: usuario_id,
-        fecha_hora_salida: None,
-        usuario_salida_id: None,
+        datos_historicos: DatosHistoricosEntrada {
+            contratista_cedula: contratista_id.to_string(),
+            contratista_nombre: format!("Contratista {contratista_id}"),
+            fecha_vencimiento_praind: Some(praind_vigente()),
+            es_personal_ruta: false,
+            tiene_acceso: true,
+            resultado_acceso: ResultadoIngresoRegistrado::Permitido,
+            reglas_version: VERSION_REGLAS_ACCESO,
+        },
     };
 
     registros.crear(&registro(primer_contratista, 5)).unwrap();

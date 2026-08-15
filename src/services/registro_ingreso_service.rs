@@ -11,7 +11,10 @@ use crate::domain::acceso::verificar_acceso;
 use crate::domain::registro_ingreso::salida_es_cronologicamente_valida;
 use crate::domain::resultado_acceso::ResultadoAcceso;
 use crate::models::medio_ingreso::MedioIngreso;
-use crate::models::registro_ingreso::RegistroIngreso;
+use crate::models::registro_ingreso::{
+    DatosHistoricosEntrada, NuevoRegistroIngreso, RegistroIngreso, ResultadoIngresoRegistrado,
+    VERSION_REGLAS_ACCESO,
+};
 use crate::models::tipo_ingreso::TipoIngreso;
 
 use super::error::RegistroIngresoServiceError;
@@ -249,8 +252,14 @@ where
             None
         };
 
-        let registro = RegistroIngreso {
-            id: 0,
+        let resultado_registrado = match &resultado_acceso {
+            ResultadoAcceso::Permitido => ResultadoIngresoRegistrado::Permitido,
+            ResultadoAcceso::PermitidoConAdvertencia => {
+                ResultadoIngresoRegistrado::PermitidoConAdvertencia
+            }
+            ResultadoAcceso::Denegado(_) => unreachable!("el acceso denegado ya fue rechazado"),
+        };
+        let registro = NuevoRegistroIngreso {
             contratista_id: contratista.id,
             empresa_id: contratista.empresa_id,
             fecha_hora_ingreso,
@@ -258,8 +267,15 @@ where
             tipo_ingreso: contratista.tipo_ingreso,
             gafete_numero,
             usuario_ingreso_id,
-            fecha_hora_salida: None,
-            usuario_salida_id: None,
+            datos_historicos: DatosHistoricosEntrada {
+                contratista_cedula: contratista.cedula,
+                contratista_nombre: contratista.nombre,
+                fecha_vencimiento_praind: contratista.fecha_vencimiento_praind,
+                es_personal_ruta: contratista.es_personal_ruta,
+                tiene_acceso: contratista.tiene_acceso,
+                resultado_acceso: resultado_registrado,
+                reglas_version: VERSION_REGLAS_ACCESO,
+            },
         };
 
         let registro_id = self.registros.crear(&registro)?;

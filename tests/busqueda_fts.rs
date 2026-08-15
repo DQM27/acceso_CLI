@@ -77,8 +77,12 @@ fn activos_busca_persona_empresa_y_gafete_exacto() {
         .execute(
             "INSERT INTO registro_ingresos(
             contratista_id,empresa_id,fecha_hora_ingreso,medio_ingreso,tipo_ingreso,
-            gafete_numero,usuario_ingreso_id
-         ) VALUES (1,1,'2026-08-12 08:00:00','CAMINANDO','PRAIND',12,1)",
+            gafete_numero,usuario_ingreso_id,contratista_cedula,contratista_nombre,
+            empresa_nombre,usuario_ingreso_nombre,fecha_vencimiento_praind,
+            es_personal_ruta,tiene_acceso,resultado_acceso,motivo_resultado,reglas_version
+         ) VALUES (1,1,'2026-08-12 08:00:00','CAMINANDO','PRAIND',12,1,
+            '1001','María Peña','Álvarez Ingeniería','José Hernández','2030-01-01',0,1,
+            'PERMITIDO',NULL,1)",
             [],
         )
         .unwrap();
@@ -103,8 +107,12 @@ fn historial_usa_fts_y_conserva_total_coherente() {
         .execute(
             "INSERT INTO registro_ingresos(
             contratista_id,empresa_id,fecha_hora_ingreso,medio_ingreso,tipo_ingreso,
-            usuario_ingreso_id
-         ) VALUES (1,1,'2026-08-12 08:00:00','CAMINANDO','PRAIND',1)",
+            usuario_ingreso_id,contratista_cedula,contratista_nombre,empresa_nombre,
+            usuario_ingreso_nombre,fecha_vencimiento_praind,es_personal_ruta,
+            tiene_acceso,resultado_acceso,motivo_resultado,reglas_version
+         ) VALUES (1,1,'2026-08-12 08:00:00','CAMINANDO','PRAIND',1,
+            '1001','María Peña','Álvarez Ingeniería','José Hernández','2030-01-01',0,1,
+            'PERMITIDO',NULL,1)",
             [],
         )
         .unwrap();

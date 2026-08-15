@@ -27,6 +27,10 @@ fn pagina(cantidad: usize, total: usize) -> PaginaHistorial {
                 gafete_numero: Some(7),
                 usuario_ingreso_nombre: "Quintana".into(),
                 usuario_salida_nombre: None,
+                resultado_acceso:
+                    crate::models::registro_ingreso::ResultadoIngresoRegistrado::Permitido,
+                motivo_resultado: None,
+                reglas_version: crate::models::registro_ingreso::VERSION_REGLAS_ACCESO,
             })
             .collect(),
         total,

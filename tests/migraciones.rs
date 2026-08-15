@@ -93,6 +93,36 @@ fn insertar_referencias(connection: &Connection) {
         .unwrap();
 }
 
+fn insertar_movimiento_actual(
+    connection: &Connection,
+    id: i64,
+    ingreso: &str,
+    salida: Option<&str>,
+    usuario_salida_id: Option<i64>,
+    usuario_salida_nombre: Option<&str>,
+) -> rusqlite::Result<()> {
+    connection.execute(
+        "INSERT INTO registro_ingresos(
+            id,contratista_id,empresa_id,fecha_hora_ingreso,medio_ingreso,
+            tipo_ingreso,gafete_numero,usuario_ingreso_id,fecha_hora_salida,
+            usuario_salida_id,contratista_cedula,contratista_nombre,
+            empresa_nombre,usuario_ingreso_nombre,usuario_salida_nombre,
+            fecha_vencimiento_praind,es_personal_ruta,tiene_acceso,
+            resultado_acceso,motivo_resultado,reglas_version
+         ) VALUES (?1,1,1,?2,'CAMINANDO','PRAIND',NULL,1,?3,?4,
+            '2001','Persona','Empresa','Operador',?5,'2030-01-01',0,1,
+            'PERMITIDO',NULL,1)",
+        rusqlite::params![
+            id,
+            ingreso,
+            salida,
+            usuario_salida_id,
+            usuario_salida_nombre
+        ],
+    )?;
+    Ok(())
+}
+
 #[test]
 fn base_vacia_llega_a_version_actual_y_es_idempotente() {
     let connection = Connection::open_in_memory().unwrap();
@@ -103,18 +133,10 @@ fn base_vacia_llega_a_version_actual_y_es_idempotente() {
 }
 
 #[test]
-fn migracion_v4_conserva_datos_y_bloquea_cambio_directo_de_cedula() {
+fn esquema_actual_bloquea_cambio_directo_de_cedula() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
     insertar_referencias(&connection);
-    connection
-        .execute_batch(
-            "DROP TRIGGER contratistas_cedula_inmutable;
-             PRAGMA user_version = 3;",
-        )
-        .unwrap();
-
-    initialize_database(&connection).unwrap();
 
     assert_eq!(version(&connection), SCHEMA_VERSION);
     assert!(
@@ -173,6 +195,19 @@ fn migra_version_1_y_conserva_datos_validos_e_indices() {
         .query_row("SELECT COUNT(*) FROM registro_ingresos", [], |r| r.get(0))
         .unwrap();
     assert_eq!(total, 1);
+    let snapshot: (String, String, String, i64) = connection
+        .query_row(
+            "SELECT contratista_cedula, contratista_nombre,
+                    resultado_acceso, reglas_version
+             FROM registro_ingresos WHERE id=1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .unwrap();
+    assert_eq!(
+        snapshot,
+        ("2001".into(), "Persona".into(), "MIGRADO".into(), 0)
+    );
     for indice in [
         "idx_registro_ingresos_contratista_activo",
         "idx_registro_ingresos_gafete_activo",
@@ -194,18 +229,38 @@ fn check_de_salida_acepta_pares_coherentes_y_rechaza_incoherentes() {
     initialize_database(&connection).unwrap();
     insertar_referencias(&connection);
 
-    connection.execute(
-        "INSERT INTO registro_ingresos VALUES (1,1,1,'2026-08-11 08:00:00','CAMINANDO','PRAIND',NULL,1,NULL,NULL)", []
-    ).unwrap();
-    connection.execute(
-        "INSERT INTO registro_ingresos VALUES (2,1,1,'2026-08-10 08:00:00','CAMINANDO','PRAIND',NULL,1,'2026-08-10 17:00:00',1)", []
-    ).unwrap();
-    assert!(connection.execute(
-        "INSERT INTO registro_ingresos VALUES (3,1,1,'2026-08-09 08:00:00','CAMINANDO','PRAIND',NULL,1,'2026-08-09 17:00:00',NULL)", []
-    ).is_err());
-    assert!(connection.execute(
-        "INSERT INTO registro_ingresos VALUES (4,1,1,'2026-08-09 08:00:00','CAMINANDO','PRAIND',NULL,1,NULL,1)", []
-    ).is_err());
+    insertar_movimiento_actual(&connection, 1, "2026-08-11 08:00:00", None, None, None).unwrap();
+    insertar_movimiento_actual(
+        &connection,
+        2,
+        "2026-08-10 08:00:00",
+        Some("2026-08-10 17:00:00"),
+        Some(1),
+        Some("Operador"),
+    )
+    .unwrap();
+    assert!(
+        insertar_movimiento_actual(
+            &connection,
+            3,
+            "2026-08-09 08:00:00",
+            Some("2026-08-09 17:00:00"),
+            None,
+            None,
+        )
+        .is_err()
+    );
+    assert!(
+        insertar_movimiento_actual(
+            &connection,
+            4,
+            "2026-08-09 08:00:00",
+            None,
+            Some(1),
+            Some("Operador"),
+        )
+        .is_err()
+    );
 }
 
 #[test]

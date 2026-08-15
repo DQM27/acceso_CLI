@@ -4,7 +4,9 @@ use control_acceso::database::repositories::registro_ingreso_repository::{
     RegistroIngresoRepository, SqliteRegistroIngresoRepository,
 };
 use control_acceso::models::medio_ingreso::MedioIngreso;
-use control_acceso::models::registro_ingreso::RegistroIngreso;
+use control_acceso::models::registro_ingreso::{
+    DatosHistoricosEntrada, NuevoRegistroIngreso, ResultadoIngresoRegistrado, VERSION_REGLAS_ACCESO,
+};
 use control_acceso::models::tipo_ingreso::TipoIngreso;
 
 use rusqlite::Connection;
@@ -88,9 +90,8 @@ fn fecha_salida() -> NaiveDateTime {
     NaiveDateTime::parse_from_str("2026-08-11 17:30:00", "%Y-%m-%d %H:%M:%S").unwrap()
 }
 
-fn crear_registro(contratista_id: i64, empresa_id: i64, usuario_id: i64) -> RegistroIngreso {
-    RegistroIngreso {
-        id: 0,
+fn crear_registro(contratista_id: i64, empresa_id: i64, usuario_id: i64) -> NuevoRegistroIngreso {
+    NuevoRegistroIngreso {
         contratista_id,
         empresa_id,
         fecha_hora_ingreso: NaiveDateTime::parse_from_str(
@@ -102,8 +103,15 @@ fn crear_registro(contratista_id: i64, empresa_id: i64, usuario_id: i64) -> Regi
         tipo_ingreso: TipoIngreso::Praind,
         gafete_numero: None,
         usuario_ingreso_id: usuario_id,
-        fecha_hora_salida: None,
-        usuario_salida_id: None,
+        datos_historicos: DatosHistoricosEntrada {
+            contratista_cedula: "20000001".into(),
+            contratista_nombre: "Contratista Prueba".into(),
+            fecha_vencimiento_praind: Some(chrono::NaiveDate::from_ymd_opt(2030, 12, 31).unwrap()),
+            es_personal_ruta: false,
+            tiene_acceso: true,
+            resultado_acceso: ResultadoIngresoRegistrado::Permitido,
+            reglas_version: VERSION_REGLAS_ACCESO,
+        },
     }
 }
 
