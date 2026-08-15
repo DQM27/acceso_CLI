@@ -1,9 +1,10 @@
 use std::path::Path;
 
 use chrono::NaiveDate;
-use rusqlite::Connection;
+use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 use crate::database::connection::open_database;
+use crate::database::error::DatabaseError;
 use crate::database::queries::contratistas::{
     ContratistaResumen, FiltroContratistas, SqliteContratistasQuery,
 };
@@ -169,11 +170,27 @@ impl AppCore {
         usuario_id: i64,
         fecha_hora: chrono::NaiveDateTime,
     ) -> Result<ResultadoRegistroEntrada, RegistroIngresoServiceError> {
-        RegistroIngresoService::new(
-            &SqliteContratistaRepository::new(&self.connection),
-            &SqliteRegistroIngresoRepository::new(&self.connection),
-        )
-        .registrar_entrada(contratista_id, medio, gafete, usuario_id, fecha_hora)
+        // El bloqueo se adquiere antes de la primera lectura definitiva. Así, los
+        // repositorios creados sobre esta transacción validan e insertan contra el
+        // mismo estado de SQLite.
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+
+        let resultado = {
+            let contratistas = SqliteContratistaRepository::new(&transaction);
+            let registros = SqliteRegistroIngresoRepository::new(&transaction);
+            RegistroIngresoService::new(&contratistas, &registros).registrar_entrada(
+                contratista_id,
+                medio,
+                gafete,
+                usuario_id,
+                fecha_hora,
+            )?
+        };
+
+        transaction.commit().map_err(DatabaseError::from)?;
+        Ok(resultado)
     }
 
     pub fn listar_ingresos_activos(

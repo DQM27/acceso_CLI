@@ -180,6 +180,11 @@ where
         })
     }
 
+    /// Ejecuta la decisión definitiva usando los repositorios recibidos.
+    ///
+    /// Este servicio es independiente de SQLite y no abre transacciones. El adaptador
+    /// productivo (`AppCore`) debe construir ambos repositorios sobre la misma unidad
+    /// de trabajo `IMMEDIATE` para que todas las lecturas y el `INSERT` sean atómicos.
     pub fn registrar_entrada(
         &self,
         contratista_id: i64,

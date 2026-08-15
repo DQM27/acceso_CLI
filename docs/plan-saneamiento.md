@@ -27,7 +27,7 @@ Cada tarea sólo se considera terminada cuando tiene pruebas y manejo de errores
 - [x] **Migraciones globalmente atómicas.** Tomar `BEGIN IMMEDIATE` antes de leer
   `user_version` y ejecutar dentro de la misma transacción todas las migraciones
   pendientes. Probar dos aperturas simultáneas.
-- [ ] **Entrada atómica.** Leer al contratista, validar acceso/PRAIND, comprobar ingreso
+- [x] **Entrada atómica.** Leer al contratista, validar acceso/PRAIND, comprobar ingreso
   y gafete e insertar el movimiento dentro de una sola transacción. Traducir colisiones
   de índices a errores de negocio comprensibles.
 - [ ] **Ediciones sin sobrescribir cambios recientes.** Añadir una versión al registro

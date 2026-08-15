@@ -92,8 +92,8 @@ iniciales. La autenticación nunca devuelve el `password_hash` dentro de la sesi
 ## 3. Registro de una entrada
 
 La preparación muestra el estado actual, pero no reserva recursos ni funciona como una
-autorización guardada. Al confirmar, el servicio vuelve a leer y validar todo antes del
-`INSERT`.
+autorización guardada. Al confirmar, la aplicación adquiere una transacción `IMMEDIATE`;
+el servicio vuelve a leer, validar e insertar usando exclusivamente esa transacción.
 
 ```mermaid
 flowchart TD
@@ -102,7 +102,8 @@ flowchart TD
     B1 --> C["Vista previa lógica"]
     C --> D["Elegir medio de ingreso<br/>y gafete cuando corresponda"]
     D --> E["Confirmar registrar_entrada"]
-    E --> F["Volver a leer el contratista"]
+    E --> TX["BEGIN IMMEDIATE"]
+    TX --> F["Volver a leer el contratista"]
 
     F --> G{"¿tiene_acceso?"}
     G -->|No| DEN1["Denegar: SinAcceso"]
@@ -129,8 +130,19 @@ flowchart TD
     O --> P
     P --> P1["Copiar empresa y tipo del contratista<br/>guardar medio, fecha y usuario de entrada"]
     P1 --> Q[("registro_ingresos<br/>salida = NULL")]
-    Q --> R["Recargar Ingresos activos"]
+    Q --> COMMIT["COMMIT"]
+    COMMIT --> R["Recargar Ingresos activos"]
+
+    DEN1 --> RB["ROLLBACK<br/>sin movimiento"]
+    DEN2 --> RB
+    ERR1 --> RB
+    ERR2 --> RB
+    ERR3 --> RB
 ```
+
+El bloqueo de escritura sólo existe durante la confirmación final; nunca permanece
+abierto mientras el operador busca, revisa o completa el formulario. Si otra escritura
+termina primero, la transacción espera y después vuelve a leer el estado ya actualizado.
 
 Reglas para PRAIND y gafete:
 
