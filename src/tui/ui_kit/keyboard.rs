@@ -15,13 +15,16 @@ pub enum StandardCommand {
     FocusPrevious,
     Help,
     Theme,
+    QuickExit,
     EmergencyExit,
 }
 
 pub const HELP_KEY: KeyCode = KeyCode::F(1);
+pub const QUICK_EXIT_KEY: KeyCode = KeyCode::F(2);
 pub const THEME_KEY: KeyCode = KeyCode::F(7);
 
 pub const HELP_HINT: CommandHint<'static> = CommandHint::new("F1", "Ayuda");
+pub const QUICK_EXIT_HINT: CommandHint<'static> = CommandHint::new("F2", "Salida rápida");
 pub const THEME_HINT: CommandHint<'static> = CommandHint::new("F7", "Tema");
 pub const CANCEL_HINT: CommandHint<'static> = CommandHint::new("ESC", "Cancelar");
 
@@ -52,6 +55,7 @@ pub fn standard_command(key: KeyEvent) -> Option<StandardCommand> {
         }
         KeyCode::Tab => Some(StandardCommand::FocusNext),
         HELP_KEY => Some(StandardCommand::Help),
+        QUICK_EXIT_KEY => Some(StandardCommand::QuickExit),
         THEME_KEY => Some(StandardCommand::Theme),
         _ => None,
     }
@@ -80,6 +84,11 @@ mod tests {
                 StandardCommand::FocusPrevious,
             ),
             (KeyCode::F(1), KeyModifiers::NONE, StandardCommand::Help),
+            (
+                KeyCode::F(2),
+                KeyModifiers::NONE,
+                StandardCommand::QuickExit,
+            ),
             (KeyCode::F(7), KeyModifiers::NONE, StandardCommand::Theme),
         ];
 

@@ -11,7 +11,8 @@ mod text_input;
 mod theme;
 
 pub use keyboard::{
-    CANCEL_HINT, HELP_HINT, HELP_KEY, StandardCommand, THEME_HINT, THEME_KEY, standard_command,
+    CANCEL_HINT, HELP_HINT, HELP_KEY, QUICK_EXIT_HINT, QUICK_EXIT_KEY, StandardCommand,
+    THEME_HINT, THEME_KEY, standard_command,
 };
 pub use select_menu::{SelectMenu, SelectMenuState};
 pub use shell::{
