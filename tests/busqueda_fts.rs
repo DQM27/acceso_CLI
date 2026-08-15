@@ -87,15 +87,13 @@ fn activos_busca_persona_empresa_y_gafete_exacto() {
     for texto in ["pena", "alvarez", "12"] {
         let filtro = FiltroIngresosActivos {
             texto: Some(texto.to_owned()),
-            ..FiltroIngresosActivos::default()
         };
-        assert_eq!(query.listar_activos(&filtro).unwrap().len(), 1);
+        assert_eq!(query.listar_activos(&filtro).unwrap().items.len(), 1);
     }
     let filtro = FiltroIngresosActivos {
         texto: Some("2".to_owned()),
-        ..FiltroIngresosActivos::default()
     };
-    assert!(query.listar_activos(&filtro).unwrap().is_empty());
+    assert!(query.listar_activos(&filtro).unwrap().items.is_empty());
 }
 
 #[test]

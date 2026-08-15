@@ -27,8 +27,8 @@ use crate::services::error::{
     UsuarioServiceError,
 };
 use crate::services::registro_ingreso_service::{
-    IngresoActivoResumen, PreparacionIngreso, RegistroIngresoConsultaService,
-    RegistroIngresoService, ResultadoRegistroEntrada,
+    IngresoActivoResumen, ListaIngresosActivosResumen, PreparacionIngreso,
+    RegistroIngresoConsultaService, RegistroIngresoService, ResultadoRegistroEntrada,
 };
 use crate::services::usuario_service::{
     ActualizarUsuarioInput, CrearRootInicialInput, CrearUsuarioInput, UsuarioConsultaService,
@@ -197,7 +197,7 @@ impl AppCore {
         &self,
         filtro: &FiltroIngresosActivos,
         hoy: NaiveDate,
-    ) -> Result<Vec<IngresoActivoResumen>, RegistroIngresoServiceError> {
+    ) -> Result<ListaIngresosActivosResumen, RegistroIngresoServiceError> {
         RegistroIngresoConsultaService::new(&SqliteIngresosQuery::new(&self.connection))
             .listar_activos(filtro, hoy)
     }
@@ -213,12 +213,10 @@ impl AppCore {
     pub fn buscar_activo_por_gafete(
         &self,
         numero: i64,
-    ) -> Result<i64, RegistroIngresoServiceError> {
-        let contratistas = SqliteContratistaRepository::new(&self.connection);
-        let registros = SqliteRegistroIngresoRepository::new(&self.connection);
-        Ok(RegistroIngresoService::new(&contratistas, &registros)
-            .buscar_ingreso_activo_por_gafete(numero)?
-            .id)
+        hoy: NaiveDate,
+    ) -> Result<IngresoActivoResumen, RegistroIngresoServiceError> {
+        RegistroIngresoConsultaService::new(&SqliteIngresosQuery::new(&self.connection))
+            .buscar_activo_por_gafete(numero, hoy)
     }
 
     pub fn registrar_salida(

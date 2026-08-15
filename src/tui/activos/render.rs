@@ -185,7 +185,11 @@ fn render_estado(frame: &mut Frame, area: Rect, state: &ActivosState) {
             Span::styled("FILTRO ACTIVO: ", theme::foco()),
             Span::styled(&state.filtro, theme::texto_normal()),
             Span::styled(
-                format!("    {} resultados    ", state.registros.len()),
+                format!(
+                    "    {} resultados de {} personas dentro    ",
+                    state.cantidad(),
+                    state.total_activos()
+                ),
                 theme::texto_secundario(),
             ),
             Span::styled("ESC ", theme::ayuda_tecla()),
@@ -222,8 +226,8 @@ fn render_pie(frame: &mut Frame, area: Rect, state: &ActivosState) {
     let posicion = texto_posicion(state);
     frame.render_widget(
         Paragraph::new(format!(
-            " {} ingresos activos │ Registro {posicion}",
-            state.cantidad()
+            " {} personas dentro │ Registro {posicion}",
+            state.total_activos()
         ))
         .style(theme::texto_normal()),
         columnas[0],
@@ -260,7 +264,7 @@ fn render_modo(frame: &mut Frame, area: Rect, state: &ActivosState) {
                 render_confirmacion(frame, area, registro);
             }
         }
-        ModoActivos::SalidaPorGafete(estado) => render_gafete(frame, area, state, estado),
+        ModoActivos::SalidaPorGafete(estado) => render_gafete(frame, area, estado),
         ModoActivos::Columnas { seleccion } => render_columnas(frame, area, state, *seleccion),
         ModoActivos::Normal | ModoActivos::Busqueda { .. } => {}
     }
@@ -346,7 +350,7 @@ fn render_detalle(frame: &mut Frame, area: Rect, registro: &IngresoActivoResumen
     );
 }
 
-fn render_gafete(frame: &mut Frame, area: Rect, state: &ActivosState, estado: &SalidaGafete) {
+fn render_gafete(frame: &mut Frame, area: Rect, estado: &SalidaGafete) {
     let lineas = match estado {
         SalidaGafete::Capturando { numero, error } => vec![
             Line::from(format!("Gafete: {numero}_")).style(theme::foco()),
@@ -355,26 +359,21 @@ fn render_gafete(frame: &mut Frame, area: Rect, state: &ActivosState, estado: &S
             Line::from(""),
             Line::from("ENTER Buscar                  ESC Cancelar").style(theme::foco()),
         ],
-        SalidaGafete::Encontrado { id } => {
-            let Some(registro) = state.registro(*id) else {
-                return;
-            };
-            vec![
-                Line::from(registro.contratista_nombre.clone()).style(theme::titulo()),
-                Line::from(registro.empresa_nombre.clone()),
-                Line::from(format!(
-                    "Gafete: {}",
-                    valor_columna(registro, Columna::Gafete)
-                )),
-                Line::from(format!(
-                    "Ingreso: {}",
-                    registro.fecha_hora_ingreso.format("%H:%M")
-                )),
-                Line::from(""),
-                Line::from("¿Registrar salida?"),
-                Line::from("Y Sí        N No        ESC Cancelar").style(theme::foco()),
-            ]
-        }
+        SalidaGafete::Encontrado { registro } => vec![
+            Line::from(registro.contratista_nombre.clone()).style(theme::titulo()),
+            Line::from(registro.empresa_nombre.clone()),
+            Line::from(format!(
+                "Gafete: {}",
+                valor_columna(registro, Columna::Gafete)
+            )),
+            Line::from(format!(
+                "Ingreso: {}",
+                registro.fecha_hora_ingreso.format("%H:%M")
+            )),
+            Line::from(""),
+            Line::from("¿Registrar salida?"),
+            Line::from("Y Sí        N No        ESC Cancelar").style(theme::foco()),
+        ],
     };
     layout::render_overlay(frame, area, 58, 11, 4, "SALIDA POR GAFETE", lineas);
 }

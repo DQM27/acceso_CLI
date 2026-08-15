@@ -6,8 +6,6 @@ use crate::database::search::BusquedaTexto;
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::models::tipo_ingreso::TipoIngreso;
 
-const LIMITE_ACTIVOS_PREDETERMINADO: usize = 100;
-const LIMITE_ACTIVOS_MAXIMO: usize = 500;
 const LIMITE_HISTORIAL_PREDETERMINADO: usize = 50;
 const LIMITE_HISTORIAL_MAXIMO: usize = 200;
 
@@ -29,21 +27,15 @@ pub struct IngresoActivoLectura {
     pub tiene_acceso: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct FiltroIngresosActivos {
     pub texto: Option<String>,
-    pub limite: usize,
-    pub offset: usize,
 }
 
-impl Default for FiltroIngresosActivos {
-    fn default() -> Self {
-        Self {
-            texto: None,
-            limite: LIMITE_ACTIVOS_PREDETERMINADO,
-            offset: 0,
-        }
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListaIngresosActivosLectura {
+    pub items: Vec<IngresoActivoLectura>,
+    pub total: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,7 +102,12 @@ pub trait IngresosQuery {
     fn listar_activos(
         &self,
         filtro: &FiltroIngresosActivos,
-    ) -> Result<Vec<IngresoActivoLectura>, DatabaseError>;
+    ) -> Result<ListaIngresosActivosLectura, DatabaseError>;
+
+    fn buscar_activo_por_gafete(
+        &self,
+        gafete_numero: i64,
+    ) -> Result<Option<IngresoActivoLectura>, DatabaseError>;
 
     fn buscar_historial(&self, filtro: &FiltroHistorial) -> Result<PaginaHistorial, DatabaseError>;
 }
@@ -129,37 +126,45 @@ impl IngresosQuery for SqliteIngresosQuery<'_> {
     fn listar_activos(
         &self,
         filtro: &FiltroIngresosActivos,
-    ) -> Result<Vec<IngresoActivoLectura>, DatabaseError> {
+    ) -> Result<ListaIngresosActivosLectura, DatabaseError> {
         let busqueda = BusquedaTexto::preparar(filtro.texto.as_deref());
-        let limite = filtro.limite.clamp(1, LIMITE_ACTIVOS_MAXIMO) as i64;
-        let offset = offset_sql(filtro.offset);
+        let total: i64 = self.connection.query_row(
+            "SELECT COUNT(*) FROM registro_ingresos WHERE fecha_hora_salida IS NULL",
+            [],
+            |row| row.get(0),
+        )?;
 
         let (sql, parametros): (&str, Vec<rusqlite::types::Value>) = match busqueda.modo {
             1 => (
                 ACTIVOS_CORTO_SQL,
-                vec![
-                    busqueda.patron_like.into(),
-                    busqueda.numero_exacto.into(),
-                    limite.into(),
-                    offset.into(),
-                ],
+                vec![busqueda.patron_like.into(), busqueda.numero_exacto.into()],
             ),
             2 => (
                 ACTIVOS_FTS_SQL,
-                vec![
-                    busqueda.consulta_fts.into(),
-                    busqueda.numero_exacto.into(),
-                    limite.into(),
-                    offset.into(),
-                ],
+                vec![busqueda.consulta_fts.into(), busqueda.numero_exacto.into()],
             ),
-            _ => (ACTIVOS_SIN_FILTRO_SQL, vec![limite.into(), offset.into()]),
+            _ => (ACTIVOS_SIN_FILTRO_SQL, vec![]),
         };
         let mut statement = self.connection.prepare(sql)?;
         let items = statement
             .query_map(rusqlite::params_from_iter(parametros), convertir_activo)?
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(items)
+        Ok(ListaIngresosActivosLectura {
+            items,
+            total: usize::try_from(total).unwrap_or(usize::MAX),
+        })
+    }
+
+    fn buscar_activo_por_gafete(
+        &self,
+        gafete_numero: i64,
+    ) -> Result<Option<IngresoActivoLectura>, DatabaseError> {
+        let mut statement = self.connection.prepare(ACTIVO_POR_GAFETE_SQL)?;
+        match statement.query_row([gafete_numero], convertir_activo) {
+            Ok(registro) => Ok(Some(registro)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(error) => Err(error.into()),
+        }
     }
 
     fn buscar_historial(&self, filtro: &FiltroHistorial) -> Result<PaginaHistorial, DatabaseError> {
@@ -230,7 +235,6 @@ const ACTIVOS_SIN_FILTRO_SQL: &str = "
     INNER JOIN usuarios AS ui ON ui.id = r.usuario_ingreso_id
     WHERE r.fecha_hora_salida IS NULL
     ORDER BY r.fecha_hora_ingreso DESC, r.id DESC
-    LIMIT ?1 OFFSET ?2
 ";
 
 const ACTIVOS_CORTO_SQL: &str = "
@@ -248,7 +252,6 @@ const ACTIVOS_CORTO_SQL: &str = "
         OR (?2 IS NOT NULL AND r.gafete_numero = ?2)
     )
     ORDER BY r.fecha_hora_ingreso DESC, r.id DESC
-    LIMIT ?3 OFFSET ?4
 ";
 
 const ACTIVOS_FTS_SQL: &str = "
@@ -277,7 +280,19 @@ const ACTIVOS_FTS_SQL: &str = "
     INNER JOIN empresas AS e ON e.id = r.empresa_id
     INNER JOIN usuarios AS ui ON ui.id = r.usuario_ingreso_id
     ORDER BY r.fecha_hora_ingreso DESC, r.id DESC
-    LIMIT ?3 OFFSET ?4
+";
+
+const ACTIVO_POR_GAFETE_SQL: &str = "
+    SELECT
+        r.id, r.contratista_id, r.empresa_id, c.cedula, c.nombre, e.nombre,
+        r.tipo_ingreso, r.medio_ingreso, r.fecha_hora_ingreso, r.gafete_numero,
+        ui.nombre, c.fecha_vencimiento_praind, c.es_personal_ruta, c.tiene_acceso
+    FROM registro_ingresos AS r
+    INNER JOIN contratistas AS c ON c.id = r.contratista_id
+    INNER JOIN empresas AS e ON e.id = r.empresa_id
+    INNER JOIN usuarios AS ui ON ui.id = r.usuario_ingreso_id
+    WHERE r.fecha_hora_salida IS NULL AND r.gafete_numero = ?1
+    LIMIT 1
 ";
 
 const HISTORIAL_COLUMNAS: &str = "

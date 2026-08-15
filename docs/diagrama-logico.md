@@ -162,8 +162,11 @@ activo de cada gafete.
 
 ```mermaid
 flowchart TD
-    A["Consultar ingresos activos"] --> B["Seleccionar registro<br/>o buscar por gafete"]
-    B --> C["Cargar registro por ID"]
+    A["Consultar todos los ingresos activos<br/>sin límite ni paginación"] --> T["Mostrar total real de personas dentro"]
+    T --> B{"Seleccionar de la lista<br/>o buscar por gafete"}
+    B -->|Lista| C["Cargar registro por ID"]
+    B -->|Gafete exacto| C2["Consultar y devolver<br/>el registro activo completo"]
+    C2 --> D
     C --> D{"¿Existe y sigue sin salida?"}
     D -->|No| E["Error: RegistroNoActivo"]
     D -->|Sí| F{"¿salida >= entrada?"}
@@ -178,6 +181,11 @@ flowchart TD
 
 El intervalo del historial es `[desde, hasta)`: incluye `desde`, excluye `hasta` y exige
 que `desde < hasta`.
+
+La lista operativa de ingresos activos no se pagina ni tiene un tope silencioso. Un
+filtro puede reducir las filas visibles, pero conserva el total real de personas dentro.
+La búsqueda exacta por gafete consulta el registro completo directamente y no depende de
+que esté presente en las filas filtradas.
 
 ## 5. Administración de datos
 

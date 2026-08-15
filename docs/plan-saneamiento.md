@@ -30,7 +30,7 @@ Cada tarea sólo se considera terminada cuando tiene pruebas y manejo de errores
 - [x] **Entrada atómica.** Leer al contratista, validar acceso/PRAIND, comprobar ingreso
   y gafete e insertar el movimiento dentro de una sola transacción. Traducir colisiones
   de índices a errores de negocio comprensibles.
-- [ ] **Ingresos activos completos.** Eliminar el límite silencioso de 100, devolver el
+- [x] **Ingresos activos completos.** Eliminar el límite silencioso de 100, devolver el
   listado completo y hacer que la búsqueda por gafete devuelva directamente el registro
   encontrado. La vista operativa debe mostrar el total real de personas dentro.
 

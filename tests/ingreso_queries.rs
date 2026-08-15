@@ -4,7 +4,7 @@ use rusqlite::{Connection, params};
 use control_acceso::database::error::DatabaseError;
 use control_acceso::database::queries::ingresos::{
     EstadoMovimiento, FiltroHistorial, FiltroIngresosActivos, IngresoActivoLectura, IngresosQuery,
-    PaginaHistorial, SqliteIngresosQuery,
+    ListaIngresosActivosLectura, PaginaHistorial, SqliteIngresosQuery,
 };
 use control_acceso::database::schema::initialize_database;
 use control_acceso::domain::resultado_acceso::ResultadoAcceso;
@@ -101,8 +101,9 @@ fn activos_solo_devuelve_abiertos_con_fila_compuesta() {
     let items = SqliteIngresosQuery::new(&base.connection)
         .listar_activos(&FiltroIngresosActivos::default())
         .unwrap();
-    assert_eq!(items.len(), 1);
-    let item = &items[0];
+    assert_eq!(items.total, 1);
+    assert_eq!(items.items.len(), 1);
+    let item = &items.items[0];
     assert_eq!(item.cedula, "1001");
     assert_eq!(item.contratista_nombre, "Ana Solano");
     assert_eq!(item.empresa_nombre, "Constructora Alfa");
@@ -141,9 +142,9 @@ fn activos_admite_gafete_none_y_ambos_medios() {
     let items = SqliteIngresosQuery::new(&base.connection)
         .listar_activos(&FiltroIngresosActivos::default())
         .unwrap();
-    assert_eq!(items[0].medio_ingreso, MedioIngreso::Vehiculo);
-    assert_eq!(items[0].gafete_numero, None);
-    assert_eq!(items[1].medio_ingreso, MedioIngreso::Caminando);
+    assert_eq!(items.items[0].medio_ingreso, MedioIngreso::Vehiculo);
+    assert_eq!(items.items[0].gafete_numero, None);
+    assert_eq!(items.items[1].medio_ingreso, MedioIngreso::Caminando);
 }
 
 #[test]
@@ -165,42 +166,79 @@ fn activos_busca_por_cedula_nombre_empresa_y_gafete() {
         let items = query
             .listar_activos(&FiltroIngresosActivos {
                 texto: Some(format!("  {texto}  ")),
-                ..FiltroIngresosActivos::default()
             })
             .unwrap();
-        assert_eq!(items.len(), 1, "filtro {texto}");
+        assert_eq!(items.items.len(), 1, "filtro {texto}");
+        assert_eq!(items.total, 1);
     }
     assert_eq!(
         query
             .listar_activos(&FiltroIngresosActivos {
                 texto: Some("   ".into()),
-                ..FiltroIngresosActivos::default()
             })
             .unwrap()
+            .items
             .len(),
         1
     );
 }
 
 #[test]
-fn activos_limit_offset_y_orden_fecha_id_son_estables() {
+fn activos_devuelve_mas_de_cien_sin_recorte_y_con_orden_estable() {
     let base = preparar_base();
-    let primero = insertar(
+    for id in 3..=125 {
+        base.connection
+            .execute(
+                "INSERT INTO contratistas(
+                    cedula,nombre,empresa_id,tipo_ingreso,es_personal_ruta,tiene_acceso
+                 ) VALUES (?1,?2,1,'SWAT',0,1)",
+                params![format!("C-{id}"), format!("Persona {id}")],
+            )
+            .unwrap();
+    }
+    let mut ids = Vec::new();
+    for contratista_id in 1..=125 {
+        ids.push(insertar(
+            &base,
+            contratista_id,
+            base.empresa_uno,
+            "2026-08-12 07:00:00",
+            "VEHICULO",
+            "SWAT",
+            None,
+            None,
+            None,
+        ));
+    }
+    let query = SqliteIngresosQuery::new(&base.connection);
+    let resultado = query
+        .listar_activos(&FiltroIngresosActivos::default())
+        .unwrap();
+    assert_eq!(resultado.total, 125);
+    assert_eq!(resultado.items.len(), 125);
+    assert_eq!(resultado.items[0].registro_id, *ids.last().unwrap());
+    assert_eq!(resultado.items[124].registro_id, ids[0]);
+}
+
+#[test]
+fn activos_filtrados_conservan_total_real_y_gafete_devuelve_registro_completo() {
+    let base = preparar_base();
+    let registro_id = insertar(
         &base,
         base.contratista_uno,
         base.empresa_uno,
         "2026-08-12 07:00:00",
         "CAMINANDO",
         "PRAIND",
-        Some(1),
+        Some(47),
         None,
         None,
     );
-    let segundo = insertar(
+    insertar(
         &base,
         base.contratista_dos,
         base.empresa_dos,
-        "2026-08-12 07:00:00",
+        "2026-08-12 08:00:00",
         "VEHICULO",
         "SWAT",
         None,
@@ -208,22 +246,19 @@ fn activos_limit_offset_y_orden_fecha_id_son_estables() {
         None,
     );
     let query = SqliteIngresosQuery::new(&base.connection);
-    let pagina_uno = query
+    let filtrados = query
         .listar_activos(&FiltroIngresosActivos {
-            texto: None,
-            limite: 1,
-            offset: 0,
+            texto: Some("Ana".into()),
         })
         .unwrap();
-    let pagina_dos = query
-        .listar_activos(&FiltroIngresosActivos {
-            texto: None,
-            limite: 1,
-            offset: 1,
-        })
-        .unwrap();
-    assert_eq!(pagina_uno[0].registro_id, segundo);
-    assert_eq!(pagina_dos[0].registro_id, primero);
+    assert_eq!(filtrados.items.len(), 1);
+    assert_eq!(filtrados.total, 2);
+
+    let encontrado = query.buscar_activo_por_gafete(47).unwrap().unwrap();
+    assert_eq!(encontrado.registro_id, registro_id);
+    assert_eq!(encontrado.contratista_nombre, "Ana Solano");
+    assert_eq!(encontrado.empresa_nombre, "Constructora Alfa");
+    assert!(query.buscar_activo_por_gafete(99).unwrap().is_none());
 }
 
 #[test]
@@ -253,6 +288,7 @@ fn activos_convierte_los_cuatro_tipos() {
     let tipos: Vec<_> = SqliteIngresosQuery::new(&base.connection)
         .listar_activos(&FiltroIngresosActivos::default())
         .unwrap()
+        .items
         .into_iter()
         .map(|i| i.tipo_ingreso)
         .collect();
@@ -290,7 +326,7 @@ fn service_calcula_advertencia_praind_actual_sin_sql_de_dominio() {
         )
         .unwrap();
     assert_eq!(
-        items[0].resultado_acceso,
+        items.items[0].resultado_acceso,
         ResultadoAcceso::PermitidoConAdvertencia
     );
 }
@@ -587,7 +623,14 @@ impl IngresosQuery for QueryConError {
     fn listar_activos(
         &self,
         _: &FiltroIngresosActivos,
-    ) -> Result<Vec<IngresoActivoLectura>, DatabaseError> {
+    ) -> Result<ListaIngresosActivosLectura, DatabaseError> {
+        Err(DatabaseError::Sqlite(rusqlite::Error::InvalidQuery))
+    }
+
+    fn buscar_activo_por_gafete(
+        &self,
+        _: i64,
+    ) -> Result<Option<IngresoActivoLectura>, DatabaseError> {
         Err(DatabaseError::Sqlite(rusqlite::Error::InvalidQuery))
     }
 

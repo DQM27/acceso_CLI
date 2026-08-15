@@ -259,25 +259,33 @@ mod tests {
             }
             if vista == Vista::IngresosActivos {
                 app.activos.completar_busqueda(
-                    Ok(vec![
-                        crate::services::registro_ingreso_service::IngresoActivoResumen {
-                            registro_id: 1,
-                            contratista_id: 1,
-                            cedula: "1".into(),
-                            contratista_nombre: "Persona".into(),
-                            empresa_nombre: "Empresa".into(),
-                            tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::Swat,
-                            medio_ingreso: crate::models::medio_ingreso::MedioIngreso::Caminando,
-                            fecha_hora_ingreso: chrono::NaiveDate::from_ymd_opt(2026, 8, 12)
-                                .unwrap()
-                                .and_hms_opt(8, 0, 0)
-                                .unwrap(),
-                            gafete_numero: None,
-                            usuario_ingreso_nombre: "Ana".into(),
-                            resultado_acceso:
-                                crate::domain::resultado_acceso::ResultadoAcceso::Permitido,
+                    Ok(
+                        crate::services::registro_ingreso_service::ListaIngresosActivosResumen {
+                            items: vec![
+                                crate::services::registro_ingreso_service::IngresoActivoResumen {
+                                    registro_id: 1,
+                                    contratista_id: 1,
+                                    cedula: "1".into(),
+                                    contratista_nombre: "Persona".into(),
+                                    empresa_nombre: "Empresa".into(),
+                                    tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::Swat,
+                                    medio_ingreso:
+                                        crate::models::medio_ingreso::MedioIngreso::Caminando,
+                                    fecha_hora_ingreso: chrono::NaiveDate::from_ymd_opt(
+                                        2026, 8, 12,
+                                    )
+                                    .unwrap()
+                                    .and_hms_opt(8, 0, 0)
+                                    .unwrap(),
+                                    gafete_numero: None,
+                                    usuario_ingreso_nombre: "Ana".into(),
+                                    resultado_acceso:
+                                        crate::domain::resultado_acceso::ResultadoAcceso::Permitido,
+                                },
+                            ],
+                            total: 1,
                         },
-                    ]),
+                    ),
                     None,
                 );
             }
@@ -1193,10 +1201,7 @@ impl App {
                     .ok_or_else(|| "No se pudieron cargar los ingresos activos".into())
                     .and_then(|c| {
                         c.listar_ingresos_activos(
-                            &crate::database::queries::ingresos::FiltroIngresosActivos {
-                                texto,
-                                ..Default::default()
-                            },
+                            &crate::database::queries::ingresos::FiltroIngresosActivos { texto },
                             chrono::Local::now().date_naive(),
                         )
                         .map_err(|_| "No se pudieron cargar los ingresos activos".into())
@@ -1207,17 +1212,10 @@ impl App {
                 let resultado = core
                     .ok_or_else(|| "No existe un ingreso activo con ese gafete".into())
                     .and_then(|c| {
-                        c.buscar_activo_por_gafete(numero)
+                        c.buscar_activo_por_gafete(numero, chrono::Local::now().date_naive())
                             .map_err(|_| "No existe un ingreso activo con ese gafete".into())
                     });
-                let lista = core.and_then(|c| {
-                    c.listar_ingresos_activos(
-                        &Default::default(),
-                        chrono::Local::now().date_naive(),
-                    )
-                    .ok()
-                });
-                self.activos.completar_gafete(resultado, lista);
+                self.activos.completar_gafete(resultado);
             }
             AccionActivos::RegistrarSalida {
                 registro_id,

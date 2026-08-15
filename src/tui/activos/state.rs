@@ -1,4 +1,6 @@
-use crate::services::registro_ingreso_service::IngresoActivoResumen;
+use crate::services::registro_ingreso_service::{
+    IngresoActivoResumen, ListaIngresosActivosResumen,
+};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Constraint;
 #[path = "render.rs"]
@@ -58,7 +60,7 @@ pub enum SalidaGafete {
         error: Option<String>,
     },
     Encontrado {
-        id: i64,
+        registro: IngresoActivoResumen,
     },
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,6 +91,7 @@ pub enum AccionActivos {
 #[derive(Debug)]
 pub struct ActivosState {
     registros: Vec<IngresoActivoResumen>,
+    total_activos: usize,
     seleccion: Option<usize>,
     modo: ModoActivos,
     columnas: Vec<(Columna, bool)>,
@@ -100,6 +103,7 @@ impl Default for ActivosState {
     fn default() -> Self {
         Self {
             registros: vec![],
+            total_activos: 0,
             seleccion: None,
             modo: ModoActivos::Normal,
             columnas: Columna::TODAS
@@ -125,46 +129,41 @@ impl ActivosState {
     pub fn cantidad(&self) -> usize {
         self.registros.len()
     }
+    pub fn total_activos(&self) -> usize {
+        self.total_activos
+    }
     pub fn modo(&self) -> &ModoActivos {
         &self.modo
     }
     pub fn completar_busqueda(
         &mut self,
-        r: Result<Vec<IngresoActivoResumen>, String>,
+        r: Result<ListaIngresosActivosResumen, String>,
         id: Option<i64>,
     ) {
         match r {
-            Ok(v) => {
-                self.registros = v;
+            Ok(resultado) => {
+                self.registros = resultado.items;
+                self.total_activos = resultado.total;
                 self.seleccion = id
                     .and_then(|x| self.registros.iter().position(|r| r.registro_id == x))
                     .or((!self.registros.is_empty()).then_some(0))
             }
             Err(e) => {
                 self.registros.clear();
+                self.total_activos = 0;
                 self.seleccion = None;
                 self.mensaje = Some(e)
             }
         }
     }
-    pub fn completar_gafete(
-        &mut self,
-        r: Result<i64, String>,
-        registros: Option<Vec<IngresoActivoResumen>>,
-    ) {
+    pub fn completar_gafete(&mut self, r: Result<IngresoActivoResumen, String>) {
         match r {
-            Ok(id) => {
-                if let Some(v) = registros {
-                    self.registros = v;
-                    self.filtro.clear()
-                }
-                self.seleccion = self.registros.iter().position(|x| x.registro_id == id);
-                if self.seleccion.is_some() {
-                    self.modo = ModoActivos::SalidaPorGafete(SalidaGafete::Encontrado { id })
-                } else {
-                    self.modo = ModoActivos::Normal;
-                    self.mensaje = Some("No existe un ingreso activo con ese gafete".into())
-                }
+            Ok(registro) => {
+                self.seleccion = self
+                    .registros
+                    .iter()
+                    .position(|x| x.registro_id == registro.registro_id);
+                self.modo = ModoActivos::SalidaPorGafete(SalidaGafete::Encontrado { registro });
             }
             Err(e) => {
                 if let ModoActivos::SalidaPorGafete(SalidaGafete::Capturando { error, .. }) =
@@ -313,17 +312,18 @@ impl ActivosState {
         }
     }
     fn confirmar(&mut self, k: KeyEvent, id: i64) -> AccionActivos {
+        let nombre = self
+            .registro(id)
+            .map(|r| r.contratista_nombre.clone())
+            .unwrap_or_default();
+        self.confirmar_registro(k, id, nombre)
+    }
+    fn confirmar_registro(&mut self, k: KeyEvent, id: i64, nombre: String) -> AccionActivos {
         match k.code {
-            KeyCode::Char('y' | 'Y') => {
-                let nombre = self
-                    .registro(id)
-                    .map(|r| r.contratista_nombre.clone())
-                    .unwrap_or_default();
-                AccionActivos::RegistrarSalida {
-                    registro_id: id,
-                    nombre,
-                }
-            }
+            KeyCode::Char('y' | 'Y') => AccionActivos::RegistrarSalida {
+                registro_id: id,
+                nombre,
+            },
             KeyCode::Char('n' | 'N') | KeyCode::Esc => {
                 self.modo = ModoActivos::Normal;
                 AccionActivos::Ninguna
@@ -366,7 +366,11 @@ impl ActivosState {
                 },
                 _ => AccionActivos::Ninguna,
             },
-            SalidaGafete::Encontrado { id } => self.confirmar(k, id),
+            SalidaGafete::Encontrado { registro } => self.confirmar_registro(
+                k,
+                registro.registro_id,
+                registro.contratista_nombre.clone(),
+            ),
         }
     }
     fn columnas(&mut self, k: KeyEvent, s: usize) {

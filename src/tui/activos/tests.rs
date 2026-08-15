@@ -28,7 +28,13 @@ fn r(id: i64, g: Option<i64>) -> IngresoActivoResumen {
     }
 }
 fn cargar(s: &mut ActivosState) {
-    s.completar_busqueda(Ok(vec![r(7, Some(26)), r(9, None)]), None)
+    s.completar_busqueda(
+        Ok(ListaIngresosActivosResumen {
+            items: vec![r(7, Some(26)), r(9, None)],
+            total: 2,
+        }),
+        None,
+    )
 }
 #[test]
 fn inicia_vacio_y_carga_real() {
@@ -36,6 +42,7 @@ fn inicia_vacio_y_carga_real() {
     assert_eq!(s.cantidad(), 0);
     cargar(&mut s);
     assert_eq!(s.cantidad(), 2);
+    assert_eq!(s.total_activos(), 2);
     assert_eq!(s.seleccion, Some(0))
 }
 #[test]
@@ -74,7 +81,13 @@ fn cancelar_salida_no_emite_accion() {
 #[test]
 fn f2_busca_numero_exacto_y_confirma() {
     let mut s = ActivosState::default();
-    cargar(&mut s);
+    s.completar_busqueda(
+        Ok(ListaIngresosActivosResumen {
+            items: vec![r(9, None)],
+            total: 2,
+        }),
+        None,
+    );
     s.handle_key(k(KeyCode::F(2)));
     for c in "26".chars() {
         s.handle_key(k(KeyCode::Char(c)));
@@ -83,10 +96,10 @@ fn f2_busca_numero_exacto_y_confirma() {
         s.handle_key(k(KeyCode::Enter)),
         AccionActivos::BuscarPorGafete { numero: 26 }
     ));
-    s.completar_gafete(Ok(7), Some(vec![r(7, Some(26))]));
+    s.completar_gafete(Ok(r(7, Some(26))));
     assert!(matches!(
         s.handle_key(k(KeyCode::Char('Y'))),
-        AccionActivos::RegistrarSalida { registro_id: 7, .. }
+        AccionActivos::RegistrarSalida { registro_id: 7, nombre } if nombre == "Persona 7"
     ));
 }
 #[test]
@@ -98,10 +111,7 @@ fn f2_invalido_y_no_encontrado_son_seguros() {
         s.modo,
         ModoActivos::SalidaPorGafete(SalidaGafete::Capturando { error: Some(_), .. })
     ));
-    s.completar_gafete(
-        Err("No existe un ingreso activo con ese gafete".into()),
-        None,
-    );
+    s.completar_gafete(Err("No existe un ingreso activo con ese gafete".into()));
 }
 #[test]
 fn callback_salida_recarga_sin_remover_localmente() {
@@ -110,7 +120,13 @@ fn callback_salida_recarga_sin_remover_localmente() {
     let a = s.completar_salida(Ok(()), 7, "Persona 7");
     assert_eq!(s.cantidad(), 2);
     assert!(matches!(a, AccionActivos::Buscar { .. }));
-    s.completar_busqueda(Ok(vec![r(9, None)]), None);
+    s.completar_busqueda(
+        Ok(ListaIngresosActivosResumen {
+            items: vec![r(9, None)],
+            total: 1,
+        }),
+        None,
+    );
     assert_eq!(s.cantidad(), 1)
 }
 #[test]

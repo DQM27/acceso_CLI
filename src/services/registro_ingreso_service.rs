@@ -53,6 +53,13 @@ pub struct IngresoActivoResumen {
     pub resultado_acceso: ResultadoAcceso,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListaIngresosActivosResumen {
+    pub items: Vec<IngresoActivoResumen>,
+    /// Total real de personas dentro, independiente del filtro aplicado.
+    pub total: usize,
+}
+
 pub struct RegistroIngresoConsultaService<'a, Q>
 where
     Q: IngresosQuery + ?Sized,
@@ -72,13 +79,27 @@ where
         &self,
         filtro: &FiltroIngresosActivos,
         hoy: NaiveDate,
-    ) -> Result<Vec<IngresoActivoResumen>, RegistroIngresoServiceError> {
-        Ok(self
-            .consultas
-            .listar_activos(filtro)?
-            .into_iter()
+    ) -> Result<ListaIngresosActivosResumen, RegistroIngresoServiceError> {
+        let resultado = self.consultas.listar_activos(filtro)?;
+        Ok(ListaIngresosActivosResumen {
+            items: resultado
+                .items
+                .into_iter()
+                .map(|lectura| convertir_activo(lectura, hoy))
+                .collect(),
+            total: resultado.total,
+        })
+    }
+
+    pub fn buscar_activo_por_gafete(
+        &self,
+        numero: i64,
+        hoy: NaiveDate,
+    ) -> Result<IngresoActivoResumen, RegistroIngresoServiceError> {
+        self.consultas
+            .buscar_activo_por_gafete(numero)?
             .map(|lectura| convertir_activo(lectura, hoy))
-            .collect())
+            .ok_or(RegistroIngresoServiceError::GafeteNoAsignado)
     }
 
     pub fn buscar_historial(
