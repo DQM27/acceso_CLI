@@ -100,6 +100,98 @@ pub(super) fn construir(
         corte_id,
     })
 }
+/// Separa la consulta en tokens respetando comillas, para que
+/// `empresa:"Brisas del Oeste"` sea un solo token en vez de partirse en el
+/// espacio.
+fn tokenizar(consulta: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut actual = String::new();
+    let mut entre_comillas = false;
+    for c in consulta.chars() {
+        match c {
+            '"' => entre_comillas = !entre_comillas,
+            c if c.is_whitespace() && !entre_comillas => {
+                if !actual.is_empty() {
+                    tokens.push(std::mem::take(&mut actual));
+                }
+            }
+            c => actual.push(c),
+        }
+    }
+    if !actual.is_empty() {
+        tokens.push(actual);
+    }
+    tokens
+}
+
+fn tipo_desde_texto(v: &str) -> Option<TipoIngreso> {
+    match v.to_lowercase().as_str() {
+        "praind" => Some(TipoIngreso::Praind),
+        "inhouse" | "in-house" | "in_house" => Some(TipoIngreso::InHouse),
+        "correo" | "porcorreo" => Some(TipoIngreso::PorCorreo),
+        "swat" => Some(TipoIngreso::Swat),
+        _ => None,
+    }
+}
+
+fn estado_desde_texto(v: &str) -> Option<EstadoMovimiento> {
+    match v.to_lowercase().as_str() {
+        "activos" | "activo" | "dentro" => Some(EstadoMovimiento::Activos),
+        "cerrados" | "cerrado" | "salieron" | "salio" | "salió" => Some(EstadoMovimiento::Cerrados),
+        "todos" => Some(EstadoMovimiento::Todos),
+        _ => None,
+    }
+}
+
+/// Interpreta el campo de búsqueda libre con sintaxis `clave:valor`
+/// (`empresa:`, `tipo:`, `estado:`, `gafete:`, `desde:`, `hasta:`) sobre los
+/// filtros ya aplicados (`base`), y deja el texto no reconocido para que se
+/// use como nombre/cédula. No valida ni construye la consulta SQL — eso lo
+/// sigue haciendo `construir` sobre el resultado, para no duplicar esa
+/// lógica.
+pub(super) fn parsear_consulta(
+    base: &FiltrosHistorial,
+    texto: &str,
+    empresas: &[Empresa],
+) -> (FiltrosHistorial, String) {
+    let mut filtros = base.clone();
+    let mut libres = Vec::new();
+    for token in tokenizar(texto) {
+        let Some((clave, valor)) = token.split_once(':') else {
+            libres.push(token);
+            continue;
+        };
+        if valor.is_empty() {
+            libres.push(token);
+            continue;
+        }
+        match clave.to_lowercase().as_str() {
+            "empresa" => {
+                match empresas
+                    .iter()
+                    .find(|e| e.nombre.to_lowercase().contains(&valor.to_lowercase()))
+                {
+                    Some(e) => filtros.empresa_id = Some(e.id),
+                    None => libres.push(token),
+                }
+            }
+            "tipo" => match tipo_desde_texto(valor) {
+                Some(t) => filtros.tipo = Some(t),
+                None => libres.push(token),
+            },
+            "estado" => match estado_desde_texto(valor) {
+                Some(e) => filtros.estado = e,
+                None => libres.push(token),
+            },
+            "gafete" => filtros.gafete = valor.to_owned(),
+            "desde" => filtros.desde = valor.to_owned(),
+            "hasta" => filtros.hasta = valor.to_owned(),
+            _ => libres.push(token),
+        }
+    }
+    (filtros, libres.join(" "))
+}
+
 pub(super) fn estado_texto(e: EstadoMovimiento) -> &'static str {
     match e {
         EstadoMovimiento::Todos => "Todos",

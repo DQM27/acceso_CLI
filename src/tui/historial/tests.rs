@@ -205,6 +205,78 @@ fn detalle_y_columnas_siguen_siendo_solo_presentacion() {
 }
 
 #[test]
+fn parsear_consulta_resuelve_empresa_por_nombre_parcial_y_deja_texto_libre() {
+    let empresas = vec![
+        Empresa {
+            id: 5,
+            nombre: "Brisas del Oeste".into(),
+        },
+        Empresa {
+            id: 9,
+            nombre: "Aldama Servicios".into(),
+        },
+    ];
+    let base = FiltrosHistorial::default();
+    let (filtros, libre) = parsear_consulta(&base, "empresa:\"Brisas del Oeste\" Ana", &empresas);
+    assert_eq!(filtros.empresa_id, Some(5));
+    assert_eq!(libre, "Ana");
+}
+
+#[test]
+fn parsear_consulta_reconoce_tipo_estado_y_gafete() {
+    let base = FiltrosHistorial::default();
+    let (filtros, libre) = parsear_consulta(&base, "tipo:praind estado:activos gafete:27", &[]);
+    assert_eq!(filtros.tipo, Some(TipoIngreso::Praind));
+    assert_eq!(filtros.estado, EstadoMovimiento::Activos);
+    assert_eq!(filtros.gafete, "27");
+    assert!(libre.is_empty());
+}
+
+#[test]
+fn parsear_consulta_conserva_lo_no_reconocido_como_texto_libre() {
+    let base = FiltrosHistorial::default();
+    let (filtros, libre) = parsear_consulta(&base, "empresa:Inexistente tipo:invalido Juan", &[]);
+    assert_eq!(filtros.empresa_id, None);
+    assert_eq!(filtros.tipo, None);
+    assert_eq!(libre, "empresa:Inexistente tipo:invalido Juan");
+}
+
+#[test]
+fn parsear_consulta_no_pisa_los_campos_no_mencionados_del_filtro_base() {
+    let base = FiltrosHistorial {
+        desde: "01/08/2026".into(),
+        empresa_id: Some(3),
+        ..Default::default()
+    };
+    let (filtros, _) = parsear_consulta(&base, "tipo:swat", &[]);
+    assert_eq!(filtros.desde, "01/08/2026");
+    assert_eq!(filtros.empresa_id, Some(3));
+    assert_eq!(filtros.tipo, Some(TipoIngreso::Swat));
+}
+
+#[test]
+fn busqueda_rapida_admite_clave_valor_y_se_combina_con_filtros_del_panel() {
+    let mut state = HistorialState::default();
+    state.completar_empresas(Ok(vec![Empresa {
+        id: 3,
+        nombre: "Expenic Industrial".into(),
+    }]));
+    state.filtro_aplicado.tipo = Some(TipoIngreso::Praind);
+    state.handle_key(tecla(KeyCode::Char('/')));
+    for c in "empresa:Expenic".chars() {
+        state.handle_key(tecla(KeyCode::Char(c)));
+    }
+    let accion = state.handle_key(tecla(KeyCode::Enter));
+    assert_eq!(accion, AccionHistorial::Ninguna);
+    let AccionHistorial::Consultar(filtro) = state.solicitud_carga() else {
+        panic!("debía consultar")
+    };
+    assert_eq!(filtro.empresa_id, Some(3));
+    assert_eq!(filtro.tipo_ingreso, Some(TipoIngreso::Praind));
+    assert_eq!(filtro.texto_persona, None);
+}
+
+#[test]
 fn activo_muestra_salida_y_usuario_salida_ausentes() {
     let registro = pagina(1, 1).items.remove(0);
     assert_eq!(valor(&registro, ColumnaHistorial::Salida), "--");

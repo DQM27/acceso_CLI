@@ -181,13 +181,9 @@ impl HistorialState {
         }
     }
     fn consulta(&self) -> Result<FiltroHistorial, String> {
-        construir(
-            &self.filtro_aplicado,
-            &self.busqueda,
-            LIMIT,
-            self.offset,
-            self.corte_id,
-        )
+        let (filtros, texto_libre) =
+            parsear_consulta(&self.filtro_aplicado, &self.busqueda, &self.empresas);
+        construir(&filtros, &texto_libre, LIMIT, self.offset, self.corte_id)
     }
     fn emitir(&mut self) -> AccionHistorial {
         match self.consulta() {
@@ -360,7 +356,9 @@ impl HistorialState {
                 }
             }
             KeyCode::Char('a' | 'A') => {
-                match construir(&self.filtro_edicion, &self.busqueda, LIMIT, 0, None) {
+                let (filtros, texto_libre) =
+                    parsear_consulta(&self.filtro_edicion, &self.busqueda, &self.empresas);
+                match construir(&filtros, &texto_libre, LIMIT, 0, None) {
                     Ok(f) => {
                         self.filtro_aplicado = self.filtro_edicion.clone();
                         self.reiniciar_paginacion();

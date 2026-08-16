@@ -54,6 +54,8 @@ fn logout_confirma_o_cancela() {
         s.handle_key(k(KeyCode::Char('Y'))),
         AccionMenu::CerrarSesion
     );
+    s.handle_key(k(KeyCode::Char('L')));
+    assert_eq!(s.handle_key(k(KeyCode::Enter)), AccionMenu::CerrarSesion);
 }
 
 #[test]
@@ -68,4 +70,6 @@ fn salida_confirma_o_cancela_y_escape_raiz_no_hace_nada() {
     assert_eq!(s.confirmacion, None);
     s.handle_key(k(KeyCode::Char('Q')));
     assert_eq!(s.handle_key(k(KeyCode::Char('Y'))), AccionMenu::Salir);
+    s.handle_key(k(KeyCode::Char('Q')));
+    assert_eq!(s.handle_key(k(KeyCode::Enter)), AccionMenu::Salir);
 }

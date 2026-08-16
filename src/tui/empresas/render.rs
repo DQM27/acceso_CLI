@@ -1,111 +1,185 @@
-use crate::tiempo::hora_actual_texto;
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table},
+    layout::{Alignment, Constraint, Layout, Rect},
+    text::Line,
+    widgets::{Cell, Paragraph, Row, Table},
 };
 
 use super::*;
 use crate::{
     database::queries::empresas::EmpresaResumen,
-    tui::{layout, theme},
+    tiempo::hora_actual_texto,
+    tui::ui_kit::{
+        CommandHint, ScreenShell, StatusKind, Theme, ThemePreset, render_terminal_too_small,
+    },
 };
 
+const ANCHO_MINIMO: u16 = 60;
+const ALTO_MINIMO: u16 = 22;
+const ANCHO_PANEL_LATERAL: u16 = 100;
+
+const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓", "Mover"),
+    CommandHint::new("ENTER", "Detalle"),
+    CommandHint::new("N", "Nueva"),
+    CommandHint::new("E", "Editar"),
+    CommandHint::new("/", "Buscar"),
+    CommandHint::new("ESC", "Volver"),
+];
+const COMANDOS_BUSQUEDA: &[CommandHint<'static>] = &[
+    CommandHint::new("ENTER", "Aplicar"),
+    CommandHint::new("ESC", "Cancelar"),
+];
+const COMANDOS_DETALLE: &[CommandHint<'static>] =
+    &[CommandHint::new("E", "Editar"), CommandHint::new("ESC", "Cerrar")];
+const COMANDOS_FORMULARIO: &[CommandHint<'static>] = &[
+    CommandHint::new("G", "Guardar"),
+    CommandHint::new("ESC", "Cancelar"),
+];
+
 pub fn render(frame: &mut Frame, area: Rect, state: &EmpresasState) {
-    frame.render_widget(Block::default().style(theme::texto_normal()), area);
-    if area.width < 60 || area.height < 22 {
-        layout::render_terminal_pequena(frame, area);
+    let theme = ThemePreset::Brisas.theme();
+
+    if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
+        render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "ESC salir", theme);
         return;
     }
-    let contenido = Rect::new(
-        area.x + 2,
-        area.y,
-        area.width.saturating_sub(4),
-        area.height,
-    );
-    let zonas = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(5),
-            Constraint::Length(2),
-            Constraint::Min(8),
-            Constraint::Length(3),
-        ])
-        .split(contenido);
-    render_cabecera(frame, zonas[0], state);
-    render_estado(frame, zonas[1], state);
-    render_tabla(frame, zonas[2], state);
-    render_pie(frame, zonas[3], state);
-    render_modo(frame, contenido, state);
-}
 
-fn render_cabecera(frame: &mut Frame, area: Rect, state: &EmpresasState) {
-    let bloque = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Plain)
-        .border_style(theme::borde());
-    let interior = bloque.inner(area);
-    frame.render_widget(bloque, area);
-    let columnas = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(30),
-            Constraint::Percentage(40),
-            Constraint::Percentage(30),
-        ])
-        .split(interior);
-    let centro = |rect: Rect| Rect::new(rect.x, rect.y + rect.height / 2, rect.width, 1);
-    frame.render_widget(
-        Paragraph::new(vec![
-            Line::from(" B R I S A S   C L I").style(theme::titulo()),
-            Line::from(" CONTROL DE ACCESO").style(theme::texto_secundario()),
-        ]),
-        Rect::new(columnas[0].x, columnas[0].y, columnas[0].width, 2),
-    );
-    frame.render_widget(
-        Paragraph::new("BASE DE EMPRESAS")
-            .style(theme::foco())
-            .alignment(Alignment::Center),
-        centro(columnas[1]),
-    );
-    frame.render_widget(
-        Paragraph::new(format!("Usuario: {} ", state.usuario_nombre)).alignment(Alignment::Right),
-        centro(columnas[2]),
-    );
-}
-
-fn render_estado(frame: &mut Frame, area: Rect, state: &EmpresasState) {
-    let linea = match &state.modo {
-        ModoEmpresas::Busqueda { texto } => Line::from(vec![
-            Span::styled("BUSCAR EMPRESAS: ", theme::foco()),
-            Span::styled(format!("{texto}_"), theme::texto_normal()),
-        ]),
-        _ if !state.filtro.is_empty() => Line::from(vec![
-            Span::styled("FILTRO ACTIVO: ", theme::foco()),
-            Span::styled(&state.filtro, theme::texto_normal()),
-            Span::styled(
-                format!("    {} resultados    ", state.empresas.len()),
-                theme::texto_secundario(),
-            ),
-            Span::styled("ESC ", theme::ayuda_tecla()),
-            Span::styled("Limpiar", theme::texto_normal()),
-        ]),
-        _ if state.error_carga.is_some() => {
-            Line::from(state.error_carga.clone().unwrap_or_default()).style(theme::error())
-        }
-        _ => Line::from(state.mensaje.clone().unwrap_or_default()).style(theme::exito()),
+    let hora = hora_actual_texto();
+    let contexto = format!("Usuario: {}", state.usuario_nombre);
+    let (estado_texto, estado_tipo) = estado_shell(state);
+    let comandos = match &state.modo {
+        ModoEmpresas::Normal => COMANDOS_NORMAL,
+        ModoEmpresas::Busqueda { .. } => COMANDOS_BUSQUEDA,
+        ModoEmpresas::Detalle { .. } => COMANDOS_DETALLE,
+        ModoEmpresas::Formulario(_) => COMANDOS_FORMULARIO,
     };
-    frame.render_widget(Paragraph::new(linea).alignment(Alignment::Center), area);
+
+    let shell = ScreenShell {
+        product: "BRISAS CLI",
+        screen: "EMPRESAS",
+        context: &contexto,
+        clock: &hora,
+        status: &estado_texto,
+        status_kind: estado_tipo,
+        commands: comandos,
+    };
+    let areas = shell.render(frame, area, theme);
+
+    render_cuerpo(frame, areas.body, state, theme);
 }
 
-fn render_tabla(frame: &mut Frame, area: Rect, state: &EmpresasState) {
-    let marco = Block::default()
-        .borders(Borders::ALL)
-        .border_style(theme::borde());
-    let interior = marco.inner(area);
-    frame.render_widget(marco, area);
-    let capacidad = interior.height.saturating_sub(2) as usize;
+fn estado_shell(state: &EmpresasState) -> (String, StatusKind) {
+    if let ModoEmpresas::Formulario(formulario) = &state.modo
+        && let Some(error) = &formulario.error
+    {
+        return (format!("✕ {error}"), StatusKind::Error);
+    }
+    if let Some(error) = &state.error_carga {
+        return (error.clone(), StatusKind::Error);
+    }
+    if let Some(mensaje) = &state.mensaje {
+        return (mensaje.clone(), StatusKind::Success);
+    }
+    (String::new(), StatusKind::Normal)
+}
+
+fn render_cuerpo(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: Theme) {
+    let filas = Layout::vertical([Constraint::Length(3), Constraint::Min(4)]).split(area);
+
+    let enfocado_busqueda = matches!(state.modo, ModoEmpresas::Busqueda { .. });
+    let area_busqueda = render_campo(
+        frame,
+        filas[0],
+        &format!("BUSCAR · {} RESULTADOS", state.empresas.len()),
+        &state.filtro,
+        enfocado_busqueda,
+        theme,
+    );
+
+    let (area_tabla, area_panel) = if area.width >= ANCHO_PANEL_LATERAL {
+        let columnas = Layout::horizontal([
+            Constraint::Percentage(63),
+            Constraint::Length(1),
+            Constraint::Percentage(36),
+        ])
+        .split(filas[1]);
+        render_separador_vertical(frame, columnas[1], theme);
+        (columnas[0], columnas[2])
+    } else {
+        let filas_apiladas = Layout::vertical([
+            Constraint::Min(4),
+            Constraint::Length(1),
+            Constraint::Length(7.min(filas[1].height.saturating_sub(5))),
+        ])
+        .split(filas[1]);
+        render_separador_horizontal(frame, filas_apiladas[1], theme);
+        (filas_apiladas[0], filas_apiladas[2])
+    };
+    render_tabla(frame, area_tabla, state, theme);
+    let area_form_nombre = render_panel(frame, area_panel, state, theme);
+
+    let cursor = match &state.modo {
+        ModoEmpresas::Busqueda { .. } => Some((area_busqueda, state.filtro.as_str())),
+        ModoEmpresas::Formulario(formulario) => {
+            area_form_nombre.map(|area| (area, formulario.nombre.as_str()))
+        }
+        _ => None,
+    };
+    if let Some((area_campo, contenido)) = cursor {
+        let ancho_visible = Line::from(contenido).width() as u16;
+        let x = area_campo
+            .x
+            .saturating_add(ancho_visible.min(area_campo.width));
+        frame.set_cursor_position((x, area_campo.y));
+    }
+}
+
+fn render_separador_vertical(frame: &mut Frame, area: Rect, theme: Theme) {
+    let lineas: Vec<Line<'static>> = (0..area.height).map(|_| Line::from("│")).collect();
+    frame.render_widget(Paragraph::new(lineas).style(theme.border()), area);
+}
+
+fn render_separador_horizontal(frame: &mut Frame, area: Rect, theme: Theme) {
+    frame.render_widget(
+        Paragraph::new("─".repeat(area.width as usize)).style(theme.border()),
+        area,
+    );
+}
+
+/// Misma silueta con foco o sin él (etiqueta, valor, línea); sólo cambian
+/// color y peso.
+fn render_campo(
+    frame: &mut Frame,
+    area: Rect,
+    etiqueta: &str,
+    valor: &str,
+    activo: bool,
+    theme: Theme,
+) -> Rect {
+    let estilo_etiqueta = if activo { theme.accent() } else { theme.muted() };
+    let estilo_linea = if activo { theme.accent() } else { theme.border() };
+    let valor_y = area.y.saturating_add(1);
+    let linea_y = area.y.saturating_add(2);
+
+    frame.render_widget(
+        Paragraph::new(etiqueta).style(estilo_etiqueta),
+        Rect::new(area.x, area.y, area.width, 1),
+    );
+    frame.render_widget(
+        Paragraph::new(Line::from(valor).style(theme.base())),
+        Rect::new(area.x, valor_y, area.width, 1),
+    );
+    frame.render_widget(
+        Paragraph::new("─".repeat(area.width as usize)).style(estilo_linea),
+        Rect::new(area.x, linea_y, area.width, 1),
+    );
+
+    Rect::new(area.x, valor_y, area.width, 1)
+}
+
+fn render_tabla(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: Theme) {
+    let capacidad = area.height.saturating_sub(2) as usize;
     let inicio = state.inicio_visible(capacidad).min(state.empresas.len());
     let filas = state
         .empresas
@@ -120,19 +194,19 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &EmpresasState) {
                 Cell::from(empresa.contratistas.to_string()),
             ])
             .style(if seleccionada {
-                theme::seleccionado()
+                theme.selected()
             } else {
-                theme::texto_normal()
+                theme.base()
             })
         });
     let encabezado = Row::new(["NOMBRE", "CONTRATISTAS"])
-        .style(theme::foco())
+        .style(theme.muted())
         .bottom_margin(1);
     frame.render_widget(
-        Table::new(filas, [Constraint::Fill(4), Constraint::Length(16)])
+        Table::new(filas, [Constraint::Fill(4), Constraint::Length(14)])
             .header(encabezado)
-            .column_spacing(2),
-        interior,
+            .column_spacing(1),
+        area,
     );
     if state.empresas.is_empty() {
         frame.render_widget(
@@ -141,114 +215,53 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &EmpresasState) {
             } else {
                 "No hay empresas que coincidan con la búsqueda."
             })
-            .style(theme::advertencia())
+            .style(theme.warning())
             .alignment(Alignment::Center),
-            interior,
+            Rect::new(area.x, area.y + area.height / 2, area.width, 1),
         );
     }
 }
 
-fn render_pie(frame: &mut Frame, area: Rect, state: &EmpresasState) {
-    let bloque = Block::default()
-        .borders(Borders::ALL)
-        .border_style(theme::borde());
-    let interior = bloque.inner(area);
-    frame.render_widget(bloque, area);
-    let columnas = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length(36),
-            Constraint::Min(20),
-            Constraint::Length(12),
-        ])
-        .split(interior);
-    let posicion = state.seleccion.map_or_else(
-        || "—/—".to_owned(),
-        |indice| format!("{}/{}", indice + 1, state.empresas.len()),
-    );
-    frame.render_widget(
-        Paragraph::new(format!(
-            " {} empresas │ Registro {posicion}",
-            state.empresas.len()
-        )),
-        columnas[0],
-    );
-    frame.render_widget(
-        Paragraph::new(
-            "↑↓ Seleccionar │ ENTER Detalle │ N Nueva │ E Editar │ / Buscar │ ESC Volver",
-        )
-        .style(theme::foco())
-        .alignment(Alignment::Center),
-        columnas[1],
-    );
-    frame.render_widget(
-        Paragraph::new(hora_actual_texto())
-            .style(theme::advertencia())
-            .alignment(Alignment::Right)
-            .block(Block::default().padding(ratatui::widgets::Padding::right(1))),
-        columnas[2],
-    );
-}
-
-fn render_modo(frame: &mut Frame, area: Rect, state: &EmpresasState) {
+/// Devuelve, cuando aplica, el área del valor del campo NOMBRE del
+/// formulario para que el llamador posicione el cursor.
+fn render_panel(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: Theme) -> Option<Rect> {
     match &state.modo {
         ModoEmpresas::Detalle { id } => {
             if let Some(empresa) = state.empresa(*id) {
-                render_detalle(frame, area, empresa);
+                render_detalle(frame, area, empresa, theme);
             }
+            None
         }
-        ModoEmpresas::Formulario(formulario) => render_formulario(frame, area, formulario),
-        _ => {}
+        ModoEmpresas::Formulario(formulario) => Some(render_formulario(frame, area, formulario, theme)),
+        ModoEmpresas::Normal | ModoEmpresas::Busqueda { .. } => {
+            frame.render_widget(
+                Paragraph::new("Seleccione ENTER para ver el detalle.").style(theme.muted()),
+                area,
+            );
+            None
+        }
     }
 }
 
-fn render_detalle(frame: &mut Frame, area: Rect, empresa: &EmpresaResumen) {
-    layout::render_overlay(
-        frame,
-        area,
-        58,
-        11,
-        4,
-        "DETALLE DE LA EMPRESA",
-        vec![
-            Line::from(empresa.nombre.clone()).style(theme::titulo()),
-            Line::from(""),
-            Line::from(format!("Nombre                   {}", empresa.nombre)),
-            Line::from(format!("Contratistas asociados  {}", empresa.contratistas)),
-            Line::from(""),
-            Line::from("E Editar                         ESC Cerrar").style(theme::foco()),
-        ],
-    );
+fn render_detalle(frame: &mut Frame, area: Rect, empresa: &EmpresaResumen, theme: Theme) {
+    let lineas = vec![
+        Line::from(empresa.nombre.as_str()).style(theme.title()),
+        Line::from(""),
+        Line::from(format!("Contratistas asociados: {}", empresa.contratistas)).style(theme.base()),
+    ];
+    frame.render_widget(Paragraph::new(lineas), area);
 }
 
-fn render_formulario(frame: &mut Frame, area: Rect, formulario: &FormularioEmpresa) {
+fn render_formulario(
+    frame: &mut Frame,
+    area: Rect,
+    formulario: &FormularioEmpresa,
+    theme: Theme,
+) -> Rect {
     let titulo = match formulario.modo {
-        ModoFormularioEmpresa::Crear => "NUEVA EMPRESA",
-        ModoFormularioEmpresa::Editar { .. } => "EDITAR EMPRESA",
+        ModoFormularioEmpresa::Crear => "NOMBRE DE LA NUEVA EMPRESA",
+        ModoFormularioEmpresa::Editar { .. } => "NOMBRE",
     };
-    layout::render_overlay(
-        frame,
-        area,
-        64,
-        10,
-        4,
-        titulo,
-        vec![
-            Line::from(""),
-            Line::from(format!("Nombre      {}_", formulario.nombre)).style(theme::foco()),
-            Line::from(""),
-            Line::from(formulario.error.clone().unwrap_or_default()).style(theme::error()),
-            Line::from("G Guardar                         ESC Cancelar").style(theme::foco()),
-        ],
-    );
-    let modal_x = area.x
-        + area
-            .width
-            .saturating_sub(64.min(area.width.saturating_sub(4)))
-            / 2;
-    let modal_y = area.y + area.height.saturating_sub(10) / 2;
-    let cursor_x = modal_x
-        .saturating_add(14)
-        .saturating_add(formulario.nombre.chars().count() as u16);
-    frame.set_cursor_position((cursor_x, modal_y.saturating_add(3)));
+    let filas = Layout::vertical([Constraint::Length(3), Constraint::Length(1)]).split(area);
+    render_campo(frame, filas[0], titulo, &formulario.nombre, true, theme)
 }

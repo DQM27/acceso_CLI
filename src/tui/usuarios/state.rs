@@ -644,7 +644,7 @@ impl UsuariosState {
     }
     fn confirmacion(&mut self, key: KeyEvent, c: ConfirmacionEstado) -> AccionUsuarios {
         match key.code {
-            KeyCode::Char('y' | 'Y') => {
+            KeyCode::Char('y' | 'Y') | KeyCode::Enter => {
                 let nombre = self
                     .usuario(c.id)
                     .map(|u| u.nombre.clone())

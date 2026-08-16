@@ -1,102 +1,107 @@
-use crate::tiempo::hora_actual_texto;
-use ratatui::{
-    Frame,
-    layout::{Alignment, Constraint, Layout, Rect},
-    text::{Line, Span},
-    widgets::{Block, Paragraph},
-};
+use ratatui::{Frame, layout::Rect, text::Line, widgets::Paragraph};
 
 use super::{ConfirmacionMenu, MenuPrincipalState, OpcionMenu};
 use crate::{
     models::usuario::RolUsuario,
     services::autenticacion_service::UsuarioSesion,
-    tui::{layout, theme},
+    tiempo::hora_actual_texto,
+    tui::ui_kit::{
+        CommandHint, ScreenShell, StatusKind, Theme, ThemePreset, render_terminal_too_small,
+    },
 };
 
+const ANCHO_MINIMO: u16 = 60;
+const ALTO_MINIMO: u16 = 22;
+
+const COMANDOS_NORMALES: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓", "Seleccionar"),
+    CommandHint::new("ENTER", "Abrir"),
+    CommandHint::new("1-6", "Acceso rápido"),
+    CommandHint::new("L", "Cerrar sesión"),
+    CommandHint::new("Q", "Salir"),
+];
+
+const COMANDOS_CONFIRMACION: &[CommandHint<'static>] = &[
+    CommandHint::new("ENTER", "Confirmar"),
+    CommandHint::new("N/ESC", "Cancelar"),
+];
+
 pub fn render(frame: &mut Frame, area: Rect, state: &MenuPrincipalState, sesion: &UsuarioSesion) {
-    frame.render_widget(Block::default().style(theme::texto_normal()), area);
-    if area.width < 60 || area.height < 22 {
-        layout::render_terminal_pequena(frame, area);
+    let theme = ThemePreset::Brisas.theme();
+
+    if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
+        render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "Q/ESC salir", theme);
         return;
     }
-    let contenido = Rect::new(
-        area.x + 2,
-        area.y,
-        area.width.saturating_sub(4),
-        area.height,
-    );
-    let zonas = Layout::vertical([
-        Constraint::Length(5),
-        Constraint::Min(14),
-        Constraint::Length(3),
-    ])
-    .split(contenido);
-    cabecera(frame, zonas[0], sesion);
-    cuerpo(frame, zonas[1], state);
-    pie(frame, zonas[2]);
-    if let Some(c) = state.confirmacion {
-        confirmacion(frame, contenido, c, sesion);
+
+    let hora = hora_actual_texto();
+    let contexto = format!("{} · {}", sesion.nombre, rol(sesion.rol));
+    let (estado_texto, estado_tipo) = estado_shell(state, sesion);
+    let comandos = if state.confirmacion.is_some() {
+        COMANDOS_CONFIRMACION
+    } else {
+        COMANDOS_NORMALES
+    };
+
+    let shell = ScreenShell {
+        product: "BRISAS CLI",
+        screen: "MENÚ PRINCIPAL",
+        context: &contexto,
+        clock: &hora,
+        status: &estado_texto,
+        status_kind: estado_tipo,
+        commands: comandos,
+    };
+    let areas = shell.render(frame, area, theme);
+
+    render_lista(frame, areas.body, state, theme);
+}
+
+fn estado_shell(state: &MenuPrincipalState, sesion: &UsuarioSesion) -> (String, StatusKind) {
+    match state.confirmacion {
+        Some(ConfirmacionMenu::CerrarSesion) => (
+            format!("¿Cerrar la sesión de {}?", sesion.nombre),
+            StatusKind::Warning,
+        ),
+        Some(ConfirmacionMenu::Salir) => {
+            ("¿Desea cerrar BRISAS CLI?".to_owned(), StatusKind::Warning)
+        }
+        None => (
+            state.seleccion.descripcion().to_owned(),
+            StatusKind::Normal,
+        ),
     }
 }
 
-fn cabecera(frame: &mut Frame, area: Rect, sesion: &UsuarioSesion) {
-    let bloque = Block::bordered().border_style(theme::borde());
-    let interior = bloque.inner(area);
-    frame.render_widget(bloque, area);
-    let cols = Layout::horizontal([
-        Constraint::Percentage(30),
-        Constraint::Percentage(40),
-        Constraint::Percentage(30),
-    ])
-    .split(interior);
-    frame.render_widget(
-        Paragraph::new(vec![
-            Line::from(" B R I S A S   C L I").style(theme::titulo()),
-            Line::from(" CONTROL DE ACCESO").style(theme::texto_secundario()),
-        ]),
-        cols[0],
-    );
-    frame.render_widget(
-        Paragraph::new("MENÚ PRINCIPAL")
-            .style(theme::foco())
-            .alignment(Alignment::Center),
-        Rect::new(cols[1].x, cols[1].y + cols[1].height / 2, cols[1].width, 1),
-    );
-    frame.render_widget(
-        Paragraph::new(format!("{} · {} ", sesion.nombre, rol(sesion.rol)))
-            .alignment(Alignment::Right),
-        Rect::new(cols[2].x, cols[2].y + cols[2].height / 2, cols[2].width, 1),
-    );
-}
+fn render_lista(frame: &mut Frame, area: Rect, state: &MenuPrincipalState, theme: Theme) {
+    let ancho = area.width.min(60);
+    let alto = area.height.min(14);
+    let lista = centrar(area, ancho, alto);
 
-fn cuerpo(frame: &mut Frame, area: Rect, state: &MenuPrincipalState) {
-    let ancho = area.width.min(68);
-    let alto = area.height.min(22);
-    let panel = Rect::new(
-        area.x + (area.width - ancho) / 2,
-        area.y + (area.height - alto) / 2,
-        ancho,
-        alto,
-    );
-    let bloque = Block::bordered().border_style(theme::borde());
-    let interior = bloque.inner(panel);
-    frame.render_widget(bloque, panel);
     let mut lineas = Vec::new();
-    grupo(&mut lineas, "OPERACIÓN", &OpcionMenu::TODAS[0..3], state);
+    grupo(
+        &mut lineas,
+        "OPERACIÓN",
+        &OpcionMenu::TODAS[0..3],
+        state,
+        theme,
+    );
     grupo(
         &mut lineas,
         "ADMINISTRACIÓN",
         &OpcionMenu::TODAS[3..6],
         state,
+        theme,
     );
-    grupo(&mut lineas, "SESIÓN", &OpcionMenu::TODAS[6..8], state);
-    lineas.push(Line::from(""));
-    lineas.push(
-        Line::from(state.seleccion.descripcion())
-            .style(theme::texto_secundario())
-            .alignment(Alignment::Center),
+    grupo(
+        &mut lineas,
+        "SESIÓN",
+        &OpcionMenu::TODAS[6..8],
+        state,
+        theme,
     );
-    frame.render_widget(Paragraph::new(lineas), interior);
+
+    frame.render_widget(Paragraph::new(lineas), lista);
 }
 
 fn grupo<'a>(
@@ -104,70 +109,28 @@ fn grupo<'a>(
     titulo: &'a str,
     opciones: &[OpcionMenu],
     state: &MenuPrincipalState,
+    theme: Theme,
 ) {
-    lineas.push(
-        Line::from(titulo)
-            .style(theme::foco())
-            .alignment(Alignment::Center),
-    );
+    lineas.push(Line::from(titulo).style(theme.muted()));
     for opcion in opciones {
-        let texto = format!("  {}  ", opcion.etiqueta());
-        lineas.push(Line::from(if *opcion == state.seleccion {
-            Span::styled(format!("> {texto}"), theme::seleccionado())
+        let marcador = if *opcion == state.seleccion { ">" } else { " " };
+        let texto = format!("{marcador} {}", opcion.etiqueta());
+        lineas.push(Line::from(texto).style(if *opcion == state.seleccion {
+            theme.selected()
         } else {
-            Span::raw(format!("  {texto}"))
+            theme.base()
         }));
     }
     lineas.push(Line::from(""));
 }
 
-fn pie(frame: &mut Frame, area: Rect) {
-    let bloque = Block::bordered().border_style(theme::borde());
-    let interior = bloque.inner(area);
-    frame.render_widget(bloque, area);
-    let cols = Layout::horizontal([Constraint::Min(1), Constraint::Length(11)]).split(interior);
-    let ayuda = if area.width >= 100 {
-        "↑↓ Seleccionar │ ENTER Abrir │ 1–6 Acceso rápido │ L Cerrar sesión │ Q Salir"
-    } else {
-        "↑↓ │ ENTER │ 1–6 │ L Sesión │ Q Salir"
-    };
-    frame.render_widget(
-        Paragraph::new(ayuda)
-            .style(theme::foco())
-            .alignment(Alignment::Center),
-        cols[0],
-    );
-    frame.render_widget(
-        Paragraph::new(hora_actual_texto())
-            .style(theme::advertencia())
-            .alignment(Alignment::Right),
-        cols[1],
-    );
-}
-
-fn confirmacion(frame: &mut Frame, area: Rect, c: ConfirmacionMenu, sesion: &UsuarioSesion) {
-    let (titulo, pregunta) = match c {
-        ConfirmacionMenu::CerrarSesion => (
-            "CERRAR SESIÓN",
-            format!("¿Cerrar la sesión de {}?", sesion.nombre),
-        ),
-        ConfirmacionMenu::Salir => ("SALIR DE BRISAS CLI", "¿Desea cerrar la aplicación?".into()),
-    };
-    layout::render_overlay(
-        frame,
-        area,
-        54,
-        8,
-        3,
-        titulo,
-        vec![
-            Line::from(pregunta).alignment(Alignment::Center),
-            Line::from(""),
-            Line::from("Y Confirmar   N / ESC Cancelar")
-                .style(theme::foco())
-                .alignment(Alignment::Center),
-        ],
-    );
+fn centrar(area: Rect, ancho: u16, alto: u16) -> Rect {
+    Rect::new(
+        area.x + area.width.saturating_sub(ancho) / 2,
+        area.y + area.height.saturating_sub(alto) / 2,
+        ancho,
+        alto,
+    )
 }
 
 fn rol(rol: RolUsuario) -> &'static str {

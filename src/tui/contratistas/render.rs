@@ -1,100 +1,257 @@
-use crate::tiempo::hora_actual_texto;
 use chrono::NaiveDate;
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table},
+    layout::{Alignment, Constraint, Layout, Rect},
+    style::Style,
+    text::Line,
+    widgets::{Cell, Paragraph, Row, Table},
 };
 
 use super::*;
 use crate::{
     database::queries::contratistas::ContratistaResumen,
-    tui::{layout, theme},
+    tiempo::hora_actual_texto,
+    tui::ui_kit::{
+        CommandHint, ScreenShell, StatusKind, Theme, ThemePreset, render_terminal_too_small,
+    },
 };
 
+const ANCHO_MINIMO: u16 = 60;
+const ALTO_MINIMO: u16 = 22;
+const ANCHO_PANEL_LATERAL: u16 = 100;
+
+const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓", "Mover"),
+    CommandHint::new("ENTER", "Detalle"),
+    CommandHint::new("N", "Nuevo"),
+    CommandHint::new("E", "Editar"),
+    CommandHint::new("/", "Buscar"),
+    CommandHint::new("C", "Columnas"),
+    CommandHint::new("ESC", "Volver"),
+];
+const COMANDOS_BUSQUEDA: &[CommandHint<'static>] = &[
+    CommandHint::new("ENTER", "Aplicar"),
+    CommandHint::new("ESC", "Cancelar"),
+];
+const COMANDOS_DETALLE: &[CommandHint<'static>] =
+    &[CommandHint::new("E", "Editar"), CommandHint::new("ESC", "Cerrar")];
+const COMANDOS_FORMULARIO: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓/TAB", "Navegar"),
+    CommandHint::new("ENTER", "Cambiar"),
+    CommandHint::new("G", "Guardar"),
+    CommandHint::new("ESC", "Cancelar"),
+];
+const COMANDOS_DESPLEGABLE: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓", "Mover"),
+    CommandHint::new("ENTER", "Aceptar"),
+    CommandHint::new("ESC", "Cancelar"),
+];
+const COMANDOS_COLUMNAS: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓", "Mover"),
+    CommandHint::new("SPACE", "Mostrar/Ocultar"),
+    CommandHint::new("ESC", "Cerrar"),
+];
+
 pub fn render(frame: &mut Frame, area: Rect, state: &ContratistasState) {
-    frame.render_widget(Block::default().style(theme::texto_normal()), area);
-    if area.width < 60 || area.height < 22 {
-        layout::render_terminal_pequena(frame, area);
+    let theme = ThemePreset::Brisas.theme();
+
+    if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
+        render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "ESC salir", theme);
         return;
     }
-    let contenido = Rect::new(
-        area.x.saturating_add(2),
-        area.y,
-        area.width.saturating_sub(4),
-        area.height,
-    );
-    let zonas = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(5),
-            Constraint::Length(2),
-            Constraint::Min(8),
-            Constraint::Length(3),
-        ])
-        .split(contenido);
-    render_cabecera(frame, zonas[0], state);
-    render_estado(frame, zonas[1], state);
-    render_tabla(frame, zonas[2], state);
-    render_pie(frame, zonas[3], state);
-    render_modo(frame, contenido, state);
+
+    let hora = hora_actual_texto();
+    let contexto = format!("Usuario: {}", state.usuario_nombre);
+    let (estado_texto, estado_tipo) = estado_shell(state);
+    let comandos = match &state.modo {
+        ModoContratistas::Normal => COMANDOS_NORMAL,
+        ModoContratistas::Busqueda { .. } => COMANDOS_BUSQUEDA,
+        ModoContratistas::Detalle { .. } => COMANDOS_DETALLE,
+        ModoContratistas::Formulario(f) if f.desplegable.is_some() => COMANDOS_DESPLEGABLE,
+        ModoContratistas::Formulario(_) => COMANDOS_FORMULARIO,
+        ModoContratistas::Columnas { .. } => COMANDOS_COLUMNAS,
+    };
+
+    let shell = ScreenShell {
+        product: "BRISAS CLI",
+        screen: "CONTRATISTAS",
+        context: &contexto,
+        clock: &hora,
+        status: &estado_texto,
+        status_kind: estado_tipo,
+        commands: comandos,
+    };
+    let areas = shell.render(frame, area, theme);
+
+    render_cuerpo(frame, areas.body, state, theme);
 }
 
-fn render_cabecera(frame: &mut Frame, area: Rect, state: &ContratistasState) {
-    let bloque = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Plain)
-        .border_style(theme::borde());
-    let interior = bloque.inner(area);
-    frame.render_widget(bloque, area);
-    let cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(30),
-            Constraint::Percentage(40),
-            Constraint::Percentage(30),
+fn estado_shell(state: &ContratistasState) -> (String, StatusKind) {
+    if let ModoContratistas::Formulario(f) = &state.modo
+        && let Some(error) = &f.error
+    {
+        return (format!("✕ {error}"), StatusKind::Error);
+    }
+    if let Some(error) = &state.error_carga {
+        return (error.clone(), StatusKind::Error);
+    }
+    if let Some(mensaje) = &state.mensaje {
+        let tipo = if mensaje.starts_with('✓') {
+            StatusKind::Success
+        } else {
+            StatusKind::Warning
+        };
+        return (mensaje.clone(), tipo);
+    }
+    (String::new(), StatusKind::Normal)
+}
+
+fn render_cuerpo(frame: &mut Frame, area: Rect, state: &ContratistasState, theme: Theme) {
+    let filas = Layout::vertical([Constraint::Length(3), Constraint::Min(4)]).split(area);
+
+    let enfocado_busqueda = matches!(state.modo, ModoContratistas::Busqueda { .. });
+    let area_busqueda = render_campo(
+        frame,
+        filas[0],
+        &format!("BUSCAR · {} RESULTADOS", state.registros.len()),
+        &state.filtro,
+        enfocado_busqueda,
+        theme,
+    );
+    if enfocado_busqueda {
+        posicionar_cursor(frame, area_busqueda, &state.filtro);
+    }
+
+    let (area_tabla, area_panel) = if area.width >= ANCHO_PANEL_LATERAL {
+        let columnas = Layout::horizontal([
+            Constraint::Percentage(60),
+            Constraint::Length(1),
+            Constraint::Percentage(39),
         ])
-        .split(interior);
-    let centro = |a: Rect| Rect::new(a.x, a.y + a.height / 2, a.width, 1);
+        .split(filas[1]);
+        render_separador_vertical(frame, columnas[1], theme);
+        (columnas[0], columnas[2])
+    } else {
+        let alto_panel = altura_panel(state);
+        let filas_apiladas = Layout::vertical([
+            Constraint::Min(4),
+            Constraint::Length(1),
+            Constraint::Length(alto_panel.min(filas[1].height.saturating_sub(5))),
+        ])
+        .split(filas[1]);
+        render_separador_horizontal(frame, filas_apiladas[1], theme);
+        (filas_apiladas[0], filas_apiladas[2])
+    };
+    render_tabla(frame, area_tabla, state, theme);
+    render_panel(frame, area_panel, state, theme);
+}
+
+fn altura_fila(campo: CampoFormulario, f: &FormularioContratista) -> u16 {
+    match campo {
+        CampoFormulario::Cedula => {
+            if matches!(f.modo, ModoFormulario::Crear) {
+                3
+            } else {
+                1
+            }
+        }
+        CampoFormulario::Nombre => 3,
+        CampoFormulario::FechaPraind => {
+            if f.requiere_praind() {
+                3
+            } else {
+                1
+            }
+        }
+        CampoFormulario::Empresa | CampoFormulario::Tipo | CampoFormulario::Ruta | CampoFormulario::Acceso => 1,
+    }
+}
+
+fn altura_panel(state: &ContratistasState) -> u16 {
+    match &state.modo {
+        ModoContratistas::Formulario(f) => {
+            let mut total: u16 = CampoFormulario::TODOS
+                .iter()
+                .map(|c| altura_fila(*c, f))
+                .sum();
+            if let Some((tipo, _)) = f.desplegable {
+                total += match tipo {
+                    Desplegable::Empresa => state.empresas.len().max(1) as u16,
+                    Desplegable::Tipo => tipos().len() as u16,
+                };
+            }
+            total + 1
+        }
+        ModoContratistas::Columnas { .. } => state.columnas.len() as u16 + 1,
+        _ => 9,
+    }
+}
+
+/// Misma silueta con foco o sin él (etiqueta, valor, línea); sólo cambian
+/// color y peso.
+fn render_campo(
+    frame: &mut Frame,
+    area: Rect,
+    etiqueta: &str,
+    valor: &str,
+    activo: bool,
+    theme: Theme,
+) -> Rect {
+    let estilo_etiqueta = if activo { theme.accent() } else { theme.muted() };
+    let estilo_linea = if activo { theme.accent() } else { theme.border() };
+    let valor_y = area.y.saturating_add(1);
+    let linea_y = area.y.saturating_add(2);
+
     frame.render_widget(
-        Paragraph::new(vec![
-            Line::from(" B R I S A S   C L I").style(theme::titulo()),
-            Line::from(" CONTROL DE ACCESO").style(theme::texto_secundario()),
-        ]),
-        Rect::new(
-            cols[0].x,
-            cols[0].y + cols[0].height.saturating_sub(2) / 2,
-            cols[0].width,
-            2,
-        ),
+        Paragraph::new(etiqueta).style(estilo_etiqueta),
+        Rect::new(area.x, area.y, area.width, 1),
     );
     frame.render_widget(
-        Paragraph::new("BASE DE CONTRATISTAS")
-            .style(theme::foco())
-            .alignment(Alignment::Center),
-        centro(cols[1]),
+        Paragraph::new(Line::from(valor).style(theme.base())),
+        Rect::new(area.x, valor_y, area.width, 1),
     );
     frame.render_widget(
-        Paragraph::new(format!("Usuario: {} ", state.usuario_nombre))
-            .style(theme::texto_normal())
-            .alignment(Alignment::Right),
-        centro(cols[2]),
+        Paragraph::new("─".repeat(area.width as usize)).style(estilo_linea),
+        Rect::new(area.x, linea_y, area.width, 1),
+    );
+
+    Rect::new(area.x, valor_y, area.width, 1)
+}
+
+fn render_opcion(frame: &mut Frame, area: Rect, etiqueta: &str, valor: &str, activo: bool, theme: Theme) {
+    let marcador = if activo { ">" } else { " " };
+    let estilo = if activo { theme.accent() } else { theme.base() };
+    frame.render_widget(
+        Paragraph::new(Line::from(format!("{marcador} {etiqueta:<20} {valor}"))).style(estilo),
+        area,
     );
 }
 
-fn render_tabla(frame: &mut Frame, area: Rect, state: &ContratistasState) {
+fn posicionar_cursor(frame: &mut Frame, area: Rect, contenido: &str) {
+    let ancho_visible = Line::from(contenido).width() as u16;
+    let x = area.x.saturating_add(ancho_visible.min(area.width));
+    frame.set_cursor_position((x, area.y));
+}
+
+fn render_separador_vertical(frame: &mut Frame, area: Rect, theme: Theme) {
+    let lineas: Vec<Line<'static>> = (0..area.height).map(|_| Line::from("│")).collect();
+    frame.render_widget(Paragraph::new(lineas).style(theme.border()), area);
+}
+
+fn render_separador_horizontal(frame: &mut Frame, area: Rect, theme: Theme) {
+    frame.render_widget(
+        Paragraph::new("─".repeat(area.width as usize)).style(theme.border()),
+        area,
+    );
+}
+
+fn render_tabla(frame: &mut Frame, area: Rect, state: &ContratistasState, theme: Theme) {
     let columnas: Vec<_> = state
         .columnas
         .iter()
         .filter_map(|(c, v)| v.then_some(*c))
         .collect();
-    let marco = Block::default()
-        .borders(Borders::ALL)
-        .border_style(theme::borde());
-    let interior = marco.inner(area);
-    frame.render_widget(marco, area);
-    let capacidad = interior.height.saturating_sub(2) as usize;
+    let capacidad = area.height.saturating_sub(2) as usize;
     let inicio = state.inicio_visible(capacidad).min(state.registros.len());
     let filas = state
         .registros
@@ -104,21 +261,18 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ContratistasState) {
         .enumerate()
         .map(|(visible, c)| {
             let seleccionado = state.seleccion == Some(inicio + visible);
+            let estilo_fila = if seleccionado { theme.selected() } else { theme.base() };
             let celdas = columnas.iter().map(|col| {
                 Cell::from(valor(c, *col)).style(if seleccionado {
-                    theme::seleccionado()
+                    estilo_fila
                 } else {
-                    estilo(c, *col, state.hoy)
+                    estilo(c, *col, state.hoy, theme)
                 })
             });
-            Row::new(celdas).style(if seleccionado {
-                theme::seleccionado()
-            } else {
-                theme::texto_normal()
-            })
+            Row::new(celdas).style(estilo_fila)
         });
     let encabezado = Row::new(columnas.iter().map(|c| c.titulo()))
-        .style(theme::foco())
+        .style(theme.muted())
         .bottom_margin(1);
     frame.render_widget(
         Table::new(
@@ -127,14 +281,18 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ContratistasState) {
         )
         .header(encabezado)
         .column_spacing(1),
-        interior,
+        area,
     );
     if state.registros.is_empty() {
         frame.render_widget(
-            Paragraph::new("No hay contratistas que coincidan con la búsqueda.")
-                .style(theme::advertencia())
-                .alignment(Alignment::Center),
-            interior,
+            Paragraph::new(if state.filtro.is_empty() {
+                "Sin contratistas registrados"
+            } else {
+                "No hay contratistas que coincidan con la búsqueda."
+            })
+            .style(theme.warning())
+            .alignment(Alignment::Center),
+            Rect::new(area.x, area.y + area.height / 2, area.width, 1),
         );
     }
 }
@@ -153,261 +311,227 @@ fn valor(c: &ContratistaResumen, col: Columna) -> String {
         Columna::Acceso => si_no(c.tiene_acceso).into(),
     }
 }
+
 fn si_no(v: bool) -> &'static str {
     if v { "SÍ" } else { "NO" }
 }
-fn estilo(c: &ContratistaResumen, col: Columna, hoy: NaiveDate) -> ratatui::style::Style {
+
+fn estilo(c: &ContratistaResumen, col: Columna, hoy: NaiveDate, theme: Theme) -> Style {
     match col {
-        Columna::Acceso if c.tiene_acceso => theme::exito(),
-        Columna::Acceso => theme::error(),
-        Columna::Praind => estilo_fecha(c.fecha_vencimiento_praind, hoy),
-        _ => theme::texto_normal(),
+        Columna::Acceso if c.tiene_acceso => theme.success(),
+        Columna::Acceso => theme.danger(),
+        Columna::Praind => estilo_fecha(c.fecha_vencimiento_praind, hoy, theme),
+        _ => theme.base(),
     }
 }
-fn estilo_fecha(fecha: Option<NaiveDate>, hoy: NaiveDate) -> ratatui::style::Style {
+
+fn estilo_fecha(fecha: Option<NaiveDate>, hoy: NaiveDate, theme: Theme) -> Style {
     let Some(fecha) = fecha else {
-        return theme::texto_secundario();
+        return theme.muted();
     };
     let dias = (fecha - hoy).num_days();
     if dias < 0 {
-        theme::error()
+        theme.danger()
     } else if dias <= 30 {
-        theme::advertencia()
+        theme.warning()
     } else {
-        theme::exito()
+        theme.success()
     }
 }
 
-fn render_estado(frame: &mut Frame, area: Rect, state: &ContratistasState) {
-    let linea = match &state.modo {
-        ModoContratistas::Busqueda { texto } => Line::from(vec![
-            Span::styled("BUSCAR CONTRATISTAS: ", theme::foco()),
-            Span::styled(format!("{texto}_"), theme::texto_normal()),
-        ]),
-        _ if !state.filtro.is_empty() => Line::from(vec![
-            Span::styled("FILTRO ACTIVO: ", theme::foco()),
-            Span::styled(&state.filtro, theme::texto_normal()),
-            Span::styled(
-                format!("    {} resultados    ", state.registros.len()),
-                theme::texto_secundario(),
-            ),
-            Span::styled("ESC ", theme::ayuda_tecla()),
-            Span::styled("Limpiar", theme::texto_normal()),
-        ]),
-        _ if state.error_carga.is_some() => {
-            Line::from(state.error_carga.clone().unwrap_or_default()).style(theme::error())
-        }
-        _ => Line::from(state.mensaje.clone().unwrap_or_default()).style(theme::exito()),
-    };
-    frame.render_widget(Paragraph::new(linea).alignment(Alignment::Center), area);
-}
-fn render_pie(frame: &mut Frame, area: Rect, state: &ContratistasState) {
-    let bloque = Block::default()
-        .borders(Borders::ALL)
-        .border_style(theme::borde());
-    let interior = bloque.inner(area);
-    frame.render_widget(bloque, area);
-    let cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length(42),
-            Constraint::Min(20),
-            Constraint::Length(12),
-        ])
-        .split(interior);
-    let posicion = state.seleccion.map_or_else(
-        || "—/—".into(),
-        |i| format!("{}/{}", i + 1, state.registros.len()),
-    );
-    frame.render_widget(
-        Paragraph::new(format!(
-            " {} contratistas │ Registro {posicion}",
-            state.registros.len()
-        )),
-        cols[0],
-    );
-    frame.render_widget(Paragraph::new("↑↓ Seleccionar │ ENTER Detalle │ N Nuevo │ E Editar │ / Buscar │ C Columnas │ ESC Volver").style(theme::foco()).alignment(Alignment::Center), cols[1]);
-    frame.render_widget(
-        Paragraph::new(hora_actual_texto())
-            .style(theme::advertencia())
-            .alignment(Alignment::Right)
-            .block(Block::default().padding(ratatui::widgets::Padding::right(1))),
-        cols[2],
-    );
-}
-
-fn render_modo(frame: &mut Frame, area: Rect, state: &ContratistasState) {
+/// Dibuja el panel lateral según el modo y, cuando corresponde, posiciona
+/// el cursor sobre el campo de texto enfocado.
+fn render_panel(frame: &mut Frame, area: Rect, state: &ContratistasState, theme: Theme) {
     match &state.modo {
         ModoContratistas::Detalle { id } => {
             if let Some(c) = state.registro(*id) {
-                render_detalle(frame, area, c);
+                render_detalle(frame, area, c, state.hoy, theme);
             }
         }
-        ModoContratistas::Formulario(f) => render_formulario(frame, area, state, f),
-        ModoContratistas::Columnas { seleccion } => render_columnas(frame, area, state, *seleccion),
-        _ => {}
+        ModoContratistas::Formulario(f) => render_formulario(frame, area, state, f, theme),
+        ModoContratistas::Columnas { seleccion } => render_columnas(frame, area, state, *seleccion, theme),
+        ModoContratistas::Normal | ModoContratistas::Busqueda { .. } => {
+            frame.render_widget(
+                Paragraph::new("Seleccione ENTER para ver el detalle.").style(theme.muted()),
+                area,
+            );
+        }
     }
 }
-fn render_detalle(frame: &mut Frame, area: Rect, c: &ContratistaResumen) {
-    layout::render_overlay(
-        frame,
-        area,
-        66,
-        17,
-        4,
-        "DETALLE DEL CONTRATISTA",
-        vec![
-            Line::from(c.nombre.clone()).style(theme::titulo()),
-            Line::from(""),
-            Line::from(format!("Cédula                 {}", c.cedula)),
-            Line::from(format!("Empresa                {}", c.empresa_nombre)),
-            Line::from(format!(
-                "Tipo de ingreso        {}",
-                texto_tipo(c.tipo_ingreso)
-            )),
-            Line::from(format!(
-                "Fecha PRAIND           {}",
-                c.fecha_vencimiento_praind
-                    .map(|f| f.format("%d/%m/%Y").to_string())
-                    .unwrap_or_else(|| "No requerida".into())
-            )),
-            Line::from(format!(
-                "Personal de ruta       {}",
-                si_no(c.es_personal_ruta)
-            )),
-            Line::from(format!("Tiene acceso           {}", si_no(c.tiene_acceso))),
-            Line::from(""),
-            Line::from("E Editar                         ESC Cerrar").style(theme::foco()),
-        ],
-    );
+
+fn render_detalle(frame: &mut Frame, area: Rect, c: &ContratistaResumen, hoy: NaiveDate, theme: Theme) {
+    let estilo_praind = estilo_fecha(c.fecha_vencimiento_praind, hoy, theme);
+    let estilo_acceso = if c.tiene_acceso { theme.success() } else { theme.danger() };
+    let lineas = vec![
+        Line::from(c.nombre.as_str()).style(theme.title()),
+        Line::from(c.cedula.as_str()).style(theme.muted()),
+        Line::from(""),
+        Line::from(format!("Empresa: {}", c.empresa_nombre)).style(theme.base()),
+        Line::from(format!("Tipo de ingreso: {}", texto_tipo(c.tipo_ingreso))).style(theme.base()),
+        Line::from(format!(
+            "PRAIND: {}",
+            c.fecha_vencimiento_praind
+                .map(|f| f.format("%d/%m/%Y").to_string())
+                .unwrap_or_else(|| "No requerida".into())
+        ))
+        .style(estilo_praind),
+        Line::from(format!("Personal de ruta: {}", si_no(c.es_personal_ruta))).style(theme.base()),
+        Line::from(if c.tiene_acceso { "ACCESO PERMITIDO" } else { "SIN ACCESO" }).style(estilo_acceso),
+    ];
+    frame.render_widget(Paragraph::new(lineas), area);
 }
+
 fn render_formulario(
     frame: &mut Frame,
     area: Rect,
     state: &ContratistasState,
     f: &FormularioContratista,
+    theme: Theme,
 ) {
-    let titulo = match f.modo {
-        ModoFormulario::Crear => "NUEVO CONTRATISTA",
-        ModoFormulario::Editar { .. } => "EDITAR CONTRATISTA",
-    };
-    let valores = [
-        match f.modo {
-            ModoFormulario::Crear => format!("{}{}", f.cedula, cursor(f, 0)),
-            ModoFormulario::Editar { .. } => format!("{}  [no editable]", f.cedula),
-        },
-        format!("{}{}", f.nombre, cursor(f, 1)),
-        state
-            .empresas
-            .get(f.empresa)
-            .map_or("Sin empresas", |e| e.nombre.as_str())
-            .into(),
-        texto_tipo(f.tipo).into(),
-        if f.requiere_praind() {
-            format!("{}{}", f.fecha_praind, cursor(f, 4))
-        } else {
-            "No requerida".into()
-        },
-        si_no(f.personal_ruta).into(),
-        si_no(f.tiene_acceso).into(),
-    ];
-    let nombres = [
-        "Cédula",
-        "Nombre",
-        "Empresa",
-        "Tipo de ingreso",
-        "Fecha PRAIND",
-        "Personal de ruta",
-        "Tiene acceso",
-    ];
-    let mut lineas = vec![Line::from("")];
-    for (i, nombre) in nombres.iter().enumerate() {
-        lineas.push(
-            Line::from(format!(
-                "{} {:<21} {}",
-                if f.campo == i { ">" } else { " " },
-                nombre,
-                valores[i]
-            ))
-            .style(if f.campo == i {
-                theme::foco()
-            } else {
-                theme::texto_normal()
-            }),
-        );
-        lineas.push(Line::from(""));
+    let campos = CampoFormulario::TODOS;
+    let mut restricciones: Vec<Constraint> = campos
+        .iter()
+        .map(|c| Constraint::Length(altura_fila(*c, f)))
+        .collect();
+    if let Some((tipo_desplegable, _)) = f.desplegable {
+        let objetivo = match tipo_desplegable {
+            Desplegable::Empresa => CampoFormulario::Empresa,
+            Desplegable::Tipo => CampoFormulario::Tipo,
+        };
+        let indice = campos.iter().position(|c| *c == objetivo).unwrap_or(0);
+        let alto = match tipo_desplegable {
+            Desplegable::Empresa => state.empresas.len().max(1) as u16,
+            Desplegable::Tipo => tipos().len() as u16,
+        };
+        restricciones.insert(indice + 1, Constraint::Length(alto));
     }
-    lineas.push(Line::from(f.error.clone().unwrap_or_default()).style(theme::error()));
-    lineas.push(Line::from("↑↓/Tab Navegar   ENTER Seleccionar/Cambiar").style(theme::foco()));
-    lineas.push(
-        Line::from("G Guardar                              ESC Cancelar").style(theme::foco()),
+    restricciones.push(Constraint::Length(1));
+    let filas = Layout::vertical(restricciones).split(area);
+
+    let mut fila = 0usize;
+    for (indice, campo) in campos.iter().enumerate() {
+        let enfocado = f.campo == indice;
+        match campo {
+            CampoFormulario::Cedula => {
+                if matches!(f.modo, ModoFormulario::Crear) {
+                    let r = render_campo(frame, filas[fila], "CÉDULA", &f.cedula, enfocado, theme);
+                    if enfocado {
+                        posicionar_cursor(frame, r, &f.cedula);
+                    }
+                } else {
+                    render_opcion(
+                        frame,
+                        filas[fila],
+                        "CÉDULA",
+                        &format!("{} (no editable)", f.cedula),
+                        false,
+                        theme,
+                    );
+                }
+            }
+            CampoFormulario::Nombre => {
+                let r = render_campo(frame, filas[fila], "NOMBRE", &f.nombre, enfocado, theme);
+                if enfocado {
+                    posicionar_cursor(frame, r, &f.nombre);
+                }
+            }
+            CampoFormulario::Empresa => {
+                let valor = state
+                    .empresas
+                    .get(f.empresa)
+                    .map_or("Sin empresas", |e| e.nombre.as_str());
+                render_opcion(frame, filas[fila], "EMPRESA", valor, enfocado, theme);
+                if let Some((Desplegable::Empresa, resaltado)) = f.desplegable {
+                    fila += 1;
+                    render_lista_desplegable(
+                        frame,
+                        filas[fila],
+                        state.empresas.iter().map(|e| e.nombre.as_str()),
+                        resaltado,
+                        theme,
+                    );
+                }
+            }
+            CampoFormulario::Tipo => {
+                render_opcion(frame, filas[fila], "TIPO DE INGRESO", texto_tipo(f.tipo), enfocado, theme);
+                if let Some((Desplegable::Tipo, resaltado)) = f.desplegable {
+                    fila += 1;
+                    render_lista_desplegable(
+                        frame,
+                        filas[fila],
+                        tipos().iter().map(|t| texto_tipo(*t)),
+                        resaltado,
+                        theme,
+                    );
+                }
+            }
+            CampoFormulario::FechaPraind => {
+                if f.requiere_praind() {
+                    let r = render_campo(
+                        frame,
+                        filas[fila],
+                        "FECHA PRAIND",
+                        &f.fecha_praind,
+                        enfocado,
+                        theme,
+                    );
+                    if enfocado {
+                        posicionar_cursor(frame, r, &f.fecha_praind);
+                    }
+                } else {
+                    render_opcion(frame, filas[fila], "FECHA PRAIND", "No requerida", false, theme);
+                }
+            }
+            CampoFormulario::Ruta => {
+                render_opcion(frame, filas[fila], "PERSONAL DE RUTA", si_no(f.personal_ruta), enfocado, theme);
+            }
+            CampoFormulario::Acceso => {
+                render_opcion(frame, filas[fila], "TIENE ACCESO", si_no(f.tiene_acceso), enfocado, theme);
+            }
+        }
+        fila += 1;
+    }
+    frame.render_widget(
+        Paragraph::new(f.error.as_deref().unwrap_or_default()).style(theme.danger()),
+        filas[fila],
     );
-    layout::render_overlay(frame, area, 76, 24, 4, titulo, lineas);
-    if let Some((tipo, opcion)) = f.desplegable {
-        render_desplegable(frame, area, state, tipo, opcion);
-    }
 }
-fn cursor(f: &FormularioContratista, campo: usize) -> &'static str {
-    if f.campo == campo { "_" } else { "" }
-}
-fn render_desplegable(
+
+fn render_lista_desplegable<'a>(
     frame: &mut Frame,
     area: Rect,
-    state: &ContratistasState,
-    tipo: Desplegable,
-    opcion: usize,
+    opciones: impl Iterator<Item = &'a str>,
+    resaltado: usize,
+    theme: Theme,
 ) {
-    let (titulo, opciones): (&str, Vec<&str>) = match tipo {
-        Desplegable::Empresa => (
-            "SELECCIONAR EMPRESA",
-            state.empresas.iter().map(|e| e.nombre.as_str()).collect(),
-        ),
-        Desplegable::Tipo => (
-            "SELECCIONAR TIPO",
-            tipos().iter().map(|t| texto_tipo(*t)).collect(),
-        ),
-    };
-    let mut lineas: Vec<_> = opciones
-        .iter()
+    let lineas: Vec<Line<'_>> = opciones
         .enumerate()
-        .map(|(i, o)| {
-            Line::from(format!("{} {o}", if i == opcion { ">" } else { " " })).style(
-                if i == opcion {
-                    theme::seleccionado()
-                } else {
-                    theme::texto_normal()
-                },
-            )
+        .map(|(indice, opcion)| {
+            let seleccionado = indice == resaltado;
+            let marcador = if seleccionado { "  >" } else { "   " };
+            Line::from(format!("{marcador} {opcion}"))
+                .style(if seleccionado { theme.selected() } else { theme.muted() })
         })
         .collect();
-    lineas.push(Line::from(""));
-    lineas.push(Line::from("↑↓ Seleccionar   ENTER Aceptar   ESC Cancelar").style(theme::foco()));
-    let alto = lineas.len() as u16 + 4;
-    layout::render_overlay(frame, area, 54, alto, 4, titulo, lineas);
+    frame.render_widget(Paragraph::new(lineas), area);
 }
-fn render_columnas(frame: &mut Frame, area: Rect, state: &ContratistasState, seleccion: usize) {
-    let mut lineas: Vec<_> = state
+
+fn render_columnas(frame: &mut Frame, area: Rect, state: &ContratistasState, seleccion: usize, theme: Theme) {
+    let lineas: Vec<Line<'_>> = state
         .columnas
         .iter()
         .enumerate()
-        .map(|(i, (c, v))| {
+        .map(|(indice, (c, visible))| {
+            let activo = indice == seleccion;
+            let estilo = if activo { theme.accent() } else { theme.base() };
             Line::from(format!(
                 "{} [{}] {}",
-                if i == seleccion { ">" } else { " " },
-                if *v { "x" } else { " " },
+                if activo { ">" } else { " " },
+                if *visible { "x" } else { " " },
                 c.titulo()
             ))
-            .style(if i == seleccion {
-                theme::foco()
-            } else {
-                theme::texto_normal()
-            })
+            .style(estilo)
         })
         .collect();
-    lineas.push(Line::from(""));
-    if let Some(m) = &state.mensaje {
-        lineas.push(Line::from(m.clone()).style(theme::advertencia()));
-    }
-    lineas.push(Line::from("↑↓ mover  SPACE mostrar/ocultar  ESC cerrar").style(theme::foco()));
-    layout::render_overlay(frame, area, 48, 15, 4, "COLUMNAS", lineas);
+    frame.render_widget(Paragraph::new(lineas), area);
 }

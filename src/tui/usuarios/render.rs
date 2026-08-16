@@ -1,105 +1,258 @@
-use crate::tiempo::hora_actual_texto;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout, Rect},
     text::{Line, Span},
-    widgets::{Block, Cell, Paragraph, Row, Table},
+    widgets::{Cell, Paragraph, Row, Table},
 };
 
 use super::*;
 use crate::{
     database::queries::usuarios::UsuarioResumen,
-    tui::{layout, theme},
+    tiempo::hora_actual_texto,
+    tui::ui_kit::{
+        CommandHint, ScreenShell, StatusKind, Theme, ThemePreset, render_terminal_too_small,
+    },
 };
 
+const ANCHO_MINIMO: u16 = 60;
+const ALTO_MINIMO: u16 = 22;
+const ANCHO_PANEL_LATERAL: u16 = 100;
+
+const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓", "Mover"),
+    CommandHint::new("ENTER", "Detalle"),
+    CommandHint::new("N", "Nuevo"),
+    CommandHint::new("E", "Editar"),
+    CommandHint::new("P", "Clave"),
+    CommandHint::new("A", "Estado"),
+    CommandHint::new("/", "Buscar"),
+    CommandHint::new("ESC", "Volver"),
+];
+const COMANDOS_BUSQUEDA: &[CommandHint<'static>] = &[
+    CommandHint::new("ENTER", "Aplicar"),
+    CommandHint::new("ESC", "Cancelar"),
+];
+const COMANDOS_DETALLE: &[CommandHint<'static>] = &[
+    CommandHint::new("E", "Editar"),
+    CommandHint::new("P", "Clave"),
+    CommandHint::new("A", "Estado"),
+    CommandHint::new("ESC", "Cerrar"),
+];
+const COMANDOS_FORMULARIO: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓/TAB", "Navegar"),
+    CommandHint::new("ENTER", "Cambiar"),
+    CommandHint::new("G", "Guardar"),
+    CommandHint::new("ESC", "Cancelar"),
+];
+const COMANDOS_SELECTOR_ROL: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓", "Mover"),
+    CommandHint::new("ENTER", "Aceptar"),
+    CommandHint::new("ESC", "Cancelar"),
+];
+const COMANDOS_PASSWORD: &[CommandHint<'static>] = &[
+    CommandHint::new("TAB", "Campo"),
+    CommandHint::new("G", "Guardar"),
+    CommandHint::new("ESC", "Cancelar"),
+];
+const COMANDOS_CONFIRMACION: &[CommandHint<'static>] = &[
+    CommandHint::new("Y/ENTER", "Confirmar"),
+    CommandHint::new("N/ESC", "Cancelar"),
+];
+
 pub fn render(frame: &mut Frame, area: Rect, state: &UsuariosState) {
-    frame.render_widget(Block::default().style(theme::texto_normal()), area);
-    if area.width < 60 || area.height < 22 {
-        layout::render_terminal_pequena(frame, area);
+    let theme = ThemePreset::Brisas.theme();
+
+    if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
+        render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "ESC salir", theme);
         return;
     }
-    let contenido = Rect::new(
-        area.x + 2,
-        area.y,
-        area.width.saturating_sub(4),
-        area.height,
-    );
-    let zonas = Layout::vertical([
-        Constraint::Length(5),
-        Constraint::Length(2),
-        Constraint::Min(8),
-        Constraint::Length(3),
-    ])
-    .split(contenido);
-    render_cabecera(frame, zonas[0], state);
-    render_estado(frame, zonas[1], state);
-    render_tabla(frame, zonas[2], state);
-    render_pie(frame, zonas[3], state);
-    render_modo(frame, contenido, state);
-}
 
-fn render_cabecera(frame: &mut Frame, area: Rect, state: &UsuariosState) {
-    let bloque = Block::bordered().border_style(theme::borde());
-    let interior = bloque.inner(area);
-    frame.render_widget(bloque, area);
-    let columnas = Layout::horizontal([
-        Constraint::Percentage(30),
-        Constraint::Percentage(40),
-        Constraint::Percentage(30),
-    ])
-    .split(interior);
-    let centro = |a: Rect| Rect::new(a.x, a.y + a.height / 2, a.width, 1);
-    frame.render_widget(
-        Paragraph::new(vec![
-            Line::from(" B R I S A S   C L I").style(theme::titulo()),
-            Line::from(" CONTROL DE ACCESO").style(theme::texto_secundario()),
-        ]),
-        Rect::new(columnas[0].x, columnas[0].y, columnas[0].width, 2),
-    );
-    frame.render_widget(
-        Paragraph::new("BASE DE USUARIOS")
-            .style(theme::foco())
-            .alignment(Alignment::Center),
-        centro(columnas[1]),
-    );
-    frame.render_widget(
-        Paragraph::new(format!("Usuario: {} ", state.usuario_nombre)).alignment(Alignment::Right),
-        centro(columnas[2]),
-    );
-}
-
-fn render_estado(frame: &mut Frame, area: Rect, state: &UsuariosState) {
-    let linea = match &state.modo {
-        ModoUsuarios::Busqueda { texto } => Line::from(vec![
-            Span::styled("BUSCAR USUARIOS: ", theme::foco()),
-            Span::raw(format!("{texto}_")),
-        ]),
-        _ if !state.filtro.is_empty() => Line::from(vec![
-            Span::styled("FILTRO ACTIVO: ", theme::foco()),
-            Span::raw(&state.filtro),
-            Span::styled(
-                format!("    {} resultados    ", state.usuarios.len()),
-                theme::texto_secundario(),
-            ),
-            Span::styled("ESC ", theme::ayuda_tecla()),
-            Span::raw("Limpiar"),
-        ]),
-        _ => Line::from(state.mensaje.clone().unwrap_or_default()).style(
-            if state.mensaje.as_deref().is_some_and(|m| m.starts_with('✓')) {
-                theme::exito()
-            } else {
-                theme::error()
-            },
-        ),
+    let hora = hora_actual_texto();
+    let contexto = format!("Usuario: {}", state.usuario_nombre);
+    let (estado_texto, estado_tipo) = estado_shell(state);
+    let comandos = match &state.modo {
+        ModoUsuarios::Normal => COMANDOS_NORMAL,
+        ModoUsuarios::Busqueda { .. } => COMANDOS_BUSQUEDA,
+        ModoUsuarios::Detalle { .. } => COMANDOS_DETALLE,
+        ModoUsuarios::Formulario(f) if f.selector_rol.is_some() => COMANDOS_SELECTOR_ROL,
+        ModoUsuarios::Formulario(_) => COMANDOS_FORMULARIO,
+        ModoUsuarios::CambioPassword(_) => COMANDOS_PASSWORD,
+        ModoUsuarios::ConfirmacionEstado(_) => COMANDOS_CONFIRMACION,
     };
-    frame.render_widget(Paragraph::new(linea).alignment(Alignment::Center), area);
+
+    let shell = ScreenShell {
+        product: "BRISAS CLI",
+        screen: "USUARIOS",
+        context: &contexto,
+        clock: &hora,
+        status: &estado_texto,
+        status_kind: estado_tipo,
+        commands: comandos,
+    };
+    let areas = shell.render(frame, area, theme);
+
+    render_cuerpo(frame, areas.body, state, theme);
 }
 
-fn render_tabla(frame: &mut Frame, area: Rect, state: &UsuariosState) {
-    let marco = Block::bordered().border_style(theme::borde());
-    let interior = marco.inner(area);
-    frame.render_widget(marco, area);
-    let capacidad = interior.height.saturating_sub(2) as usize;
+fn estado_shell(state: &UsuariosState) -> (String, StatusKind) {
+    if let ModoUsuarios::ConfirmacionEstado(c) = &state.modo
+        && let Some(u) = state.usuario(c.id)
+    {
+        let accion = if c.activar { "activar" } else { "desactivar" };
+        return (
+            format!("¿Confirma {accion} a {}?", u.nombre),
+            StatusKind::Warning,
+        );
+    }
+    if let ModoUsuarios::Formulario(f) = &state.modo
+        && let Some(error) = &f.error
+    {
+        return (format!("✕ {error}"), StatusKind::Error);
+    }
+    if let ModoUsuarios::CambioPassword(f) = &state.modo
+        && let Some(error) = &f.error
+    {
+        return (format!("✕ {error}"), StatusKind::Error);
+    }
+    if let Some(mensaje) = &state.mensaje {
+        let tipo = if mensaje.starts_with('✓') {
+            StatusKind::Success
+        } else {
+            StatusKind::Error
+        };
+        return (mensaje.clone(), tipo);
+    }
+    (String::new(), StatusKind::Normal)
+}
+
+fn render_cuerpo(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: Theme) {
+    let filas = Layout::vertical([Constraint::Length(3), Constraint::Min(4)]).split(area);
+
+    let enfocado_busqueda = matches!(state.modo, ModoUsuarios::Busqueda { .. });
+    let area_busqueda = render_campo(
+        frame,
+        filas[0],
+        &format!("BUSCAR · {} RESULTADOS", state.usuarios.len()),
+        &state.filtro,
+        enfocado_busqueda,
+        theme,
+    );
+    if enfocado_busqueda {
+        posicionar_cursor(frame, area_busqueda, &state.filtro);
+    }
+
+    let (area_tabla, area_panel) = if area.width >= ANCHO_PANEL_LATERAL {
+        let columnas = Layout::horizontal([
+            Constraint::Percentage(60),
+            Constraint::Length(1),
+            Constraint::Percentage(39),
+        ])
+        .split(filas[1]);
+        render_separador_vertical(frame, columnas[1], theme);
+        (columnas[0], columnas[2])
+    } else {
+        let alto_panel = altura_panel(state);
+        let filas_apiladas = Layout::vertical([
+            Constraint::Min(4),
+            Constraint::Length(1),
+            Constraint::Length(alto_panel.min(filas[1].height.saturating_sub(5))),
+        ])
+        .split(filas[1]);
+        render_separador_horizontal(frame, filas_apiladas[1], theme);
+        (filas_apiladas[0], filas_apiladas[2])
+    };
+    render_tabla(frame, area_tabla, state, theme);
+    render_panel(frame, area_panel, state, theme);
+}
+
+/// Posiciona el cursor en `area` (la línea de valor de un campo, devuelta
+/// por [`render_campo`]) según el ancho visible de `contenido`.
+fn posicionar_cursor(frame: &mut Frame, area: Rect, contenido: &str) {
+    let ancho_visible = Line::from(contenido).width() as u16;
+    let x = area.x.saturating_add(ancho_visible.min(area.width));
+    frame.set_cursor_position((x, area.y));
+}
+
+fn altura_panel(state: &UsuariosState) -> u16 {
+    match &state.modo {
+        ModoUsuarios::Formulario(f) => {
+            let mut total = 0u16;
+            for campo in f.campos() {
+                total += match campo {
+                    CampoUsuario::Cedula
+                    | CampoUsuario::Nombre
+                    | CampoUsuario::Password
+                    | CampoUsuario::ConfirmarPassword => 3,
+                    CampoUsuario::Rol | CampoUsuario::Activo => 1,
+                };
+            }
+            if f.selector_rol.is_some() {
+                total += ROLES.len() as u16;
+            }
+            total + 1
+        }
+        ModoUsuarios::CambioPassword(_) => 8,
+        _ => 6,
+    }
+}
+
+/// Misma silueta con foco o sin él (etiqueta, valor, línea); sólo cambian
+/// color y peso.
+fn render_campo(
+    frame: &mut Frame,
+    area: Rect,
+    etiqueta: &str,
+    valor: &str,
+    activo: bool,
+    theme: Theme,
+) -> Rect {
+    let estilo_etiqueta = if activo { theme.accent() } else { theme.muted() };
+    let estilo_linea = if activo { theme.accent() } else { theme.border() };
+    let valor_y = area.y.saturating_add(1);
+    let linea_y = area.y.saturating_add(2);
+
+    frame.render_widget(
+        Paragraph::new(etiqueta).style(estilo_etiqueta),
+        Rect::new(area.x, area.y, area.width, 1),
+    );
+    frame.render_widget(
+        Paragraph::new(Line::from(valor).style(theme.base())),
+        Rect::new(area.x, valor_y, area.width, 1),
+    );
+    frame.render_widget(
+        Paragraph::new("─".repeat(area.width as usize)).style(estilo_linea),
+        Rect::new(area.x, linea_y, area.width, 1),
+    );
+
+    Rect::new(area.x, valor_y, area.width, 1)
+}
+
+fn render_opcion(frame: &mut Frame, area: Rect, etiqueta: &str, valor: &str, activo: bool, theme: Theme) {
+    let marcador = if activo { ">" } else { " " };
+    let estilo = if activo { theme.accent() } else { theme.base() };
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(format!("{marcador} {etiqueta:<22}"), estilo),
+            Span::styled(valor.to_owned(), estilo),
+        ])),
+        area,
+    );
+}
+
+fn render_separador_vertical(frame: &mut Frame, area: Rect, theme: Theme) {
+    let lineas: Vec<Line<'static>> = (0..area.height).map(|_| Line::from("│")).collect();
+    frame.render_widget(Paragraph::new(lineas).style(theme.border()), area);
+}
+
+fn render_separador_horizontal(frame: &mut Frame, area: Rect, theme: Theme) {
+    frame.render_widget(
+        Paragraph::new("─".repeat(area.width as usize)).style(theme.border()),
+        area,
+    );
+}
+
+fn render_tabla(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: Theme) {
+    let capacidad = area.height.saturating_sub(2) as usize;
     let inicio = state.inicio_visible(capacidad).min(state.usuarios.len());
     let filas = state
         .usuarios
@@ -109,28 +262,24 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &UsuariosState) {
         .enumerate()
         .map(|(visible, usuario)| {
             let seleccionado = state.seleccion == Some(inicio + visible);
-            let estilo_fila = if seleccionado {
-                theme::seleccionado()
-            } else {
-                theme::texto_normal()
-            };
+            let estilo_fila = if seleccionado { theme.selected() } else { theme.base() };
             Row::new([
                 Cell::from(usuario.cedula.clone()),
                 Cell::from(usuario.nombre.clone()),
                 Cell::from(texto_rol(usuario.rol)).style(if seleccionado {
                     estilo_fila
                 } else if usuario.rol == RolUsuario::Root {
-                    theme::advertencia()
+                    theme.warning()
                 } else {
-                    theme::texto_normal()
+                    theme.base()
                 }),
                 Cell::from(if usuario.activo { "ACTIVO" } else { "INACTIVO" }).style(
                     if seleccionado {
                         estilo_fila
                     } else if usuario.activo {
-                        theme::exito()
+                        theme.success()
                     } else {
-                        theme::error()
+                        theme.danger()
                     },
                 ),
             ])
@@ -140,7 +289,7 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &UsuariosState) {
         Table::new(
             filas,
             [
-                Constraint::Length(18),
+                Constraint::Length(14),
                 Constraint::Fill(3),
                 Constraint::Length(16),
                 Constraint::Length(10),
@@ -148,274 +297,186 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &UsuariosState) {
         )
         .header(
             Row::new(["CÉDULA", "NOMBRE", "ROL", "ESTADO"])
-                .style(theme::foco())
+                .style(theme.muted())
                 .bottom_margin(1),
         )
         .column_spacing(1),
-        interior,
+        area,
     );
     if state.usuarios.is_empty() {
         frame.render_widget(
             Paragraph::new("No hay usuarios que coincidan con la búsqueda.")
-                .style(theme::advertencia())
+                .style(theme.warning())
                 .alignment(Alignment::Center),
-            interior,
+            Rect::new(area.x, area.y + area.height / 2, area.width, 1),
         );
     }
 }
 
-fn render_pie(frame: &mut Frame, area: Rect, state: &UsuariosState) {
-    let bloque = Block::bordered().border_style(theme::borde());
-    let interior = bloque.inner(area);
-    frame.render_widget(bloque, area);
-    let columnas = Layout::horizontal([
-        Constraint::Length(34),
-        Constraint::Min(20),
-        Constraint::Length(12),
-    ])
-    .split(interior);
-    let posicion = state.seleccion.map_or_else(
-        || "—/—".into(),
-        |i| format!("{}/{}", i + 1, state.usuarios.len()),
-    );
-    frame.render_widget(
-        Paragraph::new(format!(
-            " {} usuarios │ Registro {posicion}",
-            state.usuarios.len()
-        )),
-        columnas[0],
-    );
-    frame.render_widget(Paragraph::new("↑↓ Seleccionar │ ENTER Detalle │ N Nuevo │ E Editar │ P Clave │ A Estado │ / Buscar │ ESC Volver").style(theme::foco()).alignment(Alignment::Center), columnas[1]);
-    frame.render_widget(
-        Paragraph::new(hora_actual_texto())
-            .style(theme::advertencia())
-            .alignment(Alignment::Right)
-            .block(Block::default().padding(ratatui::widgets::Padding::right(1))),
-        columnas[2],
-    );
-}
-
-fn render_modo(frame: &mut Frame, area: Rect, state: &UsuariosState) {
+/// Dibuja el panel lateral según el modo y, cuando corresponde, posiciona
+/// el cursor sobre el campo de texto enfocado.
+fn render_panel(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: Theme) {
     match &state.modo {
         ModoUsuarios::Detalle { id } => {
             if let Some(u) = state.usuario(*id) {
-                render_detalle(frame, area, u);
+                render_detalle(frame, area, u, theme);
             }
         }
-        ModoUsuarios::Formulario(f) => render_formulario(frame, area, f),
-        ModoUsuarios::CambioPassword(f) => render_password(frame, area, f),
-        ModoUsuarios::ConfirmacionEstado(c) => render_confirmacion(frame, area, state, *c),
-        _ => {}
-    }
-}
-
-fn render_detalle(frame: &mut Frame, area: Rect, u: &UsuarioResumen) {
-    layout::render_overlay(
-        frame,
-        area,
-        64,
-        14,
-        4,
-        "DETALLE DEL USUARIO",
-        vec![
-            Line::from(u.nombre.clone()).style(theme::titulo()),
-            Line::from(""),
-            Line::from(format!("Nombre        {}", u.nombre)),
-            Line::from(format!("Cédula        {}", u.cedula)),
-            Line::from(format!("Rol           {}", texto_rol(u.rol))),
-            Line::from(format!(
-                "Estado        {}",
-                if u.activo { "ACTIVO" } else { "INACTIVO" }
-            )),
-            Line::from(""),
-            Line::from("E Editar │ P Cambiar contraseña │ A Estado │ ESC Cerrar")
-                .style(theme::foco()),
-        ],
-    );
-}
-
-fn render_formulario(frame: &mut Frame, area: Rect, f: &FormularioUsuario) {
-    let titulo = if matches!(f.modo, ModoFormularioUsuario::Crear) {
-        "NUEVO USUARIO"
-    } else {
-        "EDITAR USUARIO"
-    };
-    let mut lineas = vec![Line::from("")];
-    for (indice, campo) in f.campos().iter().enumerate() {
-        let (nombre, valor) = match campo {
-            CampoUsuario::Cedula => ("Cédula", f.cedula.clone()),
-            CampoUsuario::Nombre => ("Nombre", f.nombre.clone()),
-            CampoUsuario::Rol => ("Rol", texto_rol(f.rol).into()),
-            CampoUsuario::Password => ("Contraseña", f.password.mascara()),
-            CampoUsuario::ConfirmarPassword => {
-                ("Confirmar contraseña", f.confirmar_password.mascara())
+        ModoUsuarios::ConfirmacionEstado(c) => {
+            if let Some(u) = state.usuario(c.id) {
+                render_detalle(frame, area, u, theme);
             }
-            CampoUsuario::Activo => ("Activo", si_no(f.activo).into()),
-        };
-        lineas.push(
-            Line::from(format!(
-                "{} {:<22} {}{}",
-                if f.campo == indice { ">" } else { " " },
-                nombre,
-                valor,
-                if f.campo == indice
-                    && matches!(
-                        campo,
-                        CampoUsuario::Cedula
-                            | CampoUsuario::Nombre
-                            | CampoUsuario::Password
-                            | CampoUsuario::ConfirmarPassword
-                    )
-                {
-                    "_"
-                } else {
-                    ""
-                }
-            ))
-            .style(if f.campo == indice {
-                theme::foco()
-            } else {
-                theme::texto_normal()
-            }),
-        );
-        lineas.push(Line::from(""));
+        }
+        ModoUsuarios::Formulario(f) => render_formulario(frame, area, f, theme),
+        ModoUsuarios::CambioPassword(f) => render_password(frame, area, f, theme),
+        ModoUsuarios::Normal | ModoUsuarios::Busqueda { .. } => {
+            frame.render_widget(
+                Paragraph::new("Seleccione ENTER para ver el detalle.").style(theme.muted()),
+                area,
+            );
+        }
     }
-    lineas.push(Line::from(f.error.clone().unwrap_or_default()).style(theme::error()));
-    lineas.push(Line::from("↑↓/Tab Navegar │ ENTER Seleccionar/Cambiar").style(theme::foco()));
-    lineas
-        .push(Line::from("Shift+G Guardar                     ESC Cancelar").style(theme::foco()));
-    let alto = if matches!(f.modo, ModoFormularioUsuario::Crear) {
-        23
-    } else {
-        19
-    };
-    layout::render_overlay(frame, area, 76, alto, 4, titulo, lineas);
-    if let Some(opcion) = f.selector_rol {
-        render_roles(frame, area, opcion);
-    } else if matches!(
-        f.campo_actual(),
-        CampoUsuario::Cedula
+}
+
+fn render_detalle(frame: &mut Frame, area: Rect, u: &UsuarioResumen, theme: Theme) {
+    let estilo_rol = if u.rol == RolUsuario::Root { theme.warning() } else { theme.base() };
+    let estilo_estado = if u.activo { theme.success() } else { theme.danger() };
+    let lineas = vec![
+        Line::from(u.nombre.as_str()).style(theme.title()),
+        Line::from(u.cedula.as_str()).style(theme.muted()),
+        Line::from(""),
+        Line::from(texto_rol(u.rol)).style(estilo_rol),
+        Line::from(if u.activo { "ACTIVO" } else { "INACTIVO" }).style(estilo_estado),
+    ];
+    frame.render_widget(Paragraph::new(lineas), area);
+}
+
+fn render_formulario(frame: &mut Frame, area: Rect, f: &FormularioUsuario, theme: Theme) {
+    let campos = f.campos();
+    let mut restricciones: Vec<Constraint> = campos
+        .iter()
+        .map(|campo| match campo {
+            CampoUsuario::Cedula
             | CampoUsuario::Nombre
             | CampoUsuario::Password
-            | CampoUsuario::ConfirmarPassword
-    ) {
-        let ancho = 76.min(area.width.saturating_sub(4));
-        let modal_x = area.x + area.width.saturating_sub(ancho) / 2;
-        let modal_y = area.y + area.height.saturating_sub(alto) / 2;
-        let valor_largo = match f.campo_actual() {
-            CampoUsuario::Cedula => f.cedula.chars().count(),
-            CampoUsuario::Nombre => f.nombre.chars().count(),
-            CampoUsuario::Password => f.password.0.chars().count(),
-            CampoUsuario::ConfirmarPassword => f.confirmar_password.0.chars().count(),
-            _ => 0,
-        } as u16;
-        frame.set_cursor_position((
-            modal_x.saturating_add(28).saturating_add(valor_largo),
-            modal_y.saturating_add(3 + f.campo as u16 * 2),
-        ));
-    }
-}
-
-fn render_roles(frame: &mut Frame, area: Rect, opcion: usize) {
-    let mut lineas: Vec<_> = ROLES
-        .iter()
-        .enumerate()
-        .map(|(i, rol)| {
-            Line::from(format!(
-                "{} {}",
-                if i == opcion { ">" } else { " " },
-                texto_rol(*rol)
-            ))
-            .style(if i == opcion {
-                theme::seleccionado()
-            } else {
-                theme::texto_normal()
-            })
+            | CampoUsuario::ConfirmarPassword => Constraint::Length(3),
+            CampoUsuario::Rol | CampoUsuario::Activo => Constraint::Length(1),
         })
         .collect();
-    lineas.push(Line::from(""));
-    lineas.push(Line::from("↑↓ Seleccionar │ ENTER Aceptar │ ESC Cancelar").style(theme::foco()));
-    layout::render_overlay(frame, area, 50, 10, 4, "SELECCIONAR ROL", lineas);
-}
+    let indice_rol = campos.iter().position(|c| *c == CampoUsuario::Rol);
+    if let (Some(indice_rol), Some(_)) = (indice_rol, f.selector_rol) {
+        restricciones.insert(indice_rol + 1, Constraint::Length(ROLES.len() as u16));
+    }
+    restricciones.push(Constraint::Length(1));
+    let filas = Layout::vertical(restricciones).split(area);
 
-fn render_password(frame: &mut Frame, area: Rect, f: &FormularioPassword) {
-    layout::render_overlay(
-        frame,
-        area,
-        68,
-        14,
-        4,
-        "CAMBIAR CONTRASEÑA",
-        vec![
-            Line::from(format!("Usuario: {}", f.usuario_nombre)).style(theme::titulo()),
-            Line::from(""),
-            Line::from(format!(
-                "{} Nueva contraseña       {}{}",
-                if f.campo == 0 { ">" } else { " " },
-                f.password.mascara(),
-                if f.campo == 0 { "_" } else { "" }
-            ))
-            .style(if f.campo == 0 {
-                theme::foco()
-            } else {
-                theme::texto_normal()
-            }),
-            Line::from(""),
-            Line::from(format!(
-                "{} Confirmar contraseña   {}{}",
-                if f.campo == 1 { ">" } else { " " },
-                f.confirmar.mascara(),
-                if f.campo == 1 { "_" } else { "" }
-            ))
-            .style(if f.campo == 1 {
-                theme::foco()
-            } else {
-                theme::texto_normal()
-            }),
-            Line::from(""),
-            Line::from(f.error.clone().unwrap_or_default()).style(theme::error()),
-            Line::from("Shift+G Guardar                 ESC Cancelar").style(theme::foco()),
-        ],
+    let mut fila = 0usize;
+    for (indice, campo) in campos.iter().enumerate() {
+        let enfocado = f.campo == indice;
+        match campo {
+            CampoUsuario::Cedula => {
+                let r = render_campo(frame, filas[fila], "CÉDULA", &f.cedula, enfocado, theme);
+                if enfocado {
+                    posicionar_cursor(frame, r, &f.cedula);
+                }
+            }
+            CampoUsuario::Nombre => {
+                let r = render_campo(frame, filas[fila], "NOMBRE", &f.nombre, enfocado, theme);
+                if enfocado {
+                    posicionar_cursor(frame, r, &f.nombre);
+                }
+            }
+            CampoUsuario::Password => {
+                let mascara = f.password.mascara();
+                let r = render_campo(frame, filas[fila], "CONTRASEÑA", &mascara, enfocado, theme);
+                if enfocado {
+                    posicionar_cursor(frame, r, &mascara);
+                }
+            }
+            CampoUsuario::ConfirmarPassword => {
+                let mascara = f.confirmar_password.mascara();
+                let r = render_campo(
+                    frame,
+                    filas[fila],
+                    "CONFIRMAR CONTRASEÑA",
+                    &mascara,
+                    enfocado,
+                    theme,
+                );
+                if enfocado {
+                    posicionar_cursor(frame, r, &mascara);
+                }
+            }
+            CampoUsuario::Rol => {
+                render_opcion(frame, filas[fila], "ROL", texto_rol(f.rol), enfocado, theme);
+                if let Some(resaltado) = f.selector_rol {
+                    fila += 1;
+                    render_selector_rol(frame, filas[fila], resaltado, theme);
+                }
+            }
+            CampoUsuario::Activo => {
+                render_opcion(frame, filas[fila], "ACTIVO", si_no(f.activo), enfocado, theme);
+            }
+        }
+        fila += 1;
+    }
+    frame.render_widget(
+        Paragraph::new(f.error.as_deref().unwrap_or_default()).style(theme.danger()),
+        filas[fila],
     );
-    let ancho = 68.min(area.width.saturating_sub(4));
-    let modal_x = area.x + area.width.saturating_sub(ancho) / 2;
-    let modal_y = area.y + area.height.saturating_sub(14) / 2;
-    let largo = if f.campo == 0 {
-        f.password.0.chars().count()
-    } else {
-        f.confirmar.0.chars().count()
-    } as u16;
-    frame.set_cursor_position((
-        modal_x.saturating_add(29).saturating_add(largo),
-        modal_y.saturating_add(if f.campo == 0 { 4 } else { 6 }),
-    ));
 }
 
-fn render_confirmacion(
-    frame: &mut Frame,
-    area: Rect,
-    state: &UsuariosState,
-    c: ConfirmacionEstado,
-) {
-    if let Some(u) = state.usuario(c.id) {
-        let accion = if c.activar { "ACTIVAR" } else { "DESACTIVAR" };
-        layout::render_overlay(
-            frame,
-            area,
-            58,
-            10,
-            4,
-            &format!("{accion} USUARIO"),
-            vec![
-                Line::from(""),
-                Line::from(format!(
-                    "¿{} a {}?",
-                    if c.activar { "Activar" } else { "Desactivar" },
-                    u.nombre
-                )),
-                Line::from(""),
-                Line::from("Y Confirmar              N / ESC Cancelar").style(theme::foco()),
-            ],
-        );
+fn render_selector_rol(frame: &mut Frame, area: Rect, resaltado: usize, theme: Theme) {
+    let lineas: Vec<Line<'_>> = ROLES
+        .iter()
+        .enumerate()
+        .map(|(indice, rol)| {
+            let seleccionado = indice == resaltado;
+            let marcador = if seleccionado { "  >" } else { "   " };
+            Line::from(format!("{marcador} {}", texto_rol(*rol)))
+                .style(if seleccionado { theme.selected() } else { theme.muted() })
+        })
+        .collect();
+    frame.render_widget(Paragraph::new(lineas), area);
+}
+
+fn render_password(frame: &mut Frame, area: Rect, f: &FormularioPassword, theme: Theme) {
+    let filas = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(3),
+        Constraint::Length(3),
+        Constraint::Length(1),
+    ])
+    .split(area);
+    frame.render_widget(
+        Paragraph::new(format!("Usuario: {}", f.usuario_nombre)).style(theme.title()),
+        filas[0],
+    );
+    let mascara_nueva = f.password.mascara();
+    let area_nueva = render_campo(
+        frame,
+        filas[1],
+        "NUEVA CONTRASEÑA",
+        &mascara_nueva,
+        f.campo == 0,
+        theme,
+    );
+    let mascara_confirmar = f.confirmar.mascara();
+    let area_confirmar = render_campo(
+        frame,
+        filas[2],
+        "CONFIRMAR CONTRASEÑA",
+        &mascara_confirmar,
+        f.campo == 1,
+        theme,
+    );
+    frame.render_widget(
+        Paragraph::new(f.error.as_deref().unwrap_or_default()).style(theme.danger()),
+        filas[3],
+    );
+    if f.campo == 0 {
+        posicionar_cursor(frame, area_nueva, &mascara_nueva);
+    } else {
+        posicionar_cursor(frame, area_confirmar, &mascara_confirmar);
     }
 }

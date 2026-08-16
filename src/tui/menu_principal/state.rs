@@ -96,7 +96,7 @@ impl MenuPrincipalState {
     pub fn handle_key(&mut self, key: KeyEvent) -> AccionMenu {
         if let Some(confirmacion) = self.confirmacion {
             return match key.code {
-                KeyCode::Char('y' | 'Y') => {
+                KeyCode::Char('y' | 'Y') | KeyCode::Enter => {
                     self.confirmacion = None;
                     match confirmacion {
                         ConfirmacionMenu::CerrarSesion => AccionMenu::CerrarSesion,

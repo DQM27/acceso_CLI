@@ -1,126 +1,218 @@
-use crate::tiempo::{a_costa_rica, hora_actual_texto};
-use ratatui::{
-    Frame,
-    layout::{Alignment, Constraint, Layout, Rect},
-    text::{Line, Span},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table},
-};
-
 use super::*;
 use crate::{
     database::queries::ingresos::MovimientoIngresoResumen,
-    tui::{layout, theme},
+    tiempo::{a_costa_rica, hora_actual_texto},
+    tui::ui_kit::{
+        CommandHint, ScreenShell, StatusKind, Theme, ThemePreset, render_terminal_too_small,
+    },
+};
+use ratatui::{
+    Frame,
+    layout::{Alignment, Constraint, Layout, Rect},
+    text::Line,
+    widgets::{Cell, Paragraph, Row, Table},
 };
 
+const ANCHO_MINIMO: u16 = 60;
+const ALTO_MINIMO: u16 = 22;
+const ANCHO_PANEL_LATERAL: u16 = 100;
+
+const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓", "Mover"),
+    CommandHint::new("PGUP/PGDN", "Página"),
+    CommandHint::new("ENTER", "Detalle"),
+    CommandHint::new("/", "Buscar"),
+    CommandHint::new("F", "Filtros"),
+    CommandHint::new("C", "Columnas"),
+    CommandHint::new("ESC", "Volver"),
+];
+const COMANDOS_BUSQUEDA: &[CommandHint<'static>] = &[
+    CommandHint::new("ENTER", "Cerrar"),
+    CommandHint::new("ESC", "Limpiar"),
+];
+const COMANDOS_DETALLE: &[CommandHint<'static>] = &[CommandHint::new("ESC", "Cerrar")];
+const COMANDOS_FILTROS: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓", "Mover"),
+    CommandHint::new("ENTER", "Editar/Seleccionar"),
+    CommandHint::new("A", "Aplicar"),
+    CommandHint::new("L", "Limpiar"),
+    CommandHint::new("ESC", "Cerrar"),
+];
+const COMANDOS_FILTRO_EDITANDO: &[CommandHint<'static>] =
+    &[CommandHint::new("ENTER/ESC", "Terminar")];
+const COMANDOS_DESPLEGABLE: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓", "Mover"),
+    CommandHint::new("ENTER", "Aceptar"),
+    CommandHint::new("ESC", "Cancelar"),
+];
+const COMANDOS_COLUMNAS: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓", "Mover"),
+    CommandHint::new("SPACE", "Mostrar/Ocultar"),
+    CommandHint::new("ESC", "Cerrar"),
+];
+
 pub fn render(frame: &mut Frame, area: Rect, state: &HistorialState) {
-    frame.render_widget(Block::default().style(theme::texto_normal()), area);
-    if area.width < 60 || area.height < 22 {
-        layout::render_terminal_pequena(frame, area);
+    let theme = ThemePreset::Brisas.theme();
+
+    if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
+        render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "ESC salir", theme);
         return;
     }
-    let contenido = Rect::new(
-        area.x + 2,
-        area.y,
-        area.width.saturating_sub(4),
-        area.height,
-    );
-    let zonas = Layout::vertical([
-        Constraint::Length(5),
-        Constraint::Length(2),
-        Constraint::Min(8),
-        Constraint::Length(2),
-        Constraint::Length(3),
-    ])
-    .split(contenido);
-    render_cabecera(frame, zonas[0], state);
-    render_rango(frame, zonas[1], state);
-    render_tabla(frame, zonas[2], state);
-    render_estado(frame, zonas[3], state);
-    render_pie(frame, zonas[4], state);
-    render_modo(frame, contenido, state);
+
+    let hora = hora_actual_texto();
+    let contexto = format!("Usuario: {}", state.usuario_nombre);
+    let (estado_texto_linea, estado_tipo) = estado_shell(state);
+    let comandos = match &state.modo {
+        ModoHistorial::Normal => COMANDOS_NORMAL,
+        ModoHistorial::Busqueda { .. } => COMANDOS_BUSQUEDA,
+        ModoHistorial::Detalle { .. } => COMANDOS_DETALLE,
+        ModoHistorial::Filtros { editando: true, .. } => COMANDOS_FILTRO_EDITANDO,
+        ModoHistorial::Filtros { .. } => COMANDOS_FILTROS,
+        ModoHistorial::Desplegable { .. } => COMANDOS_DESPLEGABLE,
+        ModoHistorial::Columnas { .. } => COMANDOS_COLUMNAS,
+    };
+
+    let shell = ScreenShell {
+        product: "BRISAS CLI",
+        screen: "HISTORIAL",
+        context: &contexto,
+        clock: &hora,
+        status: &estado_texto_linea,
+        status_kind: estado_tipo,
+        commands: comandos,
+    };
+    let areas = shell.render(frame, area, theme);
+
+    render_cuerpo(frame, areas.body, state, theme);
 }
 
-fn render_cabecera(frame: &mut Frame, area: Rect, state: &HistorialState) {
-    let bloque = Block::default()
-        .borders(Borders::ALL)
-        .border_style(theme::borde());
-    let interior = bloque.inner(area);
-    frame.render_widget(bloque, area);
-    let cols = Layout::horizontal([
-        Constraint::Percentage(30),
-        Constraint::Percentage(40),
-        Constraint::Percentage(30),
-    ])
-    .split(interior);
-    frame.render_widget(
-        Paragraph::new(vec![
-            Line::from(" B R I S A S   C L I").style(theme::titulo()),
-            Line::from(" CONTROL DE ACCESO").style(theme::texto_secundario()),
-        ]),
-        cols[0],
-    );
-    let centro = |a: Rect| Rect::new(a.x, a.y + a.height / 2, a.width, 1);
-    frame.render_widget(
-        Paragraph::new("HISTORIAL DE INGRESOS")
-            .style(theme::foco())
-            .alignment(Alignment::Center),
-        centro(cols[1]),
-    );
-    frame.render_widget(
-        Paragraph::new(format!("Usuario: {} ", state.usuario_nombre)).alignment(Alignment::Right),
-        centro(cols[2]),
-    );
+fn estado_shell(state: &HistorialState) -> (String, StatusKind) {
+    if let Some(m) = &state.mensaje {
+        return (m.clone(), StatusKind::Error);
+    }
+    (String::new(), StatusKind::Normal)
 }
 
-fn render_rango(frame: &mut Frame, area: Rect, state: &HistorialState) {
+fn etiqueta_busqueda(state: &HistorialState) -> String {
     let f = &state.filtro_aplicado;
-    let mut extras = Vec::new();
-    if f.empresa_id.is_some() {
-        extras.push(format!(
-            "Empresa: {}",
-            empresa_texto(f.empresa_id, &state.empresas)
-        ));
+    let (pagina, paginas) = state.pagina();
+    let mut resumen = format!(
+        "{} · PÁG {pagina}/{paginas} · {}–{}",
+        state.total, f.desde, f.hasta
+    );
+    if let Some(id) = f.empresa_id {
+        resumen.push_str(&format!(" · {}", empresa_texto(Some(id), &state.empresas)));
     }
     if f.tipo.is_some() {
-        extras.push(format!("Tipo: {}", tipo_texto(f.tipo)));
+        resumen.push_str(&format!(" · {}", tipo_texto(f.tipo)));
     }
     if f.estado != EstadoMovimiento::Todos {
-        extras.push(format!("Estado: {}", estado_texto(f.estado)));
+        resumen.push_str(&format!(" · {}", estado_texto(f.estado)));
     }
-    let resumen = if extras.is_empty() {
-        String::new()
-    } else {
-        format!("    {}", extras.join(" │ "))
+    format!("BUSCAR · CLAVE:VALOR O TEXTO · {resumen}")
+}
+
+fn render_cuerpo(frame: &mut Frame, area: Rect, state: &HistorialState, theme: Theme) {
+    let filas = Layout::vertical([Constraint::Length(3), Constraint::Min(4)]).split(area);
+
+    let enfocado_busqueda = matches!(state.modo, ModoHistorial::Busqueda { .. });
+    let texto_busqueda = match &state.modo {
+        ModoHistorial::Busqueda { texto } => texto.as_str(),
+        _ => state.busqueda.as_str(),
     };
+    let etiqueta = etiqueta_busqueda(state);
+    let area_busqueda = render_campo(frame, filas[0], &etiqueta, texto_busqueda, enfocado_busqueda, theme);
+
+    let (area_tabla, area_panel) = if area.width >= ANCHO_PANEL_LATERAL {
+        let columnas = Layout::horizontal([
+            Constraint::Percentage(63),
+            Constraint::Length(1),
+            Constraint::Percentage(36),
+        ])
+        .split(filas[1]);
+        render_separador_vertical(frame, columnas[1], theme);
+        (columnas[0], columnas[2])
+    } else {
+        let filas_apiladas = Layout::vertical([
+            Constraint::Min(4),
+            Constraint::Length(1),
+            Constraint::Length(15.min(filas[1].height.saturating_sub(5))),
+        ])
+        .split(filas[1]);
+        render_separador_horizontal(frame, filas_apiladas[1], theme);
+        (filas_apiladas[0], filas_apiladas[2])
+    };
+    render_tabla(frame, area_tabla, state, theme);
+    let area_edicion = render_panel(frame, area_panel, state, theme);
+
+    if enfocado_busqueda {
+        let ancho_visible = Line::from(texto_busqueda).width() as u16;
+        let x = area_busqueda
+            .x
+            .saturating_add(ancho_visible.min(area_busqueda.width));
+        frame.set_cursor_position((x, area_busqueda.y));
+    } else if let Some((area_campo, valor)) = area_edicion {
+        let ancho_visible = Line::from(valor.as_str()).width() as u16;
+        let x = area_campo
+            .x
+            .saturating_add(ancho_visible.min(area_campo.width));
+        frame.set_cursor_position((x, area_campo.y));
+    }
+}
+
+fn render_separador_vertical(frame: &mut Frame, area: Rect, theme: Theme) {
+    let lineas: Vec<Line<'static>> = (0..area.height).map(|_| Line::from("│")).collect();
+    frame.render_widget(Paragraph::new(lineas).style(theme.border()), area);
+}
+
+fn render_separador_horizontal(frame: &mut Frame, area: Rect, theme: Theme) {
     frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled("Desde: ", theme::foco()),
-            Span::raw(&f.desde),
-            Span::raw("    "),
-            Span::styled("Hasta: ", theme::foco()),
-            Span::raw(&f.hasta),
-            Span::styled(
-                format!("    {} resultados{resumen}", state.total),
-                theme::texto_secundario(),
-            ),
-        ]))
-        .alignment(Alignment::Center),
+        Paragraph::new("─".repeat(area.width as usize)).style(theme.border()),
         area,
     );
 }
 
-fn render_tabla(frame: &mut Frame, area: Rect, state: &HistorialState) {
-    let cols: Vec<_> = state
+/// Misma silueta con foco o sin él (etiqueta, valor, línea); sólo cambian
+/// color y peso.
+fn render_campo(
+    frame: &mut Frame,
+    area: Rect,
+    etiqueta: &str,
+    valor: &str,
+    activo: bool,
+    theme: Theme,
+) -> Rect {
+    let estilo_etiqueta = if activo { theme.accent() } else { theme.muted() };
+    let estilo_linea = if activo { theme.accent() } else { theme.border() };
+    let valor_y = area.y.saturating_add(1);
+    let linea_y = area.y.saturating_add(2);
+
+    frame.render_widget(
+        Paragraph::new(etiqueta).style(estilo_etiqueta),
+        Rect::new(area.x, area.y, area.width, 1),
+    );
+    frame.render_widget(
+        Paragraph::new(Line::from(valor).style(theme.base())),
+        Rect::new(area.x, valor_y, area.width, 1),
+    );
+    if area.height > 2 {
+        frame.render_widget(
+            Paragraph::new("─".repeat(area.width as usize)).style(estilo_linea),
+            Rect::new(area.x, linea_y, area.width, 1),
+        );
+    }
+
+    Rect::new(area.x, valor_y, area.width, 1)
+}
+
+fn render_tabla(frame: &mut Frame, area: Rect, state: &HistorialState, theme: Theme) {
+    let columnas: Vec<_> = state
         .columnas
         .iter()
         .filter_map(|(c, visible)| visible.then_some(*c))
         .collect();
-    let marco = Block::default()
-        .borders(Borders::ALL)
-        .border_style(theme::borde());
-    let interior = marco.inner(area);
-    frame.render_widget(marco, area);
-    let capacidad = interior.height.saturating_sub(2) as usize;
+    let anchos: Vec<_> = columnas.iter().map(|c| c.constraint()).collect();
+    let capacidad = area.height.saturating_sub(2) as usize;
     let inicio = state.inicio_visible(capacidad).min(state.registros.len());
     let filas = state
         .registros
@@ -130,27 +222,25 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &HistorialState) {
         .enumerate()
         .map(|(visible, r)| {
             let seleccionada = state.seleccion == Some(inicio + visible);
-            Row::new(cols.iter().map(|c| Cell::from(valor(r, *c)))).style(if seleccionada {
-                theme::seleccionado()
+            Row::new(columnas.iter().map(|c| Cell::from(valor(r, *c)))).style(if seleccionada {
+                theme.selected()
             } else {
-                theme::texto_normal()
+                theme.base()
             })
         });
-    let header = Row::new(cols.iter().map(|c| c.titulo()))
-        .style(theme::foco())
+    let encabezado = Row::new(columnas.iter().map(|c| c.titulo()))
+        .style(theme.muted())
         .bottom_margin(1);
     frame.render_widget(
-        Table::new(filas, cols.iter().map(|c| c.constraint()))
-            .header(header)
-            .column_spacing(1),
-        interior,
+        Table::new(filas, anchos).header(encabezado).column_spacing(1),
+        area,
     );
     if state.registros.is_empty() {
         frame.render_widget(
             Paragraph::new("Sin registros para los filtros seleccionados")
-                .style(theme::advertencia())
+                .style(theme.warning())
                 .alignment(Alignment::Center),
-            interior,
+            Rect::new(area.x, area.y + area.height / 2, area.width, 1),
         );
     }
 }
@@ -174,7 +264,7 @@ pub(super) fn valor(r: &MovimientoIngresoResumen, c: ColumnaHistorial) -> String
         ColumnaHistorial::Gafete => r
             .gafete_numero
             .map_or_else(|| "S/G".into(), |g| g.to_string()),
-        ColumnaHistorial::Medio => format!("{:?}", r.medio_ingreso),
+        ColumnaHistorial::Medio => texto_medio(r.medio_ingreso).into(),
         ColumnaHistorial::UsuarioIngreso => r.usuario_ingreso_nombre.clone(),
         ColumnaHistorial::UsuarioSalida => r
             .usuario_salida_nombre
@@ -183,130 +273,99 @@ pub(super) fn valor(r: &MovimientoIngresoResumen, c: ColumnaHistorial) -> String
     }
 }
 
-fn render_estado(frame: &mut Frame, area: Rect, state: &HistorialState) {
-    let linea = match &state.modo {
-        ModoHistorial::Busqueda { texto } => Line::from(vec![
-            Span::styled("BUSCAR HISTORIAL: ", theme::foco()),
-            Span::raw(format!("{texto}_")),
-        ]),
-        _ if !state.busqueda.is_empty() => Line::from(vec![
-            Span::styled("BÚSQUEDA ACTIVA: ", theme::foco()),
-            Span::raw(&state.busqueda),
-            Span::styled(
-                format!("    {} resultados    ", state.total),
-                theme::texto_secundario(),
-            ),
-            Span::styled("ESC ", theme::ayuda_tecla()),
-            Span::raw("Limpiar"),
-        ]),
-        _ => Line::from(state.mensaje.clone().unwrap_or_default()),
-    };
-    frame.render_widget(Paragraph::new(linea).alignment(Alignment::Center), area);
+fn texto_medio(m: crate::models::medio_ingreso::MedioIngreso) -> &'static str {
+    match m {
+        crate::models::medio_ingreso::MedioIngreso::Caminando => "Caminando",
+        crate::models::medio_ingreso::MedioIngreso::Vehiculo => "Vehículo",
+    }
 }
 
-fn render_pie(frame: &mut Frame, area: Rect, state: &HistorialState) {
-    let bloque = Block::default()
-        .borders(Borders::ALL)
-        .border_style(theme::borde());
-    let interior = bloque.inner(area);
-    frame.render_widget(bloque, area);
-    let cols = Layout::horizontal([
-        Constraint::Length(42),
-        Constraint::Min(20),
-        Constraint::Length(12),
-    ])
-    .split(interior);
-    let pos = state.seleccion.map_or_else(
-        || "—/—".into(),
-        |i| format!("{}/{}", state.offset + i + 1, state.total),
-    );
-    let (pagina, paginas) = state.pagina();
-    frame.render_widget(
-        Paragraph::new(format!(
-            " {} registros │ Registro {pos} │ Página {pagina}/{paginas}",
-            state.total
-        )),
-        cols[0],
-    );
-    frame.render_widget(Paragraph::new("↑↓ Seleccionar │ PgUp/PgDn Página │ ENTER Detalle │ / Buscar │ F Filtros │ C Columnas │ ESC Volver").style(theme::foco()).alignment(Alignment::Center), cols[1]);
-    frame.render_widget(
-        Paragraph::new(hora_actual_texto())
-            .style(theme::advertencia())
-            .alignment(Alignment::Right),
-        cols[2],
-    );
-}
-
-fn render_modo(frame: &mut Frame, area: Rect, state: &HistorialState) {
+/// Devuelve, cuando aplica, el área y el contenido del campo de filtro en
+/// edición para que el llamador posicione el cursor.
+fn render_panel(
+    frame: &mut Frame,
+    area: Rect,
+    state: &HistorialState,
+    theme: Theme,
+) -> Option<(Rect, String)> {
     match &state.modo {
+        ModoHistorial::Normal | ModoHistorial::Busqueda { .. } => {
+            frame.render_widget(
+                Paragraph::new("Seleccione ENTER para ver el detalle.").style(theme.muted()),
+                area,
+            );
+            None
+        }
         ModoHistorial::Detalle { id } => {
             if let Some(r) = state.registro(*id) {
-                let salida = r.fecha_hora_salida.map_or_else(
-                    || "--".into(),
-                    |f| a_costa_rica(f).format("%d/%m/%Y %H:%M").to_string(),
-                );
-                layout::render_overlay(
-                    frame,
-                    area,
-                    68,
-                    19,
-                    2,
-                    "DETALLE DE MOVIMIENTO",
-                    vec![
-                        Line::from(r.contratista_nombre.clone()).style(theme::titulo()),
-                        Line::from(r.cedula.clone()),
-                        Line::from(""),
-                        Line::from(format!("Empresa          {}", r.empresa_nombre)),
-                        Line::from(format!(
-                            "Tipo             {}",
-                            tipo_texto(Some(r.tipo_ingreso))
-                        )),
-                        Line::from(format!("Medio            {:?}", r.medio_ingreso)),
-                        Line::from(format!(
-                            "Entrada          {}",
-                            a_costa_rica(r.fecha_hora_ingreso).format("%d/%m/%Y %H:%M")
-                        )),
-                        Line::from(format!("Usuario ingreso  {}", r.usuario_ingreso_nombre)),
-                        Line::from(format!("Evaluación       {}", texto_evaluacion(r))),
-                        Line::from(format!(
-                            "Reglas           {}",
-                            if r.reglas_version == 0 {
-                                "Registro migrado".to_owned()
-                            } else {
-                                format!("Versión {}", r.reglas_version)
-                            }
-                        )),
-                        Line::from(format!("Salida           {salida}")),
-                        Line::from(format!(
-                            "Usuario salida   {}",
-                            r.usuario_salida_nombre.as_deref().unwrap_or("--")
-                        )),
-                        Line::from(format!(
-                            "Gafete           {}",
-                            r.gafete_numero
-                                .map_or_else(|| "S/G".into(), |g| g.to_string())
-                        )),
-                        Line::from(""),
-                        Line::from("ESC Cerrar").style(theme::foco()),
-                    ],
-                );
+                render_detalle(frame, area, r, theme);
             }
+            None
         }
         ModoHistorial::Filtros {
             seleccion,
             editando,
-        } => render_filtros(frame, area, state, *seleccion, *editando),
+        } => render_filtros(frame, area, state, *seleccion, *editando, None, theme),
         ModoHistorial::Desplegable {
             campo,
             seleccion_filtro,
             opcion,
-        } => {
-            render_filtros(frame, area, state, *seleccion_filtro, false);
-            render_desplegable(frame, area, state, *campo, *opcion);
+        } => render_filtros(
+            frame,
+            area,
+            state,
+            *seleccion_filtro,
+            false,
+            Some((*campo, *opcion)),
+            theme,
+        ),
+        ModoHistorial::Columnas { seleccion } => {
+            render_columnas(frame, area, state, *seleccion, theme);
+            None
         }
-        ModoHistorial::Columnas { seleccion } => render_columnas(frame, area, state, *seleccion),
-        _ => {}
     }
+}
+
+fn render_detalle(frame: &mut Frame, area: Rect, r: &MovimientoIngresoResumen, theme: Theme) {
+    let salida = r.fecha_hora_salida.map_or_else(
+        || "--".into(),
+        |f| a_costa_rica(f).format("%d/%m/%Y %H:%M").to_string(),
+    );
+    let lineas = vec![
+        Line::from(r.contratista_nombre.clone()).style(theme.title()),
+        Line::from(format!("{} · {}", r.cedula, r.empresa_nombre)).style(theme.base()),
+        Line::from(""),
+        Line::from(format!("Tipo               {}", tipo_texto(Some(r.tipo_ingreso)))).style(theme.base()),
+        Line::from(format!("Medio              {}", texto_medio(r.medio_ingreso))).style(theme.base()),
+        Line::from(format!(
+            "Entrada            {}",
+            a_costa_rica(r.fecha_hora_ingreso).format("%d/%m/%Y %H:%M")
+        ))
+        .style(theme.base()),
+        Line::from(format!("Usuario ingreso    {}", r.usuario_ingreso_nombre)).style(theme.base()),
+        Line::from(format!("Evaluación         {}", texto_evaluacion(r))).style(theme.base()),
+        Line::from(format!(
+            "Reglas             {}",
+            if r.reglas_version == 0 {
+                "Registro migrado".to_owned()
+            } else {
+                format!("Versión {}", r.reglas_version)
+            }
+        ))
+        .style(theme.muted()),
+        Line::from(format!("Salida             {salida}")).style(theme.base()),
+        Line::from(format!(
+            "Usuario salida     {}",
+            r.usuario_salida_nombre.as_deref().unwrap_or("--")
+        ))
+        .style(theme.base()),
+        Line::from(format!(
+            "Gafete             {}",
+            r.gafete_numero.map_or_else(|| "S/G".into(), |g| g.to_string())
+        ))
+        .style(theme.base()),
+    ];
+    frame.render_widget(Paragraph::new(lineas), area);
 }
 
 fn texto_evaluacion(r: &MovimientoIngresoResumen) -> &'static str {
@@ -321,133 +380,166 @@ fn texto_evaluacion(r: &MovimientoIngresoResumen) -> &'static str {
     }
 }
 
+fn etiqueta_campo(c: CampoFiltro) -> &'static str {
+    match c {
+        CampoFiltro::Desde => "DESDE",
+        CampoFiltro::Hasta => "HASTA",
+        CampoFiltro::NombreCedula => "NOMBRE/CÉDULA",
+        CampoFiltro::Empresa => "EMPRESA",
+        CampoFiltro::Tipo => "TIPO",
+        CampoFiltro::Gafete => "GAFETE",
+        CampoFiltro::Estado => "ESTADO",
+    }
+}
+
+fn es_campo_texto(c: CampoFiltro) -> bool {
+    matches!(
+        c,
+        CampoFiltro::Desde | CampoFiltro::Hasta | CampoFiltro::NombreCedula | CampoFiltro::Gafete
+    )
+}
+
+fn texto_filtro_edicion(f: &FiltrosHistorial, c: CampoFiltro) -> &str {
+    match c {
+        CampoFiltro::Desde => &f.desde,
+        CampoFiltro::Hasta => &f.hasta,
+        CampoFiltro::NombreCedula => &f.nombre_cedula,
+        CampoFiltro::Gafete => &f.gafete,
+        _ => "",
+    }
+}
+
+fn valor_texto_campo(state: &HistorialState, c: CampoFiltro) -> String {
+    let f = &state.filtro_edicion;
+    match c {
+        CampoFiltro::Empresa => empresa_texto(f.empresa_id, &state.empresas),
+        CampoFiltro::Tipo => tipo_texto(f.tipo).to_owned(),
+        CampoFiltro::Estado => estado_texto(f.estado).to_owned(),
+        _ => String::new(),
+    }
+}
+
+fn opciones_texto(state: &HistorialState, c: CampoFiltro) -> Vec<String> {
+    match c {
+        CampoFiltro::Empresa => std::iter::once("Todas".to_owned())
+            .chain(state.empresas.iter().map(|e| e.nombre.clone()))
+            .collect(),
+        CampoFiltro::Tipo => ["Todos", "PRAIND", "IN HOUSE", "POR CORREO", "SWAT"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+        CampoFiltro::Estado => ["Todos", "Activos", "Cerrados"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+        _ => vec![],
+    }
+}
+
+fn render_opcion(frame: &mut Frame, area: Rect, etiqueta: &str, valor: &str, activo: bool, theme: Theme) {
+    let marcador = if activo { ">" } else { " " };
+    let estilo = if activo { theme.selected() } else { theme.base() };
+    frame.render_widget(
+        Paragraph::new(format!("{marcador} {etiqueta:<15}{valor}")).style(estilo),
+        area,
+    );
+}
+
+fn render_lista_desplegable(
+    frame: &mut Frame,
+    area: Rect,
+    opciones: &[String],
+    resaltado: usize,
+    theme: Theme,
+) {
+    let lineas: Vec<Line<'static>> = opciones
+        .iter()
+        .enumerate()
+        .map(|(i, o)| {
+            let marcador = if i == resaltado { "  >" } else { "   " };
+            Line::from(format!("{marcador} {o}")).style(if i == resaltado {
+                theme.selected()
+            } else {
+                theme.muted()
+            })
+        })
+        .collect();
+    frame.render_widget(Paragraph::new(lineas), area);
+}
+
+/// Devuelve, cuando aplica, el área y el valor del campo en edición para
+/// que el llamador posicione el cursor.
 fn render_filtros(
     frame: &mut Frame,
     area: Rect,
     state: &HistorialState,
     seleccion: usize,
     editando: bool,
-) {
+    desplegable: Option<(CampoFiltro, usize)>,
+    theme: Theme,
+) -> Option<(Rect, String)> {
     let f = &state.filtro_edicion;
-    let valores = [
-        f.desde.clone(),
-        f.hasta.clone(),
-        f.nombre_cedula.clone(),
-        empresa_texto(f.empresa_id, &state.empresas),
-        tipo_texto(f.tipo).into(),
-        f.gafete.clone(),
-        estado_texto(f.estado).into(),
-    ];
-    let nombres = [
-        "Desde",
-        "Hasta",
-        "Nombre/Cédula",
-        "Empresa",
-        "Tipo",
-        "Gafete",
-        "Estado",
-    ];
-    let mut lineas: Vec<_> = nombres
-        .iter()
-        .enumerate()
-        .map(|(i, nombre)| {
-            Line::from(format!(
-                "{} {:<15} {}{}",
-                if i == seleccion { ">" } else { " " },
-                nombre,
-                valores[i],
-                if i == seleccion && editando { "_" } else { "" }
-            ))
-            .style(if i == seleccion {
-                theme::foco()
-            } else {
-                theme::texto_normal()
-            })
-        })
-        .collect();
-    lineas.extend([
-        Line::from(""),
-        Line::from("↑↓ Mover   ENTER Editar/Seleccionar").style(theme::foco()),
-        Line::from("A Aplicar   L Limpiar   ESC Cerrar").style(theme::foco()),
-    ]);
-    layout::render_overlay(frame, area, 58, 15, 2, "FILTROS", lineas);
+    let mut y = area.y;
+    let fondo = area.y.saturating_add(area.height);
+    let mut cursor = None;
+    for (i, campo) in CampoFiltro::TODOS.into_iter().enumerate() {
+        if y >= fondo {
+            break;
+        }
+        let seleccionado = i == seleccion;
+        if es_campo_texto(campo) {
+            let alto = 3.min(fondo.saturating_sub(y));
+            let area_fila = Rect::new(area.x, y, area.width, alto);
+            let valor = texto_filtro_edicion(f, campo);
+            let area_valor = render_campo(
+                frame,
+                area_fila,
+                etiqueta_campo(campo),
+                valor,
+                seleccionado,
+                theme,
+            );
+            if seleccionado && editando {
+                cursor = Some((area_valor, valor.to_owned()));
+            }
+            y = y.saturating_add(alto);
+        } else {
+            let area_fila = Rect::new(area.x, y, area.width, 1);
+            render_opcion(
+                frame,
+                area_fila,
+                etiqueta_campo(campo),
+                &valor_texto_campo(state, campo),
+                seleccionado,
+                theme,
+            );
+            y = y.saturating_add(1);
+            if let Some((_, opcion)) = desplegable.filter(|(c, _)| *c == campo) {
+                let opciones = opciones_texto(state, campo);
+                let alto = (opciones.len() as u16).min(fondo.saturating_sub(y));
+                let area_lista = Rect::new(area.x, y, area.width, alto);
+                render_lista_desplegable(frame, area_lista, &opciones, opcion, theme);
+                y = y.saturating_add(alto);
+            }
+        }
+    }
+    cursor
 }
 
-fn render_desplegable(
-    frame: &mut Frame,
-    area: Rect,
-    state: &HistorialState,
-    campo: CampoFiltro,
-    opcion: usize,
-) {
-    let (titulo, opciones): (_, Vec<String>) = match campo {
-        CampoFiltro::Empresa => (
-            "SELECCIONAR EMPRESA",
-            std::iter::once("Todas".into())
-                .chain(state.empresas.iter().map(|e| e.nombre.clone()))
-                .collect(),
-        ),
-        CampoFiltro::Tipo => (
-            "SELECCIONAR TIPO",
-            ["Todos", "PRAIND", "IN HOUSE", "POR CORREO", "SWAT"]
-                .into_iter()
-                .map(str::to_owned)
-                .collect(),
-        ),
-        CampoFiltro::Estado => (
-            "SELECCIONAR ESTADO",
-            ["Todos", "Activos", "Cerrados"]
-                .into_iter()
-                .map(str::to_owned)
-                .collect(),
-        ),
-        _ => return,
-    };
-    let mut lineas: Vec<_> = opciones
-        .iter()
-        .enumerate()
-        .map(|(i, v)| {
-            Line::from(format!("{} {v}", if i == opcion { ">" } else { " " })).style(
-                if i == opcion {
-                    theme::seleccionado()
-                } else {
-                    theme::texto_normal()
-                },
-            )
-        })
-        .collect();
-    lineas.push(Line::from(""));
-    lineas.push(Line::from("↑↓ Seleccionar   ENTER Aceptar   ESC Cancelar").style(theme::foco()));
-    layout::render_overlay(
-        frame,
-        area,
-        52,
-        (lineas.len() as u16 + 4).min(area.height.saturating_sub(2)),
-        2,
-        titulo,
-        lineas,
-    );
-}
-
-fn render_columnas(frame: &mut Frame, area: Rect, state: &HistorialState, seleccion: usize) {
-    let mut lineas: Vec<_> = state
+fn render_columnas(frame: &mut Frame, area: Rect, state: &HistorialState, seleccion: usize, theme: Theme) {
+    let lineas: Vec<Line<'static>> = state
         .columnas
         .iter()
         .enumerate()
         .map(|(i, (c, v))| {
-            Line::from(format!(
-                "{} [{}] {}",
-                if i == seleccion { ">" } else { " " },
-                if *v { "x" } else { " " },
-                c.titulo()
-            ))
-            .style(if i == seleccion {
-                theme::foco()
+            let marcador = if i == seleccion { ">" } else { " " };
+            let caja = if *v { "x" } else { " " };
+            Line::from(format!("{marcador} [{caja}] {}", c.titulo())).style(if i == seleccion {
+                theme.selected()
             } else {
-                theme::texto_normal()
+                theme.base()
             })
         })
         .collect();
-    lineas.push(Line::from("↑↓ mover  SPACE mostrar/ocultar  ESC cerrar").style(theme::foco()));
-    layout::render_overlay(frame, area, 50, 17, 2, "COLUMNAS", lineas);
+    frame.render_widget(Paragraph::new(lineas), area);
 }

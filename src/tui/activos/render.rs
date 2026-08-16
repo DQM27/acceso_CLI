@@ -1,104 +1,237 @@
-use crate::tiempo::{a_costa_rica, hora_actual_texto};
-use ratatui::{
-    Frame,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table},
-};
-
 use super::*;
 use crate::{
     services::registro_ingreso_service::IngresoActivoResumen,
-    tui::{layout, theme},
+    tiempo::{a_costa_rica, hora_actual_texto},
+    tui::ui_kit::{
+        CommandHint, ScreenShell, StatusKind, Theme, ThemePreset, render_terminal_too_small,
+    },
+};
+use ratatui::{
+    Frame,
+    layout::{Alignment, Constraint, Layout, Rect},
+    text::Line,
+    widgets::{Cell, Paragraph, Row, Table},
 };
 
+const ANCHO_MINIMO: u16 = 60;
+const ALTO_MINIMO: u16 = 22;
+const ANCHO_PANEL_LATERAL: u16 = 100;
+
+const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓", "Mover"),
+    CommandHint::new("ENTER", "Detalle"),
+    CommandHint::new("S", "Salida"),
+    CommandHint::new("F2", "Gafete"),
+    CommandHint::new("/", "Buscar"),
+    CommandHint::new("C", "Columnas"),
+    CommandHint::new("ESC", "Volver"),
+];
+const COMANDOS_BUSQUEDA: &[CommandHint<'static>] = &[
+    CommandHint::new("ENTER", "Aplicar"),
+    CommandHint::new("ESC", "Limpiar"),
+];
+const COMANDOS_DETALLE: &[CommandHint<'static>] = &[
+    CommandHint::new("S", "Salida"),
+    CommandHint::new("ESC", "Cerrar"),
+];
+const COMANDOS_CONFIRMAR: &[CommandHint<'static>] = &[
+    CommandHint::new("Y", "Confirmar"),
+    CommandHint::new("N/ESC", "Cancelar"),
+];
+const COMANDOS_GAFETE: &[CommandHint<'static>] = &[
+    CommandHint::new("ENTER", "Buscar"),
+    CommandHint::new("ESC", "Cancelar"),
+];
+const COMANDOS_COLUMNAS: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓", "Mover"),
+    CommandHint::new("SPACE", "Mostrar/Ocultar"),
+    CommandHint::new("ESC", "Cerrar"),
+];
+
 pub fn render(frame: &mut Frame, area: Rect, state: &ActivosState) {
-    frame.render_widget(Block::default().style(theme::texto_normal()), area);
-    if area.width < 60 || area.height < 22 {
-        layout::render_terminal_pequena(frame, area);
+    let theme = ThemePreset::Brisas.theme();
+
+    if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
+        render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "ESC salir", theme);
         return;
     }
-    let contenido = Rect::new(
-        area.x.saturating_add(2),
-        area.y,
-        area.width.saturating_sub(4),
-        area.height,
-    );
-    let zonas = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(5),
-            Constraint::Length(2),
-            Constraint::Min(8),
-            Constraint::Length(3),
-        ])
-        .split(contenido);
-    render_cabecera(frame, zonas[0]);
-    render_estado(frame, zonas[1], state);
-    render_tabla(frame, zonas[2], state);
-    render_pie(frame, zonas[3], state);
-    render_modo(frame, contenido, state);
+
+    let hora = hora_actual_texto();
+    let contexto = format!("Usuario: {}", state.usuario_nombre);
+    let (estado_texto, estado_tipo) = estado_shell(state);
+    let comandos = match &state.modo {
+        ModoActivos::Normal => COMANDOS_NORMAL,
+        ModoActivos::Busqueda { .. } => COMANDOS_BUSQUEDA,
+        ModoActivos::Detalle { .. } => COMANDOS_DETALLE,
+        ModoActivos::ConfirmarSalida { .. } => COMANDOS_CONFIRMAR,
+        ModoActivos::SalidaPorGafete(SalidaGafete::Capturando { .. }) => COMANDOS_GAFETE,
+        ModoActivos::SalidaPorGafete(SalidaGafete::Encontrado { .. }) => COMANDOS_CONFIRMAR,
+        ModoActivos::Columnas { .. } => COMANDOS_COLUMNAS,
+    };
+
+    let shell = ScreenShell {
+        product: "BRISAS CLI",
+        screen: "INGRESOS ACTIVOS",
+        context: &contexto,
+        clock: &hora,
+        status: &estado_texto,
+        status_kind: estado_tipo,
+        commands: comandos,
+    };
+    let areas = shell.render(frame, area, theme);
+
+    render_cuerpo(frame, areas.body, state, theme);
 }
 
-fn render_cabecera(frame: &mut Frame, area: Rect) {
-    let bloque = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Plain)
-        .border_style(theme::borde());
-    let interior = bloque.inner(area);
-    frame.render_widget(bloque, area);
-    let columnas = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(30),
-            Constraint::Percentage(40),
-            Constraint::Percentage(30),
-        ])
-        .split(interior);
-    let centro = |area: Rect| Rect::new(area.x, area.y + area.height / 2, area.width, 1);
-    frame.render_widget(
-        Paragraph::new(vec![
-            Line::from(" B R I S A S   C L I").style(theme::titulo()),
-            Line::from(" CONTROL DE ACCESO").style(theme::texto_secundario()),
-        ]),
-        Rect::new(
-            columnas[0].x,
-            columnas[0].y + columnas[0].height.saturating_sub(2) / 2,
-            columnas[0].width,
-            2,
+fn estado_shell(state: &ActivosState) -> (String, StatusKind) {
+    match &state.modo {
+        ModoActivos::ConfirmarSalida { id } => {
+            let nombre = state
+                .registro(*id)
+                .map(|r| r.contratista_nombre.as_str())
+                .unwrap_or_default();
+            (
+                format!("¿Registrar la salida de {nombre}?"),
+                StatusKind::Warning,
+            )
+        }
+        ModoActivos::SalidaPorGafete(SalidaGafete::Capturando { error: Some(e), .. }) => {
+            (e.clone(), StatusKind::Error)
+        }
+        ModoActivos::SalidaPorGafete(SalidaGafete::Capturando { .. }) => (
+            "Ingrese el número de gafete.".to_owned(),
+            StatusKind::Normal,
         ),
+        ModoActivos::SalidaPorGafete(SalidaGafete::Encontrado { registro }) => (
+            format!("¿Registrar la salida de {}?", registro.contratista_nombre),
+            StatusKind::Warning,
+        ),
+        _ => {
+            if let Some(mensaje) = &state.mensaje {
+                let tipo = if mensaje.starts_with('✓') {
+                    StatusKind::Success
+                } else {
+                    StatusKind::Error
+                };
+                return (mensaje.clone(), tipo);
+            }
+            (String::new(), StatusKind::Normal)
+        }
+    }
+}
+
+fn render_cuerpo(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Theme) {
+    let filas = Layout::vertical([Constraint::Length(3), Constraint::Min(4)]).split(area);
+
+    let enfocado_busqueda = matches!(state.modo, ModoActivos::Busqueda { .. });
+    let texto_busqueda = match &state.modo {
+        ModoActivos::Busqueda { texto } => texto.as_str(),
+        _ => state.filtro.as_str(),
+    };
+    let area_busqueda = render_campo(
+        frame,
+        filas[0],
+        &format!(
+            "BUSCAR · {} DE {} DENTRO",
+            state.cantidad(),
+            state.total_activos()
+        ),
+        texto_busqueda,
+        enfocado_busqueda,
+        theme,
     );
+
+    let (area_tabla, area_panel) = if area.width >= ANCHO_PANEL_LATERAL {
+        let columnas = Layout::horizontal([
+            Constraint::Percentage(63),
+            Constraint::Length(1),
+            Constraint::Percentage(36),
+        ])
+        .split(filas[1]);
+        render_separador_vertical(frame, columnas[1], theme);
+        (columnas[0], columnas[2])
+    } else {
+        let filas_apiladas = Layout::vertical([
+            Constraint::Min(4),
+            Constraint::Length(1),
+            Constraint::Length(10.min(filas[1].height.saturating_sub(5))),
+        ])
+        .split(filas[1]);
+        render_separador_horizontal(frame, filas_apiladas[1], theme);
+        (filas_apiladas[0], filas_apiladas[2])
+    };
+    render_tabla(frame, area_tabla, state, theme);
+    let area_gafete = render_panel(frame, area_panel, state, theme);
+
+    if enfocado_busqueda {
+        let ancho_visible = Line::from(texto_busqueda).width() as u16;
+        let x = area_busqueda
+            .x
+            .saturating_add(ancho_visible.min(area_busqueda.width));
+        frame.set_cursor_position((x, area_busqueda.y));
+    } else if let ModoActivos::SalidaPorGafete(SalidaGafete::Capturando { numero, .. }) =
+        &state.modo
+        && let Some(area_campo) = area_gafete
+    {
+        let ancho_visible = Line::from(numero.as_str()).width() as u16;
+        let x = area_campo
+            .x
+            .saturating_add(ancho_visible.min(area_campo.width));
+        frame.set_cursor_position((x, area_campo.y));
+    }
+}
+
+fn render_separador_vertical(frame: &mut Frame, area: Rect, theme: Theme) {
+    let lineas: Vec<Line<'static>> = (0..area.height).map(|_| Line::from("│")).collect();
+    frame.render_widget(Paragraph::new(lineas).style(theme.border()), area);
+}
+
+fn render_separador_horizontal(frame: &mut Frame, area: Rect, theme: Theme) {
     frame.render_widget(
-        Paragraph::new("INGRESOS ACTIVOS")
-            .style(theme::foco())
-            .alignment(Alignment::Center),
-        centro(columnas[1]),
-    );
-    frame.render_widget(
-        Paragraph::new("Usuario: Quintana ")
-            .style(theme::texto_normal())
-            .alignment(Alignment::Right),
-        centro(columnas[2]),
+        Paragraph::new("─".repeat(area.width as usize)).style(theme.border()),
+        area,
     );
 }
 
-fn render_tabla(frame: &mut Frame, area: Rect, state: &ActivosState) {
+/// Misma silueta con foco o sin él (etiqueta, valor, línea); sólo cambian
+/// color y peso.
+fn render_campo(
+    frame: &mut Frame,
+    area: Rect,
+    etiqueta: &str,
+    valor: &str,
+    activo: bool,
+    theme: Theme,
+) -> Rect {
+    let estilo_etiqueta = if activo { theme.accent() } else { theme.muted() };
+    let estilo_linea = if activo { theme.accent() } else { theme.border() };
+    let valor_y = area.y.saturating_add(1);
+    let linea_y = area.y.saturating_add(2);
+
+    frame.render_widget(
+        Paragraph::new(etiqueta).style(estilo_etiqueta),
+        Rect::new(area.x, area.y, area.width, 1),
+    );
+    frame.render_widget(
+        Paragraph::new(Line::from(valor).style(theme.base())),
+        Rect::new(area.x, valor_y, area.width, 1),
+    );
+    frame.render_widget(
+        Paragraph::new("─".repeat(area.width as usize)).style(estilo_linea),
+        Rect::new(area.x, linea_y, area.width, 1),
+    );
+
+    Rect::new(area.x, valor_y, area.width, 1)
+}
+
+fn render_tabla(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Theme) {
     let columnas: Vec<_> = state
         .columnas
         .iter()
         .filter_map(|(columna, visible)| visible.then_some(*columna))
         .collect();
-    let marco = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Plain)
-        .border_style(theme::borde());
-    let interior = marco.inner(area);
-    frame.render_widget(marco, area);
-    let anchos: Vec<_> = columnas
-        .iter()
-        .map(|columna| columna.constraint())
-        .collect();
-    let capacidad = interior.height.saturating_sub(2) as usize;
+    let anchos: Vec<_> = columnas.iter().map(|c| c.constraint()).collect();
+    let capacidad = area.height.saturating_sub(2) as usize;
     let inicio = state.inicio_visible(capacidad).min(state.registros.len());
     let filas = state
         .registros
@@ -107,44 +240,41 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ActivosState) {
         .take(capacidad)
         .enumerate()
         .map(|(visible, registro)| {
-            let seleccionado = state.seleccion == Some(inicio + visible);
+            let seleccionada = state.seleccion == Some(inicio + visible);
             let celdas = columnas.iter().map(|columna| {
-                let estilo = if seleccionado {
-                    theme::seleccionado()
+                let estilo = if seleccionada {
+                    theme.selected()
                 } else if *columna == Columna::Tipo
-                    && matches!(
+                    && !matches!(
                         registro.resultado_acceso,
-                        crate::domain::resultado_acceso::ResultadoAcceso::PermitidoConAdvertencia
-                            | crate::domain::resultado_acceso::ResultadoAcceso::Denegado(_)
+                        crate::domain::resultado_acceso::ResultadoAcceso::Permitido
                     )
                 {
-                    theme::advertencia()
+                    theme.warning()
                 } else {
-                    theme::texto_normal()
+                    theme.base()
                 };
                 Cell::from(valor_columna(registro, *columna)).style(estilo)
             });
-            Row::new(celdas).style(if seleccionado {
-                theme::seleccionado()
+            Row::new(celdas).style(if seleccionada {
+                theme.selected()
             } else {
-                theme::texto_normal()
+                theme.base()
             })
         });
-    let encabezado = Row::new(columnas.iter().map(|columna| columna.titulo()))
-        .style(theme::foco())
+    let encabezado = Row::new(columnas.iter().map(|c| c.titulo()))
+        .style(theme.muted())
         .bottom_margin(1);
     frame.render_widget(
-        Table::new(filas, anchos)
-            .header(encabezado)
-            .column_spacing(1),
-        interior,
+        Table::new(filas, anchos).header(encabezado).column_spacing(1),
+        area,
     );
     if state.registros.is_empty() {
         frame.render_widget(
             Paragraph::new("No hay ingresos activos que coincidan con la búsqueda.")
-                .style(theme::advertencia())
+                .style(theme.warning())
                 .alignment(Alignment::Center),
-            interior,
+            Rect::new(area.x, area.y + area.height / 2, area.width, 1),
         );
     }
 }
@@ -177,208 +307,96 @@ fn valor_columna(registro: &IngresoActivoResumen, columna: Columna) -> String {
     }
 }
 
-fn render_estado(frame: &mut Frame, area: Rect, state: &ActivosState) {
-    let linea = match &state.modo {
-        ModoActivos::Busqueda { texto } => Line::from(vec![
-            Span::styled("BUSCAR ACTIVOS: ", theme::foco()),
-            Span::styled(format!("{texto}_"), theme::texto_normal()),
-        ]),
-        _ if !state.filtro.is_empty() => Line::from(vec![
-            Span::styled("FILTRO ACTIVO: ", theme::foco()),
-            Span::styled(&state.filtro, theme::texto_normal()),
-            Span::styled(
-                format!(
-                    "    {} resultados de {} personas dentro    ",
-                    state.cantidad(),
-                    state.total_activos()
-                ),
-                theme::texto_secundario(),
-            ),
-            Span::styled("ESC ", theme::ayuda_tecla()),
-            Span::styled("Limpiar", theme::texto_normal()),
-        ]),
-        _ => {
-            let texto = state.mensaje.clone().unwrap_or_default();
-            let estilo = if texto.starts_with('✓') {
-                theme::exito()
-            } else {
-                theme::foco()
-            };
-            Line::from(texto).style(estilo)
-        }
-    };
-    frame.render_widget(Paragraph::new(linea).alignment(Alignment::Center), area);
-}
-
-fn render_pie(frame: &mut Frame, area: Rect, state: &ActivosState) {
-    let hora = hora_actual_texto();
-    let bloque = Block::default()
-        .borders(Borders::ALL)
-        .border_style(theme::borde());
-    let interior = bloque.inner(area);
-    frame.render_widget(bloque, area);
-    let columnas = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length(40),
-            Constraint::Min(20),
-            Constraint::Length(12),
-        ])
-        .split(interior);
-    let posicion = texto_posicion(state);
-    frame.render_widget(
-        Paragraph::new(format!(
-            " {} personas dentro │ Registro {posicion}",
-            state.total_activos()
-        ))
-        .style(theme::texto_normal()),
-        columnas[0],
-    );
-    let ayuda = if area.width >= 105 {
-        "↑↓ Seleccionar │ ENTER Detalle │ S Salida │ F2 Gafete │ / Buscar │ C Columnas │ ESC Volver"
-    } else {
-        "↑↓ Mover │ ENTER Ver │ S Salida │ F2 Gafete │ / Buscar │ C Columnas"
-    };
-    frame.render_widget(
-        Paragraph::new(ayuda)
-            .style(theme::foco())
-            .alignment(Alignment::Center),
-        columnas[1],
-    );
-    frame.render_widget(
-        Paragraph::new(hora)
-            .style(theme::advertencia())
-            .alignment(Alignment::Right)
-            .block(Block::default().padding(ratatui::widgets::Padding::right(1))),
-        columnas[2],
-    );
-}
-
-fn render_modo(frame: &mut Frame, area: Rect, state: &ActivosState) {
+/// Devuelve, cuando aplica, el área del valor del campo GAFETE para que el
+/// llamador posicione el cursor.
+fn render_panel(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Theme) -> Option<Rect> {
     match &state.modo {
-        ModoActivos::Detalle { id } => {
-            if let Some(registro) = state.registro(*id) {
-                render_detalle(frame, area, registro);
-            }
+        ModoActivos::Normal | ModoActivos::Busqueda { .. } => {
+            frame.render_widget(
+                Paragraph::new("Seleccione ENTER para ver el detalle.").style(theme.muted()),
+                area,
+            );
+            None
         }
-        ModoActivos::ConfirmarSalida { id } => {
+        ModoActivos::Detalle { id } | ModoActivos::ConfirmarSalida { id } => {
             if let Some(registro) = state.registro(*id) {
-                render_confirmacion(frame, area, registro);
+                render_detalle(frame, area, registro, theme);
             }
+            None
         }
-        ModoActivos::SalidaPorGafete(estado) => render_gafete(frame, area, estado),
-        ModoActivos::Columnas { seleccion } => render_columnas(frame, area, state, *seleccion),
-        ModoActivos::Normal | ModoActivos::Busqueda { .. } => {}
+        ModoActivos::SalidaPorGafete(SalidaGafete::Capturando { numero, .. }) => {
+            Some(render_campo(frame, area, "NÚMERO DE GAFETE", numero, true, theme))
+        }
+        ModoActivos::SalidaPorGafete(SalidaGafete::Encontrado { registro }) => {
+            render_detalle(frame, area, registro, theme);
+            None
+        }
+        ModoActivos::Columnas { seleccion } => {
+            render_columnas(frame, area, state, *seleccion, theme);
+            None
+        }
     }
 }
 
-fn texto_posicion(state: &ActivosState) -> String {
-    state.seleccion.map_or_else(
-        || "—/—".to_owned(),
-        |indice| format!("{}/{}", indice + 1, state.registros.len()),
-    )
+fn render_detalle(frame: &mut Frame, area: Rect, registro: &IngresoActivoResumen, theme: Theme) {
+    let mut lineas = vec![
+        Line::from(registro.contratista_nombre.clone()).style(theme.title()),
+        Line::from(format!("{} · {}", registro.cedula, registro.empresa_nombre)).style(theme.base()),
+        Line::from(""),
+        Line::from(format!("Tipo               {}", texto_tipo(registro.tipo_ingreso))).style(theme.base()),
+        Line::from(format!("Medio              {}", texto_medio(registro.medio_ingreso))).style(theme.base()),
+        Line::from(format!(
+            "Ingreso            {}",
+            a_costa_rica(registro.fecha_hora_ingreso).format("%d/%m/%Y %H:%M")
+        ))
+        .style(theme.base()),
+        Line::from(format!(
+            "Gafete             {}",
+            valor_columna(registro, Columna::Gafete)
+        ))
+        .style(theme.base()),
+        Line::from(format!("Registrado por     {}", registro.usuario_ingreso_nombre)).style(theme.base()),
+    ];
+    if !matches!(
+        registro.resultado_acceso,
+        crate::domain::resultado_acceso::ResultadoAcceso::Permitido
+    ) {
+        lineas.push(Line::from(""));
+        lineas.push(Line::from("Condición de acceso actual requiere atención").style(theme.warning()));
+    }
+    frame.render_widget(Paragraph::new(lineas), area);
 }
 
-fn render_confirmacion(frame: &mut Frame, area: Rect, registro: &IngresoActivoResumen) {
-    layout::render_overlay(
-        frame,
-        area,
-        56,
-        11,
-        4,
-        "REGISTRAR SALIDA",
-        vec![
-            Line::from(registro.contratista_nombre.clone()).style(theme::titulo()),
-            Line::from(registro.empresa_nombre.clone()),
-            Line::from(format!(
-                "Gafete: {}",
-                valor_columna(registro, Columna::Gafete)
-            )),
-            Line::from(""),
-            Line::from("¿Desea registrar la salida?"),
-            Line::from(""),
-            Line::from("Y Sí        N No        ESC Cancelar").style(theme::foco()),
-        ],
-    );
-}
-
-fn render_detalle(frame: &mut Frame, area: Rect, registro: &IngresoActivoResumen) {
-    layout::render_overlay(
-        frame,
-        area,
-        62,
-        16,
-        4,
-        "DETALLE",
-        vec![
-            Line::from(registro.contratista_nombre.clone()).style(theme::titulo()),
-            Line::from(registro.cedula.clone()).style(theme::texto_secundario()),
-            Line::from(""),
-            Line::from(format!("Empresa          {}", registro.empresa_nombre)),
-            Line::from(format!(
-                "Tipo             {}",
-                texto_tipo(registro.tipo_ingreso)
-            )),
-            Line::from(format!(
-                "Medio            {}",
-                texto_medio(registro.medio_ingreso)
-            )),
-            Line::from(format!(
-                "Ingreso          {}",
-                a_costa_rica(registro.fecha_hora_ingreso).format("%d/%m/%Y %H:%M")
-            )),
-            Line::from(format!(
-                "Gafete           {}",
-                valor_columna(registro, Columna::Gafete)
-            )),
-            Line::from(format!(
-                "Registrado por   {}",
-                registro.usuario_ingreso_nombre
-            )),
-            Line::from(
-                if matches!(
-                    registro.resultado_acceso,
-                    crate::domain::resultado_acceso::ResultadoAcceso::Permitido
-                ) {
-                    ""
+fn render_columnas(
+    frame: &mut Frame,
+    area: Rect,
+    state: &ActivosState,
+    seleccion: usize,
+    theme: Theme,
+) {
+    let mut lineas: Vec<Line<'static>> = state
+        .columnas
+        .iter()
+        .enumerate()
+        .map(|(indice, (columna, visible))| {
+            let marcador = if indice == seleccion { ">" } else { " " };
+            let caja = if *visible { "x" } else { " " };
+            Line::from(format!("{marcador} [{caja}] {}", columna.titulo())).style(
+                if indice == seleccion {
+                    theme.selected()
                 } else {
-                    "Condición de acceso actual requiere atención"
+                    theme.base()
                 },
             )
-            .style(theme::advertencia()),
-            Line::from(""),
-            Line::from("S Salida                         ESC Cerrar").style(theme::foco()),
-        ],
-    );
+        })
+        .collect();
+    if let Some(mensaje) = &state.mensaje {
+        lineas.push(Line::from(""));
+        lineas.push(Line::from(mensaje.clone()).style(theme.warning()));
+    }
+    frame.render_widget(Paragraph::new(lineas), area);
 }
 
-fn render_gafete(frame: &mut Frame, area: Rect, estado: &SalidaGafete) {
-    let lineas = match estado {
-        SalidaGafete::Capturando { numero, error } => vec![
-            Line::from(format!("Gafete: {numero}_")).style(theme::foco()),
-            Line::from(""),
-            Line::from(error.clone().unwrap_or_default()).style(theme::error()),
-            Line::from(""),
-            Line::from("ENTER Buscar                  ESC Cancelar").style(theme::foco()),
-        ],
-        SalidaGafete::Encontrado { registro } => vec![
-            Line::from(registro.contratista_nombre.clone()).style(theme::titulo()),
-            Line::from(registro.empresa_nombre.clone()),
-            Line::from(format!(
-                "Gafete: {}",
-                valor_columna(registro, Columna::Gafete)
-            )),
-            Line::from(format!(
-                "Ingreso: {}",
-                a_costa_rica(registro.fecha_hora_ingreso).format("%H:%M")
-            )),
-            Line::from(""),
-            Line::from("¿Registrar salida?"),
-            Line::from("Y Sí        N No        ESC Cancelar").style(theme::foco()),
-        ],
-    };
-    layout::render_overlay(frame, area, 58, 11, 4, "SALIDA POR GAFETE", lineas);
-}
 fn texto_tipo(t: crate::models::tipo_ingreso::TipoIngreso) -> &'static str {
     match t {
         crate::models::tipo_ingreso::TipoIngreso::Praind => "PRAIND",
@@ -392,29 +410,4 @@ fn texto_medio(m: crate::models::medio_ingreso::MedioIngreso) -> &'static str {
         crate::models::medio_ingreso::MedioIngreso::Caminando => "Caminando",
         crate::models::medio_ingreso::MedioIngreso::Vehiculo => "Vehículo",
     }
-}
-
-fn render_columnas(frame: &mut Frame, area: Rect, state: &ActivosState, seleccion: usize) {
-    let mut lineas = Vec::new();
-    for (indice, (columna, visible)) in state.columnas.iter().enumerate() {
-        lineas.push(
-            Line::from(format!(
-                "{} [{}] {}",
-                if indice == seleccion { ">" } else { " " },
-                if *visible { "x" } else { " " },
-                columna.titulo()
-            ))
-            .style(if indice == seleccion {
-                theme::foco()
-            } else {
-                theme::texto_normal()
-            }),
-        );
-    }
-    lineas.push(Line::from(""));
-    if let Some(mensaje) = &state.mensaje {
-        lineas.push(Line::from(mensaje.clone()).style(theme::advertencia()));
-    }
-    lineas.push(Line::from("↑↓ mover  SPACE mostrar/ocultar  ESC cerrar").style(theme::foco()));
-    layout::render_overlay(frame, area, 48, 15, 4, "COLUMNAS", lineas);
 }
