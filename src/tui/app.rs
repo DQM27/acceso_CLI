@@ -19,6 +19,7 @@ use super::{
     login::LoginState,
     menu_principal::{self, AccionMenu, MenuPrincipalState, OpcionMenu},
     nuevo_ingreso::{self, AccionNuevoIngreso, NuevoIngresoState},
+    ui_kit::{StandardCommand, ThemePreset, standard_command},
     usuarios::{self, AccionUsuarios, UsuariosState},
 };
 
@@ -675,6 +676,7 @@ pub struct App {
     nuevo_ingreso: NuevoIngresoState,
     salir: bool,
     sesion: Option<UsuarioSesion>,
+    tema: ThemePreset,
 }
 
 impl Default for App {
@@ -692,6 +694,7 @@ impl Default for App {
             nuevo_ingreso: NuevoIngresoState::default(),
             salir: false,
             sesion: None,
+            tema: ThemePreset::Brisas,
         }
     }
 }
@@ -729,25 +732,33 @@ impl App {
         core: Option<&AppCore>,
     ) -> io::Result<()> {
         while !self.salir {
+            let theme = self.tema.theme();
             terminal.draw(|frame| match self.vista {
-                Vista::ConfiguracionInicial => {
-                    configuracion_inicial::render(frame, frame.area(), &self.configuracion_inicial)
-                }
-                Vista::Login => login::render(frame, frame.area(), &self.login),
+                Vista::ConfiguracionInicial => configuracion_inicial::render(
+                    frame,
+                    frame.area(),
+                    &self.configuracion_inicial,
+                    theme,
+                ),
+                Vista::Login => login::render(frame, frame.area(), &self.login, theme),
                 Vista::MenuPrincipal => {
                     if let Some(sesion) = &self.sesion {
-                        menu_principal::render(frame, frame.area(), &self.menu, sesion)
+                        menu_principal::render(frame, frame.area(), &self.menu, sesion, theme)
                     }
                 }
-                Vista::IngresosActivos => activos::render(frame, frame.area(), &self.activos),
-                Vista::Historial => historial::render(frame, frame.area(), &self.historial),
-                Vista::Contratistas => {
-                    contratistas::render(frame, frame.area(), &self.contratistas)
+                Vista::IngresosActivos => {
+                    activos::render(frame, frame.area(), &self.activos, theme)
                 }
-                Vista::Empresas => empresas::render(frame, frame.area(), &self.empresas),
-                Vista::Usuarios => usuarios::render(frame, frame.area(), &self.usuarios),
+                Vista::Historial => {
+                    historial::render(frame, frame.area(), &self.historial, theme)
+                }
+                Vista::Contratistas => {
+                    contratistas::render(frame, frame.area(), &self.contratistas, theme)
+                }
+                Vista::Empresas => empresas::render(frame, frame.area(), &self.empresas, theme),
+                Vista::Usuarios => usuarios::render(frame, frame.area(), &self.usuarios, theme),
                 Vista::NuevoIngreso => {
-                    nuevo_ingreso::render(frame, frame.area(), &self.nuevo_ingreso)
+                    nuevo_ingreso::render(frame, frame.area(), &self.nuevo_ingreso, theme)
                 }
             })?;
 
@@ -759,10 +770,10 @@ impl App {
                 && let Event::Key(key) = event::read()?
                 && key.kind == KeyEventKind::Press
             {
-                if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
-                    self.salir = true;
-                } else {
-                    self.procesar_tecla_vista_con_core(key, core);
+                match standard_command(key) {
+                    Some(StandardCommand::EmergencyExit) => self.salir = true,
+                    Some(StandardCommand::Theme) => self.tema = self.tema.next(),
+                    _ => self.procesar_tecla_vista_con_core(key, core),
                 }
             }
 

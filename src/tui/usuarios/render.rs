@@ -10,7 +10,7 @@ use crate::{
     database::queries::usuarios::UsuarioResumen,
     tiempo::hora_actual_texto,
     tui::ui_kit::{
-        CommandHint, ScreenShell, StatusKind, Theme, ThemePreset, render_terminal_too_small,
+        CommandHint, ScreenShell, StatusKind, Theme, render_terminal_too_small,
     },
 };
 
@@ -59,8 +59,7 @@ const COMANDOS_CONFIRMACION: &[CommandHint<'static>] = &[
     CommandHint::new("N/ESC", "Cancelar"),
 ];
 
-pub fn render(frame: &mut Frame, area: Rect, state: &UsuariosState) {
-    let theme = ThemePreset::Brisas.theme();
+pub fn render(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: Theme) {
 
     if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
         render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "ESC salir", theme);

@@ -8,7 +8,7 @@ use ratatui::{
 use super::*;
 use crate::tiempo::hora_actual_texto;
 use crate::tui::ui_kit::{
-    CommandHint, ScreenShell, StatusKind, Theme, ThemePreset, render_terminal_too_small,
+    CommandHint, ScreenShell, StatusKind, Theme, render_terminal_too_small,
 };
 
 const ANCHO_MINIMO: u16 = 60;
@@ -20,8 +20,7 @@ const COMANDOS: &[CommandHint<'static>] = &[
     CommandHint::new("ESC/Ctrl+C", "Salir"),
 ];
 
-pub fn render(frame: &mut Frame, area: Rect, state: &LoginState) {
-    let theme = ThemePreset::Brisas.theme();
+pub fn render(frame: &mut Frame, area: Rect, state: &LoginState, theme: Theme) {
 
     if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
         render_terminal_too_small(

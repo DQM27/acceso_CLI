@@ -3,7 +3,7 @@ use crate::{
     database::queries::ingresos::MovimientoIngresoResumen,
     tiempo::{a_costa_rica, hora_actual_texto},
     tui::ui_kit::{
-        CommandHint, ScreenShell, StatusKind, Theme, ThemePreset, render_terminal_too_small,
+        CommandHint, ScreenShell, StatusKind, Theme, render_terminal_too_small,
     },
 };
 use ratatui::{
@@ -51,8 +51,7 @@ const COMANDOS_COLUMNAS: &[CommandHint<'static>] = &[
     CommandHint::new("ESC", "Cerrar"),
 ];
 
-pub fn render(frame: &mut Frame, area: Rect, state: &HistorialState) {
-    let theme = ThemePreset::Brisas.theme();
+pub fn render(frame: &mut Frame, area: Rect, state: &HistorialState, theme: Theme) {
 
     if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
         render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "ESC salir", theme);
