@@ -2,10 +2,16 @@
 mod activos_v2;
 #[path = "brisas_cli/app.rs"]
 mod app;
+#[path = "brisas_cli/configuracion_inicial_v2.rs"]
+mod configuracion_inicial_v2;
 #[path = "brisas_cli/contratistas_v2.rs"]
 mod contratistas_v2;
+#[path = "brisas_cli/empresas_v2.rs"]
+mod empresas_v2;
 #[path = "brisas_cli/ingreso.rs"]
 mod ingreso;
+#[path = "brisas_cli/historial_v2.rs"]
+mod historial_v2;
 #[path = "brisas_cli/ingreso_v2.rs"]
 mod ingreso_v2;
 #[path = "brisas_cli/login.rs"]
@@ -20,6 +26,8 @@ mod menu_v2;
 mod quick_exit;
 #[path = "brisas_cli/terminal.rs"]
 mod terminal;
+#[path = "brisas_cli/usuarios_v2.rs"]
+mod usuarios_v2;
 
 use crossterm::event::Event;
 use ratatui::Frame;
@@ -185,6 +193,78 @@ impl PilotScreen for ingreso_v2::IngresoV2Pilot {
     }
 }
 
+impl PilotScreen for historial_v2::HistorialV2Pilot {
+    fn is_running(&self) -> bool {
+        historial_v2::HistorialV2Pilot::is_running(self)
+    }
+
+    fn handle_event(&mut self, event: &Event) -> bool {
+        historial_v2::HistorialV2Pilot::handle_event(self, event)
+    }
+
+    fn render(&mut self, frame: &mut Frame) {
+        historial_v2::HistorialV2Pilot::render(self, frame);
+    }
+
+    fn redraw_interval(&self) -> Duration {
+        Duration::from_millis(250)
+    }
+}
+
+impl PilotScreen for empresas_v2::EmpresasV2Pilot {
+    fn is_running(&self) -> bool {
+        empresas_v2::EmpresasV2Pilot::is_running(self)
+    }
+
+    fn handle_event(&mut self, event: &Event) -> bool {
+        empresas_v2::EmpresasV2Pilot::handle_event(self, event)
+    }
+
+    fn render(&mut self, frame: &mut Frame) {
+        empresas_v2::EmpresasV2Pilot::render(self, frame);
+    }
+
+    fn redraw_interval(&self) -> Duration {
+        Duration::from_millis(250)
+    }
+}
+
+impl PilotScreen for usuarios_v2::UsuariosV2Pilot {
+    fn is_running(&self) -> bool {
+        usuarios_v2::UsuariosV2Pilot::is_running(self)
+    }
+
+    fn handle_event(&mut self, event: &Event) -> bool {
+        usuarios_v2::UsuariosV2Pilot::handle_event(self, event)
+    }
+
+    fn render(&mut self, frame: &mut Frame) {
+        usuarios_v2::UsuariosV2Pilot::render(self, frame);
+    }
+
+    fn redraw_interval(&self) -> Duration {
+        Duration::from_millis(250)
+    }
+}
+
+impl PilotScreen for configuracion_inicial_v2::ConfiguracionInicialV2Pilot {
+    fn is_running(&self) -> bool {
+        configuracion_inicial_v2::ConfiguracionInicialV2Pilot::is_running(self)
+    }
+
+    fn handle_event(&mut self, event: &Event) -> bool {
+        configuracion_inicial_v2::ConfiguracionInicialV2Pilot::handle_event(self, event)
+    }
+
+    fn render(&mut self, frame: &mut Frame) {
+        configuracion_inicial_v2::ConfiguracionInicialV2Pilot::render(self, frame);
+    }
+
+    fn redraw_interval(&self) -> Duration {
+        configuracion_inicial_v2::ConfiguracionInicialV2Pilot::redraw_interval(self)
+    }
+}
+
 fn main() -> std::io::Result<()> {
     match std::env::args().nth(1).as_deref() {
         Some("login") => terminal::run(login::LoginPilot::default()),
@@ -198,9 +278,15 @@ fn main() -> std::io::Result<()> {
             terminal::run(contratistas_v2::ContratistasV2Pilot::default())
         }
         Some("activos-v2") => terminal::run(activos_v2::ActivosV2Pilot::default()),
+        Some("historial-v2") => terminal::run(historial_v2::HistorialV2Pilot::default()),
+        Some("empresas-v2") => terminal::run(empresas_v2::EmpresasV2Pilot::default()),
+        Some("usuarios-v2") => terminal::run(usuarios_v2::UsuariosV2Pilot::default()),
+        Some("configuracion-inicial-v2") => terminal::run(
+            configuracion_inicial_v2::ConfiguracionInicialV2Pilot::default(),
+        ),
         Some("--help" | "-h") => {
             println!(
-                "Uso: cargo run --example brisas_cli -- [contratistas|contratistas-v2|menu|menu-v2|login|login-v2|ingreso|ingreso-v2|activos-v2]"
+                "Uso: cargo run --example brisas_cli -- [contratistas|contratistas-v2|menu|menu-v2|login|login-v2|ingreso|ingreso-v2|activos-v2|historial-v2|empresas-v2|usuarios-v2|configuracion-inicial-v2]"
             );
             Ok(())
         }

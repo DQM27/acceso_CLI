@@ -385,7 +385,7 @@ impl MenuV2Pilot {
     fn render_top_bar(&self, frame: &mut Frame, area: Rect, theme: Theme) {
         let clock = Utc::now()
             .with_timezone(&Costa_Rica)
-            .format("%H:%M:%S")
+            .format("%H:%M")
             .to_string();
         let columns =
             Layout::horizontal([Constraint::Percentage(60), Constraint::Percentage(40)])
