@@ -13,6 +13,25 @@ pub struct UsuarioSesion {
     pub rol: RolUsuario,
 }
 
+/// Resultado de resolver la cédula (existe, está activo) sin haber verificado todavía la
+/// contraseña — permite separar la parte que toca SQLite (rápida) de la verificación de
+/// Argon2 (lenta), para que esta última pueda correr fuera del hilo de eventos.
+#[derive(Clone, PartialEq, Eq)]
+pub struct CandidatoAutenticacion {
+    pub sesion: UsuarioSesion,
+    pub password_hash: String,
+}
+
+impl std::fmt::Debug for CandidatoAutenticacion {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CandidatoAutenticacion")
+            .field("sesion", &self.sesion)
+            .field("password_hash", &"«redactado»")
+            .finish()
+    }
+}
+
 pub struct AutenticacionService<'a, R>
 where
     R: UsuarioRepository + ?Sized,
@@ -33,6 +52,21 @@ where
         cedula: &str,
         password: &str,
     ) -> Result<UsuarioSesion, AutenticacionError> {
+        let candidato = self.buscar_candidato(cedula)?;
+        match verificar_password(password, &candidato.password_hash) {
+            Ok(true) => Ok(candidato.sesion),
+            Ok(false) => Err(AutenticacionError::CredencialesInvalidas),
+            Err(_) => Err(AutenticacionError::HashInvalido),
+        }
+    }
+
+    /// Resuelve la cédula y confirma que el usuario está activo, sin verificar todavía la
+    /// contraseña. El llamador decide dónde y cuándo correr `verificar_password` sobre el
+    /// hash devuelto (por ejemplo, en un hilo aparte).
+    pub fn buscar_candidato(
+        &self,
+        cedula: &str,
+    ) -> Result<CandidatoAutenticacion, AutenticacionError> {
         let usuario = self
             .usuarios
             .buscar_por_cedula(cedula.trim())?
@@ -42,15 +76,14 @@ where
             return Err(AutenticacionError::UsuarioInactivo);
         }
 
-        match verificar_password(password, &usuario.password_hash) {
-            Ok(true) => Ok(UsuarioSesion {
+        Ok(CandidatoAutenticacion {
+            sesion: UsuarioSesion {
                 id: usuario.id,
                 cedula: usuario.cedula,
                 nombre: usuario.nombre,
                 rol: usuario.rol,
-            }),
-            Ok(false) => Err(AutenticacionError::CredencialesInvalidas),
-            Err(_) => Err(AutenticacionError::HashInvalido),
-        }
+            },
+            password_hash: usuario.password_hash,
+        })
     }
 }

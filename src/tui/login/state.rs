@@ -11,7 +11,6 @@ pub(super) mod render;
 #[path = "tests.rs"]
 mod tests;
 
-const DURACION_VALIDACION: Duration = Duration::from_millis(800);
 const DURACION_FRAME: Duration = Duration::from_millis(90);
 const DURACION_PARPADEO: Duration = Duration::from_millis(500);
 const SPINNER: &[char] = &['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -30,10 +29,15 @@ pub enum EstadoLogin {
     Exito,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AccionLogin {
     Ninguna,
     Salir,
+    /// Campos completos: hay que autenticar de verdad. Se emite en el
+    /// instante en que se presiona ENTER, sin espera artificial de por
+    /// medio — el estado `Validando` sigue existiendo para el spinner
+    /// mientras se espera el resultado real.
+    Autenticar { cedula: String, password: String },
 }
 
 #[derive(Debug)]
@@ -81,20 +85,29 @@ impl LoginState {
         }
 
         match key.code {
-            KeyCode::Tab | KeyCode::Down => self.siguiente_campo(),
-            KeyCode::BackTab | KeyCode::Up => self.campo_anterior(),
+            KeyCode::Tab | KeyCode::Down => {
+                self.siguiente_campo();
+                AccionLogin::Ninguna
+            }
+            KeyCode::BackTab | KeyCode::Up => {
+                self.campo_anterior();
+                AccionLogin::Ninguna
+            }
             KeyCode::Enter => self.enter(Instant::now()),
-            KeyCode::Backspace => self.borrar(),
+            KeyCode::Backspace => {
+                self.borrar();
+                AccionLogin::Ninguna
+            }
             KeyCode::Char(character)
                 if !key
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
                 self.escribir(character);
+                AccionLogin::Ninguna
             }
-            _ => {}
+            _ => AccionLogin::Ninguna,
         }
-        AccionLogin::Ninguna
     }
 
     pub fn tick(&mut self, ahora: Instant) {
@@ -110,14 +123,6 @@ impl LoginState {
 
         let transcurrido = ahora.saturating_duration_since(iniciado);
         self.spinner_frame = (transcurrido.as_millis() / DURACION_FRAME.as_millis()) as usize;
-    }
-
-    pub fn credenciales_si_validacion_lista(&self, ahora: Instant) -> Option<(String, String)> {
-        let EstadoLogin::Validando { iniciado } = self.estado else {
-            return None;
-        };
-        (ahora.saturating_duration_since(iniciado) >= DURACION_VALIDACION)
-            .then(|| (self.cedula.clone(), self.password.clone()))
     }
 
     pub fn completar_validacion(&mut self, error: Option<String>) {
@@ -156,19 +161,23 @@ impl LoginState {
         self.siguiente_campo();
     }
 
-    fn enter(&mut self, ahora: Instant) {
+    fn enter(&mut self, ahora: Instant) -> AccionLogin {
         if self.campo_activo == CampoLogin::Cedula {
             self.campo_activo = CampoLogin::Password;
-            return;
+            return AccionLogin::Ninguna;
         }
 
         if self.cedula.trim().is_empty() || self.password.is_empty() {
             self.estado = EstadoLogin::Error("Complete cédula y contraseña".to_owned());
-            return;
+            return AccionLogin::Ninguna;
         }
 
         self.estado = EstadoLogin::Validando { iniciado: ahora };
         self.spinner_frame = 0;
+        AccionLogin::Autenticar {
+            cedula: self.cedula.trim().to_owned(),
+            password: self.password.clone(),
+        }
     }
 
     fn escribir(&mut self, character: char) {
@@ -206,11 +215,5 @@ impl LoginState {
 
     fn spinner(&self) -> char {
         SPINNER[self.spinner_frame % SPINNER.len()]
-    }
-
-    #[cfg(test)]
-    fn iniciar_validacion_en(&mut self, ahora: Instant) {
-        self.campo_activo = CampoLogin::Password;
-        self.enter(ahora);
     }
 }

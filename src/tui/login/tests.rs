@@ -50,22 +50,22 @@ fn campos_vacios_producen_error() {
 }
 
 #[test]
-fn campos_completos_inician_validacion() {
+fn campos_completos_disparan_autenticacion_de_inmediato_y_quedan_validando() {
     let mut state = login_completo();
-    state.handle_key(tecla(KeyCode::Enter));
+    assert_eq!(
+        state.handle_key(tecla(KeyCode::Enter)),
+        AccionLogin::Autenticar {
+            cedula: "1-1111-1111".to_owned(),
+            password: "secreto".to_owned(),
+        }
+    );
     assert!(matches!(state.estado(), EstadoLogin::Validando { .. }));
 }
 
 #[test]
-fn validacion_lista_entrega_credenciales_y_espera_resultado_real() {
-    let inicio = Instant::now();
+fn completar_validacion_tras_el_resultado_real_limpia_la_contrasena() {
     let mut state = login_completo();
-    state.iniciar_validacion_en(inicio);
-    state.tick(inicio + DURACION_VALIDACION);
-    assert_eq!(
-        state.credenciales_si_validacion_lista(inicio + DURACION_VALIDACION),
-        Some(("1-1111-1111".to_owned(), "secreto".to_owned()))
-    );
+    state.handle_key(tecla(KeyCode::Enter));
     assert!(matches!(state.estado(), EstadoLogin::Validando { .. }));
     state.completar_validacion(None);
     assert_eq!(state.estado(), &EstadoLogin::Exito);

@@ -1,4 +1,5 @@
 use chrono::{Duration, NaiveDate};
+use std::time::Instant;
 
 use super::*;
 use crate::database::queries::ingresos::EstadoMovimiento;
@@ -82,10 +83,12 @@ fn filtros_mapean_ids_enums_gafete_exacto_y_texto() {
 }
 
 #[test]
-fn busqueda_rapida_se_combina_con_filtros_aplicados() {
+fn busqueda_rapida_se_combina_con_filtros_aplicados_tras_el_debounce() {
     let mut state = HistorialState::default();
     state.filtro_aplicado.empresa_id = Some(3);
     let accion = state.handle_key(tecla(KeyCode::Char('a')));
+    assert_eq!(accion, AccionHistorial::Ninguna);
+    let accion = state.tick(Instant::now() + DURACION_DEBOUNCE + std::time::Duration::from_millis(1));
     let AccionHistorial::Consultar(filtro) = accion else {
         panic!("debía consultar")
     };
@@ -124,7 +127,12 @@ fn page_down_y_page_up_emiten_offsets_de_cincuenta() {
 fn una_busqueda_nueva_descarta_el_corte_de_la_navegacion_anterior() {
     let mut state = HistorialState::default();
     state.completar(Ok(pagina(50, 120)));
-    let AccionHistorial::Consultar(filtro) = state.handle_key(tecla(KeyCode::Char('a'))) else {
+    assert_eq!(
+        state.handle_key(tecla(KeyCode::Char('a'))),
+        AccionHistorial::Ninguna
+    );
+    let accion = state.tick(Instant::now() + DURACION_DEBOUNCE + std::time::Duration::from_millis(1));
+    let AccionHistorial::Consultar(filtro) = accion else {
         panic!("debía iniciar una consulta nueva")
     };
     assert_eq!(filtro.offset, 0);

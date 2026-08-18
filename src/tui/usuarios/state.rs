@@ -6,8 +6,11 @@ use crate::{
     database::queries::usuarios::UsuarioResumen,
     models::usuario::RolUsuario,
     services::usuario_service::{ActualizarUsuarioInput, CrearUsuarioInput},
-    tui::ui_kit::{StandardCommand, standard_command},
+    tui::ui_kit::{Debounce, StandardCommand, standard_command},
 };
+use std::time::Instant;
+
+const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
 
 #[path = "render.rs"]
 pub(super) mod render;
@@ -230,6 +233,7 @@ pub struct UsuariosState {
     mensaje: Option<String>,
     usuario_nombre: String,
     ayuda_expandida: bool,
+    busqueda_debounce: Debounce,
 }
 impl Default for UsuariosState {
     fn default() -> Self {
@@ -241,6 +245,7 @@ impl Default for UsuariosState {
             mensaje: None,
             usuario_nombre: "Quintana".into(),
             ayuda_expandida: false,
+            busqueda_debounce: Debounce::default(),
         }
     }
 }
@@ -431,10 +436,8 @@ impl UsuariosState {
                     texto.pop();
                     self.filtro = texto.clone()
                 }
-                AccionUsuarios::Buscar {
-                    texto: texto_filtro(&self.filtro),
-                    seleccionar_id: None,
-                }
+                self.busqueda_debounce.marcar(Instant::now());
+                AccionUsuarios::Ninguna
             }
             KeyCode::Char(c)
                 if !key
@@ -445,12 +448,23 @@ impl UsuariosState {
                     texto.push(c);
                     self.filtro = texto.clone()
                 }
-                AccionUsuarios::Buscar {
-                    texto: texto_filtro(&self.filtro),
-                    seleccionar_id: None,
-                }
+                self.busqueda_debounce.marcar(Instant::now());
+                AccionUsuarios::Ninguna
             }
             _ => AccionUsuarios::Ninguna,
+        }
+    }
+    /// Se llama en cada vuelta del bucle principal; dispara la búsqueda
+    /// diferida sólo una vez que pasa `DURACION_DEBOUNCE` sin una tecla
+    /// nueva.
+    pub fn tick(&mut self, ahora: Instant) -> AccionUsuarios {
+        if self.busqueda_debounce.listo(ahora, DURACION_DEBOUNCE) {
+            AccionUsuarios::Buscar {
+                texto: texto_filtro(&self.filtro),
+                seleccionar_id: None,
+            }
+        } else {
+            AccionUsuarios::Ninguna
         }
     }
     fn formulario(&mut self, key: KeyEvent, mut f: FormularioUsuario) -> AccionUsuarios {

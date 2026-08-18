@@ -5,6 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 use crate::database::connection::open_database;
 use crate::database::error::DatabaseError;
+use crate::database::schema::SchemaError;
 use crate::database::queries::contratistas::{
     ContratistaResumen, FiltroContratistas, SqliteContratistasQuery,
 };
@@ -17,7 +18,9 @@ use crate::database::repositories::contratista_repository::SqliteContratistaRepo
 use crate::database::repositories::empresa_repository::SqliteEmpresaRepository;
 use crate::database::repositories::registro_ingreso_repository::SqliteRegistroIngresoRepository;
 use crate::database::repositories::usuario_repository::SqliteUsuarioRepository;
-use crate::services::autenticacion_service::{AutenticacionService, UsuarioSesion};
+use crate::services::autenticacion_service::{
+    AutenticacionService, CandidatoAutenticacion, UsuarioSesion,
+};
 use crate::services::contratista_service::{
     ContratistaConsultaService, ContratistaService, DatosActualizacionContratista, DatosContratista,
 };
@@ -27,7 +30,7 @@ use crate::services::error::{
     UsuarioServiceError,
 };
 use crate::services::registro_ingreso_service::{
-    IngresoActivoResumen, ListaIngresosActivosResumen, PreparacionIngreso,
+    ListaIngresosActivosResumen, PreparacionIngreso,
     RegistroIngresoConsultaService, RegistroIngresoService, ResultadoRegistroEntrada,
 };
 use crate::services::usuario_service::{
@@ -38,7 +41,7 @@ use crate::tiempo::{Reloj, RelojSistema, fecha_costa_rica, parsear_utc};
 
 #[derive(Debug)]
 pub enum BootstrapError {
-    Database(rusqlite::Error),
+    Database(SchemaError),
 }
 
 impl std::fmt::Display for BootstrapError {
@@ -57,8 +60,8 @@ impl std::error::Error for BootstrapError {
     }
 }
 
-impl From<rusqlite::Error> for BootstrapError {
-    fn from(error: rusqlite::Error) -> Self {
+impl From<SchemaError> for BootstrapError {
+    fn from(error: SchemaError) -> Self {
         Self::Database(error)
     }
 }
@@ -102,6 +105,16 @@ impl AppCore {
     ) -> Result<UsuarioSesion, AutenticacionError> {
         let repository = SqliteUsuarioRepository::new(&self.connection);
         AutenticacionService::new(&repository).autenticar(cedula, password)
+    }
+
+    /// Resuelve la cédula sin verificar todavía la contraseña — rápido, sólo SQLite. Permite
+    /// correr la verificación de Argon2 (lenta) en un hilo aparte sin compartir la conexión.
+    pub fn buscar_candidato_autenticacion(
+        &self,
+        cedula: &str,
+    ) -> Result<CandidatoAutenticacion, AutenticacionError> {
+        let repository = SqliteUsuarioRepository::new(&self.connection);
+        AutenticacionService::new(&repository).buscar_candidato(cedula)
     }
 
     pub fn buscar_contratistas(
@@ -155,18 +168,6 @@ impl AppCore {
         )
     }
 
-    pub fn gafete_esta_ocupado(&self, numero: i64) -> Result<bool, RegistroIngresoServiceError> {
-        let contratistas = SqliteContratistaRepository::new(&self.connection);
-        let registros = SqliteRegistroIngresoRepository::new(&self.connection);
-        match RegistroIngresoService::new(&contratistas, &registros)
-            .buscar_ingreso_activo_por_gafete(numero)
-        {
-            Ok(_) => Ok(true),
-            Err(RegistroIngresoServiceError::GafeteNoAsignado) => Ok(false),
-            Err(error) => Err(error),
-        }
-    }
-
     pub fn registrar_ingreso(
         &self,
         contratista_id: i64,
@@ -213,14 +214,6 @@ impl AppCore {
     ) -> Result<PaginaHistorial, RegistroIngresoServiceError> {
         RegistroIngresoConsultaService::new(&SqliteIngresosQuery::new(&self.connection))
             .buscar_historial(filtro)
-    }
-
-    pub fn buscar_activo_por_gafete(
-        &self,
-        numero: i64,
-    ) -> Result<IngresoActivoResumen, RegistroIngresoServiceError> {
-        RegistroIngresoConsultaService::new(&SqliteIngresosQuery::new(&self.connection))
-            .buscar_activo_por_gafete(numero, fecha_costa_rica(self.reloj.ahora_utc()))
     }
 
     pub fn registrar_salida(
@@ -296,6 +289,15 @@ impl AppCore {
     ) -> Result<(), UsuarioServiceError> {
         UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection))
             .cambiar_password(id, password)
+    }
+}
+
+impl Drop for AppCore {
+    /// Deja al planificador de consultas estadísticas frescas para la
+    /// próxima apertura. Es mantenimiento, no corrección: un fallo aquí
+    /// (conexión ya en mal estado, por ejemplo) no debe impedir el cierre.
+    fn drop(&mut self) {
+        let _ = self.connection.execute_batch("PRAGMA optimize;");
     }
 }
 

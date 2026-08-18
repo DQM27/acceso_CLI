@@ -4,6 +4,7 @@
 //! ya usan el shell visual (`ScreenShell`/`Theme`) y, desde la unificación de
 //! atajos, también la convención de teclado (`standard_command`).
 
+mod debounce;
 mod keyboard;
 pub mod query_lang;
 mod select_menu;
@@ -11,6 +12,7 @@ mod shell;
 mod text_input;
 mod theme;
 
+pub use debounce::Debounce;
 pub use keyboard::{
     CANCEL_HINT, EMERGENCY_EXIT_HINT, HELP_HINT, HELP_KEY, QUICK_EXIT_HINT, QUICK_EXIT_KEY,
     StandardCommand, THEME_HINT, THEME_KEY, standard_command,

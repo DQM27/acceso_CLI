@@ -60,18 +60,27 @@ Cada tarea sólo se considera terminada cuando tiene pruebas y manejo de errores
 
 ## Prioridad 2: ejecución y mantenibilidad
 
-- [ ] **TUI responsiva.** Eliminar la espera artificial del login, aplicar debounce a
-  búsquedas y sacar Argon2/operaciones lentas del hilo de eventos cuando sea necesario.
+- [x] **TUI responsiva (login y búsquedas).** Se eliminó la espera artificial de 800ms del
+  login; la verificación de Argon2 corre en un hilo aparte (primer uso de threading en la app,
+  acotado a esa verificación — no bloquea `terminal.draw`). Las 5 pantallas de búsqueda
+  (Historial, Contratistas, Activos, Empresas, Usuarios) tienen debounce de 250ms vía
+  `ui_kit::Debounce`, en vez de una consulta SQL por tecla. Pendiente, señalado
+  deliberadamente aparte: Argon2 en hilo aparte para crear usuario/cambiar contraseña/ROOT
+  inicial — requiere partir validación de guardado en el service de usuarios, mayor riesgo,
+  se aplaza a un pase propio.
 - [ ] **Modo demo aislado.** Sustituir `Option<&AppCore>` por una implementación falsa
   explícita disponible sólo en pruebas o mediante una feature de desarrollo.
 - [ ] **Estados sin `unwrap`.** Hacer que cada etapa de ingreso contenga los datos que
   necesita, de modo que los estados inválidos no puedan construirse.
 - [ ] **Normalización de identidades.** Definir reglas canónicas para cédulas y nombres
   únicos y reforzarlas en SQLite.
-- [ ] **Configuración SQLite explícita.** Seguir la
-  [evaluación y recomendaciones de SQLite](evaluacion-sqlite.md): definir tiempo máximo
-  de espera ante bloqueos, política de journal y tratamiento de `SQLITE_BUSY`; comprobar
-  su comportamiento con operaciones largas y cierres inesperados.
+- [x] **Configuración SQLite explícita (perfil base).** `busy_timeout`, `journal_mode`,
+  `synchronous`, `application_id`, `trusted_schema` y `quick_check`/`optimize` ya están
+  implementados y probados — ver la
+  [evaluación y recomendaciones de SQLite](evaluacion-sqlite.md), secciones 2-6. Sigue
+  pendiente el tratamiento explícito de `SQLITE_BUSY` como error observable para el
+  operador (ver el punto de abajo) y la prueba de cierre/pérdida de energía simulada en
+  un entorno real.
 - [ ] **Capas sin dependencia de SQLite.** Mover los contratos y errores neutrales a
   aplicación/dominio y dejar que el adaptador de base de datos traduzca los errores de
   `rusqlite`.

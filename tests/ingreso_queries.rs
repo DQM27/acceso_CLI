@@ -3,7 +3,7 @@ use rusqlite::{Connection, params};
 
 use control_acceso::database::error::DatabaseError;
 use control_acceso::database::queries::ingresos::{
-    EstadoMovimiento, FiltroHistorial, FiltroIngresosActivos, IngresoActivoLectura, IngresosQuery,
+    EstadoMovimiento, FiltroHistorial, FiltroIngresosActivos, IngresosQuery,
     ListaIngresosActivosLectura, PaginaHistorial, SqliteIngresosQuery,
 };
 use control_acceso::database::schema::initialize_database;
@@ -340,9 +340,9 @@ fn activos_devuelve_mas_de_cien_sin_recorte_y_con_orden_estable() {
 }
 
 #[test]
-fn activos_filtrados_conservan_total_real_y_gafete_devuelve_registro_completo() {
+fn activos_filtrados_conservan_el_total_real_sin_recortar_por_el_filtro() {
     let base = preparar_base();
-    let registro_id = insertar(
+    insertar(
         &base,
         base.contratista_uno,
         base.empresa_uno,
@@ -373,12 +373,6 @@ fn activos_filtrados_conservan_total_real_y_gafete_devuelve_registro_completo() 
         .unwrap();
     assert_eq!(filtrados.items.len(), 1);
     assert_eq!(filtrados.total, 2);
-
-    let encontrado = query.buscar_activo_por_gafete(47).unwrap().unwrap();
-    assert_eq!(encontrado.registro_id, registro_id);
-    assert_eq!(encontrado.contratista_nombre, "Ana Solano");
-    assert_eq!(encontrado.empresa_nombre, "Constructora Alfa");
-    assert!(query.buscar_activo_por_gafete(99).unwrap().is_none());
 }
 
 #[test]
@@ -883,13 +877,6 @@ impl IngresosQuery for QueryConError {
         &self,
         _: &FiltroIngresosActivos,
     ) -> Result<ListaIngresosActivosLectura, DatabaseError> {
-        Err(DatabaseError::Sqlite(rusqlite::Error::InvalidQuery))
-    }
-
-    fn buscar_activo_por_gafete(
-        &self,
-        _: i64,
-    ) -> Result<Option<IngresoActivoLectura>, DatabaseError> {
         Err(DatabaseError::Sqlite(rusqlite::Error::InvalidQuery))
     }
 

@@ -1,5 +1,6 @@
 use super::*;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::time::{Duration, Instant};
 fn k(c: KeyCode) -> KeyEvent {
     KeyEvent::new(c, KeyModifiers::NONE)
 }
@@ -51,13 +52,16 @@ fn sin_empresas_bloquea_creacion() {
     assert_eq!(s.modo, ModoContratistas::Normal);
 }
 #[test]
-fn busqueda_incremental_emite_consulta_real() {
+fn busqueda_incremental_emite_consulta_real_tras_el_debounce() {
     let mut s = ContratistasState::default();
     cargar(&mut s);
     s.handle_key(k(KeyCode::Char('/')));
-    assert!(
-        matches!(s.handle_key(k(KeyCode::Char('j'))),AccionContratistas::Buscar{texto:Some(t),..} if t=="j")
-    );
+    assert!(matches!(
+        s.handle_key(k(KeyCode::Char('j'))),
+        AccionContratistas::Ninguna
+    ));
+    let accion = s.tick(Instant::now() + DURACION_DEBOUNCE + Duration::from_millis(1));
+    assert!(matches!(accion, AccionContratistas::Buscar{texto:Some(t),..} if t=="j"));
     assert_eq!(s.registros.len(), 1);
 }
 #[test]

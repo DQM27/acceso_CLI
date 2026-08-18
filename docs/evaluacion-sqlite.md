@@ -46,20 +46,13 @@ acceso completo al archivo: SQLite no incluye usuarios internos ni permisos
 
 ## Configuración no definida explícitamente
 
-El código sólo fija actualmente `foreign_keys`. No establece de forma explícita:
-
-- `journal_mode`.
-- `synchronous`.
-- `busy_timeout`.
-- `application_id`.
-- `trusted_schema`.
-- `secure_delete`.
-- Rutinas operativas de `optimize`, `quick_check` o `integrity_check`.
-
-En una base nueva SQLite normalmente usa `journal_mode=DELETE` y `synchronous=FULL`.
-Además, la versión actual de `rusqlite` crea conexiones con un tiempo de espera de
-bloqueo de cinco segundos. No conviene depender de estos valores implícitos porque
-pueden variar con la biblioteca, el archivo o una configuración externa.
+**Actualizado (2026-08-18): `journal_mode`, `synchronous`, `busy_timeout`,
+`application_id`, `trusted_schema` y `secure_delete` ya se fijan explícitamente** en
+`initialize_database` (`src/database/schema.rs`), junto con una verificación de
+`PRAGMA quick_check` en cada apertura y `PRAGMA optimize` al cerrar `AppCore`. Ver el
+perfil exacto en la sección 2 más abajo. El cifrado en reposo (SQLCipher/BitLocker,
+sección 8) sigue pendiente de una decisión de política — `secure_delete` reduce restos
+recuperables pero no cifra la base.
 
 ## Recomendaciones antes de producción
 
@@ -71,62 +64,73 @@ generada debe validarse y la restauración debe probarse con rollback.
 
 Esta tarea se detalla en [plan-respaldos.md](plan-respaldos.md).
 
-### 2. Perfil explícito de durabilidad
+### 2. Perfil explícito de durabilidad — implementado
 
-Evaluar y probar inicialmente este perfil:
+`initialize_database` (`src/database/schema.rs`) fija este perfil en cada apertura,
+antes de abrir la transacción de migración:
 
 ```sql
 PRAGMA foreign_keys = ON;
+PRAGMA busy_timeout = 5000;
 PRAGMA journal_mode = DELETE;
 PRAGMA synchronous = EXTRA;
-PRAGMA busy_timeout = 5000;
+PRAGMA trusted_schema = OFF;
+PRAGMA secure_delete = FAST;
 ```
 
 - `DELETE` mantiene un modelo sencillo para una única conexión y una única instancia.
 - `EXTRA` prioriza durabilidad ante un corte eléctrico.
-- `busy_timeout` evita depender del valor predeterminado de `rusqlite`.
-- Si se agota el tiempo de espera, `SQLITE_BUSY` debe traducirse a un mensaje claro para
-  el operador y quedar registrado en el log técnico.
+- `busy_timeout` evita depender del valor predeterminado de `rusqlite`/SQLite (que es
+  `0`, es decir, fallar de inmediato ante cualquier bloqueo transitorio).
+- `secure_delete = FAST` sobrescribe con ceros el espacio liberado por un `DELETE`/
+  `UPDATE` en vez de dejarlo recuperable en el archivo, a cambio de un costo de
+  escritura marginal. No cifra la base — ver sección 8 para eso.
+- `trusted_schema = OFF` se probó contra toda la suite (migraciones, triggers y las
+  tres tablas FTS5) sin romper nada.
+- Si se agota el tiempo de espera, `SQLITE_BUSY` debe seguir traduciéndose a un mensaje
+  claro para el operador — eso queda pendiente en la capa de errores observables
+  (ver `plan-saneamiento.md`), no en la configuración misma.
 
-Los valores finales deben confirmarse mediante pruebas de bloqueo, cierre inesperado y
-pérdida de energía simulada; no deben aplicarse únicamente por intuición.
+Cubierto por `tests/configuracion_sqlite.rs::fija_el_perfil_de_durabilidad_esperado`.
+Los valores se aplicaron siguiendo la evaluación de este documento, no sólo por
+intuición; falta todavía la prueba de pérdida de energía simulada en un entorno real
+antes de darlos por definitivos en producción.
 
-### 3. Identificar el archivo de la aplicación
+### 3. Identificar el archivo de la aplicación — implementado
 
-Asignar y comprobar un `PRAGMA application_id` propio. Esto complementa
-`user_version` y permite rechazar un archivo SQLite que no pertenezca a Control Acceso.
+`APPLICATION_ID` (`src/database/schema.rs`, bytes de "BRIS") se verifica y adopta en
+`verificar_identidad_de_archivo`: una base nueva o creada antes de este cambio
+(`application_id = 0`) lo adopta sin fricción; un archivo con un `application_id`
+ajeno se rechaza con `SchemaError::BaseAjena` antes de tocar el esquema.
 
-Debe definirse una constante estable y una migración compatible con las bases ya
-existentes.
+Cubierto por `tests/configuracion_sqlite.rs` (`adopta_el_application_id_...`,
+`rechaza_un_archivo_con_application_id_de_otra_aplicacion`).
 
-### 4. Verificar la integridad
+### 4. Verificar la integridad — `quick_check` implementado, el resto pendiente
 
-Incorporar estas comprobaciones en momentos controlados:
+`verificar_integridad_rapida` ejecuta `PRAGMA quick_check` en cada apertura, antes de
+migrar, y rechaza el archivo con `SchemaError::IntegridadInvalida` si no responde
+`"ok"`. Cubierto por `tests/configuracion_sqlite.rs::rechaza_un_archivo_truncado...`.
 
-```sql
-PRAGMA quick_check;
-PRAGMA integrity_check;
-PRAGMA foreign_key_check;
-```
-
-- `quick_check` puede utilizarse después de una migración o un cierre anormal.
-- `integrity_check` debe validar los respaldos y las restauraciones.
-- `foreign_key_check` debe ejecutarse además de `integrity_check`, porque comprueba las
-  relaciones entre tablas.
+`integrity_check` y `foreign_key_check` (más costosos, no aptos para cada apertura)
+siguen pendientes — su lugar natural es la validación de respaldos
+([plan-respaldos.md](plan-respaldos.md)), no el arranque normal de la aplicación.
 
 Una validación fallida debe impedir reemplazar la base productiva.
 
-### 5. Mantener estadísticas del planificador
+### 5. Mantener estadísticas del planificador — implementado
 
-Ejecutar `PRAGMA optimize` después de cambios importantes del esquema y de creación de
-índices. También puede ejecutarse periódicamente o al cerrar la aplicación, siempre que
-se mida su efecto.
+`AppCore` ejecuta `PRAGMA optimize` en su `impl Drop` (`src/application.rs`), es decir,
+al cerrar la aplicación normalmente — el punto de cierre único, ya que `AppCore` es
+dueño exclusivo de la conexión. Es mantenimiento, no corrección: un fallo ahí se
+descarta silenciosamente en vez de impedir el cierre. Cubierto por
+`tests/configuracion_sqlite.rs::drop_de_appcore_no_entra_en_panico_al_optimizar_al_cerrar`.
 
-### 6. Probar `trusted_schema=OFF`
+### 6. Probar `trusted_schema=OFF` — implementado
 
-`PRAGMA trusted_schema = OFF` reduce el riesgo de que un esquema manipulado invoque
-funciones o tablas virtuales no seguras. Debe probarse contra todas las migraciones,
-triggers y tablas FTS antes de adoptarlo.
+`PRAGMA trusted_schema = OFF` ya se aplica en cada apertura. Se probó contra toda la
+suite de pruebas (migraciones, los triggers de inmutabilidad del historial y de cédula,
+y las tres tablas FTS5 de contratistas/empresas/usuarios) sin ninguna regresión.
 
 ### 7. Evaluar tablas `STRICT`
 
@@ -137,16 +141,29 @@ adicional, pero convertir las tablas existentes requiere una migración completa
 No es una corrección urgente: el modelo Rust, los parámetros tipados y las restricciones
 actuales ya reducen considerablemente este riesgo.
 
-### 8. Definir protección de datos en reposo
+### 8. Definir protección de datos en reposo — parcialmente implementado
 
-`PRAGMA secure_delete=FAST` puede reducir restos recuperables de datos actualizados o
-eliminados, pero no cifra la base. Debe evaluarse según el rendimiento y la política de
-privacidad.
+`PRAGMA secure_delete=FAST` ya está activado (ver sección 2): reduce restos
+recuperables de datos actualizados o eliminados, pero **no cifra la base**.
 
 Si se requiere protección ante robo del equipo o copia del archivo, las alternativas
 son cifrado completo del dispositivo, como BitLocker, o una variante cifrada de SQLite,
-como SQLCipher. Esto exige una política de almacenamiento y recuperación de claves; no
-debe activarse sin ella.
+como SQLCipher. Ninguna de las dos está implementada — ambas exigen una decisión de
+política (almacenamiento y recuperación de claves) antes de tocar código:
+
+- **BitLocker** es una decisión de despliegue, no de desarrollo: la activa un
+  administrador a nivel de sistema operativo, sin tocar Control Acceso. Cubre el
+  escenario de robo del equipo apagado.
+- **SQLCipher** es la opción más fuerte (cifra cada página del archivo), pero su
+  integración vía `rusqlite` es frágil en Windows específicamente: la variante
+  `bundled-sqlcipher-vendored-openssl` requiere Perl y NASM instalados para compilar
+  OpenSSL desde código fuente, y hay reportes de que no compila de forma confiable en
+  Windows ([rusqlite#1025](https://github.com/rusqlite/rusqlite/issues/1025)); la
+  variante `bundled-sqlcipher` evita compilar OpenSSL pero exige tener OpenSSL ya
+  instalado en cada máquina de build y apuntarlo a mano con `OPENSSL_DIR`. No es un
+  simple flag de Cargo en este sistema operativo. Si la amenaza real es "un respaldo
+  termina en un medio sin cifrar", cifrar sólo los archivos exportados de
+  `plan-respaldos.md` es una alternativa más liviana que reintentar SQLCipher.
 
 ## Funciones que no conviene activar actualmente
 

@@ -131,11 +131,6 @@ pub trait IngresosQuery {
         filtro: &FiltroIngresosActivos,
     ) -> Result<ListaIngresosActivosLectura, DatabaseError>;
 
-    fn buscar_activo_por_gafete(
-        &self,
-        gafete_numero: i64,
-    ) -> Result<Option<IngresoActivoLectura>, DatabaseError>;
-
     fn buscar_historial(&self, filtro: &FiltroHistorial) -> Result<PaginaHistorial, DatabaseError>;
 }
 
@@ -195,18 +190,6 @@ impl IngresosQuery for SqliteIngresosQuery<'_> {
             items,
             total: usize::try_from(total).unwrap_or(usize::MAX),
         })
-    }
-
-    fn buscar_activo_por_gafete(
-        &self,
-        gafete_numero: i64,
-    ) -> Result<Option<IngresoActivoLectura>, DatabaseError> {
-        let mut statement = self.connection.prepare(ACTIVO_POR_GAFETE_SQL)?;
-        match statement.query_row([gafete_numero], convertir_activo) {
-            Ok(registro) => Ok(Some(registro)),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(error) => Err(error.into()),
-        }
     }
 
     fn buscar_historial(&self, filtro: &FiltroHistorial) -> Result<PaginaHistorial, DatabaseError> {
@@ -334,19 +317,6 @@ const ACTIVOS_SQL: &str = "
     AND (:gafete IS NULL OR r.gafete_numero = :gafete)
     AND (:medio IS NULL OR r.medio_ingreso = :medio)
     ORDER BY r.fecha_hora_ingreso DESC, r.id DESC
-";
-
-const ACTIVO_POR_GAFETE_SQL: &str = "
-    SELECT
-        r.id, r.contratista_id, r.empresa_id, r.contratista_cedula,
-        r.contratista_nombre, r.empresa_nombre,
-        r.tipo_ingreso, r.medio_ingreso, r.fecha_hora_ingreso, r.gafete_numero,
-        r.usuario_ingreso_nombre, c.fecha_vencimiento_praind,
-        c.es_personal_ruta, c.tiene_acceso
-    FROM registro_ingresos AS r
-    INNER JOIN contratistas AS c ON c.id = r.contratista_id
-    WHERE r.fecha_hora_salida IS NULL AND r.gafete_numero = ?1
-    LIMIT 1
 ";
 
 const HISTORIAL_COLUMNAS: &str = "

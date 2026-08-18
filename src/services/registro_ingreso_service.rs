@@ -95,17 +95,6 @@ where
         })
     }
 
-    pub fn buscar_activo_por_gafete(
-        &self,
-        numero: i64,
-        hoy: NaiveDate,
-    ) -> Result<IngresoActivoResumen, RegistroIngresoServiceError> {
-        self.consultas
-            .buscar_activo_por_gafete(numero)?
-            .map(|lectura| convertir_activo(lectura, hoy))
-            .ok_or(RegistroIngresoServiceError::GafeteNoAsignado)
-    }
-
     pub fn buscar_historial(
         &self,
         filtro: &FiltroHistorial,

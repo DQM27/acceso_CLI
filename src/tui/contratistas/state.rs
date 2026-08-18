@@ -7,8 +7,11 @@ use crate::{
     models::{contratista::Contratista, empresa::Empresa, tipo_ingreso::TipoIngreso},
     services::contratista_service::{DatosActualizacionContratista, DatosContratista},
     tiempo::ahora_costa_rica,
-    tui::ui_kit::{StandardCommand, query_lang, standard_command},
+    tui::ui_kit::{Debounce, StandardCommand, query_lang, standard_command},
 };
+use std::time::Instant;
+
+const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
 
 #[path = "render.rs"]
 pub(super) mod render;
@@ -319,6 +322,7 @@ pub struct ContratistasState {
     usuario_nombre: String,
     hoy: NaiveDate,
     ayuda_expandida: bool,
+    busqueda_debounce: Debounce,
 }
 impl Default for ContratistasState {
     fn default() -> Self {
@@ -334,6 +338,7 @@ impl Default for ContratistasState {
             usuario_nombre: "Quintana".into(),
             hoy: ahora_costa_rica().date_naive(),
             ayuda_expandida: false,
+            busqueda_debounce: Debounce::default(),
         }
     }
 }
@@ -446,7 +451,8 @@ impl ContratistasState {
                     texto.pop();
                     self.filtro = texto.clone()
                 }
-                self.buscar(None)
+                self.busqueda_debounce.marcar(Instant::now());
+                AccionContratistas::Ninguna
             }
             KeyCode::Char(c)
                 if !key
@@ -457,9 +463,20 @@ impl ContratistasState {
                     texto.push(c);
                     self.filtro = texto.clone()
                 }
-                self.buscar(None)
+                self.busqueda_debounce.marcar(Instant::now());
+                AccionContratistas::Ninguna
             }
             _ => AccionContratistas::Ninguna,
+        }
+    }
+    /// Se llama en cada vuelta del bucle principal; dispara la búsqueda
+    /// diferida sólo una vez que pasa `DURACION_DEBOUNCE` sin una tecla
+    /// nueva.
+    pub fn tick(&mut self, ahora: Instant) -> AccionContratistas {
+        if self.busqueda_debounce.listo(ahora, DURACION_DEBOUNCE) {
+            self.buscar(None)
+        } else {
+            AccionContratistas::Ninguna
         }
     }
     fn formulario(&mut self, key: KeyEvent, mut f: FormularioContratista) -> AccionContratistas {

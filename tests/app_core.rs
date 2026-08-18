@@ -110,6 +110,79 @@ fn autenticacion_conserva_errores_de_credenciales_e_inactivo() {
 }
 
 #[test]
+fn buscar_candidato_resuelve_cedula_sin_verificar_password() {
+    let core = core_memoria();
+    core.crear_root_inicial(root()).unwrap();
+
+    let candidato = core.buscar_candidato_autenticacion("ROOT1").unwrap();
+    assert_eq!(candidato.sesion.cedula, "ROOT1");
+    assert_eq!(candidato.sesion.rol, RolUsuario::Root);
+    // El hash sigue siendo el mismo que produce generar_hash/verificar_password —
+    // no se toca la contraseña real, sólo se difiere su verificación.
+    assert!(
+        control_acceso::services::password::verificar_password("password1", &candidato.password_hash)
+            .unwrap()
+    );
+    assert!(
+        !control_acceso::services::password::verificar_password(
+            "incorrecta",
+            &candidato.password_hash
+        )
+        .unwrap()
+    );
+
+    assert!(matches!(
+        core.buscar_candidato_autenticacion("NO-EXISTE"),
+        Err(AutenticacionError::CredencialesInvalidas)
+    ));
+}
+
+#[test]
+fn autenticacion_en_hilo_aparte_no_bloquea_y_entrega_el_resultado_real_por_canal() {
+    let core = core_memoria();
+    core.crear_root_inicial(root()).unwrap();
+    let candidato = core.buscar_candidato_autenticacion("ROOT1").unwrap();
+
+    // Mismo patrón que usa App::iniciar_autenticacion: la parte lenta (Argon2)
+    // corre en un hilo aparte y entrega el resultado por un canal.
+    let (emisor, receptor) = std::sync::mpsc::channel();
+    let candidato_correcto = candidato.clone();
+    std::thread::spawn(move || {
+        let resultado = match control_acceso::services::password::verificar_password(
+            "password1",
+            &candidato_correcto.password_hash,
+        ) {
+            Ok(true) => Ok(candidato_correcto.sesion),
+            Ok(false) => Err(AutenticacionError::CredencialesInvalidas),
+            Err(_) => Err(AutenticacionError::HashInvalido),
+        };
+        emisor.send(resultado).unwrap();
+    });
+    let sesion = receptor
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("el hilo debía responder")
+        .expect("la contraseña correcta debía autenticar");
+    assert_eq!(sesion.cedula, "ROOT1");
+
+    let (emisor, receptor) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let resultado = match control_acceso::services::password::verificar_password(
+            "incorrecta",
+            &candidato.password_hash,
+        ) {
+            Ok(true) => Ok(candidato.sesion),
+            Ok(false) => Err(AutenticacionError::CredencialesInvalidas),
+            Err(_) => Err(AutenticacionError::HashInvalido),
+        };
+        emisor.send(resultado).unwrap();
+    });
+    let error = receptor
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("el hilo debía responder");
+    assert!(matches!(error, Err(AutenticacionError::CredencialesInvalidas)));
+}
+
+#[test]
 fn app_core_compone_query_n1_y_preparacion_n3_sin_persistir() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();

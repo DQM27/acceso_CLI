@@ -5,8 +5,69 @@ use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
 pub const SCHEMA_VERSION: i64 = 6;
 
-pub fn initialize_database(connection: &Connection) -> rusqlite::Result<()> {
-    connection.execute_batch("PRAGMA foreign_keys = ON;")?;
+/// Identifica un archivo SQLite como propio de Control Acceso (bytes de
+/// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
+/// cualquier base nueva o creada antes de este cambio; sólo se rechaza un
+/// `application_id` que sea de un tercero (ni `0` ni el nuestro).
+pub const APPLICATION_ID: i32 = 0x4252_4953;
+
+#[derive(Debug)]
+pub enum SchemaError {
+    Sqlite(rusqlite::Error),
+    /// El archivo abierto es un SQLite válido pero no es una base de
+    /// Control Acceso (`application_id` pertenece a otra aplicación).
+    BaseAjena,
+    /// `PRAGMA quick_check` encontró un problema estructural.
+    IntegridadInvalida(String),
+}
+
+impl std::fmt::Display for SchemaError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Sqlite(error) => write!(formatter, "Error de SQLite: {error}"),
+            Self::BaseAjena => write!(
+                formatter,
+                "El archivo no es una base de datos de Control Acceso"
+            ),
+            Self::IntegridadInvalida(detalle) => {
+                write!(formatter, "La base de datos falló la verificación de integridad: {detalle}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for SchemaError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Sqlite(error) => Some(error),
+            Self::BaseAjena | Self::IntegridadInvalida(_) => None,
+        }
+    }
+}
+
+impl From<rusqlite::Error> for SchemaError {
+    fn from(error: rusqlite::Error) -> Self {
+        Self::Sqlite(error)
+    }
+}
+
+pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
+    // `foreign_keys`, `journal_mode` y `trusted_schema` no pueden cambiarse
+    // dentro de una transacción activa, así que se fijan antes de abrir la
+    // transacción de migración.
+    connection.execute_batch(
+        "
+        PRAGMA foreign_keys = ON;
+        PRAGMA busy_timeout = 5000;
+        PRAGMA journal_mode = DELETE;
+        PRAGMA synchronous = EXTRA;
+        PRAGMA trusted_schema = OFF;
+        PRAGMA secure_delete = FAST;
+        ",
+    )?;
+
+    verificar_identidad_de_archivo(connection)?;
+    verificar_integridad_rapida(connection)?;
 
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     let mut version: i64 = transaction.query_row("PRAGMA user_version", [], |row| row.get(0))?;
@@ -42,10 +103,35 @@ pub fn initialize_database(connection: &Connection) -> rusqlite::Result<()> {
     }
 
     if version != SCHEMA_VERSION {
-        return Err(rusqlite::Error::InvalidQuery);
+        return Err(SchemaError::Sqlite(rusqlite::Error::InvalidQuery));
     }
 
-    transaction.commit()
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Rechaza un archivo SQLite ajeno; adopta `APPLICATION_ID` en una base
+/// nueva o en una creada antes de que existiera esta comprobación (`0`).
+fn verificar_identidad_de_archivo(connection: &Connection) -> Result<(), SchemaError> {
+    let id: i32 = connection.query_row("PRAGMA application_id", [], |row| row.get(0))?;
+    if id != 0 && id != APPLICATION_ID {
+        return Err(SchemaError::BaseAjena);
+    }
+    if id == 0 {
+        connection.execute_batch(&format!("PRAGMA application_id = {APPLICATION_ID};"))?;
+    }
+    Ok(())
+}
+
+/// Chequeo estructural barato en cada apertura (`quick_check`, no
+/// `integrity_check`/`foreign_key_check` completos — esos se reservan para
+/// la validación de respaldos, donde el costo mayor es aceptable).
+fn verificar_integridad_rapida(connection: &Connection) -> Result<(), SchemaError> {
+    let resultado: String = connection.query_row("PRAGMA quick_check", [], |row| row.get(0))?;
+    if resultado != "ok" {
+        return Err(SchemaError::IntegridadInvalida(resultado));
+    }
+    Ok(())
 }
 
 fn aplicar_migracion(

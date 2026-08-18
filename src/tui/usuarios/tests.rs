@@ -1,6 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::*;
+use std::time::{Duration, Instant};
 
 fn key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
@@ -62,11 +63,13 @@ fn tab_en_el_formulario_da_la_vuelta_en_ambas_direcciones() {
 }
 
 #[test]
-fn busqueda_emite_consulta_sin_filtrar_memoria() {
+fn busqueda_emite_consulta_sin_filtrar_memoria_tras_el_debounce() {
     let mut state = UsuariosState::default();
     cargar(&mut state);
     state.handle_key(key(KeyCode::Char('/')));
     let accion = state.handle_key(key(KeyCode::Char('j')));
+    assert!(matches!(accion, AccionUsuarios::Ninguna));
+    let accion = state.tick(Instant::now() + DURACION_DEBOUNCE + Duration::from_millis(1));
     assert!(matches!(accion, AccionUsuarios::Buscar { texto: Some(t), .. } if t == "j"));
     assert_eq!(state.usuarios.len(), 2);
 }

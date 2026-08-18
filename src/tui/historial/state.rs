@@ -6,7 +6,10 @@ use crate::{
 use chrono::{Datelike, Duration, NaiveDate};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::tui::ui_kit::{StandardCommand, standard_command};
+use crate::tui::ui_kit::{Debounce, StandardCommand, standard_command};
+use std::time::Instant;
+
+const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
 #[path = "filtros.rs"]
 mod filtros;
 pub use filtros::*;
@@ -133,6 +136,7 @@ pub struct HistorialState {
     corte_id: Option<i64>,
     usuario_nombre: String,
     ayuda_expandida: bool,
+    busqueda_debounce: Debounce,
 }
 impl Default for HistorialState {
     fn default() -> Self {
@@ -153,6 +157,7 @@ impl Default for HistorialState {
             corte_id: None,
             usuario_nombre: "Quintana".into(),
             ayuda_expandida: false,
+            busqueda_debounce: Debounce::default(),
         }
     }
 }
@@ -253,7 +258,7 @@ impl HistorialState {
             KeyCode::Backspace => {
                 self.busqueda.pop();
                 self.reiniciar_paginacion();
-                return self.emitir();
+                self.busqueda_debounce.marcar(Instant::now());
             }
             KeyCode::Esc if !self.busqueda.is_empty() => {
                 self.busqueda.clear();
@@ -268,11 +273,21 @@ impl HistorialState {
             {
                 self.busqueda.push(c);
                 self.reiniciar_paginacion();
-                return self.emitir();
+                self.busqueda_debounce.marcar(Instant::now());
             }
             _ => {}
         }
         AccionHistorial::Ninguna
+    }
+    /// Se llama en cada vuelta del bucle principal; dispara la búsqueda
+    /// diferida sólo una vez que pasa `DURACION_DEBOUNCE` sin una tecla
+    /// nueva, para no lanzar una consulta por cada carácter tecleado.
+    pub fn tick(&mut self, ahora: Instant) -> AccionHistorial {
+        if self.busqueda_debounce.listo(ahora, DURACION_DEBOUNCE) {
+            self.emitir()
+        } else {
+            AccionHistorial::Ninguna
+        }
     }
     /// El mapa de calor navega día a día con Tab/Shift+Tab y semana a
     /// semana con ↑↓ — ninguna de las dos colisiona con el campo de

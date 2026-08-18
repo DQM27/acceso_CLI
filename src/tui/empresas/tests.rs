@@ -1,5 +1,6 @@
 use super::*;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::time::{Duration, Instant};
 
 fn k(c: KeyCode) -> KeyEvent {
     KeyEvent::new(c, KeyModifiers::NONE)
@@ -40,6 +41,10 @@ fn busqueda_incremental_emite_consulta_real_sin_filtrar_vec() {
     s.handle_key(k(KeyCode::Char('/')));
     assert_eq!(
         s.handle_key(k(KeyCode::Char('a'))),
+        AccionEmpresas::Ninguna
+    );
+    assert_eq!(
+        s.tick(Instant::now() + DURACION_DEBOUNCE + Duration::from_millis(1)),
         AccionEmpresas::Buscar {
             texto: Some("a".into()),
             seleccionar_id: None

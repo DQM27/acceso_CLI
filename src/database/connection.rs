@@ -6,7 +6,7 @@ use std::{
 
 use rusqlite::Connection;
 
-use super::schema::initialize_database;
+use super::schema::{SchemaError, initialize_database};
 
 pub const DATABASE_PATH_ENV: &str = "CONTROL_ACCESO_DB";
 pub const LOCAL_APP_DATA_ENV: &str = "LOCALAPPDATA";
@@ -112,7 +112,7 @@ fn preparar_directorio(ruta_base_datos: &Path) -> Result<(), RutaBaseDatosError>
 }
 
 /// Abre la base productiva y aplica toda su inicialización en una única ruta.
-pub fn open_database(path: impl AsRef<Path>) -> rusqlite::Result<Connection> {
+pub fn open_database(path: impl AsRef<Path>) -> Result<Connection, SchemaError> {
     let connection = Connection::open(path)?;
     initialize_database(&connection)?;
     Ok(connection)

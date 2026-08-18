@@ -5,6 +5,7 @@ use crate::{
 };
 use chrono::NaiveDate;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::time::{Duration, Instant};
 fn k(c: KeyCode) -> KeyEvent {
     KeyEvent::new(c, KeyModifiers::NONE)
 }
@@ -48,13 +49,13 @@ fn inicia_vacio_y_carga_real() {
     assert_eq!(s.seleccion, Some(0))
 }
 #[test]
-fn busqueda_emite_consulta_real() {
+fn busqueda_emite_consulta_real_tras_el_debounce() {
     let mut s = ActivosState::default();
     cargar(&mut s);
     s.handle_key(k(KeyCode::Char('/')));
-    assert!(
-        matches!(s.handle_key(k(KeyCode::Char('j'))),AccionActivos::Buscar{texto:Some(t),..}if t=="j")
-    );
+    assert_eq!(s.handle_key(k(KeyCode::Char('j'))), AccionActivos::Ninguna);
+    let accion = s.tick(Instant::now() + DURACION_DEBOUNCE + Duration::from_millis(1));
+    assert!(matches!(accion, AccionActivos::Buscar{texto:Some(t),..} if t=="j"));
     assert_eq!(s.cantidad(), 2)
 }
 #[test]

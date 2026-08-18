@@ -1,7 +1,10 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::database::queries::empresas::EmpresaResumen;
-use crate::tui::ui_kit::{StandardCommand, standard_command};
+use crate::tui::ui_kit::{Debounce, StandardCommand, standard_command};
+use std::time::Instant;
+
+const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
 
 #[path = "render.rs"]
 pub(super) mod render;
@@ -57,6 +60,7 @@ pub struct EmpresasState {
     error_carga: Option<String>,
     usuario_nombre: String,
     ayuda_expandida: bool,
+    busqueda_debounce: Debounce,
 }
 
 impl Default for EmpresasState {
@@ -70,6 +74,7 @@ impl Default for EmpresasState {
             error_carga: None,
             usuario_nombre: "Quintana".into(),
             ayuda_expandida: false,
+            busqueda_debounce: Debounce::default(),
         }
     }
 }
@@ -231,7 +236,8 @@ impl EmpresasState {
                     self.filtro = texto.clone();
                 }
                 self.seleccion = None;
-                self.accion_buscar(None)
+                self.busqueda_debounce.marcar(Instant::now());
+                AccionEmpresas::Ninguna
             }
             KeyCode::Char(c)
                 if !key
@@ -243,9 +249,20 @@ impl EmpresasState {
                     self.filtro = texto.clone();
                 }
                 self.seleccion = None;
-                self.accion_buscar(None)
+                self.busqueda_debounce.marcar(Instant::now());
+                AccionEmpresas::Ninguna
             }
             _ => AccionEmpresas::Ninguna,
+        }
+    }
+    /// Se llama en cada vuelta del bucle principal; dispara la búsqueda
+    /// diferida sólo una vez que pasa `DURACION_DEBOUNCE` sin una tecla
+    /// nueva.
+    pub fn tick(&mut self, ahora: Instant) -> AccionEmpresas {
+        if self.busqueda_debounce.listo(ahora, DURACION_DEBOUNCE) {
+            self.accion_buscar(None)
+        } else {
+            AccionEmpresas::Ninguna
         }
     }
 

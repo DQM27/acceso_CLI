@@ -6,7 +6,10 @@ use crate::{
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Constraint;
 
-use crate::tui::ui_kit::{StandardCommand, query_lang, standard_command};
+use crate::tui::ui_kit::{Debounce, StandardCommand, query_lang, standard_command};
+use std::time::Instant;
+
+const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
 #[path = "render.rs"]
 pub(super) mod render;
 #[cfg(test)]
@@ -187,6 +190,7 @@ pub struct ActivosState {
     empresas: Vec<Empresa>,
     usuario_nombre: String,
     ayuda_expandida: bool,
+    busqueda_debounce: Debounce,
 }
 impl Default for ActivosState {
     fn default() -> Self {
@@ -204,6 +208,7 @@ impl Default for ActivosState {
             empresas: vec![],
             usuario_nombre: "Quintana".into(),
             ayuda_expandida: false,
+            busqueda_debounce: Debounce::default(),
         }
     }
 }
@@ -358,7 +363,8 @@ impl ActivosState {
                     texto.pop();
                     self.filtro = texto.clone()
                 }
-                self.buscar(None)
+                self.busqueda_debounce.marcar(Instant::now());
+                AccionActivos::Ninguna
             }
             KeyCode::Char(c)
                 if !k
@@ -369,9 +375,20 @@ impl ActivosState {
                     texto.push(c);
                     self.filtro = texto.clone()
                 }
-                self.buscar(None)
+                self.busqueda_debounce.marcar(Instant::now());
+                AccionActivos::Ninguna
             }
             _ => AccionActivos::Ninguna,
+        }
+    }
+    /// Se llama en cada vuelta del bucle principal; dispara la búsqueda
+    /// diferida sólo una vez que pasa `DURACION_DEBOUNCE` sin una tecla
+    /// nueva.
+    pub fn tick(&mut self, ahora: Instant) -> AccionActivos {
+        if self.busqueda_debounce.listo(ahora, DURACION_DEBOUNCE) {
+            self.buscar(None)
+        } else {
+            AccionActivos::Ninguna
         }
     }
     fn confirmar(&mut self, k: KeyEvent, id: i64) -> AccionActivos {

@@ -6,7 +6,7 @@ use ratatui::{Terminal, backend::Backend};
 use crate::application::AppCore;
 use crate::models::usuario::RolUsuario;
 use crate::services::autenticacion_service::UsuarioSesion;
-use crate::services::error::UsuarioServiceError;
+use crate::services::error::{AutenticacionError, UsuarioServiceError};
 use crate::services::usuario_service::CrearRootInicialInput;
 
 use super::{
@@ -493,6 +493,7 @@ mod tests {
         for c in "alvarez".chars() {
             app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core));
         }
+        app.agotar_debounce_busquedas(Some(&core));
         assert_eq!(app.empresas.cantidad(), 1);
         assert_eq!(
             app.empresas.empresa_seleccionada().unwrap().nombre,
@@ -767,6 +768,10 @@ pub struct App {
     salir: bool,
     sesion: Option<UsuarioSesion>,
     tema: ThemePreset,
+    /// Resultado en camino de un hilo aparte que verifica la contraseña
+    /// (Argon2) sin bloquear este bucle. `None` cuando no hay ningún login
+    /// en curso.
+    autenticacion_pendiente: Option<std::sync::mpsc::Receiver<Result<UsuarioSesion, AutenticacionError>>>,
 }
 
 impl Default for App {
@@ -786,6 +791,7 @@ impl Default for App {
             salir: false,
             sesion: None,
             tema: ThemePreset::Brisas,
+            autenticacion_pendiente: None,
         }
     }
 }
@@ -870,33 +876,105 @@ impl App {
             let ahora = std::time::Instant::now();
             self.configuracion_inicial.tick(ahora);
             self.login.tick(ahora);
-            if let Some((cedula, password)) = self.login.credenciales_si_validacion_lista(ahora) {
-                if let Some(core) = core {
-                    match core.autenticar(&cedula, &password) {
-                        Ok(sesion) => {
-                            self.login.completar_validacion(None);
-                            self.iniciar_sesion(sesion);
-                        }
-                        Err(error) => self.login.completar_validacion(Some(error.to_string())),
-                    }
-                } else {
-                    self.login.completar_validacion(None);
-                    self.iniciar_sesion(UsuarioSesion {
-                        id: 0,
-                        cedula: cedula.clone(),
-                        nombre: cedula,
-                        rol: RolUsuario::Operador,
-                    });
-                }
-            }
+            self.recibir_autenticacion_si_lista();
+
+            // Búsquedas con debounce: cada pantalla decide si ya pasó el
+            // tiempo sin tecla nueva; si no, `tick` devuelve `Ninguna` y el
+            // despacho de siempre es un no-op.
+            let accion = self.historial.tick(ahora);
+            self.procesar_accion_historial(accion, core);
+            let accion = self.contratistas.tick(ahora);
+            self.procesar_accion_contratistas(accion, core);
+            let accion = self.activos.tick(ahora);
+            self.procesar_accion_activos(accion, core);
+            let accion = self.empresas.tick(ahora);
+            self.procesar_accion_empresas(accion, core);
+            let accion = self.usuarios.tick(ahora);
+            self.procesar_accion_usuarios(accion, core);
         }
 
         Ok(())
     }
 
+    /// Revisa sin bloquear si el hilo de verificación de contraseña (Argon2) ya terminó.
+    fn recibir_autenticacion_si_lista(&mut self) {
+        let Some(receptor) = &self.autenticacion_pendiente else {
+            return;
+        };
+        let Ok(resultado) = receptor.try_recv() else {
+            return;
+        };
+        self.autenticacion_pendiente = None;
+        match resultado {
+            Ok(sesion) => {
+                self.login.completar_validacion(None);
+                self.iniciar_sesion(sesion);
+            }
+            Err(error) => self.login.completar_validacion(Some(error.to_string())),
+        }
+    }
+
+    /// Resuelve la cédula de inmediato (rápido, sólo SQLite) y, si existe y está activo,
+    /// verifica la contraseña en un hilo aparte para no congelar la UI mientras Argon2 calcula.
+    fn iniciar_autenticacion(
+        &mut self,
+        cedula: String,
+        password: String,
+        core: Option<&AppCore>,
+    ) {
+        let Some(core) = core else {
+            self.login.completar_validacion(None);
+            self.iniciar_sesion(UsuarioSesion {
+                id: 0,
+                cedula: cedula.clone(),
+                nombre: cedula,
+                rol: RolUsuario::Operador,
+            });
+            return;
+        };
+        match core.buscar_candidato_autenticacion(&cedula) {
+            Ok(candidato) => {
+                let (emisor, receptor) = std::sync::mpsc::channel();
+                std::thread::spawn(move || {
+                    let resultado =
+                        match crate::services::password::verificar_password(
+                            &password,
+                            &candidato.password_hash,
+                        ) {
+                            Ok(true) => Ok(candidato.sesion),
+                            Ok(false) => Err(AutenticacionError::CredencialesInvalidas),
+                            Err(_) => Err(AutenticacionError::HashInvalido),
+                        };
+                    let _ = emisor.send(resultado);
+                });
+                self.autenticacion_pendiente = Some(receptor);
+            }
+            Err(error) => self.login.completar_validacion(Some(error.to_string())),
+        }
+    }
+
     #[cfg(test)]
     fn procesar_tecla_vista(&mut self, key: crossterm::event::KeyEvent) {
         self.procesar_tecla_global(key, None);
+    }
+
+    /// Fuerza que se dispare cualquier búsqueda con debounce pendiente,
+    /// simulando que pasó tiempo de sobra desde la última tecla. Para
+    /// pruebas que necesitan el resultado real de una búsqueda sin esperar
+    /// el reloj de verdad.
+    #[cfg(test)]
+    fn agotar_debounce_busquedas(&mut self, core: Option<&AppCore>) {
+        let futuro = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        let accion = self.historial.tick(futuro);
+        self.procesar_accion_historial(accion, core);
+        let accion = self.contratistas.tick(futuro);
+        self.procesar_accion_contratistas(accion, core);
+        let accion = self.activos.tick(futuro);
+        self.procesar_accion_activos(accion, core);
+        let accion = self.empresas.tick(futuro);
+        self.procesar_accion_empresas(accion, core);
+        let accion = self.usuarios.tick(futuro);
+        self.procesar_accion_usuarios(accion, core);
     }
 
     /// Comandos transversales (salida de emergencia, tema, salida rápida) que se
@@ -982,11 +1060,13 @@ impl App {
                     self.salir = true;
                 }
             }
-            Vista::Login => {
-                if self.login.handle_key(key) == AccionLogin::Salir {
-                    self.salir = true;
+            Vista::Login => match self.login.handle_key(key) {
+                AccionLogin::Salir => self.salir = true,
+                AccionLogin::Autenticar { cedula, password } => {
+                    self.iniciar_autenticacion(cedula, password, core)
                 }
-            }
+                AccionLogin::Ninguna => {}
+            },
             Vista::MenuPrincipal => self.procesar_accion_menu_con_core(key, core),
             Vista::IngresosActivos => {
                 let accion = self.activos.handle_key(key);
