@@ -2,8 +2,9 @@
 
 > **Prioridad:** alta, obligatoria antes de producción.
 >
-> **Estado:** planificado; ejecución aplazada de forma intencional mientras la
-> aplicación continúa en desarrollo.
+> **Estado:** Fase 1 (motor de creación y validación) implementada y probada —
+> ver detalle al final de esa sección. Fases 2-4 (restauración, pantalla,
+> automatización/retención) siguen pendientes.
 
 ## Objetivo
 
@@ -76,27 +77,41 @@ Cada elemento listado debe exponer como mínimo:
 - Estado: pendiente, válido, inválido o incompatible.
 - Resultado y fecha de la última verificación.
 
-## Fase 1: motor de creación y validación
+## Fase 1: motor de creación y validación — implementada
 
-1. Crear un módulo de infraestructura para la Online Backup API de SQLite.
-2. Definir tipos de aplicación neutrales para solicitud, resumen, validación y error.
-3. Crear el directorio de respaldos si no existe.
-4. Escribir primero a un archivo `.partial` único.
-5. Ejecutar el respaldo desde la conexión activa.
-6. Abrir la copia por separado y ejecutar:
+Implementada en `src/database/backup.rs`, sin ninguna dependencia de la TUI ni de
+`AppCore` (recibe una `&Connection` ya abierta y un directorio destino; el futuro
+`AppCore`/pantalla serán clientes finos de este módulo, tal como pedía el diseño).
 
-   ```sql
-   PRAGMA integrity_check;
-   PRAGMA foreign_key_check;
-   ```
+1. [x] Módulo de infraestructura para la Online Backup API — `rusqlite::backup::Backup`
+   (feature `backup` de `rusqlite` habilitada en `Cargo.toml`).
+2. [x] Tipos neutrales: `TipoRespaldo`, `RespaldoResumen`, `ResultadoValidacion`,
+   `RespaldoError`.
+3. [x] `crear_respaldo` crea el directorio de respaldos si no existe
+   (`fs::create_dir_all`).
+4. [x] Escribe primero a un archivo `.partial` con nombre único (`ruta_disponible` nunca
+   sobrescribe uno existente, agrega sufijo numérico ante colisión).
+5. [x] Ejecuta el respaldo desde la conexión activa vía `Backup::run_to_completion`.
+6. [x] Abre la copia aparte (`OpenFlags::SQLITE_OPEN_READ_ONLY`, nunca crea ni modifica)
+   y corre `integrity_check` + `foreign_key_check` — ambas, por la misma razón que
+   señala este documento.
+7. [x] Lee y guarda `PRAGMA user_version` en el resultado de la validación.
+8. [x] Sólo renombra al nombre definitivo (`.db`) si la validación resultó `Valido`.
+9. [x] Si la validación falla, borra el `.partial` antes de devolver el error — nunca
+   deja un respaldo a medias publicado.
+10. [x] `listar_respaldos` (barato, sólo sistema de archivos + nombre, nunca abre
+    SQLite, nunca lista `.partial`) y `validar_respaldo` (costoso, bajo demanda) son
+    funciones separadas, tal como pedía el diseño.
 
-   `integrity_check` no cubre claves foráneas, por lo que ambas verificaciones son
-   necesarias según la [documentación de PRAGMA de SQLite](https://sqlite.org/pragma.html).
+Probado en `tests/respaldo_backup.rs`: un respaldo real conserva los datos y las
+relaciones, no queda ningún `.partial` tras una creación exitosa, dos respaldos
+seguidos no se pisan entre sí, se rechaza un archivo truncado, se rechaza un
+`user_version` de una versión futura, se rechazan claves foráneas inválidas, y el
+listado ordena del más reciente y nunca incluye `.partial`.
 
-7. Leer y guardar la versión del esquema.
-8. Renombrar el archivo únicamente si todas las verificaciones terminan bien.
-9. Eliminar archivos `.partial` fallidos sin tocar respaldos válidos.
-10. Implementar listado y validación bajo demanda.
+**Deliberadamente fuera de esta fase** (quedan para Fase 2-4): exportar una copia ya
+verificada a otra ubicación, restauración, la pantalla de la TUI, y la política de
+retención/automatización antes de migraciones.
 
 ## Fase 2: restauración segura
 
