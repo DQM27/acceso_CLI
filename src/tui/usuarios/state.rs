@@ -234,6 +234,10 @@ pub struct UsuariosState {
     usuario_nombre: String,
     ayuda_expandida: bool,
     busqueda_debounce: Debounce,
+    /// `true` mientras se espera el resultado real de crear un usuario o
+    /// cambiar una contraseña (Argon2 corriendo en un hilo aparte) — bloquea
+    /// la edición del formulario, mismo criterio que `EstadoLogin::Validando`.
+    guardando: bool,
 }
 impl Default for UsuariosState {
     fn default() -> Self {
@@ -246,6 +250,7 @@ impl Default for UsuariosState {
             usuario_nombre: "Quintana".into(),
             ayuda_expandida: false,
             busqueda_debounce: Debounce::default(),
+            guardando: false,
         }
     }
 }
@@ -257,6 +262,17 @@ impl UsuariosState {
     pub fn resumen_por_id(&self, id: i64) -> Option<&UsuarioResumen> {
         self.usuario(id)
     }
+    /// Marca que ya se disparó el hilo de Argon2 para crear un usuario o
+    /// cambiar una contraseña — bloquea la edición hasta que llegue el
+    /// resultado real (`completar_guardado`/`completar_password`).
+    pub fn marcar_guardando(&mut self) {
+        self.guardando = true;
+    }
+
+    pub fn guardando(&self) -> bool {
+        self.guardando
+    }
+
     pub fn solicitud_carga(&self) -> AccionUsuarios {
         AccionUsuarios::Buscar {
             texto: None,
@@ -288,6 +304,7 @@ impl UsuariosState {
         id: Option<i64>,
         nombre: &str,
     ) -> AccionUsuarios {
+        self.guardando = false;
         match resultado {
             Ok(nuevo) => {
                 self.modo = ModoUsuarios::Normal;
@@ -340,6 +357,7 @@ impl UsuariosState {
         }
     }
     pub fn completar_password(&mut self, resultado: Result<(), String>, nombre: &str) {
+        self.guardando = false;
         match resultado {
             Ok(()) => {
                 if let ModoUsuarios::CambioPassword(f) = &mut self.modo {
@@ -359,6 +377,9 @@ impl UsuariosState {
     pub fn handle_key(&mut self, key: KeyEvent) -> AccionUsuarios {
         if standard_command(key) == Some(StandardCommand::Help) {
             self.ayuda_expandida = !self.ayuda_expandida;
+            return AccionUsuarios::Ninguna;
+        }
+        if self.guardando {
             return AccionUsuarios::Ninguna;
         }
         match self.modo.clone() {

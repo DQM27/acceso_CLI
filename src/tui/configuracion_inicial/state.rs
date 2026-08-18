@@ -35,6 +35,17 @@ pub struct SolicitudRoot {
     pub password: String,
 }
 
+impl std::fmt::Debug for SolicitudRoot {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SolicitudRoot")
+            .field("cedula", &self.cedula)
+            .field("nombre", &self.nombre)
+            .field("password", &"[OCULTA]")
+            .finish()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AccionConfiguracion {
     Ninguna,

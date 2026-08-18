@@ -19,11 +19,12 @@ Cada tarea sólo se considera terminada cuando tiene pruebas y manejo de errores
   por una ubicación absoluta de datos de la aplicación. Mantener
   `CONTROL_ACCESO_DB` como sobreescritura explícita y no crear una base productiva
   silenciosamente en una ubicación inesperada.
-- [ ] **Respaldo y recuperación (alta prioridad antes de producción; ejecución
-  aplazada).** Seguir el [plan específico de respaldos](plan-respaldos.md): crear copias
-  consistentes mediante la API de SQLite, definir retención y probar una restauración
-  completa con rollback. Debe estar terminado antes de una actualización productiva
-  que incluya migraciones.
+- [x] **Respaldo y recuperación.** Ver el [plan específico de respaldos](plan-respaldos.md)
+  (Fases 1-4 completas): motor de creación/validación con la API de SQLite, restauración
+  con rollback automático, pantalla Configuración → Respaldos en la TUI (Crear, Listar,
+  Revalidar, Exportar, Restaurar), respaldo obligatorio antes de migrar el esquema, y
+  respaldo automático diario con retención. Pendiente sólo la acción Eliminar (menor, no
+  bloqueante).
 - [x] **Migraciones globalmente atómicas.** Tomar `BEGIN IMMEDIATE` antes de leer
   `user_version` y ejecutar dentro de la misma transacción todas las migraciones
   pendientes. Probar dos aperturas simultáneas.
@@ -44,30 +45,30 @@ Cada tarea sólo se considera terminada cuando tiene pruebas y manejo de errores
   versión de reglas. Los cambios posteriores no alteran movimientos históricos. Los
   datos anteriores a esta mejora quedan identificados como reconstruidos durante la
   migración, porque no es posible recuperar valores que ya fueron sobrescritos.
-- [ ] **Eventos denegados.** Definir y persistir intentos de acceso denegados si el
-  historial funcionará como auditoría de seguridad.
-- [ ] **Sesión vigente.** Comprobar que el usuario siga activo antes de cada movimiento,
-  cerrar su sesión si es desactivado y añadir bloqueo por inactividad.
+- [x] ~~**Eventos denegados.**~~ Descartado: el usuario determinó que este nivel de
+  auditoría no aplica para este tipo de app.
+- [x] ~~**Sesión vigente.**~~ Descartado, mismo motivo.
 - [x] **Política horaria explícita.** Centralizar un reloj, usar la zona
   `America/Costa_Rica`, persistir UTC/offset y detectar retrocesos del reloj respecto al
   último movimiento.
-- [ ] **Errores observables.** Mantener mensajes sencillos para el operador y escribir
-  logs técnicos persistentes con contexto e identificador de incidente, sin secretos.
-  No descartar resultados mediante `.ok()`.
+- [x] ~~**Errores observables** (log técnico persistente).~~ Descartado, mismo motivo. El
+  tratamiento de `SQLITE_BUSY` como error observable para el operador (mencionado también
+  en Prioridad 2) queda descartado junto con este punto.
 - [x] **Lecturas paginadas coherentes.** Obtener el total y la página del historial en
   la misma lectura de SQLite y navegar con un cursor estable, para no repetir u omitir
   movimientos si los datos cambian entre páginas.
 
 ## Prioridad 2: ejecución y mantenibilidad
 
-- [x] **TUI responsiva (login y búsquedas).** Se eliminó la espera artificial de 800ms del
-  login; la verificación de Argon2 corre en un hilo aparte (primer uso de threading en la app,
-  acotado a esa verificación — no bloquea `terminal.draw`). Las 5 pantallas de búsqueda
+- [x] **TUI responsiva (login, búsquedas, alta/edición de usuarios).** Se eliminó la espera
+  artificial de 800ms del login. Argon2 corre en un hilo aparte en los cuatro lugares donde
+  se calcula un hash: login, crear usuario, cambiar contraseña y ROOT inicial — nunca
+  bloquea `terminal.draw`. En los tres últimos, `UsuarioService` quedó partido en
+  `validar_...`/`..._con_hash` (lo rápido y ligado a SQLite se queda en el hilo principal;
+  sólo el hash puro se calcula aparte), con `UsuariosState`/`ConfiguracionInicialState`
+  bloqueando la edición mientras se espera el resultado real. Las 5 pantallas de búsqueda
   (Historial, Contratistas, Activos, Empresas, Usuarios) tienen debounce de 250ms vía
-  `ui_kit::Debounce`, en vez de una consulta SQL por tecla. Pendiente, señalado
-  deliberadamente aparte: Argon2 en hilo aparte para crear usuario/cambiar contraseña/ROOT
-  inicial — requiere partir validación de guardado en el service de usuarios, mayor riesgo,
-  se aplaza a un pase propio.
+  `ui_kit::Debounce`, en vez de una consulta SQL por tecla.
 - [ ] **Modo demo aislado.** Sustituir `Option<&AppCore>` por una implementación falsa
   explícita disponible sólo en pruebas o mediante una feature de desarrollo.
 - [ ] **Estados sin `unwrap`.** Hacer que cada etapa de ingreso contenga los datos que
@@ -77,10 +78,10 @@ Cada tarea sólo se considera terminada cuando tiene pruebas y manejo de errores
 - [x] **Configuración SQLite explícita (perfil base).** `busy_timeout`, `journal_mode`,
   `synchronous`, `application_id`, `trusted_schema` y `quick_check`/`optimize` ya están
   implementados y probados — ver la
-  [evaluación y recomendaciones de SQLite](evaluacion-sqlite.md), secciones 2-6. Sigue
-  pendiente el tratamiento explícito de `SQLITE_BUSY` como error observable para el
-  operador (ver el punto de abajo) y la prueba de cierre/pérdida de energía simulada en
-  un entorno real.
+  [evaluación y recomendaciones de SQLite](evaluacion-sqlite.md), secciones 2-6. El
+  tratamiento explícito de `SQLITE_BUSY` como error observable queda descartado junto con
+  "Errores observables" (Prioridad 1). Sigue pendiente la prueba de cierre/pérdida de
+  energía simulada en un entorno real.
 - [ ] **Capas sin dependencia de SQLite.** Mover los contratos y errores neutrales a
   aplicación/dominio y dejar que el adaptador de base de datos traduzca los errores de
   `rusqlite`.

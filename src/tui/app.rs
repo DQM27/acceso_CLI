@@ -6,13 +6,13 @@ use ratatui::{Terminal, backend::Backend};
 use crate::application::AppCore;
 use crate::models::usuario::RolUsuario;
 use crate::services::autenticacion_service::UsuarioSesion;
-use crate::services::error::{AutenticacionError, UsuarioServiceError};
+use crate::services::error::{AutenticacionError, PasswordError, UsuarioServiceError};
 use crate::services::usuario_service::CrearRootInicialInput;
 
 use super::{
     activos::{self, AccionActivos, ActivosState},
     configuracion::{self, AccionAjustes, AccionRespaldos, ConfiguracionState},
-    configuracion_inicial::{self, AccionConfiguracion, ConfiguracionInicialState},
+    configuracion_inicial::{self, AccionConfiguracion, ConfiguracionInicialState, SolicitudRoot},
     contratistas::{self, AccionContratistas, ContratistasState},
     empresas::{self, AccionEmpresas, EmpresasState},
     historial::{self, AccionHistorial, HistorialState},
@@ -153,6 +153,16 @@ mod tests {
             .handle_key(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT));
 
         app.procesar_configuracion_pendiente(&core);
+
+        // El hash de Argon2 corre en un hilo aparte; se espera el resultado real en
+        // vez de asumir que ya terminó, igual que el resto de los flujos con hilo.
+        for _ in 0..200 {
+            app.recibir_root_inicial_si_lista(&core);
+            if app.vista == Vista::Login {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
 
         assert_eq!(app.vista, Vista::Login);
         assert!(app.sesion().is_none());
@@ -818,7 +828,106 @@ mod tests {
 
         std::fs::remove_dir_all(&directorio).ok();
     }
+
+    fn core_temporal(nombre: &str) -> (AppCore, std::path::PathBuf, i64) {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let unico = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directorio = std::env::temp_dir().join(format!(
+            "control_acceso_app_{nombre}_{}_{unico}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&directorio).unwrap();
+        let ruta = directorio.join("control_acceso.sqlite");
+        let core = AppCore::abrir(&ruta).unwrap();
+        let root_id = core
+            .crear_root_inicial(CrearRootInicialInput {
+                cedula: "ROOT-1".into(),
+                nombre: "Ana".into(),
+                password: "password1".into(),
+            })
+            .unwrap();
+        (core, directorio, root_id)
+    }
+
+    #[test]
+    fn crear_usuario_en_hilo_aparte_termina_creado_en_sqlite_con_el_hash_correcto() {
+        let (core, directorio, _root_id) = core_temporal("crear_usuario");
+        let mut app = App::default();
+
+        app.iniciar_creacion_usuario(
+            crate::services::usuario_service::CrearUsuarioInput {
+                cedula: "2001".into(),
+                nombre: "Persona Nueva".into(),
+                password: "password2".into(),
+                rol: RolUsuario::Operador,
+                activo: true,
+            },
+            "Persona Nueva".into(),
+            Some(&core),
+        );
+        assert!(app.usuarios.guardando());
+
+        for _ in 0..200 {
+            app.recibir_creacion_usuario_si_lista(Some(&core));
+            if !app.usuarios.guardando() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+
+        assert!(!app.usuarios.guardando());
+        let creado = core.buscar_usuarios(&Default::default()).unwrap();
+        let persona = creado
+            .iter()
+            .find(|u| u.cedula == "2001")
+            .expect("el usuario debía quedar creado");
+        assert_eq!(persona.nombre, "Persona Nueva");
+        assert!(core.autenticar("2001", "password2").is_ok());
+
+        std::fs::remove_dir_all(&directorio).ok();
+    }
+
+    #[test]
+    fn cambiar_password_en_hilo_aparte_actualiza_la_autenticacion_real() {
+        let (core, directorio, root_id) = core_temporal("cambiar_password");
+        let mut app = App::default();
+
+        app.iniciar_cambio_password(root_id, "password-nuevo".into(), "Ana".into(), Some(&core));
+        assert!(app.usuarios.guardando());
+
+        for _ in 0..200 {
+            app.recibir_cambio_password_si_lista(Some(&core));
+            if !app.usuarios.guardando() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+
+        assert!(!app.usuarios.guardando());
+        assert!(core.autenticar("ROOT-1", "password-nuevo").is_ok());
+        assert!(core.autenticar("ROOT-1", "password1").is_err());
+
+        std::fs::remove_dir_all(&directorio).ok();
+    }
 }
+
+/// Datos ya validados de un usuario nuevo, a la espera del hash de Argon2 —
+/// no incluye `password` en texto plano, que ya se movió al hilo que calcula
+/// el hash y no hace falta después.
+#[derive(Debug, Clone)]
+struct DatosUsuarioPendiente {
+    cedula: String,
+    nombre: String,
+    rol: RolUsuario,
+    activo: bool,
+}
+
+/// Receptor del hilo aparte que sólo calcula un hash de Argon2 — nunca del resultado
+/// final de escribir en SQLite, que ocurre después, en el hilo principal.
+type ReceptorHash = std::sync::mpsc::Receiver<Result<String, PasswordError>>;
 
 #[derive(Debug)]
 pub struct App {
@@ -842,6 +951,12 @@ pub struct App {
     /// (Argon2) sin bloquear este bucle. `None` cuando no hay ningún login
     /// en curso.
     autenticacion_pendiente: Option<std::sync::mpsc::Receiver<Result<UsuarioSesion, AutenticacionError>>>,
+    /// Hash de Argon2 en camino para crear un usuario nuevo.
+    creacion_usuario_pendiente: Option<(ReceptorHash, DatosUsuarioPendiente, String)>,
+    /// Hash de Argon2 en camino para cambiar la contraseña de un usuario.
+    cambio_password_pendiente: Option<(ReceptorHash, i64, String)>,
+    /// Hash de Argon2 en camino para crear el usuario ROOT inicial.
+    root_inicial_pendiente: Option<(ReceptorHash, SolicitudRoot)>,
 }
 
 impl Default for App {
@@ -864,6 +979,9 @@ impl Default for App {
             sesion: None,
             tema: ThemePreset::Brisas,
             autenticacion_pendiente: None,
+            creacion_usuario_pendiente: None,
+            cambio_password_pendiente: None,
+            root_inicial_pendiente: None,
         }
     }
 }
@@ -943,6 +1061,7 @@ impl App {
 
             if let Some(core) = core {
                 self.procesar_configuracion_pendiente(core);
+                self.recibir_root_inicial_si_lista(core);
             }
 
             if event::poll(EVENT_POLL)?
@@ -956,6 +1075,8 @@ impl App {
             self.configuracion_inicial.tick(ahora);
             self.login.tick(ahora);
             self.recibir_autenticacion_si_lista();
+            self.recibir_creacion_usuario_si_lista(core);
+            self.recibir_cambio_password_si_lista(core);
 
             // Búsquedas con debounce: cada pantalla decide si ya pasó el
             // tiempo sin tecla nueva; si no, `tick` devuelve `Ninguna` y el
@@ -1029,6 +1150,161 @@ impl App {
                 self.autenticacion_pendiente = Some(receptor);
             }
             Err(error) => self.login.completar_validacion(Some(error.to_string())),
+        }
+    }
+
+    /// Valida rápido (sólo SQLite) y, si pasa, calcula el hash de Argon2 en un hilo
+    /// aparte — la escritura real ocurre después, en el hilo principal, cuando llega.
+    fn iniciar_creacion_usuario(
+        &mut self,
+        input: crate::services::usuario_service::CrearUsuarioInput,
+        nombre: String,
+        core: Option<&AppCore>,
+    ) {
+        let Some(core) = core else {
+            let recarga = self
+                .usuarios
+                .completar_guardado(Err("No se pudo guardar el usuario".into()), None, &nombre);
+            self.procesar_recarga_usuarios(recarga, core);
+            return;
+        };
+        if let Err(error) = core.validar_datos_para_crear_usuario(&input) {
+            let recarga =
+                self.usuarios
+                    .completar_guardado(Err(mensaje_usuario(error)), None, &nombre);
+            self.procesar_recarga_usuarios(recarga, Some(core));
+            return;
+        }
+        let datos = DatosUsuarioPendiente {
+            cedula: input.cedula,
+            nombre: input.nombre,
+            rol: input.rol,
+            activo: input.activo,
+        };
+        let password = input.password;
+        let (emisor, receptor) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = emisor.send(crate::services::password::generar_hash(&password));
+        });
+        self.creacion_usuario_pendiente = Some((receptor, datos, nombre));
+        self.usuarios.marcar_guardando();
+    }
+
+    fn recibir_creacion_usuario_si_lista(&mut self, core: Option<&AppCore>) {
+        let Some((receptor, ..)) = &self.creacion_usuario_pendiente else {
+            return;
+        };
+        let Ok(resultado_hash) = receptor.try_recv() else {
+            return;
+        };
+        let (_, datos, nombre) = self.creacion_usuario_pendiente.take().unwrap();
+        let resultado = match resultado_hash {
+            Ok(hash) => core
+                .ok_or_else(|| "No se pudo guardar el usuario".to_owned())
+                .and_then(|core| {
+                    core.crear_usuario_con_hash(&datos.cedula, &datos.nombre, datos.rol, datos.activo, hash)
+                        .map(Some)
+                        .map_err(mensaje_usuario)
+                }),
+            Err(error) => Err(error.to_string()),
+        };
+        let recarga = self.usuarios.completar_guardado(resultado, None, &nombre);
+        self.procesar_recarga_usuarios(recarga, core);
+    }
+
+    /// Mismo patrón que `iniciar_creacion_usuario`: valida rápido, hashea en un hilo aparte.
+    fn iniciar_cambio_password(
+        &mut self,
+        id: i64,
+        password: String,
+        nombre: String,
+        core: Option<&AppCore>,
+    ) {
+        let Some(core) = core else {
+            self.usuarios
+                .completar_password(Err("No se pudo cambiar la contraseña".into()), &nombre);
+            return;
+        };
+        if let Err(error) = core.validar_password_para_cambio(id, &password) {
+            self.usuarios
+                .completar_password(Err(mensaje_usuario(error)), &nombre);
+            return;
+        }
+        let (emisor, receptor) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = emisor.send(crate::services::password::generar_hash(&password));
+        });
+        self.cambio_password_pendiente = Some((receptor, id, nombre));
+        self.usuarios.marcar_guardando();
+    }
+
+    fn recibir_cambio_password_si_lista(&mut self, core: Option<&AppCore>) {
+        let Some((receptor, ..)) = &self.cambio_password_pendiente else {
+            return;
+        };
+        let Ok(resultado_hash) = receptor.try_recv() else {
+            return;
+        };
+        let (_, id, nombre) = self.cambio_password_pendiente.take().unwrap();
+        let resultado = match resultado_hash {
+            Ok(hash) => core
+                .ok_or_else(|| "No se pudo cambiar la contraseña".to_owned())
+                .and_then(|core| {
+                    core.cambiar_password_usuario_con_hash(id, &hash)
+                        .map_err(mensaje_usuario)
+                }),
+            Err(error) => Err(error.to_string()),
+        };
+        self.usuarios.completar_password(resultado, &nombre);
+    }
+
+    /// Mismo patrón para el ROOT inicial: valida rápido (sin la comprobación de "ya
+    /// existe un ROOT", que sigue siendo atómica con el insert), hashea aparte, y crea
+    /// el usuario cuando llega el hash — ver `recibir_root_inicial_si_lista`.
+    fn iniciar_root_inicial(&mut self, solicitud: SolicitudRoot, core: &AppCore) {
+        if let Err(error) = core.validar_datos_para_root_inicial(&CrearRootInicialInput {
+            cedula: solicitud.cedula.clone(),
+            nombre: solicitud.nombre.clone(),
+            password: solicitud.password.clone(),
+        }) {
+            self.configuracion_inicial.completar_con_error(error.to_string());
+            return;
+        }
+        let password = solicitud.password.clone();
+        let (emisor, receptor) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = emisor.send(crate::services::password::generar_hash(&password));
+        });
+        self.root_inicial_pendiente = Some((receptor, solicitud));
+    }
+
+    fn recibir_root_inicial_si_lista(&mut self, core: &AppCore) {
+        let Some((receptor, ..)) = &self.root_inicial_pendiente else {
+            return;
+        };
+        let Ok(resultado_hash) = receptor.try_recv() else {
+            return;
+        };
+        let (_, solicitud) = self.root_inicial_pendiente.take().unwrap();
+        match resultado_hash {
+            Ok(hash) => {
+                let input = CrearRootInicialInput {
+                    cedula: solicitud.cedula,
+                    nombre: solicitud.nombre,
+                    password: solicitud.password,
+                };
+                match core.crear_root_inicial_con_hash(input, hash) {
+                    Ok(_) | Err(UsuarioServiceError::ConfiguracionInicialYaRealizada) => {
+                        self.configuracion_inicial.limpiar_secretos();
+                        self.vista = Vista::Login;
+                    }
+                    Err(UsuarioServiceError::Database(_)) => self
+                        .configuracion_inicial
+                        .completar_con_error("No se pudo crear el usuario ROOT"),
+                    Err(error) => self.configuracion_inicial.completar_con_error(error.to_string()),
+                }
+            }
+            Err(error) => self.configuracion_inicial.completar_con_error(error.to_string()),
         }
     }
 
@@ -1407,11 +1683,7 @@ impl App {
                 self.usuarios.completar_busqueda(resultado, seleccionar_id);
             }
             AccionUsuarios::Crear { input, nombre } => {
-                let resultado = core
-                    .ok_or_else(|| "No se pudo guardar el usuario".into())
-                    .and_then(|core| core.crear_usuario(input).map(Some).map_err(mensaje_usuario));
-                let recarga = self.usuarios.completar_guardado(resultado, None, &nombre);
-                self.procesar_recarga_usuarios(recarga, core);
+                self.iniciar_creacion_usuario(input, nombre, core)
             }
             AccionUsuarios::Actualizar {
                 id,
@@ -1436,15 +1708,7 @@ impl App {
                 id,
                 password,
                 nombre,
-            } => {
-                let resultado = core
-                    .ok_or_else(|| "No se pudo cambiar la contraseña".into())
-                    .and_then(|core| {
-                        core.cambiar_password_usuario(id, &password)
-                            .map_err(mensaje_usuario)
-                    });
-                self.usuarios.completar_password(resultado, &nombre);
-            }
+            } => self.iniciar_cambio_password(id, password, nombre, core),
             AccionUsuarios::EstablecerActivo {
                 id,
                 activar,
@@ -1685,21 +1949,6 @@ impl App {
         let Some(solicitud) = self.configuracion_inicial.tomar_solicitud() else {
             return;
         };
-        match core.crear_root_inicial(CrearRootInicialInput {
-            cedula: solicitud.cedula,
-            nombre: solicitud.nombre,
-            password: solicitud.password,
-        }) {
-            Ok(_) | Err(UsuarioServiceError::ConfiguracionInicialYaRealizada) => {
-                self.configuracion_inicial.limpiar_secretos();
-                self.vista = Vista::Login;
-            }
-            Err(UsuarioServiceError::Database(_)) => self
-                .configuracion_inicial
-                .completar_con_error("No se pudo crear el usuario ROOT"),
-            Err(error) => self
-                .configuracion_inicial
-                .completar_con_error(error.to_string()),
-        }
+        self.iniciar_root_inicial(solicitud, core);
     }
 }

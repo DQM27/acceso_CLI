@@ -19,6 +19,7 @@ use crate::database::repositories::contratista_repository::SqliteContratistaRepo
 use crate::database::repositories::empresa_repository::SqliteEmpresaRepository;
 use crate::database::repositories::registro_ingreso_repository::SqliteRegistroIngresoRepository;
 use crate::database::repositories::usuario_repository::SqliteUsuarioRepository;
+use crate::models::usuario::RolUsuario;
 use crate::services::autenticacion_service::{
     AutenticacionService, CandidatoAutenticacion, UsuarioSesion,
 };
@@ -113,6 +114,23 @@ impl AppCore {
     ) -> Result<i64, UsuarioServiceError> {
         let repository = SqliteUsuarioRepository::new(&self.connection);
         UsuarioService::new(&repository).crear_root_inicial(input)
+    }
+
+    pub fn validar_datos_para_root_inicial(
+        &self,
+        input: &CrearRootInicialInput,
+    ) -> Result<(), UsuarioServiceError> {
+        let repository = SqliteUsuarioRepository::new(&self.connection);
+        UsuarioService::new(&repository).validar_datos_para_root_inicial(input)
+    }
+
+    pub fn crear_root_inicial_con_hash(
+        &self,
+        input: CrearRootInicialInput,
+        password_hash: String,
+    ) -> Result<i64, UsuarioServiceError> {
+        let repository = SqliteUsuarioRepository::new(&self.connection);
+        UsuarioService::new(&repository).crear_root_inicial_con_hash(input, password_hash)
     }
 
     pub fn autenticar(
@@ -281,6 +299,28 @@ impl AppCore {
         UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection)).crear(input)
     }
 
+    /// Parte barata de crear un usuario (sin Argon2) — permite correr el hash en un hilo
+    /// aparte sin bloquear la TUI mientras se valida.
+    pub fn validar_datos_para_crear_usuario(
+        &self,
+        input: &CrearUsuarioInput,
+    ) -> Result<(), UsuarioServiceError> {
+        UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection))
+            .validar_datos_para_crear(input)
+    }
+
+    pub fn crear_usuario_con_hash(
+        &self,
+        cedula: &str,
+        nombre: &str,
+        rol: RolUsuario,
+        activo: bool,
+        password_hash: String,
+    ) -> Result<i64, UsuarioServiceError> {
+        UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection))
+            .crear_con_hash(cedula, nombre, rol, activo, password_hash)
+    }
+
     pub fn actualizar_usuario(
         &self,
         id: i64,
@@ -306,6 +346,24 @@ impl AppCore {
     ) -> Result<(), UsuarioServiceError> {
         UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection))
             .cambiar_password(id, password)
+    }
+
+    pub fn validar_password_para_cambio(
+        &self,
+        id: i64,
+        password: &str,
+    ) -> Result<(), UsuarioServiceError> {
+        UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection))
+            .validar_password_para_cambio(id, password)
+    }
+
+    pub fn cambiar_password_usuario_con_hash(
+        &self,
+        id: i64,
+        password_hash: &str,
+    ) -> Result<(), UsuarioServiceError> {
+        UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection))
+            .cambiar_password_con_hash(id, password_hash)
     }
 
     pub fn crear_respaldo(&self, tipo: TipoRespaldo) -> Result<RespaldoResumen, RespaldoError> {

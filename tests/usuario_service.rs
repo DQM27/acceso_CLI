@@ -275,3 +275,52 @@ fn actualizar_con_cedula_duplicada_conserva_registro_original() {
     ));
     assert_eq!(servicio.buscar_por_id(segundo).unwrap(), original);
 }
+
+#[test]
+fn validar_datos_para_crear_rechaza_password_corto_sin_tocar_el_repositorio() {
+    let connection = base();
+    inicializar(&connection);
+    let repository = SqliteUsuarioRepository::new(&connection);
+    let servicio = UsuarioService::new(&repository);
+    let mut entrada = input("3001", RolUsuario::Operador, true);
+    entrada.password = "corta".to_string();
+
+    assert!(matches!(
+        servicio.validar_datos_para_crear(&entrada),
+        Err(UsuarioServiceError::PasswordDemasiadoCorto)
+    ));
+    assert!(matches!(
+        servicio.buscar_por_cedula("3001"),
+        Err(UsuarioServiceError::UsuarioNoEncontrado)
+    ));
+}
+
+#[test]
+fn crear_con_hash_guarda_el_hash_tal_cual_sin_volver_a_calcularlo() {
+    let connection = base();
+    inicializar(&connection);
+    let repository = SqliteUsuarioRepository::new(&connection);
+    let servicio = UsuarioService::new(&repository);
+
+    let id = servicio
+        .crear_con_hash("3002", "Persona Hash", RolUsuario::Operador, true, "hash-de-prueba".to_string())
+        .unwrap();
+
+    let usuario = servicio.buscar_por_id(id).unwrap();
+    assert_eq!(usuario.password_hash, "hash-de-prueba");
+}
+
+#[test]
+fn validar_password_para_cambio_rechaza_password_corto_sin_tocar_el_repositorio() {
+    let connection = base();
+    let id = inicializar(&connection);
+    let repository = SqliteUsuarioRepository::new(&connection);
+    let servicio = UsuarioService::new(&repository);
+    let hash_original = servicio.buscar_por_id(id).unwrap().password_hash;
+
+    assert!(matches!(
+        servicio.validar_password_para_cambio(id, "corta"),
+        Err(UsuarioServiceError::PasswordDemasiadoCorto)
+    ));
+    assert_eq!(servicio.buscar_por_id(id).unwrap().password_hash, hash_original);
+}

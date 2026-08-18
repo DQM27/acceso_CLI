@@ -88,6 +88,9 @@ pub fn render(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: Theme
 }
 
 fn estado_shell(state: &UsuariosState) -> (String, StatusKind) {
+    if state.guardando {
+        return ("⠋ Guardando…".to_owned(), StatusKind::Warning);
+    }
     if let ModoUsuarios::ConfirmacionEstado(c) = &state.modo
         && let Some(u) = state.usuario(c.id)
     {

@@ -224,3 +224,35 @@ fn cancelar_formularios_no_emite_escritura() {
     ));
     assert_eq!(state.usuario(7).unwrap().nombre, "Usuario 7");
 }
+
+#[test]
+fn guardando_bloquea_cualquier_tecla_hasta_que_llega_el_resultado_real() {
+    let mut state = UsuariosState::default();
+    cargar(&mut state);
+    state.handle_key(key(KeyCode::Enter));
+    let ModoUsuarios::Formulario(antes) = state.modo.clone() else {
+        panic!("debía abrir el formulario")
+    };
+
+    state.marcar_guardando();
+    assert!(matches!(
+        state.handle_key(key(KeyCode::Char('X'))),
+        AccionUsuarios::Ninguna
+    ));
+    assert!(matches!(
+        state.handle_key(key(KeyCode::Esc)),
+        AccionUsuarios::Ninguna
+    ));
+    let ModoUsuarios::Formulario(despues) = &state.modo else {
+        panic!("no debía salir del formulario mientras guarda")
+    };
+    assert_eq!(&antes, despues);
+
+    // Al llegar el resultado (éxito o error) se libera y vuelve a aceptar teclas.
+    state.completar_guardado(Err("duplicado".into()), None, "Ana");
+    assert!(!state.guardando);
+    let ModoUsuarios::Formulario(f) = &state.modo else {
+        panic!()
+    };
+    assert_eq!(f.error.as_deref(), Some("duplicado"));
+}

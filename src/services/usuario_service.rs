@@ -67,11 +67,45 @@ where
     }
 
     pub fn crear(&self, input: CrearUsuarioInput) -> Result<i64, UsuarioServiceError> {
+        self.validar_datos_para_crear(&input)?;
+        let password_hash = generar_hash(&input.password)?;
+        self.crear_con_hash(&input.cedula, &input.nombre, input.rol, input.activo, password_hash)
+    }
+
+    /// Parte barata de `crear` (sin Argon2): normaliza y valida sin escribir nada. Permite
+    /// correr el hash en un hilo aparte sin bloquear el hilo de eventos de la TUI.
+    pub fn validar_datos_para_crear(
+        &self,
+        input: &CrearUsuarioInput,
+    ) -> Result<(), UsuarioServiceError> {
         if self.requiere_configuracion_inicial()? {
             return Err(UsuarioServiceError::ConfiguracionInicialRequerida);
         }
+        normalizar_requerido(&input.cedula, UsuarioServiceError::CedulaVacia)?;
+        normalizar_requerido(&input.nombre, UsuarioServiceError::NombreVacio)?;
+        validar_password(&input.password)?;
+        Ok(())
+    }
 
-        let usuario = self.construir_usuario(0, input)?;
+    /// Parte que sí escribe, recibiendo el hash ya calculado.
+    pub fn crear_con_hash(
+        &self,
+        cedula: &str,
+        nombre: &str,
+        rol: RolUsuario,
+        activo: bool,
+        password_hash: String,
+    ) -> Result<i64, UsuarioServiceError> {
+        let cedula = normalizar_requerido(cedula, UsuarioServiceError::CedulaVacia)?.to_string();
+        let nombre = normalizar_requerido(nombre, UsuarioServiceError::NombreVacio)?.to_string();
+        let usuario = Usuario {
+            id: 0,
+            cedula,
+            nombre,
+            password_hash,
+            rol,
+            activo,
+        };
         self.usuarios
             .crear(&usuario)
             .map_err(mapear_duplicado_usuario)
@@ -126,11 +160,30 @@ where
         id: i64,
         nueva_password: &str,
     ) -> Result<(), UsuarioServiceError> {
+        self.validar_password_para_cambio(id, nueva_password)?;
+        let password_hash = generar_hash(nueva_password)?;
+        self.cambiar_password_con_hash(id, &password_hash)
+    }
+
+    /// Parte barata de `cambiar_password` (sin Argon2).
+    pub fn validar_password_para_cambio(
+        &self,
+        id: i64,
+        nueva_password: &str,
+    ) -> Result<(), UsuarioServiceError> {
         self.buscar_por_id(id)?;
         validar_password(nueva_password)?;
-        let password_hash = generar_hash(nueva_password)?;
+        Ok(())
+    }
+
+    /// Parte que sí escribe, recibiendo el hash ya calculado.
+    pub fn cambiar_password_con_hash(
+        &self,
+        id: i64,
+        password_hash: &str,
+    ) -> Result<(), UsuarioServiceError> {
         self.usuarios
-            .actualizar_password(id, &password_hash)
+            .actualizar_password(id, password_hash)
             .map_err(mapear_escritura_usuario)
     }
 
@@ -160,38 +213,46 @@ where
         &self,
         input: CrearRootInicialInput,
     ) -> Result<i64, UsuarioServiceError> {
-        let usuario = self.construir_usuario(
-            0,
-            CrearUsuarioInput {
-                cedula: input.cedula,
-                nombre: input.nombre,
-                password: input.password,
-                rol: RolUsuario::Root,
-                activo: true,
-            },
-        )?;
+        self.validar_datos_para_root_inicial(&input)?;
+        let password_hash = generar_hash(&input.password)?;
+        self.crear_root_inicial_con_hash(input, password_hash)
+    }
+
+    /// Parte barata de `crear_root_inicial` (sin Argon2). Deliberadamente **no** incluye
+    /// la comprobación de "ya existe un ROOT": esa sigue siendo atómica con el insert en
+    /// `crear_root_inicial_atomico` (ver `crear_root_inicial_con_hash`), porque repartirla
+    /// aparte reabriría la ventana de carrera entre dos instancias que
+    /// `crear_root_inicial_atomico` existe justamente para cerrar.
+    pub fn validar_datos_para_root_inicial(
+        &self,
+        input: &CrearRootInicialInput,
+    ) -> Result<(), UsuarioServiceError> {
+        normalizar_requerido(&input.cedula, UsuarioServiceError::CedulaVacia)?;
+        normalizar_requerido(&input.nombre, UsuarioServiceError::NombreVacio)?;
+        validar_password(&input.password)?;
+        Ok(())
+    }
+
+    /// Parte que sí escribe, recibiendo el hash ya calculado. El chequeo-e-inserción
+    /// atómico de "sólo un ROOT inicial" ocurre aquí, no antes.
+    pub fn crear_root_inicial_con_hash(
+        &self,
+        input: CrearRootInicialInput,
+        password_hash: String,
+    ) -> Result<i64, UsuarioServiceError> {
+        let cedula = normalizar_requerido(&input.cedula, UsuarioServiceError::CedulaVacia)?.to_string();
+        let nombre = normalizar_requerido(&input.nombre, UsuarioServiceError::NombreVacio)?.to_string();
+        let usuario = Usuario {
+            id: 0,
+            cedula,
+            nombre,
+            password_hash,
+            rol: RolUsuario::Root,
+            activo: true,
+        };
         self.usuarios
             .crear_root_inicial_atomico(&usuario)
             .map_err(mapear_escritura_usuario)
-    }
-
-    fn construir_usuario(
-        &self,
-        id: i64,
-        input: CrearUsuarioInput,
-    ) -> Result<Usuario, UsuarioServiceError> {
-        let cedula = normalizar_requerido(&input.cedula, UsuarioServiceError::CedulaVacia)?;
-        let nombre = normalizar_requerido(&input.nombre, UsuarioServiceError::NombreVacio)?;
-        validar_password(&input.password)?;
-
-        Ok(Usuario {
-            id,
-            cedula: cedula.to_string(),
-            nombre: nombre.to_string(),
-            password_hash: generar_hash(&input.password)?,
-            rol: input.rol,
-            activo: input.activo,
-        })
     }
 }
 
