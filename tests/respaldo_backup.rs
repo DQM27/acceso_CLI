@@ -4,7 +4,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use rusqlite::Connection;
 
 use control_acceso::database::backup::{
-    ResultadoValidacion, TipoRespaldo, crear_respaldo, listar_respaldos, validar_respaldo,
+    ResultadoValidacion, TipoRespaldo, crear_respaldo, listar_respaldos, restaurar_respaldo,
+    validar_respaldo,
 };
 use control_acceso::database::repositories::contratista_repository::{
     ContratistaRepository, SqliteContratistaRepository,
@@ -28,19 +29,17 @@ fn directorio_temporal(nombre: &str) -> PathBuf {
     ))
 }
 
-fn base_con_datos() -> Connection {
-    let connection = Connection::open_in_memory().unwrap();
-    initialize_database(&connection).unwrap();
-    let empresa_id = SqliteEmpresaRepository::new(&connection)
+fn poblar(connection: &Connection, nombre_empresa: &str, cedula: &str) {
+    let empresa_id = SqliteEmpresaRepository::new(connection)
         .crear(&Empresa {
             id: 0,
-            nombre: "Constructora Alfa".into(),
+            nombre: nombre_empresa.into(),
         })
         .unwrap();
-    SqliteContratistaRepository::new(&connection)
+    SqliteContratistaRepository::new(connection)
         .crear(&Contratista {
             id: 0,
-            cedula: "101010101".into(),
+            cedula: cedula.into(),
             nombre: "Ana Solano".into(),
             empresa_id,
             tipo_ingreso: TipoIngreso::Swat,
@@ -49,6 +48,19 @@ fn base_con_datos() -> Connection {
             tiene_acceso: true,
         })
         .unwrap();
+}
+
+fn base_en_archivo(ruta: &std::path::Path, nombre_empresa: &str, cedula: &str) -> Connection {
+    let connection = Connection::open(ruta).unwrap();
+    initialize_database(&connection).unwrap();
+    poblar(&connection, nombre_empresa, cedula);
+    connection
+}
+
+fn base_con_datos() -> Connection {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    poblar(&connection, "Constructora Alfa", "101010101");
     connection
 }
 
@@ -218,4 +230,118 @@ fn listar_respaldos_ordena_del_mas_reciente_y_omite_partial() {
 fn listar_respaldos_de_un_directorio_inexistente_devuelve_vacio() {
     let directorio = directorio_temporal("inexistente");
     assert!(listar_respaldos(&directorio).unwrap().is_empty());
+}
+
+fn contar(ruta: &std::path::Path, tabla: &str) -> i64 {
+    Connection::open(ruta)
+        .unwrap()
+        .query_row(&format!("SELECT COUNT(*) FROM {tabla}"), [], |r| r.get(0))
+        .unwrap()
+}
+
+#[test]
+fn restaurar_un_respaldo_valido_reemplaza_los_datos_activos() {
+    let directorio = directorio_temporal("restaurar_ok");
+    std::fs::create_dir_all(&directorio).unwrap();
+    let ruta_activa = directorio.join("activa.db");
+    let ruta_candidata_origen = directorio.join("candidata_origen.db");
+
+    let activa = base_en_archivo(&ruta_activa, "Empresa Vieja", "1");
+    let origen_candidata = base_en_archivo(&ruta_candidata_origen, "Empresa Nueva", "2");
+    // Un segundo contratista en la candidata, para distinguirla claramente
+    // de la activa (que sólo tiene uno) después de restaurar.
+    poblar(&origen_candidata, "Otra Empresa", "3");
+    let respaldo = crear_respaldo(&origen_candidata, &directorio.join("respaldos"), TipoRespaldo::Manual)
+        .unwrap();
+    drop(activa);
+    drop(origen_candidata);
+
+    restaurar_respaldo(&respaldo.ruta, &ruta_activa).unwrap();
+
+    assert_eq!(contar(&ruta_activa, "empresas"), 2);
+    assert_eq!(contar(&ruta_activa, "contratistas"), 2);
+    let nombre: String = Connection::open(&ruta_activa)
+        .unwrap()
+        .query_row("SELECT nombre FROM empresas ORDER BY id LIMIT 1", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(nombre, "Empresa Nueva");
+
+    let _ = std::fs::remove_dir_all(&directorio);
+}
+
+#[test]
+fn restaurar_rechaza_un_candidato_invalido_sin_tocar_la_base_activa() {
+    let directorio = directorio_temporal("restaurar_invalido");
+    std::fs::create_dir_all(&directorio).unwrap();
+    let ruta_activa = directorio.join("activa.db");
+    let activa = base_en_archivo(&ruta_activa, "Empresa Original", "1");
+    drop(activa);
+
+    let ruta_candidata = directorio.join("candidata_rota.db");
+    std::fs::write(&ruta_candidata, b"esto no es un archivo sqlite").unwrap();
+
+    let resultado = restaurar_respaldo(&ruta_candidata, &ruta_activa);
+    assert!(resultado.is_err());
+    assert_eq!(contar(&ruta_activa, "empresas"), 1);
+    let nombre: String = Connection::open(&ruta_activa)
+        .unwrap()
+        .query_row("SELECT nombre FROM empresas", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(nombre, "Empresa Original", "la base activa no debe tocarse si el candidato no valida");
+
+    let _ = std::fs::remove_dir_all(&directorio);
+}
+
+#[test]
+fn restaurar_reinstala_la_base_anterior_si_falla_despues_del_intercambio() {
+    let directorio = directorio_temporal("restaurar_rollback");
+    std::fs::create_dir_all(&directorio).unwrap();
+    let ruta_activa = directorio.join("activa.db");
+    let activa = base_en_archivo(&ruta_activa, "Empresa Original", "1");
+    drop(activa);
+
+    // Candidato que pasa validar_respaldo (SQLite válido, integridad ok, sin
+    // violaciones de FK, user_version dentro del rango conocido) pero que no
+    // tiene el esquema real que esa versión supone tener: al intentar
+    // migrarlo de verdad después del intercambio, tiene que fallar.
+    let ruta_candidata = directorio.join("candidata_incompatible.db");
+    let candidata = Connection::open(&ruta_candidata).unwrap();
+    candidata.execute_batch("PRAGMA user_version = 1;").unwrap();
+    drop(candidata);
+
+    let resultado = restaurar_respaldo(&ruta_candidata, &ruta_activa);
+    assert!(resultado.is_err());
+
+    // La base activa debe seguir siendo la original, no la candidata rota,
+    // y no debe quedar ningún archivo temporal de la operación.
+    assert!(ruta_activa.exists());
+    assert_eq!(contar(&ruta_activa, "empresas"), 1);
+    let nombre: String = Connection::open(&ruta_activa)
+        .unwrap()
+        .query_row("SELECT nombre FROM empresas", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(nombre, "Empresa Original");
+    assert!(!directorio.join(".control_acceso_restauracion.previa").exists());
+    assert!(!directorio.join(".control_acceso_restauracion.tmp").exists());
+
+    let _ = std::fs::remove_dir_all(&directorio);
+}
+
+#[test]
+fn restaurar_sobre_una_ruta_activa_inexistente_funciona_como_primera_carga() {
+    let directorio = directorio_temporal("restaurar_sin_activa");
+    std::fs::create_dir_all(&directorio).unwrap();
+    let ruta_activa = directorio.join("no_existe_todavia.db");
+
+    let ruta_candidata_origen = directorio.join("candidata_origen.db");
+    let origen = base_en_archivo(&ruta_candidata_origen, "Empresa Semilla", "1");
+    let respaldo = crear_respaldo(&origen, &directorio.join("respaldos"), TipoRespaldo::Manual).unwrap();
+    drop(origen);
+
+    restaurar_respaldo(&respaldo.ruta, &ruta_activa).unwrap();
+
+    assert!(ruta_activa.exists());
+    assert_eq!(contar(&ruta_activa, "empresas"), 1);
+
+    let _ = std::fs::remove_dir_all(&directorio);
 }

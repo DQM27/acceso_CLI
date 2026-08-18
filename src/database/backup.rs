@@ -18,7 +18,7 @@ use std::time::Duration;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use rusqlite::{Connection, OpenFlags};
 
-use super::schema::SCHEMA_VERSION;
+use super::schema::{SCHEMA_VERSION, SchemaError, initialize_database};
 
 const PREFIJO_ARCHIVO: &str = "control_acceso";
 const FORMATO_FECHA: &str = "%Y-%m-%d_%H%M%S";
@@ -122,6 +122,20 @@ impl From<std::io::Error> for RespaldoError {
     }
 }
 
+impl From<SchemaError> for RespaldoError {
+    fn from(error: SchemaError) -> Self {
+        match error {
+            SchemaError::Sqlite(error) => Self::Sqlite(error),
+            SchemaError::BaseAjena => Self::ValidacionFallida(ResultadoValidacion::Invalido(
+                "el archivo restaurado no es una base de Control Acceso".to_owned(),
+            )),
+            SchemaError::IntegridadInvalida(detalle) => {
+                Self::ValidacionFallida(ResultadoValidacion::Invalido(detalle))
+            }
+        }
+    }
+}
+
 /// Crea un respaldo consistente de `origen` dentro de `directorio_respaldos`
 /// (se crea si no existe) usando la Online Backup API. Sólo devuelve `Ok`
 /// una vez que el archivo ya pasó `integrity_check` + `foreign_key_check` y
@@ -163,6 +177,79 @@ pub fn crear_respaldo(
         creado_en: ahora,
         tipo,
     })
+}
+
+/// Reemplaza `ruta_activa` por `ruta_candidata` (Fase 2 de `plan-respaldos.md`).
+///
+/// **Debe llamarse con la conexión de `ruta_activa` ya cerrada.** SQLite
+/// documenta los riesgos de mover o reemplazar un archivo con una
+/// transacción o conexión activa sobre él
+/// ([How To Corrupt An SQLite Database File](https://sqlite.org/howtocorrupt.html));
+/// en Windows además el propio sistema operativo puede impedir el rename
+/// mientras el archivo esté abierto. El llamador es responsable de, en este
+/// orden: 1) crear el respaldo `PreRestauracion` de la base activa mientras
+/// la conexión sigue abierta (`crear_respaldo` necesita una `&Connection`
+/// real), 2) cerrar/descartar esa conexión (`AppCore`), 3) llamar a esta
+/// función, 4) si devuelve `Ok`, volver a abrir la base y exigir un login
+/// nuevo. `InstanciaGuard` debe seguir vivo durante todo el proceso — esta
+/// función no lo toca, es responsabilidad del llamador.
+///
+/// No destruye la base activa hasta haber copiado la candidata a un
+/// temporal en el mismo directorio: si la copia falla, la base activa ni se
+/// entera. Si algo falla después del intercambio (migración incompatible,
+/// archivo corrupto pese a la validación previa), reinstala automáticamente
+/// la base que estaba activa antes de empezar.
+pub fn restaurar_respaldo(ruta_candidata: &Path, ruta_activa: &Path) -> Result<(), RespaldoError> {
+    let validacion = validar_respaldo(ruta_candidata)?;
+    if !validacion.es_valido() {
+        return Err(RespaldoError::ValidacionFallida(validacion));
+    }
+
+    let directorio = ruta_activa.parent().unwrap_or_else(|| Path::new("."));
+    let ruta_temporal = directorio.join(".control_acceso_restauracion.tmp");
+    let ruta_previa = directorio.join(".control_acceso_restauracion.previa");
+    let _ = fs::remove_file(&ruta_temporal);
+    let _ = fs::remove_file(&ruta_previa);
+
+    // Paso 1: copiar la candidata a un temporal en el mismo directorio, sin
+    // tocar todavía la base activa.
+    fs::copy(ruta_candidata, &ruta_temporal)?;
+
+    // Paso 2: intercambiar sin destruir inmediatamente la anterior — dos
+    // renames en vez de una sobrescritura directa, para que en cualquier
+    // punto intermedio quede algo recuperable.
+    let habia_base_activa = ruta_activa.exists();
+    if habia_base_activa {
+        fs::rename(ruta_activa, &ruta_previa)?;
+    }
+    if let Err(error) = fs::rename(&ruta_temporal, ruta_activa) {
+        if habia_base_activa {
+            let _ = fs::rename(&ruta_previa, ruta_activa);
+        }
+        return Err(error.into());
+    }
+
+    // Paso 3: abrir la base ya intercambiada y aplicar sólo las migraciones
+    // compatibles (initialize_database ya rechaza una versión futura).
+    match abrir_y_verificar(ruta_activa) {
+        Ok(()) => {
+            let _ = fs::remove_file(&ruta_previa);
+            Ok(())
+        }
+        Err(error) => {
+            let _ = fs::remove_file(ruta_activa);
+            if habia_base_activa {
+                let _ = fs::rename(&ruta_previa, ruta_activa);
+            }
+            Err(error)
+        }
+    }
+}
+
+fn abrir_y_verificar(ruta: &Path) -> Result<(), RespaldoError> {
+    let connection = Connection::open(ruta)?;
+    initialize_database(&connection)?;
+    Ok(())
 }
 
 /// Abre `ruta` en modo sólo lectura (nunca crea ni modifica el archivo) y

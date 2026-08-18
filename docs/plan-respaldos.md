@@ -2,8 +2,10 @@
 
 > **Prioridad:** alta, obligatoria antes de producción.
 >
-> **Estado:** Fase 1 (motor de creación y validación) implementada y probada —
-> ver detalle al final de esa sección. Fases 2-4 (restauración, pantalla,
+> **Estado:** Fase 1 (motor de creación y validación) y el motor de la Fase 2
+> (`restaurar_respaldo`) están implementados y probados — ver detalle al final
+> de cada sección. La orquestación de la Fase 2 con la TUI (cerrar sesión,
+> descartar `AppCore`, exigir login nuevo) y las Fases 3-4 (pantalla,
 > automatización/retención) siguen pendientes.
 
 ## Objetivo
@@ -113,26 +115,54 @@ listado ordena del más reciente y nunca incluye `.partial`.
 verificada a otra ubicación, restauración, la pantalla de la TUI, y la política de
 retención/automatización antes de migraciones.
 
-## Fase 2: restauración segura
+## Fase 2: restauración segura — motor implementado, orquestación con la TUI pendiente
 
-1. Seleccionar el respaldo mediante su identificador, nunca mediante texto de interfaz
-   usado directamente como ruta.
-2. Volver a ejecutar integridad, claves foráneas y compatibilidad de esquema.
-3. Rechazar una base creada por una versión futura que la aplicación no comprenda.
-4. Crear un respaldo `pre_restauracion` de la base activa.
-5. Solicitar al bucle principal terminar la sesión y cerrar la TUI.
-6. Descartar `AppCore` para cerrar completamente SQLite.
-7. Mantener vivo `InstanciaGuard` durante toda la operación.
-8. Copiar la candidata a un archivo temporal dentro del directorio de datos.
-9. Intercambiar la base activa sin destruir inmediatamente la anterior.
-10. Abrir la base restaurada, aplicar sólo migraciones compatibles y repetir las
-    verificaciones.
-11. Si cualquier paso falla, reinstalar automáticamente la base anterior y verificarla.
-12. Si termina correctamente, volver al flujo de arranque y exigir un nuevo login.
+`restaurar_respaldo(ruta_candidata, ruta_activa)` en `src/database/backup.rs` implementa
+los pasos que son puramente de motor/archivo (1-4, 8-11); es una función pura que no
+depende de `AppCore` ni de la TUI, igual que el resto de este módulo. Los pasos 5-7 y 12
+(terminar sesión, cerrar la TUI, mantener `InstanciaGuard` vivo, exigir login nuevo) son,
+por diseño, responsabilidad de quien la llame — hoy nadie todavía, porque la orquestación
+con `App`/`main.rs` se conecta cuando se construya la pantalla (Fase 3).
 
-No se moverá ni reemplazará una base mientras tenga una conexión abierta. SQLite
-documenta los riesgos de copiar o restaurar durante transacciones activas en
+1. [x] Selección por identificador: la función recibe una `&Path` ya resuelta (la que
+   entrega `listar_respaldos`), nunca texto de interfaz interpretado como ruta — eso le
+   toca comprobarlo a la futura pantalla antes de llamar aquí.
+2. [x] Vuelve a correr `validar_respaldo` (integridad + claves foráneas + compatibilidad
+   de esquema) antes de tocar cualquier archivo.
+3. [x] Rechaza una base de una versión de esquema futura (vía `validar_respaldo`, antes de
+   copiar nada).
+4. [ ] Crear el respaldo `pre_restauracion` de la base activa — **no está dentro de
+   `restaurar_respaldo`, a propósito**: para respaldar con la Online Backup API hace falta
+   una `&Connection` abierta, y esta función asume la conexión ya cerrada (ver punto
+   siguiente). Le corresponde a quien orqueste: llamar a `crear_respaldo(&conexion, dir,
+   TipoRespaldo::PreRestauracion)` primero, con la conexión todavía abierta.
+5. [ ] Terminar sesión y cerrar la TUI — pendiente, vive en `App`/`main.rs`, no en este
+   módulo.
+6. [ ] Descartar `AppCore` — pendiente, mismo motivo; la documentación de la función deja
+   explícito que debe llamarse con la conexión ya cerrada.
+7. [ ] Mantener `InstanciaGuard` vivo — pendiente; esta función no lo toca, es
+   responsabilidad del llamador (ya está vivo en `main.rs` durante toda la ejecución).
+8. [x] Copia la candidata a un temporal en el mismo directorio antes de tocar la base
+   activa — si la copia falla, la base activa ni se entera.
+9. [x] Intercambia con dos `rename` (activa → `.previa`, temporal → activa) en vez de una
+   sobrescritura directa.
+10. [x] Abre la base ya intercambiada y corre `initialize_database` de verdad (aplica
+    migraciones reales, no sólo el chequeo superficial de `validar_respaldo`).
+11. [x] Si cualquier paso posterior al intercambio falla, reinstala automáticamente
+    `.previa` sobre la ruta activa.
+12. [ ] Volver al flujo de arranque y exigir login nuevo — pendiente, vive en `App`.
+
+No se mueve ni reemplaza una base mientras tenga una conexión abierta — la documentación
+de la función lo deja como precondición explícita. SQLite documenta los riesgos de copiar
+o restaurar durante transacciones activas en
 [How To Corrupt An SQLite Database File](https://sqlite.org/howtocorrupt.html).
+
+Probado en `tests/respaldo_backup.rs`: restaurar un candidato válido reemplaza los datos
+activos por los de la candidata; un candidato inválido se rechaza sin tocar la base
+activa; si la migración falla después del intercambio (candidato "sano" en la validación
+superficial pero con un esquema real incompatible), se reinstala automáticamente la base
+anterior y no queda ningún archivo temporal; restaurar sobre una ruta activa inexistente
+funciona como primera carga.
 
 ## Fase 3: pantalla de respaldos
 
