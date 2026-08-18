@@ -20,9 +20,8 @@ const ANCHO_PANEL_LATERAL: u16 = 100;
 
 const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓", "Mover"),
-    CommandHint::new("ENTER", "Detalle"),
+    CommandHint::new("ENTER", "Editar"),
     CommandHint::new("N", "Nuevo"),
-    CommandHint::new("E", "Editar"),
     CommandHint::new("P", "Clave"),
     CommandHint::new("A", "Estado"),
     CommandHint::new("/", "Buscar"),
@@ -32,16 +31,10 @@ const COMANDOS_BUSQUEDA: &[CommandHint<'static>] = &[
     CommandHint::new("ENTER", "Aplicar"),
     CommandHint::new("ESC", "Cancelar"),
 ];
-const COMANDOS_DETALLE: &[CommandHint<'static>] = &[
-    CommandHint::new("E", "Editar"),
-    CommandHint::new("P", "Clave"),
-    CommandHint::new("A", "Estado"),
-    CommandHint::new("ESC", "Cerrar"),
-];
 const COMANDOS_FORMULARIO: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓/TAB", "Navegar"),
-    CommandHint::new("ENTER", "Cambiar"),
-    CommandHint::new("G", "Guardar"),
+    CommandHint::new("SPACE", "Cambiar"),
+    CommandHint::new("ENTER", "Guardar"),
     CommandHint::new("ESC", "Cancelar"),
 ];
 const COMANDOS_SELECTOR_ROL: &[CommandHint<'static>] = &[
@@ -51,7 +44,7 @@ const COMANDOS_SELECTOR_ROL: &[CommandHint<'static>] = &[
 ];
 const COMANDOS_PASSWORD: &[CommandHint<'static>] = &[
     CommandHint::new("TAB", "Campo"),
-    CommandHint::new("G", "Guardar"),
+    CommandHint::new("ENTER", "Guardar"),
     CommandHint::new("ESC", "Cancelar"),
 ];
 const COMANDOS_CONFIRMACION: &[CommandHint<'static>] = &[
@@ -72,7 +65,6 @@ pub fn render(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: Theme
     let comandos = match &state.modo {
         ModoUsuarios::Normal => COMANDOS_NORMAL,
         ModoUsuarios::Busqueda { .. } => COMANDOS_BUSQUEDA,
-        ModoUsuarios::Detalle { .. } => COMANDOS_DETALLE,
         ModoUsuarios::Formulario(f) if f.selector_rol.is_some() => COMANDOS_SELECTOR_ROL,
         ModoUsuarios::Formulario(_) => COMANDOS_FORMULARIO,
         ModoUsuarios::CambioPassword(_) => COMANDOS_PASSWORD,
@@ -87,6 +79,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: Theme
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: comandos,
+        help_expanded: state.ayuda_expandida,
     };
     let areas = shell.render(frame, area, theme);
 
@@ -316,11 +309,6 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: The
 /// el cursor sobre el campo de texto enfocado.
 fn render_panel(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: Theme) {
     match &state.modo {
-        ModoUsuarios::Detalle { id } => {
-            if let Some(u) = state.usuario(*id) {
-                render_detalle(frame, area, u, theme);
-            }
-        }
         ModoUsuarios::ConfirmacionEstado(c) => {
             if let Some(u) = state.usuario(c.id) {
                 render_detalle(frame, area, u, theme);
@@ -328,12 +316,13 @@ fn render_panel(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: The
         }
         ModoUsuarios::Formulario(f) => render_formulario(frame, area, f, theme),
         ModoUsuarios::CambioPassword(f) => render_password(frame, area, f, theme),
-        ModoUsuarios::Normal | ModoUsuarios::Busqueda { .. } => {
-            frame.render_widget(
-                Paragraph::new("Seleccione ENTER para ver el detalle.").style(theme.muted()),
+        ModoUsuarios::Normal | ModoUsuarios::Busqueda { .. } => match state.seleccionado() {
+            Some(u) => render_detalle(frame, area, u, theme),
+            None => frame.render_widget(
+                Paragraph::new("No hay un registro seleccionado.").style(theme.muted()),
                 area,
-            );
-        }
+            ),
+        },
     }
 }
 

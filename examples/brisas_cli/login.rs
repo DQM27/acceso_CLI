@@ -275,6 +275,7 @@ impl LoginPilot {
             status: &self.status,
             status_kind: self.status_kind,
             commands: &commands,
+            help_expanded: false,
         };
         let areas = shell.render(frame, area, theme);
         self.render_form(frame, areas.body, theme);

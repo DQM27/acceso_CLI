@@ -22,9 +22,8 @@ const ANCHO_PANEL_LATERAL: u16 = 100;
 
 const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓", "Mover"),
-    CommandHint::new("ENTER", "Detalle"),
+    CommandHint::new("ENTER", "Editar"),
     CommandHint::new("N", "Nuevo"),
-    CommandHint::new("E", "Editar"),
     CommandHint::new("/", "Buscar"),
     CommandHint::new("C", "Columnas"),
     CommandHint::new("ESC", "Volver"),
@@ -33,12 +32,10 @@ const COMANDOS_BUSQUEDA: &[CommandHint<'static>] = &[
     CommandHint::new("ENTER", "Aplicar"),
     CommandHint::new("ESC", "Cancelar"),
 ];
-const COMANDOS_DETALLE: &[CommandHint<'static>] =
-    &[CommandHint::new("E", "Editar"), CommandHint::new("ESC", "Cerrar")];
 const COMANDOS_FORMULARIO: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓/TAB", "Navegar"),
-    CommandHint::new("ENTER", "Cambiar"),
-    CommandHint::new("G", "Guardar"),
+    CommandHint::new("SPACE", "Cambiar"),
+    CommandHint::new("ENTER", "Guardar"),
     CommandHint::new("ESC", "Cancelar"),
 ];
 const COMANDOS_DESPLEGABLE: &[CommandHint<'static>] = &[
@@ -65,7 +62,6 @@ pub fn render(frame: &mut Frame, area: Rect, state: &ContratistasState, theme: T
     let comandos = match &state.modo {
         ModoContratistas::Normal => COMANDOS_NORMAL,
         ModoContratistas::Busqueda { .. } => COMANDOS_BUSQUEDA,
-        ModoContratistas::Detalle { .. } => COMANDOS_DETALLE,
         ModoContratistas::Formulario(f) if f.desplegable.is_some() => COMANDOS_DESPLEGABLE,
         ModoContratistas::Formulario(_) => COMANDOS_FORMULARIO,
         ModoContratistas::Columnas { .. } => COMANDOS_COLUMNAS,
@@ -79,6 +75,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &ContratistasState, theme: T
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: comandos,
+        help_expanded: state.ayuda_expandida,
     };
     let areas = shell.render(frame, area, theme);
 
@@ -342,19 +339,15 @@ fn estilo_fecha(fecha: Option<NaiveDate>, hoy: NaiveDate, theme: Theme) -> Style
 /// el cursor sobre el campo de texto enfocado.
 fn render_panel(frame: &mut Frame, area: Rect, state: &ContratistasState, theme: Theme) {
     match &state.modo {
-        ModoContratistas::Detalle { id } => {
-            if let Some(c) = state.registro(*id) {
-                render_detalle(frame, area, c, state.hoy, theme);
-            }
-        }
         ModoContratistas::Formulario(f) => render_formulario(frame, area, state, f, theme),
         ModoContratistas::Columnas { seleccion } => render_columnas(frame, area, state, *seleccion, theme),
-        ModoContratistas::Normal | ModoContratistas::Busqueda { .. } => {
-            frame.render_widget(
-                Paragraph::new("Seleccione ENTER para ver el detalle.").style(theme.muted()),
+        ModoContratistas::Normal | ModoContratistas::Busqueda { .. } => match state.seleccionado() {
+            Some(c) => render_detalle(frame, area, c, state.hoy, theme),
+            None => frame.render_widget(
+                Paragraph::new("No hay un registro seleccionado.").style(theme.muted()),
                 area,
-            );
-        }
+            ),
+        },
     }
 }
 

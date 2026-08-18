@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 
-use super::Theme;
+use super::{EMERGENCY_EXIT_HINT, THEME_HINT, Theme};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusKind {
@@ -43,6 +43,9 @@ pub struct ScreenShell<'a> {
     pub status: &'a str,
     pub status_kind: StatusKind,
     pub commands: &'a [CommandHint<'a>],
+    /// Si la ayuda está expandida (F1), se agrega una segunda línea de pie con
+    /// los atajos transversales menos frecuentes (tema, salida de emergencia).
+    pub help_expanded: bool,
 }
 
 impl ScreenShell<'_> {
@@ -144,33 +147,57 @@ impl ScreenShell<'_> {
     }
 
     fn command_lines(&self, max_width: usize, theme: Theme) -> Vec<Line<'static>> {
-        let mut lines = Vec::new();
-        let mut spans = Vec::new();
-        let mut line_width = 0;
+        let ayuda_label = if self.help_expanded {
+            "cerrar ayuda"
+        } else {
+            "más"
+        };
+        let primary: Vec<CommandHint<'_>> = self
+            .commands
+            .iter()
+            .copied()
+            .chain(std::iter::once(CommandHint::new("F1", ayuda_label)))
+            .collect();
 
-        for command in self.commands {
-            let command_width = Line::from(format!("{} {}", command.key, command.label)).width();
-            let separator_width = usize::from(line_width > 0) * 2;
-            if line_width > 0 && line_width + separator_width + command_width > max_width {
-                lines.push(Line::from(std::mem::take(&mut spans)));
-                line_width = 0;
-            }
-            if line_width > 0 {
-                spans.push(Span::styled("  ", theme.base()));
-                line_width += 2;
-            }
-            spans.push(Span::styled(command.key.to_owned(), theme.accent()));
-            spans.push(Span::styled(format!(" {}", command.label), theme.base()));
-            line_width += command_width;
-        }
-        if !spans.is_empty() {
-            lines.push(Line::from(spans));
+        let mut lines = wrap_commands(&primary, max_width, theme);
+        if self.help_expanded {
+            lines.extend(wrap_commands(
+                &[THEME_HINT, EMERGENCY_EXIT_HINT],
+                max_width,
+                theme,
+            ));
         }
         if lines.is_empty() {
             lines.push(Line::default());
         }
         lines
     }
+}
+
+fn wrap_commands(commands: &[CommandHint<'_>], max_width: usize, theme: Theme) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    let mut spans = Vec::new();
+    let mut line_width = 0;
+
+    for command in commands {
+        let command_width = Line::from(format!("{} {}", command.key, command.label)).width();
+        let separator_width = usize::from(line_width > 0) * 2;
+        if line_width > 0 && line_width + separator_width + command_width > max_width {
+            lines.push(Line::from(std::mem::take(&mut spans)));
+            line_width = 0;
+        }
+        if line_width > 0 {
+            spans.push(Span::styled("  ", theme.base()));
+            line_width += 2;
+        }
+        spans.push(Span::styled(command.key.to_owned(), theme.accent()));
+        spans.push(Span::styled(format!(" {}", command.label), theme.base()));
+        line_width += command_width;
+    }
+    if !spans.is_empty() {
+        lines.push(Line::from(spans));
+    }
+    lines
 }
 
 pub fn panel(title: &str, theme: Theme, focused: bool) -> Block<'static> {
@@ -288,6 +315,7 @@ mod tests {
             status: "Preparado",
             status_kind: StatusKind::Normal,
             commands: &commands,
+            help_expanded: false,
         };
 
         terminal
@@ -305,5 +333,50 @@ mod tests {
             assert_eq!(buffer[(0, y)].symbol(), " ");
             assert_eq!(buffer[(buffer.area.width - 1, y)].symbol(), " ");
         }
+    }
+
+    fn texto_renderizado(shell: &ScreenShell<'_>) -> String {
+        let backend = TestBackend::new(60, 20);
+        let mut terminal = Terminal::new(backend).expect("backend de prueba");
+        terminal
+            .draw(|frame| {
+                shell.render(frame, frame.area(), ThemePreset::Classic.theme());
+            })
+            .expect("debe renderizar");
+        terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect()
+    }
+
+    #[test]
+    fn f1_agrega_una_segunda_linea_con_tema_y_salida_de_emergencia() {
+        let commands = [CommandHint::new("ESC", "Salir")];
+        let mut shell = ScreenShell {
+            product: "BRISAS CLI",
+            screen: "PRUEBA",
+            context: "LOCAL",
+            clock: "12:00:00",
+            status: "Preparado",
+            status_kind: StatusKind::Normal,
+            commands: &commands,
+            help_expanded: false,
+        };
+
+        let colapsado = texto_renderizado(&shell);
+        assert!(colapsado.contains("F1"));
+        assert!(!colapsado.contains("CTRL+C"));
+        assert!(!colapsado.contains("Salida de emergencia"));
+
+        shell.help_expanded = true;
+        let expandido = texto_renderizado(&shell);
+        assert!(expandido.contains("cerrar ayuda"));
+        assert!(expandido.contains("CTRL+C"));
+        assert!(expandido.contains("Salida de emergencia"));
+        assert!(expandido.contains("F7"));
+        assert!(expandido.contains("Tema"));
     }
 }

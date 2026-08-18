@@ -2,6 +2,8 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
+use crate::tui::ui_kit::{StandardCommand, standard_command};
+
 #[path = "render.rs"]
 pub(super) mod render;
 
@@ -49,6 +51,7 @@ pub struct ConfiguracionInicialState {
     solicitud: Option<SolicitudRoot>,
     cursor_iniciado: Instant,
     cursor_visible: bool,
+    ayuda_expandida: bool,
 }
 
 impl std::fmt::Debug for ConfiguracionInicialState {
@@ -77,12 +80,17 @@ impl Default for ConfiguracionInicialState {
             solicitud: None,
             cursor_iniciado: Instant::now(),
             cursor_visible: true,
+            ayuda_expandida: false,
         }
     }
 }
 
 impl ConfiguracionInicialState {
     pub fn handle_key(&mut self, key: KeyEvent) -> AccionConfiguracion {
+        if standard_command(key) == Some(StandardCommand::Help) {
+            self.ayuda_expandida = !self.ayuda_expandida;
+            return AccionConfiguracion::Ninguna;
+        }
         if self.estado == EstadoConfiguracion::Creando {
             return AccionConfiguracion::Ninguna;
         }

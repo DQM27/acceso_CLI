@@ -96,6 +96,23 @@ fn representacion_para_render_no_expone_password() {
 }
 
 #[test]
+fn escape_limpia_la_contrasena_y_senala_salir() {
+    let mut state = login_completo();
+    assert_eq!(state.handle_key(tecla(KeyCode::Esc)), AccionLogin::Salir);
+    assert!(state.password.is_empty());
+}
+
+#[test]
+fn escape_funciona_incluso_mientras_valida() {
+    let mut state = login_completo();
+    state.handle_key(tecla(KeyCode::Enter));
+    assert!(matches!(state.estado(), EstadoLogin::Validando { .. }));
+
+    assert_eq!(state.handle_key(tecla(KeyCode::Esc)), AccionLogin::Salir);
+    assert!(state.password.is_empty());
+}
+
+#[test]
 fn cursor_parpadea_y_se_reinicia_al_escribir() {
     let inicio = Instant::now();
     let mut state = LoginState {

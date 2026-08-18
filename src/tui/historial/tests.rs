@@ -1,8 +1,8 @@
-use chrono::NaiveDate;
+use chrono::{Duration, NaiveDate};
 
-use super::render::valor;
 use super::*;
-use crate::models::{empresa::Empresa, medio_ingreso::MedioIngreso};
+use crate::database::queries::ingresos::EstadoMovimiento;
+use crate::models::{empresa::Empresa, medio_ingreso::MedioIngreso, tipo_ingreso::TipoIngreso};
 
 fn tecla(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
@@ -85,29 +85,12 @@ fn filtros_mapean_ids_enums_gafete_exacto_y_texto() {
 fn busqueda_rapida_se_combina_con_filtros_aplicados() {
     let mut state = HistorialState::default();
     state.filtro_aplicado.empresa_id = Some(3);
-    state.handle_key(tecla(KeyCode::Char('/')));
     let accion = state.handle_key(tecla(KeyCode::Char('a')));
     let AccionHistorial::Consultar(filtro) = accion else {
         panic!("debía consultar")
     };
     assert_eq!(filtro.texto_persona.as_deref(), Some("a"));
     assert_eq!(filtro.empresa_id, Some(3));
-}
-
-#[test]
-fn selector_de_empresa_conserva_id_real() {
-    let mut state = HistorialState::default();
-    state.completar_empresas(Ok(vec![Empresa {
-        id: 42,
-        nombre: "Brisas".into(),
-    }]));
-    state.modo = ModoHistorial::Desplegable {
-        campo: CampoFiltro::Empresa,
-        seleccion_filtro: 3,
-        opcion: 1,
-    };
-    state.handle_key(tecla(KeyCode::Enter));
-    assert_eq!(state.filtro_edicion.empresa_id, Some(42));
 }
 
 #[test]
@@ -141,7 +124,6 @@ fn page_down_y_page_up_emiten_offsets_de_cincuenta() {
 fn una_busqueda_nueva_descarta_el_corte_de_la_navegacion_anterior() {
     let mut state = HistorialState::default();
     state.completar(Ok(pagina(50, 120)));
-    state.handle_key(tecla(KeyCode::Char('/')));
     let AccionHistorial::Consultar(filtro) = state.handle_key(tecla(KeyCode::Char('a'))) else {
         panic!("debía iniciar una consulta nueva")
     };
@@ -177,31 +159,77 @@ fn fechas_y_campos_rechazan_formato_o_caracteres_invalidos() {
         )
         .is_err()
     );
-    let mut state = HistorialState::default();
-    state.filtro_edicion.desde.clear();
-    for c in "12082026abc99".chars() {
-        state.agregar(CampoFiltro::Desde, c);
-    }
-    for c in "12a3".chars() {
-        state.agregar(CampoFiltro::Gafete, c);
-    }
-    assert_eq!(state.filtro_edicion.desde, "12/08/2026");
-    assert_eq!(state.filtro_edicion.gafete, "123");
 }
 
 #[test]
-fn detalle_y_columnas_siguen_siendo_solo_presentacion() {
+fn panel_refleja_la_seleccion_resaltada_sin_pasos_extra() {
     let mut state = HistorialState::default();
-    state.completar(Ok(pagina(1, 1)));
-    assert_eq!(
-        state.handle_key(tecla(KeyCode::Enter)),
-        AccionHistorial::Ninguna
-    );
-    assert!(matches!(state.modo, ModoHistorial::Detalle { .. }));
-    state.handle_key(tecla(KeyCode::Esc));
-    state.handle_key(tecla(KeyCode::Char('c')));
+    state.completar(Ok(pagina(2, 2)));
+    assert_eq!(state.seleccionado().map(|r| r.registro_id), Some(1));
+    state.handle_key(tecla(KeyCode::Down));
+    assert_eq!(state.seleccionado().map(|r| r.registro_id), Some(2));
+}
+
+#[test]
+fn f3_cicla_entre_las_tres_vistas() {
+    let mut state = HistorialState::default();
+    assert_eq!(state.vista, ViewMode::Timeline);
+    state.handle_key(tecla(KeyCode::F(3)));
+    assert_eq!(state.vista, ViewMode::Classic);
+    state.handle_key(tecla(KeyCode::F(3)));
+    assert_eq!(state.vista, ViewMode::Heatmap);
+    state.handle_key(tecla(KeyCode::F(3)));
+    assert_eq!(state.vista, ViewMode::Timeline);
+}
+
+#[test]
+fn f4_no_hace_nada_fuera_de_la_vista_clasica_y_letras_sueltas_van_a_la_busqueda() {
+    let mut state = HistorialState::default();
+    state.handle_key(tecla(KeyCode::F(4)));
+    assert_eq!(state.modo, ModoHistorial::Normal);
+
+    state.handle_key(tecla(KeyCode::Char('f')));
+    assert_eq!(state.modo, ModoHistorial::Normal);
+    assert_eq!(state.busqueda, "f");
+}
+
+#[test]
+fn f4_abre_el_editor_de_columnas_solo_en_la_vista_clasica() {
+    let mut state = HistorialState::default();
+    state.handle_key(tecla(KeyCode::F(3)));
+    assert_eq!(state.vista, ViewMode::Classic);
+    state.handle_key(tecla(KeyCode::F(4)));
+    assert!(matches!(state.modo, ModoHistorial::Columnas { seleccion: 0 }));
+
     state.handle_key(tecla(KeyCode::Char(' ')));
-    assert!(!state.columnas[0].1);
+    assert!(!state.columnas_clasica[0].1);
+
+    state.handle_key(tecla(KeyCode::Esc));
+    assert_eq!(state.modo, ModoHistorial::Normal);
+}
+
+#[test]
+fn el_mapa_de_calor_navega_por_semana_y_dia_y_hace_drill_down_al_timeline() {
+    let mut state = HistorialState::default();
+    state.completar(Ok(pagina(2, 2)));
+    state.handle_key(tecla(KeyCode::F(3)));
+    state.handle_key(tecla(KeyCode::F(3)));
+    assert_eq!(state.vista, ViewMode::Heatmap);
+
+    let inicial = state.heatmap_seleccion;
+    state.handle_key(tecla(KeyCode::Down));
+    assert_eq!(state.heatmap_seleccion, inicial + Duration::days(7));
+    state.handle_key(tecla(KeyCode::Up));
+    assert_eq!(state.heatmap_seleccion, inicial);
+    state.handle_key(tecla(KeyCode::Tab));
+    assert_eq!(state.heatmap_seleccion, inicial + Duration::days(1));
+
+    let fecha = state.heatmap_seleccion.format("%d/%m/%Y").to_string();
+    let AccionHistorial::Consultar(_) = state.handle_key(tecla(KeyCode::Enter)) else {
+        panic!("debía consultar al hacer drill-down")
+    };
+    assert_eq!(state.vista, ViewMode::Timeline);
+    assert_eq!(state.busqueda, format!("desde:{fecha} hasta:{fecha}"));
 }
 
 #[test]
@@ -262,7 +290,6 @@ fn busqueda_rapida_admite_clave_valor_y_se_combina_con_filtros_del_panel() {
         nombre: "Expenic Industrial".into(),
     }]));
     state.filtro_aplicado.tipo = Some(TipoIngreso::Praind);
-    state.handle_key(tecla(KeyCode::Char('/')));
     for c in "empresa:Expenic".chars() {
         state.handle_key(tecla(KeyCode::Char(c)));
     }
@@ -277,8 +304,115 @@ fn busqueda_rapida_admite_clave_valor_y_se_combina_con_filtros_del_panel() {
 }
 
 #[test]
-fn activo_muestra_salida_y_usuario_salida_ausentes() {
+fn la_linea_de_tiempo_agrupa_por_dia_y_muestra_el_glifo_de_actividad() {
+    use ratatui::{Terminal, backend::TestBackend};
+
+    let mut state = HistorialState::default();
+    state.completar(Ok(pagina(2, 2)));
+
+    let backend = TestBackend::new(140, 30);
+    let mut terminal = Terminal::new(backend).expect("backend de prueba");
+    terminal
+        .draw(|frame| {
+            render::render(frame, frame.area(), &state, crate::tui::ui_kit::ThemePreset::Brisas.theme())
+        })
+        .expect("debe renderizar");
+    let texto: String = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|celda| celda.symbol())
+        .collect();
+
+    assert!(texto.contains("movimientos"));
+    assert!(texto.contains("Ana Solano"));
+    assert!(texto.contains("Brisas"));
+    assert!(texto.contains("●"));
+    // El panel de detalle refleja al piloto: sin "Evaluación"/"Reglas", con
+    // duración y trazabilidad de quién registró entrada y salida.
+    assert!(texto.contains("Entrada 08:30"));
+    assert!(!texto.contains("Evaluación"));
+    assert!(!texto.contains("Reglas"));
+    assert!(texto.contains("Ingreso registrado por Quintana"));
+}
+
+#[test]
+fn la_vista_clasica_muestra_tabla_completa_y_el_editor_de_columnas_oculta_una() {
+    use ratatui::{Terminal, backend::TestBackend};
+
+    let mut state = HistorialState::default();
+    state.completar(Ok(pagina(2, 2)));
+    state.handle_key(tecla(KeyCode::F(3)));
+    assert_eq!(state.vista, ViewMode::Classic);
+
+    let backend = TestBackend::new(140, 30);
+    let mut terminal = Terminal::new(backend).expect("backend de prueba");
+    terminal
+        .draw(|frame| {
+            render::render(frame, frame.area(), &state, crate::tui::ui_kit::ThemePreset::Brisas.theme())
+        })
+        .expect("debe renderizar");
+    let texto: String = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|celda| celda.symbol())
+        .collect();
+    assert!(texto.contains("Ana Solano"));
+    assert!(texto.contains("CÉDULA"));
+
+    state.handle_key(tecla(KeyCode::F(4)));
+    state.handle_key(tecla(KeyCode::Char(' ')));
+    let backend = TestBackend::new(140, 30);
+    let mut terminal = Terminal::new(backend).expect("backend de prueba");
+    terminal
+        .draw(|frame| {
+            render::render(frame, frame.area(), &state, crate::tui::ui_kit::ThemePreset::Brisas.theme())
+        })
+        .expect("debe renderizar");
+    let texto: String = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|celda| celda.symbol())
+        .collect();
+    assert!(texto.contains("COLUMNAS VISIBLES"));
+}
+
+#[test]
+fn el_mapa_de_calor_renderiza_la_grilla_semanal() {
+    use ratatui::{Terminal, backend::TestBackend};
+
+    let mut state = HistorialState::default();
+    state.completar(Ok(pagina(2, 2)));
+    state.handle_key(tecla(KeyCode::F(3)));
+    state.handle_key(tecla(KeyCode::F(3)));
+    assert_eq!(state.vista, ViewMode::Heatmap);
+
+    let backend = TestBackend::new(140, 30);
+    let mut terminal = Terminal::new(backend).expect("backend de prueba");
+    terminal
+        .draw(|frame| {
+            render::render(frame, frame.area(), &state, crate::tui::ui_kit::ThemePreset::Brisas.theme())
+        })
+        .expect("debe renderizar");
+    let texto: String = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|celda| celda.symbol())
+        .collect();
+    assert!(texto.contains("movimientos"));
+    assert!(texto.contains("Línea de tiempo"));
+}
+
+#[test]
+fn activo_no_tiene_fecha_de_salida_ni_usuario_de_salida() {
     let registro = pagina(1, 1).items.remove(0);
-    assert_eq!(valor(&registro, ColumnaHistorial::Salida), "--");
-    assert_eq!(valor(&registro, ColumnaHistorial::UsuarioSalida), "--");
+    assert_eq!(registro.fecha_hora_salida, None);
+    assert_eq!(registro.usuario_salida_nombre, None);
 }

@@ -22,26 +22,14 @@ const COMANDOS_BUSCAR: &[CommandHint<'static>] = &[
     CommandHint::new("ENTER", "Preparar"),
     CommandHint::new("ESC", "Limpiar/Volver"),
 ];
-const COMANDOS_PREPARACION: &[CommandHint<'static>] = &[
-    CommandHint::new("ENTER", "Continuar"),
-    CommandHint::new("ESC", "Cambiar contratista"),
-];
-const COMANDOS_MEDIO: &[CommandHint<'static>] = &[
-    CommandHint::new("↑↓", "Mover"),
-    CommandHint::new("ENTER", "Continuar"),
+const COMANDOS_FORMULARIO: &[CommandHint<'static>] = &[
+    CommandHint::new("TAB", "Campo"),
+    CommandHint::new("←→", "Cambiar medio"),
+    CommandHint::new("ENTER", "Registrar"),
     CommandHint::new("ESC", "Volver"),
-];
-const COMANDOS_GAFETE: &[CommandHint<'static>] = &[
-    CommandHint::new("ENTER", "Continuar"),
-    CommandHint::new("ESC", "Volver"),
-];
-const COMANDOS_CONFIRMAR: &[CommandHint<'static>] = &[
-    CommandHint::new("Y", "Confirmar"),
-    CommandHint::new("N/ESC", "Volver"),
 ];
 
 pub fn render(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme: Theme) {
-
     if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
         render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "ESC salir", theme);
         return;
@@ -52,10 +40,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme: T
     let (estado_texto, estado_tipo) = estado_shell(state);
     let comandos = match state.etapa {
         EtapaNuevoIngreso::Buscar => COMANDOS_BUSCAR,
-        EtapaNuevoIngreso::Preparacion => COMANDOS_PREPARACION,
-        EtapaNuevoIngreso::Medio { .. } => COMANDOS_MEDIO,
-        EtapaNuevoIngreso::Gafete => COMANDOS_GAFETE,
-        EtapaNuevoIngreso::Confirmar => COMANDOS_CONFIRMAR,
+        EtapaNuevoIngreso::Formulario => COMANDOS_FORMULARIO,
     };
 
     let shell = ScreenShell {
@@ -66,6 +51,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme: T
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: comandos,
+        help_expanded: state.ayuda_expandida,
     };
     let areas = shell.render(frame, area, theme);
 
@@ -77,40 +63,19 @@ fn estado_shell(state: &NuevoIngresoState) -> (String, StatusKind) {
         return (error.clone(), StatusKind::Error);
     }
     match state.etapa {
-        EtapaNuevoIngreso::Preparacion => {
+        EtapaNuevoIngreso::Buscar => (String::new(), StatusKind::Normal),
+        EtapaNuevoIngreso::Formulario => {
             let Some(p) = &state.preparacion else {
                 return (String::new(), StatusKind::Normal);
             };
-            if p.tiene_ingreso_activo {
-                return (
-                    "El contratista ya tiene un ingreso activo.".to_owned(),
-                    StatusKind::Error,
-                );
-            }
             match &p.resultado_acceso {
-                ResultadoAcceso::Permitido => ("ACCESO PERMITIDO".to_owned(), StatusKind::Success),
                 ResultadoAcceso::PermitidoConAdvertencia => (
                     "PERMITIDO CON ADVERTENCIA · PRAIND próximo a vencer".to_owned(),
                     StatusKind::Warning,
                 ),
-                ResultadoAcceso::Denegado(m) => {
-                    (texto_denegacion(m.clone()), StatusKind::Error)
-                }
+                _ => (String::new(), StatusKind::Normal),
             }
         }
-        EtapaNuevoIngreso::Medio { .. } => (
-            "Seleccione el medio de ingreso.".to_owned(),
-            StatusKind::Normal,
-        ),
-        EtapaNuevoIngreso::Gafete => (
-            "Ingrese el número de gafete.".to_owned(),
-            StatusKind::Normal,
-        ),
-        EtapaNuevoIngreso::Confirmar => (
-            "¿Confirma el registro de este ingreso?".to_owned(),
-            StatusKind::Warning,
-        ),
-        EtapaNuevoIngreso::Buscar => (String::new(), StatusKind::Normal),
     }
 }
 
@@ -151,7 +116,7 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme
 
     if enfocado_busqueda {
         frame.set_cursor_position((area_busqueda.x, area_busqueda.y));
-    } else if matches!(state.etapa, EtapaNuevoIngreso::Gafete)
+    } else if state.campo_es_gafete()
         && let Some(area_campo) = area_gafete
     {
         let ancho_visible = Line::from(state.gafete_texto.as_str()).width() as u16;
@@ -201,6 +166,20 @@ fn render_campo(
     );
 
     Rect::new(area.x, valor_y, area.width, 1)
+}
+
+fn render_opcion(frame: &mut Frame, area: Rect, etiqueta: &str, valor: &str, activo: bool, theme: Theme) {
+    let marcador = if activo { ">" } else { " " };
+    let estilo = if activo { theme.accent() } else { theme.base() };
+    let flechas = if activo { (" ◀ ", " ▶") } else { ("  ", " ") };
+    frame.render_widget(
+        Paragraph::new(Line::from(format!(
+            "{marcador} {etiqueta:<18}{}{valor}{}",
+            flechas.0, flechas.1
+        )))
+        .style(estilo),
+        area,
+    );
 }
 
 fn render_tabla(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme: Theme) {
@@ -257,6 +236,14 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme:
     }
 }
 
+fn render_contexto(c: &ContratistaResumen) -> Vec<Line<'static>> {
+    vec![
+        Line::from(c.nombre.clone()),
+        Line::from(format!("{} · {}", c.cedula, c.empresa_nombre)),
+        Line::from(""),
+    ]
+}
+
 /// Devuelve, cuando aplica, el área del valor del campo GAFETE para que el
 /// llamador posicione el cursor.
 fn render_panel(
@@ -273,107 +260,54 @@ fn render_panel(
             );
             None
         }
-        EtapaNuevoIngreso::Preparacion => {
-            render_preparacion(frame, area, state, theme);
-            None
-        }
-        EtapaNuevoIngreso::Medio { opcion } => {
-            render_medio(frame, area, state, opcion, theme);
-            None
-        }
-        EtapaNuevoIngreso::Gafete => Some(render_gafete(frame, area, state, theme)),
-        EtapaNuevoIngreso::Confirmar => {
-            render_confirmar(frame, area, state, theme);
-            None
-        }
+        EtapaNuevoIngreso::Formulario => render_formulario(frame, area, state, theme),
     }
 }
 
-fn render_contexto(c: &ContratistaResumen) -> Vec<Line<'static>> {
-    vec![
-        Line::from(c.nombre.clone()),
-        Line::from(format!("{} · {}", c.cedula, c.empresa_nombre)),
-        Line::from(""),
-    ]
-}
-
-fn render_preparacion(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme: Theme) {
-    let (Some(c), Some(p)) = (state.contratista(), &state.preparacion) else {
-        return;
-    };
-    let mut lineas = render_contexto(c);
-    lineas.push(Line::from(format!("Tipo de ingreso    {}", texto_tipo(p.tipo_ingreso))).style(theme.base()));
-    lineas.push(
-        Line::from(format!(
-            "Gafete             {}",
-            if p.requiere_gafete { "REQUERIDO" } else { "SIN GAFETE" }
-        ))
-        .style(theme.base()),
-    );
-    frame.render_widget(Paragraph::new(lineas).style(theme.base()), area);
-}
-
-fn render_medio(
+fn render_formulario(
     frame: &mut Frame,
     area: Rect,
     state: &NuevoIngresoState,
-    opcion: usize,
     theme: Theme,
-) {
-    let Some(c) = state.contratista() else { return };
-    let mut lineas = render_contexto(c);
-    lineas.push(Line::from("MEDIO DE INGRESO").style(theme.muted()));
-    for (i, medio) in MEDIOS.iter().enumerate() {
-        let marcador = if i == opcion { ">" } else { " " };
-        lineas.push(
-            Line::from(format!("{marcador} {}", texto_medio(*medio))).style(if i == opcion {
-                theme.selected()
-            } else {
-                theme.base()
-            }),
-        );
-    }
-    frame.render_widget(Paragraph::new(lineas), area);
-}
-
-fn render_gafete(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme: Theme) -> Rect {
-    let Some(c) = state.contratista() else {
-        return Rect::new(area.x, area.y, area.width, 1);
+) -> Option<Rect> {
+    let (Some(c), Some(p)) = (state.contratista(), state.preparacion()) else {
+        return None;
     };
-    let contexto = render_contexto(c);
-    let filas = Layout::vertical([Constraint::Length(contexto.len() as u16), Constraint::Length(3)])
-        .split(area);
-    frame.render_widget(Paragraph::new(contexto), filas[0]);
-    render_campo(frame, filas[1], "NÚMERO DE GAFETE", &state.gafete_texto, true, theme)
-}
-
-fn render_confirmar(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme: Theme) {
-    let (Some(c), Some(p)) = (state.contratista(), &state.preparacion) else {
-        return;
-    };
+    let requiere_gafete = p.requiere_gafete;
     let mut lineas = render_contexto(c);
-    lineas.push(Line::from(format!("Empresa            {}", p.empresa_nombre)).style(theme.base()));
     lineas.push(Line::from(format!("Tipo de ingreso    {}", texto_tipo(p.tipo_ingreso))).style(theme.base()));
-    lineas.push(
-        Line::from(format!(
-            "Medio              {}",
-            state.medio.map(texto_medio).unwrap_or("—")
-        ))
-        .style(theme.base()),
+    lineas.push(Line::from(""));
+
+    let filas = Layout::vertical(if requiere_gafete {
+        vec![Constraint::Length(lineas.len() as u16), Constraint::Length(1), Constraint::Length(3)]
+    } else {
+        vec![Constraint::Length(lineas.len() as u16), Constraint::Length(1)]
+    })
+    .split(area);
+    frame.render_widget(Paragraph::new(lineas), filas[0]);
+
+    let medio_enfocado = !state.campo_es_gafete();
+    render_opcion(
+        frame,
+        filas[1],
+        "MEDIO DE INGRESO",
+        texto_medio(state.medio_actual()),
+        medio_enfocado,
+        theme,
     );
-    lineas.push(
-        Line::from(format!(
-            "Gafete             {}",
-            state.gafete.map_or("SIN GAFETE".to_owned(), |n| n.to_string())
-        ))
-        .style(theme.base()),
-    );
-    lineas.push(Line::from(format!("Registrado por     {}", state.usuario_nombre)).style(theme.base()));
-    if matches!(p.resultado_acceso, ResultadoAcceso::PermitidoConAdvertencia) {
-        lineas.push(Line::from(""));
-        lineas.push(Line::from("PRAIND próximo a vencer").style(theme.warning()));
+
+    if requiere_gafete {
+        let area_gafete = render_campo(
+            frame,
+            filas[2],
+            "NÚMERO DE GAFETE",
+            &state.gafete_texto,
+            state.campo_es_gafete(),
+            theme,
+        );
+        return Some(area_gafete);
     }
-    frame.render_widget(Paragraph::new(lineas), area);
+    None
 }
 
 fn texto_tipo(t: crate::models::tipo_ingreso::TipoIngreso) -> &'static str {
@@ -382,16 +316,5 @@ fn texto_tipo(t: crate::models::tipo_ingreso::TipoIngreso) -> &'static str {
         crate::models::tipo_ingreso::TipoIngreso::InHouse => "IN HOUSE",
         crate::models::tipo_ingreso::TipoIngreso::PorCorreo => "POR CORREO",
         crate::models::tipo_ingreso::TipoIngreso::Swat => "SWAT",
-    }
-}
-
-fn texto_denegacion(m: crate::domain::resultado_acceso::MotivoDenegacion) -> String {
-    match m {
-        crate::domain::resultado_acceso::MotivoDenegacion::SinAcceso => {
-            "Acceso denegado · no tiene acceso autorizado".into()
-        }
-        crate::domain::resultado_acceso::MotivoDenegacion::PraindVencido => {
-            "Acceso denegado · PRAIND vencido o requerido".into()
-        }
     }
 }

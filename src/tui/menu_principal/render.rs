@@ -56,6 +56,7 @@ pub fn render(
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: comandos,
+        help_expanded: state.ayuda_expandida,
     };
     let areas = shell.render(frame, area, theme);
 

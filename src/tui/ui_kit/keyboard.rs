@@ -27,6 +27,8 @@ pub const HELP_HINT: CommandHint<'static> = CommandHint::new("F1", "Ayuda");
 pub const QUICK_EXIT_HINT: CommandHint<'static> = CommandHint::new("F2", "Salida rápida");
 pub const THEME_HINT: CommandHint<'static> = CommandHint::new("F7", "Tema");
 pub const CANCEL_HINT: CommandHint<'static> = CommandHint::new("ESC", "Cancelar");
+pub const EMERGENCY_EXIT_HINT: CommandHint<'static> =
+    CommandHint::new("CTRL+C", "Salida de emergencia");
 
 /// Traduce únicamente comandos transversales. Flechas, paginación y letras de
 /// acceso rápido se resuelven en la vista que conoce su contexto.

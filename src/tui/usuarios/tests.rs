@@ -6,7 +6,7 @@ fn key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
 }
 fn save() -> KeyEvent {
-    KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT)
+    KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)
 }
 fn resumen(id: i64, rol: RolUsuario, activo: bool) -> UsuarioResumen {
     UsuarioResumen {
@@ -47,17 +47,56 @@ fn busqueda_emite_consulta_sin_filtrar_memoria() {
 }
 
 #[test]
-fn detalle_y_edicion_utilizan_id_real_y_no_password() {
+fn enter_edita_directamente_con_id_real_y_sin_password() {
     let mut state = UsuariosState::default();
     cargar(&mut state);
     state.handle_key(key(KeyCode::Enter));
-    assert!(matches!(state.modo, ModoUsuarios::Detalle { id: 7 }));
-    state.handle_key(key(KeyCode::Char('E')));
     let ModoUsuarios::Formulario(f) = &state.modo else {
         panic!()
     };
     assert!(matches!(f.modo, ModoFormularioUsuario::Editar { id: 7 }));
     assert!(!f.campos().contains(&CampoUsuario::Password));
+}
+
+#[test]
+fn panel_refleja_la_seleccion_resaltada_sin_pasos_extra() {
+    let mut state = UsuariosState::default();
+    cargar(&mut state);
+    assert_eq!(state.seleccionado().map(|u| u.id), Some(7));
+    state.handle_key(key(KeyCode::Down));
+    assert_eq!(state.seleccionado().map(|u| u.id), Some(9));
+}
+
+#[test]
+fn espacio_abre_el_selector_de_rol_y_alterna_activo() {
+    let mut state = UsuariosState::default();
+    cargar(&mut state);
+    state.abrir_edicion(7);
+    // campo 0 = Cédula, 1 = Nombre, 2 = Rol
+    state.handle_key(key(KeyCode::Tab));
+    state.handle_key(key(KeyCode::Tab));
+    let ModoUsuarios::Formulario(f) = &state.modo else {
+        panic!()
+    };
+    assert_eq!(f.campo_actual(), CampoUsuario::Rol);
+    state.handle_key(key(KeyCode::Char(' ')));
+    let ModoUsuarios::Formulario(f) = &state.modo else {
+        panic!()
+    };
+    assert!(f.selector_rol.is_some());
+    state.handle_key(key(KeyCode::Esc));
+
+    state.handle_key(key(KeyCode::Tab));
+    let ModoUsuarios::Formulario(f) = &state.modo else {
+        panic!()
+    };
+    assert_eq!(f.campo_actual(), CampoUsuario::Activo);
+    let activo_inicial = f.activo;
+    state.handle_key(key(KeyCode::Char(' ')));
+    let ModoUsuarios::Formulario(f) = &state.modo else {
+        panic!()
+    };
+    assert_eq!(f.activo, !activo_inicial);
 }
 
 #[test]

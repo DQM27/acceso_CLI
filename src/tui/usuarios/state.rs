@@ -6,6 +6,7 @@ use crate::{
     database::queries::usuarios::UsuarioResumen,
     models::usuario::RolUsuario,
     services::usuario_service::{ActualizarUsuarioInput, CrearUsuarioInput},
+    tui::ui_kit::{StandardCommand, standard_command},
 };
 
 #[path = "render.rs"]
@@ -144,7 +145,6 @@ struct ConfirmacionEstado {
 enum ModoUsuarios {
     Normal,
     Busqueda { texto: String },
-    Detalle { id: i64 },
     Formulario(FormularioUsuario),
     CambioPassword(FormularioPassword),
     ConfirmacionEstado(ConfirmacionEstado),
@@ -229,6 +229,7 @@ pub struct UsuariosState {
     filtro: String,
     mensaje: Option<String>,
     usuario_nombre: String,
+    ayuda_expandida: bool,
 }
 impl Default for UsuariosState {
     fn default() -> Self {
@@ -239,6 +240,7 @@ impl Default for UsuariosState {
             filtro: String::new(),
             mensaje: None,
             usuario_nombre: "Quintana".into(),
+            ayuda_expandida: false,
         }
     }
 }
@@ -350,28 +352,13 @@ impl UsuariosState {
         }
     }
     pub fn handle_key(&mut self, key: KeyEvent) -> AccionUsuarios {
+        if standard_command(key) == Some(StandardCommand::Help) {
+            self.ayuda_expandida = !self.ayuda_expandida;
+            return AccionUsuarios::Ninguna;
+        }
         match self.modo.clone() {
             ModoUsuarios::Normal => self.normal(key),
             ModoUsuarios::Busqueda { .. } => self.busqueda(key),
-            ModoUsuarios::Detalle { id } => match key.code {
-                KeyCode::Esc => {
-                    self.modo = ModoUsuarios::Normal;
-                    AccionUsuarios::Ninguna
-                }
-                KeyCode::Char('e' | 'E') => {
-                    self.abrir_edicion(id);
-                    AccionUsuarios::Ninguna
-                }
-                KeyCode::Char('p' | 'P') => {
-                    self.abrir_password(id);
-                    AccionUsuarios::Ninguna
-                }
-                KeyCode::Char('a' | 'A') => {
-                    self.solicitar_estado(id);
-                    AccionUsuarios::Ninguna
-                }
-                _ => AccionUsuarios::Ninguna,
-            },
             ModoUsuarios::Formulario(f) => self.formulario(key, f),
             ModoUsuarios::CambioPassword(f) => self.password(key, f),
             ModoUsuarios::ConfirmacionEstado(c) => self.confirmacion(key, c),
@@ -384,7 +371,7 @@ impl UsuariosState {
             KeyCode::Down => self.mover(1),
             KeyCode::Enter => {
                 if let Some(id) = self.id_seleccionado() {
-                    self.modo = ModoUsuarios::Detalle { id }
+                    self.abrir_edicion(id)
                 }
             }
             KeyCode::Char('n' | 'N') => {
@@ -494,15 +481,19 @@ impl UsuariosState {
             }
             KeyCode::Up | KeyCode::BackTab => f.campo = f.campo.saturating_sub(1),
             KeyCode::Down | KeyCode::Tab => f.campo = (f.campo + 1).min(f.campos().len() - 1),
-            KeyCode::Enter => match f.campo_actual() {
-                CampoUsuario::Rol => f.selector_rol = Some(indice_rol(f.rol)),
-                CampoUsuario::Activo => f.activo = !f.activo,
-                _ => {}
-            },
+            KeyCode::Char(' ')
+                if matches!(f.campo_actual(), CampoUsuario::Rol | CampoUsuario::Activo) =>
+            {
+                match f.campo_actual() {
+                    CampoUsuario::Rol => f.selector_rol = Some(indice_rol(f.rol)),
+                    CampoUsuario::Activo => f.activo = !f.activo,
+                    _ => {}
+                }
+            }
             KeyCode::Left | KeyCode::Right if f.campo_actual() == CampoUsuario::Activo => {
                 f.activo = !f.activo
             }
-            KeyCode::Char('G') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+            KeyCode::Enter => {
                 return self.emitir_guardado(f);
             }
             KeyCode::Backspace => match f.campo_actual() {
@@ -601,7 +592,7 @@ impl UsuariosState {
                 return AccionUsuarios::Ninguna;
             }
             KeyCode::Up | KeyCode::Down | KeyCode::Tab | KeyCode::BackTab => f.campo = 1 - f.campo,
-            KeyCode::Char('G') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+            KeyCode::Enter => {
                 if let Err(e) = validar_password(&f.password.0, &f.confirmar.0) {
                     f.error = Some(e);
                     self.modo = ModoUsuarios::CambioPassword(f);
@@ -704,6 +695,9 @@ impl UsuariosState {
     }
     fn usuario(&self, id: i64) -> Option<&UsuarioResumen> {
         self.usuarios.iter().find(|u| u.id == id)
+    }
+    fn seleccionado(&self) -> Option<&UsuarioResumen> {
+        self.usuarios.get(self.seleccion?)
     }
     fn inicio_visible(&self, capacidad: usize) -> usize {
         self.seleccion

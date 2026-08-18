@@ -20,9 +20,8 @@ const ANCHO_PANEL_LATERAL: u16 = 100;
 
 const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓", "Mover"),
-    CommandHint::new("ENTER", "Detalle"),
+    CommandHint::new("ENTER", "Editar"),
     CommandHint::new("N", "Nueva"),
-    CommandHint::new("E", "Editar"),
     CommandHint::new("/", "Buscar"),
     CommandHint::new("ESC", "Volver"),
 ];
@@ -30,10 +29,8 @@ const COMANDOS_BUSQUEDA: &[CommandHint<'static>] = &[
     CommandHint::new("ENTER", "Aplicar"),
     CommandHint::new("ESC", "Cancelar"),
 ];
-const COMANDOS_DETALLE: &[CommandHint<'static>] =
-    &[CommandHint::new("E", "Editar"), CommandHint::new("ESC", "Cerrar")];
 const COMANDOS_FORMULARIO: &[CommandHint<'static>] = &[
-    CommandHint::new("G", "Guardar"),
+    CommandHint::new("ENTER", "Guardar"),
     CommandHint::new("ESC", "Cancelar"),
 ];
 
@@ -50,7 +47,6 @@ pub fn render(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: Theme
     let comandos = match &state.modo {
         ModoEmpresas::Normal => COMANDOS_NORMAL,
         ModoEmpresas::Busqueda { .. } => COMANDOS_BUSQUEDA,
-        ModoEmpresas::Detalle { .. } => COMANDOS_DETALLE,
         ModoEmpresas::Formulario(_) => COMANDOS_FORMULARIO,
     };
 
@@ -62,6 +58,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: Theme
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: comandos,
+        help_expanded: state.ayuda_expandida,
     };
     let areas = shell.render(frame, area, theme);
 
@@ -225,18 +222,15 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: The
 /// formulario para que el llamador posicione el cursor.
 fn render_panel(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: Theme) -> Option<Rect> {
     match &state.modo {
-        ModoEmpresas::Detalle { id } => {
-            if let Some(empresa) = state.empresa(*id) {
-                render_detalle(frame, area, empresa, theme);
-            }
-            None
-        }
         ModoEmpresas::Formulario(formulario) => Some(render_formulario(frame, area, formulario, theme)),
         ModoEmpresas::Normal | ModoEmpresas::Busqueda { .. } => {
-            frame.render_widget(
-                Paragraph::new("Seleccione ENTER para ver el detalle.").style(theme.muted()),
-                area,
-            );
+            match state.empresa_seleccionada() {
+                Some(empresa) => render_detalle(frame, area, empresa, theme),
+                None => frame.render_widget(
+                    Paragraph::new("No hay un registro seleccionado.").style(theme.muted()),
+                    area,
+                ),
+            }
             None
         }
     }

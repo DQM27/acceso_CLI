@@ -7,6 +7,7 @@ use crate::{
     models::{contratista::Contratista, empresa::Empresa, tipo_ingreso::TipoIngreso},
     services::contratista_service::{DatosActualizacionContratista, DatosContratista},
     tiempo::ahora_costa_rica,
+    tui::ui_kit::{StandardCommand, standard_command},
 };
 
 #[path = "render.rs"]
@@ -155,7 +156,6 @@ impl FormularioContratista {
 enum ModoContratistas {
     Normal,
     Busqueda { texto: String },
-    Detalle { id: i64 },
     Formulario(FormularioContratista),
     Columnas { seleccion: usize },
 }
@@ -200,6 +200,7 @@ pub struct ContratistasState {
     error_carga: Option<String>,
     usuario_nombre: String,
     hoy: NaiveDate,
+    ayuda_expandida: bool,
 }
 impl Default for ContratistasState {
     fn default() -> Self {
@@ -214,6 +215,7 @@ impl Default for ContratistasState {
             error_carga: None,
             usuario_nombre: "Quintana".into(),
             hoy: ahora_costa_rica().date_naive(),
+            ayuda_expandida: false,
         }
     }
 }
@@ -254,17 +256,13 @@ impl ContratistasState {
         self.buscar(None)
     }
     pub fn handle_key(&mut self, key: KeyEvent) -> AccionContratistas {
+        if standard_command(key) == Some(StandardCommand::Help) {
+            self.ayuda_expandida = !self.ayuda_expandida;
+            return AccionContratistas::Ninguna;
+        }
         match self.modo.clone() {
             ModoContratistas::Normal => self.normal(key),
             ModoContratistas::Busqueda { .. } => self.busqueda(key),
-            ModoContratistas::Detalle { id } => {
-                match key.code {
-                    KeyCode::Esc => self.modo = ModoContratistas::Normal,
-                    KeyCode::Char('e' | 'E') => self.editar(id),
-                    _ => {}
-                };
-                AccionContratistas::Ninguna
-            }
             ModoContratistas::Formulario(f) => self.formulario(key, f),
             ModoContratistas::Columnas { seleccion } => {
                 self.columnas_key(key, seleccion);
@@ -279,7 +277,7 @@ impl ContratistasState {
             KeyCode::Down => self.mover(1),
             KeyCode::Enter => {
                 if let Some(id) = self.id() {
-                    self.modo = ModoContratistas::Detalle { id }
+                    self.editar(id)
                 }
             }
             KeyCode::Char('n' | 'N') => {
@@ -380,21 +378,31 @@ impl ContratistasState {
             }
             KeyCode::Up | KeyCode::BackTab => mover_campo(&mut f, -1),
             KeyCode::Down | KeyCode::Tab => mover_campo(&mut f, 1),
-            KeyCode::Enter => match CampoFormulario::TODOS[f.campo] {
-                CampoFormulario::Empresa => f.desplegable = Some((Desplegable::Empresa, f.empresa)),
-                CampoFormulario::Tipo => {
-                    f.desplegable = Some((
-                        Desplegable::Tipo,
-                        tipos().iter().position(|t| *t == f.tipo).unwrap_or(0),
-                    ))
-                }
-                CampoFormulario::Ruta => f.personal_ruta = !f.personal_ruta,
-                CampoFormulario::Acceso => f.tiene_acceso = !f.tiene_acceso,
-                _ => {}
-            },
-            KeyCode::Char('g' | 'G')
-                if CampoFormulario::TODOS[f.campo] != CampoFormulario::Nombre =>
+            KeyCode::Char(' ')
+                if matches!(
+                    CampoFormulario::TODOS[f.campo],
+                    CampoFormulario::Empresa
+                        | CampoFormulario::Tipo
+                        | CampoFormulario::Ruta
+                        | CampoFormulario::Acceso
+                ) =>
             {
+                match CampoFormulario::TODOS[f.campo] {
+                    CampoFormulario::Empresa => {
+                        f.desplegable = Some((Desplegable::Empresa, f.empresa))
+                    }
+                    CampoFormulario::Tipo => {
+                        f.desplegable = Some((
+                            Desplegable::Tipo,
+                            tipos().iter().position(|t| *t == f.tipo).unwrap_or(0),
+                        ))
+                    }
+                    CampoFormulario::Ruta => f.personal_ruta = !f.personal_ruta,
+                    CampoFormulario::Acceso => f.tiene_acceso = !f.tiene_acceso,
+                    _ => {}
+                }
+            }
+            KeyCode::Enter => {
                 return match construir(&f, self.empresas.get(f.empresa).map(|e| e.id)) {
                     Ok(datos) => {
                         let nombre = datos.nombre.clone();
@@ -510,8 +518,8 @@ impl ContratistasState {
     fn id(&self) -> Option<i64> {
         Some(self.registros.get(self.seleccion?)?.id)
     }
-    fn registro(&self, id: i64) -> Option<&ContratistaResumen> {
-        self.registros.iter().find(|c| c.id == id)
+    fn seleccionado(&self) -> Option<&ContratistaResumen> {
+        self.registros.get(self.seleccion?)
     }
     fn inicio_visible(&self, c: usize) -> usize {
         self.seleccion

@@ -21,7 +21,6 @@ const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓", "Mover"),
     CommandHint::new("ENTER", "Detalle"),
     CommandHint::new("S", "Salida"),
-    CommandHint::new("F2", "Gafete"),
     CommandHint::new("/", "Buscar"),
     CommandHint::new("C", "Columnas"),
     CommandHint::new("ESC", "Volver"),
@@ -37,10 +36,6 @@ const COMANDOS_DETALLE: &[CommandHint<'static>] = &[
 const COMANDOS_CONFIRMAR: &[CommandHint<'static>] = &[
     CommandHint::new("Y", "Confirmar"),
     CommandHint::new("N/ESC", "Cancelar"),
-];
-const COMANDOS_GAFETE: &[CommandHint<'static>] = &[
-    CommandHint::new("ENTER", "Buscar"),
-    CommandHint::new("ESC", "Cancelar"),
 ];
 const COMANDOS_COLUMNAS: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓", "Mover"),
@@ -63,8 +58,6 @@ pub fn render(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Theme)
         ModoActivos::Busqueda { .. } => COMANDOS_BUSQUEDA,
         ModoActivos::Detalle { .. } => COMANDOS_DETALLE,
         ModoActivos::ConfirmarSalida { .. } => COMANDOS_CONFIRMAR,
-        ModoActivos::SalidaPorGafete(SalidaGafete::Capturando { .. }) => COMANDOS_GAFETE,
-        ModoActivos::SalidaPorGafete(SalidaGafete::Encontrado { .. }) => COMANDOS_CONFIRMAR,
         ModoActivos::Columnas { .. } => COMANDOS_COLUMNAS,
     };
 
@@ -76,6 +69,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Theme)
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: comandos,
+        help_expanded: state.ayuda_expandida,
     };
     let areas = shell.render(frame, area, theme);
 
@@ -94,17 +88,6 @@ fn estado_shell(state: &ActivosState) -> (String, StatusKind) {
                 StatusKind::Warning,
             )
         }
-        ModoActivos::SalidaPorGafete(SalidaGafete::Capturando { error: Some(e), .. }) => {
-            (e.clone(), StatusKind::Error)
-        }
-        ModoActivos::SalidaPorGafete(SalidaGafete::Capturando { .. }) => (
-            "Ingrese el número de gafete.".to_owned(),
-            StatusKind::Normal,
-        ),
-        ModoActivos::SalidaPorGafete(SalidaGafete::Encontrado { registro }) => (
-            format!("¿Registrar la salida de {}?", registro.contratista_nombre),
-            StatusKind::Warning,
-        ),
         _ => {
             if let Some(mensaje) = &state.mensaje {
                 let tipo = if mensaje.starts_with('✓') {
@@ -160,7 +143,7 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &ActivosState, theme: The
         (filas_apiladas[0], filas_apiladas[2])
     };
     render_tabla(frame, area_tabla, state, theme);
-    let area_gafete = render_panel(frame, area_panel, state, theme);
+    render_panel(frame, area_panel, state, theme);
 
     if enfocado_busqueda {
         let ancho_visible = Line::from(texto_busqueda).width() as u16;
@@ -168,15 +151,6 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &ActivosState, theme: The
             .x
             .saturating_add(ancho_visible.min(area_busqueda.width));
         frame.set_cursor_position((x, area_busqueda.y));
-    } else if let ModoActivos::SalidaPorGafete(SalidaGafete::Capturando { numero, .. }) =
-        &state.modo
-        && let Some(area_campo) = area_gafete
-    {
-        let ancho_visible = Line::from(numero.as_str()).width() as u16;
-        let x = area_campo
-            .x
-            .saturating_add(ancho_visible.min(area_campo.width));
-        frame.set_cursor_position((x, area_campo.y));
     }
 }
 
@@ -306,33 +280,21 @@ fn valor_columna(registro: &IngresoActivoResumen, columna: Columna) -> String {
     }
 }
 
-/// Devuelve, cuando aplica, el área del valor del campo GAFETE para que el
-/// llamador posicione el cursor.
-fn render_panel(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Theme) -> Option<Rect> {
+fn render_panel(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Theme) {
     match &state.modo {
         ModoActivos::Normal | ModoActivos::Busqueda { .. } => {
             frame.render_widget(
                 Paragraph::new("Seleccione ENTER para ver el detalle.").style(theme.muted()),
                 area,
             );
-            None
         }
         ModoActivos::Detalle { id } | ModoActivos::ConfirmarSalida { id } => {
             if let Some(registro) = state.registro(*id) {
                 render_detalle(frame, area, registro, theme);
             }
-            None
-        }
-        ModoActivos::SalidaPorGafete(SalidaGafete::Capturando { numero, .. }) => {
-            Some(render_campo(frame, area, "NÚMERO DE GAFETE", numero, true, theme))
-        }
-        ModoActivos::SalidaPorGafete(SalidaGafete::Encontrado { registro }) => {
-            render_detalle(frame, area, registro, theme);
-            None
         }
         ModoActivos::Columnas { seleccion } => {
             render_columnas(frame, area, state, *seleccion, theme);
-            None
         }
     }
 }

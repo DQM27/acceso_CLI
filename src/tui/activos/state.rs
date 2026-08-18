@@ -3,6 +3,8 @@ use crate::services::registro_ingreso_service::{
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Constraint;
+
+use crate::tui::ui_kit::{StandardCommand, standard_command};
 #[path = "render.rs"]
 pub(super) mod render;
 #[cfg(test)]
@@ -54,22 +56,11 @@ impl Columna {
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SalidaGafete {
-    Capturando {
-        numero: String,
-        error: Option<String>,
-    },
-    Encontrado {
-        registro: IngresoActivoResumen,
-    },
-}
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModoActivos {
     Normal,
     Busqueda { texto: String },
     Detalle { id: i64 },
     ConfirmarSalida { id: i64 },
-    SalidaPorGafete(SalidaGafete),
     Columnas { seleccion: usize },
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -79,9 +70,6 @@ pub enum AccionActivos {
     Buscar {
         texto: Option<String>,
         seleccionar_id: Option<i64>,
-    },
-    BuscarPorGafete {
-        numero: i64,
     },
     RegistrarSalida {
         registro_id: i64,
@@ -98,6 +86,7 @@ pub struct ActivosState {
     mensaje: Option<String>,
     pub(crate) filtro: String,
     usuario_nombre: String,
+    ayuda_expandida: bool,
 }
 impl Default for ActivosState {
     fn default() -> Self {
@@ -113,6 +102,7 @@ impl Default for ActivosState {
             mensaje: None,
             filtro: String::new(),
             usuario_nombre: "Quintana".into(),
+            ayuda_expandida: false,
         }
     }
 }
@@ -156,24 +146,6 @@ impl ActivosState {
             }
         }
     }
-    pub fn completar_gafete(&mut self, r: Result<IngresoActivoResumen, String>) {
-        match r {
-            Ok(registro) => {
-                self.seleccion = self
-                    .registros
-                    .iter()
-                    .position(|x| x.registro_id == registro.registro_id);
-                self.modo = ModoActivos::SalidaPorGafete(SalidaGafete::Encontrado { registro });
-            }
-            Err(e) => {
-                if let ModoActivos::SalidaPorGafete(SalidaGafete::Capturando { error, .. }) =
-                    &mut self.modo
-                {
-                    *error = Some(e)
-                }
-            }
-        }
-    }
     pub fn completar_salida(
         &mut self,
         r: Result<(), String>,
@@ -199,6 +171,10 @@ impl ActivosState {
         }
     }
     pub fn handle_key(&mut self, k: KeyEvent) -> AccionActivos {
+        if standard_command(k) == Some(StandardCommand::Help) {
+            self.ayuda_expandida = !self.ayuda_expandida;
+            return AccionActivos::Ninguna;
+        }
         match self.modo.clone() {
             ModoActivos::Normal => self.normal(k),
             ModoActivos::Busqueda { .. } => self.busqueda(k),
@@ -214,7 +190,6 @@ impl ActivosState {
                 _ => AccionActivos::Ninguna,
             },
             ModoActivos::ConfirmarSalida { id } => self.confirmar(k, id),
-            ModoActivos::SalidaPorGafete(s) => self.gafete(k, s),
             ModoActivos::Columnas { seleccion } => {
                 self.columnas(k, seleccion);
                 AccionActivos::Ninguna
@@ -235,12 +210,6 @@ impl ActivosState {
                 if let Some(id) = self.id_seleccionado() {
                     self.modo = ModoActivos::ConfirmarSalida { id }
                 }
-            }
-            KeyCode::F(2) => {
-                self.modo = ModoActivos::SalidaPorGafete(SalidaGafete::Capturando {
-                    numero: String::new(),
-                    error: None,
-                })
             }
             KeyCode::Char('/') => {
                 self.modo = ModoActivos::Busqueda {
@@ -329,48 +298,6 @@ impl ActivosState {
                 AccionActivos::Ninguna
             }
             _ => AccionActivos::Ninguna,
-        }
-    }
-    fn gafete(&mut self, k: KeyEvent, s: SalidaGafete) -> AccionActivos {
-        match s {
-            SalidaGafete::Capturando { mut numero, .. } => match k.code {
-                KeyCode::Esc => {
-                    self.modo = ModoActivos::Normal;
-                    AccionActivos::Ninguna
-                }
-                KeyCode::Backspace => {
-                    numero.pop();
-                    self.modo = ModoActivos::SalidaPorGafete(SalidaGafete::Capturando {
-                        numero,
-                        error: None,
-                    });
-                    AccionActivos::Ninguna
-                }
-                KeyCode::Char(c) if c.is_ascii_digit() => {
-                    numero.push(c);
-                    self.modo = ModoActivos::SalidaPorGafete(SalidaGafete::Capturando {
-                        numero,
-                        error: None,
-                    });
-                    AccionActivos::Ninguna
-                }
-                KeyCode::Enter => match numero.parse::<i64>() {
-                    Ok(n) => AccionActivos::BuscarPorGafete { numero: n },
-                    Err(_) => {
-                        self.modo = ModoActivos::SalidaPorGafete(SalidaGafete::Capturando {
-                            numero,
-                            error: Some("Ingrese un número de gafete válido".into()),
-                        });
-                        AccionActivos::Ninguna
-                    }
-                },
-                _ => AccionActivos::Ninguna,
-            },
-            SalidaGafete::Encontrado { registro } => self.confirmar_registro(
-                k,
-                registro.registro_id,
-                registro.contratista_nombre.clone(),
-            ),
         }
     }
     fn columnas(&mut self, k: KeyEvent, s: usize) {

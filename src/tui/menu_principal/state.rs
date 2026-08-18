@@ -1,5 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
+use crate::tui::ui_kit::{StandardCommand, standard_command};
+
 #[path = "render.rs"]
 pub(super) mod render;
 
@@ -76,6 +78,7 @@ pub enum AccionMenu {
 pub struct MenuPrincipalState {
     pub seleccion: OpcionMenu,
     pub confirmacion: Option<ConfirmacionMenu>,
+    pub ayuda_expandida: bool,
 }
 
 impl Default for MenuPrincipalState {
@@ -83,6 +86,7 @@ impl Default for MenuPrincipalState {
         Self {
             seleccion: OpcionMenu::NuevoIngreso,
             confirmacion: None,
+            ayuda_expandida: false,
         }
     }
 }
@@ -94,6 +98,10 @@ impl MenuPrincipalState {
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) -> AccionMenu {
+        if standard_command(key) == Some(StandardCommand::Help) {
+            self.ayuda_expandida = !self.ayuda_expandida;
+            return AccionMenu::Ninguna;
+        }
         if let Some(confirmacion) = self.confirmacion {
             return match key.code {
                 KeyCode::Char('y' | 'Y') | KeyCode::Enter => {

@@ -29,27 +29,6 @@ impl Default for FiltrosHistorial {
         }
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum CampoFiltro {
-    Desde,
-    Hasta,
-    NombreCedula,
-    Empresa,
-    Tipo,
-    Gafete,
-    Estado,
-}
-impl CampoFiltro {
-    pub(super) const TODOS: [Self; 7] = [
-        Self::Desde,
-        Self::Hasta,
-        Self::NombreCedula,
-        Self::Empresa,
-        Self::Tipo,
-        Self::Gafete,
-        Self::Estado,
-    ];
-}
 pub(super) fn fecha(v: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(v, "%d/%m/%Y").ok()
 }

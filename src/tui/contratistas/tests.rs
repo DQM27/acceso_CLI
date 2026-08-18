@@ -61,12 +61,10 @@ fn busqueda_incremental_emite_consulta_real() {
     assert_eq!(s.registros.len(), 1);
 }
 #[test]
-fn detalle_edicion_precargan_ids_y_datos_reales() {
+fn enter_edita_directamente_con_ids_y_datos_reales() {
     let mut s = ContratistasState::default();
     cargar(&mut s);
     s.handle_key(k(KeyCode::Enter));
-    assert!(matches!(s.modo, ModoContratistas::Detalle { id: 7 }));
-    s.handle_key(k(KeyCode::Char('E')));
     let ModoContratistas::Formulario(f) = &s.modo else {
         panic!()
     };
@@ -77,11 +75,16 @@ fn detalle_edicion_precargan_ids_y_datos_reales() {
     assert_eq!(f.tipo, TipoIngreso::Praind);
 }
 #[test]
+fn panel_refleja_la_seleccion_resaltada_sin_pasos_extra() {
+    let mut s = ContratistasState::default();
+    cargar(&mut s);
+    assert_eq!(s.seleccionado().map(|c| c.id), Some(7));
+}
+#[test]
 fn edicion_no_permite_enfocar_ni_modificar_cedula() {
     let mut s = ContratistasState::default();
     cargar(&mut s);
     s.handle_key(k(KeyCode::Enter));
-    s.handle_key(k(KeyCode::Char('E')));
     s.handle_key(k(KeyCode::Up));
     s.handle_key(k(KeyCode::Char('9')));
     let ModoContratistas::Formulario(f) = &s.modo else {
@@ -104,7 +107,7 @@ fn formulario_valida_y_emite_creacion_tipificada() {
     }
     escribir(&mut s, "31122026");
     s.handle_key(k(KeyCode::Tab));
-    let a = s.handle_key(k(KeyCode::Char('G')));
+    let a = s.handle_key(k(KeyCode::Enter));
     assert!(matches!(
         a,
         AccionContratistas::Crear {
@@ -117,6 +120,43 @@ fn formulario_valida_y_emite_creacion_tipificada() {
             ..
         }
     ));
+}
+#[test]
+fn espacio_abre_el_desplegable_y_alterna_los_campos_booleanos() {
+    let mut s = ContratistasState::default();
+    cargar(&mut s);
+    s.handle_key(k(KeyCode::Enter));
+
+    // Empresa: SPACE abre el desplegable en vez de guardar.
+    s.handle_key(k(KeyCode::Tab));
+    s.handle_key(k(KeyCode::Char(' ')));
+    let ModoContratistas::Formulario(f) = &s.modo else {
+        panic!()
+    };
+    assert!(f.desplegable.is_some());
+    s.handle_key(k(KeyCode::Esc));
+
+    // Avanza hasta el campo Ruta y confirma que SPACE lo alterna.
+    for _ in 0..20 {
+        let ModoContratistas::Formulario(f) = &s.modo else {
+            panic!()
+        };
+        if CampoFormulario::TODOS[f.campo] == CampoFormulario::Ruta {
+            break;
+        }
+        s.handle_key(k(KeyCode::Tab));
+    }
+    let ModoContratistas::Formulario(f) = &s.modo else {
+        panic!()
+    };
+    assert_eq!(CampoFormulario::TODOS[f.campo], CampoFormulario::Ruta);
+    let ruta_inicial = f.personal_ruta;
+
+    s.handle_key(k(KeyCode::Char(' ')));
+    let ModoContratistas::Formulario(f) = &s.modo else {
+        panic!()
+    };
+    assert_eq!(f.personal_ruta, !ruta_inicial);
 }
 #[test]
 fn praind_dinamico_usa_regla_de_dominio_y_none_si_no_requerido() {

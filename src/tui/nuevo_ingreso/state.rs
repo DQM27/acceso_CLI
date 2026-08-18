@@ -1,8 +1,11 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
-    database::queries::contratistas::ContratistaResumen, domain::resultado_acceso::ResultadoAcceso,
-    models::medio_ingreso::MedioIngreso, services::registro_ingreso_service::PreparacionIngreso,
+    database::queries::contratistas::ContratistaResumen,
+    domain::resultado_acceso::{MotivoDenegacion, ResultadoAcceso},
+    models::medio_ingreso::MedioIngreso,
+    services::registro_ingreso_service::PreparacionIngreso,
+    tui::ui_kit::{StandardCommand, standard_command},
 };
 
 #[path = "render.rs"]
@@ -13,13 +16,16 @@ mod tests;
 
 const MEDIOS: [MedioIngreso; 2] = [MedioIngreso::Caminando, MedioIngreso::Vehiculo];
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EtapaNuevoIngreso {
     Buscar,
-    Preparacion,
-    Medio { opcion: usize },
+    Formulario,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CampoIngreso {
+    Medio,
     Gafete,
-    Confirmar,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,9 +37,6 @@ pub enum AccionNuevoIngreso {
     },
     Preparar {
         contratista_id: i64,
-    },
-    ConsultarGafete {
-        numero: i64,
     },
     Registrar {
         contratista_id: i64,
@@ -50,11 +53,12 @@ pub struct NuevoIngresoState {
     seleccion: Option<usize>,
     contratista_id: Option<i64>,
     preparacion: Option<PreparacionIngreso>,
-    medio: Option<MedioIngreso>,
+    campo: CampoIngreso,
+    medio_opcion: usize,
     gafete_texto: String,
-    gafete: Option<i64>,
     error: Option<String>,
     usuario_nombre: String,
+    ayuda_expandida: bool,
 }
 
 impl Default for NuevoIngresoState {
@@ -72,11 +76,12 @@ impl NuevoIngresoState {
             seleccion: None,
             contratista_id: None,
             preparacion: None,
-            medio: None,
+            campo: CampoIngreso::Medio,
+            medio_opcion: 0,
             gafete_texto: String::new(),
-            gafete: None,
             error: None,
             usuario_nombre: usuario.into(),
+            ayuda_expandida: false,
         }
     }
     pub fn solicitud_carga(&self) -> AccionNuevoIngreso {
@@ -97,26 +102,18 @@ impl NuevoIngresoState {
     }
     pub fn completar_preparacion(&mut self, r: Result<PreparacionIngreso, String>) {
         match r {
+            Ok(p) if !puede_continuar(&p) => {
+                self.error = Some(mensaje_bloqueo(&p));
+            }
             Ok(p) => {
                 self.contratista_id = Some(p.contratista_id);
                 self.preparacion = Some(p);
-                self.medio = None;
-                self.gafete = None;
+                self.campo = CampoIngreso::Medio;
+                self.medio_opcion = 0;
                 self.gafete_texto.clear();
                 self.error = None;
-                self.etapa = EtapaNuevoIngreso::Preparacion
+                self.etapa = EtapaNuevoIngreso::Formulario
             }
-            Err(e) => self.error = Some(e),
-        }
-    }
-    pub fn completar_gafete(&mut self, r: Result<bool, String>) {
-        match r {
-            Ok(false) => {
-                self.gafete = self.gafete_texto.trim().parse().ok();
-                self.error = None;
-                self.etapa = EtapaNuevoIngreso::Confirmar
-            }
-            Ok(true) => self.error = Some("El gafete ya está en uso".into()),
             Err(e) => self.error = Some(e),
         }
     }
@@ -133,12 +130,13 @@ impl NuevoIngresoState {
         }
     }
     pub fn handle_key(&mut self, key: KeyEvent) -> AccionNuevoIngreso {
+        if standard_command(key) == Some(StandardCommand::Help) {
+            self.ayuda_expandida = !self.ayuda_expandida;
+            return AccionNuevoIngreso::Ninguna;
+        }
         match self.etapa {
             EtapaNuevoIngreso::Buscar => self.buscar(key),
-            EtapaNuevoIngreso::Preparacion => self.preparacion(key),
-            EtapaNuevoIngreso::Medio { opcion } => self.medio(key, opcion),
-            EtapaNuevoIngreso::Gafete => self.gafete(key),
-            EtapaNuevoIngreso::Confirmar => self.confirmar(key),
+            EtapaNuevoIngreso::Formulario => self.formulario(key),
         }
     }
     fn buscar(&mut self, key: KeyEvent) -> AccionNuevoIngreso {
@@ -183,101 +181,67 @@ impl NuevoIngresoState {
             _ => AccionNuevoIngreso::Ninguna,
         }
     }
-    fn preparacion(&mut self, key: KeyEvent) -> AccionNuevoIngreso {
+    fn formulario(&mut self, key: KeyEvent) -> AccionNuevoIngreso {
+        let requiere_gafete = self.preparacion.as_ref().is_some_and(|p| p.requiere_gafete);
         match key.code {
             KeyCode::Esc => {
                 self.limpiar_seleccion();
-                self.etapa = EtapaNuevoIngreso::Buscar
+                self.etapa = EtapaNuevoIngreso::Buscar;
             }
-            KeyCode::Enter if self.puede_continuar() => {
-                self.etapa = EtapaNuevoIngreso::Medio { opcion: 0 }
-            }
-            _ => {}
-        }
-        AccionNuevoIngreso::Ninguna
-    }
-    fn medio(&mut self, key: KeyEvent, mut opcion: usize) -> AccionNuevoIngreso {
-        match key.code {
-            KeyCode::Esc => self.etapa = EtapaNuevoIngreso::Preparacion,
-            KeyCode::Up => opcion = opcion.saturating_sub(1),
-            KeyCode::Down => opcion = (opcion + 1).min(1),
-            KeyCode::Enter => {
-                self.medio = Some(MEDIOS[opcion]);
-                self.etapa = if self.preparacion.as_ref().is_some_and(|p| p.requiere_gafete) {
-                    EtapaNuevoIngreso::Gafete
-                } else {
-                    self.gafete = None;
-                    EtapaNuevoIngreso::Confirmar
-                }
-            }
-            _ => {}
-        }
-        if matches!(self.etapa, EtapaNuevoIngreso::Medio { .. }) {
-            self.etapa = EtapaNuevoIngreso::Medio { opcion }
-        }
-        AccionNuevoIngreso::Ninguna
-    }
-    fn gafete(&mut self, key: KeyEvent) -> AccionNuevoIngreso {
-        match key.code {
-            KeyCode::Esc => {
-                self.error = None;
-                self.etapa = EtapaNuevoIngreso::Medio {
-                    opcion: self.medio.map(indice_medio).unwrap_or(0),
+            KeyCode::Tab | KeyCode::Down | KeyCode::BackTab | KeyCode::Up if requiere_gafete => {
+                self.campo = match self.campo {
+                    CampoIngreso::Medio => CampoIngreso::Gafete,
+                    CampoIngreso::Gafete => CampoIngreso::Medio,
                 };
-                AccionNuevoIngreso::Ninguna
             }
-            KeyCode::Backspace => {
+            KeyCode::Left | KeyCode::Right if self.campo == CampoIngreso::Medio => {
+                self.medio_opcion = 1 - self.medio_opcion;
+            }
+            KeyCode::Up | KeyCode::Down if self.campo == CampoIngreso::Medio => {
+                self.medio_opcion = 1 - self.medio_opcion;
+            }
+            KeyCode::Enter => {
+                let gafete = if requiere_gafete {
+                    match self.gafete_texto.trim().parse::<i64>() {
+                        Ok(numero) => Some(numero),
+                        Err(_) => {
+                            self.error = Some(
+                                if self.gafete_texto.trim().is_empty() {
+                                    "El gafete es requerido"
+                                } else {
+                                    "Ingrese un número de gafete válido"
+                                }
+                                .into(),
+                            );
+                            return AccionNuevoIngreso::Ninguna;
+                        }
+                    }
+                } else {
+                    None
+                };
+                return AccionNuevoIngreso::Registrar {
+                    contratista_id: self.contratista_id.unwrap(),
+                    medio: MEDIOS[self.medio_opcion],
+                    gafete,
+                };
+            }
+            KeyCode::Backspace if self.campo == CampoIngreso::Gafete => {
                 self.gafete_texto.pop();
                 self.error = None;
-                AccionNuevoIngreso::Ninguna
             }
-            KeyCode::Enter => match self.gafete_texto.trim().parse::<i64>() {
-                Ok(numero) => AccionNuevoIngreso::ConsultarGafete { numero },
-                Err(_) => {
-                    self.error = Some(
-                        if self.gafete_texto.trim().is_empty() {
-                            "El gafete es requerido"
-                        } else {
-                            "Ingrese un número de gafete válido"
-                        }
-                        .into(),
-                    );
-                    AccionNuevoIngreso::Ninguna
-                }
-            },
             KeyCode::Char(c)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+                if self.campo == CampoIngreso::Gafete
+                    && c.is_ascii_digit()
+                    && !key
+                        .modifiers
+                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
                 self.gafete_texto.push(c);
                 self.error = None;
-                AccionNuevoIngreso::Ninguna
             }
-            _ => AccionNuevoIngreso::Ninguna,
+            _ => {}
         }
-    }
-    fn confirmar(&mut self, key: KeyEvent) -> AccionNuevoIngreso {
-        match key.code {
-            KeyCode::Char('n' | 'N') | KeyCode::Esc => {
-                self.error = None;
-                self.etapa = EtapaNuevoIngreso::Medio {
-                    opcion: self.medio.map(indice_medio).unwrap_or(0),
-                };
-                AccionNuevoIngreso::Ninguna
-            }
-            KeyCode::Char('y' | 'Y') => AccionNuevoIngreso::Registrar {
-                contratista_id: self.contratista_id.unwrap(),
-                medio: self.medio.unwrap(),
-                gafete: self.gafete,
-            },
-            _ => AccionNuevoIngreso::Ninguna,
-        }
-    }
-    fn puede_continuar(&self) -> bool {
-        self.preparacion.as_ref().is_some_and(|p| {
-            !p.tiene_ingreso_activo && !matches!(p.resultado_acceso, ResultadoAcceso::Denegado(_))
-        })
+        AccionNuevoIngreso::Ninguna
     }
     fn mover(&mut self, d: isize) {
         if self.contratistas.is_empty() {
@@ -295,11 +259,20 @@ impl NuevoIngresoState {
         let id = self.contratista_id?;
         self.contratistas.iter().find(|c| c.id == id)
     }
+    fn preparacion(&self) -> Option<&PreparacionIngreso> {
+        self.preparacion.as_ref()
+    }
+    fn campo_es_gafete(&self) -> bool {
+        self.campo == CampoIngreso::Gafete
+    }
+    fn medio_actual(&self) -> MedioIngreso {
+        MEDIOS[self.medio_opcion]
+    }
     fn limpiar_seleccion(&mut self) {
         self.contratista_id = None;
         self.preparacion = None;
-        self.medio = None;
-        self.gafete = None;
+        self.campo = CampoIngreso::Medio;
+        self.medio_opcion = 0;
         self.gafete_texto.clear();
         self.error = None
     }
@@ -319,8 +292,22 @@ impl NuevoIngresoState {
 fn texto_filtro(s: &str) -> Option<String> {
     (!s.trim().is_empty()).then(|| s.to_owned())
 }
-fn indice_medio(m: MedioIngreso) -> usize {
-    MEDIOS.iter().position(|x| *x == m).unwrap_or(0)
+fn puede_continuar(p: &PreparacionIngreso) -> bool {
+    !p.tiene_ingreso_activo && !matches!(p.resultado_acceso, ResultadoAcceso::Denegado(_))
+}
+fn mensaje_bloqueo(p: &PreparacionIngreso) -> String {
+    if p.tiene_ingreso_activo {
+        return "El contratista ya tiene un ingreso activo.".into();
+    }
+    match &p.resultado_acceso {
+        ResultadoAcceso::Denegado(MotivoDenegacion::SinAcceso) => {
+            "Acceso denegado · no tiene acceso autorizado".into()
+        }
+        ResultadoAcceso::Denegado(MotivoDenegacion::PraindVencido) => {
+            "Acceso denegado · PRAIND vencido o requerido".into()
+        }
+        _ => "No se puede continuar con este contratista.".into(),
+    }
 }
 fn texto_medio(m: MedioIngreso) -> &'static str {
     match m {

@@ -81,41 +81,6 @@ fn cancelar_salida_no_emite_accion() {
     assert_eq!(s.cantidad(), 2)
 }
 #[test]
-fn f2_busca_numero_exacto_y_confirma() {
-    let mut s = ActivosState::default();
-    s.completar_busqueda(
-        Ok(ListaIngresosActivosResumen {
-            items: vec![r(9, None)],
-            total: 2,
-        }),
-        None,
-    );
-    s.handle_key(k(KeyCode::F(2)));
-    for c in "26".chars() {
-        s.handle_key(k(KeyCode::Char(c)));
-    }
-    assert!(matches!(
-        s.handle_key(k(KeyCode::Enter)),
-        AccionActivos::BuscarPorGafete { numero: 26 }
-    ));
-    s.completar_gafete(Ok(r(7, Some(26))));
-    assert!(matches!(
-        s.handle_key(k(KeyCode::Char('Y'))),
-        AccionActivos::RegistrarSalida { registro_id: 7, nombre } if nombre == "Persona 7"
-    ));
-}
-#[test]
-fn f2_invalido_y_no_encontrado_son_seguros() {
-    let mut s = ActivosState::default();
-    s.handle_key(k(KeyCode::F(2)));
-    s.handle_key(k(KeyCode::Enter));
-    assert!(matches!(
-        s.modo,
-        ModoActivos::SalidaPorGafete(SalidaGafete::Capturando { error: Some(_), .. })
-    ));
-    s.completar_gafete(Err("No existe un ingreso activo con ese gafete".into()));
-}
-#[test]
 fn callback_salida_recarga_sin_remover_localmente() {
     let mut s = ActivosState::default();
     cargar(&mut s);

@@ -1,11 +1,12 @@
 use crate::{
-    database::queries::ingresos::{
-        EstadoMovimiento, FiltroHistorial, MovimientoIngresoResumen, PaginaHistorial,
-    },
-    models::{empresa::Empresa, tipo_ingreso::TipoIngreso},
+    database::queries::ingresos::{FiltroHistorial, MovimientoIngresoResumen, PaginaHistorial},
+    models::empresa::Empresa,
+    tiempo::a_costa_rica,
 };
+use chrono::{Datelike, Duration, NaiveDate};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::layout::Constraint;
+
+use crate::tui::ui_kit::{StandardCommand, standard_command};
 #[path = "filtros.rs"]
 mod filtros;
 pub use filtros::*;
@@ -15,35 +16,66 @@ pub(super) mod render;
 #[path = "tests.rs"]
 mod tests;
 const LIMIT: usize = 50;
+
+/// Dos formas de leer el mismo conjunto filtrado: el timeline agrupado
+/// (curado, con panel de detalle), la tabla clásica (densa, una línea por
+/// movimiento, sin panel) y el mapa de calor (para ubicar "cuándo" hubo más
+/// actividad). Cambiar de vista conserva la búsqueda y la selección.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ColumnaHistorial {
+enum ViewMode {
+    Timeline,
+    Classic,
+    Heatmap,
+}
+impl ViewMode {
+    const fn next(self) -> Self {
+        match self {
+            Self::Timeline => Self::Classic,
+            Self::Classic => Self::Heatmap,
+            Self::Heatmap => Self::Timeline,
+        }
+    }
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Timeline => "LÍNEA DE TIEMPO",
+            Self::Classic => "CLÁSICA",
+            Self::Heatmap => "MAPA DE CALOR",
+        }
+    }
+}
+
+/// Columnas de la vista Clásica. El timeline ya muestra todo en su panel,
+/// pero Clásica no tiene panel — ahí sí tiene sentido poder ocultar
+/// columnas para controlar la densidad.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ClassicColumn {
     Fecha,
-    Cedula,
     Nombre,
+    Cedula,
     Empresa,
     Tipo,
     Entrada,
     Salida,
     Gafete,
     Medio,
-    UsuarioIngreso,
-    UsuarioSalida,
+    Ingreso,
+    Egreso,
 }
-impl ColumnaHistorial {
-    const TODAS: [Self; 11] = [
+impl ClassicColumn {
+    const ALL: [Self; 11] = [
         Self::Fecha,
-        Self::Cedula,
         Self::Nombre,
+        Self::Cedula,
         Self::Empresa,
         Self::Tipo,
         Self::Entrada,
         Self::Salida,
         Self::Gafete,
         Self::Medio,
-        Self::UsuarioIngreso,
-        Self::UsuarioSalida,
+        Self::Ingreso,
+        Self::Egreso,
     ];
-    fn titulo(self) -> &'static str {
+    pub(super) const fn label(self) -> &'static str {
         match self {
             Self::Fecha => "FECHA",
             Self::Cedula => "CÉDULA",
@@ -54,44 +86,29 @@ impl ColumnaHistorial {
             Self::Salida => "SALIDA",
             Self::Gafete => "GAFETE",
             Self::Medio => "MEDIO",
-            Self::UsuarioIngreso => "USUARIO INGRESO",
-            Self::UsuarioSalida => "USUARIO SALIDA",
+            Self::Ingreso => "DA INGRESO",
+            Self::Egreso => "DA SALIDA",
         }
     }
-    fn constraint(self) -> Constraint {
+    pub(super) const fn constraint(self) -> ratatui::layout::Constraint {
+        use ratatui::layout::Constraint;
         match self {
             Self::Fecha => Constraint::Length(10),
+            Self::Cedula => Constraint::Length(14),
+            Self::Nombre | Self::Empresa => Constraint::Fill(3),
+            Self::Tipo => Constraint::Length(11),
             Self::Entrada | Self::Salida => Constraint::Length(8),
             Self::Gafete => Constraint::Length(7),
-            Self::Nombre | Self::Empresa => Constraint::Fill(3),
-            Self::Cedula | Self::Tipo | Self::UsuarioIngreso | Self::UsuarioSalida => {
-                Constraint::Fill(2)
-            }
             Self::Medio => Constraint::Fill(1),
+            Self::Ingreso | Self::Egreso => Constraint::Fill(2),
         }
     }
 }
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ModoHistorial {
     Normal,
-    Busqueda {
-        texto: String,
-    },
-    Detalle {
-        id: i64,
-    },
-    Filtros {
-        seleccion: usize,
-        editando: bool,
-    },
-    Desplegable {
-        campo: CampoFiltro,
-        seleccion_filtro: usize,
-        opcion: usize,
-    },
-    Columnas {
-        seleccion: usize,
-    },
+    Columnas { seleccion: usize },
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AccionHistorial {
@@ -105,46 +122,37 @@ pub struct HistorialState {
     total: usize,
     seleccion: Option<usize>,
     modo: ModoHistorial,
+    vista: ViewMode,
+    columnas_clasica: Vec<(ClassicColumn, bool)>,
+    heatmap_seleccion: NaiveDate,
     filtro_aplicado: FiltrosHistorial,
-    filtro_edicion: FiltrosHistorial,
     busqueda: String,
-    columnas: Vec<(ColumnaHistorial, bool)>,
     mensaje: Option<String>,
     empresas: Vec<Empresa>,
     offset: usize,
     corte_id: Option<i64>,
     usuario_nombre: String,
+    ayuda_expandida: bool,
 }
 impl Default for HistorialState {
     fn default() -> Self {
-        let f = FiltrosHistorial::default();
+        let hoy = crate::tiempo::ahora_costa_rica().date_naive();
         Self {
             registros: vec![],
             total: 0,
             seleccion: None,
             modo: ModoHistorial::Normal,
-            filtro_aplicado: f.clone(),
-            filtro_edicion: f,
+            vista: ViewMode::Timeline,
+            columnas_clasica: ClassicColumn::ALL.into_iter().map(|c| (c, true)).collect(),
+            heatmap_seleccion: hoy,
+            filtro_aplicado: FiltrosHistorial::default(),
             busqueda: String::new(),
-            columnas: ColumnaHistorial::TODAS
-                .into_iter()
-                .map(|c| {
-                    (
-                        c,
-                        !matches!(
-                            c,
-                            ColumnaHistorial::Medio
-                                | ColumnaHistorial::UsuarioIngreso
-                                | ColumnaHistorial::UsuarioSalida
-                        ),
-                    )
-                })
-                .collect(),
             mensaje: None,
             empresas: vec![],
             offset: 0,
             corte_id: None,
             usuario_nombre: "Quintana".into(),
+            ayuda_expandida: false,
         }
     }
 }
@@ -195,30 +203,37 @@ impl HistorialState {
         }
     }
     pub fn handle_key(&mut self, k: KeyEvent) -> AccionHistorial {
+        if standard_command(k) == Some(StandardCommand::Help) {
+            self.ayuda_expandida = !self.ayuda_expandida;
+            return AccionHistorial::Ninguna;
+        }
+        // F3 (cambiar de vista) y F4 (columnas, sólo en Clásica) son
+        // transversales a cualquier modo, salvo mientras se edita el editor
+        // de columnas mismo.
+        if let KeyCode::F(3) = k.code {
+            self.vista = self.vista.next();
+            self.modo = ModoHistorial::Normal;
+            return AccionHistorial::Ninguna;
+        }
+        if let KeyCode::F(4) = k.code
+            && self.vista == ViewMode::Classic
+            && self.modo == ModoHistorial::Normal
+        {
+            self.modo = ModoHistorial::Columnas { seleccion: 0 };
+            return AccionHistorial::Ninguna;
+        }
         match self.modo.clone() {
+            ModoHistorial::Normal if self.vista == ViewMode::Heatmap => self.heatmap(k),
             ModoHistorial::Normal => self.normal(k),
-            ModoHistorial::Busqueda { .. } => self.buscar(k),
-            ModoHistorial::Detalle { .. } => {
-                if k.code == KeyCode::Esc {
-                    self.modo = ModoHistorial::Normal
-                }
-                AccionHistorial::Ninguna
-            }
-            ModoHistorial::Filtros {
-                seleccion,
-                editando,
-            } => self.filtros(k, seleccion, editando),
-            ModoHistorial::Desplegable {
-                campo,
-                seleccion_filtro,
-                opcion,
-            } => self.desplegable(k, campo, seleccion_filtro, opcion),
             ModoHistorial::Columnas { seleccion } => {
                 self.columnas(k, seleccion);
                 AccionHistorial::Ninguna
             }
         }
     }
+    /// El campo de búsqueda está siempre activo en modo Normal: cualquier
+    /// carácter escrito filtra en vivo, sin necesidad de un atajo que lo
+    /// active primero.
     fn normal(&mut self, k: KeyEvent) -> AccionHistorial {
         match k.code {
             KeyCode::Up => self.mover(-1),
@@ -235,239 +250,59 @@ impl HistorialState {
                     return self.emitir();
                 }
             }
-            KeyCode::Enter => {
-                if let Some(r) = self.registros.get(self.seleccion.unwrap_or(usize::MAX)) {
-                    self.modo = ModoHistorial::Detalle { id: r.registro_id }
-                }
+            KeyCode::Backspace => {
+                self.busqueda.pop();
+                self.reiniciar_paginacion();
+                return self.emitir();
             }
-            KeyCode::Char('/') => {
-                self.modo = ModoHistorial::Busqueda {
-                    texto: self.busqueda.clone(),
-                }
-            }
-            KeyCode::Char('f' | 'F') => {
-                self.filtro_edicion = self.filtro_aplicado.clone();
-                self.modo = ModoHistorial::Filtros {
-                    seleccion: 0,
-                    editando: false,
-                }
-            }
-            KeyCode::Char('c' | 'C') => self.modo = ModoHistorial::Columnas { seleccion: 0 },
             KeyCode::Esc if !self.busqueda.is_empty() => {
                 self.busqueda.clear();
                 self.reiniciar_paginacion();
                 return self.emitir();
             }
             KeyCode::Esc => return AccionHistorial::Volver,
-            _ => {}
-        }
-        AccionHistorial::Ninguna
-    }
-    fn buscar(&mut self, k: KeyEvent) -> AccionHistorial {
-        match k.code {
-            KeyCode::Esc => {
-                self.busqueda.clear();
-                self.reiniciar_paginacion();
-                self.modo = ModoHistorial::Normal;
-                self.emitir()
-            }
-            KeyCode::Enter => {
-                self.modo = ModoHistorial::Normal;
-                AccionHistorial::Ninguna
-            }
-            KeyCode::Backspace => {
-                if let ModoHistorial::Busqueda { texto } = &mut self.modo {
-                    texto.pop();
-                    self.busqueda = texto.clone()
-                }
-                self.reiniciar_paginacion();
-                self.emitir()
-            }
             KeyCode::Char(c)
                 if !k
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                if let ModoHistorial::Busqueda { texto } = &mut self.modo {
-                    texto.push(c);
-                    self.busqueda = texto.clone()
-                }
+                self.busqueda.push(c);
                 self.reiniciar_paginacion();
-                self.emitir()
+                return self.emitir();
             }
-            _ => AccionHistorial::Ninguna,
-        }
-    }
-    fn filtros(&mut self, k: KeyEvent, s: usize, editando: bool) -> AccionHistorial {
-        let campo = CampoFiltro::TODOS[s];
-        if editando {
-            match k.code {
-                KeyCode::Enter | KeyCode::Esc => {
-                    self.modo = ModoHistorial::Filtros {
-                        seleccion: s,
-                        editando: false,
-                    }
-                }
-                KeyCode::Backspace => {
-                    if let Some(t) = self.texto_mut(campo) {
-                        t.pop();
-                    }
-                }
-                KeyCode::Char(c)
-                    if !k
-                        .modifiers
-                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-                {
-                    self.agregar(campo, c)
-                }
-                _ => {}
-            }
-            return AccionHistorial::Ninguna;
-        }
-        match k.code {
-            KeyCode::Up => {
-                self.modo = ModoHistorial::Filtros {
-                    seleccion: s.saturating_sub(1),
-                    editando: false,
-                }
-            }
-            KeyCode::Down => {
-                self.modo = ModoHistorial::Filtros {
-                    seleccion: (s + 1).min(6),
-                    editando: false,
-                }
-            }
-            KeyCode::Enter
-                if matches!(
-                    campo,
-                    CampoFiltro::Empresa | CampoFiltro::Tipo | CampoFiltro::Estado
-                ) =>
-            {
-                self.modo = ModoHistorial::Desplegable {
-                    campo,
-                    seleccion_filtro: s,
-                    opcion: 0,
-                }
-            }
-            KeyCode::Enter => {
-                self.modo = ModoHistorial::Filtros {
-                    seleccion: s,
-                    editando: true,
-                }
-            }
-            KeyCode::Char('a' | 'A') => {
-                let (filtros, texto_libre) =
-                    parsear_consulta(&self.filtro_edicion, &self.busqueda, &self.empresas);
-                match construir(&filtros, &texto_libre, LIMIT, 0, None) {
-                    Ok(f) => {
-                        self.filtro_aplicado = self.filtro_edicion.clone();
-                        self.reiniciar_paginacion();
-                        self.modo = ModoHistorial::Normal;
-                        return AccionHistorial::Consultar(f);
-                    }
-                    Err(e) => self.mensaje = Some(e),
-                }
-            }
-            KeyCode::Char('l' | 'L') => self.filtro_edicion = FiltrosHistorial::default(),
-            KeyCode::Esc => self.modo = ModoHistorial::Normal,
             _ => {}
         }
         AccionHistorial::Ninguna
     }
-    fn desplegable(
-        &mut self,
-        k: KeyEvent,
-        c: CampoFiltro,
-        s: usize,
-        mut o: usize,
-    ) -> AccionHistorial {
-        let n = self.opciones(c);
-        match k.code {
-            KeyCode::Up => o = o.saturating_sub(1),
-            KeyCode::Down => o = (o + 1).min(n.saturating_sub(1)),
-            KeyCode::Enter => {
-                match c {
-                    CampoFiltro::Empresa => {
-                        self.filtro_edicion.empresa_id = if o == 0 {
-                            None
-                        } else {
-                            Some(self.empresas[o - 1].id)
-                        }
-                    }
-                    CampoFiltro::Tipo => {
-                        self.filtro_edicion.tipo = [
-                            None,
-                            Some(TipoIngreso::Praind),
-                            Some(TipoIngreso::InHouse),
-                            Some(TipoIngreso::PorCorreo),
-                            Some(TipoIngreso::Swat),
-                        ][o]
-                    }
-                    CampoFiltro::Estado => {
-                        self.filtro_edicion.estado = [
-                            EstadoMovimiento::Todos,
-                            EstadoMovimiento::Activos,
-                            EstadoMovimiento::Cerrados,
-                        ][o]
-                    }
-                    _ => {}
-                }
-                self.modo = ModoHistorial::Filtros {
-                    seleccion: s,
-                    editando: false,
-                };
+    /// El mapa de calor navega día a día con Tab/Shift+Tab y semana a
+    /// semana con ↑↓ — ninguna de las dos colisiona con el campo de
+    /// búsqueda porque ese modo no tiene texto libre que escribir.
+    fn heatmap(&mut self, k: KeyEvent) -> AccionHistorial {
+        match standard_command(k) {
+            Some(StandardCommand::FocusNext) => {
+                self.heatmap_seleccion += Duration::days(1);
                 return AccionHistorial::Ninguna;
             }
-            KeyCode::Esc => {
-                self.modo = ModoHistorial::Filtros {
-                    seleccion: s,
-                    editando: false,
-                };
+            Some(StandardCommand::FocusPrevious) => {
+                self.heatmap_seleccion -= Duration::days(1);
                 return AccionHistorial::Ninguna;
+            }
+            Some(StandardCommand::Primary) => {
+                let fecha = self.heatmap_seleccion.format("%d/%m/%Y").to_string();
+                self.busqueda = format!("desde:{fecha} hasta:{fecha}");
+                self.vista = ViewMode::Timeline;
+                self.reiniciar_paginacion();
+                return self.emitir();
             }
             _ => {}
         }
-        self.modo = ModoHistorial::Desplegable {
-            campo: c,
-            seleccion_filtro: s,
-            opcion: o,
-        };
+        match k.code {
+            KeyCode::Up => self.heatmap_seleccion -= Duration::days(7),
+            KeyCode::Down => self.heatmap_seleccion += Duration::days(7),
+            KeyCode::Esc => return AccionHistorial::Volver,
+            _ => {}
+        }
         AccionHistorial::Ninguna
-    }
-    fn opciones(&self, c: CampoFiltro) -> usize {
-        match c {
-            CampoFiltro::Empresa => self.empresas.len() + 1,
-            CampoFiltro::Tipo => 5,
-            CampoFiltro::Estado => 3,
-            _ => 0,
-        }
-    }
-    fn texto_mut(&mut self, c: CampoFiltro) -> Option<&mut String> {
-        match c {
-            CampoFiltro::Desde => Some(&mut self.filtro_edicion.desde),
-            CampoFiltro::Hasta => Some(&mut self.filtro_edicion.hasta),
-            CampoFiltro::NombreCedula => Some(&mut self.filtro_edicion.nombre_cedula),
-            CampoFiltro::Gafete => Some(&mut self.filtro_edicion.gafete),
-            _ => None,
-        }
-    }
-    fn agregar(&mut self, c: CampoFiltro, x: char) {
-        if let Some(t) = self.texto_mut(c) {
-            match c {
-                CampoFiltro::Desde | CampoFiltro::Hasta if x.is_ascii_digit() => {
-                    let n = t.chars().filter(char::is_ascii_digit).count();
-                    if n < 8 {
-                        if matches!(n, 2 | 4) {
-                            t.push('/')
-                        }
-                        t.push(x)
-                    }
-                }
-                CampoFiltro::Gafete if x.is_ascii_digit() => t.push(x),
-                CampoFiltro::NombreCedula if t.chars().count() < 40 => t.push(x),
-                _ => {}
-            }
-        }
     }
     fn columnas(&mut self, k: KeyEvent, s: usize) {
         match k.code {
@@ -478,16 +313,16 @@ impl HistorialState {
             }
             KeyCode::Down => {
                 self.modo = ModoHistorial::Columnas {
-                    seleccion: (s + 1).min(self.columnas.len() - 1),
+                    seleccion: (s + 1).min(self.columnas_clasica.len() - 1),
                 }
             }
             KeyCode::Char(' ') => {
-                let n = self.columnas.iter().filter(|x| x.1).count();
-                if !(self.columnas[s].1 && n == 1) {
-                    self.columnas[s].1 = !self.columnas[s].1
+                let n = self.columnas_clasica.iter().filter(|x| x.1).count();
+                if !(self.columnas_clasica[s].1 && n == 1) {
+                    self.columnas_clasica[s].1 = !self.columnas_clasica[s].1
                 }
             }
-            KeyCode::Esc => self.modo = ModoHistorial::Normal,
+            KeyCode::Esc | KeyCode::F(4) => self.modo = ModoHistorial::Normal,
             _ => {}
         }
     }
@@ -503,13 +338,21 @@ impl HistorialState {
             })
         }
     }
-    fn registro(&self, id: i64) -> Option<&MovimientoIngresoResumen> {
-        self.registros.iter().find(|r| r.registro_id == id)
+    fn seleccionado(&self) -> Option<&MovimientoIngresoResumen> {
+        self.registros.get(self.seleccion?)
     }
-    fn inicio_visible(&self, c: usize) -> usize {
-        self.seleccion
-            .unwrap_or(0)
-            .saturating_sub(c.saturating_sub(1))
+    /// Cuenta de movimientos por día (fecha local), a partir de la página
+    /// actualmente cargada — igual que el timeline y la vista clásica, el
+    /// mapa de calor lee del mismo conjunto ya filtrado y paginado, no de
+    /// una agregación aparte en el backend.
+    fn conteo_por_dia(&self) -> std::collections::BTreeMap<NaiveDate, usize> {
+        let mut conteo = std::collections::BTreeMap::new();
+        for r in &self.registros {
+            *conteo
+                .entry(a_costa_rica(r.fecha_hora_ingreso).date_naive())
+                .or_insert(0usize) += 1;
+        }
+        conteo
     }
     fn pagina(&self) -> (usize, usize) {
         if self.total == 0 {
@@ -522,5 +365,27 @@ impl HistorialState {
     fn reiniciar_paginacion(&mut self) {
         self.offset = 0;
         self.corte_id = None;
+    }
+}
+
+fn start_of_week(date: NaiveDate) -> NaiveDate {
+    date - Duration::days(i64::from(date.weekday().num_days_from_monday()))
+}
+fn end_of_week(date: NaiveDate) -> NaiveDate {
+    date + Duration::days(6 - i64::from(date.weekday().num_days_from_monday()))
+}
+fn bucket_glyph(count: usize, max: usize) -> char {
+    if count == 0 {
+        return '·';
+    }
+    let ratio = count as f64 / max.max(1) as f64;
+    if ratio >= 0.99 {
+        '█'
+    } else if ratio >= 0.66 {
+        '▓'
+    } else if ratio >= 0.33 {
+        '▒'
+    } else {
+        '░'
     }
 }

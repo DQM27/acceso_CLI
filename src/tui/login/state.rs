@@ -2,6 +2,8 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
+use crate::tui::ui_kit::{StandardCommand, standard_command};
+
 #[path = "render.rs"]
 pub(super) mod render;
 
@@ -28,6 +30,12 @@ pub enum EstadoLogin {
     Exito,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AccionLogin {
+    Ninguna,
+    Salir,
+}
+
 #[derive(Debug)]
 pub struct LoginState {
     cedula: String,
@@ -37,6 +45,7 @@ pub struct LoginState {
     spinner_frame: usize,
     cursor_iniciado: Instant,
     cursor_visible: bool,
+    ayuda_expandida: bool,
 }
 
 impl Default for LoginState {
@@ -49,6 +58,7 @@ impl Default for LoginState {
             spinner_frame: 0,
             cursor_iniciado: Instant::now(),
             cursor_visible: true,
+            ayuda_expandida: false,
         }
     }
 }
@@ -57,9 +67,17 @@ impl LoginState {
     pub fn reiniciar(&mut self) {
         *self = Self::default();
     }
-    pub fn handle_key(&mut self, key: KeyEvent) {
+    pub fn handle_key(&mut self, key: KeyEvent) -> AccionLogin {
+        if standard_command(key) == Some(StandardCommand::Help) {
+            self.ayuda_expandida = !self.ayuda_expandida;
+            return AccionLogin::Ninguna;
+        }
+        if standard_command(key) == Some(StandardCommand::Cancel) {
+            self.password.clear();
+            return AccionLogin::Salir;
+        }
         if matches!(self.estado, EstadoLogin::Validando { .. }) {
-            return;
+            return AccionLogin::Ninguna;
         }
 
         match key.code {
@@ -76,6 +94,7 @@ impl LoginState {
             }
             _ => {}
         }
+        AccionLogin::Ninguna
     }
 
     pub fn tick(&mut self, ahora: Instant) {

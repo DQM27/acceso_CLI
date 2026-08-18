@@ -1,6 +1,6 @@
 use std::{io, time::Duration};
 
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::{self, Event, KeyEventKind};
 use ratatui::{Terminal, backend::Backend};
 
 use crate::application::AppCore;
@@ -15,10 +15,10 @@ use super::{
     contratistas::{self, AccionContratistas, ContratistasState},
     empresas::{self, AccionEmpresas, EmpresasState},
     historial::{self, AccionHistorial, HistorialState},
-    login,
-    login::LoginState,
+    login::{self, AccionLogin, LoginState},
     menu_principal::{self, AccionMenu, MenuPrincipalState, OpcionMenu},
     nuevo_ingreso::{self, AccionNuevoIngreso, NuevoIngresoState},
+    salida_rapida::{self, AccionSalidaRapida, SalidaRapidaState},
     ui_kit::{StandardCommand, ThemePreset, standard_command},
     usuarios::{self, AccionUsuarios, UsuariosState},
 };
@@ -70,6 +70,15 @@ fn mensaje_usuario(error: UsuarioServiceError) -> String {
         _ => "No se pudo guardar el usuario".into(),
     }
 }
+fn mensaje_salida(error: crate::services::error::RegistroIngresoServiceError) -> String {
+    use crate::services::error::RegistroIngresoServiceError::*;
+    match error {
+        RegistroNoActivo => "El ingreso ya no está activo".into(),
+        SalidaAnteriorAIngreso => "La salida no puede ser anterior al ingreso".into(),
+        RelojRetrocedido => "Revise la fecha y hora del equipo antes de continuar".into(),
+        _ => "No se pudo registrar la salida".into(),
+    }
+}
 fn mensaje_ingreso(error: crate::services::error::RegistroIngresoServiceError) -> String {
     use crate::{
         domain::resultado_acceso::MotivoDenegacion, services::error::RegistroIngresoServiceError::*,
@@ -101,7 +110,7 @@ pub enum Vista {
 
 #[cfg(test)]
 mod tests {
-    use crossterm::event::{KeyCode, KeyEvent};
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use rusqlite::Connection;
 
     use super::*;
@@ -150,6 +159,35 @@ mod tests {
 
     fn tecla(codigo: KeyCode) -> KeyEvent {
         KeyEvent::new(codigo, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn f7_cicla_el_tema_sin_importar_la_vista_activa() {
+        let mut app = App {
+            vista: Vista::Login,
+            ..App::default()
+        };
+        assert_eq!(app.tema, ThemePreset::Brisas);
+
+        app.procesar_tecla_vista(tecla(KeyCode::F(7)));
+        assert_eq!(app.tema, ThemePreset::Classic);
+
+        app.procesar_tecla_vista(tecla(KeyCode::F(7)));
+        assert_eq!(app.tema, ThemePreset::Brisas);
+    }
+
+    #[test]
+    fn ctrl_c_marca_salida_pero_ctrl_alt_c_no() {
+        let mut app = App::default();
+        app.procesar_tecla_vista(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
+        assert!(app.salir);
+
+        let mut app = App::default();
+        app.procesar_tecla_vista(KeyEvent::new(
+            KeyCode::Char('c'),
+            KeyModifiers::CONTROL | KeyModifiers::ALT,
+        ));
+        assert!(!app.salir);
     }
 
     #[test]
@@ -239,7 +277,6 @@ mod tests {
     fn escape_raiz_regresa_al_menu_y_estados_internos_se_cierran_primero() {
         for vista in [
             Vista::IngresosActivos,
-            Vista::Historial,
             Vista::Contratistas,
             Vista::Empresas,
             Vista::Usuarios,
@@ -322,39 +359,6 @@ mod tests {
                     None,
                 );
             }
-            if vista == Vista::Historial {
-                app.historial
-                    .completar(Ok(crate::database::queries::ingresos::PaginaHistorial {
-                        items: vec![
-                            crate::database::queries::ingresos::MovimientoIngresoResumen {
-                                registro_id: 1,
-                                contratista_id: 1,
-                                cedula: "1".into(),
-                                contratista_nombre: "Contratista".into(),
-                                empresa_nombre: "Empresa".into(),
-                                tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::Swat,
-                                medio_ingreso:
-                                    crate::models::medio_ingreso::MedioIngreso::Caminando,
-                                fecha_hora_ingreso: crate::tiempo::local_costa_rica_a_utc(
-                                    chrono::NaiveDate::from_ymd_opt(2026, 8, 12)
-                                        .unwrap()
-                                        .and_hms_opt(8, 0, 0)
-                                        .unwrap(),
-                                )
-                                .unwrap(),
-                                fecha_hora_salida: None,
-                                gafete_numero: None,
-                                usuario_ingreso_nombre: "Ana".into(),
-                                usuario_salida_nombre: None,
-                                resultado_acceso: crate::models::registro_ingreso::ResultadoIngresoRegistrado::Permitido,
-                                motivo_resultado: None,
-                                reglas_version: crate::models::registro_ingreso::VERSION_REGLAS_ACCESO,
-                            },
-                        ],
-                        total: 1,
-                        corte_id: 1,
-                    }));
-            }
             app.procesar_tecla_vista(tecla(KeyCode::Enter));
             app.procesar_tecla_vista(tecla(KeyCode::Esc));
             assert_eq!(
@@ -364,6 +368,18 @@ mod tests {
             app.procesar_tecla_vista(tecla(KeyCode::Esc));
             assert_eq!(app.vista, Vista::MenuPrincipal);
         }
+
+        // Historial ya no tiene un modo Detalle que cerrar primero: el panel
+        // lateral refleja la selección en vivo, así que un solo ESC alcanza
+        // para volver al menú.
+        let mut app = App {
+            vista: Vista::Historial,
+            sesion: Some(sesion("Daniel")),
+            ..App::default()
+        };
+        app.procesar_tecla_vista(tecla(KeyCode::Enter));
+        app.procesar_tecla_vista(tecla(KeyCode::Esc));
+        assert_eq!(app.vista, Vista::MenuPrincipal);
 
         let mut app = App {
             vista: Vista::NuevoIngreso,
@@ -430,10 +446,7 @@ mod tests {
         for c in "Empresa Real".chars() {
             app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core));
         }
-        app.procesar_tecla_vista_con_core(
-            KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT),
-            Some(&core),
-        );
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Enter), Some(&core));
         assert_eq!(
             app.empresas.empresa_seleccionada().unwrap().nombre,
             "Empresa Real"
@@ -447,10 +460,7 @@ mod tests {
         for c in "Empresa Renombrada".chars() {
             app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core));
         }
-        app.procesar_tecla_vista_con_core(
-            KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT),
-            Some(&core),
-        );
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Enter), Some(&core));
         assert_eq!(
             app.empresas.empresa_seleccionada().unwrap().nombre,
             "Empresa Renombrada"
@@ -490,7 +500,6 @@ mod tests {
         );
 
         app.procesar_tecla_vista_con_core(tecla(KeyCode::Enter), Some(&core));
-        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char('E')), Some(&core));
         for c in " no persistir".chars() {
             app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core));
         }
@@ -510,10 +519,7 @@ mod tests {
         for c in "Constructora Álvarez".chars() {
             app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core));
         }
-        app.procesar_tecla_vista_con_core(
-            KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT),
-            Some(&core),
-        );
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Enter), Some(&core));
         assert!(app.empresas.esta_en_formulario());
         assert_eq!(
             app.empresas.error_formulario_actual(),
@@ -555,7 +561,7 @@ mod tests {
             app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core))
         }
         app.procesar_tecla_vista_con_core(tecla(KeyCode::Tab), Some(&core));
-        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char('G')), Some(&core));
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Enter), Some(&core));
         let items = core
             .buscar_contratistas(
                 &crate::database::queries::contratistas::FiltroContratistas {
@@ -576,7 +582,7 @@ mod tests {
         for _ in 0..5 {
             app.procesar_tecla_vista_con_core(tecla(KeyCode::Tab), Some(&core))
         }
-        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char('G')), Some(&core));
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Enter), Some(&core));
         assert!(
             core.buscar_contratistas(
                 &crate::database::queries::contratistas::FiltroContratistas {
@@ -660,6 +666,88 @@ mod tests {
         assert_eq!(sesion.nombre, "Ana María");
         assert_eq!(sesion.rol, RolUsuario::Administrador);
     }
+
+    #[test]
+    fn f2_registra_una_salida_real_por_gafete_desde_cualquier_pantalla() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let core = AppCore::new(connection);
+        let usuario_id = core
+            .crear_root_inicial(crate::services::usuario_service::CrearRootInicialInput {
+                cedula: "ROOT-1".into(),
+                nombre: "Ana".into(),
+                password: "password1".into(),
+            })
+            .unwrap();
+        let empresa_id = core.crear_empresa("Constructora Álvarez").unwrap();
+        let contratista_id = core
+            .crear_contratista(crate::services::contratista_service::DatosContratista {
+                cedula: "9-9999-9999".into(),
+                nombre: "Persona De Prueba".into(),
+                empresa_id,
+                tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::PorCorreo,
+                fecha_vencimiento_praind: None,
+                es_personal_ruta: false,
+                tiene_acceso: true,
+            })
+            .unwrap();
+        core.registrar_ingreso(
+            contratista_id,
+            crate::models::medio_ingreso::MedioIngreso::Caminando,
+            Some(77),
+            usuario_id,
+        )
+        .unwrap();
+
+        let mut app = App {
+            vista: Vista::MenuPrincipal,
+            sesion: Some(UsuarioSesion {
+                id: usuario_id,
+                cedula: "ROOT-1".into(),
+                nombre: "Ana".into(),
+                rol: RolUsuario::Root,
+            }),
+            ..App::default()
+        };
+
+        app.procesar_tecla_global(tecla(KeyCode::F(2)), Some(&core));
+        assert!(app.salida_rapida.abierto());
+        assert_eq!(app.vista, Vista::MenuPrincipal);
+
+        for c in "77".chars() {
+            app.procesar_tecla_global(tecla(KeyCode::Char(c)), Some(&core));
+        }
+        app.procesar_tecla_global(tecla(KeyCode::Enter), Some(&core));
+
+        // La confirmación queda visible hasta la siguiente tecla; el cierre real
+        // en SQLite ya ocurrió.
+        assert!(app.salida_rapida.abierto());
+        let restantes = core
+            .listar_ingresos_activos(&crate::database::queries::ingresos::FiltroIngresosActivos {
+                texto: None,
+            })
+            .unwrap();
+        assert_eq!(restantes.total, 0);
+
+        app.procesar_tecla_global(tecla(KeyCode::Char(' ')), Some(&core));
+        assert!(!app.salida_rapida.abierto());
+    }
+
+    #[test]
+    fn f2_no_abre_sin_sesion_iniciada() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let core = AppCore::new(connection);
+        let mut app = App {
+            vista: Vista::Login,
+            sesion: None,
+            ..App::default()
+        };
+
+        app.procesar_tecla_global(tecla(KeyCode::F(2)), Some(&core));
+
+        assert!(!app.salida_rapida.abierto());
+    }
 }
 
 #[derive(Debug)]
@@ -674,6 +762,7 @@ pub struct App {
     empresas: EmpresasState,
     usuarios: UsuariosState,
     nuevo_ingreso: NuevoIngresoState,
+    salida_rapida: SalidaRapidaState,
     salir: bool,
     sesion: Option<UsuarioSesion>,
     tema: ThemePreset,
@@ -692,6 +781,7 @@ impl Default for App {
             empresas: EmpresasState::default(),
             usuarios: UsuariosState::default(),
             nuevo_ingreso: NuevoIngresoState::default(),
+            salida_rapida: SalidaRapidaState::default(),
             salir: false,
             sesion: None,
             tema: ThemePreset::Brisas,
@@ -733,33 +823,36 @@ impl App {
     ) -> io::Result<()> {
         while !self.salir {
             let theme = self.tema.theme();
-            terminal.draw(|frame| match self.vista {
-                Vista::ConfiguracionInicial => configuracion_inicial::render(
-                    frame,
-                    frame.area(),
-                    &self.configuracion_inicial,
-                    theme,
-                ),
-                Vista::Login => login::render(frame, frame.area(), &self.login, theme),
-                Vista::MenuPrincipal => {
-                    if let Some(sesion) = &self.sesion {
-                        menu_principal::render(frame, frame.area(), &self.menu, sesion, theme)
+            terminal.draw(|frame| {
+                match self.vista {
+                    Vista::ConfiguracionInicial => configuracion_inicial::render(
+                        frame,
+                        frame.area(),
+                        &self.configuracion_inicial,
+                        theme,
+                    ),
+                    Vista::Login => login::render(frame, frame.area(), &self.login, theme),
+                    Vista::MenuPrincipal => {
+                        if let Some(sesion) = &self.sesion {
+                            menu_principal::render(frame, frame.area(), &self.menu, sesion, theme)
+                        }
+                    }
+                    Vista::IngresosActivos => {
+                        activos::render(frame, frame.area(), &self.activos, theme)
+                    }
+                    Vista::Historial => {
+                        historial::render(frame, frame.area(), &self.historial, theme)
+                    }
+                    Vista::Contratistas => {
+                        contratistas::render(frame, frame.area(), &self.contratistas, theme)
+                    }
+                    Vista::Empresas => empresas::render(frame, frame.area(), &self.empresas, theme),
+                    Vista::Usuarios => usuarios::render(frame, frame.area(), &self.usuarios, theme),
+                    Vista::NuevoIngreso => {
+                        nuevo_ingreso::render(frame, frame.area(), &self.nuevo_ingreso, theme)
                     }
                 }
-                Vista::IngresosActivos => {
-                    activos::render(frame, frame.area(), &self.activos, theme)
-                }
-                Vista::Historial => {
-                    historial::render(frame, frame.area(), &self.historial, theme)
-                }
-                Vista::Contratistas => {
-                    contratistas::render(frame, frame.area(), &self.contratistas, theme)
-                }
-                Vista::Empresas => empresas::render(frame, frame.area(), &self.empresas, theme),
-                Vista::Usuarios => usuarios::render(frame, frame.area(), &self.usuarios, theme),
-                Vista::NuevoIngreso => {
-                    nuevo_ingreso::render(frame, frame.area(), &self.nuevo_ingreso, theme)
-                }
+                salida_rapida::render(frame, frame.area(), &self.salida_rapida, theme);
             })?;
 
             if let Some(core) = core {
@@ -770,11 +863,7 @@ impl App {
                 && let Event::Key(key) = event::read()?
                 && key.kind == KeyEventKind::Press
             {
-                match standard_command(key) {
-                    Some(StandardCommand::EmergencyExit) => self.salir = true,
-                    Some(StandardCommand::Theme) => self.tema = self.tema.next(),
-                    _ => self.procesar_tecla_vista_con_core(key, core),
-                }
+                self.procesar_tecla_global(key, core);
             }
 
             let ahora = std::time::Instant::now();
@@ -806,7 +895,76 @@ impl App {
 
     #[cfg(test)]
     fn procesar_tecla_vista(&mut self, key: crossterm::event::KeyEvent) {
-        self.procesar_tecla_vista_con_core(key, None);
+        self.procesar_tecla_global(key, None);
+    }
+
+    /// Comandos transversales (salida de emergencia, tema, salida rápida) que se
+    /// resuelven antes de despachar por vista, sin importar cuál esté activa.
+    fn procesar_tecla_global(&mut self, key: crossterm::event::KeyEvent, core: Option<&AppCore>) {
+        match standard_command(key) {
+            Some(StandardCommand::EmergencyExit) => {
+                self.salir = true;
+                return;
+            }
+            Some(StandardCommand::Theme) => {
+                self.tema = self.tema.next();
+                return;
+            }
+            // Requiere sesión iniciada: en Login/ConfiguracionInicial no hay a quién
+            // atribuir la salida ni personal "adentro" que buscar todavía.
+            Some(StandardCommand::QuickExit)
+                if !self.salida_rapida.abierto() && self.sesion.is_some() =>
+            {
+                let accion = self.salida_rapida.abrir();
+                self.procesar_accion_salida_rapida(accion, core);
+                return;
+            }
+            _ => {}
+        }
+        if self.salida_rapida.abierto() {
+            let accion = self.salida_rapida.handle_key(key);
+            self.procesar_accion_salida_rapida(accion, core);
+            return;
+        }
+        self.procesar_tecla_vista_con_core(key, core);
+    }
+
+    fn procesar_accion_salida_rapida(&mut self, accion: AccionSalidaRapida, core: Option<&AppCore>) {
+        match accion {
+            AccionSalidaRapida::Ninguna => {}
+            AccionSalidaRapida::Buscar { texto } => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudieron cargar los ingresos activos".into())
+                    .and_then(|c| {
+                        c.listar_ingresos_activos(
+                            &crate::database::queries::ingresos::FiltroIngresosActivos { texto },
+                        )
+                        .map(|pagina| pagina.items)
+                        .map_err(|_| "No se pudieron cargar los ingresos activos".into())
+                    });
+                self.salida_rapida.completar_busqueda(resultado);
+            }
+            AccionSalidaRapida::Confirmar {
+                registro_id,
+                nombre,
+            } => {
+                let resultado = match (&self.sesion, core) {
+                    (Some(s), _) if s.id == 0 => {
+                        Err("La sesión de desarrollo no puede registrar movimientos reales".into())
+                    }
+                    (Some(s), Some(c)) => c
+                        .registrar_salida(registro_id, s.id)
+                        .map(|()| format!("✓ Salida registrada — {nombre}"))
+                        .map_err(mensaje_salida),
+                    _ => Err("No se pudo registrar la salida".into()),
+                };
+                self.salida_rapida.completar_confirmacion(resultado);
+                if self.vista == Vista::IngresosActivos {
+                    let recarga = self.activos.solicitud_carga();
+                    self.procesar_accion_activos(recarga, core);
+                }
+            }
+        }
     }
 
     fn procesar_tecla_vista_con_core(
@@ -821,10 +979,8 @@ impl App {
                 }
             }
             Vista::Login => {
-                if key.code == KeyCode::Esc {
+                if self.login.handle_key(key) == AccionLogin::Salir {
                     self.salir = true;
-                } else {
-                    self.login.handle_key(key);
                 }
             }
             Vista::MenuPrincipal => self.procesar_accion_menu_con_core(key, core),
@@ -1172,12 +1328,6 @@ impl App {
                     .and_then(|c| c.preparar_ingreso(contratista_id).map_err(mensaje_ingreso));
                 self.nuevo_ingreso.completar_preparacion(r);
             }
-            AccionNuevoIngreso::ConsultarGafete { numero } => {
-                let r = core
-                    .ok_or_else(|| "No se pudo consultar el gafete".into())
-                    .and_then(|c| c.gafete_esta_ocupado(numero).map_err(mensaje_ingreso));
-                self.nuevo_ingreso.completar_gafete(r);
-            }
             AccionNuevoIngreso::Registrar {
                 contratista_id,
                 medio,
@@ -1226,20 +1376,19 @@ impl App {
                     });
                 self.activos.completar_busqueda(resultado, seleccionar_id);
             }
-            AccionActivos::BuscarPorGafete { numero } => {
-                let resultado = core
-                    .ok_or_else(|| "No existe un ingreso activo con ese gafete".into())
-                    .and_then(|c| {
-                        c.buscar_activo_por_gafete(numero)
-                            .map_err(|_| "No existe un ingreso activo con ese gafete".into())
-                    });
-                self.activos.completar_gafete(resultado);
-            }
             AccionActivos::RegistrarSalida {
                 registro_id,
                 nombre,
             } => {
-                let resultado=match(&self.sesion,core){(Some(s),_)if s.id==0=>Err("La sesión de desarrollo no puede registrar movimientos reales".into()),(Some(s),Some(c))=>c.registrar_salida(registro_id,s.id).map_err(|e|match e{crate::services::error::RegistroIngresoServiceError::RegistroNoActivo=>"El ingreso ya no está activo".into(),crate::services::error::RegistroIngresoServiceError::SalidaAnteriorAIngreso=>"La salida no puede ser anterior al ingreso".into(),crate::services::error::RegistroIngresoServiceError::RelojRetrocedido=>"Revise la fecha y hora del equipo antes de continuar".into(),_=>"No se pudo registrar la salida".into()}),_=>Err("No se pudo registrar la salida".into())};
+                let resultado = match (&self.sesion, core) {
+                    (Some(s), _) if s.id == 0 => {
+                        Err("La sesión de desarrollo no puede registrar movimientos reales".into())
+                    }
+                    (Some(s), Some(c)) => c
+                        .registrar_salida(registro_id, s.id)
+                        .map_err(mensaje_salida),
+                    _ => Err("No se pudo registrar la salida".into()),
+                };
                 let recarga = self
                     .activos
                     .completar_salida(resultado, registro_id, &nombre);

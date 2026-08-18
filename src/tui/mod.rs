@@ -7,6 +7,7 @@ pub mod historial;
 pub mod login;
 pub mod menu_principal;
 pub mod nuevo_ingreso;
+pub mod salida_rapida;
 pub mod terminal;
 pub mod ui_kit;
 pub mod usuarios;

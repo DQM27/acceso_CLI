@@ -1,8 +1,8 @@
 //! Primitivas visuales para mantener consistencia entre las pantallas TUI.
 //!
-//! El piloto `brisas_cli` es su primer consumidor. La aplicación productiva aún
-//! no depende de estas primitivas, de modo que pueden evaluarse antes de migrar
-//! las vistas existentes.
+//! El piloto `brisas_cli` fue su primer consumidor; las 9 pantallas de producción
+//! ya usan el shell visual (`ScreenShell`/`Theme`) y, desde la unificación de
+//! atajos, también la convención de teclado (`standard_command`).
 
 mod keyboard;
 mod select_menu;
@@ -11,8 +11,8 @@ mod text_input;
 mod theme;
 
 pub use keyboard::{
-    CANCEL_HINT, HELP_HINT, HELP_KEY, QUICK_EXIT_HINT, QUICK_EXIT_KEY, StandardCommand,
-    THEME_HINT, THEME_KEY, standard_command,
+    CANCEL_HINT, EMERGENCY_EXIT_HINT, HELP_HINT, HELP_KEY, QUICK_EXIT_HINT, QUICK_EXIT_KEY,
+    StandardCommand, THEME_HINT, THEME_KEY, standard_command,
 };
 pub use select_menu::{SelectMenu, SelectMenuState};
 pub use shell::{

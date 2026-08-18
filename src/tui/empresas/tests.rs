@@ -51,17 +51,24 @@ fn busqueda_incremental_emite_consulta_real_sin_filtrar_vec() {
 }
 
 #[test]
-fn detalle_y_edicion_usan_id_nombre_y_conteo_reales() {
+fn enter_edita_directamente_con_id_y_nombre_reales() {
     let mut s = EmpresasState::default();
     s.completar_busqueda(Ok(datos()), None);
     s.handle_key(k(KeyCode::Enter));
-    assert!(matches!(s.modo, ModoEmpresas::Detalle { id: 7 }));
-    s.handle_key(k(KeyCode::Char('E')));
     let ModoEmpresas::Formulario(f) = &s.modo else {
         panic!()
     };
     assert_eq!(f.nombre, "Constructora Álvarez");
     assert!(matches!(f.modo, ModoFormularioEmpresa::Editar { id: 7 }));
+}
+
+#[test]
+fn panel_refleja_la_seleccion_resaltada_sin_pasos_extra() {
+    let mut s = EmpresasState::default();
+    s.completar_busqueda(Ok(datos()), None);
+    assert_eq!(s.empresa_seleccionada().map(|e| e.id), Some(7));
+    s.handle_key(k(KeyCode::Down));
+    assert_eq!(s.empresa_seleccionada().map(|e| e.id), Some(9));
 }
 
 #[test]
@@ -71,7 +78,7 @@ fn crear_y_actualizar_emiten_intenciones_sin_mutar_datos() {
     s.handle_key(k(KeyCode::Char('N')));
     escribir(&mut s, "Nueva");
     assert_eq!(
-        s.handle_key(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT)),
+        s.handle_key(k(KeyCode::Enter)),
         AccionEmpresas::Crear {
             nombre: "Nueva".into()
         }
@@ -80,7 +87,7 @@ fn crear_y_actualizar_emiten_intenciones_sin_mutar_datos() {
     s.handle_key(k(KeyCode::Esc));
     s.handle_key(k(KeyCode::Char('E')));
     assert!(matches!(
-        s.handle_key(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT)),
+        s.handle_key(k(KeyCode::Enter)),
         AccionEmpresas::Actualizar { id: 7, .. }
     ));
 }

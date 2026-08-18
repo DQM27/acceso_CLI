@@ -45,25 +45,21 @@ fn inicia_vacio_y_busqueda_emite_acciones() {
     ));
 }
 #[test]
-fn preparacion_real_controla_flujo_y_gafete() {
+fn preparacion_con_gafete_pasa_directo_al_formulario_unico() {
     let mut s = NuevoIngresoState::default();
     s.completar_busqueda(Ok(vec![resumen()]));
     s.completar_preparacion(Ok(preparar(true)));
-    assert_eq!(s.etapa, EtapaNuevoIngreso::Preparacion);
-    s.handle_key(k(KeyCode::Enter));
-    s.handle_key(k(KeyCode::Enter));
-    assert_eq!(s.etapa, EtapaNuevoIngreso::Gafete);
+    assert_eq!(s.etapa, EtapaNuevoIngreso::Formulario);
+    assert!(!s.campo_es_gafete()); // arranca en Medio
+
+    // TAB mueve el foco a Gafete cuando se requiere.
+    s.handle_key(k(KeyCode::Tab));
+    assert!(s.campo_es_gafete());
     for c in "26".chars() {
         s.handle_key(k(KeyCode::Char(c)));
     }
     assert!(matches!(
         s.handle_key(k(KeyCode::Enter)),
-        AccionNuevoIngreso::ConsultarGafete { numero: 26 }
-    ));
-    s.completar_gafete(Ok(false));
-    assert_eq!(s.etapa, EtapaNuevoIngreso::Confirmar);
-    assert!(matches!(
-        s.handle_key(k(KeyCode::Char('Y'))),
         AccionNuevoIngreso::Registrar {
             contratista_id: 7,
             gafete: Some(26),
@@ -72,21 +68,34 @@ fn preparacion_real_controla_flujo_y_gafete() {
     ));
 }
 #[test]
-fn sin_gafete_confirma_none_y_cancelar_no_registra() {
+fn sin_gafete_enter_registra_directo_desde_medio() {
     let mut s = NuevoIngresoState::default();
     s.completar_busqueda(Ok(vec![resumen()]));
     s.completar_preparacion(Ok(preparar(false)));
-    s.handle_key(k(KeyCode::Enter));
-    s.handle_key(k(KeyCode::Enter));
-    assert_eq!(s.etapa, EtapaNuevoIngreso::Confirmar);
+    assert_eq!(s.etapa, EtapaNuevoIngreso::Formulario);
     assert!(matches!(
-        s.handle_key(k(KeyCode::Esc)),
-        AccionNuevoIngreso::Ninguna
+        s.handle_key(k(KeyCode::Enter)),
+        AccionNuevoIngreso::Registrar {
+            contratista_id: 7,
+            gafete: None,
+            ..
+        }
     ));
-    assert!(matches!(s.etapa, EtapaNuevoIngreso::Medio { .. }));
 }
 #[test]
-fn denegado_o_activo_no_continua() {
+fn flechas_cambian_el_medio_y_esc_vuelve_a_buscar() {
+    let mut s = NuevoIngresoState::default();
+    s.completar_busqueda(Ok(vec![resumen()]));
+    s.completar_preparacion(Ok(preparar(false)));
+    let inicial = s.medio_actual();
+    s.handle_key(k(KeyCode::Right));
+    assert_ne!(s.medio_actual(), inicial);
+
+    s.handle_key(k(KeyCode::Esc));
+    assert_eq!(s.etapa, EtapaNuevoIngreso::Buscar);
+}
+#[test]
+fn denegado_o_activo_no_continua_y_deja_mensaje_en_buscar() {
     for p in [
         {
             let mut p = preparar(false);
@@ -103,21 +112,31 @@ fn denegado_o_activo_no_continua() {
     ] {
         let mut s = NuevoIngresoState::default();
         s.completar_preparacion(Ok(p.clone()));
-        s.handle_key(k(KeyCode::Enter));
-        assert_eq!(s.etapa, EtapaNuevoIngreso::Preparacion);
+        assert_eq!(s.etapa, EtapaNuevoIngreso::Buscar);
+        assert!(s.error.is_some());
     }
 }
 #[test]
-fn gafete_invalido_y_ocupado_son_presentables() {
-    let mut s = NuevoIngresoState {
-        etapa: EtapaNuevoIngreso::Gafete,
-        ..Default::default()
-    };
-    s.handle_key(k(KeyCode::Enter));
+fn gafete_vacio_es_presentable_y_no_registra() {
+    let mut s = NuevoIngresoState::default();
+    s.completar_busqueda(Ok(vec![resumen()]));
+    s.completar_preparacion(Ok(preparar(true)));
+    s.handle_key(k(KeyCode::Tab));
+    assert!(matches!(
+        s.handle_key(k(KeyCode::Enter)),
+        AccionNuevoIngreso::Ninguna
+    ));
     assert_eq!(s.error.as_deref(), Some("El gafete es requerido"));
-    s.gafete_texto = "10".into();
-    s.completar_gafete(Ok(true));
+}
+#[test]
+fn gafete_ocupado_llega_como_error_del_backend_al_registrar() {
+    let mut s = NuevoIngresoState::default();
+    s.completar_busqueda(Ok(vec![resumen()]));
+    s.completar_preparacion(Ok(preparar(true)));
+    assert!(!s.completar_registro(Err("El gafete ya está en uso".into())));
     assert_eq!(s.error.as_deref(), Some("El gafete ya está en uso"));
+    // el formulario sigue abierto para corregir, no vuelve a Buscar.
+    assert_eq!(s.etapa, EtapaNuevoIngreso::Formulario);
 }
 #[test]
 fn fecha_determinista_pertenece_al_core_no_al_state() {

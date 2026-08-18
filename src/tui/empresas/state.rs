@@ -1,6 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::database::queries::empresas::EmpresaResumen;
+use crate::tui::ui_kit::{StandardCommand, standard_command};
 
 #[path = "render.rs"]
 pub(super) mod render;
@@ -26,7 +27,6 @@ struct FormularioEmpresa {
 enum ModoEmpresas {
     Normal,
     Busqueda { texto: String },
-    Detalle { id: i64 },
     Formulario(FormularioEmpresa),
 }
 
@@ -56,6 +56,7 @@ pub struct EmpresasState {
     mensaje: Option<String>,
     error_carga: Option<String>,
     usuario_nombre: String,
+    ayuda_expandida: bool,
 }
 
 impl Default for EmpresasState {
@@ -68,6 +69,7 @@ impl Default for EmpresasState {
             mensaje: None,
             error_carga: None,
             usuario_nombre: "Quintana".into(),
+            ayuda_expandida: false,
         }
     }
 }
@@ -101,20 +103,13 @@ impl EmpresasState {
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) -> AccionEmpresas {
+        if standard_command(key) == Some(StandardCommand::Help) {
+            self.ayuda_expandida = !self.ayuda_expandida;
+            return AccionEmpresas::Ninguna;
+        }
         match self.modo.clone() {
             ModoEmpresas::Normal => self.handle_normal(key),
             ModoEmpresas::Busqueda { .. } => self.handle_busqueda(key),
-            ModoEmpresas::Detalle { id } => match key.code {
-                KeyCode::Esc => {
-                    self.modo = ModoEmpresas::Normal;
-                    AccionEmpresas::Ninguna
-                }
-                KeyCode::Char('e' | 'E') => {
-                    self.abrir_edicion(id);
-                    AccionEmpresas::Ninguna
-                }
-                _ => AccionEmpresas::Ninguna,
-            },
             ModoEmpresas::Formulario(formulario) => self.handle_formulario(key, formulario),
         }
     }
@@ -185,7 +180,7 @@ impl EmpresasState {
             KeyCode::Down => self.mover(1),
             KeyCode::Enter => {
                 if let Some(id) = self.id_seleccionado() {
-                    self.modo = ModoEmpresas::Detalle { id };
+                    self.abrir_edicion(id);
                 }
             }
             KeyCode::Char('n' | 'N') => {
@@ -273,7 +268,7 @@ impl EmpresasState {
                 formulario.nombre.pop();
                 formulario.error = None;
             }
-            KeyCode::Char('G') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+            KeyCode::Enter => {
                 return match formulario.modo {
                     ModoFormularioEmpresa::Crear => AccionEmpresas::Crear {
                         nombre: formulario.nombre,
