@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::usuario::RolUsuario;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 fn k(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
@@ -70,14 +71,14 @@ fn la_lista_queda_centrada_en_vez_de_pegada_a_la_izquierda() {
 fn seleccion_inicial_movimiento_y_limites() {
     let mut s = MenuPrincipalState::default();
     assert_eq!(s.seleccion, OpcionMenu::NuevoIngreso);
-    s.handle_key(k(KeyCode::Up));
+    s.handle_key(k(KeyCode::Up), RolUsuario::Root);
     assert_eq!(s.seleccion, OpcionMenu::NuevoIngreso);
-    s.handle_key(k(KeyCode::Down));
+    s.handle_key(k(KeyCode::Down), RolUsuario::Root);
     assert_eq!(s.seleccion, OpcionMenu::IngresosActivos);
-    s.handle_key(k(KeyCode::Up));
+    s.handle_key(k(KeyCode::Up), RolUsuario::Root);
     assert_eq!(s.seleccion, OpcionMenu::NuevoIngreso);
     for _ in 0..20 {
-        s.handle_key(k(KeyCode::Down));
+        s.handle_key(k(KeyCode::Down), RolUsuario::Root);
     }
     assert_eq!(s.seleccion, OpcionMenu::Salir);
 }
@@ -86,7 +87,7 @@ fn seleccion_inicial_movimiento_y_limites() {
 fn enter_y_accesos_numericos_emiten_apertura_correcta() {
     let mut s = MenuPrincipalState::default();
     assert_eq!(
-        s.handle_key(k(KeyCode::Enter)),
+        s.handle_key(k(KeyCode::Enter), RolUsuario::Root),
         AccionMenu::Abrir(OpcionMenu::NuevoIngreso)
     );
     for (c, opcion) in [
@@ -96,42 +97,82 @@ fn enter_y_accesos_numericos_emiten_apertura_correcta() {
         ('4', OpcionMenu::Contratistas),
         ('5', OpcionMenu::Empresas),
         ('6', OpcionMenu::Usuarios),
+        ('7', OpcionMenu::Configuracion),
     ] {
-        assert_eq!(s.handle_key(k(KeyCode::Char(c))), AccionMenu::Abrir(opcion));
+        assert_eq!(
+            s.handle_key(k(KeyCode::Char(c)), RolUsuario::Root),
+            AccionMenu::Abrir(opcion)
+        );
     }
 }
 
 #[test]
 fn logout_confirma_o_cancela() {
     let mut s = MenuPrincipalState::default();
-    s.handle_key(k(KeyCode::Char('L')));
+    s.handle_key(k(KeyCode::Char('L')), RolUsuario::Root);
     assert_eq!(s.confirmacion, Some(ConfirmacionMenu::CerrarSesion));
     // Sólo ENTER confirma y sólo ESC cancela — Y/N ya no hacen nada.
-    s.handle_key(k(KeyCode::Char('N')));
+    s.handle_key(k(KeyCode::Char('N')), RolUsuario::Root);
     assert_eq!(s.confirmacion, Some(ConfirmacionMenu::CerrarSesion));
-    s.handle_key(k(KeyCode::Esc));
+    s.handle_key(k(KeyCode::Esc), RolUsuario::Root);
     assert_eq!(s.confirmacion, None);
-    s.handle_key(k(KeyCode::Char('L')));
+    s.handle_key(k(KeyCode::Char('L')), RolUsuario::Root);
     assert_eq!(
-        s.handle_key(k(KeyCode::Char('Y'))),
+        s.handle_key(k(KeyCode::Char('Y')), RolUsuario::Root),
         AccionMenu::Ninguna
     );
-    assert_eq!(s.handle_key(k(KeyCode::Enter)), AccionMenu::CerrarSesion);
+    assert_eq!(
+        s.handle_key(k(KeyCode::Enter), RolUsuario::Root),
+        AccionMenu::CerrarSesion
+    );
 }
 
 #[test]
 fn salida_confirma_o_cancela_y_escape_raiz_no_hace_nada() {
     let mut s = MenuPrincipalState::default();
-    assert_eq!(s.handle_key(k(KeyCode::Esc)), AccionMenu::Ninguna);
-    s.handle_key(k(KeyCode::Char('Q')));
-    s.handle_key(k(KeyCode::Esc));
+    assert_eq!(
+        s.handle_key(k(KeyCode::Esc), RolUsuario::Root),
+        AccionMenu::Ninguna
+    );
+    s.handle_key(k(KeyCode::Char('Q')), RolUsuario::Root);
+    s.handle_key(k(KeyCode::Esc), RolUsuario::Root);
     assert_eq!(s.confirmacion, None);
-    s.handle_key(k(KeyCode::Char('Q')));
-    s.handle_key(k(KeyCode::Char('N')));
+    s.handle_key(k(KeyCode::Char('Q')), RolUsuario::Root);
+    s.handle_key(k(KeyCode::Char('N')), RolUsuario::Root);
     assert_eq!(s.confirmacion, Some(ConfirmacionMenu::Salir));
-    s.handle_key(k(KeyCode::Esc));
+    s.handle_key(k(KeyCode::Esc), RolUsuario::Root);
     assert_eq!(s.confirmacion, None);
-    s.handle_key(k(KeyCode::Char('Q')));
-    assert_eq!(s.handle_key(k(KeyCode::Char('Y'))), AccionMenu::Ninguna);
-    assert_eq!(s.handle_key(k(KeyCode::Enter)), AccionMenu::Salir);
+    s.handle_key(k(KeyCode::Char('Q')), RolUsuario::Root);
+    assert_eq!(
+        s.handle_key(k(KeyCode::Char('Y')), RolUsuario::Root),
+        AccionMenu::Ninguna
+    );
+    assert_eq!(
+        s.handle_key(k(KeyCode::Enter), RolUsuario::Root),
+        AccionMenu::Salir
+    );
+}
+
+#[test]
+fn un_operador_no_ve_ni_puede_abrir_configuracion() {
+    let visibles = OpcionMenu::visibles_para(RolUsuario::Operador);
+    assert!(!visibles.contains(&OpcionMenu::Configuracion));
+
+    let mut s = MenuPrincipalState::default();
+    assert_eq!(
+        s.handle_key(k(KeyCode::Char('7')), RolUsuario::Operador),
+        AccionMenu::Ninguna
+    );
+}
+
+#[test]
+fn un_administrador_si_ve_y_puede_abrir_configuracion() {
+    let visibles = OpcionMenu::visibles_para(RolUsuario::Administrador);
+    assert!(visibles.contains(&OpcionMenu::Configuracion));
+
+    let mut s = MenuPrincipalState::default();
+    assert_eq!(
+        s.handle_key(k(KeyCode::Char('7')), RolUsuario::Administrador),
+        AccionMenu::Abrir(OpcionMenu::Configuracion)
+    );
 }

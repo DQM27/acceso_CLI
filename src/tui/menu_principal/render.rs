@@ -61,7 +61,7 @@ pub fn render(
     };
     let areas = shell.render(frame, area, theme);
 
-    render_lista(frame, areas.body, state, theme);
+    render_lista(frame, areas.body, state, sesion.rol, theme);
 }
 
 fn estado_shell(state: &MenuPrincipalState, sesion: &UsuarioSesion) -> (String, StatusKind) {
@@ -80,7 +80,15 @@ fn estado_shell(state: &MenuPrincipalState, sesion: &UsuarioSesion) -> (String, 
     }
 }
 
-fn render_lista(frame: &mut Frame, area: Rect, state: &MenuPrincipalState, theme: Theme) {
+fn render_lista(
+    frame: &mut Frame,
+    area: Rect,
+    state: &MenuPrincipalState,
+    rol: RolUsuario,
+    theme: Theme,
+) {
+    let visibles = OpcionMenu::visibles_para(rol);
+
     // El ancho del bloque se ajusta al contenido real (marcador + etiqueta
     // más larga) en vez de un valor fijo de 60 columnas: con un bloque más
     // ancho que su contenido, el texto queda alineado a la izquierda dentro
@@ -95,28 +103,39 @@ fn render_lista(frame: &mut Frame, area: Rect, state: &MenuPrincipalState, theme
     let alto = area.height.min(14);
     let lista = centrar(area, ancho, alto);
 
+    let operacion: Vec<OpcionMenu> = visibles
+        .iter()
+        .copied()
+        .filter(|o| {
+            matches!(
+                o,
+                OpcionMenu::NuevoIngreso | OpcionMenu::IngresosActivos | OpcionMenu::Historial
+            )
+        })
+        .collect();
+    let administracion: Vec<OpcionMenu> = visibles
+        .iter()
+        .copied()
+        .filter(|o| {
+            matches!(
+                o,
+                OpcionMenu::Contratistas
+                    | OpcionMenu::Empresas
+                    | OpcionMenu::Usuarios
+                    | OpcionMenu::Configuracion
+            )
+        })
+        .collect();
+    let sesion: Vec<OpcionMenu> = visibles
+        .iter()
+        .copied()
+        .filter(|o| matches!(o, OpcionMenu::CerrarSesion | OpcionMenu::Salir))
+        .collect();
+
     let mut lineas = Vec::new();
-    grupo(
-        &mut lineas,
-        "OPERACIÓN",
-        &OpcionMenu::TODAS[0..3],
-        state,
-        theme,
-    );
-    grupo(
-        &mut lineas,
-        "ADMINISTRACIÓN",
-        &OpcionMenu::TODAS[3..6],
-        state,
-        theme,
-    );
-    grupo(
-        &mut lineas,
-        "SESIÓN",
-        &OpcionMenu::TODAS[6..8],
-        state,
-        theme,
-    );
+    grupo(&mut lineas, "OPERACIÓN", &operacion, state, theme);
+    grupo(&mut lineas, "ADMINISTRACIÓN", &administracion, state, theme);
+    grupo(&mut lineas, "SESIÓN", &sesion, state, theme);
 
     frame.render_widget(Paragraph::new(lineas), lista);
 }

@@ -1,6 +1,9 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
-use crate::tui::ui_kit::{StandardCommand, standard_command};
+use crate::{
+    models::usuario::RolUsuario,
+    tui::ui_kit::{StandardCommand, standard_command},
+};
 
 #[path = "render.rs"]
 pub(super) mod render;
@@ -17,18 +20,20 @@ pub enum OpcionMenu {
     Contratistas,
     Empresas,
     Usuarios,
+    Configuracion,
     CerrarSesion,
     Salir,
 }
 
 impl OpcionMenu {
-    pub const TODAS: [Self; 8] = [
+    pub const TODAS: [Self; 9] = [
         Self::NuevoIngreso,
         Self::IngresosActivos,
         Self::Historial,
         Self::Contratistas,
         Self::Empresas,
         Self::Usuarios,
+        Self::Configuracion,
         Self::CerrarSesion,
         Self::Salir,
     ];
@@ -41,6 +46,7 @@ impl OpcionMenu {
             Self::Contratistas => "4   Contratistas",
             Self::Empresas => "5   Empresas",
             Self::Usuarios => "6   Usuarios",
+            Self::Configuracion => "7   Configuración",
             Self::CerrarSesion => "L   Cerrar sesión",
             Self::Salir => "Q   Salir",
         }
@@ -54,9 +60,25 @@ impl OpcionMenu {
             Self::Contratistas => "Administrar la base de contratistas.",
             Self::Empresas => "Administrar empresas registradas.",
             Self::Usuarios => "Administrar usuarios del sistema.",
+            Self::Configuracion => "Ajustes del sistema y respaldos de la base de datos.",
             Self::CerrarSesion => "Volver a la pantalla de autenticación.",
             Self::Salir => "Cerrar BRISAS CLI.",
         }
+    }
+
+    /// Sólo ROOT y Administrador ven las opciones de configuración del sistema.
+    fn visible_para(self, rol: RolUsuario) -> bool {
+        match self {
+            Self::Configuracion => rol != RolUsuario::Operador,
+            _ => true,
+        }
+    }
+
+    pub fn visibles_para(rol: RolUsuario) -> Vec<Self> {
+        Self::TODAS
+            .into_iter()
+            .filter(|opcion| opcion.visible_para(rol))
+            .collect()
     }
 }
 
@@ -97,7 +119,7 @@ impl MenuPrincipalState {
         self.confirmacion = None;
     }
 
-    pub fn handle_key(&mut self, key: KeyEvent) -> AccionMenu {
+    pub fn handle_key(&mut self, key: KeyEvent, rol: RolUsuario) -> AccionMenu {
         if standard_command(key) == Some(StandardCommand::Help) {
             self.ayuda_expandida = !self.ayuda_expandida;
             return AccionMenu::Ninguna;
@@ -118,9 +140,10 @@ impl MenuPrincipalState {
                 _ => AccionMenu::Ninguna,
             };
         }
+        let visibles = OpcionMenu::visibles_para(rol);
         match key.code {
-            KeyCode::Up => self.mover(-1),
-            KeyCode::Down => self.mover(1),
+            KeyCode::Up => self.mover(-1, &visibles),
+            KeyCode::Down => self.mover(1, &visibles),
             KeyCode::Enter => return self.abrir_seleccion(),
             KeyCode::Char('1') => return AccionMenu::Abrir(OpcionMenu::NuevoIngreso),
             KeyCode::Char('2') => return AccionMenu::Abrir(OpcionMenu::IngresosActivos),
@@ -128,6 +151,9 @@ impl MenuPrincipalState {
             KeyCode::Char('4') => return AccionMenu::Abrir(OpcionMenu::Contratistas),
             KeyCode::Char('5') => return AccionMenu::Abrir(OpcionMenu::Empresas),
             KeyCode::Char('6') => return AccionMenu::Abrir(OpcionMenu::Usuarios),
+            KeyCode::Char('7') if visibles.contains(&OpcionMenu::Configuracion) => {
+                return AccionMenu::Abrir(OpcionMenu::Configuracion);
+            }
             KeyCode::Char('l' | 'L') => self.solicitar(ConfirmacionMenu::CerrarSesion),
             KeyCode::Char('q' | 'Q') => self.solicitar(ConfirmacionMenu::Salir),
             _ => {}
@@ -135,17 +161,17 @@ impl MenuPrincipalState {
         AccionMenu::Ninguna
     }
 
-    fn mover(&mut self, delta: isize) {
-        let actual = OpcionMenu::TODAS
+    fn mover(&mut self, delta: isize, visibles: &[OpcionMenu]) {
+        let actual = visibles
             .iter()
             .position(|o| *o == self.seleccion)
             .unwrap_or(0);
         let nuevo = if delta < 0 {
             actual.saturating_sub(1)
         } else {
-            (actual + 1).min(OpcionMenu::TODAS.len() - 1)
+            (actual + 1).min(visibles.len() - 1)
         };
-        self.seleccion = OpcionMenu::TODAS[nuevo];
+        self.seleccion = visibles[nuevo];
     }
 
     fn abrir_seleccion(&mut self) -> AccionMenu {

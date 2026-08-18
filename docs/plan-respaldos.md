@@ -3,10 +3,12 @@
 > **Prioridad:** alta, obligatoria antes de producción.
 >
 > **Estado:** Fase 1 (motor de creación y validación) y el motor de la Fase 2
-> (`restaurar_respaldo`) están implementados y probados — ver detalle al final
-> de cada sección. La orquestación de la Fase 2 con la TUI (cerrar sesión,
-> descartar `AppCore`, exigir login nuevo) y las Fases 3-4 (pantalla,
-> automatización/retención) siguen pendientes.
+> (`restaurar_respaldo`) están implementados y probados. La pantalla de la
+> Fase 3 (Configuración → Respaldos) ya está en la TUI con Crear, Listar,
+> Revalidar y Exportar — ver detalle al final de cada sección. Restaurar
+> desde la pantalla (Fase 3, acción pendiente) y la orquestación de la Fase 2
+> con la TUI (cerrar sesión, descartar `AppCore`, exigir login nuevo) quedan
+> deliberadamente para después, junto con la Fase 4 (automatización/retención).
 
 ## Objetivo
 
@@ -164,27 +166,48 @@ superficial pero con un esquema real incompatible), se reinstala automáticament
 anterior y no queda ningún archivo temporal; restaurar sobre una ruta activa inexistente
 funciona como primera carga.
 
-## Fase 3: pantalla de respaldos
+## Fase 3: pantalla de respaldos — Crear/Listar/Revalidar/Exportar implementados
 
-Añadir una opción `Respaldos` al menú de mantenimiento con una tabla que muestre:
+Se agregó una entrada `Configuración` al menú principal (visible sólo para ROOT y
+Administrador — primer filtrado por rol de la app, en
+`src/tui/menu_principal/state.rs::OpcionMenu::visibles_para`), que abre una pantalla con
+una lista de sub-secciones (`src/tui/configuracion/`, hoy sólo `Respaldos`, pensada para
+crecer sin rediseño). Dentro de Respaldos, la tabla muestra:
 
 ```text
 Fecha | Tipo | Tamaño | Esquema | Estado
 ```
 
-Acciones previstas:
+tal como se especificó arriba. Acciones implementadas:
 
-- Crear respaldo manual.
-- Actualizar la lista.
-- Ver detalles y resultado de verificación.
-- Verificar nuevamente.
-- Exportar una copia.
-- Restaurar.
-- Eliminar, con confirmación, únicamente un respaldo no utilizado por una operación.
+- [x] Crear respaldo manual (`C`).
+- [x] Actualizar la lista (`A`).
+- [x] Verificar nuevamente un respaldo puntual (`R`) — no se valida el listado completo al
+  cargar (potencialmente costoso, abre cada `.db`); "Esquema"/"Estado" quedan en `—` hasta
+  que el operador revalida esa fila.
+- [x] Exportar una copia ya validada a una ruta que tipea el operador (`E`) — copia simple
+  (`AppCore::exportar_respaldo`, `std::fs::copy`), sin volver a pasar por el motor de
+  respaldo porque el archivo interno ya fue validado al crearse.
+- [ ] Restaurar — deliberadamente fuera de esta pasada (ver Fase 2, "orquestación con la
+  TUI pendiente": exige cerrar `AppCore` y reabrir la app).
+- [ ] Eliminar un respaldo no utilizado, con confirmación — no se acordó para esta pasada;
+  mismo patrón que Exportar cuando se agregue.
+
+La pantalla es un cliente delgado del motor: `AppCore` gana `crear_respaldo`,
+`listar_respaldos`, `validar_respaldo` y `exportar_respaldo`, cada uno una línea que
+delega a `database::backup` (mismo patrón de fachada que el resto de `AppCore`). El
+directorio de respaldos se resuelve como `<directorio de la base activa>/backups`, vía un
+nuevo campo `AppCore::ruta_base_datos` poblado sólo en `AppCore::abrir` (no rompe
+`AppCore::new`/`con_reloj`, usados por la mayoría de los tests existentes).
+
+Probado en `tests/configuracion_respaldos.rs` (crear/listar/validar y exportar a través de
+`AppCore`, y que el directorio de respaldos se ubica junto a la base activa) y en
+`src/tui/configuracion/tests.rs` (navegación Menu ↔ Respaldos, Esc no burbujea desde el
+sub-modo, crear/revalidar disparan la acción correcta sólo con una fila seleccionada).
 
 La restauración debe requerir una confirmación fuerte que indique fecha y tipo del
-respaldo. La pantalla no podrá editar ni consultar los datos internos como si fueran la
-base activa.
+respaldo, cuando se implemente. La pantalla no edita ni consulta los datos internos como
+si fueran la base activa.
 
 ## Fase 4: automatización y retención
 

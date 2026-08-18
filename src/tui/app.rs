@@ -11,6 +11,7 @@ use crate::services::usuario_service::CrearRootInicialInput;
 
 use super::{
     activos::{self, AccionActivos, ActivosState},
+    configuracion::{self, AccionAjustes, AccionRespaldos, ConfiguracionState},
     configuracion_inicial::{self, AccionConfiguracion, ConfiguracionInicialState},
     contratistas::{self, AccionContratistas, ContratistasState},
     empresas::{self, AccionEmpresas, EmpresasState},
@@ -105,6 +106,7 @@ pub enum Vista {
     Contratistas,
     Empresas,
     Usuarios,
+    Configuracion,
     NuevoIngreso,
 }
 
@@ -763,6 +765,7 @@ pub struct App {
     contratistas: ContratistasState,
     empresas: EmpresasState,
     usuarios: UsuariosState,
+    configuracion: ConfiguracionState,
     nuevo_ingreso: NuevoIngresoState,
     salida_rapida: SalidaRapidaState,
     salir: bool,
@@ -786,6 +789,7 @@ impl Default for App {
             contratistas: ContratistasState::default(),
             empresas: EmpresasState::default(),
             usuarios: UsuariosState::default(),
+            configuracion: ConfiguracionState::default(),
             nuevo_ingreso: NuevoIngresoState::default(),
             salida_rapida: SalidaRapidaState::default(),
             salir: false,
@@ -855,6 +859,9 @@ impl App {
                     }
                     Vista::Empresas => empresas::render(frame, frame.area(), &self.empresas, theme),
                     Vista::Usuarios => usuarios::render(frame, frame.area(), &self.usuarios, theme),
+                    Vista::Configuracion => {
+                        configuracion::render(frame, frame.area(), &self.configuracion, theme)
+                    }
                     Vista::NuevoIngreso => {
                         nuevo_ingreso::render(frame, frame.area(), &self.nuevo_ingreso, theme)
                     }
@@ -1088,6 +1095,10 @@ impl App {
                 let accion = self.usuarios.handle_key(key);
                 self.procesar_accion_usuarios(accion, core);
             }
+            Vista::Configuracion => {
+                let accion = self.configuracion.handle_key(key);
+                self.procesar_accion_configuracion(accion, core);
+            }
             Vista::NuevoIngreso => {
                 let accion = self.nuevo_ingreso.handle_key(key);
                 self.procesar_accion_nuevo_ingreso(accion, core);
@@ -1109,7 +1120,11 @@ impl App {
         key: crossterm::event::KeyEvent,
         core: Option<&AppCore>,
     ) {
-        match self.menu.handle_key(key) {
+        let rol = self
+            .sesion
+            .as_ref()
+            .map_or(RolUsuario::Operador, |sesion| sesion.rol);
+        match self.menu.handle_key(key, rol) {
             AccionMenu::Ninguna => {}
             AccionMenu::Abrir(opcion) => {
                 self.menu.seleccion = opcion;
@@ -1173,6 +1188,10 @@ impl App {
                             self.procesar_accion_usuarios(self.usuarios.solicitud_carga(), core);
                         }
                         Vista::Usuarios
+                    }
+                    OpcionMenu::Configuracion => {
+                        self.configuracion = ConfiguracionState::default();
+                        Vista::Configuracion
                     }
                     OpcionMenu::CerrarSesion | OpcionMenu::Salir => Vista::MenuPrincipal,
                 };
@@ -1380,6 +1399,53 @@ impl App {
     fn procesar_recarga_usuarios(&mut self, accion: AccionUsuarios, core: Option<&AppCore>) {
         if !matches!(accion, AccionUsuarios::Ninguna) {
             self.procesar_accion_usuarios(accion, core);
+        }
+    }
+
+    fn procesar_accion_configuracion(&mut self, accion: AccionAjustes, core: Option<&AppCore>) {
+        match accion {
+            AccionAjustes::Ninguna => {}
+            AccionAjustes::Volver => self.vista = Vista::MenuPrincipal,
+            AccionAjustes::Respaldos(accion) => self.procesar_accion_respaldos(accion, core),
+        }
+    }
+
+    fn procesar_accion_respaldos(&mut self, accion: AccionRespaldos, core: Option<&AppCore>) {
+        match accion {
+            AccionRespaldos::Ninguna | AccionRespaldos::Volver => {}
+            AccionRespaldos::Cargar => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudieron listar los respaldos".to_owned())
+                    .and_then(|core| core.listar_respaldos().map_err(|error| error.to_string()));
+                self.configuracion.completar_listado(resultado);
+            }
+            AccionRespaldos::Crear => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudo crear el respaldo".to_owned())
+                    .and_then(|core| {
+                        core.crear_respaldo(crate::database::backup::TipoRespaldo::Manual)
+                            .map_err(|error| error.to_string())
+                    });
+                self.configuracion.completar_creacion(resultado);
+            }
+            AccionRespaldos::Revalidar { ruta } => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudo validar el respaldo".to_owned())
+                    .and_then(|core| {
+                        core.validar_respaldo(&ruta)
+                            .map_err(|error| error.to_string())
+                    });
+                self.configuracion.completar_validacion(&ruta, resultado);
+            }
+            AccionRespaldos::Exportar { ruta, destino } => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudo exportar el respaldo".to_owned())
+                    .and_then(|core| {
+                        core.exportar_respaldo(&ruta, &destino)
+                            .map_err(|error| error.to_string())
+                    });
+                self.configuracion.completar_exportacion(resultado, &destino);
+            }
         }
     }
 

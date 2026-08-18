@@ -1,8 +1,9 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
+use crate::database::backup::{RespaldoError, RespaldoResumen, ResultadoValidacion, TipoRespaldo};
 use crate::database::connection::open_database;
 use crate::database::error::DatabaseError;
 use crate::database::schema::SchemaError;
@@ -70,6 +71,9 @@ impl From<SchemaError> for BootstrapError {
 pub struct AppCore {
     connection: Connection,
     reloj: Arc<dyn Reloj>,
+    /// Ruta del archivo activo, sólo conocida cuando se abre con [`AppCore::abrir`].
+    /// Se usa exclusivamente para ubicar el directorio de respaldos junto a la base.
+    ruta_base_datos: PathBuf,
 }
 
 impl AppCore {
@@ -78,11 +82,17 @@ impl AppCore {
     }
 
     pub fn con_reloj(connection: Connection, reloj: Arc<dyn Reloj>) -> Self {
-        Self { connection, reloj }
+        Self {
+            connection,
+            reloj,
+            ruta_base_datos: PathBuf::new(),
+        }
     }
 
     pub fn abrir(path: impl AsRef<Path>) -> Result<Self, BootstrapError> {
-        Ok(Self::new(open_database(path)?))
+        let mut core = Self::new(open_database(&path)?);
+        core.ruta_base_datos = path.as_ref().to_path_buf();
+        Ok(core)
     }
 
     pub fn requiere_configuracion_inicial(&self) -> Result<bool, UsuarioServiceError> {
@@ -289,6 +299,32 @@ impl AppCore {
     ) -> Result<(), UsuarioServiceError> {
         UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection))
             .cambiar_password(id, password)
+    }
+
+    pub fn crear_respaldo(&self, tipo: TipoRespaldo) -> Result<RespaldoResumen, RespaldoError> {
+        crate::database::backup::crear_respaldo(&self.connection, &self.directorio_respaldos(), tipo)
+    }
+
+    pub fn listar_respaldos(&self) -> Result<Vec<RespaldoResumen>, RespaldoError> {
+        crate::database::backup::listar_respaldos(&self.directorio_respaldos())
+    }
+
+    pub fn validar_respaldo(&self, ruta: &Path) -> Result<ResultadoValidacion, RespaldoError> {
+        crate::database::backup::validar_respaldo(ruta)
+    }
+
+    /// El archivo interno ya fue validado por `crear_respaldo`; exportarlo es una
+    /// copia simple a la ruta que indique el operador, sin volver a pasar por el
+    /// motor de respaldo.
+    pub fn exportar_respaldo(&self, origen: &Path, destino: &Path) -> std::io::Result<()> {
+        std::fs::copy(origen, destino).map(|_| ())
+    }
+
+    fn directorio_respaldos(&self) -> PathBuf {
+        self.ruta_base_datos
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join("backups")
     }
 }
 
