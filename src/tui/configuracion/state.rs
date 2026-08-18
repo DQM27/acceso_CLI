@@ -131,6 +131,7 @@ struct FilaRespaldo {
 enum ModoRespaldos {
     Normal,
     Exportando { destino: String },
+    ConfirmandoRestauracion { ruta: PathBuf, fecha: String, tipo: &'static str },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,6 +142,7 @@ pub enum AccionRespaldos {
     Crear,
     Revalidar { ruta: PathBuf },
     Exportar { ruta: PathBuf, destino: PathBuf },
+    Restaurar { ruta: PathBuf },
 }
 
 #[derive(Debug)]
@@ -167,6 +169,7 @@ impl RespaldosState {
         match &self.modo {
             ModoRespaldos::Normal => self.normal(key),
             ModoRespaldos::Exportando { .. } => self.exportando(key),
+            ModoRespaldos::ConfirmandoRestauracion { .. } => self.confirmando_restauracion(key),
         }
     }
 
@@ -183,7 +186,7 @@ impl RespaldosState {
             }
             KeyCode::Char('c' | 'C') => AccionRespaldos::Crear,
             KeyCode::Char('a' | 'A') => AccionRespaldos::Cargar,
-            KeyCode::Char('r' | 'R') => self
+            KeyCode::Char('v' | 'V') => self
                 .ruta_seleccionada()
                 .map_or(AccionRespaldos::Ninguna, |ruta| {
                     AccionRespaldos::Revalidar { ruta }
@@ -196,7 +199,37 @@ impl RespaldosState {
                 }
                 AccionRespaldos::Ninguna
             }
+            KeyCode::Char('r' | 'R') => {
+                if let Some(fila) = self.seleccionada() {
+                    self.modo = ModoRespaldos::ConfirmandoRestauracion {
+                        ruta: fila.resumen.ruta.clone(),
+                        fecha: crate::tiempo::a_costa_rica(fila.resumen.creado_en)
+                            .format("%Y-%m-%d %H:%M")
+                            .to_string(),
+                        tipo: etiqueta_tipo(fila.resumen.tipo),
+                    };
+                }
+                AccionRespaldos::Ninguna
+            }
             KeyCode::Esc => AccionRespaldos::Volver,
+            _ => AccionRespaldos::Ninguna,
+        }
+    }
+
+    fn confirmando_restauracion(&mut self, key: KeyEvent) -> AccionRespaldos {
+        let ModoRespaldos::ConfirmandoRestauracion { ruta, .. } = &self.modo else {
+            return AccionRespaldos::Ninguna;
+        };
+        match key.code {
+            KeyCode::Enter => {
+                let ruta = ruta.clone();
+                self.modo = ModoRespaldos::Normal;
+                AccionRespaldos::Restaurar { ruta }
+            }
+            KeyCode::Esc => {
+                self.modo = ModoRespaldos::Normal;
+                AccionRespaldos::Ninguna
+            }
             _ => AccionRespaldos::Ninguna,
         }
     }

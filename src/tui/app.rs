@@ -110,6 +110,15 @@ pub enum Vista {
     NuevoIngreso,
 }
 
+/// Cómo terminó el bucle principal: cierre normal, o una restauración de
+/// respaldo confirmada que exige que `main.rs` cierre la conexión SQLite,
+/// aplique el reemplazo de archivo y vuelva a arrancar la TUI desde cero.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SalidaApp {
+    Cerrar,
+    Restaurar { candidata: std::path::PathBuf },
+}
+
 #[cfg(test)]
 mod tests {
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -129,7 +138,7 @@ mod tests {
         let connection = Connection::open_in_memory().unwrap();
         initialize_database(&connection).unwrap();
         let core = AppCore::new(connection);
-        let mut app = App::new(true);
+        let mut app = App::new(true, None);
         escribir(&mut app.configuracion_inicial, "ROOT1");
         app.configuracion_inicial
             .handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
@@ -752,6 +761,63 @@ mod tests {
 
         assert!(!app.salida_rapida.abierto());
     }
+
+    #[test]
+    fn confirmar_restauracion_deja_la_app_lista_para_salir_sin_tocar_archivos() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let unico = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directorio = std::env::temp_dir().join(format!(
+            "control_acceso_app_restaurar_{}_{unico}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&directorio).unwrap();
+        let ruta_base_datos = directorio.join("control_acceso.sqlite");
+        let core = AppCore::abrir(&ruta_base_datos).unwrap();
+        core.crear_root_inicial(CrearRootInicialInput {
+            cedula: "ROOT-1".into(),
+            nombre: "Ana".into(),
+            password: "password1".into(),
+        })
+        .unwrap();
+        let respaldo = core
+            .crear_respaldo(crate::database::backup::TipoRespaldo::Manual)
+            .unwrap();
+
+        let mut app = App {
+            vista: Vista::Configuracion,
+            sesion: Some(UsuarioSesion {
+                id: 1,
+                cedula: "ROOT-1".into(),
+                nombre: "Ana".into(),
+                rol: RolUsuario::Root,
+            }),
+            ..App::default()
+        };
+        // Entra a Respaldos y carga la lista real desde el AppCore de archivo.
+        let accion = app.configuracion.handle_key(tecla(KeyCode::Enter));
+        app.procesar_accion_configuracion(accion, Some(&core));
+        // Selecciona la única fila, pide restaurar y confirma.
+        app.configuracion.handle_key(tecla(KeyCode::Char('r')));
+        let accion = app.configuracion.handle_key(tecla(KeyCode::Enter));
+        app.procesar_accion_configuracion(accion, Some(&core));
+
+        assert!(app.salir);
+        assert_eq!(
+            app.salida,
+            SalidaApp::Restaurar {
+                candidata: respaldo.ruta
+            }
+        );
+        // Restaurar el archivo de verdad es responsabilidad de main.rs, una vez
+        // cerrada la conexión — App nunca debe tocar el archivo activo.
+        assert!(ruta_base_datos.exists());
+
+        std::fs::remove_dir_all(&directorio).ok();
+    }
 }
 
 #[derive(Debug)]
@@ -769,6 +835,7 @@ pub struct App {
     nuevo_ingreso: NuevoIngresoState,
     salida_rapida: SalidaRapidaState,
     salir: bool,
+    salida: SalidaApp,
     sesion: Option<UsuarioSesion>,
     tema: ThemePreset,
     /// Resultado en camino de un hilo aparte que verifica la contraseña
@@ -793,6 +860,7 @@ impl Default for App {
             nuevo_ingreso: NuevoIngresoState::default(),
             salida_rapida: SalidaRapidaState::default(),
             salir: false,
+            salida: SalidaApp::Cerrar,
             sesion: None,
             tema: ThemePreset::Brisas,
             autenticacion_pendiente: None,
@@ -801,21 +869,25 @@ impl Default for App {
 }
 
 impl App {
-    pub fn new(requiere_configuracion_inicial: bool) -> Self {
-        Self {
+    pub fn new(requiere_configuracion_inicial: bool, mensaje_inicial: Option<String>) -> Self {
+        let mut app = Self {
             vista: if requiere_configuracion_inicial {
                 Vista::ConfiguracionInicial
             } else {
                 Vista::Login
             },
             ..Self::default()
+        };
+        if let Some(mensaje) = mensaje_inicial {
+            app.login.preset_error(mensaje);
         }
+        app
     }
 
     pub fn run<B: Backend<Error = io::Error>>(
         &mut self,
         terminal: &mut Terminal<B>,
-    ) -> io::Result<()> {
+    ) -> io::Result<SalidaApp> {
         self.run_internal(terminal, None)
     }
 
@@ -823,7 +895,7 @@ impl App {
         &mut self,
         terminal: &mut Terminal<B>,
         core: &AppCore,
-    ) -> io::Result<()> {
+    ) -> io::Result<SalidaApp> {
         self.run_internal(terminal, Some(core))
     }
 
@@ -831,7 +903,7 @@ impl App {
         &mut self,
         terminal: &mut Terminal<B>,
         core: Option<&AppCore>,
-    ) -> io::Result<()> {
+    ) -> io::Result<SalidaApp> {
         while !self.salir {
             let theme = self.tema.theme();
             terminal.draw(|frame| {
@@ -900,7 +972,7 @@ impl App {
             self.procesar_accion_usuarios(accion, core);
         }
 
-        Ok(())
+        Ok(self.salida.clone())
     }
 
     /// Revisa sin bloquear si el hilo de verificación de contraseña (Argon2) ya terminó.
@@ -1445,6 +1517,21 @@ impl App {
                             .map_err(|error| error.to_string())
                     });
                 self.configuracion.completar_exportacion(resultado, &destino);
+            }
+            AccionRespaldos::Restaurar { ruta } => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudo respaldar la base antes de restaurar".to_owned())
+                    .and_then(|core| {
+                        core.crear_respaldo(crate::database::backup::TipoRespaldo::PreRestauracion)
+                            .map_err(|error| error.to_string())
+                    });
+                match resultado {
+                    Ok(_) => {
+                        self.salida = SalidaApp::Restaurar { candidata: ruta };
+                        self.salir = true;
+                    }
+                    Err(error) => self.configuracion.completar_creacion(Err(error)),
+                }
             }
         }
     }

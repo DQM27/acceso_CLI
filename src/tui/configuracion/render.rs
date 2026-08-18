@@ -18,13 +18,18 @@ const COMANDOS_MENU: &[CommandHint<'static>] = &[
 const COMANDOS_RESPALDOS: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓", "Mover"),
     CommandHint::new("C", "Crear"),
-    CommandHint::new("R", "Revalidar"),
+    CommandHint::new("V", "Revalidar"),
     CommandHint::new("E", "Exportar"),
+    CommandHint::new("R", "Restaurar"),
     CommandHint::new("A", "Actualizar"),
     CommandHint::new("ESC", "Volver"),
 ];
 const COMANDOS_EXPORTAR: &[CommandHint<'static>] = &[
     CommandHint::new("ENTER", "Exportar"),
+    CommandHint::new("ESC", "Cancelar"),
+];
+const COMANDOS_CONFIRMAR_RESTAURACION: &[CommandHint<'static>] = &[
+    CommandHint::new("ENTER", "Confirmar"),
     CommandHint::new("ESC", "Cancelar"),
 ];
 
@@ -72,6 +77,7 @@ fn render_respaldos(frame: &mut Frame, area: Rect, estado: &RespaldosState, them
     let comandos = match &estado.modo {
         ModoRespaldos::Normal => COMANDOS_RESPALDOS,
         ModoRespaldos::Exportando { .. } => COMANDOS_EXPORTAR,
+        ModoRespaldos::ConfirmandoRestauracion { .. } => COMANDOS_CONFIRMAR_RESTAURACION,
     };
     let shell = ScreenShell {
         product: "BRISAS CLI",
@@ -86,9 +92,16 @@ fn render_respaldos(frame: &mut Frame, area: Rect, estado: &RespaldosState, them
     };
     let areas = shell.render(frame, area, theme);
 
-    if let ModoRespaldos::Exportando { destino } = &estado.modo {
-        render_exportar(frame, areas.body, destino, theme);
-        return;
+    match &estado.modo {
+        ModoRespaldos::Exportando { destino } => {
+            render_exportar(frame, areas.body, destino, theme);
+            return;
+        }
+        ModoRespaldos::ConfirmandoRestauracion { fecha, tipo, .. } => {
+            render_confirmar_restauracion(frame, areas.body, fecha, tipo, theme);
+            return;
+        }
+        ModoRespaldos::Normal => {}
     }
 
     let filas_area =
@@ -196,4 +209,24 @@ fn render_exportar(frame: &mut Frame, area: Rect, destino: &str, theme: Theme) {
         filas[1].x + 1 + destino.chars().count().min(filas[1].width.saturating_sub(3) as usize) as u16,
         filas[1].y + 1,
     ));
+}
+
+fn render_confirmar_restauracion(
+    frame: &mut Frame,
+    area: Rect,
+    fecha: &str,
+    tipo: &str,
+    theme: Theme,
+) {
+    let lineas = vec![
+        Line::from(format!("¿Restaurar el respaldo del {fecha} ({tipo})?")).style(theme.warning()),
+        Line::from(""),
+        Line::from("Esto reemplaza TODOS los datos activos por los de ese respaldo.")
+            .style(theme.base()),
+        Line::from("Antes de continuar se crea un respaldo de la base actual.")
+            .style(theme.base()),
+        Line::from("La aplicación se reiniciará y pedirá iniciar sesión de nuevo.")
+            .style(theme.muted()),
+    ];
+    frame.render_widget(Paragraph::new(lineas), area);
 }

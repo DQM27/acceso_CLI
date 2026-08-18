@@ -48,7 +48,7 @@ fn crear_y_revalidar_disparan_las_acciones_correctas_solo_con_seleccion() {
     );
     // Sin filas cargadas todavía, revalidar no tiene nada que seleccionar.
     assert_eq!(
-        estado.handle_key(tecla(KeyCode::Char('r'))),
+        estado.handle_key(tecla(KeyCode::Char('v'))),
         AccionAjustes::Respaldos(AccionRespaldos::Ninguna)
     );
 }
@@ -67,11 +67,71 @@ fn completar_listado_puebla_la_tabla_y_permite_revalidar_la_fila_seleccionada() 
     };
     estado.completar_listado(Ok(vec![resumen.clone()]));
 
-    let accion = estado.handle_key(tecla(KeyCode::Char('r')));
+    let accion = estado.handle_key(tecla(KeyCode::Char('v')));
 
     assert_eq!(
         accion,
         AccionAjustes::Respaldos(AccionRespaldos::Revalidar { ruta: resumen.ruta })
+    );
+}
+
+#[test]
+fn restaurar_exige_confirmacion_y_esc_cancela_sin_disparar_nada() {
+    use crate::database::backup::{RespaldoResumen, TipoRespaldo};
+
+    let mut estado = ConfiguracionState::default();
+    estado.handle_key(tecla(KeyCode::Enter));
+    estado.completar_listado(Ok(vec![RespaldoResumen {
+        ruta: std::path::PathBuf::from("respaldo.db"),
+        creado_en: chrono::Utc::now(),
+        tipo: TipoRespaldo::Manual,
+        tamano_bytes: 10,
+    }]));
+
+    assert_eq!(
+        estado.handle_key(tecla(KeyCode::Char('r'))),
+        AccionAjustes::Respaldos(AccionRespaldos::Ninguna)
+    );
+    if let ModoConfiguracion::Respaldos(respaldos) = &estado.modo {
+        assert!(matches!(
+            respaldos.modo,
+            ModoRespaldos::ConfirmandoRestauracion { .. }
+        ));
+    } else {
+        panic!("se esperaba seguir en el modo Respaldos");
+    }
+
+    assert_eq!(
+        estado.handle_key(tecla(KeyCode::Esc)),
+        AccionAjustes::Respaldos(AccionRespaldos::Ninguna)
+    );
+    if let ModoConfiguracion::Respaldos(respaldos) = &estado.modo {
+        assert_eq!(respaldos.modo, ModoRespaldos::Normal);
+    } else {
+        panic!("se esperaba seguir en el modo Respaldos");
+    }
+}
+
+#[test]
+fn restaurar_confirmado_con_enter_emite_la_accion_con_la_ruta_correcta() {
+    use crate::database::backup::{RespaldoResumen, TipoRespaldo};
+
+    let mut estado = ConfiguracionState::default();
+    estado.handle_key(tecla(KeyCode::Enter));
+    let resumen = RespaldoResumen {
+        ruta: std::path::PathBuf::from("respaldo.db"),
+        creado_en: chrono::Utc::now(),
+        tipo: TipoRespaldo::Manual,
+        tamano_bytes: 10,
+    };
+    estado.completar_listado(Ok(vec![resumen.clone()]));
+    estado.handle_key(tecla(KeyCode::Char('r')));
+
+    let accion = estado.handle_key(tecla(KeyCode::Enter));
+
+    assert_eq!(
+        accion,
+        AccionAjustes::Respaldos(AccionRespaldos::Restaurar { ruta: resumen.ruta })
     );
 }
 

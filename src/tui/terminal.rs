@@ -9,7 +9,7 @@ use ratatui::{Terminal, backend::CrosstermBackend};
 
 use crate::application::AppCore;
 
-use super::app::App;
+use super::app::{App, SalidaApp};
 
 struct TerminalGuard;
 
@@ -31,11 +31,16 @@ impl Drop for TerminalGuard {
     }
 }
 
-pub fn run(core: &AppCore, requiere_configuracion_inicial: bool) -> io::Result<()> {
+pub fn run(
+    core: &AppCore,
+    requiere_configuracion_inicial: bool,
+    mensaje_inicial: Option<String>,
+) -> io::Result<SalidaApp> {
     let _guard = TerminalGuard::acquire()?;
     let backend = CrosstermBackend::new(stdout());
     let mut terminal = Terminal::new(backend)?;
-    let resultado = App::new(requiere_configuracion_inicial).run_with_core(&mut terminal, core);
+    let resultado = App::new(requiere_configuracion_inicial, mensaje_inicial)
+        .run_with_core(&mut terminal, core);
     let _ = terminal.show_cursor();
     resultado
 }

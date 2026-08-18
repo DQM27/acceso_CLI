@@ -133,6 +133,13 @@ impl LoginState {
         };
     }
 
+    /// Muestra un mensaje de error ya en la pantalla de Login, sin haber
+    /// pasado por una autenticación real — usado cuando la app se reinicia
+    /// tras una restauración de respaldo fallida.
+    pub fn preset_error(&mut self, mensaje: String) {
+        self.estado = EstadoLogin::Error(mensaje);
+    }
+
     pub fn password_enmascarado(&self) -> String {
         "•".repeat(self.password.chars().count())
     }
