@@ -22,7 +22,7 @@ const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
     CommandHint::new("ENTER", "Detalle"),
     CommandHint::new("S", "Salida"),
     CommandHint::new("/", "Buscar"),
-    CommandHint::new("C", "Columnas"),
+    CommandHint::new("F4", "Columnas"),
     CommandHint::new("ESC", "Volver"),
 ];
 const COMANDOS_BUSQUEDA: &[CommandHint<'static>] = &[
@@ -34,8 +34,8 @@ const COMANDOS_DETALLE: &[CommandHint<'static>] = &[
     CommandHint::new("ESC", "Cerrar"),
 ];
 const COMANDOS_CONFIRMAR: &[CommandHint<'static>] = &[
-    CommandHint::new("Y", "Confirmar"),
-    CommandHint::new("N/ESC", "Cancelar"),
+    CommandHint::new("ENTER", "Confirmar"),
+    CommandHint::new("ESC", "Cancelar"),
 ];
 const COMANDOS_COLUMNAS: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓", "Mover"),
@@ -70,6 +70,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Theme)
         status_kind: estado_tipo,
         commands: comandos,
         help_expanded: state.ayuda_expandida,
+        ayuda_extra: Some("Claves: empresa, tipo, gafete, medio"),
     };
     let areas = shell.render(frame, area, theme);
 

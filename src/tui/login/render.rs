@@ -46,6 +46,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &LoginState, theme: Theme) {
         status_kind: estado_tipo,
         commands: COMANDOS,
         help_expanded: state.ayuda_expandida,
+        ayuda_extra: None,
     };
     let areas = shell.render(frame, area, theme);
 

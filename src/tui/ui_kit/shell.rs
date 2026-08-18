@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 
-use super::{EMERGENCY_EXIT_HINT, THEME_HINT, Theme};
+use super::Theme;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusKind {
@@ -43,9 +43,13 @@ pub struct ScreenShell<'a> {
     pub status: &'a str,
     pub status_kind: StatusKind,
     pub commands: &'a [CommandHint<'a>],
-    /// Si la ayuda está expandida (F1), se agrega una segunda línea de pie con
-    /// los atajos transversales menos frecuentes (tema, salida de emergencia).
+    /// Si la ayuda está expandida (F1), se agrega una segunda línea de pie.
     pub help_expanded: bool,
+    /// Contenido de esa segunda línea — hoy, las claves de búsqueda
+    /// `clave:valor` disponibles en la pantalla actual. `None` en las
+    /// pantallas que no tienen esa sintaxis: ahí F1 no agrega una segunda
+    /// línea.
+    pub ayuda_extra: Option<&'a str>,
 }
 
 impl ScreenShell<'_> {
@@ -160,12 +164,10 @@ impl ScreenShell<'_> {
             .collect();
 
         let mut lines = wrap_commands(&primary, max_width, theme);
-        if self.help_expanded {
-            lines.extend(wrap_commands(
-                &[THEME_HINT, EMERGENCY_EXIT_HINT],
-                max_width,
-                theme,
-            ));
+        if self.help_expanded
+            && let Some(extra) = self.ayuda_extra
+        {
+            lines.push(Line::from(extra.to_owned()).style(theme.muted()));
         }
         if lines.is_empty() {
             lines.push(Line::default());
@@ -316,6 +318,7 @@ mod tests {
             status_kind: StatusKind::Normal,
             commands: &commands,
             help_expanded: false,
+            ayuda_extra: None,
         };
 
         terminal
@@ -353,7 +356,7 @@ mod tests {
     }
 
     #[test]
-    fn f1_agrega_una_segunda_linea_con_tema_y_salida_de_emergencia() {
+    fn f1_agrega_una_segunda_linea_con_la_ayuda_extra_de_la_pantalla() {
         let commands = [CommandHint::new("ESC", "Salir")];
         let mut shell = ScreenShell {
             product: "BRISAS CLI",
@@ -364,19 +367,36 @@ mod tests {
             status_kind: StatusKind::Normal,
             commands: &commands,
             help_expanded: false,
+            ayuda_extra: Some("Claves: empresa, tipo"),
         };
 
         let colapsado = texto_renderizado(&shell);
         assert!(colapsado.contains("F1"));
-        assert!(!colapsado.contains("CTRL+C"));
-        assert!(!colapsado.contains("Salida de emergencia"));
+        assert!(!colapsado.contains("Claves: empresa, tipo"));
 
         shell.help_expanded = true;
         let expandido = texto_renderizado(&shell);
         assert!(expandido.contains("cerrar ayuda"));
-        assert!(expandido.contains("CTRL+C"));
-        assert!(expandido.contains("Salida de emergencia"));
-        assert!(expandido.contains("F7"));
-        assert!(expandido.contains("Tema"));
+        assert!(expandido.contains("Claves: empresa, tipo"));
+    }
+
+    #[test]
+    fn f1_no_agrega_segunda_linea_si_la_pantalla_no_tiene_ayuda_extra() {
+        let commands = [CommandHint::new("ESC", "Salir")];
+        let shell = ScreenShell {
+            product: "BRISAS CLI",
+            screen: "PRUEBA",
+            context: "LOCAL",
+            clock: "12:00:00",
+            status: "Preparado",
+            status_kind: StatusKind::Normal,
+            commands: &commands,
+            help_expanded: true,
+            ayuda_extra: None,
+        };
+
+        let expandido = texto_renderizado(&shell);
+        assert!(expandido.contains("cerrar ayuda"));
+        assert!(!expandido.contains("Claves"));
     }
 }

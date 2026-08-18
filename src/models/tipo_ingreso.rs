@@ -5,3 +5,7 @@ pub enum TipoIngreso {
     PorCorreo,
     Swat,
 }
+
+impl TipoIngreso {
+    pub const ALL: [Self; 4] = [Self::Praind, Self::InHouse, Self::PorCorreo, Self::Swat];
+}

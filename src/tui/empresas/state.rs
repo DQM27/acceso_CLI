@@ -190,11 +190,6 @@ impl EmpresasState {
                     error: None,
                 })
             }
-            KeyCode::Char('e' | 'E') => {
-                if let Some(id) = self.id_seleccionado() {
-                    self.abrir_edicion(id);
-                }
-            }
             KeyCode::Char('/') => {
                 self.modo = ModoEmpresas::Busqueda {
                     texto: self.filtro.clone(),

@@ -381,6 +381,7 @@ impl MenuPilot {
             status_kind: self.status_kind,
             commands: &commands,
             help_expanded: false,
+            ayuda_extra: None,
         };
         let areas = shell.render(frame, area, theme);
         self.render_body(frame, areas.body, theme);

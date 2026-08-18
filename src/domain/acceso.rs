@@ -3,7 +3,7 @@ use chrono::{Duration, NaiveDate};
 use super::resultado_acceso::{MotivoDenegacion, ResultadoAcceso};
 use crate::models::contratista::Contratista;
 
-const DIAS_ADVERTENCIA_PRAIND: i64 = 30;
+pub const DIAS_ADVERTENCIA_PRAIND: i64 = 30;
 
 pub fn verificar_acceso(contratista: &Contratista, hoy: NaiveDate) -> ResultadoAcceso {
     // Regla 1:

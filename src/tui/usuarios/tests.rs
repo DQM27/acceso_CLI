@@ -37,6 +37,31 @@ fn inicia_vacio_y_carga_resumenes_reales() {
 }
 
 #[test]
+fn tab_en_el_formulario_da_la_vuelta_en_ambas_direcciones() {
+    let mut state = UsuariosState::default();
+    cargar(&mut state);
+    state.handle_key(key(KeyCode::Enter));
+    let ModoUsuarios::Formulario(f) = &state.modo else {
+        panic!("debía abrir el formulario")
+    };
+    assert_eq!(f.campo, 0);
+
+    // Editar tiene 4 campos (Cédula/Nombre/Rol/Activo); Shift+Tab desde el
+    // primero debe dar la vuelta al último en vez de quedarse pegado.
+    state.handle_key(key(KeyCode::BackTab));
+    let ModoUsuarios::Formulario(f) = &state.modo else {
+        panic!()
+    };
+    assert_eq!(f.campo, 3);
+
+    state.handle_key(key(KeyCode::Tab));
+    let ModoUsuarios::Formulario(f) = &state.modo else {
+        panic!()
+    };
+    assert_eq!(f.campo, 0);
+}
+
+#[test]
 fn busqueda_emite_consulta_sin_filtrar_memoria() {
     let mut state = UsuariosState::default();
     cargar(&mut state);
@@ -150,7 +175,7 @@ fn activar_no_muta_hasta_respuesta_y_recarga() {
     cargar(&mut state);
     state.seleccion = Some(1);
     state.handle_key(key(KeyCode::Char('A')));
-    let accion = state.handle_key(key(KeyCode::Char('Y')));
+    let accion = state.handle_key(key(KeyCode::Enter));
     assert!(!state.usuario(9).unwrap().activo);
     assert!(matches!(
         accion,

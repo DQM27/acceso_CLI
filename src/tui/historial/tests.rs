@@ -66,7 +66,7 @@ fn filtros_mapean_ids_enums_gafete_exacto_y_texto() {
     let filtro = FiltrosHistorial {
         nombre_cedula: "  Ana  ".into(),
         empresa_id: Some(8),
-        tipo: Some(TipoIngreso::PorCorreo),
+        tipos: Some(vec![TipoIngreso::PorCorreo]),
         gafete: "27".into(),
         estado: EstadoMovimiento::Cerrados,
         ..Default::default()
@@ -74,7 +74,7 @@ fn filtros_mapean_ids_enums_gafete_exacto_y_texto() {
     let query = construir(&filtro, "", 50, 100, Some(77)).unwrap();
     assert_eq!(query.texto_persona.as_deref(), Some("Ana"));
     assert_eq!(query.empresa_id, Some(8));
-    assert_eq!(query.tipo_ingreso, Some(TipoIngreso::PorCorreo));
+    assert_eq!(query.tipos_incluidos, Some(vec![TipoIngreso::PorCorreo]));
     assert_eq!(query.gafete_numero, Some(27));
     assert_eq!(query.estado, EstadoMovimiento::Cerrados);
     assert_eq!((query.limite, query.offset), (50, 100));
@@ -254,10 +254,64 @@ fn parsear_consulta_resuelve_empresa_por_nombre_parcial_y_deja_texto_libre() {
 fn parsear_consulta_reconoce_tipo_estado_y_gafete() {
     let base = FiltrosHistorial::default();
     let (filtros, libre) = parsear_consulta(&base, "tipo:praind estado:activos gafete:27", &[]);
-    assert_eq!(filtros.tipo, Some(TipoIngreso::Praind));
+    assert_eq!(filtros.tipos, Some(vec![TipoIngreso::Praind]));
     assert_eq!(filtros.estado, EstadoMovimiento::Activos);
     assert_eq!(filtros.gafete, "27");
     assert!(libre.is_empty());
+}
+
+#[test]
+fn parsear_consulta_reconoce_quien_dio_ingreso_y_quien_dio_salida() {
+    let base = FiltrosHistorial::default();
+    let (filtros, libre) = parsear_consulta(&base, "ingreso:quintana salida:\"Ana Solano\"", &[]);
+    assert_eq!(filtros.usuario_ingreso, "quintana");
+    assert_eq!(filtros.usuario_salida, "Ana Solano");
+    assert!(libre.is_empty());
+}
+
+#[test]
+fn ingreso_y_salida_no_admiten_lista_ni_negacion() {
+    let base = FiltrosHistorial::default();
+    let (filtros, libre) = parsear_consulta(&base, "ingreso:a,b -salida:c", &[]);
+    assert_eq!(filtros.usuario_ingreso, "");
+    assert_eq!(filtros.usuario_salida, "");
+    assert_eq!(libre, "ingreso:a,b -salida:c");
+}
+
+#[test]
+fn parsear_consulta_admite_listas_de_tipo() {
+    let base = FiltrosHistorial::default();
+    let (filtros, libre) = parsear_consulta(&base, "tipo:praind,swat", &[]);
+    assert_eq!(filtros.tipos, Some(vec![TipoIngreso::Praind, TipoIngreso::Swat]));
+    assert!(libre.is_empty());
+}
+
+#[test]
+fn parsear_consulta_niega_tipo_incluyendo_los_demas() {
+    let base = FiltrosHistorial::default();
+    let (filtros, _) = parsear_consulta(&base, "-tipo:swat", &[]);
+    let tipos = filtros.tipos.expect("debía filtrar por tipos");
+    assert_eq!(tipos.len(), 3);
+    assert!(!tipos.contains(&TipoIngreso::Swat));
+    assert!(tipos.contains(&TipoIngreso::Praind));
+}
+
+#[test]
+fn parsear_consulta_niega_estado_invirtiendo_activos_y_cerrados() {
+    let base = FiltrosHistorial::default();
+    let (activos, _) = parsear_consulta(&base, "-estado:cerrados", &[]);
+    assert_eq!(activos.estado, EstadoMovimiento::Activos);
+    let (cerrados, _) = parsear_consulta(&base, "-estado:activos", &[]);
+    assert_eq!(cerrados.estado, EstadoMovimiento::Cerrados);
+}
+
+#[test]
+fn parsear_consulta_deja_como_texto_libre_lo_que_una_clave_no_admite() {
+    let base = FiltrosHistorial::default();
+    // gafete no admite listas ni negación: se devuelve tal cual a texto libre.
+    let (filtros, libre) = parsear_consulta(&base, "gafete:1,2 -gafete:3", &[]);
+    assert_eq!(filtros.gafete, "");
+    assert_eq!(libre, "gafete:1,2 -gafete:3");
 }
 
 #[test]
@@ -265,7 +319,7 @@ fn parsear_consulta_conserva_lo_no_reconocido_como_texto_libre() {
     let base = FiltrosHistorial::default();
     let (filtros, libre) = parsear_consulta(&base, "empresa:Inexistente tipo:invalido Juan", &[]);
     assert_eq!(filtros.empresa_id, None);
-    assert_eq!(filtros.tipo, None);
+    assert_eq!(filtros.tipos, None);
     assert_eq!(libre, "empresa:Inexistente tipo:invalido Juan");
 }
 
@@ -279,7 +333,7 @@ fn parsear_consulta_no_pisa_los_campos_no_mencionados_del_filtro_base() {
     let (filtros, _) = parsear_consulta(&base, "tipo:swat", &[]);
     assert_eq!(filtros.desde, "01/08/2026");
     assert_eq!(filtros.empresa_id, Some(3));
-    assert_eq!(filtros.tipo, Some(TipoIngreso::Swat));
+    assert_eq!(filtros.tipos, Some(vec![TipoIngreso::Swat]));
 }
 
 #[test]
@@ -289,7 +343,7 @@ fn busqueda_rapida_admite_clave_valor_y_se_combina_con_filtros_del_panel() {
         id: 3,
         nombre: "Expenic Industrial".into(),
     }]));
-    state.filtro_aplicado.tipo = Some(TipoIngreso::Praind);
+    state.filtro_aplicado.tipos = Some(vec![TipoIngreso::Praind]);
     for c in "empresa:Expenic".chars() {
         state.handle_key(tecla(KeyCode::Char(c)));
     }
@@ -299,7 +353,7 @@ fn busqueda_rapida_admite_clave_valor_y_se_combina_con_filtros_del_panel() {
         panic!("debía consultar")
     };
     assert_eq!(filtro.empresa_id, Some(3));
-    assert_eq!(filtro.tipo_ingreso, Some(TipoIngreso::Praind));
+    assert_eq!(filtro.tipos_incluidos, Some(vec![TipoIngreso::Praind]));
     assert_eq!(filtro.texto_persona, None);
 }
 
@@ -329,12 +383,14 @@ fn la_linea_de_tiempo_agrupa_por_dia_y_muestra_el_glifo_de_actividad() {
     assert!(texto.contains("Ana Solano"));
     assert!(texto.contains("Brisas"));
     assert!(texto.contains("●"));
-    // El panel de detalle refleja al piloto: sin "Evaluación"/"Reglas", con
-    // duración y trazabilidad de quién registró entrada y salida.
-    assert!(texto.contains("Entrada 08:30"));
+    // El panel de detalle sigue la convención "Etiqueta: valor" del resto de
+    // la app, sin "Evaluación"/"Reglas", con duración y trazabilidad de
+    // quién registró entrada y salida.
+    assert!(texto.contains("Empresa: Brisas"));
+    assert!(texto.contains("Entrada: 08:30"));
     assert!(!texto.contains("Evaluación"));
     assert!(!texto.contains("Reglas"));
-    assert!(texto.contains("Ingreso registrado por Quintana"));
+    assert!(texto.contains("Ingreso registrado por: Quintana"));
 }
 
 #[test]

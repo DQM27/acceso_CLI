@@ -197,9 +197,6 @@ impl NuevoIngresoState {
             KeyCode::Left | KeyCode::Right if self.campo == CampoIngreso::Medio => {
                 self.medio_opcion = 1 - self.medio_opcion;
             }
-            KeyCode::Up | KeyCode::Down if self.campo == CampoIngreso::Medio => {
-                self.medio_opcion = 1 - self.medio_opcion;
-            }
             KeyCode::Enter => {
                 let gafete = if requiere_gafete {
                     match self.gafete_texto.trim().parse::<i64>() {

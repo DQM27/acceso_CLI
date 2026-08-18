@@ -5,6 +5,7 @@
 //! atajos, también la convención de teclado (`standard_command`).
 
 mod keyboard;
+pub mod query_lang;
 mod select_menu;
 mod shell;
 mod text_input;

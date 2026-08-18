@@ -61,6 +61,69 @@ fn busqueda_incremental_emite_consulta_real() {
     assert_eq!(s.registros.len(), 1);
 }
 #[test]
+fn busqueda_admite_clave_valor_de_empresa_tipo_y_deja_texto_libre() {
+    let mut s = ContratistasState::default();
+    cargar(&mut s);
+    s.handle_key(k(KeyCode::Char('/')));
+    escribir(&mut s, "empresa:Real tipo:praind Ana");
+    let accion = s.handle_key(k(KeyCode::Enter));
+    // El último carácter tecleado ('a' de Ana) ya disparó la última consulta.
+    let _ = accion;
+    let AccionContratistas::Buscar {
+        texto,
+        empresa_id,
+        tipos,
+        ..
+    } = s.buscar(None)
+    else {
+        panic!("debía consultar")
+    };
+    assert_eq!(empresa_id, Some(5));
+    assert_eq!(tipos, Some(vec![TipoIngreso::Praind]));
+    assert_eq!(texto.as_deref(), Some("Ana"));
+}
+
+#[test]
+fn busqueda_admite_praind_ruta_y_acceso() {
+    let mut s = ContratistasState::default();
+    s.set_hoy(NaiveDate::from_ymd_opt(2026, 8, 17).unwrap());
+    s.filtro = "praind:vencido ruta:si acceso:no".into();
+    let AccionContratistas::Buscar {
+        praind,
+        personal_ruta,
+        tiene_acceso,
+        texto,
+        ..
+    } = s.buscar(None)
+    else {
+        panic!("debía consultar")
+    };
+    assert_eq!(
+        praind,
+        Some(crate::database::queries::contratistas::FiltroPraind::Vencido {
+            hoy: NaiveDate::from_ymd_opt(2026, 8, 17).unwrap()
+        })
+    );
+    assert_eq!(personal_ruta, Some(true));
+    assert_eq!(tiene_acceso, Some(false));
+    assert_eq!(texto, None);
+}
+
+#[test]
+fn clave_no_reconocida_o_lista_de_praind_cae_a_texto_libre() {
+    let s = ContratistasState {
+        filtro: "praind:vence,vencido tipo:invalido".into(),
+        ..Default::default()
+    };
+    let AccionContratistas::Buscar { texto, praind, tipos, .. } = s.buscar(None) else {
+        panic!("debía consultar")
+    };
+    assert_eq!(praind, None);
+    assert_eq!(tipos, None);
+    assert_eq!(texto.as_deref(), Some("praind:vence,vencido tipo:invalido"));
+}
+
+#[test]
 fn enter_edita_directamente_con_ids_y_datos_reales() {
     let mut s = ContratistasState::default();
     cargar(&mut s);
@@ -85,7 +148,17 @@ fn edicion_no_permite_enfocar_ni_modificar_cedula() {
     let mut s = ContratistasState::default();
     cargar(&mut s);
     s.handle_key(k(KeyCode::Enter));
+    // Nombre es el primer campo habilitado en modo Editar (Cédula queda
+    // excluida); subir desde ahí da la vuelta al último campo (Acceso) en
+    // vez de quedarse pegado, así que nunca aterriza en Cédula.
     s.handle_key(k(KeyCode::Up));
+    let ModoContratistas::Formulario(f) = &s.modo else {
+        panic!()
+    };
+    assert_eq!(f.campo, 6);
+    assert_ne!(f.campo, 0, "no debe poder enfocar Cédula en modo Editar");
+
+    s.handle_key(k(KeyCode::Down));
     s.handle_key(k(KeyCode::Char('9')));
     let ModoContratistas::Formulario(f) = &s.modo else {
         panic!()
@@ -93,6 +166,33 @@ fn edicion_no_permite_enfocar_ni_modificar_cedula() {
     assert_eq!(f.campo, 1);
     assert_eq!(f.cedula, "001-2");
     assert_eq!(f.nombre, "José Hernández9");
+}
+
+#[test]
+fn tab_en_el_ultimo_campo_da_la_vuelta_al_primero_y_viceversa() {
+    let mut s = ContratistasState::default();
+    cargar(&mut s);
+    s.handle_key(k(KeyCode::Char('N')));
+    let ModoContratistas::Formulario(f) = &s.modo else {
+        panic!()
+    };
+    assert_eq!(f.campo, 0, "Crear empieza en Cédula");
+
+    // TAB siete veces (uno por campo) debe volver exactamente a Cédula.
+    for _ in 0..7 {
+        s.handle_key(k(KeyCode::Tab));
+    }
+    let ModoContratistas::Formulario(f) = &s.modo else {
+        panic!()
+    };
+    assert_eq!(f.campo, 0);
+
+    // Shift+Tab (BackTab) desde Cédula da la vuelta al último campo.
+    s.handle_key(k(KeyCode::BackTab));
+    let ModoContratistas::Formulario(f) = &s.modo else {
+        panic!()
+    };
+    assert_eq!(f.campo, 6);
 }
 #[test]
 fn formulario_valida_y_emite_creacion_tipificada() {
@@ -183,7 +283,7 @@ fn praind_dinamico_usa_regla_de_dominio_y_none_si_no_requerido() {
 fn cancelar_no_muta_y_callback_recarga() {
     let mut s = ContratistasState::default();
     cargar(&mut s);
-    s.handle_key(k(KeyCode::Char('E')));
+    s.handle_key(k(KeyCode::Enter));
     escribir(&mut s, "x");
     s.handle_key(k(KeyCode::Esc));
     assert_eq!(s.registros[0].nombre, "José Hernández");

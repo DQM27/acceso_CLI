@@ -1,15 +1,110 @@
-use crate::services::registro_ingreso_service::{
-    IngresoActivoResumen, ListaIngresosActivosResumen,
+use crate::{
+    database::queries::ingresos::FiltroIngresosActivos,
+    models::{empresa::Empresa, medio_ingreso::MedioIngreso, tipo_ingreso::TipoIngreso},
+    services::registro_ingreso_service::{IngresoActivoResumen, ListaIngresosActivosResumen},
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Constraint;
 
-use crate::tui::ui_kit::{StandardCommand, standard_command};
+use crate::tui::ui_kit::{StandardCommand, query_lang, standard_command};
 #[path = "render.rs"]
 pub(super) mod render;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+
+/// Interpreta `texto` con la sintaxis `clave:valor` de `ui_kit::query_lang`
+/// (`empresa:`, `tipo:` con listas/negación, `gafete:`, `medio:`). Lo no
+/// reconocido, y lo que no calza con lo que una clave admite, se deja como
+/// texto libre para nombre/cédula/gafete.
+fn parsear_consulta(texto: &str, empresas: &[Empresa]) -> (FiltroIngresosActivos, String) {
+    let mut filtro = FiltroIngresosActivos::default();
+    let mut libres = Vec::new();
+    for term in query_lang::analizar(texto).terms {
+        if term.key.is_none() {
+            libres.push(query_lang::texto_libre(&term));
+            continue;
+        }
+        if !aplicar_clave(&mut filtro, &term, empresas) {
+            libres.push(query_lang::reconstruir_clave(&term));
+        }
+    }
+    (filtro, libres.join(" "))
+}
+
+fn aplicar_clave(f: &mut FiltroIngresosActivos, term: &query_lang::Term, empresas: &[Empresa]) -> bool {
+    let clave = term.key.as_deref().unwrap_or_default().to_lowercase();
+    let valores = query_lang::valores(term);
+    match clave.as_str() {
+        "empresa" if !term.negated && valores.len() == 1 => {
+            let buscado = valores[0].to_lowercase();
+            match empresas
+                .iter()
+                .find(|e| e.nombre.to_lowercase().contains(&buscado))
+            {
+                Some(e) => {
+                    f.empresa_id = Some(e.id);
+                    true
+                }
+                None => false,
+            }
+        }
+        "tipo" => {
+            let Some(reconocidos) = valores
+                .iter()
+                .map(|v| tipo_desde_texto(v))
+                .collect::<Option<Vec<_>>>()
+            else {
+                return false;
+            };
+            if reconocidos.is_empty() {
+                return false;
+            }
+            f.tipos_incluidos = Some(if term.negated {
+                TipoIngreso::ALL
+                    .into_iter()
+                    .filter(|t| !reconocidos.contains(t))
+                    .collect()
+            } else {
+                reconocidos
+            });
+            true
+        }
+        "gafete" if !term.negated && valores.len() == 1 => match valores[0].parse::<i64>() {
+            Ok(n) => {
+                f.gafete_numero = Some(n);
+                true
+            }
+            Err(_) => false,
+        },
+        "medio" if !term.negated && valores.len() == 1 => match medio_desde_texto(&valores[0]) {
+            Some(m) => {
+                f.medio_ingreso = Some(m);
+                true
+            }
+            None => false,
+        },
+        _ => false,
+    }
+}
+
+fn tipo_desde_texto(v: &str) -> Option<TipoIngreso> {
+    match v.to_lowercase().as_str() {
+        "praind" => Some(TipoIngreso::Praind),
+        "inhouse" | "in-house" | "in_house" => Some(TipoIngreso::InHouse),
+        "correo" | "porcorreo" => Some(TipoIngreso::PorCorreo),
+        "swat" => Some(TipoIngreso::Swat),
+        _ => None,
+    }
+}
+
+fn medio_desde_texto(v: &str) -> Option<MedioIngreso> {
+    match v.to_lowercase().as_str() {
+        "caminando" | "pie" | "apie" => Some(MedioIngreso::Caminando),
+        "vehiculo" | "vehículo" | "carro" => Some(MedioIngreso::Vehiculo),
+        _ => None,
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Columna {
@@ -70,6 +165,10 @@ pub enum AccionActivos {
     Buscar {
         texto: Option<String>,
         seleccionar_id: Option<i64>,
+        empresa_id: Option<i64>,
+        tipos: Option<Vec<TipoIngreso>>,
+        gafete: Option<i64>,
+        medio: Option<MedioIngreso>,
     },
     RegistrarSalida {
         registro_id: i64,
@@ -85,6 +184,7 @@ pub struct ActivosState {
     columnas: Vec<(Columna, bool)>,
     mensaje: Option<String>,
     pub(crate) filtro: String,
+    empresas: Vec<Empresa>,
     usuario_nombre: String,
     ayuda_expandida: bool,
 }
@@ -101,6 +201,7 @@ impl Default for ActivosState {
                 .collect(),
             mensaje: None,
             filtro: String::new(),
+            empresas: vec![],
             usuario_nombre: "Quintana".into(),
             ayuda_expandida: false,
         }
@@ -110,10 +211,23 @@ impl ActivosState {
     pub fn set_usuario_nombre(&mut self, n: impl Into<String>) {
         self.usuario_nombre = n.into()
     }
+    pub fn completar_empresas(&mut self, r: Result<Vec<Empresa>, String>) {
+        if let Ok(e) = r {
+            self.empresas = e
+        }
+    }
     pub fn solicitud_carga(&self) -> AccionActivos {
+        self.buscar(self.id_seleccionado())
+    }
+    pub(crate) fn buscar(&self, id: Option<i64>) -> AccionActivos {
+        let (filtro, libre) = parsear_consulta(&self.filtro, &self.empresas);
         AccionActivos::Buscar {
-            texto: texto_filtro(&self.filtro),
-            seleccionar_id: self.id_seleccionado(),
+            texto: (!libre.trim().is_empty()).then_some(libre),
+            seleccionar_id: id,
+            empresa_id: filtro.empresa_id,
+            tipos: filtro.tipos_incluidos,
+            gafete: filtro.gafete_numero,
+            medio: filtro.medio_ingreso,
         }
     }
     pub fn cantidad(&self) -> usize {
@@ -156,17 +270,11 @@ impl ActivosState {
         match r {
             Ok(()) => {
                 self.mensaje = Some(format!("✓ Salida registrada — {nombre}"));
-                AccionActivos::Buscar {
-                    texto: texto_filtro(&self.filtro),
-                    seleccionar_id: Some(id),
-                }
+                self.buscar(Some(id))
             }
             Err(e) => {
                 self.mensaje = Some(e);
-                AccionActivos::Buscar {
-                    texto: texto_filtro(&self.filtro),
-                    seleccionar_id: None,
-                }
+                self.buscar(None)
             }
         }
     }
@@ -216,15 +324,10 @@ impl ActivosState {
                     texto: self.filtro.clone(),
                 }
             }
-            KeyCode::Char('c' | 'C') | KeyCode::F(6) => {
-                self.modo = ModoActivos::Columnas { seleccion: 0 }
-            }
+            KeyCode::F(4) => self.modo = ModoActivos::Columnas { seleccion: 0 },
             KeyCode::Esc if !self.filtro.is_empty() => {
                 self.filtro.clear();
-                return AccionActivos::Buscar {
-                    texto: None,
-                    seleccionar_id: None,
-                };
+                return self.buscar(None);
             }
             KeyCode::Esc => return AccionActivos::Volver,
             _ => {}
@@ -236,10 +339,7 @@ impl ActivosState {
             KeyCode::Esc => {
                 self.filtro.clear();
                 self.modo = ModoActivos::Normal;
-                AccionActivos::Buscar {
-                    texto: None,
-                    seleccionar_id: None,
-                }
+                self.buscar(None)
             }
             KeyCode::Enter => {
                 self.modo = ModoActivos::Normal;
@@ -258,10 +358,7 @@ impl ActivosState {
                     texto.pop();
                     self.filtro = texto.clone()
                 }
-                AccionActivos::Buscar {
-                    texto: texto_filtro(&self.filtro),
-                    seleccionar_id: None,
-                }
+                self.buscar(None)
             }
             KeyCode::Char(c)
                 if !k
@@ -272,10 +369,7 @@ impl ActivosState {
                     texto.push(c);
                     self.filtro = texto.clone()
                 }
-                AccionActivos::Buscar {
-                    texto: texto_filtro(&self.filtro),
-                    seleccionar_id: None,
-                }
+                self.buscar(None)
             }
             _ => AccionActivos::Ninguna,
         }
@@ -289,11 +383,11 @@ impl ActivosState {
     }
     fn confirmar_registro(&mut self, k: KeyEvent, id: i64, nombre: String) -> AccionActivos {
         match k.code {
-            KeyCode::Char('y' | 'Y') => AccionActivos::RegistrarSalida {
+            KeyCode::Enter => AccionActivos::RegistrarSalida {
                 registro_id: id,
                 nombre,
             },
-            KeyCode::Char('n' | 'N') | KeyCode::Esc => {
+            KeyCode::Esc => {
                 self.modo = ModoActivos::Normal;
                 AccionActivos::Ninguna
             }
@@ -348,7 +442,4 @@ impl ActivosState {
             .unwrap_or(0)
             .saturating_sub(c.saturating_sub(1))
     }
-}
-fn texto_filtro(s: &str) -> Option<String> {
-    (!s.trim().is_empty()).then(|| s.to_owned())
 }

@@ -224,7 +224,7 @@ mod tests {
         };
         let activos = app.activos.cantidad();
         app.procesar_accion_menu(tecla(KeyCode::Char('L')));
-        app.procesar_accion_menu(tecla(KeyCode::Char('Y')));
+        app.procesar_accion_menu(tecla(KeyCode::Enter));
         assert_eq!(app.vista, Vista::Login);
         assert!(app.sesion.is_none());
         assert_eq!(app.login.password_enmascarado(), "");
@@ -244,7 +244,7 @@ mod tests {
         };
         app.procesar_accion_menu(tecla(KeyCode::Char('Q')));
         assert!(!app.salir);
-        app.procesar_accion_menu(tecla(KeyCode::Char('Y')));
+        app.procesar_accion_menu(tecla(KeyCode::Enter));
         assert!(app.salir);
     }
 
@@ -453,7 +453,7 @@ mod tests {
         );
         assert_eq!(app.empresas.empresa_seleccionada().unwrap().contratistas, 0);
 
-        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char('E')), Some(&core));
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Enter), Some(&core));
         for _ in 0.."Empresa Real".len() {
             app.procesar_tecla_vista_con_core(tecla(KeyCode::Backspace), Some(&core));
         }
@@ -572,7 +572,7 @@ mod tests {
             .unwrap();
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].empresa_id, empresa_id);
-        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char('E')), Some(&core));
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Enter), Some(&core));
         for _ in 0.."José Hernández".chars().count() {
             app.procesar_tecla_vista_con_core(tecla(KeyCode::Backspace), Some(&core))
         }
@@ -725,6 +725,7 @@ mod tests {
         let restantes = core
             .listar_ingresos_activos(&crate::database::queries::ingresos::FiltroIngresosActivos {
                 texto: None,
+                ..Default::default()
             })
             .unwrap();
         assert_eq!(restantes.total, 0);
@@ -937,7 +938,10 @@ impl App {
                     .ok_or_else(|| "No se pudieron cargar los ingresos activos".into())
                     .and_then(|c| {
                         c.listar_ingresos_activos(
-                            &crate::database::queries::ingresos::FiltroIngresosActivos { texto },
+                            &crate::database::queries::ingresos::FiltroIngresosActivos {
+                                texto,
+                                ..Default::default()
+                            },
                         )
                         .map(|pagina| pagina.items)
                         .map_err(|_| "No se pudieron cargar los ingresos activos".into())
@@ -1045,8 +1049,12 @@ impl App {
                         Vista::NuevoIngreso
                     }
                     OpcionMenu::IngresosActivos => {
-                        if core.is_some() {
-                            self.procesar_accion_activos(self.activos.solicitud_carga(), core)
+                        if let Some(core) = core {
+                            self.activos.completar_empresas(
+                                core.listar_empresas()
+                                    .map_err(|_| "No se pudieron cargar las empresas".into()),
+                            );
+                            self.procesar_accion_activos(self.activos.solicitud_carga(), Some(core))
                         }
                         Vista::IngresosActivos
                     }
@@ -1150,6 +1158,11 @@ impl App {
             AccionContratistas::Buscar {
                 texto,
                 seleccionar_id,
+                empresa_id,
+                tipos,
+                praind,
+                personal_ruta,
+                tiene_acceso,
             } => {
                 let resultado = core
                     .ok_or_else(|| "No se pudo cargar la base de contratistas".into())
@@ -1157,6 +1170,11 @@ impl App {
                         core.buscar_contratistas(
                             &crate::database::queries::contratistas::FiltroContratistas {
                                 texto,
+                                empresa_id,
+                                tipos_incluidos: tipos,
+                                praind,
+                                personal_ruta,
+                                tiene_acceso,
                                 ..Default::default()
                             },
                         )
@@ -1345,13 +1363,7 @@ impl App {
                 };
                 if self.nuevo_ingreso.completar_registro(resultado) {
                     self.activos.filtro.clear();
-                    self.procesar_accion_activos(
-                        AccionActivos::Buscar {
-                            texto: None,
-                            seleccionar_id: None,
-                        },
-                        core,
-                    );
+                    self.procesar_accion_activos(self.activos.buscar(None), core);
                     self.vista = Vista::IngresosActivos;
                 }
             }
@@ -1365,12 +1377,22 @@ impl App {
             AccionActivos::Buscar {
                 texto,
                 seleccionar_id,
+                empresa_id,
+                tipos,
+                gafete,
+                medio,
             } => {
                 let resultado = core
                     .ok_or_else(|| "No se pudieron cargar los ingresos activos".into())
                     .and_then(|c| {
                         c.listar_ingresos_activos(
-                            &crate::database::queries::ingresos::FiltroIngresosActivos { texto },
+                            &crate::database::queries::ingresos::FiltroIngresosActivos {
+                                texto,
+                                empresa_id,
+                                tipos_incluidos: tipos,
+                                gafete_numero: gafete,
+                                medio_ingreso: medio,
+                            },
                         )
                         .map_err(|_| "No se pudieron cargar los ingresos activos".into())
                     });

@@ -23,7 +23,7 @@ const COMANDOS_NORMALES: &[CommandHint<'static>] = &[
 
 const COMANDOS_CONFIRMACION: &[CommandHint<'static>] = &[
     CommandHint::new("ENTER", "Confirmar"),
-    CommandHint::new("N/ESC", "Cancelar"),
+    CommandHint::new("ESC", "Cancelar"),
 ];
 
 pub fn render(
@@ -57,6 +57,7 @@ pub fn render(
         status_kind: estado_tipo,
         commands: comandos,
         help_expanded: state.ayuda_expandida,
+        ayuda_extra: None,
     };
     let areas = shell.render(frame, area, theme);
 
@@ -80,7 +81,17 @@ fn estado_shell(state: &MenuPrincipalState, sesion: &UsuarioSesion) -> (String, 
 }
 
 fn render_lista(frame: &mut Frame, area: Rect, state: &MenuPrincipalState, theme: Theme) {
-    let ancho = area.width.min(60);
+    // El ancho del bloque se ajusta al contenido real (marcador + etiqueta
+    // más larga) en vez de un valor fijo de 60 columnas: con un bloque más
+    // ancho que su contenido, el texto queda alineado a la izquierda dentro
+    // de él y el conjunto se ve pegado a la izquierda aunque el bloque en sí
+    // esté centrado.
+    let ancho_contenido = OpcionMenu::TODAS
+        .iter()
+        .map(|o| o.etiqueta().chars().count() as u16 + 2)
+        .max()
+        .unwrap_or(20);
+    let ancho = area.width.min(ancho_contenido);
     let alto = area.height.min(14);
     let lista = centrar(area, ancho, alto);
 

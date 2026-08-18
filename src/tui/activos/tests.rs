@@ -58,6 +58,54 @@ fn busqueda_emite_consulta_real() {
     assert_eq!(s.cantidad(), 2)
 }
 #[test]
+fn busqueda_admite_clave_valor_de_empresa_tipo_gafete_medio_y_deja_texto_libre() {
+    let mut s = ActivosState::default();
+    cargar(&mut s);
+    s.completar_empresas(Ok(vec![crate::models::empresa::Empresa {
+        id: 5,
+        nombre: "Brisas del Oeste".into(),
+    }]));
+    s.filtro = "empresa:brisas tipo:praind,swat gafete:26 medio:caminando Ana".into();
+    let AccionActivos::Buscar {
+        texto,
+        empresa_id,
+        tipos,
+        gafete,
+        medio,
+        ..
+    } = s.buscar(None)
+    else {
+        panic!("debía consultar")
+    };
+    assert_eq!(empresa_id, Some(5));
+    assert_eq!(tipos, Some(vec![TipoIngreso::Praind, TipoIngreso::Swat]));
+    assert_eq!(gafete, Some(26));
+    assert_eq!(medio, Some(MedioIngreso::Caminando));
+    assert_eq!(texto.as_deref(), Some("Ana"));
+}
+
+#[test]
+fn negar_tipo_incluye_los_demas_y_clave_invalida_cae_a_texto_libre() {
+    let mut s = ActivosState {
+        filtro: "-tipo:swat".into(),
+        ..Default::default()
+    };
+    let AccionActivos::Buscar { tipos, .. } = s.buscar(None) else {
+        panic!("debía consultar")
+    };
+    let tipos = tipos.expect("debía filtrar por tipos");
+    assert_eq!(tipos.len(), 3);
+    assert!(!tipos.contains(&TipoIngreso::Swat));
+
+    s.filtro = "gafete:no-numero".into();
+    let AccionActivos::Buscar { texto, gafete, .. } = s.buscar(None) else {
+        panic!("debía consultar")
+    };
+    assert_eq!(gafete, None);
+    assert_eq!(texto.as_deref(), Some("gafete:no-numero"));
+}
+
+#[test]
 fn detalle_y_salida_usan_registro_id() {
     let mut s = ActivosState::default();
     cargar(&mut s);
@@ -65,7 +113,7 @@ fn detalle_y_salida_usan_registro_id() {
     assert!(matches!(s.modo, ModoActivos::Detalle { id: 7 }));
     s.handle_key(k(KeyCode::Char('S')));
     assert!(matches!(
-        s.handle_key(k(KeyCode::Char('Y'))),
+        s.handle_key(k(KeyCode::Enter)),
         AccionActivos::RegistrarSalida { registro_id: 7, .. }
     ));
 }
@@ -100,7 +148,7 @@ fn callback_salida_recarga_sin_remover_localmente() {
 fn columnas_y_movimiento_conservan_ux() {
     let mut s = ActivosState::default();
     cargar(&mut s);
-    s.handle_key(k(KeyCode::Char('C')));
+    s.handle_key(k(KeyCode::F(4)));
     assert!(matches!(s.modo, ModoActivos::Columnas { .. }));
     assert_eq!(
         NaiveDate::from_ymd_opt(2026, 8, 12).unwrap().to_string(),

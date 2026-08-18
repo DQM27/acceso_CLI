@@ -39,6 +39,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &ConfiguracionInicialState, 
         status_kind: estado_tipo,
         commands: COMANDOS,
         help_expanded: state.ayuda_expandida,
+        ayuda_extra: None,
     };
     let areas = shell.render(frame, area, theme);
 

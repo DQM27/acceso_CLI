@@ -243,7 +243,8 @@ fn limite_funciona_y_se_acota_a_un_minimo_seguro() {
             .buscar(&FiltroContratistas {
                 texto: None,
                 limite: 2,
-                offset: 0
+                offset: 0,
+                ..FiltroContratistas::default()
             })
             .unwrap()
             .len(),
@@ -254,7 +255,136 @@ fn limite_funciona_y_se_acota_a_un_minimo_seguro() {
             .buscar(&FiltroContratistas {
                 texto: None,
                 limite: 0,
-                offset: 0
+                offset: 0,
+                ..FiltroContratistas::default()
+            })
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn filtra_por_empresa_tipo_praind_ruta_y_acceso() {
+    use control_acceso::database::queries::contratistas::FiltroPraind;
+
+    let connection = preparar_base();
+    let empresa_uno = crear_empresa(&connection, "Brisas");
+    let empresa_dos = crear_empresa(&connection, "Expenic");
+    let hoy = NaiveDate::from_ymd_opt(2026, 8, 17).unwrap();
+
+    // PRAIND vencido, de ruta, sin acceso, empresa uno.
+    crear_contratista(
+        &connection,
+        "1",
+        "Ana",
+        empresa_uno,
+        TipoIngreso::Praind,
+        Some(NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()),
+        true,
+        false,
+    );
+    // PRAIND próximo a vencer (dentro de 30 días), empresa dos.
+    crear_contratista(
+        &connection,
+        "2",
+        "Beto",
+        empresa_dos,
+        TipoIngreso::Praind,
+        Some(hoy + chrono::Duration::days(10)),
+        false,
+        true,
+    );
+    // Sin fecha PRAIND (no la requiere), empresa uno.
+    crear_contratista(
+        &connection,
+        "3",
+        "Caro",
+        empresa_uno,
+        TipoIngreso::Swat,
+        None,
+        false,
+        true,
+    );
+
+    let query = SqliteContratistasQuery::new(&connection);
+
+    let base = || FiltroContratistas::default();
+
+    assert_eq!(
+        query
+            .buscar(&FiltroContratistas {
+                empresa_id: Some(empresa_uno),
+                ..base()
+            })
+            .unwrap()
+            .len(),
+        2
+    );
+
+    assert_eq!(
+        query
+            .buscar(&FiltroContratistas {
+                tipos_incluidos: Some(vec![TipoIngreso::Praind, TipoIngreso::Swat]),
+                ..base()
+            })
+            .unwrap()
+            .len(),
+        3
+    );
+    assert_eq!(
+        query
+            .buscar(&FiltroContratistas {
+                tipos_incluidos: Some(vec![TipoIngreso::InHouse]),
+                ..base()
+            })
+            .unwrap()
+            .len(),
+        0
+    );
+
+    let vencidos = query
+        .buscar(&FiltroContratistas {
+            praind: Some(FiltroPraind::Vencido { hoy }),
+            ..base()
+        })
+        .unwrap();
+    assert_eq!(vencidos.len(), 1);
+    assert_eq!(vencidos[0].nombre, "Ana");
+
+    let proximos = query
+        .buscar(&FiltroContratistas {
+            praind: Some(FiltroPraind::ProximoAVencer { hoy }),
+            ..base()
+        })
+        .unwrap();
+    assert_eq!(proximos.len(), 1);
+    assert_eq!(proximos[0].nombre, "Beto");
+
+    let sin_fecha = query
+        .buscar(&FiltroContratistas {
+            praind: Some(FiltroPraind::SinFecha),
+            ..base()
+        })
+        .unwrap();
+    assert_eq!(sin_fecha.len(), 1);
+    assert_eq!(sin_fecha[0].nombre, "Caro");
+
+    assert_eq!(
+        query
+            .buscar(&FiltroContratistas {
+                personal_ruta: Some(true),
+                ..base()
+            })
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        query
+            .buscar(&FiltroContratistas {
+                tiene_acceso: Some(false),
+                ..base()
             })
             .unwrap()
             .len(),
@@ -291,6 +421,7 @@ fn offset_funciona_sobre_el_orden_estable() {
             texto: None,
             limite: 1,
             offset: 1,
+            ..FiltroContratistas::default()
         })
         .unwrap();
     assert_eq!(resultado[0].nombre, "Beto");

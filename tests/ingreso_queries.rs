@@ -199,6 +199,7 @@ fn activos_busca_por_cedula_nombre_empresa_y_gafete() {
         let items = query
             .listar_activos(&FiltroIngresosActivos {
                 texto: Some(format!("  {texto}  ")),
+                ..Default::default()
             })
             .unwrap();
         assert_eq!(items.items.len(), 1, "filtro {texto}");
@@ -208,6 +209,91 @@ fn activos_busca_por_cedula_nombre_empresa_y_gafete() {
         query
             .listar_activos(&FiltroIngresosActivos {
                 texto: Some("   ".into()),
+                ..Default::default()
+            })
+            .unwrap()
+            .items
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn activos_filtra_por_empresa_tipo_gafete_y_medio() {
+    let base = preparar_base();
+    insertar(
+        &base,
+        base.contratista_uno,
+        base.empresa_uno,
+        "2026-08-12 07:00:00",
+        "CAMINANDO",
+        "PRAIND",
+        Some(31),
+        None,
+        None,
+    );
+    insertar(
+        &base,
+        base.contratista_dos,
+        base.empresa_dos,
+        "2026-08-12 08:00:00",
+        "VEHICULO",
+        "SWAT",
+        Some(32),
+        None,
+        None,
+    );
+    let query = SqliteIngresosQuery::new(&base.connection);
+
+    assert_eq!(
+        query
+            .listar_activos(&FiltroIngresosActivos {
+                empresa_id: Some(base.empresa_uno),
+                ..Default::default()
+            })
+            .unwrap()
+            .items
+            .len(),
+        1
+    );
+    assert_eq!(
+        query
+            .listar_activos(&FiltroIngresosActivos {
+                tipos_incluidos: Some(vec![TipoIngreso::Praind, TipoIngreso::Swat]),
+                ..Default::default()
+            })
+            .unwrap()
+            .items
+            .len(),
+        2
+    );
+    assert_eq!(
+        query
+            .listar_activos(&FiltroIngresosActivos {
+                tipos_incluidos: Some(vec![TipoIngreso::InHouse]),
+                ..Default::default()
+            })
+            .unwrap()
+            .items
+            .len(),
+        0
+    );
+    assert_eq!(
+        query
+            .listar_activos(&FiltroIngresosActivos {
+                gafete_numero: Some(32),
+                ..Default::default()
+            })
+            .unwrap()
+            .items
+            .len(),
+        1
+    );
+    assert_eq!(
+        query
+            .listar_activos(&FiltroIngresosActivos {
+                medio_ingreso: Some(MedioIngreso::Vehiculo),
+                ..Default::default()
             })
             .unwrap()
             .items
@@ -282,6 +368,7 @@ fn activos_filtrados_conservan_total_real_y_gafete_devuelve_registro_completo() 
     let filtrados = query
         .listar_activos(&FiltroIngresosActivos {
             texto: Some("Ana".into()),
+            ..Default::default()
         })
         .unwrap();
     assert_eq!(filtrados.items.len(), 1);
@@ -519,7 +606,7 @@ fn historial_filtra_empresa_tipo_y_gafete_con_and() {
     );
     let mut filtro = filtro_historial();
     filtro.empresa_id = Some(base.empresa_uno);
-    filtro.tipo_ingreso = Some(TipoIngreso::Praind);
+    filtro.tipos_incluidos = Some(vec![TipoIngreso::Praind]);
     filtro.gafete_numero = Some(31);
     filtro.estado = EstadoMovimiento::Activos;
     let pagina = SqliteIngresosQuery::new(&base.connection)
@@ -527,6 +614,84 @@ fn historial_filtra_empresa_tipo_y_gafete_con_and() {
         .unwrap();
     assert_eq!(pagina.total, 1);
     assert_eq!(pagina.items[0].contratista_nombre, "Ana Solano");
+}
+
+#[test]
+fn historial_filtra_por_quien_dio_ingreso_y_quien_dio_salida() {
+    let base = preparar_base();
+    insertar(
+        &base,
+        base.contratista_uno,
+        base.empresa_uno,
+        "2026-08-12 07:00:00",
+        "CAMINANDO",
+        "PRAIND",
+        Some(31),
+        Some("2026-08-12 12:00:00"),
+        Some(base.usuario_salida),
+    );
+    insertar(
+        &base,
+        base.contratista_dos,
+        base.empresa_dos,
+        "2026-08-12 08:00:00",
+        "VEHICULO",
+        "SWAT",
+        Some(32),
+        None,
+        None,
+    );
+    let query = SqliteIngresosQuery::new(&base.connection);
+
+    let mut filtro = filtro_historial();
+    filtro.usuario_ingreso = Some("operador entrada".into());
+    assert_eq!(query.buscar_historial(&filtro).unwrap().total, 2);
+
+    let mut filtro = filtro_historial();
+    filtro.usuario_salida = Some("salida".into());
+    let pagina = query.buscar_historial(&filtro).unwrap();
+    assert_eq!(pagina.total, 1);
+    assert_eq!(pagina.items[0].contratista_nombre, "Ana Solano");
+
+    let mut filtro = filtro_historial();
+    filtro.usuario_salida = Some("nadie".into());
+    assert_eq!(query.buscar_historial(&filtro).unwrap().total, 0);
+}
+
+#[test]
+fn historial_filtra_por_una_lista_de_tipos_como_un_in() {
+    let base = preparar_base();
+    insertar(
+        &base,
+        base.contratista_uno,
+        base.empresa_uno,
+        "2026-08-12 07:00:00",
+        "CAMINANDO",
+        "PRAIND",
+        Some(31),
+        None,
+        None,
+    );
+    insertar(
+        &base,
+        base.contratista_dos,
+        base.empresa_dos,
+        "2026-08-12 08:00:00",
+        "VEHICULO",
+        "SWAT",
+        Some(32),
+        None,
+        None,
+    );
+    let query = SqliteIngresosQuery::new(&base.connection);
+
+    let mut filtro = filtro_historial();
+    filtro.tipos_incluidos = Some(vec![TipoIngreso::Praind, TipoIngreso::Swat]);
+    let pagina = query.buscar_historial(&filtro).unwrap();
+    assert_eq!(pagina.total, 2);
+
+    filtro.tipos_incluidos = Some(vec![TipoIngreso::InHouse, TipoIngreso::PorCorreo]);
+    assert_eq!(query.buscar_historial(&filtro).unwrap().total, 0);
 }
 
 #[test]

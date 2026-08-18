@@ -85,7 +85,7 @@ fn crear_y_actualizar_emiten_intenciones_sin_mutar_datos() {
     );
     assert_eq!(s.empresas.len(), 2);
     s.handle_key(k(KeyCode::Esc));
-    s.handle_key(k(KeyCode::Char('E')));
+    s.handle_key(k(KeyCode::Enter));
     assert!(matches!(
         s.handle_key(k(KeyCode::Enter)),
         AccionEmpresas::Actualizar { id: 7, .. }
@@ -113,7 +113,7 @@ fn callbacks_exito_recargan_y_error_permanece_en_formulario() {
         Some(12),
     );
     assert_eq!(s.seleccion, Some(0));
-    s.handle_key(k(KeyCode::Char('E')));
+    s.handle_key(k(KeyCode::Enter));
     s.completar_actualizacion(
         Err("Ya existe una empresa con ese nombre".into()),
         12,

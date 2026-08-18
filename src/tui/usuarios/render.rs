@@ -48,8 +48,8 @@ const COMANDOS_PASSWORD: &[CommandHint<'static>] = &[
     CommandHint::new("ESC", "Cancelar"),
 ];
 const COMANDOS_CONFIRMACION: &[CommandHint<'static>] = &[
-    CommandHint::new("Y/ENTER", "Confirmar"),
-    CommandHint::new("N/ESC", "Cancelar"),
+    CommandHint::new("ENTER", "Confirmar"),
+    CommandHint::new("ESC", "Cancelar"),
 ];
 
 pub fn render(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: Theme) {
@@ -80,6 +80,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: Theme
         status_kind: estado_tipo,
         commands: comandos,
         help_expanded: state.ayuda_expandida,
+        ayuda_extra: None,
     };
     let areas = shell.render(frame, area, theme);
 

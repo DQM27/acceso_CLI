@@ -39,6 +39,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &HistorialState, theme: Them
         status_kind: estado_tipo,
         commands: &comandos,
         help_expanded: state.ayuda_expandida,
+        ayuda_extra: Some("Claves: empresa, tipo, estado, gafete, desde, hasta, ingreso, salida"),
     };
     let areas = shell.render(frame, area, theme);
 
@@ -106,6 +107,15 @@ fn etiqueta_busqueda(state: &HistorialState) -> String {
             "estado: {}",
             estado_texto(state.filtro_aplicado.estado)
         ));
+    }
+    if let Some(tipos) = &state.filtro_aplicado.tipos {
+        resumen.push(format!("tipo: {}", tipos_texto(Some(tipos))));
+    }
+    if !state.filtro_aplicado.usuario_ingreso.is_empty() {
+        resumen.push(format!("ingreso: {}", state.filtro_aplicado.usuario_ingreso));
+    }
+    if !state.filtro_aplicado.usuario_salida.is_empty() {
+        resumen.push(format!("salida: {}", state.filtro_aplicado.usuario_salida));
     }
     format!("BUSCAR · CLAVE:VALOR O TEXTO LIBRE · {}", resumen.join(" · "))
 }
@@ -275,26 +285,35 @@ fn fila_movimiento(r: &MovimientoIngresoResumen, seleccionada: bool, theme: Them
         Span::styled(format!("{entrada:<5} → {salida:<5}  "), estilo_fila),
         Span::styled(format!("{:<20.20} ", r.contratista_nombre), estilo_fila),
         Span::styled(format!("{:<18.18} ", r.empresa_nombre), estilo_fila),
-        Span::styled(tipo_texto(Some(r.tipo_ingreso)).to_owned(), estilo_fila),
+        Span::styled(tipo_texto(r.tipo_ingreso).to_owned(), estilo_fila),
     ])
 }
 
+/// Sigue la misma convención "Etiqueta: valor" que usan los paneles de
+/// detalle de Contratistas/Activos, agrupada en tres bloques: identidad
+/// (nombre/cédula), clasificación (empresa/tipo/medio/gafete) y cronología
+/// (fecha/entrada/salida/duración), cerrando con la trazabilidad de quién
+/// registró cada movimiento.
 fn render_detalle(frame: &mut Frame, area: Rect, r: &MovimientoIngresoResumen, theme: Theme) {
-    let badge_text = r
+    let gafete_texto = r
         .gafete_numero
-        .map_or_else(|| "Sin gafete".to_owned(), |g| format!("Gafete {g}"));
+        .map_or_else(|| "Sin gafete".to_owned(), |g| g.to_string());
     let mut lineas = vec![
         Line::from(r.contratista_nombre.clone()).style(theme.title()),
-        Line::from(format!("{} · {}", r.cedula, r.empresa_nombre)).style(theme.base()),
-        Line::from(format!(
-            "{} · {}",
-            a_costa_rica(r.fecha_hora_ingreso).format("%d/%m/%Y"),
-            tipo_texto(Some(r.tipo_ingreso))
-        ))
-        .style(theme.muted()),
+        Line::from(r.cedula.clone()).style(theme.muted()),
+        Line::from(""),
+        Line::from(format!("Empresa: {}", r.empresa_nombre)).style(theme.base()),
+        Line::from(format!("Tipo de ingreso: {}", tipo_texto(r.tipo_ingreso))).style(theme.base()),
+        Line::from(format!("Medio: {}", texto_medio(r.medio_ingreso))).style(theme.base()),
+        Line::from(format!("Gafete: {gafete_texto}")).style(theme.base()),
         Line::from(""),
         Line::from(format!(
-            "Entrada {}",
+            "Fecha: {}",
+            a_costa_rica(r.fecha_hora_ingreso).format("%d/%m/%Y")
+        ))
+        .style(theme.base()),
+        Line::from(format!(
+            "Entrada: {}",
             a_costa_rica(r.fecha_hora_ingreso).format("%H:%M")
         ))
         .style(theme.base()),
@@ -303,26 +322,28 @@ fn render_detalle(frame: &mut Frame, area: Rect, r: &MovimientoIngresoResumen, t
         Some(salida) => {
             let duracion = salida - r.fecha_hora_ingreso;
             lineas.push(
+                Line::from(format!("Salida: {}", a_costa_rica(salida).format("%H:%M")))
+                    .style(theme.base()),
+            );
+            lineas.push(
                 Line::from(format!(
-                    "Salida {} · {}h{:02}m dentro",
-                    a_costa_rica(salida).format("%H:%M"),
+                    "Duración: {}h{:02}m",
                     duracion.num_minutes() / 60,
                     duracion.num_minutes() % 60,
                 ))
                 .style(theme.base()),
             );
         }
-        None => lineas.push(Line::from("Activo · aún dentro").style(theme.warning())),
+        None => lineas.push(Line::from("Estado: activo, aún dentro").style(theme.warning())),
     }
-    lineas.push(Line::from(texto_medio(r.medio_ingreso)).style(theme.muted()));
-    lineas.push(Line::from(badge_text).style(theme.muted()));
     lineas.push(Line::from(""));
     lineas.push(
-        Line::from(format!("Ingreso registrado por {}", r.usuario_ingreso_nombre))
+        Line::from(format!("Ingreso registrado por: {}", r.usuario_ingreso_nombre))
             .style(theme.base()),
     );
     if let Some(operador) = &r.usuario_salida_nombre {
-        lineas.push(Line::from(format!("Salida registrada por {operador}")).style(theme.base()));
+        lineas
+            .push(Line::from(format!("Salida registrada por: {operador}")).style(theme.base()));
     }
     frame.render_widget(Paragraph::new(lineas), area);
 }
@@ -382,7 +403,7 @@ fn valor_columna_clasica(r: &MovimientoIngresoResumen, c: ClassicColumn) -> Stri
         ClassicColumn::Cedula => r.cedula.clone(),
         ClassicColumn::Nombre => r.contratista_nombre.clone(),
         ClassicColumn::Empresa => r.empresa_nombre.clone(),
-        ClassicColumn::Tipo => tipo_texto(Some(r.tipo_ingreso)).into(),
+        ClassicColumn::Tipo => tipo_texto(r.tipo_ingreso).into(),
         ClassicColumn::Entrada => a_costa_rica(r.fecha_hora_ingreso).format("%H:%M").to_string(),
         ClassicColumn::Salida => r.fecha_hora_salida.map_or_else(
             || "Activo".into(),

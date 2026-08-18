@@ -3,11 +3,11 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Constraint;
 
 use crate::{
-    database::queries::contratistas::ContratistaResumen,
+    database::queries::contratistas::{ContratistaResumen, FiltroContratistas, FiltroPraind},
     models::{contratista::Contratista, empresa::Empresa, tipo_ingreso::TipoIngreso},
     services::contratista_service::{DatosActualizacionContratista, DatosContratista},
     tiempo::ahora_costa_rica,
-    tui::ui_kit::{StandardCommand, standard_command},
+    tui::ui_kit::{StandardCommand, query_lang, standard_command},
 };
 
 #[path = "render.rs"]
@@ -15,6 +15,119 @@ pub(super) mod render;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+
+/// Interpreta `texto` con la sintaxis `clave:valor` de `ui_kit::query_lang`
+/// (`empresa:`, `tipo:` con listas/negación, `praind:vence|vencido|sin`,
+/// `ruta:si|no`, `acceso:si|no`). Lo no reconocido, y lo que no calza con lo
+/// que una clave admite, se deja como texto libre para nombre/cédula.
+fn parsear_consulta(texto: &str, empresas: &[Empresa], hoy: NaiveDate) -> (FiltroContratistas, String) {
+    let mut filtro = FiltroContratistas::default();
+    let mut libres = Vec::new();
+    for term in query_lang::analizar(texto).terms {
+        if term.key.is_none() {
+            libres.push(query_lang::texto_libre(&term));
+            continue;
+        }
+        if !aplicar_clave(&mut filtro, &term, empresas, hoy) {
+            libres.push(query_lang::reconstruir_clave(&term));
+        }
+    }
+    (filtro, libres.join(" "))
+}
+
+fn aplicar_clave(
+    f: &mut FiltroContratistas,
+    term: &query_lang::Term,
+    empresas: &[Empresa],
+    hoy: NaiveDate,
+) -> bool {
+    let clave = term.key.as_deref().unwrap_or_default().to_lowercase();
+    let valores = query_lang::valores(term);
+    match clave.as_str() {
+        "empresa" if !term.negated && valores.len() == 1 => {
+            let buscado = valores[0].to_lowercase();
+            match empresas
+                .iter()
+                .find(|e| e.nombre.to_lowercase().contains(&buscado))
+            {
+                Some(e) => {
+                    f.empresa_id = Some(e.id);
+                    true
+                }
+                None => false,
+            }
+        }
+        "tipo" => {
+            let Some(reconocidos) = valores
+                .iter()
+                .map(|v| tipo_desde_texto(v))
+                .collect::<Option<Vec<_>>>()
+            else {
+                return false;
+            };
+            if reconocidos.is_empty() {
+                return false;
+            }
+            f.tipos_incluidos = Some(if term.negated {
+                TipoIngreso::ALL
+                    .into_iter()
+                    .filter(|t| !reconocidos.contains(t))
+                    .collect()
+            } else {
+                reconocidos
+            });
+            true
+        }
+        "praind" if !term.negated && valores.len() == 1 => match valores[0].to_lowercase().as_str() {
+            "vence" | "proximo" | "próximo" => {
+                f.praind = Some(FiltroPraind::ProximoAVencer { hoy });
+                true
+            }
+            "vencido" => {
+                f.praind = Some(FiltroPraind::Vencido { hoy });
+                true
+            }
+            "sin" | "sinfecha" => {
+                f.praind = Some(FiltroPraind::SinFecha);
+                true
+            }
+            _ => false,
+        },
+        "ruta" if !term.negated && valores.len() == 1 => match bool_desde_texto(&valores[0]) {
+            Some(b) => {
+                f.personal_ruta = Some(b);
+                true
+            }
+            None => false,
+        },
+        "acceso" if !term.negated && valores.len() == 1 => match bool_desde_texto(&valores[0]) {
+            Some(b) => {
+                f.tiene_acceso = Some(b);
+                true
+            }
+            None => false,
+        },
+        _ => false,
+    }
+}
+
+fn bool_desde_texto(v: &str) -> Option<bool> {
+    match v.to_lowercase().as_str() {
+        "si" | "sí" | "yes" | "true" => Some(true),
+        "no" | "false" => Some(false),
+        _ => None,
+    }
+}
+
+fn tipo_desde_texto(v: &str) -> Option<TipoIngreso> {
+    match v.to_lowercase().as_str() {
+        "praind" => Some(TipoIngreso::Praind),
+        "inhouse" | "in-house" | "in_house" => Some(TipoIngreso::InHouse),
+        "correo" | "porcorreo" => Some(TipoIngreso::PorCorreo),
+        "swat" => Some(TipoIngreso::Swat),
+        _ => None,
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Columna {
@@ -165,6 +278,11 @@ pub enum AccionContratistas {
     Buscar {
         texto: Option<String>,
         seleccionar_id: Option<i64>,
+        empresa_id: Option<i64>,
+        tipos: Option<Vec<TipoIngreso>>,
+        praind: Option<FiltroPraind>,
+        personal_ruta: Option<bool>,
+        tiene_acceso: Option<bool>,
     },
     Crear {
         datos: DatosContratista,
@@ -289,17 +407,12 @@ impl ContratistasState {
                     self.modo = ModoContratistas::Formulario(FormularioContratista::nuevo())
                 }
             }
-            KeyCode::Char('e' | 'E') => {
-                if let Some(id) = self.id() {
-                    self.editar(id)
-                }
-            }
             KeyCode::Char('/') => {
                 self.modo = ModoContratistas::Busqueda {
                     texto: self.filtro.clone(),
                 }
             }
-            KeyCode::Char('c' | 'C') => self.modo = ModoContratistas::Columnas { seleccion: 0 },
+            KeyCode::F(4) => self.modo = ModoContratistas::Columnas { seleccion: 0 },
             KeyCode::Esc if !self.filtro.is_empty() => {
                 self.filtro.clear();
                 return self.buscar(None);
@@ -497,9 +610,15 @@ impl ContratistasState {
         }
     }
     fn buscar(&self, id: Option<i64>) -> AccionContratistas {
+        let (filtro, libre) = parsear_consulta(&self.filtro, &self.empresas, self.hoy);
         AccionContratistas::Buscar {
-            texto: (!self.filtro.trim().is_empty()).then(|| self.filtro.clone()),
+            texto: (!libre.trim().is_empty()).then_some(libre),
             seleccionar_id: id,
+            empresa_id: filtro.empresa_id,
+            tipos: filtro.tipos_incluidos,
+            praind: filtro.praind,
+            personal_ruta: filtro.personal_ruta,
+            tiene_acceso: filtro.tiene_acceso,
         }
     }
     fn mover(&mut self, d: isize) {
@@ -626,11 +745,8 @@ fn mover_campo(f: &mut FormularioContratista, d: isize) {
         .iter()
         .position(|indice| *indice == f.campo)
         .unwrap_or(0);
-    let siguiente = if d < 0 {
-        posicion.saturating_sub(1)
-    } else {
-        (posicion + 1).min(habilitados.len() - 1)
-    };
+    let len = habilitados.len() as isize;
+    let siguiente = (posicion as isize + d).rem_euclid(len) as usize;
     f.campo = habilitados[siguiente];
 }
 fn agregar_fecha(s: &mut String, c: char) {

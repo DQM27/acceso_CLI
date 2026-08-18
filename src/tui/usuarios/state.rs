@@ -377,11 +377,6 @@ impl UsuariosState {
             KeyCode::Char('n' | 'N') => {
                 self.modo = ModoUsuarios::Formulario(FormularioUsuario::nuevo())
             }
-            KeyCode::Char('e' | 'E') => {
-                if let Some(id) = self.id_seleccionado() {
-                    self.abrir_edicion(id)
-                }
-            }
             KeyCode::Char('p' | 'P') => {
                 if let Some(id) = self.id_seleccionado() {
                     self.abrir_password(id)
@@ -479,8 +474,11 @@ impl UsuariosState {
                 self.modo = ModoUsuarios::Normal;
                 return AccionUsuarios::Ninguna;
             }
-            KeyCode::Up | KeyCode::BackTab => f.campo = f.campo.saturating_sub(1),
-            KeyCode::Down | KeyCode::Tab => f.campo = (f.campo + 1).min(f.campos().len() - 1),
+            KeyCode::Up | KeyCode::BackTab => {
+                let len = f.campos().len();
+                f.campo = (f.campo + len - 1) % len;
+            }
+            KeyCode::Down | KeyCode::Tab => f.campo = (f.campo + 1) % f.campos().len(),
             KeyCode::Char(' ')
                 if matches!(f.campo_actual(), CampoUsuario::Rol | CampoUsuario::Activo) =>
             {
@@ -489,9 +487,6 @@ impl UsuariosState {
                     CampoUsuario::Activo => f.activo = !f.activo,
                     _ => {}
                 }
-            }
-            KeyCode::Left | KeyCode::Right if f.campo_actual() == CampoUsuario::Activo => {
-                f.activo = !f.activo
             }
             KeyCode::Enter => {
                 return self.emitir_guardado(f);
@@ -635,7 +630,7 @@ impl UsuariosState {
     }
     fn confirmacion(&mut self, key: KeyEvent, c: ConfirmacionEstado) -> AccionUsuarios {
         match key.code {
-            KeyCode::Char('y' | 'Y') | KeyCode::Enter => {
+            KeyCode::Enter => {
                 let nombre = self
                     .usuario(c.id)
                     .map(|u| u.nombre.clone())
@@ -646,7 +641,7 @@ impl UsuariosState {
                     nombre,
                 }
             }
-            KeyCode::Char('n' | 'N') | KeyCode::Esc => {
+            KeyCode::Esc => {
                 self.modo = ModoUsuarios::Normal;
                 AccionUsuarios::Ninguna
             }

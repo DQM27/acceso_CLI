@@ -104,14 +104,14 @@ impl MenuPrincipalState {
         }
         if let Some(confirmacion) = self.confirmacion {
             return match key.code {
-                KeyCode::Char('y' | 'Y') | KeyCode::Enter => {
+                KeyCode::Enter => {
                     self.confirmacion = None;
                     match confirmacion {
                         ConfirmacionMenu::CerrarSesion => AccionMenu::CerrarSesion,
                         ConfirmacionMenu::Salir => AccionMenu::Salir,
                     }
                 }
-                KeyCode::Char('n' | 'N') | KeyCode::Esc => {
+                KeyCode::Esc => {
                     self.confirmacion = None;
                     AccionMenu::Ninguna
                 }

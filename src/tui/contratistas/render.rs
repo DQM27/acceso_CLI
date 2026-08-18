@@ -25,7 +25,7 @@ const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
     CommandHint::new("ENTER", "Editar"),
     CommandHint::new("N", "Nuevo"),
     CommandHint::new("/", "Buscar"),
-    CommandHint::new("C", "Columnas"),
+    CommandHint::new("F4", "Columnas"),
     CommandHint::new("ESC", "Volver"),
 ];
 const COMANDOS_BUSQUEDA: &[CommandHint<'static>] = &[
@@ -76,6 +76,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &ContratistasState, theme: T
         status_kind: estado_tipo,
         commands: comandos,
         help_expanded: state.ayuda_expandida,
+        ayuda_extra: Some("Claves: empresa, tipo, praind, ruta, acceso"),
     };
     let areas = shell.render(frame, area, theme);
 
