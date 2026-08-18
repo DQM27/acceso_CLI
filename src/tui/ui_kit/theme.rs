@@ -27,7 +27,7 @@ impl ThemePreset {
     pub const fn theme(self) -> Theme {
         match self {
             Self::Classic => Theme {
-                background: Color::Rgb(7, 13, 10),
+                background: Color::Black,
                 text: Color::Rgb(196, 220, 199),
                 muted: Color::Rgb(105, 135, 111),
                 accent: Color::Rgb(91, 224, 123),
@@ -35,11 +35,11 @@ impl ThemePreset {
                 warning: Color::Rgb(238, 184, 78),
                 danger: Color::Rgb(239, 105, 101),
                 border: Color::Rgb(76, 119, 85),
-                selection_foreground: Color::Rgb(7, 13, 10),
+                selection_foreground: Color::Black,
                 selection_background: Color::Rgb(91, 224, 123),
             },
             Self::Brisas => Theme {
-                background: Color::Rgb(12, 16, 19),
+                background: Color::Black,
                 text: Color::Rgb(220, 225, 228),
                 muted: Color::Rgb(145, 158, 164),
                 accent: Color::Rgb(70, 200, 215),
@@ -47,7 +47,7 @@ impl ThemePreset {
                 warning: Color::Rgb(220, 170, 70),
                 danger: Color::Rgb(220, 95, 100),
                 border: Color::Rgb(100, 120, 126),
-                selection_foreground: Color::Rgb(12, 16, 19),
+                selection_foreground: Color::Black,
                 selection_background: Color::Rgb(70, 200, 215),
             },
         }

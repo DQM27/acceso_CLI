@@ -176,3 +176,27 @@ fn un_administrador_si_ve_y_puede_abrir_configuracion() {
         AccionMenu::Abrir(OpcionMenu::Configuracion)
     );
 }
+
+#[test]
+fn un_operador_no_ve_ni_puede_abrir_usuarios() {
+    let visibles = OpcionMenu::visibles_para(RolUsuario::Operador);
+    assert!(!visibles.contains(&OpcionMenu::Usuarios));
+
+    let mut s = MenuPrincipalState::default();
+    assert_eq!(
+        s.handle_key(k(KeyCode::Char('6')), RolUsuario::Operador),
+        AccionMenu::Ninguna
+    );
+}
+
+#[test]
+fn un_administrador_si_ve_y_puede_abrir_usuarios() {
+    let visibles = OpcionMenu::visibles_para(RolUsuario::Administrador);
+    assert!(visibles.contains(&OpcionMenu::Usuarios));
+
+    let mut s = MenuPrincipalState::default();
+    assert_eq!(
+        s.handle_key(k(KeyCode::Char('6')), RolUsuario::Administrador),
+        AccionMenu::Abrir(OpcionMenu::Usuarios)
+    );
+}

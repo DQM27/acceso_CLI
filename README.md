@@ -83,9 +83,7 @@ las reglas de entrada y salida, la administración y las relaciones persistidas.
 El [plan de saneamiento técnico](docs/plan-saneamiento.md) mantiene el listado priorizado
 de ajustes y sus criterios de finalización.
 
-## Prototipo TUI
-
-El login visual aislado se ejecuta con `cargo run --example brisas_cli`. Ratatui controla
-caracteres, espaciado, líneas y colores, pero no la fuente de la terminal. Para conservar
-la apariencia prevista se recomienda una terminal moderna con Cascadia Mono, Cascadia
-Code, JetBrains Mono o una fuente monoespaciada similar.
+La TUI se ejecuta con `cargo run`. Ratatui controla caracteres, espaciado, líneas y
+colores, pero no la fuente de la terminal. Para conservar la apariencia prevista se
+recomienda una terminal moderna con Cascadia Mono, Cascadia Code, JetBrains Mono o una
+fuente monoespaciada similar.

@@ -69,26 +69,22 @@ Cada tarea sólo se considera terminada cuando tiene pruebas y manejo de errores
   bloqueando la edición mientras se espera el resultado real. Las 5 pantallas de búsqueda
   (Historial, Contratistas, Activos, Empresas, Usuarios) tienen debounce de 250ms vía
   `ui_kit::Debounce`, en vez de una consulta SQL por tecla.
-- [ ] **Modo demo aislado.** Sustituir `Option<&AppCore>` por una implementación falsa
-  explícita disponible sólo en pruebas o mediante una feature de desarrollo.
-- [ ] **Estados sin `unwrap`.** Hacer que cada etapa de ingreso contenga los datos que
-  necesita, de modo que los estados inválidos no puedan construirse.
-- [ ] **Normalización de identidades.** Definir reglas canónicas para cédulas y nombres
-  únicos y reforzarlas en SQLite.
+- [x] ~~**Modo demo aislado.**~~ Descartado: el usuario determinó que esta deuda de
+  mantenibilidad no aplica para producción, sólo agrega complejidad.
+- [x] ~~**Estados sin `unwrap`.**~~ Descartado, mismo motivo.
+- [x] ~~**Normalización de identidades.**~~ Descartado, mismo motivo.
 - [x] **Configuración SQLite explícita (perfil base).** `busy_timeout`, `journal_mode`,
   `synchronous`, `application_id`, `trusted_schema` y `quick_check`/`optimize` ya están
   implementados y probados — ver la
   [evaluación y recomendaciones de SQLite](evaluacion-sqlite.md), secciones 2-6. El
   tratamiento explícito de `SQLITE_BUSY` como error observable queda descartado junto con
-  "Errores observables" (Prioridad 1). Sigue pendiente la prueba de cierre/pérdida de
-  energía simulada en un entorno real.
-- [ ] **Capas sin dependencia de SQLite.** Mover los contratos y errores neutrales a
-  aplicación/dominio y dejar que el adaptador de base de datos traduzca los errores de
-  `rusqlite`.
-- [ ] **Pruebas operativas.** Cubrir base bloqueada, disco lleno o no escribible,
-  recuperación de respaldo, reloj incorrecto y cierre inesperado.
-- [ ] **Verificación automatizada.** Ejecutar en cada cambio `cargo test`,
-  `cargo fmt --check` y Clippy con advertencias tratadas como errores.
+  "Errores observables" (Prioridad 1).
+- [x] ~~**Capas sin dependencia de SQLite.**~~ Descartado, mismo motivo que arriba.
+- [x] ~~**Pruebas operativas** (disco lleno, base bloqueada, reloj incorrecto, cierre
+  inesperado, prueba de pérdida de energía en un entorno real).~~ Descartado, mismo
+  motivo.
+- [x] ~~**Verificación automatizada** (CI con `cargo test`/`fmt`/Clippy).~~ Descartado,
+  mismo motivo.
 
 ## Capacidades futuras condicionadas
 

@@ -66,10 +66,11 @@ impl OpcionMenu {
         }
     }
 
-    /// Sólo ROOT y Administrador ven las opciones de configuración del sistema.
+    /// Sólo ROOT y Administrador administran usuarios y ajustes del sistema — un
+    /// Operador con acceso a Usuarios podría autopromoverse a Administrador o Root.
     fn visible_para(self, rol: RolUsuario) -> bool {
         match self {
-            Self::Configuracion => rol != RolUsuario::Operador,
+            Self::Usuarios | Self::Configuracion => rol != RolUsuario::Operador,
             _ => true,
         }
     }
@@ -150,7 +151,9 @@ impl MenuPrincipalState {
             KeyCode::Char('3') => return AccionMenu::Abrir(OpcionMenu::Historial),
             KeyCode::Char('4') => return AccionMenu::Abrir(OpcionMenu::Contratistas),
             KeyCode::Char('5') => return AccionMenu::Abrir(OpcionMenu::Empresas),
-            KeyCode::Char('6') => return AccionMenu::Abrir(OpcionMenu::Usuarios),
+            KeyCode::Char('6') if visibles.contains(&OpcionMenu::Usuarios) => {
+                return AccionMenu::Abrir(OpcionMenu::Usuarios);
+            }
             KeyCode::Char('7') if visibles.contains(&OpcionMenu::Configuracion) => {
                 return AccionMenu::Abrir(OpcionMenu::Configuracion);
             }
