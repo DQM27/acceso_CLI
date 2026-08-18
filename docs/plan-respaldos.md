@@ -2,13 +2,14 @@
 
 > **Prioridad:** alta, obligatoria antes de producción.
 >
-> **Estado:** Fase 1 (motor de creación y validación) y el motor de la Fase 2
-> (`restaurar_respaldo`) están implementados y probados. La pantalla de la
-> Fase 3 (Configuración → Respaldos) ya está en la TUI con Crear, Listar,
-> Revalidar y Exportar — ver detalle al final de cada sección. Restaurar
-> desde la pantalla (Fase 3, acción pendiente) y la orquestación de la Fase 2
-> con la TUI (cerrar sesión, descartar `AppCore`, exigir login nuevo) quedan
-> deliberadamente para después, junto con la Fase 4 (automatización/retención).
+> **Estado:** Fases 1-4 completas. El motor de creación, validación,
+> restauración y retención está implementado y probado; la pantalla
+> Configuración → Respaldos de la TUI cubre Crear, Listar, Revalidar,
+> Exportar y Restaurar; y la app respalda automáticamente antes de una
+> migración de esquema (obligatorio) y una vez al día al iniciar
+> (best-effort), con limpieza automática de lo viejo — ver detalle al final
+> de cada sección. Sólo queda pendiente, dentro de la Fase 3, la acción
+> Eliminar (no se pidió para esta pasada).
 
 ## Objetivo
 
@@ -117,33 +118,32 @@ listado ordena del más reciente y nunca incluye `.partial`.
 verificada a otra ubicación, restauración, la pantalla de la TUI, y la política de
 retención/automatización antes de migraciones.
 
-## Fase 2: restauración segura — motor implementado, orquestación con la TUI pendiente
+## Fase 2: restauración segura — motor y orquestación con la TUI implementados
 
 `restaurar_respaldo(ruta_candidata, ruta_activa)` en `src/database/backup.rs` implementa
 los pasos que son puramente de motor/archivo (1-4, 8-11); es una función pura que no
 depende de `AppCore` ni de la TUI, igual que el resto de este módulo. Los pasos 5-7 y 12
-(terminar sesión, cerrar la TUI, mantener `InstanciaGuard` vivo, exigir login nuevo) son,
-por diseño, responsabilidad de quien la llame — hoy nadie todavía, porque la orquestación
-con `App`/`main.rs` se conecta cuando se construya la pantalla (Fase 3).
+(terminar sesión, cerrar la TUI, mantener `InstanciaGuard` vivo, exigir login nuevo) los
+orquesta `main.rs` con un bucle de reinicio (ver Fase 3, acción Restaurar).
 
 1. [x] Selección por identificador: la función recibe una `&Path` ya resuelta (la que
-   entrega `listar_respaldos`), nunca texto de interfaz interpretado como ruta — eso le
-   toca comprobarlo a la futura pantalla antes de llamar aquí.
+   entrega `listar_respaldos`), nunca texto de interfaz interpretado como ruta — la
+   pantalla de Respaldos sólo pasa la `ruta` de una fila ya cargada, nunca texto tipeado.
 2. [x] Vuelve a correr `validar_respaldo` (integridad + claves foráneas + compatibilidad
    de esquema) antes de tocar cualquier archivo.
 3. [x] Rechaza una base de una versión de esquema futura (vía `validar_respaldo`, antes de
    copiar nada).
-4. [ ] Crear el respaldo `pre_restauracion` de la base activa — **no está dentro de
-   `restaurar_respaldo`, a propósito**: para respaldar con la Online Backup API hace falta
-   una `&Connection` abierta, y esta función asume la conexión ya cerrada (ver punto
-   siguiente). Le corresponde a quien orqueste: llamar a `crear_respaldo(&conexion, dir,
-   TipoRespaldo::PreRestauracion)` primero, con la conexión todavía abierta.
-5. [ ] Terminar sesión y cerrar la TUI — pendiente, vive en `App`/`main.rs`, no en este
-   módulo.
-6. [ ] Descartar `AppCore` — pendiente, mismo motivo; la documentación de la función deja
-   explícito que debe llamarse con la conexión ya cerrada.
-7. [ ] Mantener `InstanciaGuard` vivo — pendiente; esta función no lo toca, es
-   responsabilidad del llamador (ya está vivo en `main.rs` durante toda la ejecución).
+4. [x] Crear el respaldo `pre_restauracion` de la base activa — no está dentro de
+   `restaurar_respaldo` (para eso hace falta una `&Connection` abierta, y la función asume
+   la conexión ya cerrada). Lo hace `App::procesar_accion_respaldos` con la conexión
+   todavía abierta, justo antes de señalar la salida (`AppCore::crear_respaldo(TipoRespaldo::PreRestauracion)`).
+5. [x] Terminar sesión y cerrar la TUI — `App` marca `salir = true` y devuelve
+   `SalidaApp::Restaurar { candidata }`; `main.rs` corta el bucle de eventos al recibirla.
+6. [x] Descartar `AppCore` — `main.rs` deja caer `core` (`drop(core)`) antes de llamar a
+   `restaurar_respaldo`, cerrando la conexión SQLite sin código extra.
+7. [x] Mantener `InstanciaGuard` vivo — se adquiere una sola vez fuera del bucle de
+   reinicio de `main.rs::run()` y sigue vivo durante todos los reinicios; nunca se toca
+   porque es un archivo `.instance.lock` separado del `.db`.
 8. [x] Copia la candidata a un temporal en el mismo directorio antes de tocar la base
    activa — si la copia falla, la base activa ni se entera.
 9. [x] Intercambia con dos `rename` (activa → `.previa`, temporal → activa) en vez de una
@@ -152,7 +152,11 @@ con `App`/`main.rs` se conecta cuando se construya la pantalla (Fase 3).
     migraciones reales, no sólo el chequeo superficial de `validar_respaldo`).
 11. [x] Si cualquier paso posterior al intercambio falla, reinstala automáticamente
     `.previa` sobre la ruta activa.
-12. [ ] Volver al flujo de arranque y exigir login nuevo — pendiente, vive en `App`.
+12. [x] Volver al flujo de arranque y exigir login nuevo — `main.rs::run()` vuelve a abrir
+    `AppCore` sobre la misma ruta y relanza `terminal::run`, que siempre arranca en
+    `Vista::Login`. Si `restaurar_respaldo` falló, el login se abre con un mensaje
+    (`LoginState::preset_error`) explicando que no se pudo restaurar y que la base
+    anterior se conservó (garantizado por el rollback automático del paso 11).
 
 No se mueve ni reemplaza una base mientras tenga una conexión abierta — la documentación
 de la función lo deja como precondición explícita. SQLite documenta los riesgos de copiar
@@ -166,7 +170,7 @@ superficial pero con un esquema real incompatible), se reinstala automáticament
 anterior y no queda ningún archivo temporal; restaurar sobre una ruta activa inexistente
 funciona como primera carga.
 
-## Fase 3: pantalla de respaldos — Crear/Listar/Revalidar/Exportar implementados
+## Fase 3: pantalla de respaldos — Crear/Listar/Revalidar/Exportar/Restaurar implementados
 
 Se agregó una entrada `Configuración` al menú principal (visible sólo para ROOT y
 Administrador — primer filtrado por rol de la app, en
@@ -182,16 +186,25 @@ tal como se especificó arriba. Acciones implementadas:
 
 - [x] Crear respaldo manual (`C`).
 - [x] Actualizar la lista (`A`).
-- [x] Verificar nuevamente un respaldo puntual (`R`) — no se valida el listado completo al
+- [x] Verificar nuevamente un respaldo puntual (`V`) — no se valida el listado completo al
   cargar (potencialmente costoso, abre cada `.db`); "Esquema"/"Estado" quedan en `—` hasta
   que el operador revalida esa fila.
 - [x] Exportar una copia ya validada a una ruta que tipea el operador (`E`) — copia simple
   (`AppCore::exportar_respaldo`, `std::fs::copy`), sin volver a pasar por el motor de
   respaldo porque el archivo interno ya fue validado al crearse.
-- [ ] Restaurar — deliberadamente fuera de esta pasada (ver Fase 2, "orquestación con la
-  TUI pendiente": exige cerrar `AppCore` y reabrir la app).
+- [x] Restaurar (`R`) — pide una confirmación fuerte que muestra fecha y tipo del respaldo
+  elegido y advierte que reemplaza todos los datos activos. Al confirmar: crea un respaldo
+  `PreRestauracion` de la base activa (con la conexión todavía abierta), sale de la TUI con
+  `SalidaApp::Restaurar { candidata }`, y `main.rs` cierra `AppCore`, llama a
+  `restaurar_respaldo` y vuelve a abrir la app en la pantalla de Login — éxito silencioso
+  (mismo criterio que Cerrar sesión), o un mensaje de error si algo falló (la base activa
+  queda intacta gracias al rollback automático del motor). Ver Fase 2 para el detalle de la
+  orquestación.
 - [ ] Eliminar un respaldo no utilizado, con confirmación — no se acordó para esta pasada;
   mismo patrón que Exportar cuando se agregue.
+
+**Remapeo de teclas:** al agregar Restaurar se liberó `R` (antes Revalidar) para el
+mnemónico más importante; Revalidar pasó a `V`.
 
 La pantalla es un cliente delgado del motor: `AppCore` gana `crear_respaldo`,
 `listar_respaldos`, `validar_respaldo` y `exportar_respaldo`, cada uno una línea que
@@ -201,26 +214,53 @@ nuevo campo `AppCore::ruta_base_datos` poblado sólo en `AppCore::abrir` (no rom
 `AppCore::new`/`con_reloj`, usados por la mayoría de los tests existentes).
 
 Probado en `tests/configuracion_respaldos.rs` (crear/listar/validar y exportar a través de
-`AppCore`, y que el directorio de respaldos se ubica junto a la base activa) y en
-`src/tui/configuracion/tests.rs` (navegación Menu ↔ Respaldos, Esc no burbujea desde el
-sub-modo, crear/revalidar disparan la acción correcta sólo con una fila seleccionada).
+`AppCore`, y que el directorio de respaldos se ubica junto a la base activa), en
+`src/tui/configuracion/tests.rs` (navegación Menu ↔ Respaldos, confirmación de
+restauración con `Enter`/cancelación con `Esc`, crear/revalidar/restaurar disparan la
+acción correcta sólo con una fila seleccionada) y en `src/tui/app.rs` (confirmar una
+restauración con un `AppCore` real de archivo deja la app lista para salir con la
+candidata correcta, sin tocar el archivo activo desde `App` — eso es responsabilidad de
+`main.rs` una vez cerrada la conexión).
 
-La restauración debe requerir una confirmación fuerte que indique fecha y tipo del
-respaldo, cuando se implemente. La pantalla no edita ni consulta los datos internos como
-si fueran la base activa.
+## Fase 4: automatización y retención — implementada
 
-## Fase 4: automatización y retención
+- [x] Respaldo obligatorio antes de cualquier migración de esquema. Enganchado en
+  `database::connection::open_database` (el único punto real de apertura, usado por
+  `AppCore::abrir`): si `PRAGMA user_version` está entre `1` y `SCHEMA_VERSION - 1` al
+  abrir, crea un respaldo `TipoRespaldo::PreMigracion` **antes** de que
+  `initialize_database` aplique cualquier migración. Es bloqueante a propósito — si el
+  respaldo falla (disco lleno, permisos), `open_database` devuelve
+  `SchemaError::RespaldoPreMigracionFallido` y la app no arranca ni migra nada; sólo puede
+  ocurrir en el caso raro de una actualización de la app que trae una migración nueva, no
+  en el uso diario. Una base nueva (`version == 0`) o ya al día no gastan ningún respaldo.
+- [x] Como máximo un respaldo automático diario cuando la aplicación se inicia. Nuevo
+  `AppCore::respaldo_automatico_diario_si_hace_falta()`, invocado una vez por cada vuelta
+  del bucle de `main.rs::run()` (incluidas las que siguen a una restauración). Revisa si ya
+  existe un `TipoRespaldo::Automatico` con fecha de hoy (Costa Rica,
+  `tiempo::fecha_costa_rica`) antes de crear uno nuevo. A diferencia del respaldo
+  pre-migración, éste es best-effort: no devuelve `Result` y un fallo no impide que la app
+  arranque — el hueco queda igualmente visible en la lista de Configuración → Respaldos.
+- [x] `database::backup::aplicar_retencion(directorio, tipo, limite)` conserva los
+  `limite` respaldos más recientes de un `tipo` y borra el resto — sólo actúa sobre el
+  `tipo` que reciba, así que nunca se le pasa `Manual` ni `PreRestauracion` y esos jamás se
+  tocan. Se dispara automáticamente justo después de cada respaldo automático/pre-migración
+  exitoso, con `RETENCION_AUTOMATICOS = 7` y `RETENCION_PRE_MIGRACION = 3`
+  (`src/database/backup.rs`, ajustables antes de producción con datos reales de tamaño y
+  uso).
+- [x] No eliminar automáticamente respaldos manuales ni exportados — garantizado por
+  diseño: `aplicar_retencion` filtra por el `tipo` exacto que se le pasa, nunca opera sobre
+  todos los respaldos a la vez.
+- [x] No aplicar retención hasta que el nuevo respaldo esté validado — `crear_respaldo` ya
+  valida (`integrity_check` + `foreign_key_check`) antes de devolver `Ok`, así que
+  `aplicar_retencion` sólo corre después de esa validación, nunca antes.
 
-Política inicial propuesta:
-
-- Respaldo obligatorio antes de cualquier migración de esquema.
-- Como máximo un respaldo automático diario cuando la aplicación se inicia.
-- Conservar los últimos 7 respaldos automáticos.
-- Conservar los últimos 3 respaldos previos a migraciones.
-- No eliminar automáticamente respaldos manuales ni exportados.
-- No aplicar retención hasta que el nuevo respaldo esté validado.
-
-Estos valores podrán ajustarse antes de producción con datos reales de tamaño y uso.
+Probado en `tests/respaldo_backup.rs` (retención conserva los más recientes de un tipo y
+no toca otros tipos, y no borra nada si hay menos respaldos que el límite), en
+`tests/migraciones.rs` (abrir una base con una migración pendiente deja un respaldo
+`PreMigracion` con el estado previo a migrar; una base ya al día no genera ninguno) y en
+`tests/configuracion_respaldos.rs` (el respaldo automático diario no se duplica si ya hay
+uno con la fecha de hoy, y crea uno nuevo si el último respaldo automático es de otro día
+— usando `AppCore::abrir_con_reloj` + `RelojFijo` para fijar "hoy" de forma determinista).
 
 ## Pruebas obligatorias
 

@@ -23,6 +23,12 @@ use super::schema::{SCHEMA_VERSION, SchemaError, initialize_database};
 const PREFIJO_ARCHIVO: &str = "control_acceso";
 const FORMATO_FECHA: &str = "%Y-%m-%d_%H%M%S";
 
+/// Cuántos respaldos automáticos diarios se conservan antes de que
+/// `aplicar_retencion` empiece a borrar los más viejos.
+pub const RETENCION_AUTOMATICOS: usize = 7;
+/// Cuántos respaldos previos a una migración de esquema se conservan.
+pub const RETENCION_PRE_MIGRACION: usize = 3;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TipoRespaldo {
     Manual,
@@ -130,6 +136,12 @@ impl From<SchemaError> for RespaldoError {
                 "el archivo restaurado no es una base de Control Acceso".to_owned(),
             )),
             SchemaError::IntegridadInvalida(detalle) => {
+                Self::ValidacionFallida(ResultadoValidacion::Invalido(detalle))
+            }
+            // No lo produce ningún camino real (initialize_database nunca lo
+            // devuelve; sólo open_database lo genera, y restaurar_respaldo no
+            // pasa por ahí), pero el match debe seguir siendo exhaustivo.
+            SchemaError::RespaldoPreMigracionFallido(detalle) => {
                 Self::ValidacionFallida(ResultadoValidacion::Invalido(detalle))
             }
         }
@@ -345,6 +357,32 @@ fn interpretar_nombre(ruta: &Path) -> Option<RespaldoResumen> {
         tipo,
         tamano_bytes,
     })
+}
+
+/// Conserva como máximo `limite` respaldos del `tipo` indicado — los más
+/// recientes, según el mismo orden que ya usa `listar_respaldos` — y borra el
+/// resto. Sólo actúa sobre el `tipo` recibido: nunca se le pasa
+/// `TipoRespaldo::Manual` ni `TipoRespaldo::PreRestauracion`, así que esos no
+/// se tocan jamás desde esta función — la política de retención de
+/// `docs/plan-respaldos.md` sólo cubre respaldos automáticos y
+/// pre-migración.
+pub fn aplicar_retencion(
+    directorio_respaldos: &Path,
+    tipo: TipoRespaldo,
+    limite: usize,
+) -> Result<Vec<PathBuf>, RespaldoError> {
+    let mut candidatos: Vec<RespaldoResumen> = listar_respaldos(directorio_respaldos)?
+        .into_iter()
+        .filter(|respaldo| respaldo.tipo == tipo)
+        .collect();
+    let sobrantes = candidatos.split_off(limite.min(candidatos.len()));
+
+    let mut eliminados = Vec::with_capacity(sobrantes.len());
+    for respaldo in sobrantes {
+        fs::remove_file(&respaldo.ruta)?;
+        eliminados.push(respaldo.ruta);
+    }
+    Ok(eliminados)
 }
 
 /// Nunca sobrescribe un archivo existente: si el nombre base ya está

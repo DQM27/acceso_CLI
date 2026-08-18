@@ -415,3 +415,67 @@ fn claves_foraneas_permanecen_activas() {
          VALUES ('2001','Persona',999,'SWAT',0,1)", []
     ).is_err());
 }
+
+/// A diferencia de `base_temporal` (un archivo suelto directamente en
+/// `temp_dir()`), estas dos pruebas necesitan que `<directorio>/backups` sea
+/// exclusivo de cada una — comparten `temp_dir()` con el resto de la suite,
+/// así que si dos corridas en paralelo apuntaran al mismo `backups`
+/// interferirían entre sí.
+fn base_temporal_en_directorio_propio(nombre: &str) -> PathBuf {
+    let ruta = base_temporal(nombre);
+    let directorio = ruta.with_extension("");
+    fs::create_dir_all(&directorio).unwrap();
+    directorio.join("control_acceso.db")
+}
+
+#[test]
+fn abrir_una_base_con_migracion_pendiente_deja_un_respaldo_pre_migracion_antes_de_migrar() {
+    use control_acceso::database::backup::{TipoRespaldo, listar_respaldos};
+    use control_acceso::database::connection::open_database;
+
+    let ruta = base_temporal_en_directorio_propio("respaldo_previo");
+    let previa = Connection::open(&ruta).unwrap();
+    crear_esquema_version_1(&previa);
+    insertar_referencias(&previa);
+    drop(previa);
+
+    let connection = open_database(&ruta).unwrap();
+    assert_eq!(version(&connection), SCHEMA_VERSION);
+    drop(connection);
+
+    let directorio_respaldos = ruta.parent().unwrap().join("backups");
+    let respaldos = listar_respaldos(&directorio_respaldos).unwrap();
+    assert_eq!(respaldos.len(), 1);
+    assert_eq!(respaldos[0].tipo, TipoRespaldo::PreMigracion);
+
+    // El respaldo conserva el estado de ANTES de migrar (versión 1): abrirlo
+    // con una conexión cruda, sin pasar por open_database, debe mostrar
+    // todavía la referencia sembrada en el esquema viejo.
+    let copia = Connection::open(&respaldos[0].ruta).unwrap();
+    assert_eq!(version(&copia), 1);
+    let referencias: i64 = copia
+        .query_row("SELECT COUNT(*) FROM contratistas", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(referencias, 1);
+
+    let _ = fs::remove_dir_all(ruta.parent().unwrap());
+}
+
+#[test]
+fn una_base_ya_al_dia_no_genera_ningun_respaldo_pre_migracion() {
+    use control_acceso::database::backup::listar_respaldos;
+    use control_acceso::database::connection::open_database;
+
+    let ruta = base_temporal_en_directorio_propio("sin_migracion_pendiente");
+    let previa = Connection::open(&ruta).unwrap();
+    initialize_database(&previa).unwrap();
+    drop(previa);
+
+    let connection = open_database(&ruta).unwrap();
+    drop(connection);
+
+    let directorio_respaldos = ruta.parent().unwrap().join("backups");
+    assert!(listar_respaldos(&directorio_respaldos).unwrap().is_empty());
+
+    let _ = fs::remove_dir_all(ruta.parent().unwrap());
+}

@@ -19,6 +19,10 @@ pub enum SchemaError {
     BaseAjena,
     /// `PRAGMA quick_check` encontró un problema estructural.
     IntegridadInvalida(String),
+    /// Hay una migración de esquema pendiente pero el respaldo obligatorio
+    /// previo (`TipoRespaldo::PreMigracion`) falló — el arranque se detiene
+    /// antes de tocar el esquema.
+    RespaldoPreMigracionFallido(String),
 }
 
 impl std::fmt::Display for SchemaError {
@@ -32,6 +36,10 @@ impl std::fmt::Display for SchemaError {
             Self::IntegridadInvalida(detalle) => {
                 write!(formatter, "La base de datos falló la verificación de integridad: {detalle}")
             }
+            Self::RespaldoPreMigracionFallido(detalle) => write!(
+                formatter,
+                "No se pudo crear el respaldo obligatorio antes de migrar el esquema: {detalle}"
+            ),
         }
     }
 }
@@ -40,7 +48,7 @@ impl std::error::Error for SchemaError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Sqlite(error) => Some(error),
-            Self::BaseAjena | Self::IntegridadInvalida(_) => None,
+            Self::BaseAjena | Self::IntegridadInvalida(_) | Self::RespaldoPreMigracionFallido(_) => None,
         }
     }
 }

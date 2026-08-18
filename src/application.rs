@@ -90,7 +90,14 @@ impl AppCore {
     }
 
     pub fn abrir(path: impl AsRef<Path>) -> Result<Self, BootstrapError> {
-        let mut core = Self::new(open_database(&path)?);
+        Self::abrir_con_reloj(path, Arc::new(RelojSistema))
+    }
+
+    pub fn abrir_con_reloj(
+        path: impl AsRef<Path>,
+        reloj: Arc<dyn Reloj>,
+    ) -> Result<Self, BootstrapError> {
+        let mut core = Self::con_reloj(open_database(&path)?, reloj);
         core.ruta_base_datos = path.as_ref().to_path_buf();
         Ok(core)
     }
@@ -311,6 +318,32 @@ impl AppCore {
 
     pub fn validar_respaldo(&self, ruta: &Path) -> Result<ResultadoValidacion, RespaldoError> {
         crate::database::backup::validar_respaldo(ruta)
+    }
+
+    /// Crea el respaldo automático del día si todavía no existe uno — a lo
+    /// sumo uno por día calendario en Costa Rica. Es best-effort a
+    /// propósito (no devuelve `Result`): a diferencia del respaldo previo a
+    /// una migración, éste no es obligatorio, así que un fallo (disco lleno,
+    /// permisos) no debe impedir que la app arranque.
+    pub fn respaldo_automatico_diario_si_hace_falta(&self) {
+        let Ok(listado) = self.listar_respaldos() else {
+            return;
+        };
+        let hoy = crate::tiempo::fecha_costa_rica(self.reloj.ahora_utc());
+        let ya_existe_hoy = listado.iter().any(|respaldo| {
+            respaldo.tipo == TipoRespaldo::Automatico
+                && crate::tiempo::fecha_costa_rica(respaldo.creado_en) == hoy
+        });
+        if ya_existe_hoy {
+            return;
+        }
+        if self.crear_respaldo(TipoRespaldo::Automatico).is_ok() {
+            let _ = crate::database::backup::aplicar_retencion(
+                &self.directorio_respaldos(),
+                TipoRespaldo::Automatico,
+                crate::database::backup::RETENCION_AUTOMATICOS,
+            );
+        }
     }
 
     /// El archivo interno ya fue validado por `crear_respaldo`; exportarlo es una

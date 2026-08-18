@@ -4,8 +4,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use rusqlite::Connection;
 
 use control_acceso::database::backup::{
-    ResultadoValidacion, TipoRespaldo, crear_respaldo, listar_respaldos, restaurar_respaldo,
-    validar_respaldo,
+    ResultadoValidacion, TipoRespaldo, aplicar_retencion, crear_respaldo, listar_respaldos,
+    restaurar_respaldo, validar_respaldo,
 };
 use control_acceso::database::repositories::contratista_repository::{
     ContratistaRepository, SqliteContratistaRepository,
@@ -342,6 +342,65 @@ fn restaurar_sobre_una_ruta_activa_inexistente_funciona_como_primera_carga() {
 
     assert!(ruta_activa.exists());
     assert_eq!(contar(&ruta_activa, "empresas"), 1);
+
+    let _ = std::fs::remove_dir_all(&directorio);
+}
+
+#[test]
+fn aplicar_retencion_conserva_solo_los_mas_recientes_del_tipo_indicado() {
+    use chrono::Datelike;
+
+    let directorio = directorio_temporal("retencion");
+    std::fs::create_dir_all(&directorio).unwrap();
+
+    // 5 automáticos en días distintos, más 2 manuales que la retención de
+    // Automatico nunca debe tocar.
+    for dia in 1..=5 {
+        std::fs::write(
+            directorio.join(format!("control_acceso_2026-01-0{dia}_120000_automatico.db")),
+            b"",
+        )
+        .unwrap();
+    }
+    std::fs::write(directorio.join("control_acceso_2026-01-01_120000_manual.db"), b"").unwrap();
+    std::fs::write(directorio.join("control_acceso_2026-01-02_120000_manual.db"), b"").unwrap();
+
+    let eliminados = aplicar_retencion(&directorio, TipoRespaldo::Automatico, 3).unwrap();
+
+    assert_eq!(eliminados.len(), 2);
+    let restantes = listar_respaldos(&directorio).unwrap();
+    let mut dias_automaticos_restantes: Vec<u32> = restantes
+        .iter()
+        .filter(|respaldo| respaldo.tipo == TipoRespaldo::Automatico)
+        .map(|respaldo| respaldo.creado_en.day())
+        .collect();
+    dias_automaticos_restantes.sort_unstable();
+    assert_eq!(dias_automaticos_restantes, vec![3, 4, 5]);
+    assert_eq!(
+        restantes
+            .iter()
+            .filter(|respaldo| respaldo.tipo == TipoRespaldo::Manual)
+            .count(),
+        2
+    );
+
+    let _ = std::fs::remove_dir_all(&directorio);
+}
+
+#[test]
+fn aplicar_retencion_con_menos_respaldos_que_el_limite_no_borra_nada() {
+    let directorio = directorio_temporal("retencion_sin_exceso");
+    std::fs::create_dir_all(&directorio).unwrap();
+    std::fs::write(
+        directorio.join("control_acceso_2026-01-01_120000_pre_migracion.db"),
+        b"",
+    )
+    .unwrap();
+
+    let eliminados = aplicar_retencion(&directorio, TipoRespaldo::PreMigracion, 3).unwrap();
+
+    assert!(eliminados.is_empty());
+    assert_eq!(listar_respaldos(&directorio).unwrap().len(), 1);
 
     let _ = std::fs::remove_dir_all(&directorio);
 }
