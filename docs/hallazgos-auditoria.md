@@ -18,14 +18,14 @@ necesariamente el orden de esta lista).
 de cada uno). Delicado = puede tumbar la app, corromper datos o dejar un hueco de acceso.
 Simple = un cambio local, bajo riesgo, sin tocar lógica compartida.
 
-**Nivel 1 — Riesgo real hoy, tocan datos o disponibilidad**
-1. `unwrap()` en `contratista_id` al registrar ingreso — panic a mitad de un registro real.
-2. Salida de emergencia no espera hilos de Argon2 — escritura de usuario se pierde en silencio.
-3. Fallo al reabrir la base mata el proceso entero (ignora `mensaje_inicial`).
-4. Rollback de restauración fallida puede dejar el sistema peor que al empezar.
-5. Respaldo pre-migración corre antes de validar que el archivo es nuestro.
-6. `abrir_y_verificar` migra de verdad al "solo verificar" un respaldo.
-7. Respaldo renombrado a mano puede borrarse igual por la retención (`starts_with` laxo).
+**Nivel 1 — Riesgo real hoy, tocan datos o disponibilidad — [x] reparado (rama `fix/auditoria-nivel-1`)**
+1. [x] `unwrap()` en `contratista_id` al registrar ingreso — panic a mitad de un registro real.
+2. [x] Salida de emergencia no espera hilos de Argon2 — escritura de usuario se pierde en silencio.
+3. [x] Fallo al reabrir la base mata el proceso entero (ignora `mensaje_inicial`).
+4. [x] Rollback de restauración fallida puede dejar el sistema peor que al empezar.
+5. [x] Respaldo pre-migración corre antes de validar que el archivo es nuestro.
+6. [x] `abrir_y_verificar` migra de verdad al "solo verificar" un respaldo.
+7. [x] Respaldo renombrado a mano puede borrarse igual por la retención (`starts_with` laxo).
 
 **Nivel 2 — Corrompen decisiones o datos, pero no tumban nada**
 8. `crear_con_hash`/similares no validan nada — cuenta inutilizable si alguien pasa texto plano.
@@ -101,17 +101,17 @@ listados completos en las secciones de abajo.
 
 ## Impacto directo
 
-- [ ] **`unwrap()` sobre `contratista_id` en el camino que registra un ingreso real.**
+- [x] **`unwrap()` sobre `contratista_id` en el camino que registra un ingreso real.**
   `src/tui/nuevo_ingreso/state.rs:220`. Depende de una relación no forzada por el tipo
   (`etapa == Formulario` implica `contratista_id == Some`). Es el único `unwrap()` de las
   pantallas operativas — un panic ahí tumba la TUI completa a mitad de un registro, con
   alguien físicamente parado en la puerta.
-- [ ] **La salida de emergencia no espera los hilos de Argon2 pendientes.**
+- [x] **La salida de emergencia no espera los hilos de Argon2 pendientes.**
   `src/tui/app.rs:1339`. Si se dispara crear-usuario/cambiar-contraseña/ROOT-inicial/login
   y antes de que llegue el resultado el operador presiona la salida de emergencia, el hilo
   sigue corriendo pero su resultado cae en un canal sin receptor — la escritura real en
   SQLite nunca ocurre, sin ningún error ni aviso.
-- [ ] **Un fallo al reabrir la base mata todo el proceso en vez de mostrarlo en la TUI.**
+- [x] **Un fallo al reabrir la base mata todo el proceso en vez de mostrarlo en la TUI.**
   `src/main.rs:35`. Si `AppCore::abrir` falla en cualquier vuelta del bucle (incluida la
   que sigue a una restauración fallida), el proceso entero termina con un `eprintln`
   crudo, ignorando el mecanismo `mensaje_inicial` que la Fase 3b introdujo justo para esto.
@@ -121,22 +121,22 @@ listados completos en las secciones de abajo.
   queda congelado en "Creando" sin salida.
   Relacionado: `App::run` (la variante pública sin core) no tiene ningún llamador real hoy
   (`src/tui/app.rs:1005`) — es la razón de que este hallazgo sea hoy inofensivo.
-- [ ] **El respaldo obligatorio pre-migración corre antes de validar que el archivo es
+- [x] **El respaldo obligatorio pre-migración corre antes de validar que el archivo es
   nuestro.** `src/database/connection.rs:119`. `open_database` llama
   `respaldar_antes_de_migrar` antes de `initialize_database`, pero el rechazo de bases
   ajenas (`application_id`) vive dentro de `initialize_database`. Un archivo de otra app
   con `user_version` entre 1 y 5 por casualidad puede terminar copiado a `backups/` antes
   de ser rechazado.
-- [ ] **`abrir_y_verificar` migra el esquema de verdad, no solo "verifica".**
+- [x] **`abrir_y_verificar` migra el esquema de verdad, no solo "verifica".**
   `src/database/backup.rs:261`. Restaurar un respaldo viejo puede terminar aplicándole
   migraciones y persistiéndolas, un efecto secundario que el rustdoc público de
   `restaurar_respaldo` nunca menciona.
-- [ ] **El rollback de una restauración fallida puede dejar el sistema peor que al
+- [x] **El rollback de una restauración fallida puede dejar el sistema peor que al
   empezar.** `src/database/backup.rs:251`. Si el intento de reinstalar la base anterior
   también falla (ambos pasos descartan su error con `let _ =`), la base activa queda con
   la candidata rota y la base buena queda huérfana en un archivo sentinela — sin que el
   error devuelto lo distinga de un rollback exitoso.
-- [ ] **Un respaldo renombrado a mano para protegerlo puede ser borrado igual por la
+- [x] **Un respaldo renombrado a mano para protegerlo puede ser borrado igual por la
   retención.** `src/database/backup.rs:348`. `interpretar_nombre` matchea el tipo con
   `starts_with` sin exigir que lo que sigue sea el sufijo numérico documentado —
   `"automatico_no_borrar".starts_with("automatico_")` es `true`.

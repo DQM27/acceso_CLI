@@ -198,6 +198,12 @@ impl NuevoIngresoState {
                 self.medio_opcion = 1 - self.medio_opcion;
             }
             KeyCode::Enter => {
+                let Some(contratista_id) = self.contratista_id else {
+                    self.limpiar_seleccion();
+                    self.etapa = EtapaNuevoIngreso::Buscar;
+                    self.error = Some("Vuelva a seleccionar el contratista".into());
+                    return AccionNuevoIngreso::Ninguna;
+                };
                 let gafete = if requiere_gafete {
                     match self.gafete_texto.trim().parse::<i64>() {
                         Ok(numero) => Some(numero),
@@ -217,7 +223,7 @@ impl NuevoIngresoState {
                     None
                 };
                 return AccionNuevoIngreso::Registrar {
-                    contratista_id: self.contratista_id.unwrap(),
+                    contratista_id,
                     medio: MEDIOS[self.medio_opcion],
                     gafete,
                 };

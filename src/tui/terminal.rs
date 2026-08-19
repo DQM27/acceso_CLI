@@ -44,3 +44,15 @@ pub fn run(
     let _ = terminal.show_cursor();
     resultado
 }
+
+/// Igual que [`run`] pero sin `AppCore` — para mostrar un mensaje de error (p. ej. que
+/// no se pudo abrir la base de datos) en la pantalla de login en vez de un crash crudo
+/// fuera de la TUI.
+pub fn run_sin_core(mensaje_inicial: Option<String>) -> io::Result<SalidaApp> {
+    let _guard = TerminalGuard::acquire()?;
+    let backend = CrosstermBackend::new(stdout());
+    let mut terminal = Terminal::new(backend)?;
+    let resultado = App::new(false, mensaje_inicial).run(&mut terminal);
+    let _ = terminal.show_cursor();
+    resultado
+}

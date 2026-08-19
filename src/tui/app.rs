@@ -1337,6 +1337,7 @@ impl App {
     fn procesar_tecla_global(&mut self, key: crossterm::event::KeyEvent, core: Option<&AppCore>) {
         match standard_command(key) {
             Some(StandardCommand::EmergencyExit) => {
+                self.finalizar_hilos_pendientes(core);
                 self.salir = true;
                 return;
             }
@@ -1361,6 +1362,36 @@ impl App {
             return;
         }
         self.procesar_tecla_vista_con_core(key, core);
+    }
+
+    /// Espera (bloqueando, con reintentos cortos) cualquier hilo de Argon2 en vuelo
+    /// antes de la salida de emergencia — sin esto, la escritura ya validada se
+    /// pierde en silencio porque el bucle principal termina sin volver a sondear el
+    /// canal. El login no escribe nada y se abandona sin esperar.
+    fn finalizar_hilos_pendientes(&mut self, core: Option<&AppCore>) {
+        while self.creacion_usuario_pendiente.is_some() {
+            self.recibir_creacion_usuario_si_lista(core);
+            if self.creacion_usuario_pendiente.is_some() {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+        }
+        while self.cambio_password_pendiente.is_some() {
+            self.recibir_cambio_password_si_lista(core);
+            if self.cambio_password_pendiente.is_some() {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+        }
+        match core {
+            Some(core) => {
+                while self.root_inicial_pendiente.is_some() {
+                    self.recibir_root_inicial_si_lista(core);
+                    if self.root_inicial_pendiente.is_some() {
+                        std::thread::sleep(std::time::Duration::from_millis(5));
+                    }
+                }
+            }
+            None => self.root_inicial_pendiente = None,
+        }
     }
 
     fn procesar_accion_salida_rapida(&mut self, accion: AccionSalidaRapida, core: Option<&AppCore>) {

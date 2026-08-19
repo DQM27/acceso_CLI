@@ -7,7 +7,7 @@ use std::{
 use rusqlite::Connection;
 
 use super::backup::TipoRespaldo;
-use super::schema::{SCHEMA_VERSION, SchemaError, initialize_database};
+use super::schema::{SCHEMA_VERSION, SchemaError, initialize_database, verificar_archivo_propio};
 
 pub const DATABASE_PATH_ENV: &str = "CONTROL_ACCESO_DB";
 pub const LOCAL_APP_DATA_ENV: &str = "LOCALAPPDATA";
@@ -116,6 +116,7 @@ fn preparar_directorio(ruta_base_datos: &Path) -> Result<(), RutaBaseDatosError>
 pub fn open_database(path: impl AsRef<Path>) -> Result<Connection, SchemaError> {
     let path = path.as_ref();
     let connection = Connection::open(path)?;
+    verificar_archivo_propio(&connection)?;
     respaldar_antes_de_migrar(&connection, path)?;
     initialize_database(&connection)?;
     Ok(connection)

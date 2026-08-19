@@ -83,6 +83,16 @@ pub enum RespaldoError {
     /// El respaldo recién creado no pasó su propia validación; el `.partial`
     /// ya fue eliminado antes de devolver este error.
     ValidacionFallida(ResultadoValidacion),
+    /// `restaurar_respaldo` falló al abrir/verificar la candidata Y el intento
+    /// de reinstalar la base anterior también falló — a diferencia del resto
+    /// de variantes, el sistema puede haber quedado sin una base activa
+    /// consistente en `ruta_activa`. Distinto de un rollback exitoso, que
+    /// simplemente reporta `error_original` sin esta variante.
+    RollbackFallido {
+        error_original: Box<RespaldoError>,
+        ruta_activa: PathBuf,
+        ruta_previa: Option<PathBuf>,
+    },
 }
 
 impl std::fmt::Display for RespaldoError {
@@ -102,6 +112,22 @@ impl std::fmt::Display for RespaldoError {
             Self::ValidacionFallida(ResultadoValidacion::Valido { .. }) => {
                 write!(formatter, "Error interno: validación marcada como fallida pero válida")
             }
+            Self::RollbackFallido {
+                error_original,
+                ruta_activa,
+                ruta_previa,
+            } => {
+                write!(
+                    formatter,
+                    "La restauración falló ({error_original}) y no se pudo dejar el sistema en \
+                     un estado consistente. Revise manualmente {}",
+                    ruta_activa.display()
+                )?;
+                if let Some(previa) = ruta_previa {
+                    write!(formatter, " (la base anterior puede seguir en {})", previa.display())?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -112,6 +138,7 @@ impl std::error::Error for RespaldoError {
             Self::Sqlite(error) => Some(error),
             Self::Io(error) => Some(error),
             Self::ValidacionFallida(_) => None,
+            Self::RollbackFallido { error_original, .. } => Some(error_original.as_ref()),
         }
     }
 }
@@ -211,6 +238,12 @@ pub fn crear_respaldo(
 /// entera. Si algo falla después del intercambio (migración incompatible,
 /// archivo corrupto pese a la validación previa), reinstala automáticamente
 /// la base que estaba activa antes de empezar.
+///
+/// **Efecto secundario importante:** tras el intercambio, esta función abre
+/// la candidata y le aplica de verdad (y persiste) cualquier migración de
+/// esquema pendiente — no es una verificación de solo lectura. Restaurar un
+/// respaldo viejo deja el archivo restaurado en la versión de esquema
+/// actual, no en la versión que tenía cuando se creó el respaldo.
 pub fn restaurar_respaldo(ruta_candidata: &Path, ruta_activa: &Path) -> Result<(), RespaldoError> {
     let validacion = validar_respaldo(ruta_candidata)?;
     if !validacion.es_valido() {
@@ -249,11 +282,17 @@ pub fn restaurar_respaldo(ruta_candidata: &Path, ruta_activa: &Path) -> Result<(
             Ok(())
         }
         Err(error) => {
-            let _ = fs::remove_file(ruta_activa);
-            if habia_base_activa {
-                let _ = fs::rename(&ruta_previa, ruta_activa);
+            let limpio = fs::remove_file(ruta_activa).is_ok();
+            let restaurado = !habia_base_activa || fs::rename(&ruta_previa, ruta_activa).is_ok();
+            if limpio && restaurado {
+                Err(error)
+            } else {
+                Err(RespaldoError::RollbackFallido {
+                    error_original: Box::new(error),
+                    ruta_activa: ruta_activa.to_path_buf(),
+                    ruta_previa: habia_base_activa.then_some(ruta_previa),
+                })
             }
-            Err(error)
         }
     }
 }
@@ -345,7 +384,7 @@ fn interpretar_nombre(ruta: &Path) -> Option<RespaldoResumen> {
         TipoRespaldo::PreRestauracion,
     ]
     .into_iter()
-    .find(|tipo| resto == tipo.sufijo() || resto.starts_with(&format!("{}_", tipo.sufijo())))?;
+    .find(|tipo| coincide_sufijo(resto, tipo.sufijo()))?;
 
     let creado_en = NaiveDateTime::parse_from_str(fecha_hora, FORMATO_FECHA)
         .ok()?
@@ -357,6 +396,22 @@ fn interpretar_nombre(ruta: &Path) -> Option<RespaldoResumen> {
         tipo,
         tamano_bytes,
     })
+}
+
+/// `resto` coincide con `sufijo` exacto, o con `sufijo` seguido de
+/// `_<número>` (el sufijo de colisión que arma `ruta_disponible`, ej.
+/// `_2`) — nunca con un prefijo arbitrario. Sin esto, un archivo renombrado
+/// a mano como `..._automatico_no_borrar.db` coincidía con `Automatico`
+/// (`"automatico_no_borrar".starts_with("automatico_")`) y quedaba expuesto
+/// a que `aplicar_retencion` lo borrara igual que un respaldo real.
+fn coincide_sufijo(resto: &str, sufijo: &str) -> bool {
+    match resto.strip_prefix(sufijo) {
+        Some("") => true,
+        Some(cola) => cola
+            .strip_prefix('_')
+            .is_some_and(|numero| !numero.is_empty() && numero.bytes().all(|b| b.is_ascii_digit())),
+        None => false,
+    }
 }
 
 /// Conserva como máximo `limite` respaldos del `tipo` indicado — los más

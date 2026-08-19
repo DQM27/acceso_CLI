@@ -118,6 +118,15 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
     Ok(())
 }
 
+/// Rechaza un archivo ajeno o corrupto antes de cualquier otra operación —
+/// en particular antes del respaldo obligatorio pre-migración
+/// (`connection::respaldar_antes_de_migrar`), para no terminar copiando a
+/// `backups/` un archivo que ni siquiera es nuestro.
+pub(crate) fn verificar_archivo_propio(connection: &Connection) -> Result<(), SchemaError> {
+    verificar_identidad_de_archivo(connection)?;
+    verificar_integridad_rapida(connection)
+}
+
 /// Rechaza un archivo SQLite ajeno; adopta `APPLICATION_ID` en una base
 /// nueva o en una creada antes de que existiera esta comprobación (`0`).
 fn verificar_identidad_de_archivo(connection: &Connection) -> Result<(), SchemaError> {
