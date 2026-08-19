@@ -483,7 +483,7 @@ impl ContratistasState {
         if let Some((d, o)) = f.desplegable {
             let ultimo = match d {
                 Desplegable::Empresa => self.empresas.len().saturating_sub(1),
-                Desplegable::Tipo => 3,
+                Desplegable::Tipo => tipos().len().saturating_sub(1),
             };
             match key.code {
                 KeyCode::Up => f.desplegable = Some((d, o.saturating_sub(1))),

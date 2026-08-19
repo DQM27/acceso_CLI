@@ -46,6 +46,16 @@ pub struct NuevoRegistroIngreso {
     pub datos_historicos: DatosHistoricosEntrada,
 }
 
+/// Fecha y usuario van juntos a propósito, en vez de ser 2 `Option`
+/// independientes en `RegistroIngreso` — la base ya exige "ambos o ninguno"
+/// con un `CHECK` (ver `MIGRACION_2`/`MIGRACION_5` en `schema.rs`); este tipo
+/// hace esa misma regla imposible de romper del lado de Rust.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SalidaRegistroIngreso {
+    pub fecha_hora: DateTime<Utc>,
+    pub usuario_id: i64,
+}
+
 #[derive(Debug, Clone)]
 pub struct RegistroIngreso {
     pub id: i64,
@@ -66,6 +76,6 @@ pub struct RegistroIngreso {
 
     pub usuario_ingreso_id: i64,
 
-    pub fecha_hora_salida: Option<DateTime<Utc>>,
-    pub usuario_salida_id: Option<i64>,
+    /// `None` mientras el ingreso sigue activo; `Some` una vez registrada la salida.
+    pub salida: Option<SalidaRegistroIngreso>,
 }

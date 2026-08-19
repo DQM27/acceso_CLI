@@ -5,6 +5,10 @@ pub enum DatabaseError {
     ConfiguracionInicialYaRealizada,
     UsuarioNoEncontrado,
     UltimoRootActivo,
+    /// Una fecha almacenada no se pudo parsear. No es un error de SQLite —
+    /// SQLite ya devolvió el texto sin problema; el fallo es al interpretarlo
+    /// como fecha/hora.
+    FechaCorrupta(String),
 }
 
 impl std::fmt::Display for DatabaseError {
@@ -27,6 +31,9 @@ impl std::fmt::Display for DatabaseError {
                 formatter,
                 "No se puede desactivar o degradar al último ROOT activo"
             ),
+            DatabaseError::FechaCorrupta(detalle) => {
+                write!(formatter, "Fecha almacenada inválida: {detalle}")
+            }
         }
     }
 }

@@ -176,7 +176,8 @@ impl IngresosQuery for SqliteIngresosQuery<'_> {
         )?;
 
         let sin_filtro_tipo = filtro.tipos_incluidos.is_none();
-        let mut tipos_bind: [Option<&'static str>; 4] = [None; 4];
+        let mut tipos_bind: [Option<&'static str>; TipoIngreso::ALL.len()] =
+            [None; TipoIngreso::ALL.len()];
         if let Some(tipos) = &filtro.tipos_incluidos {
             for (slot, tipo) in tipos_bind.iter_mut().zip(tipos.iter()) {
                 *slot = Some(tipo_a_texto(*tipo));
@@ -218,7 +219,8 @@ impl IngresosQuery for SqliteIngresosQuery<'_> {
             Transaction::new_unchecked(self.connection, TransactionBehavior::Deferred)?;
         let busqueda = BusquedaTexto::preparar(filtro.texto_persona.as_deref());
         let sin_filtro_tipo = filtro.tipos_incluidos.is_none();
-        let mut tipos_bind: [Option<&'static str>; 4] = [None; 4];
+        let mut tipos_bind: [Option<&'static str>; TipoIngreso::ALL.len()] =
+            [None; TipoIngreso::ALL.len()];
         if let Some(tipos) = &filtro.tipos_incluidos {
             for (slot, tipo) in tipos_bind.iter_mut().zip(tipos.iter()) {
                 *slot = Some(tipo_a_texto(*tipo));

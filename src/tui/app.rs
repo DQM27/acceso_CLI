@@ -871,7 +871,7 @@ mod tests {
         assert!(app.usuarios.guardando());
 
         for _ in 0..200 {
-            app.recibir_creacion_usuario_si_lista(Some(&core));
+            app.recibir_hilo_usuario_si_lista(Some(&core));
             if !app.usuarios.guardando() {
                 break;
             }
@@ -899,7 +899,7 @@ mod tests {
         assert!(app.usuarios.guardando());
 
         for _ in 0..200 {
-            app.recibir_cambio_password_si_lista(Some(&core));
+            app.recibir_hilo_usuario_si_lista(Some(&core));
             if !app.usuarios.guardando() {
                 break;
             }
@@ -917,6 +917,12 @@ mod tests {
 /// Datos ya validados de un usuario nuevo, a la espera del hash de Argon2 —
 /// no incluye `password` en texto plano, que ya se movió al hilo que calcula
 /// el hash y no hace falta después.
+#[derive(Debug)]
+enum HiloUsuarioPendiente {
+    Creacion(ReceptorHash, DatosUsuarioPendiente, String),
+    CambioPassword(ReceptorHash, i64, String),
+}
+
 #[derive(Debug, Clone)]
 struct DatosUsuarioPendiente {
     cedula: String,
@@ -951,10 +957,12 @@ pub struct App {
     /// (Argon2) sin bloquear este bucle. `None` cuando no hay ningún login
     /// en curso.
     autenticacion_pendiente: Option<std::sync::mpsc::Receiver<Result<UsuarioSesion, AutenticacionError>>>,
-    /// Hash de Argon2 en camino para crear un usuario nuevo.
-    creacion_usuario_pendiente: Option<(ReceptorHash, DatosUsuarioPendiente, String)>,
-    /// Hash de Argon2 en camino para cambiar la contraseña de un usuario.
-    cambio_password_pendiente: Option<(ReceptorHash, i64, String)>,
+    /// Hash de Argon2 en camino para crear un usuario o cambiar una
+    /// contraseña. Un único `Option` en vez de dos campos independientes: la
+    /// exclusión mutua entre ambos flujos es estructural (no puede haber
+    /// creación y cambio de contraseña en vuelo a la vez), no depende de que
+    /// nada valide `UsuariosState::guardando` desde aquí.
+    hilo_usuario_pendiente: Option<HiloUsuarioPendiente>,
     /// Hash de Argon2 en camino para crear el usuario ROOT inicial.
     root_inicial_pendiente: Option<(ReceptorHash, SolicitudRoot)>,
 }
@@ -979,8 +987,7 @@ impl Default for App {
             sesion: None,
             tema: ThemePreset::Brisas,
             autenticacion_pendiente: None,
-            creacion_usuario_pendiente: None,
-            cambio_password_pendiente: None,
+            hilo_usuario_pendiente: None,
             root_inicial_pendiente: None,
         }
     }
@@ -1059,14 +1066,6 @@ impl App {
                 salida_rapida::render(frame, frame.area(), &self.salida_rapida, theme);
             })?;
 
-            match core {
-                Some(core) => {
-                    self.procesar_configuracion_pendiente(core);
-                    self.recibir_root_inicial_si_lista(core);
-                }
-                None => self.abortar_configuracion_inicial_sin_core(),
-            }
-
             if event::poll(EVENT_POLL)?
                 && let Event::Key(key) = event::read()?
                 && key.kind == KeyEventKind::Press
@@ -1077,9 +1076,18 @@ impl App {
             let ahora = std::time::Instant::now();
             self.configuracion_inicial.tick(ahora);
             self.login.tick(ahora);
+            // Sondeo de los 4 hilos de Argon2 en vuelo, siempre en el mismo lugar
+            // del bucle (después de leer teclas): login, ROOT inicial, crear
+            // usuario/cambiar contraseña.
             self.recibir_autenticacion_si_lista();
-            self.recibir_creacion_usuario_si_lista(core);
-            self.recibir_cambio_password_si_lista(core);
+            match core {
+                Some(core) => {
+                    self.procesar_configuracion_pendiente(core);
+                    self.recibir_root_inicial_si_lista(core);
+                }
+                None => self.abortar_configuracion_inicial_sin_core(),
+            }
+            self.recibir_hilo_usuario_si_lista(core);
 
             // Búsquedas con debounce: cada pantalla decide si ya pasó el
             // tiempo sin tecla nueva; si no, `tick` devuelve `Ninguna` y el
@@ -1189,30 +1197,9 @@ impl App {
         std::thread::spawn(move || {
             let _ = emisor.send(crate::services::password::generar_hash(&password));
         });
-        self.creacion_usuario_pendiente = Some((receptor, datos, nombre));
+        self.hilo_usuario_pendiente =
+            Some(HiloUsuarioPendiente::Creacion(receptor, datos, nombre));
         self.usuarios.marcar_guardando();
-    }
-
-    fn recibir_creacion_usuario_si_lista(&mut self, core: Option<&AppCore>) {
-        let Some((receptor, ..)) = &self.creacion_usuario_pendiente else {
-            return;
-        };
-        let Ok(resultado_hash) = receptor.try_recv() else {
-            return;
-        };
-        let (_, datos, nombre) = self.creacion_usuario_pendiente.take().unwrap();
-        let resultado = match resultado_hash {
-            Ok(hash) => core
-                .ok_or_else(|| "No se pudo guardar el usuario".to_owned())
-                .and_then(|core| {
-                    core.crear_usuario_con_hash(&datos.cedula, &datos.nombre, datos.rol, datos.activo, hash)
-                        .map(Some)
-                        .map_err(mensaje_usuario)
-                }),
-            Err(error) => Err(error.to_string()),
-        };
-        let recarga = self.usuarios.completar_guardado(resultado, None, &nombre);
-        self.procesar_recarga_usuarios(recarga, core);
     }
 
     /// Mismo patrón que `iniciar_creacion_usuario`: valida rápido, hashea en un hilo aparte.
@@ -1237,28 +1224,58 @@ impl App {
         std::thread::spawn(move || {
             let _ = emisor.send(crate::services::password::generar_hash(&password));
         });
-        self.cambio_password_pendiente = Some((receptor, id, nombre));
+        self.hilo_usuario_pendiente =
+            Some(HiloUsuarioPendiente::CambioPassword(receptor, id, nombre));
         self.usuarios.marcar_guardando();
     }
 
-    fn recibir_cambio_password_si_lista(&mut self, core: Option<&AppCore>) {
-        let Some((receptor, ..)) = &self.cambio_password_pendiente else {
-            return;
+    /// Revisa sin bloquear si el hilo de Argon2 de creación de usuario o cambio de
+    /// contraseña ya terminó — a lo sumo uno de los dos puede estar en vuelo a la
+    /// vez, ver el comentario de `hilo_usuario_pendiente`.
+    fn recibir_hilo_usuario_si_lista(&mut self, core: Option<&AppCore>) {
+        let receptor = match &self.hilo_usuario_pendiente {
+            Some(HiloUsuarioPendiente::Creacion(receptor, ..)) => receptor,
+            Some(HiloUsuarioPendiente::CambioPassword(receptor, ..)) => receptor,
+            None => return,
         };
         let Ok(resultado_hash) = receptor.try_recv() else {
             return;
         };
-        let (_, id, nombre) = self.cambio_password_pendiente.take().unwrap();
-        let resultado = match resultado_hash {
-            Ok(hash) => core
-                .ok_or_else(|| "No se pudo cambiar la contraseña".to_owned())
-                .and_then(|core| {
-                    core.cambiar_password_usuario_con_hash(id, &hash)
-                        .map_err(mensaje_usuario)
-                }),
-            Err(error) => Err(error.to_string()),
-        };
-        self.usuarios.completar_password(resultado, &nombre);
+        match self.hilo_usuario_pendiente.take() {
+            Some(HiloUsuarioPendiente::Creacion(_, datos, nombre)) => {
+                let resultado = match resultado_hash {
+                    Ok(hash) => core
+                        .ok_or_else(|| "No se pudo guardar el usuario".to_owned())
+                        .and_then(|core| {
+                            core.crear_usuario_con_hash(
+                                &datos.cedula,
+                                &datos.nombre,
+                                datos.rol,
+                                datos.activo,
+                                hash,
+                            )
+                            .map(Some)
+                            .map_err(mensaje_usuario)
+                        }),
+                    Err(error) => Err(error.to_string()),
+                };
+                let recarga = self.usuarios.completar_guardado(resultado, None, &nombre);
+                self.procesar_recarga_usuarios(recarga, core);
+            }
+            Some(HiloUsuarioPendiente::CambioPassword(_, id, nombre)) => {
+                let resultado = match resultado_hash {
+                    Ok(hash) => core
+                        .ok_or_else(|| "No se pudo cambiar la contraseña".to_owned())
+                        .and_then(|core| {
+                            core.cambiar_password_usuario_con_hash(id, &hash)
+                                .map_err(mensaje_usuario)
+                        }),
+                    Err(error) => Err(error.to_string()),
+                };
+                self.usuarios.completar_password(resultado, &nombre);
+            }
+            None => {}
+        }
     }
 
     /// Mismo patrón para el ROOT inicial: valida rápido (sin la comprobación de "ya
@@ -1372,15 +1389,9 @@ impl App {
     /// pierde en silencio porque el bucle principal termina sin volver a sondear el
     /// canal. El login no escribe nada y se abandona sin esperar.
     fn finalizar_hilos_pendientes(&mut self, core: Option<&AppCore>) {
-        while self.creacion_usuario_pendiente.is_some() {
-            self.recibir_creacion_usuario_si_lista(core);
-            if self.creacion_usuario_pendiente.is_some() {
-                std::thread::sleep(std::time::Duration::from_millis(5));
-            }
-        }
-        while self.cambio_password_pendiente.is_some() {
-            self.recibir_cambio_password_si_lista(core);
-            if self.cambio_password_pendiente.is_some() {
+        while self.hilo_usuario_pendiente.is_some() {
+            self.recibir_hilo_usuario_si_lista(core);
+            if self.hilo_usuario_pendiente.is_some() {
                 std::thread::sleep(std::time::Duration::from_millis(5));
             }
         }
@@ -1512,10 +1523,14 @@ impl App {
                 self.menu.seleccion = opcion;
                 self.vista = match opcion {
                     OpcionMenu::NuevoIngreso => {
+                        // El menú sólo es alcanzable con `self.sesion` ya
+                        // establecida (`Vista::MenuPrincipal` no renderiza sin
+                        // ella) — este fallback es defensivo, no debería
+                        // dispararse nunca en un flujo real.
                         let usuario = self
                             .sesion
                             .as_ref()
-                            .map_or("Quintana", |s| s.nombre.as_str());
+                            .map_or("Usuario desconocido", |s| s.nombre.as_str());
                         self.nuevo_ingreso = NuevoIngresoState::new(usuario);
                         if core.is_some() {
                             self.procesar_accion_nuevo_ingreso(

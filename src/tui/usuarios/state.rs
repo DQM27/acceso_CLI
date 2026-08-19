@@ -492,7 +492,7 @@ impl UsuariosState {
         if let Some(i) = f.selector_rol {
             match key.code {
                 KeyCode::Up => f.selector_rol = Some(i.saturating_sub(1)),
-                KeyCode::Down => f.selector_rol = Some((i + 1).min(2)),
+                KeyCode::Down => f.selector_rol = Some((i + 1).min(ROLES.len() - 1)),
                 KeyCode::Enter => {
                     f.rol = ROLES[i];
                     f.selector_rol = None

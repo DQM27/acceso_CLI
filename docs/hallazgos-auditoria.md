@@ -46,7 +46,7 @@ Simple = un cambio local, bajo riesgo, sin tocar lógica compartida.
 21. **Nuevo:** `Empresa` sin campo `activo` — baja de empresa no revoca acceso de sus
     contratistas (V1, prioridad baja, caso extremo).
 
-**Nivel 4 — Duplicación / código muerto (afecta mantenibilidad, no producción)**
+**Nivel 4 — Duplicación / código muerto (afecta mantenibilidad, no producción) — parcial: sólo se reparó el código muerto (34-35, rama `fix/auditoria-nivel-1`); la duplicación (22-33) queda pendiente**
 22. Bloque de spawn de hilo para hashear duplicado 3 veces.
 23. Mapeo `TipoIngreso` ↔ texto SQL duplicado ~6 veces en 4 archivos (+ duplicado interno en
     `contratista_repository.rs`).
@@ -63,19 +63,19 @@ Simple = un cambio local, bajo riesgo, sin tocar lógica compartida.
 34. [x] `UsuarioService::actualizar` es código muerto.
 35. [x] `SelectMenu`/`SelectMenuState` sin ningún consumidor real.
 
-**Nivel 5 — Magia / números hardcodeados (arreglo mecánico, bajo riesgo)**
-36. `guardando` compartido como mutex implícito entre 2 estados.
-37. `"Quintana"` hardcodeado como fallback sin sesión + orden de sondeo inconsistente.
-38. Fallo de invariante de migración se ve como error genérico de SQLite.
-39. `AppCore::new`/`con_reloj` dejan `ruta_base_datos` vacía sin avisar.
-40. Tope de 4 en `tipos_incluidos` repetido en 3 sitios, no derivado de `TipoIngreso::ALL`.
-41. Tope del selector de rol hardcodeado (`.min(2)`).
-42. Error de fecha corrupta disfrazado de error de SQLite.
-43. Tope del desplegable "Tipo" hardcodeado (`3`).
-44. `unwrap()` en fecha por defecto de `FiltrosHistorial`.
-45. `StandardCommand::Activate` sin consumidor real.
-46. Matriz `requiere_praind()`/`requiere_gafete()` sin comentario que explique la regla.
-47. `fecha_hora_salida`/`usuario_salida_id` deberían ser un único `Option`.
+**Nivel 5 — Magia / números hardcodeados (arreglo mecánico, bajo riesgo) — [x] reparado (rama `fix/auditoria-nivel-1`)**
+36. [x] `guardando` compartido como mutex implícito entre 2 estados.
+37. [x] `"Quintana"` hardcodeado como fallback sin sesión + orden de sondeo inconsistente.
+38. [x] Fallo de invariante de migración se ve como error genérico de SQLite.
+39. [x] `AppCore::new`/`con_reloj` dejan `ruta_base_datos` vacía sin avisar.
+40. [x] Tope de 4 en `tipos_incluidos` repetido en 3 sitios, no derivado de `TipoIngreso::ALL`.
+41. [x] Tope del selector de rol hardcodeado (`.min(2)`).
+42. [x] Error de fecha corrupta disfrazado de error de SQLite.
+43. [x] Tope del desplegable "Tipo" hardcodeado (`3`).
+44. [x] `unwrap()` en fecha por defecto de `FiltrosHistorial`.
+45. [x] `StandardCommand::Activate` sin consumidor real.
+46. [x] Matriz `requiere_praind()`/`requiere_gafete()` sin comentario que explique la regla.
+47. [x] `fecha_hora_salida`/`usuario_salida_id` deberían ser un único `Option`.
 
 **Nivel 6 — Coherencia general / entre pantallas (cosméticos, sin riesgo de datos)**
 48. Respaldo "obligatorio" se salta si la ruta no tiene directorio padre.
@@ -267,47 +267,49 @@ listados completos en las secciones de abajo.
 
 ## Magia / números y comportamientos implícitos
 
-- [ ] **`guardando` compartido como mutex implícito entre 2 estados pendientes.**
-  `src/tui/app.rs:1190`. `creacion_usuario_pendiente` y `cambio_password_pendiente` son dos
-  `Option` independientes en `App`; su exclusión mutua depende enteramente de un booleano
-  en `UsuariosState` (otro archivo) que nada en `app.rs` valida.
-- [ ] **Nombre `"Quintana"` hardcodeado como fallback sin sesión.**
-  `src/tui/app.rs:1484`. Si se abre Nuevo Ingreso sin `self.sesion`, ese literal queda
-  grabado como responsable del registro sin explicación de por qué ese nombre.
-  Relacionado — orden de sondeo inconsistente: `root_inicial_pendiente` se revisa antes de
-  leer teclas del usuario en el bucle principal; los otros 3 flujos con hilo se revisan
-  después, en la sección de tick (`src/tui/app.rs:1062`), sin ningún comentario que
-  explique la diferencia.
-- [ ] **Fallo de invariante de migración se ve como error genérico de SQLite.**
-  `src/database/schema.rs:113`. Si `version != SCHEMA_VERSION` al final, se devuelve
-  `rusqlite::Error::InvalidQuery` — un error que en la práctica nunca viene de SQLite.
-- [ ] **`AppCore::new`/`con_reloj` dejan `ruta_base_datos` vacía sin avisar en la firma
-  pública.** `src/application.rs:81`. Construir un `AppCore` así y luego pedir un respaldo
-  crea silenciosamente una carpeta `backups` relativa al directorio de trabajo del proceso.
-- [ ] **Tope de 4 en `tipos_incluidos` trunca en silencio, repetido en 3 sitios.**
+- [x] **`guardando` compartido como mutex implícito entre 2 estados pendientes.**
+  `src/tui/app.rs:1190`. **Reparado:** `creacion_usuario_pendiente`/`cambio_password_pendiente`
+  se consolidaron en un único `Option<HiloUsuarioPendiente>` (enum de 2 variantes) — la
+  exclusión mutua ahora es estructural, no depende de que nada valide un booleano en otro
+  archivo.
+- [x] **Nombre `"Quintana"` hardcodeado como fallback sin sesión.**
+  `src/tui/app.rs:1484`. **Reparado:** el fallback pasó a `"Usuario desconocido"` con un
+  comentario explicando que es puramente defensivo (el menú no es alcanzable sin sesión).
+  Relacionado — orden de sondeo inconsistente: **reparado**, los 4 sondeos de hilos de
+  Argon2 (login, ROOT inicial, crear usuario/cambiar contraseña) ahora corren siempre en
+  el mismo punto del bucle, después de leer teclas.
+- [x] **Fallo de invariante de migración se ve como error genérico de SQLite.**
+  `src/database/schema.rs:113`. **Reparado:** nueva variante
+  `SchemaError::VersionInesperadaTrasMigrar { encontrada }` en vez de un
+  `rusqlite::Error::InvalidQuery` fabricado a mano.
+- [x] **`AppCore::new`/`con_reloj` dejan `ruta_base_datos` vacía sin avisar en la firma
+  pública.** `src/application.rs:81`. **Reparado:** rustdoc explícito en ambos
+  constructores documentando la consecuencia sobre `directorio_respaldos()`.
+- [x] **Tope de 4 en `tipos_incluidos` trunca en silencio, repetido en 3 sitios.**
   `src/database/queries/ingresos.rs:160` (y `buscar_historial`, `ContratistasQuery::buscar`).
-  No se deriva de `TipoIngreso::ALL.len()`.
-- [ ] **Tope del selector de rol hardcodeado (`.min(2)`) en vez de `ROLES.len()`.**
-  `src/tui/usuarios/state.rs:495`. Si se agrega un cuarto rol, queda inalcanzable desde el
-  teclado sin ningún error de compilación.
-- [ ] **Error de fecha corrupta se disfraza de error de SQLite.** `src/application.rs:450`.
-  `validar_reloj` fabrica a mano un `FromSqlConversionFailure` para un error de parseo que
-  no viene de SQLite — manda a depurar en la dirección equivocada.
-- [ ] **Tope del desplegable "Tipo" hardcodeado en vez de `tipos().len()`.**
-  `src/tui/contratistas/state.rs:486`. Literal `3` en vez de derivarse del array. Un quinto
-  `TipoIngreso` quedaría inalcanzable con la flecha abajo.
-- [ ] **`unwrap()` en la fecha por defecto de `FiltrosHistorial`.**
-  `src/tui/historial/filtros.rs:27`. Seguro hoy, panic latente si cambia el día usado.
-- [ ] **`StandardCommand::Activate` no tiene ningún consumidor real.**
-  `src/tui/ui_kit/keyboard.rs:52`. Se genera para la tecla Espacio pero ningún `state.rs`
-  hace `match` sobre ella — sólo aparece en el propio test del módulo.
-- [ ] **Matriz `requiere_praind()`/`requiere_gafete()` sin explicar la regla de negocio.**
-  `src/models/contratista.rs:18`. Combinación específica por `TipoIngreso` (InHouse
-  requiere PRAIND pero nunca gafete, PorCorreo al revés) sin ningún comentario que la
-  justifique — sólo se puede inferir leyendo el `match` línea por línea.
-- [ ] **`fecha_hora_salida`/`usuario_salida_id` son 2 `Option` independientes.**
-  `src/models/registro_ingreso.rs:65`. Deberían ser un único `Option<Salida{...}>` — el
-  tipo permite hoy construir un registro "con salida sin usuario" o viceversa.
+  **Reparado:** los 3 sitios ahora derivan el tamaño del array de `TipoIngreso::ALL.len()`
+  en vez del literal `4`.
+- [x] **Tope del selector de rol hardcodeado (`.min(2)`) en vez de `ROLES.len()`.**
+  `src/tui/usuarios/state.rs:495`. **Reparado:** ahora usa `ROLES.len() - 1`.
+- [x] **Error de fecha corrupta se disfraza de error de SQLite.** `src/application.rs:450`.
+  **Reparado:** nueva variante `DatabaseError::FechaCorrupta(String)` en vez de un
+  `FromSqlConversionFailure` fabricado a mano.
+- [x] **Tope del desplegable "Tipo" hardcodeado en vez de `tipos().len()`.**
+  `src/tui/contratistas/state.rs:486`. **Reparado:** ahora usa `tipos().len().saturating_sub(1)`.
+- [x] **`unwrap()` en la fecha por defecto de `FiltrosHistorial`.**
+  `src/tui/historial/filtros.rs:27`. **Reparado:** `unwrap_or(h)` en vez de `unwrap()` — sin
+  panic posible aunque el día usado cambiara en el futuro.
+- [x] **`StandardCommand::Activate` no tiene ningún consumidor real.**
+  `src/tui/ui_kit/keyboard.rs:52`. **Reparado:** variante eliminada (Espacio ya no se
+  intercepta como comando transversal; cada pantalla lo maneja en su propio match, como ya
+  hacía).
+- [x] **Matriz `requiere_praind()`/`requiere_gafete()` sin explicar la regla de negocio.**
+  `src/models/contratista.rs:18`. **Reparado:** rustdoc que remite a la tabla "Reglas para
+  PRAIND y gafete" ya documentada en `docs/diagrama-logico.md`.
+- [x] **`fecha_hora_salida`/`usuario_salida_id` son 2 `Option` independientes.**
+  `src/models/registro_ingreso.rs:65`. **Reparado:** consolidados en
+  `salida: Option<SalidaRegistroIngreso { fecha_hora, usuario_id }>` — ya no se puede
+  construir un registro "con salida sin usuario" o viceversa.
 
 ## Coherencia
 

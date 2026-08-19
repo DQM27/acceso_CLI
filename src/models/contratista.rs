@@ -15,6 +15,10 @@ pub struct Contratista {
 }
 
 impl Contratista {
+    /// Regla de negocio (ver tabla "Reglas para PRAIND y gafete" en
+    /// `docs/diagrama-logico.md`): requiere PRAIND el personal de ruta (sin
+    /// importar el tipo de ingreso) y, entre los tipos de ingreso, `Praind` e
+    /// `InHouse`. `PorCorreo` y `Swat` no lo requieren.
     pub fn requiere_praind(&self) -> bool {
         self.es_personal_ruta
             || matches!(
@@ -23,6 +27,9 @@ impl Contratista {
             )
     }
 
+    /// Regla de negocio (misma tabla): el personal de ruta nunca requiere
+    /// gafete. Entre los tipos de ingreso, sólo `Praind` y `PorCorreo` lo
+    /// requieren; `InHouse` y `Swat` no.
     pub fn requiere_gafete(&self) -> bool {
         !self.es_personal_ruta
             && matches!(

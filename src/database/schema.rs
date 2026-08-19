@@ -23,6 +23,11 @@ pub enum SchemaError {
     /// previo (`TipoRespaldo::PreMigracion`) falló — el arranque se detiene
     /// antes de tocar el esquema.
     RespaldoPreMigracionFallido(String),
+    /// Invariante interno: tras aplicar todas las migraciones conocidas, la
+    /// versión resultante no es `SCHEMA_VERSION`. No es un error de SQLite —
+    /// sólo puede pasar si la cadena de migraciones de este archivo tiene un
+    /// hueco (una versión sin `if version == N` que la maneje).
+    VersionInesperadaTrasMigrar { encontrada: i64 },
 }
 
 impl std::fmt::Display for SchemaError {
@@ -40,6 +45,11 @@ impl std::fmt::Display for SchemaError {
                 formatter,
                 "No se pudo crear el respaldo obligatorio antes de migrar el esquema: {detalle}"
             ),
+            Self::VersionInesperadaTrasMigrar { encontrada } => write!(
+                formatter,
+                "Error interno: la base quedó en la versión de esquema {encontrada} tras migrar, \
+                 se esperaba {SCHEMA_VERSION}"
+            ),
         }
     }
 }
@@ -48,7 +58,10 @@ impl std::error::Error for SchemaError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Sqlite(error) => Some(error),
-            Self::BaseAjena | Self::IntegridadInvalida(_) | Self::RespaldoPreMigracionFallido(_) => None,
+            Self::BaseAjena
+            | Self::IntegridadInvalida(_)
+            | Self::RespaldoPreMigracionFallido(_)
+            | Self::VersionInesperadaTrasMigrar { .. } => None,
         }
     }
 }
@@ -111,7 +124,7 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
     }
 
     if version != SCHEMA_VERSION {
-        return Err(SchemaError::Sqlite(rusqlite::Error::InvalidQuery));
+        return Err(SchemaError::VersionInesperadaTrasMigrar { encontrada: version });
     }
 
     transaction.commit()?;

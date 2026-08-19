@@ -10,7 +10,8 @@ use control_acceso::database::schema::initialize_database;
 use control_acceso::domain::resultado_acceso::MotivoDenegacion;
 use control_acceso::models::medio_ingreso::MedioIngreso;
 use control_acceso::models::registro_ingreso::{
-    DatosHistoricosEntrada, NuevoRegistroIngreso, ResultadoIngresoRegistrado, VERSION_REGLAS_ACCESO,
+    DatosHistoricosEntrada, NuevoRegistroIngreso, ResultadoIngresoRegistrado,
+    SalidaRegistroIngreso, VERSION_REGLAS_ACCESO,
 };
 use control_acceso::models::tipo_ingreso::TipoIngreso;
 use control_acceso::services::contratista_service::{ContratistaService, DatosContratista};
@@ -130,7 +131,7 @@ fn flujo_completo_praind_libera_y_reutiliza_gafete() {
     assert_eq!(primer_ingreso.empresa_id, empresa_id);
     assert_eq!(primer_ingreso.tipo_ingreso, TipoIngreso::Praind);
     assert_eq!(primer_ingreso.gafete_numero, Some(5));
-    assert!(primer_ingreso.fecha_hora_salida.is_none());
+    assert!(primer_ingreso.salida.is_none());
     assert_eq!(
         ingreso_service
             .buscar_ingreso_activo_por_gafete(5)
@@ -177,8 +178,13 @@ fn flujo_completo_praind_libera_y_reutiliza_gafete() {
         .buscar_por_id(primer_ingreso_id.registro_id)
         .unwrap()
         .unwrap();
-    assert_eq!(cerrado.fecha_hora_salida, Some(fecha_salida()));
-    assert_eq!(cerrado.usuario_salida_id, Some(usuario_id));
+    assert_eq!(
+        cerrado.salida,
+        Some(SalidaRegistroIngreso {
+            fecha_hora: fecha_salida(),
+            usuario_id,
+        })
+    );
     assert!(
         registros
             .buscar_ingreso_activo(primer_contratista_id)

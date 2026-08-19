@@ -9,7 +9,6 @@ use super::shell::CommandHint;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StandardCommand {
     Primary,
-    Activate,
     Cancel,
     FocusNext,
     FocusPrevious,
@@ -49,7 +48,6 @@ pub fn standard_command(key: KeyEvent) -> Option<StandardCommand> {
 
     match key.code {
         KeyCode::Enter => Some(StandardCommand::Primary),
-        KeyCode::Char(' ') => Some(StandardCommand::Activate),
         KeyCode::Esc => Some(StandardCommand::Cancel),
         KeyCode::BackTab => Some(StandardCommand::FocusPrevious),
         KeyCode::Tab if key.modifiers.contains(KeyModifiers::SHIFT) => {
@@ -73,11 +71,6 @@ mod tests {
     fn reconoce_convenciones_comunes() {
         let cases = [
             (KeyCode::Enter, KeyModifiers::NONE, StandardCommand::Primary),
-            (
-                KeyCode::Char(' '),
-                KeyModifiers::NONE,
-                StandardCommand::Activate,
-            ),
             (KeyCode::Esc, KeyModifiers::NONE, StandardCommand::Cancel),
             (KeyCode::Tab, KeyModifiers::NONE, StandardCommand::FocusNext),
             (
@@ -113,6 +106,12 @@ mod tests {
         );
         assert_eq!(
             standard_command(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE)),
+            None
+        );
+        // Espacio no es una convención transversal — cada pantalla decide su
+        // propio significado (activar/desactivar, marcar, etc.) con su match local.
+        assert_eq!(
+            standard_command(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
             None
         );
     }

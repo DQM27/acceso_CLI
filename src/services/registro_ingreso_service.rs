@@ -289,7 +289,7 @@ where
             .buscar_por_id(registro_id)?
             .ok_or(RegistroIngresoServiceError::RegistroNoActivo)?;
 
-        if registro.fecha_hora_salida.is_some() {
+        if registro.salida.is_some() {
             return Err(RegistroIngresoServiceError::RegistroNoActivo);
         }
 

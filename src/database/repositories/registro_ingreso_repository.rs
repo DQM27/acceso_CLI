@@ -5,6 +5,7 @@ use crate::database::error::DatabaseError;
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::models::registro_ingreso::{
     MotivoResultadoIngreso, NuevoRegistroIngreso, RegistroIngreso, ResultadoIngresoRegistrado,
+    SalidaRegistroIngreso,
 };
 use crate::models::tipo_ingreso::TipoIngreso;
 use crate::tiempo::{parsear_utc, serializar_utc};
@@ -113,6 +114,12 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<RegistroIngreso> {
             })
         })
         .transpose()?;
+    let usuario_salida_id: Option<i64> = row.get(9)?;
+    // `CHECK (fecha_hora_salida IS NULL) = (usuario_salida_id IS NULL)` en el
+    // esquema garantiza que ambos vienen juntos o ninguno.
+    let salida = fecha_hora_salida
+        .zip(usuario_salida_id)
+        .map(|(fecha_hora, usuario_id)| SalidaRegistroIngreso { fecha_hora, usuario_id });
 
     Ok(RegistroIngreso {
         id: row.get(0)?,
@@ -123,8 +130,7 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<RegistroIngreso> {
         tipo_ingreso,
         gafete_numero,
         usuario_ingreso_id: row.get(7)?,
-        fecha_hora_salida,
-        usuario_salida_id: row.get(9)?,
+        salida,
     })
 }
 

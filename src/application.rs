@@ -78,10 +78,16 @@ pub struct AppCore {
 }
 
 impl AppCore {
+    /// Construye un `AppCore` sin ruta de archivo asociada (pensado para SQLite en
+    /// memoria y tests). **Los respaldos usan `directorio_respaldos()`, que sin una
+    /// ruta real cae en `./backups` relativo al directorio de trabajo del proceso**
+    /// — para producción, usar [`AppCore::abrir`], que sí registra la ruta real.
     pub fn new(connection: Connection) -> Self {
         Self::con_reloj(connection, Arc::new(RelojSistema))
     }
 
+    /// Igual que [`AppCore::new`] con un reloj inyectado — mismo aviso sobre
+    /// `directorio_respaldos()` sin ruta real.
     pub fn con_reloj(connection: Connection, reloj: Arc<dyn Reloj>) -> Self {
         Self {
             connection,
@@ -447,13 +453,8 @@ fn validar_reloj(
     let Some(ultima) = ultima else {
         return Ok(());
     };
-    let ultima = parsear_utc(&ultima).map_err(|error| {
-        DatabaseError::Sqlite(rusqlite::Error::FromSqlConversionFailure(
-            0,
-            rusqlite::types::Type::Text,
-            Box::new(error),
-        ))
-    })?;
+    let ultima = parsear_utc(&ultima)
+        .map_err(|error| DatabaseError::FechaCorrupta(error.to_string()))?;
     if ahora < ultima {
         return Err(RegistroIngresoServiceError::RelojRetrocedido);
     }

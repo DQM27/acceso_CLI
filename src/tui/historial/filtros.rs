@@ -24,7 +24,10 @@ pub struct FiltrosHistorial {
 impl Default for FiltrosHistorial {
     fn default() -> Self {
         let h = ahora_costa_rica().date_naive();
-        let d = NaiveDate::from_ymd_opt(h.year(), h.month(), 1).unwrap();
+        // Día 1 de cualquier mes siempre es válido, pero se evita el unwrap
+        // igual: si algún día cambia el día usado aquí, cae a `h` en vez de
+        // arriesgar un panic.
+        let d = NaiveDate::from_ymd_opt(h.year(), h.month(), 1).unwrap_or(h);
         Self {
             desde: d.format("%d/%m/%Y").to_string(),
             hasta: h.format("%d/%m/%Y").to_string(),

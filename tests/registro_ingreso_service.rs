@@ -11,6 +11,7 @@ use control_acceso::database::schema::initialize_database;
 use control_acceso::domain::resultado_acceso::{MotivoDenegacion, ResultadoAcceso};
 use control_acceso::models::contratista::Contratista;
 use control_acceso::models::medio_ingreso::MedioIngreso;
+use control_acceso::models::registro_ingreso::SalidaRegistroIngreso;
 use control_acceso::models::tipo_ingreso::TipoIngreso;
 use control_acceso::services::error::RegistroIngresoServiceError;
 use control_acceso::services::registro_ingreso_service::RegistroIngresoService;
@@ -544,8 +545,13 @@ fn salida_igual_al_ingreso_es_permitida_y_conserva_usuario() {
         .buscar_por_id(entrada.registro_id)
         .unwrap()
         .unwrap();
-    assert_eq!(cerrado.fecha_hora_salida, Some(fecha_ingreso()));
-    assert_eq!(cerrado.usuario_salida_id, Some(usuario_id));
+    assert_eq!(
+        cerrado.salida,
+        Some(SalidaRegistroIngreso {
+            fecha_hora: fecha_ingreso(),
+            usuario_id,
+        })
+    );
 }
 
 #[test]
@@ -580,8 +586,7 @@ fn salida_anterior_es_rechazada_y_no_modifica_sqlite() {
         .buscar_por_id(entrada.registro_id)
         .unwrap()
         .unwrap();
-    assert!(registro.fecha_hora_salida.is_none());
-    assert!(registro.usuario_salida_id.is_none());
+    assert!(registro.salida.is_none());
 }
 
 #[test]

@@ -171,6 +171,11 @@ impl From<SchemaError> for RespaldoError {
             SchemaError::RespaldoPreMigracionFallido(detalle) => {
                 Self::ValidacionFallida(ResultadoValidacion::Invalido(detalle))
             }
+            SchemaError::VersionInesperadaTrasMigrar { encontrada } => {
+                Self::ValidacionFallida(ResultadoValidacion::Invalido(format!(
+                    "la base quedó en la versión de esquema {encontrada} tras migrar, un estado interno inconsistente"
+                )))
+            }
         }
     }
 }
