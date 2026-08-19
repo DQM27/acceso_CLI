@@ -1,3 +1,4 @@
+use crossterm::event::KeyModifiers;
 use super::*;
 
 fn tecla(code: KeyCode) -> KeyEvent {
@@ -38,7 +39,7 @@ fn backspace_elimina_el_ultimo_caracter() {
     state.handle_key(tecla(KeyCode::Char('á')));
     state.handle_key(tecla(KeyCode::Char('b')));
     state.handle_key(tecla(KeyCode::Backspace));
-    assert_eq!(state.cedula, "á");
+    assert_eq!(state.cedula.value(), "á");
 }
 
 #[test]
@@ -69,7 +70,7 @@ fn completar_validacion_tras_el_resultado_real_limpia_la_contrasena() {
     assert!(matches!(state.estado(), EstadoLogin::Validando { .. }));
     state.completar_validacion(None);
     assert_eq!(state.estado(), &EstadoLogin::Exito);
-    assert!(state.password.is_empty());
+    assert!(state.password.value().is_empty());
 }
 
 #[test]
@@ -99,7 +100,7 @@ fn representacion_para_render_no_expone_password() {
 fn escape_limpia_la_contrasena_y_senala_salir() {
     let mut state = login_completo();
     assert_eq!(state.handle_key(tecla(KeyCode::Esc)), AccionLogin::Salir);
-    assert!(state.password.is_empty());
+    assert!(state.password.value().is_empty());
 }
 
 #[test]
@@ -109,7 +110,7 @@ fn escape_funciona_incluso_mientras_valida() {
     assert!(matches!(state.estado(), EstadoLogin::Validando { .. }));
 
     assert_eq!(state.handle_key(tecla(KeyCode::Esc)), AccionLogin::Salir);
-    assert!(state.password.is_empty());
+    assert!(state.password.value().is_empty());
 }
 
 #[test]

@@ -83,7 +83,7 @@ fn render_formulario(
         frame,
         filas[0],
         "CÉDULA",
-        &state.cedula,
+        state.cedula.value(),
         state.campo_activo == CampoConfiguracion::Cedula,
         theme,
     );
@@ -91,7 +91,7 @@ fn render_formulario(
         frame,
         filas[2],
         "NOMBRE",
-        &state.nombre,
+        state.nombre.value(),
         state.campo_activo == CampoConfiguracion::Nombre,
         theme,
     );
@@ -122,15 +122,23 @@ fn render_formulario(
     );
 
     if state.estado != EstadoConfiguracion::Creando && state.cursor_visible {
-        let (area_campo, contenido) = match state.campo_activo {
-            CampoConfiguracion::Cedula => (area_cedula, state.cedula.as_str()),
-            CampoConfiguracion::Nombre => (area_nombre, state.nombre.as_str()),
-            CampoConfiguracion::Password => (area_password, password_mascara.as_str()),
+        let (area_campo, antes_del_cursor) = match state.campo_activo {
+            CampoConfiguracion::Cedula => (
+                area_cedula,
+                state.cedula.value().chars().take(state.cedula.cursor()).collect::<String>(),
+            ),
+            CampoConfiguracion::Nombre => (
+                area_nombre,
+                state.nombre.value().chars().take(state.nombre.cursor()).collect::<String>(),
+            ),
+            CampoConfiguracion::Password => {
+                (area_password, "•".repeat(state.password.cursor()))
+            }
             CampoConfiguracion::ConfirmarPassword => {
-                (area_confirmar, confirmacion_mascara.as_str())
+                (area_confirmar, "•".repeat(state.confirmar_password.cursor()))
             }
         };
-        let ancho_visible = Line::from(contenido).width() as u16;
+        let ancho_visible = Line::from(antes_del_cursor).width() as u16;
         let x = area_campo
             .x
             .saturating_add(ancho_visible.min(area_campo.width));

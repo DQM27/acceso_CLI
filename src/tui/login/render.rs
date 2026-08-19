@@ -80,7 +80,7 @@ fn render_formulario(frame: &mut Frame, area: Rect, state: &LoginState, theme: T
         frame,
         filas[0],
         "CÉDULA",
-        &state.cedula,
+        state.cedula.value(),
         state.campo_activo == CampoLogin::Cedula,
         theme,
     );
@@ -97,11 +97,14 @@ fn render_formulario(frame: &mut Frame, area: Rect, state: &LoginState, theme: T
     let cursor_visible =
         !matches!(state.estado, EstadoLogin::Validando { .. }) && state.cursor_visible;
     if cursor_visible {
-        let (area_campo, contenido) = match state.campo_activo {
-            CampoLogin::Cedula => (area_cedula, state.cedula.as_str()),
-            CampoLogin::Password => (area_password, password_enmascarado.as_str()),
+        let (area_campo, antes_del_cursor) = match state.campo_activo {
+            CampoLogin::Cedula => (
+                area_cedula,
+                state.cedula.value().chars().take(state.cedula.cursor()).collect::<String>(),
+            ),
+            CampoLogin::Password => (area_password, "•".repeat(state.password.cursor())),
         };
-        let ancho_visible = Line::from(contenido).width() as u16;
+        let ancho_visible = Line::from(antes_del_cursor).width() as u16;
         let x = area_campo
             .x
             .saturating_add(ancho_visible.min(area_campo.width));

@@ -52,10 +52,10 @@ fn campos_aceptan_texto_conservan_contenido_y_backspace_funciona() {
     state.handle_key(tecla(KeyCode::Tab));
     escribir(&mut state, "secreto1");
 
-    assert_eq!(state.cedula, "ABC-1");
-    assert_eq!(state.nombre, "Nombre");
-    assert_eq!(state.password, "secreto1");
-    assert_eq!(state.confirmar_password, "secreto1");
+    assert_eq!(state.cedula.value(), "ABC-1");
+    assert_eq!(state.nombre.value(), "Nombre");
+    assert_eq!(state.password.value(), "secreto1");
+    assert_eq!(state.confirmar_password.value(), "secreto1");
     assert_eq!(state.password_enmascarado(), "••••••••");
 }
 
@@ -148,6 +148,6 @@ fn limpiar_secretos_no_los_expone_en_debug() {
     let mut state = formulario_valido();
     assert!(!format!("{state:?}").contains("password1"));
     state.limpiar_secretos();
-    assert!(state.password.is_empty());
-    assert!(state.confirmar_password.is_empty());
+    assert!(state.password.value().is_empty());
+    assert!(state.confirmar_password.value().is_empty());
 }

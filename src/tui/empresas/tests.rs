@@ -65,7 +65,7 @@ fn enter_edita_directamente_con_id_y_nombre_reales() {
     let ModoEmpresas::Formulario(f) = &s.modo else {
         panic!()
     };
-    assert_eq!(f.nombre, "Constructora Álvarez");
+    assert_eq!(f.nombre.value(), "Constructora Álvarez");
     assert!(matches!(f.modo, ModoFormularioEmpresa::Editar { id: 7 }));
 }
 

@@ -75,6 +75,25 @@ fn busqueda_emite_consulta_sin_filtrar_memoria_tras_el_debounce() {
 }
 
 #[test]
+fn flecha_izquierda_mueve_el_cursor_en_el_campo_contrasena_sin_borrar() {
+    let mut state = UsuariosState::default();
+    state.handle_key(key(KeyCode::Char('n')));
+    // Cedula -> Nombre -> Rol -> Password.
+    for _ in 0..3 {
+        state.handle_key(key(KeyCode::Tab));
+    }
+    for c in "1234".chars() {
+        state.handle_key(key(KeyCode::Char(c)));
+    }
+    state.handle_key(key(KeyCode::Left));
+    state.handle_key(key(KeyCode::Char('x')));
+    let ModoUsuarios::Formulario(f) = &state.modo else {
+        panic!("debía seguir en el formulario")
+    };
+    assert_eq!(f.password.valor(), "123x4");
+}
+
+#[test]
 fn enter_edita_directamente_con_id_real_y_sin_password() {
     let mut state = UsuariosState::default();
     cargar(&mut state);
@@ -132,12 +151,12 @@ fn crear_emite_dto_real_y_debug_redacta_password() {
     let mut state = UsuariosState::default();
     let form = FormularioUsuario {
         modo: ModoFormularioUsuario::Crear,
-        cedula: " 001-A ".into(),
-        nombre: " Ana ".into(),
+        cedula: TextInput::new(" 001-A "),
+        nombre: TextInput::new(" Ana "),
         rol: RolUsuario::Administrador,
         activo: true,
-        password: Secreto("secreto-123".into()),
-        confirmar_password: Secreto("secreto-123".into()),
+        password: Secreto::nuevo("secreto-123"),
+        confirmar_password: Secreto::nuevo("secreto-123"),
         campo: 0,
         selector_rol: None,
         error: None,
@@ -160,8 +179,8 @@ fn password_valida_emite_y_limpia_secretos_en_callbacks() {
     let ModoUsuarios::CambioPassword(f) = &mut state.modo else {
         panic!()
     };
-    f.password = Secreto("password-B".into());
-    f.confirmar = Secreto("password-B".into());
+    f.password = Secreto::nuevo("password-B");
+    f.confirmar = Secreto::nuevo("password-B");
     let accion = state.handle_key(save());
     assert!(!format!("{accion:?}").contains("password-B"));
     state.completar_password(Ok(()), "Usuario 7");

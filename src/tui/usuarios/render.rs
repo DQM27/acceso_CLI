@@ -11,7 +11,8 @@ use crate::{
     services::autenticacion_service::UsuarioSesion,
     tiempo::hora_actual_texto,
     tui::ui_kit::{
-        CommandHint, ScreenShell, StatusKind, Theme, identidad_sesion, render_terminal_too_small,
+        CommandHint, ScreenShell, StatusKind, TextInput, Theme, identidad_sesion,
+        render_terminal_too_small,
     },
 };
 
@@ -139,8 +140,8 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: Th
         enfocado_busqueda,
         theme,
     );
-    if enfocado_busqueda {
-        posicionar_cursor(frame, area_busqueda, &state.filtro);
+    if let ModoUsuarios::Busqueda { texto } = &state.modo {
+        posicionar_cursor_campo(frame, area_busqueda, texto);
     }
 
     let (area_tabla, area_panel) = if area.width >= ANCHO_PANEL_LATERAL {
@@ -173,6 +174,13 @@ fn posicionar_cursor(frame: &mut Frame, area: Rect, contenido: &str) {
     let ancho_visible = Line::from(contenido).width() as u16;
     let x = area.x.saturating_add(ancho_visible.min(area.width));
     frame.set_cursor_position((x, area.y));
+}
+
+/// Igual que `posicionar_cursor` pero en la posición real del cursor dentro
+/// del campo, no siempre al final.
+fn posicionar_cursor_campo(frame: &mut Frame, area: Rect, campo: &TextInput) {
+    let antes_del_cursor: String = campo.value().chars().take(campo.cursor()).collect();
+    posicionar_cursor(frame, area, &antes_del_cursor);
 }
 
 fn altura_panel(state: &UsuariosState) -> u16 {
@@ -373,22 +381,22 @@ fn render_formulario(frame: &mut Frame, area: Rect, f: &FormularioUsuario, theme
         let enfocado = f.campo == indice;
         match campo {
             CampoUsuario::Cedula => {
-                let r = render_campo(frame, filas[fila], "CÉDULA", &f.cedula, enfocado, theme);
+                let r = render_campo(frame, filas[fila], "CÉDULA", f.cedula.value(), enfocado, theme);
                 if enfocado {
-                    posicionar_cursor(frame, r, &f.cedula);
+                    posicionar_cursor_campo(frame, r, &f.cedula);
                 }
             }
             CampoUsuario::Nombre => {
-                let r = render_campo(frame, filas[fila], "NOMBRE", &f.nombre, enfocado, theme);
+                let r = render_campo(frame, filas[fila], "NOMBRE", f.nombre.value(), enfocado, theme);
                 if enfocado {
-                    posicionar_cursor(frame, r, &f.nombre);
+                    posicionar_cursor_campo(frame, r, &f.nombre);
                 }
             }
             CampoUsuario::Password => {
                 let mascara = f.password.mascara();
                 let r = render_campo(frame, filas[fila], "CONTRASEÑA", &mascara, enfocado, theme);
                 if enfocado {
-                    posicionar_cursor(frame, r, &mascara);
+                    posicionar_cursor(frame, r, &"•".repeat(f.password.cursor()));
                 }
             }
             CampoUsuario::ConfirmarPassword => {
@@ -402,7 +410,7 @@ fn render_formulario(frame: &mut Frame, area: Rect, f: &FormularioUsuario, theme
                     theme,
                 );
                 if enfocado {
-                    posicionar_cursor(frame, r, &mascara);
+                    posicionar_cursor(frame, r, &"•".repeat(f.confirmar_password.cursor()));
                 }
             }
             CampoUsuario::Rol => {
@@ -473,8 +481,8 @@ fn render_password(frame: &mut Frame, area: Rect, f: &FormularioPassword, theme:
         filas[3],
     );
     if f.campo == 0 {
-        posicionar_cursor(frame, area_nueva, &mascara_nueva);
+        posicionar_cursor(frame, area_nueva, &"•".repeat(f.password.cursor()));
     } else {
-        posicionar_cursor(frame, area_confirmar, &mascara_confirmar);
+        posicionar_cursor(frame, area_confirmar, &"•".repeat(f.confirmar.cursor()));
     }
 }

@@ -5,7 +5,7 @@ use crate::{
     domain::resultado_acceso::{MotivoDenegacion, ResultadoAcceso},
     models::medio_ingreso::MedioIngreso,
     services::registro_ingreso_service::PreparacionIngreso,
-    tui::ui_kit::{StandardCommand, mover_seleccion, standard_command},
+    tui::ui_kit::{StandardCommand, TextInput, mover_seleccion, standard_command},
 };
 
 #[path = "render.rs"]
@@ -53,13 +53,14 @@ pub struct NuevoIngresoState {
     /// — permite avisar "primeros N de M, afine la búsqueda" en vez de dejar
     /// resultados fuera de forma silenciosa.
     total: usize,
-    busqueda: String,
+    busqueda: TextInput,
     seleccion: Option<usize>,
     contratista_id: Option<i64>,
     preparacion: Option<PreparacionIngreso>,
     campo: CampoIngreso,
     medio_opcion: usize,
     gafete_texto: String,
+    gafete_cursor: usize,
     error: Option<String>,
     ayuda_expandida: bool,
 }
@@ -76,13 +77,14 @@ impl NuevoIngresoState {
             etapa: EtapaNuevoIngreso::Buscar,
             contratistas: vec![],
             total: 0,
-            busqueda: String::new(),
+            busqueda: TextInput::default(),
             seleccion: None,
             contratista_id: None,
             preparacion: None,
             campo: CampoIngreso::Medio,
             medio_opcion: 0,
             gafete_texto: String::new(),
+            gafete_cursor: 0,
             error: None,
             ayuda_expandida: false,
         }
@@ -122,6 +124,7 @@ impl NuevoIngresoState {
                 self.campo = CampoIngreso::Medio;
                 self.medio_opcion = 0;
                 self.gafete_texto.clear();
+                self.gafete_cursor = 0;
                 self.error = None;
                 self.etapa = EtapaNuevoIngreso::Formulario
             }
@@ -152,7 +155,7 @@ impl NuevoIngresoState {
     }
     fn buscar(&mut self, key: KeyEvent) -> AccionNuevoIngreso {
         match key.code {
-            KeyCode::Esc if !self.busqueda.is_empty() => {
+            KeyCode::Esc if !self.busqueda.value().is_empty() => {
                 self.busqueda.clear();
                 AccionNuevoIngreso::Buscar { texto: None }
             }
@@ -173,23 +176,15 @@ impl NuevoIngresoState {
                         contratista_id: c.id,
                     }
                 }),
-            KeyCode::Backspace => {
-                self.busqueda.pop();
-                AccionNuevoIngreso::Buscar {
-                    texto: texto_filtro(&self.busqueda),
+            _ => {
+                if self.busqueda.handle_key(key) {
+                    AccionNuevoIngreso::Buscar {
+                        texto: texto_filtro(self.busqueda.value()),
+                    }
+                } else {
+                    AccionNuevoIngreso::Ninguna
                 }
             }
-            KeyCode::Char(c)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                self.busqueda.push(c);
-                AccionNuevoIngreso::Buscar {
-                    texto: texto_filtro(&self.busqueda),
-                }
-            }
-            _ => AccionNuevoIngreso::Ninguna,
         }
     }
     fn formulario(&mut self, key: KeyEvent) -> AccionNuevoIngreso {
@@ -207,6 +202,25 @@ impl NuevoIngresoState {
             }
             KeyCode::Left | KeyCode::Right if self.campo == CampoIngreso::Medio => {
                 self.medio_opcion = 1 - self.medio_opcion;
+            }
+            KeyCode::Left if self.campo == CampoIngreso::Gafete => {
+                self.gafete_cursor = self.gafete_cursor.saturating_sub(1);
+            }
+            KeyCode::Right if self.campo == CampoIngreso::Gafete => {
+                self.gafete_cursor = (self.gafete_cursor + 1).min(self.gafete_texto.chars().count());
+            }
+            KeyCode::Home if self.campo == CampoIngreso::Gafete => {
+                self.gafete_cursor = 0;
+            }
+            KeyCode::End if self.campo == CampoIngreso::Gafete => {
+                self.gafete_cursor = self.gafete_texto.chars().count();
+            }
+            KeyCode::Delete if self.campo == CampoIngreso::Gafete => {
+                if self.gafete_cursor < self.gafete_texto.chars().count() {
+                    let idx = byte_index(&self.gafete_texto, self.gafete_cursor);
+                    self.gafete_texto.remove(idx);
+                    self.error = None;
+                }
             }
             KeyCode::Enter => {
                 let Some(contratista_id) = self.contratista_id else {
@@ -240,8 +254,12 @@ impl NuevoIngresoState {
                 };
             }
             KeyCode::Backspace if self.campo == CampoIngreso::Gafete => {
-                self.gafete_texto.pop();
-                self.error = None;
+                if self.gafete_cursor > 0 {
+                    let idx = byte_index(&self.gafete_texto, self.gafete_cursor - 1);
+                    self.gafete_texto.remove(idx);
+                    self.gafete_cursor -= 1;
+                    self.error = None;
+                }
             }
             KeyCode::Char(c)
                 if self.campo == CampoIngreso::Gafete
@@ -250,7 +268,9 @@ impl NuevoIngresoState {
                         .modifiers
                         .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                self.gafete_texto.push(c);
+                let idx = byte_index(&self.gafete_texto, self.gafete_cursor);
+                self.gafete_texto.insert(idx, c);
+                self.gafete_cursor += 1;
                 self.error = None;
             }
             _ => {}
@@ -279,6 +299,7 @@ impl NuevoIngresoState {
         self.campo = CampoIngreso::Medio;
         self.medio_opcion = 0;
         self.gafete_texto.clear();
+        self.gafete_cursor = 0;
         self.error = None
     }
     fn limpiar(&mut self) {
@@ -296,6 +317,12 @@ impl NuevoIngresoState {
 }
 fn texto_filtro(s: &str) -> Option<String> {
     (!s.trim().is_empty()).then(|| s.to_owned())
+}
+fn byte_index(s: &str, indice_char: usize) -> usize {
+    s.char_indices()
+        .nth(indice_char)
+        .map(|(i, _)| i)
+        .unwrap_or(s.len())
 }
 fn puede_continuar(p: &PreparacionIngreso) -> bool {
     !p.tiene_ingreso_activo && !matches!(p.resultado_acceso, ResultadoAcceso::Denegado(_))

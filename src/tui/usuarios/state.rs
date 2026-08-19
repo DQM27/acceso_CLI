@@ -6,7 +6,7 @@ use crate::{
     database::queries::usuarios::UsuarioResumen,
     models::usuario::RolUsuario,
     services::usuario_service::{ActualizarUsuarioInput, CrearUsuarioInput},
-    tui::ui_kit::{Debounce, StandardCommand, standard_command},
+    tui::ui_kit::{Debounce, StandardCommand, TextInput, standard_command},
 };
 use std::time::Instant;
 
@@ -24,19 +24,105 @@ const ROLES: [RolUsuario; 3] = [
     RolUsuario::Operador,
 ];
 
+/// Igual que `TextInput`, pero sin depender de `tui_input` — se usa sólo
+/// para contraseñas, donde el valor real jamás debe imprimirse ni siquiera
+/// en `Debug` (`TextInput` ya redacta su `Debug`, pero mantener este tipo
+/// aparte deja explícito, por el nombre, cuáles campos son secretos).
 #[derive(Clone, Default, PartialEq, Eq)]
-struct Secreto(String);
+struct Secreto {
+    valor: String,
+    cursor: usize,
+}
 impl fmt::Debug for Secreto {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("[OCULTA]")
     }
 }
 impl Secreto {
+    #[cfg(test)]
+    fn nuevo(valor: impl Into<String>) -> Self {
+        let valor = valor.into();
+        let cursor = valor.chars().count();
+        Self { valor, cursor }
+    }
     fn limpiar(&mut self) {
-        self.0.clear();
+        self.valor.clear();
+        self.cursor = 0;
+    }
+    /// Se lleva el valor real y deja el campo vacío — reemplaza al
+    /// `std::mem::take` que se usaba cuando esto era un `String` desnudo.
+    fn tomar(&mut self) -> String {
+        self.cursor = 0;
+        std::mem::take(&mut self.valor)
+    }
+    fn valor(&self) -> &str {
+        &self.valor
+    }
+    fn cursor(&self) -> usize {
+        self.cursor
     }
     fn mascara(&self) -> String {
-        "•".repeat(self.0.chars().count())
+        "•".repeat(self.valor.chars().count())
+    }
+    fn longitud(&self) -> usize {
+        self.valor.chars().count()
+    }
+    fn indice_byte(&self, indice_char: usize) -> usize {
+        self.valor
+            .char_indices()
+            .nth(indice_char)
+            .map(|(i, _)| i)
+            .unwrap_or(self.valor.len())
+    }
+    /// Devuelve `true` sólo si el contenido cambió (inserción o borrado) —
+    /// el movimiento de cursor solo no cuenta, así el llamador sabe cuándo
+    /// limpiar un error de validación previo.
+    fn handle_key(&mut self, key: KeyEvent, max_chars: usize) -> bool {
+        match key.code {
+            KeyCode::Left => {
+                self.cursor = self.cursor.saturating_sub(1);
+                false
+            }
+            KeyCode::Right => {
+                self.cursor = (self.cursor + 1).min(self.longitud());
+                false
+            }
+            KeyCode::Home => {
+                self.cursor = 0;
+                false
+            }
+            KeyCode::End => {
+                self.cursor = self.longitud();
+                false
+            }
+            KeyCode::Backspace => {
+                if self.cursor == 0 {
+                    return false;
+                }
+                let idx = self.indice_byte(self.cursor - 1);
+                self.valor.remove(idx);
+                self.cursor -= 1;
+                true
+            }
+            KeyCode::Delete => {
+                if self.cursor >= self.longitud() {
+                    return false;
+                }
+                let idx = self.indice_byte(self.cursor);
+                self.valor.remove(idx);
+                true
+            }
+            KeyCode::Char(c)
+                if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+                    && self.longitud() < max_chars =>
+            {
+                let idx = self.indice_byte(self.cursor);
+                self.valor.insert(idx, c);
+                self.cursor += 1;
+                true
+            }
+            _ => false,
+        }
     }
 }
 
@@ -58,8 +144,8 @@ enum CampoUsuario {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct FormularioUsuario {
     modo: ModoFormularioUsuario,
-    cedula: String,
-    nombre: String,
+    cedula: TextInput,
+    nombre: TextInput,
     rol: RolUsuario,
     activo: bool,
     password: Secreto,
@@ -72,8 +158,8 @@ impl FormularioUsuario {
     fn nuevo() -> Self {
         Self {
             modo: ModoFormularioUsuario::Crear,
-            cedula: String::new(),
-            nombre: String::new(),
+            cedula: TextInput::default().with_max_chars(30),
+            nombre: TextInput::default().with_max_chars(60),
             rol: RolUsuario::Operador,
             activo: true,
             password: Secreto::default(),
@@ -86,8 +172,8 @@ impl FormularioUsuario {
     fn editar(u: &UsuarioResumen) -> Self {
         Self {
             modo: ModoFormularioUsuario::Editar { id: u.id },
-            cedula: u.cedula.clone(),
-            nombre: u.nombre.clone(),
+            cedula: TextInput::new(u.cedula.clone()).with_max_chars(30),
+            nombre: TextInput::new(u.nombre.clone()).with_max_chars(60),
             rol: u.rol,
             activo: u.activo,
             password: Secreto::default(),
@@ -147,7 +233,7 @@ struct ConfirmacionEstado {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ModoUsuarios {
     Normal,
-    Busqueda { texto: String },
+    Busqueda { texto: TextInput },
     Formulario(FormularioUsuario),
     CambioPassword(FormularioPassword),
     ConfirmacionEstado(ConfirmacionEstado),
@@ -413,7 +499,7 @@ impl UsuariosState {
             }
             KeyCode::Char('/') => {
                 self.modo = ModoUsuarios::Busqueda {
-                    texto: self.filtro.clone(),
+                    texto: TextInput::new(self.filtro.clone()),
                 }
             }
             KeyCode::Esc if !self.filtro.is_empty() => {
@@ -450,27 +536,17 @@ impl UsuariosState {
                 self.mover(1);
                 AccionUsuarios::Ninguna
             }
-            KeyCode::Backspace => {
+            _ => {
+                let mut cambio = false;
                 if let ModoUsuarios::Busqueda { texto } = &mut self.modo {
-                    texto.pop();
-                    self.filtro = texto.clone()
+                    cambio = texto.handle_key(key);
+                    self.filtro = texto.value().to_owned();
                 }
-                self.busqueda_debounce.marcar(Instant::now());
+                if cambio {
+                    self.busqueda_debounce.marcar(Instant::now());
+                }
                 AccionUsuarios::Ninguna
             }
-            KeyCode::Char(c)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                if let ModoUsuarios::Busqueda { texto } = &mut self.modo {
-                    texto.push(c);
-                    self.filtro = texto.clone()
-                }
-                self.busqueda_debounce.marcar(Instant::now());
-                AccionUsuarios::Ninguna
-            }
-            _ => AccionUsuarios::Ninguna,
         }
     }
     /// Se llama en cada vuelta del bucle principal; dispara la búsqueda
@@ -524,36 +600,39 @@ impl UsuariosState {
             KeyCode::Enter => {
                 return self.emitir_guardado(f);
             }
-            KeyCode::Backspace => match f.campo_actual() {
+            KeyCode::Left | KeyCode::Right | KeyCode::Home | KeyCode::End | KeyCode::Delete
+            | KeyCode::Backspace => match f.campo_actual() {
                 CampoUsuario::Cedula => {
-                    f.cedula.pop();
+                    f.cedula.handle_key(key);
                 }
                 CampoUsuario::Nombre => {
-                    f.nombre.pop();
+                    f.nombre.handle_key(key);
                 }
                 CampoUsuario::Password => {
-                    f.password.0.pop();
+                    f.password.handle_key(key, 128);
                 }
                 CampoUsuario::ConfirmarPassword => {
-                    f.confirmar_password.0.pop();
+                    f.confirmar_password.handle_key(key, 128);
                 }
                 _ => {}
             },
-            KeyCode::Char(c)
+            KeyCode::Char(_)
                 if !key
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
                 match f.campo_actual() {
-                    CampoUsuario::Cedula if f.cedula.chars().count() < 30 => f.cedula.push(c),
-                    CampoUsuario::Nombre if f.nombre.chars().count() < 60 => f.nombre.push(c),
-                    CampoUsuario::Password if f.password.0.chars().count() < 128 => {
-                        f.password.0.push(c)
+                    CampoUsuario::Cedula => {
+                        f.cedula.handle_key(key);
                     }
-                    CampoUsuario::ConfirmarPassword
-                        if f.confirmar_password.0.chars().count() < 128 =>
-                    {
-                        f.confirmar_password.0.push(c)
+                    CampoUsuario::Nombre => {
+                        f.nombre.handle_key(key);
+                    }
+                    CampoUsuario::Password => {
+                        f.password.handle_key(key, 128);
+                    }
+                    CampoUsuario::ConfirmarPassword => {
+                        f.confirmar_password.handle_key(key, 128);
                     }
                     _ => {}
                 }
@@ -570,11 +649,11 @@ impl UsuariosState {
             self.modo = ModoUsuarios::Formulario(f);
             return AccionUsuarios::Ninguna;
         }
-        let cedula = f.cedula.trim().into();
-        let nombre: String = f.nombre.trim().into();
+        let cedula = f.cedula.value().trim().to_owned();
+        let nombre: String = f.nombre.value().trim().to_owned();
         match f.modo {
             ModoFormularioUsuario::Crear => {
-                let password = std::mem::take(&mut f.password.0);
+                let password = f.password.tomar();
                 f.confirmar_password.limpiar();
                 let rol = f.rol;
                 let activo = f.activo;
@@ -616,12 +695,12 @@ impl UsuariosState {
             }
             KeyCode::Up | KeyCode::Down | KeyCode::Tab | KeyCode::BackTab => f.campo = 1 - f.campo,
             KeyCode::Enter => {
-                if let Err(e) = validar_password(&f.password.0, &f.confirmar.0) {
+                if let Err(e) = validar_password(f.password.valor(), f.confirmar.valor()) {
                     f.error = Some(e);
                     self.modo = ModoUsuarios::CambioPassword(f);
                     return AccionUsuarios::Ninguna;
                 }
-                let password = std::mem::take(&mut f.password.0);
+                let password = f.password.tomar();
                 f.confirmar.limpiar();
                 let id = f.id;
                 let nombre = f.usuario_nombre.clone();
@@ -632,22 +711,23 @@ impl UsuariosState {
                     nombre,
                 };
             }
-            KeyCode::Backspace => {
+            KeyCode::Left | KeyCode::Right | KeyCode::Home | KeyCode::End | KeyCode::Delete
+            | KeyCode::Backspace => {
                 if f.campo == 0 {
-                    f.password.0.pop();
+                    f.password.handle_key(key, 128);
                 } else {
-                    f.confirmar.0.pop();
+                    f.confirmar.handle_key(key, 128);
                 }
             }
-            KeyCode::Char(c)
+            KeyCode::Char(_)
                 if !key
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
                 if f.campo == 0 {
-                    f.password.0.push(c)
+                    f.password.handle_key(key, 128);
                 } else {
-                    f.confirmar.0.push(c)
+                    f.confirmar.handle_key(key, 128);
                 }
             }
             _ => {}
@@ -733,14 +813,14 @@ fn texto_filtro(s: &str) -> Option<String> {
     (!s.trim().is_empty()).then(|| s.to_owned())
 }
 fn validar_formulario(f: &FormularioUsuario) -> Result<(), String> {
-    if f.cedula.trim().is_empty() {
+    if f.cedula.value().trim().is_empty() {
         return Err("La cédula es obligatoria".into());
     }
-    if f.nombre.trim().is_empty() {
+    if f.nombre.value().trim().is_empty() {
         return Err("El nombre es obligatorio".into());
     }
     if matches!(f.modo, ModoFormularioUsuario::Crear) {
-        validar_password(&f.password.0, &f.confirmar_password.0)?
+        validar_password(f.password.valor(), f.confirmar_password.valor())?
     }
     Ok(())
 }

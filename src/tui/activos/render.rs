@@ -109,7 +109,7 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &ActivosState, theme: The
 
     let enfocado_busqueda = matches!(state.modo, ModoActivos::Busqueda { .. });
     let texto_busqueda = match &state.modo {
-        ModoActivos::Busqueda { texto } => texto.as_str(),
+        ModoActivos::Busqueda { texto } => texto.value(),
         _ => state.filtro.as_str(),
     };
     let area_busqueda = render_campo(
@@ -147,8 +147,9 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &ActivosState, theme: The
     render_tabla(frame, area_tabla, state, theme);
     render_panel(frame, area_panel, state, theme);
 
-    if enfocado_busqueda {
-        let ancho_visible = Line::from(texto_busqueda).width() as u16;
+    if let ModoActivos::Busqueda { texto } = &state.modo {
+        let antes_del_cursor: String = texto.value().chars().take(texto.cursor()).collect();
+        let ancho_visible = Line::from(antes_del_cursor).width() as u16;
         let x = area_busqueda
             .x
             .saturating_add(ancho_visible.min(area_busqueda.width));

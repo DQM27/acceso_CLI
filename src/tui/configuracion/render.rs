@@ -6,7 +6,9 @@ use ratatui::{
 };
 
 use super::*;
-use crate::tui::ui_kit::{CommandHint, ScreenShell, StatusKind, Theme, render_terminal_too_small};
+use crate::tui::ui_kit::{
+    CommandHint, ScreenShell, StatusKind, TextInput, Theme, render_terminal_too_small,
+};
 
 const ANCHO_MINIMO: u16 = 60;
 const ALTO_MINIMO: u16 = 20;
@@ -219,20 +221,24 @@ fn render_detalle(frame: &mut Frame, area: Rect, estado: &RespaldosState, theme:
     frame.render_widget(Paragraph::new(lineas), area);
 }
 
-fn render_exportar(frame: &mut Frame, area: Rect, destino: &str, theme: Theme) {
+fn render_exportar(frame: &mut Frame, area: Rect, destino: &TextInput, theme: Theme) {
     let filas = Layout::vertical([Constraint::Length(1), Constraint::Length(3)]).split(area);
     frame.render_widget(
         Paragraph::new("Ruta destino para la copia exportada:").style(theme.base()),
         filas[0],
     );
     frame.render_widget(
-        Paragraph::new(destino)
+        Paragraph::new(destino.value())
             .style(theme.accent())
             .block(crate::tui::ui_kit::panel("DESTINO", theme, true)),
         filas[1],
     );
     frame.set_cursor_position((
-        filas[1].x + 1 + destino.chars().count().min(filas[1].width.saturating_sub(3) as usize) as u16,
+        filas[1].x
+            + 1
+            + destino
+                .cursor()
+                .min(filas[1].width.saturating_sub(3) as usize) as u16,
         filas[1].y + 1,
     ));
 }
