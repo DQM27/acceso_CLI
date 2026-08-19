@@ -2,7 +2,7 @@ use crate::{
     database::queries::ingresos::{EstadoMovimiento, FiltroHistorial},
     models::{empresa::Empresa, tipo_ingreso::TipoIngreso},
     tiempo::{ahora_costa_rica, inicio_dia_costa_rica_utc},
-    tui::ui_kit::query_lang::{self, Term},
+    tui::ui_kit::{Term, resolver_terminos, valores},
 };
 use chrono::{Datelike, Duration, NaiveDate};
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -119,9 +119,7 @@ pub(super) fn parsear_consulta(
     empresas: &[Empresa],
 ) -> (FiltrosHistorial, String) {
     let mut filtros = base.clone();
-    let libres = query_lang::resolver_terminos(texto, &mut filtros, |f, term| {
-        aplicar_clave(f, term, empresas)
-    });
+    let libres = resolver_terminos(texto, &mut filtros, |f, term| aplicar_clave(f, term, empresas));
     (filtros, libres)
 }
 
@@ -131,7 +129,7 @@ pub(super) fn parsear_consulta(
 /// como texto libre en vez de aplicarla a medias.
 fn aplicar_clave(f: &mut FiltrosHistorial, term: &Term, empresas: &[Empresa]) -> bool {
     let clave = term.key.as_deref().unwrap_or_default().to_lowercase();
-    let valores = query_lang::valores(term);
+    let valores = valores(term);
     match clave.as_str() {
         "empresa" if !term.negated && valores.len() == 1 => {
             let buscado = valores[0].to_lowercase();

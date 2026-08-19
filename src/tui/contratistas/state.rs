@@ -7,7 +7,7 @@ use crate::{
     models::{contratista::Contratista, empresa::Empresa, tipo_ingreso::TipoIngreso},
     services::contratista_service::{DatosActualizacionContratista, DatosContratista},
     tiempo::ahora_costa_rica,
-    tui::ui_kit::{Debounce, StandardCommand, query_lang, standard_command},
+    tui::ui_kit::{Debounce, StandardCommand, Term, resolver_terminos, standard_command, valores},
 };
 use std::time::Instant;
 
@@ -25,7 +25,7 @@ mod tests;
 /// que una clave admite, se deja como texto libre para nombre/cédula.
 fn parsear_consulta(texto: &str, empresas: &[Empresa], hoy: NaiveDate) -> (FiltroContratistas, String) {
     let mut filtro = FiltroContratistas::default();
-    let libres = query_lang::resolver_terminos(texto, &mut filtro, |f, term| {
+    let libres = resolver_terminos(texto, &mut filtro, |f, term| {
         aplicar_clave(f, term, empresas, hoy)
     });
     (filtro, libres)
@@ -33,12 +33,12 @@ fn parsear_consulta(texto: &str, empresas: &[Empresa], hoy: NaiveDate) -> (Filtr
 
 fn aplicar_clave(
     f: &mut FiltroContratistas,
-    term: &query_lang::Term,
+    term: &Term,
     empresas: &[Empresa],
     hoy: NaiveDate,
 ) -> bool {
     let clave = term.key.as_deref().unwrap_or_default().to_lowercase();
-    let valores = query_lang::valores(term);
+    let valores = valores(term);
     match clave.as_str() {
         "empresa" if !term.negated && valores.len() == 1 => {
             let buscado = valores[0].to_lowercase();
@@ -301,7 +301,6 @@ pub struct ContratistasState {
     columnas: Vec<(Columna, bool)>,
     filtro: String,
     mensaje: Option<String>,
-    error_carga: Option<String>,
     usuario_nombre: String,
     hoy: NaiveDate,
     ayuda_expandida: bool,
@@ -317,7 +316,6 @@ impl Default for ContratistasState {
             columnas: Columna::TODAS.into_iter().map(|c| (c, true)).collect(),
             filtro: String::new(),
             mensaje: None,
-            error_carga: None,
             usuario_nombre: "Quintana".into(),
             hoy: ahora_costa_rica().date_naive(),
             ayuda_expandida: false,
@@ -335,7 +333,7 @@ impl ContratistasState {
     pub fn completar_empresas(&mut self, r: Result<Vec<Empresa>, String>) {
         match r {
             Ok(e) => self.empresas = e,
-            Err(e) => self.error_carga = Some(e),
+            Err(e) => self.mensaje = Some(e),
         }
     }
     pub fn completar_busqueda(
@@ -346,7 +344,7 @@ impl ContratistasState {
         match r {
             Ok(v) => {
                 self.registros = v;
-                self.error_carga = None;
+                self.mensaje = None;
                 self.seleccion = id
                     .and_then(|id| self.registros.iter().position(|c| c.id == id))
                     .or_else(|| (!self.registros.is_empty()).then_some(0))
@@ -354,7 +352,7 @@ impl ContratistasState {
             Err(e) => {
                 self.registros.clear();
                 self.seleccion = None;
-                self.error_carga = Some(e)
+                self.mensaje = Some(e)
             }
         }
     }
@@ -581,9 +579,9 @@ impl ContratistasState {
         match r {
             Ok(creado) => {
                 self.modo = ModoContratistas::Normal;
-                if creado.is_some() {
-                    self.filtro.clear()
-                }
+                // Igual tras crear o editar — antes sólo se limpiaba al
+                // crear, mismo patrón de inconsistencia que ya tenía Usuarios.
+                self.filtro.clear();
                 self.mensaje = Some(format!(
                     "✓ Contratista {} — {}",
                     if creado.is_some() {

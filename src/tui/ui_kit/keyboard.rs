@@ -6,6 +6,14 @@ use super::shell::CommandHint;
 ///
 /// Las acciones de dominio siguen perteneciendo a cada vista; este módulo solo
 /// define el significado estable de las teclas comunes.
+///
+/// Adopción real desigual: `Help`, `Cancel`, `Theme`, `QuickExit` y
+/// `EmergencyExit` las usan todas las pantallas relevantes. `Primary`,
+/// `FocusNext` y `FocusPrevious` sólo las consume `historial/state.rs` de
+/// verdad — el resto de pantallas maneja Tab/BackTab/Enter con su propio
+/// `match` local en vez de pasar por `standard_command`. No es un bug (cada
+/// pantalla tiene su propia noción de "siguiente campo"), pero la
+/// abstracción cubre menos de lo que su presencia sugiere.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StandardCommand {
     Primary,

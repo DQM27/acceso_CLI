@@ -333,7 +333,11 @@ impl HistorialState {
             }
             KeyCode::Char(' ') => {
                 let n = self.columnas_clasica.iter().filter(|x| x.1).count();
-                if !(self.columnas_clasica[s].1 && n == 1) {
+                if self.columnas_clasica[s].1 && n == 1 {
+                    // Mismo aviso que Activos/Contratistas — antes esta
+                    // pantalla no hacía nada, sin explicar la restricción.
+                    self.mensaje = Some("Debe conservar al menos una columna".into());
+                } else {
                     self.columnas_clasica[s].1 = !self.columnas_clasica[s].1
                 }
             }

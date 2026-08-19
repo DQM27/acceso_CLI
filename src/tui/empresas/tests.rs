@@ -156,7 +156,7 @@ fn error_de_carga_es_presentable_y_movimiento_respeta_limites() {
     let mut s = EmpresasState::default();
     s.completar_busqueda(Err("No se pudo cargar la base de empresas".into()), None);
     assert_eq!(
-        s.error_carga.as_deref(),
+        s.mensaje.as_deref(),
         Some("No se pudo cargar la base de empresas")
     );
     s.completar_busqueda(Ok(datos()), None);

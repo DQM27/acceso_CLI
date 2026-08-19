@@ -133,9 +133,14 @@ fn respaldar_antes_de_migrar(connection: &Connection, path: &Path) -> Result<(),
     if version == 0 || version >= SCHEMA_VERSION {
         return Ok(());
     }
-    let Some(directorio_base) = path.parent() else {
-        return Ok(());
-    };
+    // No se salta en silencio si falta el directorio padre: el respaldo es
+    // obligatorio, así que sin dónde ponerlo es un fallo, no un "nada que
+    // hacer" — contradecía el propio comentario de esta función.
+    let directorio_base = path.parent().ok_or_else(|| {
+        SchemaError::RespaldoPreMigracionFallido(
+            "no se pudo determinar el directorio de la base de datos".to_owned(),
+        )
+    })?;
     let directorio_respaldos = directorio_base.join("backups");
 
     super::backup::crear_respaldo(connection, &directorio_respaldos, TipoRespaldo::PreMigracion)

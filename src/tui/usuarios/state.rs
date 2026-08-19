@@ -340,12 +340,15 @@ impl UsuariosState {
         match resultado {
             Ok(()) => {
                 self.modo = ModoUsuarios::Normal;
+                // Mismo criterio que `completar_guardado`: limpiar el filtro
+                // tras cualquier escritura exitosa, no sólo al crear/editar.
+                self.filtro.clear();
                 self.mensaje = Some(format!(
                     "✓ Usuario {} — {nombre}",
                     if activar { "activado" } else { "desactivado" }
                 ));
                 AccionUsuarios::Buscar {
-                    texto: texto_filtro(&self.filtro),
+                    texto: None,
                     seleccionar_id: Some(id),
                 }
             }
@@ -578,14 +581,16 @@ impl UsuariosState {
             ModoFormularioUsuario::Crear => {
                 let password = std::mem::take(&mut f.password.0);
                 f.confirmar_password.limpiar();
+                let rol = f.rol;
+                let activo = f.activo;
                 self.modo = ModoUsuarios::Formulario(f);
                 AccionUsuarios::Crear {
                     input: CrearUsuarioInput {
                         cedula,
                         nombre: nombre.clone(),
                         password,
-                        rol: self.formulario_actual().unwrap().rol,
-                        activo: self.formulario_actual().unwrap().activo,
+                        rol,
+                        activo,
                     },
                     nombre,
                 }
@@ -605,13 +610,6 @@ impl UsuariosState {
                     nombre,
                 }
             }
-        }
-    }
-    fn formulario_actual(&self) -> Option<&FormularioUsuario> {
-        if let ModoUsuarios::Formulario(f) = &self.modo {
-            Some(f)
-        } else {
-            None
         }
     }
     fn password(&mut self, key: KeyEvent, mut f: FormularioPassword) -> AccionUsuarios {

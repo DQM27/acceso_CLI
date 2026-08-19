@@ -57,7 +57,6 @@ pub struct EmpresasState {
     modo: ModoEmpresas,
     filtro: String,
     mensaje: Option<String>,
-    error_carga: Option<String>,
     usuario_nombre: String,
     ayuda_expandida: bool,
     busqueda_debounce: Debounce,
@@ -71,7 +70,6 @@ impl Default for EmpresasState {
             modo: ModoEmpresas::Normal,
             filtro: String::new(),
             mensaje: None,
-            error_carga: None,
             usuario_nombre: "Quintana".into(),
             ayuda_expandida: false,
             busqueda_debounce: Debounce::default(),
@@ -127,7 +125,7 @@ impl EmpresasState {
         match resultado {
             Ok(empresas) => {
                 self.empresas = empresas;
-                self.error_carga = None;
+                self.mensaje = None;
                 self.seleccion = seleccionar_id
                     .and_then(|id| self.empresas.iter().position(|e| e.id == id))
                     .or_else(|| (!self.empresas.is_empty()).then_some(0));
@@ -135,7 +133,7 @@ impl EmpresasState {
             Err(error) => {
                 self.empresas.clear();
                 self.seleccion = None;
-                self.error_carga = Some(error);
+                self.mensaje = Some(error);
             }
         }
     }
@@ -168,6 +166,9 @@ impl EmpresasState {
         match resultado {
             Ok(()) => {
                 self.modo = ModoEmpresas::Normal;
+                // Igual que al crear — antes sólo se limpiaba al crear, mismo
+                // patrón de inconsistencia que ya tenía Usuarios.
+                self.filtro.clear();
                 self.mensaje = Some(format!("✓ Empresa actualizada — {}", nombre.trim()));
                 self.accion_buscar(Some(id))
             }
@@ -235,7 +236,10 @@ impl EmpresasState {
                     texto.pop();
                     self.filtro = texto.clone();
                 }
-                self.seleccion = None;
+                // No se resetea la selección aquí — mismo criterio que
+                // Activos/Contratistas/Historial: mientras el debounce está
+                // pendiente se mantiene resaltada la fila anterior en vez de
+                // verse vacía.
                 self.busqueda_debounce.marcar(Instant::now());
                 AccionEmpresas::Ninguna
             }
@@ -248,7 +252,6 @@ impl EmpresasState {
                     texto.push(c);
                     self.filtro = texto.clone();
                 }
-                self.seleccion = None;
                 self.busqueda_debounce.marcar(Instant::now());
                 AccionEmpresas::Ninguna
             }

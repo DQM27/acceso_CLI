@@ -91,7 +91,8 @@ impl NuevoIngresoState {
         match r {
             Ok(v) => {
                 self.contratistas = v;
-                self.seleccion = (!self.contratistas.is_empty()).then_some(0)
+                self.seleccion = (!self.contratistas.is_empty()).then_some(0);
+                self.error = None;
             }
             Err(e) => {
                 self.contratistas.clear();

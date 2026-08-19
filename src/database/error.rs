@@ -51,7 +51,18 @@ impl DatabaseError {
     }
 }
 
-impl std::error::Error for DatabaseError {}
+impl std::error::Error for DatabaseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            DatabaseError::Sqlite(error) => Some(error),
+            DatabaseError::RegistroNoActivo
+            | DatabaseError::ConfiguracionInicialYaRealizada
+            | DatabaseError::UsuarioNoEncontrado
+            | DatabaseError::UltimoRootActivo
+            | DatabaseError::FechaCorrupta(_) => None,
+        }
+    }
+}
 
 impl From<rusqlite::Error> for DatabaseError {
     fn from(error: rusqlite::Error) -> Self {

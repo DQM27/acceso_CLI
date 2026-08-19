@@ -6,7 +6,7 @@ use crate::{
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Constraint;
 
-use crate::tui::ui_kit::{Debounce, StandardCommand, query_lang, standard_command};
+use crate::tui::ui_kit::{Debounce, StandardCommand, Term, resolver_terminos, standard_command, valores};
 use std::time::Instant;
 
 const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
@@ -22,15 +22,13 @@ mod tests;
 /// texto libre para nombre/cédula/gafete.
 fn parsear_consulta(texto: &str, empresas: &[Empresa]) -> (FiltroIngresosActivos, String) {
     let mut filtro = FiltroIngresosActivos::default();
-    let libres = query_lang::resolver_terminos(texto, &mut filtro, |f, term| {
-        aplicar_clave(f, term, empresas)
-    });
+    let libres = resolver_terminos(texto, &mut filtro, |f, term| aplicar_clave(f, term, empresas));
     (filtro, libres)
 }
 
-fn aplicar_clave(f: &mut FiltroIngresosActivos, term: &query_lang::Term, empresas: &[Empresa]) -> bool {
+fn aplicar_clave(f: &mut FiltroIngresosActivos, term: &Term, empresas: &[Empresa]) -> bool {
     let clave = term.key.as_deref().unwrap_or_default().to_lowercase();
-    let valores = query_lang::valores(term);
+    let valores = valores(term);
     match clave.as_str() {
         "empresa" if !term.negated && valores.len() == 1 => {
             let buscado = valores[0].to_lowercase();
@@ -257,6 +255,9 @@ impl ActivosState {
         self.modo = ModoActivos::Normal;
         match r {
             Ok(()) => {
+                // Mismo criterio que las demás pantallas tras una escritura
+                // exitosa — antes Activos nunca limpiaba el filtro.
+                self.filtro.clear();
                 self.mensaje = Some(format!("✓ Salida registrada — {nombre}"));
                 self.buscar(Some(id))
             }

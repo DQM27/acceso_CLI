@@ -1,7 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::services::registro_ingreso_service::IngresoActivoResumen;
-use crate::tui::ui_kit::mover_seleccion;
+use crate::tui::ui_kit::{StandardCommand, mover_seleccion, standard_command};
 
 #[path = "render.rs"]
 pub(super) mod render;
@@ -33,6 +33,7 @@ pub struct SalidaRapidaState {
     registros: Vec<IngresoActivoResumen>,
     seleccion: Option<usize>,
     error: Option<String>,
+    ayuda_expandida: bool,
 }
 
 impl Default for SalidaRapidaState {
@@ -43,6 +44,7 @@ impl Default for SalidaRapidaState {
             registros: vec![],
             seleccion: None,
             error: None,
+            ayuda_expandida: false,
         }
     }
 }
@@ -84,10 +86,18 @@ impl SalidaRapidaState {
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) -> AccionSalidaRapida {
+        if standard_command(key) == Some(StandardCommand::Help) {
+            self.ayuda_expandida = !self.ayuda_expandida;
+            return AccionSalidaRapida::Ninguna;
+        }
         match self.estado.clone() {
             Estado::Cerrado => AccionSalidaRapida::Ninguna,
+            // Mismo criterio que `menu_principal`: sólo Enter/Esc resuelven
+            // una confirmación pendiente, no cualquier tecla.
             Estado::Confirmado { .. } => {
-                self.estado = Estado::Cerrado;
+                if matches!(key.code, KeyCode::Enter | KeyCode::Esc) {
+                    self.estado = Estado::Cerrado;
+                }
                 AccionSalidaRapida::Ninguna
             }
             Estado::Abierto => self.handle_abierto(key),

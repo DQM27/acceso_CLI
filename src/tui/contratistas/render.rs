@@ -89,14 +89,11 @@ fn estado_shell(state: &ContratistasState) -> (String, StatusKind) {
     {
         return (format!("✕ {error}"), StatusKind::Error);
     }
-    if let Some(error) = &state.error_carga {
-        return (error.clone(), StatusKind::Error);
-    }
     if let Some(mensaje) = &state.mensaje {
         let tipo = if mensaje.starts_with('✓') {
             StatusKind::Success
         } else {
-            StatusKind::Warning
+            StatusKind::Error
         };
         return (mensaje.clone(), tipo);
     }

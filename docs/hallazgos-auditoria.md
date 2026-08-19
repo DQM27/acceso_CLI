@@ -12,6 +12,17 @@ tenía tests, cuando `tests/domain.rs` ya lo cubre con 16 casos — y se descart
 marcando `[x]` a medida que se reparan, en el orden que se decida trabajarlos (no
 necesariamente el orden de esta lista).
 
+**Estado (2026-08-19): 66/67 reparados**, todo en la rama `fix/auditoria-nivel-1`. Sólo
+queda pendiente el hallazgo 21 (`Empresa` sin campo `activo`) por decisión explícita del
+usuario — es una funcionalidad nueva (migración, cascada, UI), no un fix de código
+existente, y ya está marcado V1/prioridad baja. Varios hallazgos resultaron, al investigar
+para repararlos, tener más matices de los que el texto original capturaba (documentado en
+cada uno): dos casos donde el "problema" era en realidad una decisión de diseño intencional
+que se confirmó y documentó en vez de cambiar (10, 16), un caso donde el fix "correcto"
+arquitectónicamente se intentó, rompió un test real, y se revirtió con la lección
+documentada (18), y un caso donde unificar dos pantallas reveló que en realidad tenían dos
+campos con propósitos distintos, no sólo dos nombres para lo mismo (59).
+
 ## Orden sugerido para reparar (de lo más delicado a lo más simple)
 
 Índice rápido, sin repetir el detalle de cada hallazgo (ver arriba/abajo el texto completo
@@ -84,23 +95,27 @@ Simple = un cambio local, bajo riesgo, sin tocar lógica compartida.
 46. [x] Matriz `requiere_praind()`/`requiere_gafete()` sin comentario que explique la regla.
 47. [x] `fecha_hora_salida`/`usuario_salida_id` deberían ser un único `Option`.
 
-**Nivel 6 — Coherencia general / entre pantallas (cosméticos, sin riesgo de datos)**
-48. Respaldo "obligatorio" se salta si la ruta no tiene directorio padre.
-49. `DatabaseError` no expone `source()` (a diferencia de `SchemaError`).
-50. `StandardCommand::FocusNext`/`Primary` casi no se usan.
-51. `query_lang` expuesto como `pub mod` completo, rompe convención de `ui_kit`.
-52. Búsqueda se limpia al guardar usuario pero no al activar/desactivar.
-53. Password ROOT inicial valida orden distinto que Usuarios (coincidencia vs. longitud).
-54. ROOT inicial sin tope de longitud en cédula/nombre/password (otros formularios sí).
-55. Doble `unwrap()` innecesario en `emitir_guardado`.
-56. Mensaje de error persiste tras búsqueda exitosa en Nuevo Ingreso.
-57. Cualquier tecla cierra confirmación de Salida Rápida (no sólo Enter/Esc).
-58. Salida Rápida no soporta el toggle de ayuda (F1).
-59. Campo de error de búsqueda con nombre distinto entre pantallas.
-60. Historial no avisa al no poder ocultar la última columna visible.
-61. Política de "limpiar filtro tras guardar" distinta en cada pantalla.
-62. Empresas resetea selección en cada tecla; las otras 3 pantallas no.
-63. Patrón irrefutable asume única variante de `TermValue` (depende de versión pineada).
+**Nivel 6 — Coherencia general / entre pantallas (cosméticos, sin riesgo de datos) — [x] reparado (rama `fix/auditoria-nivel-1`)**
+48. [x] Respaldo "obligatorio" se salta si la ruta no tiene directorio padre.
+49. [x] `DatabaseError` no expone `source()` (a diferencia de `SchemaError`).
+50. [x] `StandardCommand::FocusNext`/`Primary` casi no se usan — documentado, no se fuerza
+    adopción (cada pantalla tiene su propia noción de "siguiente campo").
+51. [x] `query_lang` expuesto como `pub mod` completo, rompe convención de `ui_kit`.
+52. [x] Búsqueda se limpia al guardar usuario pero no al activar/desactivar.
+53. [x] Password ROOT inicial valida orden distinto que Usuarios (coincidencia vs. longitud).
+54. [x] ROOT inicial sin tope de longitud en cédula/nombre/password (otros formularios sí).
+55. [x] Doble `unwrap()` innecesario en `emitir_guardado`.
+56. [x] Mensaje de error persiste tras búsqueda exitosa en Nuevo Ingreso.
+57. [x] Cualquier tecla cierra confirmación de Salida Rápida (no sólo Enter/Esc).
+58. [x] Salida Rápida no soporta el toggle de ayuda (F1).
+59. [x] Campo de error de búsqueda con nombre distinto entre pantallas — de paso se encontró
+    y corrigió una colisión de nombre de campo real al unificar (`mensaje` duplicado en
+    Contratistas/Empresas, dos conceptos distintos que había que fusionar con cuidado, no
+    un simple renombre).
+60. [x] Historial no avisa al no poder ocultar la última columna visible.
+61. [x] Política de "limpiar filtro tras guardar" distinta en cada pantalla.
+62. [x] Empresas resetea selección en cada tecla; las otras 3 pantallas no.
+63. [x] Patrón irrefutable asume única variante de `TermValue` (depende de versión pineada).
 
 Los ítems que no cuentan un número aquí (Nivel 1-6 cubre 63 de 67 — el resto son notas
 "Relacionado" ya incluidas dentro del punto que las menciona, no hallazgos aparte) están
@@ -326,59 +341,57 @@ listados completos en las secciones de abajo.
 
 ## Coherencia
 
-- [ ] **El respaldo "obligatorio" pre-migración se salta si la ruta no tiene directorio
-  padre.** `src/database/connection.rs:135`. Contradice el propio comentario de la
-  función, que lo describe como bloqueante.
-- [ ] **`DatabaseError` no expone la causa real vía `source()`.**
-  `src/database/error.rs:34`. A diferencia de `SchemaError` (mismo módulo), que sí la
-  reenvía — pierde el mensaje real de SQLite en cualquier consumidor que la use.
-- [ ] **`StandardCommand::FocusNext`/`Primary` casi no se usan.**
-  `src/tui/ui_kit/keyboard.rs`. Sólo `historial/state.rs` los usa de verdad; el resto de
-  pantallas manejan Tab/BackTab/Enter/Espacio con matches propios en vez de pasar por
-  `standard_command` — la abstracción compartida cubre menos de lo que su existencia
-  sugiere.
-- [ ] **`query_lang` es el único submódulo de `ui_kit` expuesto como `pub mod` completo.**
-  `src/tui/ui_kit/mod.rs:9`. El resto son privados con una lista curada de `pub use` —
-  rompe la convención del propio archivo sin razón aparente.
+- [x] **El respaldo "obligatorio" pre-migración se salta si la ruta no tiene directorio
+  padre.** `src/database/connection.rs:135`. **Reparado:** ahora devuelve
+  `SchemaError::RespaldoPreMigracionFallido` en vez de `Ok(())` silencioso.
+- [x] **`DatabaseError` no expone la causa real vía `source()`.**
+  `src/database/error.rs:34`. **Reparado:** `source()` implementado, reenvía la causa de
+  `Sqlite(_)`.
+- [x] **`StandardCommand::FocusNext`/`Primary` casi no se usan.**
+  `src/tui/ui_kit/keyboard.rs`. **Documentado, no forzado:** rustdoc en el enum aclara la
+  adopción real — no es un bug, cada pantalla tiene su propia noción de "siguiente campo".
+- [x] **`query_lang` es el único submódulo de `ui_kit` expuesto como `pub mod` completo.**
+  `src/tui/ui_kit/mod.rs:9`. **Reparado:** ahora es `mod` privado con `pub use
+  query_lang::{Term, resolver_terminos, valores}`, igual que el resto de `ui_kit`.
 
 ## Coherencia entre pantallas
 
-- [ ] **La búsqueda se limpia al guardar un usuario pero no al activar/desactivarlo.**
-  `src/tui/usuarios/state.rs:347` vs `:311`. Dos caminos de la misma pantalla que no
-  coinciden en cómo tratan el filtro activo.
-- [ ] **Password de ROOT inicial valida coincidencia antes que longitud; Usuarios lo hace al
-  revés.** `src/tui/configuracion_inicial/state.rs:225` vs `usuarios/state.rs`. Misma regla,
-  dos copias independientes que ya divergen en el orden de evaluación.
-- [ ] **ROOT inicial es la única cuenta sin tope de longitud en cédula/nombre/password.**
-  `src/tui/configuracion_inicial/state.rs:193`. El resto de formularios (Usuarios,
-  Contratistas, Empresas) sí acotan esos mismos campos.
-- [ ] **Doble `unwrap()` innecesario en `emitir_guardado` tras mover el formulario.**
-  `src/tui/usuarios/state.rs:587`. Frágil ante un reordenamiento futuro del código; hoy no
-  entra en pánico por pura casualidad de orden.
-- [ ] **Mensaje de error persiste tras una búsqueda exitosa en Nuevo Ingreso.**
-  `src/tui/nuevo_ingreso/state.rs:92`. `completar_busqueda` no limpia `self.error` en la
-  rama `Ok`, a diferencia de la misma función en Salida Rápida que sí lo hace.
-- [ ] **Cualquier tecla cierra la confirmación de Salida Rápida, no sólo Enter/Esc.**
-  `src/tui/salida_rapida/state.rs:88`. `menu_principal` sí exige explícitamente Enter o Esc
-  para resolver una confirmación pendiente.
-- [ ] **Salida Rápida no soporta el toggle de ayuda (F1).**
-  `src/tui/salida_rapida/state.rs:1`. Ni siquiera importa `StandardCommand`, a diferencia
-  de Nuevo Ingreso y Menú Principal.
-- [ ] **Campo de error de búsqueda distinto entre pantallas (`mensaje` vs `error_carga`).**
-  `src/tui/activos/state.rs:264`. Activos/Historial usan `self.mensaje`;
-  Contratistas/Empresas usan `self.error_carga` — mismo concepto, dos nombres.
-- [ ] **Historial no avisa al no poder ocultar la última columna visible.**
-  `src/tui/historial/state.rs:334`. Activos y Contratistas sí muestran un mensaje
-  explicando la restricción; Historial simplemente no hace nada.
-- [ ] **Política de "limpiar filtro tras guardar" distinta en cada pantalla.**
-  `src/tui/contratistas/state.rs:601`. Contratistas limpia sólo al crear, Empresas sólo al
-  crear, Activos nunca — mismo patrón de inconsistencia que el de Usuarios, reproducido de
-  tres formas distintas más.
-- [ ] **Empresas resetea la selección en cada tecla de búsqueda; las otras 3 no.**
-  `src/tui/empresas/state.rs:238`. Mientras el debounce está pendiente, Empresas se ve
-  vacía; Activos/Contratistas/Historial mantienen resaltada la fila anterior.
-- [ ] **Patrón irrefutable asume una única variante de `TermValue`.**
-  `src/tui/ui_kit/query_lang.rs:33`. `let TermValue::Simple(valor) = &term.value;` en 3
-  funciones, apoyándose en que la crate externa `query-parser` (pineada a `0.2.0`) hoy sólo
-  tiene esa variante, sin comentario que documente por qué es seguro sólo mientras se
-  dependa de esa versión.
+- [x] **La búsqueda se limpia al guardar un usuario pero no al activar/desactivarlo.**
+  `src/tui/usuarios/state.rs:347` vs `:311`. **Reparado:** `completar_estado` ahora también
+  limpia el filtro.
+- [x] **Password de ROOT inicial valida coincidencia antes que longitud; Usuarios lo hace al
+  revés.** `src/tui/configuracion_inicial/state.rs:225` vs `usuarios/state.rs`. **Reparado:**
+  mismo orden que Usuarios (longitud antes que coincidencia).
+- [x] **ROOT inicial es la única cuenta sin tope de longitud en cédula/nombre/password.**
+  `src/tui/configuracion_inicial/state.rs:193`. **Reparado:** mismos topes que Usuarios (30
+  cédula, 60 nombre, 128 password).
+- [x] **Doble `unwrap()` innecesario en `emitir_guardado` tras mover el formulario.**
+  `src/tui/usuarios/state.rs:587`. **Reparado:** `rol`/`activo` se capturan antes de mover
+  `f`; se eliminó `formulario_actual()`, que quedó sin otro uso (código muerto).
+- [x] **Mensaje de error persiste tras una búsqueda exitosa en Nuevo Ingreso.**
+  `src/tui/nuevo_ingreso/state.rs:92`. **Reparado:** `completar_busqueda` limpia
+  `self.error` en la rama `Ok`, igual que Salida Rápida.
+- [x] **Cualquier tecla cierra la confirmación de Salida Rápida, no sólo Enter/Esc.**
+  `src/tui/salida_rapida/state.rs:88`. **Reparado:** sólo Enter/Esc, igual que
+  `menu_principal`.
+- [x] **Salida Rápida no soporta el toggle de ayuda (F1).**
+  `src/tui/salida_rapida/state.rs:1`. **Reparado:** F1 alterna `ayuda_expandida`, que
+  extiende el pie con el hint de F2.
+- [x] **Campo de error de búsqueda distinto entre pantallas (`mensaje` vs `error_carga`).**
+  `src/tui/activos/state.rs:264`. **Reparado:** unificado a `mensaje` en las 4 pantallas —
+  Contratistas/Empresas tenían en realidad *dos* campos (`mensaje` para éxito,
+  `error_carga` para fallo de carga); se fusionaron en uno solo con el mismo criterio por
+  contenido (`starts_with('✓')`) que ya usaba Activos.
+- [x] **Historial no avisa al no poder ocultar la última columna visible.**
+  `src/tui/historial/state.rs:334`. **Reparado:** mismo mensaje que Activos/Contratistas.
+- [x] **Política de "limpiar filtro tras guardar" distinta en cada pantalla.**
+  `src/tui/contratistas/state.rs:601`. **Reparado:** Contratistas y Empresas limpian tanto
+  al crear como al editar; Activos limpia tras registrar una salida — mismo criterio que ya
+  se fijó para Usuarios.
+- [x] **Empresas resetea la selección en cada tecla de búsqueda; las otras 3 no.**
+  `src/tui/empresas/state.rs:238`. **Reparado:** ya no resetea `seleccion` en
+  Backspace/Char, igual que las otras 3.
+- [x] **Patrón irrefutable asume una única variante de `TermValue`.**
+  `src/tui/ui_kit/query_lang.rs:33`. **Reparado:** consolidado en un único helper privado
+  `valor_simple` con el comentario que documenta la dependencia de `query-parser 0.2.x`, en
+  vez de repetir el patrón (y el supuesto sin explicar) en 3 funciones.

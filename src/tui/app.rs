@@ -752,7 +752,7 @@ mod tests {
             .unwrap();
         assert_eq!(restantes.total, 0);
 
-        app.procesar_tecla_global(tecla(KeyCode::Char(' ')), Some(&core));
+        app.procesar_tecla_global(tecla(KeyCode::Enter), Some(&core));
         assert!(!app.salida_rapida.abierto());
     }
 

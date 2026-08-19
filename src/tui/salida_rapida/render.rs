@@ -103,8 +103,10 @@ fn render_pie(frame: &mut Frame, area: Rect, state: &SalidaRapidaState, theme: T
         frame.render_widget(Paragraph::new(error.as_str()).style(theme.danger()), area);
         return;
     }
-    frame.render_widget(
-        Paragraph::new("↑↓ mover · ENTER confirmar salida · ESC cerrar").style(theme.muted()),
-        area,
-    );
+    let texto = if state.ayuda_expandida {
+        "↑↓ mover · ENTER confirmar salida · ESC cerrar · F1 ayuda · F2 abrir/cerrar salida rápida"
+    } else {
+        "↑↓ mover · ENTER confirmar salida · ESC cerrar · F1 ayuda"
+    };
+    frame.render_widget(Paragraph::new(texto).style(theme.muted()), area);
 }

@@ -72,11 +72,15 @@ fn estado_shell(state: &EmpresasState) -> (String, StatusKind) {
     {
         return (format!("✕ {error}"), StatusKind::Error);
     }
-    if let Some(error) = &state.error_carga {
-        return (error.clone(), StatusKind::Error);
-    }
+    // Mismo criterio que `activos::estado_shell`: un único campo `mensaje`,
+    // el contenido decide el estilo en vez de necesitar 2 campos separados.
     if let Some(mensaje) = &state.mensaje {
-        return (mensaje.clone(), StatusKind::Success);
+        let tipo = if mensaje.starts_with('✓') {
+            StatusKind::Success
+        } else {
+            StatusKind::Error
+        };
+        return (mensaje.clone(), tipo);
     }
     (String::new(), StatusKind::Normal)
 }

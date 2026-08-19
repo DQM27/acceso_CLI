@@ -26,12 +26,22 @@ pub fn analizar(texto: &str) -> Query {
     query_parser::parse(texto)
 }
 
+/// `TermValue` sólo tiene la variante `Simple` en `query-parser 0.2.x` (fijado
+/// en `Cargo.toml`), así que el patrón es irrefutable hoy — pero deja de
+/// compilar (no de fallar en silencio) si una versión futura agrega una
+/// variante nueva, porque entonces el patrón ya no cubriría todos los casos.
+/// Único punto donde se hace este supuesto, para no repetirlo en cada función
+/// de este módulo que necesita el texto crudo de un término.
+fn valor_simple(term: &Term) -> &str {
+    let TermValue::Simple(valor) = &term.value;
+    valor
+}
+
 /// Valores de una clave, separados por coma (`clave:a,b,c`) y sin espacios
 /// sobrantes. Para una clave sin lista (`clave:valor`) devuelve un solo
 /// elemento.
 pub fn valores(term: &Term) -> Vec<String> {
-    let TermValue::Simple(valor) = &term.value;
-    valor
+    valor_simple(term)
         .split(',')
         .map(str::trim)
         .filter(|v| !v.is_empty())
@@ -42,11 +52,11 @@ pub fn valores(term: &Term) -> Vec<String> {
 /// Texto de un término sin clave (texto libre), con el signo de negación si
 /// lo tenía, listo para unirse con otros términos libres.
 pub fn texto_libre(term: &Term) -> String {
-    let TermValue::Simple(valor) = &term.value;
+    let valor = valor_simple(term);
     if term.negated {
         format!("-{valor}")
     } else {
-        valor.clone()
+        valor.to_owned()
     }
 }
 
@@ -55,7 +65,7 @@ pub fn texto_libre(term: &Term) -> String {
 /// negada/lista que trae, y hay que devolverla a texto libre en vez de
 /// aplicarla a medias.
 pub fn reconstruir_clave(term: &Term) -> String {
-    let TermValue::Simple(valor) = &term.value;
+    let valor = valor_simple(term);
     let clave = term.key.as_deref().unwrap_or_default();
     let prefijo = if term.negated { "-" } else { "" };
     format!("{prefijo}{clave}:{valor}")
