@@ -9,6 +9,14 @@ use crate::models::tipo_ingreso::TipoIngreso;
 const LIMITE_PREDETERMINADO: usize = 100;
 const LIMITE_MAXIMO: usize = 500;
 
+/// Página de resultados: `items` respeta `limite`/`offset`, `total` es el conteo real sin
+/// recortar por el filtro — así la UI puede mostrar "100 de 120" en vez de un tope silencioso.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PaginaContratistas {
+    pub items: Vec<ContratistaResumen>,
+    pub total: usize,
+}
+
 /// Lectura compuesta lista para presentar sin resolver la empresa por separado.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContratistaResumen {
@@ -68,8 +76,7 @@ impl Default for FiltroContratistas {
 }
 
 pub trait ContratistasQuery {
-    fn buscar(&self, filtro: &FiltroContratistas)
-    -> Result<Vec<ContratistaResumen>, DatabaseError>;
+    fn buscar(&self, filtro: &FiltroContratistas) -> Result<PaginaContratistas, DatabaseError>;
 }
 
 pub struct SqliteContratistasQuery<'a> {
@@ -82,10 +89,7 @@ impl<'a> SqliteContratistasQuery<'a> {
     }
 }
 
-const CONTRATISTAS_SQL: &str = "
-    SELECT
-        c.id, c.empresa_id, c.cedula, c.nombre, e.nombre, c.tipo_ingreso,
-        c.fecha_vencimiento_praind, c.es_personal_ruta, c.tiene_acceso
+const CONTRATISTAS_FROM_WHERE: &str = "
     FROM contratistas AS c
     INNER JOIN empresas AS e ON e.id = c.empresa_id
     WHERE (
@@ -117,16 +121,10 @@ const CONTRATISTAS_SQL: &str = "
     )
     AND (:personal_ruta IS NULL OR c.es_personal_ruta = :personal_ruta)
     AND (:tiene_acceso IS NULL OR c.tiene_acceso = :tiene_acceso)
-    ORDER BY CASE WHEN c.cedula = :texto_literal COLLATE NOCASE THEN 0 ELSE 1 END,
-             c.nombre COLLATE NOCASE, c.id
-    LIMIT :limite OFFSET :offset
 ";
 
 impl ContratistasQuery for SqliteContratistasQuery<'_> {
-    fn buscar(
-        &self,
-        filtro: &FiltroContratistas,
-    ) -> Result<Vec<ContratistaResumen>, DatabaseError> {
+    fn buscar(&self, filtro: &FiltroContratistas) -> Result<PaginaContratistas, DatabaseError> {
         let busqueda = BusquedaTexto::preparar(filtro.texto.as_deref());
         let limite = filtro.limite.clamp(1, LIMITE_MAXIMO) as i64;
         let offset = filtro.offset as i64;
@@ -154,8 +152,39 @@ impl ContratistasQuery for SqliteContratistasQuery<'_> {
                 Some(FiltroPraind::SinFecha) => (3, None, None),
             };
 
-        let mut statement = self.connection.prepare(CONTRATISTAS_SQL)?;
-        let resultados = statement
+        let parametros_comunes = named_params! {
+            ":modo_busqueda": busqueda.modo,
+            ":patron": busqueda.patron_like,
+            ":consulta_fts": busqueda.consulta_fts,
+            ":empresa_id": filtro.empresa_id,
+            ":sin_filtro_tipo": sin_filtro_tipo,
+            ":t0": t0,
+            ":t1": t1,
+            ":t2": t2,
+            ":t3": t3,
+            ":praind_modo": praind_modo,
+            ":praind_hoy": praind_hoy,
+            ":praind_limite": praind_limite,
+            ":personal_ruta": filtro.personal_ruta,
+            ":tiene_acceso": filtro.tiene_acceso,
+        };
+
+        let count_sql = format!("SELECT COUNT(*) {CONTRATISTAS_FROM_WHERE}");
+        let total: i64 = self
+            .connection
+            .query_row(&count_sql, parametros_comunes, |row| row.get(0))?;
+
+        let select_sql = format!(
+            "SELECT
+                c.id, c.empresa_id, c.cedula, c.nombre, e.nombre, c.tipo_ingreso,
+                c.fecha_vencimiento_praind, c.es_personal_ruta, c.tiene_acceso
+             {CONTRATISTAS_FROM_WHERE}
+             ORDER BY CASE WHEN c.cedula = :texto_literal COLLATE NOCASE THEN 0 ELSE 1 END,
+                      c.nombre COLLATE NOCASE, c.id
+             LIMIT :limite OFFSET :offset"
+        );
+        let mut statement = self.connection.prepare(&select_sql)?;
+        let items = statement
             .query_map(
                 named_params! {
                     ":modo_busqueda": busqueda.modo,
@@ -180,7 +209,10 @@ impl ContratistasQuery for SqliteContratistasQuery<'_> {
             )?
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(resultados)
+        Ok(PaginaContratistas {
+            items,
+            total: usize::try_from(total).unwrap_or(usize::MAX),
+        })
     }
 }
 

@@ -353,19 +353,22 @@ mod tests {
             }
             if vista == Vista::Contratistas {
                 app.contratistas.completar_busqueda(
-                    Ok(vec![
-                        crate::database::queries::contratistas::ContratistaResumen {
-                            id: 1,
-                            empresa_id: 1,
-                            cedula: "1".into(),
-                            nombre: "Contratista".into(),
-                            empresa_nombre: "Empresa".into(),
-                            tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::Swat,
-                            fecha_vencimiento_praind: None,
-                            es_personal_ruta: false,
-                            tiene_acceso: true,
-                        },
-                    ]),
+                    Ok(crate::database::queries::contratistas::PaginaContratistas {
+                        items: vec![
+                            crate::database::queries::contratistas::ContratistaResumen {
+                                id: 1,
+                                empresa_id: 1,
+                                cedula: "1".into(),
+                                nombre: "Contratista".into(),
+                                empresa_nombre: "Empresa".into(),
+                                tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::Swat,
+                                fecha_vencimiento_praind: None,
+                                es_personal_ruta: false,
+                                tiene_acceso: true,
+                            },
+                        ],
+                        total: 1,
+                    }),
                     None,
                 );
             }
@@ -408,19 +411,23 @@ mod tests {
             sesion: Some(sesion("Daniel")),
             ..App::default()
         };
-        app.nuevo_ingreso.completar_busqueda(Ok(vec![
-            crate::database::queries::contratistas::ContratistaResumen {
-                id: 1,
-                empresa_id: 1,
-                cedula: "1".into(),
-                nombre: "Persona".into(),
-                empresa_nombre: "Empresa".into(),
-                tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::Swat,
-                fecha_vencimiento_praind: None,
-                es_personal_ruta: false,
-                tiene_acceso: true,
-            },
-        ]));
+        app.nuevo_ingreso
+            .completar_busqueda(Ok(crate::database::queries::contratistas::PaginaContratistas {
+                items: vec![
+                    crate::database::queries::contratistas::ContratistaResumen {
+                        id: 1,
+                        empresa_id: 1,
+                        cedula: "1".into(),
+                        nombre: "Persona".into(),
+                        empresa_nombre: "Empresa".into(),
+                        tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::Swat,
+                        fecha_vencimiento_praind: None,
+                        es_personal_ruta: false,
+                        tiene_acceso: true,
+                    },
+                ],
+                total: 1,
+            }));
         app.procesar_tecla_vista(tecla(KeyCode::Enter));
         app.nuevo_ingreso.completar_preparacion(Ok(
             crate::services::registro_ingreso_service::PreparacionIngreso {
@@ -593,8 +600,8 @@ mod tests {
                 },
             )
             .unwrap();
-        assert_eq!(items.len(), 1);
-        assert_eq!(items[0].empresa_id, empresa_id);
+        assert_eq!(items.items.len(), 1);
+        assert_eq!(items.items[0].empresa_id, empresa_id);
         app.procesar_tecla_vista_con_core(tecla(KeyCode::Enter), Some(&core));
         for _ in 0.."José Hernández".chars().count() {
             app.procesar_tecla_vista_con_core(tecla(KeyCode::Backspace), Some(&core))
@@ -614,6 +621,7 @@ mod tests {
                 }
             )
             .unwrap()
+            .items
             .is_empty()
         );
         assert_eq!(
@@ -624,6 +632,7 @@ mod tests {
                 }
             )
             .unwrap()
+            .items
             .len(),
             1
         );
@@ -635,6 +644,7 @@ mod tests {
                 }
             )
             .unwrap()
+            .items
             .len(),
             1
         );
@@ -1701,6 +1711,7 @@ impl App {
                 praind,
                 personal_ruta,
                 tiene_acceso,
+                offset,
             } => {
                 let resultado = core
                     .ok_or_else(|| "No se pudo cargar la base de contratistas".into())
@@ -1713,6 +1724,7 @@ impl App {
                                 praind,
                                 personal_ruta,
                                 tiene_acceso,
+                                offset,
                                 ..Default::default()
                             },
                         )

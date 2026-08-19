@@ -23,6 +23,7 @@ const ANCHO_PANEL_LATERAL: u16 = 100;
 
 const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓", "Mover"),
+    CommandHint::new("PGUP/PGDN", "Página"),
     CommandHint::new("ENTER", "Editar"),
     CommandHint::new("N", "Nuevo"),
     CommandHint::new("/", "Buscar"),
@@ -110,10 +111,20 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &ContratistasState, theme
     let filas = Layout::vertical([Constraint::Length(3), Constraint::Min(4)]).split(area);
 
     let enfocado_busqueda = matches!(state.modo, ModoContratistas::Busqueda { .. });
+    let (pagina, total_paginas) = state.pagina();
+    let etiqueta_busqueda = if total_paginas > 1 {
+        format!(
+            "BUSCAR · {} DE {} RESULTADOS · página {pagina}/{total_paginas}",
+            state.registros.len(),
+            state.total()
+        )
+    } else {
+        format!("BUSCAR · {} RESULTADOS", state.total())
+    };
     let area_busqueda = render_campo(
         frame,
         filas[0],
-        &format!("BUSCAR · {} RESULTADOS", state.registros.len()),
+        &etiqueta_busqueda,
         &state.filtro,
         enfocado_busqueda,
         theme,

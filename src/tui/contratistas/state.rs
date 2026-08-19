@@ -3,7 +3,9 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Constraint;
 
 use crate::{
-    database::queries::contratistas::{ContratistaResumen, FiltroContratistas, FiltroPraind},
+    database::queries::contratistas::{
+        ContratistaResumen, FiltroContratistas, FiltroPraind, PaginaContratistas,
+    },
     models::{contratista::Contratista, empresa::Empresa, tipo_ingreso::TipoIngreso},
     services::contratista_service::{DatosActualizacionContratista, DatosContratista},
     tiempo::ahora_costa_rica,
@@ -12,6 +14,10 @@ use crate::{
 use std::time::Instant;
 
 const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
+/// Mismo tamaño que `LIMITE_PREDETERMINADO` en `database::queries::contratistas` — se repite
+/// aquí (no se importa) porque ese es un detalle interno de la consulta, mientras que esta
+/// constante es el tamaño de página que la UI usa para avanzar con PageUp/PageDown.
+const LIMITE_PAGINA: usize = 100;
 
 #[path = "render.rs"]
 pub(super) mod render;
@@ -270,6 +276,7 @@ pub enum AccionContratistas {
         praind: Option<FiltroPraind>,
         personal_ruta: Option<bool>,
         tiene_acceso: Option<bool>,
+        offset: usize,
     },
     Crear {
         datos: DatosContratista,
@@ -296,6 +303,10 @@ impl std::fmt::Debug for AccionContratistas {
 #[derive(Debug)]
 pub struct ContratistasState {
     registros: Vec<ContratistaResumen>,
+    /// Conteo real, sin recortar por `LIMITE_PAGINA` — `registros.len()` sólo
+    /// dice cuántos trae la página actual.
+    total: usize,
+    offset: usize,
     empresas: Vec<Empresa>,
     seleccion: Option<usize>,
     modo: ModoContratistas,
@@ -310,6 +321,8 @@ impl Default for ContratistasState {
     fn default() -> Self {
         Self {
             registros: vec![],
+            total: 0,
+            offset: 0,
             empresas: vec![],
             seleccion: None,
             modo: ModoContratistas::Normal,
@@ -332,14 +345,11 @@ impl ContratistasState {
             Err(e) => self.mensaje = Some(e),
         }
     }
-    pub fn completar_busqueda(
-        &mut self,
-        r: Result<Vec<ContratistaResumen>, String>,
-        id: Option<i64>,
-    ) {
+    pub fn completar_busqueda(&mut self, r: Result<PaginaContratistas, String>, id: Option<i64>) {
         match r {
-            Ok(v) => {
-                self.registros = v;
+            Ok(pagina) => {
+                self.registros = pagina.items;
+                self.total = pagina.total;
                 self.mensaje = None;
                 self.seleccion = id
                     .and_then(|id| self.registros.iter().position(|c| c.id == id))
@@ -347,6 +357,7 @@ impl ContratistasState {
             }
             Err(e) => {
                 self.registros.clear();
+                self.total = 0;
                 self.seleccion = None;
                 self.mensaje = Some(e)
             }
@@ -375,6 +386,18 @@ impl ContratistasState {
         match key.code {
             KeyCode::Up => self.mover(-1),
             KeyCode::Down => self.mover(1),
+            KeyCode::PageDown => {
+                if self.offset + LIMITE_PAGINA < self.total {
+                    self.offset += LIMITE_PAGINA;
+                    return self.buscar(None);
+                }
+            }
+            KeyCode::PageUp => {
+                if self.offset > 0 {
+                    self.offset = self.offset.saturating_sub(LIMITE_PAGINA);
+                    return self.buscar(None);
+                }
+            }
             KeyCode::Enter => {
                 if let Some(id) = self.id() {
                     self.editar(id)
@@ -397,6 +420,7 @@ impl ContratistasState {
             KeyCode::F(4) => self.modo = ModoContratistas::Columnas { seleccion: 0 },
             KeyCode::Esc if !self.filtro.is_empty() => {
                 self.filtro.clear();
+                self.offset = 0;
                 return self.buscar(None);
             }
             KeyCode::Esc => return AccionContratistas::Volver,
@@ -408,6 +432,7 @@ impl ContratistasState {
         match key.code {
             KeyCode::Esc => {
                 self.filtro.clear();
+                self.offset = 0;
                 self.modo = ModoContratistas::Normal;
                 self.buscar(None)
             }
@@ -428,6 +453,7 @@ impl ContratistasState {
                     texto.pop();
                     self.filtro = texto.clone()
                 }
+                self.offset = 0;
                 self.busqueda_debounce.marcar(Instant::now());
                 AccionContratistas::Ninguna
             }
@@ -440,6 +466,7 @@ impl ContratistasState {
                     texto.push(c);
                     self.filtro = texto.clone()
                 }
+                self.offset = 0;
                 self.busqueda_debounce.marcar(Instant::now());
                 AccionContratistas::Ninguna
             }
@@ -578,6 +605,7 @@ impl ContratistasState {
                 // Igual tras crear o editar — antes sólo se limpiaba al
                 // crear, mismo patrón de inconsistencia que ya tenía Usuarios.
                 self.filtro.clear();
+                self.offset = 0;
                 self.mensaje = Some(format!(
                     "✓ Contratista {} — {}",
                     if creado.is_some() {
@@ -613,7 +641,19 @@ impl ContratistasState {
             praind: filtro.praind,
             personal_ruta: filtro.personal_ruta,
             tiene_acceso: filtro.tiene_acceso,
+            offset: self.offset,
         }
+    }
+    /// Página actual (1-indexada) y total de páginas — `(0, 0)` sin resultados.
+    pub fn pagina(&self) -> (usize, usize) {
+        if self.total == 0 {
+            (0, 0)
+        } else {
+            (self.offset / LIMITE_PAGINA + 1, self.total.div_ceil(LIMITE_PAGINA))
+        }
+    }
+    pub fn total(&self) -> usize {
+        self.total
     }
     fn mover(&mut self, d: isize) {
         let n = self.registros.len();

@@ -52,7 +52,7 @@ fn contratistas_busca_subcadenas_sin_distinguir_tildes_o_mayusculas() {
     let query = SqliteContratistasQuery::new(&connection);
 
     for texto in ["pena", "PEÑA", "aria", "alvarez", "ÁLVA"] {
-        assert_eq!(query.buscar(&filtro_contratista(texto)).unwrap().len(), 1);
+        assert_eq!(query.buscar(&filtro_contratista(texto)).unwrap().items.len(), 1);
     }
 }
 
@@ -144,6 +144,7 @@ fn texto_corto_y_operadores_fts_son_seguros() {
         contratistas
             .buscar(&filtro_contratista("ía"))
             .unwrap()
+            .items
             .len(),
         1
     );
@@ -175,6 +176,7 @@ fn triggers_mantienen_indices_en_insert_update_delete() {
         contratistas
             .buscar(&filtro_contratista("nunez"))
             .unwrap()
+            .items
             .len(),
         1
     );
@@ -182,12 +184,14 @@ fn triggers_mantienen_indices_en_insert_update_delete() {
         contratistas
             .buscar(&filtro_contratista("pena"))
             .unwrap()
+            .items
             .is_empty()
     );
     assert_eq!(
         contratistas
             .buscar(&filtro_contratista("compania"))
             .unwrap()
+            .items
             .len(),
         1
     );
@@ -195,6 +199,7 @@ fn triggers_mantienen_indices_en_insert_update_delete() {
         contratistas
             .buscar(&filtro_contratista("alvarez"))
             .unwrap()
+            .items
             .is_empty()
     );
     let filtro_usuario = FiltroUsuarios {
@@ -250,6 +255,7 @@ fn migracion_desde_v2_reconstruye_indices_con_datos_existentes() {
         SqliteContratistasQuery::new(&connection)
             .buscar(&filtro_contratista("alvarez"))
             .unwrap()
+            .items
             .len(),
         1
     );
@@ -315,6 +321,7 @@ fn fts_funciona_despues_de_cerrar_y_reabrir() {
             SqliteContratistasQuery::new(&connection)
                 .buscar(&filtro_contratista("nandez"))
                 .unwrap()
+                .items
                 .len(),
             1
         );

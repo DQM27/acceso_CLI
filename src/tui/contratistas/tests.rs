@@ -26,12 +26,67 @@ fn resumen() -> ContratistaResumen {
 }
 fn cargar(s: &mut ContratistasState) {
     s.completar_empresas(Ok(vec![empresa()]));
-    s.completar_busqueda(Ok(vec![resumen()]), None)
+    s.completar_busqueda(
+        Ok(PaginaContratistas {
+            items: vec![resumen()],
+            total: 1,
+        }),
+        None,
+    )
 }
 fn escribir(s: &mut ContratistasState, t: &str) {
     for c in t.chars() {
         s.handle_key(k(KeyCode::Char(c)));
     }
+}
+
+#[test]
+fn pagedown_avanza_una_pagina_y_pageup_retrocede() {
+    let mut s = ContratistasState::default();
+    s.completar_empresas(Ok(vec![empresa()]));
+    s.completar_busqueda(
+        Ok(PaginaContratistas {
+            items: vec![resumen()],
+            total: 120,
+        }),
+        None,
+    );
+
+    let AccionContratistas::Buscar { offset, .. } = s.handle_key(k(KeyCode::PageDown)) else {
+        panic!("debía pedir la siguiente página")
+    };
+    assert_eq!(offset, LIMITE_PAGINA);
+
+    // Simula la respuesta de esa página para que el estado interno sepa en
+    // qué offset quedó antes de retroceder.
+    s.completar_busqueda(
+        Ok(PaginaContratistas {
+            items: vec![resumen()],
+            total: 120,
+        }),
+        None,
+    );
+    let AccionContratistas::Buscar { offset, .. } = s.handle_key(k(KeyCode::PageUp)) else {
+        panic!("debía pedir la página anterior")
+    };
+    assert_eq!(offset, 0);
+}
+
+#[test]
+fn pagedown_no_hace_nada_si_ya_esta_en_la_ultima_pagina() {
+    let mut s = ContratistasState::default();
+    s.completar_empresas(Ok(vec![empresa()]));
+    s.completar_busqueda(
+        Ok(PaginaContratistas {
+            items: vec![resumen()],
+            total: 1,
+        }),
+        None,
+    );
+    assert!(matches!(
+        s.handle_key(k(KeyCode::PageDown)),
+        AccionContratistas::Ninguna
+    ));
 }
 
 #[test]

@@ -1,7 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
-    database::queries::contratistas::ContratistaResumen,
+    database::queries::contratistas::{ContratistaResumen, PaginaContratistas},
     domain::resultado_acceso::{MotivoDenegacion, ResultadoAcceso},
     models::medio_ingreso::MedioIngreso,
     services::registro_ingreso_service::PreparacionIngreso,
@@ -49,6 +49,10 @@ pub enum AccionNuevoIngreso {
 pub struct NuevoIngresoState {
     etapa: EtapaNuevoIngreso,
     contratistas: Vec<ContratistaResumen>,
+    /// Conteo real de coincidencias, sin recortar por el tope de la consulta
+    /// — permite avisar "primeros N de M, afine la búsqueda" en vez de dejar
+    /// resultados fuera de forma silenciosa.
+    total: usize,
     busqueda: String,
     seleccion: Option<usize>,
     contratista_id: Option<i64>,
@@ -71,6 +75,7 @@ impl NuevoIngresoState {
         Self {
             etapa: EtapaNuevoIngreso::Buscar,
             contratistas: vec![],
+            total: 0,
             busqueda: String::new(),
             seleccion: None,
             contratista_id: None,
@@ -85,19 +90,26 @@ impl NuevoIngresoState {
     pub fn solicitud_carga(&self) -> AccionNuevoIngreso {
         AccionNuevoIngreso::Buscar { texto: None }
     }
-    pub fn completar_busqueda(&mut self, r: Result<Vec<ContratistaResumen>, String>) {
+    pub fn completar_busqueda(&mut self, r: Result<PaginaContratistas, String>) {
         match r {
-            Ok(v) => {
-                self.contratistas = v;
+            Ok(pagina) => {
+                self.contratistas = pagina.items;
+                self.total = pagina.total;
                 self.seleccion = (!self.contratistas.is_empty()).then_some(0);
                 self.error = None;
             }
             Err(e) => {
                 self.contratistas.clear();
+                self.total = 0;
                 self.seleccion = None;
                 self.error = Some(e)
             }
         }
+    }
+    /// `Some(total)` sólo cuando quedaron resultados fuera de la lista
+    /// mostrada — la pantalla lo usa para avisar en vez de dejarlo callado.
+    pub fn resultados_ocultos(&self) -> Option<usize> {
+        (self.total > self.contratistas.len()).then_some(self.total)
     }
     pub fn completar_preparacion(&mut self, r: Result<PreparacionIngreso, String>) {
         match r {

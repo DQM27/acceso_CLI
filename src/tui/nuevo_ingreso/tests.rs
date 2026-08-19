@@ -31,13 +31,34 @@ fn preparar(requiere: bool) -> PreparacionIngreso {
     }
 }
 #[test]
+fn avisa_cuando_quedan_resultados_fuera_de_la_lista() {
+    let mut s = NuevoIngresoState::default();
+    assert_eq!(s.resultados_ocultos(), None);
+
+    s.completar_busqueda(Ok(PaginaContratistas {
+        items: vec![resumen()],
+        total: 120,
+    }));
+    assert_eq!(s.resultados_ocultos(), Some(120));
+
+    s.completar_busqueda(Ok(PaginaContratistas {
+        items: vec![resumen()],
+        total: 1,
+    }));
+    assert_eq!(s.resultados_ocultos(), None);
+}
+
+#[test]
 fn inicia_vacio_y_busqueda_emite_acciones() {
     let mut s = NuevoIngresoState::default();
     assert!(s.contratistas.is_empty());
     assert!(
         matches!(s.handle_key(k(KeyCode::Char('j'))),AccionNuevoIngreso::Buscar{texto:Some(t)}if t=="j")
     );
-    s.completar_busqueda(Ok(vec![resumen()]));
+    s.completar_busqueda(Ok(PaginaContratistas {
+        items: vec![resumen()],
+        total: 1,
+    }));
     assert_eq!(s.seleccion, Some(0));
     assert!(matches!(
         s.handle_key(k(KeyCode::Enter)),
@@ -47,7 +68,10 @@ fn inicia_vacio_y_busqueda_emite_acciones() {
 #[test]
 fn preparacion_con_gafete_pasa_directo_al_formulario_unico() {
     let mut s = NuevoIngresoState::default();
-    s.completar_busqueda(Ok(vec![resumen()]));
+    s.completar_busqueda(Ok(PaginaContratistas {
+        items: vec![resumen()],
+        total: 1,
+    }));
     s.completar_preparacion(Ok(preparar(true)));
     assert_eq!(s.etapa, EtapaNuevoIngreso::Formulario);
     assert!(!s.campo_es_gafete()); // arranca en Medio
@@ -70,7 +94,10 @@ fn preparacion_con_gafete_pasa_directo_al_formulario_unico() {
 #[test]
 fn sin_gafete_enter_registra_directo_desde_medio() {
     let mut s = NuevoIngresoState::default();
-    s.completar_busqueda(Ok(vec![resumen()]));
+    s.completar_busqueda(Ok(PaginaContratistas {
+        items: vec![resumen()],
+        total: 1,
+    }));
     s.completar_preparacion(Ok(preparar(false)));
     assert_eq!(s.etapa, EtapaNuevoIngreso::Formulario);
     assert!(matches!(
@@ -85,7 +112,10 @@ fn sin_gafete_enter_registra_directo_desde_medio() {
 #[test]
 fn flechas_cambian_el_medio_y_esc_vuelve_a_buscar() {
     let mut s = NuevoIngresoState::default();
-    s.completar_busqueda(Ok(vec![resumen()]));
+    s.completar_busqueda(Ok(PaginaContratistas {
+        items: vec![resumen()],
+        total: 1,
+    }));
     s.completar_preparacion(Ok(preparar(false)));
     let inicial = s.medio_actual();
     s.handle_key(k(KeyCode::Right));
@@ -119,7 +149,10 @@ fn denegado_o_activo_no_continua_y_deja_mensaje_en_buscar() {
 #[test]
 fn gafete_vacio_es_presentable_y_no_registra() {
     let mut s = NuevoIngresoState::default();
-    s.completar_busqueda(Ok(vec![resumen()]));
+    s.completar_busqueda(Ok(PaginaContratistas {
+        items: vec![resumen()],
+        total: 1,
+    }));
     s.completar_preparacion(Ok(preparar(true)));
     s.handle_key(k(KeyCode::Tab));
     assert!(matches!(
@@ -131,7 +164,10 @@ fn gafete_vacio_es_presentable_y_no_registra() {
 #[test]
 fn gafete_ocupado_llega_como_error_del_backend_al_registrar() {
     let mut s = NuevoIngresoState::default();
-    s.completar_busqueda(Ok(vec![resumen()]));
+    s.completar_busqueda(Ok(PaginaContratistas {
+        items: vec![resumen()],
+        total: 1,
+    }));
     s.completar_preparacion(Ok(preparar(true)));
     assert!(!s.completar_registro(Err("El gafete ya está en uso".into())));
     assert_eq!(s.error.as_deref(), Some("El gafete ya está en uso"));
