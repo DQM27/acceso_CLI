@@ -1,10 +1,11 @@
 use super::*;
 use crate::{
     database::queries::ingresos::{EstadoMovimiento, MovimientoIngresoResumen},
+    services::autenticacion_service::UsuarioSesion,
     tiempo::{a_costa_rica, hora_actual_texto},
     tui::ui_kit::{
         CommandHint, ScreenShell, StatusKind, Theme, auxiliary_panel, centered_rect,
-        render_terminal_too_small,
+        identidad_sesion, render_terminal_too_small,
     },
 };
 use ratatui::{
@@ -19,14 +20,20 @@ const ANCHO_MINIMO: u16 = 60;
 const ALTO_MINIMO: u16 = 22;
 const ANCHO_PANEL_LATERAL: u16 = 100;
 
-pub fn render(frame: &mut Frame, area: Rect, state: &HistorialState, theme: Theme) {
+pub fn render(
+    frame: &mut Frame,
+    area: Rect,
+    state: &HistorialState,
+    sesion: &UsuarioSesion,
+    theme: Theme,
+) {
     if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
         render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "ESC salir", theme);
         return;
     }
 
     let hora = hora_actual_texto();
-    let contexto = format!("Usuario: {}", state.usuario_nombre);
+    let contexto = identidad_sesion(sesion);
     let (estado_texto_linea, estado_tipo) = estado_shell(state);
     let comandos = comandos_para(state);
 

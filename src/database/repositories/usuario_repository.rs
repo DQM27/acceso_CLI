@@ -16,14 +16,6 @@ pub trait UsuarioRepository {
 
     fn actualizar_protegiendo_ultimo_root(&self, usuario: &Usuario) -> Result<(), DatabaseError>;
 
-    fn actualizar_identidad_y_rol(
-        &self,
-        id: i64,
-        cedula: &str,
-        nombre: &str,
-        rol: RolUsuario,
-    ) -> Result<(), DatabaseError>;
-
     fn establecer_activo(&self, id: i64, activo: bool) -> Result<(), DatabaseError>;
 
     fn actualizar_password(&self, id: i64, password_hash: &str) -> Result<(), DatabaseError>;
@@ -144,6 +136,15 @@ fn persistir_usuario(
     Ok(())
 }
 
+/// La regla del "último ROOT activo" vive aquí, en el repositorio, y no en
+/// `UsuarioService` como el resto de invariantes — a propósito. Igual que
+/// `crear_root_inicial_atomico`, la lectura de cuántos ROOT activos hay y la
+/// escritura comparten la misma transacción `Immediate`: si se partiera en
+/// "validar en el servicio, luego escribir", dos conexiones podrían leer
+/// "2 ROOT activos" cada una antes de que la otra escriba, y ambas
+/// desactivar/degradar el suyo, dejando cero ROOT activos. La prueba
+/// `dos_conexiones_no_pueden_desactivar_ambos_roots` existe justamente para
+/// esto — moverlo al servicio reabriría esa carrera.
 fn validar_y_persistir(
     transaction: &Transaction<'_>,
     actual: &Usuario,
@@ -241,25 +242,6 @@ impl<'a> UsuarioRepository for SqliteUsuarioRepository<'a> {
         let actual = buscar_usuario_en_transaccion(&transaction, usuario.id)?;
 
         validar_y_persistir(&transaction, &actual, usuario)?;
-        transaction.commit()?;
-        Ok(())
-    }
-
-    fn actualizar_identidad_y_rol(
-        &self,
-        id: i64,
-        cedula: &str,
-        nombre: &str,
-        rol: RolUsuario,
-    ) -> Result<(), DatabaseError> {
-        let transaction =
-            Transaction::new_unchecked(self.connection, TransactionBehavior::Immediate)?;
-        let actual = buscar_usuario_en_transaccion(&transaction, id)?;
-        let mut nuevo = actual.clone();
-        nuevo.cedula = cedula.to_string();
-        nuevo.nombre = nombre.to_string();
-        nuevo.rol = rol;
-        validar_y_persistir(&transaction, &actual, &nuevo)?;
         transaction.commit()?;
         Ok(())
     }

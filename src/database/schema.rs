@@ -23,6 +23,11 @@ pub enum SchemaError {
     /// previo (`TipoRespaldo::PreMigracion`) falló — el arranque se detiene
     /// antes de tocar el esquema.
     RespaldoPreMigracionFallido(String),
+    /// Invariante interno: tras aplicar todas las migraciones conocidas, la
+    /// versión resultante no es `SCHEMA_VERSION`. No es un error de SQLite —
+    /// sólo puede pasar si la cadena de migraciones de este archivo tiene un
+    /// hueco (una versión sin `if version == N` que la maneje).
+    VersionInesperadaTrasMigrar { encontrada: i64 },
 }
 
 impl std::fmt::Display for SchemaError {
@@ -40,6 +45,11 @@ impl std::fmt::Display for SchemaError {
                 formatter,
                 "No se pudo crear el respaldo obligatorio antes de migrar el esquema: {detalle}"
             ),
+            Self::VersionInesperadaTrasMigrar { encontrada } => write!(
+                formatter,
+                "Error interno: la base quedó en la versión de esquema {encontrada} tras migrar, \
+                 se esperaba {SCHEMA_VERSION}"
+            ),
         }
     }
 }
@@ -48,7 +58,10 @@ impl std::error::Error for SchemaError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Sqlite(error) => Some(error),
-            Self::BaseAjena | Self::IntegridadInvalida(_) | Self::RespaldoPreMigracionFallido(_) => None,
+            Self::BaseAjena
+            | Self::IntegridadInvalida(_)
+            | Self::RespaldoPreMigracionFallido(_)
+            | Self::VersionInesperadaTrasMigrar { .. } => None,
         }
     }
 }
@@ -74,8 +87,9 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
         ",
     )?;
 
-    verificar_identidad_de_archivo(connection)?;
+    rechazar_archivo_ajeno(connection)?;
     verificar_integridad_rapida(connection)?;
+    adoptar_application_id(connection)?;
 
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     let mut version: i64 = transaction.query_row("PRAGMA user_version", [], |row| row.get(0))?;
@@ -111,20 +125,41 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
     }
 
     if version != SCHEMA_VERSION {
-        return Err(SchemaError::Sqlite(rusqlite::Error::InvalidQuery));
+        return Err(SchemaError::VersionInesperadaTrasMigrar { encontrada: version });
     }
 
     transaction.commit()?;
     Ok(())
 }
 
-/// Rechaza un archivo SQLite ajeno; adopta `APPLICATION_ID` en una base
-/// nueva o en una creada antes de que existiera esta comprobación (`0`).
-fn verificar_identidad_de_archivo(connection: &Connection) -> Result<(), SchemaError> {
+/// Rechaza un archivo ajeno o corrupto antes de cualquier otra operación —
+/// en particular antes del respaldo obligatorio pre-migración
+/// (`connection::respaldar_antes_de_migrar`), para no terminar copiando a
+/// `backups/` un archivo que ni siquiera es nuestro.
+pub(crate) fn verificar_archivo_propio(connection: &Connection) -> Result<(), SchemaError> {
+    rechazar_archivo_ajeno(connection)?;
+    verificar_integridad_rapida(connection)
+}
+
+/// Rechaza un archivo SQLite ajeno (`application_id` de otra app). No
+/// escribe nada — sólo lee, a propósito: adoptar el sello (`PRAGMA
+/// application_id = ...`) es responsabilidad de [`adoptar_application_id`],
+/// que debe correr después de `quick_check`, no antes.
+fn rechazar_archivo_ajeno(connection: &Connection) -> Result<(), SchemaError> {
     let id: i32 = connection.query_row("PRAGMA application_id", [], |row| row.get(0))?;
     if id != 0 && id != APPLICATION_ID {
         return Err(SchemaError::BaseAjena);
     }
+    Ok(())
+}
+
+/// Adopta `APPLICATION_ID` en una base nueva o en una creada antes de que
+/// existiera esta comprobación (`id == 0`). Sólo se llama tras confirmar,
+/// vía `quick_check`, que el archivo no está dañado — de lo contrario un
+/// archivo corrupto o ajeno con `application_id == 0` por casualidad
+/// quedaría "adoptado" como propio antes de rechazarlo.
+fn adoptar_application_id(connection: &Connection) -> Result<(), SchemaError> {
+    let id: i32 = connection.query_row("PRAGMA application_id", [], |row| row.get(0))?;
     if id == 0 {
         connection.execute_batch(&format!("PRAGMA application_id = {APPLICATION_ID};"))?;
     }
@@ -151,6 +186,13 @@ fn aplicar_migracion(
     transaction.execute_batch(&format!("PRAGMA user_version = {nueva_version}"))
 }
 
+/// Carga toda `registro_ingresos` en memoria para normalizar sus fechas
+/// (tabla de solo-inserción, crece indefinidamente). Aceptable aquí porque
+/// ya corrió y quedó fijada — una migración, una vez publicada, no se
+/// reescribe (cualquier base que ya esté en `user_version >= 6` nunca vuelve
+/// a ejecutar esta función). **No repetir este patrón en una migración
+/// nueva** sobre esta misma tabla u otra que pueda crecer sin límite: usar
+/// lotes (`LIMIT`/`OFFSET` o un cursor) en vez de cargar todo de una vez.
 fn aplicar_migracion_6(transaction: &Transaction<'_>) -> rusqlite::Result<()> {
     let movimientos = {
         let mut statement = transaction

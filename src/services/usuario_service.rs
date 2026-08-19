@@ -4,7 +4,7 @@ use crate::database::repositories::usuario_repository::UsuarioRepository;
 use crate::models::usuario::{RolUsuario, Usuario};
 
 use super::error::UsuarioServiceError;
-use super::password::generar_hash;
+use super::password::{generar_hash, validar_formato_hash};
 
 const LONGITUD_MINIMA_PASSWORD: usize = 8;
 
@@ -87,7 +87,10 @@ where
         Ok(())
     }
 
-    /// Parte que sí escribe, recibiendo el hash ya calculado.
+    /// Parte que sí escribe, recibiendo el hash ya calculado. Repite el chequeo de
+    /// configuración inicial que ya hizo `validar_datos_para_crear` — entre validar y
+    /// recibir el hash pasó tiempo (Argon2 corrió en otro hilo) y la comprobación es
+    /// barata; no asume que nada cambió mientras tanto.
     pub fn crear_con_hash(
         &self,
         cedula: &str,
@@ -96,6 +99,10 @@ where
         activo: bool,
         password_hash: String,
     ) -> Result<i64, UsuarioServiceError> {
+        if self.requiere_configuracion_inicial()? {
+            return Err(UsuarioServiceError::ConfiguracionInicialRequerida);
+        }
+        validar_formato_hash(&password_hash)?;
         let cedula = normalizar_requerido(cedula, UsuarioServiceError::CedulaVacia)?.to_string();
         let nombre = normalizar_requerido(nombre, UsuarioServiceError::NombreVacio)?.to_string();
         let usuario = Usuario {
@@ -121,20 +128,6 @@ where
         self.usuarios
             .buscar_por_cedula(cedula.trim())?
             .ok_or(UsuarioServiceError::UsuarioNoEncontrado)
-    }
-
-    pub fn actualizar(
-        &self,
-        id: i64,
-        input: ActualizarUsuarioInput,
-    ) -> Result<(), UsuarioServiceError> {
-        self.buscar_por_id(id)?;
-        let cedula = normalizar_requerido(&input.cedula, UsuarioServiceError::CedulaVacia)?;
-        let nombre = normalizar_requerido(&input.nombre, UsuarioServiceError::NombreVacio)?;
-
-        self.usuarios
-            .actualizar_identidad_y_rol(id, cedula, nombre, input.rol)
-            .map_err(mapear_escritura_usuario)
     }
 
     pub fn actualizar_administracion(
@@ -182,6 +175,7 @@ where
         id: i64,
         password_hash: &str,
     ) -> Result<(), UsuarioServiceError> {
+        validar_formato_hash(password_hash)?;
         self.usuarios
             .actualizar_password(id, password_hash)
             .map_err(mapear_escritura_usuario)
@@ -240,6 +234,7 @@ where
         input: CrearRootInicialInput,
         password_hash: String,
     ) -> Result<i64, UsuarioServiceError> {
+        validar_formato_hash(&password_hash)?;
         let cedula = normalizar_requerido(&input.cedula, UsuarioServiceError::CedulaVacia)?.to_string();
         let nombre = normalizar_requerido(&input.nombre, UsuarioServiceError::NombreVacio)?.to_string();
         let usuario = Usuario {
@@ -257,7 +252,7 @@ where
 }
 
 fn mapear_duplicado_usuario(error: DatabaseError) -> UsuarioServiceError {
-    if es_constraint_unique(&error) {
+    if error.es_constraint_unique() {
         UsuarioServiceError::CedulaDuplicada
     } else {
         UsuarioServiceError::Database(error)
@@ -273,14 +268,6 @@ fn mapear_escritura_usuario(error: DatabaseError) -> UsuarioServiceError {
         DatabaseError::UltimoRootActivo => UsuarioServiceError::UltimoRootActivo,
         error => mapear_duplicado_usuario(error),
     }
-}
-
-fn es_constraint_unique(error: &DatabaseError) -> bool {
-    matches!(
-        error,
-        DatabaseError::Sqlite(rusqlite::Error::SqliteFailure(codigo, _))
-            if codigo.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
-    )
 }
 
 fn normalizar_requerido(

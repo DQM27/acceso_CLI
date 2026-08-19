@@ -32,7 +32,17 @@ fn run() -> Result<(), StartupError> {
 
     let mut mensaje_inicial = None;
     loop {
-        let core = AppCore::abrir(&ruta_base_datos).map_err(StartupError::Bootstrap)?;
+        let core = match AppCore::abrir(&ruta_base_datos) {
+            Ok(core) => core,
+            Err(error) => {
+                // Muestra el error en la TUI (mismo mecanismo que usa un fallo de
+                // restauración) en vez de matar el proceso con un eprintln crudo.
+                let _ = control_acceso::tui::terminal::run_sin_core(Some(format!(
+                    "No se pudo abrir la base de datos: {error}"
+                )));
+                return Err(StartupError::Bootstrap(error));
+            }
+        };
         core.respaldo_automatico_diario_si_hace_falta();
         let requiere_configuracion_inicial = core
             .requiere_configuracion_inicial()

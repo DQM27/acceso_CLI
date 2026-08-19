@@ -6,7 +6,7 @@ use crate::{
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Constraint;
 
-use crate::tui::ui_kit::{Debounce, StandardCommand, query_lang, standard_command};
+use crate::tui::ui_kit::{Debounce, StandardCommand, Term, resolver_terminos, standard_command, valores};
 use std::time::Instant;
 
 const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
@@ -22,22 +22,13 @@ mod tests;
 /// texto libre para nombre/cédula/gafete.
 fn parsear_consulta(texto: &str, empresas: &[Empresa]) -> (FiltroIngresosActivos, String) {
     let mut filtro = FiltroIngresosActivos::default();
-    let mut libres = Vec::new();
-    for term in query_lang::analizar(texto).terms {
-        if term.key.is_none() {
-            libres.push(query_lang::texto_libre(&term));
-            continue;
-        }
-        if !aplicar_clave(&mut filtro, &term, empresas) {
-            libres.push(query_lang::reconstruir_clave(&term));
-        }
-    }
-    (filtro, libres.join(" "))
+    let libres = resolver_terminos(texto, &mut filtro, |f, term| aplicar_clave(f, term, empresas));
+    (filtro, libres)
 }
 
-fn aplicar_clave(f: &mut FiltroIngresosActivos, term: &query_lang::Term, empresas: &[Empresa]) -> bool {
+fn aplicar_clave(f: &mut FiltroIngresosActivos, term: &Term, empresas: &[Empresa]) -> bool {
     let clave = term.key.as_deref().unwrap_or_default().to_lowercase();
-    let valores = query_lang::valores(term);
+    let valores = valores(term);
     match clave.as_str() {
         "empresa" if !term.negated && valores.len() == 1 => {
             let buscado = valores[0].to_lowercase();
@@ -55,7 +46,7 @@ fn aplicar_clave(f: &mut FiltroIngresosActivos, term: &query_lang::Term, empresa
         "tipo" => {
             let Some(reconocidos) = valores
                 .iter()
-                .map(|v| tipo_desde_texto(v))
+                .map(|v| TipoIngreso::from_str_filtro(v))
                 .collect::<Option<Vec<_>>>()
             else {
                 return false;
@@ -88,16 +79,6 @@ fn aplicar_clave(f: &mut FiltroIngresosActivos, term: &query_lang::Term, empresa
             None => false,
         },
         _ => false,
-    }
-}
-
-fn tipo_desde_texto(v: &str) -> Option<TipoIngreso> {
-    match v.to_lowercase().as_str() {
-        "praind" => Some(TipoIngreso::Praind),
-        "inhouse" | "in-house" | "in_house" => Some(TipoIngreso::InHouse),
-        "correo" | "porcorreo" => Some(TipoIngreso::PorCorreo),
-        "swat" => Some(TipoIngreso::Swat),
-        _ => None,
     }
 }
 
@@ -140,7 +121,7 @@ impl Columna {
             Self::Hora => "HORA",
             Self::Gafete => "GAFETE",
             Self::Medio => "MEDIO",
-            Self::Usuario => "USUARIO INGRESO",
+            Self::Usuario => "DA INGRESO",
         }
     }
     fn constraint(self) -> Constraint {
@@ -157,7 +138,6 @@ impl Columna {
 pub enum ModoActivos {
     Normal,
     Busqueda { texto: String },
-    Detalle { id: i64 },
     ConfirmarSalida { id: i64 },
     Columnas { seleccion: usize },
 }
@@ -188,7 +168,6 @@ pub struct ActivosState {
     mensaje: Option<String>,
     pub(crate) filtro: String,
     empresas: Vec<Empresa>,
-    usuario_nombre: String,
     ayuda_expandida: bool,
     busqueda_debounce: Debounce,
 }
@@ -206,16 +185,12 @@ impl Default for ActivosState {
             mensaje: None,
             filtro: String::new(),
             empresas: vec![],
-            usuario_nombre: "Quintana".into(),
             ayuda_expandida: false,
             busqueda_debounce: Debounce::default(),
         }
     }
 }
 impl ActivosState {
-    pub fn set_usuario_nombre(&mut self, n: impl Into<String>) {
-        self.usuario_nombre = n.into()
-    }
     pub fn completar_empresas(&mut self, r: Result<Vec<Empresa>, String>) {
         if let Ok(e) = r {
             self.empresas = e
@@ -274,6 +249,9 @@ impl ActivosState {
         self.modo = ModoActivos::Normal;
         match r {
             Ok(()) => {
+                // Mismo criterio que las demás pantallas tras una escritura
+                // exitosa — antes Activos nunca limpiaba el filtro.
+                self.filtro.clear();
                 self.mensaje = Some(format!("✓ Salida registrada — {nombre}"));
                 self.buscar(Some(id))
             }
@@ -291,17 +269,6 @@ impl ActivosState {
         match self.modo.clone() {
             ModoActivos::Normal => self.normal(k),
             ModoActivos::Busqueda { .. } => self.busqueda(k),
-            ModoActivos::Detalle { id } => match k.code {
-                KeyCode::Char('s' | 'S') => {
-                    self.modo = ModoActivos::ConfirmarSalida { id };
-                    AccionActivos::Ninguna
-                }
-                KeyCode::Esc => {
-                    self.modo = ModoActivos::Normal;
-                    AccionActivos::Ninguna
-                }
-                _ => AccionActivos::Ninguna,
-            },
             ModoActivos::ConfirmarSalida { id } => self.confirmar(k, id),
             ModoActivos::Columnas { seleccion } => {
                 self.columnas(k, seleccion);
@@ -315,11 +282,6 @@ impl ActivosState {
             KeyCode::Up => self.mover(-1),
             KeyCode::Down => self.mover(1),
             KeyCode::Enter => {
-                if let Some(id) = self.id_seleccionado() {
-                    self.modo = ModoActivos::Detalle { id }
-                }
-            }
-            KeyCode::Char('s' | 'S') => {
                 if let Some(id) = self.id_seleccionado() {
                     self.modo = ModoActivos::ConfirmarSalida { id }
                 }
@@ -453,6 +415,9 @@ impl ActivosState {
     }
     fn registro(&self, id: i64) -> Option<&IngresoActivoResumen> {
         self.registros.iter().find(|r| r.registro_id == id)
+    }
+    pub fn seleccionado(&self) -> Option<&IngresoActivoResumen> {
+        self.registros.get(self.seleccion?)
     }
     pub fn inicio_visible(&self, c: usize) -> usize {
         self.seleccion

@@ -5,7 +5,7 @@ use crate::{
     domain::resultado_acceso::{MotivoDenegacion, ResultadoAcceso},
     models::medio_ingreso::MedioIngreso,
     services::registro_ingreso_service::PreparacionIngreso,
-    tui::ui_kit::{StandardCommand, standard_command},
+    tui::ui_kit::{StandardCommand, mover_seleccion, standard_command},
 };
 
 #[path = "render.rs"]
@@ -57,18 +57,17 @@ pub struct NuevoIngresoState {
     medio_opcion: usize,
     gafete_texto: String,
     error: Option<String>,
-    usuario_nombre: String,
     ayuda_expandida: bool,
 }
 
 impl Default for NuevoIngresoState {
     fn default() -> Self {
-        Self::new("Quintana")
+        Self::new()
     }
 }
 
 impl NuevoIngresoState {
-    pub fn new(usuario: impl Into<String>) -> Self {
+    pub fn new() -> Self {
         Self {
             etapa: EtapaNuevoIngreso::Buscar,
             contratistas: vec![],
@@ -80,7 +79,6 @@ impl NuevoIngresoState {
             medio_opcion: 0,
             gafete_texto: String::new(),
             error: None,
-            usuario_nombre: usuario.into(),
             ayuda_expandida: false,
         }
     }
@@ -91,7 +89,8 @@ impl NuevoIngresoState {
         match r {
             Ok(v) => {
                 self.contratistas = v;
-                self.seleccion = (!self.contratistas.is_empty()).then_some(0)
+                self.seleccion = (!self.contratistas.is_empty()).then_some(0);
+                self.error = None;
             }
             Err(e) => {
                 self.contratistas.clear();
@@ -198,6 +197,12 @@ impl NuevoIngresoState {
                 self.medio_opcion = 1 - self.medio_opcion;
             }
             KeyCode::Enter => {
+                let Some(contratista_id) = self.contratista_id else {
+                    self.limpiar_seleccion();
+                    self.etapa = EtapaNuevoIngreso::Buscar;
+                    self.error = Some("Vuelva a seleccionar el contratista".into());
+                    return AccionNuevoIngreso::Ninguna;
+                };
                 let gafete = if requiere_gafete {
                     match self.gafete_texto.trim().parse::<i64>() {
                         Ok(numero) => Some(numero),
@@ -217,7 +222,7 @@ impl NuevoIngresoState {
                     None
                 };
                 return AccionNuevoIngreso::Registrar {
-                    contratista_id: self.contratista_id.unwrap(),
+                    contratista_id,
                     medio: MEDIOS[self.medio_opcion],
                     gafete,
                 };
@@ -241,16 +246,7 @@ impl NuevoIngresoState {
         AccionNuevoIngreso::Ninguna
     }
     fn mover(&mut self, d: isize) {
-        if self.contratistas.is_empty() {
-            self.seleccion = None
-        } else {
-            let i = self.seleccion.unwrap_or(0);
-            self.seleccion = Some(if d < 0 {
-                i.saturating_sub(1)
-            } else {
-                (i + 1).min(self.contratistas.len() - 1)
-            })
-        }
+        self.seleccion = mover_seleccion(self.seleccion, d, self.contratistas.len());
     }
     fn contratista(&self) -> Option<&ContratistaResumen> {
         let id = self.contratista_id?;
@@ -297,13 +293,20 @@ fn mensaje_bloqueo(p: &PreparacionIngreso) -> String {
         return "El contratista ya tiene un ingreso activo.".into();
     }
     match &p.resultado_acceso {
-        ResultadoAcceso::Denegado(MotivoDenegacion::SinAcceso) => {
-            "Acceso denegado · no tiene acceso autorizado".into()
+        ResultadoAcceso::Denegado(motivo) => mensaje_motivo_denegacion(motivo),
+        ResultadoAcceso::Permitido | ResultadoAcceso::PermitidoConAdvertencia => {
+            "No se puede continuar con este contratista.".into()
         }
-        ResultadoAcceso::Denegado(MotivoDenegacion::PraindVencido) => {
-            "Acceso denegado · PRAIND vencido o requerido".into()
-        }
-        _ => "No se puede continuar con este contratista.".into(),
+    }
+}
+
+/// Match exhaustivo sobre `MotivoDenegacion` a propósito, sin `_ =>` — si se
+/// agrega una variante nueva, el compilador obliga a decidir aquí su mensaje
+/// en vez de caer en un texto genérico sin que nadie se entere.
+fn mensaje_motivo_denegacion(motivo: &MotivoDenegacion) -> String {
+    match motivo {
+        MotivoDenegacion::SinAcceso => "Acceso denegado · no tiene acceso autorizado".into(),
+        MotivoDenegacion::PraindVencido => "Acceso denegado · PRAIND vencido o requerido".into(),
     }
 }
 fn texto_medio(m: MedioIngreso) -> &'static str {

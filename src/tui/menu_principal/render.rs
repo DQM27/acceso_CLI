@@ -6,7 +6,7 @@ use crate::{
     services::autenticacion_service::UsuarioSesion,
     tiempo::hora_actual_texto,
     tui::ui_kit::{
-        CommandHint, ScreenShell, StatusKind, Theme, render_terminal_too_small,
+        CommandHint, ScreenShell, StatusKind, Theme, identidad_sesion, render_terminal_too_small,
     },
 };
 
@@ -40,7 +40,7 @@ pub fn render(
     }
 
     let hora = hora_actual_texto();
-    let contexto = format!("{} · {}", sesion.nombre, rol(sesion.rol));
+    let contexto = identidad_sesion(sesion);
     let (estado_texto, estado_tipo) = estado_shell(state, sesion);
     let comandos = if state.confirmacion.is_some() {
         COMANDOS_CONFIRMACION
@@ -167,12 +167,4 @@ fn centrar(area: Rect, ancho: u16, alto: u16) -> Rect {
         ancho,
         alto,
     )
-}
-
-fn rol(rol: RolUsuario) -> &'static str {
-    match rol {
-        RolUsuario::Root => "ROOT",
-        RolUsuario::Administrador => "ADMINISTRADOR",
-        RolUsuario::Operador => "OPERADOR",
-    }
 }

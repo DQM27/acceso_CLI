@@ -115,13 +115,26 @@ fn esc_cierra_sin_confirmar_nada() {
 }
 
 #[test]
-fn confirmacion_exitosa_muestra_mensaje_y_cualquier_tecla_cierra() {
+fn confirmacion_exitosa_muestra_mensaje_y_solo_enter_o_esc_cierran() {
     let mut s = SalidaRapidaState::default();
     s.abrir();
     s.completar_confirmacion(Ok("✓ Salida registrada — José Peña".into()));
     assert!(s.abierto());
 
     s.handle_key(k(KeyCode::Char('x')));
+    assert!(s.abierto(), "una tecla cualquiera no debe cerrar la confirmación");
+
+    s.handle_key(k(KeyCode::Enter));
+    assert!(!s.abierto());
+}
+
+#[test]
+fn confirmacion_exitosa_se_cierra_con_esc() {
+    let mut s = SalidaRapidaState::default();
+    s.abrir();
+    s.completar_confirmacion(Ok("✓ Salida registrada — José Peña".into()));
+
+    s.handle_key(k(KeyCode::Esc));
     assert!(!s.abierto());
 }
 

@@ -4,7 +4,8 @@ use rusqlite::{Connection, Row, named_params, params};
 use crate::database::error::DatabaseError;
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::models::registro_ingreso::{
-    NuevoRegistroIngreso, RegistroIngreso, ResultadoIngresoRegistrado,
+    MotivoResultadoIngreso, NuevoRegistroIngreso, RegistroIngreso, ResultadoIngresoRegistrado,
+    SalidaRegistroIngreso,
 };
 use crate::models::tipo_ingreso::TipoIngreso;
 use crate::tiempo::{parsear_utc, serializar_utc};
@@ -36,6 +37,13 @@ pub trait RegistroIngresoRepository {
     ) -> Result<(), DatabaseError>;
 
     fn listar(&self) -> Result<Vec<RegistroIngreso>, DatabaseError>;
+}
+
+fn motivo_a_texto(motivo: MotivoResultadoIngreso) -> &'static str {
+    match motivo {
+        MotivoResultadoIngreso::PraindProximoVencer => "PRAIND_PROXIMO_VENCER",
+        MotivoResultadoIngreso::DatosReconstruidos => "DATOS_RECONSTRUIDOS",
+    }
 }
 
 pub struct SqliteRegistroIngresoRepository<'a> {
@@ -72,19 +80,12 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<RegistroIngreso> {
 
     let tipo_ingreso_texto: String = row.get(5)?;
 
-    let tipo_ingreso = match tipo_ingreso_texto.as_str() {
-        "PRAIND" => TipoIngreso::Praind,
-        "IN_HOUSE" => TipoIngreso::InHouse,
-        "POR_CORREO" => TipoIngreso::PorCorreo,
-        "SWAT" => TipoIngreso::Swat,
-
-        _ => {
-            return Err(rusqlite::Error::InvalidColumnType(
-                5,
-                "tipo_ingreso".to_string(),
-                rusqlite::types::Type::Text,
-            ));
-        }
+    let Some(tipo_ingreso) = TipoIngreso::from_str_sql(&tipo_ingreso_texto) else {
+        return Err(rusqlite::Error::InvalidColumnType(
+            5,
+            "tipo_ingreso".to_string(),
+            rusqlite::types::Type::Text,
+        ));
     };
 
     // El gafete es opcional.
@@ -106,6 +107,12 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<RegistroIngreso> {
             })
         })
         .transpose()?;
+    let usuario_salida_id: Option<i64> = row.get(9)?;
+    // `CHECK (fecha_hora_salida IS NULL) = (usuario_salida_id IS NULL)` en el
+    // esquema garantiza que ambos vienen juntos o ninguno.
+    let salida = fecha_hora_salida
+        .zip(usuario_salida_id)
+        .map(|(fecha_hora, usuario_id)| SalidaRegistroIngreso { fecha_hora, usuario_id });
 
     Ok(RegistroIngreso {
         id: row.get(0)?,
@@ -116,8 +123,7 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<RegistroIngreso> {
         tipo_ingreso,
         gafete_numero,
         usuario_ingreso_id: row.get(7)?,
-        fecha_hora_salida,
-        usuario_salida_id: row.get(9)?,
+        salida,
     })
 }
 
@@ -130,12 +136,7 @@ impl<'a> RegistroIngresoRepository for SqliteRegistroIngresoRepository<'a> {
             MedioIngreso::Vehiculo => "VEHICULO",
         };
 
-        let tipo_ingreso = match registro.tipo_ingreso {
-            TipoIngreso::Praind => "PRAIND",
-            TipoIngreso::InHouse => "IN_HOUSE",
-            TipoIngreso::PorCorreo => "POR_CORREO",
-            TipoIngreso::Swat => "SWAT",
-        };
+        let tipo_ingreso = registro.tipo_ingreso.as_str_sql();
 
         let fecha_vencimiento_praind = registro
             .datos_historicos
@@ -144,8 +145,8 @@ impl<'a> RegistroIngresoRepository for SqliteRegistroIngresoRepository<'a> {
         let (resultado_acceso, motivo_resultado) = match registro.datos_historicos.resultado_acceso
         {
             ResultadoIngresoRegistrado::Permitido => ("PERMITIDO", None),
-            ResultadoIngresoRegistrado::PermitidoConAdvertencia => {
-                ("PERMITIDO_CON_ADVERTENCIA", Some("PRAIND_PROXIMO_VENCER"))
+            ResultadoIngresoRegistrado::PermitidoConAdvertencia(motivo) => {
+                ("PERMITIDO_CON_ADVERTENCIA", Some(motivo_a_texto(motivo)))
             }
             ResultadoIngresoRegistrado::Migrado => ("MIGRADO", Some("DATOS_RECONSTRUIDOS")),
         };

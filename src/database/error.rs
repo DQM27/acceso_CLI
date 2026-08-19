@@ -5,6 +5,10 @@ pub enum DatabaseError {
     ConfiguracionInicialYaRealizada,
     UsuarioNoEncontrado,
     UltimoRootActivo,
+    /// Una fecha almacenada no se pudo parsear. No es un error de SQLite —
+    /// SQLite ya devolvió el texto sin problema; el fallo es al interpretarlo
+    /// como fecha/hora.
+    FechaCorrupta(String),
 }
 
 impl std::fmt::Display for DatabaseError {
@@ -27,11 +31,38 @@ impl std::fmt::Display for DatabaseError {
                 formatter,
                 "No se puede desactivar o degradar al último ROOT activo"
             ),
+            DatabaseError::FechaCorrupta(detalle) => {
+                write!(formatter, "Fecha almacenada inválida: {detalle}")
+            }
         }
     }
 }
 
-impl std::error::Error for DatabaseError {}
+impl DatabaseError {
+    /// Detecta una violación de restricción `UNIQUE` (cédula/nombre duplicado,
+    /// etc.), sin importar cuál columna — el llamador ya sabe cuál era.
+    /// Antes copiado igual en 3 servicios (usuario, contratista, empresa).
+    pub fn es_constraint_unique(&self) -> bool {
+        matches!(
+            self,
+            DatabaseError::Sqlite(rusqlite::Error::SqliteFailure(codigo, _))
+                if codigo.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
+        )
+    }
+}
+
+impl std::error::Error for DatabaseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            DatabaseError::Sqlite(error) => Some(error),
+            DatabaseError::RegistroNoActivo
+            | DatabaseError::ConfiguracionInicialYaRealizada
+            | DatabaseError::UsuarioNoEncontrado
+            | DatabaseError::UltimoRootActivo
+            | DatabaseError::FechaCorrupta(_) => None,
+        }
+    }
+}
 
 impl From<rusqlite::Error> for DatabaseError {
     fn from(error: rusqlite::Error) -> Self {

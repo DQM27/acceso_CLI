@@ -134,7 +134,6 @@ pub struct HistorialState {
     empresas: Vec<Empresa>,
     offset: usize,
     corte_id: Option<i64>,
-    usuario_nombre: String,
     ayuda_expandida: bool,
     busqueda_debounce: Debounce,
 }
@@ -155,16 +154,12 @@ impl Default for HistorialState {
             empresas: vec![],
             offset: 0,
             corte_id: None,
-            usuario_nombre: "Quintana".into(),
             ayuda_expandida: false,
             busqueda_debounce: Debounce::default(),
         }
     }
 }
 impl HistorialState {
-    pub fn set_usuario_nombre(&mut self, n: impl Into<String>) {
-        self.usuario_nombre = n.into()
-    }
     pub fn completar_empresas(&mut self, r: Result<Vec<Empresa>, String>) {
         match r {
             Ok(v) => self.empresas = v,
@@ -333,7 +328,11 @@ impl HistorialState {
             }
             KeyCode::Char(' ') => {
                 let n = self.columnas_clasica.iter().filter(|x| x.1).count();
-                if !(self.columnas_clasica[s].1 && n == 1) {
+                if self.columnas_clasica[s].1 && n == 1 {
+                    // Mismo aviso que Activos/Contratistas — antes esta
+                    // pantalla no hacía nada, sin explicar la restricción.
+                    self.mensaje = Some("Debe conservar al menos una columna".into());
+                } else {
                     self.columnas_clasica[s].1 = !self.columnas_clasica[s].1
                 }
             }

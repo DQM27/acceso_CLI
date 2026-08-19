@@ -6,10 +6,17 @@ use super::shell::CommandHint;
 ///
 /// Las acciones de dominio siguen perteneciendo a cada vista; este módulo solo
 /// define el significado estable de las teclas comunes.
+///
+/// Adopción real desigual: `Help`, `Cancel`, `Theme`, `QuickExit` y
+/// `EmergencyExit` las usan todas las pantallas relevantes. `Primary`,
+/// `FocusNext` y `FocusPrevious` sólo las consume `historial/state.rs` de
+/// verdad — el resto de pantallas maneja Tab/BackTab/Enter con su propio
+/// `match` local en vez de pasar por `standard_command`. No es un bug (cada
+/// pantalla tiene su propia noción de "siguiente campo"), pero la
+/// abstracción cubre menos de lo que su presencia sugiere.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StandardCommand {
     Primary,
-    Activate,
     Cancel,
     FocusNext,
     FocusPrevious,
@@ -49,7 +56,6 @@ pub fn standard_command(key: KeyEvent) -> Option<StandardCommand> {
 
     match key.code {
         KeyCode::Enter => Some(StandardCommand::Primary),
-        KeyCode::Char(' ') => Some(StandardCommand::Activate),
         KeyCode::Esc => Some(StandardCommand::Cancel),
         KeyCode::BackTab => Some(StandardCommand::FocusPrevious),
         KeyCode::Tab if key.modifiers.contains(KeyModifiers::SHIFT) => {
@@ -73,11 +79,6 @@ mod tests {
     fn reconoce_convenciones_comunes() {
         let cases = [
             (KeyCode::Enter, KeyModifiers::NONE, StandardCommand::Primary),
-            (
-                KeyCode::Char(' '),
-                KeyModifiers::NONE,
-                StandardCommand::Activate,
-            ),
             (KeyCode::Esc, KeyModifiers::NONE, StandardCommand::Cancel),
             (KeyCode::Tab, KeyModifiers::NONE, StandardCommand::FocusNext),
             (
@@ -113,6 +114,12 @@ mod tests {
         );
         assert_eq!(
             standard_command(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE)),
+            None
+        );
+        // Espacio no es una convención transversal — cada pantalla decide su
+        // propio significado (activar/desactivar, marcar, etc.) con su match local.
+        assert_eq!(
+            standard_command(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
             None
         );
     }

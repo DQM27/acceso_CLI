@@ -7,7 +7,7 @@ use std::{
 use rusqlite::Connection;
 
 use super::backup::TipoRespaldo;
-use super::schema::{SCHEMA_VERSION, SchemaError, initialize_database};
+use super::schema::{SCHEMA_VERSION, SchemaError, initialize_database, verificar_archivo_propio};
 
 pub const DATABASE_PATH_ENV: &str = "CONTROL_ACCESO_DB";
 pub const LOCAL_APP_DATA_ENV: &str = "LOCALAPPDATA";
@@ -116,6 +116,7 @@ fn preparar_directorio(ruta_base_datos: &Path) -> Result<(), RutaBaseDatosError>
 pub fn open_database(path: impl AsRef<Path>) -> Result<Connection, SchemaError> {
     let path = path.as_ref();
     let connection = Connection::open(path)?;
+    verificar_archivo_propio(&connection)?;
     respaldar_antes_de_migrar(&connection, path)?;
     initialize_database(&connection)?;
     Ok(connection)
@@ -132,9 +133,14 @@ fn respaldar_antes_de_migrar(connection: &Connection, path: &Path) -> Result<(),
     if version == 0 || version >= SCHEMA_VERSION {
         return Ok(());
     }
-    let Some(directorio_base) = path.parent() else {
-        return Ok(());
-    };
+    // No se salta en silencio si falta el directorio padre: el respaldo es
+    // obligatorio, así que sin dónde ponerlo es un fallo, no un "nada que
+    // hacer" — contradecía el propio comentario de esta función.
+    let directorio_base = path.parent().ok_or_else(|| {
+        SchemaError::RespaldoPreMigracionFallido(
+            "no se pudo determinar el directorio de la base de datos".to_owned(),
+        )
+    })?;
     let directorio_respaldos = directorio_base.join("backups");
 
     super::backup::crear_respaldo(connection, &directorio_respaldos, TipoRespaldo::PreMigracion)

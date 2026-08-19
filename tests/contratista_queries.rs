@@ -306,6 +306,18 @@ fn filtra_por_empresa_tipo_praind_ruta_y_acceso() {
         false,
         true,
     );
+    // Cambió a un tipo que ya no requiere PRAIND pero conserva una fecha
+    // vencida sin limpiar — no debe contar como "vencido" (empresa dos).
+    crear_contratista(
+        &connection,
+        "4",
+        "Dani",
+        empresa_dos,
+        TipoIngreso::PorCorreo,
+        Some(NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()),
+        false,
+        true,
+    );
 
     let query = SqliteContratistasQuery::new(&connection);
 
@@ -351,6 +363,10 @@ fn filtra_por_empresa_tipo_praind_ruta_y_acceso() {
         .unwrap();
     assert_eq!(vencidos.len(), 1);
     assert_eq!(vencidos[0].nombre, "Ana");
+    assert!(
+        !vencidos.iter().any(|c| c.nombre == "Dani"),
+        "Dani ya no requiere PRAIND (PorCorreo) aunque conserve una fecha vencida sin limpiar"
+    );
 
     let proximos = query
         .buscar(&FiltroContratistas {

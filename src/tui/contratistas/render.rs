@@ -10,9 +10,10 @@ use ratatui::{
 use super::*;
 use crate::{
     database::queries::contratistas::ContratistaResumen,
+    services::autenticacion_service::UsuarioSesion,
     tiempo::hora_actual_texto,
     tui::ui_kit::{
-        CommandHint, ScreenShell, StatusKind, Theme, render_terminal_too_small,
+        CommandHint, ScreenShell, StatusKind, Theme, identidad_sesion, render_terminal_too_small,
     },
 };
 
@@ -49,15 +50,20 @@ const COMANDOS_COLUMNAS: &[CommandHint<'static>] = &[
     CommandHint::new("ESC", "Cerrar"),
 ];
 
-pub fn render(frame: &mut Frame, area: Rect, state: &ContratistasState, theme: Theme) {
-
+pub fn render(
+    frame: &mut Frame,
+    area: Rect,
+    state: &ContratistasState,
+    sesion: &UsuarioSesion,
+    theme: Theme,
+) {
     if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
         render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "ESC salir", theme);
         return;
     }
 
     let hora = hora_actual_texto();
-    let contexto = format!("Usuario: {}", state.usuario_nombre);
+    let contexto = identidad_sesion(sesion);
     let (estado_texto, estado_tipo) = estado_shell(state);
     let comandos = match &state.modo {
         ModoContratistas::Normal => COMANDOS_NORMAL,
@@ -89,14 +95,11 @@ fn estado_shell(state: &ContratistasState) -> (String, StatusKind) {
     {
         return (format!("✕ {error}"), StatusKind::Error);
     }
-    if let Some(error) = &state.error_carga {
-        return (error.clone(), StatusKind::Error);
-    }
     if let Some(mensaje) = &state.mensaje {
         let tipo = if mensaje.starts_with('✓') {
             StatusKind::Success
         } else {
-            StatusKind::Warning
+            StatusKind::Error
         };
         return (mensaje.clone(), tipo);
     }

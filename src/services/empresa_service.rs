@@ -83,11 +83,7 @@ where
 }
 
 fn mapear_nombre_duplicado(error: DatabaseError) -> EmpresaServiceError {
-    if matches!(
-        &error,
-        DatabaseError::Sqlite(rusqlite::Error::SqliteFailure(codigo, _))
-            if codigo.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
-    ) {
+    if error.es_constraint_unique() {
         EmpresaServiceError::NombreDuplicado
     } else {
         EmpresaServiceError::Database(error)

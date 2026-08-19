@@ -51,7 +51,7 @@ fn render_menu(frame: &mut Frame, area: Rect, state: &ConfiguracionState, theme:
         screen: "CONFIGURACIÓN",
         context: "Ajustes del sistema",
         clock: &crate::tiempo::hora_actual_texto(),
-        status: OpcionConfiguracion::Respaldos.descripcion(),
+        status: state.seleccion.descripcion(),
         status_kind: StatusKind::Normal,
         commands: COMANDOS_MENU,
         help_expanded: state.ayuda_expandida,
@@ -59,17 +59,43 @@ fn render_menu(frame: &mut Frame, area: Rect, state: &ConfiguracionState, theme:
     };
     let areas = shell.render(frame, area, theme);
 
-    let mut lineas = Vec::new();
-    for opcion in OpcionConfiguracion::TODAS {
-        let marcador = if opcion == state.seleccion { ">" } else { " " };
-        let estilo = if opcion == state.seleccion {
-            theme.selected()
-        } else {
-            theme.base()
-        };
-        lineas.push(Line::from(format!("{marcador} {}", opcion.etiqueta())).style(estilo));
-    }
-    frame.render_widget(Paragraph::new(lineas), areas.body);
+    render_lista(frame, areas.body, state, theme);
+}
+
+/// Misma silueta que el menú principal: bloque centrado, ancho ajustado al
+/// contenido real para que no quede pegado a la izquierda.
+fn render_lista(frame: &mut Frame, area: Rect, state: &ConfiguracionState, theme: Theme) {
+    let ancho_contenido = OpcionConfiguracion::TODAS
+        .iter()
+        .map(|o| o.etiqueta().chars().count() as u16 + 2)
+        .max()
+        .unwrap_or(20);
+    let ancho = area.width.min(ancho_contenido);
+    let alto = area.height.min(OpcionConfiguracion::TODAS.len() as u16);
+    let lista = centrar(area, ancho, alto);
+
+    let lineas: Vec<Line<'_>> = OpcionConfiguracion::TODAS
+        .iter()
+        .map(|opcion| {
+            let marcador = if *opcion == state.seleccion { ">" } else { " " };
+            let estilo = if *opcion == state.seleccion {
+                theme.selected()
+            } else {
+                theme.base()
+            };
+            Line::from(format!("{marcador} {}", opcion.etiqueta())).style(estilo)
+        })
+        .collect();
+    frame.render_widget(Paragraph::new(lineas), lista);
+}
+
+fn centrar(area: Rect, ancho: u16, alto: u16) -> Rect {
+    Rect::new(
+        area.x + area.width.saturating_sub(ancho) / 2,
+        area.y + area.height.saturating_sub(alto) / 2,
+        ancho,
+        alto,
+    )
 }
 
 fn render_respaldos(frame: &mut Frame, area: Rect, estado: &RespaldosState, theme: Theme) {

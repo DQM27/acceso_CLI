@@ -178,11 +178,7 @@ where
 }
 
 fn mapear_cedula_duplicada(error: DatabaseError) -> ContratistaServiceError {
-    if matches!(
-        &error,
-        DatabaseError::Sqlite(rusqlite::Error::SqliteFailure(codigo, _))
-            if codigo.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
-    ) {
+    if error.es_constraint_unique() {
         ContratistaServiceError::CedulaDuplicada
     } else {
         ContratistaServiceError::Database(error)

@@ -13,6 +13,11 @@ mod tests;
 
 const DURACION_PARPADEO: Duration = Duration::from_millis(500);
 const LONGITUD_MINIMA_PASSWORD: usize = 8;
+// Mismos topes que Usuarios (`usuarios/state.rs`) — ROOT inicial era la
+// única cuenta sin ninguno.
+const LONGITUD_MAXIMA_CEDULA: usize = 30;
+const LONGITUD_MAXIMA_NOMBRE: usize = 60;
+const LONGITUD_MAXIMA_PASSWORD: usize = 128;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CampoConfiguracion {
@@ -190,10 +195,23 @@ impl ConfiguracionInicialState {
     fn escribir(&mut self, character: char) {
         self.limpiar_error();
         match self.campo_activo {
-            CampoConfiguracion::Cedula => self.cedula.push(character),
-            CampoConfiguracion::Nombre => self.nombre.push(character),
-            CampoConfiguracion::Password => self.password.push(character),
-            CampoConfiguracion::ConfirmarPassword => self.confirmar_password.push(character),
+            CampoConfiguracion::Cedula if self.cedula.chars().count() < LONGITUD_MAXIMA_CEDULA => {
+                self.cedula.push(character)
+            }
+            CampoConfiguracion::Nombre if self.nombre.chars().count() < LONGITUD_MAXIMA_NOMBRE => {
+                self.nombre.push(character)
+            }
+            CampoConfiguracion::Password
+                if self.password.chars().count() < LONGITUD_MAXIMA_PASSWORD =>
+            {
+                self.password.push(character)
+            }
+            CampoConfiguracion::ConfirmarPassword
+                if self.confirmar_password.chars().count() < LONGITUD_MAXIMA_PASSWORD =>
+            {
+                self.confirmar_password.push(character)
+            }
+            _ => {}
         }
         self.reiniciar_cursor();
     }
@@ -222,12 +240,12 @@ impl ConfiguracionInicialState {
         } else if self.confirmar_password.is_empty() {
             self.campo_activo = CampoConfiguracion::ConfirmarPassword;
             Some("Debe confirmar la contraseña")
-        } else if self.password != self.confirmar_password {
-            self.campo_activo = CampoConfiguracion::ConfirmarPassword;
-            Some("Las contraseñas no coinciden")
         } else if self.password.chars().count() < LONGITUD_MINIMA_PASSWORD {
             self.campo_activo = CampoConfiguracion::Password;
             Some("La contraseña debe tener al menos 8 caracteres")
+        } else if self.password != self.confirmar_password {
+            self.campo_activo = CampoConfiguracion::ConfirmarPassword;
+            Some("Las contraseñas no coinciden")
         } else {
             None
         };

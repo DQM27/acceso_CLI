@@ -5,6 +5,7 @@ use control_acceso::database::schema::initialize_database;
 use control_acceso::models::usuario::RolUsuario;
 use control_acceso::services::autenticacion_service::AutenticacionService;
 use control_acceso::services::error::{AutenticacionError, UsuarioServiceError};
+use control_acceso::services::password::generar_hash;
 use control_acceso::services::usuario_service::{
     ActualizarUsuarioInput, CrearRootInicialInput, CrearUsuarioInput, UsuarioService,
 };
@@ -96,23 +97,24 @@ fn busca_por_id_y_cedula_normalizada_y_reporta_inexistentes() {
 }
 
 #[test]
-fn actualizar_preserva_hash_y_activo_y_cambia_datos_y_rol() {
+fn actualizar_administracion_preserva_hash_y_cambia_datos_rol_y_activo() {
     let connection = base();
     inicializar(&connection);
     let repository = SqliteUsuarioRepository::new(&connection);
     let servicio = UsuarioService::new(&repository);
     let id = servicio
-        .crear(input("2001", RolUsuario::Operador, false))
+        .crear(input("2001", RolUsuario::Operador, true))
         .unwrap();
     let anterior = servicio.buscar_por_id(id).unwrap();
     servicio
-        .actualizar(
+        .actualizar_administracion(
             id,
             ActualizarUsuarioInput {
                 cedula: " 3001 ".to_string(),
                 nombre: " Nombre Nuevo ".to_string(),
                 rol: RolUsuario::Administrador,
             },
+            false,
         )
         .unwrap();
     let nuevo = servicio.buscar_por_id(id).unwrap();
@@ -215,7 +217,7 @@ fn cambio_password_respeta_limite_de_ocho_caracteres() {
 }
 
 #[test]
-fn actualizar_rechaza_cedula_y_nombre_vacios() {
+fn actualizar_administracion_rechaza_cedula_y_nombre_vacios() {
     let connection = base();
     inicializar(&connection);
     let repository = SqliteUsuarioRepository::new(&connection);
@@ -225,31 +227,33 @@ fn actualizar_rechaza_cedula_y_nombre_vacios() {
         .unwrap();
 
     assert!(matches!(
-        servicio.actualizar(
+        servicio.actualizar_administracion(
             id,
             ActualizarUsuarioInput {
                 cedula: " ".to_string(),
                 nombre: "Nombre".to_string(),
                 rol: RolUsuario::Operador,
-            }
+            },
+            true,
         ),
         Err(UsuarioServiceError::CedulaVacia)
     ));
     assert!(matches!(
-        servicio.actualizar(
+        servicio.actualizar_administracion(
             id,
             ActualizarUsuarioInput {
                 cedula: "2001".to_string(),
                 nombre: " ".to_string(),
                 rol: RolUsuario::Operador,
-            }
+            },
+            true,
         ),
         Err(UsuarioServiceError::NombreVacio)
     ));
 }
 
 #[test]
-fn actualizar_con_cedula_duplicada_conserva_registro_original() {
+fn actualizar_administracion_con_cedula_duplicada_conserva_registro_original() {
     let connection = base();
     inicializar(&connection);
     let repository = SqliteUsuarioRepository::new(&connection);
@@ -263,13 +267,14 @@ fn actualizar_con_cedula_duplicada_conserva_registro_original() {
     let original = servicio.buscar_por_id(segundo).unwrap();
 
     assert!(matches!(
-        servicio.actualizar(
+        servicio.actualizar_administracion(
             segundo,
             ActualizarUsuarioInput {
                 cedula: "2001".to_string(),
                 nombre: "Modificado".to_string(),
                 rol: RolUsuario::Root,
-            }
+            },
+            false,
         ),
         Err(UsuarioServiceError::CedulaDuplicada)
     ));
@@ -302,12 +307,35 @@ fn crear_con_hash_guarda_el_hash_tal_cual_sin_volver_a_calcularlo() {
     let repository = SqliteUsuarioRepository::new(&connection);
     let servicio = UsuarioService::new(&repository);
 
+    let hash = generar_hash("password-ya-calculado").unwrap();
+
     let id = servicio
-        .crear_con_hash("3002", "Persona Hash", RolUsuario::Operador, true, "hash-de-prueba".to_string())
+        .crear_con_hash("3002", "Persona Hash", RolUsuario::Operador, true, hash.clone())
         .unwrap();
 
     let usuario = servicio.buscar_por_id(id).unwrap();
-    assert_eq!(usuario.password_hash, "hash-de-prueba");
+    assert_eq!(usuario.password_hash, hash);
+}
+
+#[test]
+fn crear_con_hash_rechaza_un_hash_con_formato_invalido() {
+    let connection = base();
+    inicializar(&connection);
+    let repository = SqliteUsuarioRepository::new(&connection);
+    let servicio = UsuarioService::new(&repository);
+
+    let resultado = servicio.crear_con_hash(
+        "3003",
+        "Persona Hash Invalido",
+        RolUsuario::Operador,
+        true,
+        "no-es-un-hash-argon2".to_string(),
+    );
+
+    assert!(matches!(
+        resultado,
+        Err(UsuarioServiceError::Password(_))
+    ));
 }
 
 #[test]

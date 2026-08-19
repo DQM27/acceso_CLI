@@ -122,13 +122,14 @@ fn no_permite_desactivar_ni_degradar_ultimo_root_activo() {
         Err(UsuarioServiceError::UltimoRootActivo)
     ));
     assert!(matches!(
-        s.actualizar(
+        s.actualizar_administracion(
             id,
             ActualizarUsuarioInput {
                 cedula: "ROOT1".to_string(),
                 nombre: "Root".to_string(),
                 rol: RolUsuario::Administrador
-            }
+            },
+            true,
         ),
         Err(UsuarioServiceError::UltimoRootActivo)
     ));
@@ -143,13 +144,14 @@ fn unico_root_no_puede_convertirse_en_operador() {
     let id = s.crear_root_inicial(root("ROOT1")).unwrap();
 
     assert!(matches!(
-        s.actualizar(
+        s.actualizar_administracion(
             id,
             ActualizarUsuarioInput {
                 cedula: "ROOT1".to_string(),
                 nombre: "Root".to_string(),
                 rol: RolUsuario::Operador,
-            }
+            },
+            true,
         ),
         Err(UsuarioServiceError::UltimoRootActivo)
     ));
@@ -163,13 +165,14 @@ fn unico_root_puede_cambiar_identidad_y_password() {
     let s = UsuarioService::new(&r);
     let id = s.crear_root_inicial(root("ROOT1")).unwrap();
 
-    s.actualizar(
+    s.actualizar_administracion(
         id,
         ActualizarUsuarioInput {
             cedula: "ROOT-NUEVO".to_string(),
             nombre: "Nombre Nuevo".to_string(),
             rol: RolUsuario::Root,
         },
+        true,
     )
     .unwrap();
     s.cambiar_password(id, "password-nueva").unwrap();
@@ -204,13 +207,14 @@ fn con_dos_roots_puede_degradar_uno_y_permanece_otro() {
     let s = UsuarioService::new(&r);
     let primero = s.crear_root_inicial(root("ROOT1")).unwrap();
     s.crear(usuario("ROOT2", RolUsuario::Root, true)).unwrap();
-    s.actualizar(
+    s.actualizar_administracion(
         primero,
         ActualizarUsuarioInput {
             cedula: "ROOT1".to_string(),
             nombre: "Anterior Root".to_string(),
             rol: RolUsuario::Operador,
         },
+        true,
     )
     .unwrap();
     assert_eq!(r.contar_roots_activos().unwrap(), 1);
@@ -225,13 +229,14 @@ fn con_dos_roots_uno_puede_convertirse_en_administrador() {
     let primero = s.crear_root_inicial(root("ROOT1")).unwrap();
     s.crear(usuario("ROOT2", RolUsuario::Root, true)).unwrap();
 
-    s.actualizar(
+    s.actualizar_administracion(
         primero,
         ActualizarUsuarioInput {
             cedula: "ROOT1".to_string(),
             nombre: "Administrador".to_string(),
             rol: RolUsuario::Administrador,
         },
+        true,
     )
     .unwrap();
 
@@ -252,24 +257,26 @@ fn promover_admin_activo_incrementa_roots_y_editar_no_root_no_activa_proteccion(
         .crear(usuario("ADMIN1", RolUsuario::Administrador, true))
         .unwrap();
 
-    s.actualizar(
+    s.actualizar_administracion(
         admin,
         ActualizarUsuarioInput {
             cedula: "ADMIN-EDITADO".to_string(),
             nombre: "Administrador Editado".to_string(),
             rol: RolUsuario::Administrador,
         },
+        true,
     )
     .unwrap();
     assert_eq!(r.contar_roots_activos().unwrap(), 1);
 
-    s.actualizar(
+    s.actualizar_administracion(
         admin,
         ActualizarUsuarioInput {
             cedula: "ADMIN-EDITADO".to_string(),
             nombre: "Nuevo Root".to_string(),
             rol: RolUsuario::Root,
         },
+        true,
     )
     .unwrap();
     assert_eq!(r.contar_roots_activos().unwrap(), 2);

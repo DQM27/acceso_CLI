@@ -39,7 +39,7 @@ use crate::services::usuario_service::{
     ActualizarUsuarioInput, CrearRootInicialInput, CrearUsuarioInput, UsuarioConsultaService,
     UsuarioService,
 };
-use crate::tiempo::{Reloj, RelojSistema, fecha_costa_rica, parsear_utc};
+use crate::tiempo::{Reloj, RelojSistema, fecha_costa_rica};
 
 #[derive(Debug)]
 pub enum BootstrapError {
@@ -78,10 +78,16 @@ pub struct AppCore {
 }
 
 impl AppCore {
+    /// Construye un `AppCore` sin ruta de archivo asociada (pensado para SQLite en
+    /// memoria y tests). **Los respaldos usan `directorio_respaldos()`, que sin una
+    /// ruta real cae en `./backups` relativo al directorio de trabajo del proceso**
+    /// — para producción, usar [`AppCore::abrir`], que sí registra la ruta real.
     pub fn new(connection: Connection) -> Self {
         Self::con_reloj(connection, Arc::new(RelojSistema))
     }
 
+    /// Igual que [`AppCore::new`] con un reloj inyectado — mismo aviso sobre
+    /// `directorio_respaldos()` sin ruta real.
     pub fn con_reloj(connection: Connection, reloj: Arc<dyn Reloj>) -> Self {
         Self {
             connection,
@@ -203,6 +209,39 @@ impl AppCore {
         )
     }
 
+    /// Abre una transacción `Immediate` (el bloqueo se adquiere antes de la
+    /// primera lectura definitiva, así los repositorios creados sobre ella
+    /// validan e insertan contra el mismo estado de SQLite), valida que el
+    /// reloj no haya retrocedido, corre `operar` y confirma. Compartido por
+    /// `registrar_ingreso` y `registrar_salida` — antes cada uno repetía este
+    /// mismo armazón letra por letra.
+    ///
+    /// La validación del reloj se queda aquí, en `AppCore`, y no en
+    /// `RegistroIngresoService` (que declara `RelojRetrocedido` pero no lo
+    /// genera) **a propósito**: es una comprobación de sanidad de todo el
+    /// sistema (¿el reloj de la máquina retrocedió respecto al último
+    /// movimiento conocido, sin importar de qué contratista?), no una regla
+    /// de negocio de una entrada/salida puntual. Moverla al servicio se
+    /// intentó y se revirtió — rompía tests de integración que llaman al
+    /// servicio directo con datos de prueba cuyos tiempos no representan un
+    /// reloj real avanzando (`tests/flujo_integracion.rs`).
+    fn en_transaccion_con_reloj_validado<T>(
+        &self,
+        operar: impl FnOnce(
+            &Transaction<'_>,
+            chrono::DateTime<chrono::Utc>,
+        ) -> Result<T, RegistroIngresoServiceError>,
+    ) -> Result<T, RegistroIngresoServiceError> {
+        let ahora = self.reloj.ahora_utc();
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        validar_reloj(&transaction, ahora)?;
+        let resultado = operar(&transaction, ahora)?;
+        transaction.commit().map_err(DatabaseError::from)?;
+        Ok(resultado)
+    }
+
     pub fn registrar_ingreso(
         &self,
         contratista_id: i64,
@@ -210,29 +249,17 @@ impl AppCore {
         gafete: Option<i64>,
         usuario_id: i64,
     ) -> Result<ResultadoRegistroEntrada, RegistroIngresoServiceError> {
-        let ahora = self.reloj.ahora_utc();
-        // El bloqueo se adquiere antes de la primera lectura definitiva. Así, los
-        // repositorios creados sobre esta transacción validan e insertan contra el
-        // mismo estado de SQLite.
-        let transaction =
-            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
-                .map_err(DatabaseError::from)?;
-        validar_reloj(&transaction, ahora)?;
-
-        let resultado = {
-            let contratistas = SqliteContratistaRepository::new(&transaction);
-            let registros = SqliteRegistroIngresoRepository::new(&transaction);
+        self.en_transaccion_con_reloj_validado(|transaction, ahora| {
+            let contratistas = SqliteContratistaRepository::new(transaction);
+            let registros = SqliteRegistroIngresoRepository::new(transaction);
             RegistroIngresoService::new(&contratistas, &registros).registrar_entrada(
                 contratista_id,
                 medio,
                 gafete,
                 usuario_id,
                 ahora,
-            )?
-        };
-
-        transaction.commit().map_err(DatabaseError::from)?;
-        Ok(resultado)
+            )
+        })
     }
 
     pub fn listar_ingresos_activos(
@@ -256,19 +283,12 @@ impl AppCore {
         id: i64,
         usuario: i64,
     ) -> Result<(), RegistroIngresoServiceError> {
-        let ahora = self.reloj.ahora_utc();
-        let transaction =
-            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
-                .map_err(DatabaseError::from)?;
-        validar_reloj(&transaction, ahora)?;
-        {
-            let contratistas = SqliteContratistaRepository::new(&transaction);
-            let registros = SqliteRegistroIngresoRepository::new(&transaction);
+        self.en_transaccion_con_reloj_validado(|transaction, ahora| {
+            let contratistas = SqliteContratistaRepository::new(transaction);
+            let registros = SqliteRegistroIngresoRepository::new(transaction);
             RegistroIngresoService::new(&contratistas, &registros)
-                .registrar_salida(id, ahora, usuario)?;
-        }
-        transaction.commit().map_err(DatabaseError::from)?;
-        Ok(())
+                .registrar_salida(id, ahora, usuario)
+        })
     }
 
     pub fn buscar_empresas(
@@ -428,32 +448,20 @@ impl Drop for AppCore {
     }
 }
 
+/// Comprobación de sanidad de todo el sistema, no una regla de negocio de
+/// `RegistroIngresoService` (ver el comentario de
+/// `en_transaccion_con_reloj_validado`). Sin SQL propio —
+/// `ultimo_instante_movimiento` vive en `database::queries::ingresos`, junto
+/// al resto del acceso a `registro_ingresos`.
 fn validar_reloj(
     connection: &Connection,
     ahora: chrono::DateTime<chrono::Utc>,
 ) -> Result<(), RegistroIngresoServiceError> {
-    let ultima: Option<String> = connection
-        .query_row(
-            "SELECT MAX(instante) FROM (
-            SELECT fecha_hora_ingreso AS instante FROM registro_ingresos
-            UNION ALL
-            SELECT fecha_hora_salida FROM registro_ingresos
-            WHERE fecha_hora_salida IS NOT NULL
-         )",
-            [],
-            |row| row.get(0),
-        )
-        .map_err(DatabaseError::from)?;
-    let Some(ultima) = ultima else {
+    let Some(ultima) =
+        crate::database::queries::ingresos::ultimo_instante_movimiento(connection)?
+    else {
         return Ok(());
     };
-    let ultima = parsear_utc(&ultima).map_err(|error| {
-        DatabaseError::Sqlite(rusqlite::Error::FromSqlConversionFailure(
-            0,
-            rusqlite::types::Type::Text,
-            Box::new(error),
-        ))
-    })?;
     if ahora < ultima {
         return Err(RegistroIngresoServiceError::RelojRetrocedido);
     }

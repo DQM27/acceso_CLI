@@ -5,7 +5,8 @@ use control_acceso::database::repositories::registro_ingreso_repository::{
 };
 use control_acceso::models::medio_ingreso::MedioIngreso;
 use control_acceso::models::registro_ingreso::{
-    DatosHistoricosEntrada, NuevoRegistroIngreso, ResultadoIngresoRegistrado, VERSION_REGLAS_ACCESO,
+    DatosHistoricosEntrada, NuevoRegistroIngreso, ResultadoIngresoRegistrado,
+    SalidaRegistroIngreso, VERSION_REGLAS_ACCESO,
 };
 use control_acceso::models::tipo_ingreso::TipoIngreso;
 
@@ -144,8 +145,7 @@ fn debe_crear_y_recuperar_registro() {
     assert_eq!(recuperado.usuario_ingreso_id, usuario_id);
     assert_eq!(recuperado.medio_ingreso, MedioIngreso::Vehiculo);
     assert_eq!(recuperado.tipo_ingreso, TipoIngreso::Praind);
-    assert!(recuperado.fecha_hora_salida.is_none());
-    assert!(recuperado.usuario_salida_id.is_none());
+    assert!(recuperado.salida.is_none());
 }
 
 #[test]
@@ -174,7 +174,7 @@ fn debe_detectar_ingreso_activo() {
 
     assert_eq!(activo.contratista_id, contratista_id);
 
-    assert!(activo.fecha_hora_salida.is_none());
+    assert!(activo.salida.is_none());
 }
 
 #[test]
@@ -210,9 +210,13 @@ fn debe_dejar_de_ser_activo_al_registrar_salida() {
         .expect("Error buscando registro")
         .expect("Registro no encontrado");
 
-    assert_eq!(recuperado.fecha_hora_salida, Some(fecha_salida));
-
-    assert_eq!(recuperado.usuario_salida_id, Some(usuario_id));
+    assert_eq!(
+        recuperado.salida,
+        Some(SalidaRegistroIngreso {
+            fecha_hora: fecha_salida,
+            usuario_id,
+        })
+    );
 }
 
 #[test]

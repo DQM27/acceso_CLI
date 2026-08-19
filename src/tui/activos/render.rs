@@ -1,9 +1,11 @@
 use super::*;
 use crate::{
-    services::registro_ingreso_service::IngresoActivoResumen,
+    services::{
+        autenticacion_service::UsuarioSesion, registro_ingreso_service::IngresoActivoResumen,
+    },
     tiempo::{a_costa_rica, hora_actual_texto},
     tui::ui_kit::{
-        CommandHint, ScreenShell, StatusKind, Theme, render_terminal_too_small,
+        CommandHint, ScreenShell, StatusKind, Theme, identidad_sesion, render_terminal_too_small,
     },
 };
 use ratatui::{
@@ -19,8 +21,7 @@ const ANCHO_PANEL_LATERAL: u16 = 100;
 
 const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓", "Mover"),
-    CommandHint::new("ENTER", "Detalle"),
-    CommandHint::new("S", "Salida"),
+    CommandHint::new("ENTER", "Salida"),
     CommandHint::new("/", "Buscar"),
     CommandHint::new("F4", "Columnas"),
     CommandHint::new("ESC", "Volver"),
@@ -28,10 +29,6 @@ const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
 const COMANDOS_BUSQUEDA: &[CommandHint<'static>] = &[
     CommandHint::new("ENTER", "Aplicar"),
     CommandHint::new("ESC", "Limpiar"),
-];
-const COMANDOS_DETALLE: &[CommandHint<'static>] = &[
-    CommandHint::new("S", "Salida"),
-    CommandHint::new("ESC", "Cerrar"),
 ];
 const COMANDOS_CONFIRMAR: &[CommandHint<'static>] = &[
     CommandHint::new("ENTER", "Confirmar"),
@@ -43,20 +40,24 @@ const COMANDOS_COLUMNAS: &[CommandHint<'static>] = &[
     CommandHint::new("ESC", "Cerrar"),
 ];
 
-pub fn render(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Theme) {
-
+pub fn render(
+    frame: &mut Frame,
+    area: Rect,
+    state: &ActivosState,
+    sesion: &UsuarioSesion,
+    theme: Theme,
+) {
     if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
         render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "ESC salir", theme);
         return;
     }
 
     let hora = hora_actual_texto();
-    let contexto = format!("Usuario: {}", state.usuario_nombre);
+    let contexto = identidad_sesion(sesion);
     let (estado_texto, estado_tipo) = estado_shell(state);
     let comandos = match &state.modo {
         ModoActivos::Normal => COMANDOS_NORMAL,
         ModoActivos::Busqueda { .. } => COMANDOS_BUSQUEDA,
-        ModoActivos::Detalle { .. } => COMANDOS_DETALLE,
         ModoActivos::ConfirmarSalida { .. } => COMANDOS_CONFIRMAR,
         ModoActivos::Columnas { .. } => COMANDOS_COLUMNAS,
     };
@@ -283,13 +284,7 @@ fn valor_columna(registro: &IngresoActivoResumen, columna: Columna) -> String {
 
 fn render_panel(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Theme) {
     match &state.modo {
-        ModoActivos::Normal | ModoActivos::Busqueda { .. } => {
-            frame.render_widget(
-                Paragraph::new("Seleccione ENTER para ver el detalle.").style(theme.muted()),
-                area,
-            );
-        }
-        ModoActivos::Detalle { id } | ModoActivos::ConfirmarSalida { id } => {
+        ModoActivos::ConfirmarSalida { id } => {
             if let Some(registro) = state.registro(*id) {
                 render_detalle(frame, area, registro, theme);
             }
@@ -297,6 +292,13 @@ fn render_panel(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Them
         ModoActivos::Columnas { seleccion } => {
             render_columnas(frame, area, state, *seleccion, theme);
         }
+        ModoActivos::Normal | ModoActivos::Busqueda { .. } => match state.seleccionado() {
+            Some(registro) => render_detalle(frame, area, registro, theme),
+            None => frame.render_widget(
+                Paragraph::new("No hay un registro seleccionado.").style(theme.muted()),
+                area,
+            ),
+        },
     }
 }
 

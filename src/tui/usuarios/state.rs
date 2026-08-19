@@ -231,7 +231,6 @@ pub struct UsuariosState {
     modo: ModoUsuarios,
     filtro: String,
     mensaje: Option<String>,
-    usuario_nombre: String,
     ayuda_expandida: bool,
     busqueda_debounce: Debounce,
     /// `true` mientras se espera el resultado real de crear un usuario o
@@ -247,7 +246,6 @@ impl Default for UsuariosState {
             modo: ModoUsuarios::Normal,
             filtro: String::new(),
             mensaje: None,
-            usuario_nombre: "Quintana".into(),
             ayuda_expandida: false,
             busqueda_debounce: Debounce::default(),
             guardando: false,
@@ -256,9 +254,6 @@ impl Default for UsuariosState {
 }
 
 impl UsuariosState {
-    pub fn set_usuario_nombre(&mut self, nombre: impl Into<String>) {
-        self.usuario_nombre = nombre.into();
-    }
     pub fn resumen_por_id(&self, id: i64) -> Option<&UsuarioResumen> {
         self.usuario(id)
     }
@@ -340,12 +335,15 @@ impl UsuariosState {
         match resultado {
             Ok(()) => {
                 self.modo = ModoUsuarios::Normal;
+                // Mismo criterio que `completar_guardado`: limpiar el filtro
+                // tras cualquier escritura exitosa, no sólo al crear/editar.
+                self.filtro.clear();
                 self.mensaje = Some(format!(
                     "✓ Usuario {} — {nombre}",
                     if activar { "activado" } else { "desactivado" }
                 ));
                 AccionUsuarios::Buscar {
-                    texto: texto_filtro(&self.filtro),
+                    texto: None,
                     seleccionar_id: Some(id),
                 }
             }
@@ -492,7 +490,7 @@ impl UsuariosState {
         if let Some(i) = f.selector_rol {
             match key.code {
                 KeyCode::Up => f.selector_rol = Some(i.saturating_sub(1)),
-                KeyCode::Down => f.selector_rol = Some((i + 1).min(2)),
+                KeyCode::Down => f.selector_rol = Some((i + 1).min(ROLES.len() - 1)),
                 KeyCode::Enter => {
                     f.rol = ROLES[i];
                     f.selector_rol = None
@@ -578,14 +576,16 @@ impl UsuariosState {
             ModoFormularioUsuario::Crear => {
                 let password = std::mem::take(&mut f.password.0);
                 f.confirmar_password.limpiar();
+                let rol = f.rol;
+                let activo = f.activo;
                 self.modo = ModoUsuarios::Formulario(f);
                 AccionUsuarios::Crear {
                     input: CrearUsuarioInput {
                         cedula,
                         nombre: nombre.clone(),
                         password,
-                        rol: self.formulario_actual().unwrap().rol,
-                        activo: self.formulario_actual().unwrap().activo,
+                        rol,
+                        activo,
                     },
                     nombre,
                 }
@@ -605,13 +605,6 @@ impl UsuariosState {
                     nombre,
                 }
             }
-        }
-    }
-    fn formulario_actual(&self) -> Option<&FormularioUsuario> {
-        if let ModoUsuarios::Formulario(f) = &self.modo {
-            Some(f)
-        } else {
-            None
         }
     }
     fn password(&mut self, key: KeyEvent, mut f: FormularioPassword) -> AccionUsuarios {

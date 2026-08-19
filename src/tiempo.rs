@@ -71,7 +71,7 @@ pub fn parsear_utc(valor: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
 }
 
 pub fn hora_actual_texto() -> String {
-    ahora_costa_rica().format("%H:%M:%S").to_string()
+    ahora_costa_rica().format("%H:%M").to_string()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

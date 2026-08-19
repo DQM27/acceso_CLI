@@ -7,7 +7,7 @@ use crate::{
     models::{contratista::Contratista, empresa::Empresa, tipo_ingreso::TipoIngreso},
     services::contratista_service::{DatosActualizacionContratista, DatosContratista},
     tiempo::ahora_costa_rica,
-    tui::ui_kit::{Debounce, StandardCommand, query_lang, standard_command},
+    tui::ui_kit::{Debounce, StandardCommand, Term, resolver_terminos, standard_command, valores},
 };
 use std::time::Instant;
 
@@ -25,27 +25,20 @@ mod tests;
 /// que una clave admite, se deja como texto libre para nombre/cédula.
 fn parsear_consulta(texto: &str, empresas: &[Empresa], hoy: NaiveDate) -> (FiltroContratistas, String) {
     let mut filtro = FiltroContratistas::default();
-    let mut libres = Vec::new();
-    for term in query_lang::analizar(texto).terms {
-        if term.key.is_none() {
-            libres.push(query_lang::texto_libre(&term));
-            continue;
-        }
-        if !aplicar_clave(&mut filtro, &term, empresas, hoy) {
-            libres.push(query_lang::reconstruir_clave(&term));
-        }
-    }
-    (filtro, libres.join(" "))
+    let libres = resolver_terminos(texto, &mut filtro, |f, term| {
+        aplicar_clave(f, term, empresas, hoy)
+    });
+    (filtro, libres)
 }
 
 fn aplicar_clave(
     f: &mut FiltroContratistas,
-    term: &query_lang::Term,
+    term: &Term,
     empresas: &[Empresa],
     hoy: NaiveDate,
 ) -> bool {
     let clave = term.key.as_deref().unwrap_or_default().to_lowercase();
-    let valores = query_lang::valores(term);
+    let valores = valores(term);
     match clave.as_str() {
         "empresa" if !term.negated && valores.len() == 1 => {
             let buscado = valores[0].to_lowercase();
@@ -63,7 +56,7 @@ fn aplicar_clave(
         "tipo" => {
             let Some(reconocidos) = valores
                 .iter()
-                .map(|v| tipo_desde_texto(v))
+                .map(|v| TipoIngreso::from_str_filtro(v))
                 .collect::<Option<Vec<_>>>()
             else {
                 return false;
@@ -118,16 +111,6 @@ fn bool_desde_texto(v: &str) -> Option<bool> {
     match v.to_lowercase().as_str() {
         "si" | "sí" | "yes" | "true" => Some(true),
         "no" | "false" => Some(false),
-        _ => None,
-    }
-}
-
-fn tipo_desde_texto(v: &str) -> Option<TipoIngreso> {
-    match v.to_lowercase().as_str() {
-        "praind" => Some(TipoIngreso::Praind),
-        "inhouse" | "in-house" | "in_house" => Some(TipoIngreso::InHouse),
-        "correo" | "porcorreo" => Some(TipoIngreso::PorCorreo),
-        "swat" => Some(TipoIngreso::Swat),
         _ => None,
     }
 }
@@ -318,8 +301,6 @@ pub struct ContratistasState {
     columnas: Vec<(Columna, bool)>,
     filtro: String,
     mensaje: Option<String>,
-    error_carga: Option<String>,
-    usuario_nombre: String,
     hoy: NaiveDate,
     ayuda_expandida: bool,
     busqueda_debounce: Debounce,
@@ -334,8 +315,6 @@ impl Default for ContratistasState {
             columnas: Columna::TODAS.into_iter().map(|c| (c, true)).collect(),
             filtro: String::new(),
             mensaje: None,
-            error_carga: None,
-            usuario_nombre: "Quintana".into(),
             hoy: ahora_costa_rica().date_naive(),
             ayuda_expandida: false,
             busqueda_debounce: Debounce::default(),
@@ -343,16 +322,13 @@ impl Default for ContratistasState {
     }
 }
 impl ContratistasState {
-    pub fn set_usuario_nombre(&mut self, nombre: impl Into<String>) {
-        self.usuario_nombre = nombre.into()
-    }
     pub fn set_hoy(&mut self, hoy: NaiveDate) {
         self.hoy = hoy
     }
     pub fn completar_empresas(&mut self, r: Result<Vec<Empresa>, String>) {
         match r {
             Ok(e) => self.empresas = e,
-            Err(e) => self.error_carga = Some(e),
+            Err(e) => self.mensaje = Some(e),
         }
     }
     pub fn completar_busqueda(
@@ -363,7 +339,7 @@ impl ContratistasState {
         match r {
             Ok(v) => {
                 self.registros = v;
-                self.error_carga = None;
+                self.mensaje = None;
                 self.seleccion = id
                     .and_then(|id| self.registros.iter().position(|c| c.id == id))
                     .or_else(|| (!self.registros.is_empty()).then_some(0))
@@ -371,7 +347,7 @@ impl ContratistasState {
             Err(e) => {
                 self.registros.clear();
                 self.seleccion = None;
-                self.error_carga = Some(e)
+                self.mensaje = Some(e)
             }
         }
     }
@@ -483,7 +459,7 @@ impl ContratistasState {
         if let Some((d, o)) = f.desplegable {
             let ultimo = match d {
                 Desplegable::Empresa => self.empresas.len().saturating_sub(1),
-                Desplegable::Tipo => 3,
+                Desplegable::Tipo => tipos().len().saturating_sub(1),
             };
             match key.code {
                 KeyCode::Up => f.desplegable = Some((d, o.saturating_sub(1))),
@@ -598,9 +574,9 @@ impl ContratistasState {
         match r {
             Ok(creado) => {
                 self.modo = ModoContratistas::Normal;
-                if creado.is_some() {
-                    self.filtro.clear()
-                }
+                // Igual tras crear o editar — antes sólo se limpiaba al
+                // crear, mismo patrón de inconsistencia que ya tenía Usuarios.
+                self.filtro.clear();
                 self.mensaje = Some(format!(
                     "✓ Contratista {} — {}",
                     if creado.is_some() {

@@ -57,8 +57,6 @@ pub struct EmpresasState {
     modo: ModoEmpresas,
     filtro: String,
     mensaje: Option<String>,
-    error_carga: Option<String>,
-    usuario_nombre: String,
     ayuda_expandida: bool,
     busqueda_debounce: Debounce,
 }
@@ -71,8 +69,6 @@ impl Default for EmpresasState {
             modo: ModoEmpresas::Normal,
             filtro: String::new(),
             mensaje: None,
-            error_carga: None,
-            usuario_nombre: "Quintana".into(),
             ayuda_expandida: false,
             busqueda_debounce: Debounce::default(),
         }
@@ -80,10 +76,6 @@ impl Default for EmpresasState {
 }
 
 impl EmpresasState {
-    pub fn set_usuario_nombre(&mut self, nombre: impl Into<String>) {
-        self.usuario_nombre = nombre.into();
-    }
-
     pub fn cantidad(&self) -> usize {
         self.empresas.len()
     }
@@ -127,7 +119,7 @@ impl EmpresasState {
         match resultado {
             Ok(empresas) => {
                 self.empresas = empresas;
-                self.error_carga = None;
+                self.mensaje = None;
                 self.seleccion = seleccionar_id
                     .and_then(|id| self.empresas.iter().position(|e| e.id == id))
                     .or_else(|| (!self.empresas.is_empty()).then_some(0));
@@ -135,7 +127,7 @@ impl EmpresasState {
             Err(error) => {
                 self.empresas.clear();
                 self.seleccion = None;
-                self.error_carga = Some(error);
+                self.mensaje = Some(error);
             }
         }
     }
@@ -168,6 +160,9 @@ impl EmpresasState {
         match resultado {
             Ok(()) => {
                 self.modo = ModoEmpresas::Normal;
+                // Igual que al crear — antes sólo se limpiaba al crear, mismo
+                // patrón de inconsistencia que ya tenía Usuarios.
+                self.filtro.clear();
                 self.mensaje = Some(format!("✓ Empresa actualizada — {}", nombre.trim()));
                 self.accion_buscar(Some(id))
             }
@@ -235,7 +230,10 @@ impl EmpresasState {
                     texto.pop();
                     self.filtro = texto.clone();
                 }
-                self.seleccion = None;
+                // No se resetea la selección aquí — mismo criterio que
+                // Activos/Contratistas/Historial: mientras el debounce está
+                // pendiente se mantiene resaltada la fila anterior en vez de
+                // verse vacía.
                 self.busqueda_debounce.marcar(Instant::now());
                 AccionEmpresas::Ninguna
             }
@@ -248,7 +246,6 @@ impl EmpresasState {
                     texto.push(c);
                     self.filtro = texto.clone();
                 }
-                self.seleccion = None;
                 self.busqueda_debounce.marcar(Instant::now());
                 AccionEmpresas::Ninguna
             }
@@ -281,14 +278,18 @@ impl EmpresasState {
                 formulario.error = None;
             }
             KeyCode::Enter => {
-                return match formulario.modo {
-                    ModoFormularioEmpresa::Crear => AccionEmpresas::Crear {
-                        nombre: formulario.nombre,
+                return match construir(&formulario) {
+                    Ok(nombre) => match formulario.modo {
+                        ModoFormularioEmpresa::Crear => AccionEmpresas::Crear { nombre },
+                        ModoFormularioEmpresa::Editar { id } => {
+                            AccionEmpresas::Actualizar { id, nombre }
+                        }
                     },
-                    ModoFormularioEmpresa::Editar { id } => AccionEmpresas::Actualizar {
-                        id,
-                        nombre: formulario.nombre,
-                    },
+                    Err(error) => {
+                        formulario.error = Some(error);
+                        self.modo = ModoEmpresas::Formulario(formulario);
+                        AccionEmpresas::Ninguna
+                    }
                 };
             }
             KeyCode::Char(c)
@@ -350,4 +351,14 @@ impl EmpresasState {
             .unwrap_or(0)
             .saturating_sub(capacidad.saturating_sub(1))
     }
+}
+
+/// Valida antes de despachar la acción, igual que `contratistas::construir` —
+/// antes esta pantalla enviaba `nombre` tal cual y dejaba toda la validación
+/// al service, la única de las 3 pantallas CRUD que lo hacía así.
+fn construir(f: &FormularioEmpresa) -> Result<String, String> {
+    if f.nombre.trim().is_empty() {
+        return Err("El nombre es obligatorio".into());
+    }
+    Ok(f.nombre.trim().to_string())
 }
