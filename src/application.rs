@@ -8,7 +8,7 @@ use crate::database::connection::open_database;
 use crate::database::error::DatabaseError;
 use crate::database::schema::SchemaError;
 use crate::database::queries::contratistas::{
-    ContratistaResumen, FiltroContratistas, SqliteContratistasQuery,
+    FiltroContratistas, PaginaContratistas, SqliteContratistasQuery,
 };
 use crate::database::queries::empresas::{EmpresaResumen, FiltroEmpresas, SqliteEmpresasQuery};
 use crate::database::queries::ingresos::{
@@ -161,7 +161,7 @@ impl AppCore {
     pub fn buscar_contratistas(
         &self,
         filtro: &FiltroContratistas,
-    ) -> Result<Vec<ContratistaResumen>, ContratistaServiceError> {
+    ) -> Result<PaginaContratistas, ContratistaServiceError> {
         let query = SqliteContratistasQuery::new(&self.connection);
         ContratistaConsultaService::new(&query).buscar_para_tabla(filtro)
     }

@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 
 use crate::database::error::DatabaseError;
 use crate::database::queries::contratistas::{
-    ContratistaResumen, ContratistasQuery, FiltroContratistas,
+    ContratistasQuery, FiltroContratistas, PaginaContratistas,
 };
 use crate::database::repositories::contratista_repository::ContratistaRepository;
 use crate::database::repositories::empresa_repository::EmpresaRepository;
@@ -29,7 +29,7 @@ where
     pub fn buscar_para_tabla(
         &self,
         filtro: &FiltroContratistas,
-    ) -> Result<Vec<ContratistaResumen>, ContratistaServiceError> {
+    ) -> Result<PaginaContratistas, ContratistaServiceError> {
         Ok(self.consultas.buscar(filtro)?)
     }
 }

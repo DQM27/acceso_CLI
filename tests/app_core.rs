@@ -212,7 +212,8 @@ fn app_core_compone_query_n1_y_preparacion_n3_sin_persistir() {
 
     let filas = core
         .buscar_contratistas(&FiltroContratistas::default())
-        .unwrap();
+        .unwrap()
+        .items;
     assert_eq!(filas.len(), 1);
     assert_eq!(filas[0].empresa_nombre, "Brisas");
 

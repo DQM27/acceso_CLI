@@ -71,7 +71,7 @@ fn persistencia_busqueda_fts_y_empresa_id_sobreviven_reapertura() {
             ))
             .unwrap();
         for q in ["jose", "hernandez", "nandez", "alvarez", "tructora"] {
-            let r = core.buscar_contratistas(&filtro(q)).unwrap();
+            let r = core.buscar_contratistas(&filtro(q)).unwrap().items;
             assert_eq!(r[0].id, id);
             assert_eq!(r[0].empresa_id, e);
         }
@@ -79,7 +79,7 @@ fn persistencia_busqueda_fts_y_empresa_id_sobreviven_reapertura() {
     {
         let core = AppCore::new(open_database(&ruta).unwrap());
         assert_eq!(
-            core.buscar_contratistas(&filtro("001-09")).unwrap()[0].id,
+            core.buscar_contratistas(&filtro("001-09")).unwrap().items[0].id,
             id
         );
     }
@@ -118,10 +118,11 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
     assert!(
         core.buscar_contratistas(&filtro("hernandez"))
             .unwrap()
+            .items
             .is_empty()
     );
     assert_eq!(
-        core.buscar_contratistas(&filtro("alvarez")).unwrap()[0].id,
+        core.buscar_contratistas(&filtro("alvarez")).unwrap().items[0].id,
         a
     );
     assert!(matches!(
@@ -169,7 +170,7 @@ fn matrices_praind_ruta_acceso_y_cedula_string_se_persisten() {
             ruta_personal,
         ))
         .unwrap();
-        let r = &core.buscar_contratistas(&filtro(&cedula)).unwrap()[0];
+        let r = &core.buscar_contratistas(&filtro(&cedula)).unwrap().items[0];
         assert_eq!(r.cedula, cedula);
         assert_eq!(r.fecha_vencimiento_praind.is_some(), requiere);
         assert_eq!(r.es_personal_ruta, ruta_personal);

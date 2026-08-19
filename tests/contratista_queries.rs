@@ -69,6 +69,7 @@ fn buscar(
             ..FiltroContratistas::default()
         })
         .unwrap()
+        .items
 }
 
 #[test]
@@ -240,18 +241,18 @@ fn limite_funciona_y_se_acota_a_un_minimo_seguro() {
         );
     }
     let query = SqliteContratistasQuery::new(&connection);
-    assert_eq!(
-        query
-            .buscar(&FiltroContratistas {
-                texto: None,
-                limite: 2,
-                offset: 0,
-                ..FiltroContratistas::default()
-            })
-            .unwrap()
-            .len(),
-        2
-    );
+    let pagina = query
+        .buscar(&FiltroContratistas {
+            texto: None,
+            limite: 2,
+            offset: 0,
+            ..FiltroContratistas::default()
+        })
+        .unwrap();
+    // El conteo real no se recorta por `limite` — así la UI puede avisar
+    // "2 de 4" en vez de dejar los otros dos fuera en silencio.
+    assert_eq!(pagina.items.len(), 2);
+    assert_eq!(pagina.total, 4);
     assert_eq!(
         query
             .buscar(&FiltroContratistas {
@@ -261,6 +262,7 @@ fn limite_funciona_y_se_acota_a_un_minimo_seguro() {
                 ..FiltroContratistas::default()
             })
             .unwrap()
+            .items
             .len(),
         1
     );
@@ -332,6 +334,7 @@ fn filtra_por_empresa_tipo_praind_ruta_y_acceso() {
                 ..base()
             })
             .unwrap()
+            .items
             .len(),
         2
     );
@@ -343,6 +346,7 @@ fn filtra_por_empresa_tipo_praind_ruta_y_acceso() {
                 ..base()
             })
             .unwrap()
+            .items
             .len(),
         3
     );
@@ -353,6 +357,7 @@ fn filtra_por_empresa_tipo_praind_ruta_y_acceso() {
                 ..base()
             })
             .unwrap()
+            .items
             .len(),
         0
     );
@@ -362,7 +367,8 @@ fn filtra_por_empresa_tipo_praind_ruta_y_acceso() {
             praind: Some(FiltroPraind::Vencido { hoy }),
             ..base()
         })
-        .unwrap();
+        .unwrap()
+        .items;
     assert_eq!(vencidos.len(), 1);
     assert_eq!(vencidos[0].nombre, "Ana");
     assert!(
@@ -375,7 +381,8 @@ fn filtra_por_empresa_tipo_praind_ruta_y_acceso() {
             praind: Some(FiltroPraind::ProximoAVencer { hoy }),
             ..base()
         })
-        .unwrap();
+        .unwrap()
+        .items;
     assert_eq!(proximos.len(), 1);
     assert_eq!(proximos[0].nombre, "Beto");
 
@@ -384,7 +391,8 @@ fn filtra_por_empresa_tipo_praind_ruta_y_acceso() {
             praind: Some(FiltroPraind::SinFecha),
             ..base()
         })
-        .unwrap();
+        .unwrap()
+        .items;
     assert_eq!(sin_fecha.len(), 1);
     assert_eq!(sin_fecha[0].nombre, "Caro");
 
@@ -395,6 +403,7 @@ fn filtra_por_empresa_tipo_praind_ruta_y_acceso() {
                 ..base()
             })
             .unwrap()
+            .items
             .len(),
         1
     );
@@ -405,9 +414,59 @@ fn filtra_por_empresa_tipo_praind_ruta_y_acceso() {
                 ..base()
             })
             .unwrap()
+            .items
             .len(),
         1
     );
+}
+
+#[test]
+fn el_total_se_mantiene_igual_al_avanzar_de_pagina() {
+    let connection = preparar_base();
+    let empresa = crear_empresa(&connection, "Brisas");
+    for indice in 0..5 {
+        crear_contratista(
+            &connection,
+            &format!("{indice}"),
+            &format!("Persona {indice}"),
+            empresa,
+            TipoIngreso::Swat,
+            None,
+            false,
+            true,
+        );
+    }
+    let query = SqliteContratistasQuery::new(&connection);
+    let filtro = |offset| FiltroContratistas {
+        texto: None,
+        limite: 2,
+        offset,
+        ..FiltroContratistas::default()
+    };
+
+    let primera = query.buscar(&filtro(0)).unwrap();
+    let segunda = query.buscar(&filtro(2)).unwrap();
+    let tercera = query.buscar(&filtro(4)).unwrap();
+
+    assert_eq!(primera.total, 5);
+    assert_eq!(segunda.total, 5);
+    assert_eq!(tercera.total, 5);
+    assert_eq!(primera.items.len(), 2);
+    assert_eq!(segunda.items.len(), 2);
+    assert_eq!(tercera.items.len(), 1);
+    // Sin solapamiento ni huecos entre páginas.
+    let nombres: Vec<_> = primera
+        .items
+        .iter()
+        .chain(segunda.items.iter())
+        .chain(tercera.items.iter())
+        .map(|c| c.nombre.clone())
+        .collect();
+    assert_eq!(nombres.len(), 5);
+    let mut unicos = nombres.clone();
+    unicos.sort();
+    unicos.dedup();
+    assert_eq!(unicos.len(), 5);
 }
 
 #[test]
@@ -441,7 +500,8 @@ fn offset_funciona_sobre_el_orden_estable() {
             offset: 1,
             ..FiltroContratistas::default()
         })
-        .unwrap();
+        .unwrap()
+        .items;
     assert_eq!(resultado[0].nombre, "Beto");
 }
 
@@ -602,7 +662,8 @@ fn service_devuelve_read_model_sin_perder_datos() {
 
     let resultado = servicio
         .buscar_para_tabla(&FiltroContratistas::default())
-        .unwrap();
+        .unwrap()
+        .items;
 
     assert_eq!(resultado[0].id, id);
     assert_eq!(resultado[0].empresa_nombre, "Empresa completa");

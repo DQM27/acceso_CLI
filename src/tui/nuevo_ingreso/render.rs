@@ -91,10 +91,17 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme
     let filas = Layout::vertical([Constraint::Length(3), Constraint::Min(4)]).split(area);
 
     let enfocado_busqueda = matches!(state.etapa, EtapaNuevoIngreso::Buscar);
+    let etiqueta_busqueda = match state.resultados_ocultos() {
+        Some(total) => format!(
+            "BUSCAR CONTRATISTA · {} DE {total} RESULTADOS · afine la búsqueda para ver el resto",
+            state.contratistas.len()
+        ),
+        None => format!("BUSCAR CONTRATISTA · {} RESULTADOS", state.contratistas.len()),
+    };
     let area_busqueda = render_campo(
         frame,
         filas[0],
-        &format!("BUSCAR CONTRATISTA · {} RESULTADOS", state.contratistas.len()),
+        &etiqueta_busqueda,
         &state.busqueda,
         enfocado_busqueda,
         theme,
