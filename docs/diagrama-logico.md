@@ -74,7 +74,8 @@ flowchart TD
     Q --> T["Historial"]
     Q --> V["Administrar contratistas"]
     Q --> W["Administrar empresas"]
-    Q --> X["Administrar usuarios"]
+    Q --> X["Administrar usuarios<br/>(oculto para Operador)"]
+    Q --> Y2["Configuración → Respaldos<br/>(oculto para Operador)"]
 
     R -->|Volver| Q
     S -->|Volver| Q
@@ -82,12 +83,23 @@ flowchart TD
     V -->|Volver| Q
     W -->|Volver| Q
     X -->|Volver| Q
+    Y2 -->|Volver| Q
     Q -->|Cerrar sesión| L
     Q -->|Salir| Z["Restaurar terminal y finalizar"]
+
+    F2["Salida rápida (F2)<br/>global, con sesión iniciada,<br/>desde cualquier pantalla"]
 ```
 
 El inicio ROOT es atómico: dos instancias no pueden crear simultáneamente dos usuarios
 iniciales. La autenticación nunca devuelve el `password_hash` dentro de la sesión.
+
+**Salida rápida (F2):** overlay global que registra la salida de un ingreso activo por
+gafete o por nombre/cédula sin navegar hasta Ingresos activos, alcanzable con sesión
+iniciada desde cualquier pantalla (`src/tui/salida_rapida/`).
+
+**Configuración → Respaldos:** entrada 7 del menú (visible sólo para ROOT y
+Administrador) con Crear, Listar, Revalidar, Exportar y Restaurar respaldos —
+ver [plan de respaldos](plan-respaldos.md).
 
 ## 3. Registro de una entrada
 
@@ -336,9 +348,12 @@ triggers. Las búsquedas de usuarios nunca exponen el hash de contraseña.
 
 ## Observaciones de la implementación actual
 
-- `Root`, `Administrador` y `Operador` se persisten y se muestran en la sesión, pero no
-  existe todavía una comprobación de rol al abrir o ejecutar los casos de uso de
-  administración. Actualmente, cualquier usuario autenticado alcanza esas operaciones.
+- `Root`, `Administrador` y `Operador` se persisten y se muestran en la sesión.
+  `Usuarios` y `Configuración` ya están ocultas del menú (y de sus atajos de teclado) para
+  `Operador` (`OpcionMenu::visibles_para`, `src/tui/menu_principal/state.rs`). Fuera de esa
+  visibilidad de menú, `Root` y `Administrador` siguen siendo funcionalmente idénticos —
+  no hay ninguna otra operación que distinga entre ambos salvo la protección de no poder
+  desactivar/degradar al último `Root` activo.
 - La preparación del ingreso es informativa: la autorización definitiva ocurre de nuevo
   al registrar la entrada.
 - El historial conserva el resultado evaluado al ingresar. La lista operativa de activos
