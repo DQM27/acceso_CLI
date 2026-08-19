@@ -1,4 +1,5 @@
 use chrono::{Duration, NaiveDate};
+use crossterm::event::KeyModifiers;
 use std::time::Instant;
 
 use super::*;
@@ -207,7 +208,7 @@ fn f4_no_hace_nada_fuera_de_la_vista_clasica_y_letras_sueltas_van_a_la_busqueda(
 
     state.handle_key(tecla(KeyCode::Char('f')));
     assert_eq!(state.modo, ModoHistorial::Normal);
-    assert_eq!(state.busqueda, "f");
+    assert_eq!(state.busqueda.value(), "f");
 }
 
 #[test]
@@ -246,7 +247,7 @@ fn el_mapa_de_calor_navega_por_semana_y_dia_y_hace_drill_down_al_timeline() {
         panic!("debía consultar al hacer drill-down")
     };
     assert_eq!(state.vista, ViewMode::Timeline);
-    assert_eq!(state.busqueda, format!("desde:{fecha} hasta:{fecha}"));
+    assert_eq!(state.busqueda.value(), format!("desde:{fecha} hasta:{fecha}"));
 }
 
 #[test]

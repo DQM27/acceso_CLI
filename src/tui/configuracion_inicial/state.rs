@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::tui::ui_kit::{StandardCommand, standard_command};
+use crate::tui::ui_kit::{StandardCommand, TextInput, standard_command};
 
 #[path = "render.rs"]
 pub(super) mod render;
@@ -58,10 +58,10 @@ pub enum AccionConfiguracion {
 }
 
 pub struct ConfiguracionInicialState {
-    cedula: String,
-    nombre: String,
-    password: String,
-    confirmar_password: String,
+    cedula: TextInput,
+    nombre: TextInput,
+    password: TextInput,
+    confirmar_password: TextInput,
     campo_activo: CampoConfiguracion,
     estado: EstadoConfiguracion,
     solicitud: Option<SolicitudRoot>,
@@ -74,8 +74,8 @@ impl std::fmt::Debug for ConfiguracionInicialState {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("ConfiguracionInicialState")
-            .field("cedula", &self.cedula)
-            .field("nombre", &self.nombre)
+            .field("cedula", &self.cedula.value())
+            .field("nombre", &self.nombre.value())
             .field("password", &"[OCULTA]")
             .field("confirmar_password", &"[OCULTA]")
             .field("campo_activo", &self.campo_activo)
@@ -87,10 +87,10 @@ impl std::fmt::Debug for ConfiguracionInicialState {
 impl Default for ConfiguracionInicialState {
     fn default() -> Self {
         Self {
-            cedula: String::new(),
-            nombre: String::new(),
-            password: String::new(),
-            confirmar_password: String::new(),
+            cedula: TextInput::default().with_max_chars(LONGITUD_MAXIMA_CEDULA),
+            nombre: TextInput::default().with_max_chars(LONGITUD_MAXIMA_NOMBRE),
+            password: TextInput::default().with_max_chars(LONGITUD_MAXIMA_PASSWORD),
+            confirmar_password: TextInput::default().with_max_chars(LONGITUD_MAXIMA_PASSWORD),
             campo_activo: CampoConfiguracion::Cedula,
             estado: EstadoConfiguracion::Editando,
             solicitud: None,
@@ -121,13 +121,18 @@ impl ConfiguracionInicialState {
             KeyCode::Char('g' | 'G') if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 self.intentar_crear()
             }
-            KeyCode::Backspace => self.borrar(),
-            KeyCode::Char(character)
+            KeyCode::Backspace
+            | KeyCode::Delete
+            | KeyCode::Left
+            | KeyCode::Right
+            | KeyCode::Home
+            | KeyCode::End => self.editar(key),
+            KeyCode::Char(_)
                 if !key
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                self.escribir(character)
+                self.editar(key)
             }
             _ => {}
         }
@@ -165,11 +170,11 @@ impl ConfiguracionInicialState {
     }
 
     pub fn password_enmascarado(&self) -> String {
-        "•".repeat(self.password.chars().count())
+        "•".repeat(self.password.value().chars().count())
     }
 
     pub fn confirmacion_enmascarada(&self) -> String {
-        "•".repeat(self.confirmar_password.chars().count())
+        "•".repeat(self.confirmar_password.value().chars().count())
     }
 
     fn siguiente_campo(&mut self) {
@@ -192,58 +197,42 @@ impl ConfiguracionInicialState {
         self.reiniciar_cursor();
     }
 
-    fn escribir(&mut self, character: char) {
+    fn editar(&mut self, key: KeyEvent) {
         self.limpiar_error();
         match self.campo_activo {
-            CampoConfiguracion::Cedula if self.cedula.chars().count() < LONGITUD_MAXIMA_CEDULA => {
-                self.cedula.push(character)
+            CampoConfiguracion::Cedula => {
+                self.cedula.handle_key(key);
             }
-            CampoConfiguracion::Nombre if self.nombre.chars().count() < LONGITUD_MAXIMA_NOMBRE => {
-                self.nombre.push(character)
+            CampoConfiguracion::Nombre => {
+                self.nombre.handle_key(key);
             }
-            CampoConfiguracion::Password
-                if self.password.chars().count() < LONGITUD_MAXIMA_PASSWORD =>
-            {
-                self.password.push(character)
+            CampoConfiguracion::Password => {
+                self.password.handle_key(key);
             }
-            CampoConfiguracion::ConfirmarPassword
-                if self.confirmar_password.chars().count() < LONGITUD_MAXIMA_PASSWORD =>
-            {
-                self.confirmar_password.push(character)
+            CampoConfiguracion::ConfirmarPassword => {
+                self.confirmar_password.handle_key(key);
             }
-            _ => {}
         }
         self.reiniciar_cursor();
     }
 
-    fn borrar(&mut self) {
-        self.limpiar_error();
-        match self.campo_activo {
-            CampoConfiguracion::Cedula => self.cedula.pop(),
-            CampoConfiguracion::Nombre => self.nombre.pop(),
-            CampoConfiguracion::Password => self.password.pop(),
-            CampoConfiguracion::ConfirmarPassword => self.confirmar_password.pop(),
-        };
-        self.reiniciar_cursor();
-    }
-
     fn intentar_crear(&mut self) {
-        let error = if self.cedula.trim().is_empty() {
+        let error = if self.cedula.value().trim().is_empty() {
             self.campo_activo = CampoConfiguracion::Cedula;
             Some("La cédula es obligatoria")
-        } else if self.nombre.trim().is_empty() {
+        } else if self.nombre.value().trim().is_empty() {
             self.campo_activo = CampoConfiguracion::Nombre;
             Some("El nombre es obligatorio")
-        } else if self.password.is_empty() {
+        } else if self.password.value().is_empty() {
             self.campo_activo = CampoConfiguracion::Password;
             Some("La contraseña es obligatoria")
-        } else if self.confirmar_password.is_empty() {
+        } else if self.confirmar_password.value().is_empty() {
             self.campo_activo = CampoConfiguracion::ConfirmarPassword;
             Some("Debe confirmar la contraseña")
-        } else if self.password.chars().count() < LONGITUD_MINIMA_PASSWORD {
+        } else if self.password.value().chars().count() < LONGITUD_MINIMA_PASSWORD {
             self.campo_activo = CampoConfiguracion::Password;
             Some("La contraseña debe tener al menos 8 caracteres")
-        } else if self.password != self.confirmar_password {
+        } else if self.password.value() != self.confirmar_password.value() {
             self.campo_activo = CampoConfiguracion::ConfirmarPassword;
             Some("Las contraseñas no coinciden")
         } else {
@@ -257,9 +246,9 @@ impl ConfiguracionInicialState {
         }
 
         self.solicitud = Some(SolicitudRoot {
-            cedula: self.cedula.trim().to_owned(),
-            nombre: self.nombre.trim().to_owned(),
-            password: self.password.clone(),
+            cedula: self.cedula.value().trim().to_owned(),
+            nombre: self.nombre.value().trim().to_owned(),
+            password: self.password.value().to_owned(),
         });
         self.estado = EstadoConfiguracion::Creando;
     }

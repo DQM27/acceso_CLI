@@ -208,7 +208,7 @@ fn abrir_de_nuevo_reinicia_busqueda_y_seleccion_previas() {
     s.handle_key(k(KeyCode::Esc));
 
     s.abrir();
-    assert_eq!(s.busqueda, "");
+    assert_eq!(s.busqueda.value(), "");
     assert!(s.registros.is_empty());
     assert_eq!(s.seleccion, None);
 }

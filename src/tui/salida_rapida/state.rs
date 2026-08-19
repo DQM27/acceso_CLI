@@ -1,7 +1,7 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::services::registro_ingreso_service::IngresoActivoResumen;
-use crate::tui::ui_kit::{StandardCommand, mover_seleccion, standard_command};
+use crate::tui::ui_kit::{StandardCommand, TextInput, mover_seleccion, standard_command};
 
 #[path = "render.rs"]
 pub(super) mod render;
@@ -29,7 +29,7 @@ pub enum AccionSalidaRapida {
 #[derive(Debug)]
 pub struct SalidaRapidaState {
     estado: Estado,
-    busqueda: String,
+    busqueda: TextInput,
     registros: Vec<IngresoActivoResumen>,
     seleccion: Option<usize>,
     error: Option<String>,
@@ -40,7 +40,7 @@ impl Default for SalidaRapidaState {
     fn default() -> Self {
         Self {
             estado: Estado::Cerrado,
-            busqueda: String::new(),
+            busqueda: TextInput::default(),
             registros: vec![],
             seleccion: None,
             error: None,
@@ -125,25 +125,16 @@ impl SalidaRapidaState {
                     nombre: r.contratista_nombre.clone(),
                 },
             ),
-            KeyCode::Backspace => {
-                self.busqueda.pop();
-                self.error = None;
-                AccionSalidaRapida::Buscar {
-                    texto: texto_filtro(&self.busqueda),
+            _ => {
+                if self.busqueda.handle_key(key) {
+                    self.error = None;
+                    AccionSalidaRapida::Buscar {
+                        texto: texto_filtro(self.busqueda.value()),
+                    }
+                } else {
+                    AccionSalidaRapida::Ninguna
                 }
             }
-            KeyCode::Char(c)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                self.busqueda.push(c);
-                self.error = None;
-                AccionSalidaRapida::Buscar {
-                    texto: texto_filtro(&self.busqueda),
-                }
-            }
-            _ => AccionSalidaRapida::Ninguna,
         }
     }
 

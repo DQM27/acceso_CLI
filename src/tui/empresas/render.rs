@@ -141,14 +141,15 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: Th
     let area_form_nombre = render_panel(frame, area_panel, state, theme);
 
     let cursor = match &state.modo {
-        ModoEmpresas::Busqueda { .. } => Some((area_busqueda, state.filtro.as_str())),
+        ModoEmpresas::Busqueda { texto } => Some((area_busqueda, texto)),
         ModoEmpresas::Formulario(formulario) => {
-            area_form_nombre.map(|area| (area, formulario.nombre.as_str()))
+            area_form_nombre.map(|area| (area, &formulario.nombre))
         }
         _ => None,
     };
-    if let Some((area_campo, contenido)) = cursor {
-        let ancho_visible = Line::from(contenido).width() as u16;
+    if let Some((area_campo, texto)) = cursor {
+        let antes_del_cursor: String = texto.value().chars().take(texto.cursor()).collect();
+        let ancho_visible = Line::from(antes_del_cursor).width() as u16;
         let x = area_campo
             .x
             .saturating_add(ancho_visible.min(area_campo.width));
@@ -295,5 +296,5 @@ fn render_formulario(
         ModoFormularioEmpresa::Editar { .. } => "NOMBRE",
     };
     let filas = Layout::vertical([Constraint::Length(3), Constraint::Length(1)]).split(area);
-    render_campo(frame, filas[0], titulo, &formulario.nombre, true, theme)
+    render_campo(frame, filas[0], titulo, formulario.nombre.value(), true, theme)
 }

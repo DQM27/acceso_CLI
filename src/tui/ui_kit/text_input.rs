@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -55,6 +55,16 @@ impl fmt::Debug for TextInput {
     }
 }
 
+/// `tui_input::Input` no deriva `PartialEq` — se compara por contenido visible
+/// (valor + tope), no por la posición del cursor, que es puro estado de edición
+/// transitorio sin relevancia para comparar dos entradas "iguales".
+impl PartialEq for TextInput {
+    fn eq(&self, other: &Self) -> bool {
+        self.input.value() == other.input.value() && self.max_chars == other.max_chars
+    }
+}
+impl Eq for TextInput {}
+
 impl Default for TextInput {
     fn default() -> Self {
         Self {
@@ -89,6 +99,17 @@ impl TextInput {
 
     pub fn clear(&mut self) {
         self.input.reset();
+    }
+
+    /// Posición del cursor en caracteres (no bytes) desde el inicio del valor.
+    pub fn cursor(&self) -> usize {
+        self.input.visual_cursor()
+    }
+
+    /// Atajo para el caso común: manejar directamente un `KeyEvent` sin que
+    /// cada pantalla tenga que envolverlo en `Event::Key` por su cuenta.
+    pub fn handle_key(&mut self, key: KeyEvent) -> bool {
+        self.handle_event(&Event::Key(key))
     }
 
     pub fn handle_event(&mut self, event: &Event) -> bool {
@@ -296,6 +317,30 @@ mod tests {
 
     use super::TextInput;
     use crate::tui::ui_kit::ThemePreset;
+
+    #[test]
+    fn las_flechas_mueven_el_cursor_sin_borrar_nada() {
+        let mut input = TextInput::new("abd");
+        // Cursor arranca al final (3). Retrocede uno, inserta 'c' entre
+        // "ab" y "d" — exactamente el caso que antes obligaba a borrar todo
+        // el campo para corregir algo que no estaba al final.
+        input.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+        input.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
+        assert_eq!(input.value(), "abcd");
+        assert_eq!(input.cursor(), 3);
+    }
+
+    #[test]
+    fn home_end_y_delete_funcionan_sobre_el_cursor_real() {
+        let mut input = TextInput::new("abcd");
+        input.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE));
+        assert_eq!(input.cursor(), 0);
+        input.handle_key(KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE));
+        assert_eq!(input.value(), "bcd");
+        assert_eq!(input.cursor(), 0);
+        input.handle_key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE));
+        assert_eq!(input.cursor(), 3);
+    }
 
     #[test]
     fn edita_texto_unicode_sin_tratar_bytes_como_columnas() {

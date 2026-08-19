@@ -1,8 +1,8 @@
 use std::time::{Duration, Instant};
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 
-use crate::tui::ui_kit::{StandardCommand, standard_command};
+use crate::tui::ui_kit::{StandardCommand, TextInput, standard_command};
 
 #[path = "render.rs"]
 pub(super) mod render;
@@ -42,8 +42,8 @@ pub enum AccionLogin {
 
 #[derive(Debug)]
 pub struct LoginState {
-    cedula: String,
-    password: String,
+    cedula: TextInput,
+    password: TextInput,
     campo_activo: CampoLogin,
     estado: EstadoLogin,
     spinner_frame: usize,
@@ -55,8 +55,8 @@ pub struct LoginState {
 impl Default for LoginState {
     fn default() -> Self {
         Self {
-            cedula: String::new(),
-            password: String::new(),
+            cedula: TextInput::default(),
+            password: TextInput::default(),
             campo_activo: CampoLogin::Cedula,
             estado: EstadoLogin::Normal,
             spinner_frame: 0,
@@ -94,19 +94,10 @@ impl LoginState {
                 AccionLogin::Ninguna
             }
             KeyCode::Enter => self.enter(Instant::now()),
-            KeyCode::Backspace => {
-                self.borrar();
+            _ => {
+                self.editar(key);
                 AccionLogin::Ninguna
             }
-            KeyCode::Char(character)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                self.escribir(character);
-                AccionLogin::Ninguna
-            }
-            _ => AccionLogin::Ninguna,
         }
     }
 
@@ -141,7 +132,7 @@ impl LoginState {
     }
 
     pub fn password_enmascarado(&self) -> String {
-        "•".repeat(self.password.chars().count())
+        "•".repeat(self.password.value().chars().count())
     }
 
     pub fn campo_activo(&self) -> CampoLogin {
@@ -174,7 +165,7 @@ impl LoginState {
             return AccionLogin::Ninguna;
         }
 
-        if self.cedula.trim().is_empty() || self.password.is_empty() {
+        if self.cedula.value().trim().is_empty() || self.password.value().is_empty() {
             self.estado = EstadoLogin::Error("Complete cédula y contraseña".to_owned());
             return AccionLogin::Ninguna;
         }
@@ -182,29 +173,20 @@ impl LoginState {
         self.estado = EstadoLogin::Validando { iniciado: ahora };
         self.spinner_frame = 0;
         AccionLogin::Autenticar {
-            cedula: self.cedula.trim().to_owned(),
-            password: self.password.clone(),
+            cedula: self.cedula.value().trim().to_owned(),
+            password: self.password.value().to_owned(),
         }
     }
 
-    fn escribir(&mut self, character: char) {
-        self.limpiar_estado_transitorio();
-        self.reiniciar_cursor();
-        match self.campo_activo {
-            CampoLogin::Cedula => self.cedula.push(character),
-            CampoLogin::Password => self.password.push(character),
-        }
-    }
-
-    fn borrar(&mut self) {
+    fn editar(&mut self, key: KeyEvent) {
         self.limpiar_estado_transitorio();
         self.reiniciar_cursor();
         match self.campo_activo {
             CampoLogin::Cedula => {
-                self.cedula.pop();
+                self.cedula.handle_key(key);
             }
             CampoLogin::Password => {
-                self.password.pop();
+                self.password.handle_key(key);
             }
         }
     }

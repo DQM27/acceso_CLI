@@ -121,6 +121,25 @@ fn busqueda_incremental_emite_consulta_real_tras_el_debounce() {
     assert_eq!(s.registros.len(), 1);
 }
 #[test]
+fn flecha_izquierda_mueve_el_cursor_en_el_campo_nombre_sin_borrar() {
+    let mut s = ContratistasState::default();
+    cargar(&mut s);
+    s.handle_key(k(KeyCode::Char('N')));
+    // Cédula -> Nombre.
+    s.handle_key(k(KeyCode::Down));
+    escribir(&mut s, "Jose Perez");
+    // Corrige "Jose" -> "José" moviendo el cursor en vez de borrar todo.
+    for _ in 0.." Perez".chars().count() {
+        s.handle_key(k(KeyCode::Left));
+    }
+    s.handle_key(k(KeyCode::Backspace));
+    s.handle_key(k(KeyCode::Char('é')));
+    let ModoContratistas::Formulario(f) = &s.modo else {
+        panic!("debía seguir en el formulario")
+    };
+    assert_eq!(f.nombre.value(), "José Perez");
+}
+#[test]
 fn busqueda_admite_clave_valor_de_empresa_tipo_y_deja_texto_libre() {
     let mut s = ContratistasState::default();
     cargar(&mut s);
@@ -193,7 +212,7 @@ fn enter_edita_directamente_con_ids_y_datos_reales() {
     };
     assert!(matches!(f.modo, ModoFormulario::Editar { id: 7 }));
     assert_eq!(f.campo, 1);
-    assert_eq!(f.cedula, "001-2");
+    assert_eq!(f.cedula.value(), "001-2");
     assert_eq!(f.empresa, 0);
     assert_eq!(f.tipo, TipoIngreso::Praind);
 }
@@ -224,8 +243,8 @@ fn edicion_no_permite_enfocar_ni_modificar_cedula() {
         panic!()
     };
     assert_eq!(f.campo, 1);
-    assert_eq!(f.cedula, "001-2");
-    assert_eq!(f.nombre, "José Hernández9");
+    assert_eq!(f.cedula.value(), "001-2");
+    assert_eq!(f.nombre.value(), "José Hernández9");
 }
 
 #[test]
@@ -332,8 +351,8 @@ fn praind_dinamico_usa_regla_de_dominio_y_none_si_no_requerido() {
         Ok(_) => panic!(),
     };
     assert_eq!(d, "La cédula es obligatoria");
-    f.cedula = "1".into();
-    f.nombre = "A".into();
+    f.cedula = TextInput::new("1");
+    f.nombre = TextInput::new("A");
     assert_eq!(
         construir(&f, Some(5)).unwrap().fecha_vencimiento_praind,
         None

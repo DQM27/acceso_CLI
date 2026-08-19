@@ -54,9 +54,16 @@ fn render_confirmado(frame: &mut Frame, area: Rect, mensaje: &str, theme: Theme)
 }
 
 fn render_busqueda(frame: &mut Frame, area: Rect, state: &SalidaRapidaState, theme: Theme) {
-    let texto = format!("Buscar gafete o nombre/cédula: {}", state.busqueda);
-    frame.render_widget(Paragraph::new(texto.clone()).style(theme.accent()), area);
-    let ancho_visible = Line::from(texto).width() as u16;
+    const ETIQUETA: &str = "Buscar gafete o nombre/cédula: ";
+    let texto = format!("{ETIQUETA}{}", state.busqueda.value());
+    frame.render_widget(Paragraph::new(texto).style(theme.accent()), area);
+    let antes_del_cursor: String = state
+        .busqueda
+        .value()
+        .chars()
+        .take(state.busqueda.cursor())
+        .collect();
+    let ancho_visible = Line::from(format!("{ETIQUETA}{antes_del_cursor}")).width() as u16;
     let x = area.x.saturating_add(ancho_visible.min(area.width));
     frame.set_cursor_position((x, area.y));
 }

@@ -131,9 +131,15 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &HistorialState, theme: T
     let filas = Layout::vertical([Constraint::Length(3), Constraint::Min(4)]).split(area);
 
     let etiqueta = etiqueta_busqueda(state);
-    let area_busqueda = render_campo(frame, filas[0], &etiqueta, &state.busqueda, true, theme);
+    let area_busqueda = render_campo(frame, filas[0], &etiqueta, state.busqueda.value(), true, theme);
     if !matches!(state.vista, ViewMode::Heatmap) {
-        let ancho_visible = Line::from(state.busqueda.as_str()).width() as u16;
+        let antes_del_cursor: String = state
+            .busqueda
+            .value()
+            .chars()
+            .take(state.busqueda.cursor())
+            .collect();
+        let ancho_visible = Line::from(antes_del_cursor).width() as u16;
         let x = area_busqueda
             .x
             .saturating_add(ancho_visible.min(area_busqueda.width));

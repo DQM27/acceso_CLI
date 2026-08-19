@@ -3,10 +3,12 @@ use crate::{
     models::{empresa::Empresa, medio_ingreso::MedioIngreso, tipo_ingreso::TipoIngreso},
     services::registro_ingreso_service::{IngresoActivoResumen, ListaIngresosActivosResumen},
 };
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::Constraint;
 
-use crate::tui::ui_kit::{Debounce, StandardCommand, Term, resolver_terminos, standard_command, valores};
+use crate::tui::ui_kit::{
+    Debounce, StandardCommand, Term, TextInput, resolver_terminos, standard_command, valores,
+};
 use std::time::Instant;
 
 const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
@@ -137,7 +139,7 @@ impl Columna {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModoActivos {
     Normal,
-    Busqueda { texto: String },
+    Busqueda { texto: TextInput },
     ConfirmarSalida { id: i64 },
     Columnas { seleccion: usize },
 }
@@ -288,7 +290,7 @@ impl ActivosState {
             }
             KeyCode::Char('/') => {
                 self.modo = ModoActivos::Busqueda {
-                    texto: self.filtro.clone(),
+                    texto: TextInput::new(self.filtro.clone()),
                 }
             }
             KeyCode::F(4) => self.modo = ModoActivos::Columnas { seleccion: 0 },
@@ -320,27 +322,17 @@ impl ActivosState {
                 self.mover(1);
                 AccionActivos::Ninguna
             }
-            KeyCode::Backspace => {
+            _ => {
+                let mut cambio = false;
                 if let ModoActivos::Busqueda { texto } = &mut self.modo {
-                    texto.pop();
-                    self.filtro = texto.clone()
+                    cambio = texto.handle_key(k);
+                    self.filtro = texto.value().to_owned();
                 }
-                self.busqueda_debounce.marcar(Instant::now());
+                if cambio {
+                    self.busqueda_debounce.marcar(Instant::now());
+                }
                 AccionActivos::Ninguna
             }
-            KeyCode::Char(c)
-                if !k
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                if let ModoActivos::Busqueda { texto } = &mut self.modo {
-                    texto.push(c);
-                    self.filtro = texto.clone()
-                }
-                self.busqueda_debounce.marcar(Instant::now());
-                AccionActivos::Ninguna
-            }
-            _ => AccionActivos::Ninguna,
         }
     }
     /// Se llama en cada vuelta del bucle principal; dispara la búsqueda

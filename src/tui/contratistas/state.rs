@@ -9,7 +9,9 @@ use crate::{
     models::{contratista::Contratista, empresa::Empresa, tipo_ingreso::TipoIngreso},
     services::contratista_service::{DatosActualizacionContratista, DatosContratista},
     tiempo::ahora_costa_rica,
-    tui::ui_kit::{Debounce, StandardCommand, Term, resolver_terminos, standard_command, valores},
+    tui::ui_kit::{
+        Debounce, StandardCommand, Term, TextInput, resolver_terminos, standard_command, valores,
+    },
 };
 use std::time::Instant;
 
@@ -195,8 +197,8 @@ enum Desplegable {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct FormularioContratista {
     modo: ModoFormulario,
-    cedula: String,
-    nombre: String,
+    cedula: TextInput,
+    nombre: TextInput,
     empresa: usize,
     tipo: TipoIngreso,
     fecha_praind: String,
@@ -210,8 +212,8 @@ impl FormularioContratista {
     fn nuevo() -> Self {
         Self {
             modo: ModoFormulario::Crear,
-            cedula: String::new(),
-            nombre: String::new(),
+            cedula: TextInput::default().with_max_chars(30),
+            nombre: TextInput::default().with_max_chars(60),
             empresa: 0,
             tipo: TipoIngreso::Praind,
             fecha_praind: String::new(),
@@ -225,8 +227,8 @@ impl FormularioContratista {
     fn editar(c: &ContratistaResumen, empresas: &[Empresa]) -> Self {
         Self {
             modo: ModoFormulario::Editar { id: c.id },
-            cedula: c.cedula.clone(),
-            nombre: c.nombre.clone(),
+            cedula: TextInput::new(c.cedula.clone()).with_max_chars(30),
+            nombre: TextInput::new(c.nombre.clone()).with_max_chars(60),
             empresa: empresas
                 .iter()
                 .position(|e| e.id == c.empresa_id)
@@ -261,7 +263,7 @@ impl FormularioContratista {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ModoContratistas {
     Normal,
-    Busqueda { texto: String },
+    Busqueda { texto: TextInput },
     Formulario(FormularioContratista),
     Columnas { seleccion: usize },
 }
@@ -414,7 +416,7 @@ impl ContratistasState {
             }
             KeyCode::Char('/') => {
                 self.modo = ModoContratistas::Busqueda {
-                    texto: self.filtro.clone(),
+                    texto: TextInput::new(self.filtro.clone()),
                 }
             }
             KeyCode::F(4) => self.modo = ModoContratistas::Columnas { seleccion: 0 },
@@ -448,29 +450,18 @@ impl ContratistasState {
                 self.mover(1);
                 AccionContratistas::Ninguna
             }
-            KeyCode::Backspace => {
+            _ => {
+                let mut cambio = false;
                 if let ModoContratistas::Busqueda { texto } = &mut self.modo {
-                    texto.pop();
-                    self.filtro = texto.clone()
+                    cambio = texto.handle_key(key);
+                    self.filtro = texto.value().to_owned();
                 }
-                self.offset = 0;
-                self.busqueda_debounce.marcar(Instant::now());
+                if cambio {
+                    self.offset = 0;
+                    self.busqueda_debounce.marcar(Instant::now());
+                }
                 AccionContratistas::Ninguna
             }
-            KeyCode::Char(c)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                if let ModoContratistas::Busqueda { texto } = &mut self.modo {
-                    texto.push(c);
-                    self.filtro = texto.clone()
-                }
-                self.offset = 0;
-                self.busqueda_debounce.marcar(Instant::now());
-                AccionContratistas::Ninguna
-            }
-            _ => AccionContratistas::Ninguna,
         }
     }
     /// Se llama en cada vuelta del bucle principal; dispara la búsqueda
@@ -556,12 +547,23 @@ impl ContratistasState {
                     }
                 };
             }
+            KeyCode::Left | KeyCode::Right | KeyCode::Home | KeyCode::End | KeyCode::Delete => {
+                match CampoFormulario::TODOS[f.campo] {
+                    CampoFormulario::Cedula if matches!(f.modo, ModoFormulario::Crear) => {
+                        f.cedula.handle_key(key);
+                    }
+                    CampoFormulario::Nombre => {
+                        f.nombre.handle_key(key);
+                    }
+                    _ => {}
+                }
+            }
             KeyCode::Backspace => match CampoFormulario::TODOS[f.campo] {
                 CampoFormulario::Cedula if matches!(f.modo, ModoFormulario::Crear) => {
-                    f.cedula.pop();
+                    f.cedula.handle_key(key);
                 }
                 CampoFormulario::Nombre => {
-                    f.nombre.pop();
+                    f.nombre.handle_key(key);
                 }
                 CampoFormulario::FechaPraind if f.requiere_praind() => {
                     f.fecha_praind.pop();
@@ -574,13 +576,12 @@ impl ContratistasState {
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
                 match CampoFormulario::TODOS[f.campo] {
-                    CampoFormulario::Cedula
-                        if matches!(f.modo, ModoFormulario::Crear)
-                            && f.cedula.chars().count() < 30 =>
-                    {
-                        f.cedula.push(c)
+                    CampoFormulario::Cedula if matches!(f.modo, ModoFormulario::Crear) => {
+                        f.cedula.handle_key(key);
                     }
-                    CampoFormulario::Nombre if f.nombre.chars().count() < 60 => f.nombre.push(c),
+                    CampoFormulario::Nombre => {
+                        f.nombre.handle_key(key);
+                    }
                     CampoFormulario::FechaPraind if f.requiere_praind() => {
                         agregar_fecha(&mut f.fecha_praind, c)
                     }
@@ -725,10 +726,10 @@ fn construir(
     f: &FormularioContratista,
     empresa_id: Option<i64>,
 ) -> Result<DatosContratista, String> {
-    if f.cedula.trim().is_empty() {
+    if f.cedula.value().trim().is_empty() {
         return Err("La cédula es obligatoria".into());
     }
-    if f.nombre.trim().is_empty() {
+    if f.nombre.value().trim().is_empty() {
         return Err("El nombre es obligatorio".into());
     }
     let fecha = if f.requiere_praind() {
@@ -745,8 +746,8 @@ fn construir(
         None
     };
     Ok(DatosContratista {
-        cedula: f.cedula.trim().into(),
-        nombre: f.nombre.trim().into(),
+        cedula: f.cedula.value().trim().into(),
+        nombre: f.nombre.value().trim().into(),
         empresa_id: empresa_id.ok_or("La empresa seleccionada ya no existe")?,
         tipo_ingreso: f.tipo,
         fecha_vencimiento_praind: fecha,

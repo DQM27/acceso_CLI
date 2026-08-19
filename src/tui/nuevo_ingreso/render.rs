@@ -102,7 +102,7 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme
         frame,
         filas[0],
         &etiqueta_busqueda,
-        &state.busqueda,
+        state.busqueda.value(),
         enfocado_busqueda,
         theme,
     );
@@ -130,11 +130,23 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme
     let area_gafete = render_panel(frame, area_panel, state, theme);
 
     if enfocado_busqueda {
-        frame.set_cursor_position((area_busqueda.x, area_busqueda.y));
+        let antes_del_cursor: String = state
+            .busqueda
+            .value()
+            .chars()
+            .take(state.busqueda.cursor())
+            .collect();
+        let ancho_visible = Line::from(antes_del_cursor).width() as u16;
+        let x = area_busqueda
+            .x
+            .saturating_add(ancho_visible.min(area_busqueda.width));
+        frame.set_cursor_position((x, area_busqueda.y));
     } else if state.campo_es_gafete()
         && let Some(area_campo) = area_gafete
     {
-        let ancho_visible = Line::from(state.gafete_texto.as_str()).width() as u16;
+        let antes_del_cursor: String =
+            state.gafete_texto.chars().take(state.gafete_cursor).collect();
+        let ancho_visible = Line::from(antes_del_cursor).width() as u16;
         let x = area_campo.x.saturating_add(ancho_visible.min(area_campo.width));
         frame.set_cursor_position((x, area_campo.y));
     }
@@ -239,7 +251,7 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme:
     );
     if state.contratistas.is_empty() {
         frame.render_widget(
-            Paragraph::new(if state.busqueda.is_empty() {
+            Paragraph::new(if state.busqueda.value().is_empty() {
                 "Escriba para buscar un contratista."
             } else {
                 "Sin resultados para la búsqueda."

@@ -1,7 +1,7 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::database::queries::empresas::EmpresaResumen;
-use crate::tui::ui_kit::{Debounce, StandardCommand, standard_command};
+use crate::tui::ui_kit::{Debounce, StandardCommand, TextInput, standard_command};
 use std::time::Instant;
 
 const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
@@ -22,7 +22,7 @@ enum ModoFormularioEmpresa {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct FormularioEmpresa {
     modo: ModoFormularioEmpresa,
-    nombre: String,
+    nombre: TextInput,
     error: Option<String>,
 }
 
@@ -35,7 +35,7 @@ struct ConfirmacionEstado {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ModoEmpresas {
     Normal,
-    Busqueda { texto: String },
+    Busqueda { texto: TextInput },
     Formulario(FormularioEmpresa),
     ConfirmacionEstado(ConfirmacionEstado),
 }
@@ -227,7 +227,7 @@ impl EmpresasState {
             KeyCode::Char('n' | 'N') => {
                 self.modo = ModoEmpresas::Formulario(FormularioEmpresa {
                     modo: ModoFormularioEmpresa::Crear,
-                    nombre: String::new(),
+                    nombre: TextInput::default().with_max_chars(80),
                     error: None,
                 })
             }
@@ -238,7 +238,7 @@ impl EmpresasState {
             }
             KeyCode::Char('/') => {
                 self.modo = ModoEmpresas::Busqueda {
-                    texto: self.filtro.clone(),
+                    texto: TextInput::new(self.filtro.clone()),
                 }
             }
             KeyCode::Esc if !self.filtro.is_empty() => {
@@ -271,31 +271,21 @@ impl EmpresasState {
                 self.mover(1);
                 AccionEmpresas::Ninguna
             }
-            KeyCode::Backspace => {
+            _ => {
+                let mut cambio = false;
                 if let ModoEmpresas::Busqueda { texto } = &mut self.modo {
-                    texto.pop();
-                    self.filtro = texto.clone();
+                    cambio = texto.handle_key(key);
+                    self.filtro = texto.value().to_owned();
                 }
                 // No se resetea la selección aquí — mismo criterio que
                 // Activos/Contratistas/Historial: mientras el debounce está
                 // pendiente se mantiene resaltada la fila anterior en vez de
                 // verse vacía.
-                self.busqueda_debounce.marcar(Instant::now());
-                AccionEmpresas::Ninguna
-            }
-            KeyCode::Char(c)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                if let ModoEmpresas::Busqueda { texto } = &mut self.modo {
-                    texto.push(c);
-                    self.filtro = texto.clone();
+                if cambio {
+                    self.busqueda_debounce.marcar(Instant::now());
                 }
-                self.busqueda_debounce.marcar(Instant::now());
                 AccionEmpresas::Ninguna
             }
-            _ => AccionEmpresas::Ninguna,
         }
     }
     /// Se llama en cada vuelta del bucle principal; dispara la búsqueda
@@ -319,10 +309,6 @@ impl EmpresasState {
                 self.modo = ModoEmpresas::Normal;
                 return AccionEmpresas::Ninguna;
             }
-            KeyCode::Backspace => {
-                formulario.nombre.pop();
-                formulario.error = None;
-            }
             KeyCode::Enter => {
                 return match construir(&formulario) {
                     Ok(nombre) => match formulario.modo {
@@ -338,16 +324,11 @@ impl EmpresasState {
                     }
                 };
             }
-            KeyCode::Char(c)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
-                    && formulario.nombre.chars().count() < 80 =>
-            {
-                formulario.nombre.push(c);
-                formulario.error = None;
+            _ => {
+                if formulario.nombre.handle_key(key) {
+                    formulario.error = None;
+                }
             }
-            _ => {}
         }
         self.modo = ModoEmpresas::Formulario(formulario);
         AccionEmpresas::Ninguna
@@ -398,7 +379,7 @@ impl EmpresasState {
         if let Some(e) = self.empresa(id) {
             self.modo = ModoEmpresas::Formulario(FormularioEmpresa {
                 modo: ModoFormularioEmpresa::Editar { id },
-                nombre: e.nombre.clone(),
+                nombre: TextInput::new(e.nombre.clone()).with_max_chars(80),
                 error: None,
             });
         }
@@ -433,8 +414,8 @@ impl EmpresasState {
 /// antes esta pantalla enviaba `nombre` tal cual y dejaba toda la validación
 /// al service, la única de las 3 pantallas CRUD que lo hacía así.
 fn construir(f: &FormularioEmpresa) -> Result<String, String> {
-    if f.nombre.trim().is_empty() {
+    if f.nombre.value().trim().is_empty() {
         return Err("El nombre es obligatorio".into());
     }
-    Ok(f.nombre.trim().to_string())
+    Ok(f.nombre.value().trim().to_string())
 }

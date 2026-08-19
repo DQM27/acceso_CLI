@@ -4,9 +4,9 @@ use crate::{
     tiempo::a_costa_rica,
 };
 use chrono::{Datelike, Duration, NaiveDate};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 
-use crate::tui::ui_kit::{Debounce, StandardCommand, standard_command};
+use crate::tui::ui_kit::{Debounce, StandardCommand, TextInput, standard_command};
 use std::time::Instant;
 
 const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
@@ -129,7 +129,7 @@ pub struct HistorialState {
     columnas_clasica: Vec<(ClassicColumn, bool)>,
     heatmap_seleccion: NaiveDate,
     filtro_aplicado: FiltrosHistorial,
-    busqueda: String,
+    busqueda: TextInput,
     mensaje: Option<String>,
     empresas: Vec<Empresa>,
     offset: usize,
@@ -149,7 +149,7 @@ impl Default for HistorialState {
             columnas_clasica: ClassicColumn::ALL.into_iter().map(|c| (c, true)).collect(),
             heatmap_seleccion: hoy,
             filtro_aplicado: FiltrosHistorial::default(),
-            busqueda: String::new(),
+            busqueda: TextInput::default(),
             mensaje: None,
             empresas: vec![],
             offset: 0,
@@ -190,7 +190,7 @@ impl HistorialState {
     }
     fn consulta(&self) -> Result<FiltroHistorial, String> {
         let (filtros, texto_libre) =
-            parsear_consulta(&self.filtro_aplicado, &self.busqueda, &self.empresas);
+            parsear_consulta(&self.filtro_aplicado, self.busqueda.value(), &self.empresas);
         construir(&filtros, &texto_libre, LIMIT, self.offset, self.corte_id)
     }
     fn emitir(&mut self) -> AccionHistorial {
@@ -250,27 +250,18 @@ impl HistorialState {
                     return self.emitir();
                 }
             }
-            KeyCode::Backspace => {
-                self.busqueda.pop();
-                self.reiniciar_paginacion();
-                self.busqueda_debounce.marcar(Instant::now());
-            }
-            KeyCode::Esc if !self.busqueda.is_empty() => {
+            KeyCode::Esc if !self.busqueda.value().is_empty() => {
                 self.busqueda.clear();
                 self.reiniciar_paginacion();
                 return self.emitir();
             }
             KeyCode::Esc => return AccionHistorial::Volver,
-            KeyCode::Char(c)
-                if !k
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                self.busqueda.push(c);
-                self.reiniciar_paginacion();
-                self.busqueda_debounce.marcar(Instant::now());
+            _ => {
+                if self.busqueda.handle_key(k) {
+                    self.reiniciar_paginacion();
+                    self.busqueda_debounce.marcar(Instant::now());
+                }
             }
-            _ => {}
         }
         AccionHistorial::Ninguna
     }
@@ -299,7 +290,7 @@ impl HistorialState {
             }
             Some(StandardCommand::Primary) => {
                 let fecha = self.heatmap_seleccion.format("%d/%m/%Y").to_string();
-                self.busqueda = format!("desde:{fecha} hasta:{fecha}");
+                self.busqueda.set_value(format!("desde:{fecha} hasta:{fecha}"));
                 self.vista = ViewMode::Timeline;
                 self.reiniciar_paginacion();
                 return self.emitir();

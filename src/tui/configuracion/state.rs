@@ -1,10 +1,10 @@
 use std::path::{Path, PathBuf};
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::{
     database::backup::{RespaldoResumen, ResultadoValidacion, TipoRespaldo},
-    tui::ui_kit::{StandardCommand, standard_command},
+    tui::ui_kit::{StandardCommand, TextInput, standard_command},
 };
 
 #[path = "render.rs"]
@@ -130,7 +130,7 @@ struct FilaRespaldo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ModoRespaldos {
     Normal,
-    Exportando { destino: String },
+    Exportando { destino: TextInput },
     ConfirmandoRestauracion { ruta: PathBuf, fecha: String, tipo: &'static str },
 }
 
@@ -194,7 +194,7 @@ impl RespaldosState {
             KeyCode::Char('e' | 'E') => {
                 if self.ruta_seleccionada().is_some() {
                     self.modo = ModoRespaldos::Exportando {
-                        destino: String::new(),
+                        destino: TextInput::default().with_max_chars(240),
                     };
                 }
                 AccionRespaldos::Ninguna
@@ -244,7 +244,7 @@ impl RespaldosState {
                 let ModoRespaldos::Exportando { destino } = &self.modo else {
                     return AccionRespaldos::Ninguna;
                 };
-                let destino = destino.trim();
+                let destino = destino.value().trim();
                 if destino.is_empty() {
                     return AccionRespaldos::Ninguna;
                 }
@@ -256,25 +256,12 @@ impl RespaldosState {
                 self.modo = ModoRespaldos::Normal;
                 AccionRespaldos::Exportar { ruta, destino }
             }
-            KeyCode::Backspace => {
+            _ => {
                 if let ModoRespaldos::Exportando { destino } = &mut self.modo {
-                    destino.pop();
+                    destino.handle_key(key);
                 }
                 AccionRespaldos::Ninguna
             }
-            KeyCode::Char(c)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                if let ModoRespaldos::Exportando { destino } = &mut self.modo
-                    && destino.chars().count() < 240
-                {
-                    destino.push(c);
-                }
-                AccionRespaldos::Ninguna
-            }
-            _ => AccionRespaldos::Ninguna,
         }
     }
 
