@@ -301,7 +301,6 @@ pub struct ContratistasState {
     columnas: Vec<(Columna, bool)>,
     filtro: String,
     mensaje: Option<String>,
-    usuario_nombre: String,
     hoy: NaiveDate,
     ayuda_expandida: bool,
     busqueda_debounce: Debounce,
@@ -316,7 +315,6 @@ impl Default for ContratistasState {
             columnas: Columna::TODAS.into_iter().map(|c| (c, true)).collect(),
             filtro: String::new(),
             mensaje: None,
-            usuario_nombre: "Quintana".into(),
             hoy: ahora_costa_rica().date_naive(),
             ayuda_expandida: false,
             busqueda_debounce: Debounce::default(),
@@ -324,9 +322,6 @@ impl Default for ContratistasState {
     }
 }
 impl ContratistasState {
-    pub fn set_usuario_nombre(&mut self, nombre: impl Into<String>) {
-        self.usuario_nombre = nombre.into()
-    }
     pub fn set_hoy(&mut self, hoy: NaiveDate) {
         self.hoy = hoy
     }

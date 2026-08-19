@@ -121,7 +121,7 @@ impl Columna {
             Self::Hora => "HORA",
             Self::Gafete => "GAFETE",
             Self::Medio => "MEDIO",
-            Self::Usuario => "USUARIO INGRESO",
+            Self::Usuario => "DA INGRESO",
         }
     }
     fn constraint(self) -> Constraint {
@@ -138,7 +138,6 @@ impl Columna {
 pub enum ModoActivos {
     Normal,
     Busqueda { texto: String },
-    Detalle { id: i64 },
     ConfirmarSalida { id: i64 },
     Columnas { seleccion: usize },
 }
@@ -169,7 +168,6 @@ pub struct ActivosState {
     mensaje: Option<String>,
     pub(crate) filtro: String,
     empresas: Vec<Empresa>,
-    usuario_nombre: String,
     ayuda_expandida: bool,
     busqueda_debounce: Debounce,
 }
@@ -187,16 +185,12 @@ impl Default for ActivosState {
             mensaje: None,
             filtro: String::new(),
             empresas: vec![],
-            usuario_nombre: "Quintana".into(),
             ayuda_expandida: false,
             busqueda_debounce: Debounce::default(),
         }
     }
 }
 impl ActivosState {
-    pub fn set_usuario_nombre(&mut self, n: impl Into<String>) {
-        self.usuario_nombre = n.into()
-    }
     pub fn completar_empresas(&mut self, r: Result<Vec<Empresa>, String>) {
         if let Ok(e) = r {
             self.empresas = e
@@ -275,17 +269,6 @@ impl ActivosState {
         match self.modo.clone() {
             ModoActivos::Normal => self.normal(k),
             ModoActivos::Busqueda { .. } => self.busqueda(k),
-            ModoActivos::Detalle { id } => match k.code {
-                KeyCode::Char('s' | 'S') => {
-                    self.modo = ModoActivos::ConfirmarSalida { id };
-                    AccionActivos::Ninguna
-                }
-                KeyCode::Esc => {
-                    self.modo = ModoActivos::Normal;
-                    AccionActivos::Ninguna
-                }
-                _ => AccionActivos::Ninguna,
-            },
             ModoActivos::ConfirmarSalida { id } => self.confirmar(k, id),
             ModoActivos::Columnas { seleccion } => {
                 self.columnas(k, seleccion);
@@ -299,11 +282,6 @@ impl ActivosState {
             KeyCode::Up => self.mover(-1),
             KeyCode::Down => self.mover(1),
             KeyCode::Enter => {
-                if let Some(id) = self.id_seleccionado() {
-                    self.modo = ModoActivos::Detalle { id }
-                }
-            }
-            KeyCode::Char('s' | 'S') => {
                 if let Some(id) = self.id_seleccionado() {
                     self.modo = ModoActivos::ConfirmarSalida { id }
                 }
@@ -437,6 +415,9 @@ impl ActivosState {
     }
     fn registro(&self, id: i64) -> Option<&IngresoActivoResumen> {
         self.registros.iter().find(|r| r.registro_id == id)
+    }
+    pub fn seleccionado(&self) -> Option<&IngresoActivoResumen> {
+        self.registros.get(self.seleccion?)
     }
     pub fn inicio_visible(&self, c: usize) -> usize {
         self.seleccion

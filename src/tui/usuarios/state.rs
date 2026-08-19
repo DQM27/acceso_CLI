@@ -231,7 +231,6 @@ pub struct UsuariosState {
     modo: ModoUsuarios,
     filtro: String,
     mensaje: Option<String>,
-    usuario_nombre: String,
     ayuda_expandida: bool,
     busqueda_debounce: Debounce,
     /// `true` mientras se espera el resultado real de crear un usuario o
@@ -247,7 +246,6 @@ impl Default for UsuariosState {
             modo: ModoUsuarios::Normal,
             filtro: String::new(),
             mensaje: None,
-            usuario_nombre: "Quintana".into(),
             ayuda_expandida: false,
             busqueda_debounce: Debounce::default(),
             guardando: false,
@@ -256,9 +254,6 @@ impl Default for UsuariosState {
 }
 
 impl UsuariosState {
-    pub fn set_usuario_nombre(&mut self, nombre: impl Into<String>) {
-        self.usuario_nombre = nombre.into();
-    }
     pub fn resumen_por_id(&self, id: i64) -> Option<&UsuarioResumen> {
         self.usuario(id)
     }

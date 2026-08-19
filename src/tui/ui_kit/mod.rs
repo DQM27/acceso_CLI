@@ -21,7 +21,7 @@ pub use query_lang::{Term, resolver_terminos, valores};
 pub use seleccion::mover_seleccion;
 pub use shell::{
     CommandHint, ScreenShell, ShellAreas, StatusKind, auxiliary_panel, centered_content,
-    centered_rect, panel, render_terminal_too_small,
+    centered_rect, identidad_sesion, panel, render_terminal_too_small,
 };
 pub use text_input::{TextInput, TextInputFocus};
 pub use theme::{Theme, ThemePreset};

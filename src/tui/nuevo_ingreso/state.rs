@@ -57,18 +57,17 @@ pub struct NuevoIngresoState {
     medio_opcion: usize,
     gafete_texto: String,
     error: Option<String>,
-    usuario_nombre: String,
     ayuda_expandida: bool,
 }
 
 impl Default for NuevoIngresoState {
     fn default() -> Self {
-        Self::new("Quintana")
+        Self::new()
     }
 }
 
 impl NuevoIngresoState {
-    pub fn new(usuario: impl Into<String>) -> Self {
+    pub fn new() -> Self {
         Self {
             etapa: EtapaNuevoIngreso::Buscar,
             contratistas: vec![],
@@ -80,7 +79,6 @@ impl NuevoIngresoState {
             medio_opcion: 0,
             gafete_texto: String::new(),
             error: None,
-            usuario_nombre: usuario.into(),
             ayuda_expandida: false,
         }
     }

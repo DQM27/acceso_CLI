@@ -1046,21 +1046,49 @@ impl App {
                         }
                     }
                     Vista::IngresosActivos => {
-                        activos::render(frame, frame.area(), &self.activos, theme)
+                        if let Some(sesion) = &self.sesion {
+                            activos::render(frame, frame.area(), &self.activos, sesion, theme)
+                        }
                     }
                     Vista::Historial => {
-                        historial::render(frame, frame.area(), &self.historial, theme)
+                        if let Some(sesion) = &self.sesion {
+                            historial::render(frame, frame.area(), &self.historial, sesion, theme)
+                        }
                     }
                     Vista::Contratistas => {
-                        contratistas::render(frame, frame.area(), &self.contratistas, theme)
+                        if let Some(sesion) = &self.sesion {
+                            contratistas::render(
+                                frame,
+                                frame.area(),
+                                &self.contratistas,
+                                sesion,
+                                theme,
+                            )
+                        }
                     }
-                    Vista::Empresas => empresas::render(frame, frame.area(), &self.empresas, theme),
-                    Vista::Usuarios => usuarios::render(frame, frame.area(), &self.usuarios, theme),
+                    Vista::Empresas => {
+                        if let Some(sesion) = &self.sesion {
+                            empresas::render(frame, frame.area(), &self.empresas, sesion, theme)
+                        }
+                    }
+                    Vista::Usuarios => {
+                        if let Some(sesion) = &self.sesion {
+                            usuarios::render(frame, frame.area(), &self.usuarios, sesion, theme)
+                        }
+                    }
                     Vista::Configuracion => {
                         configuracion::render(frame, frame.area(), &self.configuracion, theme)
                     }
                     Vista::NuevoIngreso => {
-                        nuevo_ingreso::render(frame, frame.area(), &self.nuevo_ingreso, theme)
+                        if let Some(sesion) = &self.sesion {
+                            nuevo_ingreso::render(
+                                frame,
+                                frame.area(),
+                                &self.nuevo_ingreso,
+                                sesion,
+                                theme,
+                            )
+                        }
                     }
                 }
                 salida_rapida::render(frame, frame.area(), &self.salida_rapida, theme);
@@ -1524,11 +1552,7 @@ impl App {
                         // establecida (`Vista::MenuPrincipal` no renderiza sin
                         // ella) — este fallback es defensivo, no debería
                         // dispararse nunca en un flujo real.
-                        let usuario = self
-                            .sesion
-                            .as_ref()
-                            .map_or("Usuario desconocido", |s| s.nombre.as_str());
-                        self.nuevo_ingreso = NuevoIngresoState::new(usuario);
+                        self.nuevo_ingreso = NuevoIngresoState::new();
                         if core.is_some() {
                             self.procesar_accion_nuevo_ingreso(
                                 self.nuevo_ingreso.solicitud_carga(),
@@ -1857,7 +1881,6 @@ impl App {
             sesion.cedula = usuario.cedula.clone();
             sesion.nombre = usuario.nombre.clone();
             sesion.rol = usuario.rol;
-            self.usuarios.set_usuario_nombre(sesion.nombre.clone());
         }
     }
 
@@ -1980,10 +2003,6 @@ impl App {
     }
 
     fn iniciar_sesion(&mut self, sesion: UsuarioSesion) {
-        self.contratistas.set_usuario_nombre(sesion.nombre.clone());
-        self.empresas.set_usuario_nombre(sesion.nombre.clone());
-        self.usuarios.set_usuario_nombre(sesion.nombre.clone());
-        self.historial.set_usuario_nombre(sesion.nombre.clone());
         self.sesion = Some(sesion);
         self.menu.nueva_sesion();
         self.vista = Vista::MenuPrincipal;

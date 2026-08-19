@@ -8,9 +8,10 @@ use ratatui::{
 use super::*;
 use crate::{
     database::queries::empresas::EmpresaResumen,
+    services::autenticacion_service::UsuarioSesion,
     tiempo::hora_actual_texto,
     tui::ui_kit::{
-        CommandHint, ScreenShell, StatusKind, Theme, render_terminal_too_small,
+        CommandHint, ScreenShell, StatusKind, Theme, identidad_sesion, render_terminal_too_small,
     },
 };
 
@@ -34,15 +35,20 @@ const COMANDOS_FORMULARIO: &[CommandHint<'static>] = &[
     CommandHint::new("ESC", "Cancelar"),
 ];
 
-pub fn render(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: Theme) {
-
+pub fn render(
+    frame: &mut Frame,
+    area: Rect,
+    state: &EmpresasState,
+    sesion: &UsuarioSesion,
+    theme: Theme,
+) {
     if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
         render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "ESC salir", theme);
         return;
     }
 
     let hora = hora_actual_texto();
-    let contexto = format!("Usuario: {}", state.usuario_nombre);
+    let contexto = identidad_sesion(sesion);
     let (estado_texto, estado_tipo) = estado_shell(state);
     let comandos = match &state.modo {
         ModoEmpresas::Normal => COMANDOS_NORMAL,

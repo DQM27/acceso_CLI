@@ -3,7 +3,9 @@ use std::io::{self, stdout};
 use crossterm::{
     cursor::{Hide, Show},
     execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{
+        EnterAlternateScreen, LeaveAlternateScreen, SetTitle, disable_raw_mode, enable_raw_mode,
+    },
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 
@@ -16,7 +18,9 @@ struct TerminalGuard;
 impl TerminalGuard {
     fn acquire() -> io::Result<Self> {
         enable_raw_mode()?;
-        if let Err(error) = execute!(stdout(), EnterAlternateScreen, Hide) {
+        if let Err(error) =
+            execute!(stdout(), EnterAlternateScreen, Hide, SetTitle("BRISAS CLI"))
+        {
             let _ = disable_raw_mode();
             return Err(error);
         }

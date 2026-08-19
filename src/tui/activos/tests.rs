@@ -107,12 +107,11 @@ fn negar_tipo_incluye_los_demas_y_clave_invalida_cae_a_texto_libre() {
 }
 
 #[test]
-fn detalle_y_salida_usan_registro_id() {
+fn enter_pide_confirmar_la_salida_del_registro_seleccionado() {
     let mut s = ActivosState::default();
     cargar(&mut s);
     s.handle_key(k(KeyCode::Enter));
-    assert!(matches!(s.modo, ModoActivos::Detalle { id: 7 }));
-    s.handle_key(k(KeyCode::Char('S')));
+    assert!(matches!(s.modo, ModoActivos::ConfirmarSalida { id: 7 }));
     assert!(matches!(
         s.handle_key(k(KeyCode::Enter)),
         AccionActivos::RegistrarSalida { registro_id: 7, .. }
@@ -122,7 +121,7 @@ fn detalle_y_salida_usan_registro_id() {
 fn cancelar_salida_no_emite_accion() {
     let mut s = ActivosState::default();
     cargar(&mut s);
-    s.handle_key(k(KeyCode::Char('S')));
+    s.handle_key(k(KeyCode::Enter));
     assert!(matches!(
         s.handle_key(k(KeyCode::Esc)),
         AccionActivos::Ninguna

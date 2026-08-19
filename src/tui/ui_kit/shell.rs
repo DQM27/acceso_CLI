@@ -6,6 +6,21 @@ use ratatui::{
 };
 
 use super::Theme;
+use crate::{models::usuario::RolUsuario, services::autenticacion_service::UsuarioSesion};
+
+/// Texto de encabezado común a toda pantalla autenticada: nombre y nivel de
+/// acceso de la sesión activa, en el formato que usan todos los `ScreenShell`.
+pub fn identidad_sesion(sesion: &UsuarioSesion) -> String {
+    format!("{} · {}", sesion.nombre, texto_rol(sesion.rol))
+}
+
+fn texto_rol(rol: RolUsuario) -> &'static str {
+    match rol {
+        RolUsuario::Root => "ROOT",
+        RolUsuario::Administrador => "ADMINISTRADOR",
+        RolUsuario::Operador => "OPERADOR",
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusKind {

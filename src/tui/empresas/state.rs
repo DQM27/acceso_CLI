@@ -57,7 +57,6 @@ pub struct EmpresasState {
     modo: ModoEmpresas,
     filtro: String,
     mensaje: Option<String>,
-    usuario_nombre: String,
     ayuda_expandida: bool,
     busqueda_debounce: Debounce,
 }
@@ -70,7 +69,6 @@ impl Default for EmpresasState {
             modo: ModoEmpresas::Normal,
             filtro: String::new(),
             mensaje: None,
-            usuario_nombre: "Quintana".into(),
             ayuda_expandida: false,
             busqueda_debounce: Debounce::default(),
         }
@@ -78,10 +76,6 @@ impl Default for EmpresasState {
 }
 
 impl EmpresasState {
-    pub fn set_usuario_nombre(&mut self, nombre: impl Into<String>) {
-        self.usuario_nombre = nombre.into();
-    }
-
     pub fn cantidad(&self) -> usize {
         self.empresas.len()
     }
