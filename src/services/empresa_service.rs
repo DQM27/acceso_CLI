@@ -42,6 +42,7 @@ where
         let empresa = Empresa {
             id: 0,
             nombre: nombre.to_string(),
+            activo: true,
         };
 
         self.empresas
@@ -65,16 +66,27 @@ where
 
     pub fn actualizar(&self, id: i64, nombre: &str) -> Result<(), EmpresaServiceError> {
         let nombre = normalizar_nombre(nombre)?;
-        self.buscar_por_id(id)?;
+        let actual = self.buscar_por_id(id)?;
 
         let empresa = Empresa {
             id,
             nombre: nombre.to_string(),
+            activo: actual.activo,
         };
 
         self.empresas
             .actualizar(&empresa)
             .map_err(mapear_nombre_duplicado)
+    }
+
+    pub fn activar(&self, id: i64) -> Result<(), EmpresaServiceError> {
+        self.buscar_por_id(id)?;
+        Ok(self.empresas.establecer_activo(id, true)?)
+    }
+
+    pub fn desactivar(&self, id: i64) -> Result<(), EmpresaServiceError> {
+        self.buscar_por_id(id)?;
+        Ok(self.empresas.establecer_activo(id, false)?)
     }
 
     pub fn listar(&self) -> Result<Vec<Empresa>, EmpresaServiceError> {

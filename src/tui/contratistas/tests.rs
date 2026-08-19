@@ -8,6 +8,7 @@ fn empresa() -> Empresa {
     Empresa {
         id: 5,
         nombre: "Empresa Real".into(),
+        activo: true,
     }
 }
 fn resumen() -> ContratistaResumen {

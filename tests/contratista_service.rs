@@ -20,6 +20,7 @@ fn preparar_base() -> (Connection, i64) {
         .crear(&Empresa {
             id: 0,
             nombre: "Empresa principal".to_string(),
+            activo: true,
         })
         .unwrap();
     (connection, empresa_id)

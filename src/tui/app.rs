@@ -313,6 +313,7 @@ mod tests {
                         id: 1,
                         nombre: "Empresa".into(),
                         contratistas: 0,
+                        activo: true,
                     }]),
                     None,
                 );
@@ -1661,6 +1662,26 @@ impl App {
                 let recarga = self
                     .empresas
                     .completar_actualizacion(resultado, id, &nombre);
+                if !matches!(recarga, AccionEmpresas::Ninguna) {
+                    self.procesar_accion_empresas(recarga, core);
+                }
+            }
+            AccionEmpresas::EstablecerActivo {
+                id,
+                activar,
+                nombre,
+            } => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudo actualizar el estado de la empresa".into())
+                    .and_then(|core| {
+                        if activar {
+                            core.activar_empresa(id)
+                        } else {
+                            core.desactivar_empresa(id)
+                        }
+                        .map_err(mensaje_empresa)
+                    });
+                let recarga = self.empresas.completar_estado(resultado, id, activar, &nombre);
                 if !matches!(recarga, AccionEmpresas::Ninguna) {
                     self.procesar_accion_empresas(recarga, core);
                 }

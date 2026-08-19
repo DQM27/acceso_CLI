@@ -3,7 +3,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 6;
+pub const SCHEMA_VERSION: i64 = 7;
 
 /// Identifica un archivo SQLite como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -122,6 +122,11 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
     if version == 5 {
         aplicar_migracion_6(&transaction)?;
         version = 6;
+    }
+
+    if version == 6 {
+        aplicar_migracion(&transaction, MIGRACION_7, 7)?;
+        version = 7;
     }
 
     if version != SCHEMA_VERSION {
@@ -674,4 +679,12 @@ WHEN
 BEGIN
     SELECT RAISE(ABORT, 'La salida solo puede registrarse una vez');
 END;
+"#;
+
+// Da de baja una empresa sin tocar el acceso individual de sus contratistas:
+// `domain::acceso::verificar_acceso` deniega a todos los suyos mientras esté
+// inactiva. Las empresas existentes quedan activas (DEFAULT 1) — nadie pierde
+// acceso por el simple hecho de migrar.
+const MIGRACION_7: &str = r#"
+ALTER TABLE empresas ADD COLUMN activo INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1));
 "#;

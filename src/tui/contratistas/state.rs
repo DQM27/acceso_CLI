@@ -247,6 +247,7 @@ impl FormularioContratista {
             fecha_vencimiento_praind: None,
             es_personal_ruta: self.personal_ruta,
             tiene_acceso: self.tiene_acceso,
+            empresa_activa: true,
         }
         .requiere_praind()
     }

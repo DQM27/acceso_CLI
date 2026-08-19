@@ -65,6 +65,7 @@ fn busqueda_admite_clave_valor_de_empresa_tipo_gafete_medio_y_deja_texto_libre()
     s.completar_empresas(Ok(vec![crate::models::empresa::Empresa {
         id: 5,
         nombre: "Brisas del Oeste".into(),
+        activo: true,
     }]));
     s.filtro = "empresa:brisas tipo:praind,swat gafete:26 medio:caminando Ana".into();
     let AccionActivos::Buscar {

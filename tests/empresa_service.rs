@@ -187,6 +187,61 @@ fn debe_rechazar_nombre_vacio_al_actualizar() {
 }
 
 #[test]
+fn crea_empresas_activas_por_defecto() {
+    let connection = preparar_base();
+    let repository = SqliteEmpresaRepository::new(&connection);
+    let servicio = EmpresaService::new(&repository);
+    let id = servicio.crear("Empresa Uno").unwrap();
+
+    assert!(servicio.buscar_por_id(id).unwrap().activo);
+}
+
+#[test]
+fn desactivar_y_reactivar_una_empresa() {
+    let connection = preparar_base();
+    let repository = SqliteEmpresaRepository::new(&connection);
+    let servicio = EmpresaService::new(&repository);
+    let id = servicio.crear("Empresa Uno").unwrap();
+
+    servicio.desactivar(id).unwrap();
+    assert!(!servicio.buscar_por_id(id).unwrap().activo);
+
+    servicio.activar(id).unwrap();
+    assert!(servicio.buscar_por_id(id).unwrap().activo);
+}
+
+#[test]
+fn establecer_activo_de_id_inexistente_produce_error() {
+    let connection = preparar_base();
+    let repository = SqliteEmpresaRepository::new(&connection);
+    let servicio = EmpresaService::new(&repository);
+
+    assert!(matches!(
+        servicio.desactivar(999),
+        Err(EmpresaServiceError::EmpresaNoEncontrada)
+    ));
+    assert!(matches!(
+        servicio.activar(999),
+        Err(EmpresaServiceError::EmpresaNoEncontrada)
+    ));
+}
+
+#[test]
+fn actualizar_el_nombre_no_reactiva_una_empresa_desactivada() {
+    let connection = preparar_base();
+    let repository = SqliteEmpresaRepository::new(&connection);
+    let servicio = EmpresaService::new(&repository);
+    let id = servicio.crear("Nombre anterior").unwrap();
+    servicio.desactivar(id).unwrap();
+
+    servicio.actualizar(id, "Nombre nuevo").unwrap();
+
+    let empresa = servicio.buscar_por_id(id).unwrap();
+    assert_eq!(empresa.nombre, "Nombre nuevo");
+    assert!(!empresa.activo);
+}
+
+#[test]
 fn nombre_duplicado_produce_error_semantico_y_conserva_integridad() {
     let connection = preparar_base();
     let repository = SqliteEmpresaRepository::new(&connection);

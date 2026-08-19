@@ -10,6 +10,7 @@ pub struct EmpresaResumen {
     pub id: i64,
     pub nombre: String,
     pub contratistas: usize,
+    pub activo: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,24 +51,24 @@ impl EmpresasQuery for SqliteEmpresasQuery<'_> {
         let offset = i64::try_from(filtro.offset).unwrap_or(i64::MAX);
         let (sql, parametros): (&str, Vec<rusqlite::types::Value>) = match busqueda.modo {
             1 => (
-                "SELECT e.id,e.nombre,COUNT(c.id) FROM empresas e
+                "SELECT e.id,e.nombre,COUNT(c.id),e.activo FROM empresas e
                  LEFT JOIN contratistas c ON c.empresa_id=e.id
                  WHERE e.nombre LIKE ?1 COLLATE NOCASE
-                 GROUP BY e.id,e.nombre ORDER BY e.nombre COLLATE NOCASE,e.id LIMIT ?2 OFFSET ?3",
+                 GROUP BY e.id,e.nombre,e.activo ORDER BY e.nombre COLLATE NOCASE,e.id LIMIT ?2 OFFSET ?3",
                 vec![busqueda.patron_like.into(), limite.into(), offset.into()],
             ),
             2 => (
-                "SELECT e.id,e.nombre,COUNT(c.id) FROM empresas_fts
+                "SELECT e.id,e.nombre,COUNT(c.id),e.activo FROM empresas_fts
                  INNER JOIN empresas e ON e.id=empresas_fts.rowid
                  LEFT JOIN contratistas c ON c.empresa_id=e.id
                  WHERE empresas_fts MATCH ?1
-                 GROUP BY e.id,e.nombre ORDER BY e.nombre COLLATE NOCASE,e.id LIMIT ?2 OFFSET ?3",
+                 GROUP BY e.id,e.nombre,e.activo ORDER BY e.nombre COLLATE NOCASE,e.id LIMIT ?2 OFFSET ?3",
                 vec![busqueda.consulta_fts.into(), limite.into(), offset.into()],
             ),
             _ => (
-                "SELECT e.id,e.nombre,COUNT(c.id) FROM empresas e
+                "SELECT e.id,e.nombre,COUNT(c.id),e.activo FROM empresas e
                  LEFT JOIN contratistas c ON c.empresa_id=e.id
-                 GROUP BY e.id,e.nombre ORDER BY e.nombre COLLATE NOCASE,e.id LIMIT ?1 OFFSET ?2",
+                 GROUP BY e.id,e.nombre,e.activo ORDER BY e.nombre COLLATE NOCASE,e.id LIMIT ?1 OFFSET ?2",
                 vec![limite.into(), offset.into()],
             ),
         };
@@ -84,5 +85,6 @@ fn convertir_fila(row: &Row<'_>) -> rusqlite::Result<EmpresaResumen> {
         id: row.get(0)?,
         nombre: row.get(1)?,
         contratistas: usize::try_from(contratistas).unwrap_or(usize::MAX),
+        activo: row.get::<_, i64>(3)? != 0,
     })
 }

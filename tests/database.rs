@@ -29,6 +29,7 @@ fn debe_crear_y_recuperar_empresa() {
     let empresa = Empresa {
         id: 0,
         nombre: "Empresa de Prueba".to_string(),
+        activo: true,
     };
 
     let id = repository
@@ -68,6 +69,7 @@ fn debe_actualizar_un_contratista() {
     let empresa = Empresa {
         id: 0,
         nombre: "Empresa Original".to_string(),
+        activo: true,
     };
 
     let empresa_id = empresa_repository
@@ -83,6 +85,7 @@ fn debe_actualizar_un_contratista() {
         fecha_vencimiento_praind: Some(NaiveDate::from_ymd_opt(2026, 12, 31).unwrap()),
         es_personal_ruta: false,
         tiene_acceso: true,
+        empresa_activa: true,
     };
 
     let id = contratista_repository
@@ -98,6 +101,7 @@ fn debe_actualizar_un_contratista() {
         fecha_vencimiento_praind: Some(NaiveDate::from_ymd_opt(2027, 12, 31).unwrap()),
         es_personal_ruta: false,
         tiene_acceso: false,
+        empresa_activa: true,
     };
 
     contratista_repository
@@ -133,6 +137,7 @@ fn debe_guardar_los_cuatro_tipos_de_ingreso() {
     let empresa = Empresa {
         id: 0,
         nombre: "Empresa de Prueba".to_string(),
+        activo: true,
     };
 
     let empresa_id = empresa_repository
@@ -164,6 +169,7 @@ fn debe_guardar_los_cuatro_tipos_de_ingreso() {
             fecha_vencimiento_praind: fecha,
             es_personal_ruta: false,
             tiene_acceso: true,
+            empresa_activa: true,
         };
 
         contratista_repository
@@ -227,6 +233,7 @@ fn debe_identificar_si_un_tipo_requiere_praind() {
             fecha_vencimiento_praind: None,
             es_personal_ruta: false,
             tiene_acceso: true,
+            empresa_activa: true,
         };
 
         assert_eq!(contratista.requiere_praind(), esperado);

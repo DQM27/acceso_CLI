@@ -116,6 +116,7 @@ fn convertir_activo(lectura: IngresoActivoLectura, hoy: NaiveDate) -> IngresoAct
         fecha_vencimiento_praind: lectura.fecha_vencimiento_praind,
         es_personal_ruta: lectura.es_personal_ruta,
         tiene_acceso: lectura.tiene_acceso,
+        empresa_activa: lectura.empresa_activa,
     };
     let resultado_acceso = verificar_acceso(&contratista, hoy);
 

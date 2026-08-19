@@ -2,6 +2,7 @@
 pub enum MotivoDenegacion {
     SinAcceso,
     PraindVencido,
+    EmpresaInactiva,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

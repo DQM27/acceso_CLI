@@ -26,11 +26,18 @@ struct FormularioEmpresa {
     error: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ConfirmacionEstado {
+    id: i64,
+    activar: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ModoEmpresas {
     Normal,
     Busqueda { texto: String },
     Formulario(FormularioEmpresa),
+    ConfirmacionEstado(ConfirmacionEstado),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,6 +53,11 @@ pub enum AccionEmpresas {
     },
     Actualizar {
         id: i64,
+        nombre: String,
+    },
+    EstablecerActivo {
+        id: i64,
+        activar: bool,
         nombre: String,
     },
 }
@@ -108,6 +120,7 @@ impl EmpresasState {
             ModoEmpresas::Normal => self.handle_normal(key),
             ModoEmpresas::Busqueda { .. } => self.handle_busqueda(key),
             ModoEmpresas::Formulario(formulario) => self.handle_formulario(key, formulario),
+            ModoEmpresas::ConfirmacionEstado(c) => self.handle_confirmacion(key, c),
         }
     }
 
@@ -173,6 +186,34 @@ impl EmpresasState {
         }
     }
 
+    pub fn completar_estado(
+        &mut self,
+        resultado: Result<(), String>,
+        id: i64,
+        activar: bool,
+        nombre: &str,
+    ) -> AccionEmpresas {
+        match resultado {
+            Ok(()) => {
+                self.modo = ModoEmpresas::Normal;
+                self.filtro.clear();
+                self.mensaje = Some(format!(
+                    "✓ Empresa {} — {nombre}",
+                    if activar { "activada" } else { "desactivada" }
+                ));
+                AccionEmpresas::Buscar {
+                    texto: None,
+                    seleccionar_id: Some(id),
+                }
+            }
+            Err(error) => {
+                self.modo = ModoEmpresas::Normal;
+                self.mensaje = Some(error);
+                AccionEmpresas::Ninguna
+            }
+        }
+    }
+
     fn handle_normal(&mut self, key: KeyEvent) -> AccionEmpresas {
         self.mensaje = None;
         match key.code {
@@ -189,6 +230,11 @@ impl EmpresasState {
                     nombre: String::new(),
                     error: None,
                 })
+            }
+            KeyCode::Char('a' | 'A') => {
+                if let Some(id) = self.id_seleccionado() {
+                    self.solicitar_estado(id);
+                }
             }
             KeyCode::Char('/') => {
                 self.modo = ModoEmpresas::Busqueda {
@@ -305,6 +351,36 @@ impl EmpresasState {
         }
         self.modo = ModoEmpresas::Formulario(formulario);
         AccionEmpresas::Ninguna
+    }
+
+    fn handle_confirmacion(&mut self, key: KeyEvent, c: ConfirmacionEstado) -> AccionEmpresas {
+        match key.code {
+            KeyCode::Enter => {
+                let nombre = self
+                    .empresa(c.id)
+                    .map(|e| e.nombre.clone())
+                    .unwrap_or_default();
+                AccionEmpresas::EstablecerActivo {
+                    id: c.id,
+                    activar: c.activar,
+                    nombre,
+                }
+            }
+            KeyCode::Esc => {
+                self.modo = ModoEmpresas::Normal;
+                AccionEmpresas::Ninguna
+            }
+            _ => AccionEmpresas::Ninguna,
+        }
+    }
+
+    fn solicitar_estado(&mut self, id: i64) {
+        if let Some(e) = self.empresa(id) {
+            self.modo = ModoEmpresas::ConfirmacionEstado(ConfirmacionEstado {
+                id,
+                activar: !e.activo,
+            })
+        }
     }
 
     fn accion_buscar(&self, seleccionar_id: Option<i64>) -> AccionEmpresas {

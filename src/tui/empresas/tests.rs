@@ -16,11 +16,13 @@ fn datos() -> Vec<EmpresaResumen> {
             id: 7,
             nombre: "Constructora Álvarez".into(),
             contratistas: 3,
+            activo: true,
         },
         EmpresaResumen {
             id: 9,
             nombre: "Brisas".into(),
             contratistas: 0,
+            activo: true,
         },
     ]
 }
@@ -65,6 +67,35 @@ fn enter_edita_directamente_con_id_y_nombre_reales() {
     };
     assert_eq!(f.nombre, "Constructora Álvarez");
     assert!(matches!(f.modo, ModoFormularioEmpresa::Editar { id: 7 }));
+}
+
+#[test]
+fn a_pide_confirmar_el_cambio_de_estado_y_enter_emite_la_intencion() {
+    let mut s = EmpresasState::default();
+    s.completar_busqueda(Ok(datos()), None);
+    s.handle_key(k(KeyCode::Char('A')));
+    let ModoEmpresas::ConfirmacionEstado(c) = &s.modo else {
+        panic!("debía pedir confirmación")
+    };
+    assert_eq!(c.id, 7);
+    assert!(!c.activar);
+    assert_eq!(
+        s.handle_key(k(KeyCode::Enter)),
+        AccionEmpresas::EstablecerActivo {
+            id: 7,
+            activar: false,
+            nombre: "Constructora Álvarez".into(),
+        }
+    );
+}
+
+#[test]
+fn esc_en_confirmacion_de_estado_cancela_sin_emitir_nada() {
+    let mut s = EmpresasState::default();
+    s.completar_busqueda(Ok(datos()), None);
+    s.handle_key(k(KeyCode::Char('A')));
+    assert_eq!(s.handle_key(k(KeyCode::Esc)), AccionEmpresas::Ninguna);
+    assert_eq!(s.modo, ModoEmpresas::Normal);
 }
 
 #[test]
@@ -126,6 +157,7 @@ fn callbacks_exito_recargan_y_error_permanece_en_formulario() {
             id: 12,
             nombre: "Nueva".into(),
             contratistas: 0,
+            activo: true,
         }]),
         Some(12),
     );

@@ -59,6 +59,7 @@ fn crear_contratista(
             fecha_vencimiento_praind: fecha,
             es_personal_ruta: ruta,
             tiene_acceso: acceso,
+            empresa_activa: true,
         })
         .unwrap()
 }
@@ -93,6 +94,27 @@ fn prepara_identidad_empresa_tipo_y_acceso_permitido() {
     assert_eq!(preparacion.resultado_acceso, ResultadoAcceso::Permitido);
     assert!(!preparacion.requiere_gafete);
     assert!(!preparacion.tiene_ingreso_activo);
+}
+
+#[test]
+fn empresa_inactiva_deniega_el_acceso_aunque_el_contratista_lo_tenga() {
+    use control_acceso::database::repositories::empresa_repository::EmpresaRepository;
+
+    let base = base();
+    let id = crear_contratista(&base, "1001", TipoIngreso::Swat, None, false, true);
+    let contratistas = SqliteContratistaRepository::new(&base.connection);
+    let empresas = SqliteEmpresaRepository::new(&base.connection);
+    let registros = SqliteRegistroIngresoRepository::new(&base.connection);
+    empresas.establecer_activo(base.empresa_id, false).unwrap();
+
+    let preparacion = RegistroIngresoService::new(&contratistas, &registros)
+        .preparar_ingreso(&empresas, id, hoy())
+        .unwrap();
+
+    assert_eq!(
+        preparacion.resultado_acceso,
+        ResultadoAcceso::Denegado(MotivoDenegacion::EmpresaInactiva)
+    );
 }
 
 #[test]

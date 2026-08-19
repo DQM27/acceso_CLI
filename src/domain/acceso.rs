@@ -5,7 +5,7 @@ use crate::models::contratista::Contratista;
 
 pub const DIAS_ADVERTENCIA_PRAIND: i64 = 30;
 
-/// Versión de las 5 reglas de `verificar_acceso`, grabada en cada movimiento
+/// Versión de las 6 reglas de `verificar_acceso`, grabada en cada movimiento
 /// (`registro_ingresos.reglas_version`) para poder distinguir en el
 /// histórico bajo qué versión de la lógica se decidió cada entrada. Vive
 /// aquí, junto a las reglas que versiona, para que cambiarlas sin subir este
@@ -13,9 +13,16 @@ pub const DIAS_ADVERTENCIA_PRAIND: i64 = 30;
 /// struct de persistencia sin relación visible con `verificar_acceso`.
 /// Re-exportada desde allá (`models::registro_ingreso::VERSION_REGLAS_ACCESO`)
 /// para no romper a quien ya la importa de ese camino.
-pub const VERSION_REGLAS_ACCESO: i64 = 1;
+pub const VERSION_REGLAS_ACCESO: i64 = 2;
 
 pub fn verificar_acceso(contratista: &Contratista, hoy: NaiveDate) -> ResultadoAcceso {
+    // Regla 0:
+    // Si la empresa del contratista está inactiva, no puede ingresar bajo
+    // ninguna circunstancia — sin importar su acceso individual.
+    if !contratista.empresa_activa {
+        return ResultadoAcceso::Denegado(MotivoDenegacion::EmpresaInactiva);
+    }
+
     // Regla 1:
     // Si no tiene autorización de acceso,
     // no puede ingresar bajo ninguna circunstancia.

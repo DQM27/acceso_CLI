@@ -81,11 +81,16 @@ fn crear_esquema_version_1(connection: &Connection) {
         .unwrap();
 }
 
+/// Usada tanto contra el esquema crudo de la versión 1 (`crear_esquema_version_1`,
+/// sin `empresas.activo`) como contra el esquema actual ya migrado — de ahí que
+/// `empresas` liste sus columnas explícitamente en vez de depender del orden
+/// posicional: así la columna `activo` (con `DEFAULT`) no rompe el INSERT en
+/// ninguno de los dos casos.
 fn insertar_referencias(connection: &Connection) {
     connection
         .execute_batch(
             "
-            INSERT INTO empresas VALUES (1, 'Empresa');
+            INSERT INTO empresas (id, nombre) VALUES (1, 'Empresa');
             INSERT INTO usuarios VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1);
             INSERT INTO contratistas VALUES (1, '2001', 'Persona', 1, 'PRAIND', '2030-01-01', 0, 1);
             ",

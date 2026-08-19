@@ -32,6 +32,7 @@ pub struct IngresoActivoLectura {
     pub fecha_vencimiento_praind: Option<NaiveDate>,
     pub es_personal_ruta: bool,
     pub tiene_acceso: bool,
+    pub empresa_activa: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -314,9 +315,10 @@ const ACTIVOS_SQL: &str = "
         r.contratista_nombre, r.empresa_nombre,
         r.tipo_ingreso, r.medio_ingreso, r.fecha_hora_ingreso, r.gafete_numero,
         r.usuario_ingreso_nombre, c.fecha_vencimiento_praind,
-        c.es_personal_ruta, c.tiene_acceso
+        c.es_personal_ruta, c.tiene_acceso, e.activo
     FROM registro_ingresos AS r
     INNER JOIN contratistas AS c ON c.id = r.contratista_id
+    INNER JOIN empresas AS e ON e.id = c.empresa_id
     WHERE r.fecha_hora_salida IS NULL
     AND (
         :modo_busqueda = 0
@@ -395,6 +397,7 @@ fn convertir_activo(row: &Row<'_>) -> rusqlite::Result<IngresoActivoLectura> {
         fecha_vencimiento_praind: fecha_desde_fila(row, 11)?,
         es_personal_ruta: row.get::<_, i64>(12)? != 0,
         tiene_acceso: row.get::<_, i64>(13)? != 0,
+        empresa_activa: row.get::<_, i64>(14)? != 0,
     })
 }
 

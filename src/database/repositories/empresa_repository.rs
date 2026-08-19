@@ -12,6 +12,8 @@ pub trait EmpresaRepository {
 
     fn actualizar(&self, empresa: &Empresa) -> Result<(), DatabaseError>;
 
+    fn establecer_activo(&self, id: i64, activo: bool) -> Result<(), DatabaseError>;
+
     fn listar(&self) -> Result<Vec<Empresa>, DatabaseError>;
 }
 
@@ -29,6 +31,7 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<Empresa> {
     Ok(Empresa {
         id: row.get(0)?,
         nombre: row.get(1)?,
+        activo: row.get::<_, i64>(2)? != 0,
     })
 }
 
@@ -52,7 +55,8 @@ impl<'a> EmpresaRepository for SqliteEmpresaRepository<'a> {
             "
             SELECT
                 id,
-                nombre
+                nombre,
+                activo
             FROM empresas
             WHERE id = ?1
             ",
@@ -72,7 +76,8 @@ impl<'a> EmpresaRepository for SqliteEmpresaRepository<'a> {
             "
             SELECT
                 id,
-                nombre
+                nombre,
+                activo
             FROM empresas
             WHERE nombre = ?1
             ",
@@ -100,12 +105,21 @@ impl<'a> EmpresaRepository for SqliteEmpresaRepository<'a> {
         Ok(())
     }
 
+    fn establecer_activo(&self, id: i64, activo: bool) -> Result<(), DatabaseError> {
+        self.connection.execute(
+            "UPDATE empresas SET activo = ?1 WHERE id = ?2",
+            params![activo as i64, id],
+        )?;
+        Ok(())
+    }
+
     fn listar(&self) -> Result<Vec<Empresa>, DatabaseError> {
         let mut statement = self.connection.prepare(
             "
             SELECT
                 id,
-                nombre
+                nombre,
+                activo
             FROM empresas
             ORDER BY nombre
             ",
