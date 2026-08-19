@@ -7,7 +7,6 @@
 mod debounce;
 mod keyboard;
 pub mod query_lang;
-mod select_menu;
 mod shell;
 mod text_input;
 mod theme;
@@ -17,7 +16,6 @@ pub use keyboard::{
     CANCEL_HINT, EMERGENCY_EXIT_HINT, HELP_HINT, HELP_KEY, QUICK_EXIT_HINT, QUICK_EXIT_KEY,
     StandardCommand, THEME_HINT, THEME_KEY, standard_command,
 };
-pub use select_menu::{SelectMenu, SelectMenuState};
 pub use shell::{
     CommandHint, ScreenShell, ShellAreas, StatusKind, auxiliary_panel, centered_content,
     centered_rect, panel, render_terminal_too_small,

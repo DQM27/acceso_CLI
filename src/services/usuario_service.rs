@@ -130,20 +130,6 @@ where
             .ok_or(UsuarioServiceError::UsuarioNoEncontrado)
     }
 
-    pub fn actualizar(
-        &self,
-        id: i64,
-        input: ActualizarUsuarioInput,
-    ) -> Result<(), UsuarioServiceError> {
-        self.buscar_por_id(id)?;
-        let cedula = normalizar_requerido(&input.cedula, UsuarioServiceError::CedulaVacia)?;
-        let nombre = normalizar_requerido(&input.nombre, UsuarioServiceError::NombreVacio)?;
-
-        self.usuarios
-            .actualizar_identidad_y_rol(id, cedula, nombre, input.rol)
-            .map_err(mapear_escritura_usuario)
-    }
-
     pub fn actualizar_administracion(
         &self,
         id: i64,

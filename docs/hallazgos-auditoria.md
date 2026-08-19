@@ -60,8 +60,8 @@ Simple = un cambio local, bajo riesgo, sin tocar lógica compartida.
 31. Limpieza de sentinelas / `.partial` inválido descartan su propio error (2 hallazgos).
 32. `take().unwrap()` frágil repetido en los 3 flujos con hilo.
 33. Migración 6 carga toda la tabla en memoria (patrón riesgoso a futuro).
-34. `UsuarioService::actualizar` es código muerto.
-35. `SelectMenu`/`SelectMenuState` sin ningún consumidor real.
+34. [x] `UsuarioService::actualizar` es código muerto.
+35. [x] `SelectMenu`/`SelectMenuState` sin ningún consumidor real.
 
 **Nivel 5 — Magia / números hardcodeados (arreglo mecánico, bajo riesgo)**
 36. `guardando` compartido como mutex implícito entre 2 estados.
@@ -229,9 +229,12 @@ listados completos en las secciones de abajo.
 - [ ] **Migración 6 carga toda la tabla `registro_ingresos` en memoria.**
   `src/database/schema.rs:154`. Tabla de solo-inserción que crece indefinidamente; sienta
   un patrón riesgoso para una futura migración sobre una tabla ya más grande.
-- [ ] **`UsuarioService::actualizar` es código muerto.** `src/services/usuario_service.rs:126`.
-  Ningún camino de producción lo llama, sólo sus propios tests — segunda implementación
-  paralela y ligeramente distinta de `actualizar_administracion`.
+- [x] **`UsuarioService::actualizar` es código muerto.** `src/services/usuario_service.rs:126`.
+  **Reparado:** eliminado junto con `UsuarioRepository::actualizar_identidad_y_rol` (que
+  sólo él llamaba). Tenía más cobertura de la que el hallazgo original detectó — no sólo
+  sus propios tests, sino 7 casos en `tests/root_inicial.rs` que ejercitan la protección
+  del último ROOT activo — migrados a `actualizar_administracion` (el camino real de
+  producción) en vez de perderse.
 - [ ] **Chequeo de restricción UNIQUE duplicado igual en tres servicios.**
   `src/services/usuario_service.rs:278` (y `contratista_service.rs`, `empresa_service.rs`).
 - [ ] **Mapeo `TipoIngreso` ↔ texto SQL duplicado ~6 veces en 4 archivos.**
@@ -253,9 +256,10 @@ listados completos en las secciones de abajo.
   `src/database/repositories/contratista_repository.rs:81`. El mapeo texto↔enum está
   duplicado dos veces en este único archivo (líneas 81-84 y 172-175), además de en los
   otros 3-4 archivos ya señalados arriba (`Mapeo TipoIngreso ↔ texto SQL`).
-- [ ] **`SelectMenu`/`SelectMenuState` no tiene ningún consumidor real.**
+- [x] **`SelectMenu`/`SelectMenuState` no tiene ningún consumidor real.**
   `src/tui/ui_kit/select_menu.rs`. 149 líneas con navegación y tests, sin ningún caso de
-  uso en producción ni en `examples/`.
+  uso en producción ni en `examples/`. **Reparado:** módulo eliminado y su re-export en
+  `ui_kit/mod.rs` quitado.
 - [ ] **Bucle orquestador de términos `clave:valor` duplicado en 3 pantallas.**
   `src/tui/ui_kit/query_lang.rs` (falta el helper) — el bucle que separa términos libres de
   términos con clave se repite literal en `activos`, `contratistas` e `historial/filtros.rs`
