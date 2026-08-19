@@ -303,13 +303,20 @@ fn mensaje_bloqueo(p: &PreparacionIngreso) -> String {
         return "El contratista ya tiene un ingreso activo.".into();
     }
     match &p.resultado_acceso {
-        ResultadoAcceso::Denegado(MotivoDenegacion::SinAcceso) => {
-            "Acceso denegado · no tiene acceso autorizado".into()
+        ResultadoAcceso::Denegado(motivo) => mensaje_motivo_denegacion(motivo),
+        ResultadoAcceso::Permitido | ResultadoAcceso::PermitidoConAdvertencia => {
+            "No se puede continuar con este contratista.".into()
         }
-        ResultadoAcceso::Denegado(MotivoDenegacion::PraindVencido) => {
-            "Acceso denegado · PRAIND vencido o requerido".into()
-        }
-        _ => "No se puede continuar con este contratista.".into(),
+    }
+}
+
+/// Match exhaustivo sobre `MotivoDenegacion` a propósito, sin `_ =>` — si se
+/// agrega una variante nueva, el compilador obliga a decidir aquí su mensaje
+/// en vez de caer en un texto genérico sin que nadie se entere.
+fn mensaje_motivo_denegacion(motivo: &MotivoDenegacion) -> String {
+    match motivo {
+        MotivoDenegacion::SinAcceso => "Acceso denegado · no tiene acceso autorizado".into(),
+        MotivoDenegacion::PraindVencido => "Acceso denegado · PRAIND vencido o requerido".into(),
     }
 }
 fn texto_medio(m: MedioIngreso) -> &'static str {

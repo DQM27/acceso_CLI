@@ -108,9 +108,11 @@ const CONTRATISTAS_SQL: &str = "
     AND (
         :praind_modo = 0
         OR (:praind_modo = 1 AND c.fecha_vencimiento_praind IS NOT NULL
-            AND c.fecha_vencimiento_praind < :praind_hoy)
+            AND c.fecha_vencimiento_praind < :praind_hoy
+            AND (c.es_personal_ruta = 1 OR c.tipo_ingreso IN ('PRAIND', 'IN_HOUSE')))
         OR (:praind_modo = 2 AND c.fecha_vencimiento_praind IS NOT NULL
-            AND c.fecha_vencimiento_praind BETWEEN :praind_hoy AND :praind_limite)
+            AND c.fecha_vencimiento_praind BETWEEN :praind_hoy AND :praind_limite
+            AND (c.es_personal_ruta = 1 OR c.tipo_ingreso IN ('PRAIND', 'IN_HOUSE')))
         OR (:praind_modo = 3 AND c.fecha_vencimiento_praind IS NULL)
     )
     AND (:personal_ruta IS NULL OR c.es_personal_ruta = :personal_ruta)

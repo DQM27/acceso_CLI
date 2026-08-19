@@ -8,7 +8,11 @@ pub const VERSION_REGLAS_ACCESO: i64 = 1;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResultadoIngresoRegistrado {
     Permitido,
-    PermitidoConAdvertencia,
+    /// Carga el motivo en vez de dejar que quien persista lo adivine — hoy
+    /// sólo `domain::acceso::verificar_acceso` produce esta variante (regla 4,
+    /// PRAIND próximo a vencer), así que quien la construye siempre sabe el
+    /// motivo real; nadie tiene que asumirlo después.
+    PermitidoConAdvertencia(MotivoResultadoIngreso),
     /// Registro anterior a la captura de fotografías históricas.
     Migrado,
 }

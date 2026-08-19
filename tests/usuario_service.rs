@@ -5,6 +5,7 @@ use control_acceso::database::schema::initialize_database;
 use control_acceso::models::usuario::RolUsuario;
 use control_acceso::services::autenticacion_service::AutenticacionService;
 use control_acceso::services::error::{AutenticacionError, UsuarioServiceError};
+use control_acceso::services::password::generar_hash;
 use control_acceso::services::usuario_service::{
     ActualizarUsuarioInput, CrearRootInicialInput, CrearUsuarioInput, UsuarioService,
 };
@@ -302,12 +303,35 @@ fn crear_con_hash_guarda_el_hash_tal_cual_sin_volver_a_calcularlo() {
     let repository = SqliteUsuarioRepository::new(&connection);
     let servicio = UsuarioService::new(&repository);
 
+    let hash = generar_hash("password-ya-calculado").unwrap();
+
     let id = servicio
-        .crear_con_hash("3002", "Persona Hash", RolUsuario::Operador, true, "hash-de-prueba".to_string())
+        .crear_con_hash("3002", "Persona Hash", RolUsuario::Operador, true, hash.clone())
         .unwrap();
 
     let usuario = servicio.buscar_por_id(id).unwrap();
-    assert_eq!(usuario.password_hash, "hash-de-prueba");
+    assert_eq!(usuario.password_hash, hash);
+}
+
+#[test]
+fn crear_con_hash_rechaza_un_hash_con_formato_invalido() {
+    let connection = base();
+    inicializar(&connection);
+    let repository = SqliteUsuarioRepository::new(&connection);
+    let servicio = UsuarioService::new(&repository);
+
+    let resultado = servicio.crear_con_hash(
+        "3003",
+        "Persona Hash Invalido",
+        RolUsuario::Operador,
+        true,
+        "no-es-un-hash-argon2".to_string(),
+    );
+
+    assert!(matches!(
+        resultado,
+        Err(UsuarioServiceError::Password(_))
+    ));
 }
 
 #[test]

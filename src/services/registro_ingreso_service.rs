@@ -12,8 +12,8 @@ use crate::domain::registro_ingreso::salida_es_cronologicamente_valida;
 use crate::domain::resultado_acceso::ResultadoAcceso;
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::models::registro_ingreso::{
-    DatosHistoricosEntrada, NuevoRegistroIngreso, RegistroIngreso, ResultadoIngresoRegistrado,
-    VERSION_REGLAS_ACCESO,
+    DatosHistoricosEntrada, MotivoResultadoIngreso, NuevoRegistroIngreso, RegistroIngreso,
+    ResultadoIngresoRegistrado, VERSION_REGLAS_ACCESO,
 };
 use crate::models::tipo_ingreso::TipoIngreso;
 use crate::tiempo::fecha_costa_rica;
@@ -245,7 +245,9 @@ where
         let resultado_registrado = match &resultado_acceso {
             ResultadoAcceso::Permitido => ResultadoIngresoRegistrado::Permitido,
             ResultadoAcceso::PermitidoConAdvertencia => {
-                ResultadoIngresoRegistrado::PermitidoConAdvertencia
+                ResultadoIngresoRegistrado::PermitidoConAdvertencia(
+                    MotivoResultadoIngreso::PraindProximoVencer,
+                )
             }
             ResultadoAcceso::Denegado(_) => unreachable!("el acceso denegado ya fue rechazado"),
         };

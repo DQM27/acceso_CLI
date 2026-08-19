@@ -27,14 +27,14 @@ Simple = un cambio local, bajo riesgo, sin tocar lógica compartida.
 6. [x] `abrir_y_verificar` migra de verdad al "solo verificar" un respaldo.
 7. [x] Respaldo renombrado a mano puede borrarse igual por la retención (`starts_with` laxo).
 
-**Nivel 2 — Corrompen decisiones o datos, pero no tumban nada**
-8. `crear_con_hash`/similares no validan nada — cuenta inutilizable si alguien pasa texto plano.
-9. Filtro PRAIND ignora si el tipo de contrato aún lo requiere.
-10. Fallo al limpiar respaldos viejos se descarta en silencio (acumulación sin límite).
-11. `listar_activos` sin tope de filas — única consulta así en la app.
-12. Motivo de denegación con catch-all no exhaustivo (compilador no avisa de variante nueva).
-13. Motivo de `PermitidoConAdvertencia` adivinado/hardcodeado fuera del dominio.
-14. ROOT inicial se cuelga para siempre si algún día se usa `App::run` sin core.
+**Nivel 2 — Corrompen decisiones o datos, pero no tumban nada — [x] reparado (rama `fix/auditoria-nivel-1`)**
+8. [x] `crear_con_hash`/similares no validan nada — cuenta inutilizable si alguien pasa texto plano.
+9. [x] Filtro PRAIND ignora si el tipo de contrato aún lo requiere.
+10. [x] **No es bug, es diseño intencional** (Fase 4) — se deja tal cual, ver nota en el detalle abajo.
+11. [x] `listar_activos` sin tope de filas — única consulta así en la app.
+12. [x] Motivo de denegación con catch-all no exhaustivo (compilador no avisa de variante nueva).
+13. [x] Motivo de `PermitidoConAdvertencia` adivinado/hardcodeado fuera del dominio.
+14. [x] ROOT inicial se cuelga para siempre si algún día se usa `App::run` sin core.
 
 **Nivel 3 — Deuda estructural (separación de responsabilidades)**
 15. `application_id` se adopta antes de verificar integridad del archivo.
@@ -115,12 +115,13 @@ listados completos en las secciones de abajo.
   `src/main.rs:35`. Si `AppCore::abrir` falla en cualquier vuelta del bucle (incluida la
   que sigue a una restauración fallida), el proceso entero termina con un `eprintln`
   crudo, ignorando el mecanismo `mensaje_inicial` que la Fase 3b introdujo justo para esto.
-- [ ] **ROOT inicial se cuelga para siempre en modo sin base de datos.**
-  `src/tui/app.rs:1264`. A diferencia de los otros 3 flujos con threading, no maneja el
-  caso `core: None` — si algún día se usa `App::run` (público, sin core), el formulario
-  queda congelado en "Creando" sin salida.
-  Relacionado: `App::run` (la variante pública sin core) no tiene ningún llamador real hoy
-  (`src/tui/app.rs:1005`) — es la razón de que este hallazgo sea hoy inofensivo.
+- [x] **ROOT inicial se cuelga para siempre en modo sin base de datos.**
+  `src/tui/app.rs:1264`. A diferencia de los otros 3 flujos con threading, no manejaba el
+  caso `core: None`. **Reparado:** `App::run` ahora sí tiene un llamador real
+  (`terminal::run_sin_core`, agregado al reparar el hallazgo de Nivel 1 "un fallo al
+  reabrir la base mata todo el proceso") — se agregó `abortar_configuracion_inicial_sin_core`
+  para que, sin `core`, la solicitud pendiente se resuelva con un error visible en vez de
+  quedar congelada en "Creando" para siempre.
 - [x] **El respaldo obligatorio pre-migración corre antes de validar que el archivo es
   nuestro.** `src/database/connection.rs:119`. `open_database` llama
   `respaldar_antes_de_migrar` antes de `initialize_database`, pero el rechazo de bases
@@ -140,28 +141,29 @@ listados completos en las secciones de abajo.
   retención.** `src/database/backup.rs:348`. `interpretar_nombre` matchea el tipo con
   `starts_with` sin exigir que lo que sigue sea el sufijo numérico documentado —
   `"automatico_no_borrar".starts_with("automatico_")` es `true`.
-- [ ] **`crear_con_hash`/`cambiar_password_con_hash`/`crear_root_inicial_con_hash` no
+- [x] **`crear_con_hash`/`cambiar_password_con_hash`/`crear_root_inicial_con_hash` no
   validan nada.** `src/services/usuario_service.rs:91`. Persisten el `password_hash`
   recibido tal cual (ni siquiera comprueban que sea un hash Argon2 válido), y
   `crear_con_hash` tampoco repite el chequeo `ConfiguracionInicialRequerida`. Un caller
   futuro que pase el password en texto plano por error deja esa cuenta inutilizable en el
   login sin ningún aviso al guardar.
-- [ ] **Filtro "PRAIND vencido/próximo a vencer" ignora si el tipo de contrato aún lo
+- [x] **Filtro "PRAIND vencido/próximo a vencer" ignora si el tipo de contrato aún lo
   requiere.** `src/database/queries/contratistas.rs:108`. No aplica la condición
   equivalente a `Contratista::requiere_praind()`. Un contratista que cambió a un tipo que
   ya no requiere PRAIND pero conserva una fecha vieja sin limpiar sigue apareciendo como
   "vencido" aunque el sistema real le da acceso permitido sin advertencia.
-- [ ] **Fallo al limpiar respaldos automáticos viejos se descarta en silencio.**
+- [x] **Fallo al limpiar respaldos automáticos viejos se descarta en silencio.**
   `src/application.rs:386`. `let _ =` sobre `aplicar_retencion`; si falla una vez queda
   roto para siempre sin aviso y los respaldos se acumulan sin límite.
   Nota: toda la función `respaldo_automatico_diario_si_hace_falta` traga sus errores
   (no sólo la retención) — esto es **por diseño**, ya decidido explícitamente en la Fase 4
   ("ignorar en silencio si falla, no es obligatorio"). No tratar como bug salvo que se
-  quiera reconsiderar esa decisión.
-- [ ] **`listar_activos` (Ingresos Activos) es la única consulta de toda la app sin tope de
+  quiera reconsiderar esa decisión. **No se tocó código** — se marca resuelto porque ya
+  estaba decidido, no porque se haya cambiado el comportamiento.
+- [x] **`listar_activos` (Ingresos Activos) es la única consulta de toda la app sin tope de
   filas.** `src/database/queries/ingresos.rs:33`. `FiltroIngresosActivos` no tiene
   límite/offset y `ACTIVOS_SQL` no lleva `LIMIT`.
-- [ ] **Mapeo de motivo de denegación con catch-all no exhaustivo.**
+- [x] **Mapeo de motivo de denegación con catch-all no exhaustivo.**
   `src/tui/nuevo_ingreso/state.rs:306`. `mensaje_bloqueo` reimplementa en la TUI el
   conocimiento de qué `MotivoDenegacion` existen; una variante nueva cae en un mensaje
   genérico sin que el compilador avise, justo en la pantalla que decide si alguien entra.
@@ -171,7 +173,7 @@ listados completos en las secciones de abajo.
   Caso extremo pero real (empresa que deja de operar sigue entrando gente a su nombre).
   Alcance V1, prioridad baja — no bloquea nada hoy, confirmado explícitamente por decisión
   del usuario (ver `project_roadmap_v1_v2` en memoria).
-- [ ] **El motivo de `PermitidoConAdvertencia` se adivina fuera del dominio.**
+- [x] **El motivo de `PermitidoConAdvertencia` se adivina fuera del dominio.**
   `src/database/repositories/registro_ingreso_repository.rs:148`. `ResultadoAcceso` no
   transporta por qué se disparó la advertencia; el repositorio hardcodea la suposición
   `=> "PRAIND_PROXIMO_VENCER"`. Si se agrega una segunda regla de advertencia no

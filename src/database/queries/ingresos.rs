@@ -10,6 +10,11 @@ use crate::tiempo::{parsear_utc, serializar_utc};
 
 const LIMITE_HISTORIAL_PREDETERMINADO: usize = 50;
 const LIMITE_HISTORIAL_MAXIMO: usize = 200;
+/// Tope de seguridad para Ingresos Activos, la única consulta de la app que
+/// antes no tenía ninguno. No hay paginación en esa pantalla (a diferencia de
+/// Historial) — este límite es sólo para no cargar sin fin si algún día el
+/// número de ingresos sin cerrar crece de forma anómala.
+const LIMITE_ACTIVOS_PREDETERMINADO: usize = 1000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IngresoActivoLectura {
@@ -29,7 +34,7 @@ pub struct IngresoActivoLectura {
     pub tiene_acceso: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FiltroIngresosActivos {
     pub texto: Option<String>,
     pub empresa_id: Option<i64>,
@@ -38,6 +43,20 @@ pub struct FiltroIngresosActivos {
     pub tipos_incluidos: Option<Vec<TipoIngreso>>,
     pub gafete_numero: Option<i64>,
     pub medio_ingreso: Option<MedioIngreso>,
+    pub limite: usize,
+}
+
+impl Default for FiltroIngresosActivos {
+    fn default() -> Self {
+        Self {
+            texto: None,
+            empresa_id: None,
+            tipos_incluidos: None,
+            gafete_numero: None,
+            medio_ingreso: None,
+            limite: LIMITE_ACTIVOS_PREDETERMINADO,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -165,6 +184,7 @@ impl IngresosQuery for SqliteIngresosQuery<'_> {
         }
         let [t0, t1, t2, t3] = tipos_bind;
         let medio = filtro.medio_ingreso.map(medio_a_texto);
+        let limite = filtro.limite.clamp(1, LIMITE_ACTIVOS_PREDETERMINADO) as i64;
 
         let mut statement = self.connection.prepare(ACTIVOS_SQL)?;
         let items = statement
@@ -182,6 +202,7 @@ impl IngresosQuery for SqliteIngresosQuery<'_> {
                     ":t3": t3,
                     ":gafete": filtro.gafete_numero,
                     ":medio": medio,
+                    ":limite": limite,
                 },
                 convertir_activo,
             )?
@@ -317,6 +338,7 @@ const ACTIVOS_SQL: &str = "
     AND (:gafete IS NULL OR r.gafete_numero = :gafete)
     AND (:medio IS NULL OR r.medio_ingreso = :medio)
     ORDER BY r.fecha_hora_ingreso DESC, r.id DESC
+    LIMIT :limite
 ";
 
 const HISTORIAL_COLUMNAS: &str = "
@@ -375,6 +397,7 @@ fn convertir_activo(row: &Row<'_>) -> rusqlite::Result<IngresoActivoLectura> {
 }
 
 fn convertir_movimiento(row: &Row<'_>) -> rusqlite::Result<MovimientoIngresoResumen> {
+    let motivo_resultado = motivo_desde_fila(row, 13)?;
     Ok(MovimientoIngresoResumen {
         registro_id: row.get(0)?,
         contratista_id: row.get(1)?,
@@ -388,20 +411,26 @@ fn convertir_movimiento(row: &Row<'_>) -> rusqlite::Result<MovimientoIngresoResu
         gafete_numero: row.get(9)?,
         usuario_ingreso_nombre: row.get(10)?,
         usuario_salida_nombre: row.get(11)?,
-        resultado_acceso: resultado_desde_fila(row, 12)?,
-        motivo_resultado: motivo_desde_fila(row, 13)?,
+        resultado_acceso: resultado_desde_fila(row, 12, motivo_resultado)?,
+        motivo_resultado,
         reglas_version: row.get(14)?,
     })
 }
 
+/// `motivo` viene de la columna `motivo_resultado` (13), ya parseada aparte —
+/// el CHECK de `MIGRACION_5` garantiza que sólo viene `Some` cuando el texto
+/// crudo es `PERMITIDO_CON_ADVERTENCIA` o `MIGRADO`.
 fn resultado_desde_fila(
     row: &Row<'_>,
     indice: usize,
+    motivo: Option<MotivoResultadoIngreso>,
 ) -> rusqlite::Result<ResultadoIngresoRegistrado> {
     let valor: String = row.get(indice)?;
     match valor.as_str() {
         "PERMITIDO" => Ok(ResultadoIngresoRegistrado::Permitido),
-        "PERMITIDO_CON_ADVERTENCIA" => Ok(ResultadoIngresoRegistrado::PermitidoConAdvertencia),
+        "PERMITIDO_CON_ADVERTENCIA" => motivo
+            .map(ResultadoIngresoRegistrado::PermitidoConAdvertencia)
+            .ok_or_else(|| tipo_invalido(indice, "resultado_acceso")),
         "MIGRADO" => Ok(ResultadoIngresoRegistrado::Migrado),
         _ => Err(tipo_invalido(indice, "resultado_acceso")),
     }

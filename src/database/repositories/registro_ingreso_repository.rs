@@ -4,7 +4,7 @@ use rusqlite::{Connection, Row, named_params, params};
 use crate::database::error::DatabaseError;
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::models::registro_ingreso::{
-    NuevoRegistroIngreso, RegistroIngreso, ResultadoIngresoRegistrado,
+    MotivoResultadoIngreso, NuevoRegistroIngreso, RegistroIngreso, ResultadoIngresoRegistrado,
 };
 use crate::models::tipo_ingreso::TipoIngreso;
 use crate::tiempo::{parsear_utc, serializar_utc};
@@ -36,6 +36,13 @@ pub trait RegistroIngresoRepository {
     ) -> Result<(), DatabaseError>;
 
     fn listar(&self) -> Result<Vec<RegistroIngreso>, DatabaseError>;
+}
+
+fn motivo_a_texto(motivo: MotivoResultadoIngreso) -> &'static str {
+    match motivo {
+        MotivoResultadoIngreso::PraindProximoVencer => "PRAIND_PROXIMO_VENCER",
+        MotivoResultadoIngreso::DatosReconstruidos => "DATOS_RECONSTRUIDOS",
+    }
 }
 
 pub struct SqliteRegistroIngresoRepository<'a> {
@@ -144,8 +151,8 @@ impl<'a> RegistroIngresoRepository for SqliteRegistroIngresoRepository<'a> {
         let (resultado_acceso, motivo_resultado) = match registro.datos_historicos.resultado_acceso
         {
             ResultadoIngresoRegistrado::Permitido => ("PERMITIDO", None),
-            ResultadoIngresoRegistrado::PermitidoConAdvertencia => {
-                ("PERMITIDO_CON_ADVERTENCIA", Some("PRAIND_PROXIMO_VENCER"))
+            ResultadoIngresoRegistrado::PermitidoConAdvertencia(motivo) => {
+                ("PERMITIDO_CON_ADVERTENCIA", Some(motivo_a_texto(motivo)))
             }
             ResultadoIngresoRegistrado::Migrado => ("MIGRADO", Some("DATOS_RECONSTRUIDOS")),
         };

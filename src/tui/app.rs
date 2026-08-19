@@ -1059,9 +1059,12 @@ impl App {
                 salida_rapida::render(frame, frame.area(), &self.salida_rapida, theme);
             })?;
 
-            if let Some(core) = core {
-                self.procesar_configuracion_pendiente(core);
-                self.recibir_root_inicial_si_lista(core);
+            match core {
+                Some(core) => {
+                    self.procesar_configuracion_pendiente(core);
+                    self.recibir_root_inicial_si_lista(core);
+                }
+                None => self.abortar_configuracion_inicial_sin_core(),
             }
 
             if event::poll(EVENT_POLL)?
@@ -1920,6 +1923,7 @@ impl App {
                                 tipos_incluidos: tipos,
                                 gafete_numero: gafete,
                                 medio_ingreso: medio,
+                                ..Default::default()
                             },
                         )
                         .map_err(|_| "No se pudieron cargar los ingresos activos".into())
@@ -1971,6 +1975,20 @@ impl App {
         self.sesion = Some(sesion);
         self.menu.nueva_sesion();
         self.vista = Vista::MenuPrincipal;
+    }
+
+    /// Contraparte de `procesar_configuracion_pendiente` cuando no hay `core`
+    /// (`App::run`, sin base de datos): sin esto, un ROOT inicial enviado se
+    /// queda para siempre en "Creando" — `EstadoConfiguracion::Creando`
+    /// bloquea hasta el `Esc` porque nadie vuelve a tomar la solicitud pendiente.
+    fn abortar_configuracion_inicial_sin_core(&mut self) {
+        if self.vista != Vista::ConfiguracionInicial {
+            return;
+        }
+        if self.configuracion_inicial.tomar_solicitud().is_some() {
+            self.configuracion_inicial
+                .completar_con_error("No se pudo crear el usuario ROOT");
+        }
     }
 
     fn procesar_configuracion_pendiente(&mut self, core: &AppCore) {
