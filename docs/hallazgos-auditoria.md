@@ -12,10 +12,10 @@ tenía tests, cuando `tests/domain.rs` ya lo cubre con 16 casos — y se descart
 marcando `[x]` a medida que se reparan, en el orden que se decida trabajarlos (no
 necesariamente el orden de esta lista).
 
-**Estado (2026-08-19): 66/67 reparados**, todo en la rama `fix/auditoria-nivel-1`. Sólo
-queda pendiente el hallazgo 21 (`Empresa` sin campo `activo`) por decisión explícita del
-usuario — es una funcionalidad nueva (migración, cascada, UI), no un fix de código
-existente, y ya está marcado V1/prioridad baja. Varios hallazgos resultaron, al investigar
+**Estado (2026-08-19): 67/67 reparados.** Los primeros 66 quedaron en la rama
+`fix/auditoria-nivel-1` (ya en `main`); el hallazgo 21 (`Empresa` sin campo `activo`) se
+resolvió aparte, en `feature/empresa-activo`, por ser funcionalidad nueva (migración,
+regla de dominio, UI) y no un fix de código existente. Varios hallazgos resultaron, al investigar
 para repararlos, tener más matices de los que el texto original capturaba (documentado en
 cada uno): dos casos donde el "problema" era en realidad una decisión de diseño intencional
 que se confirmó y documentó en vez de cambiar (10, 16), un caso donde el fix "correcto"
@@ -189,12 +189,16 @@ listados completos en las secciones de abajo.
   `src/tui/nuevo_ingreso/state.rs:306`. `mensaje_bloqueo` reimplementa en la TUI el
   conocimiento de qué `MotivoDenegacion` existen; una variante nueva cae en un mensaje
   genérico sin que el compilador avise, justo en la pantalla que decide si alguien entra.
-- [ ] **`Empresa` no tiene campo `activo` — dar de baja una empresa no revoca el acceso de
-  sus contratistas.** `src/models/empresa.rs:1`. No existe ningún camino para "desactivar"
-  una empresa; sus contratistas siguen con `tiene_acceso = true` de forma independiente.
-  Caso extremo pero real (empresa que deja de operar sigue entrando gente a su nombre).
-  Alcance V1, prioridad baja — no bloquea nada hoy, confirmado explícitamente por decisión
-  del usuario (ver `project_roadmap_v1_v2` en memoria).
+- [x] **`Empresa` no tiene campo `activo` — dar de baja una empresa no revoca el acceso de
+  sus contratistas.** `src/models/empresa.rs:1`. **Reparado** en `feature/empresa-activo`:
+  `Empresa.activo` (migración de esquema 7, `ALTER TABLE empresas ADD COLUMN activo ...
+  DEFAULT 1` — las empresas existentes quedan activas), `EmpresaService::activar/desactivar`,
+  y una Regla 0 nueva en `domain::acceso::verificar_acceso` (`MotivoDenegacion::
+  EmpresaInactiva`) que deniega a cualquier contratista de una empresa inactiva sin tocar su
+  `tiene_acceso` individual. `Contratista` lleva un campo derivado `empresa_activa`
+  (resuelto por el repositorio vía `JOIN` a `empresas`, no persistido en `contratistas`) para
+  que el dominio no dependa de una segunda consulta. Pantalla Empresas gana la tecla `A`
+  (Estado) con confirmación, igual que Usuarios.
 - [x] **El motivo de `PermitidoConAdvertencia` se adivina fuera del dominio.**
   `src/database/repositories/registro_ingreso_repository.rs:148`. `ResultadoAcceso` no
   transporta por qué se disparó la advertencia; el repositorio hardcodea la suposición

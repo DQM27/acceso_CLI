@@ -54,6 +54,7 @@ fn preparar() -> (Connection, i64, i64, i64) {
             fecha_vencimiento_praind: NaiveDate::from_ymd_opt(2027, 12, 31),
             es_personal_ruta: false,
             tiene_acceso: true,
+            empresa_activa: true,
         })
         .unwrap();
     (connection, contratista_id, 1, 2)

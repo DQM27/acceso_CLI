@@ -23,6 +23,7 @@ const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓", "Mover"),
     CommandHint::new("ENTER", "Editar"),
     CommandHint::new("N", "Nueva"),
+    CommandHint::new("A", "Estado"),
     CommandHint::new("/", "Buscar"),
     CommandHint::new("ESC", "Volver"),
 ];
@@ -32,6 +33,10 @@ const COMANDOS_BUSQUEDA: &[CommandHint<'static>] = &[
 ];
 const COMANDOS_FORMULARIO: &[CommandHint<'static>] = &[
     CommandHint::new("ENTER", "Guardar"),
+    CommandHint::new("ESC", "Cancelar"),
+];
+const COMANDOS_CONFIRMACION: &[CommandHint<'static>] = &[
+    CommandHint::new("ENTER", "Confirmar"),
     CommandHint::new("ESC", "Cancelar"),
 ];
 
@@ -54,6 +59,7 @@ pub fn render(
         ModoEmpresas::Normal => COMANDOS_NORMAL,
         ModoEmpresas::Busqueda { .. } => COMANDOS_BUSQUEDA,
         ModoEmpresas::Formulario(_) => COMANDOS_FORMULARIO,
+        ModoEmpresas::ConfirmacionEstado(_) => COMANDOS_CONFIRMACION,
     };
 
     let shell = ScreenShell {
@@ -77,6 +83,14 @@ fn estado_shell(state: &EmpresasState) -> (String, StatusKind) {
         && let Some(error) = &formulario.error
     {
         return (format!("✕ {error}"), StatusKind::Error);
+    }
+    if let ModoEmpresas::ConfirmacionEstado(c) = &state.modo {
+        let nombre = state.empresa(c.id).map(|e| e.nombre.as_str()).unwrap_or_default();
+        let accion = if c.activar { "activar" } else { "desactivar" };
+        return (
+            format!("¿Desea {accion} la empresa {nombre}?"),
+            StatusKind::Warning,
+        );
     }
     // Mismo criterio que `activos::estado_shell`: un único campo `mensaje`,
     // el contenido decide el estilo en vez de necesitar 2 campos separados.
@@ -196,23 +210,34 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: The
         .enumerate()
         .map(|(visible, empresa)| {
             let seleccionada = state.seleccion == Some(inicio + visible);
+            let estilo = if seleccionada {
+                theme.selected()
+            } else if !empresa.activo {
+                theme.muted()
+            } else {
+                theme.base()
+            };
             Row::new([
                 Cell::from(empresa.nombre.clone()),
                 Cell::from(empresa.contratistas.to_string()),
+                Cell::from(if empresa.activo { "ACTIVA" } else { "INACTIVA" }),
             ])
-            .style(if seleccionada {
-                theme.selected()
-            } else {
-                theme.base()
-            })
+            .style(estilo)
         });
-    let encabezado = Row::new(["NOMBRE", "CONTRATISTAS"])
+    let encabezado = Row::new(["NOMBRE", "CONTRATISTAS", "ESTADO"])
         .style(theme.muted())
         .bottom_margin(1);
     frame.render_widget(
-        Table::new(filas, [Constraint::Fill(4), Constraint::Length(14)])
-            .header(encabezado)
-            .column_spacing(1),
+        Table::new(
+            filas,
+            [
+                Constraint::Fill(4),
+                Constraint::Length(14),
+                Constraint::Length(10),
+            ],
+        )
+        .header(encabezado)
+        .column_spacing(1),
         area,
     );
     if state.empresas.is_empty() {
@@ -234,7 +259,7 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: The
 fn render_panel(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: Theme) -> Option<Rect> {
     match &state.modo {
         ModoEmpresas::Formulario(formulario) => Some(render_formulario(frame, area, formulario, theme)),
-        ModoEmpresas::Normal | ModoEmpresas::Busqueda { .. } => {
+        ModoEmpresas::Normal | ModoEmpresas::Busqueda { .. } | ModoEmpresas::ConfirmacionEstado(_) => {
             match state.empresa_seleccionada() {
                 Some(empresa) => render_detalle(frame, area, empresa, theme),
                 None => frame.render_widget(
@@ -248,10 +273,13 @@ fn render_panel(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: The
 }
 
 fn render_detalle(frame: &mut Frame, area: Rect, empresa: &EmpresaResumen, theme: Theme) {
+    let estilo_estado = if empresa.activo { theme.success() } else { theme.danger() };
     let lineas = vec![
         Line::from(empresa.nombre.as_str()).style(theme.title()),
         Line::from(""),
         Line::from(format!("Contratistas asociados: {}", empresa.contratistas)).style(theme.base()),
+        Line::from(if empresa.activo { "Estado: ACTIVA" } else { "Estado: INACTIVA" })
+            .style(estilo_estado),
     ];
     frame.render_widget(Paragraph::new(lineas), area);
 }

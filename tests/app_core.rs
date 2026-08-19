@@ -191,6 +191,7 @@ fn app_core_compone_query_n1_y_preparacion_n3_sin_persistir() {
         .crear(&Empresa {
             id: 0,
             nombre: "Brisas".to_owned(),
+            activo: true,
         })
         .unwrap();
     let contratistas = SqliteContratistaRepository::new(&connection);
@@ -204,6 +205,7 @@ fn app_core_compone_query_n1_y_preparacion_n3_sin_persistir() {
             fecha_vencimiento_praind: None,
             es_personal_ruta: false,
             tiene_acceso: true,
+            empresa_activa: true,
         })
         .unwrap();
     let core = AppCore::new(connection);

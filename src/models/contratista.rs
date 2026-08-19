@@ -12,6 +12,11 @@ pub struct Contratista {
     pub fecha_vencimiento_praind: Option<NaiveDate>,
     pub es_personal_ruta: bool,
     pub tiene_acceso: bool,
+    /// Estado de `Empresa::activo` de `empresa_id`, resuelto por quien
+    /// construye este `Contratista` (repositorio o quien lo arma a mano) —
+    /// no es un campo propio de `contratistas`, viaja aquí para que
+    /// `domain::acceso::verificar_acceso` no necesite consultar otra tabla.
+    pub empresa_activa: bool,
 }
 
 impl Contratista {

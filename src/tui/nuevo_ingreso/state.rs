@@ -307,6 +307,7 @@ fn mensaje_motivo_denegacion(motivo: &MotivoDenegacion) -> String {
     match motivo {
         MotivoDenegacion::SinAcceso => "Acceso denegado · no tiene acceso autorizado".into(),
         MotivoDenegacion::PraindVencido => "Acceso denegado · PRAIND vencido o requerido".into(),
+        MotivoDenegacion::EmpresaInactiva => "Acceso denegado · la empresa está inactiva".into(),
     }
 }
 fn texto_medio(m: MedioIngreso) -> &'static str {

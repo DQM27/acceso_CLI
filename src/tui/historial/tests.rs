@@ -255,10 +255,12 @@ fn parsear_consulta_resuelve_empresa_por_nombre_parcial_y_deja_texto_libre() {
         Empresa {
             id: 5,
             nombre: "Brisas del Oeste".into(),
+            activo: true,
         },
         Empresa {
             id: 9,
             nombre: "Aldama Servicios".into(),
+            activo: true,
         },
     ];
     let base = FiltrosHistorial::default();
@@ -359,6 +361,7 @@ fn busqueda_rapida_admite_clave_valor_y_se_combina_con_filtros_del_panel() {
     state.completar_empresas(Ok(vec![Empresa {
         id: 3,
         nombre: "Expenic Industrial".into(),
+        activo: true,
     }]));
     state.filtro_aplicado.tipos = Some(vec![TipoIngreso::Praind]);
     for c in "empresa:Expenic".chars() {

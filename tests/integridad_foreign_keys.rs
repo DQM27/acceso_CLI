@@ -6,7 +6,7 @@ fn base() -> Connection {
     initialize_database(&connection).unwrap();
     connection
         .execute_batch(
-            "INSERT INTO empresas VALUES (1, 'Empresa');
+            "INSERT INTO empresas VALUES (1, 'Empresa', 1);
          INSERT INTO usuarios VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1);
          INSERT INTO contratistas VALUES (1, '2001', 'Persona', 1, 'PRAIND', '2030-01-01', 0, 1);",
         )

@@ -34,6 +34,7 @@ fn poblar(connection: &Connection, nombre_empresa: &str, cedula: &str) {
         .crear(&Empresa {
             id: 0,
             nombre: nombre_empresa.into(),
+            activo: true,
         })
         .unwrap();
     SqliteContratistaRepository::new(connection)
@@ -46,6 +47,7 @@ fn poblar(connection: &Connection, nombre_empresa: &str, cedula: &str) {
             fecha_vencimiento_praind: None,
             es_personal_ruta: false,
             tiene_acceso: true,
+            empresa_activa: true,
         })
         .unwrap();
 }

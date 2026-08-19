@@ -122,9 +122,10 @@ where
             return Err(ContratistaServiceError::NombreVacio);
         }
 
-        if self.empresas.buscar_por_id(datos.empresa_id)?.is_none() {
-            return Err(ContratistaServiceError::EmpresaNoEncontrada);
-        }
+        let empresa = self
+            .empresas
+            .buscar_por_id(datos.empresa_id)?
+            .ok_or(ContratistaServiceError::EmpresaNoEncontrada)?;
 
         let contratista = Contratista {
             id,
@@ -135,6 +136,7 @@ where
             fecha_vencimiento_praind: datos.fecha_vencimiento_praind,
             es_personal_ruta: datos.es_personal_ruta,
             tiene_acceso: datos.tiene_acceso,
+            empresa_activa: empresa.activo,
         };
 
         if contratista.requiere_praind() && contratista.fecha_vencimiento_praind.is_none() {
@@ -154,9 +156,10 @@ where
             return Err(ContratistaServiceError::NombreVacio);
         }
 
-        if self.empresas.buscar_por_id(datos.empresa_id)?.is_none() {
-            return Err(ContratistaServiceError::EmpresaNoEncontrada);
-        }
+        let empresa = self
+            .empresas
+            .buscar_por_id(datos.empresa_id)?
+            .ok_or(ContratistaServiceError::EmpresaNoEncontrada)?;
 
         let contratista = Contratista {
             id: actual.id,
@@ -167,6 +170,7 @@ where
             fecha_vencimiento_praind: datos.fecha_vencimiento_praind,
             es_personal_ruta: datos.es_personal_ruta,
             tiene_acceso: datos.tiene_acceso,
+            empresa_activa: empresa.activo,
         };
 
         if contratista.requiere_praind() && contratista.fecha_vencimiento_praind.is_none() {

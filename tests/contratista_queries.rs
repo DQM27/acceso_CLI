@@ -27,6 +27,7 @@ fn crear_empresa(connection: &Connection, nombre: &str) -> i64 {
         .crear(&Empresa {
             id: 0,
             nombre: nombre.to_owned(),
+            activo: true,
         })
         .unwrap()
 }
@@ -53,6 +54,7 @@ fn crear_contratista(
             fecha_vencimiento_praind: fecha,
             es_personal_ruta: ruta,
             tiene_acceso: acceso,
+            empresa_activa: true,
         })
         .unwrap()
 }

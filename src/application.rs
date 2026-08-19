@@ -307,6 +307,14 @@ impl AppCore {
         EmpresaService::new(&SqliteEmpresaRepository::new(&self.connection)).actualizar(id, nombre)
     }
 
+    pub fn activar_empresa(&self, id: i64) -> Result<(), EmpresaServiceError> {
+        EmpresaService::new(&SqliteEmpresaRepository::new(&self.connection)).activar(id)
+    }
+
+    pub fn desactivar_empresa(&self, id: i64) -> Result<(), EmpresaServiceError> {
+        EmpresaService::new(&SqliteEmpresaRepository::new(&self.connection)).desactivar(id)
+    }
+
     pub fn buscar_usuarios(
         &self,
         filtro: &FiltroUsuarios,

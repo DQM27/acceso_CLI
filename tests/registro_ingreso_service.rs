@@ -69,6 +69,7 @@ fn contratista(
         fecha_vencimiento_praind,
         es_personal_ruta: false,
         tiene_acceso: true,
+        empresa_activa: true,
     }
 }
 
@@ -101,6 +102,39 @@ fn resultado_praind_con_vencimiento(
             fecha_ingreso(),
         )
         .map(|resultado| resultado.resultado_acceso)
+}
+
+#[test]
+fn empresa_inactiva_deniega_registrar_entrada() {
+    use control_acceso::database::repositories::empresa_repository::{
+        EmpresaRepository, SqliteEmpresaRepository,
+    };
+
+    let (connection, empresa_id, usuario_id) = preparar_base();
+    let id = guardar_contratista(
+        &connection,
+        &contratista("2001", empresa_id, TipoIngreso::Swat, None),
+    );
+    SqliteEmpresaRepository::new(&connection)
+        .establecer_activo(empresa_id, false)
+        .unwrap();
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let registros = SqliteRegistroIngresoRepository::new(&connection);
+
+    let resultado = RegistroIngresoService::new(&contratistas, &registros).registrar_entrada(
+        id,
+        MedioIngreso::Caminando,
+        None,
+        usuario_id,
+        fecha_ingreso(),
+    );
+
+    assert!(matches!(
+        resultado,
+        Err(RegistroIngresoServiceError::AccesoDenegado(
+            MotivoDenegacion::EmpresaInactiva
+        ))
+    ));
 }
 
 #[test]

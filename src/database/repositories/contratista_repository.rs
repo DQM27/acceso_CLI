@@ -61,6 +61,7 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<Contratista> {
         fecha_vencimiento_praind,
         es_personal_ruta: row.get::<_, i64>(6)? != 0,
         tiene_acceso: row.get::<_, i64>(7)? != 0,
+        empresa_activa: row.get::<_, i64>(8)? != 0,
     })
 }
 
@@ -103,16 +104,18 @@ impl<'a> ContratistaRepository for SqliteContratistaRepository<'a> {
         let mut statement = self.connection.prepare(
             "
             SELECT
-                id,
-                cedula,
-                nombre,
-                empresa_id,
-                tipo_ingreso,
-                fecha_vencimiento_praind,
-                es_personal_ruta,
-                tiene_acceso
-            FROM contratistas
-            WHERE cedula = ?1
+                c.id,
+                c.cedula,
+                c.nombre,
+                c.empresa_id,
+                c.tipo_ingreso,
+                c.fecha_vencimiento_praind,
+                c.es_personal_ruta,
+                c.tiene_acceso,
+                e.activo
+            FROM contratistas c
+            JOIN empresas e ON e.id = c.empresa_id
+            WHERE c.cedula = ?1
             ",
         )?;
 
@@ -129,16 +132,18 @@ impl<'a> ContratistaRepository for SqliteContratistaRepository<'a> {
         let mut statement = self.connection.prepare(
             "
             SELECT
-                id,
-                cedula,
-                nombre,
-                empresa_id,
-                tipo_ingreso,
-                fecha_vencimiento_praind,
-                es_personal_ruta,
-                tiene_acceso
-            FROM contratistas
-            WHERE id = ?1
+                c.id,
+                c.cedula,
+                c.nombre,
+                c.empresa_id,
+                c.tipo_ingreso,
+                c.fecha_vencimiento_praind,
+                c.es_personal_ruta,
+                c.tiene_acceso,
+                e.activo
+            FROM contratistas c
+            JOIN empresas e ON e.id = c.empresa_id
+            WHERE c.id = ?1
             ",
         )?;
 
@@ -188,16 +193,18 @@ impl<'a> ContratistaRepository for SqliteContratistaRepository<'a> {
         let mut statement = self.connection.prepare(
             "
             SELECT
-                id,
-                cedula,
-                nombre,
-                empresa_id,
-                tipo_ingreso,
-                fecha_vencimiento_praind,
-                es_personal_ruta,
-                tiene_acceso
-            FROM contratistas
-            ORDER BY nombre
+                c.id,
+                c.cedula,
+                c.nombre,
+                c.empresa_id,
+                c.tipo_ingreso,
+                c.fecha_vencimiento_praind,
+                c.es_personal_ruta,
+                c.tiene_acceso,
+                e.activo
+            FROM contratistas c
+            JOIN empresas e ON e.id = c.empresa_id
+            ORDER BY c.nombre
             ",
         )?;
 

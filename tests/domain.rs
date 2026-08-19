@@ -19,6 +19,7 @@ fn contratista(
         fecha_vencimiento_praind,
         es_personal_ruta: false,
         tiene_acceso,
+        empresa_activa: true,
     }
 }
 
@@ -37,6 +38,44 @@ fn debe_denegar_si_no_tiene_acceso() {
     assert_eq!(
         resultado,
         ResultadoAcceso::Denegado(MotivoDenegacion::SinAcceso)
+    );
+}
+
+#[test]
+fn debe_denegar_si_la_empresa_esta_inactiva() {
+    let hoy = NaiveDate::from_ymd_opt(2026, 8, 10).unwrap();
+
+    let mut contratista = contratista(
+        TipoIngreso::PorCorreo,
+        None,
+        true,
+    );
+    contratista.empresa_activa = false;
+
+    let resultado = verificar_acceso(&contratista, hoy);
+
+    assert_eq!(
+        resultado,
+        ResultadoAcceso::Denegado(MotivoDenegacion::EmpresaInactiva)
+    );
+}
+
+#[test]
+fn empresa_inactiva_bloquea_incluso_con_acceso_individual_y_praind_vigente() {
+    let hoy = NaiveDate::from_ymd_opt(2026, 8, 10).unwrap();
+
+    let mut contratista = contratista(
+        TipoIngreso::Praind,
+        Some(NaiveDate::from_ymd_opt(2026, 12, 31).unwrap()),
+        true,
+    );
+    contratista.empresa_activa = false;
+
+    let resultado = verificar_acceso(&contratista, hoy);
+
+    assert_eq!(
+        resultado,
+        ResultadoAcceso::Denegado(MotivoDenegacion::EmpresaInactiva)
     );
 }
 
