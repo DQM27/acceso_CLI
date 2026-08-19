@@ -1,6 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::services::registro_ingreso_service::IngresoActivoResumen;
+use crate::tui::ui_kit::mover_seleccion;
 
 #[path = "render.rs"]
 pub(super) mod render;
@@ -137,16 +138,7 @@ impl SalidaRapidaState {
     }
 
     fn mover(&mut self, d: isize) {
-        if self.registros.is_empty() {
-            self.seleccion = None
-        } else {
-            let i = self.seleccion.unwrap_or(0);
-            self.seleccion = Some(if d < 0 {
-                i.saturating_sub(1)
-            } else {
-                (i + 1).min(self.registros.len() - 1)
-            })
-        }
+        self.seleccion = mover_seleccion(self.seleccion, d, self.registros.len());
     }
 
     fn registro_seleccionado(&self) -> Option<&IngresoActivoResumen> {

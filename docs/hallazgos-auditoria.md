@@ -46,20 +46,21 @@ Simple = un cambio local, bajo riesgo, sin tocar lógica compartida.
 21. **Nuevo:** `Empresa` sin campo `activo` — baja de empresa no revoca acceso de sus
     contratistas (V1, prioridad baja, caso extremo).
 
-**Nivel 4 — Duplicación / código muerto (afecta mantenibilidad, no producción) — parcial: sólo se reparó el código muerto (34-35, rama `fix/auditoria-nivel-1`); la duplicación (22-33) queda pendiente**
-22. Bloque de spawn de hilo para hashear duplicado 3 veces.
-23. Mapeo `TipoIngreso` ↔ texto SQL duplicado ~6 veces en 4 archivos (+ duplicado interno en
+**Nivel 4 — Duplicación / código muerto (afecta mantenibilidad, no producción) — [x] reparado (rama `fix/auditoria-nivel-1`)**
+22. [x] Bloque de spawn de hilo para hashear duplicado 3 veces.
+23. [x] Mapeo `TipoIngreso` ↔ texto SQL duplicado ~6 veces en 4 archivos (+ duplicado interno en
     `contratista_repository.rs`).
-24. `tipo_desde_texto` triplicado en 3 pantallas.
-25. Bucle de términos `clave:valor` duplicado en 3 pantallas (falta el helper).
-26. Verificación de login duplicada entre servicio y TUI.
-27. Chequeo UNIQUE duplicado en 3 servicios.
-28. `mover()` duplicada letra por letra en 2 pantallas.
-29. Bloque de transacción `Immediate` + `validar_reloj` duplicado 2 veces.
-30. `aplicar_retencion` aborta a mitad de camino, error descartado en ambos callers.
-31. Limpieza de sentinelas / `.partial` inválido descartan su propio error (2 hallazgos).
-32. `take().unwrap()` frágil repetido en los 3 flujos con hilo.
-33. Migración 6 carga toda la tabla en memoria (patrón riesgoso a futuro).
+24. [x] `tipo_desde_texto` triplicado en 3 pantallas.
+25. [x] Bucle de términos `clave:valor` duplicado en 3 pantallas (falta el helper).
+26. [x] Verificación de login duplicada entre servicio y TUI.
+27. [x] Chequeo UNIQUE duplicado en 3 servicios.
+28. [x] `mover()` duplicada letra por letra en 2 pantallas.
+29. [x] Bloque de transacción `Immediate` + `validar_reloj` duplicado 2 veces.
+30. [x] `aplicar_retencion` aborta a mitad de camino, error descartado en ambos callers.
+31. [x] Limpieza de sentinelas / `.partial` inválido descartan su propio error (2 hallazgos).
+32. [x] `take().unwrap()` frágil repetido en los 3 flujos con hilo.
+33. [x] Migración 6 carga toda la tabla en memoria (patrón riesgoso a futuro) — sólo
+    documentado, no se puede reescribir sin riesgo (una migración ya publicada no se toca).
 34. [x] `UsuarioService::actualizar` es código muerto.
 35. [x] `SelectMenu`/`SelectMenuState` sin ningún consumidor real.
 
@@ -207,63 +208,63 @@ listados completos en las secciones de abajo.
 
 ## Deuda técnica / duplicación
 
-- [ ] **Bloque de spawn de hilo para hashear duplicado literalmente 3 veces.**
+- [x] **Bloque de spawn de hilo para hashear duplicado literalmente 3 veces.**
   `src/tui/app.rs:1185` (`iniciar_creacion_usuario`, `iniciar_cambio_password`,
-  `iniciar_root_inicial`). Idéntico carácter por carácter salvo la variable `password`,
-  sin una función auxiliar común.
-- [ ] **`aplicar_retencion` aborta a mitad de camino y el fallo se pierde en ambos
-  callers.** `src/database/backup.rs:382`. Usa `?` dentro de un loop de `remove_file`, así
-  que el primer archivo bloqueado detiene todo sin borrar el resto; los dos únicos call
-  sites (`application.rs`, `connection.rs`) descartan el `Result` con `let _ =`.
-- [ ] **Limpieza de sentinelas de una restauración anterior descarta su error.**
-  `src/database/backup.rs:223`. Si falla en silencio, el siguiente intento de restaurar
-  falla más adelante con un error genérico sin pista de la causa real.
-- [ ] **Limpieza de un `.partial` inválido descarta su propio error.**
-  `src/database/backup.rs:179`. Contradice la garantía documentada de "nunca deja un
-  `.partial` atrás".
-- [ ] **Patrón `take().unwrap()` frágil repetido en los 3 flujos con hilo.**
-  `src/tui/app.rs:1200` (y `:1248`, `:1288`). Chequean `Some` con un `let-else` y después
-  vuelven a hacer `.take().unwrap()` en vez de un único `if let Some(...) =
-  self.xxx.take()`. Sound hoy, pero un panic latente si una edición futura inserta algo
-  entre esas dos líneas.
-- [ ] **Migración 6 carga toda la tabla `registro_ingresos` en memoria.**
-  `src/database/schema.rs:154`. Tabla de solo-inserción que crece indefinidamente; sienta
-  un patrón riesgoso para una futura migración sobre una tabla ya más grande.
+  `iniciar_root_inicial`). **Reparado:** extraído a `App::generar_hash_en_hilo`.
+- [x] **`aplicar_retencion` aborta a mitad de camino y el fallo se pierde en ambos
+  callers.** `src/database/backup.rs:382`. **Reparado:** ahora es best-effort por archivo
+  (sigue borrando el resto de sobrantes aunque uno esté bloqueado).
+- [x] **Limpieza de sentinelas de una restauración anterior descarta su error.**
+  `src/database/backup.rs:223`. **Reparado:** ahora propaga el error si el sentinela existe
+  y no se puede borrar (sólo se ignora `NotFound`, el caso normal).
+- [x] **Limpieza de un `.partial` inválido descarta su propio error.**
+  `src/database/backup.rs:179`. **Reparado:** nueva variante `RespaldoError::LimpiezaFallida`
+  que adjunta el error original en vez de descartar el fallo de limpieza.
+- [x] **Patrón `take().unwrap()` frágil repetido en los 3 flujos con hilo.**
+  `src/tui/app.rs:1200` (y `:1248`, `:1288`). **Reparado:** los 3 flujos usan un único
+  `match .take() { Some(...) => ..., None => ... }` (2 de los 3 ya habían quedado así al
+  consolidar `hilo_usuario_pendiente` en el Nivel 5; el de ROOT inicial se corrigió igual).
+- [x] **Migración 6 carga toda la tabla `registro_ingresos` en memoria.**
+  `src/database/schema.rs:154`. **No se toca la lógica** (una migración ya publicada no se
+  reescribe) — se agregó un comentario de advertencia explícito para no repetir el patrón
+  en una migración futura sobre una tabla más grande.
 - [x] **`UsuarioService::actualizar` es código muerto.** `src/services/usuario_service.rs:126`.
   **Reparado:** eliminado junto con `UsuarioRepository::actualizar_identidad_y_rol` (que
   sólo él llamaba). Tenía más cobertura de la que el hallazgo original detectó — no sólo
   sus propios tests, sino 7 casos en `tests/root_inicial.rs` que ejercitan la protección
   del último ROOT activo — migrados a `actualizar_administracion` (el camino real de
   producción) en vez de perderse.
-- [ ] **Chequeo de restricción UNIQUE duplicado igual en tres servicios.**
+- [x] **Chequeo de restricción UNIQUE duplicado igual en tres servicios.**
   `src/services/usuario_service.rs:278` (y `contratista_service.rs`, `empresa_service.rs`).
-- [ ] **Mapeo `TipoIngreso` ↔ texto SQL duplicado ~6 veces en 4 archivos.**
+  **Reparado:** movido a `DatabaseError::es_constraint_unique`.
+- [x] **Mapeo `TipoIngreso` ↔ texto SQL duplicado ~6 veces en 4 archivos.**
   `src/database/repositories/contratista_repository.rs:33` (y `queries/contratistas.rs`,
-  `registro_ingreso_repository.rs`, `queries/ingresos.rs`). Ningún match "texto→enum" es
-  exhaustivo, así que agregar una variante nueva no obliga a actualizarlos todos.
-- [ ] **Bloque de transacción `Immediate` + `validar_reloj` duplicado literalmente dos
-  veces.** `src/application.rs:217` (`registrar_ingreso` y `registrar_salida`).
-- [ ] **Verificación de login duplicada entre el servicio y la TUI.**
-  `src/services/autenticacion_service.rs:56`. `autenticar()` sólo la usan los tests; el
-  caller real (`app.rs`) copió a mano el mismo `match` para poder correrlo en un hilo.
-- [ ] **`mover()` duplicada letra por letra entre dos pantallas.**
-  `src/tui/nuevo_ingreso/state.rs:243` y `src/tui/salida_rapida/state.rs:139`. Idénticas
-  salvo el nombre del vector.
-- [ ] **`tipo_desde_texto` triplicado en 3 archivos.** `src/tui/activos/state.rs:94` (y
-  `contratistas/state.rs`, `historial/filtros.rs`). El mismo intérprete `clave:valor` para
-  tipo, copiado de forma independiente en cada pantalla.
-- [ ] **`TipoIngreso` sin `as_str`/`FromStr`, duplicado hasta dentro de un mismo archivo.**
-  `src/database/repositories/contratista_repository.rs:81`. El mapeo texto↔enum está
-  duplicado dos veces en este único archivo (líneas 81-84 y 172-175), además de en los
-  otros 3-4 archivos ya señalados arriba (`Mapeo TipoIngreso ↔ texto SQL`).
+  `registro_ingreso_repository.rs`, `queries/ingresos.rs`). **Reparado:**
+  `TipoIngreso::as_str_sql`/`from_str_sql` únicos, usados en los 4 archivos.
+- [x] **Bloque de transacción `Immediate` + `validar_reloj` duplicado literalmente dos
+  veces.** `src/application.rs:217` (`registrar_ingreso` y `registrar_salida`). **Reparado:**
+  extraído a `AppCore::en_transaccion_con_reloj_validado`.
+- [x] **Verificación de login duplicada entre el servicio y la TUI.**
+  `src/services/autenticacion_service.rs:56`. **Reparado:** extraído a la función libre
+  `verificar_candidato`, usada tanto por `autenticar()` como por el hilo de `app.rs`.
+- [x] **`mover()` duplicada letra por letra entre dos pantallas.**
+  `src/tui/nuevo_ingreso/state.rs:243` y `src/tui/salida_rapida/state.rs:139`. **Reparado:**
+  extraído a `ui_kit::mover_seleccion`.
+- [x] **`tipo_desde_texto` triplicado en 3 archivos.** `src/tui/activos/state.rs:94` (y
+  `contratistas/state.rs`, `historial/filtros.rs`). **Reparado:** movido a
+  `TipoIngreso::from_str_filtro`.
+- [x] **`TipoIngreso` sin `as_str`/`FromStr`, duplicado hasta dentro de un mismo archivo.**
+  `src/database/repositories/contratista_repository.rs:81`. **Reparado:** mismo fix que el
+  mapeo SQL de arriba (`as_str_sql`/`from_str_sql`).
 - [x] **`SelectMenu`/`SelectMenuState` no tiene ningún consumidor real.**
   `src/tui/ui_kit/select_menu.rs`. 149 líneas con navegación y tests, sin ningún caso de
   uso en producción ni en `examples/`. **Reparado:** módulo eliminado y su re-export en
   `ui_kit/mod.rs` quitado.
-- [ ] **Bucle orquestador de términos `clave:valor` duplicado en 3 pantallas.**
+- [x] **Bucle orquestador de términos `clave:valor` duplicado en 3 pantallas.**
   `src/tui/ui_kit/query_lang.rs` (falta el helper) — el bucle que separa términos libres de
   términos con clave se repite literal en `activos`, `contratistas` e `historial/filtros.rs`
-  en vez de vivir una sola vez en `query_lang.rs`.
+  en vez de vivir una sola vez en `query_lang.rs`. **Reparado:** extraído a
+  `query_lang::resolver_terminos`.
 
 ## Magia / números y comportamientos implícitos
 

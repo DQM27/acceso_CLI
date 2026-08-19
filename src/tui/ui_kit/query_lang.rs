@@ -61,6 +61,32 @@ pub fn reconstruir_clave(term: &Term) -> String {
     format!("{prefijo}{clave}:{valor}")
 }
 
+/// Bucle común a toda pantalla con búsqueda `clave:valor`: separa términos
+/// libres de términos con clave, mutando `filtro` vía `aplicar_clave` para
+/// cada uno con clave — lo no reconocido (o rechazado por `aplicar_clave`,
+/// que devuelve `false` para eso) se reconstruye como texto libre en vez de
+/// aplicarse a medias. Devuelve el texto libre acumulado, unido con espacios.
+/// Antes este mismo bucle estaba copiado igual en 3 pantallas
+/// (`activos`, `contratistas`, `historial`); cada una sólo aporta su propio
+/// resolutor de claves — este módulo sigue sin saber qué claves existen.
+pub fn resolver_terminos<F>(
+    texto: &str,
+    filtro: &mut F,
+    mut aplicar_clave: impl FnMut(&mut F, &Term) -> bool,
+) -> String {
+    let mut libres = Vec::new();
+    for term in analizar(texto).terms {
+        if term.key.is_none() {
+            libres.push(texto_libre(&term));
+            continue;
+        }
+        if !aplicar_clave(filtro, &term) {
+            libres.push(reconstruir_clave(&term));
+        }
+    }
+    libres.join(" ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -22,17 +22,10 @@ mod tests;
 /// texto libre para nombre/cédula/gafete.
 fn parsear_consulta(texto: &str, empresas: &[Empresa]) -> (FiltroIngresosActivos, String) {
     let mut filtro = FiltroIngresosActivos::default();
-    let mut libres = Vec::new();
-    for term in query_lang::analizar(texto).terms {
-        if term.key.is_none() {
-            libres.push(query_lang::texto_libre(&term));
-            continue;
-        }
-        if !aplicar_clave(&mut filtro, &term, empresas) {
-            libres.push(query_lang::reconstruir_clave(&term));
-        }
-    }
-    (filtro, libres.join(" "))
+    let libres = query_lang::resolver_terminos(texto, &mut filtro, |f, term| {
+        aplicar_clave(f, term, empresas)
+    });
+    (filtro, libres)
 }
 
 fn aplicar_clave(f: &mut FiltroIngresosActivos, term: &query_lang::Term, empresas: &[Empresa]) -> bool {
@@ -55,7 +48,7 @@ fn aplicar_clave(f: &mut FiltroIngresosActivos, term: &query_lang::Term, empresa
         "tipo" => {
             let Some(reconocidos) = valores
                 .iter()
-                .map(|v| tipo_desde_texto(v))
+                .map(|v| TipoIngreso::from_str_filtro(v))
                 .collect::<Option<Vec<_>>>()
             else {
                 return false;
@@ -88,16 +81,6 @@ fn aplicar_clave(f: &mut FiltroIngresosActivos, term: &query_lang::Term, empresa
             None => false,
         },
         _ => false,
-    }
-}
-
-fn tipo_desde_texto(v: &str) -> Option<TipoIngreso> {
-    match v.to_lowercase().as_str() {
-        "praind" => Some(TipoIngreso::Praind),
-        "inhouse" | "in-house" | "in_house" => Some(TipoIngreso::InHouse),
-        "correo" | "porcorreo" => Some(TipoIngreso::PorCorreo),
-        "swat" => Some(TipoIngreso::Swat),
-        _ => None,
     }
 }
 

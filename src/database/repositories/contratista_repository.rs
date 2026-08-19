@@ -30,19 +30,12 @@ impl<'a> SqliteContratistaRepository<'a> {
 fn convertir_fila(row: &Row) -> rusqlite::Result<Contratista> {
     let tipo_ingreso_texto: String = row.get(4)?;
 
-    let tipo_ingreso = match tipo_ingreso_texto.as_str() {
-        "PRAIND" => TipoIngreso::Praind,
-        "IN_HOUSE" => TipoIngreso::InHouse,
-        "POR_CORREO" => TipoIngreso::PorCorreo,
-        "SWAT" => TipoIngreso::Swat,
-
-        _ => {
-            return Err(rusqlite::Error::InvalidColumnType(
-                4,
-                "tipo_ingreso".to_string(),
-                rusqlite::types::Type::Text,
-            ));
-        }
+    let Some(tipo_ingreso) = TipoIngreso::from_str_sql(&tipo_ingreso_texto) else {
+        return Err(rusqlite::Error::InvalidColumnType(
+            4,
+            "tipo_ingreso".to_string(),
+            rusqlite::types::Type::Text,
+        ));
     };
 
     let fecha_texto: Option<String> = row.get(5)?;
@@ -77,12 +70,7 @@ impl<'a> ContratistaRepository for SqliteContratistaRepository<'a> {
             .fecha_vencimiento_praind
             .map(|fecha| fecha.format("%Y-%m-%d").to_string());
 
-        let tipo_ingreso = match contratista.tipo_ingreso {
-            TipoIngreso::Praind => "PRAIND",
-            TipoIngreso::InHouse => "IN_HOUSE",
-            TipoIngreso::PorCorreo => "POR_CORREO",
-            TipoIngreso::Swat => "SWAT",
-        };
+        let tipo_ingreso = contratista.tipo_ingreso.as_str_sql();
 
         self.connection.execute(
             "
@@ -168,12 +156,7 @@ impl<'a> ContratistaRepository for SqliteContratistaRepository<'a> {
             .fecha_vencimiento_praind
             .map(|fecha| fecha.format("%Y-%m-%d").to_string());
 
-        let tipo_ingreso = match contratista.tipo_ingreso {
-            TipoIngreso::Praind => "PRAIND",
-            TipoIngreso::InHouse => "IN_HOUSE",
-            TipoIngreso::PorCorreo => "POR_CORREO",
-            TipoIngreso::Swat => "SWAT",
-        };
+        let tipo_ingreso = contratista.tipo_ingreso.as_str_sql();
 
         self.connection.execute(
             "

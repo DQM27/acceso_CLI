@@ -1147,21 +1147,27 @@ impl App {
             Ok(candidato) => {
                 let (emisor, receptor) = std::sync::mpsc::channel();
                 std::thread::spawn(move || {
-                    let resultado =
-                        match crate::services::password::verificar_password(
-                            &password,
-                            &candidato.password_hash,
-                        ) {
-                            Ok(true) => Ok(candidato.sesion),
-                            Ok(false) => Err(AutenticacionError::CredencialesInvalidas),
-                            Err(_) => Err(AutenticacionError::HashInvalido),
-                        };
+                    let resultado = crate::services::autenticacion_service::verificar_candidato(
+                        candidato, &password,
+                    );
                     let _ = emisor.send(resultado);
                 });
                 self.autenticacion_pendiente = Some(receptor);
             }
             Err(error) => self.login.completar_validacion(Some(error.to_string())),
         }
+    }
+
+    /// Calcula el hash de Argon2 de `password` en un hilo aparte y devuelve el
+    /// receptor para sondear el resultado sin bloquear — usado por los 3 flujos
+    /// que crean/cambian una credencial (crear usuario, cambiar contraseña,
+    /// ROOT inicial).
+    fn generar_hash_en_hilo(password: String) -> ReceptorHash {
+        let (emisor, receptor) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = emisor.send(crate::services::password::generar_hash(&password));
+        });
+        receptor
     }
 
     /// Valida rápido (sólo SQLite) y, si pasa, calcula el hash de Argon2 en un hilo
@@ -1192,11 +1198,7 @@ impl App {
             rol: input.rol,
             activo: input.activo,
         };
-        let password = input.password;
-        let (emisor, receptor) = std::sync::mpsc::channel();
-        std::thread::spawn(move || {
-            let _ = emisor.send(crate::services::password::generar_hash(&password));
-        });
+        let receptor = Self::generar_hash_en_hilo(input.password);
         self.hilo_usuario_pendiente =
             Some(HiloUsuarioPendiente::Creacion(receptor, datos, nombre));
         self.usuarios.marcar_guardando();
@@ -1220,10 +1222,7 @@ impl App {
                 .completar_password(Err(mensaje_usuario(error)), &nombre);
             return;
         }
-        let (emisor, receptor) = std::sync::mpsc::channel();
-        std::thread::spawn(move || {
-            let _ = emisor.send(crate::services::password::generar_hash(&password));
-        });
+        let receptor = Self::generar_hash_en_hilo(password);
         self.hilo_usuario_pendiente =
             Some(HiloUsuarioPendiente::CambioPassword(receptor, id, nombre));
         self.usuarios.marcar_guardando();
@@ -1290,11 +1289,7 @@ impl App {
             self.configuracion_inicial.completar_con_error(error.to_string());
             return;
         }
-        let password = solicitud.password.clone();
-        let (emisor, receptor) = std::sync::mpsc::channel();
-        std::thread::spawn(move || {
-            let _ = emisor.send(crate::services::password::generar_hash(&password));
-        });
+        let receptor = Self::generar_hash_en_hilo(solicitud.password.clone());
         self.root_inicial_pendiente = Some((receptor, solicitud));
     }
 
@@ -1305,7 +1300,9 @@ impl App {
         let Ok(resultado_hash) = receptor.try_recv() else {
             return;
         };
-        let (_, solicitud) = self.root_inicial_pendiente.take().unwrap();
+        let Some((_, solicitud)) = self.root_inicial_pendiente.take() else {
+            return;
+        };
         match resultado_hash {
             Ok(hash) => {
                 let input = CrearRootInicialInput {

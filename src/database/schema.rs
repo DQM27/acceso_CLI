@@ -173,6 +173,13 @@ fn aplicar_migracion(
     transaction.execute_batch(&format!("PRAGMA user_version = {nueva_version}"))
 }
 
+/// Carga toda `registro_ingresos` en memoria para normalizar sus fechas
+/// (tabla de solo-inserción, crece indefinidamente). Aceptable aquí porque
+/// ya corrió y quedó fijada — una migración, una vez publicada, no se
+/// reescribe (cualquier base que ya esté en `user_version >= 6` nunca vuelve
+/// a ejecutar esta función). **No repetir este patrón en una migración
+/// nueva** sobre esta misma tabla u otra que pueda crecer sin límite: usar
+/// lotes (`LIMIT`/`OFFSET` o un cursor) en vez de cargar todo de una vez.
 fn aplicar_migracion_6(transaction: &Transaction<'_>) -> rusqlite::Result<()> {
     let movimientos = {
         let mut statement = transaction

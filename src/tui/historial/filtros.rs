@@ -94,16 +94,6 @@ pub(super) fn construir(
     })
 }
 
-fn tipo_desde_texto(v: &str) -> Option<TipoIngreso> {
-    match v.to_lowercase().as_str() {
-        "praind" => Some(TipoIngreso::Praind),
-        "inhouse" | "in-house" | "in_house" => Some(TipoIngreso::InHouse),
-        "correo" | "porcorreo" => Some(TipoIngreso::PorCorreo),
-        "swat" => Some(TipoIngreso::Swat),
-        _ => None,
-    }
-}
-
 fn estado_desde_texto(v: &str) -> Option<EstadoMovimiento> {
     match v.to_lowercase().as_str() {
         "activos" | "activo" | "dentro" => Some(EstadoMovimiento::Activos),
@@ -129,17 +119,10 @@ pub(super) fn parsear_consulta(
     empresas: &[Empresa],
 ) -> (FiltrosHistorial, String) {
     let mut filtros = base.clone();
-    let mut libres = Vec::new();
-    for term in query_lang::analizar(texto).terms {
-        if term.key.is_none() {
-            libres.push(query_lang::texto_libre(&term));
-            continue;
-        }
-        if !aplicar_clave(&mut filtros, &term, empresas) {
-            libres.push(query_lang::reconstruir_clave(&term));
-        }
-    }
-    (filtros, libres.join(" "))
+    let libres = query_lang::resolver_terminos(texto, &mut filtros, |f, term| {
+        aplicar_clave(f, term, empresas)
+    });
+    (filtros, libres)
 }
 
 /// Aplica un término `clave:valor` ya interpretado sobre `f`. Devuelve
@@ -166,7 +149,7 @@ fn aplicar_clave(f: &mut FiltrosHistorial, term: &Term, empresas: &[Empresa]) ->
         "tipo" => {
             let Some(reconocidos) = valores
                 .iter()
-                .map(|v| tipo_desde_texto(v))
+                .map(|v| TipoIngreso::from_str_filtro(v))
                 .collect::<Option<Vec<_>>>()
             else {
                 return false;

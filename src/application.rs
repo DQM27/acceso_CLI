@@ -209,6 +209,29 @@ impl AppCore {
         )
     }
 
+    /// Abre una transacción `Immediate` (el bloqueo se adquiere antes de la
+    /// primera lectura definitiva, así los repositorios creados sobre ella
+    /// validan e insertan contra el mismo estado de SQLite), valida que el
+    /// reloj no haya retrocedido, corre `operar` y confirma. Compartido por
+    /// `registrar_ingreso` y `registrar_salida` — antes cada uno repetía este
+    /// mismo armazón letra por letra.
+    fn en_transaccion_con_reloj_validado<T>(
+        &self,
+        operar: impl FnOnce(
+            &Transaction<'_>,
+            chrono::DateTime<chrono::Utc>,
+        ) -> Result<T, RegistroIngresoServiceError>,
+    ) -> Result<T, RegistroIngresoServiceError> {
+        let ahora = self.reloj.ahora_utc();
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        validar_reloj(&transaction, ahora)?;
+        let resultado = operar(&transaction, ahora)?;
+        transaction.commit().map_err(DatabaseError::from)?;
+        Ok(resultado)
+    }
+
     pub fn registrar_ingreso(
         &self,
         contratista_id: i64,
@@ -216,29 +239,17 @@ impl AppCore {
         gafete: Option<i64>,
         usuario_id: i64,
     ) -> Result<ResultadoRegistroEntrada, RegistroIngresoServiceError> {
-        let ahora = self.reloj.ahora_utc();
-        // El bloqueo se adquiere antes de la primera lectura definitiva. Así, los
-        // repositorios creados sobre esta transacción validan e insertan contra el
-        // mismo estado de SQLite.
-        let transaction =
-            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
-                .map_err(DatabaseError::from)?;
-        validar_reloj(&transaction, ahora)?;
-
-        let resultado = {
-            let contratistas = SqliteContratistaRepository::new(&transaction);
-            let registros = SqliteRegistroIngresoRepository::new(&transaction);
+        self.en_transaccion_con_reloj_validado(|transaction, ahora| {
+            let contratistas = SqliteContratistaRepository::new(transaction);
+            let registros = SqliteRegistroIngresoRepository::new(transaction);
             RegistroIngresoService::new(&contratistas, &registros).registrar_entrada(
                 contratista_id,
                 medio,
                 gafete,
                 usuario_id,
                 ahora,
-            )?
-        };
-
-        transaction.commit().map_err(DatabaseError::from)?;
-        Ok(resultado)
+            )
+        })
     }
 
     pub fn listar_ingresos_activos(
@@ -262,19 +273,12 @@ impl AppCore {
         id: i64,
         usuario: i64,
     ) -> Result<(), RegistroIngresoServiceError> {
-        let ahora = self.reloj.ahora_utc();
-        let transaction =
-            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
-                .map_err(DatabaseError::from)?;
-        validar_reloj(&transaction, ahora)?;
-        {
-            let contratistas = SqliteContratistaRepository::new(&transaction);
-            let registros = SqliteRegistroIngresoRepository::new(&transaction);
+        self.en_transaccion_con_reloj_validado(|transaction, ahora| {
+            let contratistas = SqliteContratistaRepository::new(transaction);
+            let registros = SqliteRegistroIngresoRepository::new(transaction);
             RegistroIngresoService::new(&contratistas, &registros)
-                .registrar_salida(id, ahora, usuario)?;
-        }
-        transaction.commit().map_err(DatabaseError::from)?;
-        Ok(())
+                .registrar_salida(id, ahora, usuario)
+        })
     }
 
     pub fn buscar_empresas(

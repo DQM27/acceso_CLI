@@ -136,7 +136,7 @@ impl ContratistasQuery for SqliteContratistasQuery<'_> {
             [None; TipoIngreso::ALL.len()];
         if let Some(tipos) = &filtro.tipos_incluidos {
             for (slot, tipo) in tipos_bind.iter_mut().zip(tipos.iter()) {
-                *slot = Some(tipo_a_texto(*tipo));
+                *slot = Some(tipo.as_str_sql());
             }
         }
         let [t0, t1, t2, t3] = tipos_bind;
@@ -184,23 +184,10 @@ impl ContratistasQuery for SqliteContratistasQuery<'_> {
     }
 }
 
-fn tipo_a_texto(tipo: TipoIngreso) -> &'static str {
-    match tipo {
-        TipoIngreso::Praind => "PRAIND",
-        TipoIngreso::InHouse => "IN_HOUSE",
-        TipoIngreso::PorCorreo => "POR_CORREO",
-        TipoIngreso::Swat => "SWAT",
-    }
-}
-
 fn convertir_fila(row: &Row<'_>) -> rusqlite::Result<ContratistaResumen> {
     let tipo_texto: String = row.get(5)?;
-    let tipo_ingreso = match tipo_texto.as_str() {
-        "PRAIND" => TipoIngreso::Praind,
-        "IN_HOUSE" => TipoIngreso::InHouse,
-        "POR_CORREO" => TipoIngreso::PorCorreo,
-        "SWAT" => TipoIngreso::Swat,
-        _ => return Err(tipo_invalido(5, "tipo_ingreso")),
+    let Some(tipo_ingreso) = TipoIngreso::from_str_sql(&tipo_texto) else {
+        return Err(tipo_invalido(5, "tipo_ingreso"));
     };
 
     let fecha_texto: Option<String> = row.get(6)?;

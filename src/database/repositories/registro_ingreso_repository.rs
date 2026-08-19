@@ -80,19 +80,12 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<RegistroIngreso> {
 
     let tipo_ingreso_texto: String = row.get(5)?;
 
-    let tipo_ingreso = match tipo_ingreso_texto.as_str() {
-        "PRAIND" => TipoIngreso::Praind,
-        "IN_HOUSE" => TipoIngreso::InHouse,
-        "POR_CORREO" => TipoIngreso::PorCorreo,
-        "SWAT" => TipoIngreso::Swat,
-
-        _ => {
-            return Err(rusqlite::Error::InvalidColumnType(
-                5,
-                "tipo_ingreso".to_string(),
-                rusqlite::types::Type::Text,
-            ));
-        }
+    let Some(tipo_ingreso) = TipoIngreso::from_str_sql(&tipo_ingreso_texto) else {
+        return Err(rusqlite::Error::InvalidColumnType(
+            5,
+            "tipo_ingreso".to_string(),
+            rusqlite::types::Type::Text,
+        ));
     };
 
     // El gafete es opcional.
@@ -143,12 +136,7 @@ impl<'a> RegistroIngresoRepository for SqliteRegistroIngresoRepository<'a> {
             MedioIngreso::Vehiculo => "VEHICULO",
         };
 
-        let tipo_ingreso = match registro.tipo_ingreso {
-            TipoIngreso::Praind => "PRAIND",
-            TipoIngreso::InHouse => "IN_HOUSE",
-            TipoIngreso::PorCorreo => "POR_CORREO",
-            TipoIngreso::Swat => "SWAT",
-        };
+        let tipo_ingreso = registro.tipo_ingreso.as_str_sql();
 
         let fecha_vencimiento_praind = registro
             .datos_historicos

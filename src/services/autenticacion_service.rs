@@ -53,11 +53,7 @@ where
         password: &str,
     ) -> Result<UsuarioSesion, AutenticacionError> {
         let candidato = self.buscar_candidato(cedula)?;
-        match verificar_password(password, &candidato.password_hash) {
-            Ok(true) => Ok(candidato.sesion),
-            Ok(false) => Err(AutenticacionError::CredencialesInvalidas),
-            Err(_) => Err(AutenticacionError::HashInvalido),
-        }
+        verificar_candidato(candidato, password)
     }
 
     /// Resuelve la cédula y confirma que el usuario está activo, sin verificar todavía la
@@ -85,5 +81,20 @@ where
             },
             password_hash: usuario.password_hash,
         })
+    }
+}
+
+/// Verifica `password` contra un candidato ya resuelto por `buscar_candidato`.
+/// Función libre (no depende de `&self`/repositorio) a propósito: la usa tanto
+/// `autenticar` como el hilo aparte que arma la TUI para correr Argon2 sin
+/// bloquear la UI — antes ese hilo copiaba a mano el mismo `match` de aquí.
+pub fn verificar_candidato(
+    candidato: CandidatoAutenticacion,
+    password: &str,
+) -> Result<UsuarioSesion, AutenticacionError> {
+    match verificar_password(password, &candidato.password_hash) {
+        Ok(true) => Ok(candidato.sesion),
+        Ok(false) => Err(AutenticacionError::CredencialesInvalidas),
+        Err(_) => Err(AutenticacionError::HashInvalido),
     }
 }

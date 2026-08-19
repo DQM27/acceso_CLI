@@ -93,6 +93,13 @@ pub enum RespaldoError {
         ruta_activa: PathBuf,
         ruta_previa: Option<PathBuf>,
     },
+    /// Un archivo temporal (`.partial` inválido) no se pudo borrar después de
+    /// un error real — el error original queda adjunto para no perder la
+    /// pista, en vez de descartar la falla de limpieza con `let _ =`.
+    LimpiezaFallida {
+        error_original: Box<RespaldoError>,
+        ruta: PathBuf,
+    },
 }
 
 impl std::fmt::Display for RespaldoError {
@@ -128,6 +135,11 @@ impl std::fmt::Display for RespaldoError {
                 }
                 Ok(())
             }
+            Self::LimpiezaFallida { error_original, ruta } => write!(
+                formatter,
+                "{error_original} (además, no se pudo borrar el archivo temporal {})",
+                ruta.display()
+            ),
         }
     }
 }
@@ -139,6 +151,7 @@ impl std::error::Error for RespaldoError {
             Self::Io(error) => Some(error),
             Self::ValidacionFallida(_) => None,
             Self::RollbackFallido { error_original, .. } => Some(error_original.as_ref()),
+            Self::LimpiezaFallida { error_original, .. } => Some(error_original.as_ref()),
         }
     }
 }
@@ -208,8 +221,15 @@ pub fn crear_respaldo(
 
     let validacion = validar_respaldo(&ruta_parcial)?;
     let ResultadoValidacion::Valido { .. } = &validacion else {
-        let _ = fs::remove_file(&ruta_parcial);
-        return Err(RespaldoError::ValidacionFallida(validacion));
+        let error_original = RespaldoError::ValidacionFallida(validacion);
+        return Err(if fs::remove_file(&ruta_parcial).is_ok() {
+            error_original
+        } else {
+            RespaldoError::LimpiezaFallida {
+                error_original: Box::new(error_original),
+                ruta: ruta_parcial,
+            }
+        });
     };
 
     let ruta_final = ruta_disponible(directorio_respaldos, &nombre_base, "db");
@@ -258,8 +278,17 @@ pub fn restaurar_respaldo(ruta_candidata: &Path, ruta_activa: &Path) -> Result<(
     let directorio = ruta_activa.parent().unwrap_or_else(|| Path::new("."));
     let ruta_temporal = directorio.join(".control_acceso_restauracion.tmp");
     let ruta_previa = directorio.join(".control_acceso_restauracion.previa");
-    let _ = fs::remove_file(&ruta_temporal);
-    let _ = fs::remove_file(&ruta_previa);
+    // A diferencia de otras limpiezas de este archivo, aquí sí se propaga:
+    // si el sentinela de una restauración anterior existe pero no se puede
+    // borrar (bloqueado, permisos), es mejor fallar aquí con un mensaje
+    // claro que dejar que `fs::copy`/`fs::rename` fallen más adelante sobre
+    // la misma ruta con un error genérico sin la pista real. `NotFound` (el
+    // caso normal, sin sentinela previo) no cuenta como fallo.
+    for ruta in [&ruta_temporal, &ruta_previa] {
+        if ruta.exists() {
+            fs::remove_file(ruta)?;
+        }
+    }
 
     // Paso 1: copiar la candidata a un temporal en el mismo directorio, sin
     // tocar todavía la base activa.
@@ -437,10 +466,15 @@ pub fn aplicar_retencion(
         .collect();
     let sobrantes = candidatos.split_off(limite.min(candidatos.len()));
 
+    // Best-effort por archivo, no por lote: un respaldo bloqueado (en uso,
+    // permisos) no debe impedir borrar el resto de los sobrantes. Los dos
+    // únicos callers ya tratan el resultado completo como best-effort
+    // (`let _ =`), así que abortar aquí con `?` sólo lograría borrar menos.
     let mut eliminados = Vec::with_capacity(sobrantes.len());
     for respaldo in sobrantes {
-        fs::remove_file(&respaldo.ruta)?;
-        eliminados.push(respaldo.ruta);
+        if fs::remove_file(&respaldo.ruta).is_ok() {
+            eliminados.push(respaldo.ruta);
+        }
     }
     Ok(eliminados)
 }

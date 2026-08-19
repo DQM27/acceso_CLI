@@ -5,7 +5,7 @@ use crate::{
     domain::resultado_acceso::{MotivoDenegacion, ResultadoAcceso},
     models::medio_ingreso::MedioIngreso,
     services::registro_ingreso_service::PreparacionIngreso,
-    tui::ui_kit::{StandardCommand, standard_command},
+    tui::ui_kit::{StandardCommand, mover_seleccion, standard_command},
 };
 
 #[path = "render.rs"]
@@ -247,16 +247,7 @@ impl NuevoIngresoState {
         AccionNuevoIngreso::Ninguna
     }
     fn mover(&mut self, d: isize) {
-        if self.contratistas.is_empty() {
-            self.seleccion = None
-        } else {
-            let i = self.seleccion.unwrap_or(0);
-            self.seleccion = Some(if d < 0 {
-                i.saturating_sub(1)
-            } else {
-                (i + 1).min(self.contratistas.len() - 1)
-            })
-        }
+        self.seleccion = mover_seleccion(self.seleccion, d, self.contratistas.len());
     }
     fn contratista(&self) -> Option<&ContratistaResumen> {
         let id = self.contratista_id?;

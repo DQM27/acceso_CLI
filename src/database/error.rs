@@ -38,6 +38,19 @@ impl std::fmt::Display for DatabaseError {
     }
 }
 
+impl DatabaseError {
+    /// Detecta una violación de restricción `UNIQUE` (cédula/nombre duplicado,
+    /// etc.), sin importar cuál columna — el llamador ya sabe cuál era.
+    /// Antes copiado igual en 3 servicios (usuario, contratista, empresa).
+    pub fn es_constraint_unique(&self) -> bool {
+        matches!(
+            self,
+            DatabaseError::Sqlite(rusqlite::Error::SqliteFailure(codigo, _))
+                if codigo.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
+        )
+    }
+}
+
 impl std::error::Error for DatabaseError {}
 
 impl From<rusqlite::Error> for DatabaseError {

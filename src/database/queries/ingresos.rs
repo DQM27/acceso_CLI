@@ -180,7 +180,7 @@ impl IngresosQuery for SqliteIngresosQuery<'_> {
             [None; TipoIngreso::ALL.len()];
         if let Some(tipos) = &filtro.tipos_incluidos {
             for (slot, tipo) in tipos_bind.iter_mut().zip(tipos.iter()) {
-                *slot = Some(tipo_a_texto(*tipo));
+                *slot = Some(tipo.as_str_sql());
             }
         }
         let [t0, t1, t2, t3] = tipos_bind;
@@ -223,7 +223,7 @@ impl IngresosQuery for SqliteIngresosQuery<'_> {
             [None; TipoIngreso::ALL.len()];
         if let Some(tipos) = &filtro.tipos_incluidos {
             for (slot, tipo) in tipos_bind.iter_mut().zip(tipos.iter()) {
-                *slot = Some(tipo_a_texto(*tipo));
+                *slot = Some(tipo.as_str_sql());
             }
         }
         let [t0, t1, t2, t3] = tipos_bind;
@@ -454,13 +454,7 @@ fn motivo_desde_fila(
 
 fn tipo_desde_fila(row: &Row<'_>, indice: usize) -> rusqlite::Result<TipoIngreso> {
     let valor: String = row.get(indice)?;
-    match valor.as_str() {
-        "PRAIND" => Ok(TipoIngreso::Praind),
-        "IN_HOUSE" => Ok(TipoIngreso::InHouse),
-        "POR_CORREO" => Ok(TipoIngreso::PorCorreo),
-        "SWAT" => Ok(TipoIngreso::Swat),
-        _ => Err(tipo_invalido(indice, "tipo_ingreso")),
-    }
+    TipoIngreso::from_str_sql(&valor).ok_or_else(|| tipo_invalido(indice, "tipo_ingreso"))
 }
 
 fn medio_desde_fila(row: &Row<'_>, indice: usize) -> rusqlite::Result<MedioIngreso> {
@@ -514,15 +508,6 @@ fn parsear_fecha_hora(valor: &str, indice: usize) -> rusqlite::Result<DateTime<U
 
 fn patron_like(texto: &str) -> String {
     format!("%{}%", texto.trim())
-}
-
-fn tipo_a_texto(tipo: TipoIngreso) -> &'static str {
-    match tipo {
-        TipoIngreso::Praind => "PRAIND",
-        TipoIngreso::InHouse => "IN_HOUSE",
-        TipoIngreso::PorCorreo => "POR_CORREO",
-        TipoIngreso::Swat => "SWAT",
-    }
 }
 
 fn medio_a_texto(medio: MedioIngreso) -> &'static str {

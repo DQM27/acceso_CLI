@@ -252,7 +252,7 @@ where
 }
 
 fn mapear_duplicado_usuario(error: DatabaseError) -> UsuarioServiceError {
-    if es_constraint_unique(&error) {
+    if error.es_constraint_unique() {
         UsuarioServiceError::CedulaDuplicada
     } else {
         UsuarioServiceError::Database(error)
@@ -268,14 +268,6 @@ fn mapear_escritura_usuario(error: DatabaseError) -> UsuarioServiceError {
         DatabaseError::UltimoRootActivo => UsuarioServiceError::UltimoRootActivo,
         error => mapear_duplicado_usuario(error),
     }
-}
-
-fn es_constraint_unique(error: &DatabaseError) -> bool {
-    matches!(
-        error,
-        DatabaseError::Sqlite(rusqlite::Error::SqliteFailure(codigo, _))
-            if codigo.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
-    )
 }
 
 fn normalizar_requerido(
