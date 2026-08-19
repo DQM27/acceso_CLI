@@ -87,8 +87,9 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
         ",
     )?;
 
-    verificar_identidad_de_archivo(connection)?;
+    rechazar_archivo_ajeno(connection)?;
     verificar_integridad_rapida(connection)?;
+    adoptar_application_id(connection)?;
 
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     let mut version: i64 = transaction.query_row("PRAGMA user_version", [], |row| row.get(0))?;
@@ -136,17 +137,29 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
 /// (`connection::respaldar_antes_de_migrar`), para no terminar copiando a
 /// `backups/` un archivo que ni siquiera es nuestro.
 pub(crate) fn verificar_archivo_propio(connection: &Connection) -> Result<(), SchemaError> {
-    verificar_identidad_de_archivo(connection)?;
+    rechazar_archivo_ajeno(connection)?;
     verificar_integridad_rapida(connection)
 }
 
-/// Rechaza un archivo SQLite ajeno; adopta `APPLICATION_ID` en una base
-/// nueva o en una creada antes de que existiera esta comprobación (`0`).
-fn verificar_identidad_de_archivo(connection: &Connection) -> Result<(), SchemaError> {
+/// Rechaza un archivo SQLite ajeno (`application_id` de otra app). No
+/// escribe nada — sólo lee, a propósito: adoptar el sello (`PRAGMA
+/// application_id = ...`) es responsabilidad de [`adoptar_application_id`],
+/// que debe correr después de `quick_check`, no antes.
+fn rechazar_archivo_ajeno(connection: &Connection) -> Result<(), SchemaError> {
     let id: i32 = connection.query_row("PRAGMA application_id", [], |row| row.get(0))?;
     if id != 0 && id != APPLICATION_ID {
         return Err(SchemaError::BaseAjena);
     }
+    Ok(())
+}
+
+/// Adopta `APPLICATION_ID` en una base nueva o en una creada antes de que
+/// existiera esta comprobación (`id == 0`). Sólo se llama tras confirmar,
+/// vía `quick_check`, que el archivo no está dañado — de lo contrario un
+/// archivo corrupto o ajeno con `application_id == 0` por casualidad
+/// quedaría "adoptado" como propio antes de rechazarlo.
+fn adoptar_application_id(connection: &Connection) -> Result<(), SchemaError> {
+    let id: i32 = connection.query_row("PRAGMA application_id", [], |row| row.get(0))?;
     if id == 0 {
         connection.execute_batch(&format!("PRAGMA application_id = {APPLICATION_ID};"))?;
     }

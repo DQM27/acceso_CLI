@@ -36,15 +36,21 @@ Simple = un cambio local, bajo riesgo, sin tocar lógica compartida.
 13. [x] Motivo de `PermitidoConAdvertencia` adivinado/hardcodeado fuera del dominio.
 14. [x] ROOT inicial se cuelga para siempre si algún día se usa `App::run` sin core.
 
-**Nivel 3 — Deuda estructural (separación de responsabilidades)**
-15. `application_id` se adopta antes de verificar integridad del archivo.
-16. Regla "último ROOT activo" vive en el repositorio, no en el servicio.
-17. `validar_reloj` mezcla SQL crudo en la fachada `AppCore`.
-18. `RelojRetrocedido` declarado en el servicio pero generado en `AppCore`.
-19. Empresas no valida su formulario; Contratistas sí.
-20. `VERSION_REGLAS_ACCESO` vive lejos de las reglas que versiona.
-21. **Nuevo:** `Empresa` sin campo `activo` — baja de empresa no revoca acceso de sus
-    contratistas (V1, prioridad baja, caso extremo).
+**Nivel 3 — Deuda estructural (separación de responsabilidades) — [x] reparado 15-20 (rama `fix/auditoria-nivel-1`); 21 pendiente por decisión explícita**
+15. [x] `application_id` se adopta antes de verificar integridad del archivo.
+16. [x] Regla "último ROOT activo" vive en el repositorio, no en el servicio — confirmado
+    intencional (atomicidad), documentado con la prueba que lo exige.
+17. [x] `validar_reloj` mezcla SQL crudo en la fachada `AppCore` — SQL movido a
+    `database::queries::ingresos::ultimo_instante_movimiento`.
+18. [x] `RelojRetrocedido` declarado en el servicio pero generado en `AppCore` — se intentó
+    mover al servicio, rompió un test de integración real, y se revirtió; queda documentado
+    como decisión intencional (comprobación de sistema, no regla de negocio puntual).
+19. [x] Empresas no valida su formulario; Contratistas sí — reparado, ahora valida igual.
+20. [x] `VERSION_REGLAS_ACCESO` vive lejos de las reglas que versiona — movida a
+    `domain::acceso`, re-exportada desde `models::registro_ingreso` para no romper imports.
+21. **Pendiente, por decisión explícita del usuario** (no es fix de código existente, es
+    funcionalidad nueva): `Empresa` sin campo `activo` — baja de empresa no revoca acceso de
+    sus contratistas (V1, prioridad baja, caso extremo).
 
 **Nivel 4 — Duplicación / código muerto (afecta mantenibilidad, no producción) — [x] reparado (rama `fix/auditoria-nivel-1`)**
 22. [x] Bloque de spawn de hilo para hashear duplicado 3 veces.
@@ -182,29 +188,35 @@ listados completos en las secciones de abajo.
 
 ## Separación de responsabilidades
 
-- [ ] **Se adopta el `application_id` antes de verificar integridad.**
-  `src/database/schema.rs:77`. `verificar_identidad_de_archivo` escribe el "sello" de la
-  app antes de que `verificar_integridad_rapida` corra el `quick_check`. Si la escritura
-  se completa pero el `quick_check` falla justo después, un archivo dañado o ajeno queda
-  "adoptado" como propio para siempre.
-- [ ] **La regla del "último ROOT activo" vive en el repositorio, no en el servicio.**
-  `src/database/repositories/usuario_repository.rs:121`. `SqliteUsuarioRepository` decide y
-  aplica la regla ella misma; los demás repositorios son CRUD puro y esa clase de
-  invariantes vive sólo en el service.
-- [ ] **`validar_reloj` mezcla SQL crudo y regla de negocio directo en la fachada.**
-  `src/application.rs:431`. Es la única consulta SQL de todo el codebase fuera de
-  `src/database/*`.
-- [ ] **`RegistroIngresoServiceError::RelojRetrocedido` se declara en el servicio pero
-  nunca lo genera.** `src/services/error.rs:201`. La regla que lo produce vive entera en
-  `AppCore::validar_reloj`, no en `RegistroIngresoService`.
-- [ ] **Empresas no valida el formulario; Contratistas sí.**
-  `src/tui/empresas/state.rs:283`. Dos pantallas CRUD equivalentes reparten la validación
-  distinto: Contratistas valida cédula/nombre/PRAIND en el propio `state.rs`; Empresas
-  envía el nombre tal cual, delegando todo al service.
-- [ ] **`VERSION_REGLAS_ACCESO` vive lejos de las reglas que versiona.**
-  `src/models/registro_ingreso.rs:6`. Declarada en una struct de persistencia, mientras que
-  `DIAS_ADVERTENCIA_PRAIND` y el orden de las 5 reglas de acceso viven en
-  `domain/acceso.rs`. Sin comentario ni test que fuerce subirla al cambiar la lógica real.
+- [x] **Se adopta el `application_id` antes de verificar integridad.**
+  `src/database/schema.rs:77`. **Reparado:** `rechazar_archivo_ajeno` (solo lectura) corre
+  antes de `verificar_integridad_rapida`; `adoptar_application_id` (la escritura) corre
+  después, sólo si el `quick_check` pasó.
+- [x] **La regla del "último ROOT activo" vive en el repositorio, no en el servicio.**
+  `src/database/repositories/usuario_repository.rs:121`. **Confirmado intencional, no se
+  mueve:** documentado con comentario explícito — la lectura del conteo y la escritura
+  comparten la misma transacción `Immediate` a propósito, para la misma prevención de
+  condición de carrera que `crear_root_inicial_atomico`; moverlo al servicio la reabriría
+  (`dos_conexiones_no_pueden_desactivar_ambos_roots` es la prueba que lo exige).
+- [x] **`validar_reloj` mezcla SQL crudo y regla de negocio directo en la fachada.**
+  `src/application.rs:431`. **Reparado:** el SQL se movió a
+  `database::queries::ingresos::ultimo_instante_movimiento`; `validar_reloj` en
+  `application.rs` quedó como regla pura sin SQL propio.
+- [x] **`RegistroIngresoServiceError::RelojRetrocedido` se declara en el servicio pero
+  nunca lo genera.** `src/services/error.rs:201`. **Se intentó mover a
+  `RegistroIngresoService`** (repositorio con nuevo método `ultimo_instante_movimiento`) —
+  rompió `tests/flujo_integracion.rs` porque ese test llama al servicio directo con datos de
+  prueba cuyos tiempos no representan un reloj real avanzando. Revertido; queda documentado
+  como decisión intencional (comprobación de sanidad de todo el sistema, no una regla de
+  negocio de una entrada/salida puntual).
+- [x] **Empresas no valida el formulario; Contratistas sí.**
+  `src/tui/empresas/state.rs:283`. **Reparado:** nueva función `construir` en
+  `empresas/state.rs` (mismo patrón que `contratistas::construir`) que valida y recorta el
+  nombre antes de despachar, con test nuevo para el caso vacío.
+- [x] **`VERSION_REGLAS_ACCESO` vive lejos de las reglas que versiona.**
+  `src/models/registro_ingreso.rs:6`. **Reparado:** movida a `domain::acceso`, junto a
+  `DIAS_ADVERTENCIA_PRAIND` y las 5 reglas; re-exportada desde `models::registro_ingreso`
+  para no romper los imports existentes.
 
 ## Deuda técnica / duplicación
 

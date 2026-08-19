@@ -3,7 +3,10 @@ use chrono::{DateTime, Utc};
 use super::medio_ingreso::MedioIngreso;
 use super::tipo_ingreso::TipoIngreso;
 
-pub const VERSION_REGLAS_ACCESO: i64 = 1;
+/// Definida junto a las 5 reglas de `verificar_acceso` que versiona, no aquí
+/// — ver `domain::acceso::VERSION_REGLAS_ACCESO`. Re-exportada para no
+/// romper a quien ya la importa de este camino (struct de persistencia).
+pub use crate::domain::acceso::VERSION_REGLAS_ACCESO;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResultadoIngresoRegistrado {

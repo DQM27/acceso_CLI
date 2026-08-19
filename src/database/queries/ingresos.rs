@@ -536,3 +536,28 @@ fn offset_sql(offset: usize) -> i64 {
 fn tipo_invalido(indice: usize, nombre: &str) -> rusqlite::Error {
     rusqlite::Error::InvalidColumnType(indice, nombre.to_owned(), rusqlite::types::Type::Text)
 }
+
+/// Instante más reciente entre todos los movimientos de entrada/salida
+/// registrados — `None` si nunca hubo ninguno. Usado por `AppCore` para
+/// detectar si el reloj del equipo retrocedió respecto al último movimiento
+/// conocido; vive aquí (no en `application.rs`) para que la única consulta
+/// SQL de esa validación quede junto al resto del acceso a `registro_ingresos`.
+pub fn ultimo_instante_movimiento(
+    connection: &Connection,
+) -> Result<Option<DateTime<Utc>>, DatabaseError> {
+    let ultima: Option<String> = connection.query_row(
+        "SELECT MAX(instante) FROM (
+            SELECT fecha_hora_ingreso AS instante FROM registro_ingresos
+            UNION ALL
+            SELECT fecha_hora_salida FROM registro_ingresos
+            WHERE fecha_hora_salida IS NOT NULL
+         )",
+        [],
+        |row| row.get(0),
+    )?;
+    ultima
+        .map(|texto| {
+            parsear_utc(&texto).map_err(|error| DatabaseError::FechaCorrupta(error.to_string()))
+        })
+        .transpose()
+}

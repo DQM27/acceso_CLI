@@ -281,14 +281,18 @@ impl EmpresasState {
                 formulario.error = None;
             }
             KeyCode::Enter => {
-                return match formulario.modo {
-                    ModoFormularioEmpresa::Crear => AccionEmpresas::Crear {
-                        nombre: formulario.nombre,
+                return match construir(&formulario) {
+                    Ok(nombre) => match formulario.modo {
+                        ModoFormularioEmpresa::Crear => AccionEmpresas::Crear { nombre },
+                        ModoFormularioEmpresa::Editar { id } => {
+                            AccionEmpresas::Actualizar { id, nombre }
+                        }
                     },
-                    ModoFormularioEmpresa::Editar { id } => AccionEmpresas::Actualizar {
-                        id,
-                        nombre: formulario.nombre,
-                    },
+                    Err(error) => {
+                        formulario.error = Some(error);
+                        self.modo = ModoEmpresas::Formulario(formulario);
+                        AccionEmpresas::Ninguna
+                    }
                 };
             }
             KeyCode::Char(c)
@@ -350,4 +354,14 @@ impl EmpresasState {
             .unwrap_or(0)
             .saturating_sub(capacidad.saturating_sub(1))
     }
+}
+
+/// Valida antes de despachar la acción, igual que `contratistas::construir` —
+/// antes esta pantalla enviaba `nombre` tal cual y dejaba toda la validación
+/// al service, la única de las 3 pantallas CRUD que lo hacía así.
+fn construir(f: &FormularioEmpresa) -> Result<String, String> {
+    if f.nombre.trim().is_empty() {
+        return Err("El nombre es obligatorio".into());
+    }
+    Ok(f.nombre.trim().to_string())
 }

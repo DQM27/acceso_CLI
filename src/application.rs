@@ -39,7 +39,7 @@ use crate::services::usuario_service::{
     ActualizarUsuarioInput, CrearRootInicialInput, CrearUsuarioInput, UsuarioConsultaService,
     UsuarioService,
 };
-use crate::tiempo::{Reloj, RelojSistema, fecha_costa_rica, parsear_utc};
+use crate::tiempo::{Reloj, RelojSistema, fecha_costa_rica};
 
 #[derive(Debug)]
 pub enum BootstrapError {
@@ -215,6 +215,16 @@ impl AppCore {
     /// reloj no haya retrocedido, corre `operar` y confirma. Compartido por
     /// `registrar_ingreso` y `registrar_salida` — antes cada uno repetía este
     /// mismo armazón letra por letra.
+    ///
+    /// La validación del reloj se queda aquí, en `AppCore`, y no en
+    /// `RegistroIngresoService` (que declara `RelojRetrocedido` pero no lo
+    /// genera) **a propósito**: es una comprobación de sanidad de todo el
+    /// sistema (¿el reloj de la máquina retrocedió respecto al último
+    /// movimiento conocido, sin importar de qué contratista?), no una regla
+    /// de negocio de una entrada/salida puntual. Moverla al servicio se
+    /// intentó y se revirtió — rompía tests de integración que llaman al
+    /// servicio directo con datos de prueba cuyos tiempos no representan un
+    /// reloj real avanzando (`tests/flujo_integracion.rs`).
     fn en_transaccion_con_reloj_validado<T>(
         &self,
         operar: impl FnOnce(
@@ -438,27 +448,20 @@ impl Drop for AppCore {
     }
 }
 
+/// Comprobación de sanidad de todo el sistema, no una regla de negocio de
+/// `RegistroIngresoService` (ver el comentario de
+/// `en_transaccion_con_reloj_validado`). Sin SQL propio —
+/// `ultimo_instante_movimiento` vive en `database::queries::ingresos`, junto
+/// al resto del acceso a `registro_ingresos`.
 fn validar_reloj(
     connection: &Connection,
     ahora: chrono::DateTime<chrono::Utc>,
 ) -> Result<(), RegistroIngresoServiceError> {
-    let ultima: Option<String> = connection
-        .query_row(
-            "SELECT MAX(instante) FROM (
-            SELECT fecha_hora_ingreso AS instante FROM registro_ingresos
-            UNION ALL
-            SELECT fecha_hora_salida FROM registro_ingresos
-            WHERE fecha_hora_salida IS NOT NULL
-         )",
-            [],
-            |row| row.get(0),
-        )
-        .map_err(DatabaseError::from)?;
-    let Some(ultima) = ultima else {
+    let Some(ultima) =
+        crate::database::queries::ingresos::ultimo_instante_movimiento(connection)?
+    else {
         return Ok(());
     };
-    let ultima = parsear_utc(&ultima)
-        .map_err(|error| DatabaseError::FechaCorrupta(error.to_string()))?;
     if ahora < ultima {
         return Err(RegistroIngresoServiceError::RelojRetrocedido);
     }

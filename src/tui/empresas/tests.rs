@@ -98,6 +98,18 @@ fn crear_y_actualizar_emiten_intenciones_sin_mutar_datos() {
 }
 
 #[test]
+fn nombre_vacio_o_solo_espacios_no_se_despacha_y_muestra_error() {
+    let mut s = EmpresasState::default();
+    s.handle_key(k(KeyCode::Char('N')));
+    escribir(&mut s, "   ");
+    assert_eq!(s.handle_key(k(KeyCode::Enter)), AccionEmpresas::Ninguna);
+    let ModoEmpresas::Formulario(f) = &s.modo else {
+        panic!()
+    };
+    assert_eq!(f.error.as_deref(), Some("El nombre es obligatorio"));
+}
+
+#[test]
 fn callbacks_exito_recargan_y_error_permanece_en_formulario() {
     let mut s = EmpresasState::default();
     s.handle_key(k(KeyCode::Char('N')));
