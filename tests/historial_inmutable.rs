@@ -60,6 +60,50 @@ fn preparar() -> (Connection, i64, i64, i64) {
     (connection, contratista_id, 1, 2)
 }
 
+/// Regresión del hallazgo #7 de `docs/auditoria-dominio-2026-08-20.md`: la
+/// decisión histórica debe poder reconstruirse sólo a partir del snapshot
+/// guardado, sin volver a consultar el estado actual de la empresa. Se
+/// registra la entrada con la empresa activa, se la desactiva *después*, y
+/// se confirma que el historial sigue mostrando el estado que tenía al
+/// momento del ingreso — ni la desactivación posterior lo cambia (sería
+/// justamente el bug que este hallazgo describía: el dato quedaba implícito
+/// en vez de guardado) ni queda ambiguo cuál era el estado real en ese
+/// momento.
+#[test]
+fn historial_reconstruye_el_estado_de_la_empresa_al_momento_del_ingreso() {
+    let (connection, contratista_id, usuario_entrada, _usuario_salida) = preparar();
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let registros = SqliteRegistroIngresoRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    servicio
+        .registrar_entrada(
+            contratista_id,
+            MedioIngreso::Caminando,
+            Some(18),
+            usuario_entrada,
+            fecha("2026-08-12 08:00:00"),
+        )
+        .unwrap();
+
+    // La empresa se desactiva después de registrada la entrada.
+    connection
+        .execute("UPDATE empresas SET activo = 0 WHERE id = 1", [])
+        .unwrap();
+
+    let historial = SqliteIngresosQuery::new(&connection)
+        .buscar_historial(&FiltroHistorial::nuevo(
+            fecha("2026-08-01 00:00:00"),
+            fecha("2026-09-01 00:00:00"),
+        ))
+        .unwrap();
+    assert_eq!(historial.items.len(), 1);
+    assert!(
+        historial.items[0].empresa_activa_snapshot,
+        "la empresa estaba activa al momento del ingreso, sin importar que se haya \
+         desactivado después"
+    );
+}
+
 #[test]
 fn cambios_maestros_no_reescriben_el_movimiento_historico() {
     let (connection, contratista_id, usuario_entrada, usuario_salida) = preparar();

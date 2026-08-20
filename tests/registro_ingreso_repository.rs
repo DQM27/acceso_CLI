@@ -112,6 +112,7 @@ fn crear_registro(contratista_id: i64, empresa_id: i64, usuario_id: i64) -> Nuev
             fecha_vencimiento_praind: Some(chrono::NaiveDate::from_ymd_opt(2030, 12, 31).unwrap()),
             es_personal_ruta: false,
             tiene_acceso: true,
+            empresa_activa: true,
             resultado_acceso: ResultadoIngresoRegistrado::Permitido,
             reglas_version: VERSION_REGLAS_ACCESO,
         },

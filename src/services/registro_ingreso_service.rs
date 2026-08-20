@@ -266,6 +266,7 @@ where
                 fecha_vencimiento_praind: contratista.fecha_vencimiento_praind,
                 es_personal_ruta: contratista.es_personal_ruta,
                 tiene_acceso: contratista.tiene_acceso,
+                empresa_activa: contratista.empresa_activa,
                 resultado_acceso: resultado_registrado,
                 reglas_version: VERSION_REGLAS_ACCESO,
             },

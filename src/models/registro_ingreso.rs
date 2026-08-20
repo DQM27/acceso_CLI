@@ -33,6 +33,13 @@ pub struct DatosHistoricosEntrada {
     pub fecha_vencimiento_praind: Option<chrono::NaiveDate>,
     pub es_personal_ruta: bool,
     pub tiene_acceso: bool,
+    /// Si la empresa del contratista estaba activa al momento de este
+    /// ingreso — la Regla 0 de `verificar_acceso` deniega por completo
+    /// cuando no lo está, así que cualquier fila persistida tiene esto en
+    /// `true`, pero se guarda explícito junto al resto de la fotografía en
+    /// vez de quedar implícito (`docs/auditoria-dominio-2026-08-20.md`,
+    /// hallazgo #7).
+    pub empresa_activa: bool,
     pub resultado_acceso: ResultadoIngresoRegistrado,
     pub reglas_version: i64,
 }

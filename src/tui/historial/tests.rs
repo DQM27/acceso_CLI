@@ -45,6 +45,7 @@ fn pagina(cantidad: usize, total: usize) -> PaginaHistorial {
                     crate::models::registro_ingreso::ResultadoIngresoRegistrado::Permitido,
                 motivo_resultado: None,
                 reglas_version: crate::models::registro_ingreso::VERSION_REGLAS_ACCESO,
+                empresa_activa_snapshot: true,
             })
             .collect(),
         total,

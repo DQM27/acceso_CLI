@@ -416,6 +416,7 @@ fn sqlite_impide_ingreso_activo_y_gafete_activo_duplicados() {
             fecha_vencimiento_praind: Some(praind_vigente()),
             es_personal_ruta: false,
             tiene_acceso: true,
+            empresa_activa: true,
             resultado_acceso: ResultadoIngresoRegistrado::Permitido,
             reglas_version: VERSION_REGLAS_ACCESO,
         },

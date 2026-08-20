@@ -173,7 +173,8 @@ impl<'a> RegistroIngresoRepository for SqliteRegistroIngresoRepository<'a> {
                 tiene_acceso,
                 resultado_acceso,
                 motivo_resultado,
-                reglas_version
+                reglas_version,
+                empresa_activa_snapshot
             )
             SELECT
                 :contratista_id, :empresa_id, :fecha_hora_ingreso,
@@ -182,7 +183,7 @@ impl<'a> RegistroIngresoRepository for SqliteRegistroIngresoRepository<'a> {
                 :contratista_nombre, e.nombre, u.nombre,
                 :fecha_vencimiento_praind, :es_personal_ruta,
                 :tiene_acceso, :resultado_acceso, :motivo_resultado,
-                :reglas_version
+                :reglas_version, :empresa_activa_snapshot
             FROM empresas AS e
             CROSS JOIN usuarios AS u
             WHERE e.id = :empresa_id AND u.id = :usuario_ingreso_id
@@ -203,6 +204,7 @@ impl<'a> RegistroIngresoRepository for SqliteRegistroIngresoRepository<'a> {
                 ":resultado_acceso": resultado_acceso,
                 ":motivo_resultado": motivo_resultado,
                 ":reglas_version": registro.datos_historicos.reglas_version,
+                ":empresa_activa_snapshot": registro.datos_historicos.empresa_activa as i64,
             },
         )?;
 

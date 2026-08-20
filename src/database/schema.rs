@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 7;
+pub const SCHEMA_VERSION: i64 = 8;
 
 /// Identifica un archivo SQLite como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -136,6 +136,11 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
     if version == 6 {
         aplicar_migracion(&transaction, MIGRACION_7, 7)?;
         version = 7;
+    }
+
+    if version == 7 {
+        aplicar_migracion(&transaction, MIGRACION_8, 8)?;
+        version = 8;
     }
 
     if version != SCHEMA_VERSION {
@@ -722,4 +727,53 @@ END;
 // acceso por el simple hecho de migrar.
 const MIGRACION_7: &str = r#"
 ALTER TABLE empresas ADD COLUMN activo INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1));
+"#;
+
+// Guarda si la empresa estaba activa al momento del ingreso, junto al resto
+// de la fotografía histórica (`docs/auditoria-dominio-2026-08-20.md`,
+// hallazgo #7). Antes `verificar_acceso` (Regla 0, desde la migración 7)
+// influía en la decisión sin que ese factor quedara registrado explícitamente
+// — quedaba implícito ("si se guardó el ingreso, la empresa estaba activa"),
+// pero no como un dato propio, a diferencia de PRAIND/personal de
+// ruta/tiene_acceso, que sí se snapshot-ean. `DEFAULT 1` es correcto para
+// todas las filas existentes, no sólo "la mejor reconstrucción posible": las
+// anteriores a la migración 7 son de una época en la que no existía el
+// concepto de empresa inactiva (toda empresa era, por definición, activa), y
+// las posteriores sólo pudieron persistirse si pasaron la Regla 0 primero.
+const MIGRACION_8: &str = r#"
+ALTER TABLE registro_ingresos
+ADD COLUMN empresa_activa_snapshot INTEGER NOT NULL DEFAULT 1
+CHECK (empresa_activa_snapshot IN (0, 1));
+
+DROP TRIGGER registro_ingresos_entrada_inmutable;
+CREATE TRIGGER registro_ingresos_entrada_inmutable
+BEFORE UPDATE OF
+    contratista_id, empresa_id, fecha_hora_ingreso, medio_ingreso, tipo_ingreso,
+    gafete_numero, usuario_ingreso_id, contratista_cedula, contratista_nombre,
+    empresa_nombre, usuario_ingreso_nombre, fecha_vencimiento_praind,
+    es_personal_ruta, tiene_acceso, resultado_acceso, motivo_resultado,
+    reglas_version, empresa_activa_snapshot
+ON registro_ingresos
+WHEN
+    NEW.contratista_id IS NOT OLD.contratista_id
+    OR NEW.empresa_id IS NOT OLD.empresa_id
+    OR NEW.fecha_hora_ingreso IS NOT OLD.fecha_hora_ingreso
+    OR NEW.medio_ingreso IS NOT OLD.medio_ingreso
+    OR NEW.tipo_ingreso IS NOT OLD.tipo_ingreso
+    OR NEW.gafete_numero IS NOT OLD.gafete_numero
+    OR NEW.usuario_ingreso_id IS NOT OLD.usuario_ingreso_id
+    OR NEW.contratista_cedula IS NOT OLD.contratista_cedula
+    OR NEW.contratista_nombre IS NOT OLD.contratista_nombre
+    OR NEW.empresa_nombre IS NOT OLD.empresa_nombre
+    OR NEW.usuario_ingreso_nombre IS NOT OLD.usuario_ingreso_nombre
+    OR NEW.fecha_vencimiento_praind IS NOT OLD.fecha_vencimiento_praind
+    OR NEW.es_personal_ruta IS NOT OLD.es_personal_ruta
+    OR NEW.tiene_acceso IS NOT OLD.tiene_acceso
+    OR NEW.resultado_acceso IS NOT OLD.resultado_acceso
+    OR NEW.motivo_resultado IS NOT OLD.motivo_resultado
+    OR NEW.reglas_version IS NOT OLD.reglas_version
+    OR NEW.empresa_activa_snapshot IS NOT OLD.empresa_activa_snapshot
+BEGIN
+    SELECT RAISE(ABORT, 'Los datos historicos del ingreso son inmutables');
+END;
 "#;

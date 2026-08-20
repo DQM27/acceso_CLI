@@ -88,6 +88,10 @@ pub struct MovimientoIngresoResumen {
     pub resultado_acceso: ResultadoIngresoRegistrado,
     pub motivo_resultado: Option<MotivoResultadoIngreso>,
     pub reglas_version: i64,
+    /// Si la empresa del contratista estaba activa al momento de este
+    /// ingreso — parte de la fotografía histórica, no un dato recalculado
+    /// (`docs/auditoria-dominio-2026-08-20.md`, hallazgo #7).
+    pub empresa_activa_snapshot: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -269,7 +273,8 @@ const HISTORIAL_COLUMNAS: &str = "
     r.empresa_nombre, r.tipo_ingreso,
     r.medio_ingreso, r.fecha_hora_ingreso, r.fecha_hora_salida,
     r.gafete_numero, r.usuario_ingreso_nombre, r.usuario_salida_nombre,
-    r.resultado_acceso, r.motivo_resultado, r.reglas_version
+    r.resultado_acceso, r.motivo_resultado, r.reglas_version,
+    r.empresa_activa_snapshot
 ";
 
 /// Nombre de parámetro (`:algo`) y valor bindeado.
@@ -474,6 +479,7 @@ fn convertir_movimiento(row: &Row<'_>) -> rusqlite::Result<MovimientoIngresoResu
         resultado_acceso: resultado_desde_fila(row, 12, motivo_resultado)?,
         motivo_resultado,
         reglas_version: row.get(14)?,
+        empresa_activa_snapshot: row.get::<_, i64>(15)? != 0,
     })
 }
 
