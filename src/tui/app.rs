@@ -923,6 +923,55 @@ mod tests {
 
         std::fs::remove_dir_all(&directorio).ok();
     }
+
+    /// Regresión del hallazgo #5 de `docs/auditoria-dominio-2026-08-20.md`:
+    /// "El login diferido puede aceptar credenciales revocadas". La cuenta se
+    /// desactiva *después* de arrancar el hilo de Argon2 pero *antes* de que
+    /// termine — `desactivar_usuario` corre en el hilo principal, antes de
+    /// cualquier sondeo del canal, así que la carrera queda determinista sin
+    /// depender de cuánto tarde Argon2 realmente.
+    #[test]
+    fn login_rechaza_una_cuenta_desactivada_mientras_argon2_verificaba() {
+        let (core, directorio, _root_id) = core_temporal("login_revalidacion");
+        let id = core
+            .crear_usuario(crate::services::usuario_service::CrearUsuarioInput {
+                cedula: "3001".into(),
+                nombre: "Operador".into(),
+                password: "password3".into(),
+                rol: RolUsuario::Operador,
+                activo: true,
+            })
+            .unwrap();
+
+        let mut app = App::default();
+        app.iniciar_autenticacion("3001".into(), "password3".into(), Some(&core));
+        assert!(app.autenticacion_pendiente.is_some());
+
+        core.desactivar_usuario(id).unwrap();
+
+        for _ in 0..200 {
+            app.recibir_autenticacion_si_lista(Some(&core));
+            if app.autenticacion_pendiente.is_none() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+
+        assert!(
+            app.autenticacion_pendiente.is_none(),
+            "el hilo no terminó a tiempo"
+        );
+        assert!(
+            app.sesion().is_none(),
+            "no debe iniciar sesión con una cuenta desactivada durante la verificación"
+        );
+        assert!(matches!(
+            app.login.estado(),
+            crate::tui::login::EstadoLogin::Error(_)
+        ));
+
+        std::fs::remove_dir_all(&directorio).ok();
+    }
 }
 
 /// Datos ya validados de un usuario nuevo, a la espera del hash de Argon2 —
@@ -1119,7 +1168,7 @@ impl App {
             // Sondeo de los 4 hilos de Argon2 en vuelo, siempre en el mismo lugar
             // del bucle (después de leer teclas): login, ROOT inicial, crear
             // usuario/cambiar contraseña.
-            self.recibir_autenticacion_si_lista();
+            self.recibir_autenticacion_si_lista(core);
             match core {
                 Some(core) => {
                     self.procesar_configuracion_pendiente(core);
@@ -1152,7 +1201,16 @@ impl App {
     }
 
     /// Revisa sin bloquear si el hilo de verificación de contraseña (Argon2) ya terminó.
-    fn recibir_autenticacion_si_lista(&mut self) {
+    ///
+    /// La contraseña se verificó contra un `UsuarioSesion`/hash resueltos
+    /// *antes* de que corriera Argon2 (potencialmente varios cientos de ms
+    /// atrás, ver `iniciar_autenticacion`) — si la cuenta fue desactivada,
+    /// degradada o editada mientras tanto, ese snapshot ya está vencido.
+    /// Antes de aceptar la sesión se vuelve a resolver el candidato contra
+    /// SQLite (rápido, sin Argon2) y se usa ese estado fresco, no el que
+    /// llegó por el canal — `buscar_candidato` ya rechaza cuentas inactivas
+    /// (`docs/auditoria-dominio-2026-08-20.md`, hallazgo #5).
+    fn recibir_autenticacion_si_lista(&mut self, core: Option<&AppCore>) {
         let Some(receptor) = &self.autenticacion_pendiente else {
             return;
         };
@@ -1160,7 +1218,7 @@ impl App {
             return;
         };
         self.autenticacion_pendiente = None;
-        match resultado {
+        match resultado.and_then(|sesion| Self::revalidar_sesion(core, sesion)) {
             Ok(sesion) => {
                 self.login.completar_validacion(None);
                 self.iniciar_sesion(sesion);
@@ -1194,6 +1252,22 @@ impl App {
                 self.autenticacion_pendiente = Some(receptor);
             }
             Err(error) => self.login.completar_validacion(Some(error.to_string())),
+        }
+    }
+
+    /// Vuelve a resolver el candidato contra SQLite justo antes de aceptar la
+    /// sesión, descartando el snapshot que viajó por el canal — ver el
+    /// comentario de `recibir_autenticacion_si_lista`. Sin `core` (modo de
+    /// desarrollo sin base) no hay nada que revalidar: esa rama de
+    /// `iniciar_autenticacion` nunca llega a poblar `autenticacion_pendiente`,
+    /// así que esto es puramente defensivo.
+    fn revalidar_sesion(
+        core: Option<&AppCore>,
+        sesion: UsuarioSesion,
+    ) -> Result<UsuarioSesion, AutenticacionError> {
+        match core {
+            Some(core) => Ok(core.buscar_candidato_autenticacion(&sesion.cedula)?.sesion),
+            None => Ok(sesion),
         }
     }
 
