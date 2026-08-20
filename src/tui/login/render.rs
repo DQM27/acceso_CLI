@@ -2,15 +2,14 @@ use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
     text::Line,
-    widgets::Paragraph,
 };
 
 use super::*;
 use crate::tiempo::hora_actual_texto;
-use crate::tui::ui_kit::{CommandHint, ScreenShell, StatusKind, Theme, render_terminal_too_small};
-
-const ANCHO_MINIMO: u16 = 60;
-const ALTO_MINIMO: u16 = 22;
+use crate::tui::ui_kit::{
+    CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme,
+    render_form_field, render_terminal_too_small,
+};
 
 const COMANDOS: &[CommandHint<'static>] = &[
     CommandHint::new("TAB/↑↓", "Cambiar campo"),
@@ -19,12 +18,12 @@ const COMANDOS: &[CommandHint<'static>] = &[
 ];
 
 pub fn render(frame: &mut Frame, area: Rect, state: &LoginState, theme: Theme) {
-    if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
+    if area.width < MIN_TERMINAL_WIDTH || area.height < MIN_TERMINAL_HEIGHT {
         render_terminal_too_small(
             frame,
             area,
-            ANCHO_MINIMO,
-            ALTO_MINIMO,
+            MIN_TERMINAL_WIDTH,
+            MIN_TERMINAL_HEIGHT,
             "ESC/Ctrl+C salir",
             theme,
         );
@@ -42,6 +41,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &LoginState, theme: Theme) {
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: COMANDOS,
+        authenticated: false,
         help_expanded: state.ayuda_expandida,
         ayuda_extra: None,
     };
@@ -126,33 +126,7 @@ fn render_campo(
     activo: bool,
     theme: Theme,
 ) -> Rect {
-    let estilo_etiqueta = if activo {
-        theme.accent()
-    } else {
-        theme.muted()
-    };
-    let estilo_linea = if activo {
-        theme.accent()
-    } else {
-        theme.border()
-    };
-    let valor_y = area.y.saturating_add(1);
-    let linea_y = area.y.saturating_add(2);
-
-    frame.render_widget(
-        Paragraph::new(etiqueta).style(estilo_etiqueta),
-        Rect::new(area.x, area.y, area.width, 1),
-    );
-    frame.render_widget(
-        Paragraph::new(Line::from(valor).style(theme.base())),
-        Rect::new(area.x, valor_y, area.width, 1),
-    );
-    frame.render_widget(
-        Paragraph::new("─".repeat(area.width as usize)).style(estilo_linea),
-        Rect::new(area.x, linea_y, area.width, 1),
-    );
-
-    Rect::new(area.x, valor_y, area.width, 1)
+    render_form_field(frame, area, etiqueta, valor, activo, theme)
 }
 
 fn centrar(area: Rect, ancho: u16, alto: u16) -> Rect {

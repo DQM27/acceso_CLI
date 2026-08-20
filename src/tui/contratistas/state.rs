@@ -11,7 +11,7 @@ use crate::{
     tiempo::ahora_costa_rica,
     tui::ui_kit::{
         Debounce, StandardCommand, Term, TextInput, plegar_diacriticos, resolver_terminos,
-        standard_command, valores,
+        resolver_terminos_detallado, standard_command, valores,
     },
 };
 use std::time::Instant;
@@ -166,6 +166,17 @@ impl Columna {
             Self::Cedula | Self::Tipo => Constraint::Fill(2),
             Self::Praind => Constraint::Length(11),
             Self::Ruta | Self::Acceso => Constraint::Length(8),
+        }
+    }
+    const fn clave(self) -> &'static str {
+        match self {
+            Self::Cedula => "cedula",
+            Self::Nombre => "nombre",
+            Self::Empresa => "empresa",
+            Self::Tipo => "tipo",
+            Self::Praind => "praind",
+            Self::Ruta => "ruta",
+            Self::Acceso => "acceso",
         }
     }
 }
@@ -344,6 +355,28 @@ impl Default for ContratistasState {
     }
 }
 impl ContratistasState {
+    pub(crate) fn columnas_preferencia(&self) -> String {
+        self.columnas
+            .iter()
+            .filter_map(|(columna, visible)| visible.then_some(columna.clave()))
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+
+    pub(crate) fn aplicar_columnas_preferencia(&mut self, valor: &str) {
+        let claves: Vec<&str> = valor.split(',').collect();
+        if !self
+            .columnas
+            .iter()
+            .any(|(columna, _)| claves.contains(&columna.clave()))
+        {
+            return;
+        }
+        for (columna, visible) in &mut self.columnas {
+            *visible = claves.contains(&columna.clave());
+        }
+    }
+
     pub fn set_hoy(&mut self, hoy: NaiveDate) {
         self.hoy = hoy
     }
@@ -358,7 +391,9 @@ impl ContratistasState {
             Ok(pagina) => {
                 self.registros = pagina.items;
                 self.total = pagina.total;
-                self.mensaje = None;
+                if !matches!(self.mensaje.as_deref(), Some(mensaje) if mensaje.starts_with('✓')) {
+                    self.mensaje = None;
+                }
                 self.seleccion = id
                     .and_then(|id| self.registros.iter().position(|c| c.id == id))
                     .or_else(|| (!self.registros.is_empty()).then_some(0))
@@ -373,6 +408,61 @@ impl ContratistasState {
     }
     pub fn solicitud_carga(&self) -> AccionContratistas {
         self.buscar(None)
+    }
+    pub(super) fn resumen_consulta(&self) -> String {
+        if self.filtro.trim().is_empty() {
+            return "Ejemplo: empresa:Brisas tipo:praind acceso:si".to_owned();
+        }
+
+        let mut filtro = FiltroContratistas::default();
+        let resolucion = resolver_terminos_detallado(&self.filtro, &mut filtro, |f, term| {
+            aplicar_clave(f, term, &self.empresas, self.hoy)
+        });
+        let mut partes = Vec::new();
+        if let Some(id) = filtro.empresa_id {
+            let nombre = self
+                .empresas
+                .iter()
+                .find(|empresa| empresa.id == id)
+                .map_or("?", |empresa| empresa.nombre.as_str());
+            partes.push(format!("empresa={nombre}"));
+        }
+        if let Some(tipos) = filtro.tipos_incluidos {
+            partes.push(format!(
+                "tipo={}",
+                tipos
+                    .into_iter()
+                    .map(TipoIngreso::as_str_sql)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ));
+        }
+        if let Some(praind) = filtro.praind {
+            partes.push(format!(
+                "praind={}",
+                match praind {
+                    FiltroPraind::Vencido { .. } => "vencido",
+                    FiltroPraind::ProximoAVencer { .. } => "próximo",
+                    FiltroPraind::SinFecha => "sin fecha",
+                }
+            ));
+        }
+        if let Some(ruta) = filtro.personal_ruta {
+            partes.push(format!("ruta={}", if ruta { "sí" } else { "no" }));
+        }
+        if let Some(acceso) = filtro.tiene_acceso {
+            partes.push(format!("acceso={}", if acceso { "sí" } else { "no" }));
+        }
+        if !resolucion.texto_libre.is_empty() {
+            partes.push(format!("texto=\"{}\"", resolucion.texto_libre));
+        }
+        if !resolucion.no_reconocidos.is_empty() {
+            partes.push(format!(
+                "⚠ sin interpretar: {}",
+                resolucion.no_reconocidos.join(", ")
+            ));
+        }
+        partes.join(" · ")
     }
     pub fn handle_key(&mut self, key: KeyEvent) -> AccionContratistas {
         if standard_command(key) == Some(StandardCommand::Help) {
@@ -390,7 +480,12 @@ impl ContratistasState {
         }
     }
     fn normal(&mut self, key: KeyEvent) -> AccionContratistas {
-        self.mensaje = None;
+        if matches!(
+            key.code,
+            KeyCode::Enter | KeyCode::Char('n' | 'N' | '/') | KeyCode::Esc
+        ) {
+            self.mensaje = None;
+        }
         match key.code {
             KeyCode::Up => self.mover(-1),
             KeyCode::Down => self.mover(1),

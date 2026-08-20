@@ -52,6 +52,7 @@ pub fn render(
             StatusKind::Normal
         },
         commands: COMANDOS,
+        authenticated: true,
         help_expanded: state.ayuda_expandida,
         ayuda_extra: None,
     };

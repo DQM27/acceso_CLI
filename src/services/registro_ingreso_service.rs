@@ -54,6 +54,9 @@ pub struct IngresoActivoResumen {
     pub fecha_hora_ingreso: DateTime<Utc>,
     pub gafete_numero: Option<i64>,
     pub usuario_ingreso_nombre: String,
+    /// Decisión persistida en el momento del ingreso; no se recalcula.
+    pub resultado_registrado: ResultadoIngresoRegistrado,
+    /// Evaluación con los datos y la fecha actuales.
     pub resultado_acceso: ResultadoAcceso,
 }
 
@@ -131,6 +134,7 @@ fn convertir_activo(lectura: IngresoActivoLectura, hoy: NaiveDate) -> IngresoAct
         fecha_hora_ingreso: lectura.fecha_hora_ingreso,
         gafete_numero: lectura.gafete_numero,
         usuario_ingreso_nombre: lectura.usuario_ingreso_nombre,
+        resultado_registrado: lectura.resultado_registrado,
         resultado_acceso,
     }
 }

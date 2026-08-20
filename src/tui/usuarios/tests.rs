@@ -217,6 +217,21 @@ fn activar_no_muta_hasta_respuesta_y_recarga() {
 }
 
 #[test]
+fn mensaje_de_exito_sobrevive_recarga_y_navegacion() {
+    let mut state = UsuariosState::default();
+    cargar(&mut state);
+    let recarga = state.completar_guardado(Ok(Some(7)), None, "Usuario 7");
+    assert!(matches!(recarga, AccionUsuarios::Buscar { .. }));
+    cargar(&mut state);
+    state.handle_key(key(KeyCode::Down));
+
+    assert_eq!(
+        state.mensaje.as_deref(),
+        Some("✓ Usuario creado — Usuario 7")
+    );
+}
+
+#[test]
 fn errores_backend_permanecen_en_formulario_o_modal() {
     let mut state = UsuariosState {
         modo: ModoUsuarios::Formulario(FormularioUsuario::nuevo()),

@@ -145,6 +145,10 @@ fn activos_solo_devuelve_abiertos_con_fila_compuesta() {
     assert_eq!(item.fecha_hora_ingreso, dt("2026-08-12 07:00:00"));
     assert_eq!(item.gafete_numero, Some(12));
     assert_eq!(item.usuario_ingreso_nombre, "Operador Entrada");
+    assert_eq!(
+        item.resultado_registrado,
+        control_acceso::models::registro_ingreso::ResultadoIngresoRegistrado::Migrado
+    );
 }
 
 #[test]

@@ -21,6 +21,7 @@ use super::{
     login::{self, AccionLogin, LoginState},
     menu_principal::{self, AccionMenu, MenuPrincipalState, OpcionMenu},
     nuevo_ingreso::{self, AccionNuevoIngreso, NuevoIngresoState},
+    preferences::{PreferencesStore, UiPreferences},
     salida_rapida::{self, AccionSalidaRapida, SalidaRapidaState},
     ui_kit::{StandardCommand, ThemePreset, standard_command},
     usuarios::{self, AccionUsuarios, UsuariosState},
@@ -368,6 +369,7 @@ mod tests {
                                     .unwrap(),
                                     gafete_numero: None,
                                     usuario_ingreso_nombre: "Ana".into(),
+                                    resultado_registrado: crate::models::registro_ingreso::ResultadoIngresoRegistrado::Permitido,
                                     resultado_acceso:
                                         crate::domain::resultado_acceso::ResultadoAcceso::Permitido,
                                 },
@@ -1075,6 +1077,7 @@ pub struct App {
     salida: SalidaApp,
     sesion: Option<UsuarioSesion>,
     tema: ThemePreset,
+    preferencias: Option<PreferencesStore>,
     /// Resultado en camino de un hilo aparte que verifica la contraseña
     /// (Argon2) sin bloquear este bucle. `None` cuando no hay ningún login
     /// en curso.
@@ -1112,6 +1115,7 @@ impl Default for App {
             salida: SalidaApp::Cerrar,
             sesion: None,
             tema: ThemePreset::Brisas,
+            preferencias: None,
             autenticacion_pendiente: None,
             hilo_usuario_pendiente: None,
             cambio_password_pendiente: None,
@@ -1133,7 +1137,48 @@ impl App {
         if let Some(mensaje) = mensaje_inicial {
             app.login.preset_error(mensaje);
         }
+        if let Some(store) = PreferencesStore::load_default() {
+            app.aplicar_preferencias(store.current());
+            app.preferencias = Some(store);
+        }
         app
+    }
+
+    fn aplicar_preferencias(&mut self, preferences: &UiPreferences) {
+        self.tema = preferences.theme;
+        if !preferences.activos_columns.is_empty() {
+            self.activos
+                .aplicar_columnas_preferencia(&preferences.activos_columns);
+        }
+        if !preferences.contratistas_columns.is_empty() {
+            self.contratistas
+                .aplicar_columnas_preferencia(&preferences.contratistas_columns);
+        }
+        self.historial
+            .aplicar_vista_preferencia(&preferences.historial_view);
+        if !preferences.historial_columns.is_empty() {
+            self.historial
+                .aplicar_columnas_preferencia(&preferences.historial_columns);
+        }
+    }
+
+    fn preferencias_actuales(&self) -> UiPreferences {
+        UiPreferences {
+            theme: self.tema,
+            activos_columns: self.activos.columnas_preferencia(),
+            contratistas_columns: self.contratistas.columnas_preferencia(),
+            historial_view: self.historial.vista_preferencia().to_owned(),
+            historial_columns: self.historial.columnas_preferencia(),
+        }
+    }
+
+    fn persistir_preferencias_si_cambiaron(&mut self) {
+        let preferences = self.preferencias_actuales();
+        if let Some(store) = &mut self.preferencias {
+            // Una preferencia visual nunca debe interrumpir una operación de
+            // acceso; si el sistema no permite escribir, se conserva en memoria.
+            let _ = store.save_if_changed(preferences);
+        }
     }
 
     pub fn run<B: Backend<Error = io::Error>>(
@@ -1642,6 +1687,7 @@ impl App {
             }
             Some(StandardCommand::Theme) => {
                 self.tema = self.tema.next();
+                self.persistir_preferencias_si_cambiaron();
                 return;
             }
             // Requiere sesión iniciada: en Login/ConfiguracionInicial no hay a quién
@@ -1661,6 +1707,7 @@ impl App {
             return;
         }
         self.procesar_tecla_vista_con_core(key, core);
+        self.persistir_preferencias_si_cambiaron();
     }
 
     /// Espera (bloqueando, con reintentos cortos) cualquier hilo de Argon2 en vuelo

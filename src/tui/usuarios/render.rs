@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout, Rect},
-    text::{Line, Span},
+    text::Line,
     widgets::{Cell, Paragraph, Row, Table},
 };
 
@@ -11,14 +11,11 @@ use crate::{
     services::autenticacion_service::UsuarioSesion,
     tiempo::hora_actual_texto,
     tui::ui_kit::{
-        CommandHint, ScreenShell, StatusKind, TextInput, Theme, identidad_sesion,
-        render_terminal_too_small,
+        ChoiceFieldOptions, CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell,
+        StatusKind, TextInput, Theme, identidad_sesion, master_detail_areas, render_choice_field,
+        render_form_field, render_separator, render_terminal_too_small,
     },
 };
-
-const ANCHO_MINIMO: u16 = 60;
-const ALTO_MINIMO: u16 = 22;
-const ANCHO_PANEL_LATERAL: u16 = 100;
 
 const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓", "Mover"),
@@ -29,9 +26,18 @@ const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
     CommandHint::new("/", "Buscar"),
     CommandHint::new("ESC", "Volver"),
 ];
+const COMANDOS_NORMAL_FILTRADO: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓", "Mover"),
+    CommandHint::new("ENTER", "Editar"),
+    CommandHint::new("N", "Nuevo"),
+    CommandHint::new("P", "Clave"),
+    CommandHint::new("A", "Estado"),
+    CommandHint::new("/", "Buscar"),
+    CommandHint::new("ESC", "Limpiar filtro"),
+];
 const COMANDOS_BUSQUEDA: &[CommandHint<'static>] = &[
     CommandHint::new("ENTER", "Aplicar"),
-    CommandHint::new("ESC", "Cancelar"),
+    CommandHint::new("ESC", "Limpiar"),
 ];
 const COMANDOS_FORMULARIO: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓/TAB", "Navegar"),
@@ -61,8 +67,15 @@ pub fn render(
     sesion: &UsuarioSesion,
     theme: Theme,
 ) {
-    if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
-        render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "ESC salir", theme);
+    if area.width < MIN_TERMINAL_WIDTH || area.height < MIN_TERMINAL_HEIGHT {
+        render_terminal_too_small(
+            frame,
+            area,
+            MIN_TERMINAL_WIDTH,
+            MIN_TERMINAL_HEIGHT,
+            "ESC volver",
+            theme,
+        );
         return;
     }
 
@@ -70,6 +83,7 @@ pub fn render(
     let contexto = identidad_sesion(sesion);
     let (estado_texto, estado_tipo) = estado_shell(state);
     let comandos = match &state.modo {
+        ModoUsuarios::Normal if !state.filtro.is_empty() => COMANDOS_NORMAL_FILTRADO,
         ModoUsuarios::Normal => COMANDOS_NORMAL,
         ModoUsuarios::Busqueda { .. } => COMANDOS_BUSQUEDA,
         ModoUsuarios::Formulario(f) if f.selector_rol.is_some() => COMANDOS_SELECTOR_ROL,
@@ -86,6 +100,7 @@ pub fn render(
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: comandos,
+        authenticated: true,
         help_expanded: state.ayuda_expandida,
         ayuda_extra: None,
     };
@@ -102,8 +117,13 @@ fn estado_shell(state: &UsuariosState) -> (String, StatusKind) {
         && let Some(u) = state.usuario(c.id)
     {
         let accion = if c.activar { "activar" } else { "desactivar" };
+        let consecuencia = if c.activar {
+            "permitirá iniciar sesión"
+        } else {
+            "impedirá iniciar sesión"
+        };
         return (
-            format!("¿Confirma {accion} a {}?", u.nombre),
+            format!("CONFIRMAR · {accion} a {} · {consecuencia}", u.nombre),
             StatusKind::Warning,
         );
     }
@@ -144,26 +164,9 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: Th
         posicionar_cursor_campo(frame, area_busqueda, texto);
     }
 
-    let (area_tabla, area_panel) = if area.width >= ANCHO_PANEL_LATERAL {
-        let columnas = Layout::horizontal([
-            Constraint::Percentage(60),
-            Constraint::Length(1),
-            Constraint::Percentage(39),
-        ])
-        .split(filas[1]);
-        render_separador_vertical(frame, columnas[1], theme);
-        (columnas[0], columnas[2])
-    } else {
-        let alto_panel = altura_panel(state);
-        let filas_apiladas = Layout::vertical([
-            Constraint::Min(4),
-            Constraint::Length(1),
-            Constraint::Length(alto_panel.min(filas[1].height.saturating_sub(5))),
-        ])
-        .split(filas[1]);
-        render_separador_horizontal(frame, filas_apiladas[1], theme);
-        (filas_apiladas[0], filas_apiladas[2])
-    };
+    let areas = master_detail_areas(filas[1], 60, altura_panel(state));
+    render_separator(frame, areas.separator, areas.orientation, theme);
+    let (area_tabla, area_panel) = (areas.master, areas.detail);
     render_tabla(frame, area_tabla, state, theme);
     render_panel(frame, area_panel, state, theme);
 }
@@ -216,33 +219,7 @@ fn render_campo(
     activo: bool,
     theme: Theme,
 ) -> Rect {
-    let estilo_etiqueta = if activo {
-        theme.accent()
-    } else {
-        theme.muted()
-    };
-    let estilo_linea = if activo {
-        theme.accent()
-    } else {
-        theme.border()
-    };
-    let valor_y = area.y.saturating_add(1);
-    let linea_y = area.y.saturating_add(2);
-
-    frame.render_widget(
-        Paragraph::new(etiqueta).style(estilo_etiqueta),
-        Rect::new(area.x, area.y, area.width, 1),
-    );
-    frame.render_widget(
-        Paragraph::new(Line::from(valor).style(theme.base())),
-        Rect::new(area.x, valor_y, area.width, 1),
-    );
-    frame.render_widget(
-        Paragraph::new("─".repeat(area.width as usize)).style(estilo_linea),
-        Rect::new(area.x, linea_y, area.width, 1),
-    );
-
-    Rect::new(area.x, valor_y, area.width, 1)
+    render_form_field(frame, area, etiqueta, valor, activo, theme)
 }
 
 fn render_opcion(
@@ -253,26 +230,14 @@ fn render_opcion(
     activo: bool,
     theme: Theme,
 ) {
-    let marcador = if activo { ">" } else { " " };
-    let estilo = if activo { theme.accent() } else { theme.base() };
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(format!("{marcador} {etiqueta:<22}"), estilo),
-            Span::styled(valor.to_owned(), estilo),
-        ])),
+    render_choice_field(
+        frame,
         area,
-    );
-}
-
-fn render_separador_vertical(frame: &mut Frame, area: Rect, theme: Theme) {
-    let lineas: Vec<Line<'static>> = (0..area.height).map(|_| Line::from("│")).collect();
-    frame.render_widget(Paragraph::new(lineas).style(theme.border()), area);
-}
-
-fn render_separador_horizontal(frame: &mut Frame, area: Rect, theme: Theme) {
-    frame.render_widget(
-        Paragraph::new("─".repeat(area.width as usize)).style(theme.border()),
-        area,
+        etiqueta,
+        valor,
+        activo,
+        theme,
+        ChoiceFieldOptions::plain(22),
     );
 }
 
@@ -293,7 +258,11 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: The
                 theme.base()
             };
             Row::new([
-                Cell::from(usuario.cedula.clone()),
+                Cell::from(format!(
+                    "{} {}",
+                    if seleccionado { ">" } else { " " },
+                    usuario.cedula
+                )),
                 Cell::from(usuario.nombre.clone()),
                 Cell::from(texto_rol(usuario.rol)).style(if seleccionado {
                     estilo_fila

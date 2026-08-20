@@ -84,17 +84,40 @@ pub fn resolver_terminos<F>(
     filtro: &mut F,
     mut aplicar_clave: impl FnMut(&mut F, &Term) -> bool,
 ) -> String {
+    resolver_terminos_detallado(texto, filtro, |f, term| aplicar_clave(f, term)).texto_libre
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolucionConsulta {
+    /// Texto que finalmente recibirá la búsqueda libre, incluidos los
+    /// términos estructurados que no pudieron interpretarse.
+    pub texto_libre: String,
+    /// Términos `clave:valor` que se degradaron a texto libre.
+    pub no_reconocidos: Vec<String>,
+}
+
+pub fn resolver_terminos_detallado<F>(
+    texto: &str,
+    filtro: &mut F,
+    mut aplicar_clave: impl FnMut(&mut F, &Term) -> bool,
+) -> ResolucionConsulta {
     let mut libres = Vec::new();
+    let mut no_reconocidos = Vec::new();
     for term in analizar(texto).terms {
         if term.key.is_none() {
             libres.push(texto_libre(&term));
             continue;
         }
         if !aplicar_clave(filtro, &term) {
-            libres.push(reconstruir_clave(&term));
+            let reconstruido = reconstruir_clave(&term);
+            no_reconocidos.push(reconstruido.clone());
+            libres.push(reconstruido);
         }
     }
-    libres.join(" ")
+    ResolucionConsulta {
+        texto_libre: libres.join(" "),
+        no_reconocidos,
+    }
 }
 
 #[cfg(test)]
@@ -146,5 +169,26 @@ mod tests {
     fn reconstruir_clave_regenera_el_token_negado_y_con_lista() {
         let query = analizar("-tipo:praind,swat");
         assert_eq!(reconstruir_clave(&query.terms[0]), "-tipo:praind,swat");
+    }
+
+    #[test]
+    fn resolucion_detallada_identifica_claves_que_caen_a_texto_libre() {
+        let mut filtro = Vec::<String>::new();
+        let resolucion = resolver_terminos_detallado(
+            "Ana tipo:praind clave:invalida",
+            &mut filtro,
+            |filtro, term| {
+                if term.key.as_deref() == Some("tipo") {
+                    filtro.extend(valores(term));
+                    true
+                } else {
+                    false
+                }
+            },
+        );
+
+        assert_eq!(filtro, ["praind"]);
+        assert_eq!(resolucion.texto_libre, "Ana clave:invalida");
+        assert_eq!(resolucion.no_reconocidos, ["clave:invalida"]);
     }
 }

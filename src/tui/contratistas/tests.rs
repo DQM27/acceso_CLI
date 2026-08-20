@@ -231,6 +231,7 @@ fn clave_no_reconocida_o_lista_de_praind_cae_a_texto_libre() {
         filtro: "praind:vence,vencido tipo:invalido".into(),
         ..Default::default()
     };
+    assert!(s.resumen_consulta().contains("sin interpretar"));
     let AccionContratistas::Buscar {
         texto,
         praind,
@@ -431,4 +432,15 @@ fn columnas_limites_fecha_y_escape_raiz_se_conservan() {
         s.handle_key(k(KeyCode::Esc)),
         AccionContratistas::Volver
     ));
+}
+
+#[test]
+fn exito_sobrevive_recarga_y_navegacion() {
+    let mut s = ContratistasState::default();
+    let recarga = s.completar_guardado(Ok(Some(7)), None, "José");
+    assert!(matches!(recarga, AccionContratistas::Buscar { .. }));
+    cargar(&mut s);
+    s.handle_key(k(KeyCode::Down));
+
+    assert_eq!(s.mensaje.as_deref(), Some("✓ Contratista creado — José"));
 }

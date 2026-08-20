@@ -7,10 +7,10 @@ use ratatui::{
 
 use super::*;
 use crate::tui::ui_kit::{
-    CommandHint, ScreenShell, StatusKind, TextInput, Theme, render_terminal_too_small,
+    CommandHint, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, TextInput, Theme,
+    render_terminal_too_small,
 };
 
-const ANCHO_MINIMO: u16 = 60;
 const ALTO_MINIMO: u16 = 20;
 
 const COMANDOS_MENU: &[CommandHint<'static>] = &[
@@ -36,8 +36,15 @@ const COMANDOS_CONFIRMAR_RESTAURACION: &[CommandHint<'static>] = &[
 ];
 
 pub fn render(frame: &mut Frame, area: Rect, state: &ConfiguracionState, theme: Theme) {
-    if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
-        render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "ESC salir", theme);
+    if area.width < MIN_TERMINAL_WIDTH || area.height < ALTO_MINIMO {
+        render_terminal_too_small(
+            frame,
+            area,
+            MIN_TERMINAL_WIDTH,
+            ALTO_MINIMO,
+            "ESC volver",
+            theme,
+        );
         return;
     }
 
@@ -56,6 +63,7 @@ fn render_menu(frame: &mut Frame, area: Rect, state: &ConfiguracionState, theme:
         status: state.seleccion.descripcion(),
         status_kind: StatusKind::Normal,
         commands: COMANDOS_MENU,
+        authenticated: true,
         help_expanded: state.ayuda_expandida,
         ayuda_extra: None,
     };
@@ -115,6 +123,7 @@ fn render_respaldos(frame: &mut Frame, area: Rect, estado: &RespaldosState, them
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: comandos,
+        authenticated: true,
         help_expanded: false,
         ayuda_extra: None,
     };

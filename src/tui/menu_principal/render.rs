@@ -6,12 +6,10 @@ use crate::{
     services::autenticacion_service::UsuarioSesion,
     tiempo::hora_actual_texto,
     tui::ui_kit::{
-        CommandHint, ScreenShell, StatusKind, Theme, identidad_sesion, render_terminal_too_small,
+        CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme,
+        identidad_sesion, render_terminal_too_small,
     },
 };
-
-const ANCHO_MINIMO: u16 = 60;
-const ALTO_MINIMO: u16 = 22;
 
 const COMANDOS_NORMALES: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓", "Seleccionar"),
@@ -33,8 +31,15 @@ pub fn render(
     sesion: &UsuarioSesion,
     theme: Theme,
 ) {
-    if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
-        render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "Q/ESC salir", theme);
+    if area.width < MIN_TERMINAL_WIDTH || area.height < MIN_TERMINAL_HEIGHT {
+        render_terminal_too_small(
+            frame,
+            area,
+            MIN_TERMINAL_WIDTH,
+            MIN_TERMINAL_HEIGHT,
+            "Q salir",
+            theme,
+        );
         return;
     }
 
@@ -55,6 +60,7 @@ pub fn render(
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: comandos,
+        authenticated: true,
         help_expanded: state.ayuda_expandida,
         ayuda_extra: None,
     };

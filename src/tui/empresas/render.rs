@@ -11,13 +11,11 @@ use crate::{
     services::autenticacion_service::UsuarioSesion,
     tiempo::hora_actual_texto,
     tui::ui_kit::{
-        CommandHint, ScreenShell, StatusKind, Theme, identidad_sesion, render_terminal_too_small,
+        CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme,
+        identidad_sesion, master_detail_areas, render_form_field, render_separator,
+        render_terminal_too_small,
     },
 };
-
-const ANCHO_MINIMO: u16 = 60;
-const ALTO_MINIMO: u16 = 22;
-const ANCHO_PANEL_LATERAL: u16 = 100;
 
 const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓", "Mover"),
@@ -27,9 +25,17 @@ const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
     CommandHint::new("/", "Buscar"),
     CommandHint::new("ESC", "Volver"),
 ];
+const COMANDOS_NORMAL_FILTRADO: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓", "Mover"),
+    CommandHint::new("ENTER", "Editar"),
+    CommandHint::new("N", "Nueva"),
+    CommandHint::new("A", "Estado"),
+    CommandHint::new("/", "Buscar"),
+    CommandHint::new("ESC", "Limpiar filtro"),
+];
 const COMANDOS_BUSQUEDA: &[CommandHint<'static>] = &[
     CommandHint::new("ENTER", "Aplicar"),
-    CommandHint::new("ESC", "Cancelar"),
+    CommandHint::new("ESC", "Limpiar"),
 ];
 const COMANDOS_FORMULARIO: &[CommandHint<'static>] = &[
     CommandHint::new("ENTER", "Guardar"),
@@ -47,8 +53,15 @@ pub fn render(
     sesion: &UsuarioSesion,
     theme: Theme,
 ) {
-    if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
-        render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "ESC salir", theme);
+    if area.width < MIN_TERMINAL_WIDTH || area.height < MIN_TERMINAL_HEIGHT {
+        render_terminal_too_small(
+            frame,
+            area,
+            MIN_TERMINAL_WIDTH,
+            MIN_TERMINAL_HEIGHT,
+            "ESC volver",
+            theme,
+        );
         return;
     }
 
@@ -56,6 +69,7 @@ pub fn render(
     let contexto = identidad_sesion(sesion);
     let (estado_texto, estado_tipo) = estado_shell(state);
     let comandos = match &state.modo {
+        ModoEmpresas::Normal if !state.filtro.is_empty() => COMANDOS_NORMAL_FILTRADO,
         ModoEmpresas::Normal => COMANDOS_NORMAL,
         ModoEmpresas::Busqueda { .. } => COMANDOS_BUSQUEDA,
         ModoEmpresas::Formulario(_) => COMANDOS_FORMULARIO,
@@ -70,6 +84,7 @@ pub fn render(
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: comandos,
+        authenticated: true,
         help_expanded: state.ayuda_expandida,
         ayuda_extra: None,
     };
@@ -90,8 +105,13 @@ fn estado_shell(state: &EmpresasState) -> (String, StatusKind) {
             .map(|e| e.nombre.as_str())
             .unwrap_or_default();
         let accion = if c.activar { "activar" } else { "desactivar" };
+        let consecuencia = if c.activar {
+            "habilitará nuevos ingresos"
+        } else {
+            "impedirá nuevos ingresos de sus contratistas"
+        };
         return (
-            format!("¿Desea {accion} la empresa {nombre}?"),
+            format!("CONFIRMAR · {accion} {nombre} · {consecuencia}"),
             StatusKind::Warning,
         );
     }
@@ -121,25 +141,9 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: Th
         theme,
     );
 
-    let (area_tabla, area_panel) = if area.width >= ANCHO_PANEL_LATERAL {
-        let columnas = Layout::horizontal([
-            Constraint::Percentage(63),
-            Constraint::Length(1),
-            Constraint::Percentage(36),
-        ])
-        .split(filas[1]);
-        render_separador_vertical(frame, columnas[1], theme);
-        (columnas[0], columnas[2])
-    } else {
-        let filas_apiladas = Layout::vertical([
-            Constraint::Min(4),
-            Constraint::Length(1),
-            Constraint::Length(7.min(filas[1].height.saturating_sub(5))),
-        ])
-        .split(filas[1]);
-        render_separador_horizontal(frame, filas_apiladas[1], theme);
-        (filas_apiladas[0], filas_apiladas[2])
-    };
+    let areas = master_detail_areas(filas[1], 63, 7);
+    render_separator(frame, areas.separator, areas.orientation, theme);
+    let (area_tabla, area_panel) = (areas.master, areas.detail);
     render_tabla(frame, area_tabla, state, theme);
     let area_form_nombre = render_panel(frame, area_panel, state, theme);
 
@@ -160,20 +164,6 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: Th
     }
 }
 
-fn render_separador_vertical(frame: &mut Frame, area: Rect, theme: Theme) {
-    let lineas: Vec<Line<'static>> = (0..area.height).map(|_| Line::from("│")).collect();
-    frame.render_widget(Paragraph::new(lineas).style(theme.border()), area);
-}
-
-fn render_separador_horizontal(frame: &mut Frame, area: Rect, theme: Theme) {
-    frame.render_widget(
-        Paragraph::new("─".repeat(area.width as usize)).style(theme.border()),
-        area,
-    );
-}
-
-/// Misma silueta con foco o sin él (etiqueta, valor, línea); sólo cambian
-/// color y peso.
 fn render_campo(
     frame: &mut Frame,
     area: Rect,
@@ -182,33 +172,7 @@ fn render_campo(
     activo: bool,
     theme: Theme,
 ) -> Rect {
-    let estilo_etiqueta = if activo {
-        theme.accent()
-    } else {
-        theme.muted()
-    };
-    let estilo_linea = if activo {
-        theme.accent()
-    } else {
-        theme.border()
-    };
-    let valor_y = area.y.saturating_add(1);
-    let linea_y = area.y.saturating_add(2);
-
-    frame.render_widget(
-        Paragraph::new(etiqueta).style(estilo_etiqueta),
-        Rect::new(area.x, area.y, area.width, 1),
-    );
-    frame.render_widget(
-        Paragraph::new(Line::from(valor).style(theme.base())),
-        Rect::new(area.x, valor_y, area.width, 1),
-    );
-    frame.render_widget(
-        Paragraph::new("─".repeat(area.width as usize)).style(estilo_linea),
-        Rect::new(area.x, linea_y, area.width, 1),
-    );
-
-    Rect::new(area.x, valor_y, area.width, 1)
+    render_form_field(frame, area, etiqueta, valor, activo, theme)
 }
 
 fn render_tabla(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: Theme) {
@@ -230,7 +194,11 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: The
                 theme.base()
             };
             Row::new([
-                Cell::from(empresa.nombre.clone()),
+                Cell::from(format!(
+                    "{} {}",
+                    if seleccionada { ">" } else { " " },
+                    empresa.nombre
+                )),
                 Cell::from(empresa.contratistas.to_string()),
                 Cell::from(if empresa.activo { "ACTIVA" } else { "INACTIVA" }),
             ])

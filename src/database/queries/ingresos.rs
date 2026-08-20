@@ -38,6 +38,7 @@ pub struct IngresoActivoLectura {
     pub es_personal_ruta: bool,
     pub tiene_acceso: bool,
     pub empresa_activa: bool,
+    pub resultado_registrado: ResultadoIngresoRegistrado,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -202,7 +203,8 @@ impl IngresosQuery for SqliteIngresosQuery<'_> {
                 r.contratista_nombre, r.empresa_nombre,
                 r.tipo_ingreso, r.medio_ingreso, r.fecha_hora_ingreso, r.gafete_numero,
                 r.usuario_ingreso_nombre, c.fecha_vencimiento_praind,
-                c.es_personal_ruta, c.tiene_acceso, e.activo
+                c.es_personal_ruta, c.tiene_acceso, e.activo,
+                r.resultado_acceso, r.motivo_resultado
              FROM registro_ingresos AS r
              INNER JOIN contratistas AS c ON c.id = r.contratista_id
              INNER JOIN empresas AS e ON e.id = c.empresa_id
@@ -442,6 +444,7 @@ fn construir_where_historial(
 }
 
 fn convertir_activo(row: &Row<'_>) -> rusqlite::Result<IngresoActivoLectura> {
+    let motivo_resultado = motivo_desde_fila(row, 16)?;
     Ok(IngresoActivoLectura {
         registro_id: row.get(0)?,
         contratista_id: row.get(1)?,
@@ -458,6 +461,7 @@ fn convertir_activo(row: &Row<'_>) -> rusqlite::Result<IngresoActivoLectura> {
         es_personal_ruta: row.get::<_, i64>(12)? != 0,
         tiene_acceso: row.get::<_, i64>(13)? != 0,
         empresa_activa: row.get::<_, i64>(14)? != 0,
+        resultado_registrado: resultado_desde_fila(row, 15, motivo_resultado)?,
     })
 }
 

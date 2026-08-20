@@ -8,7 +8,7 @@ use ratatui::layout::Constraint;
 
 use crate::tui::ui_kit::{
     Debounce, StandardCommand, Term, TextInput, plegar_diacriticos, resolver_terminos,
-    standard_command, valores,
+    resolver_terminos_detallado, standard_command, valores,
 };
 use std::time::Instant;
 
@@ -151,6 +151,18 @@ impl Columna {
             Self::Gafete => Constraint::Length(8),
         }
     }
+    const fn clave(self) -> &'static str {
+        match self {
+            Self::Cedula => "cedula",
+            Self::Nombre => "nombre",
+            Self::Empresa => "empresa",
+            Self::Tipo => "tipo",
+            Self::Hora => "hora",
+            Self::Gafete => "gafete",
+            Self::Medio => "medio",
+            Self::Usuario => "usuario",
+        }
+    }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModoActivos {
@@ -209,6 +221,28 @@ impl Default for ActivosState {
     }
 }
 impl ActivosState {
+    pub(crate) fn columnas_preferencia(&self) -> String {
+        self.columnas
+            .iter()
+            .filter_map(|(columna, visible)| visible.then_some(columna.clave()))
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+
+    pub(crate) fn aplicar_columnas_preferencia(&mut self, valor: &str) {
+        let claves: Vec<&str> = valor.split(',').collect();
+        if !self
+            .columnas
+            .iter()
+            .any(|(columna, _)| claves.contains(&columna.clave()))
+        {
+            return;
+        }
+        for (columna, visible) in &mut self.columnas {
+            *visible = claves.contains(&columna.clave());
+        }
+    }
+
     pub fn completar_empresas(&mut self, r: Result<Vec<Empresa>, String>) {
         if let Ok(e) = r {
             self.empresas = e
@@ -228,6 +262,57 @@ impl ActivosState {
             medio: filtro.medio_ingreso,
         }
     }
+    pub(super) fn resumen_consulta(&self) -> String {
+        if self.filtro.trim().is_empty() {
+            return "Ejemplo: empresa:Brisas tipo:praind gafete:26".to_owned();
+        }
+
+        let mut filtro = FiltroIngresosActivos::default();
+        let resolucion = resolver_terminos_detallado(&self.filtro, &mut filtro, |f, term| {
+            aplicar_clave(f, term, &self.empresas)
+        });
+        let mut partes = Vec::new();
+        if let Some(id) = filtro.empresa_id {
+            let nombre = self
+                .empresas
+                .iter()
+                .find(|empresa| empresa.id == id)
+                .map_or("?", |empresa| empresa.nombre.as_str());
+            partes.push(format!("empresa={nombre}"));
+        }
+        if let Some(tipos) = filtro.tipos_incluidos {
+            partes.push(format!(
+                "tipo={}",
+                tipos
+                    .into_iter()
+                    .map(TipoIngreso::as_str_sql)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ));
+        }
+        if let Some(gafete) = filtro.gafete_numero {
+            partes.push(format!("gafete={gafete}"));
+        }
+        if let Some(medio) = filtro.medio_ingreso {
+            partes.push(format!(
+                "medio={}",
+                match medio {
+                    MedioIngreso::Caminando => "caminando",
+                    MedioIngreso::Vehiculo => "vehículo",
+                }
+            ));
+        }
+        if !resolucion.texto_libre.is_empty() {
+            partes.push(format!("texto=\"{}\"", resolucion.texto_libre));
+        }
+        if !resolucion.no_reconocidos.is_empty() {
+            partes.push(format!(
+                "⚠ sin interpretar: {}",
+                resolucion.no_reconocidos.join(", ")
+            ));
+        }
+        partes.join(" · ")
+    }
     pub fn cantidad(&self) -> usize {
         self.registros.len()
     }
@@ -246,6 +331,9 @@ impl ActivosState {
             Ok(resultado) => {
                 self.registros = resultado.items;
                 self.total_activos = resultado.total;
+                if !matches!(self.mensaje.as_deref(), Some(mensaje) if mensaje.starts_with('✓')) {
+                    self.mensaje = None;
+                }
                 self.seleccion = id
                     .and_then(|x| self.registros.iter().position(|r| r.registro_id == x))
                     .or((!self.registros.is_empty()).then_some(0))
@@ -295,7 +383,9 @@ impl ActivosState {
         }
     }
     fn normal(&mut self, k: KeyEvent) -> AccionActivos {
-        self.mensaje = None;
+        if matches!(k.code, KeyCode::Enter | KeyCode::Char('/') | KeyCode::Esc) {
+            self.mensaje = None;
+        }
         match k.code {
             KeyCode::Up => self.mover(-1),
             KeyCode::Down => self.mover(1),

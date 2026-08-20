@@ -196,3 +196,14 @@ fn error_de_carga_es_presentable_y_movimiento_respeta_limites() {
     }
     assert_eq!(s.seleccion, Some(1));
 }
+
+#[test]
+fn exito_sobrevive_recarga_y_navegacion() {
+    let mut s = EmpresasState::default();
+    let recarga = s.completar_creacion(Ok(1), "Nueva");
+    assert!(matches!(recarga, AccionEmpresas::Buscar { .. }));
+    s.completar_busqueda(Ok(datos()), Some(1));
+    s.handle_key(k(KeyCode::Down));
+
+    assert_eq!(s.mensaje.as_deref(), Some("✓ Empresa creada — Nueva"));
+}

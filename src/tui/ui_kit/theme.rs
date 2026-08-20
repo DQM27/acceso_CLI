@@ -24,6 +24,21 @@ pub enum ThemePreset {
 }
 
 impl ThemePreset {
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::Classic => "classic",
+            Self::Brisas => "brisas",
+        }
+    }
+
+    pub fn from_key(value: &str) -> Option<Self> {
+        match value {
+            "classic" => Some(Self::Classic),
+            "brisas" => Some(Self::Brisas),
+            _ => None,
+        }
+    }
+
     pub const fn theme(self) -> Theme {
         match self {
             Self::Classic => Theme {

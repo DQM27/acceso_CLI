@@ -1,11 +1,15 @@
 use super::*;
 use crate::{
+    domain::resultado_acceso::{MotivoDenegacion, ResultadoAcceso},
+    models::registro_ingreso::{MotivoResultadoIngreso, ResultadoIngresoRegistrado},
     services::{
         autenticacion_service::UsuarioSesion, registro_ingreso_service::IngresoActivoResumen,
     },
     tiempo::{a_costa_rica, hora_actual_texto},
     tui::ui_kit::{
-        CommandHint, ScreenShell, StatusKind, Theme, identidad_sesion, render_terminal_too_small,
+        CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme,
+        identidad_sesion, master_detail_areas, render_form_field, render_separator,
+        render_terminal_too_small,
     },
 };
 use ratatui::{
@@ -15,16 +19,19 @@ use ratatui::{
     widgets::{Cell, Paragraph, Row, Table},
 };
 
-const ANCHO_MINIMO: u16 = 60;
-const ALTO_MINIMO: u16 = 22;
-const ANCHO_PANEL_LATERAL: u16 = 100;
-
 const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓", "Mover"),
     CommandHint::new("ENTER", "Salida"),
     CommandHint::new("/", "Buscar"),
     CommandHint::new("F4", "Columnas"),
     CommandHint::new("ESC", "Volver"),
+];
+const COMANDOS_NORMAL_FILTRADO: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓", "Mover"),
+    CommandHint::new("ENTER", "Salida"),
+    CommandHint::new("/", "Buscar"),
+    CommandHint::new("F4", "Columnas"),
+    CommandHint::new("ESC", "Limpiar filtro"),
 ];
 const COMANDOS_BUSQUEDA: &[CommandHint<'static>] = &[
     CommandHint::new("ENTER", "Aplicar"),
@@ -47,8 +54,15 @@ pub fn render(
     sesion: &UsuarioSesion,
     theme: Theme,
 ) {
-    if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
-        render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "ESC salir", theme);
+    if area.width < MIN_TERMINAL_WIDTH || area.height < MIN_TERMINAL_HEIGHT {
+        render_terminal_too_small(
+            frame,
+            area,
+            MIN_TERMINAL_WIDTH,
+            MIN_TERMINAL_HEIGHT,
+            "ESC volver",
+            theme,
+        );
         return;
     }
 
@@ -56,6 +70,7 @@ pub fn render(
     let contexto = identidad_sesion(sesion);
     let (estado_texto, estado_tipo) = estado_shell(state);
     let comandos = match &state.modo {
+        ModoActivos::Normal if !state.filtro.is_empty() => COMANDOS_NORMAL_FILTRADO,
         ModoActivos::Normal => COMANDOS_NORMAL,
         ModoActivos::Busqueda { .. } => COMANDOS_BUSQUEDA,
         ModoActivos::ConfirmarSalida { .. } => COMANDOS_CONFIRMAR,
@@ -70,6 +85,7 @@ pub fn render(
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: comandos,
+        authenticated: true,
         help_expanded: state.ayuda_expandida,
         ayuda_extra: Some("Claves: empresa, tipo, gafete, medio"),
     };
@@ -86,7 +102,9 @@ fn estado_shell(state: &ActivosState) -> (String, StatusKind) {
                 .map(|r| r.contratista_nombre.as_str())
                 .unwrap_or_default();
             (
-                format!("¿Registrar la salida de {nombre}?"),
+                format!(
+                    "CONFIRMAR SALIDA · {nombre} · cerrará el ingreso activo y liberará el gafete"
+                ),
                 StatusKind::Warning,
             )
         }
@@ -116,34 +134,19 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &ActivosState, theme: The
         frame,
         filas[0],
         &format!(
-            "BUSCAR · {} DE {} DENTRO",
+            "BUSCAR · {} DE {} DENTRO · {}",
             state.cantidad(),
-            state.total_activos()
+            state.total_activos(),
+            state.resumen_consulta()
         ),
         texto_busqueda,
         enfocado_busqueda,
         theme,
     );
 
-    let (area_tabla, area_panel) = if area.width >= ANCHO_PANEL_LATERAL {
-        let columnas = Layout::horizontal([
-            Constraint::Percentage(63),
-            Constraint::Length(1),
-            Constraint::Percentage(36),
-        ])
-        .split(filas[1]);
-        render_separador_vertical(frame, columnas[1], theme);
-        (columnas[0], columnas[2])
-    } else {
-        let filas_apiladas = Layout::vertical([
-            Constraint::Min(4),
-            Constraint::Length(1),
-            Constraint::Length(10.min(filas[1].height.saturating_sub(5))),
-        ])
-        .split(filas[1]);
-        render_separador_horizontal(frame, filas_apiladas[1], theme);
-        (filas_apiladas[0], filas_apiladas[2])
-    };
+    let areas = master_detail_areas(filas[1], 63, 10);
+    render_separator(frame, areas.separator, areas.orientation, theme);
+    let (area_tabla, area_panel) = (areas.master, areas.detail);
     render_tabla(frame, area_tabla, state, theme);
     render_panel(frame, area_panel, state, theme);
 
@@ -157,18 +160,6 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &ActivosState, theme: The
     }
 }
 
-fn render_separador_vertical(frame: &mut Frame, area: Rect, theme: Theme) {
-    let lineas: Vec<Line<'static>> = (0..area.height).map(|_| Line::from("│")).collect();
-    frame.render_widget(Paragraph::new(lineas).style(theme.border()), area);
-}
-
-fn render_separador_horizontal(frame: &mut Frame, area: Rect, theme: Theme) {
-    frame.render_widget(
-        Paragraph::new("─".repeat(area.width as usize)).style(theme.border()),
-        area,
-    );
-}
-
 /// Misma silueta con foco o sin él (etiqueta, valor, línea); sólo cambian
 /// color y peso.
 fn render_campo(
@@ -179,33 +170,7 @@ fn render_campo(
     activo: bool,
     theme: Theme,
 ) -> Rect {
-    let estilo_etiqueta = if activo {
-        theme.accent()
-    } else {
-        theme.muted()
-    };
-    let estilo_linea = if activo {
-        theme.accent()
-    } else {
-        theme.border()
-    };
-    let valor_y = area.y.saturating_add(1);
-    let linea_y = area.y.saturating_add(2);
-
-    frame.render_widget(
-        Paragraph::new(etiqueta).style(estilo_etiqueta),
-        Rect::new(area.x, area.y, area.width, 1),
-    );
-    frame.render_widget(
-        Paragraph::new(Line::from(valor).style(theme.base())),
-        Rect::new(area.x, valor_y, area.width, 1),
-    );
-    frame.render_widget(
-        Paragraph::new("─".repeat(area.width as usize)).style(estilo_linea),
-        Rect::new(area.x, linea_y, area.width, 1),
-    );
-
-    Rect::new(area.x, valor_y, area.width, 1)
+    render_form_field(frame, area, etiqueta, valor, activo, theme)
 }
 
 fn render_tabla(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Theme) {
@@ -225,7 +190,7 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Them
         .enumerate()
         .map(|(visible, registro)| {
             let seleccionada = state.seleccion == Some(inicio + visible);
-            let celdas = columnas.iter().map(|columna| {
+            let celdas = columnas.iter().enumerate().map(|(indice, columna)| {
                 let estilo = if seleccionada {
                     theme.selected()
                 } else if *columna == Columna::Tipo
@@ -238,7 +203,13 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Them
                 } else {
                     theme.base()
                 };
-                Cell::from(valor_columna(registro, *columna)).style(estilo)
+                let valor = valor_columna(registro, *columna);
+                let valor = if indice == 0 {
+                    format!("{} {valor}", if seleccionada { ">" } else { " " })
+                } else {
+                    valor
+                };
+                Cell::from(valor).style(estilo)
             });
             Row::new(celdas).style(if seleccionada {
                 theme.selected()
@@ -314,10 +285,21 @@ fn render_panel(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Them
 }
 
 fn render_detalle(frame: &mut Frame, area: Rect, registro: &IngresoActivoResumen, theme: Theme) {
-    let mut lineas = vec![
+    let (nivel_actual, motivo_actual, accion_actual, estilo_actual) =
+        presentacion_condicion_actual(&registro.resultado_acceso, theme);
+    let lineas = vec![
         Line::from(registro.contratista_nombre.clone()).style(theme.title()),
         Line::from(format!("{} · {}", registro.cedula, registro.empresa_nombre))
             .style(theme.base()),
+        Line::from(""),
+        Line::from(format!(
+            "Decisión al ingresar  {}",
+            texto_resultado_registrado(&registro.resultado_registrado)
+        ))
+        .style(theme.base()),
+        Line::from(format!("Condición actual     {nivel_actual}")).style(estilo_actual),
+        Line::from(format!("Motivo               {motivo_actual}")).style(estilo_actual),
+        Line::from(format!("Acción               {accion_actual}")).style(estilo_actual),
         Line::from(""),
         Line::from(format!(
             "Tipo               {}",
@@ -345,16 +327,56 @@ fn render_detalle(frame: &mut Frame, area: Rect, registro: &IngresoActivoResumen
         ))
         .style(theme.base()),
     ];
-    if !matches!(
-        registro.resultado_acceso,
-        crate::domain::resultado_acceso::ResultadoAcceso::Permitido
-    ) {
-        lineas.push(Line::from(""));
-        lineas.push(
-            Line::from("Condición de acceso actual requiere atención").style(theme.warning()),
-        );
-    }
     frame.render_widget(Paragraph::new(lineas), area);
+}
+
+fn texto_resultado_registrado(resultado: &ResultadoIngresoRegistrado) -> &'static str {
+    match resultado {
+        ResultadoIngresoRegistrado::Permitido => "PERMITIDO",
+        ResultadoIngresoRegistrado::PermitidoConAdvertencia(
+            MotivoResultadoIngreso::PraindProximoVencer,
+        ) => "PERMITIDO CON ADVERTENCIA · PRAIND próximo a vencer",
+        ResultadoIngresoRegistrado::PermitidoConAdvertencia(
+            MotivoResultadoIngreso::DatosReconstruidos,
+        )
+        | ResultadoIngresoRegistrado::Migrado => "REGISTRO HISTÓRICO RECONSTRUIDO",
+    }
+}
+
+fn presentacion_condicion_actual(
+    resultado: &ResultadoAcceso,
+    theme: Theme,
+) -> (
+    &'static str,
+    &'static str,
+    &'static str,
+    ratatui::style::Style,
+) {
+    match resultado {
+        ResultadoAcceso::Permitido => (
+            "PERMITIDO",
+            "Sin cambios relevantes",
+            "Ninguna",
+            theme.success(),
+        ),
+        ResultadoAcceso::PermitidoConAdvertencia => (
+            "ADVERTENCIA",
+            "PRAIND próximo a vencer",
+            "Verificar vigencia con el responsable",
+            theme.warning(),
+        ),
+        ResultadoAcceso::Denegado(motivo) => (
+            "ACCIÓN REQUERIDA",
+            match motivo {
+                MotivoDenegacion::SinAcceso => "Acceso individual revocado",
+                MotivoDenegacion::PraindVencido => "PRAIND vencido",
+                MotivoDenegacion::PraindNoRegistrado => "PRAIND sin fecha registrada",
+                MotivoDenegacion::EmpresaInactiva => "Empresa inactiva",
+            },
+            "Contactar seguridad y resolver antes del próximo ingreso",
+            theme.danger(),
+        ),
+    }
 }
 
 fn render_columnas(

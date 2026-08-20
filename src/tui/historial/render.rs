@@ -4,8 +4,9 @@ use crate::{
     services::autenticacion_service::UsuarioSesion,
     tiempo::{a_costa_rica, hora_actual_texto},
     tui::ui_kit::{
-        CommandHint, ScreenShell, StatusKind, Theme, auxiliary_panel, centered_rect,
-        identidad_sesion, render_terminal_too_small,
+        CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme,
+        auxiliary_panel, centered_rect, identidad_sesion, master_detail_areas, render_form_field,
+        render_separator, render_terminal_too_small,
     },
 };
 use ratatui::{
@@ -16,10 +17,6 @@ use ratatui::{
     widgets::{Cell, Clear, Paragraph, Row, Table},
 };
 
-const ANCHO_MINIMO: u16 = 60;
-const ALTO_MINIMO: u16 = 22;
-const ANCHO_PANEL_LATERAL: u16 = 100;
-
 pub fn render(
     frame: &mut Frame,
     area: Rect,
@@ -27,8 +24,15 @@ pub fn render(
     sesion: &UsuarioSesion,
     theme: Theme,
 ) {
-    if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
-        render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "ESC salir", theme);
+    if area.width < MIN_TERMINAL_WIDTH || area.height < MIN_TERMINAL_HEIGHT {
+        render_terminal_too_small(
+            frame,
+            area,
+            MIN_TERMINAL_WIDTH,
+            MIN_TERMINAL_HEIGHT,
+            "ESC volver",
+            theme,
+        );
         return;
     }
 
@@ -45,6 +49,7 @@ pub fn render(
         status: &estado_texto_linea,
         status_kind: estado_tipo,
         commands: &comandos,
+        authenticated: true,
         help_expanded: state.ayuda_expandida,
         ayuda_extra: Some("Claves: empresa, tipo, estado, gafete, desde, hasta, ingreso, salida"),
     };
@@ -168,25 +173,9 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &HistorialState, theme: T
 
 /// El timeline agrupado + panel de detalle — el enfoque "curado".
 fn render_vista_timeline(frame: &mut Frame, area: Rect, state: &HistorialState, theme: Theme) {
-    let (area_timeline, area_panel) = if area.width >= ANCHO_PANEL_LATERAL {
-        let columnas = Layout::horizontal([
-            Constraint::Percentage(63),
-            Constraint::Length(1),
-            Constraint::Percentage(36),
-        ])
-        .split(area);
-        render_separador_vertical(frame, columnas[1], theme);
-        (columnas[0], columnas[2])
-    } else {
-        let filas_apiladas = Layout::vertical([
-            Constraint::Min(4),
-            Constraint::Length(1),
-            Constraint::Length(15.min(area.height.saturating_sub(5))),
-        ])
-        .split(area);
-        render_separador_horizontal(frame, filas_apiladas[1], theme);
-        (filas_apiladas[0], filas_apiladas[2])
-    };
+    let areas = master_detail_areas(area, 63, 15);
+    render_separator(frame, areas.separator, areas.orientation, theme);
+    let (area_timeline, area_panel) = (areas.master, areas.detail);
     render_timeline(frame, area_timeline, state, theme);
     match state.seleccionado() {
         Some(r) => render_detalle(frame, area_panel, r, theme),
@@ -195,18 +184,6 @@ fn render_vista_timeline(frame: &mut Frame, area: Rect, state: &HistorialState, 
             area_panel,
         ),
     }
-}
-
-fn render_separador_vertical(frame: &mut Frame, area: Rect, theme: Theme) {
-    let lineas: Vec<Line<'static>> = (0..area.height).map(|_| Line::from("│")).collect();
-    frame.render_widget(Paragraph::new(lineas).style(theme.border()), area);
-}
-
-fn render_separador_horizontal(frame: &mut Frame, area: Rect, theme: Theme) {
-    frame.render_widget(
-        Paragraph::new("─".repeat(area.width as usize)).style(theme.border()),
-        area,
-    );
 }
 
 /// El campo de búsqueda está siempre activo: no hay otro modo que le
@@ -220,35 +197,7 @@ fn render_campo(
     activo: bool,
     theme: Theme,
 ) -> Rect {
-    let estilo_etiqueta = if activo {
-        theme.accent()
-    } else {
-        theme.muted()
-    };
-    let estilo_linea = if activo {
-        theme.accent()
-    } else {
-        theme.border()
-    };
-    let valor_y = area.y.saturating_add(1);
-    let linea_y = area.y.saturating_add(2);
-
-    frame.render_widget(
-        Paragraph::new(etiqueta).style(estilo_etiqueta),
-        Rect::new(area.x, area.y, area.width, 1),
-    );
-    frame.render_widget(
-        Paragraph::new(Line::from(valor).style(theme.base())),
-        Rect::new(area.x, valor_y, area.width, 1),
-    );
-    if area.height > 2 {
-        frame.render_widget(
-            Paragraph::new("─".repeat(area.width as usize)).style(estilo_linea),
-            Rect::new(area.x, linea_y, area.width, 1),
-        );
-    }
-
-    Rect::new(area.x, valor_y, area.width, 1)
+    render_form_field(frame, area, etiqueta, valor, activo, theme)
 }
 
 fn render_timeline(frame: &mut Frame, area: Rect, state: &HistorialState, theme: Theme) {
@@ -449,11 +398,14 @@ fn render_tabla_clasica(frame: &mut Frame, area: Rect, state: &HistorialState, t
         .enumerate()
         .map(|(visible, r)| {
             let seleccionada = state.seleccion == Some(inicio + visible);
-            Row::new(
-                columnas_visibles
-                    .iter()
-                    .map(|c| Cell::from(valor_columna_clasica(r, *c))),
-            )
+            Row::new(columnas_visibles.iter().enumerate().map(|(indice, c)| {
+                let valor = valor_columna_clasica(r, *c);
+                Cell::from(if indice == 0 {
+                    format!("{} {valor}", if seleccionada { ">" } else { " " })
+                } else {
+                    valor
+                })
+            }))
             .style(if seleccionada {
                 theme.selected()
             } else {

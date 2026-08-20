@@ -27,6 +27,8 @@ fn r(id: i64, g: Option<i64>) -> IngresoActivoResumen {
         .unwrap(),
         gafete_numero: g,
         usuario_ingreso_nombre: "Ana".into(),
+        resultado_registrado:
+            crate::models::registro_ingreso::ResultadoIngresoRegistrado::Permitido,
         resultado_acceso: ResultadoAcceso::Permitido,
     }
 }
@@ -128,6 +130,7 @@ fn negar_tipo_incluye_los_demas_y_clave_invalida_cae_a_texto_libre() {
     assert!(!tipos.contains(&TipoIngreso::Swat));
 
     s.filtro = "gafete:no-numero".into();
+    assert!(s.resumen_consulta().contains("sin interpretar"));
     let AccionActivos::Buscar { texto, gafete, .. } = s.buscar(None) else {
         panic!("debía consultar")
     };
@@ -183,4 +186,62 @@ fn columnas_y_movimiento_conservan_ux() {
         NaiveDate::from_ymd_opt(2026, 8, 12).unwrap().to_string(),
         "2026-08-12"
     )
+}
+
+#[test]
+fn mensaje_de_salida_sobrevive_recarga_y_navegacion() {
+    let mut s = ActivosState::default();
+    cargar(&mut s);
+
+    let recarga = s.completar_salida(Ok(()), 7, "Ana");
+    assert!(matches!(recarga, AccionActivos::Buscar { .. }));
+    cargar(&mut s);
+    s.handle_key(k(KeyCode::Down));
+
+    assert_eq!(s.mensaje.as_deref(), Some("✓ Salida registrada — Ana"));
+}
+
+#[test]
+fn detalle_distingue_decision_historica_de_condicion_actual() {
+    use ratatui::{Terminal, backend::TestBackend};
+
+    let mut s = ActivosState::default();
+    cargar(&mut s);
+    s.registros[0].resultado_registrado =
+        crate::models::registro_ingreso::ResultadoIngresoRegistrado::PermitidoConAdvertencia(
+            crate::models::registro_ingreso::MotivoResultadoIngreso::PraindProximoVencer,
+        );
+    s.registros[0].resultado_acceso =
+        ResultadoAcceso::Denegado(crate::domain::resultado_acceso::MotivoDenegacion::PraindVencido);
+    let sesion = crate::services::autenticacion_service::UsuarioSesion {
+        id: 1,
+        cedula: "1".into(),
+        nombre: "Operador".into(),
+        rol: crate::models::usuario::RolUsuario::Operador,
+    };
+    let mut terminal = Terminal::new(TestBackend::new(140, 40)).unwrap();
+    terminal
+        .draw(|frame| {
+            render::render(
+                frame,
+                frame.area(),
+                &s,
+                &sesion,
+                crate::tui::ui_kit::ThemePreset::Brisas.theme(),
+            )
+        })
+        .unwrap();
+    let texto: String = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect();
+
+    assert!(texto.contains("Decisión al ingresar"));
+    assert!(texto.contains("PERMITIDO CON ADVERTENCIA"));
+    assert!(texto.contains("Condición actual"));
+    assert!(texto.contains("ACCIÓN REQUERIDA"));
+    assert!(texto.contains("PRAIND vencido"));
 }

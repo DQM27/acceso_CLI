@@ -5,7 +5,9 @@
 //! atajos, también la convención de teclado (`standard_command`).
 
 mod debounce;
+mod fields;
 mod keyboard;
+mod layout;
 mod query_lang;
 mod seleccion;
 mod shell;
@@ -14,11 +16,18 @@ mod texto;
 mod theme;
 
 pub use debounce::Debounce;
+pub use fields::{ChoiceFieldOptions, render_choice_field, render_form_field};
 pub use keyboard::{
     CANCEL_HINT, EMERGENCY_EXIT_HINT, HELP_HINT, HELP_KEY, QUICK_EXIT_HINT, QUICK_EXIT_KEY,
     StandardCommand, THEME_HINT, THEME_KEY, standard_command,
 };
-pub use query_lang::{Term, resolver_terminos, valores};
+pub use layout::{
+    MASTER_DETAIL_BREAKPOINT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, MasterDetailAreas,
+    SeparatorOrientation, master_detail_areas, render_separator,
+};
+pub use query_lang::{
+    ResolucionConsulta, Term, resolver_terminos, resolver_terminos_detallado, valores,
+};
 pub use seleccion::mover_seleccion;
 pub use shell::{
     CommandHint, ScreenShell, ShellAreas, StatusKind, auxiliary_panel, centered_content,

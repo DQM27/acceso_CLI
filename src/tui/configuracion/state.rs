@@ -180,7 +180,12 @@ impl RespaldosState {
     }
 
     fn normal(&mut self, key: KeyEvent) -> AccionRespaldos {
-        self.mensaje = None;
+        if matches!(
+            key.code,
+            KeyCode::Char('c' | 'C' | 'a' | 'A' | 'v' | 'V' | 'e' | 'E' | 'r' | 'R') | KeyCode::Esc
+        ) {
+            self.mensaje = None;
+        }
         match key.code {
             KeyCode::Up => {
                 self.mover(-1);

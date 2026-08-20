@@ -58,6 +58,8 @@ pub struct ScreenShell<'a> {
     pub status: &'a str,
     pub status_kind: StatusKind,
     pub commands: &'a [CommandHint<'a>],
+    /// Habilita los atajos transversales que requieren una sesión activa.
+    pub authenticated: bool,
     /// Si la ayuda está expandida (F1), se agrega una segunda línea de pie.
     pub help_expanded: bool,
     /// Contenido de esa segunda línea — hoy, las claves de búsqueda
@@ -171,12 +173,14 @@ impl ScreenShell<'_> {
         } else {
             "más"
         };
-        let primary: Vec<CommandHint<'_>> = self
-            .commands
-            .iter()
-            .copied()
-            .chain(std::iter::once(CommandHint::new("F1", ayuda_label)))
-            .collect();
+        let mut primary = self.commands.to_vec();
+        if self.ayuda_extra.is_some() {
+            primary.push(CommandHint::new("F1", ayuda_label));
+        }
+        if self.authenticated {
+            primary.push(CommandHint::new("F2", "Salida rápida"));
+        }
+        primary.push(CommandHint::new("F7", "Tema"));
 
         let mut lines = wrap_commands(&primary, max_width, theme);
         if self.help_expanded
@@ -290,8 +294,9 @@ fn styled_panel(
     } else {
         theme.border()
     };
+    let focus_marker = if focused { "▶ " } else { "" };
     Block::default()
-        .title(format!(" {title} "))
+        .title(format!(" {focus_marker}{title} "))
         .title_alignment(title_alignment)
         .title_style(style)
         .borders(Borders::ALL)
@@ -336,6 +341,7 @@ mod tests {
             status: "Preparado",
             status_kind: StatusKind::Normal,
             commands: &commands,
+            authenticated: false,
             help_expanded: false,
             ayuda_extra: None,
         };
@@ -385,6 +391,7 @@ mod tests {
             status: "Preparado",
             status_kind: StatusKind::Normal,
             commands: &commands,
+            authenticated: false,
             help_expanded: false,
             ayuda_extra: Some("Claves: empresa, tipo"),
         };
@@ -400,7 +407,7 @@ mod tests {
     }
 
     #[test]
-    fn f1_no_agrega_segunda_linea_si_la_pantalla_no_tiene_ayuda_extra() {
+    fn f1_no_se_anuncia_si_la_pantalla_no_tiene_ayuda_extra() {
         let commands = [CommandHint::new("ESC", "Salir")];
         let shell = ScreenShell {
             product: "BRISAS CLI",
@@ -410,12 +417,35 @@ mod tests {
             status: "Preparado",
             status_kind: StatusKind::Normal,
             commands: &commands,
+            authenticated: false,
             help_expanded: true,
             ayuda_extra: None,
         };
 
         let expandido = texto_renderizado(&shell);
-        assert!(expandido.contains("cerrar ayuda"));
+        assert!(!expandido.contains("F1"));
         assert!(!expandido.contains("Claves"));
+    }
+
+    #[test]
+    fn sesion_autenticada_anuncia_atajos_globales() {
+        let commands = [CommandHint::new("ESC", "Volver")];
+        let shell = ScreenShell {
+            product: "BRISAS CLI",
+            screen: "PRUEBA",
+            context: "LOCAL",
+            clock: "12:00:00",
+            status: "Preparado",
+            status_kind: StatusKind::Normal,
+            commands: &commands,
+            authenticated: true,
+            help_expanded: false,
+            ayuda_extra: None,
+        };
+
+        let texto = texto_renderizado(&shell);
+        assert!(texto.contains("F2 Salida rápida"));
+        assert!(texto.contains("F7 Tema"));
+        assert!(!texto.contains("F1"));
     }
 }

@@ -49,6 +49,7 @@ pub fn render(
         status: &status,
         status_kind: kind,
         commands: COMANDOS,
+        authenticated: true,
         help_expanded: state.ayuda_expandida,
         ayuda_extra: None,
     };

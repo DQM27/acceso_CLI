@@ -106,6 +106,21 @@ impl ClassicColumn {
             Self::Ingreso | Self::Egreso => Constraint::Fill(2),
         }
     }
+    const fn clave(self) -> &'static str {
+        match self {
+            Self::Fecha => "fecha",
+            Self::Nombre => "nombre",
+            Self::Cedula => "cedula",
+            Self::Empresa => "empresa",
+            Self::Tipo => "tipo",
+            Self::Entrada => "entrada",
+            Self::Salida => "salida",
+            Self::Gafete => "gafete",
+            Self::Medio => "medio",
+            Self::Ingreso => "ingreso",
+            Self::Egreso => "egreso",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -160,6 +175,45 @@ impl Default for HistorialState {
     }
 }
 impl HistorialState {
+    pub(crate) fn vista_preferencia(&self) -> &'static str {
+        match self.vista {
+            ViewMode::Timeline => "timeline",
+            ViewMode::Classic => "classic",
+            ViewMode::Heatmap => "heatmap",
+        }
+    }
+
+    pub(crate) fn aplicar_vista_preferencia(&mut self, valor: &str) {
+        self.vista = match valor {
+            "timeline" => ViewMode::Timeline,
+            "classic" => ViewMode::Classic,
+            "heatmap" => ViewMode::Heatmap,
+            _ => return,
+        };
+    }
+
+    pub(crate) fn columnas_preferencia(&self) -> String {
+        self.columnas_clasica
+            .iter()
+            .filter_map(|(columna, visible)| visible.then_some(columna.clave()))
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+
+    pub(crate) fn aplicar_columnas_preferencia(&mut self, valor: &str) {
+        let claves: Vec<&str> = valor.split(',').collect();
+        if !self
+            .columnas_clasica
+            .iter()
+            .any(|(columna, _)| claves.contains(&columna.clave()))
+        {
+            return;
+        }
+        for (columna, visible) in &mut self.columnas_clasica {
+            *visible = claves.contains(&columna.clave());
+        }
+    }
+
     pub fn completar_empresas(&mut self, r: Result<Vec<Empresa>, String>) {
         match r {
             Ok(v) => self.empresas = v,

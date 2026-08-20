@@ -370,6 +370,9 @@ impl UsuariosState {
         match resultado {
             Ok(items) => {
                 self.usuarios = items;
+                if !matches!(self.mensaje.as_deref(), Some(mensaje) if mensaje.starts_with('✓')) {
+                    self.mensaje = None;
+                }
                 self.seleccion = seleccionar_id
                     .and_then(|id| self.usuarios.iter().position(|u| u.id == id))
                     .or((!self.usuarios.is_empty()).then_some(0));
@@ -477,7 +480,12 @@ impl UsuariosState {
         }
     }
     fn normal(&mut self, key: KeyEvent) -> AccionUsuarios {
-        self.mensaje = None;
+        if matches!(
+            key.code,
+            KeyCode::Enter | KeyCode::Char('n' | 'N' | 'p' | 'P' | 'a' | 'A' | '/') | KeyCode::Esc
+        ) {
+            self.mensaje = None;
+        }
         match key.code {
             KeyCode::Up => self.mover(-1),
             KeyCode::Down => self.mover(1),

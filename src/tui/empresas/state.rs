@@ -132,7 +132,9 @@ impl EmpresasState {
         match resultado {
             Ok(empresas) => {
                 self.empresas = empresas;
-                self.mensaje = None;
+                if !matches!(self.mensaje.as_deref(), Some(mensaje) if mensaje.starts_with('✓')) {
+                    self.mensaje = None;
+                }
                 self.seleccion = seleccionar_id
                     .and_then(|id| self.empresas.iter().position(|e| e.id == id))
                     .or_else(|| (!self.empresas.is_empty()).then_some(0));
@@ -215,7 +217,12 @@ impl EmpresasState {
     }
 
     fn handle_normal(&mut self, key: KeyEvent) -> AccionEmpresas {
-        self.mensaje = None;
+        if matches!(
+            key.code,
+            KeyCode::Enter | KeyCode::Char('n' | 'N' | 'a' | 'A' | '/') | KeyCode::Esc
+        ) {
+            self.mensaje = None;
+        }
         match key.code {
             KeyCode::Up => self.mover(-1),
             KeyCode::Down => self.mover(1),

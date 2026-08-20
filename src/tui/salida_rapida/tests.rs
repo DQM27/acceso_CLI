@@ -37,6 +37,8 @@ fn r(id: i64, nombre: &str, gafete: Option<i64>) -> IngresoActivoResumen {
         .unwrap(),
         gafete_numero: gafete,
         usuario_ingreso_nombre: "Ana".into(),
+        resultado_registrado:
+            crate::models::registro_ingreso::ResultadoIngresoRegistrado::Permitido,
         resultado_acceso: ResultadoAcceso::Permitido,
     }
 }
