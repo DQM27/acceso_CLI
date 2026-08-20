@@ -6,6 +6,8 @@ use chrono::{TimeZone, Utc};
 
 use control_acceso::application::AppCore;
 use control_acceso::database::backup::{ResultadoValidacion, TipoRespaldo};
+use control_acceso::services::autenticacion_service::UsuarioSesion;
+use control_acceso::services::usuario_service::CrearRootInicialInput;
 use control_acceso::tiempo::RelojFijo;
 
 /// Cada base vive en su propio directorio temporal, no directamente en
@@ -25,20 +27,31 @@ fn archivo_temporal(nombre: &str) -> PathBuf {
     directorio.join("control_acceso.sqlite")
 }
 
+fn root(core: &AppCore) -> UsuarioSesion {
+    core.crear_root_inicial(CrearRootInicialInput {
+        cedula: "ROOT".into(),
+        nombre: "Root".into(),
+        password: "password-root".into(),
+    })
+    .unwrap();
+    core.autenticar("ROOT", "password-root").unwrap()
+}
+
 #[test]
 fn crear_listar_y_validar_un_respaldo_a_traves_de_appcore() {
     let ruta = archivo_temporal("crear_listar_validar");
     let core = AppCore::abrir(&ruta).unwrap();
+    let actor = root(&core);
 
-    let creado = core.crear_respaldo(TipoRespaldo::Manual).unwrap();
+    let creado = core.crear_respaldo(&actor, TipoRespaldo::Manual).unwrap();
     assert_eq!(creado.tipo, TipoRespaldo::Manual);
     assert!(creado.ruta.exists());
 
-    let listado = core.listar_respaldos().unwrap();
+    let listado = core.listar_respaldos(&actor).unwrap();
     assert_eq!(listado.len(), 1);
     assert_eq!(listado[0].ruta, creado.ruta);
 
-    let validacion = core.validar_respaldo(&creado.ruta).unwrap();
+    let validacion = core.validar_respaldo(&actor, &creado.ruta).unwrap();
     assert!(matches!(validacion, ResultadoValidacion::Valido { .. }));
 }
 
@@ -46,10 +59,12 @@ fn crear_listar_y_validar_un_respaldo_a_traves_de_appcore() {
 fn exportar_copia_el_archivo_ya_validado_a_la_ruta_indicada() {
     let ruta = archivo_temporal("exportar");
     let core = AppCore::abrir(&ruta).unwrap();
-    let creado = core.crear_respaldo(TipoRespaldo::Manual).unwrap();
+    let actor = root(&core);
+    let creado = core.crear_respaldo(&actor, TipoRespaldo::Manual).unwrap();
 
     let destino = archivo_temporal("exportar_destino");
-    core.exportar_respaldo(&creado.ruta, &destino).unwrap();
+    core.exportar_respaldo(&actor, &creado.ruta, &destino)
+        .unwrap();
 
     assert!(destino.exists());
     assert_eq!(
@@ -62,8 +77,9 @@ fn exportar_copia_el_archivo_ya_validado_a_la_ruta_indicada() {
 fn el_directorio_de_respaldos_vive_junto_a_la_base_activa() {
     let ruta = archivo_temporal("directorio");
     let core = AppCore::abrir(&ruta).unwrap();
+    let actor = root(&core);
 
-    let creado = core.crear_respaldo(TipoRespaldo::Manual).unwrap();
+    let creado = core.crear_respaldo(&actor, TipoRespaldo::Manual).unwrap();
 
     let directorio_esperado = ruta.parent().unwrap().join("backups");
     assert_eq!(creado.ruta.parent().unwrap(), directorio_esperado);
@@ -92,10 +108,11 @@ fn respaldo_automatico_diario_no_crea_uno_nuevo_si_ya_hay_uno_de_hoy() {
     let hoy = Utc.with_ymd_and_hms(2026, 1, 16, 8, 0, 0).unwrap();
     sembrar_automatico(&ruta.parent().unwrap().join("backups"), "2026-01-16");
     let core = AppCore::abrir_con_reloj(&ruta, Arc::new(RelojFijo::new(hoy))).unwrap();
+    let actor = root(&core);
 
     core.respaldo_automatico_diario_si_hace_falta();
 
-    assert_eq!(core.listar_respaldos().unwrap().len(), 1);
+    assert_eq!(core.listar_respaldos(&actor).unwrap().len(), 1);
 }
 
 #[test]
@@ -104,10 +121,11 @@ fn respaldo_automatico_diario_crea_uno_nuevo_si_el_ultimo_es_de_otro_dia() {
     let hoy = Utc.with_ymd_and_hms(2026, 1, 16, 8, 0, 0).unwrap();
     sembrar_automatico(&ruta.parent().unwrap().join("backups"), "2026-01-15");
     let core = AppCore::abrir_con_reloj(&ruta, Arc::new(RelojFijo::new(hoy))).unwrap();
+    let actor = root(&core);
 
     core.respaldo_automatico_diario_si_hace_falta();
 
-    let listado = core.listar_respaldos().unwrap();
+    let listado = core.listar_respaldos(&actor).unwrap();
     assert_eq!(listado.len(), 2); // el sembrado de "ayer" + el nuevo de "hoy"
     assert!(listado.iter().all(|r| r.tipo == TipoRespaldo::Automatico));
 }

@@ -2,7 +2,8 @@ use chrono::NaiveDate;
 use control_acceso::{
     application::AppCore,
     database::{connection::open_database, queries::contratistas::FiltroContratistas},
-    models::tipo_ingreso::TipoIngreso,
+    models::{tipo_ingreso::TipoIngreso, usuario::RolUsuario},
+    services::autenticacion_service::UsuarioSesion,
     services::contratista_service::{DatosActualizacionContratista, DatosContratista},
     services::error::ContratistaServiceError,
 };
@@ -49,6 +50,24 @@ fn filtro(t: &str) -> FiltroContratistas {
     }
 }
 
+fn root(core: &AppCore) -> UsuarioSesion {
+    let id = core
+        .crear_root_inicial(
+            control_acceso::services::usuario_service::CrearRootInicialInput {
+                cedula: "ROOT".into(),
+                nombre: "Root".into(),
+                password: "password-root".into(),
+            },
+        )
+        .unwrap();
+    UsuarioSesion {
+        id,
+        cedula: "ROOT".into(),
+        nombre: "Root".into(),
+        rol: RolUsuario::Root,
+    }
+}
+
 #[test]
 fn persistencia_busqueda_fts_y_empresa_id_sobreviven_reapertura() {
     let sello = SystemTime::now()
@@ -59,16 +78,20 @@ fn persistencia_busqueda_fts_y_empresa_id_sobreviven_reapertura() {
     let id;
     {
         let core = AppCore::new(open_database(&ruta).unwrap());
-        let e = core.crear_empresa("Constructora Álvarez").unwrap();
+        let actor = root(&core);
+        let e = core.crear_empresa(&actor, "Constructora Álvarez").unwrap();
         id = core
-            .crear_contratista(datos(
-                "001-09",
-                "José Hernández",
-                e,
-                TipoIngreso::Praind,
-                NaiveDate::from_ymd_opt(2027, 1, 1),
-                false,
-            ))
+            .crear_contratista(
+                &actor,
+                datos(
+                    "001-09",
+                    "José Hernández",
+                    e,
+                    TipoIngreso::Praind,
+                    NaiveDate::from_ymd_opt(2027, 1, 1),
+                    false,
+                ),
+            )
             .unwrap();
         for q in ["jose", "hernandez", "nandez", "alvarez", "tructora"] {
             let r = core.buscar_contratistas(&filtro(q)).unwrap().items;
@@ -96,21 +119,29 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
             .as_nanos()
     ));
     let core = AppCore::new(open_database(&ruta).unwrap());
-    let e = core.crear_empresa("Empresa").unwrap();
+    let actor = root(&core);
+    let e = core.crear_empresa(&actor, "Empresa").unwrap();
     let a = core
-        .crear_contratista(datos(
-            "A",
-            "José Hernández",
-            e,
-            TipoIngreso::PorCorreo,
-            None,
-            false,
-        ))
+        .crear_contratista(
+            &actor,
+            datos(
+                "A",
+                "José Hernández",
+                e,
+                TipoIngreso::PorCorreo,
+                None,
+                false,
+            ),
+        )
         .unwrap();
     let _b = core
-        .crear_contratista(datos("B", "Otro", e, TipoIngreso::Swat, None, false))
+        .crear_contratista(
+            &actor,
+            datos("B", "Otro", e, TipoIngreso::Swat, None, false),
+        )
         .unwrap();
     core.actualizar_contratista(
+        &actor,
         a,
         actualizacion("José Álvarez", e, TipoIngreso::PorCorreo, None, false),
     )
@@ -126,14 +157,10 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
         a
     );
     assert!(matches!(
-        core.crear_contratista(datos(
-            "C",
-            "Sin empresa",
-            999,
-            TipoIngreso::Swat,
-            None,
-            false
-        )),
+        core.crear_contratista(
+            &actor,
+            datos("C", "Sin empresa", 999, TipoIngreso::Swat, None, false)
+        ),
         Err(ContratistaServiceError::EmpresaNoEncontrada)
     ));
     drop(core);
@@ -150,7 +177,8 @@ fn matrices_praind_ruta_acceso_y_cedula_string_se_persisten() {
             .as_nanos()
     ));
     let core = AppCore::new(open_database(&ruta).unwrap());
-    let e = core.crear_empresa("Empresa").unwrap();
+    let actor = root(&core);
+    let e = core.crear_empresa(&actor, "Empresa").unwrap();
     let casos = [
         (TipoIngreso::Praind, false, true),
         (TipoIngreso::InHouse, false, true),
@@ -161,14 +189,17 @@ fn matrices_praind_ruta_acceso_y_cedula_string_se_persisten() {
     for (i, (tipo, ruta_personal, requiere)) in casos.into_iter().enumerate() {
         let fecha = requiere.then(|| NaiveDate::from_ymd_opt(2027, 1, 1).unwrap());
         let cedula = format!("00-{i}");
-        core.crear_contratista(datos(
-            &cedula,
-            &format!("Persona {i}"),
-            e,
-            tipo,
-            fecha,
-            ruta_personal,
-        ))
+        core.crear_contratista(
+            &actor,
+            datos(
+                &cedula,
+                &format!("Persona {i}"),
+                e,
+                tipo,
+                fecha,
+                ruta_personal,
+            ),
+        )
         .unwrap();
         let r = &core.buscar_contratistas(&filtro(&cedula)).unwrap().items[0];
         assert_eq!(r.cedula, cedula);

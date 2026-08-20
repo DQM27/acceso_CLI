@@ -28,6 +28,8 @@ pub enum UsuarioServiceError {
     ConfiguracionInicialYaRealizada,
     UltimoRootActivo,
     CedulaDuplicada,
+    OperacionNoAutorizada,
+    PasswordActualIncorrecta,
     Password(PasswordError),
     Database(DatabaseError),
 }
@@ -52,6 +54,13 @@ impl std::fmt::Display for UsuarioServiceError {
                 "No se puede desactivar o degradar al último ROOT activo"
             ),
             Self::CedulaDuplicada => write!(formatter, "La cédula del usuario ya existe"),
+            Self::OperacionNoAutorizada => write!(
+                formatter,
+                "La sesión actual no está autorizada para gestionar ese usuario"
+            ),
+            Self::PasswordActualIncorrecta => {
+                write!(formatter, "La contraseña actual es incorrecta")
+            }
             Self::Password(error) => write!(formatter, "{error}"),
             Self::Database(error) => write!(formatter, "{error}"),
         }
@@ -122,6 +131,7 @@ pub enum ContratistaServiceError {
     NombreVacio,
     PraindRequerido,
     CedulaDuplicada,
+    OperacionNoAutorizada,
     Database(DatabaseError),
 }
 
@@ -134,6 +144,10 @@ impl std::fmt::Display for ContratistaServiceError {
             Self::NombreVacio => write!(formatter, "El nombre es obligatorio"),
             Self::PraindRequerido => write!(formatter, "La fecha de PRAIND es obligatoria"),
             Self::CedulaDuplicada => write!(formatter, "La cédula del contratista ya existe"),
+            Self::OperacionNoAutorizada => write!(
+                formatter,
+                "La sesión actual no está autorizada para realizar esta operación"
+            ),
             Self::Database(error) => write!(formatter, "{error}"),
         }
     }
@@ -159,6 +173,7 @@ pub enum EmpresaServiceError {
     EmpresaNoEncontrada,
     NombreEmpresaVacio,
     NombreDuplicado,
+    OperacionNoAutorizada,
     Database(DatabaseError),
 }
 
@@ -168,6 +183,10 @@ impl std::fmt::Display for EmpresaServiceError {
             Self::EmpresaNoEncontrada => write!(formatter, "Empresa no encontrada"),
             Self::NombreEmpresaVacio => write!(formatter, "El nombre de la empresa es obligatorio"),
             Self::NombreDuplicado => write!(formatter, "El nombre de la empresa ya existe"),
+            Self::OperacionNoAutorizada => write!(
+                formatter,
+                "La sesión actual no está autorizada para realizar esta operación"
+            ),
             Self::Database(error) => write!(formatter, "{error}"),
         }
     }
@@ -232,7 +251,7 @@ impl std::fmt::Display for RegistroIngresoServiceError {
             }
             Self::OperadorNoAutorizado => write!(
                 formatter,
-                "El usuario que registra el movimiento no existe o está inactivo"
+                "La sesión que registra el movimiento no existe o está inactiva"
             ),
             Self::Database(error) => write!(formatter, "{error}"),
         }

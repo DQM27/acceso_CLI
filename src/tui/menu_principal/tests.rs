@@ -14,7 +14,7 @@ fn la_lista_queda_centrada_en_vez_de_pegada_a_la_izquierda() {
     // distingue del relleno en blanco, para no confundir uno con otro al
     // contar espacios iniciales.
     let state = MenuPrincipalState {
-        seleccion: OpcionMenu::IngresosActivos,
+        seleccion: OpcionMenu::CambiarPassword,
         ..Default::default()
     };
     let sesion = UsuarioSesion {
@@ -40,7 +40,7 @@ fn la_lista_queda_centrada_en_vez_de_pegada_a_la_izquierda() {
 
     let buffer = terminal.backend().buffer();
     // Cada celda del buffer es un carácter; se arma el texto fila por fila.
-    // Se usa la fila de "Ingresos activos" porque es la opción con la
+    // Se usa la fila de "Cambiar mi contraseña" porque es la opción con la
     // etiqueta más larga — el ancho del bloque se ajusta a ella, así que
     // esa fila queda al ras de ambos bordes del bloque y sus márgenes son
     // directamente los márgenes del bloque completo.
@@ -49,9 +49,9 @@ fn la_lista_queda_centrada_en_vez_de_pegada_a_la_izquierda() {
             let texto: String = (0..buffer.area.width)
                 .map(|x| buffer[(x, y)].symbol())
                 .collect();
-            texto.contains("Ingresos activos")
+            texto.contains("Cambiar mi contraseña")
         })
-        .expect("debe encontrar la fila con 'Ingresos activos'");
+        .expect("debe encontrar la fila con 'Cambiar mi contraseña'");
 
     let texto: String = (0..buffer.area.width)
         .map(|x| buffer[(x, fila)].symbol())
@@ -97,7 +97,9 @@ fn enter_y_accesos_numericos_emiten_apertura_correcta() {
         ('4', OpcionMenu::Contratistas),
         ('5', OpcionMenu::Empresas),
         ('6', OpcionMenu::Usuarios),
-        ('7', OpcionMenu::Configuracion),
+        ('7', OpcionMenu::CambiarPassword),
+        ('8', OpcionMenu::Auditoria),
+        ('9', OpcionMenu::Configuracion),
     ] {
         assert_eq!(
             s.handle_key(k(KeyCode::Char(c)), RolUsuario::Root),
@@ -160,21 +162,50 @@ fn un_operador_no_ve_ni_puede_abrir_configuracion() {
 
     let mut s = MenuPrincipalState::default();
     assert_eq!(
-        s.handle_key(k(KeyCode::Char('7')), RolUsuario::Operador),
+        s.handle_key(k(KeyCode::Char('9')), RolUsuario::Operador),
         AccionMenu::Ninguna
     );
 }
 
 #[test]
-fn un_administrador_si_ve_y_puede_abrir_configuracion() {
+fn un_administrador_no_ve_ni_puede_abrir_configuracion() {
     let visibles = OpcionMenu::visibles_para(RolUsuario::Administrador);
-    assert!(visibles.contains(&OpcionMenu::Configuracion));
+    assert!(!visibles.contains(&OpcionMenu::Configuracion));
 
     let mut s = MenuPrincipalState::default();
     assert_eq!(
-        s.handle_key(k(KeyCode::Char('7')), RolUsuario::Administrador),
-        AccionMenu::Abrir(OpcionMenu::Configuracion)
+        s.handle_key(k(KeyCode::Char('9')), RolUsuario::Administrador),
+        AccionMenu::Ninguna
     );
+}
+
+#[test]
+fn todos_los_roles_pueden_abrir_cambio_de_password() {
+    for rol in [
+        RolUsuario::Root,
+        RolUsuario::Administrador,
+        RolUsuario::Operador,
+    ] {
+        assert!(OpcionMenu::visibles_para(rol).contains(&OpcionMenu::CambiarPassword));
+        let mut state = MenuPrincipalState::default();
+        assert_eq!(
+            state.handle_key(k(KeyCode::Char('7')), rol),
+            AccionMenu::Abrir(OpcionMenu::CambiarPassword)
+        );
+    }
+}
+
+#[test]
+fn auditoria_es_visible_para_administrador_y_root_pero_no_operador() {
+    for rol in [RolUsuario::Root, RolUsuario::Administrador] {
+        assert!(OpcionMenu::visibles_para(rol).contains(&OpcionMenu::Auditoria));
+        let mut state = MenuPrincipalState::default();
+        assert_eq!(
+            state.handle_key(k(KeyCode::Char('8')), rol),
+            AccionMenu::Abrir(OpcionMenu::Auditoria)
+        );
+    }
+    assert!(!OpcionMenu::visibles_para(RolUsuario::Operador).contains(&OpcionMenu::Auditoria));
 }
 
 #[test]

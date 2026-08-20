@@ -8,6 +8,8 @@ use control_acceso::database::queries::ingresos::FiltroIngresosActivos;
 use control_acceso::database::schema::initialize_database;
 use control_acceso::domain::resultado_acceso::ResultadoAcceso;
 use control_acceso::models::medio_ingreso::MedioIngreso;
+use control_acceso::models::usuario::RolUsuario;
+use control_acceso::services::autenticacion_service::UsuarioSesion;
 use control_acceso::services::error::RegistroIngresoServiceError;
 use control_acceso::tiempo::Reloj;
 
@@ -53,9 +55,15 @@ fn appcore_usa_costa_rica_para_reglas_utc_para_persistencia_y_detecta_retrocesos
     let ingreso = Utc.with_ymd_and_hms(2026, 8, 16, 3, 30, 0).unwrap();
     let reloj = Arc::new(RelojControlado::new(ingreso));
     let core = AppCore::con_reloj(connection, reloj.clone());
+    let actor = UsuarioSesion {
+        id: 1,
+        cedula: "U1".into(),
+        nombre: "Operador".into(),
+        rol: RolUsuario::Operador,
+    };
 
     let resultado = core
-        .registrar_ingreso(1, MedioIngreso::Caminando, None, 1)
+        .registrar_ingreso(&actor, 1, MedioIngreso::Caminando, None)
         .unwrap();
     assert_eq!(
         resultado.resultado_acceso,
@@ -68,7 +76,7 @@ fn appcore_usa_costa_rica_para_reglas_utc_para_persistencia_y_detecta_retrocesos
 
     reloj.establecer(Utc.with_ymd_and_hms(2026, 8, 16, 3, 29, 59).unwrap());
     assert!(matches!(
-        core.registrar_salida(resultado.registro_id, 1),
+        core.registrar_salida(&actor, resultado.registro_id),
         Err(RegistroIngresoServiceError::RelojRetrocedido)
     ));
     assert_eq!(
@@ -80,5 +88,6 @@ fn appcore_usa_costa_rica_para_reglas_utc_para_persistencia_y_detecta_retrocesos
     );
 
     reloj.establecer(Utc.with_ymd_and_hms(2026, 8, 16, 3, 31, 0).unwrap());
-    core.registrar_salida(resultado.registro_id, 1).unwrap();
+    core.registrar_salida(&actor, resultado.registro_id)
+        .unwrap();
 }

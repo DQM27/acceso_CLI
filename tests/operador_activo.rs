@@ -3,6 +3,8 @@ use rusqlite::Connection;
 use control_acceso::application::AppCore;
 use control_acceso::database::schema::initialize_database;
 use control_acceso::models::medio_ingreso::MedioIngreso;
+use control_acceso::models::usuario::RolUsuario;
+use control_acceso::services::autenticacion_service::UsuarioSesion;
 use control_acceso::services::error::RegistroIngresoServiceError;
 
 /// Regresión del hallazgo #2 de `docs/auditoria-dominio-2026-08-20.md`:
@@ -27,10 +29,19 @@ fn base() -> Connection {
     connection
 }
 
+fn actor(id: i64) -> UsuarioSesion {
+    UsuarioSesion {
+        id,
+        cedula: format!("U{id}"),
+        nombre: "Operador".into(),
+        rol: RolUsuario::Operador,
+    }
+}
+
 #[test]
 fn registrar_ingreso_rechaza_un_usuario_desactivado() {
     let core = AppCore::new(base());
-    let resultado = core.registrar_ingreso(1, MedioIngreso::Caminando, None, 2);
+    let resultado = core.registrar_ingreso(&actor(2), 1, MedioIngreso::Caminando, None);
     assert!(matches!(
         resultado,
         Err(RegistroIngresoServiceError::OperadorNoAutorizado)
@@ -47,7 +58,7 @@ fn registrar_ingreso_rechaza_un_usuario_desactivado() {
 #[test]
 fn registrar_ingreso_rechaza_un_usuario_inexistente() {
     let core = AppCore::new(base());
-    let resultado = core.registrar_ingreso(1, MedioIngreso::Caminando, None, 999);
+    let resultado = core.registrar_ingreso(&actor(999), 1, MedioIngreso::Caminando, None);
     assert!(matches!(
         resultado,
         Err(RegistroIngresoServiceError::OperadorNoAutorizado)
@@ -58,10 +69,10 @@ fn registrar_ingreso_rechaza_un_usuario_inexistente() {
 fn registrar_salida_rechaza_un_usuario_desactivado_aunque_el_ingreso_sea_valido() {
     let core = AppCore::new(base());
     let entrada = core
-        .registrar_ingreso(1, MedioIngreso::Caminando, None, 1)
+        .registrar_ingreso(&actor(1), 1, MedioIngreso::Caminando, None)
         .unwrap();
 
-    let resultado = core.registrar_salida(entrada.registro_id, 2);
+    let resultado = core.registrar_salida(&actor(2), entrada.registro_id);
     assert!(matches!(
         resultado,
         Err(RegistroIngresoServiceError::OperadorNoAutorizado)
@@ -80,7 +91,8 @@ fn registrar_salida_rechaza_un_usuario_desactivado_aunque_el_ingreso_sea_valido(
 fn registrar_ingreso_y_salida_funcionan_con_un_operador_activo() {
     let core = AppCore::new(base());
     let entrada = core
-        .registrar_ingreso(1, MedioIngreso::Caminando, None, 1)
+        .registrar_ingreso(&actor(1), 1, MedioIngreso::Caminando, None)
         .unwrap();
-    core.registrar_salida(entrada.registro_id, 1).unwrap();
+    core.registrar_salida(&actor(1), entrada.registro_id)
+        .unwrap();
 }

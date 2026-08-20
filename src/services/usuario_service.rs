@@ -4,7 +4,7 @@ use crate::database::repositories::usuario_repository::UsuarioRepository;
 use crate::models::usuario::{RolUsuario, Usuario};
 
 use super::error::UsuarioServiceError;
-use super::password::{generar_hash, validar_formato_hash};
+use super::password::{generar_hash, validar_formato_hash, verificar_password};
 
 const LONGITUD_MINIMA_PASSWORD: usize = 8;
 
@@ -27,7 +27,15 @@ where
         &self,
         filtro: &FiltroUsuarios,
     ) -> Result<Vec<UsuarioResumen>, UsuarioServiceError> {
-        Ok(self.consultas.buscar(filtro)?)
+        self.buscar_para_tabla_como(filtro, RolUsuario::Root)
+    }
+
+    pub fn buscar_para_tabla_como(
+        &self,
+        filtro: &FiltroUsuarios,
+        actor: RolUsuario,
+    ) -> Result<Vec<UsuarioResumen>, UsuarioServiceError> {
+        Ok(self.consultas.buscar_para_actor(filtro, actor)?)
     }
 }
 
@@ -162,6 +170,31 @@ where
         self.validar_password_para_cambio(id, nueva_password)?;
         let password_hash = generar_hash(nueva_password)?;
         self.cambiar_password_con_hash(id, &password_hash)
+    }
+
+    pub fn cambiar_password_propio(
+        &self,
+        id: i64,
+        password_actual: &str,
+        nueva_password: &str,
+    ) -> Result<(), UsuarioServiceError> {
+        self.validar_password_para_cambio(id, nueva_password)?;
+        self.validar_password_actual(id, password_actual)?;
+        let password_hash = generar_hash(nueva_password)?;
+        self.cambiar_password_con_hash(id, &password_hash)
+    }
+
+    pub fn validar_password_actual(
+        &self,
+        id: i64,
+        password_actual: &str,
+    ) -> Result<(), UsuarioServiceError> {
+        let usuario = self.buscar_por_id(id)?;
+        if verificar_password(password_actual, &usuario.password_hash)? {
+            Ok(())
+        } else {
+            Err(UsuarioServiceError::PasswordActualIncorrecta)
+        }
     }
 
     /// Parte barata de `cambiar_password` (sin Argon2).

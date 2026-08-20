@@ -6,6 +6,9 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::database::backup::{RespaldoError, RespaldoResumen, ResultadoValidacion, TipoRespaldo};
 use crate::database::connection::open_database;
 use crate::database::error::DatabaseError;
+use crate::database::queries::auditoria_contratistas::{
+    FiltroAuditoriaContratistas, PaginaAuditoriaContratistas, SqliteAuditoriaContratistas,
+};
 use crate::database::queries::contratistas::{
     FiltroContratistas, PaginaContratistas, SqliteContratistasQuery,
 };
@@ -21,7 +24,8 @@ use crate::database::repositories::usuario_repository::{
     SqliteUsuarioRepository, UsuarioRepository,
 };
 use crate::database::schema::SchemaError;
-use crate::models::usuario::RolUsuario;
+use crate::domain::autorizacion::{Operacion, puede_cambiar_password, puede_gestionar_usuario};
+use crate::models::usuario::{RolUsuario, Usuario};
 use crate::services::autenticacion_service::{
     AutenticacionService, CandidatoAutenticacion, UsuarioSesion,
 };
@@ -168,27 +172,78 @@ impl AppCore {
         ContratistaConsultaService::new(&query).buscar_para_tabla(filtro)
     }
 
+    pub fn buscar_auditoria_contratistas(
+        &self,
+        actor: &UsuarioSesion,
+        filtro: &FiltroAuditoriaContratistas,
+    ) -> Result<PaginaAuditoriaContratistas, ContratistaServiceError> {
+        let actor_actual = verificar_actor_activo(&self.connection, actor)?
+            .ok_or(ContratistaServiceError::OperacionNoAutorizada)?;
+        if !actor_actual.rol.puede(Operacion::VerAuditoria) {
+            return Err(ContratistaServiceError::OperacionNoAutorizada);
+        }
+        Ok(SqliteAuditoriaContratistas::new(&self.connection).buscar(filtro)?)
+    }
+
     pub fn crear_contratista(
         &self,
+        actor: &UsuarioSesion,
         datos: DatosContratista,
     ) -> Result<i64, ContratistaServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        verificar_actor_activo(&transaction, actor)
+            .map_err(ContratistaServiceError::Database)?
+            .ok_or(ContratistaServiceError::OperacionNoAutorizada)?;
         ContratistaService::new(
-            &SqliteContratistaRepository::new(&self.connection),
-            &SqliteEmpresaRepository::new(&self.connection),
+            &SqliteContratistaRepository::new(&transaction),
+            &SqliteEmpresaRepository::new(&transaction),
         )
         .crear(datos)
+        .and_then(|id| {
+            transaction
+                .commit()
+                .map_err(DatabaseError::from)
+                .map_err(ContratistaServiceError::Database)?;
+            Ok(id)
+        })
     }
 
     pub fn actualizar_contratista(
         &self,
+        actor: &UsuarioSesion,
         id: i64,
         datos: DatosActualizacionContratista,
     ) -> Result<(), ContratistaServiceError> {
-        ContratistaService::new(
-            &SqliteContratistaRepository::new(&self.connection),
-            &SqliteEmpresaRepository::new(&self.connection),
-        )
-        .actualizar(id, datos)
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        let actor_actual = verificar_actor_activo(&transaction, actor)
+            .map_err(ContratistaServiceError::Database)?
+            .ok_or(ContratistaServiceError::OperacionNoAutorizada)?;
+        let contratistas = SqliteContratistaRepository::new(&transaction);
+        let empresas = SqliteEmpresaRepository::new(&transaction);
+        let servicio = ContratistaService::new(&contratistas, &empresas);
+        let actual = servicio.buscar_por_id(id)?;
+        if actual.tiene_acceso != datos.tiene_acceso
+            && !actor_actual
+                .rol
+                .puede(Operacion::ActivarDesactivarContratista)
+        {
+            return Err(ContratistaServiceError::OperacionNoAutorizada);
+        }
+        servicio.actualizar_auditado(
+            id,
+            datos,
+            actor_actual.id,
+            self.reloj.ahora_utc(),
+            &SqliteAuditoriaContratistas::new(&transaction),
+        )?;
+        transaction
+            .commit()
+            .map_err(DatabaseError::from)
+            .map_err(ContratistaServiceError::Database)
     }
 
     pub fn listar_empresas(
@@ -241,7 +296,7 @@ impl AppCore {
     /// escritura.
     fn en_transaccion_con_reloj_validado<T>(
         &self,
-        usuario_id: i64,
+        actor: &UsuarioSesion,
         operar: impl FnOnce(
             &Transaction<'_>,
             chrono::DateTime<chrono::Utc>,
@@ -252,7 +307,7 @@ impl AppCore {
             Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
                 .map_err(DatabaseError::from)?;
         validar_reloj(&transaction, ahora)?;
-        verificar_operador_activo(&transaction, usuario_id)?;
+        verificar_operador_activo(&transaction, actor)?;
         let resultado = operar(&transaction, ahora)?;
         transaction.commit().map_err(DatabaseError::from)?;
         Ok(resultado)
@@ -260,19 +315,19 @@ impl AppCore {
 
     pub fn registrar_ingreso(
         &self,
+        actor: &UsuarioSesion,
         contratista_id: i64,
         medio: crate::models::medio_ingreso::MedioIngreso,
         gafete: Option<i64>,
-        usuario_id: i64,
     ) -> Result<ResultadoRegistroEntrada, RegistroIngresoServiceError> {
-        self.en_transaccion_con_reloj_validado(usuario_id, |transaction, ahora| {
+        self.en_transaccion_con_reloj_validado(actor, |transaction, ahora| {
             let contratistas = SqliteContratistaRepository::new(transaction);
             let registros = SqliteRegistroIngresoRepository::new(transaction);
             RegistroIngresoService::new(&contratistas, &registros).registrar_entrada(
                 contratista_id,
                 medio,
                 gafete,
-                usuario_id,
+                actor.id,
                 ahora,
             )
         })
@@ -296,14 +351,14 @@ impl AppCore {
 
     pub fn registrar_salida(
         &self,
+        actor: &UsuarioSesion,
         id: i64,
-        usuario: i64,
     ) -> Result<(), RegistroIngresoServiceError> {
-        self.en_transaccion_con_reloj_validado(usuario, |transaction, ahora| {
+        self.en_transaccion_con_reloj_validado(actor, |transaction, ahora| {
             let contratistas = SqliteContratistaRepository::new(transaction);
             let registros = SqliteRegistroIngresoRepository::new(transaction);
             RegistroIngresoService::new(&contratistas, &registros)
-                .registrar_salida(id, ahora, usuario)
+                .registrar_salida(id, ahora, actor.id)
         })
     }
 
@@ -315,107 +370,333 @@ impl AppCore {
             .buscar_para_tabla(filtro)
     }
 
-    pub fn crear_empresa(&self, nombre: &str) -> Result<i64, EmpresaServiceError> {
-        EmpresaService::new(&SqliteEmpresaRepository::new(&self.connection)).crear(nombre)
+    pub fn crear_empresa(
+        &self,
+        actor: &UsuarioSesion,
+        nombre: &str,
+    ) -> Result<i64, EmpresaServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        verificar_actor_activo(&transaction, actor)
+            .map_err(EmpresaServiceError::Database)?
+            .ok_or(EmpresaServiceError::OperacionNoAutorizada)?;
+        let id = EmpresaService::new(&SqliteEmpresaRepository::new(&transaction)).crear(nombre)?;
+        transaction
+            .commit()
+            .map_err(DatabaseError::from)
+            .map_err(EmpresaServiceError::Database)?;
+        Ok(id)
     }
 
-    pub fn actualizar_empresa(&self, id: i64, nombre: &str) -> Result<(), EmpresaServiceError> {
-        EmpresaService::new(&SqliteEmpresaRepository::new(&self.connection)).actualizar(id, nombre)
+    pub fn actualizar_empresa(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+        nombre: &str,
+    ) -> Result<(), EmpresaServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        verificar_actor_activo(&transaction, actor)
+            .map_err(EmpresaServiceError::Database)?
+            .ok_or(EmpresaServiceError::OperacionNoAutorizada)?;
+        EmpresaService::new(&SqliteEmpresaRepository::new(&transaction)).actualizar(id, nombre)?;
+        transaction
+            .commit()
+            .map_err(DatabaseError::from)
+            .map_err(EmpresaServiceError::Database)
     }
 
-    pub fn activar_empresa(&self, id: i64) -> Result<(), EmpresaServiceError> {
-        EmpresaService::new(&SqliteEmpresaRepository::new(&self.connection)).activar(id)
+    pub fn activar_empresa(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+    ) -> Result<(), EmpresaServiceError> {
+        self.establecer_empresa_activa(actor, id, true)
     }
 
-    pub fn desactivar_empresa(&self, id: i64) -> Result<(), EmpresaServiceError> {
-        EmpresaService::new(&SqliteEmpresaRepository::new(&self.connection)).desactivar(id)
+    pub fn desactivar_empresa(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+    ) -> Result<(), EmpresaServiceError> {
+        self.establecer_empresa_activa(actor, id, false)
+    }
+
+    fn establecer_empresa_activa(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+        activa: bool,
+    ) -> Result<(), EmpresaServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        let actor_actual = verificar_actor_activo(&transaction, actor)
+            .map_err(EmpresaServiceError::Database)?
+            .ok_or(EmpresaServiceError::OperacionNoAutorizada)?;
+        if !actor_actual.rol.puede(Operacion::ActivarDesactivarEmpresa) {
+            return Err(EmpresaServiceError::OperacionNoAutorizada);
+        }
+        let repositorio = SqliteEmpresaRepository::new(&transaction);
+        let servicio = EmpresaService::new(&repositorio);
+        if activa {
+            servicio.activar(id)?;
+        } else {
+            servicio.desactivar(id)?;
+        }
+        transaction
+            .commit()
+            .map_err(DatabaseError::from)
+            .map_err(EmpresaServiceError::Database)
     }
 
     pub fn buscar_usuarios(
         &self,
+        actor: &UsuarioSesion,
         filtro: &FiltroUsuarios,
     ) -> Result<Vec<UsuarioResumen>, UsuarioServiceError> {
+        let actor_actual = verificar_actor_activo(&self.connection, actor)?
+            .ok_or(UsuarioServiceError::OperacionNoAutorizada)?;
+        if !actor_actual.rol.puede(Operacion::GestionarUsuarios) {
+            return Err(UsuarioServiceError::OperacionNoAutorizada);
+        }
         UsuarioConsultaService::new(&SqliteUsuariosQuery::new(&self.connection))
-            .buscar_para_tabla(filtro)
+            .buscar_para_tabla_como(filtro, actor_actual.rol)
     }
 
-    pub fn crear_usuario(&self, input: CrearUsuarioInput) -> Result<i64, UsuarioServiceError> {
-        UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection)).crear(input)
+    pub fn crear_usuario(
+        &self,
+        actor: &UsuarioSesion,
+        input: CrearUsuarioInput,
+    ) -> Result<i64, UsuarioServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        verificar_creacion_usuario(&transaction, actor, input.rol)?;
+        let id = UsuarioService::new(&SqliteUsuarioRepository::new(&transaction)).crear(input)?;
+        transaction.commit().map_err(DatabaseError::from)?;
+        Ok(id)
     }
 
     /// Parte barata de crear un usuario (sin Argon2) — permite correr el hash en un hilo
     /// aparte sin bloquear la TUI mientras se valida.
     pub fn validar_datos_para_crear_usuario(
         &self,
+        actor: &UsuarioSesion,
         input: &CrearUsuarioInput,
     ) -> Result<(), UsuarioServiceError> {
+        verificar_creacion_usuario(&self.connection, actor, input.rol)?;
         UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection))
             .validar_datos_para_crear(input)
     }
 
     pub fn crear_usuario_con_hash(
         &self,
+        actor: &UsuarioSesion,
         cedula: &str,
         nombre: &str,
         rol: RolUsuario,
         activo: bool,
         password_hash: String,
     ) -> Result<i64, UsuarioServiceError> {
-        UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection)).crear_con_hash(
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        verificar_creacion_usuario(&transaction, actor, rol)?;
+        let id = UsuarioService::new(&SqliteUsuarioRepository::new(&transaction)).crear_con_hash(
             cedula,
             nombre,
             rol,
             activo,
             password_hash,
-        )
+        )?;
+        transaction.commit().map_err(DatabaseError::from)?;
+        Ok(id)
     }
 
     pub fn actualizar_usuario(
         &self,
+        actor: &UsuarioSesion,
         id: i64,
         input: ActualizarUsuarioInput,
         activo: bool,
     ) -> Result<(), UsuarioServiceError> {
-        UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection))
-            .actualizar_administracion(id, input, activo)
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        let actor_actual = verificar_gestion_usuario(&transaction, actor, id, true)?;
+        if !puede_gestionar_usuario(actor_actual.rol, input.rol) {
+            return Err(UsuarioServiceError::OperacionNoAutorizada);
+        }
+        UsuarioService::new(&SqliteUsuarioRepository::new(&transaction))
+            .actualizar_administracion(id, input, activo)?;
+        transaction.commit().map_err(DatabaseError::from)?;
+        Ok(())
     }
 
-    pub fn activar_usuario(&self, id: i64) -> Result<(), UsuarioServiceError> {
-        UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection)).activar(id)
+    pub fn activar_usuario(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+    ) -> Result<(), UsuarioServiceError> {
+        self.establecer_usuario_activo(actor, id, true)
     }
 
-    pub fn desactivar_usuario(&self, id: i64) -> Result<(), UsuarioServiceError> {
-        UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection)).desactivar(id)
+    pub fn desactivar_usuario(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+    ) -> Result<(), UsuarioServiceError> {
+        self.establecer_usuario_activo(actor, id, false)
     }
 
     pub fn cambiar_password_usuario(
         &self,
+        actor: &UsuarioSesion,
         id: i64,
         password: &str,
     ) -> Result<(), UsuarioServiceError> {
-        UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection))
-            .cambiar_password(id, password)
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        verificar_gestion_usuario(&transaction, actor, id, false)?;
+        UsuarioService::new(&SqliteUsuarioRepository::new(&transaction))
+            .cambiar_password(id, password)?;
+        transaction.commit().map_err(DatabaseError::from)?;
+        Ok(())
     }
 
     pub fn validar_password_para_cambio(
         &self,
+        actor: &UsuarioSesion,
         id: i64,
         password: &str,
     ) -> Result<(), UsuarioServiceError> {
+        verificar_gestion_usuario(&self.connection, actor, id, false)?;
         UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection))
             .validar_password_para_cambio(id, password)
     }
 
     pub fn cambiar_password_usuario_con_hash(
         &self,
+        actor: &UsuarioSesion,
         id: i64,
         password_hash: &str,
     ) -> Result<(), UsuarioServiceError> {
-        UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection))
-            .cambiar_password_con_hash(id, password_hash)
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        verificar_gestion_usuario(&transaction, actor, id, false)?;
+        UsuarioService::new(&SqliteUsuarioRepository::new(&transaction))
+            .cambiar_password_con_hash(id, password_hash)?;
+        transaction.commit().map_err(DatabaseError::from)?;
+        Ok(())
     }
 
-    pub fn crear_respaldo(&self, tipo: TipoRespaldo) -> Result<RespaldoResumen, RespaldoError> {
+    pub fn cambiar_mi_password(
+        &self,
+        actor: &UsuarioSesion,
+        password_actual: &str,
+        nueva_password: &str,
+    ) -> Result<(), UsuarioServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        let actor_actual = verificar_actor_activo(&transaction, actor)?
+            .ok_or(UsuarioServiceError::OperacionNoAutorizada)?;
+        if !puede_cambiar_password(
+            actor_actual.id,
+            actor_actual.rol,
+            actor_actual.id,
+            actor_actual.rol,
+        ) {
+            return Err(UsuarioServiceError::OperacionNoAutorizada);
+        }
+        UsuarioService::new(&SqliteUsuarioRepository::new(&transaction)).cambiar_password_propio(
+            actor_actual.id,
+            password_actual,
+            nueva_password,
+        )?;
+        transaction.commit().map_err(DatabaseError::from)?;
+        Ok(())
+    }
+
+    /// Resuelve el hash vigente y valida la contraseña nueva sin ejecutar
+    /// Argon2. La TUI usa el candidato devuelto en un hilo aparte.
+    pub fn preparar_cambio_password_propio(
+        &self,
+        actor: &UsuarioSesion,
+        nueva_password: &str,
+    ) -> Result<CandidatoAutenticacion, UsuarioServiceError> {
+        let actor_actual = verificar_actor_activo(&self.connection, actor)?
+            .ok_or(UsuarioServiceError::OperacionNoAutorizada)?;
+        let repositorio = SqliteUsuarioRepository::new(&self.connection);
+        UsuarioService::new(&repositorio)
+            .validar_password_para_cambio(actor_actual.id, nueva_password)?;
+        Ok(CandidatoAutenticacion {
+            sesion: UsuarioSesion {
+                id: actor_actual.id,
+                cedula: actor_actual.cedula,
+                nombre: actor_actual.nombre,
+                rol: actor_actual.rol,
+            },
+            password_hash: actor_actual.password_hash,
+        })
+    }
+
+    pub fn cambiar_mi_password_con_hash(
+        &self,
+        actor: &UsuarioSesion,
+        hash_actual_verificado: &str,
+        nuevo_hash: &str,
+    ) -> Result<(), UsuarioServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        let actor_actual = verificar_actor_activo(&transaction, actor)?
+            .ok_or(UsuarioServiceError::OperacionNoAutorizada)?;
+        if actor_actual.password_hash != hash_actual_verificado {
+            return Err(UsuarioServiceError::PasswordActualIncorrecta);
+        }
+        UsuarioService::new(&SqliteUsuarioRepository::new(&transaction))
+            .cambiar_password_con_hash(actor_actual.id, nuevo_hash)?;
+        transaction.commit().map_err(DatabaseError::from)?;
+        Ok(())
+    }
+
+    fn establecer_usuario_activo(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+        activo: bool,
+    ) -> Result<(), UsuarioServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        verificar_gestion_usuario(&transaction, actor, id, true)?;
+        let repositorio = SqliteUsuarioRepository::new(&transaction);
+        let servicio = UsuarioService::new(&repositorio);
+        if activo {
+            servicio.activar(id)?;
+        } else {
+            servicio.desactivar(id)?;
+        }
+        transaction.commit().map_err(DatabaseError::from)?;
+        Ok(())
+    }
+
+    pub fn crear_respaldo(
+        &self,
+        actor: &UsuarioSesion,
+        tipo: TipoRespaldo,
+    ) -> Result<RespaldoResumen, RespaldoError> {
+        self.autorizar_respaldo(actor)?;
+        self.crear_respaldo_sistema(tipo)
+    }
+
+    fn crear_respaldo_sistema(&self, tipo: TipoRespaldo) -> Result<RespaldoResumen, RespaldoError> {
         crate::database::backup::crear_respaldo(
             &self.connection,
             &self.directorio_respaldos(),
@@ -423,11 +704,24 @@ impl AppCore {
         )
     }
 
-    pub fn listar_respaldos(&self) -> Result<Vec<RespaldoResumen>, RespaldoError> {
+    pub fn listar_respaldos(
+        &self,
+        actor: &UsuarioSesion,
+    ) -> Result<Vec<RespaldoResumen>, RespaldoError> {
+        self.autorizar_respaldo(actor)?;
+        self.listar_respaldos_sistema()
+    }
+
+    fn listar_respaldos_sistema(&self) -> Result<Vec<RespaldoResumen>, RespaldoError> {
         crate::database::backup::listar_respaldos(&self.directorio_respaldos())
     }
 
-    pub fn validar_respaldo(&self, ruta: &Path) -> Result<ResultadoValidacion, RespaldoError> {
+    pub fn validar_respaldo(
+        &self,
+        actor: &UsuarioSesion,
+        ruta: &Path,
+    ) -> Result<ResultadoValidacion, RespaldoError> {
+        self.autorizar_respaldo(actor)?;
         crate::database::backup::validar_respaldo(ruta)
     }
 
@@ -437,7 +731,7 @@ impl AppCore {
     /// una migración, éste no es obligatorio, así que un fallo (disco lleno,
     /// permisos) no debe impedir que la app arranque.
     pub fn respaldo_automatico_diario_si_hace_falta(&self) {
-        let Ok(listado) = self.listar_respaldos() else {
+        let Ok(listado) = self.listar_respaldos_sistema() else {
             return;
         };
         let hoy = crate::tiempo::fecha_costa_rica(self.reloj.ahora_utc());
@@ -448,7 +742,10 @@ impl AppCore {
         if ya_existe_hoy {
             return;
         }
-        if self.crear_respaldo(TipoRespaldo::Automatico).is_ok() {
+        if self
+            .crear_respaldo_sistema(TipoRespaldo::Automatico)
+            .is_ok()
+        {
             let _ = crate::database::backup::aplicar_retencion(
                 &self.directorio_respaldos(),
                 TipoRespaldo::Automatico,
@@ -460,8 +757,29 @@ impl AppCore {
     /// El archivo interno ya fue validado por `crear_respaldo`; exportarlo es una
     /// copia simple a la ruta que indique el operador, sin volver a pasar por el
     /// motor de respaldo.
-    pub fn exportar_respaldo(&self, origen: &Path, destino: &Path) -> std::io::Result<()> {
-        std::fs::copy(origen, destino).map(|_| ())
+    pub fn exportar_respaldo(
+        &self,
+        actor: &UsuarioSesion,
+        origen: &Path,
+        destino: &Path,
+    ) -> Result<(), RespaldoError> {
+        self.autorizar_respaldo(actor)?;
+        std::fs::copy(origen, destino)
+            .map(|_| ())
+            .map_err(Into::into)
+    }
+
+    fn autorizar_respaldo(&self, actor: &UsuarioSesion) -> Result<(), RespaldoError> {
+        let usuario = verificar_actor_activo(&self.connection, actor)
+            .map_err(|error| match error {
+                DatabaseError::Sqlite(error) => RespaldoError::Sqlite(error),
+                _ => RespaldoError::OperacionNoAutorizada,
+            })?
+            .ok_or(RespaldoError::OperacionNoAutorizada)?;
+        if !usuario.rol.puede(Operacion::GestionarRespaldos) {
+            return Err(RespaldoError::OperacionNoAutorizada);
+        }
+        Ok(())
     }
 
     fn directorio_respaldos(&self) -> PathBuf {
@@ -507,14 +825,55 @@ fn validar_reloj(
 /// exista — nunca que la cuenta siga activa.
 fn verificar_operador_activo(
     connection: &Connection,
-    usuario_id: i64,
+    actor: &UsuarioSesion,
 ) -> Result<(), RegistroIngresoServiceError> {
-    let activo = SqliteUsuarioRepository::new(connection)
-        .buscar_por_id(usuario_id)?
-        .is_some_and(|usuario| usuario.activo);
-    if activo {
+    if verificar_actor_activo(connection, actor)?.is_some() {
         Ok(())
     } else {
         Err(RegistroIngresoServiceError::OperadorNoAutorizado)
     }
+}
+
+fn verificar_actor_activo(
+    connection: &Connection,
+    actor: &UsuarioSesion,
+) -> Result<Option<Usuario>, DatabaseError> {
+    Ok(SqliteUsuarioRepository::new(connection)
+        .buscar_por_id(actor.id)?
+        .filter(|usuario| usuario.activo))
+}
+
+fn verificar_creacion_usuario(
+    connection: &Connection,
+    actor: &UsuarioSesion,
+    objetivo: RolUsuario,
+) -> Result<Usuario, UsuarioServiceError> {
+    let actor_actual = verificar_actor_activo(connection, actor)?
+        .ok_or(UsuarioServiceError::OperacionNoAutorizada)?;
+    if !puede_gestionar_usuario(actor_actual.rol, objetivo) {
+        return Err(UsuarioServiceError::OperacionNoAutorizada);
+    }
+    Ok(actor_actual)
+}
+
+/// Autoriza contra el rol y estado que existen ahora en SQLite. El rol del
+/// snapshot de sesión nunca decide permisos: una degradación surte efecto en
+/// la siguiente operación sin necesidad de reiniciar la TUI.
+fn verificar_gestion_usuario(
+    connection: &Connection,
+    actor: &UsuarioSesion,
+    objetivo_id: i64,
+    permitir_mismo_usuario: bool,
+) -> Result<Usuario, UsuarioServiceError> {
+    let actor_actual = verificar_actor_activo(connection, actor)?
+        .ok_or(UsuarioServiceError::OperacionNoAutorizada)?;
+    let objetivo = SqliteUsuarioRepository::new(connection)
+        .buscar_por_id(objetivo_id)?
+        .ok_or(UsuarioServiceError::UsuarioNoEncontrado)?;
+    if (!permitir_mismo_usuario && actor_actual.id == objetivo.id)
+        || !puede_gestionar_usuario(actor_actual.rol, objetivo.rol)
+    {
+        return Err(UsuarioServiceError::OperacionNoAutorizada);
+    }
+    Ok(actor_actual)
 }

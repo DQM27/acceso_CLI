@@ -20,19 +20,23 @@ pub enum OpcionMenu {
     Contratistas,
     Empresas,
     Usuarios,
+    CambiarPassword,
+    Auditoria,
     Configuracion,
     CerrarSesion,
     Salir,
 }
 
 impl OpcionMenu {
-    pub const TODAS: [Self; 9] = [
+    pub const TODAS: [Self; 11] = [
         Self::NuevoIngreso,
         Self::IngresosActivos,
         Self::Historial,
         Self::Contratistas,
         Self::Empresas,
         Self::Usuarios,
+        Self::CambiarPassword,
+        Self::Auditoria,
         Self::Configuracion,
         Self::CerrarSesion,
         Self::Salir,
@@ -46,7 +50,9 @@ impl OpcionMenu {
             Self::Contratistas => "4   Contratistas",
             Self::Empresas => "5   Empresas",
             Self::Usuarios => "6   Usuarios",
-            Self::Configuracion => "7   Configuración",
+            Self::CambiarPassword => "7   Cambiar mi contraseña",
+            Self::Auditoria => "8   Auditoría",
+            Self::Configuracion => "9   Configuración",
             Self::CerrarSesion => "L   Cerrar sesión",
             Self::Salir => "Q   Salir",
         }
@@ -60,6 +66,8 @@ impl OpcionMenu {
             Self::Contratistas => "Administrar la base de contratistas.",
             Self::Empresas => "Administrar empresas registradas.",
             Self::Usuarios => "Administrar usuarios del sistema.",
+            Self::CambiarPassword => "Actualizar la contraseña de la sesión actual.",
+            Self::Auditoria => "Consultar cambios en campos críticos de contratistas.",
             Self::Configuracion => "Ajustes del sistema y respaldos de la base de datos.",
             Self::CerrarSesion => "Volver a la pantalla de autenticación.",
             Self::Salir => "Cerrar BRISAS CLI.",
@@ -70,7 +78,9 @@ impl OpcionMenu {
     /// Operador con acceso a Usuarios podría autopromoverse a Administrador o Root.
     fn visible_para(self, rol: RolUsuario) -> bool {
         match self {
-            Self::Usuarios | Self::Configuracion => rol != RolUsuario::Operador,
+            Self::Usuarios => rol != RolUsuario::Operador,
+            Self::Auditoria => rol != RolUsuario::Operador,
+            Self::Configuracion => rol == RolUsuario::Root,
             _ => true,
         }
     }
@@ -154,7 +164,13 @@ impl MenuPrincipalState {
             KeyCode::Char('6') if visibles.contains(&OpcionMenu::Usuarios) => {
                 return AccionMenu::Abrir(OpcionMenu::Usuarios);
             }
-            KeyCode::Char('7') if visibles.contains(&OpcionMenu::Configuracion) => {
+            KeyCode::Char('7') => {
+                return AccionMenu::Abrir(OpcionMenu::CambiarPassword);
+            }
+            KeyCode::Char('8') if visibles.contains(&OpcionMenu::Auditoria) => {
+                return AccionMenu::Abrir(OpcionMenu::Auditoria);
+            }
+            KeyCode::Char('9') if visibles.contains(&OpcionMenu::Configuracion) => {
                 return AccionMenu::Abrir(OpcionMenu::Configuracion);
             }
             KeyCode::Char('l' | 'L') => self.solicitar(ConfirmacionMenu::CerrarSesion),

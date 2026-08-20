@@ -13,8 +13,11 @@ use std::{
 use rusqlite::{Connection, params};
 
 use control_acceso::{
-    application::AppCore, database::schema::initialize_database,
-    domain::resultado_acceso::MotivoDenegacion, models::medio_ingreso::MedioIngreso,
+    application::AppCore,
+    database::schema::initialize_database,
+    domain::resultado_acceso::MotivoDenegacion,
+    models::{medio_ingreso::MedioIngreso, usuario::RolUsuario},
+    services::autenticacion_service::UsuarioSesion,
     services::error::RegistroIngresoServiceError,
 };
 
@@ -80,6 +83,15 @@ fn preparar_base(ruta: &Path) -> (i64, i64) {
     (empresa_id, usuario_id)
 }
 
+fn actor(usuario_id: i64) -> UsuarioSesion {
+    UsuarioSesion {
+        id: usuario_id,
+        cedula: "1001".into(),
+        nombre: "Operador".into(),
+        rol: RolUsuario::Operador,
+    }
+}
+
 fn crear_contratista(ruta: &Path, empresa_id: i64, cedula: &str, tipo_ingreso: &str) -> i64 {
     let connection = Connection::open(ruta).unwrap();
     connection
@@ -114,10 +126,10 @@ fn ejecutar_en_paralelo(
             thread::spawn(move || {
                 barrera.wait();
                 clasificar(core.registrar_ingreso(
+                    &actor(usuario_id),
                     contratista_id,
                     MedioIngreso::Caminando,
                     gafete,
-                    usuario_id,
                 ))
             })
         })
@@ -229,10 +241,10 @@ fn una_revocacion_confirmada_antes_del_bloqueo_impide_el_ingreso() {
     let hilo = thread::spawn(move || {
         inicio_tx.send(()).unwrap();
         let resultado = clasificar(core.registrar_ingreso(
+            &actor(usuario_id),
             contratista_id,
             MedioIngreso::Caminando,
             None,
-            usuario_id,
         ));
         resultado_tx.send(resultado).unwrap();
     });
@@ -266,7 +278,12 @@ fn una_revocacion_confirmada_antes_del_bloqueo_impide_el_ingreso() {
 
     AppCore::abrir(&ruta)
         .unwrap()
-        .registrar_ingreso(contratista_id, MedioIngreso::Caminando, None, usuario_id)
+        .registrar_ingreso(
+            &actor(usuario_id),
+            contratista_id,
+            MedioIngreso::Caminando,
+            None,
+        )
         .unwrap();
 
     limpiar_base(&ruta);

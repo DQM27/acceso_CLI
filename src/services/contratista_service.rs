@@ -1,6 +1,7 @@
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 
 use crate::database::error::DatabaseError;
+use crate::database::queries::auditoria_contratistas::AuditoriaContratistasWriter;
 use crate::database::queries::contratistas::{
     ContratistasQuery, FiltroContratistas, PaginaContratistas,
 };
@@ -101,6 +102,49 @@ where
         let actual = self.buscar_por_id(id)?;
         let contratista = self.construir_actualizacion(actual, datos)?;
         Ok(self.contratistas.actualizar(&contratista)?)
+    }
+
+    pub fn actualizar_auditado<A: AuditoriaContratistasWriter + ?Sized>(
+        &self,
+        id: i64,
+        datos: DatosActualizacionContratista,
+        actor_id: i64,
+        fecha_hora: DateTime<Utc>,
+        auditoria: &A,
+    ) -> Result<(), ContratistaServiceError> {
+        let actual = self.buscar_por_id(id)?;
+        let tipo_anterior = actual.tipo_ingreso.as_str_sql().to_owned();
+        let fecha_anterior = actual
+            .fecha_vencimiento_praind
+            .map(|fecha| fecha.format("%Y-%m-%d").to_string());
+        let contratista = self.construir_actualizacion(actual, datos)?;
+        let tipo_nuevo = contratista.tipo_ingreso.as_str_sql().to_owned();
+        let fecha_nueva = contratista
+            .fecha_vencimiento_praind
+            .map(|fecha| fecha.format("%Y-%m-%d").to_string());
+
+        self.contratistas.actualizar(&contratista)?;
+        if tipo_anterior != tipo_nuevo {
+            auditoria.registrar_cambio(
+                fecha_hora,
+                actor_id,
+                id,
+                "tipo_ingreso",
+                Some(&tipo_anterior),
+                Some(&tipo_nuevo),
+            )?;
+        }
+        if fecha_anterior != fecha_nueva {
+            auditoria.registrar_cambio(
+                fecha_hora,
+                actor_id,
+                id,
+                "fecha_vencimiento_praind",
+                fecha_anterior.as_deref(),
+                fecha_nueva.as_deref(),
+            )?;
+        }
+        Ok(())
     }
 
     pub fn listar(&self) -> Result<Vec<Contratista>, ContratistaServiceError> {

@@ -16,7 +16,7 @@ const ALTO_MINIMO: u16 = 22;
 const COMANDOS_NORMALES: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓", "Seleccionar"),
     CommandHint::new("ENTER", "Abrir"),
-    CommandHint::new("1-6", "Acceso rápido"),
+    CommandHint::new("1-9", "Acceso rápido"),
     CommandHint::new("L", "Cerrar sesión"),
     CommandHint::new("Q", "Salir"),
 ];
@@ -118,6 +118,7 @@ fn render_lista(
                 OpcionMenu::Contratistas
                     | OpcionMenu::Empresas
                     | OpcionMenu::Usuarios
+                    | OpcionMenu::Auditoria
                     | OpcionMenu::Configuracion
             )
         })
@@ -125,7 +126,12 @@ fn render_lista(
     let sesion: Vec<OpcionMenu> = visibles
         .iter()
         .copied()
-        .filter(|o| matches!(o, OpcionMenu::CerrarSesion | OpcionMenu::Salir))
+        .filter(|o| {
+            matches!(
+                o,
+                OpcionMenu::CambiarPassword | OpcionMenu::CerrarSesion | OpcionMenu::Salir
+            )
+        })
         .collect();
 
     let mut lineas = Vec::new();

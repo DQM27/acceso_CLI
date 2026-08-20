@@ -90,7 +90,7 @@ fn insertar_usuario(connection: &Connection, usuario: &Usuario) -> Result<i64, D
 }
 
 fn buscar_usuario_en_transaccion(
-    transaction: &Transaction<'_>,
+    transaction: &Connection,
     id: i64,
 ) -> Result<Usuario, DatabaseError> {
     let resultado = transaction.query_row(
@@ -126,10 +126,7 @@ fn actualizacion_reduce_roots(actual: &Usuario, nuevo: &Usuario) -> bool {
 /// terminaba restaurando el hash viejo sin que nadie lo pidiera. Excluir la
 /// columna del `UPDATE` hace la condición de carrera imposible en vez de
 /// improbable — no depende de que nadie vuelva a pasar un struct stale.
-fn persistir_usuario(
-    transaction: &Transaction<'_>,
-    usuario: &Usuario,
-) -> Result<(), DatabaseError> {
+fn persistir_usuario(transaction: &Connection, usuario: &Usuario) -> Result<(), DatabaseError> {
     transaction.execute(
         "UPDATE usuarios
          SET cedula = ?1, nombre = ?2, rol = ?3, activo = ?4
@@ -155,7 +152,7 @@ fn persistir_usuario(
 /// `dos_conexiones_no_pueden_desactivar_ambos_roots` existe justamente para
 /// esto — moverlo al servicio reabriría esa carrera.
 fn validar_y_persistir(
-    transaction: &Transaction<'_>,
+    transaction: &Connection,
     actual: &Usuario,
     nuevo: &Usuario,
 ) -> Result<(), DatabaseError> {
@@ -245,6 +242,10 @@ impl<'a> UsuarioRepository for SqliteUsuarioRepository<'a> {
     }
 
     fn actualizar_protegiendo_ultimo_root(&self, usuario: &Usuario) -> Result<(), DatabaseError> {
+        if !self.connection.is_autocommit() {
+            let actual = buscar_usuario_en_transaccion(self.connection, usuario.id)?;
+            return validar_y_persistir(self.connection, &actual, usuario);
+        }
         // La lectura de la transición y su escritura comparten la misma reserva de escritor.
         let transaction =
             Transaction::new_unchecked(self.connection, TransactionBehavior::Immediate)?;
@@ -256,6 +257,12 @@ impl<'a> UsuarioRepository for SqliteUsuarioRepository<'a> {
     }
 
     fn establecer_activo(&self, id: i64, activo: bool) -> Result<(), DatabaseError> {
+        if !self.connection.is_autocommit() {
+            let actual = buscar_usuario_en_transaccion(self.connection, id)?;
+            let mut nuevo = actual.clone();
+            nuevo.activo = activo;
+            return validar_y_persistir(self.connection, &actual, &nuevo);
+        }
         let transaction =
             Transaction::new_unchecked(self.connection, TransactionBehavior::Immediate)?;
         let actual = buscar_usuario_en_transaccion(&transaction, id)?;

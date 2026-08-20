@@ -7,6 +7,8 @@ use control_acceso::{
         queries::empresas::{EmpresasQuery, FiltroEmpresas, SqliteEmpresasQuery},
         schema::initialize_database,
     },
+    models::usuario::RolUsuario,
+    services::autenticacion_service::UsuarioSesion,
     services::error::EmpresaServiceError,
 };
 use rusqlite::{Connection, params};
@@ -15,6 +17,24 @@ fn filtro(texto: Option<&str>) -> FiltroEmpresas {
     FiltroEmpresas {
         texto: texto.map(str::to_owned),
         ..Default::default()
+    }
+}
+
+fn root(core: &AppCore) -> UsuarioSesion {
+    let id = core
+        .crear_root_inicial(
+            control_acceso::services::usuario_service::CrearRootInicialInput {
+                cedula: "ROOT".into(),
+                nombre: "Root".into(),
+                password: "password-root".into(),
+            },
+        )
+        .unwrap();
+    UsuarioSesion {
+        id,
+        cedula: "ROOT".into(),
+        nombre: "Root".into(),
+        rol: RolUsuario::Root,
     }
 }
 
@@ -83,9 +103,10 @@ fn renombrado_actualiza_fts_y_duplicado_conserva_sqlite() {
     let c = Connection::open_in_memory().unwrap();
     initialize_database(&c).unwrap();
     let core = AppCore::new(c);
-    let uno = core.crear_empresa("Constructora Álvarez").unwrap();
-    let dos = core.crear_empresa("Empresa Dos").unwrap();
-    core.actualizar_empresa(uno, "Constructora Hernández")
+    let actor = root(&core);
+    let uno = core.crear_empresa(&actor, "Constructora Álvarez").unwrap();
+    let dos = core.crear_empresa(&actor, "Empresa Dos").unwrap();
+    core.actualizar_empresa(&actor, uno, "Constructora Hernández")
         .unwrap();
     assert!(
         core.buscar_empresas(&filtro(Some("alvarez")))
@@ -97,7 +118,7 @@ fn renombrado_actualiza_fts_y_duplicado_conserva_sqlite() {
         uno
     );
     assert!(matches!(
-        core.actualizar_empresa(dos, "Constructora Hernández"),
+        core.actualizar_empresa(&actor, dos, "Constructora Hernández"),
         Err(EmpresaServiceError::NombreDuplicado)
     ));
     assert_eq!(
@@ -142,7 +163,8 @@ fn empresa_persiste_al_cerrar_y_reabrir_appcore() {
     let ruta = std::env::temp_dir().join(format!("brisas_empresas_{sello}.db"));
     {
         let core = AppCore::new(open_database(&ruta).unwrap());
-        core.crear_empresa("Empresa Persistente").unwrap();
+        let actor = root(&core);
+        core.crear_empresa(&actor, "Empresa Persistente").unwrap();
     }
     {
         let core = AppCore::new(open_database(&ruta).unwrap());

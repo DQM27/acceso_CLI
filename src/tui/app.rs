@@ -11,6 +11,8 @@ use crate::services::usuario_service::CrearRootInicialInput;
 
 use super::{
     activos::{self, AccionActivos, ActivosState},
+    auditoria::{self, AccionAuditoria, AuditoriaState},
+    cambio_password::{self, AccionCambioPassword, CambioPasswordState},
     configuracion::{self, AccionAjustes, AccionRespaldos, ConfiguracionState},
     configuracion_inicial::{self, AccionConfiguracion, ConfiguracionInicialState, SolicitudRoot},
     contratistas::{self, AccionContratistas, ContratistasState},
@@ -37,6 +39,9 @@ fn mensaje_empresa(error: crate::services::error::EmpresaServiceError) -> String
         crate::services::error::EmpresaServiceError::EmpresaNoEncontrada => {
             "La empresa ya no existe".into()
         }
+        crate::services::error::EmpresaServiceError::OperacionNoAutorizada => {
+            "Su sesión no está autorizada para esta operación".into()
+        }
         crate::services::error::EmpresaServiceError::Database(_) => {
             "No se pudo guardar la empresa".into()
         }
@@ -52,6 +57,7 @@ fn mensaje_contratista(error: crate::services::error::ContratistaServiceError) -
         NombreVacio => "El nombre es obligatorio".into(),
         PraindRequerido => "Fecha PRAIND requerida".into(),
         CedulaDuplicada => "Ya existe un contratista con esa cédula".into(),
+        OperacionNoAutorizada => "Su sesión no está autorizada para esta operación".into(),
         Database(_) => "No se pudo guardar el contratista".into(),
     }
 }
@@ -67,6 +73,12 @@ fn mensaje_usuario(error: UsuarioServiceError) -> String {
         UsuarioServiceError::CedulaDuplicada => "Ya existe un usuario con esa cédula".into(),
         UsuarioServiceError::UltimoRootActivo => {
             "Debe existir al menos un usuario ROOT activo".into()
+        }
+        UsuarioServiceError::OperacionNoAutorizada => {
+            "Su sesión no está autorizada para gestionar ese usuario".into()
+        }
+        UsuarioServiceError::PasswordActualIncorrecta => {
+            "La contraseña actual es incorrecta".into()
         }
         _ => "No se pudo guardar el usuario".into(),
     }
@@ -109,6 +121,8 @@ pub enum Vista {
     Contratistas,
     Empresas,
     Usuarios,
+    CambiarPassword,
+    Auditoria,
     Configuracion,
     NuevoIngreso,
 }
@@ -179,6 +193,16 @@ mod tests {
             nombre: nombre.into(),
             rol: crate::models::usuario::RolUsuario::Root,
         }
+    }
+
+    fn crear_root_real(core: &AppCore) -> UsuarioSesion {
+        core.crear_root_inicial(crate::services::usuario_service::CrearRootInicialInput {
+            cedula: "ROOT-TEST".into(),
+            nombre: "Root de prueba".into(),
+            password: "password-test".into(),
+        })
+        .unwrap();
+        core.autenticar("ROOT-TEST", "password-test").unwrap()
     }
 
     fn tecla(codigo: KeyCode) -> KeyEvent {
@@ -462,9 +486,10 @@ mod tests {
         let connection = Connection::open_in_memory().unwrap();
         initialize_database(&connection).unwrap();
         let core = AppCore::new(connection);
+        let actor = crear_root_real(&core);
         let mut app = App {
             vista: Vista::MenuPrincipal,
-            sesion: Some(sesion("Daniel")),
+            sesion: Some(actor),
             ..App::default()
         };
         app.procesar_accion_menu_con_core(tecla(KeyCode::Char('5')), Some(&core));
@@ -510,11 +535,12 @@ mod tests {
         let connection = Connection::open_in_memory().unwrap();
         initialize_database(&connection).unwrap();
         let core = AppCore::new(connection);
-        core.crear_empresa("Constructora Álvarez").unwrap();
-        core.crear_empresa("Servicios Hernández").unwrap();
+        let actor = crear_root_real(&core);
+        core.crear_empresa(&actor, "Constructora Álvarez").unwrap();
+        core.crear_empresa(&actor, "Servicios Hernández").unwrap();
         let mut app = App {
             vista: Vista::MenuPrincipal,
-            sesion: Some(sesion("Daniel")),
+            sesion: Some(actor),
             ..App::default()
         };
         app.procesar_accion_menu_con_core(tecla(KeyCode::Char('5')), Some(&core));
@@ -568,10 +594,11 @@ mod tests {
         let connection = Connection::open_in_memory().unwrap();
         initialize_database(&connection).unwrap();
         let core = AppCore::new(connection);
-        let empresa_id = core.crear_empresa("Constructora Álvarez").unwrap();
+        let actor = crear_root_real(&core);
+        let empresa_id = core.crear_empresa(&actor, "Constructora Álvarez").unwrap();
         let mut app = App {
             vista: Vista::MenuPrincipal,
-            sesion: Some(sesion("Daniel")),
+            sesion: Some(actor),
             ..App::default()
         };
         app.procesar_accion_menu_con_core(tecla(KeyCode::Char('4')), Some(&core));
@@ -662,13 +689,17 @@ mod tests {
                 password: "password1".into(),
             })
             .unwrap();
-        core.crear_usuario(crate::services::usuario_service::CrearUsuarioInput {
-            cedula: "ROOT-2".into(),
-            nombre: "Respaldo".into(),
-            password: "password2".into(),
-            rol: RolUsuario::Root,
-            activo: true,
-        })
+        let actor = core.autenticar("ROOT-1", "password1").unwrap();
+        core.crear_usuario(
+            &actor,
+            crate::services::usuario_service::CrearUsuarioInput {
+                cedula: "ROOT-2".into(),
+                nombre: "Respaldo".into(),
+                password: "password2".into(),
+                rol: RolUsuario::Root,
+                activo: true,
+            },
+        )
         .unwrap();
         let mut app = App {
             vista: Vista::Usuarios,
@@ -712,23 +743,27 @@ mod tests {
                 password: "password1".into(),
             })
             .unwrap();
-        let empresa_id = core.crear_empresa("Constructora Álvarez").unwrap();
+        let actor = core.autenticar("ROOT-1", "password1").unwrap();
+        let empresa_id = core.crear_empresa(&actor, "Constructora Álvarez").unwrap();
         let contratista_id = core
-            .crear_contratista(crate::services::contratista_service::DatosContratista {
-                cedula: "9-9999-9999".into(),
-                nombre: "Persona De Prueba".into(),
-                empresa_id,
-                tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::PorCorreo,
-                fecha_vencimiento_praind: None,
-                es_personal_ruta: false,
-                tiene_acceso: true,
-            })
+            .crear_contratista(
+                &actor,
+                crate::services::contratista_service::DatosContratista {
+                    cedula: "9-9999-9999".into(),
+                    nombre: "Persona De Prueba".into(),
+                    empresa_id,
+                    tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::PorCorreo,
+                    fecha_vencimiento_praind: None,
+                    es_personal_ruta: false,
+                    tiene_acceso: true,
+                },
+            )
             .unwrap();
         core.registrar_ingreso(
+            &actor,
             contratista_id,
             crate::models::medio_ingreso::MedioIngreso::Caminando,
             Some(77),
-            usuario_id,
         )
         .unwrap();
 
@@ -804,18 +839,14 @@ mod tests {
             password: "password1".into(),
         })
         .unwrap();
+        let actor = core.autenticar("ROOT-1", "password1").unwrap();
         let respaldo = core
-            .crear_respaldo(crate::database::backup::TipoRespaldo::Manual)
+            .crear_respaldo(&actor, crate::database::backup::TipoRespaldo::Manual)
             .unwrap();
 
         let mut app = App {
             vista: Vista::Configuracion,
-            sesion: Some(UsuarioSesion {
-                id: 1,
-                cedula: "ROOT-1".into(),
-                nombre: "Ana".into(),
-                rol: RolUsuario::Root,
-            }),
+            sesion: Some(actor),
             ..App::default()
         };
         // Entra a Respaldos y carga la lista real desde el AppCore de archivo.
@@ -840,7 +871,7 @@ mod tests {
         std::fs::remove_dir_all(&directorio).ok();
     }
 
-    fn core_temporal(nombre: &str) -> (AppCore, std::path::PathBuf, i64) {
+    fn core_temporal(nombre: &str) -> (AppCore, std::path::PathBuf, UsuarioSesion) {
         use std::time::{SystemTime, UNIX_EPOCH};
         let unico = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -860,13 +891,18 @@ mod tests {
                 password: "password1".into(),
             })
             .unwrap();
-        (core, directorio, root_id)
+        let actor = core.autenticar("ROOT-1", "password1").unwrap();
+        assert_eq!(actor.id, root_id);
+        (core, directorio, actor)
     }
 
     #[test]
     fn crear_usuario_en_hilo_aparte_termina_creado_en_sqlite_con_el_hash_correcto() {
-        let (core, directorio, _root_id) = core_temporal("crear_usuario");
-        let mut app = App::default();
+        let (core, directorio, actor) = core_temporal("crear_usuario");
+        let mut app = App {
+            sesion: Some(actor.clone()),
+            ..App::default()
+        };
 
         app.iniciar_creacion_usuario(
             crate::services::usuario_service::CrearUsuarioInput {
@@ -890,7 +926,7 @@ mod tests {
         }
 
         assert!(!app.usuarios.guardando());
-        let creado = core.buscar_usuarios(&Default::default()).unwrap();
+        let creado = core.buscar_usuarios(&actor, &Default::default()).unwrap();
         let persona = creado
             .iter()
             .find(|u| u.cedula == "2001")
@@ -903,10 +939,30 @@ mod tests {
 
     #[test]
     fn cambiar_password_en_hilo_aparte_actualiza_la_autenticacion_real() {
-        let (core, directorio, root_id) = core_temporal("cambiar_password");
-        let mut app = App::default();
+        let (core, directorio, actor) = core_temporal("cambiar_password");
+        let objetivo = core
+            .crear_usuario(
+                &actor,
+                crate::services::usuario_service::CrearUsuarioInput {
+                    cedula: "USR-RESET".into(),
+                    nombre: "Usuario".into(),
+                    password: "password1".into(),
+                    rol: RolUsuario::Operador,
+                    activo: true,
+                },
+            )
+            .unwrap();
+        let mut app = App {
+            sesion: Some(actor),
+            ..App::default()
+        };
 
-        app.iniciar_cambio_password(root_id, "password-nuevo".into(), "Ana".into(), Some(&core));
+        app.iniciar_cambio_password(
+            objetivo,
+            "password-nuevo".into(),
+            "Usuario".into(),
+            Some(&core),
+        );
         assert!(app.usuarios.guardando());
 
         for _ in 0..200 {
@@ -918,8 +974,8 @@ mod tests {
         }
 
         assert!(!app.usuarios.guardando());
-        assert!(core.autenticar("ROOT-1", "password-nuevo").is_ok());
-        assert!(core.autenticar("ROOT-1", "password1").is_err());
+        assert!(core.autenticar("USR-RESET", "password-nuevo").is_ok());
+        assert!(core.autenticar("USR-RESET", "password1").is_err());
 
         std::fs::remove_dir_all(&directorio).ok();
     }
@@ -932,22 +988,25 @@ mod tests {
     /// depender de cuánto tarde Argon2 realmente.
     #[test]
     fn login_rechaza_una_cuenta_desactivada_mientras_argon2_verificaba() {
-        let (core, directorio, _root_id) = core_temporal("login_revalidacion");
+        let (core, directorio, actor) = core_temporal("login_revalidacion");
         let id = core
-            .crear_usuario(crate::services::usuario_service::CrearUsuarioInput {
-                cedula: "3001".into(),
-                nombre: "Operador".into(),
-                password: "password3".into(),
-                rol: RolUsuario::Operador,
-                activo: true,
-            })
+            .crear_usuario(
+                &actor,
+                crate::services::usuario_service::CrearUsuarioInput {
+                    cedula: "3001".into(),
+                    nombre: "Operador".into(),
+                    password: "password3".into(),
+                    rol: RolUsuario::Operador,
+                    activo: true,
+                },
+            )
             .unwrap();
 
         let mut app = App::default();
         app.iniciar_autenticacion("3001".into(), "password3".into(), Some(&core));
         assert!(app.autenticacion_pendiente.is_some());
 
-        core.desactivar_usuario(id).unwrap();
+        core.desactivar_usuario(&actor, id).unwrap();
 
         for _ in 0..200 {
             app.recibir_autenticacion_si_lista(Some(&core));
@@ -979,8 +1038,8 @@ mod tests {
 /// el hash y no hace falta después.
 #[derive(Debug)]
 enum HiloUsuarioPendiente {
-    Creacion(ReceptorHash, DatosUsuarioPendiente, String),
-    CambioPassword(ReceptorHash, i64, String),
+    Creacion(ReceptorHash, UsuarioSesion, DatosUsuarioPendiente, String),
+    CambioPassword(ReceptorHash, UsuarioSesion, i64, String),
 }
 
 #[derive(Debug, Clone)]
@@ -994,6 +1053,7 @@ struct DatosUsuarioPendiente {
 /// Receptor del hilo aparte que sólo calcula un hash de Argon2 — nunca del resultado
 /// final de escribir en SQLite, que ocurre después, en el hilo principal.
 type ReceptorHash = std::sync::mpsc::Receiver<Result<String, PasswordError>>;
+type ReceptorCambioPropio = std::sync::mpsc::Receiver<Result<(String, String), String>>;
 
 #[derive(Debug)]
 pub struct App {
@@ -1006,6 +1066,8 @@ pub struct App {
     contratistas: ContratistasState,
     empresas: EmpresasState,
     usuarios: UsuariosState,
+    cambio_password: CambioPasswordState,
+    auditoria: AuditoriaState,
     configuracion: ConfiguracionState,
     nuevo_ingreso: NuevoIngresoState,
     salida_rapida: SalidaRapidaState,
@@ -1024,6 +1086,7 @@ pub struct App {
     /// creación y cambio de contraseña en vuelo a la vez), no depende de que
     /// nada valide `UsuariosState::guardando` desde aquí.
     hilo_usuario_pendiente: Option<HiloUsuarioPendiente>,
+    cambio_password_pendiente: Option<ReceptorCambioPropio>,
     /// Hash de Argon2 en camino para crear el usuario ROOT inicial.
     root_inicial_pendiente: Option<(ReceptorHash, SolicitudRoot)>,
 }
@@ -1040,6 +1103,8 @@ impl Default for App {
             contratistas: ContratistasState::default(),
             empresas: EmpresasState::default(),
             usuarios: UsuariosState::default(),
+            cambio_password: CambioPasswordState::default(),
+            auditoria: AuditoriaState::default(),
             configuracion: ConfiguracionState::default(),
             nuevo_ingreso: NuevoIngresoState::default(),
             salida_rapida: SalidaRapidaState::default(),
@@ -1049,6 +1114,7 @@ impl Default for App {
             tema: ThemePreset::Brisas,
             autenticacion_pendiente: None,
             hilo_usuario_pendiente: None,
+            cambio_password_pendiente: None,
             root_inicial_pendiente: None,
         }
     }
@@ -1137,6 +1203,22 @@ impl App {
                             usuarios::render(frame, frame.area(), &self.usuarios, sesion, theme)
                         }
                     }
+                    Vista::CambiarPassword => {
+                        if let Some(sesion) = &self.sesion {
+                            cambio_password::render(
+                                frame,
+                                frame.area(),
+                                &self.cambio_password,
+                                sesion,
+                                theme,
+                            )
+                        }
+                    }
+                    Vista::Auditoria => {
+                        if let Some(sesion) = &self.sesion {
+                            auditoria::render(frame, frame.area(), &self.auditoria, sesion, theme)
+                        }
+                    }
                     Vista::Configuracion => {
                         configuracion::render(frame, frame.area(), &self.configuracion, theme)
                     }
@@ -1177,6 +1259,7 @@ impl App {
                 None => self.abortar_configuracion_inicial_sin_core(),
             }
             self.recibir_hilo_usuario_si_lista(core);
+            self.recibir_cambio_password_propio(core);
 
             // Búsquedas con debounce: cada pantalla decide si ya pasó el
             // tiempo sin tecla nueva; si no, `tick` devuelve `Ninguna` y el
@@ -1300,7 +1383,16 @@ impl App {
             self.procesar_recarga_usuarios(recarga, core);
             return;
         };
-        if let Err(error) = core.validar_datos_para_crear_usuario(&input) {
+        let Some(actor) = self.sesion.clone() else {
+            let recarga = self.usuarios.completar_guardado(
+                Err("No hay una sesión activa".into()),
+                None,
+                &nombre,
+            );
+            self.procesar_recarga_usuarios(recarga, Some(core));
+            return;
+        };
+        if let Err(error) = core.validar_datos_para_crear_usuario(&actor, &input) {
             let recarga =
                 self.usuarios
                     .completar_guardado(Err(mensaje_usuario(error)), None, &nombre);
@@ -1314,7 +1406,9 @@ impl App {
             activo: input.activo,
         };
         let receptor = Self::generar_hash_en_hilo(input.password);
-        self.hilo_usuario_pendiente = Some(HiloUsuarioPendiente::Creacion(receptor, datos, nombre));
+        self.hilo_usuario_pendiente = Some(HiloUsuarioPendiente::Creacion(
+            receptor, actor, datos, nombre,
+        ));
         self.usuarios.marcar_guardando();
     }
 
@@ -1331,14 +1425,20 @@ impl App {
                 .completar_password(Err("No se pudo cambiar la contraseña".into()), &nombre);
             return;
         };
-        if let Err(error) = core.validar_password_para_cambio(id, &password) {
+        let Some(actor) = self.sesion.clone() else {
+            self.usuarios
+                .completar_password(Err("No hay una sesión activa".into()), &nombre);
+            return;
+        };
+        if let Err(error) = core.validar_password_para_cambio(&actor, id, &password) {
             self.usuarios
                 .completar_password(Err(mensaje_usuario(error)), &nombre);
             return;
         }
         let receptor = Self::generar_hash_en_hilo(password);
-        self.hilo_usuario_pendiente =
-            Some(HiloUsuarioPendiente::CambioPassword(receptor, id, nombre));
+        self.hilo_usuario_pendiente = Some(HiloUsuarioPendiente::CambioPassword(
+            receptor, actor, id, nombre,
+        ));
         self.usuarios.marcar_guardando();
     }
 
@@ -1355,12 +1455,13 @@ impl App {
             return;
         };
         match self.hilo_usuario_pendiente.take() {
-            Some(HiloUsuarioPendiente::Creacion(_, datos, nombre)) => {
+            Some(HiloUsuarioPendiente::Creacion(_, actor, datos, nombre)) => {
                 let resultado = match resultado_hash {
                     Ok(hash) => core
                         .ok_or_else(|| "No se pudo guardar el usuario".to_owned())
                         .and_then(|core| {
                             core.crear_usuario_con_hash(
+                                &actor,
                                 &datos.cedula,
                                 &datos.nombre,
                                 datos.rol,
@@ -1375,12 +1476,12 @@ impl App {
                 let recarga = self.usuarios.completar_guardado(resultado, None, &nombre);
                 self.procesar_recarga_usuarios(recarga, core);
             }
-            Some(HiloUsuarioPendiente::CambioPassword(_, id, nombre)) => {
+            Some(HiloUsuarioPendiente::CambioPassword(_, actor, id, nombre)) => {
                 let resultado = match resultado_hash {
                     Ok(hash) => core
                         .ok_or_else(|| "No se pudo cambiar la contraseña".to_owned())
                         .and_then(|core| {
-                            core.cambiar_password_usuario_con_hash(id, &hash)
+                            core.cambiar_password_usuario_con_hash(&actor, id, &hash)
                                 .map_err(mensaje_usuario)
                         }),
                     Err(error) => Err(error.to_string()),
@@ -1389,6 +1490,64 @@ impl App {
             }
             None => {}
         }
+    }
+
+    fn iniciar_cambio_password_propio(
+        &mut self,
+        password_actual: String,
+        nueva_password: String,
+        core: Option<&AppCore>,
+    ) {
+        let resultado = (|| {
+            let core = core.ok_or_else(|| "No se pudo cambiar la contraseña".to_owned())?;
+            let actor = self
+                .sesion
+                .as_ref()
+                .ok_or_else(|| "No hay una sesión activa".to_owned())?;
+            let candidato = core
+                .preparar_cambio_password_propio(actor, &nueva_password)
+                .map_err(mensaje_usuario)?;
+            let hash_actual = candidato.password_hash.clone();
+            let (emisor, receptor) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let resultado = crate::services::autenticacion_service::verificar_candidato(
+                    candidato,
+                    &password_actual,
+                )
+                .map_err(|_| "La contraseña actual es incorrecta".to_owned())
+                .and_then(|_| {
+                    crate::services::password::generar_hash(&nueva_password)
+                        .map(|nuevo_hash| (hash_actual, nuevo_hash))
+                        .map_err(|error| error.to_string())
+                });
+                let _ = emisor.send(resultado);
+            });
+            Ok(receptor)
+        })();
+        match resultado {
+            Ok(receptor) => self.cambio_password_pendiente = Some(receptor),
+            Err(error) => self.cambio_password.completar(Err(error)),
+        }
+    }
+
+    fn recibir_cambio_password_propio(&mut self, core: Option<&AppCore>) {
+        let Some(receptor) = &self.cambio_password_pendiente else {
+            return;
+        };
+        let Ok(resultado_hilo) = receptor.try_recv() else {
+            return;
+        };
+        self.cambio_password_pendiente = None;
+        let resultado = resultado_hilo.and_then(|(hash_actual, nuevo_hash)| {
+            let core = core.ok_or_else(|| "No se pudo cambiar la contraseña".to_owned())?;
+            let actor = self
+                .sesion
+                .as_ref()
+                .ok_or_else(|| "No hay una sesión activa".to_owned())?;
+            core.cambiar_mi_password_con_hash(actor, &hash_actual, &nuevo_hash)
+                .map_err(mensaje_usuario)
+        });
+        self.cambio_password.completar(resultado);
     }
 
     /// Mismo patrón para el ROOT inicial: valida rápido (sin la comprobación de "ya
@@ -1558,7 +1717,7 @@ impl App {
                         Err("La sesión de desarrollo no puede registrar movimientos reales".into())
                     }
                     (Some(s), Some(c)) => c
-                        .registrar_salida(registro_id, s.id)
+                        .registrar_salida(s, registro_id)
                         .map(|()| format!("✓ Salida registrada — {nombre}"))
                         .map_err(mensaje_salida),
                     _ => Err("No se pudo registrar la salida".into()),
@@ -1610,6 +1769,21 @@ impl App {
             Vista::Usuarios => {
                 let accion = self.usuarios.handle_key(key);
                 self.procesar_accion_usuarios(accion, core);
+            }
+            Vista::CambiarPassword => {
+                let accion = self.cambio_password.handle_key(key);
+                match accion {
+                    AccionCambioPassword::Ninguna => {}
+                    AccionCambioPassword::Volver => self.vista = Vista::MenuPrincipal,
+                    AccionCambioPassword::Cambiar {
+                        password_actual,
+                        nueva_password,
+                    } => self.iniciar_cambio_password_propio(password_actual, nueva_password, core),
+                }
+            }
+            Vista::Auditoria => {
+                let accion = self.auditoria.handle_key(key);
+                self.procesar_accion_auditoria(accion, core);
             }
             Vista::Configuracion => {
                 let accion = self.configuracion.handle_key(key);
@@ -1705,6 +1879,15 @@ impl App {
                         }
                         Vista::Usuarios
                     }
+                    OpcionMenu::CambiarPassword => {
+                        self.cambio_password.reiniciar();
+                        Vista::CambiarPassword
+                    }
+                    OpcionMenu::Auditoria => {
+                        let accion = self.auditoria.reiniciar();
+                        self.procesar_accion_auditoria(accion, core);
+                        Vista::Auditoria
+                    }
                     OpcionMenu::Configuracion => {
                         self.configuracion = ConfiguracionState::default();
                         Vista::Configuracion
@@ -1722,6 +1905,7 @@ impl App {
     }
 
     fn procesar_accion_empresas(&mut self, accion: AccionEmpresas, core: Option<&AppCore>) {
+        let actor = self.sesion.clone();
         match accion {
             AccionEmpresas::Ninguna => {}
             AccionEmpresas::Volver => self.vista = Vista::MenuPrincipal,
@@ -1743,7 +1927,12 @@ impl App {
             AccionEmpresas::Crear { nombre } => {
                 let resultado = core
                     .ok_or_else(|| "No se pudo guardar la empresa".to_owned())
-                    .and_then(|core| core.crear_empresa(&nombre).map_err(mensaje_empresa));
+                    .and_then(|core| {
+                        let actor = actor
+                            .as_ref()
+                            .ok_or_else(|| "No hay una sesión activa".to_owned())?;
+                        core.crear_empresa(actor, &nombre).map_err(mensaje_empresa)
+                    });
                 let recarga = self.empresas.completar_creacion(resultado, &nombre);
                 if !matches!(recarga, AccionEmpresas::Ninguna) {
                     self.procesar_accion_empresas(recarga, core);
@@ -1753,7 +1942,10 @@ impl App {
                 let resultado = core
                     .ok_or_else(|| "No se pudo guardar la empresa".to_owned())
                     .and_then(|core| {
-                        core.actualizar_empresa(id, &nombre)
+                        let actor = actor
+                            .as_ref()
+                            .ok_or_else(|| "No hay una sesión activa".to_owned())?;
+                        core.actualizar_empresa(actor, id, &nombre)
                             .map_err(mensaje_empresa)
                     });
                 let recarga = self
@@ -1771,10 +1963,13 @@ impl App {
                 let resultado = core
                     .ok_or_else(|| "No se pudo actualizar el estado de la empresa".into())
                     .and_then(|core| {
+                        let actor = actor
+                            .as_ref()
+                            .ok_or_else(|| "No hay una sesión activa".to_owned())?;
                         if activar {
-                            core.activar_empresa(id)
+                            core.activar_empresa(actor, id)
                         } else {
-                            core.desactivar_empresa(id)
+                            core.desactivar_empresa(actor, id)
                         }
                         .map_err(mensaje_empresa)
                     });
@@ -1788,7 +1983,33 @@ impl App {
         }
     }
 
+    fn procesar_accion_auditoria(&mut self, accion: AccionAuditoria, core: Option<&AppCore>) {
+        match accion {
+            AccionAuditoria::Ninguna => {}
+            AccionAuditoria::Volver => self.vista = Vista::MenuPrincipal,
+            AccionAuditoria::Cargar { offset } => {
+                let resultado = (|| {
+                    let core = core.ok_or_else(|| "No se pudo cargar la auditoría".to_owned())?;
+                    let actor = self
+                        .sesion
+                        .as_ref()
+                        .ok_or_else(|| "No hay una sesión activa".to_owned())?;
+                    core.buscar_auditoria_contratistas(
+                        actor,
+                        &crate::database::queries::auditoria_contratistas::FiltroAuditoriaContratistas {
+                            offset,
+                            ..Default::default()
+                        },
+                    )
+                    .map_err(|error| error.to_string())
+                })();
+                self.auditoria.completar(resultado);
+            }
+        }
+    }
+
     fn procesar_accion_contratistas(&mut self, accion: AccionContratistas, core: Option<&AppCore>) {
+        let actor = self.sesion.clone();
         match accion {
             AccionContratistas::Ninguna => {}
             AccionContratistas::Volver => self.vista = Vista::MenuPrincipal,
@@ -1826,7 +2047,10 @@ impl App {
                 let resultado = core
                     .ok_or_else(|| "No se pudo guardar el contratista".into())
                     .and_then(|core| {
-                        core.crear_contratista(datos)
+                        let actor = actor
+                            .as_ref()
+                            .ok_or_else(|| "No hay una sesión activa".to_owned())?;
+                        core.crear_contratista(actor, datos)
                             .map(Some)
                             .map_err(mensaje_contratista)
                     });
@@ -1841,7 +2065,10 @@ impl App {
                 let resultado = core
                     .ok_or_else(|| "No se pudo guardar el contratista".into())
                     .and_then(|core| {
-                        core.actualizar_contratista(id, datos)
+                        let actor = actor
+                            .as_ref()
+                            .ok_or_else(|| "No hay una sesión activa".to_owned())?;
+                        core.actualizar_contratista(actor, id, datos)
                             .map(|_| None)
                             .map_err(mensaje_contratista)
                     });
@@ -1856,6 +2083,7 @@ impl App {
     }
 
     fn procesar_accion_usuarios(&mut self, accion: AccionUsuarios, core: Option<&AppCore>) {
+        let actor = self.sesion.clone();
         match accion {
             AccionUsuarios::Ninguna => {}
             AccionUsuarios::Volver => self.vista = Vista::MenuPrincipal,
@@ -1866,10 +2094,16 @@ impl App {
                 let resultado = core
                     .ok_or_else(|| "No se pudo cargar la base de usuarios".into())
                     .and_then(|core| {
-                        core.buscar_usuarios(&crate::database::queries::usuarios::FiltroUsuarios {
-                            texto,
-                            ..Default::default()
-                        })
+                        let actor = actor
+                            .as_ref()
+                            .ok_or_else(|| "No hay una sesión activa".to_owned())?;
+                        core.buscar_usuarios(
+                            actor,
+                            &crate::database::queries::usuarios::FiltroUsuarios {
+                                texto,
+                                ..Default::default()
+                            },
+                        )
                         .map_err(|_| "No se pudo cargar la base de usuarios".into())
                     });
                 self.usuarios.completar_busqueda(resultado, seleccionar_id);
@@ -1886,7 +2120,10 @@ impl App {
                 let resultado = core
                     .ok_or_else(|| "No se pudo guardar el usuario".into())
                     .and_then(|core| {
-                        core.actualizar_usuario(id, input, activo)
+                        let actor = actor
+                            .as_ref()
+                            .ok_or_else(|| "No hay una sesión activa".to_owned())?;
+                        core.actualizar_usuario(actor, id, input, activo)
                             .map_err(mensaje_usuario)
                     })
                     .map(|_| None);
@@ -1909,10 +2146,13 @@ impl App {
                 let resultado = core
                     .ok_or_else(|| "No se pudo actualizar el estado del usuario".into())
                     .and_then(|core| {
+                        let actor = actor
+                            .as_ref()
+                            .ok_or_else(|| "No hay una sesión activa".to_owned())?;
                         if activar {
-                            core.activar_usuario(id)
+                            core.activar_usuario(actor, id)
                         } else {
-                            core.desactivar_usuario(id)
+                            core.desactivar_usuario(actor, id)
                         }
                         .map_err(mensaje_usuario)
                     });
@@ -1939,19 +2179,29 @@ impl App {
     }
 
     fn procesar_accion_respaldos(&mut self, accion: AccionRespaldos, core: Option<&AppCore>) {
+        let actor = self.sesion.clone();
         match accion {
             AccionRespaldos::Ninguna | AccionRespaldos::Volver => {}
             AccionRespaldos::Cargar => {
                 let resultado = core
                     .ok_or_else(|| "No se pudieron listar los respaldos".to_owned())
-                    .and_then(|core| core.listar_respaldos().map_err(|error| error.to_string()));
+                    .and_then(|core| {
+                        let actor = actor
+                            .as_ref()
+                            .ok_or_else(|| "No hay una sesión activa".to_owned())?;
+                        core.listar_respaldos(actor)
+                            .map_err(|error| error.to_string())
+                    });
                 self.configuracion.completar_listado(resultado);
             }
             AccionRespaldos::Crear => {
                 let resultado = core
                     .ok_or_else(|| "No se pudo crear el respaldo".to_owned())
                     .and_then(|core| {
-                        core.crear_respaldo(crate::database::backup::TipoRespaldo::Manual)
+                        let actor = actor
+                            .as_ref()
+                            .ok_or_else(|| "No hay una sesión activa".to_owned())?;
+                        core.crear_respaldo(actor, crate::database::backup::TipoRespaldo::Manual)
                             .map_err(|error| error.to_string())
                     });
                 self.configuracion.completar_creacion(resultado);
@@ -1960,7 +2210,10 @@ impl App {
                 let resultado = core
                     .ok_or_else(|| "No se pudo validar el respaldo".to_owned())
                     .and_then(|core| {
-                        core.validar_respaldo(&ruta)
+                        let actor = actor
+                            .as_ref()
+                            .ok_or_else(|| "No hay una sesión activa".to_owned())?;
+                        core.validar_respaldo(actor, &ruta)
                             .map_err(|error| error.to_string())
                     });
                 self.configuracion.completar_validacion(&ruta, resultado);
@@ -1969,7 +2222,10 @@ impl App {
                 let resultado = core
                     .ok_or_else(|| "No se pudo exportar el respaldo".to_owned())
                     .and_then(|core| {
-                        core.exportar_respaldo(&ruta, &destino)
+                        let actor = actor
+                            .as_ref()
+                            .ok_or_else(|| "No hay una sesión activa".to_owned())?;
+                        core.exportar_respaldo(actor, &ruta, &destino)
                             .map_err(|error| error.to_string())
                     });
                 self.configuracion
@@ -1979,8 +2235,14 @@ impl App {
                 let resultado = core
                     .ok_or_else(|| "No se pudo respaldar la base antes de restaurar".to_owned())
                     .and_then(|core| {
-                        core.crear_respaldo(crate::database::backup::TipoRespaldo::PreRestauracion)
-                            .map_err(|error| error.to_string())
+                        let actor = actor
+                            .as_ref()
+                            .ok_or_else(|| "No hay una sesión activa".to_owned())?;
+                        core.crear_respaldo(
+                            actor,
+                            crate::database::backup::TipoRespaldo::PreRestauracion,
+                        )
+                        .map_err(|error| error.to_string())
                     });
                 match resultado {
                     Ok(_) => {
@@ -2045,7 +2307,7 @@ impl App {
                         Err("La sesión de desarrollo no puede registrar movimientos reales".into())
                     }
                     (Some(s), Some(c)) => c
-                        .registrar_ingreso(contratista_id, medio, gafete, s.id)
+                        .registrar_ingreso(s, contratista_id, medio, gafete)
                         .map(|r| r.registro_id)
                         .map_err(mensaje_ingreso),
                     _ => Err("No se pudo registrar el ingreso".into()),
@@ -2096,9 +2358,9 @@ impl App {
                     (Some(s), _) if s.id == 0 => {
                         Err("La sesión de desarrollo no puede registrar movimientos reales".into())
                     }
-                    (Some(s), Some(c)) => c
-                        .registrar_salida(registro_id, s.id)
-                        .map_err(mensaje_salida),
+                    (Some(s), Some(c)) => {
+                        c.registrar_salida(s, registro_id).map_err(mensaje_salida)
+                    }
                     _ => Err("No se pudo registrar la salida".into()),
                 };
                 let recarga = self

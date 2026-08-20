@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 8;
+pub const SCHEMA_VERSION: i64 = 9;
 
 /// Identifica un archivo SQLite como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -141,6 +141,11 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
     if version == 7 {
         aplicar_migracion(&transaction, MIGRACION_8, 8)?;
         version = 8;
+    }
+
+    if version == 8 {
+        aplicar_migracion(&transaction, MIGRACION_9, 9)?;
+        version = 9;
     }
 
     if version != SCHEMA_VERSION {
@@ -776,4 +781,26 @@ WHEN
 BEGIN
     SELECT RAISE(ABORT, 'Los datos historicos del ingreso son inmutables');
 END;
+"#;
+
+// Registro acotado a los dos campos de contratistas cuya trazabilidad es
+// operativamente crítica. Los valores son texto nullable para representar
+// correctamente una fecha PRAIND ausente, sin inventar sentinelas.
+const MIGRACION_9: &str = r#"
+CREATE TABLE auditoria_contratistas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha_hora TEXT NOT NULL,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+    contratista_id INTEGER NOT NULL REFERENCES contratistas(id) ON DELETE RESTRICT,
+    campo TEXT NOT NULL CHECK (campo IN ('tipo_ingreso', 'fecha_vencimiento_praind')),
+    valor_anterior TEXT,
+    valor_nuevo TEXT,
+    CHECK (valor_anterior IS NOT valor_nuevo)
+);
+
+CREATE INDEX idx_auditoria_contratistas_fecha
+ON auditoria_contratistas(fecha_hora DESC, id DESC);
+
+CREATE INDEX idx_auditoria_contratistas_contratista
+ON auditoria_contratistas(contratista_id, id DESC);
 "#;

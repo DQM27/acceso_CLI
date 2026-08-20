@@ -35,7 +35,15 @@ impl Default for FiltroUsuarios {
 }
 
 pub trait UsuariosQuery {
-    fn buscar(&self, filtro: &FiltroUsuarios) -> Result<Vec<UsuarioResumen>, DatabaseError>;
+    fn buscar(&self, filtro: &FiltroUsuarios) -> Result<Vec<UsuarioResumen>, DatabaseError> {
+        self.buscar_para_actor(filtro, RolUsuario::Root)
+    }
+
+    fn buscar_para_actor(
+        &self,
+        filtro: &FiltroUsuarios,
+        actor: RolUsuario,
+    ) -> Result<Vec<UsuarioResumen>, DatabaseError>;
 }
 
 pub struct SqliteUsuariosQuery<'a> {
@@ -49,17 +57,24 @@ impl<'a> SqliteUsuariosQuery<'a> {
 }
 
 impl UsuariosQuery for SqliteUsuariosQuery<'_> {
-    fn buscar(&self, filtro: &FiltroUsuarios) -> Result<Vec<UsuarioResumen>, DatabaseError> {
+    fn buscar_para_actor(
+        &self,
+        filtro: &FiltroUsuarios,
+        actor: RolUsuario,
+    ) -> Result<Vec<UsuarioResumen>, DatabaseError> {
         let busqueda = BusquedaTexto::preparar(filtro.texto.as_deref());
         let limite = filtro.limite.clamp(1, LIMITE_MAXIMO) as i64;
         let offset = i64::try_from(filtro.offset).unwrap_or(i64::MAX);
+        let incluir_root = i64::from(actor == RolUsuario::Root);
         let (sql, parametros): (&str, Vec<rusqlite::types::Value>) = match busqueda.modo {
             1 => (
                 "SELECT id,cedula,nombre,rol,activo FROM usuarios
-                 WHERE PLEGAR(cedula) LIKE PLEGAR(?1) OR PLEGAR(nombre) LIKE PLEGAR(?1)
-                 ORDER BY CASE WHEN cedula=?2 COLLATE NOCASE THEN 0 ELSE 1 END,
-                          nombre COLLATE NOCASE,id LIMIT ?3 OFFSET ?4",
+                 WHERE (?1 = 1 OR rol <> 'ROOT')
+                   AND (PLEGAR(cedula) LIKE PLEGAR(?2) OR PLEGAR(nombre) LIKE PLEGAR(?2))
+                 ORDER BY CASE WHEN cedula=?3 COLLATE NOCASE THEN 0 ELSE 1 END,
+                          nombre COLLATE NOCASE,id LIMIT ?4 OFFSET ?5",
                 vec![
+                    incluir_root.into(),
                     busqueda.patron_like.into(),
                     busqueda.texto_literal.into(),
                     limite.into(),
@@ -70,10 +85,11 @@ impl UsuariosQuery for SqliteUsuariosQuery<'_> {
                 "SELECT u.id,u.cedula,u.nombre,u.rol,u.activo
                  FROM usuarios_fts
                  INNER JOIN usuarios AS u ON u.id=usuarios_fts.rowid
-                 WHERE usuarios_fts MATCH ?1
-                 ORDER BY CASE WHEN u.cedula=?2 COLLATE NOCASE THEN 0 ELSE 1 END,
-                          u.nombre COLLATE NOCASE,u.id LIMIT ?3 OFFSET ?4",
+                 WHERE (?1 = 1 OR u.rol <> 'ROOT') AND usuarios_fts MATCH ?2
+                 ORDER BY CASE WHEN u.cedula=?3 COLLATE NOCASE THEN 0 ELSE 1 END,
+                          u.nombre COLLATE NOCASE,u.id LIMIT ?4 OFFSET ?5",
                 vec![
+                    incluir_root.into(),
                     busqueda.consulta_fts.into(),
                     busqueda.texto_literal.into(),
                     limite.into(),
@@ -82,8 +98,9 @@ impl UsuariosQuery for SqliteUsuariosQuery<'_> {
             ),
             _ => (
                 "SELECT id,cedula,nombre,rol,activo FROM usuarios
-                 ORDER BY nombre COLLATE NOCASE,id LIMIT ?1 OFFSET ?2",
-                vec![limite.into(), offset.into()],
+                 WHERE (?1 = 1 OR rol <> 'ROOT')
+                 ORDER BY nombre COLLATE NOCASE,id LIMIT ?2 OFFSET ?3",
+                vec![incluir_root.into(), limite.into(), offset.into()],
             ),
         };
         let mut statement = self.connection.prepare(sql)?;

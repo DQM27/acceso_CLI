@@ -81,6 +81,7 @@ impl ResultadoValidacion {
 
 #[derive(Debug)]
 pub enum RespaldoError {
+    OperacionNoAutorizada,
     Sqlite(rusqlite::Error),
     Io(std::io::Error),
     /// El respaldo recién creado no pasó su propia validación; el `.partial`
@@ -108,6 +109,10 @@ pub enum RespaldoError {
 impl std::fmt::Display for RespaldoError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::OperacionNoAutorizada => write!(
+                formatter,
+                "Sólo una sesión ROOT activa puede gestionar respaldos"
+            ),
             Self::Sqlite(error) => write!(formatter, "Error de SQLite: {error}"),
             Self::Io(error) => write!(formatter, "Error de archivo: {error}"),
             Self::ValidacionFallida(ResultadoValidacion::Invalido(detalle)) => {
@@ -163,6 +168,7 @@ impl std::fmt::Display for RespaldoError {
 impl std::error::Error for RespaldoError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
+            Self::OperacionNoAutorizada => None,
             Self::Sqlite(error) => Some(error),
             Self::Io(error) => Some(error),
             Self::ValidacionFallida(_) => None,
