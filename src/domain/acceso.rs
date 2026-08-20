@@ -39,7 +39,7 @@ pub fn verificar_acceso(contratista: &Contratista, hoy: NaiveDate) -> ResultadoA
     // Todo contratista que requiere PRAIND debe tener
     // una fecha de vencimiento registrada.
     let Some(fecha_vencimiento) = contratista.fecha_vencimiento_praind else {
-        return ResultadoAcceso::Denegado(MotivoDenegacion::PraindVencido);
+        return ResultadoAcceso::Denegado(MotivoDenegacion::PraindNoRegistrado);
     };
 
     // Regla 3:

@@ -129,7 +129,7 @@ fn debe_denegar_si_praind_no_tiene_fecha() {
 
     assert_eq!(
         resultado,
-        ResultadoAcceso::Denegado(MotivoDenegacion::PraindVencido)
+        ResultadoAcceso::Denegado(MotivoDenegacion::PraindNoRegistrado)
     );
 }
 
@@ -213,7 +213,7 @@ fn in_house_sin_fecha_debe_ser_denegado() {
 
     assert_eq!(
         resultado,
-        ResultadoAcceso::Denegado(MotivoDenegacion::PraindVencido)
+        ResultadoAcceso::Denegado(MotivoDenegacion::PraindNoRegistrado)
     );
 }
 
@@ -297,6 +297,6 @@ fn personal_de_ruta_sin_praind_debe_ser_denegado() {
 
     assert_eq!(
         verificar_acceso(&contratista, hoy),
-        ResultadoAcceso::Denegado(MotivoDenegacion::PraindVencido)
+        ResultadoAcceso::Denegado(MotivoDenegacion::PraindNoRegistrado)
     );
 }

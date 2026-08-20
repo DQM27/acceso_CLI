@@ -90,7 +90,10 @@ fn mensaje_ingreso(error: crate::services::error::RegistroIngresoServiceError) -
         GafeteRequerido => "El gafete es requerido".into(),
         GafeteOcupado => "El gafete ya está en uso".into(),
         AccesoDenegado(MotivoDenegacion::SinAcceso) => "No tiene acceso autorizado".into(),
-        AccesoDenegado(MotivoDenegacion::PraindVencido) => "PRAIND vencido o requerido".into(),
+        AccesoDenegado(MotivoDenegacion::PraindVencido) => "PRAIND vencido".into(),
+        AccesoDenegado(MotivoDenegacion::PraindNoRegistrado) => {
+            "PRAIND sin fecha registrada".into()
+        }
         RelojRetrocedido => "Revise la fecha y hora del equipo antes de continuar".into(),
         _ => "No se pudo registrar el ingreso".into(),
     }

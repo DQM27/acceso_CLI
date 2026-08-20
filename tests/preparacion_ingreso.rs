@@ -206,7 +206,7 @@ fn personal_de_ruta_sigue_requiriendo_praind_para_acceso() {
         .unwrap();
     assert_eq!(
         resultado.resultado_acceso,
-        ResultadoAcceso::Denegado(MotivoDenegacion::PraindVencido)
+        ResultadoAcceso::Denegado(MotivoDenegacion::PraindNoRegistrado)
     );
     assert!(!resultado.requiere_gafete);
 }

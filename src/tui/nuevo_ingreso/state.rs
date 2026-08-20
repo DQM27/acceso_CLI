@@ -360,7 +360,10 @@ fn mensaje_bloqueo(p: &PreparacionIngreso) -> String {
 fn mensaje_motivo_denegacion(motivo: &MotivoDenegacion) -> String {
     match motivo {
         MotivoDenegacion::SinAcceso => "Acceso denegado · no tiene acceso autorizado".into(),
-        MotivoDenegacion::PraindVencido => "Acceso denegado · PRAIND vencido o requerido".into(),
+        MotivoDenegacion::PraindVencido => "Acceso denegado · PRAIND vencido".into(),
+        MotivoDenegacion::PraindNoRegistrado => {
+            "Acceso denegado · PRAIND sin fecha registrada".into()
+        }
         MotivoDenegacion::EmpresaInactiva => "Acceso denegado · la empresa está inactiva".into(),
     }
 }
