@@ -196,12 +196,12 @@ otro para respaldos) en vez de un solo commit gigante.
 
 ## Checklist de cierre
 
-- [ ] `cargo test` completo en verde.
-- [ ] `cargo clippy --lib --tests` sin warnings.
-- [ ] `cargo fmt --all -- --check` limpio.
-- [ ] `docs/auditoria-dominio-2026-08-20.md` actualizado: hallazgo #1 marcado `[x]` con el
+- [x] `cargo test` completo en verde.
+- [x] `cargo clippy --lib --tests` sin warnings.
+- [x] `cargo fmt --all -- --check` limpio.
+- [x] `docs/auditoria-dominio-2026-08-20.md` actualizado: hallazgo #1 marcado `[x]` con el
       detalle de qué se hizo y en qué commits (mismo formato que los hallazgos #2/#4/#5/#7/#9/#11
       ya marcados en ese documento).
-- [ ] Reporte final al usuario resumiendo qué se implementó, en qué commits, y cualquier decisión
+- [x] Reporte final al usuario resumiendo qué se implementó, en qué commits, y cualquier decisión
       de diseño que haya hecho falta tomar sobre la marcha (nombres de tipos, forma exacta de la
       tabla de auditoría, etc.) que no estuviera ya fijada en este documento.

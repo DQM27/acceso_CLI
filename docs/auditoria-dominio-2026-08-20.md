@@ -19,27 +19,31 @@ algunas entidades permiten construir estados que deberían ser imposibles, por l
 dominio todavía no es la única autoridad de las decisiones.
 
 **Estado (2026-08-20): 11 hallazgos, verificados uno por uno leyendo el código real antes
-de reparar (no se tomó ninguno por alucinado — ver detalle en cada uno). 6 reparados (#2,
-#4, #5, #7, #9, #11), 1 revisado y descartado con evidencia (#8), 1 no se toca por
+de reparar (no se tomó ninguno por alucinado — ver detalle en cada uno). 7 reparados (#1,
+#2, #4, #5, #7, #9, #11), 1 revisado y descartado con evidencia (#8), 1 no se toca por
 contradecir una decisión explícita ya tomada en una sesión anterior (#10 — ver
-`plan-saneamiento.md`/`hallazgos-auditoria.md`). Pendientes #1, #3 y #6 — los tres son
-refactors arquitectónicos de alcance amplio (contexto de actor en toda `AppCore`,
-agregados de dominio con constructores privados) que ameritan una decisión de diseño
-explícita antes de tocarlos, no sólo un fix puntual.**
+`plan-saneamiento.md`/`hallazgos-auditoria.md`). Pendientes #3 y #6 — ambos son refactors
+arquitectónicos de agregados de dominio con constructores privados, dejados fuera del
+plan de autorización a propósito.**
 
 ## Hallazgos
 
-### 1. [ ] Alta — Autorización protegida sólo por la presentación
+### 1. [x] Alta — Autorización protegida sólo por la presentación
 
-**Pendiente — requiere decisión de diseño, no es un fix puntual (2026-08-20).** El
-hallazgo es real: verificado que ninguna mutación de `AppCore` recibe ni comprueba un
-actor. Pero cerrarlo bien (política explícita por caso de uso, contexto de sesión
-enhebrado por toda la fachada) toca decenas de métodos de `AppCore` y todos sus
-llamadores en `app.rs` — un alcance muy distinto al resto de hallazgos de esta lista, que
-son fixes locales y contenidos. Además, hoy `AppCore` sólo lo llama la TUI (que ya exige
-login y ya oculta opciones por rol) — no es una ruta explotable hoy, es una fragilidad
-arquitectónica si algún día se agrega otro consumidor de `AppCore`. Vale la pena
-diseñarlo con el usuario antes de tocarlo, no adivinar el alcance solo.
+**Reparado (2026-08-20, commit `1fb1c21`).** La política quedó centralizada en
+`domain::autorizacion`; todas las mutaciones productivas de `AppCore` reciben la
+`UsuarioSesion`, vuelven a resolver en SQLite que el actor exista y siga activo, y aplican
+el rol vigente dentro de la misma transacción que la escritura. El ID persistido en
+ingresos/salidas siempre procede del actor. Administrador no recibe filas Root desde SQL
+y cada escritura rechaza además un ID Root pasado a mano. Respaldos son exclusivos de
+Root; la activación de empresas/contratistas y la gestión de usuarios respetan la matriz
+Root ⊇ Administrador ⊇ Operador.
+
+El mismo cambio agregó el flujo separado de contraseña propia (contraseña actual
+obligatoria y Argon2 fuera del hilo TUI), la migración 9 con auditoría transaccional de
+`tipo_ingreso`/`fecha_vencimiento_praind`, y una pantalla paginada visible para
+Administrador y Root. Las regresiones directas contra `AppCore` viven en
+`tests/autorizacion_roles.rs` y `tests/auditoria_contratistas.rs`.
 
 `AppCore` expone mutaciones de contratistas, empresas, usuarios, roles, contraseñas,
 ingresos, salidas y respaldos sin recibir un actor autenticado ni aplicar una política de
@@ -346,4 +350,3 @@ formato con las correcciones funcionales.
 - Snapshot manipulado y PRAIND sin gafete mediante la API del repositorio.
 - Reconstrucción completa de una decisión histórica.
 - Fallos de disco/permisos durante el respaldo automático.
-
