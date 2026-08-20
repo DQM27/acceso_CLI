@@ -1,5 +1,5 @@
 use crate::{
-    database::queries::ingresos::FiltroIngresosActivos,
+    database::queries::{Igualdad, ingresos::FiltroIngresosActivos},
     models::{empresa::Empresa, medio_ingreso::MedioIngreso, tipo_ingreso::TipoIngreso},
     services::registro_ingreso_service::{IngresoActivoResumen, ListaIngresosActivosResumen},
 };
@@ -20,9 +20,9 @@ pub(super) mod render;
 mod tests;
 
 /// Interpreta `texto` con la sintaxis `clave:valor` de `ui_kit::query_lang`
-/// (`empresa:`, `tipo:` con listas/negación, `gafete:`, `medio:`). Lo no
-/// reconocido, y lo que no calza con lo que una clave admite, se deja como
-/// texto libre para nombre/cédula/gafete.
+/// (`empresa:`, `tipo:`, `gafete:`, `medio:` — todas con negación
+/// `-clave:valor`). Lo no reconocido, y lo que no calza con lo que una clave
+/// admite, se deja como texto libre para nombre/cédula/gafete.
 fn parsear_consulta(texto: &str, empresas: &[Empresa]) -> (FiltroIngresosActivos, String) {
     let mut filtro = FiltroIngresosActivos::default();
     let libres = resolver_terminos(texto, &mut filtro, |f, term| {
@@ -35,14 +35,18 @@ fn aplicar_clave(f: &mut FiltroIngresosActivos, term: &Term, empresas: &[Empresa
     let clave = term.key.as_deref().unwrap_or_default().to_lowercase();
     let valores = valores(term);
     match clave.as_str() {
-        "empresa" if !term.negated && valores.len() == 1 => {
+        "empresa" if valores.len() == 1 => {
             let buscado = plegar_diacriticos(&valores[0].to_lowercase());
             match empresas
                 .iter()
                 .find(|e| plegar_diacriticos(&e.nombre.to_lowercase()).contains(&buscado))
             {
                 Some(e) => {
-                    f.empresa_id = Some(e.id);
+                    f.empresa_id = Some(if term.negated {
+                        Igualdad::Excluye(e.id)
+                    } else {
+                        Igualdad::Incluye(e.id)
+                    });
                     true
                 }
                 None => false,
@@ -69,9 +73,13 @@ fn aplicar_clave(f: &mut FiltroIngresosActivos, term: &Term, empresas: &[Empresa
             });
             true
         }
-        "gafete" if !term.negated && valores.len() == 1 => match valores[0].parse::<i64>() {
+        "gafete" if valores.len() == 1 => match valores[0].parse::<i64>() {
             Ok(n) => {
-                f.gafete_numero = Some(n);
+                f.gafete_numero = Some(if term.negated {
+                    Igualdad::Excluye(n)
+                } else {
+                    Igualdad::Incluye(n)
+                });
                 true
             }
             Err(_) => false,
@@ -178,9 +186,9 @@ pub enum AccionActivos {
     Buscar {
         texto: Option<String>,
         seleccionar_id: Option<i64>,
-        empresa_id: Option<i64>,
+        empresa_id: Option<Igualdad<i64>>,
         tipos: Option<Vec<TipoIngreso>>,
-        gafete: Option<i64>,
+        gafete: Option<Igualdad<i64>>,
         medio: Option<MedioIngreso>,
     },
     RegistrarSalida {
@@ -272,13 +280,14 @@ impl ActivosState {
             aplicar_clave(f, term, &self.empresas)
         });
         let mut partes = Vec::new();
-        if let Some(id) = filtro.empresa_id {
+        if let Some(empresa_id) = filtro.empresa_id {
             let nombre = self
                 .empresas
                 .iter()
-                .find(|empresa| empresa.id == id)
+                .find(|empresa| empresa.id == *empresa_id.valor())
                 .map_or("?", |empresa| empresa.nombre.as_str());
-            partes.push(format!("empresa={nombre}"));
+            let signo = if empresa_id.negado() { "≠" } else { "=" };
+            partes.push(format!("empresa{signo}{nombre}"));
         }
         if let Some(tipos) = filtro.tipos_incluidos {
             partes.push(format!(
@@ -291,7 +300,8 @@ impl ActivosState {
             ));
         }
         if let Some(gafete) = filtro.gafete_numero {
-            partes.push(format!("gafete={gafete}"));
+            let signo = if gafete.negado() { "≠" } else { "=" };
+            partes.push(format!("gafete{signo}{}", gafete.valor()));
         }
         if let Some(medio) = filtro.medio_ingreso {
             partes.push(format!(

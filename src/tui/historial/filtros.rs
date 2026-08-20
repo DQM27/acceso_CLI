@@ -1,5 +1,8 @@
 use crate::{
-    database::queries::ingresos::{EstadoMovimiento, FiltroHistorial},
+    database::queries::{
+        Igualdad,
+        ingresos::{EstadoMovimiento, FiltroHistorial},
+    },
     models::{empresa::Empresa, tipo_ingreso::TipoIngreso},
     tiempo::{ahora_costa_rica, inicio_dia_costa_rica_utc},
     tui::ui_kit::{Term, plegar_diacriticos, resolver_terminos, valores},
@@ -10,16 +13,19 @@ pub struct FiltrosHistorial {
     pub desde: String,
     pub hasta: String,
     pub nombre_cedula: String,
-    pub empresa_id: Option<i64>,
+    pub empresa_id: Option<Igualdad<i64>>,
     /// `None` = todos los tipos; `Some(vec)` = cualquiera de los listados
     /// (`tipo:praind,swat`, o el complemento si viene negado `-tipo:swat`).
     pub tipos: Option<Vec<TipoIngreso>>,
     pub gafete: String,
+    pub gafete_negado: bool,
     pub estado: EstadoMovimiento,
     /// Nombre (parcial) de quien registró el ingreso.
     pub usuario_ingreso: String,
+    pub usuario_ingreso_negado: bool,
     /// Nombre (parcial) de quien registró la salida.
     pub usuario_salida: String,
+    pub usuario_salida_negado: bool,
 }
 impl Default for FiltrosHistorial {
     fn default() -> Self {
@@ -35,9 +41,12 @@ impl Default for FiltrosHistorial {
             empresa_id: None,
             tipos: None,
             gafete: String::new(),
+            gafete_negado: false,
             estado: EstadoMovimiento::Todos,
             usuario_ingreso: String::new(),
+            usuario_ingreso_negado: false,
             usuario_salida: String::new(),
+            usuario_salida_negado: false,
         }
     }
 }
@@ -66,12 +75,16 @@ pub(super) fn construir(
     let gafete = if f.gafete.trim().is_empty() {
         None
     } else {
-        Some(
-            f.gafete
-                .trim()
-                .parse::<i64>()
-                .map_err(|_| "Ingrese un número de gafete válido")?,
-        )
+        let numero = f
+            .gafete
+            .trim()
+            .parse::<i64>()
+            .map_err(|_| "Ingrese un número de gafete válido")?;
+        Some(if f.gafete_negado {
+            Igualdad::Excluye(numero)
+        } else {
+            Igualdad::Incluye(numero)
+        })
     };
     let texto = if busqueda.trim().is_empty() {
         f.nombre_cedula.trim()
@@ -88,8 +101,10 @@ pub(super) fn construir(
         estado: f.estado,
         usuario_ingreso: (!f.usuario_ingreso.trim().is_empty())
             .then(|| f.usuario_ingreso.trim().to_owned()),
+        usuario_ingreso_negado: f.usuario_ingreso_negado,
         usuario_salida: (!f.usuario_salida.trim().is_empty())
             .then(|| f.usuario_salida.trim().to_owned()),
+        usuario_salida_negado: f.usuario_salida_negado,
         limite: limit,
         offset,
         corte_id,
@@ -110,13 +125,15 @@ fn estado_desde_texto(v: &str) -> Option<EstadoMovimiento> {
 /// Interpreta el campo de búsqueda libre con el lenguaje `clave:valor`
 /// genérico de `ui_kit::query_lang` (negación `-clave:valor`, listas
 /// `clave:a,b,c`, comillas), sobre los filtros ya aplicados (`base`). Cada
-/// clave reconocida (`empresa`, `tipo`, `estado`, `gafete`, `desde`,
-/// `hasta`, `ingreso` — quién registró el ingreso, `salida` — quién
-/// registró la salida) la resuelve `aplicar_clave`; lo no reconocido, y lo
-/// que no calza con lo que esa clave admite (p. ej. `gafete:1,2` o
-/// `-desde:...`), se deja como texto libre para usarse como nombre/cédula.
-/// No valida ni construye la consulta SQL — eso lo sigue haciendo
-/// `construir` sobre el resultado.
+/// clave reconocida (`empresa`, `tipo`, `estado`, `gafete`, `ingreso` —
+/// quién registró el ingreso, `salida` — quién registró la salida, todas
+/// con negación) la resuelve `aplicar_clave`; `desde`/`hasta` son la única
+/// excepción deliberada — no admiten negación porque `-desde:X` no tiene un
+/// significado obvio para un límite de rango de fechas (`docs/hallazgos-clave-valor.md`).
+/// Lo no reconocido, y lo que no calza con lo que esa clave admite (p. ej.
+/// `gafete:1,2` o `-desde:...`), se deja como texto libre para usarse como
+/// nombre/cédula. No valida ni construye la consulta SQL — eso lo sigue
+/// haciendo `construir` sobre el resultado.
 pub(super) fn parsear_consulta(
     base: &FiltrosHistorial,
     texto: &str,
@@ -137,14 +154,18 @@ fn aplicar_clave(f: &mut FiltrosHistorial, term: &Term, empresas: &[Empresa]) ->
     let clave = term.key.as_deref().unwrap_or_default().to_lowercase();
     let valores = valores(term);
     match clave.as_str() {
-        "empresa" if !term.negated && valores.len() == 1 => {
+        "empresa" if valores.len() == 1 => {
             let buscado = plegar_diacriticos(&valores[0].to_lowercase());
             match empresas
                 .iter()
                 .find(|e| plegar_diacriticos(&e.nombre.to_lowercase()).contains(&buscado))
             {
                 Some(e) => {
-                    f.empresa_id = Some(e.id);
+                    f.empresa_id = Some(if term.negated {
+                        Igualdad::Excluye(e.id)
+                    } else {
+                        Igualdad::Incluye(e.id)
+                    });
                     true
                 }
                 None => false,
@@ -206,12 +227,14 @@ fn aplicar_clave(f: &mut FiltrosHistorial, term: &Term, empresas: &[Empresa]) ->
         // `f.gafete` y hacer que `construir()` rechace toda la búsqueda con
         // "Ingrese un número de gafete válido" — ese mensaje queda para
         // cuando el operador lo escribe directo en el campo del panel.
-        "gafete"
-            if !term.negated && valores.len() == 1 && valores[0].trim().parse::<i64>().is_ok() =>
-        {
+        "gafete" if valores.len() == 1 && valores[0].trim().parse::<i64>().is_ok() => {
             f.gafete = valores[0].clone();
+            f.gafete_negado = term.negated;
             true
         }
+        // `desde`/`hasta` no admiten negación: `-desde:X`/`-hasta:X` no
+        // tiene un significado obvio para el límite de un rango de fechas
+        // (decisión documentada en `docs/hallazgos-clave-valor.md`).
         "desde" if !term.negated && valores.len() == 1 => {
             f.desde = valores[0].clone();
             true
@@ -220,12 +243,14 @@ fn aplicar_clave(f: &mut FiltrosHistorial, term: &Term, empresas: &[Empresa]) ->
             f.hasta = valores[0].clone();
             true
         }
-        "ingreso" if !term.negated && valores.len() == 1 => {
+        "ingreso" if valores.len() == 1 => {
             f.usuario_ingreso = valores[0].clone();
+            f.usuario_ingreso_negado = term.negated;
             true
         }
-        "salida" if !term.negated && valores.len() == 1 => {
+        "salida" if valores.len() == 1 => {
             f.usuario_salida = valores[0].clone();
+            f.usuario_salida_negado = term.negated;
             true
         }
         _ => false,
@@ -239,9 +264,19 @@ pub(super) fn estado_texto(e: EstadoMovimiento) -> &'static str {
         EstadoMovimiento::Cerrados => "Cerrados",
     }
 }
-pub(super) fn empresa_texto(id: Option<i64>, empresas: &[Empresa]) -> String {
-    id.and_then(|x| empresas.iter().find(|e| e.id == x))
-        .map_or("Todas".into(), |e| e.nombre.clone())
+pub(super) fn empresa_texto(id: Option<Igualdad<i64>>, empresas: &[Empresa]) -> String {
+    let Some(id) = id else {
+        return "Todas".into();
+    };
+    let nombre = empresas
+        .iter()
+        .find(|e| e.id == *id.valor())
+        .map_or("?", |e| e.nombre.as_str());
+    if id.negado() {
+        format!("≠{nombre}")
+    } else {
+        nombre.to_owned()
+    }
 }
 pub(super) fn tipo_texto(t: TipoIngreso) -> &'static str {
     match t {

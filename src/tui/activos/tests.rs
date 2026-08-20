@@ -81,9 +81,15 @@ fn busqueda_admite_clave_valor_de_empresa_tipo_gafete_medio_y_deja_texto_libre()
     else {
         panic!("debía consultar")
     };
-    assert_eq!(empresa_id, Some(5));
+    assert_eq!(
+        empresa_id,
+        Some(crate::database::queries::Igualdad::Incluye(5))
+    );
     assert_eq!(tipos, Some(vec![TipoIngreso::Praind, TipoIngreso::Swat]));
-    assert_eq!(gafete, Some(26));
+    assert_eq!(
+        gafete,
+        Some(crate::database::queries::Igualdad::Incluye(26))
+    );
     assert_eq!(medio, Some(MedioIngreso::Caminando));
     assert_eq!(texto.as_deref(), Some("Ana"));
 }
@@ -113,7 +119,39 @@ fn empresa_con_clave_valor_ignora_tildes_en_ambos_lados() {
     let AccionActivos::Buscar { empresa_id, .. } = s.buscar(None) else {
         panic!("debía consultar")
     };
-    assert_eq!(empresa_id, Some(9));
+    assert_eq!(
+        empresa_id,
+        Some(crate::database::queries::Igualdad::Incluye(9))
+    );
+}
+
+#[test]
+fn negar_empresa_y_gafete() {
+    let mut s = ActivosState::default();
+    s.completar_empresas(Ok(vec![crate::models::empresa::Empresa {
+        id: 9,
+        nombre: "Álvarez Ingeniería".into(),
+        activo: true,
+    }]));
+    s.filtro = "-empresa:alvarez -gafete:26".into();
+    let AccionActivos::Buscar {
+        empresa_id,
+        gafete,
+        texto,
+        ..
+    } = s.buscar(None)
+    else {
+        panic!("debía consultar")
+    };
+    assert_eq!(
+        empresa_id,
+        Some(crate::database::queries::Igualdad::Excluye(9))
+    );
+    assert_eq!(
+        gafete,
+        Some(crate::database::queries::Igualdad::Excluye(26))
+    );
+    assert_eq!(texto, None);
 }
 
 #[test]

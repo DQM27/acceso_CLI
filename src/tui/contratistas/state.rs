@@ -3,8 +3,9 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Constraint;
 
 use crate::{
-    database::queries::contratistas::{
-        ContratistaResumen, FiltroContratistas, FiltroPraind, PaginaContratistas,
+    database::queries::{
+        Igualdad,
+        contratistas::{ContratistaResumen, FiltroContratistas, FiltroPraind, PaginaContratistas},
     },
     models::{contratista::Contratista, empresa::Empresa, tipo_ingreso::TipoIngreso},
     services::contratista_service::{DatosActualizacionContratista, DatosContratista},
@@ -29,9 +30,10 @@ pub(super) mod render;
 mod tests;
 
 /// Interpreta `texto` con la sintaxis `clave:valor` de `ui_kit::query_lang`
-/// (`empresa:`, `tipo:` con listas/negación, `praind:vence|vencido|sin`,
-/// `ruta:si|no`, `acceso:si|no`). Lo no reconocido, y lo que no calza con lo
-/// que una clave admite, se deja como texto libre para nombre/cédula.
+/// (`empresa:`, `tipo:`, `praind:vence|vencido|sin` — todas con negación
+/// `-clave:valor` —, `ruta:si|no`, `acceso:si|no`). Lo no reconocido, y lo
+/// que no calza con lo que una clave admite, se deja como texto libre para
+/// nombre/cédula.
 fn parsear_consulta(
     texto: &str,
     empresas: &[Empresa],
@@ -53,14 +55,18 @@ fn aplicar_clave(
     let clave = term.key.as_deref().unwrap_or_default().to_lowercase();
     let valores = valores(term);
     match clave.as_str() {
-        "empresa" if !term.negated && valores.len() == 1 => {
+        "empresa" if valores.len() == 1 => {
             let buscado = plegar_diacriticos(&valores[0].to_lowercase());
             match empresas
                 .iter()
                 .find(|e| plegar_diacriticos(&e.nombre.to_lowercase()).contains(&buscado))
             {
                 Some(e) => {
-                    f.empresa_id = Some(e.id);
+                    f.empresa_id = Some(if term.negated {
+                        Igualdad::Excluye(e.id)
+                    } else {
+                        Igualdad::Incluye(e.id)
+                    });
                     true
                 }
                 None => false,
@@ -87,18 +93,20 @@ fn aplicar_clave(
             });
             true
         }
-        "praind" if !term.negated && valores.len() == 1 => match valores[0].to_lowercase().as_str()
-        {
+        "praind" if valores.len() == 1 => match valores[0].to_lowercase().as_str() {
             "vence" | "proximo" | "próximo" => {
                 f.praind = Some(FiltroPraind::ProximoAVencer { hoy });
+                f.praind_negado = term.negated;
                 true
             }
             "vencido" => {
                 f.praind = Some(FiltroPraind::Vencido { hoy });
+                f.praind_negado = term.negated;
                 true
             }
             "sin" | "sinfecha" => {
                 f.praind = Some(FiltroPraind::SinFecha);
+                f.praind_negado = term.negated;
                 true
             }
             _ => false,
@@ -290,9 +298,10 @@ pub enum AccionContratistas {
     Buscar {
         texto: Option<String>,
         seleccionar_id: Option<i64>,
-        empresa_id: Option<i64>,
+        empresa_id: Option<Igualdad<i64>>,
         tipos: Option<Vec<TipoIngreso>>,
         praind: Option<FiltroPraind>,
+        praind_negado: bool,
         personal_ruta: Option<bool>,
         tiene_acceso: Option<bool>,
         offset: usize,
@@ -419,13 +428,14 @@ impl ContratistasState {
             aplicar_clave(f, term, &self.empresas, self.hoy)
         });
         let mut partes = Vec::new();
-        if let Some(id) = filtro.empresa_id {
+        if let Some(empresa_id) = filtro.empresa_id {
             let nombre = self
                 .empresas
                 .iter()
-                .find(|empresa| empresa.id == id)
+                .find(|empresa| empresa.id == *empresa_id.valor())
                 .map_or("?", |empresa| empresa.nombre.as_str());
-            partes.push(format!("empresa={nombre}"));
+            let signo = if empresa_id.negado() { "≠" } else { "=" };
+            partes.push(format!("empresa{signo}{nombre}"));
         }
         if let Some(tipos) = filtro.tipos_incluidos {
             partes.push(format!(
@@ -438,8 +448,9 @@ impl ContratistasState {
             ));
         }
         if let Some(praind) = filtro.praind {
+            let signo = if filtro.praind_negado { "≠" } else { "=" };
             partes.push(format!(
-                "praind={}",
+                "praind{signo}{}",
                 match praind {
                     FiltroPraind::Vencido { .. } => "vencido",
                     FiltroPraind::ProximoAVencer { .. } => "próximo",
@@ -744,6 +755,7 @@ impl ContratistasState {
             empresa_id: filtro.empresa_id,
             tipos: filtro.tipos_incluidos,
             praind: filtro.praind,
+            praind_negado: filtro.praind_negado,
             personal_ruta: filtro.personal_ruta,
             tiene_acceso: filtro.tiene_acceso,
             offset: self.offset,

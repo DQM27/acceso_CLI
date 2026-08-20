@@ -13,3 +13,30 @@ pub mod usuarios;
 pub(crate) const LIMITE_LISTADO_PREDETERMINADO: usize = 100;
 pub(crate) const LIMITE_LISTADO_MAXIMO: usize = 500;
 pub mod auditoria_contratistas;
+
+/// Filtro de igualdad que también admite su negación (`-clave:valor` en el
+/// lenguaje `clave:valor` de la TUI) — `Incluye(v)` arma `col = v`,
+/// `Excluye(v)` arma `col <> v`. Compartido por `empresa_id`/`gafete_numero`
+/// en `contratistas.rs`/`ingresos.rs` para no repetir el mismo par
+/// valor+bandera-de-negación en cada `Filtro*`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Igualdad<T> {
+    Incluye(T),
+    Excluye(T),
+}
+
+impl<T> Igualdad<T> {
+    pub fn valor(&self) -> &T {
+        match self {
+            Igualdad::Incluye(v) | Igualdad::Excluye(v) => v,
+        }
+    }
+
+    pub fn negado(&self) -> bool {
+        matches!(self, Igualdad::Excluye(_))
+    }
+
+    pub fn operador_sql(&self) -> &'static str {
+        if self.negado() { "<>" } else { "=" }
+    }
+}

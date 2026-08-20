@@ -124,13 +124,26 @@ fn etiqueta_busqueda(state: &HistorialState) -> String {
         resumen.push(format!("tipo: {}", tipos_texto(Some(tipos))));
     }
     if !state.filtro_aplicado.usuario_ingreso.is_empty() {
+        let signo = if state.filtro_aplicado.usuario_ingreso_negado {
+            "≠"
+        } else {
+            ""
+        };
         resumen.push(format!(
-            "ingreso: {}",
+            "ingreso: {signo}{}",
             state.filtro_aplicado.usuario_ingreso
         ));
     }
     if !state.filtro_aplicado.usuario_salida.is_empty() {
-        resumen.push(format!("salida: {}", state.filtro_aplicado.usuario_salida));
+        let signo = if state.filtro_aplicado.usuario_salida_negado {
+            "≠"
+        } else {
+            ""
+        };
+        resumen.push(format!(
+            "salida: {signo}{}",
+            state.filtro_aplicado.usuario_salida
+        ));
     }
     format!(
         "BUSCAR · CLAVE:VALOR O TEXTO LIBRE · {}",

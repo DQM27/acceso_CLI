@@ -77,7 +77,7 @@ fn fechas_visuales_generan_rango_backend_inclusivo_exclusivo() {
 fn filtros_mapean_ids_enums_gafete_exacto_y_texto() {
     let filtro = FiltrosHistorial {
         nombre_cedula: "  Ana  ".into(),
-        empresa_id: Some(8),
+        empresa_id: Some(crate::database::queries::Igualdad::Incluye(8)),
         tipos: Some(vec![TipoIngreso::PorCorreo]),
         gafete: "27".into(),
         estado: EstadoMovimiento::Cerrados,
@@ -85,9 +85,15 @@ fn filtros_mapean_ids_enums_gafete_exacto_y_texto() {
     };
     let query = construir(&filtro, "", 50, 100, Some(77)).unwrap();
     assert_eq!(query.texto_persona.as_deref(), Some("Ana"));
-    assert_eq!(query.empresa_id, Some(8));
+    assert_eq!(
+        query.empresa_id,
+        Some(crate::database::queries::Igualdad::Incluye(8))
+    );
     assert_eq!(query.tipos_incluidos, Some(vec![TipoIngreso::PorCorreo]));
-    assert_eq!(query.gafete_numero, Some(27));
+    assert_eq!(
+        query.gafete_numero,
+        Some(crate::database::queries::Igualdad::Incluye(27))
+    );
     assert_eq!(query.estado, EstadoMovimiento::Cerrados);
     assert_eq!((query.limite, query.offset), (50, 100));
     assert_eq!(query.corte_id, Some(77));
@@ -96,7 +102,7 @@ fn filtros_mapean_ids_enums_gafete_exacto_y_texto() {
 #[test]
 fn busqueda_rapida_se_combina_con_filtros_aplicados_tras_el_debounce() {
     let mut state = HistorialState::default();
-    state.filtro_aplicado.empresa_id = Some(3);
+    state.filtro_aplicado.empresa_id = Some(crate::database::queries::Igualdad::Incluye(3));
     let accion = state.handle_key(tecla(KeyCode::Char('a')));
     assert_eq!(accion, AccionHistorial::Ninguna);
     let accion =
@@ -105,7 +111,10 @@ fn busqueda_rapida_se_combina_con_filtros_aplicados_tras_el_debounce() {
         panic!("debía consultar")
     };
     assert_eq!(filtro.texto_persona.as_deref(), Some("a"));
-    assert_eq!(filtro.empresa_id, Some(3));
+    assert_eq!(
+        filtro.empresa_id,
+        Some(crate::database::queries::Igualdad::Incluye(3))
+    );
 }
 
 #[test]
@@ -275,7 +284,10 @@ fn parsear_consulta_resuelve_empresa_por_nombre_parcial_y_deja_texto_libre() {
     ];
     let base = FiltrosHistorial::default();
     let (filtros, libre) = parsear_consulta(&base, "empresa:\"Brisas del Oeste\" Ana", &empresas);
-    assert_eq!(filtros.empresa_id, Some(5));
+    assert_eq!(
+        filtros.empresa_id,
+        Some(crate::database::queries::Igualdad::Incluye(5))
+    );
     assert_eq!(libre, "Ana");
 }
 
@@ -288,7 +300,36 @@ fn parsear_consulta_empresa_ignora_tildes_en_ambos_lados() {
     }];
     let base = FiltrosHistorial::default();
     let (filtros, _) = parsear_consulta(&base, "empresa:alvarez", &empresas);
-    assert_eq!(filtros.empresa_id, Some(9));
+    assert_eq!(
+        filtros.empresa_id,
+        Some(crate::database::queries::Igualdad::Incluye(9))
+    );
+}
+
+#[test]
+fn parsear_consulta_niega_empresa_gafete_ingreso_y_salida() {
+    let empresas = vec![Empresa {
+        id: 9,
+        nombre: "Álvarez Ingeniería".into(),
+        activo: true,
+    }];
+    let base = FiltrosHistorial::default();
+    let (filtros, libre) = parsear_consulta(
+        &base,
+        "-empresa:alvarez -gafete:26 -ingreso:ana -salida:ana",
+        &empresas,
+    );
+    assert_eq!(
+        filtros.empresa_id,
+        Some(crate::database::queries::Igualdad::Excluye(9))
+    );
+    assert_eq!(filtros.gafete, "26");
+    assert!(filtros.gafete_negado);
+    assert_eq!(filtros.usuario_ingreso, "ana");
+    assert!(filtros.usuario_ingreso_negado);
+    assert_eq!(filtros.usuario_salida, "ana");
+    assert!(filtros.usuario_salida_negado);
+    assert!(libre.is_empty());
 }
 
 #[test]
@@ -323,12 +364,13 @@ fn parsear_consulta_reconoce_quien_dio_ingreso_y_quien_dio_salida() {
 }
 
 #[test]
-fn ingreso_y_salida_no_admiten_lista_ni_negacion() {
+fn ingreso_y_salida_no_admiten_lista_pero_si_negacion() {
     let base = FiltrosHistorial::default();
     let (filtros, libre) = parsear_consulta(&base, "ingreso:a,b -salida:c", &[]);
     assert_eq!(filtros.usuario_ingreso, "");
-    assert_eq!(filtros.usuario_salida, "");
-    assert_eq!(libre, "ingreso:a,b -salida:c");
+    assert_eq!(filtros.usuario_salida, "c");
+    assert!(filtros.usuario_salida_negado);
+    assert_eq!(libre, "ingreso:a,b");
 }
 
 #[test]
@@ -362,12 +404,14 @@ fn parsear_consulta_niega_estado_invirtiendo_activos_y_cerrados() {
 }
 
 #[test]
-fn parsear_consulta_deja_como_texto_libre_lo_que_una_clave_no_admite() {
+fn parsear_consulta_deja_como_texto_libre_las_listas_pero_admite_negacion_de_gafete() {
     let base = FiltrosHistorial::default();
-    // gafete no admite listas ni negación: se devuelve tal cual a texto libre.
+    // gafete no admite listas (cae a texto libre), pero sí negación de un
+    // único valor.
     let (filtros, libre) = parsear_consulta(&base, "gafete:1,2 -gafete:3", &[]);
-    assert_eq!(filtros.gafete, "");
-    assert_eq!(libre, "gafete:1,2 -gafete:3");
+    assert_eq!(filtros.gafete, "3");
+    assert!(filtros.gafete_negado);
+    assert_eq!(libre, "gafete:1,2");
 }
 
 #[test]
@@ -383,12 +427,15 @@ fn parsear_consulta_conserva_lo_no_reconocido_como_texto_libre() {
 fn parsear_consulta_no_pisa_los_campos_no_mencionados_del_filtro_base() {
     let base = FiltrosHistorial {
         desde: "01/08/2026".into(),
-        empresa_id: Some(3),
+        empresa_id: Some(crate::database::queries::Igualdad::Incluye(3)),
         ..Default::default()
     };
     let (filtros, _) = parsear_consulta(&base, "tipo:swat", &[]);
     assert_eq!(filtros.desde, "01/08/2026");
-    assert_eq!(filtros.empresa_id, Some(3));
+    assert_eq!(
+        filtros.empresa_id,
+        Some(crate::database::queries::Igualdad::Incluye(3))
+    );
     assert_eq!(filtros.tipos, Some(vec![TipoIngreso::Swat]));
 }
 
@@ -409,7 +456,10 @@ fn busqueda_rapida_admite_clave_valor_y_se_combina_con_filtros_del_panel() {
     let AccionHistorial::Consultar(filtro) = state.solicitud_carga() else {
         panic!("debía consultar")
     };
-    assert_eq!(filtro.empresa_id, Some(3));
+    assert_eq!(
+        filtro.empresa_id,
+        Some(crate::database::queries::Igualdad::Incluye(3))
+    );
     assert_eq!(filtro.tipos_incluidos, Some(vec![TipoIngreso::Praind]));
     assert_eq!(filtro.texto_persona, None);
 }

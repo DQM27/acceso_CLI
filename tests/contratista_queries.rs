@@ -1,6 +1,7 @@
 use chrono::NaiveDate;
 use rusqlite::{Connection, params};
 
+use control_acceso::database::queries::Igualdad;
 use control_acceso::database::queries::contratistas::{
     ContratistasQuery, FiltroContratistas, SqliteContratistasQuery,
 };
@@ -350,7 +351,7 @@ fn filtra_por_empresa_tipo_praind_ruta_y_acceso() {
     assert_eq!(
         query
             .buscar(&FiltroContratistas {
-                empresa_id: Some(empresa_uno),
+                empresa_id: Some(Igualdad::Incluye(empresa_uno)),
                 ..base()
             })
             .unwrap()

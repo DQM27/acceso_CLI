@@ -3,7 +3,8 @@ use rusqlite::{Connection, Row};
 
 use crate::database::error::DatabaseError;
 use crate::database::queries::{
-    LIMITE_LISTADO_MAXIMO as LIMITE_MAXIMO, LIMITE_LISTADO_PREDETERMINADO as LIMITE_PREDETERMINADO,
+    Igualdad, LIMITE_LISTADO_MAXIMO as LIMITE_MAXIMO,
+    LIMITE_LISTADO_PREDETERMINADO as LIMITE_PREDETERMINADO,
 };
 use crate::database::search::BusquedaTexto;
 use crate::domain::acceso::DIAS_ADVERTENCIA_PRAIND;
@@ -49,11 +50,16 @@ pub enum FiltroPraind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FiltroContratistas {
     pub texto: Option<String>,
-    pub empresa_id: Option<i64>,
+    pub empresa_id: Option<Igualdad<i64>>,
     /// `None` = todos los tipos; `Some(vec)` filtra a cualquiera de los
     /// listados (como máximo 4, la cantidad de variantes de `TipoIngreso`).
     pub tipos_incluidos: Option<Vec<TipoIngreso>>,
     pub praind: Option<FiltroPraind>,
+    /// Sólo importa cuando `praind` es `Some`: si viene de `-praind:...`, el
+    /// `WHERE` niega la condición completa de la variante en vez de
+    /// intentar una variante "opuesta" (que no existe de forma unívoca para
+    /// las 3 variantes de `FiltroPraind`).
+    pub praind_negado: bool,
     pub personal_ruta: Option<bool>,
     pub tiene_acceso: Option<bool>,
     pub limite: usize,
@@ -67,6 +73,7 @@ impl Default for FiltroContratistas {
             empresa_id: None,
             tipos_incluidos: None,
             praind: None,
+            praind_negado: false,
             personal_ruta: None,
             tiene_acceso: None,
             limite: LIMITE_PREDETERMINADO,
@@ -145,8 +152,11 @@ fn construir_where(
     }
 
     if let Some(empresa_id) = filtro.empresa_id {
-        condiciones.push("c.empresa_id = :empresa_id".into());
-        parametros.push((":empresa_id".into(), Box::new(empresa_id)));
+        condiciones.push(format!(
+            "c.empresa_id {} :empresa_id",
+            empresa_id.operador_sql()
+        ));
+        parametros.push((":empresa_id".into(), Box::new(*empresa_id.valor())));
     }
 
     if let Some(tipos) = &filtro.tipos_incluidos {
@@ -158,33 +168,38 @@ fn construir_where(
     }
 
     let formato = |f: NaiveDate| f.format("%Y-%m-%d").to_string();
-    match filtro.praind {
-        None => {}
-        Some(FiltroPraind::Vencido { hoy }) => {
-            condiciones.push(
+    if let Some(variante) = filtro.praind {
+        // Cada rama ya incluye `IS NOT NULL`/`IS NULL` explícito, así que la
+        // condición nunca evalúa a NULL (sólo TRUE/FALSE) y envolverla en
+        // `NOT (...)` para `-praind:...` es una negación de 2 valores
+        // correcta — no deja fuera a los contratistas sin fecha por la
+        // lógica de 3 valores de SQL.
+        let condicion = match variante {
+            FiltroPraind::Vencido { hoy } => {
+                parametros.push((":praind_hoy".into(), Box::new(formato(hoy))));
                 "(c.fecha_vencimiento_praind IS NOT NULL \
                   AND c.fecha_vencimiento_praind < :praind_hoy \
                   AND (c.es_personal_ruta = 1 OR c.tipo_ingreso IN ('PRAIND', 'IN_HOUSE')))"
-                    .into(),
-            );
-            parametros.push((":praind_hoy".into(), Box::new(formato(hoy))));
-        }
-        Some(FiltroPraind::ProximoAVencer { hoy }) => {
-            condiciones.push(
+                    .to_string()
+            }
+            FiltroPraind::ProximoAVencer { hoy } => {
+                parametros.push((":praind_hoy".into(), Box::new(formato(hoy))));
+                parametros.push((
+                    ":praind_limite".into(),
+                    Box::new(formato(hoy + Duration::days(DIAS_ADVERTENCIA_PRAIND))),
+                ));
                 "(c.fecha_vencimiento_praind IS NOT NULL \
                   AND c.fecha_vencimiento_praind BETWEEN :praind_hoy AND :praind_limite \
                   AND (c.es_personal_ruta = 1 OR c.tipo_ingreso IN ('PRAIND', 'IN_HOUSE')))"
-                    .into(),
-            );
-            parametros.push((":praind_hoy".into(), Box::new(formato(hoy))));
-            parametros.push((
-                ":praind_limite".into(),
-                Box::new(formato(hoy + Duration::days(DIAS_ADVERTENCIA_PRAIND))),
-            ));
-        }
-        Some(FiltroPraind::SinFecha) => {
-            condiciones.push("c.fecha_vencimiento_praind IS NULL".into());
-        }
+                    .to_string()
+            }
+            FiltroPraind::SinFecha => "c.fecha_vencimiento_praind IS NULL".to_string(),
+        };
+        condiciones.push(if filtro.praind_negado {
+            format!("NOT ({condicion})")
+        } else {
+            condicion
+        });
     }
 
     if let Some(personal_ruta) = filtro.personal_ruta {
@@ -298,7 +313,7 @@ mod tests {
 
         let busqueda = BusquedaTexto::preparar(None);
         let filtro = FiltroContratistas {
-            empresa_id: Some(1),
+            empresa_id: Some(Igualdad::Incluye(1)),
             ..FiltroContratistas::default()
         };
         let (where_sql, parametros) = construir_where(&busqueda, &filtro);
@@ -331,5 +346,39 @@ mod tests {
         let (where_sql, parametros) = construir_where(&busqueda, &FiltroContratistas::default());
         assert_eq!(where_sql, "");
         assert!(parametros.is_empty());
+    }
+
+    /// `-empresa:...` (`docs/hallazgos-clave-valor.md`) debe armar `<>` en
+    /// vez de `=`.
+    #[test]
+    fn negar_empresa_usa_distinto() {
+        let busqueda = BusquedaTexto::preparar(None);
+        let filtro = FiltroContratistas {
+            empresa_id: Some(Igualdad::Excluye(1)),
+            ..FiltroContratistas::default()
+        };
+        let (where_sql, _parametros) = construir_where(&busqueda, &filtro);
+        assert!(
+            where_sql.contains("c.empresa_id <> :empresa_id"),
+            "{where_sql}"
+        );
+    }
+
+    /// `-praind:...` niega la condición completa de la variante en vez de
+    /// buscar una variante "opuesta" — cubre las 3 variantes de
+    /// `FiltroPraind`, no sólo un caso.
+    #[test]
+    fn negar_praind_envuelve_la_condicion_en_not() {
+        let busqueda = BusquedaTexto::preparar(None);
+        let filtro = FiltroContratistas {
+            praind: Some(FiltroPraind::SinFecha),
+            praind_negado: true,
+            ..FiltroContratistas::default()
+        };
+        let (where_sql, _parametros) = construir_where(&busqueda, &filtro);
+        assert!(
+            where_sql.contains("NOT (c.fecha_vencimiento_praind IS NULL)"),
+            "{where_sql}"
+        );
     }
 }

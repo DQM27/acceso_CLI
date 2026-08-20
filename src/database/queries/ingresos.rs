@@ -2,6 +2,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use rusqlite::{Connection, Row, Transaction, TransactionBehavior};
 
 use crate::database::error::DatabaseError;
+use crate::database::queries::Igualdad;
 use crate::database::search::BusquedaTexto;
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::models::registro_ingreso::{MotivoResultadoIngreso, ResultadoIngresoRegistrado};
@@ -44,11 +45,11 @@ pub struct IngresoActivoLectura {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FiltroIngresosActivos {
     pub texto: Option<String>,
-    pub empresa_id: Option<i64>,
+    pub empresa_id: Option<Igualdad<i64>>,
     /// `None` = todos los tipos; `Some(vec)` filtra a cualquiera de los
     /// listados (como máximo 4, la cantidad de variantes de `TipoIngreso`).
     pub tipos_incluidos: Option<Vec<TipoIngreso>>,
-    pub gafete_numero: Option<i64>,
+    pub gafete_numero: Option<Igualdad<i64>>,
     pub medio_ingreso: Option<MedioIngreso>,
     pub limite: usize,
 }
@@ -109,19 +110,29 @@ pub struct FiltroHistorial {
     /// Límite superior exclusivo aplicado a `fecha_hora_ingreso`.
     pub hasta: DateTime<Utc>,
     pub texto_persona: Option<String>,
-    pub empresa_id: Option<i64>,
+    pub empresa_id: Option<Igualdad<i64>>,
     /// `None` = todos los tipos. `Some(vec)` filtra a cualquiera de los tipos
     /// listados (como un `IN`); como máximo 4 (la cantidad de variantes de
     /// `TipoIngreso`), los excedentes se ignoran.
     pub tipos_incluidos: Option<Vec<TipoIngreso>>,
-    pub gafete_numero: Option<i64>,
+    pub gafete_numero: Option<Igualdad<i64>>,
     pub estado: EstadoMovimiento,
     /// Nombre (parcial, sin distinguir mayúsculas) del usuario que registró
     /// el ingreso.
     pub usuario_ingreso: Option<String>,
+    /// Negar (`-ingreso:...`) sólo importa cuando `usuario_ingreso` es
+    /// `Some`; la columna es `NOT NULL` así que la negación es una simple
+    /// `NOT (...)`, sin casos especiales de NULL.
+    pub usuario_ingreso_negado: bool,
     /// Nombre (parcial, sin distinguir mayúsculas) del usuario que registró
-    /// la salida. Un movimiento sin salida nunca matchea.
+    /// la salida. Un movimiento sin salida nunca matchea en positivo.
     pub usuario_salida: Option<String>,
+    /// Negar (`-salida:...`) sólo importa cuando `usuario_salida` es `Some`.
+    /// A diferencia de `usuario_ingreso_negado`, la columna admite `NULL`
+    /// (movimiento aún sin salida) — `construir_where_historial` incluye
+    /// esas filas en el negado (no se cerró, así que no lo cerró esa
+    /// persona) en vez de excluirlas por la lógica de 3 valores de SQL.
+    pub usuario_salida_negado: bool,
     pub limite: usize,
     pub offset: usize,
     /// ID máximo visible en esta navegación. Excluye ingresos creados después de
@@ -140,7 +151,9 @@ impl FiltroHistorial {
             gafete_numero: None,
             estado: EstadoMovimiento::Todos,
             usuario_ingreso: None,
+            usuario_ingreso_negado: false,
             usuario_salida: None,
+            usuario_salida_negado: false,
             limite: LIMITE_HISTORIAL_PREDETERMINADO,
             offset: 0,
             corte_id: None,
@@ -329,8 +342,11 @@ fn construir_where_activos(
     }
 
     if let Some(empresa_id) = filtro.empresa_id {
-        condiciones.push("r.empresa_id = :empresa_id".into());
-        parametros.push((":empresa_id".into(), Box::new(empresa_id)));
+        condiciones.push(format!(
+            "r.empresa_id {} :empresa_id",
+            empresa_id.operador_sql()
+        ));
+        parametros.push((":empresa_id".into(), Box::new(*empresa_id.valor())));
     }
     if let Some(tipos) = &filtro.tipos_incluidos {
         let marcadores: Vec<String> = (0..tipos.len()).map(|i| format!(":tipo{i}")).collect();
@@ -340,8 +356,8 @@ fn construir_where_activos(
         }
     }
     if let Some(gafete) = filtro.gafete_numero {
-        condiciones.push("r.gafete_numero = :gafete".into());
-        parametros.push((":gafete".into(), Box::new(gafete)));
+        condiciones.push(format!("r.gafete_numero {} :gafete", gafete.operador_sql()));
+        parametros.push((":gafete".into(), Box::new(*gafete.valor())));
     }
     if let Some(medio) = filtro.medio_ingreso {
         condiciones.push("r.medio_ingreso = :medio".into());
@@ -406,8 +422,11 @@ fn construir_where_historial(
     }
 
     if let Some(empresa_id) = filtro.empresa_id {
-        condiciones.push("r.empresa_id = :empresa_id".into());
-        parametros.push((":empresa_id".into(), Box::new(empresa_id)));
+        condiciones.push(format!(
+            "r.empresa_id {} :empresa_id",
+            empresa_id.operador_sql()
+        ));
+        parametros.push((":empresa_id".into(), Box::new(*empresa_id.valor())));
     }
     if let Some(tipos) = &filtro.tipos_incluidos {
         let marcadores: Vec<String> = (0..tipos.len()).map(|i| format!(":tipo{i}")).collect();
@@ -417,8 +436,8 @@ fn construir_where_historial(
         }
     }
     if let Some(gafete) = filtro.gafete_numero {
-        condiciones.push("r.gafete_numero = :gafete".into());
-        parametros.push((":gafete".into(), Box::new(gafete)));
+        condiciones.push(format!("r.gafete_numero {} :gafete", gafete.operador_sql()));
+        parametros.push((":gafete".into(), Box::new(*gafete.valor())));
     }
     match filtro.estado {
         EstadoMovimiento::Todos => {}
@@ -426,18 +445,34 @@ fn construir_where_historial(
         EstadoMovimiento::Cerrados => condiciones.push("r.fecha_hora_salida IS NOT NULL".into()),
     }
     if let Some(usuario_ingreso) = &filtro.usuario_ingreso {
-        condiciones.push("r.usuario_ingreso_nombre LIKE :usuario_ingreso COLLATE NOCASE".into());
         parametros.push((
             ":usuario_ingreso".into(),
             Box::new(patron_like(usuario_ingreso)),
         ));
+        // `usuario_ingreso_nombre` es `NOT NULL`: la comparación nunca da
+        // NULL, así que `NOT (...)` alcanza para negar sin casos especiales.
+        condiciones.push(if filtro.usuario_ingreso_negado {
+            "NOT (r.usuario_ingreso_nombre LIKE :usuario_ingreso COLLATE NOCASE)".into()
+        } else {
+            "r.usuario_ingreso_nombre LIKE :usuario_ingreso COLLATE NOCASE".into()
+        });
     }
     if let Some(usuario_salida) = &filtro.usuario_salida {
-        condiciones.push("r.usuario_salida_nombre LIKE :usuario_salida COLLATE NOCASE".into());
         parametros.push((
             ":usuario_salida".into(),
             Box::new(patron_like(usuario_salida)),
         ));
+        condiciones.push(if filtro.usuario_salida_negado {
+            // `usuario_salida_nombre` admite NULL (movimiento sin salida
+            // todavía) — se incluye explícitamente en la negación en vez de
+            // dejar que la lógica de 3 valores de SQL lo excluya de ambos
+            // lados (positivo y negado) por igual.
+            "(r.usuario_salida_nombre IS NULL \
+              OR r.usuario_salida_nombre NOT LIKE :usuario_salida COLLATE NOCASE)"
+                .into()
+        } else {
+            "r.usuario_salida_nombre LIKE :usuario_salida COLLATE NOCASE".into()
+        });
     }
 
     (format!("WHERE {}", condiciones.join(" AND ")), parametros)
@@ -651,7 +686,7 @@ mod tests {
 
         let busqueda = BusquedaTexto::preparar(None);
         let filtro = FiltroIngresosActivos {
-            empresa_id: Some(1),
+            empresa_id: Some(Igualdad::Incluye(1)),
             ..FiltroIngresosActivos::default()
         };
         let (where_sql, parametros) = construir_where_activos(&busqueda, &filtro);
@@ -699,6 +734,74 @@ mod tests {
                 .iter()
                 .any(|d| d.contains("idx_registro_ingresos_fecha_ingreso")),
             "{detalles:?}"
+        );
+    }
+
+    /// `-empresa:`/`-gafete:` (`docs/hallazgos-clave-valor.md`) deben armar
+    /// `<>` en vez de `=`, tanto en Activos como en Historial.
+    #[test]
+    fn negar_empresa_y_gafete_usa_distinto() {
+        let busqueda = BusquedaTexto::preparar(None);
+
+        let filtro_activos = FiltroIngresosActivos {
+            empresa_id: Some(Igualdad::Excluye(1)),
+            gafete_numero: Some(Igualdad::Excluye(26)),
+            ..FiltroIngresosActivos::default()
+        };
+        let (where_activos, _) = construir_where_activos(&busqueda, &filtro_activos);
+        assert!(
+            where_activos.contains("r.empresa_id <> :empresa_id"),
+            "{where_activos}"
+        );
+        assert!(
+            where_activos.contains("r.gafete_numero <> :gafete"),
+            "{where_activos}"
+        );
+
+        let mut filtro_historial = FiltroHistorial::nuevo(
+            "2026-01-01T00:00:00Z".parse().unwrap(),
+            "2026-02-01T00:00:00Z".parse().unwrap(),
+        );
+        filtro_historial.empresa_id = Some(Igualdad::Excluye(1));
+        filtro_historial.gafete_numero = Some(Igualdad::Excluye(26));
+        let (where_historial, _) = construir_where_historial(&busqueda, &filtro_historial, 0);
+        assert!(
+            where_historial.contains("r.empresa_id <> :empresa_id"),
+            "{where_historial}"
+        );
+        assert!(
+            where_historial.contains("r.gafete_numero <> :gafete"),
+            "{where_historial}"
+        );
+    }
+
+    /// `-ingreso:`/`-salida:` (Historial): la columna de ingreso es
+    /// `NOT NULL` así que basta con `NOT (...)`; la de salida admite `NULL`
+    /// (movimiento aún abierto) y debe incluirse en la negación.
+    #[test]
+    fn negar_ingreso_y_salida() {
+        let busqueda = BusquedaTexto::preparar(None);
+        let mut filtro = FiltroHistorial::nuevo(
+            "2026-01-01T00:00:00Z".parse().unwrap(),
+            "2026-02-01T00:00:00Z".parse().unwrap(),
+        );
+        filtro.usuario_ingreso = Some("ana".into());
+        filtro.usuario_ingreso_negado = true;
+        filtro.usuario_salida = Some("ana".into());
+        filtro.usuario_salida_negado = true;
+
+        let (where_sql, _) = construir_where_historial(&busqueda, &filtro, 0);
+        assert!(
+            where_sql.contains("NOT (r.usuario_ingreso_nombre LIKE :usuario_ingreso"),
+            "{where_sql}"
+        );
+        assert!(
+            where_sql.contains("r.usuario_salida_nombre IS NULL"),
+            "{where_sql}"
+        );
+        assert!(
+            where_sql.contains("r.usuario_salida_nombre NOT LIKE :usuario_salida"),
+            "{where_sql}"
         );
     }
 }

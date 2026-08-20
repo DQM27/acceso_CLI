@@ -2,6 +2,7 @@ use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use rusqlite::{Connection, params};
 
 use control_acceso::database::error::DatabaseError;
+use control_acceso::database::queries::Igualdad;
 use control_acceso::database::queries::ingresos::{
     EstadoMovimiento, FiltroHistorial, FiltroIngresosActivos, IngresosQuery,
     ListaIngresosActivosLectura, PaginaHistorial, SqliteIngresosQuery,
@@ -288,7 +289,7 @@ fn activos_filtra_por_empresa_tipo_gafete_y_medio() {
     assert_eq!(
         query
             .listar_activos(&FiltroIngresosActivos {
-                empresa_id: Some(base.empresa_uno),
+                empresa_id: Some(Igualdad::Incluye(base.empresa_uno)),
                 ..Default::default()
             })
             .unwrap()
@@ -321,7 +322,7 @@ fn activos_filtra_por_empresa_tipo_gafete_y_medio() {
     assert_eq!(
         query
             .listar_activos(&FiltroIngresosActivos {
-                gafete_numero: Some(32),
+                gafete_numero: Some(Igualdad::Incluye(32)),
                 ..Default::default()
             })
             .unwrap()
@@ -639,9 +640,9 @@ fn historial_filtra_empresa_tipo_y_gafete_con_and() {
         None,
     );
     let mut filtro = filtro_historial();
-    filtro.empresa_id = Some(base.empresa_uno);
+    filtro.empresa_id = Some(Igualdad::Incluye(base.empresa_uno));
     filtro.tipos_incluidos = Some(vec![TipoIngreso::Praind]);
-    filtro.gafete_numero = Some(31);
+    filtro.gafete_numero = Some(Igualdad::Incluye(31));
     filtro.estado = EstadoMovimiento::Activos;
     let pagina = SqliteIngresosQuery::new(&base.connection)
         .buscar_historial(&filtro)

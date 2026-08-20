@@ -6,7 +6,7 @@ Activos, Historial), en 4 ángulos en paralelo (multi-agente): UX/consistencia, 
 velocidad/eficiencia, y acentos/eñes. Cada hallazgo fue verificado por un segundo agente
 independiente leyendo el código real antes de confirmarse.
 
-**Estado (2026-08-20): 16/18 hallazgos confirmados, 2 reparados (1 parcialmente).** 2
+**Estado (2026-08-20): 16/18 hallazgos confirmados, 2 reparados.** 2
 hallazgos propuestos se descartaron por evidencia (ver abajo).
 
 El análisis léxico (comillas, negación con guion, separar clave de texto libre) lo hace el
@@ -19,19 +19,23 @@ interpreta las claves reconocidas y llama a `resolver_terminos` (`src/tui/ui_kit
   claves reconocidas (`empresa`, `praind`, `ruta`, `acceso`, `gafete`, `medio`, `desde`,
   `hasta`, `ingreso`, `salida`) tenían el guard `!term.negated`, así que un término negado se
   rechazaba en silencio y caía a texto libre reconstruido con el guion (`-empresa:brisas`),
-  que casi nunca matchea nada. **Severidad alta.** **Parcialmente reparado (2026-08-20):**
-  `ruta`/`acceso` (Contratistas) y `medio` (Activos) ya soportan negación —
+  que casi nunca matchea nada. **Severidad alta.** **Reparado (2026-08-20):** `ruta`/`acceso`
+  (Contratistas) y `medio` (Activos) ya soportaban negación desde antes —
   `src/tui/contratistas/state.rs::aplicar_clave` invierte el booleano (`b != term.negated`);
   `src/tui/activos/state.rs::aplicar_clave` usa `medio_opuesto` (sólo hay 2 variantes de
-  `MedioIngreso`, así que negar una da la otra; el patrón exhaustivo deja de compilar si se
-  agrega una tercera). **Sigue pendiente** para `empresa`, `gafete`, `desde`, `hasta`,
-  `ingreso`, `salida` (Contratistas/Activos/Historial) y `praind` (Contratistas): esas claves
-  filtran por igualdad/rango contra SQL (`= :valor`, `LIKE '%valor%'`), no por un booleano o
-  enum cerrado ya resuelto en Rust — soportar `-clave:valor` ahí exige agregar `NOT`/`!=` en
-  las mismas consultas (`contratistas.rs`, `queries/ingresos.rs`) que ya están marcadas para
-  reescribirse por el hallazgo de rendimiento "WHERE con flags dinámicos" en
-  `docs/hallazgos-buscador.md` — se decidió no tocar ese SQL dos veces por separado, sino
-  resolver ambos juntos cuando se aborde esa reescritura.
+  `MedioIngreso`). El resto (`empresa`, `gafete`, `praind`, `ingreso`, `salida`) ya soporta
+  negación también: se agregó `database::queries::Igualdad<T>` (`Incluye(v)`/`Excluye(v)`),
+  usado por `empresa_id`/`gafete_numero` en `FiltroContratistas`/`FiltroIngresosActivos`/
+  `FiltroHistorial` para armar `<>` en vez de `=` en el `WHERE`; `praind_negado` envuelve la
+  condición completa de la variante de `FiltroPraind` en `NOT (...)` (las 3 variantes ya
+  incluyen `IS NOT NULL`/`IS NULL` explícito, así que la negación es de 2 valores, sin dejar
+  fuera filas por la lógica de 3 valores de SQL); `usuario_ingreso_negado`/
+  `usuario_salida_negado` arman `NOT (LIKE ...)` para `ingreso`/`salida` — `usuario_salida`
+  admite `NULL` (movimiento sin cerrar) y esas filas se incluyen explícitamente en la negación
+  (`r.usuario_salida_nombre IS NULL OR ... NOT LIKE ...`) en vez de perderse por NULL.
+  `desde`/`hasta` quedan como la única excepción deliberada: `-desde:X`/`-hasta:X` no tiene un
+  significado obvio para el límite de un rango de fechas, así que siguen sin admitir negación
+  (guard `!term.negated` explícito y documentado en `historial/filtros.rs::aplicar_clave`).
 
 - [ ] **Clave con typo o no soportada en la pantalla se busca como texto libre sin ningún
   aviso.** `escribir "empresaa:brisas"` (o `estado:` en Contratistas/Activos, donde esa clave

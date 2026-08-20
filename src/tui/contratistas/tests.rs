@@ -157,7 +157,10 @@ fn busqueda_admite_clave_valor_de_empresa_tipo_y_deja_texto_libre() {
     else {
         panic!("debía consultar")
     };
-    assert_eq!(empresa_id, Some(5));
+    assert_eq!(
+        empresa_id,
+        Some(crate::database::queries::Igualdad::Incluye(5))
+    );
     assert_eq!(tipos, Some(vec![TipoIngreso::Praind]));
     assert_eq!(texto.as_deref(), Some("Ana"));
 }
@@ -222,7 +225,46 @@ fn empresa_con_clave_valor_ignora_tildes_en_ambos_lados() {
     let AccionContratistas::Buscar { empresa_id, .. } = s.buscar(None) else {
         panic!("debía consultar")
     };
-    assert_eq!(empresa_id, Some(9));
+    assert_eq!(
+        empresa_id,
+        Some(crate::database::queries::Igualdad::Incluye(9))
+    );
+}
+
+#[test]
+fn negar_empresa_y_praind() {
+    let mut s = ContratistasState::default();
+    s.completar_empresas(Ok(vec![Empresa {
+        id: 9,
+        nombre: "Álvarez Ingeniería".into(),
+        activo: true,
+    }]));
+    s.set_hoy(NaiveDate::from_ymd_opt(2026, 8, 17).unwrap());
+    s.filtro = "-empresa:alvarez -praind:vencido".into();
+    let AccionContratistas::Buscar {
+        empresa_id,
+        praind,
+        praind_negado,
+        texto,
+        ..
+    } = s.buscar(None)
+    else {
+        panic!("debía consultar")
+    };
+    assert_eq!(
+        empresa_id,
+        Some(crate::database::queries::Igualdad::Excluye(9))
+    );
+    assert_eq!(
+        praind,
+        Some(
+            crate::database::queries::contratistas::FiltroPraind::Vencido {
+                hoy: NaiveDate::from_ymd_opt(2026, 8, 17).unwrap()
+            }
+        )
+    );
+    assert!(praind_negado);
+    assert_eq!(texto, None);
 }
 
 #[test]
