@@ -260,10 +260,34 @@ fn render_panel(
 ) -> Option<Rect> {
     match state.etapa {
         EtapaNuevoIngreso::Buscar => {
-            frame.render_widget(
-                Paragraph::new("Seleccione ENTER para preparar el ingreso.").style(theme.muted()),
-                area,
-            );
+            let contenido = state
+                .seleccion
+                .and_then(|indice| state.contratistas.get(indice))
+                .map(|contratista| {
+                    let mut lineas = render_contexto(contratista);
+                    lineas.push(Line::from("ESTADO ACTUAL").style(theme.muted()));
+                    if contratista.tiene_ingreso_activo {
+                        lineas.push(
+                            Line::from("● DENTRO · tiene un ingreso activo").style(theme.danger()),
+                        );
+                        lineas.push(
+                            Line::from("No puede registrar otro ingreso.").style(theme.muted()),
+                        );
+                    } else {
+                        lineas.push(
+                            Line::from("● FUERA · sin ingreso activo").style(theme.success()),
+                        );
+                        lineas.push(
+                            Line::from("ENTER para validar y preparar el ingreso.")
+                                .style(theme.muted()),
+                        );
+                    }
+                    lineas
+                })
+                .unwrap_or_else(|| {
+                    vec![Line::from("Seleccione un contratista.").style(theme.muted())]
+                });
+            frame.render_widget(Paragraph::new(contenido), area);
             None
         }
         EtapaNuevoIngreso::Formulario => render_formulario(frame, area, state, theme),

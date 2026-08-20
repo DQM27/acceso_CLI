@@ -16,8 +16,59 @@ fn resumen() -> ContratistaResumen {
         fecha_vencimiento_praind: None,
         es_personal_ruta: false,
         tiene_acceso: true,
+        tiene_ingreso_activo: false,
     }
 }
+
+#[test]
+fn muestra_si_el_contratista_seleccionado_esta_dentro_o_fuera() {
+    use ratatui::{Terminal, backend::TestBackend};
+
+    use crate::{
+        models::usuario::RolUsuario, services::autenticacion_service::UsuarioSesion,
+        tui::ui_kit::ThemePreset,
+    };
+
+    fn texto(terminal: &Terminal<TestBackend>) -> String {
+        terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|celda| celda.symbol())
+            .collect()
+    }
+
+    let sesion = UsuarioSesion {
+        id: 1,
+        cedula: "ROOT".into(),
+        nombre: "Daniel".into(),
+        rol: RolUsuario::Root,
+    };
+    let theme = ThemePreset::Brisas.theme();
+    let mut state = NuevoIngresoState::default();
+    state.completar_busqueda(Ok(PaginaContratistas {
+        items: vec![resumen()],
+        total: 1,
+    }));
+    let mut terminal = Terminal::new(TestBackend::new(140, 30)).unwrap();
+
+    terminal
+        .draw(|frame| render::render(frame, frame.area(), &state, &sesion, theme))
+        .unwrap();
+    let fuera = texto(&terminal);
+    assert!(fuera.contains("FUERA · sin ingreso activo"));
+    assert!(fuera.contains("ENTER para validar y preparar el ingreso"));
+
+    state.contratistas[0].tiene_ingreso_activo = true;
+    terminal
+        .draw(|frame| render::render(frame, frame.area(), &state, &sesion, theme))
+        .unwrap();
+    let dentro = texto(&terminal);
+    assert!(dentro.contains("DENTRO · tiene un ingreso activo"));
+    assert!(dentro.contains("No puede registrar otro ingreso"));
+}
+
 fn preparar(requiere: bool) -> PreparacionIngreso {
     PreparacionIngreso {
         contratista_id: 7,

@@ -30,6 +30,9 @@ pub struct ContratistaResumen {
     pub fecha_vencimiento_praind: Option<NaiveDate>,
     pub es_personal_ruta: bool,
     pub tiene_acceso: bool,
+    /// Indica si existe un movimiento sin salida para mostrar el estado
+    /// actual antes de intentar preparar un nuevo ingreso.
+    pub tiene_ingreso_activo: bool,
 }
 
 /// Estado de vencimiento de PRAIND a filtrar. `hoy` viaja con la variante en
@@ -238,7 +241,13 @@ impl ContratistasQuery for SqliteContratistasQuery<'_> {
         let select_sql = format!(
             "SELECT
                 c.id, c.empresa_id, c.cedula, c.nombre, e.nombre, c.tipo_ingreso,
-                c.fecha_vencimiento_praind, c.es_personal_ruta, c.tiene_acceso
+                c.fecha_vencimiento_praind, c.es_personal_ruta, c.tiene_acceso,
+                EXISTS (
+                    SELECT 1
+                    FROM registro_ingresos AS r
+                    WHERE r.contratista_id = c.id
+                      AND r.fecha_hora_salida IS NULL
+                )
              {CONTRATISTAS_FROM} {where_sql}
              ORDER BY CASE WHEN c.cedula = :texto_literal COLLATE NOCASE THEN 0 ELSE 1 END,
                       c.nombre COLLATE NOCASE, c.id
@@ -290,6 +299,7 @@ fn convertir_fila(row: &Row<'_>) -> rusqlite::Result<ContratistaResumen> {
         fecha_vencimiento_praind,
         es_personal_ruta: row.get::<_, i64>(7)? != 0,
         tiene_acceso: row.get::<_, i64>(8)? != 0,
+        tiene_ingreso_activo: row.get::<_, i64>(9)? != 0,
     })
 }
 

@@ -93,6 +93,57 @@ fn devuelve_contratista_con_nombre_de_empresa_en_un_solo_resultado() {
     assert_eq!(resultados.len(), 1);
     assert_eq!(resultados[0].empresa_nombre, "Constructora Alfa");
     assert_eq!(resultados[0].cedula, "1001");
+    assert!(!resultados[0].tiene_ingreso_activo);
+}
+
+#[test]
+fn informa_si_el_contratista_esta_dentro_o_fuera() {
+    let connection = preparar_base();
+    let empresa_id = crear_empresa(&connection, "Constructora Alfa");
+    let contratista_id = crear_contratista(
+        &connection,
+        "1001",
+        "Ana Solano",
+        empresa_id,
+        TipoIngreso::Swat,
+        None,
+        false,
+        true,
+    );
+    connection
+        .execute(
+            "INSERT INTO usuarios(cedula,nombre,password_hash,rol,activo)
+             VALUES ('u1','Operador','hash','OPERADOR',1)",
+            [],
+        )
+        .unwrap();
+    connection
+        .execute(
+            "INSERT INTO registro_ingresos(
+                contratista_id,empresa_id,fecha_hora_ingreso,medio_ingreso,tipo_ingreso,
+                usuario_ingreso_id,contratista_cedula,contratista_nombre,empresa_nombre,
+                usuario_ingreso_nombre,es_personal_ruta,tiene_acceso,resultado_acceso,
+                reglas_version
+             ) VALUES (?1,?2,'2026-08-20T18:00:00Z','CAMINANDO','SWAT',1,
+                       '1001','Ana Solano','Constructora Alfa','Operador',0,1,
+                       'PERMITIDO',1)",
+            params![contratista_id, empresa_id],
+        )
+        .unwrap();
+
+    assert!(buscar(&connection, Some("1001"))[0].tiene_ingreso_activo);
+
+    connection
+        .execute(
+            "UPDATE registro_ingresos
+             SET fecha_hora_salida='2026-08-20T20:00:00Z', usuario_salida_id=1,
+                 usuario_salida_nombre='Operador'
+             WHERE contratista_id=?1",
+            [contratista_id],
+        )
+        .unwrap();
+
+    assert!(!buscar(&connection, Some("1001"))[0].tiene_ingreso_activo);
 }
 
 #[test]

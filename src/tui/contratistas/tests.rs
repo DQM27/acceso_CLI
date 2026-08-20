@@ -22,6 +22,7 @@ fn resumen() -> ContratistaResumen {
         fecha_vencimiento_praind: NaiveDate::from_ymd_opt(2026, 12, 31),
         es_personal_ruta: false,
         tiene_acceso: true,
+        tiene_ingreso_activo: false,
     }
 }
 fn cargar(s: &mut ContratistasState) {
@@ -138,6 +139,90 @@ fn flecha_izquierda_mueve_el_cursor_en_el_campo_nombre_sin_borrar() {
         panic!("debía seguir en el formulario")
     };
     assert_eq!(f.nombre.value(), "José Perez");
+}
+
+#[test]
+fn fecha_praind_permite_mover_el_cursor_y_corregir_un_digito() {
+    let mut s = ContratistasState::default();
+    cargar(&mut s);
+    s.handle_key(k(KeyCode::Enter));
+    // Editar inicia en Nombre; avanza por Empresa y Tipo hasta Fecha PRAIND.
+    for _ in 0..3 {
+        s.handle_key(k(KeyCode::Tab));
+    }
+    let ModoContratistas::Formulario(f) = &s.modo else {
+        panic!("debía estar editando")
+    };
+    assert_eq!(
+        CampoFormulario::TODOS[f.campo],
+        CampoFormulario::FechaPraind
+    );
+    assert_eq!(f.fecha_praind.value(), "31/12/2026");
+
+    // Vuelve al primer dígito, cambia 31 por 21 y conserva el resto.
+    for _ in 0..10 {
+        s.handle_key(k(KeyCode::Left));
+    }
+    s.handle_key(k(KeyCode::Delete));
+    s.handle_key(k(KeyCode::Char('2')));
+
+    let ModoContratistas::Formulario(f) = &s.modo else {
+        panic!("debía seguir editando")
+    };
+    assert_eq!(f.fecha_praind.value(), "21/12/2026");
+    let AccionContratistas::Actualizar { datos, .. } = s.handle_key(k(KeyCode::Enter)) else {
+        panic!("debía emitir la actualización")
+    };
+    assert_eq!(
+        datos.fecha_vencimiento_praind,
+        NaiveDate::from_ymd_opt(2026, 12, 21)
+    );
+}
+
+#[test]
+fn formulario_alinea_nombre_y_fecha_a_la_derecha_de_sus_etiquetas() {
+    use ratatui::{Terminal, backend::TestBackend};
+
+    let mut state = ContratistasState::default();
+    cargar(&mut state);
+    state.handle_key(k(KeyCode::Enter));
+    let sesion = crate::services::autenticacion_service::UsuarioSesion {
+        id: 1,
+        cedula: "ROOT".into(),
+        nombre: "Root".into(),
+        rol: crate::models::usuario::RolUsuario::Root,
+    };
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|frame| {
+            render::render(
+                frame,
+                frame.area(),
+                &state,
+                &sesion,
+                crate::tui::ui_kit::ThemePreset::Brisas.theme(),
+            )
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let lineas = (0..buffer.area.height)
+        .map(|y| {
+            (0..buffer.area.width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        lineas
+            .iter()
+            .any(|linea| linea.contains("NOMBRE") && linea.contains("José Hernández"))
+    );
+    assert!(
+        lineas
+            .iter()
+            .any(|linea| linea.contains("FECHA PRAIND") && linea.contains("31/12/2026"))
+    );
 }
 #[test]
 fn busqueda_admite_clave_valor_de_empresa_tipo_y_deja_texto_libre() {
@@ -431,7 +516,7 @@ fn praind_dinamico_usa_regla_de_dominio_y_none_si_no_requerido() {
     f.personal_ruta = true;
     assert!(f.requiere_praind());
     f.personal_ruta = false;
-    f.fecha_praind = "31/12/2026".into();
+    f.fecha_praind = TextInput::new("31/12/2026").with_max_chars(10);
     let d = match construir(&f, Some(5)) {
         Err(e) => e,
         Ok(_) => panic!(),

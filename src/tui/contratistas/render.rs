@@ -15,7 +15,7 @@ use crate::{
     tui::ui_kit::{
         ChoiceFieldOptions, CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell,
         StatusKind, TextInput, Theme, identidad_sesion, master_detail_areas, render_choice_field,
-        render_form_field, render_separator, render_terminal_too_small,
+        render_separator, render_terminal_too_small,
     },
 };
 
@@ -57,6 +57,7 @@ const COMANDOS_COLUMNAS: &[CommandHint<'static>] = &[
     CommandHint::new("SPACE", "Mostrar/Ocultar"),
     CommandHint::new("ESC", "Cerrar"),
 ];
+const ANCHO_ETIQUETA_FORMULARIO: usize = 20;
 
 pub fn render(
     frame: &mut Frame,
@@ -157,28 +158,8 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &ContratistasState, theme
     render_panel(frame, area_panel, state, theme);
 }
 
-fn altura_fila(campo: CampoFormulario, f: &FormularioContratista) -> u16 {
-    match campo {
-        CampoFormulario::Cedula => {
-            if matches!(f.modo, ModoFormulario::Crear) {
-                3
-            } else {
-                1
-            }
-        }
-        CampoFormulario::Nombre => 3,
-        CampoFormulario::FechaPraind => {
-            if f.requiere_praind() {
-                3
-            } else {
-                1
-            }
-        }
-        CampoFormulario::Empresa
-        | CampoFormulario::Tipo
-        | CampoFormulario::Ruta
-        | CampoFormulario::Acceso => 1,
-    }
+fn altura_fila(_: CampoFormulario, _: &FormularioContratista) -> u16 {
+    1
 }
 
 fn altura_panel(state: &ContratistasState) -> u16 {
@@ -201,8 +182,9 @@ fn altura_panel(state: &ContratistasState) -> u16 {
     }
 }
 
-/// Misma silueta con foco o sin él (etiqueta, valor, línea); sólo cambian
-/// color y peso.
+/// Campo editable en la misma línea y con la misma alineación que Empresa y
+/// Tipo. El rectángulo devuelto comienza exactamente donde inicia el valor,
+/// para posicionar allí el cursor real del `TextInput`.
 fn render_campo(
     frame: &mut Frame,
     area: Rect,
@@ -211,7 +193,22 @@ fn render_campo(
     activo: bool,
     theme: Theme,
 ) -> Rect {
-    render_form_field(frame, area, etiqueta, valor, activo, theme)
+    render_choice_field(
+        frame,
+        area,
+        etiqueta,
+        valor,
+        activo,
+        theme,
+        ChoiceFieldOptions::plain(ANCHO_ETIQUETA_FORMULARIO),
+    );
+    let desplazamiento = ANCHO_ETIQUETA_FORMULARIO as u16 + 3;
+    Rect::new(
+        area.x.saturating_add(desplazamiento),
+        area.y,
+        area.width.saturating_sub(desplazamiento),
+        1,
+    )
 }
 
 fn render_opcion(
@@ -229,7 +226,7 @@ fn render_opcion(
         valor,
         activo,
         theme,
-        ChoiceFieldOptions::plain(20),
+        ChoiceFieldOptions::plain(ANCHO_ETIQUETA_FORMULARIO),
     );
 }
 
@@ -519,12 +516,12 @@ fn render_formulario(
                         frame,
                         filas[fila],
                         "FECHA PRAIND",
-                        &f.fecha_praind,
+                        f.fecha_praind.value(),
                         enfocado,
                         theme,
                     );
                     if enfocado {
-                        posicionar_cursor(frame, r, &f.fecha_praind);
+                        posicionar_cursor_campo(frame, r, &f.fecha_praind);
                     }
                 } else {
                     render_opcion(

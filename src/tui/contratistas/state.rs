@@ -226,7 +226,7 @@ struct FormularioContratista {
     nombre: TextInput,
     empresa: usize,
     tipo: TipoIngreso,
-    fecha_praind: String,
+    fecha_praind: TextInput,
     personal_ruta: bool,
     tiene_acceso: bool,
     campo: usize,
@@ -241,7 +241,7 @@ impl FormularioContratista {
             nombre: TextInput::default().with_max_chars(60),
             empresa: 0,
             tipo: TipoIngreso::Praind,
-            fecha_praind: String::new(),
+            fecha_praind: TextInput::default().with_max_chars(10),
             personal_ruta: false,
             tiene_acceso: true,
             campo: 0,
@@ -259,10 +259,12 @@ impl FormularioContratista {
                 .position(|e| e.id == c.empresa_id)
                 .unwrap_or(0),
             tipo: c.tipo_ingreso,
-            fecha_praind: c
-                .fecha_vencimiento_praind
-                .map(|f| f.format("%d/%m/%Y").to_string())
-                .unwrap_or_default(),
+            fecha_praind: TextInput::new(
+                c.fecha_vencimiento_praind
+                    .map(|f| f.format("%d/%m/%Y").to_string())
+                    .unwrap_or_default(),
+            )
+            .with_max_chars(10),
             personal_ruta: c.es_personal_ruta,
             tiene_acceso: c.tiene_acceso,
             campo: 1,
@@ -289,7 +291,7 @@ impl FormularioContratista {
 enum ModoContratistas {
     Normal,
     Busqueda { texto: TextInput },
-    Formulario(FormularioContratista),
+    Formulario(Box<FormularioContratista>),
     Columnas { seleccion: usize },
 }
 pub enum AccionContratistas {
@@ -523,7 +525,8 @@ impl ContratistasState {
                         "Debe registrar al menos una empresa antes de crear contratistas".into(),
                     )
                 } else {
-                    self.modo = ModoContratistas::Formulario(FormularioContratista::nuevo())
+                    self.modo =
+                        ModoContratistas::Formulario(Box::new(FormularioContratista::nuevo()))
                 }
             }
             KeyCode::Char('/') => {
@@ -589,7 +592,11 @@ impl ContratistasState {
             AccionContratistas::Ninguna
         }
     }
-    fn formulario(&mut self, key: KeyEvent, mut f: FormularioContratista) -> AccionContratistas {
+    fn formulario(
+        &mut self,
+        key: KeyEvent,
+        mut f: Box<FormularioContratista>,
+    ) -> AccionContratistas {
         if let Some((d, o)) = f.desplegable {
             let ultimo = match d {
                 Desplegable::Empresa => self.empresas.len().saturating_sub(1),
@@ -670,6 +677,9 @@ impl ContratistasState {
                     CampoFormulario::Nombre => {
                         f.nombre.handle_key(key);
                     }
+                    CampoFormulario::FechaPraind if f.requiere_praind() => {
+                        f.fecha_praind.handle_key(key);
+                    }
                     _ => {}
                 }
             }
@@ -681,7 +691,7 @@ impl ContratistasState {
                     f.nombre.handle_key(key);
                 }
                 CampoFormulario::FechaPraind if f.requiere_praind() => {
-                    f.fecha_praind.pop();
+                    f.fecha_praind.handle_key(key);
                 }
                 _ => {}
             },
@@ -698,7 +708,7 @@ impl ContratistasState {
                         f.nombre.handle_key(key);
                     }
                     CampoFormulario::FechaPraind if f.requiere_praind() => {
-                        agregar_fecha(&mut f.fecha_praind, c)
+                        agregar_fecha(&mut f.fecha_praind, key, c)
                     }
                     _ => {}
                 }
@@ -743,8 +753,10 @@ impl ContratistasState {
     }
     fn editar(&mut self, id: i64) {
         if let Some(c) = self.registros.iter().find(|c| c.id == id) {
-            self.modo =
-                ModoContratistas::Formulario(FormularioContratista::editar(c, &self.empresas))
+            self.modo = ModoContratistas::Formulario(Box::new(FormularioContratista::editar(
+                c,
+                &self.empresas,
+            )))
         }
     }
     fn buscar(&self, id: Option<i64>) -> AccionContratistas {
@@ -853,8 +865,8 @@ fn construir(
     }
     let fecha = if f.requiere_praind() {
         Some(
-            NaiveDate::parse_from_str(&f.fecha_praind, "%d/%m/%Y").map_err(|_| {
-                if f.fecha_praind.is_empty() {
+            NaiveDate::parse_from_str(f.fecha_praind.value(), "%d/%m/%Y").map_err(|_| {
+                if f.fecha_praind.value().is_empty() {
                     "Fecha PRAIND requerida"
                 } else {
                     "Fecha inválida. Use DD/MM/YYYY"
@@ -903,15 +915,20 @@ fn mover_campo(f: &mut FormularioContratista, d: isize) {
     let siguiente = (posicion as isize + d).rem_euclid(len) as usize;
     f.campo = habilitados[siguiente];
 }
-fn agregar_fecha(s: &mut String, c: char) {
-    if !c.is_ascii_digit() {
+fn agregar_fecha(input: &mut TextInput, key: KeyEvent, caracter: char) {
+    if caracter == '/' {
+        input.handle_key(key);
         return;
     }
-    let n = s.chars().filter(char::is_ascii_digit).count();
-    if n < 8 {
-        if matches!(n, 2 | 4) {
-            s.push('/')
+    if !caracter.is_ascii_digit() {
+        return;
+    }
+    let cantidad_digitos = input.value().chars().filter(char::is_ascii_digit).count();
+    if cantidad_digitos < 8 {
+        let cursor_al_final = input.cursor() == input.value().chars().count();
+        if cursor_al_final && matches!(cantidad_digitos, 2 | 4) && !input.value().ends_with('/') {
+            input.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
         }
-        s.push(c)
+        input.handle_key(key);
     }
 }
