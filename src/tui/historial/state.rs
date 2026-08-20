@@ -290,7 +290,8 @@ impl HistorialState {
             }
             Some(StandardCommand::Primary) => {
                 let fecha = self.heatmap_seleccion.format("%d/%m/%Y").to_string();
-                self.busqueda.set_value(format!("desde:{fecha} hasta:{fecha}"));
+                self.busqueda
+                    .set_value(format!("desde:{fecha} hasta:{fecha}"));
                 self.vista = ViewMode::Timeline;
                 self.reiniciar_paginacion();
                 return self.emitir();

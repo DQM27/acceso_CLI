@@ -107,7 +107,10 @@ fn no_deja_archivos_partial_tras_una_creacion_exitosa() {
         .unwrap()
         .filter_map(Result::ok)
         .any(|entrada| entrada.path().extension().and_then(|e| e.to_str()) == Some("partial"));
-    assert!(!quedan_partials, "no debe quedar ningún .partial tras un respaldo exitoso");
+    assert!(
+        !quedan_partials,
+        "no debe quedar ningún .partial tras un respaldo exitoso"
+    );
 
     let _ = std::fs::remove_dir_all(&directorio);
 }
@@ -216,14 +219,26 @@ fn listar_respaldos_ordena_del_mas_reciente_y_omite_partial() {
         "control_acceso_2026-08-12_090000_pre_restauracion_2.db",
         "control_acceso_2026-08-16_000000_manual.partial",
     ] {
-        std::fs::write(directorio.join(nombre), b"contenido de prueba, no es sqlite real").unwrap();
+        std::fs::write(
+            directorio.join(nombre),
+            b"contenido de prueba, no es sqlite real",
+        )
+        .unwrap();
     }
 
     let respaldos = listar_respaldos(&directorio).unwrap();
     assert_eq!(respaldos.len(), 4, "el .partial no debe listarse");
-    assert!(respaldos.windows(2).all(|par| par[0].creado_en >= par[1].creado_en));
+    assert!(
+        respaldos
+            .windows(2)
+            .all(|par| par[0].creado_en >= par[1].creado_en)
+    );
     assert_eq!(respaldos[0].tipo, TipoRespaldo::Automatico);
-    assert!(respaldos.iter().any(|r| r.tipo == TipoRespaldo::PreRestauracion));
+    assert!(
+        respaldos
+            .iter()
+            .any(|r| r.tipo == TipoRespaldo::PreRestauracion)
+    );
 
     let _ = std::fs::remove_dir_all(&directorio);
 }
@@ -253,8 +268,12 @@ fn restaurar_un_respaldo_valido_reemplaza_los_datos_activos() {
     // Un segundo contratista en la candidata, para distinguirla claramente
     // de la activa (que sólo tiene uno) después de restaurar.
     poblar(&origen_candidata, "Otra Empresa", "3");
-    let respaldo = crear_respaldo(&origen_candidata, &directorio.join("respaldos"), TipoRespaldo::Manual)
-        .unwrap();
+    let respaldo = crear_respaldo(
+        &origen_candidata,
+        &directorio.join("respaldos"),
+        TipoRespaldo::Manual,
+    )
+    .unwrap();
     drop(activa);
     drop(origen_candidata);
 
@@ -264,7 +283,9 @@ fn restaurar_un_respaldo_valido_reemplaza_los_datos_activos() {
     assert_eq!(contar(&ruta_activa, "contratistas"), 2);
     let nombre: String = Connection::open(&ruta_activa)
         .unwrap()
-        .query_row("SELECT nombre FROM empresas ORDER BY id LIMIT 1", [], |r| r.get(0))
+        .query_row("SELECT nombre FROM empresas ORDER BY id LIMIT 1", [], |r| {
+            r.get(0)
+        })
         .unwrap();
     assert_eq!(nombre, "Empresa Nueva");
 
@@ -289,7 +310,10 @@ fn restaurar_rechaza_un_candidato_invalido_sin_tocar_la_base_activa() {
         .unwrap()
         .query_row("SELECT nombre FROM empresas", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(nombre, "Empresa Original", "la base activa no debe tocarse si el candidato no valida");
+    assert_eq!(
+        nombre, "Empresa Original",
+        "la base activa no debe tocarse si el candidato no valida"
+    );
 
     let _ = std::fs::remove_dir_all(&directorio);
 }
@@ -323,7 +347,11 @@ fn restaurar_reinstala_la_base_anterior_si_falla_despues_del_intercambio() {
         .query_row("SELECT nombre FROM empresas", [], |r| r.get(0))
         .unwrap();
     assert_eq!(nombre, "Empresa Original");
-    assert!(!directorio.join(".control_acceso_restauracion.previa").exists());
+    assert!(
+        !directorio
+            .join(".control_acceso_restauracion.previa")
+            .exists()
+    );
     assert!(!directorio.join(".control_acceso_restauracion.tmp").exists());
 
     let _ = std::fs::remove_dir_all(&directorio);
@@ -337,7 +365,8 @@ fn restaurar_sobre_una_ruta_activa_inexistente_funciona_como_primera_carga() {
 
     let ruta_candidata_origen = directorio.join("candidata_origen.db");
     let origen = base_en_archivo(&ruta_candidata_origen, "Empresa Semilla", "1");
-    let respaldo = crear_respaldo(&origen, &directorio.join("respaldos"), TipoRespaldo::Manual).unwrap();
+    let respaldo =
+        crear_respaldo(&origen, &directorio.join("respaldos"), TipoRespaldo::Manual).unwrap();
     drop(origen);
 
     restaurar_respaldo(&respaldo.ruta, &ruta_activa).unwrap();
@@ -359,13 +388,23 @@ fn aplicar_retencion_conserva_solo_los_mas_recientes_del_tipo_indicado() {
     // Automatico nunca debe tocar.
     for dia in 1..=5 {
         std::fs::write(
-            directorio.join(format!("control_acceso_2026-01-0{dia}_120000_automatico.db")),
+            directorio.join(format!(
+                "control_acceso_2026-01-0{dia}_120000_automatico.db"
+            )),
             b"",
         )
         .unwrap();
     }
-    std::fs::write(directorio.join("control_acceso_2026-01-01_120000_manual.db"), b"").unwrap();
-    std::fs::write(directorio.join("control_acceso_2026-01-02_120000_manual.db"), b"").unwrap();
+    std::fs::write(
+        directorio.join("control_acceso_2026-01-01_120000_manual.db"),
+        b"",
+    )
+    .unwrap();
+    std::fs::write(
+        directorio.join("control_acceso_2026-01-02_120000_manual.db"),
+        b"",
+    )
+    .unwrap();
 
     let eliminados = aplicar_retencion(&directorio, TipoRespaldo::Automatico, 3).unwrap();
 

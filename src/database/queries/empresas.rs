@@ -1,7 +1,9 @@
 use rusqlite::{Connection, Row};
 
+use crate::database::queries::{
+    LIMITE_LISTADO_MAXIMO as LIMITE_MAXIMO, LIMITE_LISTADO_PREDETERMINADO as LIMITE_PREDETERMINADO,
+};
 use crate::database::{error::DatabaseError, search::BusquedaTexto};
-use crate::database::queries::{LIMITE_LISTADO_MAXIMO as LIMITE_MAXIMO, LIMITE_LISTADO_PREDETERMINADO as LIMITE_PREDETERMINADO};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EmpresaResumen {

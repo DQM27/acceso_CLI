@@ -113,7 +113,9 @@ impl Secreto {
                 true
             }
             KeyCode::Char(c)
-                if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
                     && self.longitud() < max_chars =>
             {
                 let idx = self.indice_byte(self.cursor);
@@ -600,7 +602,11 @@ impl UsuariosState {
             KeyCode::Enter => {
                 return self.emitir_guardado(f);
             }
-            KeyCode::Left | KeyCode::Right | KeyCode::Home | KeyCode::End | KeyCode::Delete
+            KeyCode::Left
+            | KeyCode::Right
+            | KeyCode::Home
+            | KeyCode::End
+            | KeyCode::Delete
             | KeyCode::Backspace => match f.campo_actual() {
                 CampoUsuario::Cedula => {
                     f.cedula.handle_key(key);
@@ -711,7 +717,11 @@ impl UsuariosState {
                     nombre,
                 };
             }
-            KeyCode::Left | KeyCode::Right | KeyCode::Home | KeyCode::End | KeyCode::Delete
+            KeyCode::Left
+            | KeyCode::Right
+            | KeyCode::Home
+            | KeyCode::End
+            | KeyCode::Delete
             | KeyCode::Backspace => {
                 if f.campo == 0 {
                     f.password.handle_key(key, 128);

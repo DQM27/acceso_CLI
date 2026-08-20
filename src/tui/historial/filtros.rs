@@ -86,8 +86,10 @@ pub(super) fn construir(
         tipos_incluidos: f.tipos.clone(),
         gafete_numero: gafete,
         estado: f.estado,
-        usuario_ingreso: (!f.usuario_ingreso.trim().is_empty()).then(|| f.usuario_ingreso.trim().to_owned()),
-        usuario_salida: (!f.usuario_salida.trim().is_empty()).then(|| f.usuario_salida.trim().to_owned()),
+        usuario_ingreso: (!f.usuario_ingreso.trim().is_empty())
+            .then(|| f.usuario_ingreso.trim().to_owned()),
+        usuario_salida: (!f.usuario_salida.trim().is_empty())
+            .then(|| f.usuario_salida.trim().to_owned()),
         limite: limit,
         offset,
         corte_id,
@@ -97,7 +99,9 @@ pub(super) fn construir(
 fn estado_desde_texto(v: &str) -> Option<EstadoMovimiento> {
     match v.to_lowercase().as_str() {
         "activos" | "activo" | "dentro" => Some(EstadoMovimiento::Activos),
-        "cerrados" | "cerrado" | "salieron" | "salio" | "salió" => Some(EstadoMovimiento::Cerrados),
+        "cerrados" | "cerrado" | "salieron" | "salio" | "salió" => {
+            Some(EstadoMovimiento::Cerrados)
+        }
         "todos" => Some(EstadoMovimiento::Todos),
         _ => None,
     }
@@ -119,7 +123,9 @@ pub(super) fn parsear_consulta(
     empresas: &[Empresa],
 ) -> (FiltrosHistorial, String) {
     let mut filtros = base.clone();
-    let libres = resolver_terminos(texto, &mut filtros, |f, term| aplicar_clave(f, term, empresas));
+    let libres = resolver_terminos(texto, &mut filtros, |f, term| {
+        aplicar_clave(f, term, empresas)
+    });
     (filtros, libres)
 }
 
@@ -200,7 +206,9 @@ fn aplicar_clave(f: &mut FiltrosHistorial, term: &Term, empresas: &[Empresa]) ->
         // `f.gafete` y hacer que `construir()` rechace toda la búsqueda con
         // "Ingrese un número de gafete válido" — ese mensaje queda para
         // cuando el operador lo escribe directo en el campo del panel.
-        "gafete" if !term.negated && valores.len() == 1 && valores[0].trim().parse::<i64>().is_ok() => {
+        "gafete"
+            if !term.negated && valores.len() == 1 && valores[0].trim().parse::<i64>().is_ok() =>
+        {
             f.gafete = valores[0].clone();
             true
         }

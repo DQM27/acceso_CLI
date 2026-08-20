@@ -2,7 +2,9 @@ use chrono::{Duration, NaiveDate};
 use rusqlite::{Connection, Row};
 
 use crate::database::error::DatabaseError;
-use crate::database::queries::{LIMITE_LISTADO_MAXIMO as LIMITE_MAXIMO, LIMITE_LISTADO_PREDETERMINADO as LIMITE_PREDETERMINADO};
+use crate::database::queries::{
+    LIMITE_LISTADO_MAXIMO as LIMITE_MAXIMO, LIMITE_LISTADO_PREDETERMINADO as LIMITE_PREDETERMINADO,
+};
 use crate::database::search::BusquedaTexto;
 use crate::domain::acceso::DIAS_ADVERTENCIA_PRAIND;
 use crate::models::tipo_ingreso::TipoIngreso;
@@ -92,6 +94,10 @@ const CONTRATISTAS_FROM: &str = "
     INNER JOIN empresas AS e ON e.id = c.empresa_id
 ";
 
+/// Nombre de parámetro (`:algo`) y valor bindeado. Usado sólo por los
+/// constructores de `WHERE` dinámico de este archivo/`ingresos.rs`.
+type ParametrosSql = Vec<(String, Box<dyn rusqlite::ToSql>)>;
+
 /// Arma el `WHERE` sólo con las condiciones realmente activas (en vez de un
 /// bloque fijo con flags `:x IS NULL OR col = :x` evaluados en cada fila) y
 /// los parámetros que le corresponden a cada una. Con flags dinámicos,
@@ -102,11 +108,10 @@ const CONTRATISTAS_FROM: &str = "
 /// condición cuando el filtro no aplica deja que el planificador vea
 /// predicados concretos y elija índice, igual que ya hacen
 /// `empresas.rs`/`usuarios.rs` para el modo de búsqueda.
-/// Nombre de parámetro (`:algo`) y valor bindeado. Usado sólo por los
-/// constructores de `WHERE` dinámico de este archivo/`ingresos.rs`.
-type ParametrosSql = Vec<(String, Box<dyn rusqlite::ToSql>)>;
-
-fn construir_where(busqueda: &BusquedaTexto, filtro: &FiltroContratistas) -> (String, ParametrosSql) {
+fn construir_where(
+    busqueda: &BusquedaTexto,
+    filtro: &FiltroContratistas,
+) -> (String, ParametrosSql) {
     let mut condiciones: Vec<String> = Vec::new();
     let mut parametros: ParametrosSql = Vec::new();
 
@@ -131,7 +136,10 @@ fn construir_where(busqueda: &BusquedaTexto, filtro: &FiltroContratistas) -> (St
                 )"
                 .into(),
             );
-            parametros.push((":consulta_fts".into(), Box::new(busqueda.consulta_fts.clone())));
+            parametros.push((
+                ":consulta_fts".into(),
+                Box::new(busqueda.consulta_fts.clone()),
+            ));
         }
         _ => {}
     }
@@ -307,7 +315,9 @@ mod tests {
             .collect::<Result<_, _>>()
             .unwrap();
         assert!(
-            detalles.iter().any(|d| d.contains("idx_contratistas_empresa")),
+            detalles
+                .iter()
+                .any(|d| d.contains("idx_contratistas_empresa")),
             "{detalles:?}"
         );
     }

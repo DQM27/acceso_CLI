@@ -175,7 +175,10 @@ fn altura_fila(campo: CampoFormulario, f: &FormularioContratista) -> u16 {
                 1
             }
         }
-        CampoFormulario::Empresa | CampoFormulario::Tipo | CampoFormulario::Ruta | CampoFormulario::Acceso => 1,
+        CampoFormulario::Empresa
+        | CampoFormulario::Tipo
+        | CampoFormulario::Ruta
+        | CampoFormulario::Acceso => 1,
     }
 }
 
@@ -209,8 +212,16 @@ fn render_campo(
     activo: bool,
     theme: Theme,
 ) -> Rect {
-    let estilo_etiqueta = if activo { theme.accent() } else { theme.muted() };
-    let estilo_linea = if activo { theme.accent() } else { theme.border() };
+    let estilo_etiqueta = if activo {
+        theme.accent()
+    } else {
+        theme.muted()
+    };
+    let estilo_linea = if activo {
+        theme.accent()
+    } else {
+        theme.border()
+    };
     let valor_y = area.y.saturating_add(1);
     let linea_y = area.y.saturating_add(2);
 
@@ -230,7 +241,14 @@ fn render_campo(
     Rect::new(area.x, valor_y, area.width, 1)
 }
 
-fn render_opcion(frame: &mut Frame, area: Rect, etiqueta: &str, valor: &str, activo: bool, theme: Theme) {
+fn render_opcion(
+    frame: &mut Frame,
+    area: Rect,
+    etiqueta: &str,
+    valor: &str,
+    activo: bool,
+    theme: Theme,
+) {
     let marcador = if activo { ">" } else { " " };
     let estilo = if activo { theme.accent() } else { theme.base() };
     frame.render_widget(
@@ -281,7 +299,11 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ContratistasState, theme:
         .enumerate()
         .map(|(visible, c)| {
             let seleccionado = state.seleccion == Some(inicio + visible);
-            let estilo_fila = if seleccionado { theme.selected() } else { theme.base() };
+            let estilo_fila = if seleccionado {
+                theme.selected()
+            } else {
+                theme.base()
+            };
             let celdas = columnas.iter().map(|col| {
                 Cell::from(valor(c, *col)).style(if seleccionado {
                     estilo_fila
@@ -364,20 +386,34 @@ fn estilo_fecha(fecha: Option<NaiveDate>, hoy: NaiveDate, theme: Theme) -> Style
 fn render_panel(frame: &mut Frame, area: Rect, state: &ContratistasState, theme: Theme) {
     match &state.modo {
         ModoContratistas::Formulario(f) => render_formulario(frame, area, state, f, theme),
-        ModoContratistas::Columnas { seleccion } => render_columnas(frame, area, state, *seleccion, theme),
-        ModoContratistas::Normal | ModoContratistas::Busqueda { .. } => match state.seleccionado() {
-            Some(c) => render_detalle(frame, area, c, state.hoy, theme),
-            None => frame.render_widget(
-                Paragraph::new("No hay un registro seleccionado.").style(theme.muted()),
-                area,
-            ),
-        },
+        ModoContratistas::Columnas { seleccion } => {
+            render_columnas(frame, area, state, *seleccion, theme)
+        }
+        ModoContratistas::Normal | ModoContratistas::Busqueda { .. } => {
+            match state.seleccionado() {
+                Some(c) => render_detalle(frame, area, c, state.hoy, theme),
+                None => frame.render_widget(
+                    Paragraph::new("No hay un registro seleccionado.").style(theme.muted()),
+                    area,
+                ),
+            }
+        }
     }
 }
 
-fn render_detalle(frame: &mut Frame, area: Rect, c: &ContratistaResumen, hoy: NaiveDate, theme: Theme) {
+fn render_detalle(
+    frame: &mut Frame,
+    area: Rect,
+    c: &ContratistaResumen,
+    hoy: NaiveDate,
+    theme: Theme,
+) {
     let estilo_praind = estilo_fecha(c.fecha_vencimiento_praind, hoy, theme);
-    let estilo_acceso = if c.tiene_acceso { theme.success() } else { theme.danger() };
+    let estilo_acceso = if c.tiene_acceso {
+        theme.success()
+    } else {
+        theme.danger()
+    };
     let lineas = vec![
         Line::from(c.nombre.as_str()).style(theme.title()),
         Line::from(c.cedula.as_str()).style(theme.muted()),
@@ -392,7 +428,12 @@ fn render_detalle(frame: &mut Frame, area: Rect, c: &ContratistaResumen, hoy: Na
         ))
         .style(estilo_praind),
         Line::from(format!("Personal de ruta: {}", si_no(c.es_personal_ruta))).style(theme.base()),
-        Line::from(if c.tiene_acceso { "ACCESO PERMITIDO" } else { "SIN ACCESO" }).style(estilo_acceso),
+        Line::from(if c.tiene_acceso {
+            "ACCESO PERMITIDO"
+        } else {
+            "SIN ACCESO"
+        })
+        .style(estilo_acceso),
     ];
     frame.render_widget(Paragraph::new(lineas), area);
 }
@@ -453,7 +494,14 @@ fn render_formulario(
                 }
             }
             CampoFormulario::Nombre => {
-                let r = render_campo(frame, filas[fila], "NOMBRE", f.nombre.value(), enfocado, theme);
+                let r = render_campo(
+                    frame,
+                    filas[fila],
+                    "NOMBRE",
+                    f.nombre.value(),
+                    enfocado,
+                    theme,
+                );
                 if enfocado {
                     posicionar_cursor_campo(frame, r, &f.nombre);
                 }
@@ -476,7 +524,14 @@ fn render_formulario(
                 }
             }
             CampoFormulario::Tipo => {
-                render_opcion(frame, filas[fila], "TIPO DE INGRESO", texto_tipo(f.tipo), enfocado, theme);
+                render_opcion(
+                    frame,
+                    filas[fila],
+                    "TIPO DE INGRESO",
+                    texto_tipo(f.tipo),
+                    enfocado,
+                    theme,
+                );
                 if let Some((Desplegable::Tipo, resaltado)) = f.desplegable {
                     fila += 1;
                     render_lista_desplegable(
@@ -502,14 +557,35 @@ fn render_formulario(
                         posicionar_cursor(frame, r, &f.fecha_praind);
                     }
                 } else {
-                    render_opcion(frame, filas[fila], "FECHA PRAIND", "No requerida", false, theme);
+                    render_opcion(
+                        frame,
+                        filas[fila],
+                        "FECHA PRAIND",
+                        "No requerida",
+                        false,
+                        theme,
+                    );
                 }
             }
             CampoFormulario::Ruta => {
-                render_opcion(frame, filas[fila], "PERSONAL DE RUTA", si_no(f.personal_ruta), enfocado, theme);
+                render_opcion(
+                    frame,
+                    filas[fila],
+                    "PERSONAL DE RUTA",
+                    si_no(f.personal_ruta),
+                    enfocado,
+                    theme,
+                );
             }
             CampoFormulario::Acceso => {
-                render_opcion(frame, filas[fila], "TIENE ACCESO", si_no(f.tiene_acceso), enfocado, theme);
+                render_opcion(
+                    frame,
+                    filas[fila],
+                    "TIENE ACCESO",
+                    si_no(f.tiene_acceso),
+                    enfocado,
+                    theme,
+                );
             }
         }
         fila += 1;
@@ -532,14 +608,23 @@ fn render_lista_desplegable<'a>(
         .map(|(indice, opcion)| {
             let seleccionado = indice == resaltado;
             let marcador = if seleccionado { "  >" } else { "   " };
-            Line::from(format!("{marcador} {opcion}"))
-                .style(if seleccionado { theme.selected() } else { theme.muted() })
+            Line::from(format!("{marcador} {opcion}")).style(if seleccionado {
+                theme.selected()
+            } else {
+                theme.muted()
+            })
         })
         .collect();
     frame.render_widget(Paragraph::new(lineas), area);
 }
 
-fn render_columnas(frame: &mut Frame, area: Rect, state: &ContratistasState, seleccion: usize, theme: Theme) {
+fn render_columnas(
+    frame: &mut Frame,
+    area: Rect,
+    state: &ContratistasState,
+    seleccion: usize,
+    theme: Theme,
+) {
     let lineas: Vec<Line<'_>> = state
         .columnas
         .iter()

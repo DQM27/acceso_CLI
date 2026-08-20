@@ -179,9 +179,11 @@ fn busqueda_admite_praind_ruta_y_acceso() {
     };
     assert_eq!(
         praind,
-        Some(crate::database::queries::contratistas::FiltroPraind::Vencido {
-            hoy: NaiveDate::from_ymd_opt(2026, 8, 17).unwrap()
-        })
+        Some(
+            crate::database::queries::contratistas::FiltroPraind::Vencido {
+                hoy: NaiveDate::from_ymd_opt(2026, 8, 17).unwrap()
+            }
+        )
     );
     assert_eq!(personal_ruta, Some(true));
     assert_eq!(tiene_acceso, Some(false));
@@ -229,7 +231,13 @@ fn clave_no_reconocida_o_lista_de_praind_cae_a_texto_libre() {
         filtro: "praind:vence,vencido tipo:invalido".into(),
         ..Default::default()
     };
-    let AccionContratistas::Buscar { texto, praind, tipos, .. } = s.buscar(None) else {
+    let AccionContratistas::Buscar {
+        texto,
+        praind,
+        tipos,
+        ..
+    } = s.buscar(None)
+    else {
         panic!("debía consultar")
     };
     assert_eq!(praind, None);

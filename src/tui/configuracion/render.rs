@@ -132,9 +132,12 @@ fn render_respaldos(frame: &mut Frame, area: Rect, estado: &RespaldosState, them
         ModoRespaldos::Normal => {}
     }
 
-    let filas_area =
-        Layout::vertical([Constraint::Min(4), Constraint::Length(1), Constraint::Length(6)])
-            .split(areas.body);
+    let filas_area = Layout::vertical([
+        Constraint::Min(4),
+        Constraint::Length(1),
+        Constraint::Length(6),
+    ])
+    .split(areas.body);
     render_tabla(frame, filas_area[0], estado, theme);
     render_detalle(frame, filas_area[2], estado, theme);
 }
@@ -255,8 +258,7 @@ fn render_confirmar_restauracion(
         Line::from(""),
         Line::from("Esto reemplaza TODOS los datos activos por los de ese respaldo.")
             .style(theme.base()),
-        Line::from("Antes de continuar se crea un respaldo de la base actual.")
-            .style(theme.base()),
+        Line::from("Antes de continuar se crea un respaldo de la base actual.").style(theme.base()),
         Line::from("La aplicación se reiniciará y pedirá iniciar sesión de nuevo.")
             .style(theme.muted()),
     ];

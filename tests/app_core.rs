@@ -120,8 +120,11 @@ fn buscar_candidato_resuelve_cedula_sin_verificar_password() {
     // El hash sigue siendo el mismo que produce generar_hash/verificar_password —
     // no se toca la contraseña real, sólo se difiere su verificación.
     assert!(
-        control_acceso::services::password::verificar_password("password1", &candidato.password_hash)
-            .unwrap()
+        control_acceso::services::password::verificar_password(
+            "password1",
+            &candidato.password_hash
+        )
+        .unwrap()
     );
     assert!(
         !control_acceso::services::password::verificar_password(
@@ -179,7 +182,10 @@ fn autenticacion_en_hilo_aparte_no_bloquea_y_entrega_el_resultado_real_por_canal
     let error = receptor
         .recv_timeout(std::time::Duration::from_secs(5))
         .expect("el hilo debía responder");
-    assert!(matches!(error, Err(AutenticacionError::CredencialesInvalidas)));
+    assert!(matches!(
+        error,
+        Err(AutenticacionError::CredencialesInvalidas)
+    ));
 }
 
 #[test]

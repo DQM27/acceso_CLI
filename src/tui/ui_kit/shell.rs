@@ -191,7 +191,11 @@ impl ScreenShell<'_> {
     }
 }
 
-fn wrap_commands(commands: &[CommandHint<'_>], max_width: usize, theme: Theme) -> Vec<Line<'static>> {
+fn wrap_commands(
+    commands: &[CommandHint<'_>],
+    max_width: usize,
+    theme: Theme,
+) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     let mut spans = Vec::new();
     let mut line_width = 0;

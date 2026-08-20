@@ -45,11 +45,7 @@ fn debe_denegar_si_no_tiene_acceso() {
 fn debe_denegar_si_la_empresa_esta_inactiva() {
     let hoy = NaiveDate::from_ymd_opt(2026, 8, 10).unwrap();
 
-    let mut contratista = contratista(
-        TipoIngreso::PorCorreo,
-        None,
-        true,
-    );
+    let mut contratista = contratista(TipoIngreso::PorCorreo, None, true);
     contratista.empresa_activa = false;
 
     let resultado = verificar_acceso(&contratista, hoy);

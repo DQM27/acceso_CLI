@@ -96,7 +96,10 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme
             "BUSCAR CONTRATISTA · {} DE {total} RESULTADOS · afine la búsqueda para ver el resto",
             state.contratistas.len()
         ),
-        None => format!("BUSCAR CONTRATISTA · {} RESULTADOS", state.contratistas.len()),
+        None => format!(
+            "BUSCAR CONTRATISTA · {} RESULTADOS",
+            state.contratistas.len()
+        ),
     };
     let area_busqueda = render_campo(
         frame,
@@ -144,10 +147,15 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme
     } else if state.campo_es_gafete()
         && let Some(area_campo) = area_gafete
     {
-        let antes_del_cursor: String =
-            state.gafete_texto.chars().take(state.gafete_cursor).collect();
+        let antes_del_cursor: String = state
+            .gafete_texto
+            .chars()
+            .take(state.gafete_cursor)
+            .collect();
         let ancho_visible = Line::from(antes_del_cursor).width() as u16;
-        let x = area_campo.x.saturating_add(ancho_visible.min(area_campo.width));
+        let x = area_campo
+            .x
+            .saturating_add(ancho_visible.min(area_campo.width));
         frame.set_cursor_position((x, area_campo.y));
     }
 }
@@ -174,8 +182,16 @@ fn render_campo(
     activo: bool,
     theme: Theme,
 ) -> Rect {
-    let estilo_etiqueta = if activo { theme.accent() } else { theme.muted() };
-    let estilo_linea = if activo { theme.accent() } else { theme.border() };
+    let estilo_etiqueta = if activo {
+        theme.accent()
+    } else {
+        theme.muted()
+    };
+    let estilo_linea = if activo {
+        theme.accent()
+    } else {
+        theme.border()
+    };
     let valor_y = area.y.saturating_add(1);
     let linea_y = area.y.saturating_add(2);
 
@@ -195,10 +211,21 @@ fn render_campo(
     Rect::new(area.x, valor_y, area.width, 1)
 }
 
-fn render_opcion(frame: &mut Frame, area: Rect, etiqueta: &str, valor: &str, activo: bool, theme: Theme) {
+fn render_opcion(
+    frame: &mut Frame,
+    area: Rect,
+    etiqueta: &str,
+    valor: &str,
+    activo: bool,
+    theme: Theme,
+) {
     let marcador = if activo { ">" } else { " " };
     let estilo = if activo { theme.accent() } else { theme.base() };
-    let flechas = if activo { (" ◀ ", " ▶") } else { ("  ", " ") };
+    let flechas = if activo {
+        (" ◀ ", " ▶")
+    } else {
+        ("  ", " ")
+    };
     frame.render_widget(
         Paragraph::new(Line::from(format!(
             "{marcador} {etiqueta:<18}{}{valor}{}",
@@ -211,7 +238,9 @@ fn render_opcion(frame: &mut Frame, area: Rect, etiqueta: &str, valor: &str, act
 
 fn render_tabla(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme: Theme) {
     let capacidad = area.height.saturating_sub(2) as usize;
-    let inicio = state.inicio_visible(capacidad).min(state.contratistas.len());
+    let inicio = state
+        .inicio_visible(capacidad)
+        .min(state.contratistas.len());
     let filas = state
         .contratistas
         .iter()
@@ -302,13 +331,23 @@ fn render_formulario(
     };
     let requiere_gafete = p.requiere_gafete;
     let mut lineas = render_contexto(c);
-    lineas.push(Line::from(format!("Tipo de ingreso    {}", texto_tipo(p.tipo_ingreso))).style(theme.base()));
+    lineas.push(
+        Line::from(format!("Tipo de ingreso    {}", texto_tipo(p.tipo_ingreso)))
+            .style(theme.base()),
+    );
     lineas.push(Line::from(""));
 
     let filas = Layout::vertical(if requiere_gafete {
-        vec![Constraint::Length(lineas.len() as u16), Constraint::Length(1), Constraint::Length(3)]
+        vec![
+            Constraint::Length(lineas.len() as u16),
+            Constraint::Length(1),
+            Constraint::Length(3),
+        ]
     } else {
-        vec![Constraint::Length(lineas.len() as u16), Constraint::Length(1)]
+        vec![
+            Constraint::Length(lineas.len() as u16),
+            Constraint::Length(1),
+        ]
     })
     .split(area);
     frame.render_widget(Paragraph::new(lineas), filas[0]);

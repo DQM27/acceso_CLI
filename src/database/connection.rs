@@ -143,8 +143,12 @@ fn respaldar_antes_de_migrar(connection: &Connection, path: &Path) -> Result<(),
     })?;
     let directorio_respaldos = directorio_base.join("backups");
 
-    super::backup::crear_respaldo(connection, &directorio_respaldos, TipoRespaldo::PreMigracion)
-        .map_err(|error| SchemaError::RespaldoPreMigracionFallido(error.to_string()))?;
+    super::backup::crear_respaldo(
+        connection,
+        &directorio_respaldos,
+        TipoRespaldo::PreMigracion,
+    )
+    .map_err(|error| SchemaError::RespaldoPreMigracionFallido(error.to_string()))?;
 
     // Best-effort: si la limpieza de respaldos viejos falla, no se bloquea el
     // arranque por eso — sólo el respaldo obligatorio en sí es bloqueante.

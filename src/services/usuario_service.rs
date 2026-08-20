@@ -69,7 +69,13 @@ where
     pub fn crear(&self, input: CrearUsuarioInput) -> Result<i64, UsuarioServiceError> {
         self.validar_datos_para_crear(&input)?;
         let password_hash = generar_hash(&input.password)?;
-        self.crear_con_hash(&input.cedula, &input.nombre, input.rol, input.activo, password_hash)
+        self.crear_con_hash(
+            &input.cedula,
+            &input.nombre,
+            input.rol,
+            input.activo,
+            password_hash,
+        )
     }
 
     /// Parte barata de `crear` (sin Argon2): normaliza y valida sin escribir nada. Permite
@@ -235,8 +241,10 @@ where
         password_hash: String,
     ) -> Result<i64, UsuarioServiceError> {
         validar_formato_hash(&password_hash)?;
-        let cedula = normalizar_requerido(&input.cedula, UsuarioServiceError::CedulaVacia)?.to_string();
-        let nombre = normalizar_requerido(&input.nombre, UsuarioServiceError::NombreVacio)?.to_string();
+        let cedula =
+            normalizar_requerido(&input.cedula, UsuarioServiceError::CedulaVacia)?.to_string();
+        let nombre =
+            normalizar_requerido(&input.nombre, UsuarioServiceError::NombreVacio)?.to_string();
         let usuario = Usuario {
             id: 0,
             cedula,

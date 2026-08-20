@@ -47,7 +47,10 @@ mod tests {
 
     #[test]
     fn pliega_vocales_acentuadas_y_dieresis() {
-        assert_eq!(plegar_diacriticos("Álvarez Ingeniería"), "Alvarez Ingenieria");
+        assert_eq!(
+            plegar_diacriticos("Álvarez Ingeniería"),
+            "Alvarez Ingenieria"
+        );
     }
 
     #[test]

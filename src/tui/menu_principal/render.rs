@@ -33,7 +33,6 @@ pub fn render(
     sesion: &UsuarioSesion,
     theme: Theme,
 ) {
-
     if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
         render_terminal_too_small(frame, area, ANCHO_MINIMO, ALTO_MINIMO, "Q/ESC salir", theme);
         return;
@@ -73,10 +72,7 @@ fn estado_shell(state: &MenuPrincipalState, sesion: &UsuarioSesion) -> (String, 
         Some(ConfirmacionMenu::Salir) => {
             ("¿Desea cerrar BRISAS CLI?".to_owned(), StatusKind::Warning)
         }
-        None => (
-            state.seleccion.descripcion().to_owned(),
-            StatusKind::Normal,
-        ),
+        None => (state.seleccion.descripcion().to_owned(), StatusKind::Normal),
     }
 }
 

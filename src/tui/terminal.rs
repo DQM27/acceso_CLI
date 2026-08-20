@@ -18,9 +18,7 @@ struct TerminalGuard;
 impl TerminalGuard {
     fn acquire() -> io::Result<Self> {
         enable_raw_mode()?;
-        if let Err(error) =
-            execute!(stdout(), EnterAlternateScreen, Hide, SetTitle("BRISAS CLI"))
-        {
+        if let Err(error) = execute!(stdout(), EnterAlternateScreen, Hide, SetTitle("BRISAS CLI")) {
             let _ = disable_raw_mode();
             return Err(error);
         }

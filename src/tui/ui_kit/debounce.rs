@@ -37,7 +37,10 @@ mod tests {
         let inicio = Instant::now();
         let mut debounce = Debounce::default();
         debounce.marcar(inicio);
-        assert!(!debounce.listo(inicio + Duration::from_millis(100), Duration::from_millis(250)));
+        assert!(!debounce.listo(
+            inicio + Duration::from_millis(100),
+            Duration::from_millis(250)
+        ));
     }
 
     #[test]
@@ -45,7 +48,10 @@ mod tests {
         let inicio = Instant::now();
         let mut debounce = Debounce::default();
         debounce.marcar(inicio);
-        assert!(debounce.listo(inicio + Duration::from_millis(250), Duration::from_millis(250)));
+        assert!(debounce.listo(
+            inicio + Duration::from_millis(250),
+            Duration::from_millis(250)
+        ));
     }
 
     #[test]
@@ -66,7 +72,10 @@ mod tests {
         debounce.marcar(inicio + Duration::from_millis(200));
         // Sin la segunda marca, esto ya habría estado listo (400ms desde la
         // primera); con ella, sólo pasaron 200ms desde la marca vigente.
-        assert!(!debounce.listo(inicio + Duration::from_millis(400), Duration::from_millis(250)));
+        assert!(!debounce.listo(
+            inicio + Duration::from_millis(400),
+            Duration::from_millis(250)
+        ));
     }
 
     #[test]

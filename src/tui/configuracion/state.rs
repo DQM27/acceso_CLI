@@ -130,8 +130,14 @@ struct FilaRespaldo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ModoRespaldos {
     Normal,
-    Exportando { destino: TextInput },
-    ConfirmandoRestauracion { ruta: PathBuf, fecha: String, tipo: &'static str },
+    Exportando {
+        destino: TextInput,
+    },
+    ConfirmandoRestauracion {
+        ruta: PathBuf,
+        fecha: String,
+        tipo: &'static str,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -311,7 +317,10 @@ impl RespaldosState {
     fn completar_creacion(&mut self, resultado: Result<RespaldoResumen, String>) {
         match resultado {
             Ok(resumen) => {
-                self.mensaje = Some(format!("✓ Respaldo creado — {}", nombre_archivo(&resumen.ruta)));
+                self.mensaje = Some(format!(
+                    "✓ Respaldo creado — {}",
+                    nombre_archivo(&resumen.ruta)
+                ));
                 self.filas.insert(
                     0,
                     FilaRespaldo {
@@ -325,7 +334,11 @@ impl RespaldosState {
         }
     }
 
-    fn completar_validacion(&mut self, ruta: &Path, resultado: Result<ResultadoValidacion, String>) {
+    fn completar_validacion(
+        &mut self,
+        ruta: &Path,
+        resultado: Result<ResultadoValidacion, String>,
+    ) {
         match resultado {
             Ok(validacion) => {
                 if let Some(fila) = self

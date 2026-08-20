@@ -7,9 +7,7 @@ use ratatui::{
 
 use super::*;
 use crate::tiempo::hora_actual_texto;
-use crate::tui::ui_kit::{
-    CommandHint, ScreenShell, StatusKind, Theme, render_terminal_too_small,
-};
+use crate::tui::ui_kit::{CommandHint, ScreenShell, StatusKind, Theme, render_terminal_too_small};
 
 const ANCHO_MINIMO: u16 = 60;
 const ALTO_MINIMO: u16 = 22;
@@ -21,7 +19,6 @@ const COMANDOS: &[CommandHint<'static>] = &[
 ];
 
 pub fn render(frame: &mut Frame, area: Rect, state: &LoginState, theme: Theme) {
-
     if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
         render_terminal_too_small(
             frame,
@@ -100,7 +97,12 @@ fn render_formulario(frame: &mut Frame, area: Rect, state: &LoginState, theme: T
         let (area_campo, antes_del_cursor) = match state.campo_activo {
             CampoLogin::Cedula => (
                 area_cedula,
-                state.cedula.value().chars().take(state.cedula.cursor()).collect::<String>(),
+                state
+                    .cedula
+                    .value()
+                    .chars()
+                    .take(state.cedula.cursor())
+                    .collect::<String>(),
             ),
             CampoLogin::Password => (area_password, "•".repeat(state.password.cursor())),
         };
@@ -124,8 +126,16 @@ fn render_campo(
     activo: bool,
     theme: Theme,
 ) -> Rect {
-    let estilo_etiqueta = if activo { theme.accent() } else { theme.muted() };
-    let estilo_linea = if activo { theme.accent() } else { theme.border() };
+    let estilo_etiqueta = if activo {
+        theme.accent()
+    } else {
+        theme.muted()
+    };
+    let estilo_linea = if activo {
+        theme.accent()
+    } else {
+        theme.border()
+    };
     let valor_y = area.y.saturating_add(1);
     let linea_y = area.y.saturating_add(2);
 

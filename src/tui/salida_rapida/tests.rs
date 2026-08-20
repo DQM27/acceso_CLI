@@ -51,10 +51,7 @@ fn cerrado_ignora_teclas() {
 #[test]
 fn abrir_dispara_una_busqueda_sin_texto() {
     let mut s = SalidaRapidaState::default();
-    assert_eq!(
-        s.abrir(),
-        AccionSalidaRapida::Buscar { texto: None }
-    );
+    assert_eq!(s.abrir(), AccionSalidaRapida::Buscar { texto: None });
     assert!(s.abierto());
 }
 
@@ -64,8 +61,14 @@ fn escribir_filtra_por_gafete_o_nombre_en_un_solo_campo_tras_el_debounce() {
     s.abrir();
     let futuro = || Instant::now() + DURACION_DEBOUNCE + Duration::from_millis(1);
 
-    assert_eq!(s.handle_key(k(KeyCode::Char('2'))), AccionSalidaRapida::Ninguna);
-    assert_eq!(s.handle_key(k(KeyCode::Char('5'))), AccionSalidaRapida::Ninguna);
+    assert_eq!(
+        s.handle_key(k(KeyCode::Char('2'))),
+        AccionSalidaRapida::Ninguna
+    );
+    assert_eq!(
+        s.handle_key(k(KeyCode::Char('5'))),
+        AccionSalidaRapida::Ninguna
+    );
     assert_eq!(
         s.tick(futuro()),
         AccionSalidaRapida::Buscar {
@@ -82,7 +85,10 @@ fn escribir_filtra_por_gafete_o_nombre_en_un_solo_campo_tras_el_debounce() {
 fn enter_sobre_el_resaltado_pide_confirmar_con_su_id_y_nombre() {
     let mut s = SalidaRapidaState::default();
     s.abrir();
-    s.completar_busqueda(Ok(pagina(vec![r(7, "José Peña", Some(12)), r(9, "Ana Solís", None)])));
+    s.completar_busqueda(Ok(pagina(vec![
+        r(7, "José Peña", Some(12)),
+        r(9, "Ana Solís", None),
+    ])));
 
     assert_eq!(
         s.handle_key(k(KeyCode::Enter)),
@@ -148,7 +154,10 @@ fn confirmacion_exitosa_muestra_mensaje_y_solo_enter_o_esc_cierran() {
     assert!(s.abierto());
 
     s.handle_key(k(KeyCode::Char('x')));
-    assert!(s.abierto(), "una tecla cualquiera no debe cerrar la confirmación");
+    assert!(
+        s.abierto(),
+        "una tecla cualquiera no debe cerrar la confirmación"
+    );
 
     s.handle_key(k(KeyCode::Enter));
     assert!(!s.abierto());

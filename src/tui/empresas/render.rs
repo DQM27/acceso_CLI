@@ -85,7 +85,10 @@ fn estado_shell(state: &EmpresasState) -> (String, StatusKind) {
         return (format!("✕ {error}"), StatusKind::Error);
     }
     if let ModoEmpresas::ConfirmacionEstado(c) = &state.modo {
-        let nombre = state.empresa(c.id).map(|e| e.nombre.as_str()).unwrap_or_default();
+        let nombre = state
+            .empresa(c.id)
+            .map(|e| e.nombre.as_str())
+            .unwrap_or_default();
         let accion = if c.activar { "activar" } else { "desactivar" };
         return (
             format!("¿Desea {accion} la empresa {nombre}?"),
@@ -179,8 +182,16 @@ fn render_campo(
     activo: bool,
     theme: Theme,
 ) -> Rect {
-    let estilo_etiqueta = if activo { theme.accent() } else { theme.muted() };
-    let estilo_linea = if activo { theme.accent() } else { theme.border() };
+    let estilo_etiqueta = if activo {
+        theme.accent()
+    } else {
+        theme.muted()
+    };
+    let estilo_linea = if activo {
+        theme.accent()
+    } else {
+        theme.border()
+    };
     let valor_y = area.y.saturating_add(1);
     let linea_y = area.y.saturating_add(2);
 
@@ -257,10 +268,19 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: The
 
 /// Devuelve, cuando aplica, el área del valor del campo NOMBRE del
 /// formulario para que el llamador posicione el cursor.
-fn render_panel(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: Theme) -> Option<Rect> {
+fn render_panel(
+    frame: &mut Frame,
+    area: Rect,
+    state: &EmpresasState,
+    theme: Theme,
+) -> Option<Rect> {
     match &state.modo {
-        ModoEmpresas::Formulario(formulario) => Some(render_formulario(frame, area, formulario, theme)),
-        ModoEmpresas::Normal | ModoEmpresas::Busqueda { .. } | ModoEmpresas::ConfirmacionEstado(_) => {
+        ModoEmpresas::Formulario(formulario) => {
+            Some(render_formulario(frame, area, formulario, theme))
+        }
+        ModoEmpresas::Normal
+        | ModoEmpresas::Busqueda { .. }
+        | ModoEmpresas::ConfirmacionEstado(_) => {
             match state.empresa_seleccionada() {
                 Some(empresa) => render_detalle(frame, area, empresa, theme),
                 None => frame.render_widget(
@@ -274,13 +294,21 @@ fn render_panel(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: The
 }
 
 fn render_detalle(frame: &mut Frame, area: Rect, empresa: &EmpresaResumen, theme: Theme) {
-    let estilo_estado = if empresa.activo { theme.success() } else { theme.danger() };
+    let estilo_estado = if empresa.activo {
+        theme.success()
+    } else {
+        theme.danger()
+    };
     let lineas = vec![
         Line::from(empresa.nombre.as_str()).style(theme.title()),
         Line::from(""),
         Line::from(format!("Contratistas asociados: {}", empresa.contratistas)).style(theme.base()),
-        Line::from(if empresa.activo { "Estado: ACTIVA" } else { "Estado: INACTIVA" })
-            .style(estilo_estado),
+        Line::from(if empresa.activo {
+            "Estado: ACTIVA"
+        } else {
+            "Estado: INACTIVA"
+        })
+        .style(estilo_estado),
     ];
     frame.render_widget(Paragraph::new(lineas), area);
 }
@@ -296,5 +324,12 @@ fn render_formulario(
         ModoFormularioEmpresa::Editar { .. } => "NOMBRE",
     };
     let filas = Layout::vertical([Constraint::Length(3), Constraint::Length(1)]).split(area);
-    render_campo(frame, filas[0], titulo, formulario.nombre.value(), true, theme)
+    render_campo(
+        frame,
+        filas[0],
+        titulo,
+        formulario.nombre.value(),
+        true,
+        theme,
+    )
 }

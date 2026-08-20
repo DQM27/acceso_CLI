@@ -46,7 +46,6 @@ impl TipoRespaldo {
             Self::PreRestauracion => "pre_restauracion",
         }
     }
-
 }
 
 /// Metadatos de un respaldo ya existente, obtenidos del sistema de archivos
@@ -63,11 +62,15 @@ pub struct RespaldoResumen {
 /// Resultado de abrir un respaldo aparte y verificarlo de verdad.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResultadoValidacion {
-    Valido { version_esquema: i64 },
+    Valido {
+        version_esquema: i64,
+    },
     Invalido(String),
     /// El archivo es una base de Control Acceso válida, pero de una versión
     /// de esquema que esta versión de la aplicación no reconoce.
-    EsquemaIncompatible { version_encontrada: i64 },
+    EsquemaIncompatible {
+        version_encontrada: i64,
+    },
 }
 
 impl ResultadoValidacion {
@@ -108,7 +111,10 @@ impl std::fmt::Display for RespaldoError {
             Self::Sqlite(error) => write!(formatter, "Error de SQLite: {error}"),
             Self::Io(error) => write!(formatter, "Error de archivo: {error}"),
             Self::ValidacionFallida(ResultadoValidacion::Invalido(detalle)) => {
-                write!(formatter, "El respaldo generado no pasó la verificación: {detalle}")
+                write!(
+                    formatter,
+                    "El respaldo generado no pasó la verificación: {detalle}"
+                )
             }
             Self::ValidacionFallida(ResultadoValidacion::EsquemaIncompatible {
                 version_encontrada,
@@ -117,7 +123,10 @@ impl std::fmt::Display for RespaldoError {
                 "El respaldo generado quedó en una versión de esquema incompatible ({version_encontrada})"
             ),
             Self::ValidacionFallida(ResultadoValidacion::Valido { .. }) => {
-                write!(formatter, "Error interno: validación marcada como fallida pero válida")
+                write!(
+                    formatter,
+                    "Error interno: validación marcada como fallida pero válida"
+                )
             }
             Self::RollbackFallido {
                 error_original,
@@ -131,11 +140,18 @@ impl std::fmt::Display for RespaldoError {
                     ruta_activa.display()
                 )?;
                 if let Some(previa) = ruta_previa {
-                    write!(formatter, " (la base anterior puede seguir en {})", previa.display())?;
+                    write!(
+                        formatter,
+                        " (la base anterior puede seguir en {})",
+                        previa.display()
+                    )?;
                 }
                 Ok(())
             }
-            Self::LimpiezaFallida { error_original, ruta } => write!(
+            Self::LimpiezaFallida {
+                error_original,
+                ruta,
+            } => write!(
                 formatter,
                 "{error_original} (además, no se pudo borrar el archivo temporal {})",
                 ruta.display()
@@ -344,7 +360,8 @@ fn abrir_y_verificar(ruta: &Path) -> Result<(), RespaldoError> {
 pub fn validar_respaldo(ruta: &Path) -> Result<ResultadoValidacion, RespaldoError> {
     let connection = Connection::open_with_flags(ruta, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
 
-    let integridad: String = connection.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
+    let integridad: String =
+        connection.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
     if integridad != "ok" {
         return Ok(ResultadoValidacion::Invalido(integridad));
     }
@@ -364,9 +381,7 @@ pub fn validar_respaldo(ruta: &Path) -> Result<ResultadoValidacion, RespaldoErro
         });
     }
 
-    Ok(ResultadoValidacion::Valido {
-        version_esquema,
-    })
+    Ok(ResultadoValidacion::Valido { version_esquema })
 }
 
 /// Lista los respaldos ya publicados en `directorio_respaldos` (nunca los
@@ -374,7 +389,9 @@ pub fn validar_respaldo(ruta: &Path) -> Result<ResultadoValidacion, RespaldoErro
 /// SQLite — sólo lee el sistema de archivos y el nombre de cada archivo;
 /// para saber si un respaldo sigue siendo válido hay que llamar
 /// `validar_respaldo` aparte.
-pub fn listar_respaldos(directorio_respaldos: &Path) -> Result<Vec<RespaldoResumen>, RespaldoError> {
+pub fn listar_respaldos(
+    directorio_respaldos: &Path,
+) -> Result<Vec<RespaldoResumen>, RespaldoError> {
     if !directorio_respaldos.exists() {
         return Ok(Vec::new());
     }
@@ -486,8 +503,10 @@ fn ruta_disponible(directorio: &Path, nombre_base: &str, extension: &str) -> Pat
     if !candidato.exists() {
         return candidato;
     }
-    (2..).find_map(|n| {
-        let candidato = directorio.join(format!("{nombre_base}_{n}.{extension}"));
-        (!candidato.exists()).then_some(candidato)
-    }).expect("el rango de sufijos numéricos es infinito")
+    (2..)
+        .find_map(|n| {
+            let candidato = directorio.join(format!("{nombre_base}_{n}.{extension}"));
+            (!candidato.exists()).then_some(candidato)
+        })
+        .expect("el rango de sufijos numéricos es infinito")
 }

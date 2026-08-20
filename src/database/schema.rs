@@ -29,7 +29,9 @@ pub enum SchemaError {
     /// versión resultante no es `SCHEMA_VERSION`. No es un error de SQLite —
     /// sólo puede pasar si la cadena de migraciones de este archivo tiene un
     /// hueco (una versión sin `if version == N` que la maneje).
-    VersionInesperadaTrasMigrar { encontrada: i64 },
+    VersionInesperadaTrasMigrar {
+        encontrada: i64,
+    },
 }
 
 impl std::fmt::Display for SchemaError {
@@ -41,7 +43,10 @@ impl std::fmt::Display for SchemaError {
                 "El archivo no es una base de datos de Control Acceso"
             ),
             Self::IntegridadInvalida(detalle) => {
-                write!(formatter, "La base de datos falló la verificación de integridad: {detalle}")
+                write!(
+                    formatter,
+                    "La base de datos falló la verificación de integridad: {detalle}"
+                )
             }
             Self::RespaldoPreMigracionFallido(detalle) => write!(
                 formatter,
@@ -134,7 +139,9 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
     }
 
     if version != SCHEMA_VERSION {
-        return Err(SchemaError::VersionInesperadaTrasMigrar { encontrada: version });
+        return Err(SchemaError::VersionInesperadaTrasMigrar {
+            encontrada: version,
+        });
     }
 
     transaction.commit()?;

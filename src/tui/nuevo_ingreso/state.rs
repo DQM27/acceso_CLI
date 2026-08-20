@@ -221,7 +221,8 @@ impl NuevoIngresoState {
                 self.gafete_cursor = self.gafete_cursor.saturating_sub(1);
             }
             KeyCode::Right if self.campo == CampoIngreso::Gafete => {
-                self.gafete_cursor = (self.gafete_cursor + 1).min(self.gafete_texto.chars().count());
+                self.gafete_cursor =
+                    (self.gafete_cursor + 1).min(self.gafete_texto.chars().count());
             }
             KeyCode::Home if self.campo == CampoIngreso::Gafete => {
                 self.gafete_cursor = 0;

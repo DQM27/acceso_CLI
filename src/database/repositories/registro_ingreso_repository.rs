@@ -112,7 +112,10 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<RegistroIngreso> {
     // esquema garantiza que ambos vienen juntos o ninguno.
     let salida = fecha_hora_salida
         .zip(usuario_salida_id)
-        .map(|(fecha_hora, usuario_id)| SalidaRegistroIngreso { fecha_hora, usuario_id });
+        .map(|(fecha_hora, usuario_id)| SalidaRegistroIngreso {
+            fecha_hora,
+            usuario_id,
+        });
 
     Ok(RegistroIngreso {
         id: row.get(0)?,

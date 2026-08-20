@@ -56,7 +56,8 @@ fn inicia_vacio_y_busqueda_emite_acciones_tras_el_debounce() {
         s.handle_key(k(KeyCode::Char('j'))),
         AccionNuevoIngreso::Ninguna
     );
-    let futuro = std::time::Instant::now() + DURACION_DEBOUNCE + std::time::Duration::from_millis(1);
+    let futuro =
+        std::time::Instant::now() + DURACION_DEBOUNCE + std::time::Duration::from_millis(1);
     assert!(matches!(
         s.tick(futuro),
         AccionNuevoIngreso::Buscar{texto:Some(t)} if t=="j"

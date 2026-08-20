@@ -117,9 +117,9 @@ fn rechaza_un_archivo_truncado_en_vez_de_aceptarlo_en_silencio() {
     archivo.flush().unwrap();
     drop(archivo);
 
-    let resultado = Connection::open(&ruta).map_err(SchemaError::from).and_then(|connection| {
-        initialize_database(&connection)
-    });
+    let resultado = Connection::open(&ruta)
+        .map_err(SchemaError::from)
+        .and_then(|connection| initialize_database(&connection));
     assert!(
         resultado.is_err(),
         "un archivo truncado a la mitad nunca debe abrirse como si estuviera sano"

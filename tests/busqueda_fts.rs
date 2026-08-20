@@ -52,7 +52,14 @@ fn contratistas_busca_subcadenas_sin_distinguir_tildes_o_mayusculas() {
     let query = SqliteContratistasQuery::new(&connection);
 
     for texto in ["pena", "PEÑA", "aria", "alvarez", "ÁLVA"] {
-        assert_eq!(query.buscar(&filtro_contratista(texto)).unwrap().items.len(), 1);
+        assert_eq!(
+            query
+                .buscar(&filtro_contratista(texto))
+                .unwrap()
+                .items
+                .len(),
+            1
+        );
     }
 }
 

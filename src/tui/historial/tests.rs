@@ -98,7 +98,8 @@ fn busqueda_rapida_se_combina_con_filtros_aplicados_tras_el_debounce() {
     state.filtro_aplicado.empresa_id = Some(3);
     let accion = state.handle_key(tecla(KeyCode::Char('a')));
     assert_eq!(accion, AccionHistorial::Ninguna);
-    let accion = state.tick(Instant::now() + DURACION_DEBOUNCE + std::time::Duration::from_millis(1));
+    let accion =
+        state.tick(Instant::now() + DURACION_DEBOUNCE + std::time::Duration::from_millis(1));
     let AccionHistorial::Consultar(filtro) = accion else {
         panic!("debía consultar")
     };
@@ -141,7 +142,8 @@ fn una_busqueda_nueva_descarta_el_corte_de_la_navegacion_anterior() {
         state.handle_key(tecla(KeyCode::Char('a'))),
         AccionHistorial::Ninguna
     );
-    let accion = state.tick(Instant::now() + DURACION_DEBOUNCE + std::time::Duration::from_millis(1));
+    let accion =
+        state.tick(Instant::now() + DURACION_DEBOUNCE + std::time::Duration::from_millis(1));
     let AccionHistorial::Consultar(filtro) = accion else {
         panic!("debía iniciar una consulta nueva")
     };
@@ -217,7 +219,10 @@ fn f4_abre_el_editor_de_columnas_solo_en_la_vista_clasica() {
     state.handle_key(tecla(KeyCode::F(3)));
     assert_eq!(state.vista, ViewMode::Classic);
     state.handle_key(tecla(KeyCode::F(4)));
-    assert!(matches!(state.modo, ModoHistorial::Columnas { seleccion: 0 }));
+    assert!(matches!(
+        state.modo,
+        ModoHistorial::Columnas { seleccion: 0 }
+    ));
 
     state.handle_key(tecla(KeyCode::Char(' ')));
     assert!(!state.columnas_clasica[0].1);
@@ -247,7 +252,10 @@ fn el_mapa_de_calor_navega_por_semana_y_dia_y_hace_drill_down_al_timeline() {
         panic!("debía consultar al hacer drill-down")
     };
     assert_eq!(state.vista, ViewMode::Timeline);
-    assert_eq!(state.busqueda.value(), format!("desde:{fecha} hasta:{fecha}"));
+    assert_eq!(
+        state.busqueda.value(),
+        format!("desde:{fecha} hasta:{fecha}")
+    );
 }
 
 #[test]
@@ -326,7 +334,10 @@ fn ingreso_y_salida_no_admiten_lista_ni_negacion() {
 fn parsear_consulta_admite_listas_de_tipo() {
     let base = FiltrosHistorial::default();
     let (filtros, libre) = parsear_consulta(&base, "tipo:praind,swat", &[]);
-    assert_eq!(filtros.tipos, Some(vec![TipoIngreso::Praind, TipoIngreso::Swat]));
+    assert_eq!(
+        filtros.tipos,
+        Some(vec![TipoIngreso::Praind, TipoIngreso::Swat])
+    );
     assert!(libre.is_empty());
 }
 
@@ -413,7 +424,13 @@ fn la_linea_de_tiempo_agrupa_por_dia_y_muestra_el_glifo_de_actividad() {
     let mut terminal = Terminal::new(backend).expect("backend de prueba");
     terminal
         .draw(|frame| {
-            render::render(frame, frame.area(), &state, &sesion_prueba(), crate::tui::ui_kit::ThemePreset::Brisas.theme())
+            render::render(
+                frame,
+                frame.area(),
+                &state,
+                &sesion_prueba(),
+                crate::tui::ui_kit::ThemePreset::Brisas.theme(),
+            )
         })
         .expect("debe renderizar");
     let texto: String = terminal
@@ -451,7 +468,13 @@ fn la_vista_clasica_muestra_tabla_completa_y_el_editor_de_columnas_oculta_una() 
     let mut terminal = Terminal::new(backend).expect("backend de prueba");
     terminal
         .draw(|frame| {
-            render::render(frame, frame.area(), &state, &sesion_prueba(), crate::tui::ui_kit::ThemePreset::Brisas.theme())
+            render::render(
+                frame,
+                frame.area(),
+                &state,
+                &sesion_prueba(),
+                crate::tui::ui_kit::ThemePreset::Brisas.theme(),
+            )
         })
         .expect("debe renderizar");
     let texto: String = terminal
@@ -470,7 +493,13 @@ fn la_vista_clasica_muestra_tabla_completa_y_el_editor_de_columnas_oculta_una() 
     let mut terminal = Terminal::new(backend).expect("backend de prueba");
     terminal
         .draw(|frame| {
-            render::render(frame, frame.area(), &state, &sesion_prueba(), crate::tui::ui_kit::ThemePreset::Brisas.theme())
+            render::render(
+                frame,
+                frame.area(),
+                &state,
+                &sesion_prueba(),
+                crate::tui::ui_kit::ThemePreset::Brisas.theme(),
+            )
         })
         .expect("debe renderizar");
     let texto: String = terminal
@@ -497,7 +526,13 @@ fn el_mapa_de_calor_renderiza_la_grilla_semanal() {
     let mut terminal = Terminal::new(backend).expect("backend de prueba");
     terminal
         .draw(|frame| {
-            render::render(frame, frame.area(), &state, &sesion_prueba(), crate::tui::ui_kit::ThemePreset::Brisas.theme())
+            render::render(
+                frame,
+                frame.area(),
+                &state,
+                &sesion_prueba(),
+                crate::tui::ui_kit::ThemePreset::Brisas.theme(),
+            )
         })
         .expect("debe renderizar");
     let texto: String = terminal

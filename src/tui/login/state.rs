@@ -37,7 +37,10 @@ pub enum AccionLogin {
     /// instante en que se presiona ENTER, sin espera artificial de por
     /// medio — el estado `Validando` sigue existiendo para el spinner
     /// mientras se espera el resultado real.
-    Autenticar { cedula: String, password: String },
+    Autenticar {
+        cedula: String,
+        password: String,
+    },
 }
 
 #[derive(Debug)]

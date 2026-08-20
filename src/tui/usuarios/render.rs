@@ -216,8 +216,16 @@ fn render_campo(
     activo: bool,
     theme: Theme,
 ) -> Rect {
-    let estilo_etiqueta = if activo { theme.accent() } else { theme.muted() };
-    let estilo_linea = if activo { theme.accent() } else { theme.border() };
+    let estilo_etiqueta = if activo {
+        theme.accent()
+    } else {
+        theme.muted()
+    };
+    let estilo_linea = if activo {
+        theme.accent()
+    } else {
+        theme.border()
+    };
     let valor_y = area.y.saturating_add(1);
     let linea_y = area.y.saturating_add(2);
 
@@ -237,7 +245,14 @@ fn render_campo(
     Rect::new(area.x, valor_y, area.width, 1)
 }
 
-fn render_opcion(frame: &mut Frame, area: Rect, etiqueta: &str, valor: &str, activo: bool, theme: Theme) {
+fn render_opcion(
+    frame: &mut Frame,
+    area: Rect,
+    etiqueta: &str,
+    valor: &str,
+    activo: bool,
+    theme: Theme,
+) {
     let marcador = if activo { ">" } else { " " };
     let estilo = if activo { theme.accent() } else { theme.base() };
     frame.render_widget(
@@ -272,7 +287,11 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: The
         .enumerate()
         .map(|(visible, usuario)| {
             let seleccionado = state.seleccion == Some(inicio + visible);
-            let estilo_fila = if seleccionado { theme.selected() } else { theme.base() };
+            let estilo_fila = if seleccionado {
+                theme.selected()
+            } else {
+                theme.base()
+            };
             Row::new([
                 Cell::from(usuario.cedula.clone()),
                 Cell::from(usuario.nombre.clone()),
@@ -345,8 +364,16 @@ fn render_panel(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: The
 }
 
 fn render_detalle(frame: &mut Frame, area: Rect, u: &UsuarioResumen, theme: Theme) {
-    let estilo_rol = if u.rol == RolUsuario::Root { theme.warning() } else { theme.base() };
-    let estilo_estado = if u.activo { theme.success() } else { theme.danger() };
+    let estilo_rol = if u.rol == RolUsuario::Root {
+        theme.warning()
+    } else {
+        theme.base()
+    };
+    let estilo_estado = if u.activo {
+        theme.success()
+    } else {
+        theme.danger()
+    };
     let lineas = vec![
         Line::from(u.nombre.as_str()).style(theme.title()),
         Line::from(u.cedula.as_str()).style(theme.muted()),
@@ -381,13 +408,27 @@ fn render_formulario(frame: &mut Frame, area: Rect, f: &FormularioUsuario, theme
         let enfocado = f.campo == indice;
         match campo {
             CampoUsuario::Cedula => {
-                let r = render_campo(frame, filas[fila], "CÉDULA", f.cedula.value(), enfocado, theme);
+                let r = render_campo(
+                    frame,
+                    filas[fila],
+                    "CÉDULA",
+                    f.cedula.value(),
+                    enfocado,
+                    theme,
+                );
                 if enfocado {
                     posicionar_cursor_campo(frame, r, &f.cedula);
                 }
             }
             CampoUsuario::Nombre => {
-                let r = render_campo(frame, filas[fila], "NOMBRE", f.nombre.value(), enfocado, theme);
+                let r = render_campo(
+                    frame,
+                    filas[fila],
+                    "NOMBRE",
+                    f.nombre.value(),
+                    enfocado,
+                    theme,
+                );
                 if enfocado {
                     posicionar_cursor_campo(frame, r, &f.nombre);
                 }
@@ -421,7 +462,14 @@ fn render_formulario(frame: &mut Frame, area: Rect, f: &FormularioUsuario, theme
                 }
             }
             CampoUsuario::Activo => {
-                render_opcion(frame, filas[fila], "ACTIVO", si_no(f.activo), enfocado, theme);
+                render_opcion(
+                    frame,
+                    filas[fila],
+                    "ACTIVO",
+                    si_no(f.activo),
+                    enfocado,
+                    theme,
+                );
             }
         }
         fila += 1;
@@ -439,8 +487,11 @@ fn render_selector_rol(frame: &mut Frame, area: Rect, resaltado: usize, theme: T
         .map(|(indice, rol)| {
             let seleccionado = indice == resaltado;
             let marcador = if seleccionado { "  >" } else { "   " };
-            Line::from(format!("{marcador} {}", texto_rol(*rol)))
-                .style(if seleccionado { theme.selected() } else { theme.muted() })
+            Line::from(format!("{marcador} {}", texto_rol(*rol))).style(if seleccionado {
+                theme.selected()
+            } else {
+                theme.muted()
+            })
         })
         .collect();
     frame.render_widget(Paragraph::new(lineas), area);

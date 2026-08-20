@@ -354,19 +354,17 @@ mod tests {
             if vista == Vista::Contratistas {
                 app.contratistas.completar_busqueda(
                     Ok(crate::database::queries::contratistas::PaginaContratistas {
-                        items: vec![
-                            crate::database::queries::contratistas::ContratistaResumen {
-                                id: 1,
-                                empresa_id: 1,
-                                cedula: "1".into(),
-                                nombre: "Contratista".into(),
-                                empresa_nombre: "Empresa".into(),
-                                tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::Swat,
-                                fecha_vencimiento_praind: None,
-                                es_personal_ruta: false,
-                                tiene_acceso: true,
-                            },
-                        ],
+                        items: vec![crate::database::queries::contratistas::ContratistaResumen {
+                            id: 1,
+                            empresa_id: 1,
+                            cedula: "1".into(),
+                            nombre: "Contratista".into(),
+                            empresa_nombre: "Empresa".into(),
+                            tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::Swat,
+                            fecha_vencimiento_praind: None,
+                            es_personal_ruta: false,
+                            tiene_acceso: true,
+                        }],
                         total: 1,
                     }),
                     None,
@@ -411,23 +409,22 @@ mod tests {
             sesion: Some(sesion("Daniel")),
             ..App::default()
         };
-        app.nuevo_ingreso
-            .completar_busqueda(Ok(crate::database::queries::contratistas::PaginaContratistas {
-                items: vec![
-                    crate::database::queries::contratistas::ContratistaResumen {
-                        id: 1,
-                        empresa_id: 1,
-                        cedula: "1".into(),
-                        nombre: "Persona".into(),
-                        empresa_nombre: "Empresa".into(),
-                        tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::Swat,
-                        fecha_vencimiento_praind: None,
-                        es_personal_ruta: false,
-                        tiene_acceso: true,
-                    },
-                ],
+        app.nuevo_ingreso.completar_busqueda(Ok(
+            crate::database::queries::contratistas::PaginaContratistas {
+                items: vec![crate::database::queries::contratistas::ContratistaResumen {
+                    id: 1,
+                    empresa_id: 1,
+                    cedula: "1".into(),
+                    nombre: "Persona".into(),
+                    empresa_nombre: "Empresa".into(),
+                    tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::Swat,
+                    fecha_vencimiento_praind: None,
+                    es_personal_ruta: false,
+                    tiene_acceso: true,
+                }],
                 total: 1,
-            }));
+            },
+        ));
         app.procesar_tecla_vista(tecla(KeyCode::Enter));
         app.nuevo_ingreso.completar_preparacion(Ok(
             crate::services::registro_ingreso_service::PreparacionIngreso {
@@ -967,7 +964,8 @@ pub struct App {
     /// Resultado en camino de un hilo aparte que verifica la contraseña
     /// (Argon2) sin bloquear este bucle. `None` cuando no hay ningún login
     /// en curso.
-    autenticacion_pendiente: Option<std::sync::mpsc::Receiver<Result<UsuarioSesion, AutenticacionError>>>,
+    autenticacion_pendiente:
+        Option<std::sync::mpsc::Receiver<Result<UsuarioSesion, AutenticacionError>>>,
     /// Hash de Argon2 en camino para crear un usuario o cambiar una
     /// contraseña. Un único `Option` en vez de dos campos independientes: la
     /// exclusión mutua entre ambos flujos es estructural (no puede haber
@@ -1170,12 +1168,7 @@ impl App {
 
     /// Resuelve la cédula de inmediato (rápido, sólo SQLite) y, si existe y está activo,
     /// verifica la contraseña en un hilo aparte para no congelar la UI mientras Argon2 calcula.
-    fn iniciar_autenticacion(
-        &mut self,
-        cedula: String,
-        password: String,
-        core: Option<&AppCore>,
-    ) {
+    fn iniciar_autenticacion(&mut self, cedula: String, password: String, core: Option<&AppCore>) {
         let Some(core) = core else {
             self.login.completar_validacion(None);
             self.iniciar_sesion(UsuarioSesion {
@@ -1222,9 +1215,11 @@ impl App {
         core: Option<&AppCore>,
     ) {
         let Some(core) = core else {
-            let recarga = self
-                .usuarios
-                .completar_guardado(Err("No se pudo guardar el usuario".into()), None, &nombre);
+            let recarga = self.usuarios.completar_guardado(
+                Err("No se pudo guardar el usuario".into()),
+                None,
+                &nombre,
+            );
             self.procesar_recarga_usuarios(recarga, core);
             return;
         };
@@ -1242,8 +1237,7 @@ impl App {
             activo: input.activo,
         };
         let receptor = Self::generar_hash_en_hilo(input.password);
-        self.hilo_usuario_pendiente =
-            Some(HiloUsuarioPendiente::Creacion(receptor, datos, nombre));
+        self.hilo_usuario_pendiente = Some(HiloUsuarioPendiente::Creacion(receptor, datos, nombre));
         self.usuarios.marcar_guardando();
     }
 
@@ -1329,7 +1323,8 @@ impl App {
             nombre: solicitud.nombre.clone(),
             password: solicitud.password.clone(),
         }) {
-            self.configuracion_inicial.completar_con_error(error.to_string());
+            self.configuracion_inicial
+                .completar_con_error(error.to_string());
             return;
         }
         let receptor = Self::generar_hash_en_hilo(solicitud.password.clone());
@@ -1361,10 +1356,14 @@ impl App {
                     Err(UsuarioServiceError::Database(_)) => self
                         .configuracion_inicial
                         .completar_con_error("No se pudo crear el usuario ROOT"),
-                    Err(error) => self.configuracion_inicial.completar_con_error(error.to_string()),
+                    Err(error) => self
+                        .configuracion_inicial
+                        .completar_con_error(error.to_string()),
                 }
             }
-            Err(error) => self.configuracion_inicial.completar_con_error(error.to_string()),
+            Err(error) => self
+                .configuracion_inicial
+                .completar_con_error(error.to_string()),
         }
     }
 
@@ -1452,7 +1451,11 @@ impl App {
         }
     }
 
-    fn procesar_accion_salida_rapida(&mut self, accion: AccionSalidaRapida, core: Option<&AppCore>) {
+    fn procesar_accion_salida_rapida(
+        &mut self,
+        accion: AccionSalidaRapida,
+        core: Option<&AppCore>,
+    ) {
         match accion {
             AccionSalidaRapida::Ninguna => {}
             AccionSalidaRapida::Buscar { texto } => {
@@ -1698,7 +1701,9 @@ impl App {
                         }
                         .map_err(mensaje_empresa)
                     });
-                let recarga = self.empresas.completar_estado(resultado, id, activar, &nombre);
+                let recarga = self
+                    .empresas
+                    .completar_estado(resultado, id, activar, &nombre);
                 if !matches!(recarga, AccionEmpresas::Ninguna) {
                     self.procesar_accion_empresas(recarga, core);
                 }
@@ -1890,7 +1895,8 @@ impl App {
                         core.exportar_respaldo(&ruta, &destino)
                             .map_err(|error| error.to_string())
                     });
-                self.configuracion.completar_exportacion(resultado, &destino);
+                self.configuracion
+                    .completar_exportacion(resultado, &destino);
             }
             AccionRespaldos::Restaurar { ruta } => {
                 let resultado = core

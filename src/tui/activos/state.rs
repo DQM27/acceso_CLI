@@ -25,7 +25,9 @@ mod tests;
 /// texto libre para nombre/cédula/gafete.
 fn parsear_consulta(texto: &str, empresas: &[Empresa]) -> (FiltroIngresosActivos, String) {
     let mut filtro = FiltroIngresosActivos::default();
-    let libres = resolver_terminos(texto, &mut filtro, |f, term| aplicar_clave(f, term, empresas));
+    let libres = resolver_terminos(texto, &mut filtro, |f, term| {
+        aplicar_clave(f, term, empresas)
+    });
     (filtro, libres)
 }
 

@@ -6,7 +6,6 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::database::backup::{RespaldoError, RespaldoResumen, ResultadoValidacion, TipoRespaldo};
 use crate::database::connection::open_database;
 use crate::database::error::DatabaseError;
-use crate::database::schema::SchemaError;
 use crate::database::queries::contratistas::{
     FiltroContratistas, PaginaContratistas, SqliteContratistasQuery,
 };
@@ -19,6 +18,7 @@ use crate::database::repositories::contratista_repository::SqliteContratistaRepo
 use crate::database::repositories::empresa_repository::SqliteEmpresaRepository;
 use crate::database::repositories::registro_ingreso_repository::SqliteRegistroIngresoRepository;
 use crate::database::repositories::usuario_repository::SqliteUsuarioRepository;
+use crate::database::schema::SchemaError;
 use crate::models::usuario::RolUsuario;
 use crate::services::autenticacion_service::{
     AutenticacionService, CandidatoAutenticacion, UsuarioSesion,
@@ -32,8 +32,8 @@ use crate::services::error::{
     UsuarioServiceError,
 };
 use crate::services::registro_ingreso_service::{
-    ListaIngresosActivosResumen, PreparacionIngreso,
-    RegistroIngresoConsultaService, RegistroIngresoService, ResultadoRegistroEntrada,
+    ListaIngresosActivosResumen, PreparacionIngreso, RegistroIngresoConsultaService,
+    RegistroIngresoService, ResultadoRegistroEntrada,
 };
 use crate::services::usuario_service::{
     ActualizarUsuarioInput, CrearRootInicialInput, CrearUsuarioInput, UsuarioConsultaService,
@@ -345,8 +345,13 @@ impl AppCore {
         activo: bool,
         password_hash: String,
     ) -> Result<i64, UsuarioServiceError> {
-        UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection))
-            .crear_con_hash(cedula, nombre, rol, activo, password_hash)
+        UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection)).crear_con_hash(
+            cedula,
+            nombre,
+            rol,
+            activo,
+            password_hash,
+        )
     }
 
     pub fn actualizar_usuario(
@@ -395,7 +400,11 @@ impl AppCore {
     }
 
     pub fn crear_respaldo(&self, tipo: TipoRespaldo) -> Result<RespaldoResumen, RespaldoError> {
-        crate::database::backup::crear_respaldo(&self.connection, &self.directorio_respaldos(), tipo)
+        crate::database::backup::crear_respaldo(
+            &self.connection,
+            &self.directorio_respaldos(),
+            tipo,
+        )
     }
 
     pub fn listar_respaldos(&self) -> Result<Vec<RespaldoResumen>, RespaldoError> {
@@ -465,8 +474,7 @@ fn validar_reloj(
     connection: &Connection,
     ahora: chrono::DateTime<chrono::Utc>,
 ) -> Result<(), RegistroIngresoServiceError> {
-    let Some(ultima) =
-        crate::database::queries::ingresos::ultimo_instante_movimiento(connection)?
+    let Some(ultima) = crate::database::queries::ingresos::ultimo_instante_movimiento(connection)?
     else {
         return Ok(());
     };

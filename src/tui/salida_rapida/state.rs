@@ -1,7 +1,9 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use std::time::Instant;
 
-use crate::services::registro_ingreso_service::{IngresoActivoResumen, ListaIngresosActivosResumen};
+use crate::services::registro_ingreso_service::{
+    IngresoActivoResumen, ListaIngresosActivosResumen,
+};
 use crate::tui::ui_kit::{Debounce, StandardCommand, TextInput, mover_seleccion, standard_command};
 
 #[path = "render.rs"]
@@ -145,13 +147,15 @@ impl SalidaRapidaState {
                 self.mover(1);
                 AccionSalidaRapida::Ninguna
             }
-            KeyCode::Enter => self.registro_seleccionado().map_or(
-                AccionSalidaRapida::Ninguna,
-                |r| AccionSalidaRapida::Confirmar {
-                    registro_id: r.registro_id,
-                    nombre: r.contratista_nombre.clone(),
-                },
-            ),
+            KeyCode::Enter => {
+                self.registro_seleccionado()
+                    .map_or(AccionSalidaRapida::Ninguna, |r| {
+                        AccionSalidaRapida::Confirmar {
+                            registro_id: r.registro_id,
+                            nombre: r.contratista_nombre.clone(),
+                        }
+                    })
+            }
             _ => {
                 if self.busqueda.handle_key(key) {
                     self.error = None;

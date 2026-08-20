@@ -310,7 +310,13 @@ fn crear_con_hash_guarda_el_hash_tal_cual_sin_volver_a_calcularlo() {
     let hash = generar_hash("password-ya-calculado").unwrap();
 
     let id = servicio
-        .crear_con_hash("3002", "Persona Hash", RolUsuario::Operador, true, hash.clone())
+        .crear_con_hash(
+            "3002",
+            "Persona Hash",
+            RolUsuario::Operador,
+            true,
+            hash.clone(),
+        )
         .unwrap();
 
     let usuario = servicio.buscar_por_id(id).unwrap();
@@ -332,10 +338,7 @@ fn crear_con_hash_rechaza_un_hash_con_formato_invalido() {
         "no-es-un-hash-argon2".to_string(),
     );
 
-    assert!(matches!(
-        resultado,
-        Err(UsuarioServiceError::Password(_))
-    ));
+    assert!(matches!(resultado, Err(UsuarioServiceError::Password(_))));
 }
 
 #[test]
@@ -350,5 +353,8 @@ fn validar_password_para_cambio_rechaza_password_corto_sin_tocar_el_repositorio(
         servicio.validar_password_para_cambio(id, "corta"),
         Err(UsuarioServiceError::PasswordDemasiadoCorto)
     ));
-    assert_eq!(servicio.buscar_por_id(id).unwrap().password_hash, hash_original);
+    assert_eq!(
+        servicio.buscar_por_id(id).unwrap().password_hash,
+        hash_original
+    );
 }

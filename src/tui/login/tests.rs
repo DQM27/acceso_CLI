@@ -1,5 +1,5 @@
-use crossterm::event::KeyModifiers;
 use super::*;
+use crossterm::event::KeyModifiers;
 
 fn tecla(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)

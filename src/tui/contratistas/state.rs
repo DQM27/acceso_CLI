@@ -32,7 +32,11 @@ mod tests;
 /// (`empresa:`, `tipo:` con listas/negación, `praind:vence|vencido|sin`,
 /// `ruta:si|no`, `acceso:si|no`). Lo no reconocido, y lo que no calza con lo
 /// que una clave admite, se deja como texto libre para nombre/cédula.
-fn parsear_consulta(texto: &str, empresas: &[Empresa], hoy: NaiveDate) -> (FiltroContratistas, String) {
+fn parsear_consulta(
+    texto: &str,
+    empresas: &[Empresa],
+    hoy: NaiveDate,
+) -> (FiltroContratistas, String) {
     let mut filtro = FiltroContratistas::default();
     let libres = resolver_terminos(texto, &mut filtro, |f, term| {
         aplicar_clave(f, term, empresas, hoy)
@@ -83,7 +87,8 @@ fn aplicar_clave(
             });
             true
         }
-        "praind" if !term.negated && valores.len() == 1 => match valores[0].to_lowercase().as_str() {
+        "praind" if !term.negated && valores.len() == 1 => match valores[0].to_lowercase().as_str()
+        {
             "vence" | "proximo" | "próximo" => {
                 f.praind = Some(FiltroPraind::ProximoAVencer { hoy });
                 true
@@ -654,7 +659,10 @@ impl ContratistasState {
         if self.total == 0 {
             (0, 0)
         } else {
-            (self.offset / LIMITE_PAGINA + 1, self.total.div_ceil(LIMITE_PAGINA))
+            (
+                self.offset / LIMITE_PAGINA + 1,
+                self.total.div_ceil(LIMITE_PAGINA),
+            )
         }
     }
     pub fn total(&self) -> usize {

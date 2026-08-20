@@ -272,14 +272,14 @@ const HISTORIAL_COLUMNAS: &str = "
     r.resultado_acceso, r.motivo_resultado, r.reglas_version
 ";
 
+/// Nombre de parámetro (`:algo`) y valor bindeado.
+type ParametrosSql = Vec<(String, Box<dyn rusqlite::ToSql>)>;
+
 /// Igual que `contratistas::construir_where`: arma el `WHERE` sólo con las
 /// condiciones realmente activas, sin flags `:x IS NULL OR col = :x`
 /// evaluados en cada fila — eso es lo que le impedía a SQLite usar
 /// `idx_registro_ingresos_empresa` aunque existiera (confirmado con
 /// `EXPLAIN QUERY PLAN`, `docs/hallazgos-buscador.md`).
-/// Nombre de parámetro (`:algo`) y valor bindeado.
-type ParametrosSql = Vec<(String, Box<dyn rusqlite::ToSql>)>;
-
 fn construir_where_activos(
     busqueda: &BusquedaTexto,
     filtro: &FiltroIngresosActivos,
@@ -388,7 +388,9 @@ fn construir_where_historial(
                 Box::new(busqueda.consulta_fts.clone()),
             ));
             if let Some(numero) = busqueda.numero_exacto {
-                sub.push_str(" UNION SELECT id FROM registro_ingresos WHERE gafete_numero = :numero_exacto");
+                sub.push_str(
+                    " UNION SELECT id FROM registro_ingresos WHERE gafete_numero = :numero_exacto",
+                );
                 parametros.push((":numero_exacto".into(), Box::new(numero)));
             }
             condiciones.push(format!("r.id IN ({sub})"));
@@ -615,7 +617,11 @@ mod tests {
     use super::*;
     use crate::database::schema::initialize_database;
 
-    fn plan(connection: &Connection, sql: &str, params: &[(&str, &dyn rusqlite::ToSql)]) -> Vec<String> {
+    fn plan(
+        connection: &Connection,
+        sql: &str,
+        params: &[(&str, &dyn rusqlite::ToSql)],
+    ) -> Vec<String> {
         let mut statement = connection
             .prepare(&format!("EXPLAIN QUERY PLAN {sql}"))
             .unwrap();

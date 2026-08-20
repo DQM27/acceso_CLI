@@ -179,8 +179,16 @@ fn render_campo(
     activo: bool,
     theme: Theme,
 ) -> Rect {
-    let estilo_etiqueta = if activo { theme.accent() } else { theme.muted() };
-    let estilo_linea = if activo { theme.accent() } else { theme.border() };
+    let estilo_etiqueta = if activo {
+        theme.accent()
+    } else {
+        theme.muted()
+    };
+    let estilo_linea = if activo {
+        theme.accent()
+    } else {
+        theme.border()
+    };
     let valor_y = area.y.saturating_add(1);
     let linea_y = area.y.saturating_add(2);
 
@@ -242,7 +250,9 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Them
         .style(theme.muted())
         .bottom_margin(1);
     frame.render_widget(
-        Table::new(filas, anchos).header(encabezado).column_spacing(1),
+        Table::new(filas, anchos)
+            .header(encabezado)
+            .column_spacing(1),
         area,
     );
     if state.registros.is_empty() {
@@ -306,10 +316,19 @@ fn render_panel(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Them
 fn render_detalle(frame: &mut Frame, area: Rect, registro: &IngresoActivoResumen, theme: Theme) {
     let mut lineas = vec![
         Line::from(registro.contratista_nombre.clone()).style(theme.title()),
-        Line::from(format!("{} · {}", registro.cedula, registro.empresa_nombre)).style(theme.base()),
+        Line::from(format!("{} · {}", registro.cedula, registro.empresa_nombre))
+            .style(theme.base()),
         Line::from(""),
-        Line::from(format!("Tipo               {}", texto_tipo(registro.tipo_ingreso))).style(theme.base()),
-        Line::from(format!("Medio              {}", texto_medio(registro.medio_ingreso))).style(theme.base()),
+        Line::from(format!(
+            "Tipo               {}",
+            texto_tipo(registro.tipo_ingreso)
+        ))
+        .style(theme.base()),
+        Line::from(format!(
+            "Medio              {}",
+            texto_medio(registro.medio_ingreso)
+        ))
+        .style(theme.base()),
         Line::from(format!(
             "Ingreso            {}",
             a_costa_rica(registro.fecha_hora_ingreso).format("%d/%m/%Y %H:%M")
@@ -320,14 +339,20 @@ fn render_detalle(frame: &mut Frame, area: Rect, registro: &IngresoActivoResumen
             valor_columna(registro, Columna::Gafete)
         ))
         .style(theme.base()),
-        Line::from(format!("Registrado por     {}", registro.usuario_ingreso_nombre)).style(theme.base()),
+        Line::from(format!(
+            "Registrado por     {}",
+            registro.usuario_ingreso_nombre
+        ))
+        .style(theme.base()),
     ];
     if !matches!(
         registro.resultado_acceso,
         crate::domain::resultado_acceso::ResultadoAcceso::Permitido
     ) {
         lineas.push(Line::from(""));
-        lineas.push(Line::from("Condición de acceso actual requiere atención").style(theme.warning()));
+        lineas.push(
+            Line::from("Condición de acceso actual requiere atención").style(theme.warning()),
+        );
     }
     frame.render_widget(Paragraph::new(lineas), area);
 }

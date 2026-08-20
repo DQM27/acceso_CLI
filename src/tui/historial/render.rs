@@ -119,19 +119,32 @@ fn etiqueta_busqueda(state: &HistorialState) -> String {
         resumen.push(format!("tipo: {}", tipos_texto(Some(tipos))));
     }
     if !state.filtro_aplicado.usuario_ingreso.is_empty() {
-        resumen.push(format!("ingreso: {}", state.filtro_aplicado.usuario_ingreso));
+        resumen.push(format!(
+            "ingreso: {}",
+            state.filtro_aplicado.usuario_ingreso
+        ));
     }
     if !state.filtro_aplicado.usuario_salida.is_empty() {
         resumen.push(format!("salida: {}", state.filtro_aplicado.usuario_salida));
     }
-    format!("BUSCAR · CLAVE:VALOR O TEXTO LIBRE · {}", resumen.join(" · "))
+    format!(
+        "BUSCAR · CLAVE:VALOR O TEXTO LIBRE · {}",
+        resumen.join(" · ")
+    )
 }
 
 fn render_cuerpo(frame: &mut Frame, area: Rect, state: &HistorialState, theme: Theme) {
     let filas = Layout::vertical([Constraint::Length(3), Constraint::Min(4)]).split(area);
 
     let etiqueta = etiqueta_busqueda(state);
-    let area_busqueda = render_campo(frame, filas[0], &etiqueta, state.busqueda.value(), true, theme);
+    let area_busqueda = render_campo(
+        frame,
+        filas[0],
+        &etiqueta,
+        state.busqueda.value(),
+        true,
+        theme,
+    );
     if !matches!(state.vista, ViewMode::Heatmap) {
         let antes_del_cursor: String = state
             .busqueda
@@ -207,8 +220,16 @@ fn render_campo(
     activo: bool,
     theme: Theme,
 ) -> Rect {
-    let estilo_etiqueta = if activo { theme.accent() } else { theme.muted() };
-    let estilo_linea = if activo { theme.accent() } else { theme.border() };
+    let estilo_etiqueta = if activo {
+        theme.accent()
+    } else {
+        theme.muted()
+    };
+    let estilo_linea = if activo {
+        theme.accent()
+    } else {
+        theme.border()
+    };
     let valor_y = area.y.saturating_add(1);
     let linea_y = area.y.saturating_add(2);
 
@@ -249,12 +270,19 @@ fn render_timeline(frame: &mut Frame, area: Rect, state: &HistorialState, theme:
     let mut fila_seleccionada = 0usize;
     let mut ultima_fecha: Option<String> = None;
     for (indice, registro) in state.registros.iter().enumerate() {
-        let fecha = a_costa_rica(registro.fecha_hora_ingreso).format("%d/%m/%Y").to_string();
+        let fecha = a_costa_rica(registro.fecha_hora_ingreso)
+            .format("%d/%m/%Y")
+            .to_string();
         if ultima_fecha.as_deref() != Some(fecha.as_str()) {
             let cantidad = state
                 .registros
                 .iter()
-                .filter(|r| a_costa_rica(r.fecha_hora_ingreso).format("%d/%m/%Y").to_string() == fecha)
+                .filter(|r| {
+                    a_costa_rica(r.fecha_hora_ingreso)
+                        .format("%d/%m/%Y")
+                        .to_string()
+                        == fecha
+                })
                 .count();
             filas.push(
                 Line::from(format!("{fecha} · {cantidad} movimientos"))
@@ -265,7 +293,11 @@ fn render_timeline(frame: &mut Frame, area: Rect, state: &HistorialState, theme:
         if state.seleccion == Some(indice) {
             fila_seleccionada = filas.len();
         }
-        filas.push(fila_movimiento(registro, state.seleccion == Some(indice), theme));
+        filas.push(fila_movimiento(
+            registro,
+            state.seleccion == Some(indice),
+            theme,
+        ));
     }
 
     let capacidad = area_scroll.height as usize;
@@ -282,19 +314,41 @@ fn encabezado_timeline(theme: Theme) -> Line<'static> {
     .style(theme.muted().add_modifier(Modifier::BOLD))
 }
 
-fn fila_movimiento(r: &MovimientoIngresoResumen, seleccionada: bool, theme: Theme) -> Line<'static> {
+fn fila_movimiento(
+    r: &MovimientoIngresoResumen,
+    seleccionada: bool,
+    theme: Theme,
+) -> Line<'static> {
     let activo = r.fecha_hora_salida.is_none();
     let glifo = if activo { "●" } else { "○" };
-    let estilo_glifo = if activo { theme.warning() } else { theme.muted() };
-    let salida = r
-        .fecha_hora_salida
-        .map_or_else(|| "ahora".to_owned(), |f| a_costa_rica(f).format("%H:%M").to_string());
-    let entrada = a_costa_rica(r.fecha_hora_ingreso).format("%H:%M").to_string();
+    let estilo_glifo = if activo {
+        theme.warning()
+    } else {
+        theme.muted()
+    };
+    let salida = r.fecha_hora_salida.map_or_else(
+        || "ahora".to_owned(),
+        |f| a_costa_rica(f).format("%H:%M").to_string(),
+    );
+    let entrada = a_costa_rica(r.fecha_hora_ingreso)
+        .format("%H:%M")
+        .to_string();
     let marcador = if seleccionada { ">" } else { " " };
-    let estilo_fila = if seleccionada { theme.selected() } else { theme.base() };
+    let estilo_fila = if seleccionada {
+        theme.selected()
+    } else {
+        theme.base()
+    };
     Line::from(vec![
         Span::styled(format!("{marcador} "), estilo_fila),
-        Span::styled(format!("{glifo} "), if seleccionada { estilo_fila } else { estilo_glifo }),
+        Span::styled(
+            format!("{glifo} "),
+            if seleccionada {
+                estilo_fila
+            } else {
+                estilo_glifo
+            },
+        ),
         Span::styled(format!("{entrada:<5} → {salida:<5}  "), estilo_fila),
         Span::styled(format!("{:<20.20} ", r.contratista_nombre), estilo_fila),
         Span::styled(format!("{:<18.18} ", r.empresa_nombre), estilo_fila),
@@ -351,12 +405,14 @@ fn render_detalle(frame: &mut Frame, area: Rect, r: &MovimientoIngresoResumen, t
     }
     lineas.push(Line::from(""));
     lineas.push(
-        Line::from(format!("Ingreso registrado por: {}", r.usuario_ingreso_nombre))
-            .style(theme.base()),
+        Line::from(format!(
+            "Ingreso registrado por: {}",
+            r.usuario_ingreso_nombre
+        ))
+        .style(theme.base()),
     );
     if let Some(operador) = &r.usuario_salida_nombre {
-        lineas
-            .push(Line::from(format!("Salida registrada por: {operador}")).style(theme.base()));
+        lineas.push(Line::from(format!("Salida registrada por: {operador}")).style(theme.base()));
     }
     frame.render_widget(Paragraph::new(lineas), area);
 }
@@ -398,38 +454,59 @@ fn render_tabla_clasica(frame: &mut Frame, area: Rect, state: &HistorialState, t
                     .iter()
                     .map(|c| Cell::from(valor_columna_clasica(r, *c))),
             )
-            .style(if seleccionada { theme.selected() } else { theme.base() })
+            .style(if seleccionada {
+                theme.selected()
+            } else {
+                theme.base()
+            })
         });
     let encabezado = Row::new(columnas_visibles.iter().map(|c| c.label()))
         .style(theme.muted().add_modifier(Modifier::BOLD))
         .bottom_margin(1);
     let anchos: Vec<_> = columnas_visibles.iter().map(|c| c.constraint()).collect();
     frame.render_widget(
-        Table::new(filas, anchos).header(encabezado).column_spacing(1),
+        Table::new(filas, anchos)
+            .header(encabezado)
+            .column_spacing(1),
         area,
     );
 }
 
 fn valor_columna_clasica(r: &MovimientoIngresoResumen, c: ClassicColumn) -> String {
     match c {
-        ClassicColumn::Fecha => a_costa_rica(r.fecha_hora_ingreso).format("%d/%m/%Y").to_string(),
+        ClassicColumn::Fecha => a_costa_rica(r.fecha_hora_ingreso)
+            .format("%d/%m/%Y")
+            .to_string(),
         ClassicColumn::Cedula => r.cedula.clone(),
         ClassicColumn::Nombre => r.contratista_nombre.clone(),
         ClassicColumn::Empresa => r.empresa_nombre.clone(),
         ClassicColumn::Tipo => tipo_texto(r.tipo_ingreso).into(),
-        ClassicColumn::Entrada => a_costa_rica(r.fecha_hora_ingreso).format("%H:%M").to_string(),
+        ClassicColumn::Entrada => a_costa_rica(r.fecha_hora_ingreso)
+            .format("%H:%M")
+            .to_string(),
         ClassicColumn::Salida => r.fecha_hora_salida.map_or_else(
             || "Activo".into(),
             |f| a_costa_rica(f).format("%H:%M").to_string(),
         ),
-        ClassicColumn::Gafete => r.gafete_numero.map_or_else(|| "S/G".into(), |g| g.to_string()),
+        ClassicColumn::Gafete => r
+            .gafete_numero
+            .map_or_else(|| "S/G".into(), |g| g.to_string()),
         ClassicColumn::Medio => texto_medio(r.medio_ingreso).into(),
         ClassicColumn::Ingreso => r.usuario_ingreso_nombre.clone(),
-        ClassicColumn::Egreso => r.usuario_salida_nombre.clone().unwrap_or_else(|| "—".into()),
+        ClassicColumn::Egreso => r
+            .usuario_salida_nombre
+            .clone()
+            .unwrap_or_else(|| "—".into()),
     }
 }
 
-fn render_columnas_editor(frame: &mut Frame, area: Rect, state: &HistorialState, seleccion: usize, theme: Theme) {
+fn render_columnas_editor(
+    frame: &mut Frame,
+    area: Rect,
+    state: &HistorialState,
+    seleccion: usize,
+    theme: Theme,
+) {
     let franja_superior = Rect::new(area.x, area.y, area.width, area.height.min(20));
     let popup = centered_rect(
         franja_superior,
@@ -488,12 +565,16 @@ fn render_mapa_calor(frame: &mut Frame, area: Rect, state: &HistorialState, them
     let seleccion = state.heatmap_seleccion.clamp(fecha_min, fecha_max);
 
     let mut lineas: Vec<Line<'static>> = vec![
-        Line::from("            L  M  M  J  V  S  D").style(theme.muted().add_modifier(Modifier::BOLD)),
+        Line::from("            L  M  M  J  V  S  D")
+            .style(theme.muted().add_modifier(Modifier::BOLD)),
     ];
     let mut inicio_semana = start_of_week(fecha_min);
     let fin_grilla = end_of_week(fecha_max);
     while inicio_semana <= fin_grilla {
-        let mut spans = vec![Span::styled(format!("{}  ", inicio_semana.format("%d/%m")), theme.muted())];
+        let mut spans = vec![Span::styled(
+            format!("{}  ", inicio_semana.format("%d/%m")),
+            theme.muted(),
+        )];
         for offset in 0..7 {
             let dia = inicio_semana + Duration::days(offset);
             let en_rango = dia >= fecha_min && dia <= fecha_max;
@@ -518,7 +599,11 @@ fn render_mapa_calor(frame: &mut Frame, area: Rect, state: &HistorialState, them
                     theme.muted()
                 }
             };
-            let texto = if seleccionado { format!("[{glifo}]") } else { format!(" {glifo} ") };
+            let texto = if seleccionado {
+                format!("[{glifo}]")
+            } else {
+                format!(" {glifo} ")
+            };
             spans.push(Span::styled(texto, estilo));
         }
         lineas.push(Line::from(spans));
