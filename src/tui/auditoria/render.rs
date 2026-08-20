@@ -7,7 +7,7 @@ use ratatui::{
 use super::AuditoriaState;
 use crate::{
     services::autenticacion_service::UsuarioSesion,
-    tiempo::hora_actual_texto,
+    tiempo::{a_costa_rica, hora_actual_texto},
     tui::ui_kit::{
         CommandHint, ScreenShell, StatusKind, Theme, identidad_sesion, render_terminal_too_small,
     },
@@ -58,33 +58,31 @@ pub fn render(
     };
     let areas = shell.render(frame, area, theme);
     let encabezado = Row::new([
-        "FECHA (UTC)",
-        "USUARIO",
+        "FECHA Y HORA (CR)",
         "CONTRATISTA",
-        "CAMPO",
-        "ANTERIOR",
-        "NUEVO",
+        "CAMBIO REALIZADO",
+        "MODIFICADO POR",
     ])
     .style(theme.accent());
     let filas = state.items.iter().map(|item| {
         Row::new([
-            Cell::from(item.fecha_hora.format("%Y-%m-%d %H:%M").to_string()),
-            Cell::from(item.usuario_nombre.clone()),
+            Cell::from(
+                a_costa_rica(item.fecha_hora)
+                    .format("%d/%m/%Y %H:%M")
+                    .to_string(),
+            ),
             Cell::from(item.contratista_nombre.clone()),
-            Cell::from(item.campo.clone()),
-            Cell::from(item.valor_anterior.clone().unwrap_or_else(|| "—".into())),
-            Cell::from(item.valor_nuevo.clone().unwrap_or_else(|| "—".into())),
+            Cell::from(descripcion_cambio(item)),
+            Cell::from(item.usuario_nombre.clone()),
         ])
     });
     let tabla = Table::new(
         filas,
         [
-            Constraint::Length(17),
+            Constraint::Length(18),
             Constraint::Fill(2),
+            Constraint::Fill(4),
             Constraint::Fill(2),
-            Constraint::Length(24),
-            Constraint::Length(15),
-            Constraint::Length(15),
         ],
     )
     .header(encabezado)
@@ -95,4 +93,38 @@ pub fn render(
         areas.body,
         &mut TableState::default().with_selected(state.seleccion),
     );
+}
+
+pub(super) fn descripcion_cambio(
+    item: &crate::database::queries::auditoria_contratistas::CambioContratistaAuditado,
+) -> String {
+    let etiqueta = match item.campo.as_str() {
+        "tipo_ingreso" => "Tipo de ingreso",
+        "fecha_vencimiento_praind" => "Vencimiento PRAIND",
+        "tiene_acceso" => "Acceso",
+        _ => item.campo.as_str(),
+    };
+    let anterior = valor_presentable(&item.campo, item.valor_anterior.as_deref());
+    let nuevo = valor_presentable(&item.campo, item.valor_nuevo.as_deref());
+    format!("{etiqueta}: {anterior} → {nuevo}")
+}
+
+fn valor_presentable(campo: &str, valor: Option<&str>) -> String {
+    let Some(valor) = valor else {
+        return if campo == "fecha_vencimiento_praind" {
+            "Sin fecha".to_owned()
+        } else {
+            "—".to_owned()
+        };
+    };
+    match (campo, valor) {
+        ("tipo_ingreso", "IN_HOUSE") => "IN HOUSE".to_owned(),
+        ("tipo_ingreso", "POR_CORREO") => "POR CORREO".to_owned(),
+        ("fecha_vencimiento_praind", valor) => chrono::NaiveDate::parse_from_str(valor, "%Y-%m-%d")
+            .map(|fecha| fecha.format("%d/%m/%Y").to_string())
+            .unwrap_or_else(|_| valor.to_owned()),
+        ("tiene_acceso", "HABILITADO") => "Habilitado".to_owned(),
+        ("tiene_acceso", "DESHABILITADO") => "Deshabilitado".to_owned(),
+        _ => valor.to_owned(),
+    }
 }

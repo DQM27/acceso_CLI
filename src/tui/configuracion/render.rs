@@ -119,7 +119,7 @@ fn render_tabla(frame: &mut Frame, area: Rect, estado: &RespaldosState, theme: T
             theme.base()
         };
         let fecha = crate::tiempo::a_costa_rica(fila.resumen.creado_en)
-            .format("%Y-%m-%d %H:%M")
+            .format("%d/%m/%Y %H:%M")
             .to_string();
         Row::new([
             Cell::from(fecha),

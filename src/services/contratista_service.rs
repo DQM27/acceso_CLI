@@ -117,11 +117,13 @@ where
         let fecha_anterior = actual
             .fecha_vencimiento_praind
             .map(|fecha| fecha.format("%Y-%m-%d").to_string());
+        let acceso_anterior = actual.tiene_acceso;
         let contratista = self.construir_actualizacion(actual, datos)?;
         let tipo_nuevo = contratista.tipo_ingreso.as_str_sql().to_owned();
         let fecha_nueva = contratista
             .fecha_vencimiento_praind
             .map(|fecha| fecha.format("%Y-%m-%d").to_string());
+        let acceso_nuevo = contratista.tiene_acceso;
 
         self.contratistas.actualizar(&contratista)?;
         if tipo_anterior != tipo_nuevo {
@@ -142,6 +144,16 @@ where
                 "fecha_vencimiento_praind",
                 fecha_anterior.as_deref(),
                 fecha_nueva.as_deref(),
+            )?;
+        }
+        if acceso_anterior != acceso_nuevo {
+            auditoria.registrar_cambio(
+                fecha_hora,
+                actor_id,
+                id,
+                "tiene_acceso",
+                Some(texto_estado_acceso(acceso_anterior)),
+                Some(texto_estado_acceso(acceso_nuevo)),
             )?;
         }
         Ok(())
@@ -222,6 +234,14 @@ where
         }
 
         Ok(contratista)
+    }
+}
+
+fn texto_estado_acceso(tiene_acceso: bool) -> &'static str {
+    if tiene_acceso {
+        "HABILITADO"
+    } else {
+        "DESHABILITADO"
     }
 }
 

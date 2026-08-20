@@ -49,6 +49,13 @@ fn datos(tipo: TipoIngreso, fecha: Option<NaiveDate>) -> DatosActualizacionContr
     }
 }
 
+fn datos_con_acceso(tiene_acceso: bool) -> DatosActualizacionContratista {
+    DatosActualizacionContratista {
+        tiene_acceso,
+        ..datos(TipoIngreso::Swat, None)
+    }
+}
+
 #[test]
 fn solo_registra_cambios_reales_con_actor_y_valores_correctos() {
     let core = AppCore::new(conexion());
@@ -112,4 +119,35 @@ fn fallo_de_auditoria_revierte_tambien_la_actualizacion() {
         )
         .unwrap();
     assert_eq!(contratista.items[0].tipo_ingreso, TipoIngreso::Swat);
+}
+
+#[test]
+fn registra_cada_desactivacion_y_reactivacion_del_acceso() {
+    let core = AppCore::new(conexion());
+    let actor = actor();
+
+    core.actualizar_contratista(&actor, 1, datos_con_acceso(false))
+        .unwrap();
+    core.actualizar_contratista(&actor, 1, datos_con_acceso(true))
+        .unwrap();
+
+    let pagina = core
+        .buscar_auditoria_contratistas(&actor, &FiltroAuditoriaContratistas::default())
+        .unwrap();
+    assert_eq!(pagina.total, 2);
+    assert_eq!(pagina.items[0].campo, "tiene_acceso");
+    assert_eq!(
+        pagina.items[0].valor_anterior.as_deref(),
+        Some("DESHABILITADO")
+    );
+    assert_eq!(pagina.items[0].valor_nuevo.as_deref(), Some("HABILITADO"));
+    assert_eq!(pagina.items[1].campo, "tiene_acceso");
+    assert_eq!(
+        pagina.items[1].valor_anterior.as_deref(),
+        Some("HABILITADO")
+    );
+    assert_eq!(
+        pagina.items[1].valor_nuevo.as_deref(),
+        Some("DESHABILITADO")
+    );
 }

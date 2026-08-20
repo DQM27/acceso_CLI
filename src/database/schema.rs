@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 9;
+pub const SCHEMA_VERSION: i64 = 10;
 
 /// Identifica un archivo SQLite como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -146,6 +146,11 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
     if version == 8 {
         aplicar_migracion(&transaction, MIGRACION_9, 9)?;
         version = 9;
+    }
+
+    if version == 9 {
+        aplicar_migracion(&transaction, MIGRACION_10, 10)?;
+        version = 10;
     }
 
     if version != SCHEMA_VERSION {
@@ -797,6 +802,39 @@ CREATE TABLE auditoria_contratistas (
     valor_nuevo TEXT,
     CHECK (valor_anterior IS NOT valor_nuevo)
 );
+
+CREATE INDEX idx_auditoria_contratistas_fecha
+ON auditoria_contratistas(fecha_hora DESC, id DESC);
+
+CREATE INDEX idx_auditoria_contratistas_contratista
+ON auditoria_contratistas(contratista_id, id DESC);
+"#;
+
+// Amplía la trazabilidad operativa para incluir la habilitación o
+// deshabilitación de acceso. SQLite no permite modificar un CHECK existente,
+// por eso se reconstruye la tabla conservando todas las filas anteriores.
+const MIGRACION_10: &str = r#"
+CREATE TABLE auditoria_contratistas_nueva (
+    id INTEGER PRIMARY KEY,
+    fecha_hora TEXT NOT NULL,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+    contratista_id INTEGER NOT NULL REFERENCES contratistas(id) ON DELETE RESTRICT,
+    campo TEXT NOT NULL CHECK (
+        campo IN ('tipo_ingreso', 'fecha_vencimiento_praind', 'tiene_acceso')
+    ),
+    valor_anterior TEXT,
+    valor_nuevo TEXT,
+    CHECK (valor_anterior IS NOT valor_nuevo)
+);
+
+INSERT INTO auditoria_contratistas_nueva(
+    id, fecha_hora, usuario_id, contratista_id, campo, valor_anterior, valor_nuevo
+)
+SELECT id, fecha_hora, usuario_id, contratista_id, campo, valor_anterior, valor_nuevo
+FROM auditoria_contratistas;
+
+DROP TABLE auditoria_contratistas;
+ALTER TABLE auditoria_contratistas_nueva RENAME TO auditoria_contratistas;
 
 CREATE INDEX idx_auditoria_contratistas_fecha
 ON auditoria_contratistas(fecha_hora DESC, id DESC);

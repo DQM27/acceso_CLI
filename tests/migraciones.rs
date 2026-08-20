@@ -138,6 +138,56 @@ fn base_vacia_llega_a_version_actual_y_es_idempotente() {
 }
 
 #[test]
+fn migracion_10_conserva_auditoria_y_admite_cambios_de_acceso() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    insertar_referencias(&connection);
+    connection
+        .execute_batch(
+            "DROP TABLE auditoria_contratistas;
+             CREATE TABLE auditoria_contratistas (
+                id INTEGER PRIMARY KEY,
+                fecha_hora TEXT NOT NULL,
+                usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+                contratista_id INTEGER NOT NULL REFERENCES contratistas(id) ON DELETE RESTRICT,
+                campo TEXT NOT NULL CHECK (
+                    campo IN ('tipo_ingreso', 'fecha_vencimiento_praind')
+                ),
+                valor_anterior TEXT,
+                valor_nuevo TEXT,
+                CHECK (valor_anterior IS NOT valor_nuevo)
+             );
+             INSERT INTO auditoria_contratistas(
+                fecha_hora,usuario_id,contratista_id,campo,valor_anterior,valor_nuevo
+             ) VALUES(
+                '2026-08-20T22:00:00Z',1,1,'tipo_ingreso','SWAT','PRAIND'
+             );
+             PRAGMA user_version = 9;",
+        )
+        .unwrap();
+
+    initialize_database(&connection).unwrap();
+
+    assert_eq!(version(&connection), SCHEMA_VERSION);
+    let conservados: i64 = connection
+        .query_row("SELECT COUNT(*) FROM auditoria_contratistas", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(conservados, 1);
+    connection
+        .execute(
+            "INSERT INTO auditoria_contratistas(
+                fecha_hora,usuario_id,contratista_id,campo,valor_anterior,valor_nuevo
+             ) VALUES(
+                '2026-08-20T22:01:00Z',1,1,'tiene_acceso','HABILITADO','DESHABILITADO'
+             )",
+            [],
+        )
+        .unwrap();
+}
+
+#[test]
 fn esquema_actual_bloquea_cambio_directo_de_cedula() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();

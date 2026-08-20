@@ -161,7 +161,7 @@ impl RespaldosState {
                     self.modo = ModoRespaldos::ConfirmandoRestauracion {
                         ruta: fila.resumen.ruta.clone(),
                         fecha: crate::tiempo::a_costa_rica(fila.resumen.creado_en)
-                            .format("%Y-%m-%d %H:%M")
+                            .format("%d/%m/%Y %H:%M")
                             .to_string(),
                         tipo: etiqueta_tipo(fila.resumen.tipo),
                     };
