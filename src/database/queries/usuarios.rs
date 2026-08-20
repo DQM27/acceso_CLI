@@ -65,45 +65,77 @@ impl UsuariosQuery for SqliteUsuariosQuery<'_> {
         let busqueda = BusquedaTexto::preparar(filtro.texto.as_deref());
         let limite = filtro.limite.clamp(1, LIMITE_MAXIMO) as i64;
         let offset = i64::try_from(filtro.offset).unwrap_or(i64::MAX);
-        let incluir_root = i64::from(actor == RolUsuario::Root);
-        let (sql, parametros): (&str, Vec<rusqlite::types::Value>) = match busqueda.modo {
-            1 => (
-                "SELECT id,cedula,nombre,rol,activo FROM usuarios
-                 WHERE (?1 = 1 OR rol <> 'ROOT')
-                   AND (PLEGAR(cedula) LIKE PLEGAR(?2) OR PLEGAR(nombre) LIKE PLEGAR(?2))
-                 ORDER BY CASE WHEN cedula=?3 COLLATE NOCASE THEN 0 ELSE 1 END,
-                          nombre COLLATE NOCASE,id LIMIT ?4 OFFSET ?5",
-                vec![
-                    incluir_root.into(),
-                    busqueda.patron_like.into(),
-                    busqueda.texto_literal.into(),
-                    limite.into(),
-                    offset.into(),
-                ],
-            ),
-            2 => (
-                "SELECT u.id,u.cedula,u.nombre,u.rol,u.activo
-                 FROM usuarios_fts
-                 INNER JOIN usuarios AS u ON u.id=usuarios_fts.rowid
-                 WHERE (?1 = 1 OR u.rol <> 'ROOT') AND usuarios_fts MATCH ?2
-                 ORDER BY CASE WHEN u.cedula=?3 COLLATE NOCASE THEN 0 ELSE 1 END,
-                          u.nombre COLLATE NOCASE,u.id LIMIT ?4 OFFSET ?5",
-                vec![
-                    incluir_root.into(),
-                    busqueda.consulta_fts.into(),
-                    busqueda.texto_literal.into(),
-                    limite.into(),
-                    offset.into(),
-                ],
-            ),
-            _ => (
-                "SELECT id,cedula,nombre,rol,activo FROM usuarios
-                 WHERE (?1 = 1 OR rol <> 'ROOT')
-                 ORDER BY nombre COLLATE NOCASE,id LIMIT ?2 OFFSET ?3",
-                vec![incluir_root.into(), limite.into(), offset.into()],
-            ),
+        // Root es invisible para cualquier actor que no sea Root — se omite
+        // la condición del todo (no un flag `?1 = 1 OR ...` evaluado en cada
+        // fila) para que quede un predicado directo, igual que el resto de
+        // los filtros de esta app (`docs/hallazgos-buscador.md`). La tabla
+        // `usuarios` es chica y esto no cambia el rendimiento, pero mantiene
+        // el mismo criterio en todo el código en vez de una excepción.
+        let excluir_root = actor != RolUsuario::Root;
+        let (sql, parametros): (String, Vec<rusqlite::types::Value>) = match busqueda.modo {
+            1 => {
+                let filtro_rol = if excluir_root {
+                    "AND rol <> 'ROOT'"
+                } else {
+                    ""
+                };
+                (
+                    format!(
+                        "SELECT id,cedula,nombre,rol,activo FROM usuarios
+                         WHERE (PLEGAR(cedula) LIKE PLEGAR(?1) OR PLEGAR(nombre) LIKE PLEGAR(?1))
+                           {filtro_rol}
+                         ORDER BY CASE WHEN cedula=?2 COLLATE NOCASE THEN 0 ELSE 1 END,
+                                  nombre COLLATE NOCASE,id LIMIT ?3 OFFSET ?4"
+                    ),
+                    vec![
+                        busqueda.patron_like.into(),
+                        busqueda.texto_literal.into(),
+                        limite.into(),
+                        offset.into(),
+                    ],
+                )
+            }
+            2 => {
+                let filtro_rol = if excluir_root {
+                    "AND u.rol <> 'ROOT'"
+                } else {
+                    ""
+                };
+                (
+                    format!(
+                        "SELECT u.id,u.cedula,u.nombre,u.rol,u.activo
+                         FROM usuarios_fts
+                         INNER JOIN usuarios AS u ON u.id=usuarios_fts.rowid
+                         WHERE usuarios_fts MATCH ?1
+                           {filtro_rol}
+                         ORDER BY CASE WHEN u.cedula=?2 COLLATE NOCASE THEN 0 ELSE 1 END,
+                                  u.nombre COLLATE NOCASE,u.id LIMIT ?3 OFFSET ?4"
+                    ),
+                    vec![
+                        busqueda.consulta_fts.into(),
+                        busqueda.texto_literal.into(),
+                        limite.into(),
+                        offset.into(),
+                    ],
+                )
+            }
+            _ => {
+                let filtro_rol = if excluir_root {
+                    "WHERE rol <> 'ROOT'"
+                } else {
+                    ""
+                };
+                (
+                    format!(
+                        "SELECT id,cedula,nombre,rol,activo FROM usuarios
+                         {filtro_rol}
+                         ORDER BY nombre COLLATE NOCASE,id LIMIT ?1 OFFSET ?2"
+                    ),
+                    vec![limite.into(), offset.into()],
+                )
+            }
         };
-        let mut statement = self.connection.prepare(sql)?;
+        let mut statement = self.connection.prepare(&sql)?;
         let items = statement
             .query_map(rusqlite::params_from_iter(parametros), convertir_fila)?
             .collect::<Result<Vec<_>, _>>()?;

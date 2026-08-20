@@ -788,7 +788,7 @@ END;
 // correctamente una fecha PRAIND ausente, sin inventar sentinelas.
 const MIGRACION_9: &str = r#"
 CREATE TABLE auditoria_contratistas (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id INTEGER PRIMARY KEY,
     fecha_hora TEXT NOT NULL,
     usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
     contratista_id INTEGER NOT NULL REFERENCES contratistas(id) ON DELETE RESTRICT,
