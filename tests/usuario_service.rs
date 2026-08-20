@@ -1,6 +1,8 @@
 use rusqlite::Connection;
 
-use control_acceso::database::repositories::usuario_repository::SqliteUsuarioRepository;
+use control_acceso::database::repositories::usuario_repository::{
+    SqliteUsuarioRepository, UsuarioRepository,
+};
 use control_acceso::database::schema::initialize_database;
 use control_acceso::models::usuario::RolUsuario;
 use control_acceso::services::autenticacion_service::AutenticacionService;
@@ -123,6 +125,48 @@ fn actualizar_administracion_preserva_hash_y_cambia_datos_rol_y_activo() {
     assert_eq!(nuevo.rol, RolUsuario::Administrador);
     assert_eq!(nuevo.password_hash, anterior.password_hash);
     assert!(!nuevo.activo);
+}
+
+/// Regresión del hallazgo #4 de `docs/auditoria-dominio-2026-08-20.md`: una
+/// edición administrativa (nombre/rol/estado) no debe poder revertir una
+/// contraseña cambiada por otra instancia mientras tanto. Reproduce el
+/// camino exacto que tenía el bug: `UsuarioService::actualizar_administracion`
+/// lee el `Usuario` completo (incluido `password_hash`) *antes* de la
+/// transacción de escritura — si el hash cambia real en ese intervalo, la
+/// versión vieja quedaba en memoria y se volvía a escribir al persistir.
+#[test]
+fn actualizar_administracion_no_revierte_una_contrasena_cambiada_concurrentemente() {
+    let connection = base();
+    inicializar(&connection);
+    let repository = SqliteUsuarioRepository::new(&connection);
+    let servicio = UsuarioService::new(&repository);
+    let id = servicio
+        .crear(input("2001", RolUsuario::Operador, true))
+        .unwrap();
+
+    // Instancia A lee el usuario para editar nombre/rol — igual que hace
+    // `actualizar_administracion` internamente — y se queda con el hash
+    // vigente en ese momento.
+    let mut editado_por_instancia_a = servicio.buscar_por_id(id).unwrap();
+    editado_por_instancia_a.cedula = "3001".to_string();
+    editado_por_instancia_a.nombre = "Nombre Nuevo".to_string();
+    editado_por_instancia_a.rol = RolUsuario::Administrador;
+
+    // Mientras tanto, otra instancia cambia la contraseña real.
+    let hash_nuevo = generar_hash("clave-cambiada-concurrentemente").unwrap();
+    repository.actualizar_password(id, &hash_nuevo).unwrap();
+
+    // Instancia A recién ahora persiste su edición, con el hash viejo todavía
+    // en memoria.
+    repository.actualizar(&editado_por_instancia_a).unwrap();
+
+    let final_usuario = servicio.buscar_por_id(id).unwrap();
+    assert_eq!(
+        final_usuario.password_hash, hash_nuevo,
+        "la edición administrativa no debe revertir la contraseña nueva"
+    );
+    assert_eq!(final_usuario.cedula, "3001");
+    assert_eq!(final_usuario.rol, RolUsuario::Administrador);
 }
 
 #[test]

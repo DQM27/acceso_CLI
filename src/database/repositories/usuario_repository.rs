@@ -116,18 +116,27 @@ fn actualizacion_reduce_roots(actual: &Usuario, nuevo: &Usuario) -> bool {
         && (nuevo.rol != RolUsuario::Root || !nuevo.activo)
 }
 
+/// Nunca toca `password_hash` a propósito, aunque `usuario.password_hash` lo
+/// traiga en el struct — este es el camino de edición administrativa
+/// (identidad/rol/estado), no el de cambio de contraseña (`actualizar_password`,
+/// la única función que sí escribe esa columna). Antes escribía el hash tal
+/// cual venía en `usuario`, que en `actualizar_protegiendo_ultimo_root` es un
+/// valor leído por el *servicio* **antes** de esta transacción: si otra
+/// instancia cambiaba la contraseña justo en ese intervalo, esta función
+/// terminaba restaurando el hash viejo sin que nadie lo pidiera. Excluir la
+/// columna del `UPDATE` hace la condición de carrera imposible en vez de
+/// improbable — no depende de que nadie vuelva a pasar un struct stale.
 fn persistir_usuario(
     transaction: &Transaction<'_>,
     usuario: &Usuario,
 ) -> Result<(), DatabaseError> {
     transaction.execute(
         "UPDATE usuarios
-         SET cedula = ?1, nombre = ?2, password_hash = ?3, rol = ?4, activo = ?5
-         WHERE id = ?6",
+         SET cedula = ?1, nombre = ?2, rol = ?3, activo = ?4
+         WHERE id = ?5",
         params![
             usuario.cedula,
             usuario.nombre,
-            usuario.password_hash,
             rol_a_texto(usuario.rol),
             usuario.activo as i64,
             usuario.id,
