@@ -7,7 +7,8 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::Constraint;
 
 use crate::tui::ui_kit::{
-    Debounce, StandardCommand, Term, TextInput, resolver_terminos, standard_command, valores,
+    Debounce, StandardCommand, Term, TextInput, plegar_diacriticos, resolver_terminos,
+    standard_command, valores,
 };
 use std::time::Instant;
 
@@ -33,10 +34,10 @@ fn aplicar_clave(f: &mut FiltroIngresosActivos, term: &Term, empresas: &[Empresa
     let valores = valores(term);
     match clave.as_str() {
         "empresa" if !term.negated && valores.len() == 1 => {
-            let buscado = valores[0].to_lowercase();
+            let buscado = plegar_diacriticos(&valores[0].to_lowercase());
             match empresas
                 .iter()
-                .find(|e| e.nombre.to_lowercase().contains(&buscado))
+                .find(|e| plegar_diacriticos(&e.nombre.to_lowercase()).contains(&buscado))
             {
                 Some(e) => {
                     f.empresa_id = Some(e.id);
@@ -73,9 +74,9 @@ fn aplicar_clave(f: &mut FiltroIngresosActivos, term: &Term, empresas: &[Empresa
             }
             Err(_) => false,
         },
-        "medio" if !term.negated && valores.len() == 1 => match medio_desde_texto(&valores[0]) {
+        "medio" if valores.len() == 1 => match medio_desde_texto(&valores[0]) {
             Some(m) => {
-                f.medio_ingreso = Some(m);
+                f.medio_ingreso = Some(if term.negated { medio_opuesto(m) } else { m });
                 true
             }
             None => false,
@@ -89,6 +90,19 @@ fn medio_desde_texto(v: &str) -> Option<MedioIngreso> {
         "caminando" | "pie" | "apie" => Some(MedioIngreso::Caminando),
         "vehiculo" | "vehículo" | "carro" => Some(MedioIngreso::Vehiculo),
         _ => None,
+    }
+}
+
+/// Sólo hay 2 variantes de `MedioIngreso`, así que negar una equivale a
+/// pedir la otra (`-medio:caminando` == `medio:vehiculo`). El patrón
+/// exhaustivo deja de compilar, en vez de fallar en silencio, si se agrega
+/// una tercera variante — momento en el que esta función dejaría de ser
+/// válida y `medio_ingreso` tendría que pasar a admitir una lista, como ya
+/// hace `tipo`.
+fn medio_opuesto(m: MedioIngreso) -> MedioIngreso {
+    match m {
+        MedioIngreso::Caminando => MedioIngreso::Vehiculo,
+        MedioIngreso::Vehiculo => MedioIngreso::Caminando,
     }
 }
 

@@ -49,12 +49,18 @@ fn avisa_cuando_quedan_resultados_fuera_de_la_lista() {
 }
 
 #[test]
-fn inicia_vacio_y_busqueda_emite_acciones() {
+fn inicia_vacio_y_busqueda_emite_acciones_tras_el_debounce() {
     let mut s = NuevoIngresoState::default();
     assert!(s.contratistas.is_empty());
-    assert!(
-        matches!(s.handle_key(k(KeyCode::Char('j'))),AccionNuevoIngreso::Buscar{texto:Some(t)}if t=="j")
+    assert_eq!(
+        s.handle_key(k(KeyCode::Char('j'))),
+        AccionNuevoIngreso::Ninguna
     );
+    let futuro = std::time::Instant::now() + DURACION_DEBOUNCE + std::time::Duration::from_millis(1);
+    assert!(matches!(
+        s.tick(futuro),
+        AccionNuevoIngreso::Buscar{texto:Some(t)} if t=="j"
+    ));
     s.completar_busqueda(Ok(PaginaContratistas {
         items: vec![resumen()],
         total: 1,

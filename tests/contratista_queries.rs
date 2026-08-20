@@ -179,6 +179,26 @@ fn busqueda_ascii_es_case_insensitive() {
     assert_eq!(buscar(&connection, Some("constructora alfa")).len(), 1);
 }
 
+/// Regresión de "Búsquedas de 1-2 caracteres no pliegan tildes ni Ñ"
+/// (`docs/hallazgos-buscador.md`): `COLLATE NOCASE` sólo pliega ASCII A-Z,
+/// así que "os" no encontraba "Óscar" antes de la función SQL `PLEGAR`.
+#[test]
+fn busqueda_corta_pliega_tildes() {
+    let connection = preparar_base();
+    let empresa = crear_empresa(&connection, "Brisas");
+    crear_contratista(
+        &connection,
+        "1",
+        "Óscar Peña",
+        empresa,
+        TipoIngreso::Swat,
+        None,
+        false,
+        true,
+    );
+    assert_eq!(buscar(&connection, Some("os")).len(), 1);
+}
+
 #[test]
 fn texto_vacio_o_blancos_equivale_a_sin_filtro() {
     let connection = preparar_base();

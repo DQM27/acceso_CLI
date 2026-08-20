@@ -1,11 +1,12 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::time::Instant;
 
 use crate::{
     database::queries::contratistas::{ContratistaResumen, PaginaContratistas},
     domain::resultado_acceso::{MotivoDenegacion, ResultadoAcceso},
     models::medio_ingreso::MedioIngreso,
     services::registro_ingreso_service::PreparacionIngreso,
-    tui::ui_kit::{StandardCommand, TextInput, mover_seleccion, standard_command},
+    tui::ui_kit::{Debounce, StandardCommand, TextInput, mover_seleccion, standard_command},
 };
 
 #[path = "render.rs"]
@@ -15,6 +16,7 @@ pub(super) mod render;
 mod tests;
 
 const MEDIOS: [MedioIngreso; 2] = [MedioIngreso::Caminando, MedioIngreso::Vehiculo];
+const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EtapaNuevoIngreso {
@@ -63,6 +65,7 @@ pub struct NuevoIngresoState {
     gafete_cursor: usize,
     error: Option<String>,
     ayuda_expandida: bool,
+    busqueda_debounce: Debounce,
 }
 
 impl Default for NuevoIngresoState {
@@ -87,6 +90,7 @@ impl NuevoIngresoState {
             gafete_cursor: 0,
             error: None,
             ayuda_expandida: false,
+            busqueda_debounce: Debounce::default(),
         }
     }
     pub fn solicitud_carga(&self) -> AccionNuevoIngreso {
@@ -178,13 +182,23 @@ impl NuevoIngresoState {
                 }),
             _ => {
                 if self.busqueda.handle_key(key) {
-                    AccionNuevoIngreso::Buscar {
-                        texto: texto_filtro(self.busqueda.value()),
-                    }
-                } else {
-                    AccionNuevoIngreso::Ninguna
+                    self.busqueda_debounce.marcar(Instant::now());
                 }
+                AccionNuevoIngreso::Ninguna
             }
+        }
+    }
+    /// Se llama en cada vuelta del bucle principal; dispara la búsqueda
+    /// diferida sólo una vez que pasa `DURACION_DEBOUNCE` sin una tecla
+    /// nueva — antes esta pantalla golpeaba la base con cada tecla en vez
+    /// de agrupar, a diferencia de las otras 5 pantallas de búsqueda.
+    pub fn tick(&mut self, ahora: Instant) -> AccionNuevoIngreso {
+        if self.busqueda_debounce.listo(ahora, DURACION_DEBOUNCE) {
+            AccionNuevoIngreso::Buscar {
+                texto: texto_filtro(self.busqueda.value()),
+            }
+        } else {
+            AccionNuevoIngreso::Ninguna
         }
     }
     fn formulario(&mut self, key: KeyEvent) -> AccionNuevoIngreso {

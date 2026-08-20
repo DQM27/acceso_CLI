@@ -218,6 +218,42 @@ fn activos_busca_por_cedula_nombre_empresa_y_gafete() {
     );
 }
 
+/// Regresión de "Búsquedas de 1-2 caracteres no pliegan tildes ni Ñ"
+/// (`docs/hallazgos-buscador.md`): "os" (2 caracteres) no aparece como
+/// subcadena literal en "Óscar" (tiene Ó, no O) — sólo matchea tras plegar
+/// diacríticos vía la función SQL `PLEGAR`.
+#[test]
+fn activos_busqueda_corta_pliega_tildes() {
+    let base = preparar_base();
+    base.connection
+        .execute(
+            "INSERT INTO contratistas(cedula,nombre,empresa_id,tipo_ingreso,es_personal_ruta,tiene_acceso) \
+             VALUES ('3003','Óscar Peña',1,'SWAT',0,1)",
+            [],
+        )
+        .unwrap();
+    let contratista_tres = base.connection.last_insert_rowid();
+    insertar(
+        &base,
+        contratista_tres,
+        base.empresa_uno,
+        "2026-08-12 07:00:00",
+        "CAMINANDO",
+        "SWAT",
+        None,
+        None,
+        None,
+    );
+    let items = SqliteIngresosQuery::new(&base.connection)
+        .listar_activos(&FiltroIngresosActivos {
+            texto: Some("os".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(items.items.len(), 1);
+    assert_eq!(items.items[0].contratista_nombre, "Óscar Peña");
+}
+
 #[test]
 fn activos_filtra_por_empresa_tipo_gafete_y_medio() {
     let base = preparar_base();
@@ -608,6 +644,85 @@ fn historial_filtra_empresa_tipo_y_gafete_con_and() {
         .unwrap();
     assert_eq!(pagina.total, 1);
     assert_eq!(pagina.items[0].contratista_nombre, "Ana Solano");
+}
+
+/// Regresión de "Historial no encuentra por número de gafete en texto
+/// libre; Activos sí" (`docs/hallazgos-buscador.md`) — `registro_ingresos_fts`
+/// no indexa `gafete_numero`, así que tanto el modo corto (`< 3` caracteres,
+/// `LIKE`) como el modo FTS (`>= 3`) necesitan una unión explícita por
+/// gafete exacto, igual que ya tenía `listar_activos`.
+#[test]
+fn historial_encuentra_por_gafete_en_texto_libre_modo_corto_y_fts() {
+    let base = preparar_base();
+    insertar(
+        &base,
+        base.contratista_uno,
+        base.empresa_uno,
+        "2026-08-12 07:00:00",
+        "CAMINANDO",
+        "PRAIND",
+        Some(31),
+        None,
+        None,
+    );
+    insertar(
+        &base,
+        base.contratista_dos,
+        base.empresa_dos,
+        "2026-08-12 08:00:00",
+        "VEHICULO",
+        "SWAT",
+        Some(310),
+        None,
+        None,
+    );
+    let query = SqliteIngresosQuery::new(&base.connection);
+
+    // "31" (2 caracteres) cae en modo LIKE corto.
+    let mut corto = filtro_historial();
+    corto.texto_persona = Some("31".into());
+    let pagina_corta = query.buscar_historial(&corto).unwrap();
+    assert_eq!(pagina_corta.total, 1);
+    assert_eq!(pagina_corta.items[0].gafete_numero, Some(31));
+
+    // "310" (3+ caracteres) cae en modo FTS.
+    let mut fts = filtro_historial();
+    fts.texto_persona = Some("310".into());
+    let pagina_fts = query.buscar_historial(&fts).unwrap();
+    assert_eq!(pagina_fts.total, 1);
+    assert_eq!(pagina_fts.items[0].gafete_numero, Some(310));
+}
+
+/// Mismo hallazgo que `activos_busqueda_corta_pliega_tildes`, para Historial.
+#[test]
+fn historial_busqueda_corta_pliega_tildes() {
+    let base = preparar_base();
+    base.connection
+        .execute(
+            "INSERT INTO contratistas(cedula,nombre,empresa_id,tipo_ingreso,es_personal_ruta,tiene_acceso) \
+             VALUES ('3003','Óscar Peña',1,'SWAT',0,1)",
+            [],
+        )
+        .unwrap();
+    let contratista_tres = base.connection.last_insert_rowid();
+    insertar(
+        &base,
+        contratista_tres,
+        base.empresa_uno,
+        "2026-08-12 07:00:00",
+        "CAMINANDO",
+        "SWAT",
+        None,
+        None,
+        None,
+    );
+    let mut filtro = filtro_historial();
+    filtro.texto_persona = Some("os".into());
+    let pagina = SqliteIngresosQuery::new(&base.connection)
+        .buscar_historial(&filtro)
+        .unwrap();
+    assert_eq!(pagina.total, 1);
+    assert_eq!(pagina.items[0].contratista_nombre, "Óscar Peña");
 }
 
 #[test]

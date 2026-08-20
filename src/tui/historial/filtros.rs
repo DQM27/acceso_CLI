@@ -2,7 +2,7 @@ use crate::{
     database::queries::ingresos::{EstadoMovimiento, FiltroHistorial},
     models::{empresa::Empresa, tipo_ingreso::TipoIngreso},
     tiempo::{ahora_costa_rica, inicio_dia_costa_rica_utc},
-    tui::ui_kit::{Term, resolver_terminos, valores},
+    tui::ui_kit::{Term, plegar_diacriticos, resolver_terminos, valores},
 };
 use chrono::{Datelike, Duration, NaiveDate};
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,10 +132,10 @@ fn aplicar_clave(f: &mut FiltrosHistorial, term: &Term, empresas: &[Empresa]) ->
     let valores = valores(term);
     match clave.as_str() {
         "empresa" if !term.negated && valores.len() == 1 => {
-            let buscado = valores[0].to_lowercase();
+            let buscado = plegar_diacriticos(&valores[0].to_lowercase());
             match empresas
                 .iter()
-                .find(|e| e.nombre.to_lowercase().contains(&buscado))
+                .find(|e| plegar_diacriticos(&e.nombre.to_lowercase()).contains(&buscado))
             {
                 Some(e) => {
                     f.empresa_id = Some(e.id);
@@ -195,7 +195,12 @@ fn aplicar_clave(f: &mut FiltrosHistorial, term: &Term, empresas: &[Empresa]) ->
             };
             true
         }
-        "gafete" if !term.negated && valores.len() == 1 => {
+        // Sólo acepta un valor numérico, igual que Activos: un valor no
+        // numérico cae a texto libre en silencio en vez de escribirse en
+        // `f.gafete` y hacer que `construir()` rechace toda la búsqueda con
+        // "Ingrese un número de gafete válido" — ese mensaje queda para
+        // cuando el operador lo escribe directo en el campo del panel.
+        "gafete" if !term.negated && valores.len() == 1 && valores[0].trim().parse::<i64>().is_ok() => {
             f.gafete = valores[0].clone();
             true
         }

@@ -1,13 +1,11 @@
 use chrono::{Duration, NaiveDate};
-use rusqlite::{Connection, Row, named_params};
+use rusqlite::{Connection, Row};
 
 use crate::database::error::DatabaseError;
+use crate::database::queries::{LIMITE_LISTADO_MAXIMO as LIMITE_MAXIMO, LIMITE_LISTADO_PREDETERMINADO as LIMITE_PREDETERMINADO};
 use crate::database::search::BusquedaTexto;
 use crate::domain::acceso::DIAS_ADVERTENCIA_PRAIND;
 use crate::models::tipo_ingreso::TipoIngreso;
-
-const LIMITE_PREDETERMINADO: usize = 100;
-const LIMITE_MAXIMO: usize = 500;
 
 /// Página de resultados: `items` respeta `limite`/`offset`, `total` es el conteo real sin
 /// recortar por el filtro — así la UI puede mostrar "100 de 120" en vez de un tope silencioso.
@@ -89,124 +87,148 @@ impl<'a> SqliteContratistasQuery<'a> {
     }
 }
 
-const CONTRATISTAS_FROM_WHERE: &str = "
+const CONTRATISTAS_FROM: &str = "
     FROM contratistas AS c
     INNER JOIN empresas AS e ON e.id = c.empresa_id
-    WHERE (
-        :modo_busqueda = 0
-        OR (:modo_busqueda = 1 AND (
-            c.cedula LIKE :patron COLLATE NOCASE
-            OR c.nombre LIKE :patron COLLATE NOCASE
-            OR e.nombre LIKE :patron COLLATE NOCASE
-        ))
-        OR (:modo_busqueda = 2 AND c.id IN (
-            SELECT rowid FROM contratistas_fts WHERE contratistas_fts MATCH :consulta_fts
-            UNION
-            SELECT ct.id FROM empresas_fts
-            INNER JOIN contratistas AS ct ON ct.empresa_id = empresas_fts.rowid
-            WHERE empresas_fts MATCH :consulta_fts
-        ))
-    )
-    AND (:empresa_id IS NULL OR c.empresa_id = :empresa_id)
-    AND (:sin_filtro_tipo OR c.tipo_ingreso IN (:t0, :t1, :t2, :t3))
-    AND (
-        :praind_modo = 0
-        OR (:praind_modo = 1 AND c.fecha_vencimiento_praind IS NOT NULL
-            AND c.fecha_vencimiento_praind < :praind_hoy
-            AND (c.es_personal_ruta = 1 OR c.tipo_ingreso IN ('PRAIND', 'IN_HOUSE')))
-        OR (:praind_modo = 2 AND c.fecha_vencimiento_praind IS NOT NULL
-            AND c.fecha_vencimiento_praind BETWEEN :praind_hoy AND :praind_limite
-            AND (c.es_personal_ruta = 1 OR c.tipo_ingreso IN ('PRAIND', 'IN_HOUSE')))
-        OR (:praind_modo = 3 AND c.fecha_vencimiento_praind IS NULL)
-    )
-    AND (:personal_ruta IS NULL OR c.es_personal_ruta = :personal_ruta)
-    AND (:tiene_acceso IS NULL OR c.tiene_acceso = :tiene_acceso)
 ";
+
+/// Arma el `WHERE` sólo con las condiciones realmente activas (en vez de un
+/// bloque fijo con flags `:x IS NULL OR col = :x` evaluados en cada fila) y
+/// los parámetros que le corresponden a cada una. Con flags dinámicos,
+/// SQLite no puede decidir en `prepare` qué rama aplica (depende del valor
+/// del parámetro en runtime) y termina escaneando todas las filas sin usar
+/// `idx_contratistas_empresa` aunque exista — confirmado con
+/// `EXPLAIN QUERY PLAN` (`docs/hallazgos-buscador.md`). Omitir del todo la
+/// condición cuando el filtro no aplica deja que el planificador vea
+/// predicados concretos y elija índice, igual que ya hacen
+/// `empresas.rs`/`usuarios.rs` para el modo de búsqueda.
+/// Nombre de parámetro (`:algo`) y valor bindeado. Usado sólo por los
+/// constructores de `WHERE` dinámico de este archivo/`ingresos.rs`.
+type ParametrosSql = Vec<(String, Box<dyn rusqlite::ToSql>)>;
+
+fn construir_where(busqueda: &BusquedaTexto, filtro: &FiltroContratistas) -> (String, ParametrosSql) {
+    let mut condiciones: Vec<String> = Vec::new();
+    let mut parametros: ParametrosSql = Vec::new();
+
+    match busqueda.modo {
+        1 => {
+            condiciones.push(
+                "(PLEGAR(c.cedula) LIKE PLEGAR(:patron) \
+                  OR PLEGAR(c.nombre) LIKE PLEGAR(:patron) \
+                  OR PLEGAR(e.nombre) LIKE PLEGAR(:patron))"
+                    .into(),
+            );
+            parametros.push((":patron".into(), Box::new(busqueda.patron_like.clone())));
+        }
+        2 => {
+            condiciones.push(
+                "c.id IN (
+                    SELECT rowid FROM contratistas_fts WHERE contratistas_fts MATCH :consulta_fts
+                    UNION
+                    SELECT ct.id FROM empresas_fts
+                    INNER JOIN contratistas AS ct ON ct.empresa_id = empresas_fts.rowid
+                    WHERE empresas_fts MATCH :consulta_fts
+                )"
+                .into(),
+            );
+            parametros.push((":consulta_fts".into(), Box::new(busqueda.consulta_fts.clone())));
+        }
+        _ => {}
+    }
+
+    if let Some(empresa_id) = filtro.empresa_id {
+        condiciones.push("c.empresa_id = :empresa_id".into());
+        parametros.push((":empresa_id".into(), Box::new(empresa_id)));
+    }
+
+    if let Some(tipos) = &filtro.tipos_incluidos {
+        let marcadores: Vec<String> = (0..tipos.len()).map(|i| format!(":tipo{i}")).collect();
+        condiciones.push(format!("c.tipo_ingreso IN ({})", marcadores.join(", ")));
+        for (marcador, tipo) in marcadores.into_iter().zip(tipos.iter()) {
+            parametros.push((marcador, Box::new(tipo.as_str_sql())));
+        }
+    }
+
+    let formato = |f: NaiveDate| f.format("%Y-%m-%d").to_string();
+    match filtro.praind {
+        None => {}
+        Some(FiltroPraind::Vencido { hoy }) => {
+            condiciones.push(
+                "(c.fecha_vencimiento_praind IS NOT NULL \
+                  AND c.fecha_vencimiento_praind < :praind_hoy \
+                  AND (c.es_personal_ruta = 1 OR c.tipo_ingreso IN ('PRAIND', 'IN_HOUSE')))"
+                    .into(),
+            );
+            parametros.push((":praind_hoy".into(), Box::new(formato(hoy))));
+        }
+        Some(FiltroPraind::ProximoAVencer { hoy }) => {
+            condiciones.push(
+                "(c.fecha_vencimiento_praind IS NOT NULL \
+                  AND c.fecha_vencimiento_praind BETWEEN :praind_hoy AND :praind_limite \
+                  AND (c.es_personal_ruta = 1 OR c.tipo_ingreso IN ('PRAIND', 'IN_HOUSE')))"
+                    .into(),
+            );
+            parametros.push((":praind_hoy".into(), Box::new(formato(hoy))));
+            parametros.push((
+                ":praind_limite".into(),
+                Box::new(formato(hoy + Duration::days(DIAS_ADVERTENCIA_PRAIND))),
+            ));
+        }
+        Some(FiltroPraind::SinFecha) => {
+            condiciones.push("c.fecha_vencimiento_praind IS NULL".into());
+        }
+    }
+
+    if let Some(personal_ruta) = filtro.personal_ruta {
+        condiciones.push("c.es_personal_ruta = :personal_ruta".into());
+        parametros.push((":personal_ruta".into(), Box::new(personal_ruta)));
+    }
+    if let Some(tiene_acceso) = filtro.tiene_acceso {
+        condiciones.push("c.tiene_acceso = :tiene_acceso".into());
+        parametros.push((":tiene_acceso".into(), Box::new(tiene_acceso)));
+    }
+
+    let where_sql = if condiciones.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", condiciones.join(" AND "))
+    };
+    (where_sql, parametros)
+}
 
 impl ContratistasQuery for SqliteContratistasQuery<'_> {
     fn buscar(&self, filtro: &FiltroContratistas) -> Result<PaginaContratistas, DatabaseError> {
         let busqueda = BusquedaTexto::preparar(filtro.texto.as_deref());
         let limite = filtro.limite.clamp(1, LIMITE_MAXIMO) as i64;
         let offset = filtro.offset as i64;
+        let (where_sql, parametros) = construir_where(&busqueda, filtro);
+        let params_comunes: Vec<(&str, &dyn rusqlite::ToSql)> = parametros
+            .iter()
+            .map(|(n, v)| (n.as_str(), v.as_ref()))
+            .collect();
 
-        let sin_filtro_tipo = filtro.tipos_incluidos.is_none();
-        let mut tipos_bind: [Option<&'static str>; TipoIngreso::ALL.len()] =
-            [None; TipoIngreso::ALL.len()];
-        if let Some(tipos) = &filtro.tipos_incluidos {
-            for (slot, tipo) in tipos_bind.iter_mut().zip(tipos.iter()) {
-                *slot = Some(tipo.as_str_sql());
-            }
-        }
-        let [t0, t1, t2, t3] = tipos_bind;
-
-        let formato = |f: NaiveDate| f.format("%Y-%m-%d").to_string();
-        let (praind_modo, praind_hoy, praind_limite): (i64, Option<String>, Option<String>) =
-            match filtro.praind {
-                None => (0, None, None),
-                Some(FiltroPraind::Vencido { hoy }) => (1, Some(formato(hoy)), None),
-                Some(FiltroPraind::ProximoAVencer { hoy }) => (
-                    2,
-                    Some(formato(hoy)),
-                    Some(formato(hoy + Duration::days(DIAS_ADVERTENCIA_PRAIND))),
-                ),
-                Some(FiltroPraind::SinFecha) => (3, None, None),
-            };
-
-        let parametros_comunes = named_params! {
-            ":modo_busqueda": busqueda.modo,
-            ":patron": busqueda.patron_like,
-            ":consulta_fts": busqueda.consulta_fts,
-            ":empresa_id": filtro.empresa_id,
-            ":sin_filtro_tipo": sin_filtro_tipo,
-            ":t0": t0,
-            ":t1": t1,
-            ":t2": t2,
-            ":t3": t3,
-            ":praind_modo": praind_modo,
-            ":praind_hoy": praind_hoy,
-            ":praind_limite": praind_limite,
-            ":personal_ruta": filtro.personal_ruta,
-            ":tiene_acceso": filtro.tiene_acceso,
-        };
-
-        let count_sql = format!("SELECT COUNT(*) {CONTRATISTAS_FROM_WHERE}");
-        let total: i64 = self
-            .connection
-            .query_row(&count_sql, parametros_comunes, |row| row.get(0))?;
+        let count_sql = format!("SELECT COUNT(*) {CONTRATISTAS_FROM} {where_sql}");
+        let total: i64 =
+            self.connection
+                .query_row(&count_sql, params_comunes.as_slice(), |row| row.get(0))?;
 
         let select_sql = format!(
             "SELECT
                 c.id, c.empresa_id, c.cedula, c.nombre, e.nombre, c.tipo_ingreso,
                 c.fecha_vencimiento_praind, c.es_personal_ruta, c.tiene_acceso
-             {CONTRATISTAS_FROM_WHERE}
+             {CONTRATISTAS_FROM} {where_sql}
              ORDER BY CASE WHEN c.cedula = :texto_literal COLLATE NOCASE THEN 0 ELSE 1 END,
                       c.nombre COLLATE NOCASE, c.id
              LIMIT :limite OFFSET :offset"
         );
+        let mut params_select = params_comunes;
+        params_select.push((":texto_literal", &busqueda.texto_literal));
+        params_select.push((":limite", &limite));
+        params_select.push((":offset", &offset));
+
         let mut statement = self.connection.prepare(&select_sql)?;
         let items = statement
-            .query_map(
-                named_params! {
-                    ":modo_busqueda": busqueda.modo,
-                    ":patron": busqueda.patron_like,
-                    ":consulta_fts": busqueda.consulta_fts,
-                    ":texto_literal": busqueda.texto_literal,
-                    ":empresa_id": filtro.empresa_id,
-                    ":sin_filtro_tipo": sin_filtro_tipo,
-                    ":t0": t0,
-                    ":t1": t1,
-                    ":t2": t2,
-                    ":t3": t3,
-                    ":praind_modo": praind_modo,
-                    ":praind_hoy": praind_hoy,
-                    ":praind_limite": praind_limite,
-                    ":personal_ruta": filtro.personal_ruta,
-                    ":tiene_acceso": filtro.tiene_acceso,
-                    ":limite": limite,
-                    ":offset": offset,
-                },
-                convertir_fila,
-            )?
+            .query_map(params_select.as_slice(), convertir_fila)?
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(PaginaContratistas {
@@ -250,4 +272,54 @@ fn convertir_fila(row: &Row<'_>) -> rusqlite::Result<ContratistaResumen> {
 
 fn tipo_invalido(indice: usize, nombre: &str) -> rusqlite::Error {
     rusqlite::Error::InvalidColumnType(indice, nombre.to_owned(), rusqlite::types::Type::Text)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::schema::initialize_database;
+
+    /// Regresión directa del hallazgo "WHERE con flags dinámicos impide usar
+    /// índices" (`docs/hallazgos-buscador.md`): filtrar por `empresa_id` debe
+    /// generar un predicado que el planificador pueda resolver con
+    /// `idx_contratistas_empresa`, no un full scan.
+    #[test]
+    fn filtrar_por_empresa_usa_el_indice() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+
+        let busqueda = BusquedaTexto::preparar(None);
+        let filtro = FiltroContratistas {
+            empresa_id: Some(1),
+            ..FiltroContratistas::default()
+        };
+        let (where_sql, parametros) = construir_where(&busqueda, &filtro);
+        let params: Vec<(&str, &dyn rusqlite::ToSql)> = parametros
+            .iter()
+            .map(|(n, v)| (n.as_str(), v.as_ref()))
+            .collect();
+
+        let sql = format!("EXPLAIN QUERY PLAN SELECT COUNT(*) {CONTRATISTAS_FROM} {where_sql}");
+        let mut statement = connection.prepare(&sql).unwrap();
+        let detalles: Vec<String> = statement
+            .query_map(params.as_slice(), |row| row.get::<_, String>(3))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert!(
+            detalles.iter().any(|d| d.contains("idx_contratistas_empresa")),
+            "{detalles:?}"
+        );
+    }
+
+    /// Sin ningún filtro, el `WHERE` debe quedar vacío en vez de arrastrar
+    /// condiciones siempre-verdaderas — evita el patrón que impedía usar
+    /// índices incluso cuando no había nada realmente que filtrar.
+    #[test]
+    fn sin_filtros_el_where_queda_vacio() {
+        let busqueda = BusquedaTexto::preparar(None);
+        let (where_sql, parametros) = construir_where(&busqueda, &FiltroContratistas::default());
+        assert_eq!(where_sql, "");
+        assert!(parametros.is_empty());
+    }
 }

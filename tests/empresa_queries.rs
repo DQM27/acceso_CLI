@@ -35,6 +35,26 @@ fn busca_fts_sin_acentos_mayusculas_y_por_substring() {
     }
 }
 
+/// Regresión de "Búsquedas de 1-2 caracteres no pliegan tildes ni Ñ"
+/// (`docs/hallazgos-buscador.md`): "al" (2 caracteres) no aparece como
+/// subcadena literal en "Álvarez" (empieza con `á`, no `a`) — sólo matchea
+/// tras plegar diacríticos vía la función SQL `PLEGAR`.
+#[test]
+fn busqueda_corta_pliega_tildes() {
+    let c = Connection::open_in_memory().unwrap();
+    initialize_database(&c).unwrap();
+    c.execute(
+        "INSERT INTO empresas(nombre) VALUES ('Constructora Álvarez')",
+        [],
+    )
+    .unwrap();
+    let items = SqliteEmpresasQuery::new(&c)
+        .buscar(&filtro(Some("al")))
+        .unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].nombre, "Constructora Álvarez");
+}
+
 #[test]
 fn conteo_real_incluye_empresas_con_cero_sin_n_mas_uno() {
     let c = Connection::open_in_memory().unwrap();

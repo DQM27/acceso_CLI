@@ -1,13 +1,16 @@
 use crossterm::event::{KeyCode, KeyEvent};
+use std::time::Instant;
 
-use crate::services::registro_ingreso_service::IngresoActivoResumen;
-use crate::tui::ui_kit::{StandardCommand, TextInput, mover_seleccion, standard_command};
+use crate::services::registro_ingreso_service::{IngresoActivoResumen, ListaIngresosActivosResumen};
+use crate::tui::ui_kit::{Debounce, StandardCommand, TextInput, mover_seleccion, standard_command};
 
 #[path = "render.rs"]
 pub(super) mod render;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+
+const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
 
 /// Overlay global de "salida rápida" (F2): registra la salida de un ingreso
 /// activo por gafete o por nombre/cédula desde cualquier pantalla, sin
@@ -31,9 +34,14 @@ pub struct SalidaRapidaState {
     estado: Estado,
     busqueda: TextInput,
     registros: Vec<IngresoActivoResumen>,
+    /// Total real de coincidencias, sin recortar por el tope de la consulta
+    /// — permite avisar "N de M, afine la búsqueda" igual que Nuevo Ingreso,
+    /// en vez de dejar resultados fuera de forma silenciosa.
+    total: usize,
     seleccion: Option<usize>,
     error: Option<String>,
     ayuda_expandida: bool,
+    busqueda_debounce: Debounce,
 }
 
 impl Default for SalidaRapidaState {
@@ -42,9 +50,11 @@ impl Default for SalidaRapidaState {
             estado: Estado::Cerrado,
             busqueda: TextInput::default(),
             registros: vec![],
+            total: 0,
             seleccion: None,
             error: None,
             ayuda_expandida: false,
+            busqueda_debounce: Debounce::default(),
         }
     }
 }
@@ -63,19 +73,26 @@ impl SalidaRapidaState {
         AccionSalidaRapida::Buscar { texto: None }
     }
 
-    pub fn completar_busqueda(&mut self, r: Result<Vec<IngresoActivoResumen>, String>) {
+    pub fn completar_busqueda(&mut self, r: Result<ListaIngresosActivosResumen, String>) {
         match r {
-            Ok(v) => {
-                self.registros = v;
+            Ok(pagina) => {
+                self.registros = pagina.items;
+                self.total = pagina.total;
                 self.seleccion = (!self.registros.is_empty()).then_some(0);
                 self.error = None;
             }
             Err(e) => {
                 self.registros.clear();
+                self.total = 0;
                 self.seleccion = None;
                 self.error = Some(e);
             }
         }
+    }
+    /// `Some(total)` sólo cuando quedaron resultados fuera de la lista
+    /// mostrada — mismo criterio que `NuevoIngresoState::resultados_ocultos`.
+    pub fn resultados_ocultos(&self) -> Option<usize> {
+        (self.total > self.registros.len()).then_some(self.total)
     }
 
     pub fn completar_confirmacion(&mut self, r: Result<String, String>) {
@@ -106,6 +123,16 @@ impl SalidaRapidaState {
 
     fn handle_abierto(&mut self, key: KeyEvent) -> AccionSalidaRapida {
         match key.code {
+            // Mismo criterio de dos etapas que el resto de pantallas de
+            // búsqueda: con filtro escrito, Esc sólo lo limpia; con filtro
+            // vacío, Esc cierra el overlay. Antes un solo Esc cerraba todo
+            // de una, descartando lo escrito sin la etapa intermedia que el
+            // operador ya aprendió en el resto de la app.
+            KeyCode::Esc if !self.busqueda.value().is_empty() => {
+                self.busqueda.clear();
+                self.error = None;
+                AccionSalidaRapida::Buscar { texto: None }
+            }
             KeyCode::Esc => {
                 self.estado = Estado::Cerrado;
                 AccionSalidaRapida::Ninguna
@@ -128,13 +155,23 @@ impl SalidaRapidaState {
             _ => {
                 if self.busqueda.handle_key(key) {
                     self.error = None;
-                    AccionSalidaRapida::Buscar {
-                        texto: texto_filtro(self.busqueda.value()),
-                    }
-                } else {
-                    AccionSalidaRapida::Ninguna
+                    self.busqueda_debounce.marcar(Instant::now());
                 }
+                AccionSalidaRapida::Ninguna
             }
+        }
+    }
+    /// Se llama en cada vuelta del bucle principal; dispara la búsqueda
+    /// diferida sólo una vez que pasa `DURACION_DEBOUNCE` sin una tecla
+    /// nueva — antes esta pantalla golpeaba la base con cada tecla en vez
+    /// de agrupar, a diferencia de las otras 5 pantallas de búsqueda.
+    pub fn tick(&mut self, ahora: Instant) -> AccionSalidaRapida {
+        if self.abierto() && self.busqueda_debounce.listo(ahora, DURACION_DEBOUNCE) {
+            AccionSalidaRapida::Buscar {
+                texto: texto_filtro(self.busqueda.value()),
+            }
+        } else {
+            AccionSalidaRapida::Ninguna
         }
     }
 

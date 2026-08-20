@@ -10,7 +10,8 @@ use crate::{
     services::contratista_service::{DatosActualizacionContratista, DatosContratista},
     tiempo::ahora_costa_rica,
     tui::ui_kit::{
-        Debounce, StandardCommand, Term, TextInput, resolver_terminos, standard_command, valores,
+        Debounce, StandardCommand, Term, TextInput, plegar_diacriticos, resolver_terminos,
+        standard_command, valores,
     },
 };
 use std::time::Instant;
@@ -49,10 +50,10 @@ fn aplicar_clave(
     let valores = valores(term);
     match clave.as_str() {
         "empresa" if !term.negated && valores.len() == 1 => {
-            let buscado = valores[0].to_lowercase();
+            let buscado = plegar_diacriticos(&valores[0].to_lowercase());
             match empresas
                 .iter()
-                .find(|e| e.nombre.to_lowercase().contains(&buscado))
+                .find(|e| plegar_diacriticos(&e.nombre.to_lowercase()).contains(&buscado))
             {
                 Some(e) => {
                     f.empresa_id = Some(e.id);
@@ -97,16 +98,16 @@ fn aplicar_clave(
             }
             _ => false,
         },
-        "ruta" if !term.negated && valores.len() == 1 => match bool_desde_texto(&valores[0]) {
+        "ruta" if valores.len() == 1 => match bool_desde_texto(&valores[0]) {
             Some(b) => {
-                f.personal_ruta = Some(b);
+                f.personal_ruta = Some(b != term.negated);
                 true
             }
             None => false,
         },
-        "acceso" if !term.negated && valores.len() == 1 => match bool_desde_texto(&valores[0]) {
+        "acceso" if valores.len() == 1 => match bool_desde_texto(&valores[0]) {
             Some(b) => {
-                f.tiene_acceso = Some(b);
+                f.tiene_acceso = Some(b != term.negated);
                 true
             }
             None => false,
@@ -466,8 +467,11 @@ impl ContratistasState {
     }
     /// Se llama en cada vuelta del bucle principal; dispara la búsqueda
     /// diferida sólo una vez que pasa `DURACION_DEBOUNCE` sin una tecla
-    /// nueva.
+    /// nueva. También refresca `hoy` (usado por `praind:` y el coloreado de
+    /// vencimiento) para que una sesión que cruza medianoche no quede
+    /// congelada en la fecha de arranque.
     pub fn tick(&mut self, ahora: Instant) -> AccionContratistas {
+        self.hoy = ahora_costa_rica().date_naive();
         if self.busqueda_debounce.listo(ahora, DURACION_DEBOUNCE) {
             self.buscar(None)
         } else {

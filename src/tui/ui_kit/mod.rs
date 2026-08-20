@@ -10,6 +10,7 @@ mod query_lang;
 mod seleccion;
 mod shell;
 mod text_input;
+mod texto;
 mod theme;
 
 pub use debounce::Debounce;
@@ -24,4 +25,5 @@ pub use shell::{
     centered_rect, identidad_sesion, panel, render_terminal_too_small,
 };
 pub use text_input::{TextInput, TextInputFocus};
+pub use texto::plegar_diacriticos;
 pub use theme::{Theme, ThemePreset};

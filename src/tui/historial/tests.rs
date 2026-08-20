@@ -271,6 +271,18 @@ fn parsear_consulta_resuelve_empresa_por_nombre_parcial_y_deja_texto_libre() {
 }
 
 #[test]
+fn parsear_consulta_empresa_ignora_tildes_en_ambos_lados() {
+    let empresas = vec![Empresa {
+        id: 9,
+        nombre: "Álvarez Ingeniería".into(),
+        activo: true,
+    }];
+    let base = FiltrosHistorial::default();
+    let (filtros, _) = parsear_consulta(&base, "empresa:alvarez", &empresas);
+    assert_eq!(filtros.empresa_id, Some(9));
+}
+
+#[test]
 fn parsear_consulta_reconoce_tipo_estado_y_gafete() {
     let base = FiltrosHistorial::default();
     let (filtros, libre) = parsear_consulta(&base, "tipo:praind estado:activos gafete:27", &[]);
@@ -278,6 +290,18 @@ fn parsear_consulta_reconoce_tipo_estado_y_gafete() {
     assert_eq!(filtros.estado, EstadoMovimiento::Activos);
     assert_eq!(filtros.gafete, "27");
     assert!(libre.is_empty());
+}
+
+/// Regresión de "`gafete:abc` (no numérico) se comporta distinto en Activos
+/// e Historial" (`docs/hallazgos-buscador.md`): un valor no numérico debe
+/// caer a texto libre en silencio, igual que Activos — no debe escribirse
+/// en `f.gafete` (eso haría que `construir()` rechace toda la búsqueda).
+#[test]
+fn parsear_consulta_gafete_no_numerico_cae_a_texto_libre() {
+    let base = FiltrosHistorial::default();
+    let (filtros, libre) = parsear_consulta(&base, "gafete:abc", &[]);
+    assert_eq!(filtros.gafete, "");
+    assert_eq!(libre, "gafete:abc");
 }
 
 #[test]

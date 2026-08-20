@@ -189,6 +189,41 @@ fn busqueda_admite_praind_ruta_y_acceso() {
 }
 
 #[test]
+fn negar_ruta_y_acceso_invierte_el_booleano() {
+    let s = ContratistasState {
+        filtro: "-ruta:si -acceso:no".into(),
+        ..Default::default()
+    };
+    let AccionContratistas::Buscar {
+        personal_ruta,
+        tiene_acceso,
+        texto,
+        ..
+    } = s.buscar(None)
+    else {
+        panic!("debía consultar")
+    };
+    assert_eq!(personal_ruta, Some(false));
+    assert_eq!(tiene_acceso, Some(true));
+    assert_eq!(texto, None);
+}
+
+#[test]
+fn empresa_con_clave_valor_ignora_tildes_en_ambos_lados() {
+    let mut s = ContratistasState::default();
+    s.completar_empresas(Ok(vec![Empresa {
+        id: 9,
+        nombre: "Álvarez Ingeniería".into(),
+        activo: true,
+    }]));
+    s.filtro = "empresa:alvarez".into();
+    let AccionContratistas::Buscar { empresa_id, .. } = s.buscar(None) else {
+        panic!("debía consultar")
+    };
+    assert_eq!(empresa_id, Some(9));
+}
+
+#[test]
 fn clave_no_reconocida_o_lista_de_praind_cae_a_texto_libre() {
     let s = ContratistasState {
         filtro: "praind:vence,vencido tipo:invalido".into(),

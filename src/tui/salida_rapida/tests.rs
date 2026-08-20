@@ -1,5 +1,6 @@
 use chrono::NaiveDate;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::time::Duration;
 
 use super::*;
 use crate::{
@@ -9,6 +10,13 @@ use crate::{
 
 fn k(c: KeyCode) -> KeyEvent {
     KeyEvent::new(c, KeyModifiers::NONE)
+}
+
+fn pagina(items: Vec<IngresoActivoResumen>) -> ListaIngresosActivosResumen {
+    ListaIngresosActivosResumen {
+        total: items.len(),
+        items,
+    }
 }
 
 fn r(id: i64, nombre: &str, gafete: Option<i64>) -> IngresoActivoResumen {
@@ -51,33 +59,30 @@ fn abrir_dispara_una_busqueda_sin_texto() {
 }
 
 #[test]
-fn escribir_filtra_por_gafete_o_nombre_en_un_solo_campo() {
+fn escribir_filtra_por_gafete_o_nombre_en_un_solo_campo_tras_el_debounce() {
     let mut s = SalidaRapidaState::default();
     s.abrir();
+    let futuro = || Instant::now() + DURACION_DEBOUNCE + Duration::from_millis(1);
+
+    assert_eq!(s.handle_key(k(KeyCode::Char('2'))), AccionSalidaRapida::Ninguna);
+    assert_eq!(s.handle_key(k(KeyCode::Char('5'))), AccionSalidaRapida::Ninguna);
     assert_eq!(
-        s.handle_key(k(KeyCode::Char('2'))),
-        AccionSalidaRapida::Buscar {
-            texto: Some("2".into())
-        }
-    );
-    assert_eq!(
-        s.handle_key(k(KeyCode::Char('5'))),
+        s.tick(futuro()),
         AccionSalidaRapida::Buscar {
             texto: Some("25".into())
         }
     );
+
     s.handle_key(k(KeyCode::Backspace));
-    assert_eq!(
-        s.handle_key(k(KeyCode::Backspace)),
-        AccionSalidaRapida::Buscar { texto: None }
-    );
+    s.handle_key(k(KeyCode::Backspace));
+    assert_eq!(s.tick(futuro()), AccionSalidaRapida::Buscar { texto: None });
 }
 
 #[test]
 fn enter_sobre_el_resaltado_pide_confirmar_con_su_id_y_nombre() {
     let mut s = SalidaRapidaState::default();
     s.abrir();
-    s.completar_busqueda(Ok(vec![r(7, "José Peña", Some(12)), r(9, "Ana Solís", None)]));
+    s.completar_busqueda(Ok(pagina(vec![r(7, "José Peña", Some(12)), r(9, "Ana Solís", None)])));
 
     assert_eq!(
         s.handle_key(k(KeyCode::Enter)),
@@ -101,15 +106,36 @@ fn enter_sobre_el_resaltado_pide_confirmar_con_su_id_y_nombre() {
 fn enter_sin_resultados_no_hace_nada() {
     let mut s = SalidaRapidaState::default();
     s.abrir();
-    s.completar_busqueda(Ok(vec![]));
+    s.completar_busqueda(Ok(pagina(vec![])));
     assert_eq!(s.handle_key(k(KeyCode::Enter)), AccionSalidaRapida::Ninguna);
+}
+
+/// Regresión de "un solo Esc cierra todo el overlay y descarta lo escrito"
+/// (`docs/hallazgos-buscador.md`): con filtro escrito, Esc sólo limpia,
+/// igual que el resto de pantallas de búsqueda; recién con el filtro ya
+/// vacío un segundo Esc cierra el overlay.
+#[test]
+fn esc_con_filtro_escrito_solo_limpia_sin_cerrar() {
+    let mut s = SalidaRapidaState::default();
+    s.abrir();
+    s.handle_key(k(KeyCode::Char('2')));
+
+    assert_eq!(
+        s.handle_key(k(KeyCode::Esc)),
+        AccionSalidaRapida::Buscar { texto: None }
+    );
+    assert!(s.abierto());
+    assert_eq!(s.busqueda.value(), "");
+
+    assert_eq!(s.handle_key(k(KeyCode::Esc)), AccionSalidaRapida::Ninguna);
+    assert!(!s.abierto());
 }
 
 #[test]
 fn esc_cierra_sin_confirmar_nada() {
     let mut s = SalidaRapidaState::default();
     s.abrir();
-    s.completar_busqueda(Ok(vec![r(7, "José Peña", Some(12))]));
+    s.completar_busqueda(Ok(pagina(vec![r(7, "José Peña", Some(12))])));
     s.handle_key(k(KeyCode::Esc));
     assert!(!s.abierto());
 }
@@ -142,7 +168,7 @@ fn confirmacion_exitosa_se_cierra_con_esc() {
 fn error_de_confirmacion_deja_reintentar_sin_cerrar() {
     let mut s = SalidaRapidaState::default();
     s.abrir();
-    s.completar_busqueda(Ok(vec![r(7, "José Peña", Some(12))]));
+    s.completar_busqueda(Ok(pagina(vec![r(7, "José Peña", Some(12))])));
     s.completar_confirmacion(Err("El ingreso ya no está activo".into()));
 
     assert!(s.abierto());
@@ -182,7 +208,7 @@ fn renderiza_resultados_y_luego_el_mensaje_de_confirmacion() {
     assert!(!texto(terminal.backend()).contains("SALIDA RÁPIDA"));
 
     s.abrir();
-    s.completar_busqueda(Ok(vec![r(7, "José Peña", Some(12))]));
+    s.completar_busqueda(Ok(pagina(vec![r(7, "José Peña", Some(12))])));
     terminal
         .draw(|frame| render::render(frame, frame.area(), &s, theme))
         .expect("debe renderizar");
@@ -203,7 +229,7 @@ fn renderiza_resultados_y_luego_el_mensaje_de_confirmacion() {
 fn abrir_de_nuevo_reinicia_busqueda_y_seleccion_previas() {
     let mut s = SalidaRapidaState::default();
     s.abrir();
-    s.completar_busqueda(Ok(vec![r(7, "José Peña", Some(12))]));
+    s.completar_busqueda(Ok(pagina(vec![r(7, "José Peña", Some(12))])));
     s.handle_key(k(KeyCode::Char('1')));
     s.handle_key(k(KeyCode::Esc));
 

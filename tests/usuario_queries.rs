@@ -55,6 +55,24 @@ fn busca_por_cedula_y_nombre_parcial_case_insensitive_con_trim() {
     }
 }
 
+/// Regresión de "Búsquedas de 1-2 caracteres no pliegan tildes ni Ñ"
+/// (`docs/hallazgos-buscador.md`): "ri" (2 caracteres) no aparece como
+/// subcadena literal en "María" (tiene í, no i) — sólo matchea tras plegar
+/// diacríticos vía la función SQL `PLEGAR`.
+#[test]
+fn busqueda_corta_pliega_tildes() {
+    let connection = base();
+    insertar(&connection, "1", "María Mora", "OPERADOR", true);
+    let items = SqliteUsuariosQuery::new(&connection)
+        .buscar(&FiltroUsuarios {
+            texto: Some("ri".into()),
+            ..FiltroUsuarios::default()
+        })
+        .unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].nombre, "María Mora");
+}
+
 #[test]
 fn texto_vacio_equivale_a_sin_filtro() {
     let connection = base();

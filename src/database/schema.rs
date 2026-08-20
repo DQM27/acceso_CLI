@@ -1,6 +1,8 @@
 use chrono::NaiveDateTime;
+use rusqlite::functions::FunctionFlags;
 use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 
+use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
 pub const SCHEMA_VERSION: i64 = 7;
@@ -73,6 +75,8 @@ impl From<rusqlite::Error> for SchemaError {
 }
 
 pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
+    registrar_funcion_plegar(connection)?;
+
     // `foreign_keys`, `journal_mode` y `trusted_schema` no pueden cambiarse
     // dentro de una transacción activa, así que se fijan antes de abrir la
     // transacción de migración.
@@ -169,6 +173,30 @@ fn adoptar_application_id(connection: &Connection) -> Result<(), SchemaError> {
         connection.execute_batch(&format!("PRAGMA application_id = {APPLICATION_ID};"))?;
     }
     Ok(())
+}
+
+/// Función SQL `PLEGAR(texto)`: minúsculas + diacríticos plegados
+/// (`crate::texto::plegar_para_busqueda`), usada por las búsquedas cortas
+/// (`< 3` caracteres) en vez de `LIKE ... COLLATE NOCASE`. `COLLATE NOCASE`
+/// sólo pliega ASCII A-Z — no encuentra "Óscar" buscando "os" — y a
+/// diferencia de una `COLLATE` personalizada (que SQLite no aplica al
+/// operador `LIKE`, sólo a comparaciones de igualdad; verificado antes de
+/// implementar esto), una función SQL sí participa en `LIKE` porque el
+/// plegado ocurre antes de comparar, no durante. Se registra en cada
+/// apertura (no sobrevive a un `ATTACH`/reconexión) — determinista y sin
+/// acceso a memoria compartida entre threads, así que es segura para SQLite.
+fn registrar_funcion_plegar(connection: &Connection) -> Result<(), SchemaError> {
+    connection
+        .create_scalar_function(
+            "PLEGAR",
+            1,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            |contexto| {
+                let texto: String = contexto.get(0)?;
+                Ok(plegar_para_busqueda(&texto))
+            },
+        )
+        .map_err(SchemaError::from)
 }
 
 /// Chequeo estructural barato en cada apertura (`quick_check`, no

@@ -6,8 +6,8 @@ Activos, Historial), en 4 ángulos en paralelo (multi-agente): UX/consistencia, 
 velocidad/eficiencia, y acentos/eñes. Cada hallazgo fue verificado por un segundo agente
 independiente leyendo el código real antes de confirmarse.
 
-**Estado (2026-08-19): 16/18 hallazgos confirmados, 0 reparados.** 2 hallazgos propuestos se
-descartaron por evidencia (ver abajo).
+**Estado (2026-08-20): 16/18 hallazgos confirmados, 2 reparados (1 parcialmente).** 2
+hallazgos propuestos se descartaron por evidencia (ver abajo).
 
 El análisis léxico (comillas, negación con guion, separar clave de texto libre) lo hace el
 crate externo `query-parser`; cada pantalla tiene su propia función `aplicar_clave` que
@@ -15,15 +15,23 @@ interpreta las claves reconocidas y llama a `resolver_terminos` (`src/tui/ui_kit
 
 ## UX / consistencia entre pantallas
 
-- [ ] **La negación (`-clave:valor`) solo funciona para `tipo` y `estado`.** Todas las demás
+- [x] **La negación (`-clave:valor`) solo funciona para `tipo` y `estado`.** Todas las demás
   claves reconocidas (`empresa`, `praind`, `ruta`, `acceso`, `gafete`, `medio`, `desde`,
-  `hasta`, `ingreso`, `salida`) tienen el guard `!term.negated`, así que un término negado se
-  rechaza en silencio y cae a texto libre reconstruido con el guion (`-empresa:brisas`), que
-  casi nunca matchea nada. `src/tui/contratistas/state.rs:51,85,100,107`;
-  `activos/state.rs:35,69,76`; `historial/filtros.rs:134,198,202,206,210,214`. **Severidad
-  alta.** Sugerencia: soportar la negación en todas las claves de valor único, o al menos
-  distinguir "clave reconocida pero sin negación soportada" de "clave no reconocida" para
-  avisar al usuario.
+  `hasta`, `ingreso`, `salida`) tenían el guard `!term.negated`, así que un término negado se
+  rechazaba en silencio y caía a texto libre reconstruido con el guion (`-empresa:brisas`),
+  que casi nunca matchea nada. **Severidad alta.** **Parcialmente reparado (2026-08-20):**
+  `ruta`/`acceso` (Contratistas) y `medio` (Activos) ya soportan negación —
+  `src/tui/contratistas/state.rs::aplicar_clave` invierte el booleano (`b != term.negated`);
+  `src/tui/activos/state.rs::aplicar_clave` usa `medio_opuesto` (sólo hay 2 variantes de
+  `MedioIngreso`, así que negar una da la otra; el patrón exhaustivo deja de compilar si se
+  agrega una tercera). **Sigue pendiente** para `empresa`, `gafete`, `desde`, `hasta`,
+  `ingreso`, `salida` (Contratistas/Activos/Historial) y `praind` (Contratistas): esas claves
+  filtran por igualdad/rango contra SQL (`= :valor`, `LIKE '%valor%'`), no por un booleano o
+  enum cerrado ya resuelto en Rust — soportar `-clave:valor` ahí exige agregar `NOT`/`!=` en
+  las mismas consultas (`contratistas.rs`, `queries/ingresos.rs`) que ya están marcadas para
+  reescribirse por el hallazgo de rendimiento "WHERE con flags dinámicos" en
+  `docs/hallazgos-buscador.md` — se decidió no tocar ese SQL dos veces por separado, sino
+  resolver ambos juntos cuando se aborde esa reescritura.
 
 - [ ] **Clave con typo o no soportada en la pantalla se busca como texto libre sin ningún
   aviso.** `escribir "empresaa:brisas"` (o `estado:` en Contratistas/Activos, donde esa clave
@@ -53,13 +61,14 @@ interpreta las claves reconocidas y llama a `resolver_terminos` (`src/tui/ui_kit
 
 ## Consultas / SQL
 
-- [ ] **`ContratistasState.hoy` se calcula una sola vez al arrancar la app y nunca se
+- [x] **`ContratistasState.hoy` se calcula una sola vez al arrancar la app y nunca se
   refresca.** Alimenta tanto `praind:vence`/`praind:vencido`/`praind:sin` como el coloreado de
-  vencimiento en pantalla; el único setter (`set_hoy`) solo lo llaman los tests.
+  vencimiento en pantalla; el único setter (`set_hoy`) solo lo llamaban los tests.
   `src/tui/contratistas/state.rs:334` (`impl Default`), `341-343` (`set_hoy`); nunca invocado
-  desde `app.rs`. **Severidad alta.** En una sesión larga que cruza medianoche, `praind:` y el
-  color de vencimiento quedan congelados en la fecha del arranque. Sugerencia: refrescar
-  `state.hoy` en cada `tick()`, igual que el resto del estado vivo.
+  desde `app.rs`. **Severidad alta.** **Reparado (2026-08-20):** `ContratistasState::tick`
+  ahora refresca `self.hoy = ahora_costa_rica().date_naive()` en cada vuelta (antes de
+  revisar el debounce), igual que el resto del estado vivo — una sesión que cruza medianoche
+  ya no queda congelada en la fecha de arranque.
 
 - [x] **Historial no tiene una clave `praind:` — la comparación pedida no aplica.** Solo existe
   `tipo:praind` como valor de la clave `tipo`. Historial calcula su propio `hoy` una vez, pero

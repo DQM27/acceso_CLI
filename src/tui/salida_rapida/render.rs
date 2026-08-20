@@ -55,7 +55,13 @@ fn render_confirmado(frame: &mut Frame, area: Rect, mensaje: &str, theme: Theme)
 
 fn render_busqueda(frame: &mut Frame, area: Rect, state: &SalidaRapidaState, theme: Theme) {
     const ETIQUETA: &str = "Buscar gafete o nombre/cédula: ";
-    let texto = format!("{ETIQUETA}{}", state.busqueda.value());
+    let mut texto = format!("{ETIQUETA}{}", state.busqueda.value());
+    if let Some(total) = state.resultados_ocultos() {
+        texto.push_str(&format!(
+            "  ({} de {total} — afine la búsqueda)",
+            state.registros.len()
+        ));
+    }
     frame.render_widget(Paragraph::new(texto).style(theme.accent()), area);
     let antes_del_cursor: String = state
         .busqueda

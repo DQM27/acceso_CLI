@@ -1141,6 +1141,10 @@ impl App {
             self.procesar_accion_empresas(accion, core);
             let accion = self.usuarios.tick(ahora);
             self.procesar_accion_usuarios(accion, core);
+            let accion = self.nuevo_ingreso.tick(ahora);
+            self.procesar_accion_nuevo_ingreso(accion, core);
+            let accion = self.salida_rapida.tick(ahora);
+            self.procesar_accion_salida_rapida(accion, core);
         }
 
         Ok(self.salida.clone())
@@ -1386,6 +1390,10 @@ impl App {
         self.procesar_accion_empresas(accion, core);
         let accion = self.usuarios.tick(futuro);
         self.procesar_accion_usuarios(accion, core);
+        let accion = self.nuevo_ingreso.tick(futuro);
+        self.procesar_accion_nuevo_ingreso(accion, core);
+        let accion = self.salida_rapida.tick(futuro);
+        self.procesar_accion_salida_rapida(accion, core);
     }
 
     /// Comandos transversales (salida de emergencia, tema, salida rápida) que se
@@ -1457,7 +1465,6 @@ impl App {
                                 ..Default::default()
                             },
                         )
-                        .map(|pagina| pagina.items)
                         .map_err(|_| "No se pudieron cargar los ingresos activos".into())
                     });
                 self.salida_rapida.completar_busqueda(resultado);

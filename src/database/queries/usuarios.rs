@@ -1,11 +1,9 @@
 use rusqlite::{Connection, Row};
 
 use crate::database::error::DatabaseError;
+use crate::database::queries::{LIMITE_LISTADO_MAXIMO as LIMITE_MAXIMO, LIMITE_LISTADO_PREDETERMINADO as LIMITE_PREDETERMINADO};
 use crate::database::search::BusquedaTexto;
 use crate::models::usuario::RolUsuario;
-
-const LIMITE_PREDETERMINADO: usize = 100;
-const LIMITE_MAXIMO: usize = 500;
 
 /// Contrato de lectura administrativa; nunca contiene material de autenticación.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,7 +54,7 @@ impl UsuariosQuery for SqliteUsuariosQuery<'_> {
         let (sql, parametros): (&str, Vec<rusqlite::types::Value>) = match busqueda.modo {
             1 => (
                 "SELECT id,cedula,nombre,rol,activo FROM usuarios
-                 WHERE cedula LIKE ?1 COLLATE NOCASE OR nombre LIKE ?1 COLLATE NOCASE
+                 WHERE PLEGAR(cedula) LIKE PLEGAR(?1) OR PLEGAR(nombre) LIKE PLEGAR(?1)
                  ORDER BY CASE WHEN cedula=?2 COLLATE NOCASE THEN 0 ELSE 1 END,
                           nombre COLLATE NOCASE,id LIMIT ?3 OFFSET ?4",
                 vec![

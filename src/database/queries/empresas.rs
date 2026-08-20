@@ -1,9 +1,7 @@
 use rusqlite::{Connection, Row};
 
 use crate::database::{error::DatabaseError, search::BusquedaTexto};
-
-const LIMITE_PREDETERMINADO: usize = 100;
-const LIMITE_MAXIMO: usize = 500;
+use crate::database::queries::{LIMITE_LISTADO_MAXIMO as LIMITE_MAXIMO, LIMITE_LISTADO_PREDETERMINADO as LIMITE_PREDETERMINADO};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EmpresaResumen {
@@ -53,7 +51,7 @@ impl EmpresasQuery for SqliteEmpresasQuery<'_> {
             1 => (
                 "SELECT e.id,e.nombre,COUNT(c.id),e.activo FROM empresas e
                  LEFT JOIN contratistas c ON c.empresa_id=e.id
-                 WHERE e.nombre LIKE ?1 COLLATE NOCASE
+                 WHERE PLEGAR(e.nombre) LIKE PLEGAR(?1)
                  GROUP BY e.id,e.nombre,e.activo ORDER BY e.nombre COLLATE NOCASE,e.id LIMIT ?2 OFFSET ?3",
                 vec![busqueda.patron_like.into(), limite.into(), offset.into()],
             ),

@@ -87,6 +87,34 @@ fn busqueda_admite_clave_valor_de_empresa_tipo_gafete_medio_y_deja_texto_libre()
 }
 
 #[test]
+fn negar_medio_pide_el_medio_opuesto() {
+    let s = ActivosState {
+        filtro: "-medio:caminando".into(),
+        ..Default::default()
+    };
+    let AccionActivos::Buscar { medio, texto, .. } = s.buscar(None) else {
+        panic!("debía consultar")
+    };
+    assert_eq!(medio, Some(MedioIngreso::Vehiculo));
+    assert_eq!(texto, None);
+}
+
+#[test]
+fn empresa_con_clave_valor_ignora_tildes_en_ambos_lados() {
+    let mut s = ActivosState::default();
+    s.completar_empresas(Ok(vec![crate::models::empresa::Empresa {
+        id: 9,
+        nombre: "Álvarez Ingeniería".into(),
+        activo: true,
+    }]));
+    s.filtro = "empresa:alvarez".into();
+    let AccionActivos::Buscar { empresa_id, .. } = s.buscar(None) else {
+        panic!("debía consultar")
+    };
+    assert_eq!(empresa_id, Some(9));
+}
+
+#[test]
 fn negar_tipo_incluye_los_demas_y_clave_invalida_cae_a_texto_libre() {
     let mut s = ActivosState {
         filtro: "-tipo:swat".into(),
