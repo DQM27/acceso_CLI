@@ -97,9 +97,9 @@ fn enter_y_accesos_numericos_emiten_apertura_correcta() {
         ('4', OpcionMenu::Contratistas),
         ('5', OpcionMenu::Empresas),
         ('6', OpcionMenu::Usuarios),
-        ('7', OpcionMenu::CambiarPassword),
-        ('8', OpcionMenu::Auditoria),
-        ('9', OpcionMenu::Configuracion),
+        ('7', OpcionMenu::Auditoria),
+        ('8', OpcionMenu::Respaldos),
+        ('9', OpcionMenu::CambiarPassword),
     ] {
         assert_eq!(
             s.handle_key(k(KeyCode::Char(c)), RolUsuario::Root),
@@ -156,25 +156,25 @@ fn salida_confirma_o_cancela_y_escape_raiz_no_hace_nada() {
 }
 
 #[test]
-fn un_operador_no_ve_ni_puede_abrir_configuracion() {
+fn un_operador_no_ve_ni_puede_abrir_respaldos() {
     let visibles = OpcionMenu::visibles_para(RolUsuario::Operador);
-    assert!(!visibles.contains(&OpcionMenu::Configuracion));
+    assert!(!visibles.contains(&OpcionMenu::Respaldos));
 
     let mut s = MenuPrincipalState::default();
     assert_eq!(
-        s.handle_key(k(KeyCode::Char('9')), RolUsuario::Operador),
+        s.handle_key(k(KeyCode::Char('8')), RolUsuario::Operador),
         AccionMenu::Ninguna
     );
 }
 
 #[test]
-fn un_administrador_no_ve_ni_puede_abrir_configuracion() {
+fn un_administrador_no_ve_ni_puede_abrir_respaldos() {
     let visibles = OpcionMenu::visibles_para(RolUsuario::Administrador);
-    assert!(!visibles.contains(&OpcionMenu::Configuracion));
+    assert!(!visibles.contains(&OpcionMenu::Respaldos));
 
     let mut s = MenuPrincipalState::default();
     assert_eq!(
-        s.handle_key(k(KeyCode::Char('9')), RolUsuario::Administrador),
+        s.handle_key(k(KeyCode::Char('8')), RolUsuario::Administrador),
         AccionMenu::Ninguna
     );
 }
@@ -189,7 +189,7 @@ fn todos_los_roles_pueden_abrir_cambio_de_password() {
         assert!(OpcionMenu::visibles_para(rol).contains(&OpcionMenu::CambiarPassword));
         let mut state = MenuPrincipalState::default();
         assert_eq!(
-            state.handle_key(k(KeyCode::Char('7')), rol),
+            state.handle_key(k(KeyCode::Char('9')), rol),
             AccionMenu::Abrir(OpcionMenu::CambiarPassword)
         );
     }
@@ -201,11 +201,71 @@ fn auditoria_es_visible_para_administrador_y_root_pero_no_operador() {
         assert!(OpcionMenu::visibles_para(rol).contains(&OpcionMenu::Auditoria));
         let mut state = MenuPrincipalState::default();
         assert_eq!(
-            state.handle_key(k(KeyCode::Char('8')), rol),
+            state.handle_key(k(KeyCode::Char('7')), rol),
             AccionMenu::Abrir(OpcionMenu::Auditoria)
         );
     }
     assert!(!OpcionMenu::visibles_para(RolUsuario::Operador).contains(&OpcionMenu::Auditoria));
+}
+
+#[test]
+fn el_menu_root_muestra_todas_las_opciones_en_orden_sin_recortarlas() {
+    use crate::services::autenticacion_service::UsuarioSesion;
+    use ratatui::{Terminal, backend::TestBackend};
+
+    let state = MenuPrincipalState::default();
+    let sesion = UsuarioSesion {
+        id: 1,
+        cedula: "1".into(),
+        nombre: "Root".into(),
+        rol: RolUsuario::Root,
+    };
+    let mut terminal = Terminal::new(TestBackend::new(60, 22)).unwrap();
+    terminal
+        .draw(|frame| {
+            render::render(
+                frame,
+                frame.area(),
+                &state,
+                &sesion,
+                crate::tui::ui_kit::ThemePreset::Brisas.theme(),
+            )
+        })
+        .unwrap();
+
+    let buffer = terminal.backend().buffer();
+    let texto = (0..buffer.area.height)
+        .map(|y| {
+            (0..buffer.area.width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let opciones = [
+        "1   Nuevo ingreso",
+        "2   Ingresos activos",
+        "3   Historial",
+        "4   Contratistas",
+        "5   Empresas",
+        "6   Usuarios",
+        "7   Auditoría",
+        "8   Respaldos",
+        "9   Cambiar mi contraseña",
+        "L   Cerrar sesión",
+        "Q   Salir",
+    ];
+    let mut posicion_anterior = 0;
+    for opcion in opciones {
+        let posicion = texto
+            .find(opcion)
+            .unwrap_or_else(|| panic!("falta {opcion}"));
+        assert!(
+            posicion >= posicion_anterior,
+            "{opcion} aparece fuera de orden"
+        );
+        posicion_anterior = posicion;
+    }
 }
 
 #[test]

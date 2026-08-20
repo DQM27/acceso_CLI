@@ -14,48 +14,10 @@ pub(super) mod render;
 #[path = "tests.rs"]
 mod tests;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OpcionConfiguracion {
-    Respaldos,
-}
-
-impl OpcionConfiguracion {
-    pub const TODAS: [Self; 1] = [Self::Respaldos];
-
-    pub fn etiqueta(self) -> &'static str {
-        match self {
-            Self::Respaldos => "1   Respaldos",
-        }
-    }
-
-    pub fn descripcion(self) -> &'static str {
-        match self {
-            Self::Respaldos => "Crear, listar, validar y exportar respaldos de la base de datos.",
-        }
-    }
-}
-
-#[derive(Debug)]
-enum ModoConfiguracion {
-    Menu,
-    Respaldos(RespaldosState),
-}
-
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ConfiguracionState {
-    modo: ModoConfiguracion,
-    seleccion: OpcionConfiguracion,
+    respaldos: RespaldosState,
     ayuda_expandida: bool,
-}
-
-impl Default for ConfiguracionState {
-    fn default() -> Self {
-        Self {
-            modo: ModoConfiguracion::Menu,
-            seleccion: OpcionConfiguracion::Respaldos,
-            ayuda_expandida: false,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,42 +28,30 @@ pub enum AccionAjustes {
 }
 
 impl ConfiguracionState {
+    pub fn reiniciar(&mut self) -> AccionAjustes {
+        *self = Self::default();
+        AccionAjustes::Respaldos(AccionRespaldos::Cargar)
+    }
+
     pub fn handle_key(&mut self, key: KeyEvent) -> AccionAjustes {
         if standard_command(key) == Some(StandardCommand::Help) {
             self.ayuda_expandida = !self.ayuda_expandida;
             return AccionAjustes::Ninguna;
         }
-        match &mut self.modo {
-            ModoConfiguracion::Menu => match key.code {
-                KeyCode::Enter | KeyCode::Char('1') => {
-                    self.modo = ModoConfiguracion::Respaldos(RespaldosState::default());
-                    AccionAjustes::Respaldos(AccionRespaldos::Cargar)
-                }
-                KeyCode::Esc => AccionAjustes::Volver,
-                _ => AccionAjustes::Ninguna,
-            },
-            ModoConfiguracion::Respaldos(estado) => {
-                let accion = estado.handle_key(key);
-                if accion == AccionRespaldos::Volver {
-                    self.modo = ModoConfiguracion::Menu;
-                    AccionAjustes::Ninguna
-                } else {
-                    AccionAjustes::Respaldos(accion)
-                }
-            }
+        let accion = self.respaldos.handle_key(key);
+        if accion == AccionRespaldos::Volver {
+            AccionAjustes::Volver
+        } else {
+            AccionAjustes::Respaldos(accion)
         }
     }
 
     pub fn completar_listado(&mut self, resultado: Result<Vec<RespaldoResumen>, String>) {
-        if let ModoConfiguracion::Respaldos(estado) = &mut self.modo {
-            estado.completar_listado(resultado);
-        }
+        self.respaldos.completar_listado(resultado);
     }
 
     pub fn completar_creacion(&mut self, resultado: Result<RespaldoResumen, String>) {
-        if let ModoConfiguracion::Respaldos(estado) = &mut self.modo {
-            estado.completar_creacion(resultado);
-        }
+        self.respaldos.completar_creacion(resultado);
     }
 
     pub fn completar_validacion(
@@ -109,15 +59,11 @@ impl ConfiguracionState {
         ruta: &Path,
         resultado: Result<ResultadoValidacion, String>,
     ) {
-        if let ModoConfiguracion::Respaldos(estado) = &mut self.modo {
-            estado.completar_validacion(ruta, resultado);
-        }
+        self.respaldos.completar_validacion(ruta, resultado);
     }
 
     pub fn completar_exportacion(&mut self, resultado: Result<(), String>, destino: &Path) {
-        if let ModoConfiguracion::Respaldos(estado) = &mut self.modo {
-            estado.completar_exportacion(resultado, destino);
-        }
+        self.respaldos.completar_exportacion(resultado, destino);
     }
 }
 

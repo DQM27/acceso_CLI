@@ -20,9 +20,9 @@ pub enum OpcionMenu {
     Contratistas,
     Empresas,
     Usuarios,
-    CambiarPassword,
     Auditoria,
-    Configuracion,
+    Respaldos,
+    CambiarPassword,
     CerrarSesion,
     Salir,
 }
@@ -35,9 +35,9 @@ impl OpcionMenu {
         Self::Contratistas,
         Self::Empresas,
         Self::Usuarios,
-        Self::CambiarPassword,
         Self::Auditoria,
-        Self::Configuracion,
+        Self::Respaldos,
+        Self::CambiarPassword,
         Self::CerrarSesion,
         Self::Salir,
     ];
@@ -50,9 +50,9 @@ impl OpcionMenu {
             Self::Contratistas => "4   Contratistas",
             Self::Empresas => "5   Empresas",
             Self::Usuarios => "6   Usuarios",
-            Self::CambiarPassword => "7   Cambiar mi contraseña",
-            Self::Auditoria => "8   Auditoría",
-            Self::Configuracion => "9   Configuración",
+            Self::Auditoria => "7   Auditoría",
+            Self::Respaldos => "8   Respaldos",
+            Self::CambiarPassword => "9   Cambiar mi contraseña",
             Self::CerrarSesion => "L   Cerrar sesión",
             Self::Salir => "Q   Salir",
         }
@@ -68,7 +68,7 @@ impl OpcionMenu {
             Self::Usuarios => "Administrar usuarios del sistema.",
             Self::CambiarPassword => "Actualizar la contraseña de la sesión actual.",
             Self::Auditoria => "Consultar cambios en campos críticos de contratistas.",
-            Self::Configuracion => "Ajustes del sistema y respaldos de la base de datos.",
+            Self::Respaldos => "Crear, validar, exportar y restaurar respaldos.",
             Self::CerrarSesion => "Volver a la pantalla de autenticación.",
             Self::Salir => "Cerrar BRISAS CLI.",
         }
@@ -80,7 +80,7 @@ impl OpcionMenu {
         match self {
             Self::Usuarios => rol != RolUsuario::Operador,
             Self::Auditoria => rol != RolUsuario::Operador,
-            Self::Configuracion => rol == RolUsuario::Root,
+            Self::Respaldos => rol == RolUsuario::Root,
             _ => true,
         }
     }
@@ -164,14 +164,14 @@ impl MenuPrincipalState {
             KeyCode::Char('6') if visibles.contains(&OpcionMenu::Usuarios) => {
                 return AccionMenu::Abrir(OpcionMenu::Usuarios);
             }
-            KeyCode::Char('7') => {
-                return AccionMenu::Abrir(OpcionMenu::CambiarPassword);
-            }
-            KeyCode::Char('8') if visibles.contains(&OpcionMenu::Auditoria) => {
+            KeyCode::Char('7') if visibles.contains(&OpcionMenu::Auditoria) => {
                 return AccionMenu::Abrir(OpcionMenu::Auditoria);
             }
-            KeyCode::Char('9') if visibles.contains(&OpcionMenu::Configuracion) => {
-                return AccionMenu::Abrir(OpcionMenu::Configuracion);
+            KeyCode::Char('8') if visibles.contains(&OpcionMenu::Respaldos) => {
+                return AccionMenu::Abrir(OpcionMenu::Respaldos);
+            }
+            KeyCode::Char('9') => {
+                return AccionMenu::Abrir(OpcionMenu::CambiarPassword);
             }
             KeyCode::Char('l' | 'L') => self.solicitar(ConfirmacionMenu::CerrarSesion),
             KeyCode::Char('q' | 'Q') => self.solicitar(ConfirmacionMenu::Salir),

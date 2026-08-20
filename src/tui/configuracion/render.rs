@@ -13,10 +13,6 @@ use crate::tui::ui_kit::{
 
 const ALTO_MINIMO: u16 = 20;
 
-const COMANDOS_MENU: &[CommandHint<'static>] = &[
-    CommandHint::new("ENTER", "Abrir"),
-    CommandHint::new("ESC", "Volver"),
-];
 const COMANDOS_RESPALDOS: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓", "Mover"),
     CommandHint::new("C", "Crear"),
@@ -48,67 +44,16 @@ pub fn render(frame: &mut Frame, area: Rect, state: &ConfiguracionState, theme: 
         return;
     }
 
-    match &state.modo {
-        ModoConfiguracion::Menu => render_menu(frame, area, state, theme),
-        ModoConfiguracion::Respaldos(estado) => render_respaldos(frame, area, estado, theme),
-    }
+    render_respaldos(frame, area, &state.respaldos, state.ayuda_expandida, theme);
 }
 
-fn render_menu(frame: &mut Frame, area: Rect, state: &ConfiguracionState, theme: Theme) {
-    let shell = ScreenShell {
-        product: "BRISAS CLI",
-        screen: "CONFIGURACIÓN",
-        context: "Ajustes del sistema",
-        clock: &crate::tiempo::hora_actual_texto(),
-        status: state.seleccion.descripcion(),
-        status_kind: StatusKind::Normal,
-        commands: COMANDOS_MENU,
-        authenticated: true,
-        help_expanded: state.ayuda_expandida,
-        ayuda_extra: None,
-    };
-    let areas = shell.render(frame, area, theme);
-
-    render_lista(frame, areas.body, state, theme);
-}
-
-/// Misma silueta que el menú principal: bloque centrado, ancho ajustado al
-/// contenido real para que no quede pegado a la izquierda.
-fn render_lista(frame: &mut Frame, area: Rect, state: &ConfiguracionState, theme: Theme) {
-    let ancho_contenido = OpcionConfiguracion::TODAS
-        .iter()
-        .map(|o| o.etiqueta().chars().count() as u16 + 2)
-        .max()
-        .unwrap_or(20);
-    let ancho = area.width.min(ancho_contenido);
-    let alto = area.height.min(OpcionConfiguracion::TODAS.len() as u16);
-    let lista = centrar(area, ancho, alto);
-
-    let lineas: Vec<Line<'_>> = OpcionConfiguracion::TODAS
-        .iter()
-        .map(|opcion| {
-            let marcador = if *opcion == state.seleccion { ">" } else { " " };
-            let estilo = if *opcion == state.seleccion {
-                theme.selected()
-            } else {
-                theme.base()
-            };
-            Line::from(format!("{marcador} {}", opcion.etiqueta())).style(estilo)
-        })
-        .collect();
-    frame.render_widget(Paragraph::new(lineas), lista);
-}
-
-fn centrar(area: Rect, ancho: u16, alto: u16) -> Rect {
-    Rect::new(
-        area.x + area.width.saturating_sub(ancho) / 2,
-        area.y + area.height.saturating_sub(alto) / 2,
-        ancho,
-        alto,
-    )
-}
-
-fn render_respaldos(frame: &mut Frame, area: Rect, estado: &RespaldosState, theme: Theme) {
+fn render_respaldos(
+    frame: &mut Frame,
+    area: Rect,
+    estado: &RespaldosState,
+    ayuda_expandida: bool,
+    theme: Theme,
+) {
     let (estado_texto, estado_tipo) = estado_shell(estado);
     let comandos = match &estado.modo {
         ModoRespaldos::Normal => COMANDOS_RESPALDOS,
@@ -117,14 +62,14 @@ fn render_respaldos(frame: &mut Frame, area: Rect, estado: &RespaldosState, them
     };
     let shell = ScreenShell {
         product: "BRISAS CLI",
-        screen: "CONFIGURACIÓN · RESPALDOS",
+        screen: "RESPALDOS",
         context: &format!("{} respaldo(s)", estado.filas.len()),
         clock: &crate::tiempo::hora_actual_texto(),
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: comandos,
         authenticated: true,
-        help_expanded: false,
+        help_expanded: ayuda_expandida,
         ayuda_extra: None,
     };
     let areas = shell.render(frame, area, theme);

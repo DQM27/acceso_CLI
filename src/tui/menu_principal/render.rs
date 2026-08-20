@@ -101,10 +101,6 @@ fn render_lista(
         .map(|o| o.etiqueta().chars().count() as u16 + 2)
         .max()
         .unwrap_or(20);
-    let ancho = area.width.min(ancho_contenido);
-    let alto = area.height.min(14);
-    let lista = centrar(area, ancho, alto);
-
     let operacion: Vec<OpcionMenu> = visibles
         .iter()
         .copied()
@@ -125,10 +121,11 @@ fn render_lista(
                     | OpcionMenu::Empresas
                     | OpcionMenu::Usuarios
                     | OpcionMenu::Auditoria
-                    | OpcionMenu::Configuracion
+                    | OpcionMenu::Respaldos
             )
         })
         .collect();
+
     let sesion: Vec<OpcionMenu> = visibles
         .iter()
         .copied()
@@ -141,9 +138,37 @@ fn render_lista(
         .collect();
 
     let mut lineas = Vec::new();
-    grupo(&mut lineas, "OPERACIÓN", &operacion, state, theme);
-    grupo(&mut lineas, "ADMINISTRACIÓN", &administracion, state, theme);
-    grupo(&mut lineas, "SESIÓN", &sesion, state, theme);
+    let mostrar_grupos = area.height as usize >= visibles.len() + 3;
+    if mostrar_grupos {
+        let separar_grupos = area.height as usize >= visibles.len() + 6;
+        grupo(
+            &mut lineas,
+            "OPERACIÓN",
+            &operacion,
+            state,
+            theme,
+            separar_grupos,
+        );
+        grupo(
+            &mut lineas,
+            "ADMINISTRACIÓN",
+            &administracion,
+            state,
+            theme,
+            separar_grupos,
+        );
+        grupo(&mut lineas, "SESIÓN", &sesion, state, theme, separar_grupos);
+    } else {
+        lineas.extend(
+            visibles
+                .iter()
+                .map(|opcion| linea_opcion(*opcion, state, theme)),
+        );
+    }
+
+    let ancho = area.width.min(ancho_contenido);
+    let alto = area.height.min(lineas.len() as u16);
+    let lista = centrar(area, ancho, alto);
 
     frame.render_widget(Paragraph::new(lineas), lista);
 }
@@ -154,18 +179,25 @@ fn grupo<'a>(
     opciones: &[OpcionMenu],
     state: &MenuPrincipalState,
     theme: Theme,
+    separar: bool,
 ) {
     lineas.push(Line::from(titulo).style(theme.muted()));
     for opcion in opciones {
-        let marcador = if *opcion == state.seleccion { ">" } else { " " };
-        let texto = format!("{marcador} {}", opcion.etiqueta());
-        lineas.push(Line::from(texto).style(if *opcion == state.seleccion {
-            theme.selected()
-        } else {
-            theme.base()
-        }));
+        lineas.push(linea_opcion(*opcion, state, theme));
     }
-    lineas.push(Line::from(""));
+    if separar {
+        lineas.push(Line::from(""));
+    }
+}
+
+fn linea_opcion(opcion: OpcionMenu, state: &MenuPrincipalState, theme: Theme) -> Line<'static> {
+    let marcador = if opcion == state.seleccion { ">" } else { " " };
+    let texto = format!("{marcador} {}", opcion.etiqueta());
+    Line::from(texto).style(if opcion == state.seleccion {
+        theme.selected()
+    } else {
+        theme.base()
+    })
 }
 
 fn centrar(area: Rect, ancho: u16, alto: u16) -> Rect {

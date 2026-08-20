@@ -18,7 +18,7 @@ enum Screen {
     Usuarios,
     CambioPassword,
     Auditoria,
-    Configuracion,
+    Respaldos,
     NuevoIngreso,
 }
 
@@ -34,7 +34,7 @@ impl Screen {
         Self::Usuarios,
         Self::CambioPassword,
         Self::Auditoria,
-        Self::Configuracion,
+        Self::Respaldos,
         Self::NuevoIngreso,
     ];
 
@@ -50,7 +50,7 @@ impl Screen {
             Self::Usuarios => "USUARIOS",
             Self::CambioPassword => "CAMBIAR MI CONTRASEÑA",
             Self::Auditoria => "AUDITORÍA",
-            Self::Configuracion => "CONFIGURACIÓN",
+            Self::Respaldos => "RESPALDOS",
             Self::NuevoIngreso => "NUEVO INGRESO",
         }
     }
@@ -58,7 +58,7 @@ impl Screen {
     const fn min_height(self) -> u16 {
         match self {
             Self::ConfiguracionInicial => 26,
-            Self::Configuracion => 20,
+            Self::Respaldos => 20,
             _ => 22,
         }
     }
@@ -157,7 +157,7 @@ fn todas_las_pantallas_renderizan_la_matriz_de_tamanos_y_temas() {
                                 &session,
                                 theme,
                             ),
-                            Screen::Configuracion => configuracion::render(
+                            Screen::Respaldos => configuracion::render(
                                 frame,
                                 area,
                                 &configuracion::ConfiguracionState::default(),

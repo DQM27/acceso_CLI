@@ -124,7 +124,7 @@ pub enum Vista {
     Usuarios,
     CambiarPassword,
     Auditoria,
-    Configuracion,
+    Respaldos,
     NuevoIngreso,
 }
 
@@ -847,12 +847,12 @@ mod tests {
             .unwrap();
 
         let mut app = App {
-            vista: Vista::Configuracion,
+            vista: Vista::Respaldos,
             sesion: Some(actor),
             ..App::default()
         };
-        // Entra a Respaldos y carga la lista real desde el AppCore de archivo.
-        let accion = app.configuracion.handle_key(tecla(KeyCode::Enter));
+        // Carga la lista real desde el AppCore de archivo.
+        let accion = app.configuracion.reiniciar();
         app.procesar_accion_configuracion(accion, Some(&core));
         // Selecciona la única fila, pide restaurar y confirma.
         app.configuracion.handle_key(tecla(KeyCode::Char('r')));
@@ -1264,7 +1264,7 @@ impl App {
                             auditoria::render(frame, frame.area(), &self.auditoria, sesion, theme)
                         }
                     }
-                    Vista::Configuracion => {
+                    Vista::Respaldos => {
                         configuracion::render(frame, frame.area(), &self.configuracion, theme)
                     }
                     Vista::NuevoIngreso => {
@@ -1832,7 +1832,7 @@ impl App {
                 let accion = self.auditoria.handle_key(key);
                 self.procesar_accion_auditoria(accion, core);
             }
-            Vista::Configuracion => {
+            Vista::Respaldos => {
                 let accion = self.configuracion.handle_key(key);
                 self.procesar_accion_configuracion(accion, core);
             }
@@ -1935,9 +1935,10 @@ impl App {
                         self.procesar_accion_auditoria(accion, core);
                         Vista::Auditoria
                     }
-                    OpcionMenu::Configuracion => {
-                        self.configuracion = ConfiguracionState::default();
-                        Vista::Configuracion
+                    OpcionMenu::Respaldos => {
+                        let accion = self.configuracion.reiniciar();
+                        self.procesar_accion_configuracion(accion, core);
+                        Vista::Respaldos
                     }
                     OpcionMenu::CerrarSesion | OpcionMenu::Salir => Vista::MenuPrincipal,
                 };
