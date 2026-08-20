@@ -17,7 +17,9 @@ use crate::database::queries::usuarios::{FiltroUsuarios, SqliteUsuariosQuery, Us
 use crate::database::repositories::contratista_repository::SqliteContratistaRepository;
 use crate::database::repositories::empresa_repository::SqliteEmpresaRepository;
 use crate::database::repositories::registro_ingreso_repository::SqliteRegistroIngresoRepository;
-use crate::database::repositories::usuario_repository::SqliteUsuarioRepository;
+use crate::database::repositories::usuario_repository::{
+    SqliteUsuarioRepository, UsuarioRepository,
+};
 use crate::database::schema::SchemaError;
 use crate::models::usuario::RolUsuario;
 use crate::services::autenticacion_service::{
@@ -212,7 +214,8 @@ impl AppCore {
     /// Abre una transacción `Immediate` (el bloqueo se adquiere antes de la
     /// primera lectura definitiva, así los repositorios creados sobre ella
     /// validan e insertan contra el mismo estado de SQLite), valida que el
-    /// reloj no haya retrocedido, corre `operar` y confirma. Compartido por
+    /// reloj no haya retrocedido, confirma que `usuario_id` sigue siendo un
+    /// operador activo, corre `operar` y confirma. Compartido por
     /// `registrar_ingreso` y `registrar_salida` — antes cada uno repetía este
     /// mismo armazón letra por letra.
     ///
@@ -225,8 +228,20 @@ impl AppCore {
     /// intentó y se revirtió — rompía tests de integración que llaman al
     /// servicio directo con datos de prueba cuyos tiempos no representan un
     /// reloj real avanzando (`tests/flujo_integracion.rs`).
+    ///
+    /// La verificación de operador activo vive aquí por el mismo motivo:
+    /// `registrar_entrada`/`registrar_salida` recibían el `usuario_id` como
+    /// un entero crudo, sin comprobar que existiera ni que siguiera activo —
+    /// la FK de SQLite sólo exige que exista, no que esté activo. Una
+    /// sesión de TUI ya iniciada podía seguir registrando movimientos
+    /// después de que un administrador desactivara esa cuenta
+    /// (`docs/auditoria-dominio-2026-08-20.md`, hallazgo #2). Se revisa
+    /// dentro de esta misma transacción `Immediate`, no antes, para que una
+    /// desactivación concurrente no pueda colarse entre el chequeo y la
+    /// escritura.
     fn en_transaccion_con_reloj_validado<T>(
         &self,
+        usuario_id: i64,
         operar: impl FnOnce(
             &Transaction<'_>,
             chrono::DateTime<chrono::Utc>,
@@ -237,6 +252,7 @@ impl AppCore {
             Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
                 .map_err(DatabaseError::from)?;
         validar_reloj(&transaction, ahora)?;
+        verificar_operador_activo(&transaction, usuario_id)?;
         let resultado = operar(&transaction, ahora)?;
         transaction.commit().map_err(DatabaseError::from)?;
         Ok(resultado)
@@ -249,7 +265,7 @@ impl AppCore {
         gafete: Option<i64>,
         usuario_id: i64,
     ) -> Result<ResultadoRegistroEntrada, RegistroIngresoServiceError> {
-        self.en_transaccion_con_reloj_validado(|transaction, ahora| {
+        self.en_transaccion_con_reloj_validado(usuario_id, |transaction, ahora| {
             let contratistas = SqliteContratistaRepository::new(transaction);
             let registros = SqliteRegistroIngresoRepository::new(transaction);
             RegistroIngresoService::new(&contratistas, &registros).registrar_entrada(
@@ -283,7 +299,7 @@ impl AppCore {
         id: i64,
         usuario: i64,
     ) -> Result<(), RegistroIngresoServiceError> {
-        self.en_transaccion_con_reloj_validado(|transaction, ahora| {
+        self.en_transaccion_con_reloj_validado(usuario, |transaction, ahora| {
             let contratistas = SqliteContratistaRepository::new(transaction);
             let registros = SqliteRegistroIngresoRepository::new(transaction);
             RegistroIngresoService::new(&contratistas, &registros)
@@ -482,4 +498,23 @@ fn validar_reloj(
         return Err(RegistroIngresoServiceError::RelojRetrocedido);
     }
     Ok(())
+}
+
+/// Comprobación de sanidad del actor, mismo criterio que `validar_reloj`: no
+/// es una regla de negocio de una entrada/salida puntual, es "¿quién dice
+/// que está registrando esto sigue siendo un operador real?". La FK de
+/// `usuario_ingreso_id`/`usuario_salida_id` en SQLite sólo exige que el ID
+/// exista — nunca que la cuenta siga activa.
+fn verificar_operador_activo(
+    connection: &Connection,
+    usuario_id: i64,
+) -> Result<(), RegistroIngresoServiceError> {
+    let activo = SqliteUsuarioRepository::new(connection)
+        .buscar_por_id(usuario_id)?
+        .is_some_and(|usuario| usuario.activo);
+    if activo {
+        Ok(())
+    } else {
+        Err(RegistroIngresoServiceError::OperadorNoAutorizado)
+    }
 }

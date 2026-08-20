@@ -200,6 +200,11 @@ pub enum RegistroIngresoServiceError {
     SalidaAnteriorAIngreso,
     RelojRetrocedido,
     RangoFechasInvalido,
+    /// El usuario que figura como operador del movimiento no existe o está
+    /// inactivo — revisado dentro de la misma transacción que el
+    /// movimiento, así que una desactivación concurrente no puede colarse
+    /// entre la verificación y la escritura.
+    OperadorNoAutorizado,
     Database(DatabaseError),
 }
 
@@ -225,6 +230,10 @@ impl std::fmt::Display for RegistroIngresoServiceError {
             Self::RangoFechasInvalido => {
                 write!(formatter, "El rango de fechas del historial no es válido")
             }
+            Self::OperadorNoAutorizado => write!(
+                formatter,
+                "El usuario que registra el movimiento no existe o está inactivo"
+            ),
             Self::Database(error) => write!(formatter, "{error}"),
         }
     }
