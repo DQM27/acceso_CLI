@@ -247,7 +247,7 @@ flowchart LR
 
     B -->|Empresa| E["Normalizar nombre<br/>exigir no vacío y único"]
     B -->|Contratista nuevo| C["Normalizar cédula y nombre<br/>validar empresa existente<br/>fecha PRAIND cuando aplica<br/>cédula única"]
-    B -->|Editar contratista| CE["Cédula inmutable<br/>actualizar nombre, empresa,<br/>tipo, PRAIND, ruta o acceso"]
+    B -->|Editar contratista| CE["Actualizar nombre, empresa,<br/>tipo, PRAIND, ruta o acceso<br/>cédula sólo por ROOT/Administrador"]
     B -->|Usuario| U["Normalizar identidad y exigir cédula única<br/>al crear o cambiar clave: mínimo 8 y Argon2"]
 
     E --> DB[("SQLite")]
@@ -263,6 +263,11 @@ flowchart LR
 Los usuarios se activan o desactivan; no se eliminan, porque sus identificadores forman
 parte de la auditoría de entradas y salidas.
 
+La cédula vigente del contratista sólo puede corregirla un usuario ROOT o Administrador.
+Cuando el valor cambia, la misma transacción registra en la auditoría quién hizo la
+corrección y cuáles fueron las cédulas anterior y nueva. Esa corrección afecta al catálogo
+actual y a sus búsquedas, pero no modifica la cédula copiada en movimientos ya registrados.
+
 ## 6. Relaciones persistidas
 
 ```mermaid
@@ -272,6 +277,8 @@ erDiagram
     CONTRATISTAS ||--o{ REGISTRO_INGRESOS : genera
     USUARIOS ||--o{ REGISTRO_INGRESOS : registra_entrada
     USUARIOS o|--o{ REGISTRO_INGRESOS : registra_salida
+    CONTRATISTAS ||--o{ AUDITORIA_CONTRATISTAS : recibe_cambios
+    USUARIOS ||--o{ AUDITORIA_CONTRATISTAS : modifica
 
     EMPRESAS {
         integer id PK
@@ -321,11 +328,23 @@ erDiagram
         integer usuario_salida_id FK
         string usuario_salida_nombre_snapshot
     }
+
+    AUDITORIA_CONTRATISTAS {
+        integer id PK
+        datetime fecha_hora
+        integer usuario_id FK
+        integer contratista_id FK
+        string campo
+        string valor_anterior
+        string valor_nuevo
+    }
 ```
 
 Las columnas marcadas conceptualmente como `snapshot` son copias históricas; en SQLite
 sus nombres no llevan ese sufijo. Los IDs mantienen integridad referencial y las copias
-mantienen el significado histórico del evento.
+mantienen el significado histórico del evento. En particular, corregir la cédula vigente
+de un contratista no altera la copia histórica `contratista_cedula` en ingresos activos
+ni cerrados.
 
 ## 7. Lecturas y búsqueda
 

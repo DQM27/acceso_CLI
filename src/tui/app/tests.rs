@@ -595,6 +595,13 @@ fn contratistas_tui_carga_empresas_crea_edita_y_busca_con_appcore_real() {
     assert_eq!(items.items.len(), 1);
     assert_eq!(items.items[0].empresa_id, empresa_id);
     app.procesar_tecla_vista_con_core(tecla(KeyCode::Enter), Some(&core));
+    for _ in 0.."001-ABC".chars().count() {
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Backspace), Some(&core))
+    }
+    for c in "009-XYZ".chars() {
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core))
+    }
+    app.procesar_tecla_vista_con_core(tecla(KeyCode::Tab), Some(&core));
     for _ in 0.."José Hernández".chars().count() {
         app.procesar_tecla_vista_con_core(tecla(KeyCode::Backspace), Some(&core))
     }
@@ -628,10 +635,21 @@ fn contratistas_tui_carga_empresas_crea_edita_y_busca_con_appcore_real() {
         .len(),
         1
     );
-    assert_eq!(
+    assert!(
         core.buscar_contratistas(
             &crate::database::queries::contratistas::FiltroContratistas {
                 texto: Some("001-ABC".into()),
+                ..Default::default()
+            }
+        )
+        .unwrap()
+        .items
+        .is_empty()
+    );
+    assert_eq!(
+        core.buscar_contratistas(
+            &crate::database::queries::contratistas::FiltroContratistas {
+                texto: Some("009-XYZ".into()),
                 ..Default::default()
             }
         )

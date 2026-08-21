@@ -541,7 +541,11 @@ impl App {
                 self.procesar_accion_historial(accion, core);
             }
             Vista::Contratistas => {
-                let accion = self.contratistas.handle_key(key);
+                let rol = self
+                    .sesion
+                    .as_ref()
+                    .map_or(RolUsuario::Operador, |sesion| sesion.rol);
+                let accion = self.contratistas.handle_key_con_rol(key, rol);
                 self.procesar_accion_contratistas(accion, core);
             }
             Vista::Empresas => {

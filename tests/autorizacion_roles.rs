@@ -3,7 +3,10 @@ use rusqlite::Connection;
 use control_acceso::{
     application::AppCore,
     database::{
-        queries::{auditoria_contratistas::FiltroAuditoriaContratistas, usuarios::FiltroUsuarios},
+        queries::{
+            auditoria_contratistas::FiltroAuditoriaContratistas, contratistas::FiltroContratistas,
+            usuarios::FiltroUsuarios,
+        },
         schema::initialize_database,
     },
     models::{tipo_ingreso::TipoIngreso, usuario::RolUsuario},
@@ -109,6 +112,7 @@ fn operador_no_puede_invocar_comandos_administrativos_directamente() {
     ));
 
     let cambio_acceso = DatosActualizacionContratista {
+        cedula: "C1".into(),
         nombre: "Persona".into(),
         empresa_id: 1,
         tipo_ingreso: TipoIngreso::Swat,
@@ -120,6 +124,65 @@ fn operador_no_puede_invocar_comandos_administrativos_directamente() {
         core.actualizar_contratista(&operador, 1, cambio_acceso),
         Err(ContratistaServiceError::OperacionNoAutorizada)
     ));
+}
+
+fn datos_contratista(cedula: &str, nombre: &str) -> DatosActualizacionContratista {
+    DatosActualizacionContratista {
+        cedula: cedula.into(),
+        nombre: nombre.into(),
+        empresa_id: 1,
+        tipo_ingreso: TipoIngreso::Swat,
+        fecha_vencimiento_praind: None,
+        es_personal_ruta: false,
+        tiene_acceso: true,
+    }
+}
+
+#[test]
+fn solo_administrador_y_root_pueden_cambiar_cedula_de_contratista() {
+    let core = base();
+
+    assert!(matches!(
+        core.actualizar_contratista(
+            &sesion(3, RolUsuario::Operador),
+            1,
+            datos_contratista("C-OPERADOR", "Persona")
+        ),
+        Err(ContratistaServiceError::OperacionNoAutorizada)
+    ));
+    assert!(matches!(
+        core.actualizar_contratista(
+            &sesion(3, RolUsuario::Root),
+            1,
+            datos_contratista("C-SESION-FALSA", "Persona")
+        ),
+        Err(ContratistaServiceError::OperacionNoAutorizada)
+    ));
+
+    core.actualizar_contratista(
+        &sesion(3, RolUsuario::Operador),
+        1,
+        datos_contratista("C1", "Nombre corregido"),
+    )
+    .unwrap();
+    core.actualizar_contratista(
+        &sesion(2, RolUsuario::Administrador),
+        1,
+        datos_contratista("C2", "Nombre corregido"),
+    )
+    .unwrap();
+    core.actualizar_contratista(
+        &sesion(1, RolUsuario::Root),
+        1,
+        datos_contratista("C3", "Nombre corregido"),
+    )
+    .unwrap();
+
+    let pagina = core
+        .buscar_contratistas(&FiltroContratistas::default())
+        .unwrap();
+    assert_eq!(pagina.items[0].cedula, "C3");
+    assert_eq!(pagina.items[0].nombre, "Nombre corregido");
 }
 
 #[test]

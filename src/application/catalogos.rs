@@ -85,6 +85,11 @@ impl AppCore {
         let empresas = SqliteEmpresaRepository::new(&transaction);
         let servicio = ContratistaService::new(&contratistas, &empresas);
         let actual = servicio.buscar_por_id(id)?;
+        if actual.cedula != datos.cedula.trim()
+            && !actor_actual.rol.puede(Operacion::EditarCedulaContratista)
+        {
+            return Err(ContratistaServiceError::OperacionNoAutorizada);
+        }
         if actual.tiene_acceso != datos.tiene_acceso
             && !actor_actual
                 .rol

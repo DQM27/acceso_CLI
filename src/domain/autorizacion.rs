@@ -4,6 +4,7 @@ use crate::models::usuario::RolUsuario;
 pub enum Operacion {
     GestionarRespaldos,
     GestionarUsuarios,
+    EditarCedulaContratista,
     ActivarDesactivarContratista,
     ActivarDesactivarEmpresa,
     VerAuditoria,
@@ -42,9 +43,10 @@ mod tests {
         RolUsuario::Administrador,
         RolUsuario::Operador,
     ];
-    const OPERACIONES: [Operacion; 5] = [
+    const OPERACIONES: [Operacion; 6] = [
         Operacion::GestionarRespaldos,
         Operacion::GestionarUsuarios,
+        Operacion::EditarCedulaContratista,
         Operacion::ActivarDesactivarContratista,
         Operacion::ActivarDesactivarEmpresa,
         Operacion::VerAuditoria,
@@ -53,9 +55,9 @@ mod tests {
     #[test]
     fn matriz_completa_de_permisos_por_operacion() {
         let esperados = [
-            [true, true, true, true, true],
-            [false, true, true, true, true],
-            [false, false, false, false, false],
+            [true, true, true, true, true, true],
+            [false, true, true, true, true, true],
+            [false, false, false, false, false, false],
         ];
 
         for (indice_rol, rol) in ROLES.into_iter().enumerate() {

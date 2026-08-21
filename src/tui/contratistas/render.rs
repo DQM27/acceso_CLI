@@ -429,7 +429,7 @@ fn render_formulario(
         let enfocado = f.campo == indice;
         match campo {
             CampoFormulario::Cedula => {
-                if matches!(f.modo, ModoFormulario::Crear) {
+                if f.cedula_editable {
                     let r = render_campo(
                         frame,
                         filas[fila],

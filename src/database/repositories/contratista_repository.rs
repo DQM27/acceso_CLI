@@ -167,15 +167,17 @@ impl<'a> ContratistaRepository for SqliteContratistaRepository<'a> {
             "
             UPDATE contratistas
             SET
-                nombre = ?1,
-                empresa_id = ?2,
-                tipo_ingreso = ?3,
-                fecha_vencimiento_praind = ?4,
-                es_personal_ruta = ?5,
-                tiene_acceso = ?6
-            WHERE id = ?7
+                cedula = ?1,
+                nombre = ?2,
+                empresa_id = ?3,
+                tipo_ingreso = ?4,
+                fecha_vencimiento_praind = ?5,
+                es_personal_ruta = ?6,
+                tiene_acceso = ?7
+            WHERE id = ?8
             ",
             params![
+                contratista.cedula,
                 contratista.nombre,
                 contratista.empresa_id,
                 tipo_ingreso,

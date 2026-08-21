@@ -7,7 +7,10 @@ use crate::{
         Igualdad,
         contratistas::{ContratistaResumen, FiltroContratistas, FiltroPraind, PaginaContratistas},
     },
-    models::{contratista::Contratista, empresa::Empresa, tipo_ingreso::TipoIngreso},
+    domain::autorizacion::Operacion,
+    models::{
+        contratista::Contratista, empresa::Empresa, tipo_ingreso::TipoIngreso, usuario::RolUsuario,
+    },
     services::contratista_service::{DatosActualizacionContratista, DatosContratista},
     tiempo::ahora_costa_rica,
     tui::ui_kit::{
@@ -120,6 +123,7 @@ enum Desplegable {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct FormularioContratista {
     modo: ModoFormulario,
+    cedula_editable: bool,
     cedula: TextInput,
     nombre: TextInput,
     empresa: usize,
@@ -135,6 +139,7 @@ impl FormularioContratista {
     fn nuevo() -> Self {
         Self {
             modo: ModoFormulario::Crear,
+            cedula_editable: true,
             cedula: TextInput::default().with_max_chars(30),
             nombre: TextInput::default().with_max_chars(60),
             empresa: 0,
@@ -147,9 +152,10 @@ impl FormularioContratista {
             error: None,
         }
     }
-    fn editar(c: &ContratistaResumen, empresas: &[Empresa]) -> Self {
+    fn editar(c: &ContratistaResumen, empresas: &[Empresa], cedula_editable: bool) -> Self {
         Self {
             modo: ModoFormulario::Editar { id: c.id },
+            cedula_editable,
             cedula: TextInput::new(c.cedula.clone()).with_max_chars(30),
             nombre: TextInput::new(c.nombre.clone()).with_max_chars(60),
             empresa: empresas
@@ -165,7 +171,7 @@ impl FormularioContratista {
             .with_max_chars(10),
             personal_ruta: c.es_personal_ruta,
             tiene_acceso: c.tiene_acceso,
-            campo: 1,
+            campo: usize::from(!cedula_editable),
             desplegable: None,
             error: None,
         }
@@ -373,12 +379,16 @@ impl ContratistasState {
         partes.join(" · ")
     }
     pub fn handle_key(&mut self, key: KeyEvent) -> AccionContratistas {
+        self.handle_key_con_rol(key, RolUsuario::Operador)
+    }
+
+    pub fn handle_key_con_rol(&mut self, key: KeyEvent, rol: RolUsuario) -> AccionContratistas {
         if standard_command(key) == Some(StandardCommand::Help) {
             self.ayuda_expandida = !self.ayuda_expandida;
             return AccionContratistas::Ninguna;
         }
         match self.modo.clone() {
-            ModoContratistas::Normal => self.normal(key),
+            ModoContratistas::Normal => self.normal(key, rol),
             ModoContratistas::Busqueda { .. } => self.busqueda(key),
             ModoContratistas::Formulario(f) => self.formulario(key, f),
             ModoContratistas::Columnas { seleccion } => {
@@ -387,7 +397,7 @@ impl ContratistasState {
             }
         }
     }
-    fn normal(&mut self, key: KeyEvent) -> AccionContratistas {
+    fn normal(&mut self, key: KeyEvent, rol: RolUsuario) -> AccionContratistas {
         if matches!(
             key.code,
             KeyCode::Enter | KeyCode::Char('n' | 'N' | '/') | KeyCode::Esc
@@ -411,7 +421,7 @@ impl ContratistasState {
             }
             KeyCode::Enter => {
                 if let Some(id) = self.id() {
-                    self.editar(id)
+                    self.editar(id, rol.puede(Operacion::EditarCedulaContratista))
                 }
             }
             KeyCode::Char('n' | 'N') => {
@@ -566,7 +576,7 @@ impl ContratistasState {
             }
             KeyCode::Left | KeyCode::Right | KeyCode::Home | KeyCode::End | KeyCode::Delete => {
                 match CampoFormulario::TODOS[f.campo] {
-                    CampoFormulario::Cedula if matches!(f.modo, ModoFormulario::Crear) => {
+                    CampoFormulario::Cedula if f.cedula_editable => {
                         f.cedula.handle_key(key);
                     }
                     CampoFormulario::Nombre => {
@@ -579,7 +589,7 @@ impl ContratistasState {
                 }
             }
             KeyCode::Backspace => match CampoFormulario::TODOS[f.campo] {
-                CampoFormulario::Cedula if matches!(f.modo, ModoFormulario::Crear) => {
+                CampoFormulario::Cedula if f.cedula_editable => {
                     f.cedula.handle_key(key);
                 }
                 CampoFormulario::Nombre => {
@@ -596,7 +606,7 @@ impl ContratistasState {
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
                 match CampoFormulario::TODOS[f.campo] {
-                    CampoFormulario::Cedula if matches!(f.modo, ModoFormulario::Crear) => {
+                    CampoFormulario::Cedula if f.cedula_editable => {
                         f.cedula.handle_key(key);
                     }
                     CampoFormulario::Nombre => {
@@ -646,11 +656,12 @@ impl ContratistasState {
             }
         }
     }
-    fn editar(&mut self, id: i64) {
+    fn editar(&mut self, id: i64, cedula_editable: bool) {
         if let Some(c) = self.registros.iter().find(|c| c.id == id) {
             self.modo = ModoContratistas::Formulario(Box::new(FormularioContratista::editar(
                 c,
                 &self.empresas,
+                cedula_editable,
             )))
         }
     }

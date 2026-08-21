@@ -124,7 +124,7 @@ fn cambios_maestros_no_reescriben_el_movimiento_historico() {
 
     connection
         .execute(
-            "UPDATE contratistas SET nombre='Juan Actual', empresa_id=2,
+            "UPDATE contratistas SET cedula='2-2222-2222', nombre='Juan Actual', empresa_id=2,
                     tipo_ingreso='SWAT', fecha_vencimiento_praind=NULL,
                     tiene_acceso=0 WHERE id=?1",
             [contratista_id],
@@ -150,6 +150,7 @@ fn cambios_maestros_no_reescriben_el_movimiento_historico() {
             NaiveDate::from_ymd_opt(2026, 8, 12).unwrap(),
         )
         .unwrap();
+    assert_eq!(activos.items[0].cedula, "1-1111-1111");
     assert_eq!(activos.items[0].contratista_nombre, "Juan Original");
     assert_eq!(activos.items[0].empresa_nombre, "Aldama");
     assert_eq!(activos.items[0].usuario_ingreso_nombre, "Operador Entrada");

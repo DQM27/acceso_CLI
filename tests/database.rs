@@ -94,7 +94,7 @@ fn debe_actualizar_un_contratista() {
 
     let actualizado = Contratista {
         id,
-        cedula: "CEDULA-IGNORADA".to_string(),
+        cedula: "209870123".to_string(),
         nombre: "Juan Pérez Actualizado".to_string(),
         empresa_id,
         tipo_ingreso: TipoIngreso::InHouse,
@@ -109,12 +109,18 @@ fn debe_actualizar_un_contratista() {
         .expect("No se pudo actualizar el contratista");
 
     let recuperado = contratista_repository
-        .buscar_por_cedula("109870123")
+        .buscar_por_cedula("209870123")
         .expect("Error buscando contratista")
         .expect("El contratista no fue encontrado");
 
     assert_eq!(recuperado.nombre, "Juan Pérez Actualizado");
-    assert_eq!(recuperado.cedula, "109870123");
+    assert_eq!(recuperado.cedula, "209870123");
+    assert!(
+        contratista_repository
+            .buscar_por_cedula("109870123")
+            .unwrap()
+            .is_none()
+    );
 
     assert_eq!(recuperado.tipo_ingreso, TipoIngreso::InHouse);
 

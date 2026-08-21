@@ -124,3 +124,23 @@ fn cambio_de_praind_usa_la_convencion_de_fecha_de_la_ui() {
         "Vencimiento PRAIND: 01/05/2028 → 01/05/2026"
     );
 }
+
+#[test]
+fn cambio_de_cedula_usa_una_etiqueta_legible() {
+    let cambio = CambioContratistaAuditado {
+        id: 1,
+        fecha_hora: chrono::Utc::now(),
+        usuario_id: 1,
+        usuario_nombre: "Administradora".into(),
+        contratista_id: 1,
+        contratista_nombre: "Persona".into(),
+        campo: "cedula".into(),
+        valor_anterior: Some("1-1111-1111".into()),
+        valor_nuevo: Some("1-2222-2222".into()),
+    };
+
+    assert_eq!(
+        render::descripcion_cambio(&cambio),
+        "Cédula: 1-1111-1111 → 1-2222-2222"
+    );
+}

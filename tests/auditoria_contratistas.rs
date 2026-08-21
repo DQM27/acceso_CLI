@@ -40,6 +40,7 @@ fn conexion() -> Connection {
 
 fn datos(tipo: TipoIngreso, fecha: Option<NaiveDate>) -> DatosActualizacionContratista {
     DatosActualizacionContratista {
+        cedula: "C1".into(),
         nombre: "Persona".into(),
         empresa_id: 1,
         tipo_ingreso: tipo,
@@ -47,6 +48,24 @@ fn datos(tipo: TipoIngreso, fecha: Option<NaiveDate>) -> DatosActualizacionContr
         es_personal_ruta: false,
         tiene_acceso: true,
     }
+}
+
+#[test]
+fn registra_cambio_de_cedula_normalizada() {
+    let core = AppCore::new(conexion());
+    let actor = actor();
+    let mut cambio = datos(TipoIngreso::Swat, None);
+    cambio.cedula = "  C2  ".into();
+
+    core.actualizar_contratista(&actor, 1, cambio).unwrap();
+
+    let pagina = core
+        .buscar_auditoria_contratistas(&actor, &FiltroAuditoriaContratistas::default())
+        .unwrap();
+    assert_eq!(pagina.total, 1);
+    assert_eq!(pagina.items[0].campo, "cedula");
+    assert_eq!(pagina.items[0].valor_anterior.as_deref(), Some("C1"));
+    assert_eq!(pagina.items[0].valor_nuevo.as_deref(), Some("C2"));
 }
 
 fn datos_con_acceso(tiene_acceso: bool) -> DatosActualizacionContratista {

@@ -32,10 +32,14 @@ Referencias principales:
 - Transacción de lectura para obtener de forma coherente el total y la página del
   historial.
 - Migraciones secuenciales controladas con `PRAGMA user_version`.
-- Triggers para mantener índices FTS, hacer inmutable la cédula y proteger el historial
-  contra modificaciones, eliminaciones o salidas duplicadas.
+- Triggers para mantener índices FTS y proteger el historial contra modificaciones,
+  eliminaciones o salidas duplicadas.
 - FTS5 con tokenizador de trigramas para búsquedas parciales por cédula, nombre y
   empresa, ignorando mayúsculas y diacríticos.
+- La cédula vigente de un contratista puede corregirse únicamente por un usuario ROOT o
+  Administrador. Cada cambio efectivo queda auditado con el actor y los valores anterior
+  y nuevo; los movimientos conservan por separado la cédula copiada al registrar el
+  ingreso, por lo que una corrección no reescribe el historial.
 - Identificadores `INTEGER PRIMARY KEY` sin `AUTOINCREMENT`.
 - Fechas persistidas en UTC con formato canónico.
 
@@ -131,8 +135,9 @@ descarta silenciosamente en vez de impedir el cierre. Cubierto por
 ### 6. Probar `trusted_schema=OFF` — implementado
 
 `PRAGMA trusted_schema = OFF` ya se aplica en cada apertura. Se probó contra toda la
-suite de pruebas (migraciones, los triggers de inmutabilidad del historial y de cédula,
-y las tres tablas FTS5 de contratistas/empresas/usuarios) sin ninguna regresión.
+suite de pruebas (migraciones, los triggers de inmutabilidad del historial, la auditoría
+de correcciones de cédula y las tres tablas FTS5 de contratistas/empresas/usuarios) sin
+ninguna regresión.
 
 ### 7. Evaluar tablas `STRICT`
 

@@ -28,6 +28,7 @@ fn datos(
     }
 }
 fn actualizacion(
+    cedula: &str,
     nombre: &str,
     empresa_id: i64,
     tipo: TipoIngreso,
@@ -35,6 +36,7 @@ fn actualizacion(
     ruta: bool,
 ) -> DatosActualizacionContratista {
     DatosActualizacionContratista {
+        cedula: cedula.into(),
         nombre: nombre.into(),
         empresa_id,
         tipo_ingreso: tipo,
@@ -125,7 +127,7 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
         .crear_contratista(
             &actor,
             datos(
-                "A",
+                "CEDULA-VIEJA-997",
                 "José Hernández",
                 e,
                 TipoIngreso::PorCorreo,
@@ -143,7 +145,14 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
     core.actualizar_contratista(
         &actor,
         a,
-        actualizacion("José Álvarez", e, TipoIngreso::PorCorreo, None, false),
+        actualizacion(
+            "CEDULA-NUEVA-998",
+            "José Álvarez",
+            e,
+            TipoIngreso::PorCorreo,
+            None,
+            false,
+        ),
     )
     .unwrap();
     assert!(
@@ -156,10 +165,37 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
         core.buscar_contratistas(&filtro("alvarez")).unwrap().items[0].id,
         a
     );
+    assert!(
+        core.buscar_contratistas(&filtro("CEDULA-VIEJA-997"))
+            .unwrap()
+            .items
+            .is_empty()
+    );
+    assert_eq!(
+        core.buscar_contratistas(&filtro("CEDULA-NUEVA-998"))
+            .unwrap()
+            .items[0]
+            .id,
+        a
+    );
+    assert!(matches!(
+        core.actualizar_contratista(
+            &actor,
+            a,
+            actualizacion("B", "No debe persistir", e, TipoIngreso::Swat, None, false)
+        ),
+        Err(ContratistaServiceError::CedulaDuplicada)
+    ));
+    let conservado = &core
+        .buscar_contratistas(&filtro("CEDULA-NUEVA-998"))
+        .unwrap()
+        .items[0];
+    assert_eq!(conservado.nombre, "José Álvarez");
+    assert_eq!(conservado.tipo_ingreso, TipoIngreso::PorCorreo);
     assert!(matches!(
         core.crear_contratista(
             &actor,
-            datos("C", "Sin empresa", 999, TipoIngreso::Swat, None, false)
+            datos("D", "Sin empresa", 999, TipoIngreso::Swat, None, false)
         ),
         Err(ContratistaServiceError::EmpresaNoEncontrada)
     ));

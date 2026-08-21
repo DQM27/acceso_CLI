@@ -46,6 +46,7 @@ pub struct DatosContratista {
 }
 
 pub struct DatosActualizacionContratista {
+    pub cedula: String,
     pub nombre: String,
     pub empresa_id: i64,
     pub tipo_ingreso: TipoIngreso,
@@ -101,7 +102,9 @@ where
     ) -> Result<(), ContratistaServiceError> {
         let actual = self.buscar_por_id(id)?;
         let contratista = self.construir_actualizacion(actual, datos)?;
-        Ok(self.contratistas.actualizar(&contratista)?)
+        self.contratistas
+            .actualizar(&contratista)
+            .map_err(mapear_cedula_duplicada)
     }
 
     pub fn actualizar_auditado<A: AuditoriaContratistasWriter + ?Sized>(
@@ -113,19 +116,33 @@ where
         auditoria: &A,
     ) -> Result<(), ContratistaServiceError> {
         let actual = self.buscar_por_id(id)?;
+        let cedula_anterior = actual.cedula.clone();
         let tipo_anterior = actual.tipo_ingreso.as_str_sql().to_owned();
         let fecha_anterior = actual
             .fecha_vencimiento_praind
             .map(|fecha| fecha.format("%Y-%m-%d").to_string());
         let acceso_anterior = actual.tiene_acceso;
         let contratista = self.construir_actualizacion(actual, datos)?;
+        let cedula_nueva = contratista.cedula.clone();
         let tipo_nuevo = contratista.tipo_ingreso.as_str_sql().to_owned();
         let fecha_nueva = contratista
             .fecha_vencimiento_praind
             .map(|fecha| fecha.format("%Y-%m-%d").to_string());
         let acceso_nuevo = contratista.tiene_acceso;
 
-        self.contratistas.actualizar(&contratista)?;
+        self.contratistas
+            .actualizar(&contratista)
+            .map_err(mapear_cedula_duplicada)?;
+        if cedula_anterior != cedula_nueva {
+            auditoria.registrar_cambio(
+                fecha_hora,
+                actor_id,
+                id,
+                "cedula",
+                Some(&cedula_anterior),
+                Some(&cedula_nueva),
+            )?;
+        }
         if tipo_anterior != tipo_nuevo {
             auditoria.registrar_cambio(
                 fecha_hora,
@@ -207,6 +224,11 @@ where
         actual: Contratista,
         datos: DatosActualizacionContratista,
     ) -> Result<Contratista, ContratistaServiceError> {
+        let cedula = datos.cedula.trim();
+        if cedula.is_empty() {
+            return Err(ContratistaServiceError::CedulaVacia);
+        }
+
         let nombre = datos.nombre.trim();
         if nombre.is_empty() {
             return Err(ContratistaServiceError::NombreVacio);
@@ -219,7 +241,7 @@ where
 
         let contratista = Contratista {
             id: actual.id,
-            cedula: actual.cedula,
+            cedula: cedula.to_string(),
             nombre: nombre.to_string(),
             empresa_id: datos.empresa_id,
             tipo_ingreso: datos.tipo_ingreso,

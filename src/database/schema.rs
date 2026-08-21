@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 11;
+pub const SCHEMA_VERSION: i64 = 12;
 
 /// Identifica un archivo SQLite como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -116,6 +116,11 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
     if version == 10 {
         aplicar_migracion(&transaction, MIGRACION_11, 11)?;
         version = 11;
+    }
+
+    if version == 11 {
+        aplicar_migracion(&transaction, MIGRACION_12, 12)?;
+        version = 12;
     }
 
     if version != SCHEMA_VERSION {
@@ -820,4 +825,40 @@ const MIGRACION_11: &str = r#"
 CREATE INDEX idx_registro_ingresos_fecha_salida
 ON registro_ingresos(fecha_hora_salida)
 WHERE fecha_hora_salida IS NOT NULL;
+"#;
+
+// La identidad del contratista puede corregirse desde la aplicación con una
+// sesión administrativa. Se retira la prohibición absoluta de SQLite y se
+// incorpora la cédula a la auditoría para conservar quién hizo la corrección
+// y sus valores anterior y nuevo.
+const MIGRACION_12: &str = r#"
+DROP TRIGGER IF EXISTS contratistas_cedula_inmutable;
+
+CREATE TABLE auditoria_contratistas_nueva (
+    id INTEGER PRIMARY KEY,
+    fecha_hora TEXT NOT NULL,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+    contratista_id INTEGER NOT NULL REFERENCES contratistas(id) ON DELETE RESTRICT,
+    campo TEXT NOT NULL CHECK (
+        campo IN ('cedula', 'tipo_ingreso', 'fecha_vencimiento_praind', 'tiene_acceso')
+    ),
+    valor_anterior TEXT,
+    valor_nuevo TEXT,
+    CHECK (valor_anterior IS NOT valor_nuevo)
+);
+
+INSERT INTO auditoria_contratistas_nueva(
+    id, fecha_hora, usuario_id, contratista_id, campo, valor_anterior, valor_nuevo
+)
+SELECT id, fecha_hora, usuario_id, contratista_id, campo, valor_anterior, valor_nuevo
+FROM auditoria_contratistas;
+
+DROP TABLE auditoria_contratistas;
+ALTER TABLE auditoria_contratistas_nueva RENAME TO auditoria_contratistas;
+
+CREATE INDEX idx_auditoria_contratistas_fecha
+ON auditoria_contratistas(fecha_hora DESC, id DESC);
+
+CREATE INDEX idx_auditoria_contratistas_contratista
+ON auditoria_contratistas(contratista_id, id DESC);
 "#;

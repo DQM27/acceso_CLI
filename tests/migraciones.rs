@@ -36,6 +36,19 @@ fn version(connection: &Connection) -> i64 {
         .unwrap()
 }
 
+fn crear_trigger_cedula_inmutable(connection: &Connection) {
+    connection
+        .execute_batch(
+            "CREATE TRIGGER contratistas_cedula_inmutable
+             BEFORE UPDATE OF cedula ON contratistas
+             WHEN NEW.cedula <> OLD.cedula
+             BEGIN
+                SELECT RAISE(ABORT, 'La cedula del contratista es inmutable');
+             END;",
+        )
+        .unwrap();
+}
+
 fn crear_esquema_version_1(connection: &Connection) {
     connection
         .execute_batch(
@@ -142,6 +155,7 @@ fn migracion_10_conserva_auditoria_y_admite_cambios_de_acceso() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
     insertar_referencias(&connection);
+    crear_trigger_cedula_inmutable(&connection);
     connection
         .execute_batch(
             "DROP INDEX idx_registro_ingresos_fecha_salida;
@@ -193,6 +207,7 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
     insertar_referencias(&connection);
+    crear_trigger_cedula_inmutable(&connection);
     insertar_movimiento_actual(
         &connection,
         1,
@@ -242,23 +257,75 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
 }
 
 #[test]
-fn esquema_actual_bloquea_cambio_directo_de_cedula() {
+fn migracion_12_habilita_cambio_de_cedula_y_conserva_auditoria() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
     insertar_referencias(&connection);
+    connection
+        .execute(
+            "INSERT INTO auditoria_contratistas(
+                fecha_hora,usuario_id,contratista_id,campo,valor_anterior,valor_nuevo
+             ) VALUES(
+                '2026-08-21T12:00:00Z',1,1,'tipo_ingreso','SWAT','PRAIND'
+             )",
+            [],
+        )
+        .unwrap();
+    crear_trigger_cedula_inmutable(&connection);
+    connection
+        .execute_batch(
+            "CREATE TABLE auditoria_contratistas_v11 (
+                id INTEGER PRIMARY KEY,
+                fecha_hora TEXT NOT NULL,
+                usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+                contratista_id INTEGER NOT NULL REFERENCES contratistas(id) ON DELETE RESTRICT,
+                campo TEXT NOT NULL CHECK (
+                    campo IN ('tipo_ingreso', 'fecha_vencimiento_praind', 'tiene_acceso')
+                ),
+                valor_anterior TEXT,
+                valor_nuevo TEXT,
+                CHECK (valor_anterior IS NOT valor_nuevo)
+             );
+             INSERT INTO auditoria_contratistas_v11
+             SELECT * FROM auditoria_contratistas;
+             DROP TABLE auditoria_contratistas;
+             ALTER TABLE auditoria_contratistas_v11 RENAME TO auditoria_contratistas;
+             CREATE INDEX idx_auditoria_contratistas_fecha
+             ON auditoria_contratistas(fecha_hora DESC, id DESC);
+             CREATE INDEX idx_auditoria_contratistas_contratista
+             ON auditoria_contratistas(contratista_id, id DESC);
+             PRAGMA user_version = 11;",
+        )
+        .unwrap();
+
+    initialize_database(&connection).unwrap();
 
     assert_eq!(version(&connection), SCHEMA_VERSION);
-    assert!(
-        connection
-            .execute("UPDATE contratistas SET cedula = 'OTRA' WHERE id = 1", [],)
-            .is_err()
-    );
+    connection
+        .execute("UPDATE contratistas SET cedula = 'OTRA' WHERE id = 1", [])
+        .unwrap();
     let cedula: String = connection
         .query_row("SELECT cedula FROM contratistas WHERE id = 1", [], |row| {
             row.get(0)
         })
         .unwrap();
-    assert_eq!(cedula, "2001");
+    assert_eq!(cedula, "OTRA");
+    let conservados: i64 = connection
+        .query_row("SELECT COUNT(*) FROM auditoria_contratistas", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(conservados, 1);
+    connection
+        .execute(
+            "INSERT INTO auditoria_contratistas(
+                fecha_hora,usuario_id,contratista_id,campo,valor_anterior,valor_nuevo
+             ) VALUES(
+                '2026-08-21T12:01:00Z',1,1,'cedula','2001','OTRA'
+             )",
+            [],
+        )
+        .unwrap();
 }
 
 #[test]

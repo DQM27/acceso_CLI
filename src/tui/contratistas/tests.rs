@@ -185,7 +185,7 @@ fn formulario_alinea_nombre_y_fecha_a_la_derecha_de_sus_etiquetas() {
 
     let mut state = ContratistasState::default();
     cargar(&mut state);
-    state.handle_key(k(KeyCode::Enter));
+    state.handle_key_con_rol(k(KeyCode::Enter), RolUsuario::Root);
     let sesion = crate::services::autenticacion_service::UsuarioSesion {
         id: 1,
         cedula: "ROOT".into(),
@@ -223,6 +223,12 @@ fn formulario_alinea_nombre_y_fecha_a_la_derecha_de_sus_etiquetas() {
             .iter()
             .any(|linea| linea.contains("FECHA PRAIND") && linea.contains("31/12/2026"))
     );
+    assert!(
+        lineas
+            .iter()
+            .any(|linea| linea.contains("CÉDULA") && linea.contains("001-2"))
+    );
+    assert!(!lineas.iter().any(|linea| linea.contains("no editable")));
 }
 
 #[test]
@@ -474,10 +480,10 @@ fn panel_refleja_la_seleccion_resaltada_sin_pasos_extra() {
     assert_eq!(s.seleccionado().map(|c| c.id), Some(7));
 }
 #[test]
-fn edicion_no_permite_enfocar_ni_modificar_cedula() {
+fn operador_no_puede_enfocar_ni_modificar_cedula() {
     let mut s = ContratistasState::default();
     cargar(&mut s);
-    s.handle_key(k(KeyCode::Enter));
+    s.handle_key_con_rol(k(KeyCode::Enter), RolUsuario::Operador);
     // Nombre es el primer campo habilitado en modo Editar (Cédula queda
     // excluida); subir desde ahí da la vuelta al último campo (Acceso) en
     // vez de quedarse pegado, así que nunca aterriza en Cédula.
@@ -485,6 +491,7 @@ fn edicion_no_permite_enfocar_ni_modificar_cedula() {
     let ModoContratistas::Formulario(f) = &s.modo else {
         panic!()
     };
+    assert!(!f.cedula_editable);
     assert_eq!(f.campo, 6);
     assert_ne!(f.campo, 0, "no debe poder enfocar Cédula en modo Editar");
 
@@ -496,6 +503,31 @@ fn edicion_no_permite_enfocar_ni_modificar_cedula() {
     assert_eq!(f.campo, 1);
     assert_eq!(f.cedula.value(), "001-2");
     assert_eq!(f.nombre.value(), "José Hernández9");
+}
+
+#[test]
+fn administrador_y_root_pueden_editar_cedula() {
+    for rol in [RolUsuario::Administrador, RolUsuario::Root] {
+        let mut s = ContratistasState::default();
+        cargar(&mut s);
+        s.handle_key_con_rol(k(KeyCode::Enter), rol);
+
+        let ModoContratistas::Formulario(f) = &s.modo else {
+            panic!("debía abrir el formulario para {rol:?}")
+        };
+        assert!(f.cedula_editable);
+        assert_eq!(CampoFormulario::TODOS[f.campo], CampoFormulario::Cedula);
+
+        s.handle_key_con_rol(k(KeyCode::Backspace), rol);
+        s.handle_key_con_rol(k(KeyCode::Char('9')), rol);
+        let AccionContratistas::Actualizar { id, datos, .. } =
+            s.handle_key_con_rol(k(KeyCode::Enter), rol)
+        else {
+            panic!("debía emitir la actualización para {rol:?}")
+        };
+        assert_eq!(id, 7);
+        assert_eq!(datos.cedula, "001-9");
+    }
 }
 
 #[test]

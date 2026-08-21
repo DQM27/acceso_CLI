@@ -10,7 +10,7 @@ use crate::{
     tui::ui_kit::TextInput,
 };
 
-use super::{CampoFormulario, FormularioContratista, ModoFormulario};
+use super::{CampoFormulario, FormularioContratista};
 
 pub(in crate::tui::contratistas::state) fn tipos() -> [TipoIngreso; 4] {
     [
@@ -66,6 +66,7 @@ pub(super) fn construir(
 
 pub(super) fn convertir_actualizacion(datos: DatosContratista) -> DatosActualizacionContratista {
     DatosActualizacionContratista {
+        cedula: datos.cedula,
         nombre: datos.nombre,
         empresa_id: datos.empresa_id,
         tipo_ingreso: datos.tipo_ingreso,
@@ -80,8 +81,7 @@ pub(super) fn mover_campo(f: &mut FormularioContratista, d: isize) {
         .iter()
         .enumerate()
         .filter_map(|(indice, campo)| {
-            let habilitado = !(matches!(f.modo, ModoFormulario::Editar { .. })
-                && *campo == CampoFormulario::Cedula)
+            let habilitado = (*campo != CampoFormulario::Cedula || f.cedula_editable)
                 && (*campo != CampoFormulario::FechaPraind || f.requiere_praind());
             habilitado.then_some(indice)
         })

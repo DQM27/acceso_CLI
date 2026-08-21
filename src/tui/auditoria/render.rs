@@ -100,6 +100,7 @@ pub(super) fn descripcion_cambio(
     item: &crate::database::queries::auditoria_contratistas::CambioContratistaAuditado,
 ) -> String {
     let etiqueta = match item.campo.as_str() {
+        "cedula" => "Cédula",
         "tipo_ingreso" => "Tipo de ingreso",
         "fecha_vencimiento_praind" => "Vencimiento PRAIND",
         "tiene_acceso" => "Acceso",
