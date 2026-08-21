@@ -17,7 +17,7 @@ use crate::{
         ChoiceFieldOptions, CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell,
         StatusKind, Theme, clasificar_mensaje, detail_line, empty_state, identidad_sesion,
         master_detail_areas, panel_vacio, posicionar_cursor_campo, render_choice_field,
-        render_separator, render_terminal_too_small,
+        render_form_field, render_separator, render_terminal_too_small,
     },
 };
 
@@ -128,6 +128,10 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &ContratistasState, theme
     let filas = Layout::vertical([Constraint::Length(3), Constraint::Min(4)]).split(area);
 
     let enfocado_busqueda = matches!(state.modo, ModoContratistas::Busqueda { .. });
+    let texto_busqueda = match &state.modo {
+        ModoContratistas::Busqueda { texto } => texto.value(),
+        _ => state.filtro.as_str(),
+    };
     let (pagina, total_paginas) = state.pagina();
     let conteo = if total_paginas > 1 {
         format!(
@@ -140,15 +144,15 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &ContratistasState, theme
     };
     let resumen = state.resumen_consulta();
     let etiqueta_busqueda = if resumen.is_empty() {
-        format!("BUSCAR · {conteo}")
+        format!("BUSCAR CONTRATISTA · {conteo}")
     } else {
-        format!("BUSCAR · {conteo} · {resumen}")
+        format!("BUSCAR CONTRATISTA · {conteo} · {resumen}")
     };
-    let area_busqueda = render_campo(
+    let area_busqueda = render_form_field(
         frame,
         filas[0],
         &etiqueta_busqueda,
-        &state.filtro,
+        texto_busqueda,
         enfocado_busqueda,
         theme,
     );

@@ -11,7 +11,7 @@ use std::{
     time::Instant,
 };
 
-const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
+const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(120);
 #[path = "filtros.rs"]
 mod filtros;
 pub use filtros::*;

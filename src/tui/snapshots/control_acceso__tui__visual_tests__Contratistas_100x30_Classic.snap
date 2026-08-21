@@ -7,9 +7,9 @@ expression: volcado
  BRISAS CLI                                                               Operador de prueba · ROOT 
  CONTROL DE ACCESO                               CONTRATISTAS                                 ··:·· 
  ────────────────────────────────────────────────────────────────────────────────────────────────── 
-   BUSCAR · 0 RESULTADOS · Ejemplo: empresa:Brisas tipo:praind acceso:si                            
+   BUSCAR CONTRATISTA · 0 RESULTADOS · Ejemplo: empresa:Brisas tipo:praind acceso:si                
                                                                                                     
-                                                                                                    
+ ────────────────────────────────────────────────────────────────────────────────────────────────── 
  CÉDULA        NOMBRE               EMPRESA             TIPO          PRAIND      RUTA     ACCESO   
                                                                                                     
                                                                                                     
@@ -51,9 +51,13 @@ expression: volcado
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "──────────────────────────────────────────────────────────────────────────────────────────────────" fg=Rgb(76, 119, 85) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"   BUSCAR · 0 RESULTADOS · Ejemplo: empresa:Brisas tipo:praind acceso:si                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"  BUSCAR CONTRATISTA · 0 RESULTADOS · Ejemplo: empresa:Brisas tipo:praind acceso:si               " fg=Rgb(105, 135, 111) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"──────────────────────────────────────────────────────────────────────────────────────────────────" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "CÉDULA        NOMBRE               EMPRESA             TIPO          PRAIND      RUTA     ACCESO  " fg=Rgb(105, 135, 111) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE

@@ -19,7 +19,7 @@ use std::time::Instant;
 use form::{agregar_fecha, construir, convertir_actualizacion, mover_campo, tipos};
 use query::{aplicar_clave, parsear_consulta};
 
-const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
+const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(120);
 /// Mismo tamaño que `LIMITE_PREDETERMINADO` en `database::queries::contratistas` — se repite
 /// aquí (no se importa) porque ese es un detalle interno de la consulta, mientras que esta
 /// constante es el tamaño de página que la UI usa para avanzar con PageUp/PageDown.

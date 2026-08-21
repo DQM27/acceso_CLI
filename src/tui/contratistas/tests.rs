@@ -224,6 +224,86 @@ fn formulario_alinea_nombre_y_fecha_a_la_derecha_de_sus_etiquetas() {
             .any(|linea| linea.contains("FECHA PRAIND") && linea.contains("31/12/2026"))
     );
 }
+
+#[test]
+fn buscador_separa_etiqueta_e_input_y_posiciona_el_cursor_al_final() {
+    use ratatui::{Terminal, backend::TestBackend};
+
+    let mut state = ContratistasState::default();
+    cargar(&mut state);
+    state.filtro = "filtro anterior".into();
+    state.handle_key(k(KeyCode::Char('/')));
+
+    let sesion = crate::services::autenticacion_service::UsuarioSesion {
+        id: 1,
+        cedula: "ROOT".into(),
+        nombre: "Root".into(),
+        rol: crate::models::usuario::RolUsuario::Root,
+    };
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    let dibujar = |terminal: &mut Terminal<TestBackend>, state: &ContratistasState| {
+        terminal
+            .draw(|frame| {
+                render::render(
+                    frame,
+                    frame.area(),
+                    state,
+                    &sesion,
+                    crate::tui::ui_kit::ThemePreset::Brisas.theme(),
+                )
+            })
+            .unwrap();
+    };
+
+    dibujar(&mut terminal, &state);
+    let lineas = (0..terminal.backend().buffer().area.height)
+        .map(|y| {
+            (0..terminal.backend().buffer().area.width)
+                .map(|x| terminal.backend().buffer()[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>();
+    let fila_etiqueta = lineas
+        .iter()
+        .position(|linea| linea.contains("BUSCAR CONTRATISTA"))
+        .expect("debía renderizar la etiqueta del buscador");
+    assert!(
+        lineas[fila_etiqueta + 1].trim().is_empty(),
+        "al pulsar / el input debe verse vacío aunque exista un filtro anterior"
+    );
+    let inicio_campo = lineas[fila_etiqueta + 2]
+        .find('─')
+        .expect("debía subrayar el input");
+    let cursor = terminal.backend().cursor_position();
+    assert_eq!(
+        (cursor.x, cursor.y),
+        (inicio_campo as u16, (fila_etiqueta + 1) as u16)
+    );
+
+    escribir(&mut state, "hfjj");
+    dibujar(&mut terminal, &state);
+    let lineas = (0..terminal.backend().buffer().area.height)
+        .map(|y| {
+            (0..terminal.backend().buffer().area.width)
+                .map(|x| terminal.backend().buffer()[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>();
+    let fila_etiqueta = lineas
+        .iter()
+        .position(|linea| linea.contains("BUSCAR CONTRATISTA"))
+        .expect("debía mantener la etiqueta del buscador");
+    let fila_input = fila_etiqueta + 1;
+    let inicio_input = lineas[fila_input]
+        .find("hfjj")
+        .expect("el texto debe aparecer debajo de la etiqueta");
+    let cursor = terminal.backend().cursor_position();
+
+    assert!(lineas[fila_input + 1].contains('─'));
+    assert_eq!(cursor.y, fila_input as u16);
+    assert_eq!(cursor.x, inicio_input as u16 + "hfjj".len() as u16);
+}
+
 #[test]
 fn busqueda_admite_clave_valor_de_empresa_tipo_y_deja_texto_libre() {
     let mut s = ContratistasState::default();

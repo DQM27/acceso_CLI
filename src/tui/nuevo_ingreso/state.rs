@@ -16,7 +16,7 @@ pub(super) mod render;
 mod tests;
 
 const MEDIOS: [MedioIngreso; 2] = [MedioIngreso::Caminando, MedioIngreso::Vehiculo];
-const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
+const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(120);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EtapaNuevoIngreso {

@@ -4,7 +4,7 @@ use crate::database::queries::empresas::EmpresaResumen;
 use crate::tui::ui_kit::{Debounce, StandardCommand, TextInput, standard_command};
 use std::time::Instant;
 
-const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
+const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(120);
 
 #[path = "render.rs"]
 pub(super) mod render;

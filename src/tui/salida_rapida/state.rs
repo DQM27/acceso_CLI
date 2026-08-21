@@ -12,7 +12,7 @@ pub(super) mod render;
 #[path = "tests.rs"]
 mod tests;
 
-const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
+const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(120);
 
 /// Overlay global de "salida rápida" (F2): registra la salida de un ingreso
 /// activo por gafete o por nombre/cédula desde cualquier pantalla, sin

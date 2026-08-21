@@ -7,9 +7,9 @@ expression: volcado
  BRISAS CLI                        Operador de prueba · ROO 
  CONTRATISTAS                                         ··:·· 
  ────────────────────────────────────────────────────────── 
-   BUSCAR · 0 RESULTADOS · Ejemplo: empresa:Brisas tipo:pra 
+   BUSCAR CONTRATISTA · 0 RESULTADOS · Ejemplo: empresa:Bri 
                                                             
-                                                            
+ ────────────────────────────────────────────────────────── 
  CÉDUL NOMBRE   EMPRESA TIPO  PRAIND      RUTA     ACCESO   
                                                             
                 Sin contratistas registrados                
@@ -41,9 +41,13 @@ expression: volcado
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "──────────────────────────────────────────────────────────" fg=Rgb(100, 120, 126) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"   BUSCAR · 0 RESULTADOS · Ejemplo: empresa:Brisas tipo:pra " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"  BUSCAR CONTRATISTA · 0 RESULTADOS · Ejemplo: empresa:Bri" fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"──────────────────────────────────────────────────────────" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "CÉDUL NOMBRE   EMPRESA TIPO  PRAIND      RUTA     ACCESO  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE

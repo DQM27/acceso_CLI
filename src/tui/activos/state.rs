@@ -12,7 +12,7 @@ use crate::tui::ui_kit::{
 };
 use std::time::Instant;
 
-const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
+const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(120);
 #[path = "render.rs"]
 pub(super) mod render;
 #[cfg(test)]
