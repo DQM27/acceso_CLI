@@ -112,6 +112,11 @@ pub struct MenuPrincipalState {
     pub seleccion: OpcionMenu,
     pub confirmacion: Option<ConfirmacionMenu>,
     pub ayuda_expandida: bool,
+    /// Mensaje de por qué falló el último intento de respaldo automático —
+    /// `None` si el más reciente tuvo éxito (o aún no hubo ninguno). Sólo se
+    /// usa para decidir si mostrar el aviso genérico; el detalle vive en la
+    /// pantalla Respaldos, no aquí.
+    pub fallo_respaldo_automatico: Option<String>,
 }
 
 impl Default for MenuPrincipalState {
@@ -120,6 +125,7 @@ impl Default for MenuPrincipalState {
             seleccion: OpcionMenu::NuevoIngreso,
             confirmacion: None,
             ayuda_expandida: false,
+            fallo_respaldo_automatico: None,
         }
     }
 }

@@ -107,6 +107,14 @@ fn estado_shell(estado: &RespaldosState) -> (String, StatusKind) {
         };
         return (mensaje.clone(), tipo);
     }
+    // Persiste hasta que un intento nuevo lo resuelva — a diferencia de
+    // `mensaje`, no se limpia solo por navegar dentro de la pantalla.
+    if let Some(fallo) = &estado.fallo_automatico {
+        return (
+            format!("⚠ El respaldo automático de hoy falló: {fallo}"),
+            StatusKind::Error,
+        );
+    }
     (String::new(), StatusKind::Normal)
 }
 

@@ -4,7 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use chrono::{TimeZone, Utc};
 
-use control_acceso::application::AppCore;
+use control_acceso::application::{AppCore, EstadoRespaldoAutomatico};
 use control_acceso::database::backup::{ResultadoValidacion, TipoRespaldo};
 use control_acceso::services::autenticacion_service::UsuarioSesion;
 use control_acceso::services::usuario_service::CrearRootInicialInput;
@@ -110,8 +110,9 @@ fn respaldo_automatico_diario_no_crea_uno_nuevo_si_ya_hay_uno_de_hoy() {
     let core = AppCore::abrir_con_reloj(&ruta, Arc::new(RelojFijo::new(hoy))).unwrap();
     let actor = root(&core);
 
-    core.respaldo_automatico_diario_si_hace_falta();
+    let estado = core.respaldo_automatico_diario_si_hace_falta();
 
+    assert_eq!(estado, EstadoRespaldoAutomatico::SinCambios);
     assert_eq!(core.listar_respaldos(&actor).unwrap().len(), 1);
 }
 
@@ -125,8 +126,9 @@ fn respaldo_automatico_diario_no_corre_antes_de_la_una_am_costa_rica() {
     let core = AppCore::abrir_con_reloj(&ruta, Arc::new(RelojFijo::new(antes_de_la_una))).unwrap();
     let actor = root(&core);
 
-    core.respaldo_automatico_diario_si_hace_falta();
+    let estado = core.respaldo_automatico_diario_si_hace_falta();
 
+    assert_eq!(estado, EstadoRespaldoAutomatico::SinCambios);
     assert_eq!(core.listar_respaldos(&actor).unwrap().len(), 0);
 }
 
@@ -137,11 +139,35 @@ fn respaldo_automatico_diario_corre_a_partir_de_la_una_am_costa_rica() {
     let core = AppCore::abrir_con_reloj(&ruta, Arc::new(RelojFijo::new(la_una_en_punto))).unwrap();
     let actor = root(&core);
 
-    core.respaldo_automatico_diario_si_hace_falta();
+    let estado = core.respaldo_automatico_diario_si_hace_falta();
 
+    assert_eq!(estado, EstadoRespaldoAutomatico::Creado);
     let listado = core.listar_respaldos(&actor).unwrap();
     assert_eq!(listado.len(), 1);
     assert_eq!(listado[0].tipo, TipoRespaldo::Automatico);
+}
+
+/// Si crear el respaldo falla (disco lleno, permisos, carpeta bloqueada...),
+/// la TUI necesita el motivo para avisarle al operador -- no puede quedar
+/// en silencio como antes. Se fuerza el fallo poniendo un archivo común
+/// donde `crear_respaldo` espera poder crear el directorio `backups/`.
+#[test]
+fn respaldo_automatico_diario_informa_el_motivo_si_falla() {
+    let ruta = archivo_temporal("automatico_diario_falla");
+    let la_una_en_punto = Utc.with_ymd_and_hms(2026, 1, 16, 7, 0, 0).unwrap();
+    std::fs::write(
+        ruta.parent().unwrap().join("backups"),
+        b"no es un directorio",
+    )
+    .unwrap();
+    let core = AppCore::abrir_con_reloj(&ruta, Arc::new(RelojFijo::new(la_una_en_punto))).unwrap();
+
+    let estado = core.respaldo_automatico_diario_si_hace_falta();
+
+    assert!(
+        matches!(&estado, EstadoRespaldoAutomatico::Fallo(mensaje) if !mensaje.is_empty()),
+        "{estado:?}"
+    );
 }
 
 #[test]

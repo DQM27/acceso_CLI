@@ -280,6 +280,56 @@ fn un_operador_no_ve_ni_puede_abrir_usuarios() {
     );
 }
 
+/// El aviso es genérico a propósito (sin el detalle técnico, que vive en
+/// Respaldos) y visible para cualquier rol, incluido Operador, que ni
+/// siquiera puede abrir la pantalla Respaldos — cualquiera puede ser quien
+/// note el problema y avise al administrador.
+#[test]
+fn el_menu_avisa_si_el_respaldo_automatico_fallo_sin_importar_el_rol() {
+    use crate::services::autenticacion_service::UsuarioSesion;
+    use ratatui::{Terminal, backend::TestBackend};
+
+    let state = MenuPrincipalState {
+        fallo_respaldo_automatico: Some("Error de archivo: disco lleno".into()),
+        ..Default::default()
+    };
+    let sesion = UsuarioSesion {
+        id: 1,
+        cedula: "1".into(),
+        nombre: "Operador".into(),
+        rol: RolUsuario::Operador,
+    };
+    let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+    terminal
+        .draw(|frame| {
+            render::render(
+                frame,
+                frame.area(),
+                &state,
+                &sesion,
+                crate::tui::ui_kit::ThemePreset::Brisas.theme(),
+            )
+        })
+        .unwrap();
+
+    let buffer = terminal.backend().buffer();
+    let texto = (0..buffer.area.height)
+        .map(|y| {
+            (0..buffer.area.width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        texto.contains("Fallo en el sistema de respaldo de la base de datos"),
+        "{texto}"
+    );
+    // El mensaje es a propósito genérico: el detalle técnico no debe
+    // filtrarse a una pantalla que ve cualquier rol.
+    assert!(!texto.contains("disco lleno"), "{texto}");
+}
+
 #[test]
 fn un_administrador_si_ve_y_puede_abrir_usuarios() {
     let visibles = OpcionMenu::visibles_para(RolUsuario::Administrador);

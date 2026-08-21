@@ -15,6 +15,33 @@ fn reiniciar_respaldos_solicita_la_carga_inicial() {
     assert_eq!(accion, AccionAjustes::Respaldos(AccionRespaldos::Cargar));
 }
 
+/// A diferencia de `mensaje` (transitorio), el aviso de que el respaldo
+/// automático falló debe seguir visible después de entrar y salir de la
+/// pantalla — `reiniciar()` no debe borrarlo, sólo un intento nuevo lo
+/// reemplaza (con éxito o con otro fallo).
+#[test]
+fn reiniciar_conserva_el_fallo_del_respaldo_automatico() {
+    let mut estado = ConfiguracionState::default();
+    estado.actualizar_fallo_respaldo_automatico(Some("Error de archivo: disco lleno".into()));
+
+    estado.reiniciar();
+
+    assert_eq!(
+        estado.respaldos.fallo_automatico.as_deref(),
+        Some("Error de archivo: disco lleno")
+    );
+}
+
+#[test]
+fn un_intento_nuevo_reemplaza_el_fallo_del_respaldo_automatico() {
+    let mut estado = ConfiguracionState::default();
+    estado.actualizar_fallo_respaldo_automatico(Some("Error de archivo: disco lleno".into()));
+
+    estado.actualizar_fallo_respaldo_automatico(None);
+
+    assert_eq!(estado.respaldos.fallo_automatico, None);
+}
+
 #[test]
 fn esc_en_respaldos_vuelve_directamente_al_menu_principal() {
     let mut estado = ConfiguracionState::default();
@@ -154,4 +181,37 @@ fn exportar_sin_texto_no_dispara_nada_y_esc_cancela() {
         accion,
         AccionAjustes::Respaldos(AccionRespaldos::Exportar { .. })
     ));
+}
+
+/// El detalle técnico (a diferencia del aviso genérico del Menú Principal)
+/// sólo lo ve quien ya está en Respaldos — alcanzable únicamente por Root.
+#[test]
+fn la_pantalla_respaldos_muestra_el_motivo_del_fallo_automatico() {
+    use ratatui::{Terminal, backend::TestBackend};
+
+    let mut estado = ConfiguracionState::default();
+    estado.actualizar_fallo_respaldo_automatico(Some("Error de archivo: disco lleno".into()));
+
+    let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+    terminal
+        .draw(|frame| {
+            render::render(
+                frame,
+                frame.area(),
+                &estado,
+                crate::tui::ui_kit::ThemePreset::Brisas.theme(),
+            )
+        })
+        .unwrap();
+
+    let buffer = terminal.backend().buffer();
+    let texto = (0..buffer.area.height)
+        .map(|y| {
+            (0..buffer.area.width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(texto.contains("disco lleno"), "{texto}");
 }

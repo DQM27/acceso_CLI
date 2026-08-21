@@ -29,7 +29,13 @@ pub enum AccionAjustes {
 
 impl ConfiguracionState {
     pub fn reiniciar(&mut self) -> AccionAjustes {
+        // `fallo_automatico` no es estado transitorio de la pantalla, es el
+        // estado real del respaldo automático — entrar a la pantalla no
+        // debe hacerlo desaparecer, sólo un intento nuevo (exitoso o no) lo
+        // reemplaza.
+        let fallo_automatico = self.respaldos.fallo_automatico.take();
         *self = Self::default();
+        self.respaldos.fallo_automatico = fallo_automatico;
         AccionAjustes::Respaldos(AccionRespaldos::Cargar)
     }
 
@@ -64,6 +70,13 @@ impl ConfiguracionState {
 
     pub fn completar_exportacion(&mut self, resultado: Result<(), String>, destino: &Path) {
         self.respaldos.completar_exportacion(resultado, destino);
+    }
+
+    /// Empuja el resultado de la revisión periódica del respaldo automático
+    /// (`AppCore::respaldo_automatico_diario_si_hace_falta`) — `None` cuando
+    /// el más reciente tuvo éxito o no hacía falta ninguno todavía.
+    pub fn actualizar_fallo_respaldo_automatico(&mut self, fallo: Option<String>) {
+        self.respaldos.fallo_automatico = fallo;
     }
 }
 
@@ -103,6 +116,11 @@ struct RespaldosState {
     seleccion: Option<usize>,
     modo: ModoRespaldos,
     mensaje: Option<String>,
+    /// A diferencia de `mensaje` (transitorio, se limpia con la siguiente
+    /// tecla), refleja el estado real del respaldo automático hasta que se
+    /// resuelva — no debe desaparecer solo porque el operador movió la
+    /// selección.
+    fallo_automatico: Option<String>,
 }
 
 impl Default for RespaldosState {
@@ -112,6 +130,7 @@ impl Default for RespaldosState {
             seleccion: None,
             modo: ModoRespaldos::Normal,
             mensaje: None,
+            fallo_automatico: None,
         }
     }
 }

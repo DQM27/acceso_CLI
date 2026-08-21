@@ -12,7 +12,7 @@ mod error_messages;
 
 use auth_jobs::{HiloUsuarioPendiente, ReceptorAutenticacion, ReceptorCambioPropio, ReceptorHash};
 
-use crate::application::AppCore;
+use crate::application::{AppCore, EstadoRespaldoAutomatico};
 use crate::models::usuario::RolUsuario;
 use crate::services::autenticacion_service::UsuarioSesion;
 
@@ -360,7 +360,16 @@ impl App {
                         >= REVISION_RESPALDO_AUTOMATICO
                     {
                         ultima_revision_respaldo = ahora;
-                        core.respaldo_automatico_diario_si_hace_falta();
+                        let fallo = match core.respaldo_automatico_diario_si_hace_falta() {
+                            EstadoRespaldoAutomatico::Fallo(mensaje) => Some(mensaje),
+                            EstadoRespaldoAutomatico::SinCambios
+                            | EstadoRespaldoAutomatico::Creado => None,
+                        };
+                        cambio_visible |=
+                            fallo.is_some() != self.menu.fallo_respaldo_automatico.is_some();
+                        self.menu.fallo_respaldo_automatico = fallo.clone();
+                        self.configuracion
+                            .actualizar_fallo_respaldo_automatico(fallo);
                     }
                 }
                 None => self.abortar_configuracion_inicial_sin_core(),

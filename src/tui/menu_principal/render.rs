@@ -78,6 +78,15 @@ fn estado_shell(state: &MenuPrincipalState, sesion: &UsuarioSesion) -> (String, 
         Some(ConfirmacionMenu::Salir) => {
             ("¿Desea cerrar BRISAS CLI?".to_owned(), StatusKind::Warning)
         }
+        // Mensaje genérico a propósito, sin el detalle técnico (disco lleno,
+        // permisos, etc.) — ese detalle vive en Respaldos, sólo alcanzable
+        // por Root. Cualquier rol ve este aviso porque cualquiera puede ser
+        // quien note el problema y avise al administrador.
+        None if state.fallo_respaldo_automatico.is_some() => (
+            "Fallo en el sistema de respaldo de la base de datos. Contacte al administrador."
+                .to_owned(),
+            StatusKind::Error,
+        ),
         None => (state.seleccion.descripcion().to_owned(), StatusKind::Normal),
     }
 }

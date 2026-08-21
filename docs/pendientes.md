@@ -147,11 +147,21 @@ suite completa + Clippy estricto.
   (`database::backup::restaurar_respaldo`) es reutilizable casi tal cual — falta la
   pantalla previa al login que detecte "no existe archivo" y ofrezca importar vs. crear
   nueva.
-- [ ] `respaldo_automatico_diario_si_hace_falta` sigue descartando todos sus errores en
-  silencio, incluida la limpieza por retención — si falla una vez, queda roto para
-  siempre sin ningún aviso y los respaldos se acumulan sin límite. Es **por diseño**
-  (decisión previa: "ignorar en silencio si falla, no es obligatorio"), pero queda abierto
-  para que el usuario decida si quiere reconsiderarlo — pendiente de esa conversación.
+- [x] **Reparado (2026-08-21): el fallo del respaldo automático ya no queda en silencio.**
+  Solución en dos fases, según lo pedido: **Fase 1** — si
+  `respaldo_automatico_diario_si_hace_falta` falla, el Menú Principal muestra un aviso
+  genérico ("Fallo en el sistema de respaldo de la base de datos. Contacte al
+  administrador.") en la barra de estado, para cualquier rol — no en Login, porque una
+  sesión puede pasar días sin que nadie inicie sesión. **Fase 2** — el motivo exacto (se
+  reutilizan los mensajes de `RespaldoError`, p.ej. "disco lleno") sólo se muestra en la
+  pantalla Respaldos (sólo Root). No se construyó ningún sistema de log persistente: el
+  estado vive en memoria (`MenuPrincipalState::fallo_respaldo_automatico` y
+  `RespaldosState::fallo_automatico`), se actualiza en cada revisión periódica (60s, en
+  `tui/app.rs::run_internal`) y se reemplaza en el próximo intento (éxito u otro fallo).
+  `respaldo_automatico_diario_si_hace_falta` ahora devuelve `EstadoRespaldoAutomatico`
+  (`SinCambios`/`Creado`/`Fallo(mensaje)`) en vez de descartar el resultado. La limpieza
+  por retención sigue sin reportar sus propios errores por separado (se ignora con `let
+  _ =`, como antes) — no se consideró necesario para este alcance.
 
 ## Búsqueda `clave:valor` e Historial
 

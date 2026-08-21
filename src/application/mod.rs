@@ -21,6 +21,7 @@ mod respaldos;
 mod usuarios;
 
 pub use historial::ExportarHistorialError;
+pub use respaldos::EstadoRespaldoAutomatico;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BootstrapError {

@@ -34,7 +34,10 @@ fn run() -> Result<(), StartupError> {
                 return Err(StartupError::Bootstrap(error));
             }
         };
-        core.respaldo_automatico_diario_si_hace_falta();
+        // El resultado real se recoge dentro de la TUI (`App::run_internal`
+        // vuelve a revisar en su primera vuelta de todos modos) para poder
+        // avisarle al operador si falla; acá sólo hace falta que se intente.
+        let _ = core.respaldo_automatico_diario_si_hace_falta();
         let requiere_configuracion_inicial = core
             .requiere_configuracion_inicial()
             .map_err(StartupError::Usuario)?;

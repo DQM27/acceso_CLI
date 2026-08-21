@@ -18,6 +18,23 @@ const HORA_RESPALDO_AUTOMATICO: u32 = 1;
 
 use super::{AppCore, verificar_actor_activo};
 
+/// Resultado de una revisión del respaldo automático diario — para que la
+/// TUI pueda avisarle al operador cuando algo falla, sin necesitar guardar
+/// nada aparte de lo que ya vive en memoria durante la sesión actual (no es
+/// un sistema de log persistente, sólo el último resultado conocido).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EstadoRespaldoAutomatico {
+    /// No hacía falta hacer nada: aún no es la hora, o ya existe el de hoy.
+    SinCambios,
+    /// Se creó el respaldo del día sin problema.
+    Creado,
+    /// Falló crear el respaldo — mensaje ya listo para mostrar, no un error
+    /// técnico crudo. La limpieza por retención se queda best-effort/en
+    /// silencio como antes: acumular respaldos de más no es un riesgo de
+    /// pérdida de datos, a diferencia de no poder crear uno nuevo.
+    Fallo(String),
+}
+
 impl AppCore {
     pub fn crear_respaldo(
         &self,
@@ -63,17 +80,17 @@ impl AppCore {
     /// correr, p. ej. la app estuvo cerrada) como periódicamente mientras
     /// sigue abierta (la app puede quedarse corriendo varios días seguidos
     /// sin reiniciar, y antes esta función sólo se evaluaba una vez al
-    /// arrancar el proceso). Es best-effort a propósito (no devuelve
-    /// `Result`): a diferencia del respaldo previo a una migración, éste no
-    /// es obligatorio, así que un fallo (disco lleno, permisos) no debe
-    /// impedir que la app arranque ni interrumpir al operador.
-    pub fn respaldo_automatico_diario_si_hace_falta(&self) {
+    /// arrancar el proceso). No interrumpe al operador ni impide que la app
+    /// arranque: un fallo (disco lleno, permisos) se devuelve para que la
+    /// TUI decida cómo avisar, no se convierte en un error fatal aquí.
+    pub fn respaldo_automatico_diario_si_hace_falta(&self) -> EstadoRespaldoAutomatico {
         let ahora = a_costa_rica(self.reloj.ahora_utc());
         if ahora.hour() < HORA_RESPALDO_AUTOMATICO {
-            return;
+            return EstadoRespaldoAutomatico::SinCambios;
         }
-        let Ok(listado) = self.listar_respaldos_sistema() else {
-            return;
+        let listado = match self.listar_respaldos_sistema() {
+            Ok(listado) => listado,
+            Err(error) => return EstadoRespaldoAutomatico::Fallo(error.to_string()),
         };
         let hoy = ahora.date_naive();
         let ya_existe_hoy = listado.iter().any(|respaldo| {
@@ -81,17 +98,18 @@ impl AppCore {
                 && crate::tiempo::fecha_costa_rica(respaldo.creado_en) == hoy
         });
         if ya_existe_hoy {
-            return;
+            return EstadoRespaldoAutomatico::SinCambios;
         }
-        if self
-            .crear_respaldo_sistema(TipoRespaldo::Automatico)
-            .is_ok()
-        {
-            let _ = crate::database::backup::aplicar_retencion(
-                &self.directorio_respaldos(),
-                TipoRespaldo::Automatico,
-                crate::database::backup::RETENCION_AUTOMATICOS,
-            );
+        match self.crear_respaldo_sistema(TipoRespaldo::Automatico) {
+            Ok(_) => {
+                let _ = crate::database::backup::aplicar_retencion(
+                    &self.directorio_respaldos(),
+                    TipoRespaldo::Automatico,
+                    crate::database::backup::RETENCION_AUTOMATICOS,
+                );
+                EstadoRespaldoAutomatico::Creado
+            }
+            Err(error) => EstadoRespaldoAutomatico::Fallo(error.to_string()),
         }
     }
 
