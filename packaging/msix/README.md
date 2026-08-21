@@ -44,6 +44,22 @@ la validación falla. Subir el archivo tal cual sale de `MakeAppx.exe`.
 En Partner Center → Control de Acceso Brisas → "Iniciar envío", subir este
 `.msix` en la sección de paquetes.
 
+## Versionado
+
+`Identity/Version` en `AppxManifest.xml` usa el formato `Major.Minor.Build.Revision`
+(cuatro números, no el semver de tres partes de `Cargo.toml`) y sigue reglas propias
+de la Store, independientes de la versión que tenga el crate:
+
+- El primer número (Major) **no puede ser 0** — por eso arranca en `1.0.0.0`, aunque
+  `Cargo.toml` diga `0.1.0`. No hace falta que ambas versiones coincidan.
+- El cuarto número (Revision) está **reservado para la Store y debe quedar en 0**
+  siempre que vos generás el paquete; ellos lo pueden cambiar internamente, pero no
+  lo tocás vos.
+- Cada envío nuevo a Partner Center tiene que tener una versión **mayor** a la
+  última aprobada, si no la rechaza. En la práctica, subir el `Build` (tercer
+  número) en cada release: `1.0.0.0` → `1.0.1.0` → `1.0.2.0`, etc. Reservá el
+  `Minor` para cambios más grandes si querés, es a tu criterio.
+
 ## Probarlo localmente antes de subir (opcional)
 
 Para instalar el paquete sin pasar por la Store y confirmar que abre bien,
