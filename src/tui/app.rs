@@ -1057,6 +1057,84 @@ mod tests {
         assert_eq!(activos.total, 1, "el ingreso sí debía quedar registrado");
     }
 
+    /// Regresión puntual del reporte de usuario: con varios contratistas
+    /// filtrados en pantalla, registrar a uno no debía vaciar la lista de
+    /// los demás ni mandar al menú principal con un ESC — el operador
+    /// tiene que poder seguir con el siguiente sin volver a escribir la
+    /// búsqueda.
+    #[test]
+    fn registrar_no_vacia_la_lista_ni_manda_al_menu_con_mas_por_procesar() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let core = AppCore::new(connection);
+        let usuario_id = core
+            .crear_root_inicial(crate::services::usuario_service::CrearRootInicialInput {
+                cedula: "ROOT-1".into(),
+                nombre: "Ana".into(),
+                password: "password1".into(),
+            })
+            .unwrap();
+        let actor = core.autenticar("ROOT-1", "password1").unwrap();
+        let empresa_id = core.crear_empresa(&actor, "Constructora Álvarez").unwrap();
+        for (cedula, nombre) in [("1001", "Persona Uno"), ("1002", "Persona Dos")] {
+            core.crear_contratista(
+                &actor,
+                crate::services::contratista_service::DatosContratista {
+                    cedula: cedula.into(),
+                    nombre: nombre.into(),
+                    empresa_id,
+                    tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::PorCorreo,
+                    fecha_vencimiento_praind: None,
+                    es_personal_ruta: false,
+                    tiene_acceso: true,
+                },
+            )
+            .unwrap();
+        }
+
+        let mut app = App {
+            vista: Vista::NuevoIngreso,
+            sesion: Some(UsuarioSesion {
+                id: usuario_id,
+                cedula: "ROOT-1".into(),
+                nombre: "Ana".into(),
+                rol: RolUsuario::Root,
+            }),
+            ..App::default()
+        };
+
+        app.procesar_tecla_global(tecla(KeyCode::Char('/')), Some(&core));
+        for c in "Persona".chars() {
+            app.procesar_tecla_global(tecla(KeyCode::Char(c)), Some(&core));
+        }
+        let futuro = std::time::Instant::now() + std::time::Duration::from_millis(300);
+        let accion = app.nuevo_ingreso.tick(futuro);
+        app.procesar_accion_nuevo_ingreso(accion, Some(&core));
+        assert_eq!(app.nuevo_ingreso.cantidad(), 2);
+
+        // Selecciona al resaltado, completa el gafete (PorCorreo lo exige)
+        // y registra.
+        app.procesar_tecla_global(tecla(KeyCode::Enter), Some(&core));
+        app.procesar_tecla_global(tecla(KeyCode::Tab), Some(&core));
+        for c in "50".chars() {
+            app.procesar_tecla_global(tecla(KeyCode::Char(c)), Some(&core));
+        }
+        app.procesar_tecla_global(tecla(KeyCode::Enter), Some(&core));
+
+        assert_eq!(
+            app.nuevo_ingreso.cantidad(),
+            2,
+            "los dos deben seguir visibles; el registrado ahora con ingreso activo"
+        );
+
+        app.procesar_tecla_global(tecla(KeyCode::Esc), Some(&core));
+        assert_eq!(
+            app.vista,
+            Vista::NuevoIngreso,
+            "ESC con filtro activo debía limpiar el filtro, no salir al menú"
+        );
+    }
+
     #[test]
     fn f2_no_abre_sin_sesion_iniciada() {
         let connection = Connection::open_in_memory().unwrap();
@@ -2655,8 +2733,11 @@ impl App {
                 // contratistas por procesar seguidos, ese salto obligaba a
                 // volver a navegar por cada uno. `completar_registro` deja
                 // su propio mensaje de confirmación ("✓ Ingreso registrado
-                // — X") en vez de depender de ver la fila nueva en Activos.
-                self.nuevo_ingreso.completar_registro(resultado);
+                // — X") y pide recargar la misma búsqueda para que la
+                // lista no quede en blanco ni pierda lo que el operador
+                // ya tenía filtrado.
+                let recarga = self.nuevo_ingreso.completar_registro(resultado);
+                self.procesar_accion_nuevo_ingreso(recarga, core);
             }
         }
     }

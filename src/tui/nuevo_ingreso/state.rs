@@ -143,6 +143,9 @@ impl NuevoIngresoState {
     pub fn resultados_ocultos(&self) -> Option<usize> {
         (self.total > self.contratistas.len()).then_some(self.total)
     }
+    pub fn cantidad(&self) -> usize {
+        self.contratistas.len()
+    }
     pub fn completar_preparacion(&mut self, r: Result<PreparacionIngreso, String>) {
         match r {
             Ok(p) if !puede_continuar(&p) => {
@@ -161,17 +164,29 @@ impl NuevoIngresoState {
             Err(e) => self.error = Some(e),
         }
     }
-    pub fn completar_registro(&mut self, r: Result<i64, String>) -> bool {
+    /// `Ok`: vuelve a la etapa de búsqueda sin perder lo que el operador ya
+    /// tenía escrito/filtrado — antes se limpiaba todo (filtro incluido),
+    /// así que tras cada registro la lista quedaba en blanco y había que
+    /// volver a escribir la búsqueda para seguir con el siguiente
+    /// contratista. Pide recargar la misma búsqueda (acción devuelta) para
+    /// que la lista refleje el estado fresco: el que se acaba de registrar
+    /// pasa a mostrarse con `tiene_ingreso_activo`, sin tener que
+    /// desaparecer de la vista para eso.
+    pub fn completar_registro(&mut self, r: Result<i64, String>) -> AccionNuevoIngreso {
         match r {
             Ok(_) => {
                 let nombre = self.preparacion.as_ref().map(|p| p.nombre.clone());
-                self.limpiar();
+                self.limpiar_seleccion();
+                self.modo = ModoBuscarIngreso::Normal;
+                self.etapa = EtapaNuevoIngreso::Buscar;
                 self.mensaje = nombre.map(|nombre| format!("✓ Ingreso registrado — {nombre}"));
-                true
+                AccionNuevoIngreso::Buscar {
+                    texto: texto_filtro(&self.filtro),
+                }
             }
             Err(e) => {
                 self.error = Some(e);
-                false
+                AccionNuevoIngreso::Ninguna
             }
         }
     }
@@ -388,19 +403,6 @@ impl NuevoIngresoState {
         self.gafete_texto.clear();
         self.gafete_cursor = 0;
         self.error = None
-    }
-    fn limpiar(&mut self) {
-        self.limpiar_seleccion();
-        self.filtro.clear();
-        self.modo = ModoBuscarIngreso::Normal;
-        self.contratistas.clear();
-        // Antes se quedaba con el `total` de la última búsqueda (p. ej. 3)
-        // mientras `contratistas` ya estaba vacío — el aviso de "resultados
-        // ocultos" se disparaba con la lista en blanco, mostrando "0 DE 3
-        // RESULTADOS" después de cada registro exitoso.
-        self.total = 0;
-        self.seleccion = None;
-        self.etapa = EtapaNuevoIngreso::Buscar
     }
     pub(super) fn inicio_visible(&self, cap: usize) -> usize {
         self.seleccion

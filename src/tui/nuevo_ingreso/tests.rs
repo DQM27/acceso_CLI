@@ -242,18 +242,20 @@ fn gafete_ocupado_llega_como_error_del_backend_al_registrar() {
         total: 1,
     }));
     s.completar_preparacion(Ok(preparar(true)));
-    assert!(!s.completar_registro(Err("El gafete ya está en uso".into())));
+    assert_eq!(
+        s.completar_registro(Err("El gafete ya está en uso".into())),
+        AccionNuevoIngreso::Ninguna
+    );
     assert_eq!(s.error.as_deref(), Some("El gafete ya está en uso"));
     // el formulario sigue abierto para corregir, no vuelve a Buscar.
     assert_eq!(s.etapa, EtapaNuevoIngreso::Formulario);
 }
 /// Regresión de "registrar un ingreso interrumpe el flujo saltando a
-/// Ingresos Activos": ahora el registro exitoso se queda en la pantalla,
-/// resetea a la etapa de búsqueda para poder cargar al siguiente
-/// contratista de una, y deja su propio mensaje de confirmación (la
-/// navegación a otra pantalla ya no es la señal de éxito).
+/// Ingresos Activos": ahora el registro exitoso se queda en la pantalla y
+/// deja su propio mensaje de confirmación (la navegación a otra pantalla
+/// ya no es la señal de éxito).
 #[test]
-fn registrar_con_exito_vuelve_a_buscar_y_deja_el_mensaje_de_confirmacion() {
+fn registrar_con_exito_deja_el_mensaje_de_confirmacion() {
     let mut s = NuevoIngresoState::default();
     s.completar_busqueda(Ok(PaginaContratistas {
         items: vec![resumen()],
@@ -262,17 +264,10 @@ fn registrar_con_exito_vuelve_a_buscar_y_deja_el_mensaje_de_confirmacion() {
     s.completar_preparacion(Ok(preparar(false)));
     assert_eq!(s.etapa, EtapaNuevoIngreso::Formulario);
 
-    assert!(s.completar_registro(Ok(99)));
+    s.completar_registro(Ok(99));
 
     assert_eq!(s.etapa, EtapaNuevoIngreso::Buscar);
     assert_eq!(s.modo, ModoBuscarIngreso::Normal);
-    assert!(s.filtro.is_empty());
-    assert!(s.contratistas.is_empty());
-    assert_eq!(
-        s.resultados_ocultos(),
-        None,
-        "no debe arrastrar el total anterior"
-    );
     assert_eq!(s.mensaje.as_deref(), Some("✓ Ingreso registrado — José"));
 
     // Buscar al siguiente contratista (con '/', como cualquier otra
@@ -280,6 +275,46 @@ fn registrar_con_exito_vuelve_a_buscar_y_deja_el_mensaje_de_confirmacion() {
     s.handle_key(k(KeyCode::Char('/')));
     s.handle_key(k(KeyCode::Char('1')));
     assert_eq!(s.mensaje, None);
+}
+
+/// Regresión puntual del reporte de usuario: registrar a un contratista de
+/// una lista filtrada no debe vaciar la lista ni el filtro — el operador
+/// tiene que poder seguir con el siguiente resultado sin volver a
+/// escribir la búsqueda. `completar_registro` pide recargar la misma
+/// búsqueda (no la borra) para que la lista se actualice en el lugar,
+/// reflejando `tiene_ingreso_activo` en quien se acaba de registrar.
+#[test]
+fn registrar_con_exito_conserva_el_filtro_y_pide_recargar_la_misma_busqueda() {
+    let mut s = NuevoIngresoState::default();
+    s.handle_key(k(KeyCode::Char('/')));
+    for c in "Jos".chars() {
+        s.handle_key(k(KeyCode::Char(c)));
+    }
+    s.completar_busqueda(Ok(PaginaContratistas {
+        items: vec![resumen()],
+        total: 1,
+    }));
+    s.completar_preparacion(Ok(preparar(false)));
+
+    let accion = s.completar_registro(Ok(99));
+
+    assert_eq!(s.etapa, EtapaNuevoIngreso::Buscar);
+    assert_eq!(s.filtro, "Jos", "no debía perder lo que ya tenía buscado");
+    assert_eq!(
+        accion,
+        AccionNuevoIngreso::Buscar {
+            texto: Some("Jos".into())
+        },
+        "debía pedir recargar la misma búsqueda, no dejarla en blanco"
+    );
+
+    // La recarga puede seguir trayendo al mismo contratista (ahora con
+    // tiene_ingreso_activo) — la lista no se queda vacía por sí sola.
+    s.completar_busqueda(Ok(PaginaContratistas {
+        items: vec![resumen()],
+        total: 1,
+    }));
+    assert_eq!(s.contratistas.len(), 1);
 }
 
 /// Regresión puntual del reporte de usuario: tras registrar, una tecla
