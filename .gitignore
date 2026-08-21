@@ -24,3 +24,9 @@ Thumbs.db
 
 # Snapshots de insta pendientes de revisar (los .snap aprobados sí se commitean)
 *.snap.new
+
+# Empaquetado MSIX: el .exe copiado y el paquete generado son artefactos de
+# build, no fuente — el manifiesto y los Assets sí se commitean
+packaging/msix/control_acceso.exe
+packaging/msix/*.msix
+*.pfx
