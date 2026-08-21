@@ -5,9 +5,9 @@ use crate::{
     tiempo::hora_actual_texto,
     tui::ui_kit::{
         ChoiceFieldOptions, CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell,
-        StatusKind, Theme, empty_state, identidad_sesion, master_detail_areas, posicionar_cursor,
-        posicionar_cursor_campo, render_choice_field, render_form_field, render_separator,
-        render_terminal_too_small,
+        StatusKind, Theme, empty_state, identidad_sesion, marcador_seleccion, master_detail_areas,
+        posicionar_cursor, posicionar_cursor_campo, render_choice_field, render_form_field,
+        render_separator, render_terminal_too_small,
     },
 };
 use ratatui::{
@@ -193,11 +193,7 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme:
         .map(|(visible, c): (usize, &ContratistaResumen)| {
             let seleccionada = state.seleccion == Some(inicio + visible);
             Row::new([
-                Cell::from(format!(
-                    "{} {}",
-                    if seleccionada { ">" } else { " " },
-                    c.cedula
-                )),
+                Cell::from(format!("{} {}", marcador_seleccion(seleccionada), c.cedula)),
                 Cell::from(c.nombre.clone()),
                 Cell::from(c.empresa_nombre.clone()),
                 Cell::from(texto_tipo(c.tipo_ingreso)),

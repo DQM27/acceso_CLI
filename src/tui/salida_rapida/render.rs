@@ -6,7 +6,7 @@ use ratatui::{
 };
 
 use crate::services::registro_ingreso_service::IngresoActivoResumen;
-use crate::tui::ui_kit::{Theme, auxiliary_panel, centered_rect};
+use crate::tui::ui_kit::{SIMBOLO_RESALTADO_TABLA, Theme, auxiliary_panel, centered_rect};
 
 use super::{Estado, SalidaRapidaState};
 
@@ -121,7 +121,7 @@ fn render_resultados(frame: &mut Frame, area: Rect, state: &SalidaRapidaState, t
     ];
     let tabla = Table::new(filas, anchos)
         .row_highlight_style(theme.selected())
-        .highlight_symbol("> ");
+        .highlight_symbol(SIMBOLO_RESALTADO_TABLA);
     frame.render_stateful_widget(
         tabla,
         area,

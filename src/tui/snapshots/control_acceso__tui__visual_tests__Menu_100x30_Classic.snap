@@ -10,7 +10,7 @@ expression: volcado
                                                                                                     
                                                                                                     
                                     OPERACIÓN                                                       
-                                    > 1   Nuevo ingreso                                             
+                                    ▶ 1   Nuevo ingreso                                             
                                       2   Ingresos activos                                          
                                       3   Historial                                                 
                                                                                                     
@@ -57,7 +57,7 @@ expression: volcado
 "OPERACIÓN" fg=Rgb(105, 135, 111) bg=Black mod=NONE
 "                                                       " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"> 1   Nuevo ingreso" fg=Black bg=Rgb(91, 224, 123) mod=BOLD
+"▶ 1   Nuevo ingreso" fg=Black bg=Rgb(91, 224, 123) mod=BOLD
 "                                             " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                      2   Ingresos activos                                          " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                      3   Historial                                                 " fg=Rgb(196, 220, 199) bg=Black mod=NONE

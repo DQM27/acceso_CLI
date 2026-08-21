@@ -1,14 +1,17 @@
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout, Rect},
+    layout::{Alignment, Constraint, Layout, Rect},
+    widgets::Paragraph,
 };
 
 use super::*;
-use crate::tiempo::hora_actual_texto;
 use crate::tui::ui_kit::{
     CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme,
     posicionar_cursor, render_form_field, render_terminal_too_small,
 };
+
+const PRODUCTO: &str = "BRISAS CLI";
+const TITULO: &str = "INICIO DE SESIÓN";
 
 const COMANDOS: &[CommandHint<'static>] = &[
     CommandHint::new("TAB/↑↓", "Cambiar campo"),
@@ -29,14 +32,13 @@ pub fn render(frame: &mut Frame, area: Rect, state: &LoginState, theme: Theme) {
         return;
     }
 
-    let hora = hora_actual_texto();
     let (estado_texto, estado_tipo) = estado_shell(state);
 
     let shell = ScreenShell {
-        product: "BRISAS CLI",
-        screen: "INICIO DE SESIÓN",
-        context: "CONTROL DE ACCESO",
-        clock: &hora,
+        product: PRODUCTO,
+        screen: TITULO,
+        context: "",
+        clock: "",
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: COMANDOS,
@@ -44,7 +46,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &LoginState, theme: Theme) {
         help_expanded: state.ayuda_expandida,
         ayuda_extra: None,
     };
-    let areas = shell.render(frame, area, theme);
+    let areas = shell.render_with_centered_product(frame, area, theme);
 
     render_formulario(frame, areas.body, state, theme);
 }
@@ -63,18 +65,27 @@ fn estado_shell(state: &LoginState) -> (String, StatusKind) {
 
 fn render_formulario(frame: &mut Frame, area: Rect, state: &LoginState, theme: Theme) {
     let ancho = 46.min(area.width);
-    let alto = 7.min(area.height);
+    let alto = 9.min(area.height);
     let hero = centrar(area, ancho, alto);
     let filas = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(1),
         Constraint::Length(3),
         Constraint::Length(1),
         Constraint::Length(3),
     ])
     .split(hero);
 
+    frame.render_widget(
+        Paragraph::new(TITULO)
+            .style(theme.title())
+            .alignment(Alignment::Center),
+        filas[0],
+    );
+
     let area_cedula = render_form_field(
         frame,
-        filas[0],
+        filas[2],
         "CÉDULA",
         state.cedula.value(),
         state.campo_activo == CampoLogin::Cedula,
@@ -83,7 +94,7 @@ fn render_formulario(frame: &mut Frame, area: Rect, state: &LoginState, theme: T
     let password_enmascarado = state.password_enmascarado();
     let area_password = render_form_field(
         frame,
-        filas[2],
+        filas[4],
         "CONTRASEÑA",
         &password_enmascarado,
         state.campo_activo == CampoLogin::Password,

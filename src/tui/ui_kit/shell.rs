@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 
-use super::Theme;
+use super::{MARCADOR_SELECCION, Theme};
 use crate::{models::usuario::RolUsuario, services::autenticacion_service::UsuarioSesion};
 
 /// Texto de encabezado común a toda pantalla autenticada: nombre y nivel de
@@ -85,6 +85,27 @@ pub struct ScreenShell<'a> {
 
 impl ScreenShell<'_> {
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: Theme) -> ShellAreas {
+        self.render_with_header(frame, area, theme, HeaderKind::Standard)
+    }
+
+    /// Variante para pantallas de entrada que sólo necesitan identificar el
+    /// producto: centra el nombre y omite contexto, pantalla y reloj.
+    pub fn render_with_centered_product(
+        &self,
+        frame: &mut Frame,
+        area: Rect,
+        theme: Theme,
+    ) -> ShellAreas {
+        self.render_with_header(frame, area, theme, HeaderKind::CenteredProduct)
+    }
+
+    fn render_with_header(
+        &self,
+        frame: &mut Frame,
+        area: Rect,
+        theme: Theme,
+        header_kind: HeaderKind,
+    ) -> ShellAreas {
         frame.render_widget(Block::default().style(theme.base()), area);
         let viewport = area.inner(Margin {
             horizontal: 1,
@@ -103,7 +124,10 @@ impl ScreenShell<'_> {
         ])
         .split(viewport);
 
-        self.render_header(frame, rows[0], theme);
+        match header_kind {
+            HeaderKind::Standard => self.render_header(frame, rows[0], theme),
+            HeaderKind::CenteredProduct => self.render_centered_product(frame, rows[0], theme),
+        }
         frame.render_widget(
             Paragraph::new("─".repeat(viewport.width as usize)).style(theme.border()),
             rows[1],
@@ -116,6 +140,15 @@ impl ScreenShell<'_> {
             status: rows[3],
             commands: rows[4],
         }
+    }
+
+    fn render_centered_product(&self, frame: &mut Frame, area: Rect, theme: Theme) {
+        frame.render_widget(
+            Paragraph::new(self.product)
+                .style(theme.title())
+                .alignment(Alignment::Center),
+            Rect::new(area.x, area.y, area.width, 1),
+        );
     }
 
     fn render_header(&self, frame: &mut Frame, area: Rect, theme: Theme) {
@@ -207,6 +240,12 @@ impl ScreenShell<'_> {
         }
         lines
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HeaderKind {
+    Standard,
+    CenteredProduct,
 }
 
 fn wrap_commands(
@@ -308,9 +347,13 @@ fn styled_panel(
     } else {
         theme.border()
     };
-    let focus_marker = if focused { "▶ " } else { "" };
+    let title = if focused {
+        format!(" {MARCADOR_SELECCION} {title} ")
+    } else {
+        format!(" {title} ")
+    };
     Block::default()
-        .title(format!(" {focus_marker}{title} "))
+        .title(title)
         .title_alignment(title_alignment)
         .title_style(style)
         .borders(Borders::ALL)

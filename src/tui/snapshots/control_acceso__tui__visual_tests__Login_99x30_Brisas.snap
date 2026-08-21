@@ -4,8 +4,8 @@ expression: volcado
 ---
 === texto ===
                                                                                                    
- BRISAS CLI                                                                      CONTROL DE ACCESO 
- CONTROL DE ACCESO                            INICIO DE SESIÓN                               ··:·· 
+                                            BRISAS CLI                                             
+                                                                                                   
  ───────────────────────────────────────────────────────────────────────────────────────────────── 
                                                                                                    
                                                                                                    
@@ -14,6 +14,7 @@ expression: volcado
                                                                                                    
                                                                                                    
                                                                                                    
+                                         INICIO DE SESIÓN                                          
                                                                                                    
                           ▶ CÉDULA                                                                 
                                                                                                    
@@ -30,24 +31,15 @@ expression: volcado
                                                                                                    
                                                                                                    
                                                                                                    
-                                                                                                   
  TAB/↑↓ Cambiar campo  ENTER Continuar  ESC/Ctrl+C Salir  F7 Tema                                  
                                                                                                    
 
 === estilos ===
 "                                                                                                   " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"BRISAS CLI" fg=Rgb(70, 200, 215) bg=Black mod=BOLD
-"                                                                      " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"CONTROL DE ACCESO" fg=Rgb(145, 158, 164) bg=Black mod=NONE
+"                                           BRISAS CLI                                            " fg=Rgb(70, 200, 215) bg=Black mod=BOLD
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"CONTROL DE ACCESO" fg=Rgb(145, 158, 164) bg=Black mod=NONE
-"                    " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"        INICIO DE SESIÓN         " fg=Rgb(70, 200, 215) bg=Black mod=BOLD
-"                      " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"··:··" fg=Rgb(220, 170, 70) bg=Black mod=NONE
-" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                                   " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "─────────────────────────────────────────────────────────────────────────────────────────────────" fg=Rgb(100, 120, 126) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
@@ -58,6 +50,9 @@ expression: volcado
 "                                                                                                   " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "                                                                                                   " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "                                                                                                   " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                          " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"               INICIO DE SESIÓN               " fg=Rgb(70, 200, 215) bg=Black mod=BOLD
+"                           " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "                                                                                                   " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "                          " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "▶ CÉDULA                                      " fg=Rgb(70, 200, 215) bg=Black mod=BOLD
@@ -74,7 +69,6 @@ expression: volcado
 "                          " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "──────────────────────────────────────────────" fg=Rgb(100, 120, 126) bg=Black mod=NONE
 "                           " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                   " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "                                                                                                   " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "                                                                                                   " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "                                                                                                   " fg=Rgb(220, 225, 228) bg=Black mod=NONE

@@ -32,7 +32,9 @@ pub use layout::{
 pub use query_lang::{
     ResolucionConsulta, Term, resolver_terminos, resolver_terminos_detallado, valores,
 };
-pub use seleccion::mover_seleccion;
+pub use seleccion::{
+    MARCADOR_SELECCION, SIMBOLO_RESALTADO_TABLA, marcador_seleccion, mover_seleccion,
+};
 pub use shell::{
     CommandHint, ScreenShell, ShellAreas, StatusKind, auxiliary_panel, centered_content,
     centered_rect, clasificar_mensaje, identidad_sesion, panel, render_terminal_too_small,

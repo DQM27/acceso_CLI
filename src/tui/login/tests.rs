@@ -18,6 +18,74 @@ fn login_completo() -> LoginState {
 }
 
 #[test]
+fn presenta_un_encabezado_minimo_y_el_titulo_sobre_los_campos() {
+    use ratatui::{Terminal, backend::TestBackend};
+
+    let ancho = 100;
+    let mut terminal = Terminal::new(TestBackend::new(ancho, 30)).unwrap();
+    terminal
+        .draw(|frame| {
+            render::render(
+                frame,
+                frame.area(),
+                &LoginState::default(),
+                crate::tui::ui_kit::ThemePreset::Classic.theme(),
+            )
+        })
+        .unwrap();
+
+    let buffer = terminal.backend().buffer();
+    let filas: Vec<String> = (0..buffer.area.height)
+        .map(|y| {
+            (0..buffer.area.width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect()
+        })
+        .collect();
+    let texto = filas.join("\n");
+
+    assert_eq!(texto.matches("BRISAS CLI").count(), 1, "{texto}");
+    assert!(!texto.contains("CONTROL DE ACCESO"), "{texto}");
+    assert!(!filas.iter().any(|fila| contiene_hora(fila)), "{texto}");
+
+    let fila_producto = filas
+        .iter()
+        .find(|fila| fila.contains("BRISAS CLI"))
+        .unwrap();
+    assert_centrado(fila_producto, "BRISAS CLI");
+
+    let indice_titulo = filas
+        .iter()
+        .position(|fila| fila.contains("INICIO DE SESIÓN"))
+        .unwrap();
+    let indice_cedula = filas
+        .iter()
+        .position(|fila| fila.contains("▶ CÉDULA"))
+        .unwrap();
+    assert!(indice_titulo < indice_cedula, "{texto}");
+    assert_centrado(&filas[indice_titulo], "INICIO DE SESIÓN");
+}
+
+fn assert_centrado(fila: &str, texto: &str) {
+    let izquierda = fila.find(texto).unwrap();
+    let derecha = fila.chars().count() - izquierda - texto.chars().count();
+    assert!(
+        izquierda.abs_diff(derecha) <= 1,
+        "'{texto}' no está centrado: {izquierda} celdas a la izquierda y {derecha} a la derecha"
+    );
+}
+
+fn contiene_hora(texto: &str) -> bool {
+    texto.as_bytes().windows(5).any(|ventana| {
+        ventana[0].is_ascii_digit()
+            && ventana[1].is_ascii_digit()
+            && ventana[2] == b':'
+            && ventana[3].is_ascii_digit()
+            && ventana[4].is_ascii_digit()
+    })
+}
+
+#[test]
 fn cambia_el_foco_en_ambas_direcciones() {
     let mut state = LoginState::default();
     state.handle_key(tecla(KeyCode::Tab));

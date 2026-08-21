@@ -7,7 +7,7 @@ use crate::{
     tiempo::hora_actual_texto,
     tui::ui_kit::{
         CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme,
-        identidad_sesion, render_terminal_too_small,
+        identidad_sesion, marcador_seleccion, render_terminal_too_small,
     },
 };
 
@@ -200,7 +200,7 @@ fn grupo<'a>(
 }
 
 fn linea_opcion(opcion: OpcionMenu, state: &MenuPrincipalState, theme: Theme) -> Line<'static> {
-    let marcador = if opcion == state.seleccion { ">" } else { " " };
+    let marcador = marcador_seleccion(opcion == state.seleccion);
     let texto = format!("{marcador} {}", opcion.etiqueta());
     Line::from(texto).style(if opcion == state.seleccion {
         theme.selected()

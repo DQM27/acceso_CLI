@@ -6,8 +6,8 @@ use crate::{
     tui::ui_kit::{
         CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme,
         auxiliary_panel, centered_rect, detail_line, empty_state, identidad_sesion,
-        master_detail_areas, panel_vacio, posicionar_cursor_campo, render_form_field,
-        render_separator, render_terminal_too_small,
+        marcador_seleccion, master_detail_areas, panel_vacio, posicionar_cursor_campo,
+        render_form_field, render_separator, render_terminal_too_small,
     },
 };
 use ratatui::{
@@ -264,7 +264,7 @@ fn fila_movimiento(
     let entrada = a_costa_rica(r.fecha_hora_ingreso)
         .format("%H:%M")
         .to_string();
-    let marcador = if seleccionada { ">" } else { " " };
+    let marcador = marcador_seleccion(seleccionada);
     let estilo_fila = if seleccionada {
         theme.selected()
     } else {
@@ -391,7 +391,7 @@ fn render_tabla_clasica(frame: &mut Frame, area: Rect, state: &HistorialState, t
             Row::new(columnas_visibles.iter().enumerate().map(|(indice, c)| {
                 let valor = valor_columna_clasica(r, *c);
                 Cell::from(if indice == 0 {
-                    format!("{} {valor}", if seleccionada { ">" } else { " " })
+                    format!("{} {valor}", marcador_seleccion(seleccionada))
                 } else {
                     valor
                 })
@@ -475,7 +475,7 @@ fn render_columnas_editor(
         .enumerate()
         .map(|(i, (c, visible))| {
             let seleccionado = i == seleccion;
-            let marcador = if seleccionado { ">" } else { " " };
+            let marcador = marcador_seleccion(seleccionado);
             let caja = if *visible { "[x]" } else { "[ ]" };
             Line::from(format!("{marcador} {caja} {}", c.label())).style(if seleccionado {
                 theme.selected()

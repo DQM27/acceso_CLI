@@ -10,7 +10,7 @@ fn la_lista_queda_centrada_en_vez_de_pegada_a_la_izquierda() {
     use crate::{models::usuario::RolUsuario, services::autenticacion_service::UsuarioSesion};
     use ratatui::{Terminal, backend::TestBackend};
 
-    // Se selecciona la opción que se va a medir: su marcador ">" la
+    // Se selecciona la opción que se va a medir: su marcador "▶" la
     // distingue del relleno en blanco, para no confundir uno con otro al
     // contar espacios iniciales.
     let state = MenuPrincipalState {

@@ -1,3 +1,19 @@
+/// Glifo común para señalar el elemento que tiene el foco o la selección.
+pub const MARCADOR_SELECCION: &str = "▶";
+
+/// Variante que Ratatui antepone a una fila resaltada de una tabla.
+pub const SIMBOLO_RESALTADO_TABLA: &str = "▶ ";
+
+/// Reserva siempre una celda para que las filas seleccionadas y no
+/// seleccionadas conserven la misma alineación.
+pub const fn marcador_seleccion(seleccionado: bool) -> &'static str {
+    if seleccionado {
+        MARCADOR_SELECCION
+    } else {
+        " "
+    }
+}
+
 /// Mueve una selección dentro de una lista de `longitud` elementos, saturando
 /// en los bordes (no da la vuelta). `None` si la lista está vacía.
 ///
@@ -19,6 +35,13 @@ pub fn mover_seleccion(seleccion: Option<usize>, delta: isize, longitud: usize) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn marcador_visual_usa_el_triangulo_comun_y_reserva_su_espacio() {
+        assert_eq!(marcador_seleccion(true), "▶");
+        assert_eq!(marcador_seleccion(false), " ");
+        assert_eq!(SIMBOLO_RESALTADO_TABLA, "▶ ");
+    }
 
     #[test]
     fn lista_vacia_no_selecciona_nada() {

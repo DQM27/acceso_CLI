@@ -14,8 +14,9 @@ use crate::{
     tui::ui_kit::{
         ChoiceFieldOptions, CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell,
         StatusKind, Theme, clasificar_mensaje, detail_line, empty_state, identidad_sesion,
-        master_detail_areas, panel_vacio, posicionar_cursor, posicionar_cursor_campo,
-        render_choice_field, render_form_field, render_separator, render_terminal_too_small,
+        marcador_seleccion, master_detail_areas, panel_vacio, posicionar_cursor,
+        posicionar_cursor_campo, render_choice_field, render_form_field, render_separator,
+        render_terminal_too_small,
     },
 };
 
@@ -229,7 +230,7 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: The
             Row::new([
                 Cell::from(format!(
                     "{} {}",
-                    if seleccionado { ">" } else { " " },
+                    marcador_seleccion(seleccionado),
                     usuario.cedula
                 )),
                 Cell::from(usuario.nombre.clone()),
@@ -416,8 +417,8 @@ fn render_selector_rol(frame: &mut Frame, area: Rect, resaltado: usize, theme: T
         .enumerate()
         .map(|(indice, rol)| {
             let seleccionado = indice == resaltado;
-            let marcador = if seleccionado { "  >" } else { "   " };
-            Line::from(format!("{marcador} {}", texto_rol(*rol))).style(if seleccionado {
+            let marcador = marcador_seleccion(seleccionado);
+            Line::from(format!("  {marcador} {}", texto_rol(*rol))).style(if seleccionado {
                 theme.selected()
             } else {
                 theme.muted()

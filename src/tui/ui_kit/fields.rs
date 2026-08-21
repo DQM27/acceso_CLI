@@ -5,7 +5,7 @@ use ratatui::{
     widgets::Paragraph,
 };
 
-use super::Theme;
+use super::{Theme, marcador_seleccion};
 
 /// Mensaje de "sin resultados" centrado a media altura de `area` — mismo
 /// patrón repetido en cada pantalla con lista: una línea de advertencia sin
@@ -66,12 +66,12 @@ pub fn render_form_field(
     } else {
         theme.border()
     };
-    let marker = if focused { "▶ " } else { "  " };
+    let marker = marcador_seleccion(focused);
     let value_y = area.y.saturating_add(1);
     let line_y = area.y.saturating_add(2);
 
     frame.render_widget(
-        Paragraph::new(format!("{marker}{label}")).style(label_style),
+        Paragraph::new(format!("{marker} {label}")).style(label_style),
         Rect::new(area.x, area.y, area.width, 1),
     );
     frame.render_widget(
@@ -96,7 +96,7 @@ pub fn render_choice_field(
     theme: Theme,
     options: ChoiceFieldOptions,
 ) {
-    let marker = if focused { "▶" } else { " " };
+    let marker = marcador_seleccion(focused);
     let style = if focused {
         theme.accent()
     } else {

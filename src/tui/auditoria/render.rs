@@ -9,7 +9,8 @@ use crate::{
     services::autenticacion_service::UsuarioSesion,
     tiempo::{a_costa_rica, hora_actual_texto},
     tui::ui_kit::{
-        CommandHint, ScreenShell, StatusKind, Theme, identidad_sesion, render_terminal_too_small,
+        CommandHint, SIMBOLO_RESALTADO_TABLA, ScreenShell, StatusKind, Theme, identidad_sesion,
+        render_terminal_too_small,
     },
 };
 
@@ -87,7 +88,7 @@ pub fn render(
     )
     .header(encabezado)
     .row_highlight_style(theme.selected())
-    .highlight_symbol("> ");
+    .highlight_symbol(SIMBOLO_RESALTADO_TABLA);
     frame.render_stateful_widget(
         tabla,
         areas.body,

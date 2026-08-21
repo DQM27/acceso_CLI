@@ -6,9 +6,9 @@ use crate::{
     tiempo::{a_costa_rica, hora_actual_texto},
     tui::ui_kit::{
         CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme,
-        clasificar_mensaje, detail_line, empty_state, identidad_sesion, master_detail_areas,
-        panel_vacio, posicionar_cursor_campo, render_form_field, render_separator,
-        render_terminal_too_small,
+        clasificar_mensaje, detail_line, empty_state, identidad_sesion, marcador_seleccion,
+        master_detail_areas, panel_vacio, posicionar_cursor_campo, render_form_field,
+        render_separator, render_terminal_too_small,
     },
 };
 use ratatui::{
@@ -193,7 +193,7 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Them
                 };
                 let valor = valor_columna(registro, *columna);
                 let valor = if indice == 0 {
-                    format!("{} {valor}", if seleccionada { ">" } else { " " })
+                    format!("{} {valor}", marcador_seleccion(seleccionada))
                 } else {
                     valor
                 };
@@ -307,7 +307,7 @@ fn render_columnas(
         .iter()
         .enumerate()
         .map(|(indice, (columna, visible))| {
-            let marcador = if indice == seleccion { ">" } else { " " };
+            let marcador = marcador_seleccion(indice == seleccion);
             let caja = if *visible { "x" } else { " " };
             Line::from(format!("{marcador} [{caja}] {}", columna.titulo())).style(
                 if indice == seleccion {

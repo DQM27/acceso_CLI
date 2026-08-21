@@ -12,9 +12,9 @@ use crate::{
     tiempo::hora_actual_texto,
     tui::ui_kit::{
         CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme,
-        clasificar_mensaje, detail_line, empty_state, identidad_sesion, master_detail_areas,
-        panel_vacio, posicionar_cursor_campo, render_form_field, render_separator,
-        render_terminal_too_small,
+        clasificar_mensaje, detail_line, empty_state, identidad_sesion, marcador_seleccion,
+        master_detail_areas, panel_vacio, posicionar_cursor_campo, render_form_field,
+        render_separator, render_terminal_too_small,
     },
 };
 
@@ -176,7 +176,7 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: The
             Row::new([
                 Cell::from(format!(
                     "{} {}",
-                    if seleccionada { ">" } else { " " },
+                    marcador_seleccion(seleccionada),
                     empresa.nombre
                 )),
                 Cell::from(empresa.contratistas.to_string()),

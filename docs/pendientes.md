@@ -223,9 +223,9 @@ suite completa + Clippy estricto.
   cada pantalla interpreta su propio `clave:valor`, unificarla exige un callback
   conectable, no es un corte mecánico.
 - [x] **Reparado (2026-08-21): foco/selección/severidad dependían del color.** Auditado
-  a fondo: la mayoría de pantallas ya tenían marcador no cromático (`▶` de foco vía
-  `ScreenShell`, `>` de selección en cada tabla). Gaps reales encontrados y cerrados: la
-  tabla de Respaldos era la única sin ningún marcador de selección (agregado `>`); la
+  a fondo: las pantallas usan el marcador no cromático `▶` para foco y selección vía
+  `ui_kit`. Gaps reales encontrados y cerrados: la tabla de Respaldos era la única sin
+  ningún marcador de selección (agregado `▶`); la
   fecha PRAIND vencida/por vencer en Contratistas sólo tenía color, sin símbolo de
   respaldo (agregado `!` antes de la fecha, mismo criterio que Activos ya usa para
   accesos con advertencia).

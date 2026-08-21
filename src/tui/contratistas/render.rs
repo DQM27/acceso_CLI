@@ -16,8 +16,8 @@ use crate::{
     tui::ui_kit::{
         ChoiceFieldOptions, CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell,
         StatusKind, Theme, clasificar_mensaje, detail_line, empty_state, identidad_sesion,
-        master_detail_areas, panel_vacio, posicionar_cursor_campo, render_choice_field,
-        render_form_field, render_separator, render_terminal_too_small,
+        marcador_seleccion, master_detail_areas, panel_vacio, posicionar_cursor_campo,
+        render_choice_field, render_form_field, render_separator, render_terminal_too_small,
     },
 };
 
@@ -263,7 +263,7 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ContratistasState, theme:
             let celdas = columnas.iter().enumerate().map(|(indice, col)| {
                 let valor = valor(c, *col, state.hoy);
                 let valor = if indice == 0 {
-                    format!("{} {valor}", if seleccionado { ">" } else { " " })
+                    format!("{} {valor}", marcador_seleccion(seleccionado))
                 } else {
                     valor
                 };
@@ -566,8 +566,8 @@ fn render_lista_desplegable<'a>(
         .enumerate()
         .map(|(indice, opcion)| {
             let seleccionado = indice == resaltado;
-            let marcador = if seleccionado { "  >" } else { "   " };
-            Line::from(format!("{marcador} {opcion}")).style(if seleccionado {
+            let marcador = marcador_seleccion(seleccionado);
+            Line::from(format!("  {marcador} {opcion}")).style(if seleccionado {
                 theme.selected()
             } else {
                 theme.muted()
@@ -593,7 +593,7 @@ fn render_columnas(
             let estilo = if activo { theme.accent() } else { theme.base() };
             Line::from(format!(
                 "{} [{}] {}",
-                if activo { ">" } else { " " },
+                marcador_seleccion(activo),
                 if *visible { "x" } else { " " },
                 c.titulo()
             ))

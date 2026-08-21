@@ -9,7 +9,7 @@ use super::*;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::tui::ui_kit::{
     CommandHint, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, TextInput, Theme, empty_state,
-    identidad_sesion, master_detail_areas, panel_vacio, render_separator,
+    identidad_sesion, marcador_seleccion, master_detail_areas, panel_vacio, render_separator,
     render_terminal_too_small,
 };
 
@@ -151,7 +151,7 @@ fn render_tabla(frame: &mut Frame, area: Rect, estado: &RespaldosState, theme: T
             .format("%d/%m/%Y  %H:%M")
             .to_string();
         Row::new([
-            Cell::from(format!("{} {fecha}", if seleccionada { ">" } else { " " })),
+            Cell::from(format!("{} {fecha}", marcador_seleccion(seleccionada))),
             Cell::from(etiqueta_tipo(fila.resumen.tipo)),
             Cell::from(tamano_legible(fila.resumen.tamano_bytes)),
             Cell::from(etiqueta_esquema(fila.validacion.as_ref())),
