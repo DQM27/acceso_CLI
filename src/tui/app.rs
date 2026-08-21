@@ -39,6 +39,12 @@ const EVENT_POLL: Duration = Duration::from_millis(50);
 /// deja margen de sobra para el cambio de minuto sin volver a construir toda la TUI
 /// veinte veces por segundo cuando el operador no está haciendo nada.
 const CLOCK_REFRESH: Duration = Duration::from_secs(1);
+/// `AppCore::respaldo_automatico_diario_si_hace_falta` sólo hace algo una vez
+/// por día (después de la 01:00 Costa Rica), así que revisarla una vez por
+/// minuto —no en cada vuelta del bucle— alcanza de sobra; evita golpear el
+/// directorio de respaldos veinte veces por segundo mientras la app se queda
+/// abierta varios días seguidos sin reiniciar.
+const REVISION_RESPALDO_AUTOMATICO: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Vista {
@@ -214,6 +220,9 @@ impl App {
     ) -> io::Result<SalidaApp> {
         let mut redibujar = true;
         let mut ultimo_refresco_reloj = Instant::now();
+        // Arranca vencido a propósito: la primera vuelta del bucle ya debe
+        // revisar el respaldo automático, no esperar un minuto entero.
+        let mut ultima_revision_respaldo = Instant::now() - REVISION_RESPALDO_AUTOMATICO;
         while !self.salir {
             if redibujar {
                 let theme = self.tema.theme();
@@ -347,6 +356,12 @@ impl App {
                 Some(core) => {
                     self.procesar_configuracion_pendiente(core);
                     self.recibir_root_inicial_si_lista(core);
+                    if ahora.saturating_duration_since(ultima_revision_respaldo)
+                        >= REVISION_RESPALDO_AUTOMATICO
+                    {
+                        ultima_revision_respaldo = ahora;
+                        core.respaldo_automatico_diario_si_hace_falta();
+                    }
                 }
                 None => self.abortar_configuracion_inicial_sin_core(),
             }

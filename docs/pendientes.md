@@ -116,13 +116,42 @@ suite completa + Clippy estricto.
   instancia única y un solo hilo — la protección sería cosmética porque nada en el camino
   real la viola. Retomar cuando se diseñe **concurrencia multi-terminal (V3)**, no antes.
 
-## Respaldo automático — fallos silenciosos (a discutir a continuación)
+## Respaldo automático
 
-- [ ] `respaldo_automatico_diario_si_hace_falta` (`src/application.rs`) descarta todos sus
-  errores en silencio, incluida la limpieza por retención — si falla una vez, queda roto
-  para siempre sin ningún aviso y los respaldos se acumulan sin límite. Es **por diseño**
+- [x] **Reparado (2026-08-21): el respaldo automático corre a la 01:00 (hora Costa Rica),
+  no a cualquier hora del día.** Antes se disparaba apenas la app arrancaba, sin importar
+  la hora — si abrías a las 9 AM, el respaldo del día quedaba sellado a las 9 AM. Ahora
+  `respaldo_automatico_diario_si_hace_falta` (`application/respaldos.rs`) no hace nada
+  antes de la 01:00 Costa Rica. **Bug real encontrado y reparado en el mismo cambio:** el
+  chequeo sólo se evaluaba una vez, al arrancar el proceso (`main.rs`) — si la app se
+  queda abierta varios días seguidos sin reiniciar (el caso normal, "la app siempre está
+  abierta"), el respaldo de un día nuevo nunca se disparaba. Se agregó una revisión
+  periódica (cada 60s) dentro del bucle de la TUI (`tui/app.rs::run_internal`) para que
+  también corra mientras la app sigue corriendo, no sólo al abrir. Si la app estuvo
+  cerrada cuando pasó la 01:00, se sigue capturando apenas se vuelve a abrir (ya
+  funcionaba así). Pruebas nuevas en `tests/configuracion_respaldos.rs` cubren el límite
+  de hora exacto (antes/después de la 01:00).
+- [x] **Retención de 30 días — evaluado, se deja en 7.** La retención actual es por
+  *cantidad* de archivos automáticos (`RETENCION_AUTOMATICOS`), no por fecha real — con
+  el respaldo corriendo ~1 vez/día, ambas nociones coinciden en el uso normal, pero
+  divergen si la app estuvo cerrada varias semanas (el conteo de "últimos N archivos" no
+  es lo mismo que "últimos N días calendario" si hay huecos). Decisión del usuario:
+  mantener el criterio por cantidad, y **7 ya es suficiente** — no se cambia.
+- [ ] **Omitido a propósito: importar un respaldo en una instalación sin base de datos
+  detectada.** La base ya es portátil hoy sin cambios de código (`journal_mode = DELETE`,
+  un solo archivo `.db`, sin `-wal`/`-shm`) — copiarla a otra máquina con ambas apps
+  cerradas ya funciona. Lo que falta es la UX: hoy, si no hay base, la app crea una vacía
+  en silencio y va directo a "Configuración Inicial" (crear ROOT), sin ofrecer nunca
+  importar un respaldo existente. El usuario pidió omitirlo por ahora ("no quiero entrar
+  en cosas tan complejas"). Si se retoma, la restauración ya validada
+  (`database::backup::restaurar_respaldo`) es reutilizable casi tal cual — falta la
+  pantalla previa al login que detecte "no existe archivo" y ofrezca importar vs. crear
+  nueva.
+- [ ] `respaldo_automatico_diario_si_hace_falta` sigue descartando todos sus errores en
+  silencio, incluida la limpieza por retención — si falla una vez, queda roto para
+  siempre sin ningún aviso y los respaldos se acumulan sin límite. Es **por diseño**
   (decisión previa: "ignorar en silencio si falla, no es obligatorio"), pero queda abierto
-  para que el usuario decida si quiere reconsiderarlo.
+  para que el usuario decida si quiere reconsiderarlo — pendiente de esa conversación.
 
 ## Búsqueda `clave:valor` e Historial
 

@@ -115,6 +115,35 @@ fn respaldo_automatico_diario_no_crea_uno_nuevo_si_ya_hay_uno_de_hoy() {
     assert_eq!(core.listar_respaldos(&actor).unwrap().len(), 1);
 }
 
+/// Costa Rica es UTC-6 todo el año (sin horario de verano): 00:30 hora
+/// local es 06:30 UTC. Corre de madrugada, no ni bien empieza el día
+/// calendario, para no competir con el cierre de un turno nocturno.
+#[test]
+fn respaldo_automatico_diario_no_corre_antes_de_la_una_am_costa_rica() {
+    let ruta = archivo_temporal("automatico_diario_antes_de_la_una");
+    let antes_de_la_una = Utc.with_ymd_and_hms(2026, 1, 16, 6, 30, 0).unwrap();
+    let core = AppCore::abrir_con_reloj(&ruta, Arc::new(RelojFijo::new(antes_de_la_una))).unwrap();
+    let actor = root(&core);
+
+    core.respaldo_automatico_diario_si_hace_falta();
+
+    assert_eq!(core.listar_respaldos(&actor).unwrap().len(), 0);
+}
+
+#[test]
+fn respaldo_automatico_diario_corre_a_partir_de_la_una_am_costa_rica() {
+    let ruta = archivo_temporal("automatico_diario_desde_la_una");
+    let la_una_en_punto = Utc.with_ymd_and_hms(2026, 1, 16, 7, 0, 0).unwrap();
+    let core = AppCore::abrir_con_reloj(&ruta, Arc::new(RelojFijo::new(la_una_en_punto))).unwrap();
+    let actor = root(&core);
+
+    core.respaldo_automatico_diario_si_hace_falta();
+
+    let listado = core.listar_respaldos(&actor).unwrap();
+    assert_eq!(listado.len(), 1);
+    assert_eq!(listado[0].tipo, TipoRespaldo::Automatico);
+}
+
 #[test]
 fn respaldo_automatico_diario_crea_uno_nuevo_si_el_ultimo_es_de_otro_dia() {
     let ruta = archivo_temporal("automatico_diario_otro_dia");

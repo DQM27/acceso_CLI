@@ -3,10 +3,18 @@
 
 use std::path::{Path, PathBuf};
 
+use chrono::Timelike;
+
 use crate::database::backup::{RespaldoError, RespaldoResumen, ResultadoValidacion, TipoRespaldo};
 use crate::database::error::DatabaseError;
 use crate::domain::autorizacion::Operacion;
 use crate::services::autenticacion_service::UsuarioSesion;
+use crate::tiempo::a_costa_rica;
+
+/// Hora (Costa Rica) a partir de la cual corre el respaldo automático del
+/// día — de madrugada, cuando es menos probable que un operador esté
+/// registrando un ingreso a la vez.
+const HORA_RESPALDO_AUTOMATICO: u32 = 1;
 
 use super::{AppCore, verificar_actor_activo};
 
@@ -49,16 +57,25 @@ impl AppCore {
         crate::database::backup::validar_respaldo(ruta)
     }
 
-    /// Crea el respaldo automático del día si todavía no existe uno — a lo
-    /// sumo uno por día calendario en Costa Rica. Es best-effort a
-    /// propósito (no devuelve `Result`): a diferencia del respaldo previo a
-    /// una migración, éste no es obligatorio, así que un fallo (disco lleno,
-    /// permisos) no debe impedir que la app arranque.
+    /// Crea el respaldo automático del día si todavía no existe uno y ya
+    /// pasó la 01:00 (hora Costa Rica) — a lo sumo uno por día calendario.
+    /// Se llama tanto al abrir la app (por si el día anterior nunca llegó a
+    /// correr, p. ej. la app estuvo cerrada) como periódicamente mientras
+    /// sigue abierta (la app puede quedarse corriendo varios días seguidos
+    /// sin reiniciar, y antes esta función sólo se evaluaba una vez al
+    /// arrancar el proceso). Es best-effort a propósito (no devuelve
+    /// `Result`): a diferencia del respaldo previo a una migración, éste no
+    /// es obligatorio, así que un fallo (disco lleno, permisos) no debe
+    /// impedir que la app arranque ni interrumpir al operador.
     pub fn respaldo_automatico_diario_si_hace_falta(&self) {
+        let ahora = a_costa_rica(self.reloj.ahora_utc());
+        if ahora.hour() < HORA_RESPALDO_AUTOMATICO {
+            return;
+        }
         let Ok(listado) = self.listar_respaldos_sistema() else {
             return;
         };
-        let hoy = crate::tiempo::fecha_costa_rica(self.reloj.ahora_utc());
+        let hoy = ahora.date_naive();
         let ya_existe_hoy = listado.iter().any(|respaldo| {
             respaldo.tipo == TipoRespaldo::Automatico
                 && crate::tiempo::fecha_costa_rica(respaldo.creado_en) == hoy
