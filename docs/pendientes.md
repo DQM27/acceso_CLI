@@ -32,9 +32,13 @@ este orden:
   sin cambiar lógica; los campos de estado async se quedaron en el `struct App` de
   `app.rs`. `app.rs` pasó de 1.556 a 1.189 líneas. `cargo fmt`, Clippy estricto
   (`-D warnings`) y la suite completa en verde.
-- [ ] **Fase 4 — Agrupar despachadores por área.** Separar en
-  `src/tui/app/actions/{accesos,catalogos,admin}.rs` en vez de un archivo monolítico o uno
-  por pantalla.
+- [x] **Fase 4 — Agrupar despachadores por área (2026-08-21).** Movidos a
+  `src/tui/app/actions/{accesos,catalogos,admin}.rs`: accesos (Activos, Historial, Nuevo
+  Ingreso, Salida Rápida), catálogos (Contratistas, Empresas), administración (Usuarios,
+  Auditoría, Respaldos). Métodos marcados `pub(in crate::tui::app)` para que `app.rs`
+  (ancestro del submódulo `actions`) siga pudiendo llamarlos — visibilidad de Rust sólo da
+  acceso automático a descendientes, no a ancestros. `app.rs` pasó de 1.189 a 620 líneas.
+  `cargo fmt`, Clippy estricto y la suite completa en verde.
 - [ ] **Fase 5 — Separar navegación y runtime.** `src/tui/app/navigation.rs` y
   `src/tui/app/runtime.rs`; evaluar reemplazar `Option<&AppCore>` por un modo de ejecución
   explícito (normal vs. arranque degradado).
