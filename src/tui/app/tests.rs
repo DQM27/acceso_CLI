@@ -3,6 +3,7 @@ use rusqlite::Connection;
 
 use super::*;
 use crate::database::schema::initialize_database;
+use crate::services::usuario_service::CrearRootInicialInput;
 
 fn escribir(state: &mut ConfiguracionInicialState, texto: &str) {
     for caracter in texto.chars() {
