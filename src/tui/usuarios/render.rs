@@ -5,6 +5,7 @@ use ratatui::{
     widgets::{Cell, Paragraph, Row, Table},
 };
 
+use super::form::{ROLES, si_no, texto_rol};
 use super::*;
 use crate::{
     database::queries::usuarios::UsuarioResumen,

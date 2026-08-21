@@ -88,8 +88,15 @@ suite completa + Clippy estricto.
   `texto_tipo`, con `tipos`/`texto_tipo` visibles también para `render.rs` vía
   `pub(in crate::tui::contratistas::state)`, ya que ese archivo los usa directo). `cargo
   fmt`, Clippy estricto y la suite completa en verde.
-- [ ] `src/tui/usuarios/state.rs` (870 líneas) — extraer `usuarios/form.rs` y
-  `usuarios/password.rs`.
+- [x] **Repartido (2026-08-21).** `src/tui/usuarios/state.rs` (870 líneas) → `form.rs`
+  (validación y selector de rol, 42 líneas), `password.rs` (regla de validación de
+  contraseña compartida por crear-usuario y cambiar-contraseña, 17 líneas), `state.rs`
+  queda en 833. Igual que en Contratistas: `Secreto`/`FormularioUsuario`/
+  `FormularioPassword` se quedan en `state.rs` porque `render.rs` lee sus campos
+  privados directamente — sólo se extrajeron las funciones libres sin ese acoplamiento
+  (`ROLES`/`texto_rol`/`si_no` visibles también para `render.rs` vía
+  `pub(in crate::tui::usuarios::state)`). `cargo fmt`, Clippy estricto y la suite
+  completa en verde.
 - `src/database/schema.rs` (804 líneas) y los `render.rs` de 500-600 líneas: revisados, sin
   acción urgente — cohesión aceptable. Reevaluar sólo si agregar una migración o una
   sección visual nueva empieza a doler.

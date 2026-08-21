@@ -12,17 +12,18 @@ use std::time::Instant;
 
 const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
 
+#[path = "form.rs"]
+mod form;
+#[path = "password.rs"]
+mod password;
 #[path = "render.rs"]
 pub(super) mod render;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
 
-const ROLES: [RolUsuario; 3] = [
-    RolUsuario::Root,
-    RolUsuario::Administrador,
-    RolUsuario::Operador,
-];
+use form::{ROLES, indice_rol, validar_formulario};
+use password::validar_password;
 
 /// Igual que `TextInput`, pero sin depender de `tui_input` — se usa sólo
 /// para contraseñas, donde el valor real jamás debe imprimirse ni siquiera
@@ -829,42 +830,4 @@ impl UsuariosState {
 
 fn texto_filtro(s: &str) -> Option<String> {
     (!s.trim().is_empty()).then(|| s.to_owned())
-}
-fn validar_formulario(f: &FormularioUsuario) -> Result<(), String> {
-    if f.cedula.value().trim().is_empty() {
-        return Err("La cédula es obligatoria".into());
-    }
-    if f.nombre.value().trim().is_empty() {
-        return Err("El nombre es obligatorio".into());
-    }
-    if matches!(f.modo, ModoFormularioUsuario::Crear) {
-        validar_password(f.password.valor(), f.confirmar_password.valor())?
-    }
-    Ok(())
-}
-fn validar_password(p: &str, c: &str) -> Result<(), String> {
-    if p.is_empty() {
-        Err("La contraseña es obligatoria".into())
-    } else if c.is_empty() {
-        Err("Debe confirmar la contraseña".into())
-    } else if p.chars().count() < 8 {
-        Err("La contraseña debe tener al menos 8 caracteres".into())
-    } else if p != c {
-        Err("Las contraseñas no coinciden".into())
-    } else {
-        Ok(())
-    }
-}
-fn indice_rol(r: RolUsuario) -> usize {
-    ROLES.iter().position(|x| *x == r).unwrap_or(2)
-}
-fn texto_rol(r: RolUsuario) -> &'static str {
-    match r {
-        RolUsuario::Root => "ROOT",
-        RolUsuario::Administrador => "ADMINISTRADOR",
-        RolUsuario::Operador => "OPERADOR",
-    }
-}
-fn si_no(v: bool) -> &'static str {
-    if v { "SÍ" } else { "NO" }
 }
