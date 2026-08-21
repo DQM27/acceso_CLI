@@ -68,8 +68,15 @@ suite completa + Clippy estricto.
 
 ## Otros archivos grandes (orden sugerido, después de lo anterior)
 
-- [ ] `src/database/queries/ingresos.rs` (807 líneas) — separar en
-  `ingresos/{mod,activos,historial}.rs`; mantener los conversores compartidos en `mod.rs`.
+- [x] **Repartido (2026-08-21).** `src/database/queries/ingresos.rs` (807 líneas) se
+  separó en `ingresos/{mod,activos,historial}.rs` (144/313/438 líneas). `mod.rs` conserva
+  el trait `IngresosQuery`, `SqliteIngresosQuery` (que delega cada método a su
+  submódulo — un `impl Trait` no se puede partir entre archivos) y los conversores de
+  fila que ambas consultas comparten (`resultado_desde_fila`, `motivo_desde_fila`,
+  `tipo_desde_fila`, `medio_desde_fila`, `fecha_hora_desde_fila`); cada submódulo se
+  quedó con su propio `WHERE` dinámico, conversor específico y pruebas de plan de
+  consulta (`EXPLAIN QUERY PLAN`). `cargo fmt`, Clippy estricto y la suite completa en
+  verde.
 - [ ] `src/tui/contratistas/state.rs` (934 líneas) — extraer `contratistas/query.rs` y
   `contratistas/form.rs`; dejar estado público y `handle_key` en `state.rs`.
 - [ ] `src/tui/usuarios/state.rs` (870 líneas) — extraer `usuarios/form.rs` y
