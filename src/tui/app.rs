@@ -264,6 +264,102 @@ mod tests {
         }
     }
 
+    /// Atajo sin documentar (a propósito, no aparece en ninguna ayuda F1):
+    /// Ctrl+1..Ctrl+9 saltan directo a la pantalla correspondiente desde
+    /// cualquier vista, sin pasar por el menú principal primero.
+    #[test]
+    fn ctrl_numero_salta_directo_a_la_pantalla_sin_pasar_por_el_menu() {
+        let mut app = App {
+            vista: Vista::Contratistas,
+            sesion: Some(sesion("Ana")),
+            ..App::default()
+        };
+
+        app.procesar_tecla_global(
+            KeyEvent::new(KeyCode::Char('3'), KeyModifiers::CONTROL),
+            None,
+        );
+        assert_eq!(app.vista, Vista::Historial);
+    }
+
+    /// Reusa la misma tabla y el mismo chequeo de rol que
+    /// `MenuPrincipalState::handle_key` — un Operador no puede saltar a
+    /// Usuarios con Ctrl+6, igual que no puede con un '6' suelto parado en
+    /// el menú.
+    #[test]
+    fn ctrl_numero_respeta_el_rol_igual_que_el_menu() {
+        let mut app = App {
+            vista: Vista::NuevoIngreso,
+            sesion: Some(UsuarioSesion {
+                id: 1,
+                cedula: "1".into(),
+                nombre: "Operador".into(),
+                rol: crate::models::usuario::RolUsuario::Operador,
+            }),
+            ..App::default()
+        };
+
+        app.procesar_tecla_global(
+            KeyEvent::new(KeyCode::Char('6'), KeyModifiers::CONTROL),
+            None,
+        );
+        assert_eq!(app.vista, Vista::NuevoIngreso);
+    }
+
+    #[test]
+    fn ctrl_numero_no_funciona_sin_sesion_ni_con_ctrl_alt_ni_con_salida_rapida_abierta() {
+        let mut app = App {
+            vista: Vista::Login,
+            sesion: None,
+            ..App::default()
+        };
+        app.procesar_tecla_global(
+            KeyEvent::new(KeyCode::Char('3'), KeyModifiers::CONTROL),
+            None,
+        );
+        assert_eq!(app.vista, Vista::Login);
+
+        let mut app = App {
+            vista: Vista::Contratistas,
+            sesion: Some(sesion("Ana")),
+            ..App::default()
+        };
+        // Ctrl+Alt+número queda reservado (Windows Terminal lo usa para
+        // cambiar de pestaña) — el atajo sólo reacciona a Ctrl solo.
+        app.procesar_tecla_global(
+            KeyEvent::new(
+                KeyCode::Char('3'),
+                KeyModifiers::CONTROL | KeyModifiers::ALT,
+            ),
+            None,
+        );
+        assert_eq!(app.vista, Vista::Contratistas);
+
+        app.salida_rapida.abrir();
+        app.procesar_tecla_global(
+            KeyEvent::new(KeyCode::Char('3'), KeyModifiers::CONTROL),
+            None,
+        );
+        assert_eq!(
+            app.vista,
+            Vista::Contratistas,
+            "no debe saltar con el overlay de salida rápida abierto"
+        );
+    }
+
+    /// Un dígito suelto (sin Ctrl) sigue siendo texto libre normal en
+    /// cualquier campo de búsqueda — el atajo global no debe robárselo.
+    #[test]
+    fn digito_suelto_sin_ctrl_no_dispara_el_salto() {
+        let mut app = App {
+            vista: Vista::Contratistas,
+            sesion: Some(sesion("Ana")),
+            ..App::default()
+        };
+        app.procesar_tecla_global(KeyEvent::new(KeyCode::Char('3'), KeyModifiers::NONE), None);
+        assert_eq!(app.vista, Vista::Contratistas);
+    }
+
     #[test]
     fn logout_limpia_sesion_login_y_conserva_estado_mock() {
         let mut app = App {
@@ -1716,6 +1812,26 @@ impl App {
                 return;
             }
             _ => {}
+        }
+        // Atajo global sin documentar en ninguna pantalla de ayuda (a pedido
+        // explícito): Ctrl+1..Ctrl+9 saltan directo a la pantalla
+        // correspondiente sin pasar por el menú principal. Reusa la misma
+        // tabla de números y el mismo chequeo de rol que ya tiene
+        // `MenuPrincipalState::handle_key` (armando el `KeyEvent` sin el
+        // modificador) en vez de duplicar la relación número→pantalla acá,
+        // para que no puedan desincronizarse.
+        if self.sesion.is_some()
+            && !self.salida_rapida.abierto()
+            && key
+                .modifiers
+                .contains(crossterm::event::KeyModifiers::CONTROL)
+            && !key.modifiers.contains(crossterm::event::KeyModifiers::ALT)
+            && matches!(key.code, crossterm::event::KeyCode::Char(c) if c.is_ascii_digit() && c != '0')
+        {
+            let sin_modificador =
+                crossterm::event::KeyEvent::new(key.code, crossterm::event::KeyModifiers::NONE);
+            self.procesar_accion_menu_con_core(sin_modificador, core);
+            return;
         }
         if self.salida_rapida.abierto() {
             let accion = self.salida_rapida.handle_key(key);
