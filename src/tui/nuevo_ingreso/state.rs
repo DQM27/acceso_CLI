@@ -64,6 +64,12 @@ pub struct NuevoIngresoState {
     gafete_texto: String,
     gafete_cursor: usize,
     error: Option<String>,
+    /// "✓ Ingreso registrado — X". Antes esta pantalla saltaba a Ingresos
+    /// Activos tras cada registro (interrumpía el flujo de registrar varios
+    /// contratistas seguidos); ahora se queda acá y este mensaje es la única
+    /// confirmación de que sí se registró, igual que el resto de pantallas
+    /// que escriben (`ActivosState.mensaje`, `SalidaRapidaState.mensaje`).
+    mensaje: Option<String>,
     ayuda_expandida: bool,
     busqueda_debounce: Debounce,
 }
@@ -89,6 +95,7 @@ impl NuevoIngresoState {
             gafete_texto: String::new(),
             gafete_cursor: 0,
             error: None,
+            mensaje: None,
             ayuda_expandida: false,
             busqueda_debounce: Debounce::default(),
         }
@@ -138,7 +145,9 @@ impl NuevoIngresoState {
     pub fn completar_registro(&mut self, r: Result<i64, String>) -> bool {
         match r {
             Ok(_) => {
+                let nombre = self.preparacion.as_ref().map(|p| p.nombre.clone());
                 self.limpiar();
+                self.mensaje = nombre.map(|nombre| format!("✓ Ingreso registrado — {nombre}"));
                 true
             }
             Err(e) => {
@@ -161,6 +170,7 @@ impl NuevoIngresoState {
         match key.code {
             KeyCode::Esc if !self.busqueda.value().is_empty() => {
                 self.busqueda.clear();
+                self.mensaje = None;
                 AccionNuevoIngreso::Buscar { texto: None }
             }
             KeyCode::Esc => AccionNuevoIngreso::Volver,
@@ -182,6 +192,7 @@ impl NuevoIngresoState {
                 }),
             _ => {
                 if self.busqueda.handle_key(key) {
+                    self.mensaje = None;
                     self.busqueda_debounce.marcar(Instant::now());
                 }
                 AccionNuevoIngreso::Ninguna

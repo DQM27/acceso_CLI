@@ -244,6 +244,33 @@ fn gafete_ocupado_llega_como_error_del_backend_al_registrar() {
     // el formulario sigue abierto para corregir, no vuelve a Buscar.
     assert_eq!(s.etapa, EtapaNuevoIngreso::Formulario);
 }
+/// Regresión de "registrar un ingreso interrumpe el flujo saltando a
+/// Ingresos Activos": ahora el registro exitoso se queda en la pantalla,
+/// resetea a la etapa de búsqueda para poder cargar al siguiente
+/// contratista de una, y deja su propio mensaje de confirmación (la
+/// navegación a otra pantalla ya no es la señal de éxito).
+#[test]
+fn registrar_con_exito_vuelve_a_buscar_y_deja_el_mensaje_de_confirmacion() {
+    let mut s = NuevoIngresoState::default();
+    s.completar_busqueda(Ok(PaginaContratistas {
+        items: vec![resumen()],
+        total: 1,
+    }));
+    s.completar_preparacion(Ok(preparar(false)));
+    assert_eq!(s.etapa, EtapaNuevoIngreso::Formulario);
+
+    assert!(s.completar_registro(Ok(99)));
+
+    assert_eq!(s.etapa, EtapaNuevoIngreso::Buscar);
+    assert!(s.busqueda.value().is_empty());
+    assert!(s.contratistas.is_empty());
+    assert_eq!(s.mensaje.as_deref(), Some("✓ Ingreso registrado — José"));
+
+    // Escribir para el siguiente contratista limpia el mensaje anterior.
+    s.handle_key(k(KeyCode::Char('1')));
+    assert_eq!(s.mensaje, None);
+}
+
 #[test]
 fn fecha_determinista_pertenece_al_core_no_al_state() {
     let fecha = NaiveDate::from_ymd_opt(2026, 8, 12).unwrap();

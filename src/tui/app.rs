@@ -916,6 +916,70 @@ mod tests {
         assert!(!app.salida_rapida.abierto());
     }
 
+    /// Regresión de "registrar un ingreso interrumpe el flujo saltando a
+    /// Ingresos Activos": antes cada registro exitoso cambiaba
+    /// `self.vista` a `Vista::IngresosActivos`, obligando a volver a
+    /// navegar para registrar al siguiente contratista. Ahora se queda en
+    /// Nuevo Ingreso — el ingreso sí quedó real en SQLite.
+    #[test]
+    fn registrar_ingreso_se_queda_en_nuevo_ingreso_en_vez_de_saltar_a_activos() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let core = AppCore::new(connection);
+        let usuario_id = core
+            .crear_root_inicial(crate::services::usuario_service::CrearRootInicialInput {
+                cedula: "ROOT-1".into(),
+                nombre: "Ana".into(),
+                password: "password1".into(),
+            })
+            .unwrap();
+        let actor = core.autenticar("ROOT-1", "password1").unwrap();
+        let empresa_id = core.crear_empresa(&actor, "Constructora Álvarez").unwrap();
+        let contratista_id = core
+            .crear_contratista(
+                &actor,
+                crate::services::contratista_service::DatosContratista {
+                    cedula: "9-9999-9999".into(),
+                    nombre: "Persona De Prueba".into(),
+                    empresa_id,
+                    tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::PorCorreo,
+                    fecha_vencimiento_praind: None,
+                    es_personal_ruta: false,
+                    tiene_acceso: true,
+                },
+            )
+            .unwrap();
+
+        let mut app = App {
+            vista: Vista::NuevoIngreso,
+            sesion: Some(UsuarioSesion {
+                id: usuario_id,
+                cedula: "ROOT-1".into(),
+                nombre: "Ana".into(),
+                rol: RolUsuario::Root,
+            }),
+            ..App::default()
+        };
+
+        app.procesar_accion_nuevo_ingreso(
+            AccionNuevoIngreso::Registrar {
+                contratista_id,
+                medio: crate::models::medio_ingreso::MedioIngreso::Caminando,
+                gafete: Some(77),
+            },
+            Some(&core),
+        );
+
+        assert_eq!(app.vista, Vista::NuevoIngreso);
+        let activos = core
+            .listar_ingresos_activos(&crate::database::queries::ingresos::FiltroIngresosActivos {
+                texto: None,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(activos.total, 1, "el ingreso sí debía quedar registrado");
+    }
+
     #[test]
     fn f2_no_abre_sin_sesion_iniciada() {
         let connection = Connection::open_in_memory().unwrap();
@@ -2495,11 +2559,13 @@ impl App {
                         .map_err(mensaje_ingreso),
                     _ => Err("No se pudo registrar el ingreso".into()),
                 };
-                if self.nuevo_ingreso.completar_registro(resultado) {
-                    self.activos.filtro.clear();
-                    self.procesar_accion_activos(self.activos.buscar(None), core);
-                    self.vista = Vista::IngresosActivos;
-                }
+                // Se queda en Nuevo Ingreso tras registrar (a diferencia de
+                // antes, que saltaba a Ingresos Activos) — con varios
+                // contratistas por procesar seguidos, ese salto obligaba a
+                // volver a navegar por cada uno. `completar_registro` deja
+                // su propio mensaje de confirmación ("✓ Ingreso registrado
+                // — X") en vez de depender de ver la fila nueva en Activos.
+                self.nuevo_ingreso.completar_registro(resultado);
             }
         }
     }

@@ -76,6 +76,9 @@ fn estado_shell(state: &NuevoIngresoState) -> (String, StatusKind) {
     if let Some(error) = &state.error {
         return (error.clone(), StatusKind::Error);
     }
+    if let Some(mensaje) = &state.mensaje {
+        return (mensaje.clone(), StatusKind::Success);
+    }
     match state.etapa {
         EtapaNuevoIngreso::Buscar => (String::new(), StatusKind::Normal),
         EtapaNuevoIngreso::Formulario => {
