@@ -115,6 +115,9 @@ fn avisa_cuando_quedan_resultados_fuera_de_la_lista() {
 fn inicia_vacio_y_busqueda_emite_acciones_tras_el_debounce() {
     let mut s = NuevoIngresoState::default();
     assert!(s.contratistas.is_empty());
+    // '/' activa la búsqueda — en Normal, escribir no hace nada (mismo
+    // criterio que Activos/Contratistas/Historial).
+    s.handle_key(k(KeyCode::Char('/')));
     assert_eq!(
         s.handle_key(k(KeyCode::Char('j'))),
         AccionNuevoIngreso::Ninguna
@@ -262,13 +265,44 @@ fn registrar_con_exito_vuelve_a_buscar_y_deja_el_mensaje_de_confirmacion() {
     assert!(s.completar_registro(Ok(99)));
 
     assert_eq!(s.etapa, EtapaNuevoIngreso::Buscar);
-    assert!(s.busqueda.value().is_empty());
+    assert_eq!(s.modo, ModoBuscarIngreso::Normal);
+    assert!(s.filtro.is_empty());
     assert!(s.contratistas.is_empty());
+    assert_eq!(
+        s.resultados_ocultos(),
+        None,
+        "no debe arrastrar el total anterior"
+    );
     assert_eq!(s.mensaje.as_deref(), Some("✓ Ingreso registrado — José"));
 
-    // Escribir para el siguiente contratista limpia el mensaje anterior.
+    // Buscar al siguiente contratista (con '/', como cualquier otra
+    // pantalla) limpia el mensaje anterior.
+    s.handle_key(k(KeyCode::Char('/')));
     s.handle_key(k(KeyCode::Char('1')));
     assert_eq!(s.mensaje, None);
+}
+
+/// Regresión puntual del reporte de usuario: tras registrar, una tecla
+/// suelta (sin `/` antes) no debe escribirse en el filtro ni disparar una
+/// búsqueda — y ESC en ese estado de reposo se comporta como en cualquier
+/// otra pantalla con el filtro vacío (vuelve al menú), no como si hubiera
+/// algo que limpiar primero.
+#[test]
+fn tras_registrar_una_tecla_suelta_no_escribe_en_el_filtro() {
+    let mut s = NuevoIngresoState::default();
+    s.completar_busqueda(Ok(PaginaContratistas {
+        items: vec![resumen()],
+        total: 1,
+    }));
+    s.completar_preparacion(Ok(preparar(false)));
+    s.completar_registro(Ok(99));
+
+    assert_eq!(
+        s.handle_key(k(KeyCode::Char('9'))),
+        AccionNuevoIngreso::Ninguna
+    );
+    assert!(s.filtro.is_empty(), "no debía escribirse sin pasar por /");
+    assert_eq!(s.handle_key(k(KeyCode::Esc)), AccionNuevoIngreso::Volver);
 }
 
 #[test]

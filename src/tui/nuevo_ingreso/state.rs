@@ -24,6 +24,20 @@ enum EtapaNuevoIngreso {
     Formulario,
 }
 
+/// Mismo criterio Normal/Búsqueda que Activos/Contratistas/Historial: el
+/// campo de texto sólo captura teclas mientras está en `Busqueda` (activado
+/// con `/`); en `Normal` las flechas siguen navegando la lista, pero
+/// escribir no hace nada. Antes esta pantalla no tenía esta distinción — el
+/// campo de texto capturaba cualquier tecla todo el tiempo que `etapa` fuera
+/// `Buscar`, así que tras registrar un ingreso (que vuelve a esa etapa) el
+/// operador quedaba "adentro" del campo de búsqueda sin haberlo pedido, y
+/// Esc con el campo ya vacío lo mandaba de una al menú principal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ModoBuscarIngreso {
+    Normal,
+    Busqueda { texto: TextInput },
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CampoIngreso {
     Medio,
@@ -55,7 +69,11 @@ pub struct NuevoIngresoState {
     /// — permite avisar "primeros N de M, afine la búsqueda" en vez de dejar
     /// resultados fuera de forma silenciosa.
     total: usize,
-    busqueda: TextInput,
+    /// Texto de búsqueda comprometido — se mantiene sincronizado con el
+    /// `TextInput` de `ModoBuscarIngreso::Busqueda` mientras se escribe
+    /// (mismo patrón que `ActivosState.filtro`).
+    filtro: String,
+    modo: ModoBuscarIngreso,
     seleccion: Option<usize>,
     contratista_id: Option<i64>,
     preparacion: Option<PreparacionIngreso>,
@@ -86,7 +104,8 @@ impl NuevoIngresoState {
             etapa: EtapaNuevoIngreso::Buscar,
             contratistas: vec![],
             total: 0,
-            busqueda: TextInput::default(),
+            filtro: String::new(),
+            modo: ModoBuscarIngreso::Normal,
             seleccion: None,
             contratista_id: None,
             preparacion: None,
@@ -162,18 +181,18 @@ impl NuevoIngresoState {
             return AccionNuevoIngreso::Ninguna;
         }
         match self.etapa {
-            EtapaNuevoIngreso::Buscar => self.buscar(key),
+            EtapaNuevoIngreso::Buscar => match self.modo.clone() {
+                ModoBuscarIngreso::Normal => self.normal(key),
+                ModoBuscarIngreso::Busqueda { .. } => self.busqueda_input(key),
+            },
             EtapaNuevoIngreso::Formulario => self.formulario(key),
         }
     }
-    fn buscar(&mut self, key: KeyEvent) -> AccionNuevoIngreso {
+    fn normal(&mut self, key: KeyEvent) -> AccionNuevoIngreso {
+        if matches!(key.code, KeyCode::Enter | KeyCode::Char('/') | KeyCode::Esc) {
+            self.mensaje = None;
+        }
         match key.code {
-            KeyCode::Esc if !self.busqueda.value().is_empty() => {
-                self.busqueda.clear();
-                self.mensaje = None;
-                AccionNuevoIngreso::Buscar { texto: None }
-            }
-            KeyCode::Esc => AccionNuevoIngreso::Volver,
             KeyCode::Up => {
                 self.mover(-1);
                 AccionNuevoIngreso::Ninguna
@@ -182,22 +201,64 @@ impl NuevoIngresoState {
                 self.mover(1);
                 AccionNuevoIngreso::Ninguna
             }
-            KeyCode::Enter => self
-                .contratistas
-                .get(self.seleccion.unwrap_or(usize::MAX))
-                .map_or(AccionNuevoIngreso::Ninguna, |c| {
-                    AccionNuevoIngreso::Preparar {
-                        contratista_id: c.id,
-                    }
-                }),
+            KeyCode::Enter => self.seleccionar_resaltado(),
+            KeyCode::Char('/') => {
+                self.modo = ModoBuscarIngreso::Busqueda {
+                    texto: TextInput::new(self.filtro.clone()),
+                };
+                AccionNuevoIngreso::Ninguna
+            }
+            KeyCode::Esc if !self.filtro.is_empty() => {
+                self.filtro.clear();
+                AccionNuevoIngreso::Buscar { texto: None }
+            }
+            KeyCode::Esc => AccionNuevoIngreso::Volver,
+            _ => AccionNuevoIngreso::Ninguna,
+        }
+    }
+    fn busqueda_input(&mut self, key: KeyEvent) -> AccionNuevoIngreso {
+        match key.code {
+            KeyCode::Esc => {
+                self.filtro.clear();
+                self.modo = ModoBuscarIngreso::Normal;
+                AccionNuevoIngreso::Buscar { texto: None }
+            }
+            // A diferencia de Activos (donde Enter en Búsqueda sólo cierra
+            // el campo), acá selecciona directo al resaltado — Nuevo
+            // Ingreso necesita el camino más rápido posible (buscar y
+            // Enter) para no frenar al operador cuando ya sabe a quién
+            // busca.
+            KeyCode::Enter => self.seleccionar_resaltado(),
+            KeyCode::Up => {
+                self.mover(-1);
+                AccionNuevoIngreso::Ninguna
+            }
+            KeyCode::Down => {
+                self.mover(1);
+                AccionNuevoIngreso::Ninguna
+            }
             _ => {
-                if self.busqueda.handle_key(key) {
+                let mut cambio = false;
+                if let ModoBuscarIngreso::Busqueda { texto } = &mut self.modo {
+                    cambio = texto.handle_key(key);
+                    self.filtro = texto.value().to_owned();
+                }
+                if cambio {
                     self.mensaje = None;
                     self.busqueda_debounce.marcar(Instant::now());
                 }
                 AccionNuevoIngreso::Ninguna
             }
         }
+    }
+    fn seleccionar_resaltado(&self) -> AccionNuevoIngreso {
+        self.contratistas
+            .get(self.seleccion.unwrap_or(usize::MAX))
+            .map_or(AccionNuevoIngreso::Ninguna, |c| {
+                AccionNuevoIngreso::Preparar {
+                    contratista_id: c.id,
+                }
+            })
     }
     /// Se llama en cada vuelta del bucle principal; dispara la búsqueda
     /// diferida sólo una vez que pasa `DURACION_DEBOUNCE` sin una tecla
@@ -206,7 +267,7 @@ impl NuevoIngresoState {
     pub fn tick(&mut self, ahora: Instant) -> AccionNuevoIngreso {
         if self.busqueda_debounce.listo(ahora, DURACION_DEBOUNCE) {
             AccionNuevoIngreso::Buscar {
-                texto: texto_filtro(self.busqueda.value()),
+                texto: texto_filtro(&self.filtro),
             }
         } else {
             AccionNuevoIngreso::Ninguna
@@ -330,8 +391,14 @@ impl NuevoIngresoState {
     }
     fn limpiar(&mut self) {
         self.limpiar_seleccion();
-        self.busqueda.clear();
+        self.filtro.clear();
+        self.modo = ModoBuscarIngreso::Normal;
         self.contratistas.clear();
+        // Antes se quedaba con el `total` de la última búsqueda (p. ej. 3)
+        // mientras `contratistas` ya estaba vacío — el aviso de "resultados
+        // ocultos" se disparaba con la lista en blanco, mostrando "0 DE 3
+        // RESULTADOS" después de cada registro exitoso.
+        self.total = 0;
         self.seleccion = None;
         self.etapa = EtapaNuevoIngreso::Buscar
     }

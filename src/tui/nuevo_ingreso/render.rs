@@ -16,10 +16,22 @@ use ratatui::{
     widgets::{Cell, Paragraph, Row, Table},
 };
 
-const COMANDOS_BUSCAR: &[CommandHint<'static>] = &[
+const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓", "Mover"),
     CommandHint::new("ENTER", "Preparar"),
-    CommandHint::new("ESC", "Limpiar/Volver"),
+    CommandHint::new("/", "Buscar"),
+    CommandHint::new("ESC", "Volver"),
+];
+const COMANDOS_NORMAL_FILTRADO: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓", "Mover"),
+    CommandHint::new("ENTER", "Preparar"),
+    CommandHint::new("/", "Buscar"),
+    CommandHint::new("ESC", "Limpiar filtro"),
+];
+const COMANDOS_BUSQUEDA: &[CommandHint<'static>] = &[
+    CommandHint::new("↑↓", "Mover"),
+    CommandHint::new("ENTER", "Preparar"),
+    CommandHint::new("ESC", "Cerrar búsqueda"),
 ];
 const COMANDOS_FORMULARIO: &[CommandHint<'static>] = &[
     CommandHint::new("TAB", "Campo"),
@@ -50,9 +62,13 @@ pub fn render(
     let hora = hora_actual_texto();
     let contexto = identidad_sesion(sesion);
     let (estado_texto, estado_tipo) = estado_shell(state);
-    let comandos = match state.etapa {
-        EtapaNuevoIngreso::Buscar => COMANDOS_BUSCAR,
-        EtapaNuevoIngreso::Formulario => COMANDOS_FORMULARIO,
+    let comandos = match (state.etapa, &state.modo) {
+        (EtapaNuevoIngreso::Buscar, ModoBuscarIngreso::Normal) if !state.filtro.is_empty() => {
+            COMANDOS_NORMAL_FILTRADO
+        }
+        (EtapaNuevoIngreso::Buscar, ModoBuscarIngreso::Normal) => COMANDOS_NORMAL,
+        (EtapaNuevoIngreso::Buscar, ModoBuscarIngreso::Busqueda { .. }) => COMANDOS_BUSQUEDA,
+        (EtapaNuevoIngreso::Formulario, _) => COMANDOS_FORMULARIO,
     };
 
     let shell = ScreenShell {
@@ -99,7 +115,11 @@ fn estado_shell(state: &NuevoIngresoState) -> (String, StatusKind) {
 fn render_cuerpo(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme: Theme) {
     let filas = Layout::vertical([Constraint::Length(3), Constraint::Min(4)]).split(area);
 
-    let enfocado_busqueda = matches!(state.etapa, EtapaNuevoIngreso::Buscar);
+    let enfocado_busqueda = matches!(state.modo, ModoBuscarIngreso::Busqueda { .. });
+    let texto_busqueda = match &state.modo {
+        ModoBuscarIngreso::Busqueda { texto } => texto.value(),
+        ModoBuscarIngreso::Normal => state.filtro.as_str(),
+    };
     let etiqueta_busqueda = match state.resultados_ocultos() {
         Some(total) => format!(
             "BUSCAR CONTRATISTA · {} DE {total} RESULTADOS · afine la búsqueda para ver el resto",
@@ -114,7 +134,7 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme
         frame,
         filas[0],
         &etiqueta_busqueda,
-        state.busqueda.value(),
+        texto_busqueda,
         enfocado_busqueda,
         theme,
     );
@@ -125,13 +145,8 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme
     render_tabla(frame, area_tabla, state, theme);
     let area_gafete = render_panel(frame, area_panel, state, theme);
 
-    if enfocado_busqueda {
-        let antes_del_cursor: String = state
-            .busqueda
-            .value()
-            .chars()
-            .take(state.busqueda.cursor())
-            .collect();
+    if let ModoBuscarIngreso::Busqueda { texto } = &state.modo {
+        let antes_del_cursor: String = texto.value().chars().take(texto.cursor()).collect();
         let ancho_visible = Line::from(antes_del_cursor).width() as u16;
         let x = area_busqueda
             .x
@@ -233,8 +248,8 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme:
     );
     if state.contratistas.is_empty() {
         frame.render_widget(
-            Paragraph::new(if state.busqueda.value().is_empty() {
-                "Escriba para buscar un contratista."
+            Paragraph::new(if state.filtro.is_empty() {
+                "Presione / para buscar un contratista."
             } else {
                 "Sin resultados para la búsqueda."
             })
