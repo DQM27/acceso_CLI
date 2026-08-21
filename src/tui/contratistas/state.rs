@@ -364,9 +364,6 @@ impl ContratistasState {
         if let Some(acceso) = filtro.tiene_acceso {
             partes.push(format!("acceso={}", if acceso { "sí" } else { "no" }));
         }
-        if !resolucion.texto_libre.is_empty() {
-            partes.push(format!("texto=\"{}\"", resolucion.texto_libre));
-        }
         if !resolucion.no_reconocidos.is_empty() {
             partes.push(format!(
                 "⚠ sin interpretar: {}",

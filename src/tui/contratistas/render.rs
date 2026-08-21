@@ -138,7 +138,12 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &ContratistasState, theme
     } else {
         format!("{} RESULTADOS", state.total())
     };
-    let etiqueta_busqueda = format!("BUSCAR · {conteo} · {}", state.resumen_consulta());
+    let resumen = state.resumen_consulta();
+    let etiqueta_busqueda = if resumen.is_empty() {
+        format!("BUSCAR · {conteo}")
+    } else {
+        format!("BUSCAR · {conteo} · {resumen}")
+    };
     let area_busqueda = render_campo(
         frame,
         filas[0],

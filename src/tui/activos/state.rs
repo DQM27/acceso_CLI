@@ -312,9 +312,6 @@ impl ActivosState {
                 }
             ));
         }
-        if !resolucion.texto_libre.is_empty() {
-            partes.push(format!("texto=\"{}\"", resolucion.texto_libre));
-        }
         if !resolucion.no_reconocidos.is_empty() {
             partes.push(format!(
                 "⚠ sin interpretar: {}",

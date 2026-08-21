@@ -127,15 +127,24 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &ActivosState, theme: The
         ModoActivos::Busqueda { texto } => texto.value(),
         _ => state.filtro.as_str(),
     };
+    let resumen = state.resumen_consulta();
+    let etiqueta_busqueda = if resumen.is_empty() {
+        format!(
+            "BUSCAR · {} DE {} DENTRO",
+            state.cantidad(),
+            state.total_activos()
+        )
+    } else {
+        format!(
+            "BUSCAR · {} DE {} DENTRO · {resumen}",
+            state.cantidad(),
+            state.total_activos()
+        )
+    };
     let area_busqueda = render_form_field(
         frame,
         filas[0],
-        &format!(
-            "BUSCAR · {} DE {} DENTRO · {}",
-            state.cantidad(),
-            state.total_activos(),
-            state.resumen_consulta()
-        ),
+        &etiqueta_busqueda,
         texto_busqueda,
         enfocado_busqueda,
         theme,
