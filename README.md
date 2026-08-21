@@ -4,6 +4,50 @@ Aplicación local en Rust para administrar empresas, contratistas, usuarios e in
 salidas de una instalación. SQLite es la fuente de verdad; los repositorios persisten,
 los servicios orquestan casos de uso y el dominio contiene reglas puras.
 
+## Funciones
+
+### Operación diaria (todos los roles)
+
+- **Nuevo ingreso**: registra la entrada de un contratista.
+- **Ingresos activos**: quién está actualmente dentro de la instalación.
+- **Historial**: consulta de movimientos de entrada y salida. Alterna con `F3` entre
+  Línea de tiempo y tabla Clásica; `F5` exporta a `.xlsx` todos los movimientos del
+  filtro vigente (no solo la página visible).
+- **Contratistas** / **Empresas**: alta, edición y búsqueda. La búsqueda textual es
+  indexada (FTS5) a partir de tres caracteres, insensible a mayúsculas y diacríticos.
+- **Cambiar mi contraseña**.
+
+### Administración (Administrador y Root)
+
+- **Usuarios**: alta, edición, activación/desactivación y reseteo de contraseña de
+  otros usuarios. Los usuarios se desactivan, nunca se eliminan, para conservar las
+  referencias del historial.
+- **Auditoría**: consulta de cambios en campos críticos de contratistas.
+
+### Solo Root
+
+- **Respaldos**: crear, validar, exportar y restaurar copias de la base de datos desde
+  la propia TUI. Además de los respaldos manuales, se genera uno automático por día a
+  partir de la 01:00 (hora Costa Rica); si falla, la app avisa en vez de descartarlo en
+  silencio.
+
+### Recuperación fuera de la TUI
+
+`control_acceso --reset-root` restablece la contraseña de un usuario ROOT sin
+necesidad de loguearse, para cuando la olvida y no hay otro Administrador/Root con
+sesión activa que se la pueda cambiar desde el menú de Usuarios. Pide confirmación
+explícita y genera un respaldo dedicado (tipo `PorFlag`, exento de la retención
+automática) antes de aplicar el cambio, para poder deshacerlo restaurándolo desde la
+pantalla de Respaldos.
+
+### Roles
+
+| | Operación diaria | Usuarios / Auditoría | Respaldos |
+|---|:---:|:---:|:---:|
+| Operador | Sí | No | No |
+| Administrador | Sí | Sí | No |
+| Root | Sí | Sí | Sí |
+
 ## Reglas principales
 
 | Tipo | PRAIND | Gafete |
