@@ -1,14 +1,14 @@
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Layout, Rect},
+    layout::{Constraint, Layout, Rect},
     text::Line,
     widgets::{Cell, Paragraph, Row, Table},
 };
 
 use super::*;
 use crate::tui::ui_kit::{
-    CommandHint, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, TextInput, Theme,
-    render_terminal_too_small,
+    CommandHint, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, TextInput, Theme, empty_state,
+    panel_vacio, render_terminal_too_small,
 };
 
 const ALTO_MINIMO: u16 = 20;
@@ -19,7 +19,7 @@ const COMANDOS_RESPALDOS: &[CommandHint<'static>] = &[
     CommandHint::new("V", "Revalidar"),
     CommandHint::new("E", "Exportar"),
     CommandHint::new("R", "Restaurar"),
-    CommandHint::new("A", "Actualizar"),
+    CommandHint::new("L", "Actualizar"),
     CommandHint::new("ESC", "Volver"),
 ];
 const COMANDOS_EXPORTAR: &[CommandHint<'static>] = &[
@@ -122,7 +122,7 @@ fn render_tabla(frame: &mut Frame, area: Rect, estado: &RespaldosState, theme: T
             .format("%d/%m/%Y %H:%M")
             .to_string();
         Row::new([
-            Cell::from(fecha),
+            Cell::from(format!("{} {fecha}", if seleccionada { ">" } else { " " })),
             Cell::from(etiqueta_tipo(fila.resumen.tipo)),
             Cell::from(tamano_legible(fila.resumen.tamano_bytes)),
             Cell::from(etiqueta_esquema(fila.validacion.as_ref())),
@@ -150,21 +150,18 @@ fn render_tabla(frame: &mut Frame, area: Rect, estado: &RespaldosState, theme: T
         area,
     );
     if estado.filas.is_empty() {
-        frame.render_widget(
-            Paragraph::new("No hay respaldos todavía. Presione C para crear uno.")
-                .style(theme.warning())
-                .alignment(Alignment::Center),
-            Rect::new(area.x, area.y + area.height / 2, area.width, 1),
+        empty_state(
+            frame,
+            area,
+            "No hay respaldos todavía. Presione C para crear uno.",
+            theme,
         );
     }
 }
 
 fn render_detalle(frame: &mut Frame, area: Rect, estado: &RespaldosState, theme: Theme) {
     let Some(fila) = estado.seleccionada() else {
-        frame.render_widget(
-            Paragraph::new("No hay un respaldo seleccionado.").style(theme.muted()),
-            area,
-        );
+        panel_vacio(frame, area, "No hay un respaldo seleccionado.", theme);
         return;
     };
     let lineas = vec![

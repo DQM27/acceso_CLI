@@ -25,6 +25,23 @@ fn esc_en_respaldos_vuelve_directamente_al_menu_principal() {
     );
 }
 
+/// `A` ya significa "Activar/Desactivar" en Empresas y Usuarios — Respaldos
+/// usa `L` (Listar) para recargar en vez de reutilizar la misma letra con
+/// un significado distinto entre pantallas.
+#[test]
+fn l_recarga_el_listado_de_respaldos() {
+    let mut estado = ConfiguracionState::default();
+
+    assert_eq!(
+        estado.handle_key(tecla(KeyCode::Char('l'))),
+        AccionAjustes::Respaldos(AccionRespaldos::Cargar)
+    );
+    assert_eq!(
+        estado.handle_key(tecla(KeyCode::Char('a'))),
+        AccionAjustes::Respaldos(AccionRespaldos::Ninguna)
+    );
+}
+
 #[test]
 fn crear_y_revalidar_disparan_las_acciones_correctas_solo_con_seleccion() {
     let mut estado = ConfiguracionState::default();

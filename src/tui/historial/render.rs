@@ -5,13 +5,14 @@ use crate::{
     tiempo::{a_costa_rica, hora_actual_texto},
     tui::ui_kit::{
         CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme,
-        auxiliary_panel, centered_rect, detail_line, identidad_sesion, master_detail_areas,
-        posicionar_cursor_campo, render_form_field, render_separator, render_terminal_too_small,
+        auxiliary_panel, centered_rect, detail_line, empty_state, identidad_sesion,
+        master_detail_areas, panel_vacio, posicionar_cursor_campo, render_form_field,
+        render_separator, render_terminal_too_small,
     },
 };
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Layout, Rect},
+    layout::{Constraint, Layout, Rect},
     style::Modifier,
     text::{Line, Span},
     widgets::{Cell, Clear, Paragraph, Row, Table},
@@ -177,20 +178,17 @@ fn render_vista_timeline(frame: &mut Frame, area: Rect, state: &HistorialState, 
     render_timeline(frame, area_timeline, state, theme);
     match state.seleccionado() {
         Some(r) => render_detalle(frame, area_panel, r, theme),
-        None => frame.render_widget(
-            Paragraph::new("No hay un registro seleccionado.").style(theme.muted()),
-            area_panel,
-        ),
+        None => panel_vacio(frame, area_panel, "No hay un registro seleccionado.", theme),
     }
 }
 
 fn render_timeline(frame: &mut Frame, area: Rect, state: &HistorialState, theme: Theme) {
     if state.registros.is_empty() {
-        frame.render_widget(
-            Paragraph::new("Sin registros para los filtros seleccionados")
-                .style(theme.warning())
-                .alignment(Alignment::Center),
-            Rect::new(area.x, area.y + area.height / 2, area.width, 1),
+        empty_state(
+            frame,
+            area,
+            "Sin registros para los filtros seleccionados",
+            theme,
         );
         return;
     }
@@ -362,11 +360,11 @@ fn render_detalle(frame: &mut Frame, area: Rect, r: &MovimientoIngresoResumen, t
 /// para quien prefiera el formato de planilla.
 fn render_tabla_clasica(frame: &mut Frame, area: Rect, state: &HistorialState, theme: Theme) {
     if state.registros.is_empty() {
-        frame.render_widget(
-            Paragraph::new("Sin registros para los filtros seleccionados")
-                .style(theme.warning())
-                .alignment(Alignment::Center),
-            Rect::new(area.x, area.y + area.height / 2, area.width, 1),
+        empty_state(
+            frame,
+            area,
+            "Sin registros para los filtros seleccionados",
+            theme,
         );
         return;
     }

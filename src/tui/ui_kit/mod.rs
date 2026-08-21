@@ -18,7 +18,9 @@ mod theme;
 pub use crate::texto::plegar_diacriticos;
 pub use debounce::Debounce;
 pub use details::detail_line;
-pub use fields::{ChoiceFieldOptions, render_choice_field, render_form_field};
+pub use fields::{
+    ChoiceFieldOptions, empty_state, panel_vacio, render_choice_field, render_form_field,
+};
 pub use keyboard::{
     CANCEL_HINT, EMERGENCY_EXIT_HINT, HELP_HINT, HELP_KEY, QUICK_EXIT_HINT, QUICK_EXIT_KEY,
     StandardCommand, THEME_HINT, THEME_KEY, standard_command,
@@ -33,7 +35,7 @@ pub use query_lang::{
 pub use seleccion::mover_seleccion;
 pub use shell::{
     CommandHint, ScreenShell, ShellAreas, StatusKind, auxiliary_panel, centered_content,
-    centered_rect, identidad_sesion, panel, render_terminal_too_small,
+    centered_rect, clasificar_mensaje, identidad_sesion, panel, render_terminal_too_small,
 };
 pub use text_input::{TextInput, TextInputFocus, posicionar_cursor, posicionar_cursor_campo};
 pub use theme::{Theme, ThemePreset};

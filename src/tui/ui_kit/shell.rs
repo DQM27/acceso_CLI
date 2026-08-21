@@ -30,6 +30,20 @@ pub enum StatusKind {
     Error,
 }
 
+/// Clasifica un mensaje de estado por su prefijo convencional (`✓` éxito,
+/// cualquier otra cosa error) — mismo patrón que varias pantallas repetían
+/// para decidir el color del mensaje mostrado en la barra de estado. No
+/// cubre pantallas con más de dos categorías (p. ej. Historial, que además
+/// distingue "Exportando…" como advertencia) — esas se quedan con su propia
+/// clasificación.
+pub fn clasificar_mensaje(mensaje: &str) -> StatusKind {
+    if mensaje.starts_with('✓') {
+        StatusKind::Success
+    } else {
+        StatusKind::Error
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CommandHint<'a> {
     pub key: &'a str,

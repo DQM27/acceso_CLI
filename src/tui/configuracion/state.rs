@@ -128,7 +128,7 @@ impl RespaldosState {
     fn normal(&mut self, key: KeyEvent) -> AccionRespaldos {
         if matches!(
             key.code,
-            KeyCode::Char('c' | 'C' | 'a' | 'A' | 'v' | 'V' | 'e' | 'E' | 'r' | 'R') | KeyCode::Esc
+            KeyCode::Char('c' | 'C' | 'l' | 'L' | 'v' | 'V' | 'e' | 'E' | 'r' | 'R') | KeyCode::Esc
         ) {
             self.mensaje = None;
         }
@@ -142,7 +142,10 @@ impl RespaldosState {
                 AccionRespaldos::Ninguna
             }
             KeyCode::Char('c' | 'C') => AccionRespaldos::Crear,
-            KeyCode::Char('a' | 'A') => AccionRespaldos::Cargar,
+            // `A` está reservado en el resto de la app para "Activar/
+            // Desactivar" (Empresas, Usuarios) — usar `L` (Listar) aquí en
+            // vez de reutilizar la misma letra con un significado distinto.
+            KeyCode::Char('l' | 'L') => AccionRespaldos::Cargar,
             KeyCode::Char('v' | 'V') => self
                 .ruta_seleccionada()
                 .map_or(AccionRespaldos::Ninguna, |ruta| {

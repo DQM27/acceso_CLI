@@ -6,13 +6,14 @@ use crate::{
     tiempo::{a_costa_rica, hora_actual_texto},
     tui::ui_kit::{
         CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme,
-        detail_line, identidad_sesion, master_detail_areas, posicionar_cursor_campo,
-        render_form_field, render_separator, render_terminal_too_small,
+        clasificar_mensaje, detail_line, empty_state, identidad_sesion, master_detail_areas,
+        panel_vacio, posicionar_cursor_campo, render_form_field, render_separator,
+        render_terminal_too_small,
     },
 };
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Layout, Rect},
+    layout::{Constraint, Layout, Rect},
     text::Line,
     widgets::{Cell, Paragraph, Row, Table},
 };
@@ -111,12 +112,7 @@ fn estado_shell(state: &ActivosState) -> (String, StatusKind) {
         }
         _ => {
             if let Some(mensaje) = &state.mensaje {
-                let tipo = if mensaje.starts_with('✓') {
-                    StatusKind::Success
-                } else {
-                    StatusKind::Error
-                };
-                return (mensaje.clone(), tipo);
+                return (mensaje.clone(), clasificar_mensaje(mensaje));
             }
             (String::new(), StatusKind::Normal)
         }
@@ -210,11 +206,11 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Them
         area,
     );
     if state.registros.is_empty() {
-        frame.render_widget(
-            Paragraph::new("No hay ingresos activos que coincidan con la búsqueda.")
-                .style(theme.warning())
-                .alignment(Alignment::Center),
-            Rect::new(area.x, area.y + area.height / 2, area.width, 1),
+        empty_state(
+            frame,
+            area,
+            "No hay ingresos activos que coincidan con la búsqueda.",
+            theme,
         );
     }
 }
@@ -259,10 +255,7 @@ fn render_panel(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Them
         }
         ModoActivos::Normal | ModoActivos::Busqueda { .. } => match state.seleccionado() {
             Some(registro) => render_detalle(frame, area, registro, theme),
-            None => frame.render_widget(
-                Paragraph::new("No hay un registro seleccionado.").style(theme.muted()),
-                area,
-            ),
+            None => panel_vacio(frame, area, "No hay un registro seleccionado.", theme),
         },
     }
 }

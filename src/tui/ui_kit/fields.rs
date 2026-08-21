@@ -1,11 +1,29 @@
 use ratatui::{
     Frame,
-    layout::Rect,
+    layout::{Alignment, Rect},
     text::{Line, Span},
     widgets::Paragraph,
 };
 
 use super::Theme;
+
+/// Mensaje de "sin resultados" centrado a media altura de `area` — mismo
+/// patrón repetido en cada pantalla con lista: una línea de advertencia sin
+/// caja ni layout propio.
+pub fn empty_state(frame: &mut Frame, area: Rect, texto: &str, theme: Theme) {
+    frame.render_widget(
+        Paragraph::new(texto)
+            .style(theme.warning())
+            .alignment(Alignment::Center),
+        Rect::new(area.x, area.y + area.height / 2, area.width, 1),
+    );
+}
+
+/// Mensaje de "nada seleccionado" para un panel de detalle vacío — mismo
+/// patrón repetido en cada pantalla con maestro-detalle.
+pub fn panel_vacio(frame: &mut Frame, area: Rect, texto: &str, theme: Theme) {
+    frame.render_widget(Paragraph::new(texto).style(theme.muted()), area);
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChoiceFieldOptions {

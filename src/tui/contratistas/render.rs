@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Layout, Rect},
+    layout::{Constraint, Layout, Rect},
     style::Style,
     text::Line,
     widgets::{Cell, Paragraph, Row, Table},
@@ -15,8 +15,9 @@ use crate::{
     tiempo::hora_actual_texto,
     tui::ui_kit::{
         ChoiceFieldOptions, CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell,
-        StatusKind, Theme, detail_line, identidad_sesion, master_detail_areas,
-        posicionar_cursor_campo, render_choice_field, render_separator, render_terminal_too_small,
+        StatusKind, Theme, clasificar_mensaje, detail_line, empty_state, identidad_sesion,
+        master_detail_areas, panel_vacio, posicionar_cursor_campo, render_choice_field,
+        render_separator, render_terminal_too_small,
     },
 };
 
@@ -118,12 +119,7 @@ fn estado_shell(state: &ContratistasState) -> (String, StatusKind) {
         return (format!("✕ {error}"), StatusKind::Error);
     }
     if let Some(mensaje) = &state.mensaje {
-        let tipo = if mensaje.starts_with('✓') {
-            StatusKind::Success
-        } else {
-            StatusKind::Error
-        };
-        return (mensaje.clone(), tipo);
+        return (mensaje.clone(), clasificar_mensaje(mensaje));
     }
     (String::new(), StatusKind::Normal)
 }
@@ -256,7 +252,7 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ContratistasState, theme:
                 theme.base()
             };
             let celdas = columnas.iter().enumerate().map(|(indice, col)| {
-                let valor = valor(c, *col);
+                let valor = valor(c, *col, state.hoy);
                 let valor = if indice == 0 {
                     format!("{} {valor}", if seleccionado { ">" } else { " " })
                 } else {
@@ -283,32 +279,41 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ContratistasState, theme:
         area,
     );
     if state.registros.is_empty() {
-        frame.render_widget(
-            Paragraph::new(if state.filtro.is_empty() {
+        empty_state(
+            frame,
+            area,
+            if state.filtro.is_empty() {
                 "Sin contratistas registrados"
             } else {
                 "No hay contratistas que coincidan con la búsqueda."
-            })
-            .style(theme.warning())
-            .alignment(Alignment::Center),
-            Rect::new(area.x, area.y + area.height / 2, area.width, 1),
+            },
+            theme,
         );
     }
 }
 
-fn valor(c: &ContratistaResumen, col: Columna) -> String {
+fn valor(c: &ContratistaResumen, col: Columna, hoy: NaiveDate) -> String {
     match col {
         Columna::Cedula => c.cedula.clone(),
         Columna::Nombre => c.nombre.clone(),
         Columna::Empresa => c.empresa_nombre.clone(),
         Columna::Tipo => texto_tipo(c.tipo_ingreso).into(),
-        Columna::Praind => c
-            .fecha_vencimiento_praind
-            .map(|f| f.format("%d/%m/%Y").to_string())
-            .unwrap_or_else(|| "--".into()),
+        Columna::Praind => match c.fecha_vencimiento_praind {
+            // El color ya distingue vencido/próximo/vigente (`estilo_fecha`),
+            // pero no debe ser la única señal — `!` acompaña la fecha para
+            // que también se note sin depender del color.
+            Some(f) if venciendo(f, hoy) => format!("! {}", f.format("%d/%m/%Y")),
+            Some(f) => f.format("%d/%m/%Y").to_string(),
+            None => "--".into(),
+        },
         Columna::Ruta => si_no(c.es_personal_ruta).into(),
         Columna::Acceso => si_no(c.tiene_acceso).into(),
     }
+}
+
+/// Vencido o a 30 días o menos de vencer — mismo umbral que `estilo_fecha`.
+fn venciendo(fecha: NaiveDate, hoy: NaiveDate) -> bool {
+    (fecha - hoy).num_days() <= 30
 }
 
 fn si_no(v: bool) -> &'static str {
@@ -349,10 +354,7 @@ fn render_panel(frame: &mut Frame, area: Rect, state: &ContratistasState, theme:
         ModoContratistas::Normal | ModoContratistas::Busqueda { .. } => {
             match state.seleccionado() {
                 Some(c) => render_detalle(frame, area, c, theme),
-                None => frame.render_widget(
-                    Paragraph::new("No hay un registro seleccionado.").style(theme.muted()),
-                    area,
-                ),
+                None => panel_vacio(frame, area, "No hay un registro seleccionado.", theme),
             }
         }
     }
@@ -590,4 +592,41 @@ fn render_columnas(
         })
         .collect();
     frame.render_widget(Paragraph::new(lineas), area);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn contratista(fecha_vencimiento_praind: Option<NaiveDate>) -> ContratistaResumen {
+        ContratistaResumen {
+            id: 1,
+            empresa_id: 1,
+            cedula: "1-1111-1111".into(),
+            nombre: "Ana Solano".into(),
+            empresa_nombre: "Brisas".into(),
+            tipo_ingreso: TipoIngreso::Praind,
+            fecha_vencimiento_praind,
+            es_personal_ruta: false,
+            tiene_acceso: true,
+            tiene_ingreso_activo: false,
+        }
+    }
+
+    /// El color ya distingue vencido/próximo/vigente (`estilo_fecha`), pero
+    /// no debe ser la única señal — la fecha lleva un `!` cuando está
+    /// vencida o vence en 30 días o menos.
+    #[test]
+    fn marca_con_admiracion_el_praind_vencido_o_por_vencer() {
+        let hoy = NaiveDate::from_ymd_opt(2026, 6, 15).unwrap();
+        let vencido = contratista(Some(NaiveDate::from_ymd_opt(2026, 6, 1).unwrap()));
+        let por_vencer = contratista(Some(NaiveDate::from_ymd_opt(2026, 7, 1).unwrap()));
+        let vigente = contratista(Some(NaiveDate::from_ymd_opt(2026, 12, 1).unwrap()));
+        let sin_fecha = contratista(None);
+
+        assert!(valor(&vencido, Columna::Praind, hoy).starts_with('!'));
+        assert!(valor(&por_vencer, Columna::Praind, hoy).starts_with('!'));
+        assert!(!valor(&vigente, Columna::Praind, hoy).starts_with('!'));
+        assert_eq!(valor(&sin_fecha, Columna::Praind, hoy), "--");
+    }
 }

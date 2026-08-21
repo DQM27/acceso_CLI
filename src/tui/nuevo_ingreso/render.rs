@@ -5,14 +5,14 @@ use crate::{
     tiempo::hora_actual_texto,
     tui::ui_kit::{
         ChoiceFieldOptions, CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell,
-        StatusKind, Theme, identidad_sesion, master_detail_areas, posicionar_cursor,
+        StatusKind, Theme, empty_state, identidad_sesion, master_detail_areas, posicionar_cursor,
         posicionar_cursor_campo, render_choice_field, render_form_field, render_separator,
         render_terminal_too_small,
     },
 };
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Layout, Rect},
+    layout::{Constraint, Layout, Rect},
     text::Line,
     widgets::{Cell, Paragraph, Row, Table},
 };
@@ -226,15 +226,15 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme:
         area,
     );
     if state.contratistas.is_empty() {
-        frame.render_widget(
-            Paragraph::new(if state.filtro.is_empty() {
+        empty_state(
+            frame,
+            area,
+            if state.filtro.is_empty() {
                 "Presione / para buscar un contratista."
             } else {
                 "Sin resultados para la búsqueda."
-            })
-            .style(theme.warning())
-            .alignment(Alignment::Center),
-            Rect::new(area.x, area.y + area.height / 2, area.width, 1),
+            },
+            theme,
         );
     }
 }

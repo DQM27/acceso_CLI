@@ -1,6 +1,6 @@
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Layout, Rect},
+    layout::{Constraint, Layout, Rect},
     text::Line,
     widgets::{Cell, Paragraph, Row, Table},
 };
@@ -13,9 +13,9 @@ use crate::{
     tiempo::hora_actual_texto,
     tui::ui_kit::{
         ChoiceFieldOptions, CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell,
-        StatusKind, Theme, detail_line, identidad_sesion, master_detail_areas, posicionar_cursor,
-        posicionar_cursor_campo, render_choice_field, render_form_field, render_separator,
-        render_terminal_too_small,
+        StatusKind, Theme, clasificar_mensaje, detail_line, empty_state, identidad_sesion,
+        master_detail_areas, panel_vacio, posicionar_cursor, posicionar_cursor_campo,
+        render_choice_field, render_form_field, render_separator, render_terminal_too_small,
     },
 };
 
@@ -140,12 +140,7 @@ fn estado_shell(state: &UsuariosState) -> (String, StatusKind) {
         return (format!("✕ {error}"), StatusKind::Error);
     }
     if let Some(mensaje) = &state.mensaje {
-        let tipo = if mensaje.starts_with('✓') {
-            StatusKind::Success
-        } else {
-            StatusKind::Error
-        };
-        return (mensaje.clone(), tipo);
+        return (mensaje.clone(), clasificar_mensaje(mensaje));
     }
     (String::new(), StatusKind::Normal)
 }
@@ -276,11 +271,11 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: The
         area,
     );
     if state.usuarios.is_empty() {
-        frame.render_widget(
-            Paragraph::new("No hay usuarios que coincidan con la búsqueda.")
-                .style(theme.warning())
-                .alignment(Alignment::Center),
-            Rect::new(area.x, area.y + area.height / 2, area.width, 1),
+        empty_state(
+            frame,
+            area,
+            "No hay usuarios que coincidan con la búsqueda.",
+            theme,
         );
     }
 }
@@ -298,10 +293,7 @@ fn render_panel(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: The
         ModoUsuarios::CambioPassword(f) => render_password(frame, area, f, theme),
         ModoUsuarios::Normal | ModoUsuarios::Busqueda { .. } => match state.seleccionado() {
             Some(u) => render_detalle(frame, area, u, theme),
-            None => frame.render_widget(
-                Paragraph::new("No hay un registro seleccionado.").style(theme.muted()),
-                area,
-            ),
+            None => panel_vacio(frame, area, "No hay un registro seleccionado.", theme),
         },
     }
 }
