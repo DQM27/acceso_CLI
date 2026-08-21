@@ -18,6 +18,8 @@ ratatui = { version = "0.30.2", default-features = false, features = ["crossterm
 crossterm = "0.29.0"
 tui-input = { version = "0.15.4", default-features = false, features = ["crossterm"] }
 query-parser = "0.2.0"
+rust_xlsxwriter = { version = "0.98.2", features = ["chrono", "constant_memory"] }
+tempfile = "3"
 
 [build-dependencies]
 winresource = "0.1"

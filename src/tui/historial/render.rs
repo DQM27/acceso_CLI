@@ -57,25 +57,47 @@ pub fn render(
 
     render_cuerpo(frame, areas.body, state, theme);
 
-    if let ModoHistorial::Columnas { seleccion } = state.modo {
-        render_columnas_editor(frame, area, state, seleccion, theme);
+    match &state.modo {
+        ModoHistorial::Columnas {
+            seleccion,
+            proposito,
+        } => render_columnas_editor(frame, area, state, *seleccion, *proposito, theme),
+        ModoHistorial::RutaExportacion { destino } => {
+            render_ruta_exportacion(frame, area, destino, theme)
+        }
+        ModoHistorial::Normal => {}
     }
 }
 
 fn comandos_para(state: &HistorialState) -> Vec<CommandHint<'static>> {
     let etiqueta_vista: &'static str = state.vista.next().label();
-    if let ModoHistorial::Columnas { .. } = state.modo {
-        return vec![
-            CommandHint::new("↑↓", "Mover"),
-            CommandHint::new("SPACE", "Mostrar/Ocultar"),
-            CommandHint::new("ESC/F4", "Cerrar"),
-        ];
+    match &state.modo {
+        ModoHistorial::Columnas { proposito, .. } => {
+            let ultimo = if *proposito == PropositoColumnas::Exportacion {
+                CommandHint::new("ENTER", "Continuar")
+            } else {
+                CommandHint::new("ESC/F4", "Cerrar")
+            };
+            return vec![
+                CommandHint::new("↑↓", "Mover"),
+                CommandHint::new("SPACE", "Mostrar/Ocultar"),
+                ultimo,
+            ];
+        }
+        ModoHistorial::RutaExportacion { .. } => {
+            return vec![
+                CommandHint::new("ENTER", "Exportar"),
+                CommandHint::new("ESC", "Cancelar"),
+            ];
+        }
+        ModoHistorial::Normal => {}
     }
     match state.vista {
         ViewMode::Timeline => vec![
             CommandHint::new("↑↓", "Mover"),
             CommandHint::new("PGUP/PGDN", "Página"),
             CommandHint::new("F3", etiqueta_vista),
+            CommandHint::new("F5", "Exportar"),
             CommandHint::new("ESC", "Volver"),
         ],
         ViewMode::Classic => vec![
@@ -83,13 +105,7 @@ fn comandos_para(state: &HistorialState) -> Vec<CommandHint<'static>> {
             CommandHint::new("PGUP/PGDN", "Página"),
             CommandHint::new("F3", etiqueta_vista),
             CommandHint::new("F4", "Columnas"),
-            CommandHint::new("ESC", "Volver"),
-        ],
-        ViewMode::Heatmap => vec![
-            CommandHint::new("↑↓", "Semana"),
-            CommandHint::new("TAB", "Día"),
-            CommandHint::new("ENTER", "Ver ese día"),
-            CommandHint::new("F3", etiqueta_vista),
+            CommandHint::new("F5", "Exportar"),
             CommandHint::new("ESC", "Volver"),
         ],
     }
@@ -97,7 +113,14 @@ fn comandos_para(state: &HistorialState) -> Vec<CommandHint<'static>> {
 
 fn estado_shell(state: &HistorialState) -> (String, StatusKind) {
     if let Some(m) = &state.mensaje {
-        return (m.clone(), StatusKind::Error);
+        let tipo = if m.starts_with('✓') {
+            StatusKind::Success
+        } else if m.contains("Exportando") {
+            StatusKind::Warning
+        } else {
+            StatusKind::Error
+        };
+        return (m.clone(), tipo);
     }
     (String::new(), StatusKind::Normal)
 }
@@ -163,24 +186,21 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &HistorialState, theme: T
         true,
         theme,
     );
-    if !matches!(state.vista, ViewMode::Heatmap) {
-        let antes_del_cursor: String = state
-            .busqueda
-            .value()
-            .chars()
-            .take(state.busqueda.cursor())
-            .collect();
-        let ancho_visible = Line::from(antes_del_cursor).width() as u16;
-        let x = area_busqueda
-            .x
-            .saturating_add(ancho_visible.min(area_busqueda.width));
-        frame.set_cursor_position((x, area_busqueda.y));
-    }
+    let antes_del_cursor: String = state
+        .busqueda
+        .value()
+        .chars()
+        .take(state.busqueda.cursor())
+        .collect();
+    let ancho_visible = Line::from(antes_del_cursor).width() as u16;
+    let x = area_busqueda
+        .x
+        .saturating_add(ancho_visible.min(area_busqueda.width));
+    frame.set_cursor_position((x, area_busqueda.y));
 
     match state.vista {
         ViewMode::Timeline => render_vista_timeline(frame, filas[1], state, theme),
         ViewMode::Classic => render_tabla_clasica(frame, filas[1], state, theme),
-        ViewMode::Heatmap => render_mapa_calor(frame, filas[1], state, theme),
     }
 }
 
@@ -199,9 +219,7 @@ fn render_vista_timeline(frame: &mut Frame, area: Rect, state: &HistorialState, 
     }
 }
 
-/// El campo de búsqueda está siempre activo: no hay otro modo que le
-/// dispute el teclado (salvo el mapa de calor, que no tiene texto libre),
-/// así que se dibuja siempre en estado activo.
+/// El campo de búsqueda está siempre activo en las dos vistas de Historial.
 fn render_campo(
     frame: &mut Frame,
     area: Rect,
@@ -399,7 +417,7 @@ fn render_tabla_clasica(frame: &mut Frame, area: Rect, state: &HistorialState, t
         );
         return;
     }
-    let columnas_visibles: Vec<ClassicColumn> = state
+    let columnas_visibles: Vec<ColumnaHistorial> = state
         .columnas_clasica
         .iter()
         .filter(|(_, visible)| *visible)
@@ -445,28 +463,28 @@ fn render_tabla_clasica(frame: &mut Frame, area: Rect, state: &HistorialState, t
     );
 }
 
-fn valor_columna_clasica(r: &MovimientoIngresoResumen, c: ClassicColumn) -> String {
+fn valor_columna_clasica(r: &MovimientoIngresoResumen, c: ColumnaHistorial) -> String {
     match c {
-        ClassicColumn::Fecha => a_costa_rica(r.fecha_hora_ingreso)
+        ColumnaHistorial::Fecha => a_costa_rica(r.fecha_hora_ingreso)
             .format("%d/%m/%Y")
             .to_string(),
-        ClassicColumn::Cedula => r.cedula.clone(),
-        ClassicColumn::Nombre => r.contratista_nombre.clone(),
-        ClassicColumn::Empresa => r.empresa_nombre.clone(),
-        ClassicColumn::Tipo => tipo_texto(r.tipo_ingreso).into(),
-        ClassicColumn::Entrada => a_costa_rica(r.fecha_hora_ingreso)
+        ColumnaHistorial::Cedula => r.cedula.clone(),
+        ColumnaHistorial::Nombre => r.contratista_nombre.clone(),
+        ColumnaHistorial::Empresa => r.empresa_nombre.clone(),
+        ColumnaHistorial::Tipo => tipo_texto(r.tipo_ingreso).into(),
+        ColumnaHistorial::Entrada => a_costa_rica(r.fecha_hora_ingreso)
             .format("%H:%M")
             .to_string(),
-        ClassicColumn::Salida => r.fecha_hora_salida.map_or_else(
+        ColumnaHistorial::Salida => r.fecha_hora_salida.map_or_else(
             || "Activo".into(),
             |f| a_costa_rica(f).format("%H:%M").to_string(),
         ),
-        ClassicColumn::Gafete => r
+        ColumnaHistorial::Gafete => r
             .gafete_numero
             .map_or_else(|| "S/G".into(), |g| g.to_string()),
-        ClassicColumn::Medio => texto_medio(r.medio_ingreso).into(),
-        ClassicColumn::Ingreso => r.usuario_ingreso_nombre.clone(),
-        ClassicColumn::Egreso => r
+        ColumnaHistorial::Medio => texto_medio(r.medio_ingreso).into(),
+        ColumnaHistorial::Ingreso => r.usuario_ingreso_nombre.clone(),
+        ColumnaHistorial::Egreso => r
             .usuario_salida_nombre
             .clone()
             .unwrap_or_else(|| "—".into()),
@@ -478,16 +496,22 @@ fn render_columnas_editor(
     area: Rect,
     state: &HistorialState,
     seleccion: usize,
+    proposito: PropositoColumnas,
     theme: Theme,
 ) {
     let franja_superior = Rect::new(area.x, area.y, area.width, area.height.min(20));
     let popup = centered_rect(
         franja_superior,
         44.min(area.width),
-        (ClassicColumn::ALL.len() as u16 + 4).min(franja_superior.height),
+        (ColumnaHistorial::ALL.len() as u16 + 4).min(franja_superior.height),
     );
     frame.render_widget(Clear, popup);
-    let block = auxiliary_panel("COLUMNAS VISIBLES", theme, true);
+    let titulo = if proposito == PropositoColumnas::Exportacion {
+        "COLUMNAS PARA EXPORTAR"
+    } else {
+        "COLUMNAS VISIBLES"
+    };
+    let block = auxiliary_panel(titulo, theme, true);
     let interior = block.inner(popup);
     frame.render_widget(block, popup);
     if interior.height == 0 {
@@ -510,91 +534,38 @@ fn render_columnas_editor(
         })
         .collect();
     frame.render_widget(Paragraph::new(lineas), filas[0]);
-    frame.render_widget(
-        Line::from("↑↓ mover · ESPACIO mostrar/ocultar · F4/ESC cerrar").style(theme.muted()),
-        filas[1],
-    );
+    let ayuda = if proposito == PropositoColumnas::Exportacion {
+        "↑↓ mover · ESPACIO incluir/omitir · ENTER continuar · ESC cancelar"
+    } else {
+        "↑↓ mover · ESPACIO mostrar/ocultar · F4/ESC cerrar"
+    };
+    frame.render_widget(Line::from(ayuda).style(theme.muted()), filas[1]);
 }
 
-/// Grilla semanal estilo "contribuciones de GitHub": responde "¿cuándo hubo
-/// más actividad?", algo que el timeline y la vista clásica no contestan de
-/// un vistazo porque ambas están pensadas para navegar registros uno por
-/// uno, no para ver el patrón completo.
-fn render_mapa_calor(frame: &mut Frame, area: Rect, state: &HistorialState, theme: Theme) {
-    let conteo = state.conteo_por_dia();
-    if conteo.is_empty() {
-        frame.render_widget(
-            Paragraph::new("Sin registros para los filtros seleccionados")
-                .style(theme.warning())
-                .alignment(Alignment::Center),
-            Rect::new(area.x, area.y + area.height / 2, area.width, 1),
-        );
+fn render_ruta_exportacion(frame: &mut Frame, area: Rect, destino: &TextInput, theme: Theme) {
+    let popup = centered_rect(area, area.width.min(100), 7.min(area.height));
+    frame.render_widget(Clear, popup);
+    let block = auxiliary_panel("EXPORTAR HISTORIAL", theme, true);
+    let interior = block.inner(popup);
+    frame.render_widget(block, popup);
+    if interior.height < 4 {
         return;
     }
-
-    let maximo = *conteo.values().max().unwrap_or(&1);
-    let fecha_min = *conteo.keys().min().expect("conteo no está vacío");
-    let fecha_max = *conteo.keys().max().expect("conteo no está vacío");
-    let seleccion = state.heatmap_seleccion.clamp(fecha_min, fecha_max);
-
-    let mut lineas: Vec<Line<'static>> = vec![
-        Line::from("            L  M  M  J  V  S  D")
-            .style(theme.muted().add_modifier(Modifier::BOLD)),
-    ];
-    let mut inicio_semana = start_of_week(fecha_min);
-    let fin_grilla = end_of_week(fecha_max);
-    while inicio_semana <= fin_grilla {
-        let mut spans = vec![Span::styled(
-            format!("{}  ", inicio_semana.format("%d/%m")),
-            theme.muted(),
-        )];
-        for offset in 0..7 {
-            let dia = inicio_semana + Duration::days(offset);
-            let en_rango = dia >= fecha_min && dia <= fecha_max;
-            let cantidad = conteo.get(&dia).copied().unwrap_or(0);
-            let seleccionado = dia == seleccion;
-            let glifo = bucket_glyph(cantidad, maximo);
-            let estilo = if !en_rango {
-                theme.muted()
-            } else if seleccionado {
-                theme.selected()
-            } else if cantidad == 0 {
-                theme.muted()
-            } else {
-                let ratio = cantidad as f64 / maximo.max(1) as f64;
-                if ratio >= 0.99 {
-                    theme.warning()
-                } else if ratio >= 0.66 {
-                    theme.accent()
-                } else if ratio >= 0.33 {
-                    theme.base()
-                } else {
-                    theme.muted()
-                }
-            };
-            let texto = if seleccionado {
-                format!("[{glifo}]")
-            } else {
-                format!(" {glifo} ")
-            };
-            spans.push(Span::styled(texto, estilo));
-        }
-        lineas.push(Line::from(spans));
-        inicio_semana += Duration::days(7);
-    }
-
-    lineas.push(Line::from(""));
-    let cantidad_seleccion = conteo.get(&seleccion).copied().unwrap_or(0);
-    lineas.push(
-        Line::from(format!(
-            "{} · {cantidad_seleccion} movimientos · ENTER ver en Línea de tiempo",
-            seleccion.format("%d/%m/%Y")
-        ))
-        .style(theme.accent()),
+    let filas = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(3),
+        Constraint::Length(1),
+    ])
+    .split(interior);
+    frame.render_widget(
+        Paragraph::new("Confirme o edite la ruta del archivo XLSX:").style(theme.base()),
+        filas[0],
     );
-    lineas.push(Line::from("█ mucho   ▓ ▒ ░ menos   · sin datos").style(theme.muted()));
-
-    frame.render_widget(Paragraph::new(lineas), area);
+    destino.render(frame, filas[1], "DESTINO", "historial.xlsx", true, theme);
+    frame.render_widget(
+        Line::from("ENTER exportar · ESC cancelar").style(theme.muted()),
+        filas[2],
+    );
 }
 
 fn texto_medio(m: crate::models::medio_ingreso::MedioIngreso) -> &'static str {

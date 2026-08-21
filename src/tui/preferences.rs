@@ -42,7 +42,7 @@ impl UiPreferences {
                 "contratistas_columns" => {
                     preferences.contratistas_columns = value.trim().to_owned()
                 }
-                "historial_view" if matches!(value.trim(), "timeline" | "classic" | "heatmap") => {
+                "historial_view" if matches!(value.trim(), "timeline" | "classic") => {
                     preferences.historial_view = value.trim().to_owned()
                 }
                 "historial_columns" => preferences.historial_columns = value.trim().to_owned(),
@@ -147,5 +147,11 @@ mod tests {
     fn archivo_invalido_cae_a_valores_seguros() {
         let parsed = UiPreferences::parse("theme=desconocido\nhistorial_view=otra\n");
         assert_eq!(parsed, UiPreferences::default());
+    }
+
+    #[test]
+    fn preferencia_antigua_de_heatmap_migra_a_timeline() {
+        let parsed = UiPreferences::parse("historial_view=heatmap\n");
+        assert_eq!(parsed.historial_view, "timeline");
     }
 }

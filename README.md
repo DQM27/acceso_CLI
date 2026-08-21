@@ -50,6 +50,12 @@ El historial devuelve el total y las filas de cada página dentro de la misma le
 SQLite. La primera página fija además un corte por ID que se conserva durante la
 navegación, para que los movimientos nuevos no desplacen ni dupliquen filas.
 
+Historial alterna con `F3` entre Línea de tiempo y la tabla Clásica. `F5` abre la
+selección de columnas y luego solicita la ruta para exportar todos los movimientos del
+filtro vigente a un archivo `.xlsx`; la paginación visible no recorta la exportación. El
+archivo se publica sólo después de generarse por completo y nunca reemplaza otro archivo
+existente silenciosamente.
+
 La creación del ROOT inicial y la protección del último ROOT activo se ejecutan mediante
 transacciones SQLite `IMMEDIATE`, de modo que la lectura de la condición y su escritura
 son una sola operación atómica incluso con varios escritores.

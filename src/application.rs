@@ -25,6 +25,9 @@ use crate::database::repositories::usuario_repository::{
 };
 use crate::database::schema::SchemaError;
 use crate::domain::autorizacion::{Operacion, puede_cambiar_password, puede_gestionar_usuario};
+use crate::exportacion_historial::{
+    ColumnaHistorial, FormatosHistorial, escribir_movimiento, preparar_hoja,
+};
 use crate::models::usuario::{RolUsuario, Usuario};
 use crate::services::autenticacion_service::{
     AutenticacionService, CandidatoAutenticacion, UsuarioSesion,
@@ -71,6 +74,75 @@ impl std::error::Error for BootstrapError {
 impl From<SchemaError> for BootstrapError {
     fn from(error: SchemaError) -> Self {
         Self::Database(error)
+    }
+}
+
+#[derive(Debug)]
+pub enum ExportarHistorialError {
+    SinColumnas,
+    DestinoExiste(PathBuf),
+    DirectorioNoExiste(PathBuf),
+    DemasiadasFilas(usize),
+    Consulta(RegistroIngresoServiceError),
+    Xlsx(rust_xlsxwriter::XlsxError),
+    Io(std::io::Error),
+}
+
+impl std::fmt::Display for ExportarHistorialError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SinColumnas => write!(formatter, "Seleccione al menos una columna"),
+            Self::DestinoExiste(ruta) => write!(
+                formatter,
+                "El archivo ya existe; elija otro nombre: {}",
+                ruta.display()
+            ),
+            Self::DirectorioNoExiste(ruta) => {
+                write!(
+                    formatter,
+                    "La carpeta destino no existe: {}",
+                    ruta.display()
+                )
+            }
+            Self::DemasiadasFilas(total) => write!(
+                formatter,
+                "La exportación tiene {total} filas y supera el límite de una hoja de Excel"
+            ),
+            Self::Consulta(error) => {
+                write!(formatter, "No se pudo consultar el historial: {error}")
+            }
+            Self::Xlsx(error) => write!(formatter, "No se pudo crear el archivo XLSX: {error}"),
+            Self::Io(error) => write!(formatter, "No se pudo guardar la exportación: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for ExportarHistorialError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Consulta(error) => Some(error),
+            Self::Xlsx(error) => Some(error),
+            Self::Io(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
+impl From<RegistroIngresoServiceError> for ExportarHistorialError {
+    fn from(error: RegistroIngresoServiceError) -> Self {
+        Self::Consulta(error)
+    }
+}
+
+impl From<rust_xlsxwriter::XlsxError> for ExportarHistorialError {
+    fn from(error: rust_xlsxwriter::XlsxError) -> Self {
+        Self::Xlsx(error)
+    }
+}
+
+impl From<std::io::Error> for ExportarHistorialError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error)
     }
 }
 
@@ -347,6 +419,92 @@ impl AppCore {
     ) -> Result<PaginaHistorial, RegistroIngresoServiceError> {
         RegistroIngresoConsultaService::new(&SqliteIngresosQuery::new(&self.connection))
             .buscar_historial(filtro)
+    }
+
+    /// Exporta todo el conjunto filtrado que representa la pantalla, no sólo
+    /// su página actual. Se conserva `corte_id`, por lo que ingresos creados
+    /// después de cargar Historial no aparecen inesperadamente en el XLSX.
+    pub fn exportar_historial(
+        &self,
+        filtro: &FiltroHistorial,
+        columnas: &[ColumnaHistorial],
+        destino: &Path,
+    ) -> Result<usize, ExportarHistorialError> {
+        const MAX_FILAS_DATOS_XLSX: usize = 1_048_575;
+
+        if columnas.is_empty() {
+            return Err(ExportarHistorialError::SinColumnas);
+        }
+        if destino.exists() {
+            return Err(ExportarHistorialError::DestinoExiste(destino.to_owned()));
+        }
+        let directorio = destino
+            .parent()
+            .filter(|ruta| !ruta.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+        if !directorio.is_dir() {
+            return Err(ExportarHistorialError::DirectorioNoExiste(
+                directorio.to_owned(),
+            ));
+        }
+
+        let mut libro = rust_xlsxwriter::Workbook::new();
+        let mut exportados = 0usize;
+        {
+            let hoja = libro.add_worksheet_with_constant_memory();
+            preparar_hoja(hoja, columnas)?;
+            let formatos = FormatosHistorial::default();
+
+            let mut consulta = filtro.clone();
+            consulta.offset = 0;
+            // La consulta limita internamente cada página a 200 filas. El
+            // exportador las consume por lotes para no retener todo en RAM.
+            consulta.limite = usize::MAX;
+            loop {
+                let pagina = self.buscar_historial(&consulta)?;
+                if pagina.total > MAX_FILAS_DATOS_XLSX {
+                    return Err(ExportarHistorialError::DemasiadasFilas(pagina.total));
+                }
+                consulta.corte_id = Some(pagina.corte_id);
+                if pagina.items.is_empty() {
+                    break;
+                }
+                for movimiento in &pagina.items {
+                    let fila = u32::try_from(exportados + 1).unwrap_or(u32::MAX);
+                    escribir_movimiento(hoja, fila, columnas, movimiento, &formatos)?;
+                    exportados += 1;
+                }
+                if exportados >= pagina.total {
+                    break;
+                }
+                consulta.offset = exportados;
+            }
+
+            let ultima_columna = u16::try_from(columnas.len() - 1).unwrap_or(u16::MAX);
+            hoja.autofilter(
+                0,
+                0,
+                u32::try_from(exportados).unwrap_or(u32::MAX),
+                ultima_columna,
+            )?;
+        }
+
+        // Se escribe junto al destino y sólo se publica al finalizar. Así un
+        // error no deja un XLSX parcial y nunca se reemplaza otro archivo.
+        let temporal = tempfile::Builder::new()
+            .prefix(".historial-")
+            .suffix(".xlsx")
+            .tempfile_in(directorio)?
+            .into_temp_path();
+        libro.save(&temporal)?;
+        temporal.persist_noclobber(destino).map_err(|error| {
+            if error.error.kind() == std::io::ErrorKind::AlreadyExists {
+                ExportarHistorialError::DestinoExiste(destino.to_owned())
+            } else {
+                ExportarHistorialError::Io(error.error)
+            }
+        })?;
+        Ok(exportados)
     }
 
     pub fn registrar_salida(

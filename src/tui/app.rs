@@ -2923,6 +2923,19 @@ impl App {
                     });
                 self.historial.completar(resultado);
             }
+            AccionHistorial::Exportar {
+                filtro,
+                columnas,
+                destino,
+            } => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudo exportar el historial".to_owned())
+                    .and_then(|core| {
+                        core.exportar_historial(&filtro, &columnas, &destino)
+                            .map_err(|error| error.to_string())
+                    });
+                self.historial.completar_exportacion(resultado, &destino);
+            }
         }
     }
 

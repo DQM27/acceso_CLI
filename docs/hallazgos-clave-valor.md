@@ -131,8 +131,7 @@ interpreta las claves reconocidas y llama a `resolver_terminos` (`src/tui/ui_kit
 
 - **"`desde:`/`hasta:` sobrescriben un formulario de fecha ajustado por otro control, sin
   aviso visual."** Refutado: no existe tal formulario/control alterno para fecha — el único
-  mecanismo para fijar `desde`/`hasta` es la misma sintaxis `clave:valor` (tecleada o vía el
-  atajo del heatmap, que arma la misma sintaxis internamente). El detalle técnico de "acepta
+  mecanismo para fijar `desde`/`hasta` es la misma sintaxis `clave:valor` tecleada. El detalle técnico de "acepta
   cualquier texto sin validar formato hasta `construir()`, con mensaje genérico" es real, pero
   la premisa de impacto ("pierde un valor que el usuario fijó por otra vía") no aplica a este
   código.

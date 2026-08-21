@@ -1,4 +1,4 @@
-use chrono::{Duration, NaiveDate};
+use chrono::NaiveDate;
 use crossterm::event::KeyModifiers;
 use std::time::Instant;
 
@@ -201,13 +201,11 @@ fn panel_refleja_la_seleccion_resaltada_sin_pasos_extra() {
 }
 
 #[test]
-fn f3_cicla_entre_las_tres_vistas() {
+fn f3_alterna_entre_linea_de_tiempo_y_vista_clasica() {
     let mut state = HistorialState::default();
     assert_eq!(state.vista, ViewMode::Timeline);
     state.handle_key(tecla(KeyCode::F(3)));
     assert_eq!(state.vista, ViewMode::Classic);
-    state.handle_key(tecla(KeyCode::F(3)));
-    assert_eq!(state.vista, ViewMode::Heatmap);
     state.handle_key(tecla(KeyCode::F(3)));
     assert_eq!(state.vista, ViewMode::Timeline);
 }
@@ -231,7 +229,10 @@ fn f4_abre_el_editor_de_columnas_solo_en_la_vista_clasica() {
     state.handle_key(tecla(KeyCode::F(4)));
     assert!(matches!(
         state.modo,
-        ModoHistorial::Columnas { seleccion: 0 }
+        ModoHistorial::Columnas {
+            seleccion: 0,
+            proposito: PropositoColumnas::Vista,
+        }
     ));
 
     state.handle_key(tecla(KeyCode::Char(' ')));
@@ -242,29 +243,50 @@ fn f4_abre_el_editor_de_columnas_solo_en_la_vista_clasica() {
 }
 
 #[test]
-fn el_mapa_de_calor_navega_por_semana_y_dia_y_hace_drill_down_al_timeline() {
+fn f5_pide_columnas_y_ruta_antes_de_exportar_todo_el_filtro() {
     let mut state = HistorialState::default();
-    state.completar(Ok(pagina(2, 2)));
-    state.handle_key(tecla(KeyCode::F(3)));
-    state.handle_key(tecla(KeyCode::F(3)));
-    assert_eq!(state.vista, ViewMode::Heatmap);
+    state.completar(Ok(pagina(2, 73)));
 
-    let inicial = state.heatmap_seleccion;
-    state.handle_key(tecla(KeyCode::Down));
-    assert_eq!(state.heatmap_seleccion, inicial + Duration::days(7));
-    state.handle_key(tecla(KeyCode::Up));
-    assert_eq!(state.heatmap_seleccion, inicial);
-    state.handle_key(tecla(KeyCode::Tab));
-    assert_eq!(state.heatmap_seleccion, inicial + Duration::days(1));
-
-    let fecha = state.heatmap_seleccion.format("%d/%m/%Y").to_string();
-    let AccionHistorial::Consultar(_) = state.handle_key(tecla(KeyCode::Enter)) else {
-        panic!("debía consultar al hacer drill-down")
-    };
-    assert_eq!(state.vista, ViewMode::Timeline);
     assert_eq!(
-        state.busqueda.value(),
-        format!("desde:{fecha} hasta:{fecha}")
+        state.handle_key(tecla(KeyCode::F(5))),
+        AccionHistorial::Ninguna
+    );
+    assert!(matches!(
+        state.modo,
+        ModoHistorial::Columnas {
+            seleccion: 0,
+            proposito: PropositoColumnas::Exportacion,
+        }
+    ));
+
+    state.handle_key(tecla(KeyCode::Char(' ')));
+    assert!(!state.columnas_clasica[0].1, "FECHA debía quedar omitida");
+    state.handle_key(tecla(KeyCode::Enter));
+    assert!(matches!(state.modo, ModoHistorial::RutaExportacion { .. }));
+
+    let AccionHistorial::Exportar {
+        filtro,
+        columnas,
+        destino,
+    } = state.handle_key(tecla(KeyCode::Enter))
+    else {
+        panic!("debía confirmar la exportación")
+    };
+    assert_eq!(filtro.offset, 0);
+    assert_eq!(filtro.corte_id, Some(100));
+    assert_eq!(columnas.len(), ColumnaHistorial::ALL.len() - 1);
+    assert!(!columnas.contains(&ColumnaHistorial::Fecha));
+    assert_eq!(destino.extension().and_then(|e| e.to_str()), Some("xlsx"));
+}
+
+#[test]
+fn f5_sin_resultados_no_abre_el_flujo_de_exportacion() {
+    let mut state = HistorialState::default();
+    state.handle_key(tecla(KeyCode::F(5)));
+    assert_eq!(state.modo, ModoHistorial::Normal);
+    assert_eq!(
+        state.mensaje.as_deref(),
+        Some("No hay movimientos para exportar")
     );
 }
 
@@ -561,40 +583,6 @@ fn la_vista_clasica_muestra_tabla_completa_y_el_editor_de_columnas_oculta_una() 
         .map(|celda| celda.symbol())
         .collect();
     assert!(texto.contains("COLUMNAS VISIBLES"));
-}
-
-#[test]
-fn el_mapa_de_calor_renderiza_la_grilla_semanal() {
-    use ratatui::{Terminal, backend::TestBackend};
-
-    let mut state = HistorialState::default();
-    state.completar(Ok(pagina(2, 2)));
-    state.handle_key(tecla(KeyCode::F(3)));
-    state.handle_key(tecla(KeyCode::F(3)));
-    assert_eq!(state.vista, ViewMode::Heatmap);
-
-    let backend = TestBackend::new(140, 30);
-    let mut terminal = Terminal::new(backend).expect("backend de prueba");
-    terminal
-        .draw(|frame| {
-            render::render(
-                frame,
-                frame.area(),
-                &state,
-                &sesion_prueba(),
-                crate::tui::ui_kit::ThemePreset::Brisas.theme(),
-            )
-        })
-        .expect("debe renderizar");
-    let texto: String = terminal
-        .backend()
-        .buffer()
-        .content
-        .iter()
-        .map(|celda| celda.symbol())
-        .collect();
-    assert!(texto.contains("movimientos"));
-    assert!(texto.contains("Línea de tiempo"));
 }
 
 #[test]

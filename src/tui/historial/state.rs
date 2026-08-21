@@ -1,13 +1,15 @@
 use crate::{
     database::queries::ingresos::{FiltroHistorial, MovimientoIngresoResumen, PaginaHistorial},
+    exportacion_historial::ColumnaHistorial,
     models::empresa::Empresa,
-    tiempo::a_costa_rica,
 };
-use chrono::{Datelike, Duration, NaiveDate};
 use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::tui::ui_kit::{Debounce, StandardCommand, TextInput, standard_command};
-use std::time::Instant;
+use std::{
+    path::{Path, PathBuf},
+    time::Instant,
+};
 
 const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
 #[path = "filtros.rs"]
@@ -21,28 +23,24 @@ mod tests;
 const LIMIT: usize = 50;
 
 /// Dos formas de leer el mismo conjunto filtrado: el timeline agrupado
-/// (curado, con panel de detalle), la tabla clásica (densa, una línea por
-/// movimiento, sin panel) y el mapa de calor (para ubicar "cuándo" hubo más
-/// actividad). Cambiar de vista conserva la búsqueda y la selección.
+/// (curado, con panel de detalle) y la tabla clásica (densa, una línea por
+/// movimiento, sin panel). Cambiar de vista conserva búsqueda y selección.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ViewMode {
     Timeline,
     Classic,
-    Heatmap,
 }
 impl ViewMode {
     const fn next(self) -> Self {
         match self {
             Self::Timeline => Self::Classic,
-            Self::Classic => Self::Heatmap,
-            Self::Heatmap => Self::Timeline,
+            Self::Classic => Self::Timeline,
         }
     }
     const fn label(self) -> &'static str {
         match self {
             Self::Timeline => "LÍNEA DE TIEMPO",
             Self::Classic => "CLÁSICA",
-            Self::Heatmap => "MAPA DE CALOR",
         }
     }
 }
@@ -50,49 +48,7 @@ impl ViewMode {
 /// Columnas de la vista Clásica. El timeline ya muestra todo en su panel,
 /// pero Clásica no tiene panel — ahí sí tiene sentido poder ocultar
 /// columnas para controlar la densidad.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ClassicColumn {
-    Fecha,
-    Nombre,
-    Cedula,
-    Empresa,
-    Tipo,
-    Entrada,
-    Salida,
-    Gafete,
-    Medio,
-    Ingreso,
-    Egreso,
-}
-impl ClassicColumn {
-    const ALL: [Self; 11] = [
-        Self::Fecha,
-        Self::Nombre,
-        Self::Cedula,
-        Self::Empresa,
-        Self::Tipo,
-        Self::Entrada,
-        Self::Salida,
-        Self::Gafete,
-        Self::Medio,
-        Self::Ingreso,
-        Self::Egreso,
-    ];
-    pub(super) const fn label(self) -> &'static str {
-        match self {
-            Self::Fecha => "FECHA",
-            Self::Cedula => "CÉDULA",
-            Self::Nombre => "NOMBRE",
-            Self::Empresa => "EMPRESA",
-            Self::Tipo => "TIPO",
-            Self::Entrada => "ENTRADA",
-            Self::Salida => "SALIDA",
-            Self::Gafete => "GAFETE",
-            Self::Medio => "MEDIO",
-            Self::Ingreso => "DA INGRESO",
-            Self::Egreso => "DA SALIDA",
-        }
-    }
+impl ColumnaHistorial {
     pub(super) const fn constraint(self) -> ratatui::layout::Constraint {
         use ratatui::layout::Constraint;
         match self {
@@ -106,33 +62,35 @@ impl ClassicColumn {
             Self::Ingreso | Self::Egreso => Constraint::Fill(2),
         }
     }
-    const fn clave(self) -> &'static str {
-        match self {
-            Self::Fecha => "fecha",
-            Self::Nombre => "nombre",
-            Self::Cedula => "cedula",
-            Self::Empresa => "empresa",
-            Self::Tipo => "tipo",
-            Self::Entrada => "entrada",
-            Self::Salida => "salida",
-            Self::Gafete => "gafete",
-            Self::Medio => "medio",
-            Self::Ingreso => "ingreso",
-            Self::Egreso => "egreso",
-        }
-    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PropositoColumnas {
+    Vista,
+    Exportacion,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ModoHistorial {
     Normal,
-    Columnas { seleccion: usize },
+    Columnas {
+        seleccion: usize,
+        proposito: PropositoColumnas,
+    },
+    RutaExportacion {
+        destino: TextInput,
+    },
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AccionHistorial {
     Ninguna,
     Volver,
     Consultar(FiltroHistorial),
+    Exportar {
+        filtro: FiltroHistorial,
+        columnas: Vec<ColumnaHistorial>,
+        destino: PathBuf,
+    },
 }
 #[derive(Debug)]
 pub struct HistorialState {
@@ -141,8 +99,7 @@ pub struct HistorialState {
     seleccion: Option<usize>,
     modo: ModoHistorial,
     vista: ViewMode,
-    columnas_clasica: Vec<(ClassicColumn, bool)>,
-    heatmap_seleccion: NaiveDate,
+    columnas_clasica: Vec<(ColumnaHistorial, bool)>,
     filtro_aplicado: FiltrosHistorial,
     busqueda: TextInput,
     mensaje: Option<String>,
@@ -154,15 +111,16 @@ pub struct HistorialState {
 }
 impl Default for HistorialState {
     fn default() -> Self {
-        let hoy = crate::tiempo::ahora_costa_rica().date_naive();
         Self {
             registros: vec![],
             total: 0,
             seleccion: None,
             modo: ModoHistorial::Normal,
             vista: ViewMode::Timeline,
-            columnas_clasica: ClassicColumn::ALL.into_iter().map(|c| (c, true)).collect(),
-            heatmap_seleccion: hoy,
+            columnas_clasica: ColumnaHistorial::ALL
+                .into_iter()
+                .map(|c| (c, true))
+                .collect(),
             filtro_aplicado: FiltrosHistorial::default(),
             busqueda: TextInput::default(),
             mensaje: None,
@@ -179,7 +137,6 @@ impl HistorialState {
         match self.vista {
             ViewMode::Timeline => "timeline",
             ViewMode::Classic => "classic",
-            ViewMode::Heatmap => "heatmap",
         }
     }
 
@@ -187,7 +144,6 @@ impl HistorialState {
         self.vista = match valor {
             "timeline" => ViewMode::Timeline,
             "classic" => ViewMode::Classic,
-            "heatmap" => ViewMode::Heatmap,
             _ => return,
         };
     }
@@ -256,6 +212,13 @@ impl HistorialState {
             }
         }
     }
+
+    pub fn completar_exportacion(&mut self, resultado: Result<usize, String>, destino: &Path) {
+        self.mensaje = Some(match resultado {
+            Ok(filas) => format!("✓ Exportados {filas} movimientos a {}", destino.display()),
+            Err(error) => format!("✕ {error}"),
+        });
+    }
     fn consulta(&self) -> Result<FiltroHistorial, String> {
         let (filtros, texto_libre) =
             parsear_consulta(&self.filtro_aplicado, self.busqueda.value(), &self.empresas);
@@ -275,29 +238,42 @@ impl HistorialState {
             self.ayuda_expandida = !self.ayuda_expandida;
             return AccionHistorial::Ninguna;
         }
-        // F3 (cambiar de vista) y F4 (columnas, sólo en Clásica) son
-        // transversales a cualquier modo, salvo mientras se edita el editor
-        // de columnas mismo.
+        match self.modo.clone() {
+            ModoHistorial::Columnas {
+                seleccion,
+                proposito,
+            } => return self.columnas(k, seleccion, proposito),
+            ModoHistorial::RutaExportacion { .. } => return self.ruta_exportacion(k),
+            ModoHistorial::Normal => {}
+        }
+
         if let KeyCode::F(3) = k.code {
             self.vista = self.vista.next();
-            self.modo = ModoHistorial::Normal;
             return AccionHistorial::Ninguna;
         }
         if let KeyCode::F(4) = k.code
             && self.vista == ViewMode::Classic
             && self.modo == ModoHistorial::Normal
         {
-            self.modo = ModoHistorial::Columnas { seleccion: 0 };
+            self.modo = ModoHistorial::Columnas {
+                seleccion: 0,
+                proposito: PropositoColumnas::Vista,
+            };
             return AccionHistorial::Ninguna;
         }
-        match self.modo.clone() {
-            ModoHistorial::Normal if self.vista == ViewMode::Heatmap => self.heatmap(k),
-            ModoHistorial::Normal => self.normal(k),
-            ModoHistorial::Columnas { seleccion } => {
-                self.columnas(k, seleccion);
-                AccionHistorial::Ninguna
+        if let KeyCode::F(5) = k.code {
+            if self.total == 0 {
+                self.mensaje = Some("No hay movimientos para exportar".into());
+            } else {
+                self.mensaje = None;
+                self.modo = ModoHistorial::Columnas {
+                    seleccion: 0,
+                    proposito: PropositoColumnas::Exportacion,
+                };
             }
+            return AccionHistorial::Ninguna;
         }
+        self.normal(k)
     }
     /// El campo de búsqueda está siempre activo en modo Normal: cualquier
     /// carácter escrito filtra en vivo, sin necesidad de un atajo que lo
@@ -343,47 +319,18 @@ impl HistorialState {
             AccionHistorial::Ninguna
         }
     }
-    /// El mapa de calor navega día a día con Tab/Shift+Tab y semana a
-    /// semana con ↑↓ — ninguna de las dos colisiona con el campo de
-    /// búsqueda porque ese modo no tiene texto libre que escribir.
-    fn heatmap(&mut self, k: KeyEvent) -> AccionHistorial {
-        match standard_command(k) {
-            Some(StandardCommand::FocusNext) => {
-                self.heatmap_seleccion += Duration::days(1);
-                return AccionHistorial::Ninguna;
-            }
-            Some(StandardCommand::FocusPrevious) => {
-                self.heatmap_seleccion -= Duration::days(1);
-                return AccionHistorial::Ninguna;
-            }
-            Some(StandardCommand::Primary) => {
-                let fecha = self.heatmap_seleccion.format("%d/%m/%Y").to_string();
-                self.busqueda
-                    .set_value(format!("desde:{fecha} hasta:{fecha}"));
-                self.vista = ViewMode::Timeline;
-                self.reiniciar_paginacion();
-                return self.emitir();
-            }
-            _ => {}
-        }
-        match k.code {
-            KeyCode::Up => self.heatmap_seleccion -= Duration::days(7),
-            KeyCode::Down => self.heatmap_seleccion += Duration::days(7),
-            KeyCode::Esc => return AccionHistorial::Volver,
-            _ => {}
-        }
-        AccionHistorial::Ninguna
-    }
-    fn columnas(&mut self, k: KeyEvent, s: usize) {
+    fn columnas(&mut self, k: KeyEvent, s: usize, proposito: PropositoColumnas) -> AccionHistorial {
         match k.code {
             KeyCode::Up => {
                 self.modo = ModoHistorial::Columnas {
                     seleccion: s.saturating_sub(1),
+                    proposito,
                 }
             }
             KeyCode::Down => {
                 self.modo = ModoHistorial::Columnas {
                     seleccion: (s + 1).min(self.columnas_clasica.len() - 1),
+                    proposito,
                 }
             }
             KeyCode::Char(' ') => {
@@ -396,8 +343,64 @@ impl HistorialState {
                     self.columnas_clasica[s].1 = !self.columnas_clasica[s].1
                 }
             }
-            KeyCode::Esc | KeyCode::F(4) => self.modo = ModoHistorial::Normal,
+            KeyCode::Enter if proposito == PropositoColumnas::Exportacion => {
+                self.modo = ModoHistorial::RutaExportacion {
+                    destino: TextInput::new(ruta_exportacion_predeterminada()).with_max_chars(240),
+                };
+            }
+            KeyCode::Esc => self.modo = ModoHistorial::Normal,
+            KeyCode::F(4) if proposito == PropositoColumnas::Vista => {
+                self.modo = ModoHistorial::Normal;
+            }
             _ => {}
+        }
+        AccionHistorial::Ninguna
+    }
+
+    fn ruta_exportacion(&mut self, k: KeyEvent) -> AccionHistorial {
+        match k.code {
+            KeyCode::Esc => {
+                self.modo = ModoHistorial::Normal;
+                AccionHistorial::Ninguna
+            }
+            KeyCode::Enter => {
+                let ModoHistorial::RutaExportacion { destino } = &self.modo else {
+                    return AccionHistorial::Ninguna;
+                };
+                let destino = match normalizar_destino(destino.value()) {
+                    Ok(destino) => destino,
+                    Err(error) => {
+                        self.mensaje = Some(error);
+                        return AccionHistorial::Ninguna;
+                    }
+                };
+                let mut filtro = match self.consulta() {
+                    Ok(filtro) => filtro,
+                    Err(error) => {
+                        self.mensaje = Some(error);
+                        return AccionHistorial::Ninguna;
+                    }
+                };
+                filtro.offset = 0;
+                let columnas = self
+                    .columnas_clasica
+                    .iter()
+                    .filter_map(|(columna, visible)| visible.then_some(*columna))
+                    .collect();
+                self.modo = ModoHistorial::Normal;
+                self.mensaje = Some("Exportando historial…".into());
+                AccionHistorial::Exportar {
+                    filtro,
+                    columnas,
+                    destino,
+                }
+            }
+            _ => {
+                if let ModoHistorial::RutaExportacion { destino } = &mut self.modo {
+                    destino.handle_key(k);
+                }
+                AccionHistorial::Ninguna
+            }
         }
     }
     fn mover(&mut self, d: isize) {
@@ -415,19 +418,6 @@ impl HistorialState {
     fn seleccionado(&self) -> Option<&MovimientoIngresoResumen> {
         self.registros.get(self.seleccion?)
     }
-    /// Cuenta de movimientos por día (fecha local), a partir de la página
-    /// actualmente cargada — igual que el timeline y la vista clásica, el
-    /// mapa de calor lee del mismo conjunto ya filtrado y paginado, no de
-    /// una agregación aparte en el backend.
-    fn conteo_por_dia(&self) -> std::collections::BTreeMap<NaiveDate, usize> {
-        let mut conteo = std::collections::BTreeMap::new();
-        for r in &self.registros {
-            *conteo
-                .entry(a_costa_rica(r.fecha_hora_ingreso).date_naive())
-                .or_insert(0usize) += 1;
-        }
-        conteo
-    }
     fn pagina(&self) -> (usize, usize) {
         if self.total == 0 {
             (0, 0)
@@ -442,24 +432,34 @@ impl HistorialState {
     }
 }
 
-fn start_of_week(date: NaiveDate) -> NaiveDate {
-    date - Duration::days(i64::from(date.weekday().num_days_from_monday()))
+fn ruta_exportacion_predeterminada() -> String {
+    let nombre = format!(
+        "historial_{}.xlsx",
+        crate::tiempo::ahora_costa_rica().format("%Y-%m-%d_%H%M")
+    );
+    std::env::var_os("USERPROFILE")
+        .map(PathBuf::from)
+        .filter(|ruta| ruta.is_absolute())
+        .map(|ruta| ruta.join("Documents"))
+        .filter(|ruta| ruta.is_dir())
+        .map(|ruta| ruta.join(&nombre))
+        .unwrap_or_else(|| PathBuf::from(nombre))
+        .display()
+        .to_string()
 }
-fn end_of_week(date: NaiveDate) -> NaiveDate {
-    date + Duration::days(6 - i64::from(date.weekday().num_days_from_monday()))
-}
-fn bucket_glyph(count: usize, max: usize) -> char {
-    if count == 0 {
-        return '·';
+
+fn normalizar_destino(valor: &str) -> Result<PathBuf, String> {
+    let valor = valor.trim();
+    if valor.is_empty() {
+        return Err("Ingrese una ruta para el archivo XLSX".into());
     }
-    let ratio = count as f64 / max.max(1) as f64;
-    if ratio >= 0.99 {
-        '█'
-    } else if ratio >= 0.66 {
-        '▓'
-    } else if ratio >= 0.33 {
-        '▒'
-    } else {
-        '░'
+    let mut destino = PathBuf::from(valor);
+    match destino.extension().and_then(|extension| extension.to_str()) {
+        None => {
+            destino.set_extension("xlsx");
+        }
+        Some(extension) if extension.eq_ignore_ascii_case("xlsx") => {}
+        Some(_) => return Err("La exportación debe usar la extensión .xlsx".into()),
     }
+    Ok(destino)
 }
