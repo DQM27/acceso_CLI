@@ -789,11 +789,20 @@ mod tests {
         for c in "77".chars() {
             app.procesar_tecla_global(tecla(KeyCode::Char(c)), Some(&core));
         }
+        // El primer Enter sólo pide confirmar (`Estado::ConfirmarSalida`);
+        // todavía no toca SQLite.
         app.procesar_tecla_global(tecla(KeyCode::Enter), Some(&core));
-
-        // La confirmación queda visible hasta la siguiente tecla; el cierre real
-        // en SQLite ya ocurrió.
         assert!(app.salida_rapida.abierto());
+        let antes = core
+            .listar_ingresos_activos(&crate::database::queries::ingresos::FiltroIngresosActivos {
+                texto: None,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(antes.total, 1);
+
+        // El segundo Enter (sobre la confirmación) sí registra la salida real.
+        app.procesar_tecla_global(tecla(KeyCode::Enter), Some(&core));
         let restantes = core
             .listar_ingresos_activos(&crate::database::queries::ingresos::FiltroIngresosActivos {
                 texto: None,
@@ -802,7 +811,12 @@ mod tests {
             .unwrap();
         assert_eq!(restantes.total, 0);
 
-        app.procesar_tecla_global(tecla(KeyCode::Enter), Some(&core));
+        // El overlay vuelve a quedar abierto (no cerrado) mostrando la lista
+        // recargada de quienes siguen dentro — regresión de "tras sacar a
+        // alguien no se ven los demás contratistas".
+        assert!(app.salida_rapida.abierto());
+
+        app.procesar_tecla_global(tecla(KeyCode::Esc), Some(&core));
         assert!(!app.salida_rapida.abierto());
     }
 
@@ -1771,10 +1785,11 @@ impl App {
                         .map_err(mensaje_salida),
                     _ => Err("No se pudo registrar la salida".into()),
                 };
-                self.salida_rapida.completar_confirmacion(resultado);
+                let recarga = self.salida_rapida.completar_confirmacion(resultado);
+                self.procesar_accion_salida_rapida(recarga, core);
                 if self.vista == Vista::IngresosActivos {
-                    let recarga = self.activos.solicitud_carga();
-                    self.procesar_accion_activos(recarga, core);
+                    let recarga_activos = self.activos.solicitud_carga();
+                    self.procesar_accion_activos(recarga_activos, core);
                 }
             }
         }

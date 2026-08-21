@@ -5,6 +5,7 @@ use ratatui::{
     widgets::{Cell, Clear, Paragraph, Row, Table, TableState},
 };
 
+use crate::services::registro_ingreso_service::IngresoActivoResumen;
 use crate::tui::ui_kit::{Theme, auxiliary_panel, centered_rect};
 
 use super::{Estado, SalidaRapidaState};
@@ -23,8 +24,10 @@ pub fn render(frame: &mut Frame, area: Rect, state: &SalidaRapidaState, theme: T
         return;
     }
 
-    if let Estado::Confirmado { mensaje } = &state.estado {
-        render_confirmado(frame, inner, mensaje, theme);
+    if let Estado::ConfirmarSalida { registro_id } = &state.estado {
+        if let Some(registro) = state.registro(*registro_id) {
+            render_confirmar_salida(frame, inner, registro, theme);
+        }
         return;
     }
 
@@ -40,17 +43,32 @@ pub fn render(frame: &mut Frame, area: Rect, state: &SalidaRapidaState, theme: T
     render_pie(frame, filas[2], state, theme);
 }
 
-fn render_confirmado(frame: &mut Frame, area: Rect, mensaje: &str, theme: Theme) {
-    frame.render_widget(
-        Paragraph::new(mensaje).style(theme.success()),
-        Rect::new(area.x, area.y, area.width, 1),
-    );
-    if area.height > 2 {
-        frame.render_widget(
-            Paragraph::new("Presione cualquier tecla para cerrar").style(theme.muted()),
-            Rect::new(area.x, area.y + 2, area.width, 1),
-        );
-    }
+/// Paso intermedio antes de registrar la salida: muestra a quién concretamente
+/// se va a sacar (nombre, cédula, empresa, gafete) — antes un solo Enter sobre
+/// la fila resaltada registraba la salida directo, sin este punto de control.
+fn render_confirmar_salida(
+    frame: &mut Frame,
+    area: Rect,
+    registro: &IngresoActivoResumen,
+    theme: Theme,
+) {
+    let gafete = registro
+        .gafete_numero
+        .map_or_else(|| "S/G".to_owned(), |g| g.to_string());
+    let lineas = vec![
+        Line::from(format!(
+            "¿Confirmar salida de {}?",
+            registro.contratista_nombre
+        ))
+        .style(theme.title()),
+        Line::from(""),
+        Line::from(format!("Cédula: {}", registro.cedula)).style(theme.base()),
+        Line::from(format!("Empresa: {}", registro.empresa_nombre)).style(theme.base()),
+        Line::from(format!("Gafete: {gafete}")).style(theme.base()),
+        Line::from(""),
+        Line::from("ENTER confirma · ESC cancela").style(theme.muted()),
+    ];
+    frame.render_widget(Paragraph::new(lineas), area);
 }
 
 fn render_busqueda(frame: &mut Frame, area: Rect, state: &SalidaRapidaState, theme: Theme) {
@@ -116,10 +134,17 @@ fn render_pie(frame: &mut Frame, area: Rect, state: &SalidaRapidaState, theme: T
         frame.render_widget(Paragraph::new(error.as_str()).style(theme.danger()), area);
         return;
     }
+    if let Some(mensaje) = &state.mensaje {
+        frame.render_widget(
+            Paragraph::new(mensaje.as_str()).style(theme.success()),
+            area,
+        );
+        return;
+    }
     let texto = if state.ayuda_expandida {
-        "↑↓ mover · ENTER confirmar salida · ESC cerrar · F1 ayuda · F2 abrir/cerrar salida rápida"
+        "↑↓ mover · ENTER seleccionar · ESC cerrar · F1 ayuda · F2 abrir/cerrar salida rápida"
     } else {
-        "↑↓ mover · ENTER confirmar salida · ESC cerrar · F1 ayuda"
+        "↑↓ mover · ENTER seleccionar · ESC cerrar · F1 ayuda"
     };
     frame.render_widget(Paragraph::new(texto).style(theme.muted()), area);
 }

@@ -21,7 +21,16 @@ const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(
 enum Estado {
     Cerrado,
     Abierto,
-    Confirmado { mensaje: String },
+    /// Enter sobre una fila no registra la salida directo — primero pide
+    /// confirmar mostrando a quién, igual que `ModoActivos::ConfirmarSalida`
+    /// en la pantalla completa. Sin este paso, un Enter en blanco justo
+    /// después de abrir el overlay (que carga a todos los que están dentro,
+    /// más reciente primero, con la fila 0 ya seleccionada) sacaba en
+    /// silencio a quien entró más reciente, no a quien el operador tenía
+    /// en mente.
+    ConfirmarSalida {
+        registro_id: i64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,6 +51,12 @@ pub struct SalidaRapidaState {
     total: usize,
     seleccion: Option<usize>,
     error: Option<String>,
+    /// Mensaje de éxito ("✓ Salida registrada — X"), independiente de
+    /// `error`. Sobrevive al refresco de `registros` que sigue a una
+    /// confirmación exitosa (mismo criterio que `ActivosState.mensaje`) para
+    /// que el operador vea la confirmación Y la lista con los demás
+    /// contratistas al mismo tiempo, en vez de una u otra.
+    mensaje: Option<String>,
     ayuda_expandida: bool,
     busqueda_debounce: Debounce,
 }
@@ -55,6 +70,7 @@ impl Default for SalidaRapidaState {
             total: 0,
             seleccion: None,
             error: None,
+            mensaje: None,
             ayuda_expandida: false,
             busqueda_debounce: Debounce::default(),
         }
@@ -72,6 +88,7 @@ impl SalidaRapidaState {
         self.registros.clear();
         self.seleccion = None;
         self.error = None;
+        self.mensaje = None;
         AccionSalidaRapida::Buscar { texto: None }
     }
 
@@ -97,10 +114,27 @@ impl SalidaRapidaState {
         (self.total > self.registros.len()).then_some(self.total)
     }
 
-    pub fn completar_confirmacion(&mut self, r: Result<String, String>) {
+    /// `Ok`: registrada — vuelve a `Abierto`, guarda el mensaje de éxito y
+    /// limpia la búsqueda para que la acción devuelta recargue la lista
+    /// completa de quienes siguen dentro (antes esto entraba a un estado
+    /// `Confirmado` aparte que sólo mostraba el mensaje, sin volver a
+    /// consultar — el overlay quedaba abierto pero sin mostrar al resto de
+    /// los contratistas hasta cerrarlo y reabrirlo).
+    /// `Err`: se queda en `ConfirmarSalida` (si ahí estaba) para que un
+    /// nuevo Enter reintente sin tener que volver a seleccionar la fila.
+    pub fn completar_confirmacion(&mut self, r: Result<String, String>) -> AccionSalidaRapida {
         match r {
-            Ok(mensaje) => self.estado = Estado::Confirmado { mensaje },
-            Err(e) => self.error = Some(e),
+            Ok(mensaje) => {
+                self.estado = Estado::Abierto;
+                self.mensaje = Some(mensaje);
+                self.error = None;
+                self.busqueda.clear();
+                AccionSalidaRapida::Buscar { texto: None }
+            }
+            Err(e) => {
+                self.error = Some(e);
+                AccionSalidaRapida::Ninguna
+            }
         }
     }
 
@@ -111,15 +145,8 @@ impl SalidaRapidaState {
         }
         match self.estado.clone() {
             Estado::Cerrado => AccionSalidaRapida::Ninguna,
-            // Mismo criterio que `menu_principal`: sólo Enter/Esc resuelven
-            // una confirmación pendiente, no cualquier tecla.
-            Estado::Confirmado { .. } => {
-                if matches!(key.code, KeyCode::Enter | KeyCode::Esc) {
-                    self.estado = Estado::Cerrado;
-                }
-                AccionSalidaRapida::Ninguna
-            }
             Estado::Abierto => self.handle_abierto(key),
+            Estado::ConfirmarSalida { registro_id } => self.handle_confirmar(key, registro_id),
         }
     }
 
@@ -133,6 +160,7 @@ impl SalidaRapidaState {
             KeyCode::Esc if !self.busqueda.value().is_empty() => {
                 self.busqueda.clear();
                 self.error = None;
+                self.mensaje = None;
                 AccionSalidaRapida::Buscar { texto: None }
             }
             KeyCode::Esc => {
@@ -147,22 +175,44 @@ impl SalidaRapidaState {
                 self.mover(1);
                 AccionSalidaRapida::Ninguna
             }
+            // No registra la salida directo: primero pide confirmar (ver
+            // `Estado::ConfirmarSalida`).
             KeyCode::Enter => {
-                self.registro_seleccionado()
-                    .map_or(AccionSalidaRapida::Ninguna, |r| {
-                        AccionSalidaRapida::Confirmar {
-                            registro_id: r.registro_id,
-                            nombre: r.contratista_nombre.clone(),
-                        }
-                    })
+                if let Some(r) = self.registro_seleccionado() {
+                    self.estado = Estado::ConfirmarSalida {
+                        registro_id: r.registro_id,
+                    };
+                }
+                AccionSalidaRapida::Ninguna
             }
             _ => {
                 if self.busqueda.handle_key(key) {
                     self.error = None;
+                    self.mensaje = None;
                     self.busqueda_debounce.marcar(Instant::now());
                 }
                 AccionSalidaRapida::Ninguna
             }
+        }
+    }
+
+    fn handle_confirmar(&mut self, key: KeyEvent, registro_id: i64) -> AccionSalidaRapida {
+        match key.code {
+            KeyCode::Enter => {
+                let nombre = self
+                    .registro(registro_id)
+                    .map(|r| r.contratista_nombre.clone())
+                    .unwrap_or_default();
+                AccionSalidaRapida::Confirmar {
+                    registro_id,
+                    nombre,
+                }
+            }
+            KeyCode::Esc => {
+                self.estado = Estado::Abierto;
+                AccionSalidaRapida::Ninguna
+            }
+            _ => AccionSalidaRapida::Ninguna,
         }
     }
     /// Se llama en cada vuelta del bucle principal; dispara la búsqueda
@@ -185,6 +235,10 @@ impl SalidaRapidaState {
 
     fn registro_seleccionado(&self) -> Option<&IngresoActivoResumen> {
         self.registros.get(self.seleccion?)
+    }
+
+    fn registro(&self, id: i64) -> Option<&IngresoActivoResumen> {
+        self.registros.iter().find(|r| r.registro_id == id)
     }
 }
 
