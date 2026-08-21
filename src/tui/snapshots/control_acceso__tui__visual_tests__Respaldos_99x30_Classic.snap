@@ -4,11 +4,10 @@ expression: volcado
 ---
 === texto ===
                                                                                                    
- BRISAS CLI                                                                          0 respaldo(s) 
+ BRISAS CLI                                                              Operador de prueba · ROOT 
  CONTROL DE ACCESO                                RESPALDOS                                  ··:·· 
  ───────────────────────────────────────────────────────────────────────────────────────────────── 
- FECHA             TIPO              TAMAÑO     ESQUEMA   ESTADO                                   
-                                                                                                   
+ FECHA               TIPO              TAMAÑO     ESQUEMA   ESTADO                                 
                                                                                                    
                                                                                                    
                                                                                                    
@@ -21,8 +20,7 @@ expression: volcado
                                                                                                    
                                                                                                    
                                                                                                    
-                                                                                                   
-                                                                                                   
+ ───────────────────────────────────────────────────────────────────────────────────────────────── 
  No hay un respaldo seleccionado.                                                                  
                                                                                                    
                                                                                                    
@@ -30,6 +28,8 @@ expression: volcado
                                                                                                    
                                                                                                    
                                                                                                    
+                                                                                                   
+ 0 respaldo(s)                                                                                     
  ↑↓ Mover  C Crear  V Revalidar  E Exportar  R Restaurar  L Actualizar  ESC Volver                 
  F2 Salida rápida  F7 Tema                                                                         
                                                                                                    
@@ -38,8 +38,8 @@ expression: volcado
 "                                                                                                   " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "BRISAS CLI" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
-"                                                                          " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"0 respaldo(s)" fg=Rgb(105, 135, 111) bg=Black mod=NONE
+"                                                              " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"Operador de prueba · ROOT" fg=Rgb(105, 135, 111) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "CONTROL DE ACCESO" fg=Rgb(105, 135, 111) bg=Black mod=NONE
@@ -52,9 +52,8 @@ expression: volcado
 "─────────────────────────────────────────────────────────────────────────────────────────────────" fg=Rgb(76, 119, 85) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"FECHA             TIPO              TAMAÑO     ESQUEMA   ESTADO                                  " fg=Rgb(105, 135, 111) bg=Black mod=NONE
+"FECHA               TIPO              TAMAÑO     ESQUEMA   ESTADO                                " fg=Rgb(105, 135, 111) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                                                                   " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                   " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                   " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                   " fg=Rgb(196, 220, 199) bg=Black mod=NONE
@@ -69,8 +68,9 @@ expression: volcado
 "                                                                                                   " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                   " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                   " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                                                                   " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                                                                   " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"─────────────────────────────────────────────────────────────────────────────────────────────────" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "No hay un respaldo seleccionado.                                                                 " fg=Rgb(105, 135, 111) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
@@ -91,6 +91,12 @@ expression: volcado
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                 " fg=Rgb(105, 135, 111) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                 " fg=Rgb(105, 135, 111) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"0 respaldo(s)                                                                                    " fg=Rgb(105, 135, 111) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "↑↓" fg=Rgb(91, 224, 123) bg=Black mod=BOLD

@@ -6,6 +6,15 @@ fn tecla(codigo: KeyCode) -> KeyEvent {
     KeyEvent::new(codigo, KeyModifiers::NONE)
 }
 
+fn sesion_prueba() -> crate::services::autenticacion_service::UsuarioSesion {
+    crate::services::autenticacion_service::UsuarioSesion {
+        id: 1,
+        cedula: "1-1111-1111".into(),
+        nombre: "Ana Quintana".into(),
+        rol: crate::models::usuario::RolUsuario::Root,
+    }
+}
+
 #[test]
 fn reiniciar_respaldos_solicita_la_carga_inicial() {
     let mut estado = ConfiguracionState::default();
@@ -199,6 +208,7 @@ fn la_pantalla_respaldos_muestra_el_motivo_del_fallo_automatico() {
                 frame,
                 frame.area(),
                 &estado,
+                &sesion_prueba(),
                 crate::tui::ui_kit::ThemePreset::Brisas.theme(),
             )
         })

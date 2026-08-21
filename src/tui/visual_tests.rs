@@ -237,6 +237,7 @@ fn todas_las_pantallas_renderizan_la_matriz_de_tamanos_y_temas() {
                                 frame,
                                 area,
                                 &configuracion::ConfiguracionState::default(),
+                                &session,
                                 theme,
                             ),
                             Screen::NuevoIngreso => nuevo_ingreso::render(

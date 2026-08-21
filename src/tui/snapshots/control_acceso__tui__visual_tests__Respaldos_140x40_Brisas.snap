@@ -4,43 +4,43 @@ expression: volcado
 ---
 === texto ===
                                                                                                                                             
- BRISAS CLI                                                                                                                   0 respaldo(s) 
+ BRISAS CLI                                                                                                       Operador de prueba · ROOT 
  CONTROL DE ACCESO                                                      RESPALDOS                                                     ··:·· 
  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── 
- FECHA             TIPO              TAMAÑO     ESQUEMA   ESTADO                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                            No hay respaldos todavía. Presione C para crear uno.                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
- No hay un respaldo seleccionado.                                                                                                           
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
+ FECHA               TIPO              TAMAÑO     ESQUEMA   ESTADO                      │No hay un respaldo seleccionado.                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                  No hay respaldos todavía. Presione C para crear uno.                  │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+                                                                                        │                                                   
+ 0 respaldo(s)                                                                                                                              
  ↑↓ Mover  C Crear  V Revalidar  E Exportar  R Restaurar  L Actualizar  ESC Volver  F2 Salida rápida  F7 Tema                               
                                                                                                                                             
 
@@ -48,8 +48,8 @@ expression: volcado
 "                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "BRISAS CLI" fg=Rgb(70, 200, 215) bg=Black mod=BOLD
-"                                                                                                                   " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"0 respaldo(s)" fg=Rgb(145, 158, 164) bg=Black mod=NONE
+"                                                                                                       " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"Operador de prueba · ROOT" fg=Rgb(145, 158, 164) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "CONTROL DE ACCESO" fg=Rgb(145, 158, 164) bg=Black mod=NONE
@@ -62,56 +62,141 @@ expression: volcado
 "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────" fg=Rgb(100, 120, 126) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"FECHA             TIPO              TAMAÑO     ESQUEMA   ESTADO                                                                           " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+"FECHA               TIPO              TAMAÑO     ESQUEMA   ESTADO                      " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"No hay un respaldo seleccionado.                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                           No hay respaldos todavía. Presione C para crear uno.                                           " fg=Rgb(220, 170, 70) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"No hay un respaldo seleccionado.                                                                                                          " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                          " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+"                 No hay respaldos todavía. Presione C para crear uno.                  " fg=Rgb(220, 170, 70) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                                                        " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"│" fg=Rgb(100, 120, 126) bg=Black mod=NONE
+"                                                  " fg=Rgb(145, 158, 164) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                          " fg=Rgb(145, 158, 164) bg=Black mod=NONE
-" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                          " fg=Rgb(145, 158, 164) bg=Black mod=NONE
-" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                          " fg=Rgb(145, 158, 164) bg=Black mod=NONE
-" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                          " fg=Rgb(145, 158, 164) bg=Black mod=NONE
-" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-" " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                                                                                                                                          " fg=Rgb(145, 158, 164) bg=Black mod=NONE
+"0 respaldo(s)                                                                                                                             " fg=Rgb(145, 158, 164) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "↑↓" fg=Rgb(70, 200, 215) bg=Black mod=BOLD

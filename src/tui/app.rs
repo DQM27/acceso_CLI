@@ -306,7 +306,15 @@ impl App {
                             }
                         }
                         Vista::Respaldos => {
-                            configuracion::render(frame, frame.area(), &self.configuracion, theme)
+                            if let Some(sesion) = &self.sesion {
+                                configuracion::render(
+                                    frame,
+                                    frame.area(),
+                                    &self.configuracion,
+                                    sesion,
+                                    theme,
+                                )
+                            }
                         }
                         Vista::NuevoIngreso => {
                             if let Some(sesion) = &self.sesion {
