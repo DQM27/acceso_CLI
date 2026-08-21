@@ -1,0 +1,55 @@
+---
+source: src/tui/visual_tests.rs
+expression: volcado
+---
+=== texto ===
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                 TERMINAL DEMASIADO PEQUEÑA                 
+                Actual: 60×22 · mínimo: 80×22               
+             Amplíe para continuar · ESC volver             
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+
+=== estilos ===
+"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                 " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"TERMINAL DEMASIADO PEQUEÑA" fg=Rgb(220, 170, 70) bg=Black mod=NONE
+"                 " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                Actual: 60×22 · mínimo: 80×22               " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"             " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"Amplíe para continuar · ESC volver" fg=Rgb(145, 158, 164) bg=Black mod=NONE
+"             " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE

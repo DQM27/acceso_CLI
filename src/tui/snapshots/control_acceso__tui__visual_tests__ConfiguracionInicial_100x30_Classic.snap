@@ -1,0 +1,107 @@
+---
+source: src/tui/visual_tests.rs
+expression: volcado
+---
+=== texto ===
+                                                                                                    
+ BRISAS CLI                                                              PRIMER USUARIO DEL SISTEMA 
+ CONTROL DE ACCESO                           CONFIGURACIÓN INICIAL                            ··:·· 
+ ────────────────────────────────────────────────────────────────────────────────────────────────── 
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                         ▶ CÉDULA                                                                   
+                                                                                                    
+                         ──────────────────────────────────────────────────                         
+                                                                                                    
+                           NOMBRE                                                                   
+                                                                                                    
+                         ──────────────────────────────────────────────────                         
+                                                                                                    
+                           CONTRASEÑA                                                               
+                                                                                                    
+                         ──────────────────────────────────────────────────                         
+                                                                                                    
+                           CONFIRMAR CONTRASEÑA                                                     
+                                                                                                    
+                         ──────────────────────────────────────────────────                         
+                                                                                                    
+                           Este usuario será creado activo y con rol ROOT.                          
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+ TAB/↑↓ Campo  G/ENTER Crear ROOT  ESC Salir  F7 Tema                                               
+                                                                                                    
+
+=== estilos ===
+"                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"BRISAS CLI" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+"                                                              " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"PRIMER USUARIO DEL SISTEMA" fg=Rgb(105, 135, 111) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"CONTROL DE ACCESO" fg=Rgb(105, 135, 111) bg=Black mod=NONE
+"                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"       CONFIGURACIÓN INICIAL      " fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+"                      " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"··:··" fg=Rgb(238, 184, 78) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"──────────────────────────────────────────────────────────────────────────────────────────────────" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"▶ CÉDULA                                          " fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+"                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"──────────────────────────────────────────────────" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+"                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"  NOMBRE                                          " fg=Rgb(105, 135, 111) bg=Black mod=NONE
+"                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"──────────────────────────────────────────────────" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"  CONTRASEÑA                                      " fg=Rgb(105, 135, 111) bg=Black mod=NONE
+"                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"──────────────────────────────────────────────────" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"  CONFIRMAR CONTRASEÑA                            " fg=Rgb(105, 135, 111) bg=Black mod=NONE
+"                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"──────────────────────────────────────────────────" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"  Este usuario será creado activo y con rol ROOT. " fg=Rgb(238, 184, 78) bg=Black mod=NONE
+"                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                  " fg=Rgb(105, 135, 111) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"TAB/↑↓" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+" Campo  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"G/ENTER" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+" Crear ROOT  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"ESC" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+" Salir  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"F7" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+" Tema                                               " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE

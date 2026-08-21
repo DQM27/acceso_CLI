@@ -168,32 +168,45 @@ suite completa + Clippy estricto.
   escribe algo, así que salir sin escribir (Enter sin cambios) conserva el filtro anterior
   intacto. Historial y Salida Rápida no tenían el bug (su caja es un campo permanente, no
   un modo que se abre/cierra).
-- [x] **Parcial (2026-08-21): componentes visuales duplicados — buscador.** `render_campo`
-  (alias sin valor agregado de `render_form_field`) estaba copiado en 8 `render.rs`; se
-  eliminó y esos 8 llaman a `render_form_field` de `ui_kit` directo. El cálculo de
-  posición del cursor (`antes_del_cursor`/`ancho_visible`/`set_cursor_position`) estaba
-  duplicado igual en 6 sitios — se movió a `ui_kit::{posicionar_cursor,
-  posicionar_cursor_campo}`. `FormField`/`ChoiceField`/separadores/layout maestro-detalle
-  ya estaban en `ui_kit` de antes; faltan estados vacíos (`EmptyState`), confirmaciones
-  (`ConfirmationView`) y mensajes de estado (`StatusMessage`) como componentes
-  compartidos — hoy cada pantalla los reimplementa. La máquina de estados del modo
-  búsqueda (abrir/cerrar/debounce) sigue duplicada 5 veces — no se tocó porque cada
-  pantalla interpreta su propio `clave:valor`; unificarla exigiría un callback
+- [x] **Reparado (2026-08-21): componentes visuales duplicados.** `render_campo` (alias
+  sin valor agregado de `render_form_field`) estaba copiado en 8 `render.rs`; eliminado,
+  llaman a `render_form_field` directo. Cálculo de posición del cursor duplicado en 6
+  sitios → `ui_kit::{posicionar_cursor, posicionar_cursor_campo}`. Mensaje de "sin
+  resultados" y de "nada seleccionado" duplicados en 7 pantallas →
+  `ui_kit::{empty_state, panel_vacio}`. Clasificación `✓`/error de la barra de estado,
+  idéntica en 4 pantallas → `ui_kit::clasificar_mensaje` (Historial/Respaldos tienen una
+  3ª categoría real y se quedan con su propia lógica). **Sin tocar, evaluado y
+  descartado por ahora:** un `ConfirmationView` único — unificarlo de verdad exigiría
+  promover Activos/Empresas/Usuarios (hoy una línea en la barra de estado) al panel
+  completo que ya tiene Salida Rápida, un cambio de UX visible que el usuario prefirió
+  dejar para revisar después con calma, no meterlo en este barrido. La máquina de
+  estados del modo búsqueda (abrir/cerrar/debounce) también sigue duplicada 5 veces —
+  cada pantalla interpreta su propio `clave:valor`, unificarla exige un callback
   conectable, no es un corte mecánico.
-- [ ] **Foco, selección y severidad dependen demasiado del color.** Reforzar con `>`,
-  `[x]`, `!` o etiqueta textual de forma consistente (hoy no todas las vistas lo hacen
-  igual); verificar ambos temas con contraste reducido y paleta de 16 colores.
-- [ ] **Cobertura visual automatizada sin snapshots aprobados.** Ya existe una matriz que
-  renderiza 12 pantallas en 5 tamaños × 2 temas (120 combinaciones, `visual_tests.rs`),
-  pero sin snapshots de referencia guardados — falta comparar contra un estado aprobado,
-  no sólo que no truene.
-- [ ] **Paneles de confirmación sin componente unificado.** Cada pantalla arma su propia
-  confirmación; falta un componente común que incluya siempre acción, identidad del
-  objeto, datos para evitar confusión, consecuencia y atajos de confirmar/cancelar, con
-  estilo especial para lo destructivo/irreversible.
-- [ ] **Atajos por letra inconsistentes entre pantallas.** `A`, `C`, `E`, `N`, `P`, `R`
-  cambian de significado según la pantalla. Aceptable localmente, pero sin una referencia
-  global de teclado que lo explique de un vistazo.
+- [x] **Reparado (2026-08-21): foco/selección/severidad dependían del color.** Auditado
+  a fondo: la mayoría de pantallas ya tenían marcador no cromático (`▶` de foco vía
+  `ScreenShell`, `>` de selección en cada tabla). Gaps reales encontrados y cerrados: la
+  tabla de Respaldos era la única sin ningún marcador de selección (agregado `>`); la
+  fecha PRAIND vencida/por vencer en Contratistas sólo tenía color, sin símbolo de
+  respaldo (agregado `!` antes de la fecha, mismo criterio que Activos ya usa para
+  accesos con advertencia).
+- [x] **Reparado (2026-08-21): cobertura visual sin snapshots aprobados.** Agregada
+  `insta` como dev-dependency; `visual_tests.rs` vuelca cada combinación (texto +
+  tramos de estilo — color/negrita por fragmento, no sólo el texto, para no dejar pasar
+  una regresión que sólo pierde una señal de color) a un snapshot aprobado por
+  `insta::assert_snapshot!`. 120 snapshots generados y aprobados
+  (`src/tui/snapshots/*.snap`, ~1.5 MB). El reloj de `ScreenShell`
+  (`hora_actual_texto()`, hora real del sistema) se enmascara (`··:··`) antes de
+  comparar — sin eso el snapshot habría cambiado solo con el reloj, sin ninguna
+  regresión visual real, y el test habría empezado a fallar en cualquier corrida
+  futura. Para actualizar snapshots tras un cambio visual intencional:
+  `INSTA_UPDATE=always cargo test --lib visual_tests`, revisar el diff, commitear.
+- [x] **Reparado (2026-08-21): atajos por letra — el único conflicto real.** La
+  auditoría redujo el alcance real a un solo choque: `A` significaba "Activar/
+  Desactivar" en Empresas/Usuarios pero "recargar listado" en Respaldos. Renombrado a
+  `L` en Respaldos. El resto de letras señaladas (`C`, `E`, `N`, `P`, `R`) no chocan
+  entre pantallas — cada una se usa en una sola pantalla con su propio significado, no
+  hay una referencia global de teclado formal pero tampoco ambigüedad real que resolver.
 
 ## SQLite — decisiones abiertas
 

@@ -1,0 +1,113 @@
+---
+source: src/tui/visual_tests.rs
+expression: volcado
+---
+=== texto ===
+                                                                                                                                            
+ BRISAS CLI                                                                                                       Operador de prueba · ROOT 
+ CONTROL DE ACCESO                                              AUDITORÍA DE CONTRATISTAS                                             ··:·· 
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── 
+ FECHA Y HORA (CR)  CONTRATISTA                   CAMBIO REALIZADO                                            MODIFICADO POR                
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+ 0–0 de 0 cambios                                                                                                                           
+ ↑↓ Seleccionar  PgUp/PgDn Página  ESC Volver  F2 Salida rápida  F7 Tema                                                                    
+                                                                                                                                            
+
+=== estilos ===
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"BRISAS CLI" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+"                                                                                                       " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"Operador de prueba · ROOT" fg=Rgb(105, 135, 111) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"CONTROL DE ACCESO" fg=Rgb(105, 135, 111) bg=Black mod=NONE
+"                                   " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"           AUDITORÍA DE CONTRATISTAS           " fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+"                                  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"··:··" fg=Rgb(238, 184, 78) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"FECHA Y HORA (CR)  CONTRATISTA                   CAMBIO REALIZADO                                            MODIFICADO POR               " fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"0–0 de 0 cambios                                                                                                                          " fg=Rgb(105, 135, 111) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"↑↓" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+" Seleccionar  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"PgUp/PgDn" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+" Página  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"ESC" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+" Volver  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"F2" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+" Salida rápida  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"F7" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+" Tema                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE

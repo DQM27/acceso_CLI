@@ -21,3 +21,6 @@ Thumbs.db
 # Archivos temporales
 *.tmp
 *.temp
+
+# Snapshots de insta pendientes de revisar (los .snap aprobados sí se commitean)
+*.snap.new

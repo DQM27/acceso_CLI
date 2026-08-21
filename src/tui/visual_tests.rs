@@ -1,10 +1,86 @@
-use ratatui::{Terminal, backend::TestBackend};
+use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
 
 use super::*;
 use crate::{
     models::usuario::RolUsuario, services::autenticacion_service::UsuarioSesion,
     tui::ui_kit::ThemePreset,
 };
+
+/// Vuelca el buffer a texto plano más los tramos de estilo (color de
+/// frente/fondo, negrita, etc.) que cambian a lo largo de cada fila —
+/// snapshots de sólo texto no detectan una regresión que deja el contenido
+/// igual pero pierde una señal de color (foco, severidad). Se omiten los
+/// tramos de relleno sin texto y sin color propio para no inflar el
+/// snapshot con fondo vacío.
+fn volcar_buffer(buffer: &Buffer) -> String {
+    let area = buffer.area;
+    let mut texto = String::new();
+    for y in area.top()..area.bottom() {
+        for x in area.left()..area.right() {
+            texto.push_str(buffer[(x, y)].symbol());
+        }
+        texto.push('\n');
+    }
+
+    let mut estilos = String::new();
+    for y in area.top()..area.bottom() {
+        let mut x = area.left();
+        while x < area.right() {
+            let celda = &buffer[(x, y)];
+            let (fg, bg, modificador) = (celda.fg, celda.bg, celda.modifier);
+            let inicio = x;
+            let mut fin = x + 1;
+            while fin < area.right() {
+                let siguiente = &buffer[(fin, y)];
+                if siguiente.fg != fg || siguiente.bg != bg || siguiente.modifier != modificador {
+                    break;
+                }
+                fin += 1;
+            }
+            let tramo: String = (inicio..fin).map(|cx| buffer[(cx, y)].symbol()).collect();
+            let relleno_sin_estilo =
+                tramo.trim().is_empty() && fg == ratatui::style::Color::Reset && bg == fg;
+            if !relleno_sin_estilo {
+                estilos.push_str(&format!(
+                    "{tramo:?} fg={fg:?} bg={bg:?} mod={modificador:?}\n"
+                ));
+            }
+            x = fin;
+        }
+    }
+
+    format!(
+        "=== texto ===\n{}\n=== estilos ===\n{}",
+        enmascarar_hora(&texto),
+        enmascarar_hora(&estilos)
+    )
+}
+
+/// Reemplaza cualquier `HH:MM` literal por un marcador fijo — el reloj de
+/// `ScreenShell` (`hora_actual_texto()`) muestra la hora real del sistema,
+/// así que sin esto el snapshot cambiaría solo con el reloj y el test
+/// fallaría en cualquier corrida futura sin que nada visual haya cambiado.
+fn enmascarar_hora(texto: &str) -> String {
+    let chars: Vec<char> = texto.chars().collect();
+    let mut resultado = String::with_capacity(texto.len());
+    let mut i = 0;
+    while i < chars.len() {
+        let es_hora = i + 5 <= chars.len()
+            && chars[i].is_ascii_digit()
+            && chars[i + 1].is_ascii_digit()
+            && chars[i + 2] == ':'
+            && chars[i + 3].is_ascii_digit()
+            && chars[i + 4].is_ascii_digit();
+        if es_hora {
+            resultado.push_str("··:··");
+            i += 5;
+        } else {
+            resultado.push(chars[i]);
+            i += 1;
+        }
+    }
+    resultado
+}
 
 #[derive(Debug, Clone, Copy)]
 enum Screen {
@@ -176,13 +252,8 @@ fn todas_las_pantallas_renderizan_la_matriz_de_tamanos_y_temas() {
                         panic!("falló {screen:?} en {width}×{height} ({preset:?}): {error}")
                     });
 
-                let text: String = terminal
-                    .backend()
-                    .buffer()
-                    .content
-                    .iter()
-                    .map(|cell| cell.symbol())
-                    .collect();
+                let buffer = terminal.backend().buffer();
+                let text: String = buffer.content.iter().map(|cell| cell.symbol()).collect();
                 assert!(!text.trim().is_empty(), "buffer vacío para {screen:?}");
                 assert!(!text.contains('�'), "glifo inválido para {screen:?}");
                 if width < screen.min_width() || height < screen.min_height() {
@@ -193,6 +264,13 @@ fn todas_las_pantallas_renderizan_la_matriz_de_tamanos_y_temas() {
                         "falta título de {screen:?} en {width}×{height}"
                     );
                 }
+
+                // Snapshot aprobado (texto + tramos de estilo) — detecta
+                // cualquier cambio visual, no sólo que la pantalla no
+                // truene o que el título siga presente.
+                let volcado = volcar_buffer(buffer);
+                let nombre = format!("{screen:?}_{width}x{height}_{preset:?}");
+                insta::assert_snapshot!(nombre, volcado);
             }
         }
     }
