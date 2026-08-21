@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 10;
+pub const SCHEMA_VERSION: i64 = 11;
 
 /// Identifica un archivo SQLite como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -111,6 +111,11 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
     if version == 9 {
         aplicar_migracion(&transaction, MIGRACION_10, 10)?;
         version = 10;
+    }
+
+    if version == 10 {
+        aplicar_migracion(&transaction, MIGRACION_11, 11)?;
+        version = 11;
     }
 
     if version != SCHEMA_VERSION {
@@ -807,4 +812,12 @@ ON auditoria_contratistas(fecha_hora DESC, id DESC);
 
 CREATE INDEX idx_auditoria_contratistas_contratista
 ON auditoria_contratistas(contratista_id, id DESC);
+"#;
+
+// Acelera la búsqueda de la salida más reciente sin indexar las filas todavía
+// activas. La propia clave del índice cubre por completo `MAX(fecha_hora_salida)`.
+const MIGRACION_11: &str = r#"
+CREATE INDEX idx_registro_ingresos_fecha_salida
+ON registro_ingresos(fecha_hora_salida)
+WHERE fecha_hora_salida IS NOT NULL;
 "#;

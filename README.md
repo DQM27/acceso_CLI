@@ -89,7 +89,23 @@ las reglas de entrada y salida, la administración y las relaciones persistidas.
 El [plan de saneamiento técnico](docs/plan-saneamiento.md) mantiene el listado priorizado
 de ajustes y sus criterios de finalización.
 
-La TUI se ejecuta con `cargo run`. Ratatui controla caracteres, espaciado, líneas y
-colores, pero no la fuente de la terminal. Para conservar la apariencia prevista se
-recomienda una terminal moderna con Cascadia Mono, Cascadia Code, JetBrains Mono o una
-fuente monoespaciada similar.
+La TUI para uso real se ejecuta optimizada con `cargo run --release`. `cargo run` sin
+`--release` se reserva para depuración y puede sentirse considerablemente más lento.
+Ratatui controla caracteres, espaciado, líneas y colores, pero no la fuente de la
+terminal. Para conservar la apariencia prevista se recomienda una terminal moderna con
+Cascadia Mono, Cascadia Code, JetBrains Mono o una fuente monoespaciada similar.
+
+### Compilación optimizada para una sola computadora
+
+El release normal ya usa optimización nivel 3, ThinLTO y una sola unidad de generación
+de código. Si el ejecutable **nunca se va a copiar a otra computadora**, se puede generar
+además una variante que habilita las instrucciones disponibles en el procesador local:
+
+```powershell
+cargo build-native
+.\target\release-native\control_acceso.exe
+```
+
+La variante `release-native` no es portable a procesadores más antiguos. No se fuerza
+un número de hilos: Cargo ya paraleliza la compilación automáticamente y la aplicación
+mantiene serializadas las escrituras de SQLite para preservar sus garantías.

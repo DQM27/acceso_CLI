@@ -1,4 +1,7 @@
-use std::{io, time::Duration};
+use std::{
+    io,
+    time::{Duration, Instant},
+};
 
 use crossterm::event::{self, Event, KeyEventKind};
 use ratatui::{Terminal, backend::Backend};
@@ -14,24 +17,28 @@ use crate::models::usuario::RolUsuario;
 use crate::services::autenticacion_service::UsuarioSesion;
 
 use super::{
-    activos::{self, ActivosState},
+    activos::{self, AccionActivos, ActivosState},
     auditoria::{self, AuditoriaState},
     cambio_password::{self, AccionCambioPassword, CambioPasswordState},
     configuracion::{self, ConfiguracionState},
     configuracion_inicial::{self, AccionConfiguracion, ConfiguracionInicialState, SolicitudRoot},
-    contratistas::{self, ContratistasState},
-    empresas::{self, EmpresasState},
-    historial::{self, HistorialState},
+    contratistas::{self, AccionContratistas, ContratistasState},
+    empresas::{self, AccionEmpresas, EmpresasState},
+    historial::{self, AccionHistorial, HistorialState},
     login::{self, AccionLogin, LoginState},
     menu_principal::{self, AccionMenu, MenuPrincipalState, OpcionMenu},
-    nuevo_ingreso::{self, NuevoIngresoState},
+    nuevo_ingreso::{self, AccionNuevoIngreso, NuevoIngresoState},
     preferences::{PreferencesStore, UiPreferences},
-    salida_rapida::{self, SalidaRapidaState},
+    salida_rapida::{self, AccionSalidaRapida, SalidaRapidaState},
     ui_kit::{StandardCommand, ThemePreset, standard_command},
-    usuarios::{self, UsuariosState},
+    usuarios::{self, AccionUsuarios, UsuariosState},
 };
 
 const EVENT_POLL: Duration = Duration::from_millis(50);
+/// Las pantallas muestran un reloj con precisión de minutos. Un refresco por segundo
+/// deja margen de sobra para el cambio de minuto sin volver a construir toda la TUI
+/// veinte veces por segundo cuando el operador no está haciendo nada.
+const CLOCK_REFRESH: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Vista {
@@ -205,97 +212,133 @@ impl App {
         terminal: &mut Terminal<B>,
         core: Option<&AppCore>,
     ) -> io::Result<SalidaApp> {
+        let mut redibujar = true;
+        let mut ultimo_refresco_reloj = Instant::now();
         while !self.salir {
-            let theme = self.tema.theme();
-            terminal.draw(|frame| {
-                match self.vista {
-                    Vista::ConfiguracionInicial => configuracion_inicial::render(
-                        frame,
-                        frame.area(),
-                        &self.configuracion_inicial,
-                        theme,
-                    ),
-                    Vista::Login => login::render(frame, frame.area(), &self.login, theme),
-                    Vista::MenuPrincipal => {
-                        if let Some(sesion) = &self.sesion {
-                            menu_principal::render(frame, frame.area(), &self.menu, sesion, theme)
+            if redibujar {
+                let theme = self.tema.theme();
+                terminal.draw(|frame| {
+                    match self.vista {
+                        Vista::ConfiguracionInicial => configuracion_inicial::render(
+                            frame,
+                            frame.area(),
+                            &self.configuracion_inicial,
+                            theme,
+                        ),
+                        Vista::Login => login::render(frame, frame.area(), &self.login, theme),
+                        Vista::MenuPrincipal => {
+                            if let Some(sesion) = &self.sesion {
+                                menu_principal::render(
+                                    frame,
+                                    frame.area(),
+                                    &self.menu,
+                                    sesion,
+                                    theme,
+                                )
+                            }
+                        }
+                        Vista::IngresosActivos => {
+                            if let Some(sesion) = &self.sesion {
+                                activos::render(frame, frame.area(), &self.activos, sesion, theme)
+                            }
+                        }
+                        Vista::Historial => {
+                            if let Some(sesion) = &self.sesion {
+                                historial::render(
+                                    frame,
+                                    frame.area(),
+                                    &self.historial,
+                                    sesion,
+                                    theme,
+                                )
+                            }
+                        }
+                        Vista::Contratistas => {
+                            if let Some(sesion) = &self.sesion {
+                                contratistas::render(
+                                    frame,
+                                    frame.area(),
+                                    &self.contratistas,
+                                    sesion,
+                                    theme,
+                                )
+                            }
+                        }
+                        Vista::Empresas => {
+                            if let Some(sesion) = &self.sesion {
+                                empresas::render(frame, frame.area(), &self.empresas, sesion, theme)
+                            }
+                        }
+                        Vista::Usuarios => {
+                            if let Some(sesion) = &self.sesion {
+                                usuarios::render(frame, frame.area(), &self.usuarios, sesion, theme)
+                            }
+                        }
+                        Vista::CambiarPassword => {
+                            if let Some(sesion) = &self.sesion {
+                                cambio_password::render(
+                                    frame,
+                                    frame.area(),
+                                    &self.cambio_password,
+                                    sesion,
+                                    theme,
+                                )
+                            }
+                        }
+                        Vista::Auditoria => {
+                            if let Some(sesion) = &self.sesion {
+                                auditoria::render(
+                                    frame,
+                                    frame.area(),
+                                    &self.auditoria,
+                                    sesion,
+                                    theme,
+                                )
+                            }
+                        }
+                        Vista::Respaldos => {
+                            configuracion::render(frame, frame.area(), &self.configuracion, theme)
+                        }
+                        Vista::NuevoIngreso => {
+                            if let Some(sesion) = &self.sesion {
+                                nuevo_ingreso::render(
+                                    frame,
+                                    frame.area(),
+                                    &self.nuevo_ingreso,
+                                    sesion,
+                                    theme,
+                                )
+                            }
                         }
                     }
-                    Vista::IngresosActivos => {
-                        if let Some(sesion) = &self.sesion {
-                            activos::render(frame, frame.area(), &self.activos, sesion, theme)
-                        }
-                    }
-                    Vista::Historial => {
-                        if let Some(sesion) = &self.sesion {
-                            historial::render(frame, frame.area(), &self.historial, sesion, theme)
-                        }
-                    }
-                    Vista::Contratistas => {
-                        if let Some(sesion) = &self.sesion {
-                            contratistas::render(
-                                frame,
-                                frame.area(),
-                                &self.contratistas,
-                                sesion,
-                                theme,
-                            )
-                        }
-                    }
-                    Vista::Empresas => {
-                        if let Some(sesion) = &self.sesion {
-                            empresas::render(frame, frame.area(), &self.empresas, sesion, theme)
-                        }
-                    }
-                    Vista::Usuarios => {
-                        if let Some(sesion) = &self.sesion {
-                            usuarios::render(frame, frame.area(), &self.usuarios, sesion, theme)
-                        }
-                    }
-                    Vista::CambiarPassword => {
-                        if let Some(sesion) = &self.sesion {
-                            cambio_password::render(
-                                frame,
-                                frame.area(),
-                                &self.cambio_password,
-                                sesion,
-                                theme,
-                            )
-                        }
-                    }
-                    Vista::Auditoria => {
-                        if let Some(sesion) = &self.sesion {
-                            auditoria::render(frame, frame.area(), &self.auditoria, sesion, theme)
-                        }
-                    }
-                    Vista::Respaldos => {
-                        configuracion::render(frame, frame.area(), &self.configuracion, theme)
-                    }
-                    Vista::NuevoIngreso => {
-                        if let Some(sesion) = &self.sesion {
-                            nuevo_ingreso::render(
-                                frame,
-                                frame.area(),
-                                &self.nuevo_ingreso,
-                                sesion,
-                                theme,
-                            )
-                        }
-                    }
-                }
-                salida_rapida::render(frame, frame.area(), &self.salida_rapida, theme);
-            })?;
-
-            if event::poll(EVENT_POLL)?
-                && let Event::Key(key) = event::read()?
-                && key.kind == KeyEventKind::Press
-            {
-                self.procesar_tecla_global(key, core);
+                    salida_rapida::render(frame, frame.area(), &self.salida_rapida, theme);
+                })?;
+                redibujar = false;
             }
 
-            let ahora = std::time::Instant::now();
+            let mut cambio_visible = false;
+            if event::poll(EVENT_POLL)? {
+                match event::read()? {
+                    Event::Key(key) if key.kind == KeyEventKind::Press => {
+                        self.procesar_tecla_global(key, core);
+                        cambio_visible = true;
+                    }
+                    // Sin el redibujado continuo, un cambio de tamaño debe invalidar
+                    // explícitamente el frame anterior.
+                    Event::Resize(_, _) => cambio_visible = true,
+                    _ => {}
+                }
+            }
+
+            let ahora = Instant::now();
             self.configuracion_inicial.tick(ahora);
             self.login.tick(ahora);
+            let trabajos_antes = (
+                self.autenticacion_pendiente.is_some(),
+                self.hilo_usuario_pendiente.is_some(),
+                self.cambio_password_pendiente.is_some(),
+                self.root_inicial_pendiente.is_some(),
+            );
             // Sondeo de los 4 hilos de Argon2 en vuelo, siempre en el mismo lugar
             // del bucle (después de leer teclas): login, ROOT inicial, crear
             // usuario/cambiar contraseña.
@@ -309,24 +352,48 @@ impl App {
             }
             self.recibir_hilo_usuario_si_lista(core);
             self.recibir_cambio_password_propio(core);
+            let trabajos_despues = (
+                self.autenticacion_pendiente.is_some(),
+                self.hilo_usuario_pendiente.is_some(),
+                self.cambio_password_pendiente.is_some(),
+                self.root_inicial_pendiente.is_some(),
+            );
+            cambio_visible |= trabajos_antes != trabajos_despues;
 
             // Búsquedas con debounce: cada pantalla decide si ya pasó el
             // tiempo sin tecla nueva; si no, `tick` devuelve `Ninguna` y el
             // despacho de siempre es un no-op.
             let accion = self.historial.tick(ahora);
+            cambio_visible |= !matches!(&accion, AccionHistorial::Ninguna);
             self.procesar_accion_historial(accion, core);
             let accion = self.contratistas.tick(ahora);
+            cambio_visible |= !matches!(&accion, AccionContratistas::Ninguna);
             self.procesar_accion_contratistas(accion, core);
             let accion = self.activos.tick(ahora);
+            cambio_visible |= !matches!(&accion, AccionActivos::Ninguna);
             self.procesar_accion_activos(accion, core);
             let accion = self.empresas.tick(ahora);
+            cambio_visible |= !matches!(&accion, AccionEmpresas::Ninguna);
             self.procesar_accion_empresas(accion, core);
             let accion = self.usuarios.tick(ahora);
+            cambio_visible |= !matches!(&accion, AccionUsuarios::Ninguna);
             self.procesar_accion_usuarios(accion, core);
             let accion = self.nuevo_ingreso.tick(ahora);
+            cambio_visible |= !matches!(&accion, AccionNuevoIngreso::Ninguna);
             self.procesar_accion_nuevo_ingreso(accion, core);
             let accion = self.salida_rapida.tick(ahora);
+            cambio_visible |= !matches!(&accion, AccionSalidaRapida::Ninguna);
             self.procesar_accion_salida_rapida(accion, core);
+
+            // Login y configuración inicial sí tienen animación (spinner/cursor).
+            // El resto sólo se invalida por una entrada, un resultado, un resize o
+            // el reloj; así la app ociosa deja de reconstruir 20 frames por segundo.
+            cambio_visible |= matches!(self.vista, Vista::Login | Vista::ConfiguracionInicial);
+            if ahora.saturating_duration_since(ultimo_refresco_reloj) >= CLOCK_REFRESH {
+                ultimo_refresco_reloj = ahora;
+                cambio_visible = true;
+            }
+            redibujar |= cambio_visible;
         }
 
         Ok(self.salida.clone())

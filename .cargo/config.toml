@@ -1,0 +1,2 @@
+[alias]
+build-native = ["--config", "build.rustflags=['-C','target-cpu=native']", "build", "--profile", "release-native"]

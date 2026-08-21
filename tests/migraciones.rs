@@ -144,7 +144,8 @@ fn migracion_10_conserva_auditoria_y_admite_cambios_de_acceso() {
     insertar_referencias(&connection);
     connection
         .execute_batch(
-            "DROP TABLE auditoria_contratistas;
+            "DROP INDEX idx_registro_ingresos_fecha_salida;
+             DROP TABLE auditoria_contratistas;
              CREATE TABLE auditoria_contratistas (
                 id INTEGER PRIMARY KEY,
                 fecha_hora TEXT NOT NULL,
@@ -185,6 +186,59 @@ fn migracion_10_conserva_auditoria_y_admite_cambios_de_acceso() {
             [],
         )
         .unwrap();
+}
+
+#[test]
+fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    insertar_referencias(&connection);
+    insertar_movimiento_actual(
+        &connection,
+        1,
+        "2026-08-21T10:00:00Z",
+        Some("2026-08-21T11:00:00Z"),
+        Some(1),
+        Some("Operador"),
+    )
+    .unwrap();
+    connection
+        .execute_batch(
+            "DROP INDEX idx_registro_ingresos_fecha_salida;
+             PRAGMA user_version = 10;",
+        )
+        .unwrap();
+
+    initialize_database(&connection).unwrap();
+
+    assert_eq!(version(&connection), SCHEMA_VERSION);
+    let definicion: String = connection
+        .query_row(
+            "SELECT sql FROM sqlite_master
+             WHERE type = 'index'
+               AND name = 'idx_registro_ingresos_fecha_salida'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(definicion.contains("ON registro_ingresos(fecha_hora_salida)"));
+    assert!(definicion.contains("WHERE fecha_hora_salida IS NOT NULL"));
+    let movimiento: (String, String) = connection
+        .query_row(
+            "SELECT fecha_hora_ingreso, fecha_hora_salida
+             FROM registro_ingresos WHERE id = 1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(
+        movimiento,
+        (
+            "2026-08-21T10:00:00Z".to_owned(),
+            "2026-08-21T11:00:00Z".to_owned()
+        )
+    );
+    initialize_database(&connection).unwrap();
 }
 
 #[test]
