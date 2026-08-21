@@ -51,18 +51,19 @@ acceso completo al archivo: SQLite no incluye usuarios internos ni permisos
 `initialize_database` (`src/database/schema.rs`), junto con una verificación de
 `PRAGMA quick_check` en cada apertura y `PRAGMA optimize` al cerrar `AppCore`. Ver el
 perfil exacto en la sección 2 más abajo. El cifrado en reposo (SQLCipher/BitLocker,
-sección 8) sigue pendiente de una decisión de política — `secure_delete` reduce restos
-recuperables pero no cifra la base.
+sección 8) sigue abierto como decisión de política — ver `docs/pendientes.md`;
+`secure_delete` reduce restos recuperables pero no cifra la base.
 
 ## Recomendaciones antes de producción
 
 ### 1. Respaldo y restauración
 
-Activar la característica `backup` de `rusqlite` y usar la Online Backup API. Una copia
-directa del archivo mientras SQLite está abierto no es el mecanismo correcto. La copia
-generada debe validarse y la restauración debe probarse con rollback.
-
-Esta tarea se detalla en [plan-respaldos.md](plan-respaldos.md).
+**Implementado.** `rusqlite` con la característica `backup` y la Online Backup API;
+copia validada, restauración con rollback automático, pantalla Configuración →
+Respaldos, respaldo obligatorio pre-migración y respaldo automático diario con
+retención. Detalle histórico del diseño e implementación en el `git log` de los commits
+que tocaron `src/database/backup.rs` (el plan de fases que lo guió se consolidó en
+`docs/pendientes.md`, que conserva sólo la acción "Eliminar respaldo" aún no acordada).
 
 ### 2. Perfil explícito de durabilidad — implementado
 
@@ -87,9 +88,10 @@ PRAGMA secure_delete = FAST;
   escritura marginal. No cifra la base — ver sección 8 para eso.
 - `trusted_schema = OFF` se probó contra toda la suite (migraciones, triggers y las
   tres tablas FTS5) sin romper nada.
-- Si se agota el tiempo de espera, `SQLITE_BUSY` debe seguir traduciéndose a un mensaje
-  claro para el operador — eso queda pendiente en la capa de errores observables
-  (ver `plan-saneamiento.md`), no en la configuración misma.
+- Tratar `SQLITE_BUSY` como error observable para el operador se evaluó y se **descartó
+  a propósito** (decisión explícita del usuario, mismo motivo que el resto de "errores
+  observables": no proporcional a lo que esta app necesita) — no es un pendiente, es
+  una decisión ya cerrada.
 
 Cubierto por `tests/configuracion_sqlite.rs::fija_el_perfil_de_durabilidad_esperado`.
 Los valores se aplicaron siguiendo la evaluación de este documento, no sólo por
