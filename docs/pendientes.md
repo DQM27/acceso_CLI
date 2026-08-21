@@ -39,9 +39,12 @@ este orden:
   (ancestro del submódulo `actions`) siga pudiendo llamarlos — visibilidad de Rust sólo da
   acceso automático a descendientes, no a ancestros. `app.rs` pasó de 1.189 a 620 líneas.
   `cargo fmt`, Clippy estricto y la suite completa en verde.
-- [ ] **Fase 5 — Separar navegación y runtime.** `src/tui/app/navigation.rs` y
-  `src/tui/app/runtime.rs`; evaluar reemplazar `Option<&AppCore>` por un modo de ejecución
-  explícito (normal vs. arranque degradado).
+- [x] **Fase 5 — Separar navegación y runtime: descartada por decisión (2026-08-21).**
+  `app.rs` ya quedó en 620 líneas tras las Fases 3-4 — dejó de ser el hotspot que
+  justificaba el refactor original (2.971 líneas). Partirlo más en `navigation.rs`/
+  `runtime.rs` tendría retorno decreciente: cada pieza restante (loop de render,
+  navegación global, sesión) ya es chica y de propósito claro. Se prioriza
+  `application.rs` (965 líneas, más señal real de necesitar el corte) en su lugar.
 
 Riesgos a conservar bajo prueba durante el refactor: una vista autenticada no debe quedar
 activa sin sesión; F2 debe refrescar Activos/Historial/Nuevo Ingreso según la vista debajo
