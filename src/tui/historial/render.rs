@@ -5,8 +5,8 @@ use crate::{
     tiempo::{a_costa_rica, hora_actual_texto},
     tui::ui_kit::{
         CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme,
-        auxiliary_panel, centered_rect, identidad_sesion, master_detail_areas, render_form_field,
-        render_separator, render_terminal_too_small,
+        auxiliary_panel, centered_rect, detail_line, identidad_sesion, master_detail_areas,
+        render_form_field, render_separator, render_terminal_too_small,
     },
 };
 use ratatui::{
@@ -329,52 +329,60 @@ fn render_detalle(frame: &mut Frame, area: Rect, r: &MovimientoIngresoResumen, t
         .map_or_else(|| "Sin gafete".to_owned(), |g| g.to_string());
     let mut lineas = vec![
         Line::from(r.contratista_nombre.clone()).style(theme.title()),
-        Line::from(r.cedula.clone()).style(theme.muted()),
+        detail_line("Cédula", r.cedula.clone(), theme),
         Line::from(""),
-        Line::from(format!("Empresa: {}", r.empresa_nombre)).style(theme.base()),
-        Line::from(format!("Tipo de ingreso: {}", tipo_texto(r.tipo_ingreso))).style(theme.base()),
-        Line::from(format!("Medio: {}", texto_medio(r.medio_ingreso))).style(theme.base()),
-        Line::from(format!("Gafete: {gafete_texto}")).style(theme.base()),
+        detail_line("Empresa", r.empresa_nombre.clone(), theme),
+        detail_line("Tipo", tipo_texto(r.tipo_ingreso), theme),
+        detail_line("Medio", texto_medio(r.medio_ingreso), theme),
+        detail_line("Gafete", gafete_texto, theme),
         Line::from(""),
-        Line::from(format!(
-            "Fecha: {}",
-            a_costa_rica(r.fecha_hora_ingreso).format("%d/%m/%Y")
-        ))
-        .style(theme.base()),
-        Line::from(format!(
-            "Entrada: {}",
-            a_costa_rica(r.fecha_hora_ingreso).format("%H:%M")
-        ))
-        .style(theme.base()),
+        detail_line(
+            "Fecha",
+            a_costa_rica(r.fecha_hora_ingreso)
+                .format("%d/%m/%Y")
+                .to_string(),
+            theme,
+        ),
+        detail_line(
+            "Entrada",
+            a_costa_rica(r.fecha_hora_ingreso)
+                .format("%H:%M")
+                .to_string(),
+            theme,
+        ),
     ];
     match r.fecha_hora_salida {
         Some(salida) => {
             let duracion = salida - r.fecha_hora_ingreso;
-            lineas.push(
-                Line::from(format!("Salida: {}", a_costa_rica(salida).format("%H:%M")))
-                    .style(theme.base()),
-            );
-            lineas.push(
-                Line::from(format!(
-                    "Duración: {}h{:02}m",
+            lineas.push(detail_line(
+                "Salida",
+                a_costa_rica(salida).format("%H:%M").to_string(),
+                theme,
+            ));
+            lineas.push(detail_line(
+                "Duración",
+                format!(
+                    "{}h{:02}m",
                     duracion.num_minutes() / 60,
                     duracion.num_minutes() % 60,
-                ))
-                .style(theme.base()),
-            );
+                ),
+                theme,
+            ));
         }
-        None => lineas.push(Line::from("Estado: activo, aún dentro").style(theme.warning())),
+        None => lineas.push(detail_line("Estado", "Activo, aún dentro", theme)),
     }
     lineas.push(Line::from(""));
-    lineas.push(
-        Line::from(format!(
-            "Ingreso registrado por: {}",
-            r.usuario_ingreso_nombre
-        ))
-        .style(theme.base()),
-    );
+    lineas.push(detail_line(
+        "Ingreso registrado por",
+        r.usuario_ingreso_nombre.clone(),
+        theme,
+    ));
     if let Some(operador) = &r.usuario_salida_nombre {
-        lineas.push(Line::from(format!("Salida registrada por: {operador}")).style(theme.base()));
+        lineas.push(detail_line(
+            "Salida registrada por",
+            operador.clone(),
+            theme,
+        ));
     }
     frame.render_widget(Paragraph::new(lineas), area);
 }

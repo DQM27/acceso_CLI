@@ -12,7 +12,7 @@ use crate::{
     tiempo::hora_actual_texto,
     tui::ui_kit::{
         CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme,
-        identidad_sesion, master_detail_areas, render_form_field, render_separator,
+        detail_line, identidad_sesion, master_detail_areas, render_form_field, render_separator,
         render_terminal_too_small,
     },
 };
@@ -262,21 +262,19 @@ fn render_panel(
 }
 
 fn render_detalle(frame: &mut Frame, area: Rect, empresa: &EmpresaResumen, theme: Theme) {
-    let estilo_estado = if empresa.activo {
-        theme.success()
-    } else {
-        theme.danger()
-    };
     let lineas = vec![
         Line::from(empresa.nombre.as_str()).style(theme.title()),
         Line::from(""),
-        Line::from(format!("Contratistas asociados: {}", empresa.contratistas)).style(theme.base()),
-        Line::from(if empresa.activo {
-            "Estado: ACTIVA"
-        } else {
-            "Estado: INACTIVA"
-        })
-        .style(estilo_estado),
+        detail_line(
+            "Contratistas asociados",
+            empresa.contratistas.to_string(),
+            theme,
+        ),
+        detail_line(
+            "Estado",
+            if empresa.activo { "Activa" } else { "Inactiva" },
+            theme,
+        ),
     ];
     frame.render_widget(Paragraph::new(lineas), area);
 }

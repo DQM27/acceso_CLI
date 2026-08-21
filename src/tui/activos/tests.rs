@@ -240,7 +240,7 @@ fn mensaje_de_salida_sobrevive_recarga_y_navegacion() {
 }
 
 #[test]
-fn detalle_distingue_decision_historica_de_condicion_actual() {
+fn detalle_muestra_solo_datos_operativos_en_orden() {
     use ratatui::{Terminal, backend::TestBackend};
 
     let mut s = ActivosState::default();
@@ -277,9 +277,15 @@ fn detalle_distingue_decision_historica_de_condicion_actual() {
         .map(|cell| cell.symbol())
         .collect();
 
-    assert!(texto.contains("Decisión al ingresar"));
-    assert!(texto.contains("PERMITIDO CON ADVERTENCIA"));
-    assert!(texto.contains("Condición actual"));
-    assert!(texto.contains("ACCIÓN REQUERIDA"));
-    assert!(texto.contains("PRAIND vencido"));
+    assert!(texto.contains("Cédula: C-7"));
+    assert!(texto.contains("Empresa: Empresa"));
+    assert!(texto.contains("Tipo: PRAIND"));
+    assert!(texto.contains("Medio: Caminando"));
+    assert!(texto.contains("Gafete: 26"));
+    assert!(texto.contains("Ingreso: 12/08/2026"));
+    assert!(texto.contains("Registrado por: Ana"));
+    assert!(!texto.contains("Decisión al ingresar"));
+    assert!(!texto.contains("Condición actual"));
+    assert!(!texto.contains("Motivo"));
+    assert!(!texto.contains("Acción"));
 }

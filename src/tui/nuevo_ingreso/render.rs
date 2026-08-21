@@ -270,13 +270,30 @@ fn render_panel(
                         lineas.push(
                             Line::from("● DENTRO · tiene un ingreso activo").style(theme.danger()),
                         );
-                        lineas.push(
-                            Line::from("No puede registrar otro ingreso.").style(theme.muted()),
-                        );
                     } else {
                         lineas.push(
                             Line::from("● FUERA · sin ingreso activo").style(theme.success()),
                         );
+                    }
+                    lineas.push(Line::from(""));
+                    lineas.push(Line::from("PERMISO DE ACCESO").style(theme.muted()));
+                    if contratista.tiene_acceso {
+                        lineas.push(Line::from("● HABILITADO").style(theme.success()));
+                    } else {
+                        lineas.push(
+                            Line::from("● DENEGADO · no tiene acceso autorizado")
+                                .style(theme.danger()),
+                        );
+                    }
+                    if contratista.tiene_ingreso_activo {
+                        lineas.push(
+                            Line::from("No puede registrar otro ingreso.").style(theme.muted()),
+                        );
+                    } else if !contratista.tiene_acceso {
+                        lineas.push(
+                            Line::from("No puede registrar un ingreso.").style(theme.muted()),
+                        );
+                    } else {
                         lineas.push(
                             Line::from("ENTER para validar y preparar el ingreso.")
                                 .style(theme.muted()),

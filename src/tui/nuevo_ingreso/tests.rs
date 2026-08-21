@@ -58,6 +58,8 @@ fn muestra_si_el_contratista_seleccionado_esta_dentro_o_fuera() {
         .unwrap();
     let fuera = texto(&terminal);
     assert!(fuera.contains("FUERA · sin ingreso activo"));
+    assert!(fuera.contains("PERMISO DE ACCESO"));
+    assert!(fuera.contains("HABILITADO"));
     assert!(fuera.contains("ENTER para validar y preparar el ingreso"));
 
     state.contratistas[0].tiene_ingreso_activo = true;
@@ -67,6 +69,16 @@ fn muestra_si_el_contratista_seleccionado_esta_dentro_o_fuera() {
     let dentro = texto(&terminal);
     assert!(dentro.contains("DENTRO · tiene un ingreso activo"));
     assert!(dentro.contains("No puede registrar otro ingreso"));
+
+    state.contratistas[0].tiene_ingreso_activo = false;
+    state.contratistas[0].tiene_acceso = false;
+    terminal
+        .draw(|frame| render::render(frame, frame.area(), &state, &sesion, theme))
+        .unwrap();
+    let denegado = texto(&terminal);
+    assert!(denegado.contains("DENEGADO · no tiene acceso autorizado"));
+    assert!(denegado.contains("No puede registrar un ingreso"));
+    assert!(!denegado.contains("ENTER para validar y preparar el ingreso"));
 }
 
 fn preparar(requiere: bool) -> PreparacionIngreso {

@@ -5,6 +5,7 @@
 //! atajos, también la convención de teclado (`standard_command`).
 
 mod debounce;
+mod details;
 mod fields;
 mod keyboard;
 mod layout;
@@ -16,6 +17,7 @@ mod texto;
 mod theme;
 
 pub use debounce::Debounce;
+pub use details::detail_line;
 pub use fields::{ChoiceFieldOptions, render_choice_field, render_form_field};
 pub use keyboard::{
     CANCEL_HINT, EMERGENCY_EXIT_HINT, HELP_HINT, HELP_KEY, QUICK_EXIT_HINT, QUICK_EXIT_KEY,

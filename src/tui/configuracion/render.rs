@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout, Rect},
-    text::{Line, Span},
+    text::Line,
     widgets::{Cell, Paragraph, Row, Table},
 };
 
@@ -170,10 +170,11 @@ fn render_detalle(frame: &mut Frame, area: Rect, estado: &RespaldosState, theme:
     let lineas = vec![
         Line::from(nombre_archivo(&fila.resumen.ruta)).style(theme.title()),
         Line::from(fila.resumen.ruta.display().to_string()).style(theme.muted()),
-        Line::from(vec![
-            Span::styled("Estado: ", theme.muted()),
-            Span::styled(etiqueta_validacion(fila.validacion.as_ref()), theme.base()),
-        ]),
+        crate::tui::ui_kit::detail_line(
+            "Estado",
+            etiqueta_validacion(fila.validacion.as_ref()),
+            theme,
+        ),
     ];
     frame.render_widget(Paragraph::new(lineas), area);
 }

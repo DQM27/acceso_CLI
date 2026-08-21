@@ -14,8 +14,8 @@ use crate::{
     tiempo::hora_actual_texto,
     tui::ui_kit::{
         ChoiceFieldOptions, CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell,
-        StatusKind, TextInput, Theme, identidad_sesion, master_detail_areas, render_choice_field,
-        render_separator, render_terminal_too_small,
+        StatusKind, TextInput, Theme, detail_line, identidad_sesion, master_detail_areas,
+        render_choice_field, render_separator, render_terminal_too_small,
     },
 };
 
@@ -358,7 +358,7 @@ fn render_panel(frame: &mut Frame, area: Rect, state: &ContratistasState, theme:
         }
         ModoContratistas::Normal | ModoContratistas::Busqueda { .. } => {
             match state.seleccionado() {
-                Some(c) => render_detalle(frame, area, c, state.hoy, theme),
+                Some(c) => render_detalle(frame, area, c, theme),
                 None => frame.render_widget(
                     Paragraph::new("No hay un registro seleccionado.").style(theme.muted()),
                     area,
@@ -368,39 +368,30 @@ fn render_panel(frame: &mut Frame, area: Rect, state: &ContratistasState, theme:
     }
 }
 
-fn render_detalle(
-    frame: &mut Frame,
-    area: Rect,
-    c: &ContratistaResumen,
-    hoy: NaiveDate,
-    theme: Theme,
-) {
-    let estilo_praind = estilo_fecha(c.fecha_vencimiento_praind, hoy, theme);
-    let estilo_acceso = if c.tiene_acceso {
-        theme.success()
-    } else {
-        theme.danger()
-    };
+fn render_detalle(frame: &mut Frame, area: Rect, c: &ContratistaResumen, theme: Theme) {
     let lineas = vec![
         Line::from(c.nombre.as_str()).style(theme.title()),
-        Line::from(c.cedula.as_str()).style(theme.muted()),
+        detail_line("Cédula", c.cedula.clone(), theme),
         Line::from(""),
-        Line::from(format!("Empresa: {}", c.empresa_nombre)).style(theme.base()),
-        Line::from(format!("Tipo de ingreso: {}", texto_tipo(c.tipo_ingreso))).style(theme.base()),
-        Line::from(format!(
-            "PRAIND: {}",
+        detail_line("Empresa", c.empresa_nombre.clone(), theme),
+        detail_line("Tipo", texto_tipo(c.tipo_ingreso), theme),
+        detail_line(
+            "PRAIND",
             c.fecha_vencimiento_praind
                 .map(|f| f.format("%d/%m/%Y").to_string())
-                .unwrap_or_else(|| "No requerida".into())
-        ))
-        .style(estilo_praind),
-        Line::from(format!("Personal de ruta: {}", si_no(c.es_personal_ruta))).style(theme.base()),
-        Line::from(if c.tiene_acceso {
-            "ACCESO PERMITIDO"
-        } else {
-            "SIN ACCESO"
-        })
-        .style(estilo_acceso),
+                .unwrap_or_else(|| "No requerida".into()),
+            theme,
+        ),
+        detail_line("Personal de ruta", si_no(c.es_personal_ruta), theme),
+        detail_line(
+            "Acceso",
+            if c.tiene_acceso {
+                "Permitido"
+            } else {
+                "Denegado"
+            },
+            theme,
+        ),
     ];
     frame.render_widget(Paragraph::new(lineas), area);
 }

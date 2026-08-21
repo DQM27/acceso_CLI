@@ -1,14 +1,12 @@
 use super::*;
 use crate::{
-    domain::resultado_acceso::{MotivoDenegacion, ResultadoAcceso},
-    models::registro_ingreso::{MotivoResultadoIngreso, ResultadoIngresoRegistrado},
     services::{
         autenticacion_service::UsuarioSesion, registro_ingreso_service::IngresoActivoResumen,
     },
     tiempo::{a_costa_rica, hora_actual_texto},
     tui::ui_kit::{
         CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme,
-        identidad_sesion, master_detail_areas, render_form_field, render_separator,
+        detail_line, identidad_sesion, master_detail_areas, render_form_field, render_separator,
         render_terminal_too_small,
     },
 };
@@ -285,98 +283,29 @@ fn render_panel(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Them
 }
 
 fn render_detalle(frame: &mut Frame, area: Rect, registro: &IngresoActivoResumen, theme: Theme) {
-    let (nivel_actual, motivo_actual, accion_actual, estilo_actual) =
-        presentacion_condicion_actual(&registro.resultado_acceso, theme);
     let lineas = vec![
         Line::from(registro.contratista_nombre.clone()).style(theme.title()),
-        Line::from(format!("{} · {}", registro.cedula, registro.empresa_nombre))
-            .style(theme.base()),
+        detail_line("Cédula", registro.cedula.clone(), theme),
+        detail_line("Empresa", registro.empresa_nombre.clone(), theme),
         Line::from(""),
-        Line::from(format!(
-            "Decisión al ingresar  {}",
-            texto_resultado_registrado(&registro.resultado_registrado)
-        ))
-        .style(theme.base()),
-        Line::from(format!("Condición actual     {nivel_actual}")).style(estilo_actual),
-        Line::from(format!("Motivo               {motivo_actual}")).style(estilo_actual),
-        Line::from(format!("Acción               {accion_actual}")).style(estilo_actual),
+        detail_line("Tipo", texto_tipo(registro.tipo_ingreso), theme),
+        detail_line("Medio", texto_medio(registro.medio_ingreso), theme),
+        detail_line("Gafete", valor_columna(registro, Columna::Gafete), theme),
         Line::from(""),
-        Line::from(format!(
-            "Tipo               {}",
-            texto_tipo(registro.tipo_ingreso)
-        ))
-        .style(theme.base()),
-        Line::from(format!(
-            "Medio              {}",
-            texto_medio(registro.medio_ingreso)
-        ))
-        .style(theme.base()),
-        Line::from(format!(
-            "Ingreso            {}",
-            a_costa_rica(registro.fecha_hora_ingreso).format("%d/%m/%Y %H:%M")
-        ))
-        .style(theme.base()),
-        Line::from(format!(
-            "Gafete             {}",
-            valor_columna(registro, Columna::Gafete)
-        ))
-        .style(theme.base()),
-        Line::from(format!(
-            "Registrado por     {}",
-            registro.usuario_ingreso_nombre
-        ))
-        .style(theme.base()),
+        detail_line(
+            "Ingreso",
+            a_costa_rica(registro.fecha_hora_ingreso)
+                .format("%d/%m/%Y %H:%M")
+                .to_string(),
+            theme,
+        ),
+        detail_line(
+            "Registrado por",
+            registro.usuario_ingreso_nombre.clone(),
+            theme,
+        ),
     ];
     frame.render_widget(Paragraph::new(lineas), area);
-}
-
-fn texto_resultado_registrado(resultado: &ResultadoIngresoRegistrado) -> &'static str {
-    match resultado {
-        ResultadoIngresoRegistrado::Permitido => "PERMITIDO",
-        ResultadoIngresoRegistrado::PermitidoConAdvertencia(
-            MotivoResultadoIngreso::PraindProximoVencer,
-        ) => "PERMITIDO CON ADVERTENCIA · PRAIND próximo a vencer",
-        ResultadoIngresoRegistrado::PermitidoConAdvertencia(
-            MotivoResultadoIngreso::DatosReconstruidos,
-        )
-        | ResultadoIngresoRegistrado::Migrado => "REGISTRO HISTÓRICO RECONSTRUIDO",
-    }
-}
-
-fn presentacion_condicion_actual(
-    resultado: &ResultadoAcceso,
-    theme: Theme,
-) -> (
-    &'static str,
-    &'static str,
-    &'static str,
-    ratatui::style::Style,
-) {
-    match resultado {
-        ResultadoAcceso::Permitido => (
-            "PERMITIDO",
-            "Sin cambios relevantes",
-            "Ninguna",
-            theme.success(),
-        ),
-        ResultadoAcceso::PermitidoConAdvertencia => (
-            "ADVERTENCIA",
-            "PRAIND próximo a vencer",
-            "Verificar vigencia con el responsable",
-            theme.warning(),
-        ),
-        ResultadoAcceso::Denegado(motivo) => (
-            "ACCIÓN REQUERIDA",
-            match motivo {
-                MotivoDenegacion::SinAcceso => "Acceso individual revocado",
-                MotivoDenegacion::PraindVencido => "PRAIND vencido",
-                MotivoDenegacion::PraindNoRegistrado => "PRAIND sin fecha registrada",
-                MotivoDenegacion::EmpresaInactiva => "Empresa inactiva",
-            },
-            "Contactar seguridad y resolver antes del próximo ingreso",
-            theme.danger(),
-        ),
-    }
 }
 
 fn render_columnas(

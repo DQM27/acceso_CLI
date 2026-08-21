@@ -12,8 +12,8 @@ use crate::{
     tiempo::hora_actual_texto,
     tui::ui_kit::{
         ChoiceFieldOptions, CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell,
-        StatusKind, TextInput, Theme, identidad_sesion, master_detail_areas, render_choice_field,
-        render_form_field, render_separator, render_terminal_too_small,
+        StatusKind, TextInput, Theme, detail_line, identidad_sesion, master_detail_areas,
+        render_choice_field, render_form_field, render_separator, render_terminal_too_small,
     },
 };
 
@@ -333,22 +333,16 @@ fn render_panel(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: The
 }
 
 fn render_detalle(frame: &mut Frame, area: Rect, u: &UsuarioResumen, theme: Theme) {
-    let estilo_rol = if u.rol == RolUsuario::Root {
-        theme.warning()
-    } else {
-        theme.base()
-    };
-    let estilo_estado = if u.activo {
-        theme.success()
-    } else {
-        theme.danger()
-    };
     let lineas = vec![
         Line::from(u.nombre.as_str()).style(theme.title()),
-        Line::from(u.cedula.as_str()).style(theme.muted()),
+        detail_line("Cédula", u.cedula.clone(), theme),
         Line::from(""),
-        Line::from(texto_rol(u.rol)).style(estilo_rol),
-        Line::from(if u.activo { "ACTIVO" } else { "INACTIVO" }).style(estilo_estado),
+        detail_line("Rol", texto_rol(u.rol), theme),
+        detail_line(
+            "Estado",
+            if u.activo { "Activo" } else { "Inactivo" },
+            theme,
+        ),
     ];
     frame.render_widget(Paragraph::new(lineas), area);
 }
