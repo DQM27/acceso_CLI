@@ -1135,6 +1135,119 @@ mod tests {
         );
     }
 
+    /// Regresión: "en Historial actualiza cuando saco a alguien, pero en
+    /// Nuevo Ingreso no" — sacar a alguien por F2 mientras el operador
+    /// tiene una búsqueda abierta en Nuevo Ingreso debía refrescar
+    /// `tiene_ingreso_activo` en la fila ya visible, no dejarla mostrando
+    /// "DENTRO" después de que la persona ya salió.
+    #[test]
+    fn f2_registra_salida_refresca_nuevo_ingreso_sin_navegar() {
+        use crate::tui::ui_kit::ThemePreset;
+        use ratatui::{Terminal, backend::TestBackend};
+
+        fn texto(terminal: &Terminal<TestBackend>) -> String {
+            terminal
+                .backend()
+                .buffer()
+                .content
+                .iter()
+                .map(|celda| celda.symbol())
+                .collect()
+        }
+
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let core = AppCore::new(connection);
+        let usuario_id = core
+            .crear_root_inicial(crate::services::usuario_service::CrearRootInicialInput {
+                cedula: "ROOT-1".into(),
+                nombre: "Ana".into(),
+                password: "password1".into(),
+            })
+            .unwrap();
+        let actor = core.autenticar("ROOT-1", "password1").unwrap();
+        let empresa_id = core.crear_empresa(&actor, "Constructora Álvarez").unwrap();
+        let contratista_id = core
+            .crear_contratista(
+                &actor,
+                crate::services::contratista_service::DatosContratista {
+                    cedula: "9-9999-9999".into(),
+                    nombre: "Persona De Prueba".into(),
+                    empresa_id,
+                    tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::PorCorreo,
+                    fecha_vencimiento_praind: None,
+                    es_personal_ruta: false,
+                    tiene_acceso: true,
+                },
+            )
+            .unwrap();
+        core.registrar_ingreso(
+            &actor,
+            contratista_id,
+            crate::models::medio_ingreso::MedioIngreso::Caminando,
+            Some(77),
+        )
+        .unwrap();
+
+        let mut app = App {
+            vista: Vista::NuevoIngreso,
+            sesion: Some(UsuarioSesion {
+                id: usuario_id,
+                cedula: "ROOT-1".into(),
+                nombre: "Ana".into(),
+                rol: RolUsuario::Root,
+            }),
+            ..App::default()
+        };
+        let theme = ThemePreset::Brisas.theme();
+        let sesion = app.sesion().unwrap().clone();
+
+        app.procesar_tecla_global(tecla(KeyCode::Char('/')), Some(&core));
+        for c in "Persona".chars() {
+            app.procesar_tecla_global(tecla(KeyCode::Char(c)), Some(&core));
+        }
+        let futuro = std::time::Instant::now() + std::time::Duration::from_millis(300);
+        let accion = app.nuevo_ingreso.tick(futuro);
+        app.procesar_accion_nuevo_ingreso(accion, Some(&core));
+        assert_eq!(app.nuevo_ingreso.cantidad(), 1);
+
+        let mut terminal = Terminal::new(TestBackend::new(140, 30)).unwrap();
+        terminal
+            .draw(|frame| {
+                nuevo_ingreso::render(frame, frame.area(), &app.nuevo_ingreso, &sesion, theme)
+            })
+            .unwrap();
+        assert!(
+            texto(&terminal).contains("DENTRO · tiene un ingreso activo"),
+            "antes de la salida debía verse como dentro"
+        );
+
+        // Saca a la misma persona por F2, sin navegar de Nuevo Ingreso.
+        app.procesar_tecla_global(tecla(KeyCode::F(2)), Some(&core));
+        for c in "77".chars() {
+            app.procesar_tecla_global(tecla(KeyCode::Char(c)), Some(&core));
+        }
+        app.procesar_tecla_global(tecla(KeyCode::Enter), Some(&core));
+        app.procesar_tecla_global(tecla(KeyCode::Enter), Some(&core));
+        app.procesar_tecla_global(tecla(KeyCode::Esc), Some(&core));
+
+        assert_eq!(
+            app.vista,
+            Vista::NuevoIngreso,
+            "no debía moverse de pantalla"
+        );
+        terminal
+            .draw(|frame| {
+                nuevo_ingreso::render(frame, frame.area(), &app.nuevo_ingreso, &sesion, theme)
+            })
+            .unwrap();
+        let despues = texto(&terminal);
+        assert!(
+            despues.contains("FUERA · sin ingreso activo"),
+            "debía reflejar la salida sin que el operador navegara a otra pantalla: {despues}"
+        );
+    }
+
     #[test]
     fn f2_no_abre_sin_sesion_iniciada() {
         let connection = Connection::open_in_memory().unwrap();
@@ -2126,9 +2239,10 @@ impl App {
                 // pasar por la pantalla que el operador tiene abierta
                 // debajo — a diferencia de registrarla directo desde
                 // Ingresos Activos, acá nada más recarga esa pantalla en
-                // particular. Sin este refresco, Historial/Activos se
-                // quedaban mostrando datos viejos hasta que el operador
-                // navegaba a otra pantalla y volvía.
+                // particular. Sin este refresco, Historial/Activos/Nuevo
+                // Ingreso se quedaban mostrando datos viejos (p. ej.
+                // `tiene_ingreso_activo` desactualizado) hasta que el
+                // operador navegaba a otra pantalla y volvía.
                 match self.vista {
                     Vista::IngresosActivos => {
                         let recarga_activos = self.activos.solicitud_carga();
@@ -2137,6 +2251,10 @@ impl App {
                     Vista::Historial => {
                         let recarga_historial = self.historial.refrescar();
                         self.procesar_accion_historial(recarga_historial, core);
+                    }
+                    Vista::NuevoIngreso => {
+                        let recarga_nuevo_ingreso = self.nuevo_ingreso.refrescar();
+                        self.procesar_accion_nuevo_ingreso(recarga_nuevo_ingreso, core);
                     }
                     _ => {}
                 }

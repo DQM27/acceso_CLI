@@ -122,6 +122,16 @@ impl NuevoIngresoState {
     pub fn solicitud_carga(&self) -> AccionNuevoIngreso {
         AccionNuevoIngreso::Buscar { texto: None }
     }
+    /// Repite la búsqueda actual (mismo `filtro`) sin tocar nada más — para
+    /// refrescar `tiene_ingreso_activo` en la lista ya visible tras un
+    /// cambio hecho desde otra pantalla (p. ej. una salida registrada por
+    /// F2 mientras el operador está viendo Nuevo Ingreso), sin perder lo
+    /// que ya tenía filtrado ni su selección actual.
+    pub fn refrescar(&self) -> AccionNuevoIngreso {
+        AccionNuevoIngreso::Buscar {
+            texto: texto_filtro(&self.filtro),
+        }
+    }
     pub fn completar_busqueda(&mut self, r: Result<PaginaContratistas, String>) {
         match r {
             Ok(pagina) => {
@@ -180,9 +190,7 @@ impl NuevoIngresoState {
                 self.modo = ModoBuscarIngreso::Normal;
                 self.etapa = EtapaNuevoIngreso::Buscar;
                 self.mensaje = nombre.map(|nombre| format!("✓ Ingreso registrado — {nombre}"));
-                AccionNuevoIngreso::Buscar {
-                    texto: texto_filtro(&self.filtro),
-                }
+                self.refrescar()
             }
             Err(e) => {
                 self.error = Some(e);
