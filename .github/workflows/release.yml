@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar toolchain de Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Tests
+        run: cargo test --verbose
+
+      - name: Build de release
+        run: cargo build --release --verbose
+
+      # TODO: una vez aprobado el proyecto en SignPath Foundation, agregar acá
+      # el paso que envía target/release/control_acceso.exe a firmar antes de
+      # publicarlo como artefacto de la release. Sin este paso, el .exe que
+      # sube este workflow queda sin firmar (igual que ahora).
+      - name: Publicar el ejecutable como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: control_acceso-${{ github.ref_name }}
+          path: target/release/control_acceso.exe

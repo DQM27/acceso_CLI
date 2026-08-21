@@ -104,7 +104,12 @@ fn render_respaldos(
     }
 
     let areas_detalle = master_detail_areas(areas.body, 63, 8);
-    render_separator(frame, areas_detalle.separator, areas_detalle.orientation, theme);
+    render_separator(
+        frame,
+        areas_detalle.separator,
+        areas_detalle.orientation,
+        theme,
+    );
     render_tabla(frame, areas_detalle.master, estado, theme);
     render_detalle(frame, areas_detalle.detail, estado, theme);
 }
@@ -128,7 +133,10 @@ fn estado_shell(estado: &RespaldosState) -> (String, StatusKind) {
             StatusKind::Error,
         );
     }
-    (format!("{} respaldo(s)", estado.filas.len()), StatusKind::Normal)
+    (
+        format!("{} respaldo(s)", estado.filas.len()),
+        StatusKind::Normal,
+    )
 }
 
 fn render_tabla(frame: &mut Frame, area: Rect, estado: &RespaldosState, theme: Theme) {
