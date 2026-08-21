@@ -50,100 +50,28 @@ use crate::services::usuario_service::{
 };
 use crate::tiempo::{Reloj, RelojSistema, fecha_costa_rica};
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum BootstrapError {
-    Database(SchemaError),
+    #[error("No se pudo preparar SQLite: {0}")]
+    Database(#[from] SchemaError),
 }
 
-impl std::fmt::Display for BootstrapError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Database(error) => write!(formatter, "No se pudo preparar SQLite: {error}"),
-        }
-    }
-}
-
-impl std::error::Error for BootstrapError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Database(error) => Some(error),
-        }
-    }
-}
-
-impl From<SchemaError> for BootstrapError {
-    fn from(error: SchemaError) -> Self {
-        Self::Database(error)
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum ExportarHistorialError {
+    #[error("Seleccione al menos una columna")]
     SinColumnas,
+    #[error("El archivo ya existe; elija otro nombre: {}", .0.display())]
     DestinoExiste(PathBuf),
+    #[error("La carpeta destino no existe: {}", .0.display())]
     DirectorioNoExiste(PathBuf),
+    #[error("La exportación tiene {0} filas y supera el límite de una hoja de Excel")]
     DemasiadasFilas(usize),
-    Consulta(RegistroIngresoServiceError),
-    Xlsx(rust_xlsxwriter::XlsxError),
-    Io(std::io::Error),
-}
-
-impl std::fmt::Display for ExportarHistorialError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::SinColumnas => write!(formatter, "Seleccione al menos una columna"),
-            Self::DestinoExiste(ruta) => write!(
-                formatter,
-                "El archivo ya existe; elija otro nombre: {}",
-                ruta.display()
-            ),
-            Self::DirectorioNoExiste(ruta) => {
-                write!(
-                    formatter,
-                    "La carpeta destino no existe: {}",
-                    ruta.display()
-                )
-            }
-            Self::DemasiadasFilas(total) => write!(
-                formatter,
-                "La exportación tiene {total} filas y supera el límite de una hoja de Excel"
-            ),
-            Self::Consulta(error) => {
-                write!(formatter, "No se pudo consultar el historial: {error}")
-            }
-            Self::Xlsx(error) => write!(formatter, "No se pudo crear el archivo XLSX: {error}"),
-            Self::Io(error) => write!(formatter, "No se pudo guardar la exportación: {error}"),
-        }
-    }
-}
-
-impl std::error::Error for ExportarHistorialError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Consulta(error) => Some(error),
-            Self::Xlsx(error) => Some(error),
-            Self::Io(error) => Some(error),
-            _ => None,
-        }
-    }
-}
-
-impl From<RegistroIngresoServiceError> for ExportarHistorialError {
-    fn from(error: RegistroIngresoServiceError) -> Self {
-        Self::Consulta(error)
-    }
-}
-
-impl From<rust_xlsxwriter::XlsxError> for ExportarHistorialError {
-    fn from(error: rust_xlsxwriter::XlsxError) -> Self {
-        Self::Xlsx(error)
-    }
-}
-
-impl From<std::io::Error> for ExportarHistorialError {
-    fn from(error: std::io::Error) -> Self {
-        Self::Io(error)
-    }
+    #[error("No se pudo consultar el historial: {0}")]
+    Consulta(#[from] RegistroIngresoServiceError),
+    #[error("No se pudo crear el archivo XLSX: {0}")]
+    Xlsx(#[from] rust_xlsxwriter::XlsxError),
+    #[error("No se pudo guardar la exportación: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 /// Fachada de aplicación y propietario único de la conexión SQLite.

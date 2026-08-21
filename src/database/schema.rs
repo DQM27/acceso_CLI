@@ -13,70 +13,30 @@ pub const SCHEMA_VERSION: i64 = 10;
 /// `application_id` que sea de un tercero (ni `0` ni el nuestro).
 pub const APPLICATION_ID: i32 = 0x4252_4953;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum SchemaError {
-    Sqlite(rusqlite::Error),
+    #[error("Error de SQLite: {0}")]
+    Sqlite(#[from] rusqlite::Error),
     /// El archivo abierto es un SQLite válido pero no es una base de
     /// Control Acceso (`application_id` pertenece a otra aplicación).
+    #[error("El archivo no es una base de datos de Control Acceso")]
     BaseAjena,
     /// `PRAGMA quick_check` encontró un problema estructural.
+    #[error("La base de datos falló la verificación de integridad: {0}")]
     IntegridadInvalida(String),
     /// Hay una migración de esquema pendiente pero el respaldo obligatorio
     /// previo (`TipoRespaldo::PreMigracion`) falló — el arranque se detiene
     /// antes de tocar el esquema.
+    #[error("No se pudo crear el respaldo obligatorio antes de migrar el esquema: {0}")]
     RespaldoPreMigracionFallido(String),
     /// Invariante interno: tras aplicar todas las migraciones conocidas, la
     /// versión resultante no es `SCHEMA_VERSION`. No es un error de SQLite —
     /// sólo puede pasar si la cadena de migraciones de este archivo tiene un
     /// hueco (una versión sin `if version == N` que la maneje).
-    VersionInesperadaTrasMigrar {
-        encontrada: i64,
-    },
-}
-
-impl std::fmt::Display for SchemaError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Sqlite(error) => write!(formatter, "Error de SQLite: {error}"),
-            Self::BaseAjena => write!(
-                formatter,
-                "El archivo no es una base de datos de Control Acceso"
-            ),
-            Self::IntegridadInvalida(detalle) => {
-                write!(
-                    formatter,
-                    "La base de datos falló la verificación de integridad: {detalle}"
-                )
-            }
-            Self::RespaldoPreMigracionFallido(detalle) => write!(
-                formatter,
-                "No se pudo crear el respaldo obligatorio antes de migrar el esquema: {detalle}"
-            ),
-            Self::VersionInesperadaTrasMigrar { encontrada } => write!(
-                formatter,
-                "Error interno: la base quedó en la versión de esquema {encontrada} tras migrar, \
-                 se esperaba {SCHEMA_VERSION}"
-            ),
-        }
-    }
-}
-
-impl std::error::Error for SchemaError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Sqlite(error) => Some(error),
-            Self::BaseAjena
-            | Self::IntegridadInvalida(_)
-            | Self::RespaldoPreMigracionFallido(_)
-            | Self::VersionInesperadaTrasMigrar { .. } => None,
-        }
-    }
-}
-
-impl From<rusqlite::Error> for SchemaError {
-    fn from(error: rusqlite::Error) -> Self {
-        Self::Sqlite(error)
-    }
+    #[error(
+        "Error interno: la base quedó en la versión de esquema {encontrada} tras migrar, se esperaba {SCHEMA_VERSION}"
+    )]
+    VersionInesperadaTrasMigrar { encontrada: i64 },
 }
 
 pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {

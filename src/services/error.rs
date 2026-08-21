@@ -1,274 +1,116 @@
 use crate::database::error::DatabaseError;
 use crate::domain::resultado_acceso::MotivoDenegacion;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum PasswordError {
+    #[error("No se pudo generar el hash")]
     GeneracionHash,
+    #[error("El hash almacenado no es válido")]
     HashInvalido,
 }
 
-impl std::fmt::Display for PasswordError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::GeneracionHash => write!(formatter, "No se pudo generar el hash"),
-            Self::HashInvalido => write!(formatter, "El hash almacenado no es válido"),
-        }
-    }
-}
-
-impl std::error::Error for PasswordError {}
-
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum UsuarioServiceError {
+    #[error("La cédula es obligatoria")]
     CedulaVacia,
+    #[error("El nombre es obligatorio")]
     NombreVacio,
+    #[error("La contraseña debe tener al menos 8 caracteres")]
     PasswordDemasiadoCorto,
+    #[error("Usuario no encontrado")]
     UsuarioNoEncontrado,
+    #[error("Se requiere crear el usuario ROOT inicial")]
     ConfiguracionInicialRequerida,
+    #[error("La configuración inicial ya fue realizada")]
     ConfiguracionInicialYaRealizada,
+    #[error("No se puede desactivar o degradar al último ROOT activo")]
     UltimoRootActivo,
+    #[error("La cédula del usuario ya existe")]
     CedulaDuplicada,
+    #[error("La sesión actual no está autorizada para gestionar ese usuario")]
     OperacionNoAutorizada,
+    #[error("La contraseña actual es incorrecta")]
     PasswordActualIncorrecta,
-    Password(PasswordError),
-    Database(DatabaseError),
+    #[error(transparent)]
+    Password(#[from] PasswordError),
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
 }
 
-impl std::fmt::Display for UsuarioServiceError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::CedulaVacia => write!(formatter, "La cédula es obligatoria"),
-            Self::NombreVacio => write!(formatter, "El nombre es obligatorio"),
-            Self::PasswordDemasiadoCorto => {
-                write!(formatter, "La contraseña debe tener al menos 8 caracteres")
-            }
-            Self::UsuarioNoEncontrado => write!(formatter, "Usuario no encontrado"),
-            Self::ConfiguracionInicialRequerida => {
-                write!(formatter, "Se requiere crear el usuario ROOT inicial")
-            }
-            Self::ConfiguracionInicialYaRealizada => {
-                write!(formatter, "La configuración inicial ya fue realizada")
-            }
-            Self::UltimoRootActivo => write!(
-                formatter,
-                "No se puede desactivar o degradar al último ROOT activo"
-            ),
-            Self::CedulaDuplicada => write!(formatter, "La cédula del usuario ya existe"),
-            Self::OperacionNoAutorizada => write!(
-                formatter,
-                "La sesión actual no está autorizada para gestionar ese usuario"
-            ),
-            Self::PasswordActualIncorrecta => {
-                write!(formatter, "La contraseña actual es incorrecta")
-            }
-            Self::Password(error) => write!(formatter, "{error}"),
-            Self::Database(error) => write!(formatter, "{error}"),
-        }
-    }
-}
-
-impl std::error::Error for UsuarioServiceError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Password(error) => Some(error),
-            Self::Database(error) => Some(error),
-            _ => None,
-        }
-    }
-}
-
-impl From<PasswordError> for UsuarioServiceError {
-    fn from(error: PasswordError) -> Self {
-        Self::Password(error)
-    }
-}
-
-impl From<DatabaseError> for UsuarioServiceError {
-    fn from(error: DatabaseError) -> Self {
-        Self::Database(error)
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum AutenticacionError {
+    #[error("Credenciales inválidas")]
     CredencialesInvalidas,
+    #[error("Usuario inactivo")]
     UsuarioInactivo,
+    #[error("El hash almacenado no es válido")]
     HashInvalido,
-    Database(DatabaseError),
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
 }
 
-impl std::fmt::Display for AutenticacionError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::CredencialesInvalidas => write!(formatter, "Credenciales inválidas"),
-            Self::UsuarioInactivo => write!(formatter, "Usuario inactivo"),
-            Self::HashInvalido => write!(formatter, "El hash almacenado no es válido"),
-            Self::Database(error) => write!(formatter, "{error}"),
-        }
-    }
-}
-
-impl std::error::Error for AutenticacionError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Database(error) => Some(error),
-            _ => None,
-        }
-    }
-}
-
-impl From<DatabaseError> for AutenticacionError {
-    fn from(error: DatabaseError) -> Self {
-        Self::Database(error)
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum ContratistaServiceError {
+    #[error("Contratista no encontrado")]
     ContratistaNoEncontrado,
+    #[error("Empresa no encontrada")]
     EmpresaNoEncontrada,
+    #[error("La cédula es obligatoria")]
     CedulaVacia,
+    #[error("El nombre es obligatorio")]
     NombreVacio,
+    #[error("La fecha de PRAIND es obligatoria")]
     PraindRequerido,
+    #[error("La cédula del contratista ya existe")]
     CedulaDuplicada,
+    #[error("La sesión actual no está autorizada para realizar esta operación")]
     OperacionNoAutorizada,
-    Database(DatabaseError),
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
 }
 
-impl std::fmt::Display for ContratistaServiceError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ContratistaNoEncontrado => write!(formatter, "Contratista no encontrado"),
-            Self::EmpresaNoEncontrada => write!(formatter, "Empresa no encontrada"),
-            Self::CedulaVacia => write!(formatter, "La cédula es obligatoria"),
-            Self::NombreVacio => write!(formatter, "El nombre es obligatorio"),
-            Self::PraindRequerido => write!(formatter, "La fecha de PRAIND es obligatoria"),
-            Self::CedulaDuplicada => write!(formatter, "La cédula del contratista ya existe"),
-            Self::OperacionNoAutorizada => write!(
-                formatter,
-                "La sesión actual no está autorizada para realizar esta operación"
-            ),
-            Self::Database(error) => write!(formatter, "{error}"),
-        }
-    }
-}
-
-impl std::error::Error for ContratistaServiceError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Database(error) => Some(error),
-            _ => None,
-        }
-    }
-}
-
-impl From<DatabaseError> for ContratistaServiceError {
-    fn from(error: DatabaseError) -> Self {
-        Self::Database(error)
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum EmpresaServiceError {
+    #[error("Empresa no encontrada")]
     EmpresaNoEncontrada,
+    #[error("El nombre de la empresa es obligatorio")]
     NombreEmpresaVacio,
+    #[error("El nombre de la empresa ya existe")]
     NombreDuplicado,
+    #[error("La sesión actual no está autorizada para realizar esta operación")]
     OperacionNoAutorizada,
-    Database(DatabaseError),
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
 }
 
-impl std::fmt::Display for EmpresaServiceError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::EmpresaNoEncontrada => write!(formatter, "Empresa no encontrada"),
-            Self::NombreEmpresaVacio => write!(formatter, "El nombre de la empresa es obligatorio"),
-            Self::NombreDuplicado => write!(formatter, "El nombre de la empresa ya existe"),
-            Self::OperacionNoAutorizada => write!(
-                formatter,
-                "La sesión actual no está autorizada para realizar esta operación"
-            ),
-            Self::Database(error) => write!(formatter, "{error}"),
-        }
-    }
-}
-
-impl std::error::Error for EmpresaServiceError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Database(error) => Some(error),
-            _ => None,
-        }
-    }
-}
-
-impl From<DatabaseError> for EmpresaServiceError {
-    fn from(error: DatabaseError) -> Self {
-        Self::Database(error)
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum RegistroIngresoServiceError {
+    #[error("Contratista no encontrado")]
     ContratistaNoEncontrado,
+    #[error("Acceso denegado: {0:?}")]
     AccesoDenegado(MotivoDenegacion),
+    #[error("El contratista ya tiene un ingreso activo")]
     IngresoActivo,
+    #[error("El contratista requiere gafete")]
     GafeteRequerido,
+    #[error("El gafete ya está asignado")]
     GafeteOcupado,
+    #[error("El gafete no está asignado actualmente")]
     GafeteNoAsignado,
+    #[error("El registro de ingreso no está activo")]
     RegistroNoActivo,
+    #[error("La salida no puede ser anterior al ingreso")]
     SalidaAnteriorAIngreso,
+    #[error("El reloj del equipo está atrasado respecto al último movimiento registrado")]
     RelojRetrocedido,
+    #[error("El rango de fechas del historial no es válido")]
     RangoFechasInvalido,
     /// El usuario que figura como operador del movimiento no existe o está
     /// inactivo — revisado dentro de la misma transacción que el
     /// movimiento, así que una desactivación concurrente no puede colarse
     /// entre la verificación y la escritura.
+    #[error("La sesión que registra el movimiento no existe o está inactiva")]
     OperadorNoAutorizado,
-    Database(DatabaseError),
-}
-
-impl std::fmt::Display for RegistroIngresoServiceError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ContratistaNoEncontrado => write!(formatter, "Contratista no encontrado"),
-            Self::AccesoDenegado(motivo) => {
-                write!(formatter, "Acceso denegado: {motivo:?}")
-            }
-            Self::IngresoActivo => write!(formatter, "El contratista ya tiene un ingreso activo"),
-            Self::GafeteRequerido => write!(formatter, "El contratista requiere gafete"),
-            Self::GafeteOcupado => write!(formatter, "El gafete ya está asignado"),
-            Self::GafeteNoAsignado => write!(formatter, "El gafete no está asignado actualmente"),
-            Self::RegistroNoActivo => write!(formatter, "El registro de ingreso no está activo"),
-            Self::SalidaAnteriorAIngreso => {
-                write!(formatter, "La salida no puede ser anterior al ingreso")
-            }
-            Self::RelojRetrocedido => write!(
-                formatter,
-                "El reloj del equipo está atrasado respecto al último movimiento registrado"
-            ),
-            Self::RangoFechasInvalido => {
-                write!(formatter, "El rango de fechas del historial no es válido")
-            }
-            Self::OperadorNoAutorizado => write!(
-                formatter,
-                "La sesión que registra el movimiento no existe o está inactiva"
-            ),
-            Self::Database(error) => write!(formatter, "{error}"),
-        }
-    }
-}
-
-impl std::error::Error for RegistroIngresoServiceError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Database(error) => Some(error),
-            _ => None,
-        }
-    }
-}
-
-impl From<DatabaseError> for RegistroIngresoServiceError {
-    fn from(error: DatabaseError) -> Self {
-        Self::Database(error)
-    }
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
 }

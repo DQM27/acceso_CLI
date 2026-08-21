@@ -74,28 +74,13 @@ pub fn hora_actual_texto() -> String {
     ahora_costa_rica().format("%H:%M").to_string()
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum TiempoError {
+    #[error("La hora local es ambigua en la zona {ZONA_APLICACION_NOMBRE}")]
     HoraLocalAmbigua,
+    #[error("La hora local no existe en la zona {ZONA_APLICACION_NOMBRE}")]
     HoraLocalInexistente,
 }
-
-impl std::fmt::Display for TiempoError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::HoraLocalAmbigua => write!(
-                formatter,
-                "La hora local es ambigua en la zona {ZONA_APLICACION_NOMBRE}"
-            ),
-            Self::HoraLocalInexistente => write!(
-                formatter,
-                "La hora local no existe en la zona {ZONA_APLICACION_NOMBRE}"
-            ),
-        }
-    }
-}
-
-impl std::error::Error for TiempoError {}
 
 #[cfg(test)]
 mod tests {

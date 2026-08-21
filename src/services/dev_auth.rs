@@ -2,21 +2,11 @@ use crate::models::usuario::RolUsuario;
 
 use super::autenticacion_service::UsuarioSesion;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum DevAuthError {
+    #[error("La operación auditada requiere seleccionar o autenticar un usuario persistido")]
     ActorPersistidoRequerido,
 }
-
-impl std::fmt::Display for DevAuthError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            formatter,
-            "La operación auditada requiere seleccionar o autenticar un usuario persistido"
-        )
-    }
-}
-
-impl std::error::Error for DevAuthError {}
 
 /// Construye una identidad únicamente en memoria para la futura CLI de desarrollo.
 ///

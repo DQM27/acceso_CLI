@@ -5,36 +5,19 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum InstanciaError {
+    #[error(
+        "Control de Acceso ya está abierto para la base de datos {}",
+        .base_datos.display()
+    )]
     YaEstaEnEjecucion { base_datos: PathBuf },
-    Bloqueo { ruta: PathBuf, origen: io::Error },
-}
-
-impl std::fmt::Display for InstanciaError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::YaEstaEnEjecucion { base_datos } => write!(
-                formatter,
-                "Control de Acceso ya está abierto para la base de datos {}",
-                base_datos.display()
-            ),
-            Self::Bloqueo { ruta, origen } => write!(
-                formatter,
-                "No se pudo preparar el bloqueo de instancia {}: {origen}",
-                ruta.display()
-            ),
-        }
-    }
-}
-
-impl std::error::Error for InstanciaError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::YaEstaEnEjecucion { .. } => None,
-            Self::Bloqueo { origen, .. } => Some(origen),
-        }
-    }
+    #[error("No se pudo preparar el bloqueo de instancia {}: {origen}", .ruta.display())]
+    Bloqueo {
+        ruta: PathBuf,
+        #[source]
+        origen: io::Error,
+    },
 }
 
 /// Mantiene un bloqueo exclusivo mientras la aplicación usa una base de datos.

@@ -169,6 +169,7 @@ dependencies = [
  "rusqlite",
  "rust_xlsxwriter",
  "tempfile",
+ "thiserror",
  "tui-input",
  "winresource",
 ]

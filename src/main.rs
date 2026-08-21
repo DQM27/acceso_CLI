@@ -3,28 +3,19 @@ use control_acceso::database::connection::{RutaBaseDatosError, ruta_base_datos};
 use control_acceso::instancia::{InstanciaError, InstanciaGuard};
 use control_acceso::tui::app::SalidaApp;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 enum StartupError {
+    #[error(transparent)]
     RutaBaseDatos(RutaBaseDatosError),
+    #[error(transparent)]
     Instancia(InstanciaError),
+    #[error(transparent)]
     Bootstrap(BootstrapError),
-    Terminal(std::io::Error),
+    #[error("No se pudo iniciar la terminal: {0}")]
+    Terminal(#[source] std::io::Error),
+    #[error(transparent)]
     Usuario(control_acceso::services::error::UsuarioServiceError),
 }
-
-impl std::fmt::Display for StartupError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::RutaBaseDatos(error) => write!(formatter, "{error}"),
-            Self::Instancia(error) => write!(formatter, "{error}"),
-            Self::Bootstrap(error) => write!(formatter, "{error}"),
-            Self::Terminal(error) => write!(formatter, "No se pudo iniciar la terminal: {error}"),
-            Self::Usuario(error) => write!(formatter, "{error}"),
-        }
-    }
-}
-
-impl std::error::Error for StartupError {}
 
 fn run() -> Result<(), StartupError> {
     let ruta_base_datos = ruta_base_datos().map_err(StartupError::RutaBaseDatos)?;

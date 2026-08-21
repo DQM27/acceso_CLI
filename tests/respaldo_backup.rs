@@ -1,11 +1,12 @@
+use std::error::Error;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::Connection;
 
 use control_acceso::database::backup::{
-    ResultadoValidacion, TipoRespaldo, aplicar_retencion, crear_respaldo, listar_respaldos,
-    restaurar_respaldo, validar_respaldo,
+    RespaldoError, ResultadoValidacion, TipoRespaldo, aplicar_retencion, crear_respaldo,
+    listar_respaldos, restaurar_respaldo, validar_respaldo,
 };
 use control_acceso::database::repositories::contratista_repository::{
     ContratistaRepository, SqliteContratistaRepository,
@@ -444,4 +445,30 @@ fn aplicar_retencion_con_menos_respaldos_que_el_limite_no_borra_nada() {
     assert_eq!(listar_respaldos(&directorio).unwrap().len(), 1);
 
     let _ = std::fs::remove_dir_all(&directorio);
+}
+
+#[test]
+fn errores_de_respaldo_conservan_contexto_y_fuente() {
+    let error = RespaldoError::RollbackFallido {
+        error_original: Box::new(RespaldoError::OperacionNoAutorizada),
+        ruta_activa: PathBuf::from("activa.db"),
+        ruta_previa: Some(PathBuf::from("previa.db")),
+    };
+
+    assert_eq!(
+        error.to_string(),
+        "La restauración falló (Sólo una sesión ROOT activa puede gestionar respaldos) y no se pudo dejar el sistema en un estado consistente. Revise manualmente activa.db (la base anterior puede seguir en previa.db)"
+    );
+    assert_eq!(
+        error.source().map(ToString::to_string),
+        Some("Sólo una sesión ROOT activa puede gestionar respaldos".into())
+    );
+
+    assert_eq!(
+        RespaldoError::ValidacionFallida(ResultadoValidacion::EsquemaIncompatible {
+            version_encontrada: 99,
+        })
+        .to_string(),
+        "El respaldo generado quedó en una versión de esquema incompatible (99)"
+    );
 }

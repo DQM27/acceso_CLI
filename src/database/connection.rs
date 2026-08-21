@@ -15,49 +15,24 @@ pub const LOCAL_APP_DATA_ENV: &str = "LOCALAPPDATA";
 const APP_DATA_DIRECTORY: &str = "ControlAcceso";
 const DATABASE_FILE_NAME: &str = "control_acceso.db";
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum RutaBaseDatosError {
-    VariableNoDisponible {
-        variable: &'static str,
-    },
+    #[error("No se encontró la variable {variable} necesaria para ubicar la base de datos")]
+    VariableNoDisponible { variable: &'static str },
+    #[error(
+        "La variable {variable} debe contener una ruta absoluta: {}",
+        .ruta.display()
+    )]
     RutaNoAbsoluta {
         variable: &'static str,
         ruta: PathBuf,
     },
+    #[error("No se pudo crear el directorio de datos {}: {origen}", .ruta.display())]
     CrearDirectorio {
         ruta: PathBuf,
+        #[source]
         origen: io::Error,
     },
-}
-
-impl std::fmt::Display for RutaBaseDatosError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::VariableNoDisponible { variable } => write!(
-                formatter,
-                "No se encontró la variable {variable} necesaria para ubicar la base de datos"
-            ),
-            Self::RutaNoAbsoluta { variable, ruta } => write!(
-                formatter,
-                "La variable {variable} debe contener una ruta absoluta: {}",
-                ruta.display()
-            ),
-            Self::CrearDirectorio { ruta, origen } => write!(
-                formatter,
-                "No se pudo crear el directorio de datos {}: {origen}",
-                ruta.display()
-            ),
-        }
-    }
-}
-
-impl std::error::Error for RutaBaseDatosError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::CrearDirectorio { origen, .. } => Some(origen),
-            Self::VariableNoDisponible { .. } | Self::RutaNoAbsoluta { .. } => None,
-        }
-    }
 }
 
 pub fn ruta_base_datos() -> Result<PathBuf, RutaBaseDatosError> {

@@ -79,20 +79,55 @@ impl ResultadoValidacion {
     }
 }
 
-#[derive(Debug)]
+impl std::fmt::Display for ResultadoValidacion {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Invalido(detalle) => write!(
+                formatter,
+                "El respaldo generado no pasó la verificación: {detalle}"
+            ),
+            Self::EsquemaIncompatible { version_encontrada } => write!(
+                formatter,
+                "El respaldo generado quedó en una versión de esquema incompatible ({version_encontrada})"
+            ),
+            Self::Valido { .. } => write!(
+                formatter,
+                "Error interno: validación marcada como fallida pero válida"
+            ),
+        }
+    }
+}
+
+fn detalle_ruta_previa(ruta_previa: Option<&Path>) -> String {
+    ruta_previa.map_or_else(String::new, |ruta| {
+        format!(" (la base anterior puede seguir en {})", ruta.display())
+    })
+}
+
+#[derive(Debug, thiserror::Error)]
 pub enum RespaldoError {
+    #[error("Sólo una sesión ROOT activa puede gestionar respaldos")]
     OperacionNoAutorizada,
-    Sqlite(rusqlite::Error),
-    Io(std::io::Error),
+    #[error("Error de SQLite: {0}")]
+    Sqlite(#[from] rusqlite::Error),
+    #[error("Error de archivo: {0}")]
+    Io(#[from] std::io::Error),
     /// El respaldo recién creado no pasó su propia validación; el `.partial`
     /// ya fue eliminado antes de devolver este error.
+    #[error("{0}")]
     ValidacionFallida(ResultadoValidacion),
     /// `restaurar_respaldo` falló al abrir/verificar la candidata Y el intento
     /// de reinstalar la base anterior también falló — a diferencia del resto
     /// de variantes, el sistema puede haber quedado sin una base activa
     /// consistente en `ruta_activa`. Distinto de un rollback exitoso, que
     /// simplemente reporta `error_original` sin esta variante.
+    #[error(
+        "La restauración falló ({error_original}) y no se pudo dejar el sistema en un estado consistente. Revise manualmente {}{}",
+        .ruta_activa.display(),
+        detalle_ruta_previa(.ruta_previa.as_deref())
+    )]
     RollbackFallido {
+        #[source]
         error_original: Box<RespaldoError>,
         ruta_activa: PathBuf,
         ruta_previa: Option<PathBuf>,
@@ -100,94 +135,15 @@ pub enum RespaldoError {
     /// Un archivo temporal (`.partial` inválido) no se pudo borrar después de
     /// un error real — el error original queda adjunto para no perder la
     /// pista, en vez de descartar la falla de limpieza con `let _ =`.
+    #[error(
+        "{error_original} (además, no se pudo borrar el archivo temporal {})",
+        .ruta.display()
+    )]
     LimpiezaFallida {
+        #[source]
         error_original: Box<RespaldoError>,
         ruta: PathBuf,
     },
-}
-
-impl std::fmt::Display for RespaldoError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::OperacionNoAutorizada => write!(
-                formatter,
-                "Sólo una sesión ROOT activa puede gestionar respaldos"
-            ),
-            Self::Sqlite(error) => write!(formatter, "Error de SQLite: {error}"),
-            Self::Io(error) => write!(formatter, "Error de archivo: {error}"),
-            Self::ValidacionFallida(ResultadoValidacion::Invalido(detalle)) => {
-                write!(
-                    formatter,
-                    "El respaldo generado no pasó la verificación: {detalle}"
-                )
-            }
-            Self::ValidacionFallida(ResultadoValidacion::EsquemaIncompatible {
-                version_encontrada,
-            }) => write!(
-                formatter,
-                "El respaldo generado quedó en una versión de esquema incompatible ({version_encontrada})"
-            ),
-            Self::ValidacionFallida(ResultadoValidacion::Valido { .. }) => {
-                write!(
-                    formatter,
-                    "Error interno: validación marcada como fallida pero válida"
-                )
-            }
-            Self::RollbackFallido {
-                error_original,
-                ruta_activa,
-                ruta_previa,
-            } => {
-                write!(
-                    formatter,
-                    "La restauración falló ({error_original}) y no se pudo dejar el sistema en \
-                     un estado consistente. Revise manualmente {}",
-                    ruta_activa.display()
-                )?;
-                if let Some(previa) = ruta_previa {
-                    write!(
-                        formatter,
-                        " (la base anterior puede seguir en {})",
-                        previa.display()
-                    )?;
-                }
-                Ok(())
-            }
-            Self::LimpiezaFallida {
-                error_original,
-                ruta,
-            } => write!(
-                formatter,
-                "{error_original} (además, no se pudo borrar el archivo temporal {})",
-                ruta.display()
-            ),
-        }
-    }
-}
-
-impl std::error::Error for RespaldoError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::OperacionNoAutorizada => None,
-            Self::Sqlite(error) => Some(error),
-            Self::Io(error) => Some(error),
-            Self::ValidacionFallida(_) => None,
-            Self::RollbackFallido { error_original, .. } => Some(error_original.as_ref()),
-            Self::LimpiezaFallida { error_original, .. } => Some(error_original.as_ref()),
-        }
-    }
-}
-
-impl From<rusqlite::Error> for RespaldoError {
-    fn from(error: rusqlite::Error) -> Self {
-        Self::Sqlite(error)
-    }
-}
-
-impl From<std::io::Error> for RespaldoError {
-    fn from(error: std::io::Error) -> Self {
-        Self::Io(error)
-    }
 }
 
 impl From<SchemaError> for RespaldoError {
