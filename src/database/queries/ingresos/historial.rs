@@ -263,10 +263,14 @@ fn construir_where_historial(
         ));
         // `usuario_ingreso_nombre` es `NOT NULL`: la comparación nunca da
         // NULL, así que `NOT (...)` alcanza para negar sin casos especiales.
+        // `PLEGAR` pliega mayúsculas y diacríticos a la vez (igual que
+        // `empresa:`/texto libre) — reemplaza a `COLLATE NOCASE`, que sólo
+        // pliega mayúsculas ASCII y dejaba "salida:josé" sin encontrar
+        // "José" o viceversa.
         condiciones.push(if filtro.usuario_ingreso_negado {
-            "NOT (r.usuario_ingreso_nombre LIKE :usuario_ingreso COLLATE NOCASE)".into()
+            "NOT (PLEGAR(r.usuario_ingreso_nombre) LIKE PLEGAR(:usuario_ingreso))".into()
         } else {
-            "r.usuario_ingreso_nombre LIKE :usuario_ingreso COLLATE NOCASE".into()
+            "PLEGAR(r.usuario_ingreso_nombre) LIKE PLEGAR(:usuario_ingreso)".into()
         });
     }
     if let Some(usuario_salida) = &filtro.usuario_salida {
@@ -280,10 +284,10 @@ fn construir_where_historial(
             // dejar que la lógica de 3 valores de SQL lo excluya de ambos
             // lados (positivo y negado) por igual.
             "(r.usuario_salida_nombre IS NULL \
-              OR r.usuario_salida_nombre NOT LIKE :usuario_salida COLLATE NOCASE)"
+              OR PLEGAR(r.usuario_salida_nombre) NOT LIKE PLEGAR(:usuario_salida))"
                 .into()
         } else {
-            "r.usuario_salida_nombre LIKE :usuario_salida COLLATE NOCASE".into()
+            "PLEGAR(r.usuario_salida_nombre) LIKE PLEGAR(:usuario_salida)".into()
         });
     }
 
@@ -423,7 +427,8 @@ mod tests {
 
         let (where_sql, _) = construir_where_historial(&busqueda, &filtro, 0);
         assert!(
-            where_sql.contains("NOT (r.usuario_ingreso_nombre LIKE :usuario_ingreso"),
+            where_sql
+                .contains("NOT (PLEGAR(r.usuario_ingreso_nombre) LIKE PLEGAR(:usuario_ingreso))"),
             "{where_sql}"
         );
         assert!(
@@ -431,7 +436,32 @@ mod tests {
             "{where_sql}"
         );
         assert!(
-            where_sql.contains("r.usuario_salida_nombre NOT LIKE :usuario_salida"),
+            where_sql.contains("PLEGAR(r.usuario_salida_nombre) NOT LIKE PLEGAR(:usuario_salida)"),
+            "{where_sql}"
+        );
+    }
+
+    /// `ingreso:`/`salida:` deben plegar tildes igual que `empresa:`/texto
+    /// libre vía la función SQL `PLEGAR` — antes usaban `COLLATE NOCASE`,
+    /// que sólo pliega mayúsculas ASCII y no encuentra "José" con
+    /// "salida:jose" ni viceversa (`PLEGAR` en sí ya está probada en
+    /// `texto::tests`; aquí sólo se verifica que esta consulta la use).
+    #[test]
+    fn ingreso_y_salida_pliegan_tildes() {
+        let busqueda = BusquedaTexto::preparar(None);
+        let mut filtro = FiltroHistorial::nuevo(
+            "2026-01-01T00:00:00Z".parse().unwrap(),
+            "2026-02-01T00:00:00Z".parse().unwrap(),
+        );
+        filtro.usuario_ingreso = Some("José".into());
+        filtro.usuario_salida = Some("María".into());
+        let (where_sql, _) = construir_where_historial(&busqueda, &filtro, 0);
+        assert!(
+            where_sql.contains("PLEGAR(r.usuario_ingreso_nombre) LIKE PLEGAR(:usuario_ingreso)"),
+            "{where_sql}"
+        );
+        assert!(
+            where_sql.contains("PLEGAR(r.usuario_salida_nombre) LIKE PLEGAR(:usuario_salida)"),
             "{where_sql}"
         );
     }

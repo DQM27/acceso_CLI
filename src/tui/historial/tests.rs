@@ -445,6 +445,38 @@ fn parsear_consulta_conserva_lo_no_reconocido_como_texto_libre() {
     assert_eq!(libre, "empresa:Inexistente tipo:invalido Juan");
 }
 
+/// A diferencia de Contratistas/Activos (que ya usaban
+/// `resolver_terminos_detallado`), Historial dejaba caer una clave con typo
+/// a texto libre sin ningún aviso — casi indistinguible de una búsqueda
+/// legítima sin resultados.
+#[test]
+fn resumen_consulta_avisa_de_clave_no_reconocida() {
+    let base = FiltrosHistorial::default();
+    let resumen = resumen_consulta(&base, "estadoo:activos", &[]);
+    assert!(
+        resumen.contains("⚠ sin interpretar: estadoo:activos"),
+        "{resumen}"
+    );
+}
+
+/// `-tipo:swat` se guardaba como el complemento positivo
+/// (`tipos = [Praind, InHouse, PorCorreo]`), así que el resumen mostraba
+/// "tipo: PRAIND o IN HOUSE o POR CORREO" sin ningún rastro de que hubo
+/// negación.
+#[test]
+fn resumen_consulta_muestra_la_negacion_de_tipo() {
+    let base = FiltrosHistorial::default();
+    let resumen = resumen_consulta(&base, "-tipo:swat", &[]);
+    assert!(resumen.contains("tipo: no SWAT"), "{resumen}");
+}
+
+#[test]
+fn resumen_consulta_muestra_tipo_sin_negar_como_antes() {
+    let base = FiltrosHistorial::default();
+    let resumen = resumen_consulta(&base, "tipo:swat,praind", &[]);
+    assert!(resumen.contains("tipo: SWAT o PRAIND"), "{resumen}");
+}
+
 #[test]
 fn parsear_consulta_no_pisa_los_campos_no_mencionados_del_filtro_base() {
     let base = FiltrosHistorial {

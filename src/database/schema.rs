@@ -167,6 +167,12 @@ fn adoptar_application_id(connection: &Connection) -> Result<(), SchemaError> {
 /// plegado ocurre antes de comparar, no durante. Se registra en cada
 /// apertura (no sobrevive a un `ATTACH`/reconexión) — determinista y sin
 /// acceso a memoria compartida entre threads, así que es segura para SQLite.
+///
+/// `NULL` de entrada produce `NULL` de salida (semántica SQL estándar, igual
+/// que cualquier función de SQLite) en vez de fallar — necesario para
+/// columnas opcionales como `usuario_salida_nombre`, donde antes
+/// `LIKE ... COLLATE NOCASE` excluía la fila sin error al comparar contra
+/// `NULL` y `PLEGAR(NULL)` sin este manejo rompía la consulta entera.
 fn registrar_funcion_plegar(connection: &Connection) -> Result<(), SchemaError> {
     connection
         .create_scalar_function(
@@ -174,8 +180,8 @@ fn registrar_funcion_plegar(connection: &Connection) -> Result<(), SchemaError> 
             1,
             FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
             |contexto| {
-                let texto: String = contexto.get(0)?;
-                Ok(plegar_para_busqueda(&texto))
+                let texto: Option<String> = contexto.get(0)?;
+                Ok(texto.map(|texto| plegar_para_busqueda(&texto)))
             },
         )
         .map_err(SchemaError::from)

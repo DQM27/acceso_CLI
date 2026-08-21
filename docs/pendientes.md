@@ -126,25 +126,37 @@ suite completa + Clippy estricto.
 
 ## Búsqueda `clave:valor` e Historial
 
-- [ ] **Historial no avisa de clave no reconocida.** Contratistas y Activos ya usan
-  `resolver_terminos_detallado` y muestran `no_reconocidos`
-  (`contratistas/state.rs:429-475`, `activos/state.rs:279-321`); Historial sigue en
-  `resolver_terminos` simple (`historial/filtros.rs:143`), así que un typo en la clave cae
-  a texto libre sin aviso, casi siempre 0 resultados indistinguibles de una búsqueda
-  legítima sin coincidencias.
-- [ ] **Historial oculta la negación de `tipo`/`estado` en la etiqueta de búsqueda.**
-  `-tipo:swat` se guarda como el complemento positivo internamente, así que el resumen
-  (`historial/render.rs:140-148`) muestra `"tipo: PRAIND o IN HOUSE..."` sin rastro de que
-  hubo negación — a diferencia de `ingreso`/`salida`, un poco más abajo en el mismo
-  archivo, que sí muestran el signo `≠`.
-- [ ] **F1 no documenta sintaxis de valores, sólo nombres de clave.** Ninguna de las 3
-  pantallas (`contratistas/render.rs:103`, `activos/render.rs:88`, `historial/render.rs:54`)
-  menciona en `ayuda_extra` los valores aceptados (`praind:vence|vencido|sin`,
-  `ruta:si|no`, `medio:caminando|vehiculo`, `estado:activos|cerrados|todos`) ni la
-  negación con guion.
-- [ ] **`ingreso:`/`salida:` en Historial no pliegan tildes**, a diferencia de `empresa:`.
-  `historial/filtros.rs:210-217` pasa el valor crudo a `LIKE ... COLLATE NOCASE`, que sólo
-  pliega ASCII. Ej.: "María José" — `salida:jose` matchea, `salida:josé` no.
+- [x] **Reparado (2026-08-21): Historial no avisaba de clave no reconocida.** Se agregó
+  `filtros::resumen_consulta` (usa `resolver_terminos_detallado`, igual que Contratistas/
+  Activos) y `render.rs::etiqueta_busqueda` ahora lo llama en vez de leer directo de
+  `state.filtro_aplicado` — de paso corrige que la etiqueta nunca reflejaba `tipo`/
+  `estado`/`ingreso`/`salida` realmente tecleados, porque nada en producción escribía en
+  `filtro_aplicado` (sólo los tests lo tocaban a mano). La consulta SQL real no cambió.
+- [x] **Reparado (2026-08-21): Historial ocultaba la negación de `tipo`.** Nuevo campo
+  `FiltrosHistorial::tipos_negado`; `resumen_consulta` reconstruye la lista original
+  (complemento del complemento) y muestra `"tipo: no SWAT"` en vez de `"tipo: PRAIND o IN
+  HOUSE o POR CORREO"`. `estado` se dejó tal cual a propósito: negar uno de sus 2 valores
+  reales ya produce el otro valor exacto y sin ambigüedad (`-estado:cerrados` → `Activos`
+  es la respuesta correcta, no hay información que se pierda al mostrarla en positivo) —
+  a diferencia de `tipo`, donde negar 1 de 4 exige leer una lista de 3 para inferirlo.
+- [x] **Reparado (2026-08-21): F1 no documentaba sintaxis de valores.** Las 3 pantallas
+  (`contratistas`, `activos`, `historial`) ahora listan los valores aceptados por clave
+  (`praind:vence|vencido|sin`, `ruta:si|no`, `medio:caminando|vehiculo`,
+  `estado:activos|cerrados|todos`, formato de fecha, etc.) y mencionan la negación con
+  guion en `ayuda_extra`.
+- [x] **Reparado (2026-08-21): `ingreso:`/`salida:` en Historial no plegaban tildes.**
+  `database/queries/ingresos/historial.rs` cambió `LIKE ... COLLATE NOCASE` (sólo pliega
+  ASCII) por `PLEGAR(...) LIKE PLEGAR(...)` — misma función SQL que ya usan `empresa:`/
+  texto libre. "María José" — `salida:jose` y `salida:josé` ahora matchean igual.
+  **Efecto secundario encontrado y reparado en el mismo cambio:** `usuario_salida_nombre`
+  es la primera columna nullable a la que se le aplica `PLEGAR` — la función nunca había
+  manejado `NULL` (siempre se usó antes sólo con columnas `NOT NULL`) y rompía toda la
+  consulta con "Invalid function parameter type Null" en vez de simplemente excluir la
+  fila, como sí hacía `LIKE` con `NULL` de forma nativa. `registrar_funcion_plegar`
+  (`src/database/schema.rs`) ahora toma `Option<String>` y devuelve `None` si la entrada
+  es `NULL` — semántica SQL estándar, detectado por
+  `tests/ingreso_queries.rs::historial_filtra_por_quien_dio_ingreso_y_quien_dio_salida`
+  (ya existente, no hizo falta un test nuevo).
 
 ## Sistema visual / UI
 

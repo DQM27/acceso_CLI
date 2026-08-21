@@ -5,7 +5,9 @@ use crate::{
     },
     models::{empresa::Empresa, tipo_ingreso::TipoIngreso},
     tiempo::{ahora_costa_rica, inicio_dia_costa_rica_utc},
-    tui::ui_kit::{Term, plegar_diacriticos, resolver_terminos, valores},
+    tui::ui_kit::{
+        Term, plegar_diacriticos, resolver_terminos, resolver_terminos_detallado, valores,
+    },
 };
 use chrono::{Datelike, Duration, NaiveDate};
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,6 +19,11 @@ pub struct FiltrosHistorial {
     /// `None` = todos los tipos; `Some(vec)` = cualquiera de los listados
     /// (`tipo:praind,swat`, o el complemento si viene negado `-tipo:swat`).
     pub tipos: Option<Vec<TipoIngreso>>,
+    /// `true` si `tipos` es el complemento de una negación (`-tipo:swat`),
+    /// no la lista tal cual se escribió — sólo para mostrar "no swat" en vez
+    /// de "praind o in house o por correo" en la etiqueta de búsqueda; la
+    /// consulta SQL usa `tipos` (ya complementado) sin mirar este flag.
+    pub tipos_negado: bool,
     pub gafete: String,
     pub gafete_negado: bool,
     pub estado: EstadoMovimiento,
@@ -40,6 +47,7 @@ impl Default for FiltrosHistorial {
             nombre_cedula: String::new(),
             empresa_id: None,
             tipos: None,
+            tipos_negado: false,
             gafete: String::new(),
             gafete_negado: false,
             estado: EstadoMovimiento::Todos,
@@ -182,6 +190,7 @@ fn aplicar_clave(f: &mut FiltrosHistorial, term: &Term, empresas: &[Empresa]) ->
             if reconocidos.is_empty() {
                 return false;
             }
+            f.tipos_negado = term.negated;
             f.tipos = Some(if term.negated {
                 TipoIngreso::ALL
                     .into_iter()
@@ -287,14 +296,87 @@ pub(super) fn tipo_texto(t: TipoIngreso) -> &'static str {
     }
 }
 /// Resume el filtro de tipos aplicado para mostrarlo en la etiqueta de
-/// búsqueda: "Todos" si no hay filtro, o los tipos unidos con " o ".
-pub(super) fn tipos_texto(tipos: Option<&[TipoIngreso]>) -> String {
+/// búsqueda: "Todos" si no hay filtro, o los tipos unidos con " o ". Si
+/// `negado` es `true`, `tipos` ya es el complemento (ver
+/// `FiltrosHistorial::tipos_negado`) — se reconstruye la lista tal como se
+/// escribió (el complemento del complemento) y se antepone "no " en vez de
+/// mostrar el complemento largo, para no perder el rastro de que hubo una
+/// negación (`-tipo:swat` se vería igual que escribir los otros 3 a mano).
+pub(super) fn tipos_texto(tipos: Option<&[TipoIngreso]>, negado: bool) -> String {
     match tipos {
         None => "Todos".into(),
+        Some(tipos) if negado => {
+            let originales: Vec<TipoIngreso> = TipoIngreso::ALL
+                .into_iter()
+                .filter(|t| !tipos.contains(t))
+                .collect();
+            format!(
+                "no {}",
+                originales
+                    .iter()
+                    .map(|t| tipo_texto(*t))
+                    .collect::<Vec<_>>()
+                    .join(" o ")
+            )
+        }
         Some(tipos) => tipos
             .iter()
             .map(|t| tipo_texto(*t))
             .collect::<Vec<_>>()
             .join(" o "),
     }
+}
+
+/// Igual que `parsear_consulta`, pero además informa qué términos no se
+/// reconocieron (`resolucion.no_reconocidos`) — usado por la etiqueta de
+/// búsqueda para avisar de un typo en la clave en vez de dejarlo caer a
+/// texto libre en silencio, igual que ya hacen Contratistas y Activos.
+pub(super) fn resumen_consulta(
+    base: &FiltrosHistorial,
+    texto: &str,
+    empresas: &[Empresa],
+) -> String {
+    let mut filtros = base.clone();
+    let resolucion = resolver_terminos_detallado(texto, &mut filtros, |f, term| {
+        aplicar_clave(f, term, empresas)
+    });
+    let mut partes = Vec::new();
+    if filtros.empresa_id.is_some() {
+        partes.push(format!(
+            "empresa: {}",
+            empresa_texto(filtros.empresa_id, empresas)
+        ));
+    }
+    if filtros.estado != EstadoMovimiento::Todos {
+        partes.push(format!("estado: {}", estado_texto(filtros.estado)));
+    }
+    if let Some(tipos) = &filtros.tipos {
+        partes.push(format!(
+            "tipo: {}",
+            tipos_texto(Some(tipos), filtros.tipos_negado)
+        ));
+    }
+    if !filtros.usuario_ingreso.is_empty() {
+        let signo = if filtros.usuario_ingreso_negado {
+            "≠"
+        } else {
+            ""
+        };
+        partes.push(format!("ingreso: {signo}{}", filtros.usuario_ingreso));
+    }
+    if !filtros.usuario_salida.is_empty() {
+        let signo = if filtros.usuario_salida_negado {
+            "≠"
+        } else {
+            ""
+        };
+        partes.push(format!("salida: {signo}{}", filtros.usuario_salida));
+    }
+    if !resolucion.no_reconocidos.is_empty() {
+        partes.push(format!(
+            "⚠ sin interpretar: {}",
+            resolucion.no_reconocidos.join(", ")
+        ));
+    }
+    partes.join(" · ")
 }

@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    database::queries::ingresos::{EstadoMovimiento, MovimientoIngresoResumen},
+    database::queries::ingresos::MovimientoIngresoResumen,
     services::autenticacion_service::UsuarioSesion,
     tiempo::{a_costa_rica, hora_actual_texto},
     tui::ui_kit::{
@@ -51,7 +51,11 @@ pub fn render(
         commands: &comandos,
         authenticated: true,
         help_expanded: state.ayuda_expandida,
-        ayuda_extra: Some("Claves: empresa, tipo, estado, gafete, desde, hasta, ingreso, salida"),
+        ayuda_extra: Some(
+            "Claves: empresa:nombre · tipo:praind|inhouse|correo|swat (lista con comas) · \
+             estado:activos|cerrados|todos · gafete:número · desde/hasta:DD/MM/YYYY (sin negar) · \
+             ingreso/salida:usuario · negar con -clave:valor",
+        ),
     };
     let areas = shell.render(frame, area, theme);
 
@@ -131,42 +135,13 @@ fn etiqueta_busqueda(state: &HistorialState) -> String {
     if pagina > 0 {
         resumen.push(format!("página {pagina}/{total_paginas}"));
     }
-    if state.filtro_aplicado.empresa_id.is_some() {
-        resumen.push(format!(
-            "empresa: {}",
-            empresa_texto(state.filtro_aplicado.empresa_id, &state.empresas)
-        ));
-    }
-    if state.filtro_aplicado.estado != EstadoMovimiento::Todos {
-        resumen.push(format!(
-            "estado: {}",
-            estado_texto(state.filtro_aplicado.estado)
-        ));
-    }
-    if let Some(tipos) = &state.filtro_aplicado.tipos {
-        resumen.push(format!("tipo: {}", tipos_texto(Some(tipos))));
-    }
-    if !state.filtro_aplicado.usuario_ingreso.is_empty() {
-        let signo = if state.filtro_aplicado.usuario_ingreso_negado {
-            "≠"
-        } else {
-            ""
-        };
-        resumen.push(format!(
-            "ingreso: {signo}{}",
-            state.filtro_aplicado.usuario_ingreso
-        ));
-    }
-    if !state.filtro_aplicado.usuario_salida.is_empty() {
-        let signo = if state.filtro_aplicado.usuario_salida_negado {
-            "≠"
-        } else {
-            ""
-        };
-        resumen.push(format!(
-            "salida: {signo}{}",
-            state.filtro_aplicado.usuario_salida
-        ));
+    let filtros = resumen_consulta(
+        &state.filtro_aplicado,
+        state.busqueda.value(),
+        &state.empresas,
+    );
+    if !filtros.is_empty() {
+        resumen.push(filtros);
     }
     format!(
         "BUSCAR · CLAVE:VALOR O TEXTO LIBRE · {}",

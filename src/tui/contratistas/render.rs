@@ -101,7 +101,10 @@ pub fn render(
         commands: comandos,
         authenticated: true,
         help_expanded: state.ayuda_expandida,
-        ayuda_extra: Some("Claves: empresa, tipo, praind, ruta, acceso"),
+        ayuda_extra: Some(
+            "Claves: empresa:nombre · tipo:praind|inhouse|correo|swat (lista con comas) · \
+             praind:vence|vencido|sin · ruta:si|no · acceso:si|no · negar con -clave:valor",
+        ),
     };
     let areas = shell.render(frame, area, theme);
 
