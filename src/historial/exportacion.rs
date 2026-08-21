@@ -6,7 +6,7 @@ use crate::{
     tiempo::a_costa_rica,
 };
 
-/// Campos que el operador puede mostrar tanto en la tabla clásica como en
+/// Columnas que el operador puede mostrar tanto en la tabla clásica como en
 /// una exportación de Historial. Mantener un único enum evita que F4 y el
 /// archivo XLSX diverjan con el tiempo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

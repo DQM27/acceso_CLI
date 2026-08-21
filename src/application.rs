@@ -25,7 +25,7 @@ use crate::database::repositories::usuario_repository::{
 };
 use crate::database::schema::SchemaError;
 use crate::domain::autorizacion::{Operacion, puede_cambiar_password, puede_gestionar_usuario};
-use crate::exportacion_historial::{
+use crate::historial::exportacion::{
     ColumnaHistorial, FormatosHistorial, escribir_movimiento, preparar_hoja,
 };
 use crate::models::usuario::{RolUsuario, Usuario};

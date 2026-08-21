@@ -1,6 +1,6 @@
 use crate::{
     database::queries::ingresos::{FiltroHistorial, MovimientoIngresoResumen, PaginaHistorial},
-    exportacion_historial::ColumnaHistorial,
+    historial::ColumnaHistorial,
     models::empresa::Empresa,
 };
 use crossterm::event::{KeyCode, KeyEvent};

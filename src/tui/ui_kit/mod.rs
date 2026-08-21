@@ -13,9 +13,9 @@ mod query_lang;
 mod seleccion;
 mod shell;
 mod text_input;
-mod texto;
 mod theme;
 
+pub use crate::texto::plegar_diacriticos;
 pub use debounce::Debounce;
 pub use details::detail_line;
 pub use fields::{ChoiceFieldOptions, render_choice_field, render_form_field};
@@ -36,5 +36,4 @@ pub use shell::{
     centered_rect, identidad_sesion, panel, render_terminal_too_small,
 };
 pub use text_input::{TextInput, TextInputFocus};
-pub use texto::plegar_diacriticos;
 pub use theme::{Theme, ThemePreset};

@@ -4,7 +4,7 @@ use rusqlite::{Connection, params};
 use control_acceso::{
     application::{AppCore, ExportarHistorialError},
     database::{queries::ingresos::FiltroHistorial, schema::initialize_database},
-    exportacion_historial::ColumnaHistorial,
+    historial::ColumnaHistorial,
     tiempo::serializar_utc,
 };
 

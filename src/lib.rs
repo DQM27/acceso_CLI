@@ -1,8 +1,7 @@
 pub mod application;
-pub mod cli;
 pub mod database;
 pub mod domain;
-pub mod exportacion_historial;
+pub mod historial;
 pub mod instancia;
 pub mod models;
 pub mod services;
