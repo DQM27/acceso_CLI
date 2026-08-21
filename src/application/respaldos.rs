@@ -45,6 +45,13 @@ impl AppCore {
         self.crear_respaldo_sistema(tipo)
     }
 
+    /// Respaldo previo a una operación de recuperación por CLI (`--reset-root` en
+    /// main.rs) — sin actor, por la misma razón que `AppCore::resetear_password_root`:
+    /// este camino existe justo para cuando nadie puede loguearse.
+    pub fn crear_respaldo_por_flag(&self) -> Result<RespaldoResumen, RespaldoError> {
+        self.crear_respaldo_sistema(TipoRespaldo::PorFlag)
+    }
+
     fn crear_respaldo_sistema(&self, tipo: TipoRespaldo) -> Result<RespaldoResumen, RespaldoError> {
         crate::database::backup::crear_respaldo(
             &self.connection,

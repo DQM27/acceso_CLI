@@ -35,6 +35,10 @@ pub enum TipoRespaldo {
     Automatico,
     PreMigracion,
     PreRestauracion,
+    /// Disparado por un flag de línea de comandos (p. ej. `--reset-root`) en vez de
+    /// desde la TUI — se distingue de `Manual` para que quede claro, al mirar la
+    /// lista de respaldos, que fue una intervención fuera de la app normal.
+    PorFlag,
 }
 
 impl TipoRespaldo {
@@ -44,6 +48,7 @@ impl TipoRespaldo {
             Self::Automatico => "automatico",
             Self::PreMigracion => "pre_migracion",
             Self::PreRestauracion => "pre_restauracion",
+            Self::PorFlag => "por_flag",
         }
     }
 }
@@ -395,6 +400,7 @@ fn interpretar_nombre(ruta: &Path) -> Option<RespaldoResumen> {
         TipoRespaldo::Automatico,
         TipoRespaldo::PreMigracion,
         TipoRespaldo::PreRestauracion,
+        TipoRespaldo::PorFlag,
     ]
     .into_iter()
     .find(|tipo| coincide_sufijo(resto, tipo.sufijo()))?;
@@ -430,10 +436,12 @@ fn coincide_sufijo(resto: &str, sufijo: &str) -> bool {
 /// Conserva como máximo `limite` respaldos del `tipo` indicado — los más
 /// recientes, según el mismo orden que ya usa `listar_respaldos` — y borra el
 /// resto. Sólo actúa sobre el `tipo` recibido: nunca se le pasa
-/// `TipoRespaldo::Manual` ni `TipoRespaldo::PreRestauracion`, así que esos no
-/// se tocan jamás desde esta función — la política de retención de
-/// `docs/plan-respaldos.md` sólo cubre respaldos automáticos y
-/// pre-migración.
+/// `TipoRespaldo::Manual`, `TipoRespaldo::PreRestauracion` ni
+/// `TipoRespaldo::PorFlag`, así que esos no se tocan jamás desde esta función
+/// — la política de retención de `docs/plan-respaldos.md` sólo cubre
+/// respaldos automáticos y pre-migración. Un respaldo `PorFlag` es un punto
+/// de recuperación deliberado (p. ej. antes de `--reset-root`); borrarlo solo
+/// junto con los demás automáticos derrotaría su propósito.
 pub fn aplicar_retencion(
     directorio_respaldos: &Path,
     tipo: TipoRespaldo,

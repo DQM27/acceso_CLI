@@ -21,6 +21,7 @@ query-parser = "0.2.0"
 rust_xlsxwriter = { version = "0.98.2", features = ["chrono", "constant_memory"] }
 tempfile = "3"
 thiserror = "2"
+rpassword = "7"
 
 [build-dependencies]
 winresource = "0.1"

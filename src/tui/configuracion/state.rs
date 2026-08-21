@@ -347,6 +347,7 @@ fn etiqueta_tipo(tipo: TipoRespaldo) -> &'static str {
         TipoRespaldo::Automatico => "Automático",
         TipoRespaldo::PreMigracion => "Pre-migración",
         TipoRespaldo::PreRestauracion => "Pre-restauración",
+        TipoRespaldo::PorFlag => "Por flag (CLI)",
     }
 }
 

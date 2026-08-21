@@ -33,6 +33,45 @@ impl AppCore {
             .buscar_para_tabla_como(filtro, actor_actual.rol)
     }
 
+    /// Usuarios ROOT activos — usado por el flujo de recuperación `--reset-root`
+    /// (main.rs) para saber a cuál restablecer cuando hay más de uno.
+    pub fn listar_roots_activos(&self) -> Result<Vec<Usuario>, UsuarioServiceError> {
+        let usuarios =
+            UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection)).listar()?;
+        Ok(usuarios
+            .into_iter()
+            .filter(|usuario| usuario.rol == RolUsuario::Root && usuario.activo)
+            .collect())
+    }
+
+    /// Camino de recuperación fuera de la TUI (`--reset-root` en main.rs), pensado para
+    /// cuando el ROOT olvidó su contraseña y no hay otro admin/root con sesión para
+    /// restablecérsela. A propósito no pasa por `verificar_gestion_usuario` como el
+    /// resto de `cambiar_password_usuario_*`: no hay actor logueado, porque este
+    /// flujo existe justo para cuando nadie puede loguearse. Su única barrera es
+    /// tener acceso al ejecutable y al archivo de la base de datos — quien tiene eso
+    /// ya podría manipular el `.sqlite` directamente, así que esto no baja el nivel
+    /// de seguridad real, sólo evita tener que calcular un hash Argon2 a mano.
+    pub fn resetear_password_root(
+        &self,
+        id: i64,
+        nueva_password: &str,
+    ) -> Result<(), UsuarioServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        let usuario = SqliteUsuarioRepository::new(&transaction)
+            .buscar_por_id(id)?
+            .ok_or(UsuarioServiceError::UsuarioNoEncontrado)?;
+        if usuario.rol != RolUsuario::Root || !usuario.activo {
+            return Err(UsuarioServiceError::UsuarioNoEncontrado);
+        }
+        UsuarioService::new(&SqliteUsuarioRepository::new(&transaction))
+            .cambiar_password(id, nueva_password)?;
+        transaction.commit().map_err(DatabaseError::from)?;
+        Ok(())
+    }
+
     pub fn crear_usuario(
         &self,
         actor: &UsuarioSesion,
