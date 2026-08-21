@@ -916,6 +916,83 @@ mod tests {
         assert!(!app.salida_rapida.abierto());
     }
 
+    /// Regresión de "registrar una salida por F2 no actualiza en tiempo
+    /// real otras pantallas": antes sólo se recargaba Ingresos Activos si
+    /// era la vista actual — quedándose en Historial, un movimiento recién
+    /// cerrado seguía mostrándose como abierto hasta navegar a otra
+    /// pantalla y volver.
+    #[test]
+    fn f2_registra_salida_refresca_historial_sin_navegar() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let core = AppCore::new(connection);
+        let usuario_id = core
+            .crear_root_inicial(crate::services::usuario_service::CrearRootInicialInput {
+                cedula: "ROOT-1".into(),
+                nombre: "Ana".into(),
+                password: "password1".into(),
+            })
+            .unwrap();
+        let actor = core.autenticar("ROOT-1", "password1").unwrap();
+        let empresa_id = core.crear_empresa(&actor, "Constructora Álvarez").unwrap();
+        let contratista_id = core
+            .crear_contratista(
+                &actor,
+                crate::services::contratista_service::DatosContratista {
+                    cedula: "9-9999-9999".into(),
+                    nombre: "Persona De Prueba".into(),
+                    empresa_id,
+                    tipo_ingreso: crate::models::tipo_ingreso::TipoIngreso::PorCorreo,
+                    fecha_vencimiento_praind: None,
+                    es_personal_ruta: false,
+                    tiene_acceso: true,
+                },
+            )
+            .unwrap();
+        core.registrar_ingreso(
+            &actor,
+            contratista_id,
+            crate::models::medio_ingreso::MedioIngreso::Caminando,
+            Some(77),
+        )
+        .unwrap();
+
+        let mut app = App {
+            vista: Vista::Historial,
+            sesion: Some(UsuarioSesion {
+                id: usuario_id,
+                cedula: "ROOT-1".into(),
+                nombre: "Ana".into(),
+                rol: RolUsuario::Root,
+            }),
+            ..App::default()
+        };
+        let carga = app.historial.solicitud_carga();
+        app.procesar_accion_historial(carga, Some(&core));
+        for c in "estado:activos".chars() {
+            app.historial
+                .handle_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE));
+        }
+        let futuro = std::time::Instant::now() + std::time::Duration::from_millis(300);
+        let accion = app.historial.tick(futuro);
+        app.procesar_accion_historial(accion, Some(&core));
+        assert_eq!(app.historial.total(), 1, "debía ver el movimiento abierto");
+
+        app.procesar_tecla_global(tecla(KeyCode::F(2)), Some(&core));
+        for c in "77".chars() {
+            app.procesar_tecla_global(tecla(KeyCode::Char(c)), Some(&core));
+        }
+        app.procesar_tecla_global(tecla(KeyCode::Enter), Some(&core));
+        app.procesar_tecla_global(tecla(KeyCode::Enter), Some(&core));
+
+        assert_eq!(app.vista, Vista::Historial, "no debía moverse de pantalla");
+        assert_eq!(
+            app.historial.total(),
+            0,
+            "Historial debía refrescarse solo, sin navegar, tras la salida por F2"
+        );
+    }
+
     /// Regresión de "registrar un ingreso interrumpe el flujo saltando a
     /// Ingresos Activos": antes cada registro exitoso cambiaba
     /// `self.vista` a `Vista::IngresosActivos`, obligando a volver a
@@ -1967,9 +2044,23 @@ impl App {
                 };
                 let recarga = self.salida_rapida.completar_confirmacion(resultado);
                 self.procesar_accion_salida_rapida(recarga, core);
-                if self.vista == Vista::IngresosActivos {
-                    let recarga_activos = self.activos.solicitud_carga();
-                    self.procesar_accion_activos(recarga_activos, core);
+                // La salida se registra desde el overlay global (F2), sin
+                // pasar por la pantalla que el operador tiene abierta
+                // debajo — a diferencia de registrarla directo desde
+                // Ingresos Activos, acá nada más recarga esa pantalla en
+                // particular. Sin este refresco, Historial/Activos se
+                // quedaban mostrando datos viejos hasta que el operador
+                // navegaba a otra pantalla y volvía.
+                match self.vista {
+                    Vista::IngresosActivos => {
+                        let recarga_activos = self.activos.solicitud_carga();
+                        self.procesar_accion_activos(recarga_activos, core);
+                    }
+                    Vista::Historial => {
+                        let recarga_historial = self.historial.refrescar();
+                        self.procesar_accion_historial(recarga_historial, core);
+                    }
+                    _ => {}
                 }
             }
         }

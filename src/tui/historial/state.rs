@@ -225,6 +225,20 @@ impl HistorialState {
         self.consulta()
             .map_or(AccionHistorial::Ninguna, AccionHistorial::Consultar)
     }
+    /// Repite la consulta actual (mismo filtro, página y `corte_id`) sin
+    /// reiniciar la paginación — para refrescar el contenido ya visible tras
+    /// un cambio hecho desde otra pantalla (p. ej. una salida registrada por
+    /// F2 mientras el operador está viendo Historial), sin saltarlo a la
+    /// página 1 ni desplazar lo que ya tenía cargado.
+    pub fn refrescar(&mut self) -> AccionHistorial {
+        self.emitir()
+    }
+    /// Conteo real de coincidencias de la página cargada, sin recortar por
+    /// `LIMIT` — expuesto para que `app.rs` pueda verificar que una
+    /// recarga en segundo plano sí actualizó el estado (p. ej. tras F2).
+    pub fn total(&self) -> usize {
+        self.total
+    }
     pub fn completar(&mut self, r: Result<PaginaHistorial, String>) {
         match r {
             Ok(p) => {
