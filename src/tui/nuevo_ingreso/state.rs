@@ -227,7 +227,7 @@ impl NuevoIngresoState {
             KeyCode::Enter => self.seleccionar_resaltado(),
             KeyCode::Char('/') => {
                 self.modo = ModoBuscarIngreso::Busqueda {
-                    texto: TextInput::new(self.filtro.clone()),
+                    texto: TextInput::default(),
                 };
                 AccionNuevoIngreso::Ninguna
             }

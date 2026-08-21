@@ -429,7 +429,7 @@ impl ContratistasState {
             }
             KeyCode::Char('/') => {
                 self.modo = ModoContratistas::Busqueda {
-                    texto: TextInput::new(self.filtro.clone()),
+                    texto: TextInput::default(),
                 }
             }
             KeyCode::F(4) => self.modo = ModoContratistas::Columnas { seleccion: 0 },

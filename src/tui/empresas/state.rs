@@ -245,7 +245,7 @@ impl EmpresasState {
             }
             KeyCode::Char('/') => {
                 self.modo = ModoEmpresas::Busqueda {
-                    texto: TextInput::new(self.filtro.clone()),
+                    texto: TextInput::default(),
                 }
             }
             KeyCode::Esc if !self.filtro.is_empty() => {

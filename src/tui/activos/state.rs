@@ -406,7 +406,7 @@ impl ActivosState {
             }
             KeyCode::Char('/') => {
                 self.modo = ModoActivos::Busqueda {
-                    texto: TextInput::new(self.filtro.clone()),
+                    texto: TextInput::default(),
                 }
             }
             KeyCode::F(4) => self.modo = ModoActivos::Columnas { seleccion: 0 },
