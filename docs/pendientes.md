@@ -77,8 +77,17 @@ suite completa + Clippy estricto.
   quedó con su propio `WHERE` dinámico, conversor específico y pruebas de plan de
   consulta (`EXPLAIN QUERY PLAN`). `cargo fmt`, Clippy estricto y la suite completa en
   verde.
-- [ ] `src/tui/contratistas/state.rs` (934 líneas) — extraer `contratistas/query.rs` y
-  `contratistas/form.rs`; dejar estado público y `handle_key` en `state.rs`.
+- [x] **Repartido (2026-08-21).** `src/tui/contratistas/state.rs` (934 líneas) →
+  `query.rs` (lenguaje `clave:valor`, 120 líneas), `form.rs` (validación y construcción
+  del formulario, 114 líneas), `state.rs` queda en 737. `FormularioContratista` y sus
+  enums (`CampoFormulario`/`ModoFormulario`/`Desplegable`) se quedaron en `state.rs` a
+  propósito: `render.rs` lee sus campos privados directamente, y moverlos habría exigido
+  `pub(in ...)` en cada campo sólo para separar código sin beneficio real. Sólo se
+  extrajeron las funciones libres que no tienen ese acoplamiento
+  (`construir`/`convertir_actualizacion`/`mover_campo`/`agregar_fecha`/`tipos`/
+  `texto_tipo`, con `tipos`/`texto_tipo` visibles también para `render.rs` vía
+  `pub(in crate::tui::contratistas::state)`, ya que ese archivo los usa directo). `cargo
+  fmt`, Clippy estricto y la suite completa en verde.
 - [ ] `src/tui/usuarios/state.rs` (870 líneas) — extraer `usuarios/form.rs` y
   `usuarios/password.rs`.
 - `src/database/schema.rs` (804 líneas) y los `render.rs` de 500-600 líneas: revisados, sin

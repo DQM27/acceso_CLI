@@ -11,11 +11,13 @@ use crate::{
     services::contratista_service::{DatosActualizacionContratista, DatosContratista},
     tiempo::ahora_costa_rica,
     tui::ui_kit::{
-        Debounce, StandardCommand, Term, TextInput, plegar_diacriticos, resolver_terminos,
-        resolver_terminos_detallado, standard_command, valores,
+        Debounce, StandardCommand, TextInput, resolver_terminos_detallado, standard_command,
     },
 };
 use std::time::Instant;
+
+use form::{agregar_fecha, construir, convertir_actualizacion, mover_campo, tipos};
+use query::{aplicar_clave, parsear_consulta};
 
 const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
 /// Mismo tamaño que `LIMITE_PREDETERMINADO` en `database::queries::contratistas` — se repite
@@ -23,119 +25,15 @@ const DURACION_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(
 /// constante es el tamaño de página que la UI usa para avanzar con PageUp/PageDown.
 const LIMITE_PAGINA: usize = 100;
 
+#[path = "form.rs"]
+mod form;
+#[path = "query.rs"]
+mod query;
 #[path = "render.rs"]
 pub(super) mod render;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
-
-/// Interpreta `texto` con la sintaxis `clave:valor` de `ui_kit::query_lang`
-/// (`empresa:`, `tipo:`, `praind:vence|vencido|sin` — todas con negación
-/// `-clave:valor` —, `ruta:si|no`, `acceso:si|no`). Lo no reconocido, y lo
-/// que no calza con lo que una clave admite, se deja como texto libre para
-/// nombre/cédula.
-fn parsear_consulta(
-    texto: &str,
-    empresas: &[Empresa],
-    hoy: NaiveDate,
-) -> (FiltroContratistas, String) {
-    let mut filtro = FiltroContratistas::default();
-    let libres = resolver_terminos(texto, &mut filtro, |f, term| {
-        aplicar_clave(f, term, empresas, hoy)
-    });
-    (filtro, libres)
-}
-
-fn aplicar_clave(
-    f: &mut FiltroContratistas,
-    term: &Term,
-    empresas: &[Empresa],
-    hoy: NaiveDate,
-) -> bool {
-    let clave = term.key.as_deref().unwrap_or_default().to_lowercase();
-    let valores = valores(term);
-    match clave.as_str() {
-        "empresa" if valores.len() == 1 => {
-            let buscado = plegar_diacriticos(&valores[0].to_lowercase());
-            match empresas
-                .iter()
-                .find(|e| plegar_diacriticos(&e.nombre.to_lowercase()).contains(&buscado))
-            {
-                Some(e) => {
-                    f.empresa_id = Some(if term.negated {
-                        Igualdad::Excluye(e.id)
-                    } else {
-                        Igualdad::Incluye(e.id)
-                    });
-                    true
-                }
-                None => false,
-            }
-        }
-        "tipo" => {
-            let Some(reconocidos) = valores
-                .iter()
-                .map(|v| TipoIngreso::from_str_filtro(v))
-                .collect::<Option<Vec<_>>>()
-            else {
-                return false;
-            };
-            if reconocidos.is_empty() {
-                return false;
-            }
-            f.tipos_incluidos = Some(if term.negated {
-                TipoIngreso::ALL
-                    .into_iter()
-                    .filter(|t| !reconocidos.contains(t))
-                    .collect()
-            } else {
-                reconocidos
-            });
-            true
-        }
-        "praind" if valores.len() == 1 => match valores[0].to_lowercase().as_str() {
-            "vence" | "proximo" | "próximo" => {
-                f.praind = Some(FiltroPraind::ProximoAVencer { hoy });
-                f.praind_negado = term.negated;
-                true
-            }
-            "vencido" => {
-                f.praind = Some(FiltroPraind::Vencido { hoy });
-                f.praind_negado = term.negated;
-                true
-            }
-            "sin" | "sinfecha" => {
-                f.praind = Some(FiltroPraind::SinFecha);
-                f.praind_negado = term.negated;
-                true
-            }
-            _ => false,
-        },
-        "ruta" if valores.len() == 1 => match bool_desde_texto(&valores[0]) {
-            Some(b) => {
-                f.personal_ruta = Some(b != term.negated);
-                true
-            }
-            None => false,
-        },
-        "acceso" if valores.len() == 1 => match bool_desde_texto(&valores[0]) {
-            Some(b) => {
-                f.tiene_acceso = Some(b != term.negated);
-                true
-            }
-            None => false,
-        },
-        _ => false,
-    }
-}
-
-fn bool_desde_texto(v: &str) -> Option<bool> {
-    match v.to_lowercase().as_str() {
-        "si" | "sí" | "yes" | "true" => Some(true),
-        "no" | "false" => Some(false),
-        _ => None,
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Columna {
@@ -835,100 +733,5 @@ impl ContratistasState {
             KeyCode::Esc => self.modo = ModoContratistas::Normal,
             _ => {}
         }
-    }
-}
-fn tipos() -> [TipoIngreso; 4] {
-    [
-        TipoIngreso::Praind,
-        TipoIngreso::InHouse,
-        TipoIngreso::PorCorreo,
-        TipoIngreso::Swat,
-    ]
-}
-fn texto_tipo(t: TipoIngreso) -> &'static str {
-    match t {
-        TipoIngreso::Praind => "PRAIND",
-        TipoIngreso::InHouse => "IN HOUSE",
-        TipoIngreso::PorCorreo => "POR CORREO",
-        TipoIngreso::Swat => "SWAT",
-    }
-}
-fn construir(
-    f: &FormularioContratista,
-    empresa_id: Option<i64>,
-) -> Result<DatosContratista, String> {
-    if f.cedula.value().trim().is_empty() {
-        return Err("La cédula es obligatoria".into());
-    }
-    if f.nombre.value().trim().is_empty() {
-        return Err("El nombre es obligatorio".into());
-    }
-    let fecha = if f.requiere_praind() {
-        Some(
-            NaiveDate::parse_from_str(f.fecha_praind.value(), "%d/%m/%Y").map_err(|_| {
-                if f.fecha_praind.value().is_empty() {
-                    "Fecha PRAIND requerida"
-                } else {
-                    "Fecha inválida. Use DD/MM/YYYY"
-                }
-            })?,
-        )
-    } else {
-        None
-    };
-    Ok(DatosContratista {
-        cedula: f.cedula.value().trim().into(),
-        nombre: f.nombre.value().trim().into(),
-        empresa_id: empresa_id.ok_or("La empresa seleccionada ya no existe")?,
-        tipo_ingreso: f.tipo,
-        fecha_vencimiento_praind: fecha,
-        es_personal_ruta: f.personal_ruta,
-        tiene_acceso: f.tiene_acceso,
-    })
-}
-fn convertir_actualizacion(datos: DatosContratista) -> DatosActualizacionContratista {
-    DatosActualizacionContratista {
-        nombre: datos.nombre,
-        empresa_id: datos.empresa_id,
-        tipo_ingreso: datos.tipo_ingreso,
-        fecha_vencimiento_praind: datos.fecha_vencimiento_praind,
-        es_personal_ruta: datos.es_personal_ruta,
-        tiene_acceso: datos.tiene_acceso,
-    }
-}
-fn mover_campo(f: &mut FormularioContratista, d: isize) {
-    let habilitados: Vec<usize> = CampoFormulario::TODOS
-        .iter()
-        .enumerate()
-        .filter_map(|(indice, campo)| {
-            let habilitado = !(matches!(f.modo, ModoFormulario::Editar { .. })
-                && *campo == CampoFormulario::Cedula)
-                && (*campo != CampoFormulario::FechaPraind || f.requiere_praind());
-            habilitado.then_some(indice)
-        })
-        .collect();
-    let posicion = habilitados
-        .iter()
-        .position(|indice| *indice == f.campo)
-        .unwrap_or(0);
-    let len = habilitados.len() as isize;
-    let siguiente = (posicion as isize + d).rem_euclid(len) as usize;
-    f.campo = habilitados[siguiente];
-}
-fn agregar_fecha(input: &mut TextInput, key: KeyEvent, caracter: char) {
-    if caracter == '/' {
-        input.handle_key(key);
-        return;
-    }
-    if !caracter.is_ascii_digit() {
-        return;
-    }
-    let cantidad_digitos = input.value().chars().filter(char::is_ascii_digit).count();
-    if cantidad_digitos < 8 {
-        let cursor_al_final = input.cursor() == input.value().chars().count();
-        if cursor_al_final && matches!(cantidad_digitos, 2 | 4) && !input.value().ends_with('/') {
-            input.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
-        }
-        input.handle_key(key);
     }
 }

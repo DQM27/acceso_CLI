@@ -7,6 +7,7 @@ use ratatui::{
     widgets::{Cell, Paragraph, Row, Table},
 };
 
+use super::form::{texto_tipo, tipos};
 use super::*;
 use crate::{
     database::queries::contratistas::ContratistaResumen,
