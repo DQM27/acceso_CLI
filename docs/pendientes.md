@@ -55,18 +55,16 @@ suite completa + Clippy estricto.
 
 ## Siguiente candidato tras `app.rs`: repartir `AppCore`
 
-- [ ] `src/application.rs` (965 líneas) concentra arranque, autenticación, contratistas,
-  empresas, ingresos/historial, usuarios, respaldos y exportación XLSX. Repartir
-  mecánicamente sus bloques `impl` sin cambiar la API pública:
-  ```text
-  src/application/mod.rs          (estructura, construcción, errores compartidos)
-  src/application/autenticacion.rs
-  src/application/accesos.rs
-  src/application/catalogos.rs
-  src/application/usuarios.rs
-  src/application/respaldos.rs
-  src/application/historial.rs
-  ```
+- [x] **Repartido (2026-08-21).** `src/application.rs` (965 líneas) se repartió en
+  `src/application/{mod,autenticacion,accesos,catalogos,usuarios,respaldos,historial}.rs`
+  (61-291 líneas cada uno), API pública sin cambios — `mod.rs` conserva la estructura,
+  construcción, `Drop`, y el único helper realmente transversal
+  (`verificar_actor_activo`, usado por 4 de los 6 submódulos). Los demás helpers
+  privados (`en_transaccion_con_reloj_validado`, `validar_reloj`,
+  `verificar_operador_activo`, `verificar_creacion_usuario`, `verificar_gestion_usuario`,
+  `establecer_empresa_activa`, `establecer_usuario_activo`, los de respaldos) se movieron
+  junto con su único grupo consumidor en vez de quedar en `mod.rs`. `cargo fmt`, Clippy
+  estricto y la suite completa en verde.
 
 ## Otros archivos grandes (orden sugerido, después de lo anterior)
 
