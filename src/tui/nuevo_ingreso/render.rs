@@ -5,8 +5,9 @@ use crate::{
     tiempo::hora_actual_texto,
     tui::ui_kit::{
         ChoiceFieldOptions, CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell,
-        StatusKind, Theme, identidad_sesion, master_detail_areas, render_choice_field,
-        render_form_field, render_separator, render_terminal_too_small,
+        StatusKind, Theme, identidad_sesion, master_detail_areas, posicionar_cursor,
+        posicionar_cursor_campo, render_choice_field, render_form_field, render_separator,
+        render_terminal_too_small,
     },
 };
 use ratatui::{
@@ -130,7 +131,7 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme
             state.contratistas.len()
         ),
     };
-    let area_busqueda = render_campo(
+    let area_busqueda = render_form_field(
         frame,
         filas[0],
         &etiqueta_busqueda,
@@ -146,12 +147,7 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme
     let area_gafete = render_panel(frame, area_panel, state, theme);
 
     if let ModoBuscarIngreso::Busqueda { texto } = &state.modo {
-        let antes_del_cursor: String = texto.value().chars().take(texto.cursor()).collect();
-        let ancho_visible = Line::from(antes_del_cursor).width() as u16;
-        let x = area_busqueda
-            .x
-            .saturating_add(ancho_visible.min(area_busqueda.width));
-        frame.set_cursor_position((x, area_busqueda.y));
+        posicionar_cursor_campo(frame, area_busqueda, texto);
     } else if state.campo_es_gafete()
         && let Some(area_campo) = area_gafete
     {
@@ -160,25 +156,8 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme
             .chars()
             .take(state.gafete_cursor)
             .collect();
-        let ancho_visible = Line::from(antes_del_cursor).width() as u16;
-        let x = area_campo
-            .x
-            .saturating_add(ancho_visible.min(area_campo.width));
-        frame.set_cursor_position((x, area_campo.y));
+        posicionar_cursor(frame, area_campo, &antes_del_cursor);
     }
-}
-
-/// Misma silueta con foco o sin él (etiqueta, valor, línea); sólo cambian
-/// color y peso.
-fn render_campo(
-    frame: &mut Frame,
-    area: Rect,
-    etiqueta: &str,
-    valor: &str,
-    activo: bool,
-    theme: Theme,
-) -> Rect {
-    render_form_field(frame, area, etiqueta, valor, activo, theme)
 }
 
 fn render_opcion(
@@ -372,7 +351,7 @@ fn render_formulario(
     );
 
     if requiere_gafete {
-        let area_gafete = render_campo(
+        let area_gafete = render_form_field(
             frame,
             filas[2],
             "NÚMERO DE GAFETE",

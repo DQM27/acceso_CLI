@@ -148,10 +148,26 @@ suite completa + Clippy estricto.
 
 ## Sistema visual / UI
 
-- [ ] **Componentes visuales aún duplicados entre pantallas.** `FormField`/`ChoiceField`/
-  separadores/layout maestro-detalle ya se centralizaron en `ui_kit`; faltan estados
-  vacíos (`EmptyState`), confirmaciones (`ConfirmationView`) y mensajes de estado
-  (`StatusMessage`) como componentes compartidos — hoy cada pantalla los reimplementa.
+- [x] **Bug (2026-08-21): el buscador no arrancaba vacío al activarlo.** Al presionar `/`
+  en Activos, Contratistas, Empresas, Nuevo Ingreso y Usuarios, el campo se prellenaba con
+  el filtro anterior (`TextInput::new(self.filtro.clone())`) en vez de arrancar limpio —
+  reportado por el usuario como "entorpece" escribir una búsqueda nueva. Reparado en las 5
+  pantallas (`TextInput::default()`); `self.filtro` no se toca hasta que el operador
+  escribe algo, así que salir sin escribir (Enter sin cambios) conserva el filtro anterior
+  intacto. Historial y Salida Rápida no tenían el bug (su caja es un campo permanente, no
+  un modo que se abre/cierra).
+- [x] **Parcial (2026-08-21): componentes visuales duplicados — buscador.** `render_campo`
+  (alias sin valor agregado de `render_form_field`) estaba copiado en 8 `render.rs`; se
+  eliminó y esos 8 llaman a `render_form_field` de `ui_kit` directo. El cálculo de
+  posición del cursor (`antes_del_cursor`/`ancho_visible`/`set_cursor_position`) estaba
+  duplicado igual en 6 sitios — se movió a `ui_kit::{posicionar_cursor,
+  posicionar_cursor_campo}`. `FormField`/`ChoiceField`/separadores/layout maestro-detalle
+  ya estaban en `ui_kit` de antes; faltan estados vacíos (`EmptyState`), confirmaciones
+  (`ConfirmationView`) y mensajes de estado (`StatusMessage`) como componentes
+  compartidos — hoy cada pantalla los reimplementa. La máquina de estados del modo
+  búsqueda (abrir/cerrar/debounce) sigue duplicada 5 veces — no se tocó porque cada
+  pantalla interpreta su propio `clave:valor`; unificarla exigiría un callback
+  conectable, no es un corte mecánico.
 - [ ] **Foco, selección y severidad dependen demasiado del color.** Reforzar con `>`,
   `[x]`, `!` o etiqueta textual de forma consistente (hoy no todas las vistas lo hacen
   igual); verificar ambos temas con contraste reducido y paleta de 16 colores.

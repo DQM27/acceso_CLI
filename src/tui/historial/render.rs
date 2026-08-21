@@ -6,7 +6,7 @@ use crate::{
     tui::ui_kit::{
         CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme,
         auxiliary_panel, centered_rect, detail_line, identidad_sesion, master_detail_areas,
-        render_form_field, render_separator, render_terminal_too_small,
+        posicionar_cursor_campo, render_form_field, render_separator, render_terminal_too_small,
     },
 };
 use ratatui::{
@@ -178,7 +178,7 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &HistorialState, theme: T
     let filas = Layout::vertical([Constraint::Length(3), Constraint::Min(4)]).split(area);
 
     let etiqueta = etiqueta_busqueda(state);
-    let area_busqueda = render_campo(
+    let area_busqueda = render_form_field(
         frame,
         filas[0],
         &etiqueta,
@@ -186,17 +186,7 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &HistorialState, theme: T
         true,
         theme,
     );
-    let antes_del_cursor: String = state
-        .busqueda
-        .value()
-        .chars()
-        .take(state.busqueda.cursor())
-        .collect();
-    let ancho_visible = Line::from(antes_del_cursor).width() as u16;
-    let x = area_busqueda
-        .x
-        .saturating_add(ancho_visible.min(area_busqueda.width));
-    frame.set_cursor_position((x, area_busqueda.y));
+    posicionar_cursor_campo(frame, area_busqueda, &state.busqueda);
 
     match state.vista {
         ViewMode::Timeline => render_vista_timeline(frame, filas[1], state, theme),
@@ -217,18 +207,6 @@ fn render_vista_timeline(frame: &mut Frame, area: Rect, state: &HistorialState, 
             area_panel,
         ),
     }
-}
-
-/// El campo de búsqueda está siempre activo en las dos vistas de Historial.
-fn render_campo(
-    frame: &mut Frame,
-    area: Rect,
-    etiqueta: &str,
-    valor: &str,
-    activo: bool,
-    theme: Theme,
-) -> Rect {
-    render_form_field(frame, area, etiqueta, valor, activo, theme)
 }
 
 fn render_timeline(frame: &mut Frame, area: Rect, state: &HistorialState, theme: Theme) {

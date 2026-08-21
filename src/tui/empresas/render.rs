@@ -12,8 +12,8 @@ use crate::{
     tiempo::hora_actual_texto,
     tui::ui_kit::{
         CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme,
-        detail_line, identidad_sesion, master_detail_areas, render_form_field, render_separator,
-        render_terminal_too_small,
+        detail_line, identidad_sesion, master_detail_areas, posicionar_cursor_campo,
+        render_form_field, render_separator, render_terminal_too_small,
     },
 };
 
@@ -132,7 +132,7 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: Th
     let filas = Layout::vertical([Constraint::Length(3), Constraint::Min(4)]).split(area);
 
     let enfocado_busqueda = matches!(state.modo, ModoEmpresas::Busqueda { .. });
-    let area_busqueda = render_campo(
+    let area_busqueda = render_form_field(
         frame,
         filas[0],
         &format!("BUSCAR · {} RESULTADOS", state.empresas.len()),
@@ -155,24 +155,8 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: Th
         _ => None,
     };
     if let Some((area_campo, texto)) = cursor {
-        let antes_del_cursor: String = texto.value().chars().take(texto.cursor()).collect();
-        let ancho_visible = Line::from(antes_del_cursor).width() as u16;
-        let x = area_campo
-            .x
-            .saturating_add(ancho_visible.min(area_campo.width));
-        frame.set_cursor_position((x, area_campo.y));
+        posicionar_cursor_campo(frame, area_campo, texto);
     }
-}
-
-fn render_campo(
-    frame: &mut Frame,
-    area: Rect,
-    etiqueta: &str,
-    valor: &str,
-    activo: bool,
-    theme: Theme,
-) -> Rect {
-    render_form_field(frame, area, etiqueta, valor, activo, theme)
 }
 
 fn render_tabla(frame: &mut Frame, area: Rect, state: &EmpresasState, theme: Theme) {
@@ -290,7 +274,7 @@ fn render_formulario(
         ModoFormularioEmpresa::Editar { .. } => "NOMBRE",
     };
     let filas = Layout::vertical([Constraint::Length(3), Constraint::Length(1)]).split(area);
-    render_campo(
+    render_form_field(
         frame,
         filas[0],
         titulo,

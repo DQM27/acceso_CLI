@@ -35,5 +35,5 @@ pub use shell::{
     CommandHint, ScreenShell, ShellAreas, StatusKind, auxiliary_panel, centered_content,
     centered_rect, identidad_sesion, panel, render_terminal_too_small,
 };
-pub use text_input::{TextInput, TextInputFocus};
+pub use text_input::{TextInput, TextInputFocus, posicionar_cursor, posicionar_cursor_campo};
 pub use theme::{Theme, ThemePreset};

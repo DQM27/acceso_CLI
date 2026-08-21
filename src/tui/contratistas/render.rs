@@ -15,8 +15,8 @@ use crate::{
     tiempo::hora_actual_texto,
     tui::ui_kit::{
         ChoiceFieldOptions, CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell,
-        StatusKind, TextInput, Theme, detail_line, identidad_sesion, master_detail_areas,
-        render_choice_field, render_separator, render_terminal_too_small,
+        StatusKind, Theme, detail_line, identidad_sesion, master_detail_areas,
+        posicionar_cursor_campo, render_choice_field, render_separator, render_terminal_too_small,
     },
 };
 
@@ -229,20 +229,6 @@ fn render_opcion(
         theme,
         ChoiceFieldOptions::plain(ANCHO_ETIQUETA_FORMULARIO),
     );
-}
-
-fn posicionar_cursor(frame: &mut Frame, area: Rect, contenido: &str) {
-    let ancho_visible = Line::from(contenido).width() as u16;
-    let x = area.x.saturating_add(ancho_visible.min(area.width));
-    frame.set_cursor_position((x, area.y));
-}
-
-/// Igual que `posicionar_cursor` pero en la posición real del cursor dentro
-/// del campo, no siempre al final — es lo que permite mover el cursor con
-/// las flechas para corregir algo sin borrar todo el texto.
-fn posicionar_cursor_campo(frame: &mut Frame, area: Rect, campo: &TextInput) {
-    let antes_del_cursor: String = campo.value().chars().take(campo.cursor()).collect();
-    posicionar_cursor(frame, area, &antes_del_cursor);
 }
 
 fn render_tabla(frame: &mut Frame, area: Rect, state: &ContratistasState, theme: Theme) {

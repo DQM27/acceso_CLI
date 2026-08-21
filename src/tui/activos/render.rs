@@ -6,8 +6,8 @@ use crate::{
     tiempo::{a_costa_rica, hora_actual_texto},
     tui::ui_kit::{
         CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme,
-        detail_line, identidad_sesion, master_detail_areas, render_form_field, render_separator,
-        render_terminal_too_small,
+        detail_line, identidad_sesion, master_detail_areas, posicionar_cursor_campo,
+        render_form_field, render_separator, render_terminal_too_small,
     },
 };
 use ratatui::{
@@ -128,7 +128,7 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &ActivosState, theme: The
         ModoActivos::Busqueda { texto } => texto.value(),
         _ => state.filtro.as_str(),
     };
-    let area_busqueda = render_campo(
+    let area_busqueda = render_form_field(
         frame,
         filas[0],
         &format!(
@@ -149,26 +149,8 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &ActivosState, theme: The
     render_panel(frame, area_panel, state, theme);
 
     if let ModoActivos::Busqueda { texto } = &state.modo {
-        let antes_del_cursor: String = texto.value().chars().take(texto.cursor()).collect();
-        let ancho_visible = Line::from(antes_del_cursor).width() as u16;
-        let x = area_busqueda
-            .x
-            .saturating_add(ancho_visible.min(area_busqueda.width));
-        frame.set_cursor_position((x, area_busqueda.y));
+        posicionar_cursor_campo(frame, area_busqueda, texto);
     }
-}
-
-/// Misma silueta con foco o sin él (etiqueta, valor, línea); sólo cambian
-/// color y peso.
-fn render_campo(
-    frame: &mut Frame,
-    area: Rect,
-    etiqueta: &str,
-    valor: &str,
-    activo: bool,
-    theme: Theme,
-) -> Rect {
-    render_form_field(frame, area, etiqueta, valor, activo, theme)
 }
 
 fn render_tabla(frame: &mut Frame, area: Rect, state: &ActivosState, theme: Theme) {

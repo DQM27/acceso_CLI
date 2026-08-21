@@ -1,15 +1,14 @@
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout, Rect},
-    text::Line,
     widgets::Paragraph,
 };
 
 use super::*;
 use crate::tiempo::hora_actual_texto;
 use crate::tui::ui_kit::{
-    CommandHint, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme, render_form_field,
-    render_terminal_too_small,
+    CommandHint, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme, posicionar_cursor,
+    render_form_field, render_terminal_too_small,
 };
 
 const ALTO_MINIMO: u16 = 26;
@@ -83,7 +82,7 @@ fn render_formulario(
     ])
     .split(hero);
 
-    let area_cedula = render_campo(
+    let area_cedula = render_form_field(
         frame,
         filas[0],
         "CÉDULA",
@@ -91,7 +90,7 @@ fn render_formulario(
         state.campo_activo == CampoConfiguracion::Cedula,
         theme,
     );
-    let area_nombre = render_campo(
+    let area_nombre = render_form_field(
         frame,
         filas[2],
         "NOMBRE",
@@ -100,7 +99,7 @@ fn render_formulario(
         theme,
     );
     let password_mascara = state.password_enmascarado();
-    let area_password = render_campo(
+    let area_password = render_form_field(
         frame,
         filas[4],
         "CONTRASEÑA",
@@ -109,7 +108,7 @@ fn render_formulario(
         theme,
     );
     let confirmacion_mascara = state.confirmacion_enmascarada();
-    let area_confirmar = render_campo(
+    let area_confirmar = render_form_field(
         frame,
         filas[6],
         "CONFIRMAR CONTRASEÑA",
@@ -151,27 +150,8 @@ fn render_formulario(
                 "•".repeat(state.confirmar_password.cursor()),
             ),
         };
-        let ancho_visible = Line::from(antes_del_cursor).width() as u16;
-        let x = area_campo
-            .x
-            .saturating_add(ancho_visible.min(area_campo.width));
-        let y = area_campo.y;
-        frame.set_cursor_position((x, y));
+        posicionar_cursor(frame, area_campo, &antes_del_cursor);
     }
-}
-
-/// Misma silueta con foco o sin él (etiqueta, valor, línea); sólo cambian
-/// color y peso, para que cambiar de campo nunca reordene ni redimensione
-/// nada en pantalla.
-fn render_campo(
-    frame: &mut Frame,
-    area: Rect,
-    etiqueta: &str,
-    valor: &str,
-    activo: bool,
-    theme: Theme,
-) -> Rect {
-    render_form_field(frame, area, etiqueta, valor, activo, theme)
 }
 
 fn centrar(area: Rect, ancho: u16, alto: u16) -> Rect {

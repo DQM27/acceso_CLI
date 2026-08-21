@@ -310,6 +310,25 @@ fn limited(value: &str, max_chars: usize) -> String {
     value.chars().take(max_chars).collect()
 }
 
+/// Posiciona el cursor real del terminal después de `contenido` (lo que hay
+/// antes del cursor, ya recortado) dentro de `area`. Primitiva de bajo nivel
+/// usada tanto por [`posicionar_cursor_campo`] como por campos enmascarados
+/// (contraseñas), donde `contenido` es una máscara sintética y no el valor
+/// real.
+pub fn posicionar_cursor(frame: &mut Frame, area: Rect, contenido: &str) {
+    let ancho_visible = Line::from(contenido).width() as u16;
+    let x = area.x.saturating_add(ancho_visible.min(area.width));
+    frame.set_cursor_position((x, area.y));
+}
+
+/// Igual que [`posicionar_cursor`] pero toma la posición real del cursor
+/// dentro de `campo`, no siempre al final — es lo que permite mover el
+/// cursor con las flechas para corregir algo sin borrar todo el texto.
+pub fn posicionar_cursor_campo(frame: &mut Frame, area: Rect, campo: &TextInput) {
+    let antes_del_cursor: String = campo.value().chars().take(campo.cursor()).collect();
+    posicionar_cursor(frame, area, &antes_del_cursor);
+}
+
 #[cfg(test)]
 mod tests {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};

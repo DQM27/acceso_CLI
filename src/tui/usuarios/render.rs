@@ -13,8 +13,9 @@ use crate::{
     tiempo::hora_actual_texto,
     tui::ui_kit::{
         ChoiceFieldOptions, CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell,
-        StatusKind, TextInput, Theme, detail_line, identidad_sesion, master_detail_areas,
-        render_choice_field, render_form_field, render_separator, render_terminal_too_small,
+        StatusKind, Theme, detail_line, identidad_sesion, master_detail_areas, posicionar_cursor,
+        posicionar_cursor_campo, render_choice_field, render_form_field, render_separator,
+        render_terminal_too_small,
     },
 };
 
@@ -153,7 +154,7 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: Th
     let filas = Layout::vertical([Constraint::Length(3), Constraint::Min(4)]).split(area);
 
     let enfocado_busqueda = matches!(state.modo, ModoUsuarios::Busqueda { .. });
-    let area_busqueda = render_campo(
+    let area_busqueda = render_form_field(
         frame,
         filas[0],
         &format!("BUSCAR · {} RESULTADOS", state.usuarios.len()),
@@ -170,21 +171,6 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &UsuariosState, theme: Th
     let (area_tabla, area_panel) = (areas.master, areas.detail);
     render_tabla(frame, area_tabla, state, theme);
     render_panel(frame, area_panel, state, theme);
-}
-
-/// Posiciona el cursor en `area` (la línea de valor de un campo, devuelta
-/// por [`render_campo`]) según el ancho visible de `contenido`.
-fn posicionar_cursor(frame: &mut Frame, area: Rect, contenido: &str) {
-    let ancho_visible = Line::from(contenido).width() as u16;
-    let x = area.x.saturating_add(ancho_visible.min(area.width));
-    frame.set_cursor_position((x, area.y));
-}
-
-/// Igual que `posicionar_cursor` pero en la posición real del cursor dentro
-/// del campo, no siempre al final.
-fn posicionar_cursor_campo(frame: &mut Frame, area: Rect, campo: &TextInput) {
-    let antes_del_cursor: String = campo.value().chars().take(campo.cursor()).collect();
-    posicionar_cursor(frame, area, &antes_del_cursor);
 }
 
 fn altura_panel(state: &UsuariosState) -> u16 {
@@ -208,19 +194,6 @@ fn altura_panel(state: &UsuariosState) -> u16 {
         ModoUsuarios::CambioPassword(_) => 8,
         _ => 6,
     }
-}
-
-/// Misma silueta con foco o sin él (etiqueta, valor, línea); sólo cambian
-/// color y peso.
-fn render_campo(
-    frame: &mut Frame,
-    area: Rect,
-    etiqueta: &str,
-    valor: &str,
-    activo: bool,
-    theme: Theme,
-) -> Rect {
-    render_form_field(frame, area, etiqueta, valor, activo, theme)
 }
 
 fn render_opcion(
@@ -372,7 +345,7 @@ fn render_formulario(frame: &mut Frame, area: Rect, f: &FormularioUsuario, theme
         let enfocado = f.campo == indice;
         match campo {
             CampoUsuario::Cedula => {
-                let r = render_campo(
+                let r = render_form_field(
                     frame,
                     filas[fila],
                     "CÉDULA",
@@ -385,7 +358,7 @@ fn render_formulario(frame: &mut Frame, area: Rect, f: &FormularioUsuario, theme
                 }
             }
             CampoUsuario::Nombre => {
-                let r = render_campo(
+                let r = render_form_field(
                     frame,
                     filas[fila],
                     "NOMBRE",
@@ -399,14 +372,15 @@ fn render_formulario(frame: &mut Frame, area: Rect, f: &FormularioUsuario, theme
             }
             CampoUsuario::Password => {
                 let mascara = f.password.mascara();
-                let r = render_campo(frame, filas[fila], "CONTRASEÑA", &mascara, enfocado, theme);
+                let r =
+                    render_form_field(frame, filas[fila], "CONTRASEÑA", &mascara, enfocado, theme);
                 if enfocado {
                     posicionar_cursor(frame, r, &"•".repeat(f.password.cursor()));
                 }
             }
             CampoUsuario::ConfirmarPassword => {
                 let mascara = f.confirmar_password.mascara();
-                let r = render_campo(
+                let r = render_form_field(
                     frame,
                     filas[fila],
                     "CONFIRMAR CONTRASEÑA",
@@ -474,7 +448,7 @@ fn render_password(frame: &mut Frame, area: Rect, f: &FormularioPassword, theme:
         filas[0],
     );
     let mascara_nueva = f.password.mascara();
-    let area_nueva = render_campo(
+    let area_nueva = render_form_field(
         frame,
         filas[1],
         "NUEVA CONTRASEÑA",
@@ -483,7 +457,7 @@ fn render_password(frame: &mut Frame, area: Rect, f: &FormularioPassword, theme:
         theme,
     );
     let mascara_confirmar = f.confirmar.mascara();
-    let area_confirmar = render_campo(
+    let area_confirmar = render_form_field(
         frame,
         filas[2],
         "CONFIRMAR CONTRASEÑA",
