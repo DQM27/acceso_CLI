@@ -4,6 +4,18 @@ Genera el paquete `.msix` para subir a Microsoft Store (identidad de producto:
 "Control de Acceso Brisas", editor DQM27). Se hace en la PC con el Windows SDK
 instalado — no en la máquina de compilación habitual sin privilegios de admin.
 
+## Recursos del icono
+
+La imagen maestra vive en `assets/icon-master.png`. Para regenerar el `.ico`
+multirresolución del ejecutable y los cuatro PNG usados por MSIX:
+
+```powershell
+& .\packaging\generate-icons.ps1
+```
+
+El script conserva las variantes de 16 a 256 px del ejecutable y exporta cada
+PNG con el tamaño exacto declarado en `AppxManifest.xml`.
+
 ## Requisitos (una sola vez, con admin)
 
 Instalar el **Windows SDK** (trae `MakeAppx.exe` y `signtool.exe`):
