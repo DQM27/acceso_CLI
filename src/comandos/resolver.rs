@@ -66,8 +66,8 @@ pub fn resolver(core: &AppCore, entrada: &Entrada) -> ContextState {
                 Comando::Ingreso => resolver_busqueda_contratistas(core, consulta),
                 Comando::Salida => resolver_salida(core, consulta, gafete_numero),
                 Comando::Activos => resolver_activos(core, consulta),
-                Comando::Buscar => resolver_busqueda_contratistas(core, consulta),
                 Comando::Ayuda => ContextState::Ayuda,
+                Comando::CerrarSesion => ContextState::ConfirmarCerrarSesion,
             }
         }
     }
@@ -105,9 +105,9 @@ pub fn preparar_resumen_ingreso(
     }
 }
 
-/// Ficha de `/buscar` con el contratista ya elegido: el resumen de la
-/// búsqueda ya trae todos los campos que muestra la ficha, no hace falta otra
-/// consulta.
+/// Ficha de una búsqueda de texto libre con el contratista ya elegido: el
+/// resumen de la búsqueda ya trae todos los campos que muestra la ficha, no
+/// hace falta otra consulta.
 pub fn ficha_desde_resumen(resumen: ContratistaResumen) -> ContextState {
     ContextState::FichaContratista { resumen }
 }

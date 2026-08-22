@@ -58,9 +58,10 @@ pub enum ContextState {
     Inicio {
         total_dentro: usize,
     },
-    /// Coincidencias de contratistas para `/ingreso` o `/buscar`. Con la
-    /// consulta demasiado corta o sin resultados, `items` queda vacío y el
-    /// render muestra la pista correspondiente a partir de `consulta`.
+    /// Coincidencias de contratistas para `/ingreso` o una búsqueda de texto
+    /// libre. Con la consulta demasiado corta o sin resultados, `items` queda
+    /// vacío y el render muestra la pista correspondiente a partir de
+    /// `consulta`.
     Coincidencias {
         consulta: String,
         items: Vec<ContratistaResumen>,
@@ -91,10 +92,13 @@ pub enum ContextState {
         items: Vec<IngresoActivoResumen>,
         total: usize,
     },
-    /// `/buscar` resuelto a un contratista concreto.
+    /// Búsqueda de texto libre resuelta a un contratista concreto.
     FichaContratista {
         resumen: ContratistaResumen,
     },
+    /// `/cerrarsesion`: tarjeta de confirmación — Enter cierra la sesión y
+    /// vuelve al login, Esc cancela.
+    ConfirmarCerrarSesion,
     Ayuda,
     /// Comando desconocido, parámetro inválido o error de consulta: se muestra
     /// el mensaje con `✗` y la sugerencia de `/ayuda` cuando aplica.

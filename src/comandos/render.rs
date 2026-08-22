@@ -65,15 +65,20 @@ pub fn render(frame: &mut Frame, app: &AppState) {
     }
 
     let paleta = paleta_comandos(app);
-    let disponible = area.height.saturating_sub(3 /* recuadro del input */ + 3 /* mínimo del contexto */);
-    let alto_pista = match &paleta {
-        Some(comandos) => (comandos.len() as u16 + 2).min(disponible.max(1)),
-        None => 1,
+    let filas_comandos = paleta.as_ref().map_or(0, |comandos| comandos.len() as u16);
+    // Con paleta, el input y la lista viven en un único recuadro (2 bordes +
+    // input + divisor + N filas); sin paleta, el recuadro del input solo.
+    // El cap deja al menos 3 filas para el área de contexto arriba.
+    let cap = area.height.saturating_sub(3);
+    let alto_bloque_prompt = match &paleta {
+        Some(_) => (4 + filas_comandos).min(cap.max(4)),
+        None => 3,
     };
+    let alto_pista = if paleta.is_some() { 0 } else { 1 };
 
     let [area_contexto, area_prompt, area_pista] = Layout::vertical([
         Constraint::Min(3),
-        Constraint::Length(3),
+        Constraint::Length(alto_bloque_prompt),
         Constraint::Length(alto_pista),
     ])
     .areas(area);
@@ -84,10 +89,9 @@ pub fn render(frame: &mut Frame, app: &AppState) {
     };
     frame.render_widget(Paragraph::new(lineas), area_contexto);
 
-    render_prompt(frame, area_prompt, app);
-    match &paleta {
-        Some(comandos) => render_paleta(frame, area_pista, comandos),
-        None => render_pista(frame, area_pista, app),
+    render_prompt(frame, area_prompt, app, paleta.as_deref());
+    if paleta.is_none() {
+        render_pista(frame, area_pista, app);
     }
 }
 
@@ -109,32 +113,6 @@ fn paleta_comandos(app: &AppState) -> Option<Vec<Comando>> {
         .filter(|comando| comando.nombre().starts_with(&prefijo))
         .collect();
     (!coincidentes.is_empty()).then_some(coincidentes)
-}
-
-/// Desplegable de comandos, en un recuadro propio debajo del input — mismo
-/// espíritu que el command palette de una CLI moderna: escribís `/` y aparece
-/// la lista, se filtra sola a medida que seguís tecleando.
-fn render_paleta(frame: &mut Frame, area: Rect, comandos: &[Comando]) {
-    // Sin borde superior: el borde inferior del input hace de línea
-    // divisoria, así el desplegable da la impresión de salir de él en vez de
-    // quedar como un recuadro aparte.
-    let bloque = Block::default()
-        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
-        .border_type(BorderType::Rounded)
-        .border_style(muted());
-    let interior = bloque.inner(area);
-    frame.render_widget(bloque, area);
-
-    let lineas: Vec<Line> = comandos
-        .iter()
-        .map(|comando| {
-            Line::from(vec![
-                Span::styled(format!("/{:<8}", comando.nombre()), acento()),
-                Span::styled(descripcion_comando(*comando), muted()),
-            ])
-        })
-        .collect();
-    frame.render_widget(Paragraph::new(lineas), interior);
 }
 
 /// Línea debajo del recuadro del input (estilo CLI moderna): el feedback
@@ -170,7 +148,13 @@ fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
 /// El prompt nunca desaparece: vive dentro de un recuadro de línea fina
 /// (bordes redondeados) y cambia de etiqueta según la fase (cédula, contraseña
 /// enmascarada, o el `>` de comandos), siempre con el cursor visible.
-fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState) {
+///
+/// Con `paleta` en `Some`, el desplegable de comandos se dibuja **dentro del
+/// mismo marco** que el input, separado por un divisor real (`├──┤`) en vez
+/// de un segundo recuadro pegado al primero — así no quedan dos juegos de
+/// esquinas redondeadas encontrándose a mitad de una línea vertical, que es
+/// lo que se veía "cortado".
+fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState, paleta: Option<&[Comando]>) {
     let bloque = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -178,6 +162,44 @@ fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState) {
     let interior = bloque.inner(area);
     frame.render_widget(bloque, area);
 
+    let fila_input = Rect::new(interior.x, interior.y, interior.width, 1);
+    render_prompt_linea(frame, fila_input, app);
+
+    let Some(comandos) = paleta else { return };
+    if interior.height < 2 {
+        return;
+    }
+
+    // El divisor se dibuja sobre el ancho completo del recuadro exterior
+    // (no del interior) para que "├"/"┤" caigan exactamente sobre las
+    // líneas verticales del marco y se empalmen con ellas.
+    let fila_divisor = Rect::new(area.x, interior.y + 1, area.width, 1);
+    let divisor = format!("├{}┤", "─".repeat((area.width as usize).saturating_sub(2)));
+    frame.render_widget(Paragraph::new(divisor).style(muted()), fila_divisor);
+
+    let filas_disponibles = interior.height.saturating_sub(2);
+    let fila_comandos = Rect::new(
+        interior.x,
+        interior.y + 2,
+        interior.width,
+        filas_disponibles,
+    );
+    let lineas: Vec<Line> = comandos
+        .iter()
+        .map(|comando| {
+            Line::from(vec![
+                Span::styled(format!("/{:<8}", comando.nombre()), acento()),
+                Span::styled(descripcion_comando(*comando), muted()),
+            ])
+        })
+        .collect();
+    frame.render_widget(Paragraph::new(lineas), fila_comandos);
+}
+
+/// Sólo la línea de texto del input (etiqueta + valor + cursor), sin marco —
+/// el marco lo pone `render_prompt`, que reutiliza esto tanto con paleta
+/// como sin ella.
+fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
     let (etiqueta, valor, cursor_visible, cursor_chars) = match &app.fase {
         Fase::LoginCedula { .. } => (
             "cédula › ",
@@ -199,7 +221,7 @@ fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState) {
     };
 
     let ancho_etiqueta = etiqueta.chars().count() as u16;
-    let viewport = interior.width.saturating_sub(ancho_etiqueta + 1) as usize;
+    let viewport = area.width.saturating_sub(ancho_etiqueta + 1) as usize;
     let scroll = if cursor_visible {
         app.input.visual_scroll(viewport)
     } else {
@@ -208,11 +230,11 @@ fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState) {
     let visible: String = valor.chars().skip(scroll).take(viewport).collect();
 
     let linea = Line::from(vec![Span::styled(etiqueta, acento()), Span::raw(visible)]);
-    frame.render_widget(Paragraph::new(linea), interior);
+    frame.render_widget(Paragraph::new(linea), area);
 
     if cursor_visible {
         let columna = cursor_chars.saturating_sub(scroll).min(viewport) as u16;
-        frame.set_cursor_position((interior.x + ancho_etiqueta + columna, interior.y));
+        frame.set_cursor_position((area.x + ancho_etiqueta + columna, area.y));
     }
 }
 
@@ -279,6 +301,7 @@ fn lineas_contexto(contexto: &ContextState, ancho: u16) -> Vec<Line<'static>> {
         ContextState::ResumenSalida { activo } => lineas_resumen_salida(activo),
         ContextState::TablaActivos { items, total } => lineas_tabla_activos(items, *total, ancho),
         ContextState::FichaContratista { resumen } => lineas_ficha(resumen),
+        ContextState::ConfirmarCerrarSesion => lineas_cerrar_sesion(),
         ContextState::Ayuda => lineas_ayuda(),
         ContextState::MensajeError { mensaje } => vec![
             Line::from(""),
@@ -313,8 +336,8 @@ fn descripcion_comando(comando: Comando) -> &'static str {
         Comando::Ingreso => "registrar ingreso — /ingreso <nombre> G:<n> M:<medio>",
         Comando::Salida => "registrar salida — /salida <nombre> o /salida G:<n>",
         Comando::Activos => "quién está dentro ahora",
-        Comando::Buscar => "ficha de un contratista",
         Comando::Ayuda => "sintaxis completa y ejemplos",
+        Comando::CerrarSesion => "cerrar sesión y volver al login",
     }
 }
 
@@ -673,6 +696,19 @@ fn lineas_ficha(
     ]
 }
 
+fn lineas_cerrar_sesion() -> Vec<Line<'static>> {
+    vec![
+        Line::from(Span::styled("CERRAR SESIÓN", muted())),
+        Line::from(""),
+        Line::from("La sesión actual se cerrará y volverá a la pantalla de autenticación."),
+        Line::from(""),
+        Line::from(Span::styled(
+            "ENTER para cerrar sesión · Esc para cancelar",
+            acento(),
+        )),
+    ]
+}
+
 fn lineas_ayuda() -> Vec<Line<'static>> {
     let mut lineas = vec![
         Line::from(Span::styled(
@@ -687,9 +723,9 @@ fn lineas_ayuda() -> Vec<Line<'static>> {
         ("/salida <nombre>", "registrar salida por nombre"),
         ("/salida G:27", "registrar salida por gafete"),
         ("/activos", "tabla de personas dentro"),
-        ("/buscar <nombre>", "ficha de un contratista"),
+        ("/cerrarsesion", "cerrar sesión y volver al login"),
         ("/ayuda", "esta ayuda"),
-        ("texto sin /", "equivale a /buscar <texto>"),
+        ("texto sin /", "búsqueda de contratistas"),
     ];
     for (sintaxis, descripcion) in ejemplos {
         lineas.push(Line::from(vec![
@@ -699,7 +735,7 @@ fn lineas_ayuda() -> Vec<Line<'static>> {
     }
     lineas.push(Line::from(""));
     lineas.push(Line::from(Span::styled(
-        "Claves: G: gafete · M: caminando|vehiculo (por defecto caminando) · alias: /i /s /a /b",
+        "Claves: G: gafete · M: caminando|vehiculo (por defecto caminando) · alias: /i /s /a /cs",
         muted(),
     )));
     lineas.push(Line::from(Span::styled(

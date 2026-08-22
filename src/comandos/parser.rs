@@ -12,8 +12,9 @@
 //! búsqueda libre.
 //!
 //! Decisiones de diseño:
-//! - Texto sin `/` inicial equivale a `/buscar <texto>` (la acción más común
-//!   después de ingresos, y la única sin efectos laterales).
+//! - No existe un comando `/buscar`: el texto sin `/` inicial YA es la
+//!   búsqueda (la acción más común después de ingresos, y la única sin
+//!   efectos laterales) — un comando aparte para lo mismo sería redundante.
 //! - Una clave con valor vacío mientras se teclea (`G:` sin número todavía) se
 //!   trata como parámetro ausente, no como error — el parseo debe funcionar con
 //!   entrada parcial en cada pulsación de tecla.
@@ -28,8 +29,8 @@ pub enum Comando {
     Ingreso,
     Salida,
     Activos,
-    Buscar,
     Ayuda,
+    CerrarSesion,
 }
 
 impl Comando {
@@ -38,8 +39,8 @@ impl Comando {
         Self::Ingreso,
         Self::Salida,
         Self::Activos,
-        Self::Buscar,
         Self::Ayuda,
+        Self::CerrarSesion,
     ];
 
     pub fn nombre(self) -> &'static str {
@@ -47,8 +48,8 @@ impl Comando {
             Self::Ingreso => "ingreso",
             Self::Salida => "salida",
             Self::Activos => "activos",
-            Self::Buscar => "buscar",
             Self::Ayuda => "ayuda",
+            Self::CerrarSesion => "cerrarsesion",
         }
     }
 
@@ -60,8 +61,8 @@ impl Comando {
             "ingreso" | "i" => Some(Self::Ingreso),
             "salida" | "s" => Some(Self::Salida),
             "activos" | "a" => Some(Self::Activos),
-            "buscar" | "b" => Some(Self::Buscar),
             "ayuda" => Some(Self::Ayuda),
+            "cerrarsesion" | "cs" => Some(Self::CerrarSesion),
             _ => None,
         }
     }
@@ -88,7 +89,8 @@ pub enum MedioParse {
 pub enum Entrada {
     /// Input vacío o sólo espacios.
     Inicio,
-    /// Texto sin `/` inicial: equivale a `/buscar <texto>`.
+    /// Texto sin `/` inicial: es la búsqueda de contratistas (la acción más
+    /// común, no necesita comando propio).
     BusquedaLibre { consulta: String },
     /// Comando reconocido con sus argumentos (posiblemente vacíos mientras se
     /// teclea: `/ingreso car` ya parsea a `Ingreso` con consulta "car").
@@ -273,10 +275,12 @@ mod tests {
     }
 
     #[test]
-    fn buscar_por_nombre() {
-        let (cmd, consulta, _, _) = comando(parsear("/buscar Carlos"));
-        assert_eq!(cmd, Comando::Buscar);
-        assert_eq!(consulta, "Carlos");
+    fn cerrarsesion_sin_argumentos() {
+        let (cmd, consulta, gafete, medio) = comando(parsear("/cerrarsesion"));
+        assert_eq!(cmd, Comando::CerrarSesion);
+        assert_eq!(consulta, "");
+        assert_eq!(gafete, None);
+        assert_eq!(medio, None);
     }
 
     // ── Equivalencias de casing y orden ──────────────────────────────────
@@ -381,11 +385,11 @@ mod tests {
     }
 
     #[test]
-    fn aliases_de_una_letra() {
+    fn aliases_cortos() {
         assert_eq!(comando(parsear("/i Ana")).0, Comando::Ingreso);
         assert_eq!(comando(parsear("/s Ana")).0, Comando::Salida);
         assert_eq!(comando(parsear("/a")).0, Comando::Activos);
-        assert_eq!(comando(parsear("/b Ana")).0, Comando::Buscar);
+        assert_eq!(comando(parsear("/cs")).0, Comando::CerrarSesion);
     }
 
     #[test]
@@ -398,7 +402,11 @@ mod tests {
 
     #[test]
     fn consulta_con_varias_palabras() {
-        let (_, consulta, _, _) = comando(parsear("/buscar maria de los angeles"));
-        assert_eq!(consulta, "maria de los angeles");
+        assert_eq!(
+            parsear("maria de los angeles"),
+            Entrada::BusquedaLibre {
+                consulta: "maria de los angeles".to_string()
+            }
+        );
     }
 }

@@ -363,11 +363,16 @@ fn confirmar(core: &AppCore, app: &mut AppState) {
             let Some(item) = items.get(seleccion) else {
                 return;
             };
-            let comando = match &entrada {
-                Entrada::Comando { comando, .. } => *comando,
-                _ => Comando::Buscar,
-            };
-            app.contexto = if comando == Comando::Ingreso {
+            // El texto libre y cualquier comando distinto de /ingreso abren la
+            // ficha; sólo /ingreso arma la tarjeta de validación previa.
+            let es_ingreso = matches!(
+                &entrada,
+                Entrada::Comando {
+                    comando: Comando::Ingreso,
+                    ..
+                }
+            );
+            app.contexto = if es_ingreso {
                 let (gafete, medio) = parametros_ingreso(&entrada);
                 resolver::preparar_resumen_ingreso(core, item.id, gafete, medio)
             } else {
@@ -415,6 +420,14 @@ fn confirmar(core: &AppCore, app: &mut AppState) {
                     app.mostrar_feedback(mensaje_error_ingreso(&error), NivelFeedback::Error);
                 }
             }
+        }
+        ContextState::ConfirmarCerrarSesion => {
+            app.input.reset();
+            app.feedback = None;
+            app.fase = Fase::LoginCedula { error: None };
+            app.contexto = ContextState::Ayuda;
+            app.sugerencias.clear();
+            app.mostrar_feedback("Sesión cerrada".to_string(), NivelFeedback::Exito);
         }
         ContextState::ResumenSalida { activo } => {
             let Fase::Operando { sesion } = &app.fase else {
