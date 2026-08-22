@@ -29,16 +29,20 @@ pub enum Comando {
     Ingreso,
     Salida,
     Activos,
+    Nuevo,
+    Editar,
     Ayuda,
     CerrarSesion,
 }
 
 impl Comando {
-    /// Los 5 comandos en el orden en que se presentan en la ayuda.
-    pub const TODOS: [Self; 5] = [
+    /// Los 7 comandos en el orden en que se presentan en la ayuda.
+    pub const TODOS: [Self; 7] = [
         Self::Ingreso,
         Self::Salida,
         Self::Activos,
+        Self::Nuevo,
+        Self::Editar,
         Self::Ayuda,
         Self::CerrarSesion,
     ];
@@ -48,6 +52,8 @@ impl Comando {
             Self::Ingreso => "ingreso",
             Self::Salida => "salida",
             Self::Activos => "activos",
+            Self::Nuevo => "nuevo",
+            Self::Editar => "editar",
             Self::Ayuda => "ayuda",
             Self::CerrarSesion => "cerrarsesion",
         }
@@ -61,6 +67,8 @@ impl Comando {
             "ingreso" | "i" => Some(Self::Ingreso),
             "salida" | "s" => Some(Self::Salida),
             "activos" | "a" => Some(Self::Activos),
+            "nuevo" | "n" => Some(Self::Nuevo),
+            "editar" | "e" => Some(Self::Editar),
             "ayuda" => Some(Self::Ayuda),
             "cerrarsesion" | "cs" => Some(Self::CerrarSesion),
             _ => None,
@@ -283,6 +291,20 @@ mod tests {
         assert_eq!(medio, None);
     }
 
+    #[test]
+    fn nuevo_sin_argumentos() {
+        let (cmd, consulta, _, _) = comando(parsear("/nuevo"));
+        assert_eq!(cmd, Comando::Nuevo);
+        assert_eq!(consulta, "");
+    }
+
+    #[test]
+    fn editar_conserva_la_consulta() {
+        let (cmd, consulta, _, _) = comando(parsear("/editar carlos"));
+        assert_eq!(cmd, Comando::Editar);
+        assert_eq!(consulta, "carlos");
+    }
+
     // ── Equivalencias de casing y orden ──────────────────────────────────
 
     #[test]
@@ -389,6 +411,8 @@ mod tests {
         assert_eq!(comando(parsear("/i Ana")).0, Comando::Ingreso);
         assert_eq!(comando(parsear("/s Ana")).0, Comando::Salida);
         assert_eq!(comando(parsear("/a")).0, Comando::Activos);
+        assert_eq!(comando(parsear("/n")).0, Comando::Nuevo);
+        assert_eq!(comando(parsear("/e Ana")).0, Comando::Editar);
         assert_eq!(comando(parsear("/cs")).0, Comando::CerrarSesion);
     }
 

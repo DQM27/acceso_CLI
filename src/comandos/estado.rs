@@ -14,6 +14,8 @@ use crate::models::medio_ingreso::MedioIngreso;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::registro_ingreso_service::{IngresoActivoResumen, PreparacionIngreso};
 
+use super::formulario::FormularioContratista;
+
 /// Cuánto permanece visible un mensaje de feedback transitorio (también
 /// desaparece en cuanto el operador vuelve a escribir).
 pub const DURACION_FEEDBACK: std::time::Duration = std::time::Duration::from_secs(4);
@@ -99,6 +101,9 @@ pub enum ContextState {
     /// `/cerrarsesion`: tarjeta de confirmación — Enter cierra la sesión y
     /// vuelve al login, Esc cancela.
     ConfirmarCerrarSesion,
+    /// `/nuevo`: tarjeta de entrada al alta — Enter abre el formulario de
+    /// contratista, Esc cancela.
+    NuevoContratista,
     Ayuda,
     /// Comando desconocido, parámetro inválido o error de consulta: se muestra
     /// el mensaje con `✗` y la sugerencia de `/ayuda` cuando aplica.
@@ -136,6 +141,10 @@ pub struct AppState {
     pub input: Input,
     pub fase: Fase,
     pub contexto: ContextState,
+    /// Formulario de alta/edición de contratista. Mientras es `Some`, el input
+    /// deja de ser línea de comandos y edita el campo activo del formulario —
+    /// `recomputar` no toca el contexto hasta que el formulario se cierra.
+    pub formulario: Option<FormularioContratista>,
     /// Pistas de la línea de sugerencias (autocompletado contextual, teclas).
     pub sugerencias: Vec<String>,
     pub feedback: Option<(Instant, Feedback)>,
@@ -148,6 +157,7 @@ impl AppState {
             input: Input::default(),
             fase: Fase::LoginCedula { error: None },
             contexto: ContextState::Ayuda,
+            formulario: None,
             sugerencias: Vec::new(),
             feedback: None,
             salir: false,

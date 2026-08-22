@@ -22,6 +22,7 @@ use crate::services::registro_ingreso_service::IngresoActivoResumen;
 use crate::tiempo::a_costa_rica;
 
 use super::estado::{AppState, ContextState, Fase, NivelFeedback};
+use super::formulario::{Campo, FormularioContratista, MAX_VISIBLES_EMPRESAS, ModoFormulario, Subfase};
 use super::parser::Comando;
 use super::resolver::MIN_CONSULTA;
 
@@ -84,7 +85,10 @@ pub fn render(frame: &mut Frame, app: &AppState) {
     .areas(area);
 
     let lineas = match &app.fase {
-        Fase::Operando { .. } => lineas_contexto(&app.contexto, area_contexto.width),
+        Fase::Operando { .. } => match &app.formulario {
+            Some(formulario) => lineas_formulario(formulario, app.input.value()),
+            None => lineas_contexto(&app.contexto, area_contexto.width),
+        },
         fase => lineas_login(fase),
     };
     frame.render_widget(Paragraph::new(lineas), area_contexto);
@@ -100,7 +104,7 @@ pub fn render(frame: &mut Frame, app: &AppState) {
 /// En cuanto hay un espacio (ya se eligió comando y se sigue con argumentos)
 /// el desplegable desaparece y vuelve la línea de pistas normal.
 fn paleta_comandos(app: &AppState) -> Option<Vec<Comando>> {
-    if !matches!(app.fase, Fase::Operando { .. }) {
+    if !matches!(app.fase, Fase::Operando { .. }) || app.formulario.is_some() {
         return None;
     }
     let texto = app.input.value();
@@ -130,6 +134,24 @@ fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
                 Span::styled(format!("{simbolo} "), estilo),
                 Span::styled(&feedback.texto, estilo),
             ])),
+            area,
+        );
+        return;
+    }
+    // Con el formulario abierto, la pista describe las teclas de la sub-fase
+    // (las sugerencias del autocompletado no aplican: el input edita campos).
+    if let Some(formulario) = &app.formulario {
+        let pista = match formulario.subfase {
+            Subfase::Editando => {
+                "↑↓ campo · Enter siguiente · Space/←/→ cambiar valor · Esc cancelar"
+            }
+            Subfase::EligiendoEmpresa { .. } => {
+                "escriba para filtrar · ↑↓ elegir · Enter aceptar · Esc volver"
+            }
+            Subfase::Resumen => "Enter guardar · Esc volver a editar",
+        };
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(pista, muted()))),
             area,
         );
         return;
@@ -202,22 +224,47 @@ fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState, paleta: Option<&
 fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
     let (etiqueta, valor, cursor_visible, cursor_chars) = match &app.fase {
         Fase::LoginCedula { .. } => (
-            "cédula › ",
+            "cédula › ".to_string(),
             app.input.value().to_string(),
             true,
             app.input.visual_cursor(),
         ),
         Fase::LoginPassword { .. } => {
             let largo = app.input.value().chars().count();
-            ("contraseña › ", "•".repeat(largo), true, largo)
+            ("contraseña › ".to_string(), "•".repeat(largo), true, largo)
         }
-        Fase::Verificando => ("verificando › ", String::new(), false, 0),
-        Fase::Operando { .. } => (
-            "> ",
-            app.input.value().to_string(),
-            true,
-            app.input.visual_cursor(),
-        ),
+        Fase::Verificando => ("verificando › ".to_string(), String::new(), false, 0),
+        Fase::Operando { .. } => match &app.formulario {
+            // Con el formulario abierto el input edita el campo activo (o
+            // filtra empresas en el selector): la etiqueta lo anuncia y el
+            // cursor sólo aparece cuando hay algo que teclear.
+            Some(formulario) => {
+                let etiqueta = match formulario.subfase {
+                    Subfase::EligiendoEmpresa { .. } => "empresa › ".to_string(),
+                    Subfase::Resumen => "confirmar › ".to_string(),
+                    Subfase::Editando => match formulario.campo {
+                        Campo::Cedula => "cédula › ".to_string(),
+                        Campo::Nombre => "nombre › ".to_string(),
+                        Campo::FechaPraind => "fecha praind › ".to_string(),
+                        campo => format!("{} › ", campo.etiqueta().to_lowercase()),
+                    },
+                };
+                let editable = matches!(formulario.subfase, Subfase::EligiendoEmpresa { .. })
+                    || formulario.campo.es_texto();
+                (
+                    etiqueta,
+                    app.input.value().to_string(),
+                    editable,
+                    if editable { app.input.visual_cursor() } else { 0 },
+                )
+            }
+            None => (
+                "> ".to_string(),
+                app.input.value().to_string(),
+                true,
+                app.input.visual_cursor(),
+            ),
+        },
     };
 
     let ancho_etiqueta = etiqueta.chars().count() as u16;
@@ -302,6 +349,7 @@ fn lineas_contexto(contexto: &ContextState, ancho: u16) -> Vec<Line<'static>> {
         ContextState::TablaActivos { items, total } => lineas_tabla_activos(items, *total, ancho),
         ContextState::FichaContratista { resumen } => lineas_ficha(resumen),
         ContextState::ConfirmarCerrarSesion => lineas_cerrar_sesion(),
+        ContextState::NuevoContratista => lineas_nuevo_contratista(),
         ContextState::Ayuda => lineas_ayuda(),
         ContextState::MensajeError { mensaje } => vec![
             Line::from(""),
@@ -336,6 +384,8 @@ fn descripcion_comando(comando: Comando) -> &'static str {
         Comando::Ingreso => "registrar ingreso — /ingreso <nombre> G:<n> M:<medio>",
         Comando::Salida => "registrar salida — /salida <nombre> o /salida G:<n>",
         Comando::Activos => "quién está dentro ahora",
+        Comando::Nuevo => "dar de alta un contratista",
+        Comando::Editar => "editar un contratista — /editar <nombre>",
         Comando::Ayuda => "sintaxis completa y ejemplos",
         Comando::CerrarSesion => "cerrar sesión y volver al login",
     }
@@ -709,6 +759,194 @@ fn lineas_cerrar_sesion() -> Vec<Line<'static>> {
     ]
 }
 
+fn lineas_nuevo_contratista() -> Vec<Line<'static>> {
+    vec![
+        Line::from(Span::styled("NUEVO CONTRATISTA", muted())),
+        Line::from(""),
+        Line::from("Se abrirá el formulario de alta: cédula, nombre, empresa, tipo,"),
+        Line::from("fecha PRAIND, personal de ruta y acceso."),
+        Line::from(""),
+        Line::from(Span::styled(
+            "ENTER para abrir el formulario · Esc para cancelar",
+            acento(),
+        )),
+    ]
+}
+
+// ── Formulario de contratista ────────────────────────────────────────────
+
+fn lineas_formulario(
+    formulario: &FormularioContratista,
+    consulta_empresa: &str,
+) -> Vec<Line<'static>> {
+    match formulario.subfase {
+        Subfase::Resumen => lineas_resumen_formulario(formulario),
+        _ => lineas_campos_formulario(formulario, consulta_empresa),
+    }
+}
+
+fn lineas_campos_formulario(
+    formulario: &FormularioContratista,
+    consulta_empresa: &str,
+) -> Vec<Line<'static>> {
+    let titulo = match formulario.modo {
+        ModoFormulario::Nuevo => "NUEVO CONTRATISTA".to_string(),
+        ModoFormulario::Editar { .. } => format!("EDITAR CONTRATISTA — {}", formulario.nombre),
+    };
+    let mut lineas = vec![
+        Line::from(Span::styled(titulo, muted())),
+        Line::from(""),
+    ];
+
+    for campo in Campo::ORDEN {
+        lineas.push(linea_campo(formulario, campo));
+    }
+
+    if let Subfase::EligiendoEmpresa { seleccion } = formulario.subfase {
+        lineas.push(Line::from(""));
+        lineas.push(Line::from(Span::styled("EMPRESAS", muted())));
+        let filtradas = formulario.empresas_filtradas(consulta_empresa);
+        if filtradas.is_empty() {
+            lineas.push(Line::from(Span::styled(
+                format!("Sin empresas para \"{consulta_empresa}\""),
+                muted(),
+            )));
+        }
+        for (indice, empresa) in filtradas.iter().take(MAX_VISIBLES_EMPRESAS).enumerate() {
+            let marcador = if indice == seleccion { "▸ " } else { "  " };
+            let texto = format!("{marcador}{}", empresa.nombre);
+            lineas.push(if indice == seleccion {
+                Line::from(Span::styled(texto, estilo_seleccion()))
+            } else {
+                Line::from(texto)
+            });
+        }
+    }
+    lineas
+}
+
+/// Una línea por campo: `▸` en el activo, bloqueados apagados con su motivo,
+/// errores de validación en ✗ junto al valor.
+fn linea_campo(formulario: &FormularioContratista, campo: Campo) -> Line<'static> {
+    let activo = formulario.campo == campo
+        && matches!(formulario.subfase, Subfase::Editando | Subfase::EligiendoEmpresa { .. });
+    let habilitado = formulario.campo_habilitado(campo);
+    let marcador = if activo { "▸ " } else { "  " };
+    let etiqueta = format!("{:<16}", campo.etiqueta());
+
+    if campo == Campo::Confirmar {
+        let estilo = if activo { acento() } else { muted() };
+        return Line::from(Span::styled(
+            format!("{marcador}{etiqueta}— revisar y guardar"),
+            estilo,
+        ));
+    }
+
+    if !habilitado {
+        return Line::from(Span::styled(
+            format!("{marcador}{etiqueta}{} (sin permiso)", valor_campo(formulario, campo)),
+            muted(),
+        ));
+    }
+
+    let mut spans = vec![Span::styled(
+        format!("{marcador}{etiqueta}"),
+        if activo { acento() } else { Style::default() },
+    )];
+    let valor = valor_campo(formulario, campo);
+    let valor_mostrado = if valor.is_empty() {
+        match campo {
+            Campo::FechaPraind => "DD/MM/AAAA".to_string(),
+            Campo::Empresa => "Enter para elegir…".to_string(),
+            _ => String::new(),
+        }
+    } else {
+        valor
+    };
+    let estilo_valor = if valor_mostrado.is_empty() {
+        muted()
+    } else if activo && !campo.es_texto() {
+        acento()
+    } else if campo == Campo::FechaPraind && valor_mostrado == "DD/MM/AAAA"
+        || campo == Campo::Empresa && valor_mostrado == "Enter para elegir…"
+    {
+        muted()
+    } else {
+        Style::default()
+    };
+    // Los valores que se alternan se muestran entre guiones cuando están
+    // activos, sugiriendo el Space/←/→.
+    let valor_final = if activo && matches!(campo, Campo::Tipo | Campo::Ruta | Campo::Acceso) {
+        format!("‹ {valor_mostrado} ›")
+    } else {
+        valor_mostrado
+    };
+    spans.push(Span::styled(valor_final, estilo_valor));
+    if let Some(mensaje) = formulario.error_de(campo) {
+        spans.push(Span::styled(format!("  ✗ {mensaje}"), estilo_error()));
+    }
+    Line::from(spans)
+}
+
+fn valor_campo(formulario: &FormularioContratista, campo: Campo) -> String {
+    match campo {
+        Campo::Cedula => formulario.cedula.clone(),
+        Campo::Nombre => formulario.nombre.clone(),
+        Campo::Empresa => formulario
+            .empresa
+            .as_ref()
+            .map(|(_, nombre)| nombre.clone())
+            .unwrap_or_default(),
+        Campo::Tipo => tipo_texto(formulario.tipo).to_string(),
+        Campo::FechaPraind => formulario.fecha_praind.clone(),
+        Campo::Ruta => si_no(formulario.es_personal_ruta).to_string(),
+        Campo::Acceso => si_no(formulario.tiene_acceso).to_string(),
+        Campo::Confirmar => String::new(),
+    }
+}
+
+fn si_no(valor: bool) -> &'static str {
+    if valor { "Sí" } else { "No" }
+}
+
+fn lineas_resumen_formulario(formulario: &FormularioContratista) -> Vec<Line<'static>> {
+    let fecha = if formulario.requiere_praind() {
+        formulario.fecha_praind.clone()
+    } else {
+        "no aplica".to_string()
+    };
+    let empresa = formulario
+        .empresa
+        .as_ref()
+        .map(|(_, nombre)| nombre.clone())
+        .unwrap_or_default();
+    let filas = [
+        ("Cédula", formulario.cedula.clone()),
+        ("Nombre", formulario.nombre.clone()),
+        ("Empresa", empresa),
+        ("Tipo", tipo_texto(formulario.tipo).to_string()),
+        ("Fecha PRAIND", fecha),
+        ("Personal de ruta", si_no(formulario.es_personal_ruta).to_string()),
+        ("Acceso", si_no(formulario.tiene_acceso).to_string()),
+    ];
+    let mut lineas = vec![
+        Line::from(Span::styled("REVISAR Y CONFIRMAR", muted())),
+        Line::from(""),
+    ];
+    for (etiqueta, valor) in filas {
+        lineas.push(Line::from(vec![
+            Span::styled(format!("{etiqueta:<18}"), muted()),
+            Span::raw(valor),
+        ]));
+    }
+    lineas.push(Line::from(""));
+    lineas.push(Line::from(Span::styled(
+        "ENTER para guardar · Esc para volver a editar",
+        acento(),
+    )));
+    lineas
+}
+
 fn lineas_ayuda() -> Vec<Line<'static>> {
     let mut lineas = vec![
         Line::from(Span::styled(
@@ -717,12 +955,14 @@ fn lineas_ayuda() -> Vec<Line<'static>> {
         )),
         Line::from(""),
     ];
-    let ejemplos: [(&str, &str); 8] = [
+    let ejemplos: [(&str, &str); 10] = [
         ("/ingreso <nombre> G:<n> M:<medio>", "registrar un ingreso"),
         ("/ingreso 119430546 G:12", "también por cédula"),
         ("/salida <nombre>", "registrar salida por nombre"),
         ("/salida G:27", "registrar salida por gafete"),
         ("/activos", "tabla de personas dentro"),
+        ("/nuevo", "dar de alta un contratista"),
+        ("/editar <nombre>", "editar un contratista"),
         ("/cerrarsesion", "cerrar sesión y volver al login"),
         ("/ayuda", "esta ayuda"),
         ("texto sin /", "búsqueda de contratistas"),
@@ -735,7 +975,7 @@ fn lineas_ayuda() -> Vec<Line<'static>> {
     }
     lineas.push(Line::from(""));
     lineas.push(Line::from(Span::styled(
-        "Claves: G: gafete · M: caminando|vehiculo (por defecto caminando) · alias: /i /s /a /cs",
+        "Claves: G: gafete · M: caminando|vehiculo (por defecto caminando) · alias: /i /s /a /n /e /cs",
         muted(),
     )));
     lineas.push(Line::from(Span::styled(

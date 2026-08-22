@@ -66,6 +66,17 @@ pub fn resolver(core: &AppCore, entrada: &Entrada) -> ContextState {
                 Comando::Ingreso => resolver_busqueda_contratistas(core, consulta),
                 Comando::Salida => resolver_salida(core, consulta, gafete_numero),
                 Comando::Activos => resolver_activos(core, consulta),
+                Comando::Nuevo => {
+                    if consulta.is_empty() {
+                        ContextState::NuevoContratista
+                    } else {
+                        ContextState::MensajeError {
+                            mensaje: "El alta no toma argumentos: escriba /nuevo a secas"
+                                .to_string(),
+                        }
+                    }
+                }
+                Comando::Editar => resolver_busqueda_contratistas(core, consulta),
                 Comando::Ayuda => ContextState::Ayuda,
                 Comando::CerrarSesion => ContextState::ConfirmarCerrarSesion,
             }
@@ -297,6 +308,14 @@ pub fn calcular_sugerencias(core: &AppCore, texto: &str, entrada: &Entrada) -> V
             comando: Comando::Salida,
             ..
         } => vec!["nombre o G:<número> del gafete · ↑↓ elegir · Enter confirmar".into()],
+        Entrada::Comando {
+            comando: Comando::Nuevo,
+            ..
+        } => vec!["Enter abre el formulario de alta · Esc limpiar".into()],
+        Entrada::Comando {
+            comando: Comando::Editar,
+            ..
+        } => vec!["nombre o cédula del contratista · ↑↓ elegir · Enter abrir edición".into()],
         _ => vec!["Enter confirmar · Esc limpiar · Ctrl+C salir".into()],
     }
 }
