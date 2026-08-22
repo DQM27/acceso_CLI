@@ -70,11 +70,18 @@ fn run() -> Result<(), StartupError> {
             mensaje_inicial.take(),
         )
         .map_err(StartupError::Terminal)?;
-        drop(core); // cierra la conexión SQLite antes de tocar el archivo activo
 
         match salida {
             SalidaApp::Cerrar => return Ok(()),
+            // El operador ya se autenticó y eligió el modo CLI: se reusa la
+            // misma conexión (`core`) y la misma sesión, sin volver a pedir
+            // cédula/contraseña.
+            SalidaApp::ModoComandos { sesion } => {
+                return control_acceso::comandos::run(core, Some(sesion))
+                    .map_err(StartupError::Comandos);
+            }
             SalidaApp::Restaurar { candidata } => {
+                drop(core); // cierra la conexión SQLite antes de tocar el archivo activo
                 if let Err(error) = control_acceso::database::backup::restaurar_respaldo(
                     &candidata,
                     &ruta_base_datos,
@@ -94,7 +101,7 @@ fn run() -> Result<(), StartupError> {
 fn run_comandos(ruta_base_datos: &std::path::Path) -> Result<(), StartupError> {
     let core = AppCore::abrir(ruta_base_datos).map_err(StartupError::Bootstrap)?;
     let _ = core.respaldo_automatico_diario_si_hace_falta();
-    control_acceso::comandos::run(core).map_err(StartupError::Comandos)
+    control_acceso::comandos::run(core, None).map_err(StartupError::Comandos)
 }
 
 fn leer_linea(prompt: &str) -> Result<String, StartupError> {

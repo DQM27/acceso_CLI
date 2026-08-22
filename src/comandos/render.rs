@@ -64,10 +64,17 @@ pub fn render(frame: &mut Frame, app: &AppState) {
         return;
     }
 
-    let [area_contexto, area_pista, area_prompt] = Layout::vertical([
+    let paleta = paleta_comandos(app);
+    let disponible = area.height.saturating_sub(3 /* recuadro del input */ + 3 /* mínimo del contexto */);
+    let alto_pista = match &paleta {
+        Some(comandos) => (comandos.len() as u16 + 2).min(disponible.max(1)),
+        None => 1,
+    };
+
+    let [area_contexto, area_prompt, area_pista] = Layout::vertical([
         Constraint::Min(3),
-        Constraint::Length(1),
         Constraint::Length(3),
+        Constraint::Length(alto_pista),
     ])
     .areas(area);
 
@@ -77,12 +84,62 @@ pub fn render(frame: &mut Frame, app: &AppState) {
     };
     frame.render_widget(Paragraph::new(lineas), area_contexto);
 
-    render_pista(frame, area_pista, app);
     render_prompt(frame, area_prompt, app);
+    match &paleta {
+        Some(comandos) => render_paleta(frame, area_pista, comandos),
+        None => render_pista(frame, area_pista, app),
+    }
 }
 
-/// Línea entre el contexto y el prompt: el feedback transitorio tiene
-/// prioridad; sin feedback, las sugerencias del autocompletado contextual.
+/// Comandos a mostrar en el desplegable bajo el input: sólo mientras se
+/// teclea el nombre del comando (`/`, `/in`, …) — antes del primer espacio.
+/// En cuanto hay un espacio (ya se eligió comando y se sigue con argumentos)
+/// el desplegable desaparece y vuelve la línea de pistas normal.
+fn paleta_comandos(app: &AppState) -> Option<Vec<Comando>> {
+    if !matches!(app.fase, Fase::Operando { .. }) {
+        return None;
+    }
+    let texto = app.input.value();
+    if !texto.starts_with('/') || texto.contains(' ') {
+        return None;
+    }
+    let prefijo = texto[1..].to_lowercase();
+    let coincidentes: Vec<Comando> = Comando::TODOS
+        .into_iter()
+        .filter(|comando| comando.nombre().starts_with(&prefijo))
+        .collect();
+    (!coincidentes.is_empty()).then_some(coincidentes)
+}
+
+/// Desplegable de comandos, en un recuadro propio debajo del input — mismo
+/// espíritu que el command palette de una CLI moderna: escribís `/` y aparece
+/// la lista, se filtra sola a medida que seguís tecleando.
+fn render_paleta(frame: &mut Frame, area: Rect, comandos: &[Comando]) {
+    // Sin borde superior: el borde inferior del input hace de línea
+    // divisoria, así el desplegable da la impresión de salir de él en vez de
+    // quedar como un recuadro aparte.
+    let bloque = Block::default()
+        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+        .border_type(BorderType::Rounded)
+        .border_style(muted());
+    let interior = bloque.inner(area);
+    frame.render_widget(bloque, area);
+
+    let lineas: Vec<Line> = comandos
+        .iter()
+        .map(|comando| {
+            Line::from(vec![
+                Span::styled(format!("/{:<8}", comando.nombre()), acento()),
+                Span::styled(descripcion_comando(*comando), muted()),
+            ])
+        })
+        .collect();
+    frame.render_widget(Paragraph::new(lineas), interior);
+}
+
+/// Línea debajo del recuadro del input (estilo CLI moderna): el feedback
+/// transitorio tiene prioridad; sin feedback, las sugerencias del
+/// autocompletado contextual, truncadas al ancho disponible.
 fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
     if let Some(feedback) = app.feedback_vigente() {
         let (simbolo, estilo) = match feedback.nivel {
@@ -164,7 +221,7 @@ fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState) {
 fn lineas_login(fase: &Fase) -> Vec<Line<'static>> {
     let mut lineas = vec![
         Line::from(Span::styled(
-            "CONTROL DE ACCESO",
+            "BRISAS CLI",
             Style::default().add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
@@ -212,12 +269,12 @@ fn lineas_contexto(contexto: &ContextState, ancho: u16) -> Vec<Line<'static>> {
             consulta,
             items,
             seleccion,
-        } => lineas_coincidencias(consulta, items, *seleccion),
+        } => lineas_coincidencias(consulta, items, *seleccion, ancho),
         ContextState::CoincidenciasActivos {
             descripcion,
             items,
             seleccion,
-        } => lineas_coincidencias_activos(descripcion, items, *seleccion),
+        } => lineas_coincidencias_activos(descripcion, items, *seleccion, ancho),
         ContextState::ResumenIngreso { .. } => lineas_resumen_ingreso(contexto),
         ContextState::ResumenSalida { activo } => lineas_resumen_salida(activo),
         ContextState::TablaActivos { items, total } => lineas_tabla_activos(items, *total, ancho),
@@ -231,24 +288,16 @@ fn lineas_contexto(contexto: &ContextState, ancho: u16) -> Vec<Line<'static>> {
 }
 
 fn lineas_inicio(total_dentro: usize) -> Vec<Line<'static>> {
-    let mut lineas = vec![
+    vec![
         Line::from(Span::styled(
-            "CONTROL DE ACCESO",
+            "BRISAS CLI",
             Style::default().add_modifier(Modifier::BOLD),
         )),
         Line::from(format!(
             "{} actualmente dentro",
             cantidad_personas(total_dentro)
         )),
-        Line::from(""),
-    ];
-    lineas.extend(Comando::TODOS.iter().map(|comando| {
-        Line::from(vec![
-            Span::styled(format!("/{:<8}", comando.nombre()), acento()),
-            Span::styled(descripcion_comando(*comando), muted()),
-        ])
-    }));
-    lineas
+    ]
 }
 
 fn cantidad_personas(total: usize) -> String {
@@ -269,10 +318,22 @@ fn descripcion_comando(comando: Comando) -> &'static str {
     }
 }
 
+/// Reparte el espacio libre entre NOMBRE y EMPRESA una vez descontadas las
+/// columnas de ancho fijo de cada tabla (marcador, cédula/gafete, tipo/hora)
+/// — así el nombre deja de truncarse apenas la terminal tiene espacio, igual
+/// que ya hacía `/activos` con su propio ancho completo/reducido.
+fn anchos_nombre_empresa(ancho: u16, fijo: u16) -> (usize, usize) {
+    let disponible = ancho.saturating_sub(fijo).max(30) as usize;
+    let nombre = (disponible * 55 / 100).max(18);
+    let empresa = disponible.saturating_sub(nombre).max(14);
+    (nombre, empresa)
+}
+
 fn lineas_coincidencias(
     consulta: &str,
     items: &[crate::database::queries::contratistas::ContratistaResumen],
     seleccion: usize,
+    ancho: u16,
 ) -> Vec<Line<'static>> {
     if consulta.chars().count() < MIN_CONSULTA {
         return vec![
@@ -292,12 +353,29 @@ fn lineas_coincidencias(
             )),
         ];
     }
-    let mut lineas = Vec::new();
+    // Mismo orden de columnas que la tabla de contratistas de la TUI clásica
+    // (cédula → nombre → empresa → tipo) y mismo estilo de encabezado que
+    // `/activos`, para que todas las listas se lean igual.
+    const CEDULA: usize = 14;
+    let (nombre_ancho, empresa_ancho) = anchos_nombre_empresa(ancho, 2 + CEDULA as u16 + 10);
+    let mut lineas = vec![
+        Line::from(Span::styled(
+            format!(
+                "  {:<CEDULA$}{:<nombre_ancho$}{:<empresa_ancho$}TIPO",
+                "CÉDULA", "NOMBRE", "EMPRESA"
+            ),
+            Style::default().add_modifier(Modifier::BOLD),
+        )),
+        Line::from(Span::styled("─".repeat(ancho as usize), muted())),
+    ];
     for (indice, item) in items.iter().enumerate() {
         let marcador = if indice == seleccion { "▸ " } else { "  " };
         let texto = format!(
-            "{marcador}{} — {} · {}",
-            item.nombre, item.empresa_nombre, item.cedula
+            "{marcador}{:<CEDULA$}{:<nombre_ancho$}{:<empresa_ancho$}{}",
+            recortar(&item.cedula, CEDULA - 1),
+            recortar(&item.nombre, nombre_ancho.saturating_sub(1)),
+            recortar(&item.empresa_nombre, empresa_ancho.saturating_sub(1)),
+            tipo_texto(item.tipo_ingreso)
         );
         lineas.push(if indice == seleccion {
             Line::from(Span::styled(texto, estilo_seleccion()))
@@ -312,6 +390,7 @@ fn lineas_coincidencias_activos(
     descripcion: &str,
     items: &[IngresoActivoResumen],
     seleccion: usize,
+    ancho: u16,
 ) -> Vec<Line<'static>> {
     if items.is_empty() {
         let mensaje = if descripcion.is_empty() {
@@ -321,29 +400,40 @@ fn lineas_coincidencias_activos(
         };
         return vec![Line::from(""), Line::from(Span::styled(mensaje, muted()))];
     }
-    items
-        .iter()
-        .enumerate()
-        .map(|(indice, item)| {
-            let marcador = if indice == seleccion { "▸ " } else { "  " };
-            let gafete = item
-                .gafete_numero
-                .map(|numero| format!("gafete {numero}"))
-                .unwrap_or_else(|| "sin gafete".to_string());
-            let texto = format!(
-                "{marcador}{} — {} · {} · ingresó {}",
-                item.contratista_nombre,
-                item.empresa_nombre,
-                gafete,
-                hora_cr(item.fecha_hora_ingreso)
-            );
-            if indice == seleccion {
-                Line::from(Span::styled(texto, estilo_seleccion()))
-            } else {
-                Line::from(texto)
-            }
-        })
-        .collect()
+    // Mismo encabezado y orden de columnas que `/activos` — es la misma
+    // fuente de datos (ingresos activos), sólo que filtrada por la búsqueda.
+    const GAFETE: usize = 8;
+    let (nombre_ancho, empresa_ancho) = anchos_nombre_empresa(ancho, 2 + GAFETE as u16 + 6);
+    let mut lineas = vec![
+        Line::from(Span::styled(
+            format!(
+                "  {:<GAFETE$}{:<nombre_ancho$}{:<empresa_ancho$}INGRESO",
+                "GAFETE", "NOMBRE", "EMPRESA"
+            ),
+            Style::default().add_modifier(Modifier::BOLD),
+        )),
+        Line::from(Span::styled("─".repeat(ancho as usize), muted())),
+    ];
+    for (indice, item) in items.iter().enumerate() {
+        let marcador = if indice == seleccion { "▸ " } else { "  " };
+        let gafete = item
+            .gafete_numero
+            .map(|numero| numero.to_string())
+            .unwrap_or_else(|| "—".into());
+        let texto = format!(
+            "{marcador}{:<GAFETE$}{:<nombre_ancho$}{:<empresa_ancho$}{}",
+            recortar(&gafete, GAFETE - 1),
+            recortar(&item.contratista_nombre, nombre_ancho.saturating_sub(1)),
+            recortar(&item.empresa_nombre, empresa_ancho.saturating_sub(1)),
+            hora_cr(item.fecha_hora_ingreso)
+        );
+        lineas.push(if indice == seleccion {
+            Line::from(Span::styled(texto, estilo_seleccion()))
+        } else {
+            Line::from(texto)
+        });
+    }
+    lineas
 }
 
 /// Tarjeta de validación previa al ingreso: un símbolo por chequeo, y al pie
@@ -360,19 +450,26 @@ fn lineas_resumen_ingreso(contexto: &ContextState) -> Vec<Line<'static>> {
     };
 
     let mut lineas = vec![
+        Line::from(Span::styled("INGRESO", muted())),
         Line::from(vec![
-            Span::styled("INGRESO — ", muted()),
+            Span::styled("Cédula:  ", muted()),
+            Span::raw(preparacion.cedula.clone()),
+        ]),
+        Line::from(vec![
+            Span::styled("Nombre:  ", muted()),
             Span::styled(
                 preparacion.nombre.clone(),
                 Style::default().add_modifier(Modifier::BOLD),
             ),
         ]),
-        Line::from(format!(
-            "Cédula {} · {} · {}",
-            preparacion.cedula,
-            preparacion.empresa_nombre,
-            tipo_texto(preparacion.tipo_ingreso)
-        )),
+        Line::from(vec![
+            Span::styled("Empresa: ", muted()),
+            Span::raw(preparacion.empresa_nombre.clone()),
+        ]),
+        Line::from(vec![
+            Span::styled("Tipo:    ", muted()),
+            Span::raw(tipo_texto(preparacion.tipo_ingreso)),
+        ]),
         Line::from(""),
     ];
 
@@ -435,22 +532,33 @@ fn lineas_resumen_ingreso(contexto: &ContextState) -> Vec<Line<'static>> {
 fn lineas_resumen_salida(activo: &IngresoActivoResumen) -> Vec<Line<'static>> {
     let gafete = activo
         .gafete_numero
-        .map(|numero| format!("Gafete {numero}"))
+        .map(|numero| numero.to_string())
         .unwrap_or_else(|| "Sin gafete".to_string());
     vec![
+        Line::from(Span::styled("SALIDA", muted())),
         Line::from(vec![
-            Span::styled("SALIDA — ", muted()),
+            Span::styled("Cédula:  ", muted()),
+            Span::raw(activo.cedula.clone()),
+        ]),
+        Line::from(vec![
+            Span::styled("Nombre:  ", muted()),
             Span::styled(
                 activo.contratista_nombre.clone(),
                 Style::default().add_modifier(Modifier::BOLD),
             ),
         ]),
-        Line::from(format!(
-            "{} · {} · {}",
-            activo.empresa_nombre,
-            gafete,
-            tipo_texto(activo.tipo_ingreso)
-        )),
+        Line::from(vec![
+            Span::styled("Empresa: ", muted()),
+            Span::raw(activo.empresa_nombre.clone()),
+        ]),
+        Line::from(vec![
+            Span::styled("Tipo:    ", muted()),
+            Span::raw(tipo_texto(activo.tipo_ingreso)),
+        ]),
+        Line::from(vec![
+            Span::styled("Gafete:  ", muted()),
+            Span::raw(gafete),
+        ]),
         Line::from(""),
         Line::from(format!(
             "Ingresó {} · lleva {} dentro",
@@ -535,26 +643,33 @@ fn lineas_ficha(
     } else {
         chequeo("✗", estilo_error(), "Sin acceso autorizado".into())
     };
-    let estado = if resumen.tiene_ingreso_activo {
-        Span::styled("DENTRO", acento())
+    // Misma idea visual que la tabla de /activos: encabezado en negrita y una
+    // fila de datos, en el orden cédula → empresa → tipo → estado.
+    let (estado_texto, estado_estilo) = if resumen.tiene_ingreso_activo {
+        ("DENTRO", acento())
     } else {
-        Span::styled("FUERA", muted())
+        ("FUERA", muted())
     };
     vec![
         Line::from(Span::styled(
             resumen.nombre.clone(),
             Style::default().add_modifier(Modifier::BOLD),
         )),
-        Line::from(format!(
-            "Cédula {} · {} · {}",
-            resumen.cedula,
-            resumen.empresa_nombre,
-            tipo_texto(resumen.tipo_ingreso)
+        Line::from(""),
+        Line::from(Span::styled(
+            format!("{:<14}{:<24}{:<12}ESTADO", "CÉDULA", "EMPRESA", "TIPO"),
+            Style::default().add_modifier(Modifier::BOLD),
         )),
+        Line::from(Span::styled("─".repeat(56), muted())),
+        Line::from(vec![
+            Span::raw(format!("{:<14}", recortar(&resumen.cedula, 13))),
+            Span::raw(format!("{:<24}", recortar(&resumen.empresa_nombre, 23))),
+            Span::raw(format!("{:<12}", tipo_texto(resumen.tipo_ingreso))),
+            Span::styled(estado_texto, estado_estilo),
+        ]),
         Line::from(""),
         Line::from(format!("PRAIND: {praind}")),
         acceso,
-        Line::from(vec![Span::raw("Estado actual: "), estado]),
     ]
 }
 

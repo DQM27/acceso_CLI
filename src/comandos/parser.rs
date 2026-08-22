@@ -120,6 +120,12 @@ pub fn parsear(texto: &str) -> Entrada {
         };
     };
 
+    // "/" a secas no es un error: el operador apenas empezó a escribir un
+    // comando — las sugerencias ya le muestran los disponibles.
+    if nombre.is_empty() {
+        return Entrada::Inicio;
+    }
+
     let Some(comando) = Comando::desde_texto(nombre) else {
         return Entrada::Desconocido {
             nombre: nombre.to_string(),
@@ -350,6 +356,12 @@ mod tests {
         let (_, consulta, gafete, _) = comando(parsear("/ingreso car G:"));
         assert_eq!(consulta, "car");
         assert_eq!(gafete, None);
+    }
+
+    #[test]
+    fn barra_sola_no_es_error() {
+        assert_eq!(parsear("/"), Entrada::Inicio);
+        assert_eq!(parsear("/ "), Entrada::Inicio);
     }
 
     #[test]

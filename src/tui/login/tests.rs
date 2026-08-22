@@ -17,8 +17,12 @@ fn login_completo() -> LoginState {
     state
 }
 
+/// El login ya no es un formulario: sin título, sin etiquetas, sin siquiera
+/// el nombre del producto — sólo una caja delgada y centrada para la cédula
+/// (la de la contraseña recién aparece cuando `Enter` avanza el foco, eso lo
+/// cubre `enter_desde_cedula_avanza_a_password`, acá sólo el estado inicial).
 #[test]
-fn presenta_un_encabezado_minimo_y_el_titulo_sobre_los_campos() {
+fn presenta_solo_una_caja_sin_texto_para_la_cedula() {
     use ratatui::{Terminal, backend::TestBackend};
 
     let ancho = 100;
@@ -44,35 +48,19 @@ fn presenta_un_encabezado_minimo_y_el_titulo_sobre_los_campos() {
         .collect();
     let texto = filas.join("\n");
 
-    assert_eq!(texto.matches("BRISAS CLI").count(), 1, "{texto}");
-    assert!(!texto.contains("CONTROL DE ACCESO"), "{texto}");
     assert!(!filas.iter().any(|fila| contiene_hora(fila)), "{texto}");
+    // Sin formulario: nada de título, marca de producto, etiquetas de campo
+    // ni contraseña visible todavía (el foco arranca en cédula).
+    assert!(!texto.contains("BRISAS CLI"), "{texto}");
+    assert!(!texto.contains("CONTROL DE ACCESO"), "{texto}");
+    assert!(!texto.contains("INICIO DE SESIÓN"), "{texto}");
+    assert!(!texto.contains("CÉDULA"), "{texto}");
+    assert!(!texto.contains("CONTRASEÑA"), "{texto}");
 
-    let fila_producto = filas
-        .iter()
-        .find(|fila| fila.contains("BRISAS CLI"))
-        .unwrap();
-    assert_centrado(fila_producto, "BRISAS CLI");
-
-    let indice_titulo = filas
-        .iter()
-        .position(|fila| fila.contains("INICIO DE SESIÓN"))
-        .unwrap();
-    let indice_cedula = filas
-        .iter()
-        .position(|fila| fila.contains("▶ CÉDULA"))
-        .unwrap();
-    assert!(indice_titulo < indice_cedula, "{texto}");
-    assert_centrado(&filas[indice_titulo], "INICIO DE SESIÓN");
-}
-
-fn assert_centrado(fila: &str, texto: &str) {
-    let izquierda = fila.find(texto).unwrap();
-    let derecha = fila.chars().count() - izquierda - texto.chars().count();
-    assert!(
-        izquierda.abs_diff(derecha) <= 1,
-        "'{texto}' no está centrado: {izquierda} celdas a la izquierda y {derecha} a la derecha"
-    );
+    // Una única caja delgada y centrada — se ubica por sus bordes, no por
+    // ningún texto dentro (no lleva ninguno).
+    assert_eq!(texto.matches('┌').count(), 1, "{texto}");
+    assert_eq!(texto.matches('┘').count(), 1, "{texto}");
 }
 
 fn contiene_hora(texto: &str) -> bool {

@@ -23,6 +23,7 @@ use super::{
     configuracion::{self, ConfiguracionState},
     configuracion_inicial::{self, AccionConfiguracion, ConfiguracionInicialState, SolicitudRoot},
     contratistas::{self, AccionContratistas, ContratistasState},
+    elegir_interfaz::{self, AccionElegirInterfaz, ElegirInterfazState},
     empresas::{self, AccionEmpresas, EmpresasState},
     historial::{self, AccionHistorial, HistorialState},
     login::{self, AccionLogin, LoginState},
@@ -50,6 +51,7 @@ const REVISION_RESPALDO_AUTOMATICO: Duration = Duration::from_secs(60);
 pub enum Vista {
     ConfiguracionInicial,
     Login,
+    ElegirInterfaz,
     MenuPrincipal,
     IngresosActivos,
     Historial,
@@ -74,7 +76,9 @@ impl Vista {
             Self::Auditoria => Some(OpcionMenu::Auditoria),
             Self::Respaldos => Some(OpcionMenu::Respaldos),
             Self::CambiarPassword => Some(OpcionMenu::CambiarPassword),
-            Self::ConfiguracionInicial | Self::Login | Self::MenuPrincipal => None,
+            Self::ConfiguracionInicial | Self::Login | Self::ElegirInterfaz | Self::MenuPrincipal => {
+                None
+            }
         }
     }
 }
@@ -86,6 +90,10 @@ impl Vista {
 pub enum SalidaApp {
     Cerrar,
     Restaurar { candidata: std::path::PathBuf },
+    /// El operador ya se autenticó y eligió el modo CLI en `ElegirInterfaz`:
+    /// `main.rs` arranca `comandos::run` con esta misma sesión, sin volver a
+    /// pedir cédula/contraseña.
+    ModoComandos { sesion: UsuarioSesion },
 }
 
 #[cfg(test)]
@@ -96,6 +104,7 @@ mod tests;
 pub struct App {
     vista: Vista,
     login: LoginState,
+    elegir_interfaz: ElegirInterfazState,
     menu: MenuPrincipalState,
     configuracion_inicial: ConfiguracionInicialState,
     activos: ActivosState,
@@ -134,6 +143,7 @@ impl Default for App {
         Self {
             vista: Vista::Login,
             login: LoginState::default(),
+            elegir_interfaz: ElegirInterfazState::default(),
             menu: MenuPrincipalState::default(),
             configuracion_inicial: ConfiguracionInicialState::default(),
             activos: ActivosState::default(),
@@ -254,6 +264,9 @@ impl App {
                             theme,
                         ),
                         Vista::Login => login::render(frame, frame.area(), &self.login, theme),
+                        Vista::ElegirInterfaz => {
+                            elegir_interfaz::render(frame, frame.area(), &self.elegir_interfaz, theme)
+                        }
                         Vista::MenuPrincipal => {
                             if let Some(sesion) = &self.sesion {
                                 menu_principal::render(
@@ -568,6 +581,19 @@ impl App {
                 }
                 AccionLogin::Ninguna => {}
             },
+            Vista::ElegirInterfaz => match self.elegir_interfaz.handle_key(key) {
+                AccionElegirInterfaz::Ninguna => {}
+                AccionElegirInterfaz::Tui => {
+                    self.vista = Vista::MenuPrincipal;
+                    self.sincronizar_vista_con_tema(core);
+                }
+                AccionElegirInterfaz::Cli => {
+                    if let Some(sesion) = self.sesion.clone() {
+                        self.salida = SalidaApp::ModoComandos { sesion };
+                        self.salir = true;
+                    }
+                }
+            },
             Vista::MenuPrincipal => self.procesar_accion_menu_con_core(key, core),
             Vista::IngresosActivos => {
                 let accion = self.activos.handle_key(key);
@@ -776,12 +802,15 @@ impl App {
         }
     }
 
-    fn iniciar_sesion(&mut self, sesion: UsuarioSesion, core: Option<&AppCore>) {
+    fn iniciar_sesion(&mut self, sesion: UsuarioSesion, _core: Option<&AppCore>) {
         self.sesion = Some(sesion);
         self.pestanas_visitadas = [false; 9];
         self.menu.nueva_sesion();
-        self.vista = Vista::MenuPrincipal;
-        self.sincronizar_vista_con_tema(core);
+        self.elegir_interfaz.reiniciar();
+        // No entra directo al Menú/pestañas: primero pregunta TUI o CLI en
+        // `ElegirInterfaz` (`sincronizar_vista_con_tema` se aplica recién si
+        // elige TUI, ver `procesar_tecla_vista_con_core`).
+        self.vista = Vista::ElegirInterfaz;
     }
 
     /// El Menú Principal y la navegación por pestañas son dos modos

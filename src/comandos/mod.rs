@@ -86,7 +86,12 @@ impl Drop for TerminalGuard {
 
 /// Punto de entrada de la interfaz de comandos. Consume el `AppCore` (la ruta
 /// `--comandos` de `main` no hace nada más con él después).
-pub fn run(core: AppCore) -> Result<(), ComandosError> {
+///
+/// `sesion_inicial` viene con `Some` cuando el operador ya se autenticó en la
+/// TUI clásica y eligió el modo CLI desde `ElegirInterfaz` — en ese caso se
+/// arranca directo en `Fase::Operando`, sin repetir cédula/contraseña. Con
+/// `None` (ruta `--comandos`) hace su propio login, como siempre.
+pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<(), ComandosError> {
     if core.requiere_configuracion_inicial()? {
         return avisar_configuracion_inicial();
     }
@@ -94,7 +99,10 @@ pub fn run(core: AppCore) -> Result<(), ComandosError> {
     let _guard = TerminalGuard::acquire()?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
 
-    let mut app = AppState::new();
+    let mut app = match sesion_inicial {
+        Some(sesion) => AppState::con_sesion(sesion),
+        None => AppState::new(),
+    };
     let mut autenticacion: AutenticacionPendiente = None;
     recomputar(&core, &mut app);
 

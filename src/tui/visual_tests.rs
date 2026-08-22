@@ -117,7 +117,9 @@ impl Screen {
     const fn title(self) -> &'static str {
         match self {
             Self::ConfiguracionInicial => "CONFIGURACIÓN INICIAL",
-            Self::Login => "INICIO DE SESIÓN",
+            // Sin texto fijo por diseño — el llamador salta la aserción de
+            // título para esta pantalla (ver el `match` en el test).
+            Self::Login => "",
             Self::Menu => "MENÚ PRINCIPAL",
             Self::Activos => "INGRESOS ACTIVOS",
             Self::Historial => "HISTORIAL",
@@ -283,6 +285,11 @@ fn todas_las_pantallas_renderizan_la_matriz_de_tamanos_y_temas() {
                 assert!(!text.contains('�'), "glifo inválido para {screen:?}");
                 if width < screen.min_width() || height < screen.min_height() {
                     assert!(text.contains("TERMINAL DEMASIADO PEQUEÑA"));
+                } else if matches!(screen, Screen::Login) {
+                    // El login ya no muestra ningún texto fijo por diseño
+                    // (ver `login::render`) — sólo cajas sin etiquetas. Ya se
+                    // comprobó arriba que el buffer no está vacío ni tiene
+                    // glifos rotos.
                 } else if preset == ThemePreset::Negro
                     && let Some(tecla) = screen.tecla_pestana()
                 {

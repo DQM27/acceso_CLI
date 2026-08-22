@@ -56,6 +56,15 @@ la validación falla. Subir el archivo tal cual sale de `MakeAppx.exe`.
 En Partner Center → Control de Acceso Brisas → "Iniciar envío", subir este
 `.msix` en la sección de paquetes.
 
+## Alias de ejecución (`brisas`)
+
+El manifiesto declara un `windows.appExecutionAlias`: una vez instalado el
+paquete, cualquier `cmd`/PowerShell que se abra después reconoce `brisas`
+como comando y arranca `control_acceso.exe` ahí mismo (consola heredada, no
+abre ventana nueva). No requiere tocar el `PATH` a mano — lo resuelve Windows
+solo a partir del manifiesto. Sólo funciona con la app instalada vía MSIX
+(Store o sideload); `cargo run`/el `.exe` suelto no lo tienen.
+
 ## Versionado
 
 `Identity/Version` en `AppxManifest.xml` usa el formato `Major.Minor.Build.Revision`

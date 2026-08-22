@@ -150,6 +150,16 @@ impl AppState {
         }
     }
 
+    /// Arranca ya autenticado — para cuando la TUI clásica hizo el login y el
+    /// operador eligió el modo CLI desde `ElegirInterfaz`, sin volver a pedir
+    /// cédula/contraseña.
+    pub fn con_sesion(sesion: UsuarioSesion) -> Self {
+        Self {
+            fase: Fase::Operando { sesion },
+            ..Self::new()
+        }
+    }
+
     pub fn mostrar_feedback(&mut self, texto: String, nivel: NivelFeedback) {
         self.feedback = Some((Instant::now(), Feedback { texto, nivel }));
     }

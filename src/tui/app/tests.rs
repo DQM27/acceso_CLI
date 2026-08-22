@@ -570,13 +570,31 @@ fn escape_raiz_regresa_al_menu_y_estados_internos_se_cierran_primero() {
 }
 
 #[test]
-fn login_exitoso_inicia_menu_con_nuevo_ingreso_seleccionado() {
+fn login_exitoso_pregunta_interfaz_y_elegir_tui_entra_al_menu_con_nuevo_ingreso_seleccionado() {
     let mut app = App::default();
     app.menu.seleccion = OpcionMenu::Usuarios;
     app.iniciar_sesion(sesion("Daniel Quintana"), None);
+    // No entra directo al menú: primero pregunta TUI o CLI.
+    assert_eq!(app.vista, Vista::ElegirInterfaz);
+    assert_eq!(app.sesion().unwrap().nombre, "Daniel Quintana");
+
+    app.procesar_tecla_vista(tecla(KeyCode::Char('1')));
     assert_eq!(app.vista, Vista::MenuPrincipal);
     assert_eq!(app.menu.seleccion, OpcionMenu::NuevoIngreso);
-    assert_eq!(app.sesion().unwrap().nombre, "Daniel Quintana");
+}
+
+#[test]
+fn login_exitoso_elegir_cli_sale_con_salidaapp_modocomandos_y_la_misma_sesion() {
+    let mut app = App::default();
+    app.iniciar_sesion(sesion("Daniel Quintana"), None);
+    assert_eq!(app.vista, Vista::ElegirInterfaz);
+
+    app.procesar_tecla_vista(tecla(KeyCode::Char('2')));
+    assert!(app.salir);
+    match app.salida {
+        SalidaApp::ModoComandos { sesion } => assert_eq!(sesion.nombre, "Daniel Quintana"),
+        otra => panic!("se esperaba SalidaApp::ModoComandos, llegó {otra:?}"),
+    }
 }
 
 #[test]

@@ -2,8 +2,9 @@
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap rescap">
+  IgnorableNamespaces="uap uap5 rescap">
 
   <Identity
     Name="DQM27.ControldeAccesoBrisas"
@@ -34,6 +35,17 @@
         BackgroundColor="transparent">
         <uap:DefaultTile Square71x71Logo="Assets\Square71x71Logo.png" />
       </uap:VisualElements>
+      <Extensions>
+        <!-- Alias de ejecución: con la app instalada, cualquier cmd/PowerShell
+             que se abra después reconoce "brisas" como comando y arranca este
+             mismo ejecutable ahí mismo (no abre ventana nueva ni necesita
+             editar el PATH) — Windows resuelve "brisas" a "brisas.exe" solo. -->
+        <uap5:Extension Category="windows.appExecutionAlias" Executable="control_acceso.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap5:AppExecutionAlias>
+            <uap5:ExecutionAlias Alias="brisas.exe" />
+          </uap5:AppExecutionAlias>
+        </uap5:Extension>
+      </Extensions>
     </Application>
   </Applications>
 
