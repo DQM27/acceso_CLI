@@ -11,6 +11,11 @@ use control_acceso::tui::app::SalidaApp;
 /// de datos (ver comentario en `AppCore::resetear_password_root`).
 const FLAG_RESET_ROOT: &str = "--reset-root";
 
+/// Interfaz alternativa dirigida por comandos (input persistente + área
+/// contextual adaptativa). Sin este flag el comportamiento es idéntico al de
+/// siempre: la TUI clásica.
+const FLAG_COMANDOS: &str = "--comandos";
+
 #[derive(Debug, thiserror::Error)]
 enum StartupError {
     #[error(transparent)]
@@ -27,11 +32,17 @@ enum StartupError {
     Entrada(#[source] std::io::Error),
     #[error("No se pudo crear el respaldo previo: {0}")]
     Respaldo(#[source] control_acceso::database::backup::RespaldoError),
+    #[error(transparent)]
+    Comandos(#[from] control_acceso::comandos::ComandosError),
 }
 
 fn run() -> Result<(), StartupError> {
     let ruta_base_datos = ruta_base_datos().map_err(StartupError::RutaBaseDatos)?;
     let _instancia = InstanciaGuard::adquirir(&ruta_base_datos).map_err(StartupError::Instancia)?;
+
+    if std::env::args().any(|arg| arg == FLAG_COMANDOS) {
+        return run_comandos(&ruta_base_datos);
+    }
 
     let mut mensaje_inicial = None;
     loop {
@@ -75,6 +86,15 @@ fn run() -> Result<(), StartupError> {
             }
         }
     }
+}
+
+/// Ruta `--comandos`: mismo guard de instancia (lo adquiere `run` antes de
+/// bifurcar) y mismo respaldo diario que la ruta clásica; la configuración
+/// inicial la detecta y la explica la propia interfaz de comandos.
+fn run_comandos(ruta_base_datos: &std::path::Path) -> Result<(), StartupError> {
+    let core = AppCore::abrir(ruta_base_datos).map_err(StartupError::Bootstrap)?;
+    let _ = core.respaldo_automatico_diario_si_hace_falta();
+    control_acceso::comandos::run(core).map_err(StartupError::Comandos)
 }
 
 fn leer_linea(prompt: &str) -> Result<String, StartupError> {

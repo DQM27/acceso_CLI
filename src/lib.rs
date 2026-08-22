@@ -1,4 +1,5 @@
 pub mod application;
+pub mod comandos;
 pub mod database;
 pub mod domain;
 pub mod historial;
