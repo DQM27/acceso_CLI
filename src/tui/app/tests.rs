@@ -84,10 +84,72 @@ fn f7_cicla_el_tema_sin_importar_la_vista_activa() {
     assert_eq!(app.tema, ThemePreset::Brisas);
 
     app.procesar_tecla_vista(tecla(KeyCode::F(7)));
+    assert_eq!(app.tema, ThemePreset::Negro);
+
+    app.procesar_tecla_vista(tecla(KeyCode::F(7)));
     assert_eq!(app.tema, ThemePreset::Classic);
 
     app.procesar_tecla_vista(tecla(KeyCode::F(7)));
     assert_eq!(app.tema, ThemePreset::Brisas);
+}
+
+/// El Menú Principal y las pestañas son modos excluyentes atados al tema:
+/// sólo Negro usa pestañas. Con sesión activa, entrar a Negro debe saltar
+/// directo a la primera pestaña (el Menú no es alcanzable ahí), y salir de
+/// Negro debe volver al Menú con la selección sincronizada a la pantalla
+/// que se estaba viendo.
+#[test]
+fn f7_hacia_negro_salta_del_menu_a_la_primera_pestana_y_de_vuelta_sincroniza_la_seleccion() {
+    let mut app = App {
+        vista: Vista::MenuPrincipal,
+        sesion: Some(sesion("Root")),
+        ..App::default()
+    };
+    assert_eq!(app.tema, ThemePreset::Brisas);
+
+    app.procesar_tecla_vista(tecla(KeyCode::F(7)));
+    assert_eq!(app.tema, ThemePreset::Negro);
+    assert_eq!(app.vista, Vista::NuevoIngreso, "primera pestaña visible");
+
+    app.procesar_tecla_global(KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL), None);
+    assert_eq!(
+        app.vista,
+        Vista::IngresosActivos,
+        "se movió dentro de Negro"
+    );
+
+    app.procesar_tecla_vista(tecla(KeyCode::F(7)));
+    assert_eq!(app.tema, ThemePreset::Classic);
+    assert_eq!(app.vista, Vista::MenuPrincipal, "Classic no tiene pestañas");
+    assert_eq!(
+        app.menu.seleccion,
+        OpcionMenu::IngresosActivos,
+        "la selección del menú queda sincronizada con lo último visto"
+    );
+}
+
+/// Con Esc en Cambiar contraseña ("Volver"), el destino depende del tema:
+/// en Negro no hay Menú al que volver, así que va a la primera pestaña; en
+/// Classic/Brisas vuelve al Menú de siempre.
+#[test]
+fn volver_desde_cambiar_password_depende_del_tema() {
+    let mut app = App {
+        vista: Vista::CambiarPassword,
+        sesion: Some(sesion("Root")),
+        tema: ThemePreset::Negro,
+        ..App::default()
+    };
+    app.procesar_tecla_vista(tecla(KeyCode::Esc));
+    assert_eq!(app.vista, Vista::NuevoIngreso);
+
+    let mut app = App {
+        vista: Vista::CambiarPassword,
+        sesion: Some(sesion("Root")),
+        tema: ThemePreset::Classic,
+        ..App::default()
+    };
+    app.procesar_tecla_vista(tecla(KeyCode::Esc));
+    assert_eq!(app.vista, Vista::MenuPrincipal);
 }
 
 #[test]
@@ -137,6 +199,7 @@ fn ctrl_numero_salta_directo_a_la_pantalla_sin_pasar_por_el_menu() {
     let mut app = App {
         vista: Vista::Contratistas,
         sesion: Some(sesion("Ana")),
+        tema: ThemePreset::Negro,
         ..App::default()
     };
 
@@ -161,6 +224,7 @@ fn ctrl_numero_respeta_el_rol_igual_que_el_menu() {
             nombre: "Operador".into(),
             rol: crate::models::usuario::RolUsuario::Operador,
         }),
+        tema: ThemePreset::Negro,
         ..App::default()
     };
 
@@ -187,6 +251,7 @@ fn ctrl_numero_no_funciona_sin_sesion_ni_con_ctrl_alt_ni_con_salida_rapida_abier
     let mut app = App {
         vista: Vista::Contratistas,
         sesion: Some(sesion("Ana")),
+        tema: ThemePreset::Negro,
         ..App::default()
     };
     // Ctrl+Alt+número queda reservado (Windows Terminal lo usa para
@@ -219,10 +284,78 @@ fn digito_suelto_sin_ctrl_no_dispara_el_salto() {
     let mut app = App {
         vista: Vista::Contratistas,
         sesion: Some(sesion("Ana")),
+        tema: ThemePreset::Negro,
         ..App::default()
     };
     app.procesar_tecla_global(KeyEvent::new(KeyCode::Char('3'), KeyModifiers::NONE), None);
     assert_eq!(app.vista, Vista::Contratistas);
+}
+
+#[test]
+fn ctrl_flechas_recorrer_pestanas_envuelve_y_respeta_el_rol() {
+    let mut root = App {
+        vista: Vista::NuevoIngreso,
+        sesion: Some(sesion("Root")),
+        tema: ThemePreset::Negro,
+        ..App::default()
+    };
+    root.procesar_tecla_global(KeyEvent::new(KeyCode::Left, KeyModifiers::CONTROL), None);
+    assert_eq!(root.vista, Vista::CambiarPassword);
+    root.procesar_tecla_global(KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL), None);
+    assert_eq!(root.vista, Vista::NuevoIngreso);
+
+    let mut operador = App {
+        vista: Vista::Empresas,
+        sesion: Some(UsuarioSesion {
+            id: 2,
+            cedula: "2".into(),
+            nombre: "Operador".into(),
+            rol: RolUsuario::Operador,
+        }),
+        tema: ThemePreset::Negro,
+        ..App::default()
+    };
+    operador.procesar_tecla_global(KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL), None);
+    assert_eq!(operador.vista, Vista::CambiarPassword);
+}
+
+#[test]
+fn cambiar_de_pestana_conserva_el_estado_de_la_pantalla() {
+    let mut app = App {
+        vista: Vista::Contratistas,
+        sesion: Some(sesion("Root")),
+        tema: ThemePreset::Negro,
+        ..App::default()
+    };
+    app.pestanas_visitadas[OpcionMenu::Contratistas.indice_pestana().unwrap()] = true;
+    app.procesar_tecla_global(tecla(KeyCode::Char('/')), None);
+    for caracter in "filtro vivo".chars() {
+        app.procesar_tecla_global(tecla(KeyCode::Char(caracter)), None);
+    }
+    let antes = format!("{:?}", app.contratistas);
+
+    app.procesar_tecla_global(KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL), None);
+    assert_eq!(app.vista, Vista::Empresas);
+    app.procesar_tecla_global(KeyEvent::new(KeyCode::Left, KeyModifiers::CONTROL), None);
+
+    assert_eq!(app.vista, Vista::Contratistas);
+    assert_eq!(format!("{:?}", app.contratistas), antes);
+}
+
+#[test]
+fn ctrl_flechas_no_salen_del_inicio_ni_atraviesan_el_overlay() {
+    let mut app = App {
+        vista: Vista::MenuPrincipal,
+        sesion: Some(sesion("Root")),
+        ..App::default()
+    };
+    app.procesar_tecla_global(KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL), None);
+    assert_eq!(app.vista, Vista::MenuPrincipal);
+
+    app.vista = Vista::Historial;
+    app.salida_rapida.abrir();
+    app.procesar_tecla_global(KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL), None);
+    assert_eq!(app.vista, Vista::Historial);
 }
 
 #[test]
@@ -440,7 +573,7 @@ fn escape_raiz_regresa_al_menu_y_estados_internos_se_cierran_primero() {
 fn login_exitoso_inicia_menu_con_nuevo_ingreso_seleccionado() {
     let mut app = App::default();
     app.menu.seleccion = OpcionMenu::Usuarios;
-    app.iniciar_sesion(sesion("Daniel Quintana"));
+    app.iniciar_sesion(sesion("Daniel Quintana"), None);
     assert_eq!(app.vista, Vista::MenuPrincipal);
     assert_eq!(app.menu.seleccion, OpcionMenu::NuevoIngreso);
     assert_eq!(app.sesion().unwrap().nombre, "Daniel Quintana");

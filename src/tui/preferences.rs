@@ -129,7 +129,7 @@ mod tests {
         let path = path();
         let mut store = PreferencesStore::load(path.clone());
         let preferences = UiPreferences {
-            theme: ThemePreset::Classic,
+            theme: ThemePreset::Negro,
             activos_columns: "nombre,gafete".into(),
             contratistas_columns: "nombre,empresa".into(),
             historial_view: "classic".into(),

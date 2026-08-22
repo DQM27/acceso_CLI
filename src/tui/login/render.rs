@@ -42,6 +42,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &LoginState, theme: Theme) {
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: COMANDOS,
+        tabs: None,
         authenticated: false,
         help_expanded: state.ayuda_expandida,
         ayuda_extra: None,

@@ -36,8 +36,9 @@ pub use seleccion::{
     MARCADOR_SELECCION, SIMBOLO_RESALTADO_TABLA, marcador_seleccion, mover_seleccion,
 };
 pub use shell::{
-    CommandHint, ScreenShell, ShellAreas, StatusKind, auxiliary_panel, centered_content,
-    centered_rect, clasificar_mensaje, identidad_sesion, panel, render_terminal_too_small,
+    CommandHint, ScreenShell, ShellAreas, StatusKind, TabBar, TabItem, auxiliary_panel,
+    centered_content, centered_rect, clasificar_mensaje, identidad_sesion, panel,
+    render_terminal_too_small,
 };
 pub use text_input::{TextInput, TextInputFocus, posicionar_cursor, posicionar_cursor_campo};
 pub use theme::{Theme, ThemePreset};

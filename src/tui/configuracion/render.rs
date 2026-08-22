@@ -1,3 +1,4 @@
+use crate::tui::menu_principal::OpcionMenu;
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
@@ -77,6 +78,7 @@ fn render_respaldos(
         ModoRespaldos::Exportando { .. } => COMANDOS_EXPORTAR,
         ModoRespaldos::ConfirmandoRestauracion { .. } => COMANDOS_CONFIRMAR_RESTAURACION,
     };
+    let tabs = OpcionMenu::barra_pestanas(sesion.rol, OpcionMenu::Respaldos);
     let shell = ScreenShell {
         product: "BRISAS CLI",
         screen: "RESPALDOS",
@@ -85,6 +87,7 @@ fn render_respaldos(
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: comandos,
+        tabs: theme.navegacion_pestanas.then_some(&tabs),
         authenticated: true,
         help_expanded: ayuda_expandida,
         ayuda_extra: None,

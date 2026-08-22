@@ -1,4 +1,5 @@
 use super::*;
+use crate::tui::menu_principal::OpcionMenu;
 use crate::{
     services::{
         autenticacion_service::UsuarioSesion, registro_ingreso_service::IngresoActivoResumen,
@@ -76,6 +77,7 @@ pub fn render(
         ModoActivos::Columnas { .. } => COMANDOS_COLUMNAS,
     };
 
+    let tabs = OpcionMenu::barra_pestanas(sesion.rol, OpcionMenu::IngresosActivos);
     let shell = ScreenShell {
         product: "BRISAS CLI",
         screen: "INGRESOS ACTIVOS",
@@ -84,6 +86,7 @@ pub fn render(
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: comandos,
+        tabs: theme.navegacion_pestanas.then_some(&tabs),
         authenticated: true,
         help_expanded: state.ayuda_expandida,
         ayuda_extra: Some(

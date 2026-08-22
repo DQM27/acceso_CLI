@@ -145,12 +145,36 @@ impl Screen {
             _ => 60,
         }
     }
+
+    /// Tecla de la pestaña que identifica esta pantalla en la barra
+    /// (`OpcionMenu::desde_atajo`), o `None` para las 3 pantallas sin
+    /// pestañas (ConfiguraciónInicial/Login/Menú). Las pantallas con
+    /// pestañas ya no repiten su título en el encabezado — la pestaña
+    /// resaltada es la única identificación visible.
+    const fn tecla_pestana(self) -> Option<&'static str> {
+        match self {
+            Self::NuevoIngreso => Some("1"),
+            Self::Activos => Some("2"),
+            Self::Historial => Some("3"),
+            Self::Contratistas => Some("4"),
+            Self::Empresas => Some("5"),
+            Self::Usuarios => Some("6"),
+            Self::Auditoria => Some("7"),
+            Self::Respaldos => Some("8"),
+            Self::CambioPassword => Some("9"),
+            Self::ConfiguracionInicial | Self::Login | Self::Menu => None,
+        }
+    }
 }
 
 #[test]
 fn todas_las_pantallas_renderizan_la_matriz_de_tamanos_y_temas() {
     let sizes = [(60, 22), (80, 24), (99, 30), (100, 30), (140, 40)];
-    let themes = [ThemePreset::Classic, ThemePreset::Brisas];
+    let themes = [
+        ThemePreset::Classic,
+        ThemePreset::Brisas,
+        ThemePreset::Negro,
+    ];
     let session = UsuarioSesion {
         id: 1,
         cedula: "1-1111-1111".into(),
@@ -259,6 +283,16 @@ fn todas_las_pantallas_renderizan_la_matriz_de_tamanos_y_temas() {
                 assert!(!text.contains('�'), "glifo inválido para {screen:?}");
                 if width < screen.min_width() || height < screen.min_height() {
                     assert!(text.contains("TERMINAL DEMASIADO PEQUEÑA"));
+                } else if preset == ThemePreset::Negro
+                    && let Some(tecla) = screen.tecla_pestana()
+                {
+                    // Sólo Negro navega por pestañas; ahí reemplazan al
+                    // título (ver `Screen::tecla_pestana`). Classic/Brisas
+                    // siguen mostrando el título de siempre, chequeado abajo.
+                    assert!(
+                        text.contains(tecla),
+                        "falta la pestaña de {screen:?} en {width}×{height} ({preset:?})"
+                    );
                 } else {
                     assert!(
                         text.contains(screen.title()),

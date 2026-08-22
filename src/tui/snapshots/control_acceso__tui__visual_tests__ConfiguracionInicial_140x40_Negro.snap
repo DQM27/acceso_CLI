@@ -1,0 +1,127 @@
+---
+source: src/tui/visual_tests.rs
+expression: volcado
+---
+=== texto ===
+                                                                                                                                            
+ BRISAS CLI                                                                                                      PRIMER USUARIO DEL SISTEMA 
+ CONTROL DE ACCESO                                                CONFIGURACIÓN INICIAL                                               ··:·· 
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── 
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                             ▶ CÉDULA                                                                                       
+                                                                                                                                            
+                                             ──────────────────────────────────────────────────                                             
+                                                                                                                                            
+                                               NOMBRE                                                                                       
+                                                                                                                                            
+                                             ──────────────────────────────────────────────────                                             
+                                                                                                                                            
+                                               CONTRASEÑA                                                                                   
+                                                                                                                                            
+                                             ──────────────────────────────────────────────────                                             
+                                                                                                                                            
+                                               CONFIRMAR CONTRASEÑA                                                                         
+                                                                                                                                            
+                                             ──────────────────────────────────────────────────                                             
+                                                                                                                                            
+                                               Este usuario será creado activo y con rol ROOT.                                              
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+ TAB/↑↓ Campo  G/ENTER Crear ROOT  ESC Salir  F7 Tema                                                                                       
+                                                                                                                                            
+
+=== estilos ===
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"BRISAS CLI" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+"                                                                                                      " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"PRIMER USUARIO DEL SISTEMA" fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"CONTROL DE ACCESO" fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+"                                   " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"             CONFIGURACIÓN INICIAL             " fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+"                                  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"··:··" fg=Rgb(231, 198, 107) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────" fg=Rgb(86, 86, 94) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"▶ CÉDULA                                          " fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+"                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"──────────────────────────────────────────────────" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+"                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"  NOMBRE                                          " fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+"                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"──────────────────────────────────────────────────" fg=Rgb(86, 86, 94) bg=Rgb(36, 36, 39) mod=NONE
+"                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"  CONTRASEÑA                                      " fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+"                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"──────────────────────────────────────────────────" fg=Rgb(86, 86, 94) bg=Rgb(36, 36, 39) mod=NONE
+"                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"  CONFIRMAR CONTRASEÑA                            " fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+"                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"──────────────────────────────────────────────────" fg=Rgb(86, 86, 94) bg=Rgb(36, 36, 39) mod=NONE
+"                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"  Este usuario será creado activo y con rol ROOT. " fg=Rgb(231, 198, 107) bg=Rgb(36, 36, 39) mod=NONE
+"                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                          " fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"TAB/↑↓" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Campo  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"G/ENTER" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Crear ROOT  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"ESC" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Salir  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"F7" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Tema                                                                                       " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE

@@ -1,4 +1,5 @@
 use super::*;
+use crate::tui::menu_principal::OpcionMenu;
 use crate::{
     database::queries::contratistas::ContratistaResumen,
     services::autenticacion_service::UsuarioSesion,
@@ -72,6 +73,7 @@ pub fn render(
         (EtapaNuevoIngreso::Formulario, _) => COMANDOS_FORMULARIO,
     };
 
+    let tabs = OpcionMenu::barra_pestanas(sesion.rol, OpcionMenu::NuevoIngreso);
     let shell = ScreenShell {
         product: "BRISAS CLI",
         screen: "NUEVO INGRESO",
@@ -80,6 +82,7 @@ pub fn render(
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: comandos,
+        tabs: theme.navegacion_pestanas.then_some(&tabs),
         authenticated: true,
         help_expanded: state.ayuda_expandida,
         ayuda_extra: None,

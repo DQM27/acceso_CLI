@@ -1,0 +1,123 @@
+---
+source: src/tui/visual_tests.rs
+expression: volcado
+---
+=== texto ===
+                                                                                                                                            
+ BRISAS CLI                                                                                                       Operador de prueba · ROOT 
+ CONTROL DE ACCESO                                                   MENÚ PRINCIPAL                                                   ··:·· 
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── 
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                        OPERACIÓN                                                                           
+                                                        ▶ 1   Nuevo ingreso                                                                 
+                                                          2   Ingresos activos                                                              
+                                                          3   Historial                                                                     
+                                                                                                                                            
+                                                        ADMINISTRACIÓN                                                                      
+                                                          4   Contratistas                                                                  
+                                                          5   Empresas                                                                      
+                                                          6   Usuarios                                                                      
+                                                          7   Auditoría                                                                     
+                                                          8   Respaldos                                                                     
+                                                                                                                                            
+                                                        SESIÓN                                                                              
+                                                          9   Cambiar mi contraseña                                                         
+                                                          L   Cerrar sesión                                                                 
+                                                          Q   Salir                                                                         
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+ Registrar la entrada de un contratista.                                                                                                    
+ ↑↓ Seleccionar  ENTER Abrir  1-9 Acceso rápido  L Cerrar sesión  Q Salir  F2 Salida rápida  F7 Tema                                        
+                                                                                                                                            
+
+=== estilos ===
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"BRISAS CLI" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+"                                                                                                       " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"Operador de prueba · ROOT" fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"CONTROL DE ACCESO" fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+"                                   " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                MENÚ PRINCIPAL                 " fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+"                                  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"··:··" fg=Rgb(231, 198, 107) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────" fg=Rgb(86, 86, 94) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                        " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"OPERACIÓN" fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                           " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                        " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"▶ 1   Nuevo ingreso" fg=Rgb(24, 24, 27) bg=Rgb(232, 232, 235) mod=BOLD
+"                                                                 " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                          2   Ingresos activos                                                              " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                          3   Historial                                                                     " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                        " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"ADMINISTRACIÓN" fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                      " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                          4   Contratistas                                                                  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                          5   Empresas                                                                      " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                          6   Usuarios                                                                      " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                          7   Auditoría                                                                     " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                          8   Respaldos                                                                     " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                        " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"SESIÓN" fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                              " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                          9   Cambiar mi contraseña                                                         " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                          L   Cerrar sesión                                                                 " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                          Q   Salir                                                                         " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"Registrar la entrada de un contratista.                                                                                                   " fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"↑↓" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Seleccionar  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"ENTER" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Abrir  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"1-9" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Acceso rápido  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"L" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Cerrar sesión  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"Q" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Salir  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"F2" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Salida rápida  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"F7" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Tema                                        " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE

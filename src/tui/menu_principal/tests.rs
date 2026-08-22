@@ -109,6 +109,30 @@ fn enter_y_accesos_numericos_emiten_apertura_correcta() {
 }
 
 #[test]
+fn pestanas_excluyen_acciones_y_reusan_permisos_del_rol() {
+    assert_eq!(OpcionMenu::pestanas_para(RolUsuario::Root).len(), 9);
+
+    let operador = OpcionMenu::pestanas_para(RolUsuario::Operador);
+    assert_eq!(
+        operador,
+        vec![
+            OpcionMenu::NuevoIngreso,
+            OpcionMenu::IngresosActivos,
+            OpcionMenu::Historial,
+            OpcionMenu::Contratistas,
+            OpcionMenu::Empresas,
+            OpcionMenu::CambiarPassword,
+        ]
+    );
+    assert!(!operador.contains(&OpcionMenu::CerrarSesion));
+    assert!(!operador.contains(&OpcionMenu::Salir));
+
+    let barra = OpcionMenu::barra_pestanas(RolUsuario::Operador, OpcionMenu::Historial);
+    assert_eq!(barra.items.len(), operador.len());
+    assert_eq!(barra.selected, 2);
+}
+
+#[test]
 fn logout_confirma_o_cancela() {
     let mut s = MenuPrincipalState::default();
     s.handle_key(k(KeyCode::Char('L')), RolUsuario::Root);

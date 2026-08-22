@@ -60,6 +60,7 @@ pub fn render(
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: comandos,
+        tabs: None,
         authenticated: true,
         help_expanded: state.ayuda_expandida,
         ayuda_extra: None,

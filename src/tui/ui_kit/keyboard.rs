@@ -22,6 +22,8 @@ pub enum StandardCommand {
     FocusPrevious,
     Help,
     Theme,
+    PreviousTab,
+    NextTab,
     QuickExit,
     EmergencyExit,
 }
@@ -45,6 +47,14 @@ pub fn standard_command(key: KeyEvent) -> Option<StandardCommand> {
         && matches!(key.code, KeyCode::Char(character) if character.eq_ignore_ascii_case(&'c'))
     {
         return Some(StandardCommand::EmergencyExit);
+    }
+
+    if key.modifiers.contains(KeyModifiers::CONTROL) && !key.modifiers.contains(KeyModifiers::ALT) {
+        return match key.code {
+            KeyCode::Left => Some(StandardCommand::PreviousTab),
+            KeyCode::Right => Some(StandardCommand::NextTab),
+            _ => None,
+        };
     }
 
     if key
@@ -93,6 +103,16 @@ mod tests {
                 StandardCommand::QuickExit,
             ),
             (KeyCode::F(7), KeyModifiers::NONE, StandardCommand::Theme),
+            (
+                KeyCode::Left,
+                KeyModifiers::CONTROL,
+                StandardCommand::PreviousTab,
+            ),
+            (
+                KeyCode::Right,
+                KeyModifiers::CONTROL,
+                StandardCommand::NextTab,
+            ),
         ];
 
         for (code, modifiers, expected) in cases {

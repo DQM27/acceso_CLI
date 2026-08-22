@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::{
     models::usuario::RolUsuario,
-    tui::ui_kit::{StandardCommand, standard_command},
+    tui::ui_kit::{StandardCommand, TabBar, TabItem, standard_command},
 };
 
 #[path = "render.rs"]
@@ -90,6 +90,73 @@ impl OpcionMenu {
             .into_iter()
             .filter(|opcion| opcion.visible_para(rol))
             .collect()
+    }
+
+    pub fn pestanas_para(rol: RolUsuario) -> Vec<Self> {
+        Self::TODAS
+            .into_iter()
+            .filter(|opcion| opcion.es_pestana() && opcion.visible_para(rol))
+            .collect()
+    }
+
+    pub fn barra_pestanas(rol: RolUsuario, activa: Self) -> TabBar {
+        let opciones = Self::pestanas_para(rol);
+        let selected = opciones
+            .iter()
+            .position(|opcion| *opcion == activa)
+            .unwrap_or_default();
+        let items = opciones.into_iter().filter_map(Self::tab_item).collect();
+        TabBar::new(items, selected)
+    }
+
+    pub const fn desde_atajo(character: char) -> Option<Self> {
+        match character {
+            '1' => Some(Self::NuevoIngreso),
+            '2' => Some(Self::IngresosActivos),
+            '3' => Some(Self::Historial),
+            '4' => Some(Self::Contratistas),
+            '5' => Some(Self::Empresas),
+            '6' => Some(Self::Usuarios),
+            '7' => Some(Self::Auditoria),
+            '8' => Some(Self::Respaldos),
+            '9' => Some(Self::CambiarPassword),
+            _ => None,
+        }
+    }
+
+    pub const fn indice_pestana(self) -> Option<usize> {
+        match self {
+            Self::NuevoIngreso => Some(0),
+            Self::IngresosActivos => Some(1),
+            Self::Historial => Some(2),
+            Self::Contratistas => Some(3),
+            Self::Empresas => Some(4),
+            Self::Usuarios => Some(5),
+            Self::Auditoria => Some(6),
+            Self::Respaldos => Some(7),
+            Self::CambiarPassword => Some(8),
+            Self::CerrarSesion | Self::Salir => None,
+        }
+    }
+
+    const fn es_pestana(self) -> bool {
+        self.indice_pestana().is_some()
+    }
+
+    const fn tab_item(self) -> Option<TabItem> {
+        let item = match self {
+            Self::NuevoIngreso => TabItem::new("1", "Nuevo ingreso", "Nuevo"),
+            Self::IngresosActivos => TabItem::new("2", "Ingresos activos", "Activos"),
+            Self::Historial => TabItem::new("3", "Historial", "Hist."),
+            Self::Contratistas => TabItem::new("4", "Contratistas", "Contr."),
+            Self::Empresas => TabItem::new("5", "Empresas", "Emp."),
+            Self::Usuarios => TabItem::new("6", "Usuarios", "Usr."),
+            Self::Auditoria => TabItem::new("7", "Auditoría", "Aud."),
+            Self::Respaldos => TabItem::new("8", "Respaldos", "Resp."),
+            Self::CambiarPassword => TabItem::new("9", "Mi contraseña", "Clave"),
+            Self::CerrarSesion | Self::Salir => return None,
+        };
+        Some(item)
     }
 }
 

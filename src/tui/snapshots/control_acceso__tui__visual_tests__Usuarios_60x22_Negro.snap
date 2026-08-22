@@ -1,0 +1,117 @@
+---
+source: src/tui/visual_tests.rs
+expression: volcado
+---
+=== texto ===
+                                                            
+ BRISAS CLI                        Operador de prueba · ROO 
+                                                      ··:·· 
+                 1  2  3  4  5  6  7  8  9                  
+ ────────────────────────────────────────────────────────── 
+   BUSCAR · 0 RESULTADOS                                    
+                                                            
+ ────────────────────────────────────────────────────────── 
+ CÉDULA         NOMBRE          ROL              ESTADO     
+                                                            
+       No hay usuarios que coincidan con la búsqueda.       
+                                                            
+ ────────────────────────────────────────────────────────── 
+ No hay un registro seleccionado.                           
+                                                            
+                                                            
+                                                            
+                                                            
+ ↑↓ Mover  ENTER Editar  N Nuevo  P Clave  A Estado         
+ / Buscar  ESC Volver  F2 Salida rápida  CTRL+←/→ Pestañas  
+ F7 Tema                                                    
+                                                            
+
+=== estilos ===
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"BRISAS CLI" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+"                        " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"Operador de prueba · ROO" fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                      " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"··:··" fg=Rgb(231, 198, 107) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                 " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"1" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+"  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"2" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+"  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"3" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+"  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"4" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+"  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"5" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+"  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"6" fg=Rgb(36, 36, 39) bg=Rgb(232, 232, 235) mod=BOLD
+"  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"7" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+"  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"8" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+"  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"9" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+"                  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"──────────────────────────────────────────────────────────" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"  BUSCAR · 0 RESULTADOS                                   " fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"──────────────────────────────────────────────────────────" fg=Rgb(86, 86, 94) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"CÉDULA         NOMBRE          ROL              ESTADO    " fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"      No hay usuarios que coincidan con la búsqueda.      " fg=Rgb(231, 198, 107) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"──────────────────────────────────────────────────────────" fg=Rgb(86, 86, 94) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"No hay un registro seleccionado.                          " fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                          " fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                          " fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                          " fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                          " fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"↑↓" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Mover  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"ENTER" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Editar  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"N" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Nuevo  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"P" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Clave  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"A" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Estado         " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"/" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Buscar  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"ESC" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Volver  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"F2" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Salida rápida  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"CTRL+←/→" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Pestañas  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"F7" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Tema                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE

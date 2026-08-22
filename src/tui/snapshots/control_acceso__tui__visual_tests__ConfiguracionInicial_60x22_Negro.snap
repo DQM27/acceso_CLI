@@ -1,0 +1,55 @@
+---
+source: src/tui/visual_tests.rs
+expression: volcado
+---
+=== texto ===
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                 TERMINAL DEMASIADO PEQUEÑA                 
+                Actual: 60×22 · mínimo: 60×26               
+              Amplíe para continuar · ESC salir             
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+
+=== estilos ===
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                 " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"TERMINAL DEMASIADO PEQUEÑA" fg=Rgb(231, 198, 107) bg=Rgb(36, 36, 39) mod=NONE
+"                 " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                Actual: 60×22 · mínimo: 60×26               " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"              " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"Amplíe para continuar · ESC salir" fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+"             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                            " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE

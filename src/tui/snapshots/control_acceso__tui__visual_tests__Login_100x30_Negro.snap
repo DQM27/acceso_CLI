@@ -1,0 +1,91 @@
+---
+source: src/tui/visual_tests.rs
+expression: volcado
+---
+=== texto ===
+                                                                                                    
+                                             BRISAS CLI                                             
+                                                                                                    
+ ────────────────────────────────────────────────────────────────────────────────────────────────── 
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                          INICIO DE SESIÓN                                          
+                                                                                                    
+                           ▶ CÉDULA                                                                 
+                                                                                                    
+                           ──────────────────────────────────────────────                           
+                                                                                                    
+                             CONTRASEÑA                                                             
+                                                                                                    
+                           ──────────────────────────────────────────────                           
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+ TAB/↑↓ Cambiar campo  ENTER Continuar  ESC/Ctrl+C Salir  F7 Tema                                   
+                                                                                                    
+
+=== estilos ===
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                            BRISAS CLI                                            " fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"──────────────────────────────────────────────────────────────────────────────────────────────────" fg=Rgb(86, 86, 94) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                           " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"               INICIO DE SESIÓN               " fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+"                           " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                           " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"▶ CÉDULA                                      " fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+"                           " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                           " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"──────────────────────────────────────────────" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+"                           " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                           " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"  CONTRASEÑA                                  " fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+"                           " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                           " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"──────────────────────────────────────────────" fg=Rgb(86, 86, 94) bg=Rgb(36, 36, 39) mod=NONE
+"                           " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                  " fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"TAB/↑↓" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Cambiar campo  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"ENTER" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Continuar  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"ESC/Ctrl+C" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Salir  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"F7" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Tema                                   " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE

@@ -199,6 +199,35 @@ suite completa + Clippy estricto.
 
 ## Sistema visual / UI
 
+- [x] **Tema Negro y navegación por pestañas (2026-08-22).** Se agregó un tercer tema
+  oscuro inspirado en la referencia entregada: fondo carbón, texto claro, acento lavanda
+  y selección por video inverso. Las 9 pantallas operativas comparten una barra creada
+  con `ratatui::widgets::Tabs` desde `ScreenShell`; Login, Configuración Inicial y el Menú
+  Principal quedan fuera, igual que las acciones Cerrar sesión/Salir. La barra reutiliza
+  `OpcionMenu::visible_para`, conserva el estado de cada pantalla al alternar y responde a
+  `Ctrl+←/→` o `Ctrl+1..9`. En anchos reducidos degrada de nombres completos a nombres
+  cortos y finalmente sólo números. Se regeneraron y revisaron los snapshots de los tres
+  temas: 180 combinaciones en total. Animaciones, transiciones y mouse quedaron fuera del
+  alcance por decisión explícita.
+- [x] **Ajustado (2026-08-22): la barra se fusionó al encabezado y la navegación por
+  pestañas quedó exclusiva del tema Negro.** Feedback del usuario tras probar la primera
+  versión: la barra vivía en su propia fila separada del encabezado por una línea propia
+  (fatiga visual, "dos piezas sueltas"), el título de pantalla repetía lo que la pestaña
+  resaltada ya decía, y las pestañas no debían convivir con Classic/Brisas — para el
+  usuario "tema" siempre significó todo el entorno, no sólo el color. Cambios: (1)
+  `ScreenShell` (`ui_kit/shell.rs`) ahora dibuja la pestaña como 3ª línea del mismo bloque
+  de encabezado, sin línea divisoria de por medio, a todo lo ancho del viewport (antes
+  compartía 1/3 de columna con el reloj y degradaba a sólo números en anchos normales); el
+  título de pantalla se omite cuando hay pestañas. (2) Nuevo campo
+  `Theme::navegacion_pestanas` (`ui_kit/theme.rs`), `true` sólo en `ThemePreset::Negro` —
+  las 9 pantallas gatean `tabs: theme.navegacion_pestanas.then_some(&tabs)` en vez de
+  pasarlo siempre. (3) `App::sincronizar_vista_con_tema` (`tui/app.rs`), llamada al iniciar
+  sesión y en cada F7: entrar a Negro salta del Menú Principal directo a la primera
+  pestaña visible para el rol (el Menú no es alcanzable ahí); salir de Negro vuelve al
+  Menú con `menu.seleccion` sincronizada a la última pantalla vista. Los atajos
+  `Ctrl+←/→`/`Ctrl+1..9` y el "Volver" de Cambiar contraseña (Esc) quedaron gateados igual.
+  Suite completa (289 tests, con 2 casos nuevos para la sincronización) + snapshots
+  regenerados y revisados + Clippy estricto + `cargo fmt`, todo en verde.
 - [x] **Bug (2026-08-21): el buscador no arrancaba vacío al activarlo.** Al presionar `/`
   en Activos, Contratistas, Empresas, Nuevo Ingreso y Usuarios, el campo se prellenaba con
   el filtro anterior (`TextInput::new(self.filtro.clone())`) en vez de arrancar limpio —
@@ -277,6 +306,55 @@ sistema actual:
 - [ ] Impedir la actualización mientras la aplicación tenga el bloqueo de instancia.
 - [ ] Respaldar SQLite antes de migrar y conservar un mecanismo probado de rollback.
 - [ ] Separar completamente el cliente de actualización del núcleo de control de acceso.
+
+## Permisos granulares por usuario — descartado por ahora
+
+- [x] **Evaluado (2026-08-22): no se construye.** Hoy los permisos son RBAC simple
+  (`rol.puede(Operacion::X)`, ej. `application/catalogos.rs`) — agregar que un rol pueda
+  hacer algo nuevo es un match arm, no una migración. Un sistema de permisos por usuario
+  individual (matriz configurable, pantalla de asignación) resolvería un problema
+  hipotético, no uno real. Retomar sólo si aparece un caso concreto donde los 3 roles
+  actuales ya no alcanzan (ej. "este operador puede X pero no Y") — ahí se evalúa una vez
+  con el caso real delante, no antes.
+
+## Percepción de velocidad — sugerencias UX (sin acordar, evaluar con calma)
+
+Origen: el usuario reportó una sensación de lentitud en la app (no en el buscador ni en
+animaciones puntuales — "no sé si es la app o soy yo"). Auditoría de
+`src/tui/app.rs`/`terminal.rs`/`ui_kit/debounce.rs`: no hay nada objetivamente lento —
+redibujo sólo por evento (no hay loop de 60fps quemando CPU), `event::poll` cada 50ms,
+debounce de búsqueda en 120ms (`activos`/`empresas`/`nuevo_ingreso`/`usuarios`/`historial`/
+`contratistas`/`salida_rapida`, todos `state.rs`), Argon2 en hilos aparte
+(`app/auth_jobs.rs`) sin bloquear el loop. Conclusión: es percepción, no rendimiento real
+— Ratatui redibuja por *snapshot* (la pantalla entera cambia de golpe, sin transición),
+mientras que una CLI tipo Ink/React va mostrando actividad progresiva (cursor, streaming,
+spinners), lo que se lee como "viva" aunque no sea más rápida. Ideas para achicar esa
+brecha perceptual, en orden de costo/beneficio:
+
+- [ ] **Spinner o indicador durante el debounce de búsqueda (120ms).** Hoy no hay ninguna
+  señal entre que se deja de teclear y que aparece el resultado filtrado — se siente como
+  un salto. Un indicador chico (p. ej. `⏳` o `…` en la etiqueta de búsqueda) mientras
+  `Debounce::listo` todavía no disparó daría la sensación de "está procesando" en vez de
+  "no reaccionó".
+- [ ] **Parpadeo de cursor en campos de texto ya existe en Login** (`DURACION_PARPADEO`,
+  `login/state.rs`) **pero no en los demás formularios** (Contratistas, Usuarios, Nuevo
+  Ingreso, etc.). Extender el mismo patrón a `ui_kit/text_input.rs` daría consistencia y
+  una señal continua de "esto está vivo" incluso sin tecleo.
+- [ ] **Confirmación visual breve tras guardar/registrar** (p. ej. resaltar la fila
+  recién creada/editada por un instante) en vez de sólo el mensaje de estado en texto —
+  hoy el cambio es instantáneo y silencioso, lo que puede leerse como "¿pasó algo?".
+- [ ] **Indicador durante operaciones de disco más pesadas** (crear/restaurar respaldo,
+  `configuracion`/`render.rs`): si alguna tarda más de ~200ms, mostrar un estado
+  "trabajando" explícito en vez de dejar la pantalla congelada hasta que vuelve.
+  Requiere primero medir si alguna realmente tarda eso — no está confirmado, sólo es el
+  candidato más probable de una demora real (I/O de archivo) en vez de percibida.
+- [x] **Frame de transición mínimo en cambios de vista: descartado (2026-08-22).** La
+  navegación por pestañas se pidió sin animaciones ni transiciones; se conserva el cambio
+  inmediato y no se agrega trabajo visual ajeno al alcance.
+
+Nada de esto es un bug ni tiene prioridad definida — quedan acá como banco de ideas para
+retomar cuando se decida invertir tiempo en pulido visual, no porque haya un problema de
+rendimiento real que resolver.
 
 ## Roadmap de producto (V2/V3, fuera del alcance actual)
 

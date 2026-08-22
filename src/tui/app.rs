@@ -62,6 +62,23 @@ pub enum Vista {
     NuevoIngreso,
 }
 
+impl Vista {
+    const fn opcion_menu(self) -> Option<OpcionMenu> {
+        match self {
+            Self::NuevoIngreso => Some(OpcionMenu::NuevoIngreso),
+            Self::IngresosActivos => Some(OpcionMenu::IngresosActivos),
+            Self::Historial => Some(OpcionMenu::Historial),
+            Self::Contratistas => Some(OpcionMenu::Contratistas),
+            Self::Empresas => Some(OpcionMenu::Empresas),
+            Self::Usuarios => Some(OpcionMenu::Usuarios),
+            Self::Auditoria => Some(OpcionMenu::Auditoria),
+            Self::Respaldos => Some(OpcionMenu::Respaldos),
+            Self::CambiarPassword => Some(OpcionMenu::CambiarPassword),
+            Self::ConfiguracionInicial | Self::Login | Self::MenuPrincipal => None,
+        }
+    }
+}
+
 /// Cómo terminó el bucle principal: cierre normal, o una restauración de
 /// respaldo confirmada que exige que `main.rs` cierre la conexión SQLite,
 /// aplique el reemplazo de archivo y vuelva a arrancar la TUI desde cero.
@@ -94,6 +111,7 @@ pub struct App {
     salir: bool,
     salida: SalidaApp,
     sesion: Option<UsuarioSesion>,
+    pestanas_visitadas: [bool; 9],
     tema: ThemePreset,
     preferencias: Option<PreferencesStore>,
     /// Resultado en camino de un hilo aparte que verifica la contraseña
@@ -131,6 +149,7 @@ impl Default for App {
             salir: false,
             salida: SalidaApp::Cerrar,
             sesion: None,
+            pestanas_visitadas: [false; 9],
             tema: ThemePreset::Brisas,
             preferencias: None,
             autenticacion_pendiente: None,
@@ -471,6 +490,23 @@ impl App {
             Some(StandardCommand::Theme) => {
                 self.tema = self.tema.next();
                 self.persistir_preferencias_si_cambiaron();
+                self.sincronizar_vista_con_tema(core);
+                return;
+            }
+            Some(StandardCommand::PreviousTab)
+                if self.sesion.is_some()
+                    && self.tema.theme().navegacion_pestanas
+                    && !self.salida_rapida.abierto() =>
+            {
+                self.mover_pestana(-1, core);
+                return;
+            }
+            Some(StandardCommand::NextTab)
+                if self.sesion.is_some()
+                    && self.tema.theme().navegacion_pestanas
+                    && !self.salida_rapida.abierto() =>
+            {
+                self.mover_pestana(1, core);
                 return;
             }
             // Requiere sesión iniciada: en Login/ConfiguracionInicial no hay a quién
@@ -484,14 +520,12 @@ impl App {
             }
             _ => {}
         }
-        // Atajo global sin documentar en ninguna pantalla de ayuda (a pedido
-        // explícito): Ctrl+1..Ctrl+9 saltan directo a la pantalla
-        // correspondiente sin pasar por el menú principal. Reusa la misma
-        // tabla de números y el mismo chequeo de rol que ya tiene
-        // `MenuPrincipalState::handle_key` (armando el `KeyEvent` sin el
-        // modificador) en vez de duplicar la relación número→pantalla acá,
-        // para que no puedan desincronizarse.
+        // Ctrl+1..Ctrl+9 saltan directo a una pestaña. La relación entre
+        // número, pantalla y permisos vive en `OpcionMenu`, igual que la barra.
+        // Sólo tiene sentido en el tema con navegación por pestañas — en los
+        // demás no hay barra visible ni Menú Principal fuera de circulación.
         if self.sesion.is_some()
+            && self.tema.theme().navegacion_pestanas
             && !self.salida_rapida.abierto()
             && key
                 .modifiers
@@ -499,9 +533,12 @@ impl App {
             && !key.modifiers.contains(crossterm::event::KeyModifiers::ALT)
             && matches!(key.code, crossterm::event::KeyCode::Char(c) if c.is_ascii_digit() && c != '0')
         {
-            let sin_modificador =
-                crossterm::event::KeyEvent::new(key.code, crossterm::event::KeyModifiers::NONE);
-            self.procesar_accion_menu_con_core(sin_modificador, core);
+            let crossterm::event::KeyCode::Char(numero) = key.code else {
+                unreachable!();
+            };
+            if let Some(opcion) = OpcionMenu::desde_atajo(numero) {
+                self.navegar_a_pestana(opcion, core);
+            }
             return;
         }
         if self.salida_rapida.abierto() {
@@ -560,7 +597,7 @@ impl App {
                 let accion = self.cambio_password.handle_key(key);
                 match accion {
                     AccionCambioPassword::Ninguna => {}
-                    AccionCambioPassword::Volver => self.vista = Vista::MenuPrincipal,
+                    AccionCambioPassword::Volver => self.volver_de_pestana(core),
                     AccionCambioPassword::Cambiar {
                         password_actual,
                         nueva_password,
@@ -603,87 +640,11 @@ impl App {
         match self.menu.handle_key(key, rol) {
             AccionMenu::Ninguna => {}
             AccionMenu::Abrir(opcion) => {
-                self.menu.seleccion = opcion;
-                self.vista = match opcion {
-                    OpcionMenu::NuevoIngreso => {
-                        // El menú sólo es alcanzable con `self.sesion` ya
-                        // establecida (`Vista::MenuPrincipal` no renderiza sin
-                        // ella) — este fallback es defensivo, no debería
-                        // dispararse nunca en un flujo real.
-                        self.nuevo_ingreso = NuevoIngresoState::new();
-                        if core.is_some() {
-                            self.procesar_accion_nuevo_ingreso(
-                                self.nuevo_ingreso.solicitud_carga(),
-                                core,
-                            );
-                        }
-                        Vista::NuevoIngreso
-                    }
-                    OpcionMenu::IngresosActivos => {
-                        if let Some(core) = core {
-                            self.activos.completar_empresas(
-                                core.listar_empresas()
-                                    .map_err(|_| "No se pudieron cargar las empresas".into()),
-                            );
-                            self.procesar_accion_activos(self.activos.solicitud_carga(), Some(core))
-                        }
-                        Vista::IngresosActivos
-                    }
-                    OpcionMenu::Historial => {
-                        if let Some(core) = core {
-                            self.historial.completar_empresas(
-                                core.listar_empresas()
-                                    .map_err(|_| "No se pudieron cargar las empresas".into()),
-                            );
-                            let accion = self.historial.solicitud_carga();
-                            self.procesar_accion_historial(accion, Some(core));
-                        }
-                        Vista::Historial
-                    }
-                    OpcionMenu::Contratistas => {
-                        if let Some(core) = core {
-                            self.contratistas.completar_empresas(
-                                core.listar_empresas()
-                                    .map_err(|_| "No se pudieron cargar las empresas".into()),
-                            );
-                            self.procesar_accion_contratistas(
-                                self.contratistas.solicitud_carga(),
-                                Some(core),
-                            );
-                        }
-                        Vista::Contratistas
-                    }
-                    OpcionMenu::Empresas => {
-                        if core.is_some() {
-                            self.procesar_accion_empresas(self.empresas.solicitar_carga(), core);
-                        }
-                        Vista::Empresas
-                    }
-                    OpcionMenu::Usuarios => {
-                        if core.is_some() {
-                            self.procesar_accion_usuarios(self.usuarios.solicitud_carga(), core);
-                        }
-                        Vista::Usuarios
-                    }
-                    OpcionMenu::CambiarPassword => {
-                        self.cambio_password.reiniciar();
-                        Vista::CambiarPassword
-                    }
-                    OpcionMenu::Auditoria => {
-                        let accion = self.auditoria.reiniciar();
-                        self.procesar_accion_auditoria(accion, core);
-                        Vista::Auditoria
-                    }
-                    OpcionMenu::Respaldos => {
-                        let accion = self.configuracion.reiniciar();
-                        self.procesar_accion_configuracion(accion, core);
-                        Vista::Respaldos
-                    }
-                    OpcionMenu::CerrarSesion | OpcionMenu::Salir => Vista::MenuPrincipal,
-                };
+                self.abrir_opcion(opcion, core);
             }
             AccionMenu::CerrarSesion => {
                 self.sesion = None;
+                self.pestanas_visitadas = [false; 9];
                 self.login.reiniciar();
                 self.vista = Vista::Login;
             }
@@ -691,9 +652,171 @@ impl App {
         }
     }
 
-    fn iniciar_sesion(&mut self, sesion: UsuarioSesion) {
+    fn mover_pestana(&mut self, desplazamiento: isize, core: Option<&AppCore>) {
+        let Some(actual) = self.vista.opcion_menu() else {
+            return;
+        };
+        let Some(sesion) = self.sesion.as_ref() else {
+            return;
+        };
+        let visibles = OpcionMenu::pestanas_para(sesion.rol);
+        let Some(indice) = visibles.iter().position(|opcion| *opcion == actual) else {
+            return;
+        };
+        let destino =
+            (indice as isize + desplazamiento).rem_euclid(visibles.len() as isize) as usize;
+        self.navegar_a_pestana(visibles[destino], core);
+    }
+
+    fn navegar_a_pestana(&mut self, opcion: OpcionMenu, core: Option<&AppCore>) {
+        let Some(sesion) = self.sesion.as_ref() else {
+            return;
+        };
+        if !OpcionMenu::pestanas_para(sesion.rol).contains(&opcion) {
+            return;
+        }
+        let Some(indice) = opcion.indice_pestana() else {
+            return;
+        };
+        if !self.pestanas_visitadas[indice] {
+            self.preparar_opcion(opcion, core);
+            self.pestanas_visitadas[indice] = true;
+        }
+        self.menu.seleccion = opcion;
+        self.vista = Self::vista_de_opcion(opcion);
+    }
+
+    /// Abrir desde el menú conserva el comportamiento histórico: refresca o
+    /// reinicia la pantalla. Cambiar entre pestañas sólo hace esa preparación
+    /// en la primera visita de la sesión y después conserva filtros/formularios.
+    fn abrir_opcion(&mut self, opcion: OpcionMenu, core: Option<&AppCore>) {
+        let Some(indice) = opcion.indice_pestana() else {
+            return;
+        };
+        self.preparar_opcion(opcion, core);
+        self.pestanas_visitadas[indice] = true;
+        self.menu.seleccion = opcion;
+        self.vista = Self::vista_de_opcion(opcion);
+    }
+
+    fn preparar_opcion(&mut self, opcion: OpcionMenu, core: Option<&AppCore>) {
+        match opcion {
+            OpcionMenu::NuevoIngreso => {
+                self.nuevo_ingreso = NuevoIngresoState::new();
+                if core.is_some() {
+                    self.procesar_accion_nuevo_ingreso(self.nuevo_ingreso.solicitud_carga(), core);
+                }
+            }
+            OpcionMenu::IngresosActivos => {
+                if let Some(core) = core {
+                    self.activos.completar_empresas(
+                        core.listar_empresas()
+                            .map_err(|_| "No se pudieron cargar las empresas".into()),
+                    );
+                    self.procesar_accion_activos(self.activos.solicitud_carga(), Some(core));
+                }
+            }
+            OpcionMenu::Historial => {
+                if let Some(core) = core {
+                    self.historial.completar_empresas(
+                        core.listar_empresas()
+                            .map_err(|_| "No se pudieron cargar las empresas".into()),
+                    );
+                    let accion = self.historial.solicitud_carga();
+                    self.procesar_accion_historial(accion, Some(core));
+                }
+            }
+            OpcionMenu::Contratistas => {
+                if let Some(core) = core {
+                    self.contratistas.completar_empresas(
+                        core.listar_empresas()
+                            .map_err(|_| "No se pudieron cargar las empresas".into()),
+                    );
+                    self.procesar_accion_contratistas(
+                        self.contratistas.solicitud_carga(),
+                        Some(core),
+                    );
+                }
+            }
+            OpcionMenu::Empresas => {
+                if core.is_some() {
+                    self.procesar_accion_empresas(self.empresas.solicitar_carga(), core);
+                }
+            }
+            OpcionMenu::Usuarios => {
+                if core.is_some() {
+                    self.procesar_accion_usuarios(self.usuarios.solicitud_carga(), core);
+                }
+            }
+            OpcionMenu::CambiarPassword => self.cambio_password.reiniciar(),
+            OpcionMenu::Auditoria => {
+                let accion = self.auditoria.reiniciar();
+                self.procesar_accion_auditoria(accion, core);
+            }
+            OpcionMenu::Respaldos => {
+                let accion = self.configuracion.reiniciar();
+                self.procesar_accion_configuracion(accion, core);
+            }
+            OpcionMenu::CerrarSesion | OpcionMenu::Salir => {}
+        }
+    }
+
+    const fn vista_de_opcion(opcion: OpcionMenu) -> Vista {
+        match opcion {
+            OpcionMenu::NuevoIngreso => Vista::NuevoIngreso,
+            OpcionMenu::IngresosActivos => Vista::IngresosActivos,
+            OpcionMenu::Historial => Vista::Historial,
+            OpcionMenu::Contratistas => Vista::Contratistas,
+            OpcionMenu::Empresas => Vista::Empresas,
+            OpcionMenu::Usuarios => Vista::Usuarios,
+            OpcionMenu::CambiarPassword => Vista::CambiarPassword,
+            OpcionMenu::Auditoria => Vista::Auditoria,
+            OpcionMenu::Respaldos => Vista::Respaldos,
+            OpcionMenu::CerrarSesion | OpcionMenu::Salir => Vista::MenuPrincipal,
+        }
+    }
+
+    fn iniciar_sesion(&mut self, sesion: UsuarioSesion, core: Option<&AppCore>) {
         self.sesion = Some(sesion);
+        self.pestanas_visitadas = [false; 9];
         self.menu.nueva_sesion();
+        self.vista = Vista::MenuPrincipal;
+        self.sincronizar_vista_con_tema(core);
+    }
+
+    /// El Menú Principal y la navegación por pestañas son dos modos
+    /// excluyentes atados al tema activo (sólo Negro usa pestañas) — se
+    /// llama al iniciar sesión y cada vez que cambia el tema (F7) para que
+    /// nunca convivan: entrar a Negro salta directo a la primera pestaña
+    /// visible para el rol; salir de Negro vuelve al Menú, sincronizado con
+    /// la pantalla que se estaba viendo.
+    fn sincronizar_vista_con_tema(&mut self, core: Option<&AppCore>) {
+        let Some(sesion) = self.sesion.as_ref() else {
+            return;
+        };
+        if self.tema.theme().navegacion_pestanas {
+            if self.vista == Vista::MenuPrincipal
+                && let Some(primera) = OpcionMenu::pestanas_para(sesion.rol).first().copied()
+            {
+                self.navegar_a_pestana(primera, core);
+            }
+        } else if let Some(opcion) = self.vista.opcion_menu() {
+            self.menu.seleccion = opcion;
+            self.vista = Vista::MenuPrincipal;
+        }
+    }
+
+    /// Volver desde una pantalla de pestaña (hoy sólo Cambiar contraseña) al
+    /// punto de partida correcto según el tema: el Menú en Classic/Brisas, o
+    /// la primera pestaña en Negro, donde el Menú no es alcanzable.
+    fn volver_de_pestana(&mut self, core: Option<&AppCore>) {
+        if self.tema.theme().navegacion_pestanas
+            && let Some(sesion) = self.sesion.as_ref()
+            && let Some(primera) = OpcionMenu::pestanas_para(sesion.rol).first().copied()
+        {
+            self.navegar_a_pestana(primera, core);
+            return;
+        }
         self.vista = Vista::MenuPrincipal;
     }
 

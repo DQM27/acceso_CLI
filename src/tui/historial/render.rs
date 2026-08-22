@@ -1,4 +1,5 @@
 use super::*;
+use crate::tui::menu_principal::OpcionMenu;
 use crate::{
     database::queries::ingresos::MovimientoIngresoResumen,
     services::autenticacion_service::UsuarioSesion,
@@ -42,6 +43,7 @@ pub fn render(
     let (estado_texto_linea, estado_tipo) = estado_shell(state);
     let comandos = comandos_para(state);
 
+    let tabs = OpcionMenu::barra_pestanas(sesion.rol, OpcionMenu::Historial);
     let shell = ScreenShell {
         product: "BRISAS CLI",
         screen: &format!("HISTORIAL · {}", state.vista.label()),
@@ -50,6 +52,7 @@ pub fn render(
         status: &estado_texto_linea,
         status_kind: estado_tipo,
         commands: &comandos,
+        tabs: theme.navegacion_pestanas.then_some(&tabs),
         authenticated: true,
         help_expanded: state.ayuda_expandida,
         ayuda_extra: Some(

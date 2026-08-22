@@ -1,3 +1,4 @@
+use crate::tui::menu_principal::OpcionMenu;
 use ratatui::{
     Frame,
     layout::{Constraint, Rect},
@@ -41,6 +42,7 @@ pub fn render(
             state.total
         )
     });
+    let tabs = OpcionMenu::barra_pestanas(sesion.rol, OpcionMenu::Auditoria);
     let shell = ScreenShell {
         product: "BRISAS CLI",
         screen: "AUDITORÍA DE CONTRATISTAS",
@@ -53,6 +55,7 @@ pub fn render(
             StatusKind::Normal
         },
         commands: COMANDOS,
+        tabs: theme.navegacion_pestanas.then_some(&tabs),
         authenticated: true,
         help_expanded: state.ayuda_expandida,
         ayuda_extra: None,

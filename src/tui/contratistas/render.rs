@@ -1,3 +1,4 @@
+use crate::tui::menu_principal::OpcionMenu;
 use chrono::NaiveDate;
 use ratatui::{
     Frame,
@@ -92,6 +93,7 @@ pub fn render(
         ModoContratistas::Columnas { .. } => COMANDOS_COLUMNAS,
     };
 
+    let tabs = OpcionMenu::barra_pestanas(sesion.rol, OpcionMenu::Contratistas);
     let shell = ScreenShell {
         product: "BRISAS CLI",
         screen: "CONTRATISTAS",
@@ -100,6 +102,7 @@ pub fn render(
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: comandos,
+        tabs: theme.navegacion_pestanas.then_some(&tabs),
         authenticated: true,
         help_expanded: state.ayuda_expandida,
         ayuda_extra: Some(

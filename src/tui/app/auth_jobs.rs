@@ -60,7 +60,7 @@ impl App {
         match resultado.and_then(|sesion| Self::revalidar_sesion(core, sesion)) {
             Ok(sesion) => {
                 self.login.completar_validacion(None);
-                self.iniciar_sesion(sesion);
+                self.iniciar_sesion(sesion, core);
             }
             Err(error) => self.login.completar_validacion(Some(error.to_string())),
         }
@@ -76,12 +76,15 @@ impl App {
     ) {
         let Some(core) = core else {
             self.login.completar_validacion(None);
-            self.iniciar_sesion(UsuarioSesion {
-                id: 0,
-                cedula: cedula.clone(),
-                nombre: cedula,
-                rol: RolUsuario::Operador,
-            });
+            self.iniciar_sesion(
+                UsuarioSesion {
+                    id: 0,
+                    cedula: cedula.clone(),
+                    nombre: cedula,
+                    rol: RolUsuario::Operador,
+                },
+                None,
+            );
             return;
         };
         match core.buscar_candidato_autenticacion(&cedula) {

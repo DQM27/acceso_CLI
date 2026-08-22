@@ -1,3 +1,4 @@
+use crate::tui::menu_principal::OpcionMenu;
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
@@ -95,6 +96,7 @@ pub fn render(
         ModoUsuarios::ConfirmacionEstado(_) => COMANDOS_CONFIRMACION,
     };
 
+    let tabs = OpcionMenu::barra_pestanas(sesion.rol, OpcionMenu::Usuarios);
     let shell = ScreenShell {
         product: "BRISAS CLI",
         screen: "USUARIOS",
@@ -103,6 +105,7 @@ pub fn render(
         status: &estado_texto,
         status_kind: estado_tipo,
         commands: comandos,
+        tabs: theme.navegacion_pestanas.then_some(&tabs),
         authenticated: true,
         help_expanded: state.ayuda_expandida,
         ayuda_extra: None,

@@ -1,3 +1,4 @@
+use crate::tui::menu_principal::OpcionMenu;
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
@@ -41,6 +42,7 @@ pub fn render(
             StatusKind::Normal,
         ),
     };
+    let tabs = OpcionMenu::barra_pestanas(sesion.rol, OpcionMenu::CambiarPassword);
     let shell = ScreenShell {
         product: "BRISAS CLI",
         screen: "CAMBIAR MI CONTRASEÑA",
@@ -49,6 +51,7 @@ pub fn render(
         status: &status,
         status_kind: kind,
         commands: COMANDOS,
+        tabs: theme.navegacion_pestanas.then_some(&tabs),
         authenticated: true,
         help_expanded: state.ayuda_expandida,
         ayuda_extra: None,

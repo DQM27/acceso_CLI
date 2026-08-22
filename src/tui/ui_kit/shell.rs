@@ -2,7 +2,7 @@ use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout, Margin, Rect},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, Paragraph, Tabs},
 };
 
 use super::{MARCADOR_SELECCION, Theme};
@@ -63,6 +63,38 @@ pub struct ShellAreas {
     pub commands: Rect,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TabItem {
+    pub key: &'static str,
+    pub label: &'static str,
+    pub short_label: &'static str,
+}
+
+impl TabItem {
+    pub const fn new(key: &'static str, label: &'static str, short_label: &'static str) -> Self {
+        Self {
+            key,
+            label,
+            short_label,
+        }
+    }
+}
+
+/// Modelo genérico de la barra. La política de permisos y la relación con
+/// las vistas pertenecen al menú/app; `ScreenShell` sólo sabe dibujarla.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TabBar {
+    pub items: Vec<TabItem>,
+    pub selected: usize,
+}
+
+impl TabBar {
+    pub fn new(items: Vec<TabItem>, selected: usize) -> Self {
+        let selected = selected.min(items.len().saturating_sub(1));
+        Self { items, selected }
+    }
+}
+
 /// Marco común de una pantalla: identidad, contexto, estado y comandos.
 pub struct ScreenShell<'a> {
     pub product: &'a str,
@@ -72,6 +104,9 @@ pub struct ScreenShell<'a> {
     pub status: &'a str,
     pub status_kind: StatusKind,
     pub commands: &'a [CommandHint<'a>],
+    /// Navegación operativa compartida. Login, configuración inicial y menú
+    /// principal no son pestañas y pasan `None`.
+    pub tabs: Option<&'a TabBar>,
     /// Habilita los atajos transversales que requieren una sesión activa.
     pub authenticated: bool,
     /// Si la ayuda está expandida (F1), se agrega una segunda línea de pie.
@@ -114,9 +149,17 @@ impl ScreenShell<'_> {
 
         let command_lines = self.command_lines(viewport.width as usize, theme);
         let command_height = u16::try_from(command_lines.len()).unwrap_or(u16::MAX);
+        let tiene_pestanas = self.tabs.is_some() && matches!(header_kind, HeaderKind::Standard);
+        // El bloque de encabezado crece una línea para las pestañas en vez de
+        // vivir en una fila propia separada por su propia línea divisoria —
+        // así queda una sola pieza (identidad + navegación), no dos bloques
+        // sueltos, y la pestaña usa el ancho completo en vez de compartir
+        // columna con el título/reloj (que la obligaba a truncarse antes de
+        // lo necesario).
+        let header_height = 2 + u16::from(tiene_pestanas);
 
         let rows = Layout::vertical([
-            Constraint::Length(2),
+            Constraint::Length(header_height),
             Constraint::Length(1),
             Constraint::Min(5),
             Constraint::Length(1),
@@ -128,8 +171,16 @@ impl ScreenShell<'_> {
             HeaderKind::Standard => self.render_header(frame, rows[0], theme),
             HeaderKind::CenteredProduct => self.render_centered_product(frame, rows[0], theme),
         }
+        if tiene_pestanas && let Some(tabs) = self.tabs {
+            let linea_pestanas = Rect::new(rows[0].x, rows[0].y + 2, rows[0].width, 1);
+            self.render_tabs(frame, linea_pestanas, tabs, theme);
+        }
         frame.render_widget(
-            Paragraph::new("─".repeat(viewport.width as usize)).style(theme.border()),
+            Paragraph::new("─".repeat(viewport.width as usize)).style(if tiene_pestanas {
+                theme.accent()
+            } else {
+                theme.border()
+            }),
             rows[1],
         );
         self.render_status(frame, rows[3], theme);
@@ -142,6 +193,38 @@ impl ScreenShell<'_> {
         }
     }
 
+    fn render_tabs(&self, frame: &mut Frame, area: Rect, tabs: &TabBar, theme: Theme) {
+        if tabs.items.is_empty() || area.is_empty() {
+            return;
+        }
+
+        let full = tab_titles(&tabs.items, TabLabelKind::Full, theme);
+        let short = tab_titles(&tabs.items, TabLabelKind::Short, theme);
+        let compact = tab_titles(&tabs.items, TabLabelKind::KeyOnly, theme);
+        let max_width = area.width as usize;
+        let titles = if tabs_width(&full) <= max_width {
+            full
+        } else if tabs_width(&short) <= max_width {
+            short
+        } else {
+            compact
+        };
+        let width = tabs_width(&titles).min(max_width) as u16;
+        let centered = Rect::new(
+            area.x + area.width.saturating_sub(width) / 2,
+            area.y,
+            width,
+            1,
+        );
+        let widget = Tabs::new(titles)
+            .select(tabs.selected)
+            .style(theme.muted())
+            .highlight_style(theme.selected_tab())
+            .divider(Span::styled("  ", theme.base()))
+            .padding("", "");
+        frame.render_widget(widget, centered);
+    }
+
     fn render_centered_product(&self, frame: &mut Frame, area: Rect, theme: Theme) {
         frame.render_widget(
             Paragraph::new(self.product)
@@ -151,18 +234,30 @@ impl ScreenShell<'_> {
         );
     }
 
+    /// Dibuja sólo la identidad (producto/pantalla/contexto/reloj) en las
+    /// primeras 2 líneas de `area`. La pestaña activa, cuando aplica, se
+    /// dibuja aparte por el llamador en una 3ª línea a todo lo ancho — ya no
+    /// comparte columna con el título, que la obligaba a truncarse antes de
+    /// lo necesario.
     fn render_header(&self, frame: &mut Frame, area: Rect, theme: Theme) {
+        let titulo_pantalla = self.tabs.is_none();
         if area.width < 90 {
             let columns =
                 Layout::horizontal([Constraint::Percentage(58), Constraint::Percentage(42)])
                     .split(area);
             frame.render_widget(
-                Paragraph::new(vec![
-                    Line::from(self.product).style(theme.title()),
-                    Line::from(self.screen).style(theme.accent()),
-                ]),
+                Paragraph::new(Line::from(self.product).style(theme.title())),
                 columns[0],
             );
+            // Pestaña activa: la línea del título de pantalla se libera y
+            // ese espacio queda en blanco (el llamador dibuja la barra en
+            // la línea 3, no acá).
+            if titulo_pantalla {
+                frame.render_widget(
+                    Paragraph::new(Line::from(self.screen).style(theme.accent())),
+                    Rect::new(columns[0].x, columns[0].y + 1, columns[0].width, 1),
+                );
+            }
             frame.render_widget(
                 Paragraph::new(vec![
                     Line::from(self.context).style(theme.muted()),
@@ -188,12 +283,16 @@ impl ScreenShell<'_> {
             ]),
             columns[0],
         );
-        frame.render_widget(
-            Paragraph::new(self.screen)
-                .style(theme.accent())
-                .alignment(Alignment::Center),
-            Rect::new(columns[1].x, columns[1].y + 1, columns[1].width, 1),
-        );
+        // La pestaña resaltada ya identifica la pantalla actual cuando hay
+        // barra — repetir el nombre acá sería la misma información dos veces.
+        if titulo_pantalla {
+            frame.render_widget(
+                Paragraph::new(self.screen)
+                    .style(theme.accent())
+                    .alignment(Alignment::Center),
+                Rect::new(columns[1].x, columns[1].y + 1, columns[1].width, 1),
+            );
+        }
         frame.render_widget(
             Paragraph::new(vec![
                 Line::from(self.context).style(theme.muted()),
@@ -227,6 +326,9 @@ impl ScreenShell<'_> {
         if self.authenticated {
             primary.push(CommandHint::new("F2", "Salida rápida"));
         }
+        if self.tabs.is_some() {
+            primary.push(CommandHint::new("CTRL+←/→", "Pestañas"));
+        }
         primary.push(CommandHint::new("F7", "Tema"));
 
         let mut lines = wrap_commands(&primary, max_width, theme);
@@ -240,6 +342,35 @@ impl ScreenShell<'_> {
         }
         lines
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TabLabelKind {
+    Full,
+    Short,
+    KeyOnly,
+}
+
+fn tab_titles(items: &[TabItem], label_kind: TabLabelKind, theme: Theme) -> Vec<Line<'static>> {
+    items
+        .iter()
+        .map(|item| {
+            let label = match label_kind {
+                TabLabelKind::Full => item.label,
+                TabLabelKind::Short => item.short_label,
+                TabLabelKind::KeyOnly => "",
+            };
+            let mut spans = vec![Span::styled(item.key, theme.accent())];
+            if !label.is_empty() {
+                spans.push(Span::styled(format!(" {label}"), theme.muted()));
+            }
+            Line::from(spans)
+        })
+        .collect()
+}
+
+fn tabs_width(titles: &[Line<'_>]) -> usize {
+    titles.iter().map(Line::width).sum::<usize>() + titles.len().saturating_sub(1) * 2
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -398,6 +529,7 @@ mod tests {
             status: "Preparado",
             status_kind: StatusKind::Normal,
             commands: &commands,
+            tabs: None,
             authenticated: false,
             help_expanded: false,
             ayuda_extra: None,
@@ -448,6 +580,7 @@ mod tests {
             status: "Preparado",
             status_kind: StatusKind::Normal,
             commands: &commands,
+            tabs: None,
             authenticated: false,
             help_expanded: false,
             ayuda_extra: Some("Claves: empresa, tipo"),
@@ -474,6 +607,7 @@ mod tests {
             status: "Preparado",
             status_kind: StatusKind::Normal,
             commands: &commands,
+            tabs: None,
             authenticated: false,
             help_expanded: true,
             ayuda_extra: None,
@@ -495,6 +629,7 @@ mod tests {
             status: "Preparado",
             status_kind: StatusKind::Normal,
             commands: &commands,
+            tabs: None,
             authenticated: true,
             help_expanded: false,
             ayuda_extra: None,
