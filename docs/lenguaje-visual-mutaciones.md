@@ -630,6 +630,44 @@ DEC-044  Cédula se verifica contra duplicados de forma proactiva, no sólo
          reemplazo. `formulario.rs` sigue sin tocar `AppCore` — la consulta
          vive en el controlador, el modelo puro no gana una dependencia
          nueva.
+DEC-045  `/nuevo` gana un argumento posicional (`contratista` por defecto,
+         `empresa`/`em`, `usuario`/`u`) en vez del `--c`/`--e`/`--u`
+         propuesto originalmente. Dos razones: (1) `/nuevo` es un comando
+         global, y DEC-021 ya estableció que `--modificador` es sólo para
+         comandos de ítem (Ingreso/Salida/Editar) — usarlo acá rompería esa
+         regla sin necesidad; (2) con el parser actual `/n --c` ni siquiera
+         funcionaría como se esperaba, caería a texto libre. El positional
+         además ya tiene precedente (`/editar <nombre>`). Se evita el alias
+         corto `e` (reservado en la cabeza para "editar") — la forma corta
+         de empresa es `em`.
+DEC-046  El formulario de Empresa (un solo campo, nombre) no tiene paso de
+         Resumen — a diferencia de Contratista y Usuario. Con un solo campo,
+         una segunda pantalla de revisión es fricción sin valor (§2.8,
+         "¿realmente hace falta?"); Enter desde el campo guarda directo.
+DEC-047  El formulario de Usuario sí conserva el paso de Resumen (mismo
+         patrón que Contratista, DEC-025: Enter intenta confirmar el
+         formulario completo desde cualquier campo y sólo entonces avanza a
+         Resumen) — a diferencia de Empresa, acá hay varios campos con
+         consecuencias reales (contraseña, asignación de rol), y una
+         revisión antes de guardar sí aporta.
+DEC-048  Crear un usuario hashea la contraseña de forma síncrona
+         (`AppCore::crear_usuario`), no en un hilo aparte como el login
+         (`login.rs`, con su propio canal y estado pendiente). El login
+         hashea en cada intento de autenticación — el camino más frecuente
+         de toda la app — y por eso justifica esa plomería. Crear un usuario
+         es una acción administrativa poco frecuente: el bloqueo es de
+         cientos de ms, una sola vez, en una acción explícita del operador,
+         no tecla a tecla. Threading esto exigiría un tipo de estado
+         pendiente propio y tocar `mod.rs`/`operando.rs`/`manejar_tecla` sin
+         beneficio real todavía.
+DEC-049  El selector de Rol en el formulario de Usuario (Space/←/→) sólo
+         cicla entre los roles que `puede_gestionar_usuario(rol_actor, _)`
+         permite — un Administrador no puede llegar a "Root" ni por
+         accidente, la opción simplemente no está en la lista que recorre.
+DEC-050  La contraseña nunca se muestra en texto plano en ningún punto de la
+         UI: en el campo del área de contenido y en la barra de prompt se
+         enmascara con `•` (recalculado por longitud real, no un placeholder
+         fijo); en el Resumen se muestra "(definida)" en vez del valor.
 ```
 
 ## 14.1 Escena de login (implementada)

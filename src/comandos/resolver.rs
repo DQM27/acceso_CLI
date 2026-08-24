@@ -29,6 +29,31 @@ pub const LIMITE_COINCIDENCIAS: usize = 9;
 pub const GAFETE_SUGERIDO_MIN: i64 = 1;
 pub const GAFETE_SUGERIDO_MAX: i64 = 50;
 
+/// Qué crea `/nuevo <sujeto>` — argumento posicional, no `--modificador`:
+/// `/nuevo` es un comando global (no actúa sobre un resultado de búsqueda,
+/// DEC-021), así que no le corresponde esa gramática; funciona igual que
+/// `/editar <nombre>`, donde la consulta ya es el sujeto de la acción.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SujetoNuevo {
+    Contratista,
+    Empresa,
+    Usuario,
+}
+
+/// Vacío = Contratista (compatibilidad: `/nuevo` a secas seguía creando lo
+/// mismo que antes de que existieran los otros dos sujetos). `em`/`emp` para
+/// empresa, nunca `e` a secas — ya es el alias de `/editar` y aunque el
+/// parser no los confunde (son namespaces distintos: nombre de comando vs.
+/// valor de un argumento), el operador sí podría.
+fn sujeto_nuevo(consulta: &str) -> Option<SujetoNuevo> {
+    match consulta.trim().to_lowercase().as_str() {
+        "" | "contratista" | "c" => Some(SujetoNuevo::Contratista),
+        "empresa" | "em" | "emp" => Some(SujetoNuevo::Empresa),
+        "usuario" | "u" => Some(SujetoNuevo::Usuario),
+        _ => None,
+    }
+}
+
 /// Deriva el contexto completo a partir del parseo. Punto único de consulta
 /// "mientras se teclea": se llama tras cada cambio del input.
 pub fn resolver(core: &AppCore, entrada: &Entrada) -> ContextState {
@@ -66,16 +91,17 @@ pub fn resolver(core: &AppCore, entrada: &Entrada) -> ContextState {
                 Comando::Ingreso => resolver_busqueda_contratistas(core, consulta),
                 Comando::Salida => resolver_salida(core, consulta, gafete_numero),
                 Comando::Activos => resolver_activos(core, consulta),
-                Comando::Nuevo => {
-                    if consulta.is_empty() {
-                        ContextState::NuevoContratista
-                    } else {
-                        ContextState::MensajeError {
-                            mensaje: "El alta no toma argumentos: escriba /nuevo a secas"
-                                .to_string(),
-                        }
-                    }
-                }
+                Comando::Nuevo => match sujeto_nuevo(consulta) {
+                    Some(SujetoNuevo::Contratista) => ContextState::NuevoContratista,
+                    Some(SujetoNuevo::Empresa) => ContextState::NuevoEmpresa,
+                    Some(SujetoNuevo::Usuario) => ContextState::NuevoUsuario,
+                    None => ContextState::MensajeError {
+                        mensaje: format!(
+                            "Sujeto no reconocido: /nuevo contratista|empresa|usuario \
+                             (o /n c|em|u) — \"{consulta}\" no es ninguno"
+                        ),
+                    },
+                },
                 Comando::Editar => resolver_busqueda_contratistas(core, consulta),
                 Comando::Historial => {
                     if consulta.is_empty() {

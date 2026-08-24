@@ -16,6 +16,8 @@ use crate::services::registro_ingreso_service::{IngresoActivoResumen, Preparacio
 
 use super::columnas::{ColumnaActivos, ColumnaBusqueda, ColumnaHistorial, SelectorColumnas};
 use super::formulario::{Campo, FormularioContratista, Subfase};
+use super::formulario_empresa::FormularioEmpresa;
+use super::formulario_usuario::FormularioUsuario;
 use super::historial::HistorialState;
 use super::presentation;
 
@@ -45,6 +47,8 @@ pub enum ObjetivoColumnas {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SurfaceActiva {
     Formulario,
+    FormularioEmpresa,
+    FormularioUsuario,
     Columnas,
     Historial,
     Ninguna,
@@ -200,9 +204,13 @@ pub enum ContextState {
     /// `/cerrarsesion`: tarjeta de confirmación — Enter cierra la sesión y
     /// vuelve al login, Esc cancela.
     ConfirmarCerrarSesion,
-    /// `/nuevo`: tarjeta de entrada al alta — Enter abre el formulario de
-    /// contratista, Esc cancela.
+    /// `/nuevo` (o `/nuevo contratista`/`/n c`): tarjeta de entrada al alta
+    /// — Enter abre el formulario de contratista, Esc cancela.
     NuevoContratista,
+    /// `/nuevo empresa` (`/n em`): tarjeta de entrada al alta de empresa.
+    NuevoEmpresa,
+    /// `/nuevo usuario` (`/n u`): tarjeta de entrada al alta de usuario.
+    NuevoUsuario,
     /// `/historial`: tarjeta de entrada — Enter abre la Surface de
     /// Historial (§5.2/DEC-023/024), Esc cancela.
     AbrirHistorial,
@@ -247,6 +255,12 @@ pub struct AppState {
     /// deja de ser línea de comandos y edita el campo activo del formulario —
     /// `recomputar` no toca el contexto hasta que el formulario se cierra.
     pub formulario: Option<FormularioContratista>,
+    /// `/nuevo empresa` (`/n em`) — Surface separada de `formulario` (un
+    /// solo campo, sin Resumen; ver `formulario_empresa.rs`).
+    pub formulario_empresa: Option<FormularioEmpresa>,
+    /// `/nuevo usuario` (`/n u`) — Surface separada de `formulario`, mismo
+    /// patrón (campos, Resumen) que contratista; ver `formulario_usuario.rs`.
+    pub formulario_usuario: Option<FormularioUsuario>,
     /// Columnas visibles de cada tabla — `F4` abre `edicion_columnas` sobre
     /// una de las dos (según `app.contexto` en ese momento).
     pub columnas_busqueda: SelectorColumnas<ColumnaBusqueda>,
@@ -282,6 +296,8 @@ impl AppState {
             fase: Fase::LoginCedula,
             contexto: ContextState::Ayuda,
             formulario: None,
+            formulario_empresa: None,
+            formulario_usuario: None,
             columnas_busqueda: SelectorColumnas::todas_visibles(),
             columnas_activos: SelectorColumnas::todas_visibles(),
             columnas_historial: SelectorColumnas::todas_visibles(),
@@ -353,6 +369,10 @@ impl AppState {
     pub fn surface_activa(&self) -> SurfaceActiva {
         if self.formulario.is_some() {
             SurfaceActiva::Formulario
+        } else if self.formulario_empresa.is_some() {
+            SurfaceActiva::FormularioEmpresa
+        } else if self.formulario_usuario.is_some() {
+            SurfaceActiva::FormularioUsuario
         } else if self.edicion_columnas.is_some() {
             SurfaceActiva::Columnas
         } else if self.historial.is_some() {

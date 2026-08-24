@@ -20,6 +20,7 @@ use tui_big_text::{BigText, PixelSize};
 use crate::domain::resultado_acceso::{MotivoDenegacion, ResultadoAcceso};
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::models::tipo_ingreso::TipoIngreso;
+use crate::models::usuario::RolUsuario;
 use crate::services::registro_ingreso_service::IngresoActivoResumen;
 use crate::tiempo::a_costa_rica;
 
@@ -33,6 +34,8 @@ use super::estado::{
 use super::formulario::{
     Campo, FormularioContratista, MAX_VISIBLES_EMPRESAS, ModoFormulario, Subfase,
 };
+use super::formulario_empresa::FormularioEmpresa;
+use super::formulario_usuario::{CampoUsuario, FormularioUsuario, SubfaseUsuario};
 use super::historial::HistorialState;
 use super::parser::Comando;
 use super::resolver::MIN_CONSULTA;
@@ -125,6 +128,10 @@ pub fn render(frame: &mut Frame, app: &AppState) {
             error: app.presentacion.opacidad("form_error"),
         };
         lineas_formulario(formulario, app.input.value(), &opacidades)
+    } else if let Some(fe) = &app.formulario_empresa {
+        lineas_formulario_empresa(fe)
+    } else if let Some(fu) = &app.formulario_usuario {
+        lineas_formulario_usuario(fu)
     } else if let Some(edicion) = &app.edicion_columnas {
         lineas_selector_columnas(app, *edicion)
     } else if let Some(historial) = &app.historial {
@@ -232,6 +239,29 @@ fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
         );
         return;
     }
+    if app.formulario_empresa.is_some() {
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                "Enter guardar · Esc cancelar",
+                muted(),
+            ))),
+            area,
+        );
+        return;
+    }
+    if let Some(fu) = &app.formulario_usuario {
+        let pista = match fu.subfase {
+            SubfaseUsuario::Editando => {
+                "↑↓ campo · Space/←/→ cambiar rol · Enter guardar · Esc cancelar"
+            }
+            SubfaseUsuario::Resumen => "Enter guardar · Esc volver a editar",
+        };
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(pista, muted()))),
+            area,
+        );
+        return;
+    }
     if !app.sugerencias.is_empty() {
         frame.render_widget(
             Paragraph::new(Line::from(Span::styled(
@@ -320,6 +350,36 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
         (
             "historial › ".to_string(),
             app.input.value().to_string(),
+            editable,
+            if editable {
+                app.input.visual_cursor()
+            } else {
+                0
+            },
+        )
+    } else if app.formulario_empresa.is_some() {
+        (
+            "empresa › ".to_string(),
+            app.input.value().to_string(),
+            true,
+            app.input.visual_cursor(),
+        )
+    } else if let Some(fu) = &app.formulario_usuario {
+        let etiqueta = match fu.subfase {
+            SubfaseUsuario::Resumen => "confirmar › ".to_string(),
+            SubfaseUsuario::Editando => format!("{} › ", fu.campo.etiqueta().to_lowercase()),
+        };
+        let editable = matches!(fu.subfase, SubfaseUsuario::Editando) && fu.campo.es_texto();
+        // Password/Confirmar se enmascaran también acá — no sólo en el
+        // área de contenido — nunca se ve la contraseña en texto plano.
+        let valor = if editable && fu.campo.es_secreto() {
+            "•".repeat(app.input.value().chars().count())
+        } else {
+            app.input.value().to_string()
+        };
+        (
+            etiqueta,
+            valor,
             editable,
             if editable {
                 app.input.visual_cursor()
@@ -707,6 +767,8 @@ fn lineas_contexto(
         ContextState::FichaContratista { resumen } => lineas_ficha(resumen),
         ContextState::ConfirmarCerrarSesion => lineas_cerrar_sesion(),
         ContextState::NuevoContratista => lineas_nuevo_contratista(),
+        ContextState::NuevoEmpresa => lineas_nuevo_empresa(),
+        ContextState::NuevoUsuario => lineas_nuevo_usuario(),
         ContextState::AbrirHistorial => lineas_abrir_historial(),
         ContextState::Ayuda => lineas_ayuda(),
         ContextState::MensajeError { mensaje } => vec![
@@ -742,7 +804,7 @@ fn descripcion_comando(comando: Comando) -> &'static str {
         Comando::Ingreso => "registrar ingreso — /ingreso <nombre> G:<n> M:<medio>",
         Comando::Salida => "registrar salida — /salida <nombre> o /salida G:<n>",
         Comando::Activos => "quién está dentro ahora",
-        Comando::Nuevo => "dar de alta un contratista",
+        Comando::Nuevo => "dar de alta — contratista (default), empresa o usuario",
         Comando::Editar => "editar un contratista — /editar <nombre>",
         Comando::Historial => "explorar movimientos — filtro empresa/tipo/fecha…",
         Comando::Ayuda => "sintaxis completa y ejemplos",
@@ -1227,6 +1289,32 @@ fn lineas_nuevo_contratista() -> Vec<Line<'static>> {
         Line::from(""),
         Line::from("Se abrirá el formulario de alta: cédula, nombre, empresa, tipo,"),
         Line::from("fecha PRAIND, personal de ruta y acceso."),
+        Line::from(""),
+        Line::from(Span::styled(
+            "ENTER para abrir el formulario · Esc para cancelar",
+            acento(),
+        )),
+    ]
+}
+
+fn lineas_nuevo_empresa() -> Vec<Line<'static>> {
+    vec![
+        Line::from(Span::styled("NUEVA EMPRESA", muted())),
+        Line::from(""),
+        Line::from("Se abrirá el alta de empresa: sólo el nombre."),
+        Line::from(""),
+        Line::from(Span::styled(
+            "ENTER para abrir el formulario · Esc para cancelar",
+            acento(),
+        )),
+    ]
+}
+
+fn lineas_nuevo_usuario() -> Vec<Line<'static>> {
+    vec![
+        Line::from(Span::styled("NUEVO USUARIO", muted())),
+        Line::from(""),
+        Line::from("Se abrirá el formulario de alta: cédula, nombre, rol y contraseña."),
         Line::from(""),
         Line::from(Span::styled(
             "ENTER para abrir el formulario · Esc para cancelar",
@@ -1793,6 +1881,141 @@ fn lineas_resumen_formulario(
     lineas
 }
 
+// ── Formulario de empresa (un solo campo, sin Resumen) ───────────────────
+
+fn lineas_formulario_empresa(form: &FormularioEmpresa) -> Vec<Line<'static>> {
+    let (glifo, estilo_glifo) = if form.error.is_some() {
+        ("× ", estilo_error())
+    } else {
+        ("› ", acento())
+    };
+    let mut lineas = vec![
+        Line::from(Span::styled("NUEVA EMPRESA", muted())),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(glifo, estilo_glifo),
+            Span::styled(format!("{:<10}", "Nombre"), acento()),
+            Span::raw(form.nombre.clone()),
+        ]),
+    ];
+    if let Some(mensaje) = &form.error {
+        lineas.push(Line::from(Span::styled(
+            format!("  {mensaje}"),
+            estilo_error(),
+        )));
+    }
+    lineas
+}
+
+// ── Formulario de usuario ─────────────────────────────────────────────────
+
+fn rol_texto(rol: RolUsuario) -> &'static str {
+    match rol {
+        RolUsuario::Root => "ROOT",
+        RolUsuario::Administrador => "ADMINISTRADOR",
+        RolUsuario::Operador => "OPERADOR",
+    }
+}
+
+fn lineas_formulario_usuario(form: &FormularioUsuario) -> Vec<Line<'static>> {
+    match form.subfase {
+        SubfaseUsuario::Resumen => lineas_resumen_usuario(form),
+        SubfaseUsuario::Editando => lineas_campos_usuario(form),
+    }
+}
+
+fn lineas_campos_usuario(form: &FormularioUsuario) -> Vec<Line<'static>> {
+    let mut lineas = vec![
+        Line::from(Span::styled("NUEVO USUARIO", muted())),
+        Line::from(""),
+    ];
+    for campo in CampoUsuario::ORDEN {
+        lineas.push(linea_campo_usuario(form, campo));
+    }
+    lineas
+}
+
+/// Mismo glifo unificado a la izquierda que el formulario de contratista
+/// (DEC-042): `›` en edición, `×` con error, `✓` completo. Rol no admite
+/// "completo" — siempre tiene un valor, un check ahí no aportaría nada.
+fn linea_campo_usuario(form: &FormularioUsuario, campo: CampoUsuario) -> Line<'static> {
+    let activo = form.campo == campo;
+    let etiqueta = format!("{:<16}", campo.etiqueta());
+    let completo = match campo {
+        CampoUsuario::Cedula => !form.cedula.is_empty(),
+        CampoUsuario::Nombre => !form.nombre.is_empty(),
+        CampoUsuario::Password => !form.password.is_empty(),
+        CampoUsuario::ConfirmarPassword => !form.confirmar_password.is_empty(),
+        CampoUsuario::Rol => false,
+    };
+    let (glifo, estilo_glifo) = if activo {
+        ("› ", acento())
+    } else if form.error_de(campo).is_some() {
+        ("× ", estilo_error())
+    } else if completo {
+        ("✓ ", exito())
+    } else {
+        ("  ", Style::default())
+    };
+
+    let mut spans = vec![
+        Span::styled(glifo, estilo_glifo),
+        Span::styled(etiqueta, if activo { acento() } else { Style::default() }),
+    ];
+    let valor_mostrado = match campo {
+        CampoUsuario::Cedula => form.cedula.clone(),
+        CampoUsuario::Nombre => form.nombre.clone(),
+        CampoUsuario::Rol => rol_texto(form.rol).to_string(),
+        CampoUsuario::Password => "•".repeat(form.password.chars().count()),
+        CampoUsuario::ConfirmarPassword => "•".repeat(form.confirmar_password.chars().count()),
+    };
+    let es_rol_activo = activo && campo == CampoUsuario::Rol;
+    let valor_final = if es_rol_activo {
+        format!("‹ {valor_mostrado} ›")
+    } else {
+        valor_mostrado
+    };
+    spans.push(Span::styled(
+        valor_final,
+        if es_rol_activo {
+            acento()
+        } else {
+            Style::default()
+        },
+    ));
+    if let Some(mensaje) = form.error_de(campo) {
+        spans.push(Span::styled(format!("  {mensaje}"), estilo_error()));
+    }
+    Line::from(spans)
+}
+
+fn lineas_resumen_usuario(form: &FormularioUsuario) -> Vec<Line<'static>> {
+    let filas = [
+        ("Cédula", form.cedula.clone()),
+        ("Nombre", form.nombre.clone()),
+        ("Rol", rol_texto(form.rol).to_string()),
+        // Nunca se muestra la contraseña, ni en el resumen — sólo que se
+        // definió.
+        ("Contraseña", "(definida)".to_string()),
+    ];
+    let mut lineas = vec![
+        Line::from(Span::styled("REVISAR Y CONFIRMAR", muted())),
+        Line::from(""),
+    ];
+    for (etiqueta, valor) in filas {
+        lineas.push(Line::from(vec![
+            Span::styled(format!("{etiqueta:<18}"), muted()),
+            Span::raw(valor),
+        ]));
+    }
+    lineas.push(Line::from(""));
+    lineas.push(Line::from(Span::styled(
+        "ENTER para guardar · Esc para volver a editar",
+        acento(),
+    )));
+    lineas
+}
+
 fn lineas_ayuda() -> Vec<Line<'static>> {
     let mut lineas = vec![
         Line::from(Span::styled(
@@ -1801,13 +2024,18 @@ fn lineas_ayuda() -> Vec<Line<'static>> {
         )),
         Line::from(""),
     ];
-    let ejemplos: [(&str, &str); 13] = [
+    let ejemplos: [(&str, &str); 15] = [
         ("/ingreso <nombre> G:<n> M:<medio>", "registrar un ingreso"),
         ("/ingreso 119430546 G:12", "también por cédula"),
         ("/salida <nombre>", "registrar salida por nombre"),
         ("/salida G:27", "registrar salida por gafete"),
         ("/activos", "tabla de personas dentro"),
-        ("/nuevo", "dar de alta un contratista"),
+        ("/nuevo", "dar de alta un contratista (default)"),
+        ("/nuevo empresa", "dar de alta una empresa (alias /n em)"),
+        (
+            "/nuevo usuario",
+            "dar de alta un usuario (alias /n u, requiere permiso)",
+        ),
         ("/editar <nombre>", "editar un contratista"),
         ("/historial", "explorar movimientos (alias /h)"),
         ("/cerrarsesion", "cerrar sesión y volver al login"),

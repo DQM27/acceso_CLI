@@ -30,6 +30,14 @@ pub(super) fn manejar_operando(core: &AppCore, app: &mut AppState, key: KeyEvent
             super::formulario_controller::manejar_formulario(core, app, key);
             return;
         }
+        SurfaceActiva::FormularioEmpresa => {
+            super::formulario_empresa_controller::manejar_formulario_empresa(core, app, key);
+            return;
+        }
+        SurfaceActiva::FormularioUsuario => {
+            super::formulario_usuario_controller::manejar_formulario_usuario(core, app, key);
+            return;
+        }
         SurfaceActiva::Columnas => {
             manejar_columnas(app, key);
             return;
@@ -226,6 +234,12 @@ fn confirmar(core: &AppCore, app: &mut AppState) {
             }
         }
         ContextState::NuevoContratista => abrir_formulario_nuevo(core, app),
+        ContextState::NuevoEmpresa => {
+            super::formulario_empresa_controller::abrir_formulario_nuevo_empresa(app)
+        }
+        ContextState::NuevoUsuario => {
+            super::formulario_usuario_controller::abrir_formulario_nuevo_usuario(app)
+        }
         ContextState::AbrirHistorial => super::historial_controller::abrir_historial(core, app),
         ContextState::ConfirmarCerrarSesion => {
             app.input.reset();

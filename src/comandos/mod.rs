@@ -23,6 +23,10 @@ mod columnas;
 mod estado;
 mod formulario;
 mod formulario_controller;
+mod formulario_empresa;
+mod formulario_empresa_controller;
+mod formulario_usuario;
+mod formulario_usuario_controller;
 mod historial;
 mod historial_controller;
 mod login;
@@ -55,10 +59,14 @@ use crate::services::error::{AutenticacionError, UsuarioServiceError};
 
 pub use breakpoint::Breakpoint;
 pub use columnas::{Columna, ColumnaActivos, ColumnaBusqueda, ColumnaHistorial, SelectorColumnas};
-pub use estado::{AppState, ContextState, EdicionColumnas, Fase, NivelFeedback, ObjetivoColumnas};
+pub use estado::{
+    AppState, ContextState, EdicionColumnas, Fase, NivelFeedback, ObjetivoColumnas, SurfaceActiva,
+};
 pub use formulario::{
     Campo, FormularioContratista, MAX_VISIBLES_EMPRESAS, ModoFormulario, Subfase,
 };
+pub use formulario_empresa::FormularioEmpresa;
+pub use formulario_usuario::{CampoUsuario, FormularioUsuario, SubfaseUsuario};
 pub use historial::HistorialState;
 pub use parser::{Comando, Entrada, GafeteParse, MedioParse, parsear};
 pub use resolver::{
