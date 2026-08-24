@@ -35,7 +35,11 @@ pub enum ModoFormulario {
     Editar { id: i64 },
 }
 
-/// Campos en el orden en que se recorren con ↑↓.
+/// Campos en el orden en que se recorren con ↑↓. No hay un campo
+/// "Confirmar": Enter intenta guardar desde cualquiera de éstos (igual que
+/// la TUI clásica) — un campo-botón al final obligaba a navegar hasta él
+/// para poder confirmar, rompiendo la regla de que Enter significa lo mismo
+/// en toda la interfaz (§2/§5.2, DEC-025).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Campo {
     Cedula,
@@ -45,11 +49,10 @@ pub enum Campo {
     FechaPraind,
     Ruta,
     Acceso,
-    Confirmar,
 }
 
 impl Campo {
-    pub const ORDEN: [Self; 8] = [
+    pub const ORDEN: [Self; 7] = [
         Self::Cedula,
         Self::Nombre,
         Self::Empresa,
@@ -57,7 +60,6 @@ impl Campo {
         Self::FechaPraind,
         Self::Ruta,
         Self::Acceso,
-        Self::Confirmar,
     ];
 
     pub fn etiqueta(self) -> &'static str {
@@ -69,15 +71,24 @@ impl Campo {
             Self::FechaPraind => "Fecha PRAIND",
             Self::Ruta => "Personal de ruta",
             Self::Acceso => "Acceso",
-            Self::Confirmar => "Confirmar",
         }
     }
 
     /// Los campos de texto se editan tecleando en el input; el resto se
-    /// modifican con Enter (empresa), Space/←/→ (tipo y booleanos) o son la
-    /// acción final (confirmar).
+    /// modifican con Space/←/→ (empresa abre el selector, tipo cicla,
+    /// ruta/acceso conmutan).
     pub fn es_texto(self) -> bool {
         matches!(self, Self::Cedula | Self::Nombre | Self::FechaPraind)
+    }
+
+    /// Campos que pueden quedar vacíos o inválidos — los únicos que muestran
+    /// ✓/× de estado en el render (Tipo/Ruta/Acceso siempre tienen un valor
+    /// por defecto, un check ahí no aportaría información).
+    pub fn admite_estado(self) -> bool {
+        matches!(
+            self,
+            Self::Cedula | Self::Nombre | Self::Empresa | Self::FechaPraind
+        )
     }
 }
 
@@ -467,7 +478,6 @@ mod tests {
             Campo::FechaPraind,
             Campo::Ruta,
             Campo::Acceso,
-            Campo::Confirmar,
         ];
         for campo in esperado {
             assert!(form.mover_campo(1));
@@ -475,7 +485,7 @@ mod tests {
         }
         // En el último no se sale del extremo.
         assert!(!form.mover_campo(1));
-        assert_eq!(form.campo, Campo::Confirmar);
+        assert_eq!(form.campo, Campo::Acceso);
     }
 
     #[test]
@@ -483,13 +493,13 @@ mod tests {
         let mut form = FormularioContratista::editar(&resumen(), empresas(), false, false);
         // Sin permiso de cédula: arranca en Nombre.
         assert_eq!(form.campo, Campo::Nombre);
-        // Sin permiso de acceso: de Ruta salta directo a Confirmar.
+        // Sin permiso de acceso: Ruta ya es el último campo navegable.
         form.campo = Campo::Ruta;
-        assert!(form.mover_campo(1));
-        assert_eq!(form.campo, Campo::Confirmar);
-        // Hacia atrás igual.
-        assert!(form.mover_campo(-1));
+        assert!(!form.mover_campo(1));
         assert_eq!(form.campo, Campo::Ruta);
+        // Hacia atrás sigue funcionando con normalidad.
+        assert!(form.mover_campo(-1));
+        assert_eq!(form.campo, Campo::FechaPraind);
     }
 
     #[test]

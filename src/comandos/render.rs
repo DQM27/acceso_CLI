@@ -166,7 +166,7 @@ fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
     if let Some(formulario) = &app.formulario {
         let pista = match formulario.subfase {
             Subfase::Editando => {
-                "↑↓ campo · Enter siguiente · Space/←/→ cambiar valor · Esc cancelar"
+                "↑↓ campo · Space/←/→ cambiar valor · Enter guardar · Esc cancelar"
             }
             Subfase::EligiendoEmpresa { .. } => {
                 "escriba para filtrar · ↑↓ elegir · Enter aceptar · Esc volver"
@@ -674,7 +674,7 @@ fn lineas_coincidencias(
         Line::from(Span::styled("─".repeat(ancho as usize), muted())),
     ];
     for (indice, item) in items.iter().enumerate() {
-        let marcador = if indice == seleccion { "▸ " } else { "  " };
+        let marcador = if indice == seleccion { "› " } else { "  " };
         let texto = format!(
             "{marcador}{:<CEDULA$}{:<nombre_ancho$}{:<empresa_ancho$}{}",
             recortar(&item.cedula, CEDULA - 1),
@@ -720,7 +720,7 @@ fn lineas_coincidencias_activos(
         Line::from(Span::styled("─".repeat(ancho as usize), muted())),
     ];
     for (indice, item) in items.iter().enumerate() {
-        let marcador = if indice == seleccion { "▸ " } else { "  " };
+        let marcador = if indice == seleccion { "› " } else { "  " };
         let gafete = item
             .gafete_numero
             .map(|numero| numero.to_string())
@@ -1026,33 +1026,60 @@ fn lineas_campos_formulario(
 
     for campo in Campo::ORDEN {
         lineas.push(linea_campo(formulario, campo));
-    }
-
-    if let Subfase::EligiendoEmpresa { seleccion } = formulario.subfase {
-        lineas.push(Line::from(""));
-        lineas.push(Line::from(Span::styled("EMPRESAS", muted())));
-        let filtradas = formulario.empresas_filtradas(consulta_empresa);
-        if filtradas.is_empty() {
-            lineas.push(Line::from(Span::styled(
-                format!("Sin empresas para \"{consulta_empresa}\""),
-                muted(),
-            )));
-        }
-        for (indice, empresa) in filtradas.iter().take(MAX_VISIBLES_EMPRESAS).enumerate() {
-            let marcador = if indice == seleccion { "▸ " } else { "  " };
-            let texto = format!("{marcador}{}", empresa.nombre);
-            lineas.push(if indice == seleccion {
-                Line::from(Span::styled(texto, estilo_seleccion()))
-            } else {
-                Line::from(texto)
-            });
+        // El desplegable de empresa muta justo debajo de su propio campo, no
+        // al final del formulario — mismo criterio que la TUI clásica
+        // (`restricciones.insert(indice + 1, ...)`), para que la mutación se
+        // vea anclada a lo que la originó en vez de aparecer desconectada
+        // más abajo (DEC-025).
+        if campo == Campo::Empresa
+            && let Subfase::EligiendoEmpresa { seleccion } = formulario.subfase
+        {
+            lineas.extend(lineas_selector_empresa(
+                formulario,
+                consulta_empresa,
+                seleccion,
+            ));
         }
     }
     lineas
 }
 
-/// Una línea por campo: `▸` en el activo, bloqueados apagados con su motivo,
-/// errores de validación en ✗ junto al valor.
+fn lineas_selector_empresa(
+    formulario: &FormularioContratista,
+    consulta_empresa: &str,
+    seleccion: usize,
+) -> Vec<Line<'static>> {
+    let filtradas = formulario.empresas_filtradas(consulta_empresa);
+    if filtradas.is_empty() {
+        return vec![Line::from(Span::styled(
+            format!("    Sin empresas para \"{consulta_empresa}\""),
+            muted(),
+        ))];
+    }
+    filtradas
+        .iter()
+        .take(MAX_VISIBLES_EMPRESAS)
+        .enumerate()
+        .map(|(indice, empresa)| {
+            let marcador = if indice == seleccion {
+                "  › "
+            } else {
+                "    "
+            };
+            let texto = format!("{marcador}{}", empresa.nombre);
+            if indice == seleccion {
+                Line::from(Span::styled(texto, estilo_seleccion()))
+            } else {
+                Line::from(texto)
+            }
+        })
+        .collect()
+}
+
+/// Una línea por campo: `›` en el activo, bloqueados apagados con su motivo,
+/// `✓`/`×` de estado en los campos que admiten quedar vacíos o inválidos
+/// (`Campo::admite_estado`) — mismo vocabulario de glifos que el resto de la
+/// app (`glifo_feedback`, §5), no un marcador propio del formulario.
 fn linea_campo(formulario: &FormularioContratista, campo: Campo) -> Line<'static> {
     let activo = formulario.campo == campo
         && matches!(
@@ -1060,16 +1087,8 @@ fn linea_campo(formulario: &FormularioContratista, campo: Campo) -> Line<'static
             Subfase::Editando | Subfase::EligiendoEmpresa { .. }
         );
     let habilitado = formulario.campo_habilitado(campo);
-    let marcador = if activo { "▸ " } else { "  " };
+    let marcador = if activo { "› " } else { "  " };
     let etiqueta = format!("{:<16}", campo.etiqueta());
-
-    if campo == Campo::Confirmar {
-        let estilo = if activo { acento() } else { muted() };
-        return Line::from(Span::styled(
-            format!("{marcador}{etiqueta}— revisar y guardar"),
-            estilo,
-        ));
-    }
 
     if !habilitado {
         return Line::from(Span::styled(
@@ -1086,10 +1105,11 @@ fn linea_campo(formulario: &FormularioContratista, campo: Campo) -> Line<'static
         if activo { acento() } else { Style::default() },
     )];
     let valor = valor_campo(formulario, campo);
+    let valor_presente = !valor.is_empty();
     let valor_mostrado = if valor.is_empty() {
         match campo {
             Campo::FechaPraind => "DD/MM/AAAA".to_string(),
-            Campo::Empresa => "Enter para elegir…".to_string(),
+            Campo::Empresa => "Space para elegir…".to_string(),
             _ => String::new(),
         }
     } else {
@@ -1100,7 +1120,7 @@ fn linea_campo(formulario: &FormularioContratista, campo: Campo) -> Line<'static
     } else if activo && !campo.es_texto() {
         acento()
     } else if campo == Campo::FechaPraind && valor_mostrado == "DD/MM/AAAA"
-        || campo == Campo::Empresa && valor_mostrado == "Enter para elegir…"
+        || campo == Campo::Empresa && valor_mostrado == "Space para elegir…"
     {
         muted()
     } else {
@@ -1115,7 +1135,9 @@ fn linea_campo(formulario: &FormularioContratista, campo: Campo) -> Line<'static
     };
     spans.push(Span::styled(valor_final, estilo_valor));
     if let Some(mensaje) = formulario.error_de(campo) {
-        spans.push(Span::styled(format!("  ✗ {mensaje}"), estilo_error()));
+        spans.push(Span::styled(format!("  × {mensaje}"), estilo_error()));
+    } else if campo.admite_estado() && valor_presente {
+        spans.push(Span::styled("  ✓", exito()));
     }
     Line::from(spans)
 }
@@ -1133,7 +1155,6 @@ fn valor_campo(formulario: &FormularioContratista, campo: Campo) -> String {
         Campo::FechaPraind => formulario.fecha_praind.clone(),
         Campo::Ruta => si_no(formulario.es_personal_ruta).to_string(),
         Campo::Acceso => si_no(formulario.tiene_acceso).to_string(),
-        Campo::Confirmar => String::new(),
     }
 }
 

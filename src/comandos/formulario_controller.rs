@@ -103,28 +103,29 @@ fn manejar_edicion_formulario(core: &AppCore, app: &mut AppState, key: KeyEvent)
         KeyCode::Esc => cerrar_formulario(core, app),
         KeyCode::Up => mover_campo_formulario(app, -1),
         KeyCode::Down => mover_campo_formulario(app, 1),
-        KeyCode::Enter => match campo {
-            Campo::Empresa => {
-                if let Some(form) = &mut app.formulario {
-                    form.subfase = Subfase::EligiendoEmpresa { seleccion: 0 };
-                }
+        // Enter siempre intenta confirmar el formulario completo, sin
+        // importar en qué campo esté el operador — mismo significado que en
+        // el resto de la interfaz (§2 principio 6) y que la TUI clásica
+        // (que intenta guardar desde cualquier campo, no sólo desde un
+        // "botón" al final). Con errores se queda editando (los × ya se
+        // muestran junto a cada campo); sin errores pasa al resumen.
+        KeyCode::Enter => {
+            if let Some(form) = &mut app.formulario
+                && form.validar().is_ok()
+            {
+                form.subfase = Subfase::Resumen;
                 app.input.reset();
             }
-            Campo::Confirmar => {
-                // Con errores se queda editando (los ✗ ya se muestran junto
-                // a cada campo); sin errores pasa a la tarjeta de resumen.
-                if let Some(form) = &mut app.formulario
-                    && form.validar().is_ok()
-                {
-                    form.subfase = Subfase::Resumen;
-                    app.input.reset();
-                }
+        }
+        // Space/←/→ cambian el valor de los campos no textuales: abren el
+        // selector de empresa o alternan tipo/booleanos. En campos de texto
+        // Space es un carácter más y ←/→ mueven el cursor (tui_input).
+        KeyCode::Left | KeyCode::Right | KeyCode::Char(' ') if campo == Campo::Empresa => {
+            if let Some(form) = &mut app.formulario {
+                form.subfase = Subfase::EligiendoEmpresa { seleccion: 0 };
             }
-            // En el resto Enter simplemente avanza al siguiente campo.
-            _ => mover_campo_formulario(app, 1),
-        },
-        // Space/←/→ cambian el valor de los campos no textuales; en campos de
-        // texto Space es un carácter más y ←/→ mueven el cursor (tui_input).
+            app.input.reset();
+        }
         KeyCode::Left | KeyCode::Right | KeyCode::Char(' ') if !campo.es_texto() => {
             if let Some(form) = &mut app.formulario {
                 form.alternar();

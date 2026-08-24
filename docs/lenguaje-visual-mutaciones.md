@@ -448,6 +448,24 @@ DEC-024  Historial (Surface, aún no construida) aplica su filtro clave:valor
          lista corta, así que recalcular en cada tecla es gasto real. Esc
          nunca borra la consulta ya escrita, vuelve a editarla — mismo
          comportamiento que Esc en el resumen del formulario de /nuevo.
+DEC-025  El formulario de contratista no tiene un campo "Confirmar": Enter
+         intenta guardar desde cualquier campo de Editando (igual que la
+         TUI clásica), no sólo al llegar a un campo-botón al final — un
+         campo-botón obligaba a navegar hasta él para confirmar, violando
+         que Enter significa lo mismo en toda la interfaz (§2 principio 6).
+         Space/←/→ abren el selector de empresa además de alternar
+         tipo/booleanos, dejando Enter 100% libre para "confirmar".
+DEC-026  El desplegable de empresa muta justo debajo de su propio campo
+         (como ya hacía la TUI clásica insertando una fila en el layout),
+         no al final del formulario desconectado de lo que lo originó.
+DEC-027  El formulario aplica la gramática de glifos de §5/`glifo_feedback`
+         en vez de marcadores propios: `›` foco (reemplaza el `▸` que
+         también usaban las listas de coincidencias y el selector de
+         empresa, ahora unificados), `×` error (reemplaza `✗`), `✓` junto a
+         los campos que admiten quedar vacíos/inválidos y ya tienen un
+         valor válido (`Campo::admite_estado`) — es el indicador de estado
+         del proceso que reemplaza al texto "Confirmar — revisar y
+         guardar".
 ```
 
 ## 14.1 Escena de login (implementada)
