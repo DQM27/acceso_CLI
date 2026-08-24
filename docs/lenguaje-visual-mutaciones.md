@@ -608,6 +608,28 @@ DEC-042  El estado de cada campo del formulario vive en un solo glifo a la
          runtime real: el `✓` aparecía a la derecha mientras se seguía
          escribiendo, antes de confirmar nada — confuso, parecía validado
          cuando sólo estaba "no vacío".
+DEC-043  Cédula y Nombre filtran caracteres al teclear, no sólo largo
+         máximo — mismo criterio que ya tenía Fecha PRAIND (un carácter que
+         no corresponde no se inserta, sin aviso ni error, simplemente no
+         aparece). Reportado en runtime real: Cédula aceptaba letras,
+         Nombre aceptaba dígitos y símbolos — ninguna de las dos lo filtraba
+         nunca, ni acá ni en la TUI clásica (mismo hueco, nunca se había
+         notado). Cédula: sólo dígitos ASCII. Nombre: letras (con acentos y
+         ñ vía `char::is_alphabetic`), espacios, guion y apóstrofo (nombres
+         compuestos).
+DEC-044  Cédula se verifica contra duplicados de forma proactiva, no sólo
+         al guardar: al dejar el campo (↓) o al confirmar con Enter desde
+         cualquier campo, `formulario_controller.rs` consulta
+         `AppCore::buscar_contratistas` (comparación exacta, la búsqueda en
+         sí es difusa) y marca el error en el campo si ya existe otro
+         contratista con esa cédula — en modo edición se excluye al propio
+         contratista. La restricción `UNIQUE` de la base sigue siendo la
+         autoridad final (condición de carrera con otra terminal creando la
+         misma cédula al mismo tiempo); esto es sólo para que el operador
+         se entere antes de llenar el resto del formulario, no un
+         reemplazo. `formulario.rs` sigue sin tocar `AppCore` — la consulta
+         vive en el controlador, el modelo puro no gana una dependencia
+         nueva.
 ```
 
 ## 14.1 Escena de login (implementada)

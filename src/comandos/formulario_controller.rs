@@ -10,7 +10,7 @@ use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
 
 use crate::application::AppCore;
-use crate::database::queries::contratistas::ContratistaResumen;
+use crate::database::queries::contratistas::{ContratistaResumen, FiltroContratistas};
 use crate::domain::autorizacion::Operacion;
 
 use super::{
@@ -74,13 +74,60 @@ fn sincronizar_input(app: &mut AppState) {
     app.input = Input::new(texto);
 }
 
-fn mover_campo_formulario(app: &mut AppState, delta: isize) {
+fn mover_campo_formulario(core: &AppCore, app: &mut AppState, delta: isize) {
+    let campo_anterior = app.formulario.as_ref().map(|form| form.campo);
     let cambio = match &mut app.formulario {
         Some(form) => form.mover_campo(delta),
         None => false,
     };
     if cambio {
+        // Al dejar Cédula (no en cada tecla, sólo al alejarse) se verifica
+        // proactivamente si ya existe un contratista con esa cédula, en vez
+        // de esperar al intento final de guardar — el operador lo ve antes
+        // de llenar el resto del formulario.
+        if campo_anterior == Some(Campo::Cedula) {
+            verificar_cedula_duplicada(core, app);
+        }
         sincronizar_input(app);
+    }
+}
+
+/// Compara por igualdad exacta (la búsqueda de `AppCore` es difusa/parcial)
+/// y, en modo edición, excluye al propio contratista que se está editando
+/// — de lo contrario cualquier edición se marcaría duplicada contra sí
+/// misma.
+fn verificar_cedula_duplicada(core: &AppCore, app: &mut AppState) {
+    let Some(form) = &app.formulario else {
+        return;
+    };
+    let cedula = form.cedula.trim().to_string();
+    if cedula.is_empty() {
+        return;
+    }
+    let id_actual = match form.modo {
+        ModoFormulario::Editar { id } => Some(id),
+        ModoFormulario::Nuevo => None,
+    };
+    let filtro = FiltroContratistas {
+        texto: Some(cedula.clone()),
+        limite: 5,
+        ..FiltroContratistas::default()
+    };
+    let Ok(pagina) = core.buscar_contratistas(&filtro) else {
+        return;
+    };
+    let duplicado = pagina
+        .items
+        .iter()
+        .any(|item| item.cedula == cedula && Some(item.id) != id_actual);
+    if let Some(form) = &mut app.formulario {
+        form.errores.retain(|(campo, _)| *campo != Campo::Cedula);
+        if duplicado {
+            form.errores.push((
+                Campo::Cedula,
+                "Ya existe un contratista con esta cédula".to_string(),
+            ));
+        }
     }
 }
 
@@ -90,7 +137,7 @@ pub(super) fn manejar_formulario(core: &AppCore, app: &mut AppState, key: KeyEve
     };
     match form.subfase {
         Subfase::Editando => manejar_edicion_formulario(core, app, key),
-        Subfase::EligiendoEmpresa { .. } => manejar_selector_empresa(app, key),
+        Subfase::EligiendoEmpresa { .. } => manejar_selector_empresa(core, app, key),
         Subfase::Resumen => manejar_resumen_formulario(core, app, key),
     }
 }
@@ -101,15 +148,33 @@ fn manejar_edicion_formulario(core: &AppCore, app: &mut AppState, key: KeyEvent)
     };
     match key.code {
         KeyCode::Esc => cerrar_formulario(core, app),
-        KeyCode::Up => mover_campo_formulario(app, -1),
-        KeyCode::Down => mover_campo_formulario(app, 1),
+        KeyCode::Up => mover_campo_formulario(core, app, -1),
+        KeyCode::Down => mover_campo_formulario(core, app, 1),
         // Enter siempre intenta confirmar el formulario completo, sin
         // importar en qué campo esté el operador — mismo significado que en
         // el resto de la interfaz (§2 principio 6) y que la TUI clásica
         // (que intenta guardar desde cualquier campo, no sólo desde un
         // "botón" al final). Con errores se queda editando (los × ya se
         // muestran junto a cada campo); sin errores pasa al resumen.
+        //
+        // La cédula se reverifica acá también (no sólo al dejarla con
+        // ↓): si el operador la escribe y confirma con Enter sin pasar por
+        // otro campo, igual tiene que enterarse de un duplicado antes de
+        // llegar al resumen.
         KeyCode::Enter => {
+            verificar_cedula_duplicada(core, app);
+            // `validar()` reemplaza `errores` entero (limpia o repone según
+            // el resultado) — si se llamara igual acá borraría el error de
+            // duplicado recién puesto. Con duplicado, ni se intenta: el
+            // error ya quedó marcado y el operador tiene que corregirlo
+            // primero.
+            let duplicada = app
+                .formulario
+                .as_ref()
+                .is_some_and(|form| form.error_de(Campo::Cedula).is_some());
+            if duplicada {
+                return;
+            }
             if let Some(form) = &mut app.formulario
                 && form.validar().is_ok()
             {
@@ -149,7 +214,7 @@ fn manejar_edicion_formulario(core: &AppCore, app: &mut AppState, key: KeyEvent)
     }
 }
 
-fn manejar_selector_empresa(app: &mut AppState, key: KeyEvent) {
+fn manejar_selector_empresa(core: &AppCore, app: &mut AppState, key: KeyEvent) {
     match key.code {
         KeyCode::Esc => {
             if let Some(form) = &mut app.formulario {
@@ -189,7 +254,7 @@ fn manejar_selector_empresa(app: &mut AppState, key: KeyEvent) {
                     form.errores.retain(|(campo, _)| *campo != Campo::Empresa);
                     form.subfase = Subfase::Editando;
                 }
-                mover_campo_formulario(app, 1);
+                mover_campo_formulario(core, app, 1);
             }
         }
         _ => {

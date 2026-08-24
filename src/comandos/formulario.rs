@@ -254,14 +254,27 @@ impl FormularioContratista {
     }
 
     /// Vuelca el contenido del input sobre el campo activo, saneando según el
-    /// campo: largos máximos y fecha con sólo dígitos y `/` auto-insertadas.
+    /// campo: cédula sólo dígitos, nombre sólo letras/espacios (con acentos
+    /// y ñ) más guion y apóstrofo para nombres compuestos, fecha con sólo
+    /// dígitos y `/` auto-insertadas — todos con su largo máximo. Un
+    /// carácter que no corresponde no se inserta y punto, igual criterio
+    /// que ya tenía la fecha (nunca fue una regla nueva, sólo faltaba
+    /// aplicarla a los otros dos campos de texto).
     pub fn asignar_texto(&mut self, texto: &str) {
         match self.campo {
             Campo::Cedula => {
-                self.cedula = texto.chars().take(MAX_CEDULA).collect();
+                self.cedula = texto
+                    .chars()
+                    .filter(char::is_ascii_digit)
+                    .take(MAX_CEDULA)
+                    .collect();
             }
             Campo::Nombre => {
-                self.nombre = texto.chars().take(MAX_NOMBRE).collect();
+                self.nombre = texto
+                    .chars()
+                    .filter(|c| c.is_alphabetic() || c.is_whitespace() || *c == '-' || *c == '\'')
+                    .take(MAX_NOMBRE)
+                    .collect();
             }
             Campo::FechaPraind => {
                 self.fecha_praind = formatear_fecha(texto);
@@ -563,6 +576,30 @@ mod tests {
         form.campo = Campo::Nombre;
         form.asignar_texto(&"a".repeat(70));
         assert_eq!(form.nombre.chars().count(), MAX_NOMBRE);
+    }
+
+    #[test]
+    fn cedula_solo_admite_digitos() {
+        let mut form = FormularioContratista::nuevo(empresas(), true);
+        form.campo = Campo::Cedula;
+        form.asignar_texto("1a1b9c4-3 0546");
+        assert_eq!(form.cedula, "119430546");
+    }
+
+    #[test]
+    fn nombre_admite_letras_acentos_ene_espacios_guion_y_apostrofo() {
+        let mut form = FormularioContratista::nuevo(empresas(), true);
+        form.campo = Campo::Nombre;
+        form.asignar_texto("María José Peña-O'Brien");
+        assert_eq!(form.nombre, "María José Peña-O'Brien");
+    }
+
+    #[test]
+    fn nombre_descarta_digitos_y_simbolos() {
+        let mut form = FormularioContratista::nuevo(empresas(), true);
+        form.campo = Campo::Nombre;
+        form.asignar_texto("Carlos123 #Pérez!");
+        assert_eq!(form.nombre, "Carlos Pérez");
     }
 
     #[test]
