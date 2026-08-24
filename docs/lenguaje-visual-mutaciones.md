@@ -668,7 +668,16 @@ DEC-050  La contraseña nunca se muestra en texto plano en ningún punto de la
          UI: en el campo del área de contenido y en la barra de prompt se
          enmascara con `•` (recalculado por longitud real, no un placeholder
          fijo); en el Resumen se muestra "(definida)" en vez del valor.
-```
+DEC-051  Existen dos gramáticas `clave:valor` distintas bajo la misma
+         sintaxis visual: la de parámetros de ítem (`G:`/`M:` en
+         `parser.rs`, un solo valor, sin lista ni negación) y la de
+         Historial (`query_lang.rs`, listas `a,b,c` y negación `-clave:`).
+         Deliberadamente no se unifican — `G:`/`M:` son dos parámetros
+         fijos con un único valor válido cada uno, no una búsqueda abierta;
+         darles lista/negación sería complejidad sin caso de uso real. En
+         cambio se hace explícita la diferencia en `/ayuda` (línea aparte
+         bajo "Claves:") para que no dependa de que el operador la infiera
+         probando `-G:27` y viendo que simplemente no pasa nada.
 
 ## 14.1 Escena de login (implementada)
 

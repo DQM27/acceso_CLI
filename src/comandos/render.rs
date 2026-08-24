@@ -2062,6 +2062,10 @@ fn lineas_ayuda() -> Vec<Line<'static>> {
         muted(),
     )));
     lineas.push(Line::from(Span::styled(
+        "G:/M: admiten un solo valor, sin lista ni negación — listas (a,b,c) y -clave sólo existen dentro de /historial",
+        muted(),
+    )));
+    lineas.push(Line::from(Span::styled(
         "Modificador sobre una búsqueda: --i/--ingreso, --s/--salida, --e/--editar (sólo éstos tres)",
         muted(),
     )));
