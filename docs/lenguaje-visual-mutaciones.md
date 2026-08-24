@@ -487,6 +487,35 @@ DEC-030  ColumnaBusqueda y ColumnaActivos tienen las mismas 7/8 columnas que
          datos ya viven en `ContratistaResumen`/`IngresoActivoResumen`, así
          que no ofrecerlos en el selector era una limitación arbitraria del
          primer corte, corregida tras revisar la TUI clásica.
+DEC-031  `/historial` (alias `/h`) construido: cuarta Surface enclavada
+         (§5.2), la primera que usa Enter-aplica en vez de filtrado en vivo
+         (DEC-024, cumplido). `src/comandos/query_lang.rs` (motor
+         clave:valor sobre el crate `query-parser`, DEC-022) tiene por fin
+         un consumidor real — reescrito desde `tui/ui_kit/query_lang.rs`,
+         no importado (DEC-002/DEC-014). Claves: empresa, tipo, estado,
+         gafete, ingreso, salida (con negación `-clave:valor`), desde/hasta
+         (sin negación — no tiene un significado obvio para el límite de un
+         rango).
+DEC-032  `FiltroHistorial::hasta` es el límite exclusivo del rango (inicio
+         del día siguiente al último incluido): al parsear `hasta:DD/MM/AAAA`
+         tecleado por el operador se suma un día antes de convertir a UTC
+         — mismo criterio que `tui::historial::filtros::construir`. Mostrar
+         el rango de vuelta (resumen del filtro, "Rango actual") hace la
+         resta inversa para no mostrarle al operador una fecha que no es
+         la que escribió.
+DEC-033  La paginación (PageUp/PageDown) fija `corte_id` en la primera
+         consulta aplicada (Enter) y lo conserva entre páginas — ingresos
+         nuevos registrados mientras el operador navega no corren las
+         páginas ya vistas. Una nueva consulta (Enter tras volver a editar
+         con Esc) resetea `corte_id` a `None`: es un corte distinto.
+DEC-034  `ColumnaHistorial` (7 columnas: ingreso, nombre, empresa, tipo,
+         gafete, salida, "da ingreso") implementa el mismo trait `Columna`
+         que `ColumnaBusqueda`/`ColumnaActivos` para reusar
+         `anchos_columnas`/`fila_columnas` tal cual, pero deliberadamente
+         **sin** `SelectorColumnas`/F4 todavía — la tabla siempre muestra
+         las 7. Sumarle F4 más adelante es sólo agregar el campo a
+         `AppState`, no rehacer el render; no se hizo ahora por no ser lo
+         que se pidió.
 ```
 
 ## 14.1 Escena de login (implementada)

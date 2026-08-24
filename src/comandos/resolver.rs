@@ -77,6 +77,16 @@ pub fn resolver(core: &AppCore, entrada: &Entrada) -> ContextState {
                     }
                 }
                 Comando::Editar => resolver_busqueda_contratistas(core, consulta),
+                Comando::Historial => {
+                    if consulta.is_empty() {
+                        ContextState::AbrirHistorial
+                    } else {
+                        ContextState::MensajeError {
+                            mensaje: "El historial no toma argumentos: escriba /historial a secas"
+                                .to_string(),
+                        }
+                    }
+                }
                 Comando::Ayuda => ContextState::Ayuda,
                 Comando::CerrarSesion => ContextState::ConfirmarCerrarSesion,
             }

@@ -33,6 +33,11 @@ pub(super) fn manejar_operando(core: &AppCore, app: &mut AppState, key: KeyEvent
         manejar_columnas(app, key);
         return;
     }
+    // Historial: tercera Surface enclavada (§5.2/DEC-023/024).
+    if app.historial.is_some() {
+        super::historial_controller::manejar_historial(core, app, key);
+        return;
+    }
     match key.code {
         // Esc y Ctrl+L: limpiar todo y volver a Inicio.
         KeyCode::Esc => {
@@ -217,6 +222,7 @@ fn confirmar(core: &AppCore, app: &mut AppState) {
             }
         }
         ContextState::NuevoContratista => abrir_formulario_nuevo(core, app),
+        ContextState::AbrirHistorial => super::historial_controller::abrir_historial(core, app),
         ContextState::ConfirmarCerrarSesion => {
             app.input.reset();
             app.feedback = None;

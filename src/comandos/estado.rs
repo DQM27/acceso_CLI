@@ -16,6 +16,7 @@ use crate::services::registro_ingreso_service::{IngresoActivoResumen, Preparacio
 
 use super::columnas::{ColumnaActivos, ColumnaBusqueda, SelectorColumnas};
 use super::formulario::FormularioContratista;
+use super::historial::HistorialState;
 use super::presentation;
 
 /// Sobre qué tabla actúa el selector de columnas (`F4`) — determina qué
@@ -157,6 +158,9 @@ pub enum ContextState {
     /// `/nuevo`: tarjeta de entrada al alta — Enter abre el formulario de
     /// contratista, Esc cancela.
     NuevoContratista,
+    /// `/historial`: tarjeta de entrada — Enter abre la Surface de
+    /// Historial (§5.2/DEC-023/024), Esc cancela.
+    AbrirHistorial,
     Ayuda,
     /// Comando desconocido, parámetro inválido o error de consulta: se muestra
     /// el mensaje con `✗` y la sugerencia de `/ayuda` cuando aplica.
@@ -204,6 +208,10 @@ pub struct AppState {
     pub columnas_activos: SelectorColumnas<ColumnaActivos>,
     /// Selector de columnas abierto, si lo hay (ver `EdicionColumnas`).
     pub edicion_columnas: Option<EdicionColumnas>,
+    /// Surface de Historial abierta, si la hay (§5.2/DEC-023/024) — mientras
+    /// es `Some`, el input deja de ser línea de comandos y edita el filtro
+    /// clave:valor de Historial.
+    pub historial: Option<HistorialState>,
     /// Pistas de la línea de sugerencias (autocompletado contextual, teclas).
     pub sugerencias: Vec<String>,
     pub feedback: Option<(Instant, Feedback)>,
@@ -227,6 +235,7 @@ impl AppState {
             columnas_busqueda: SelectorColumnas::todas_visibles(),
             columnas_activos: SelectorColumnas::todas_visibles(),
             edicion_columnas: None,
+            historial: None,
             sugerencias: Vec::new(),
             feedback: None,
             salir: false,

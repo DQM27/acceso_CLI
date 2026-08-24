@@ -192,6 +192,59 @@ impl Columna for ColumnaActivos {
     }
 }
 
+/// Columnas de la tabla de Historial. A diferencia de `ColumnaBusqueda`/
+/// `ColumnaActivos`, todavía no hay un `SelectorColumnas<ColumnaHistorial>`
+/// en `AppState` — la primera versión muestra siempre las 7, sin F4. El
+/// enum ya implementa `Columna` para reusar `anchos_columnas`/
+/// `fila_columnas` de `render.rs` tal cual; sumarle F4 más adelante es sólo
+/// agregar el campo a `AppState`, no rehacer el render.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColumnaHistorial {
+    Ingreso,
+    Nombre,
+    Empresa,
+    Tipo,
+    Gafete,
+    Salida,
+    Usuario,
+}
+
+impl Columna for ColumnaHistorial {
+    const TODAS: &'static [Self] = &[
+        Self::Ingreso,
+        Self::Nombre,
+        Self::Empresa,
+        Self::Tipo,
+        Self::Gafete,
+        Self::Salida,
+        Self::Usuario,
+    ];
+
+    fn etiqueta(self) -> &'static str {
+        match self {
+            Self::Ingreso => "Ingreso",
+            Self::Nombre => "Nombre",
+            Self::Empresa => "Empresa",
+            Self::Tipo => "Tipo",
+            Self::Gafete => "Gafete",
+            Self::Salida => "Salida",
+            Self::Usuario => "Da ingreso",
+        }
+    }
+
+    fn clave(self) -> &'static str {
+        match self {
+            Self::Ingreso => "ingreso_col",
+            Self::Nombre => "nombre",
+            Self::Empresa => "empresa",
+            Self::Tipo => "tipo",
+            Self::Gafete => "gafete",
+            Self::Salida => "salida_col",
+            Self::Usuario => "usuario",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

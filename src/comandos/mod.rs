@@ -22,11 +22,14 @@ mod columnas;
 mod estado;
 mod formulario;
 mod formulario_controller;
+mod historial;
+mod historial_controller;
 mod login;
 mod operando;
 mod parser;
 mod preferencias;
 mod presentation;
+mod query_lang;
 mod render;
 mod resolver;
 mod terminal;
@@ -49,11 +52,12 @@ use crate::application::AppCore;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::error::{AutenticacionError, UsuarioServiceError};
 
-pub use columnas::{Columna, ColumnaActivos, ColumnaBusqueda, SelectorColumnas};
+pub use columnas::{Columna, ColumnaActivos, ColumnaBusqueda, ColumnaHistorial, SelectorColumnas};
 pub use estado::{AppState, ContextState, EdicionColumnas, Fase, NivelFeedback, ObjetivoColumnas};
 pub use formulario::{
     Campo, FormularioContratista, MAX_VISIBLES_EMPRESAS, ModoFormulario, Subfase,
 };
+pub use historial::HistorialState;
 pub use parser::{Comando, Entrada, GafeteParse, MedioParse, parsear};
 pub use resolver::{
     autocompletar, calcular_sugerencias, ficha_desde_resumen, preparar_resumen_ingreso, resolver,

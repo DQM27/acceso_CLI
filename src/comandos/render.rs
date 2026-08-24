@@ -23,13 +23,16 @@ use crate::models::tipo_ingreso::TipoIngreso;
 use crate::services::registro_ingreso_service::IngresoActivoResumen;
 use crate::tiempo::a_costa_rica;
 
-use super::columnas::{Columna, ColumnaActivos, ColumnaBusqueda, SelectorColumnas};
+use super::columnas::{
+    Columna, ColumnaActivos, ColumnaBusqueda, ColumnaHistorial, SelectorColumnas,
+};
 use super::estado::{
     AppState, ContextState, EdicionColumnas, Fase, NivelFeedback, ObjetivoColumnas,
 };
 use super::formulario::{
     Campo, FormularioContratista, MAX_VISIBLES_EMPRESAS, ModoFormulario, Subfase,
 };
+use super::historial::HistorialState;
 use super::parser::Comando;
 use super::resolver::MIN_CONSULTA;
 
@@ -117,15 +120,19 @@ pub fn render(frame: &mut Frame, app: &AppState) {
     ])
     .areas(area);
 
-    let lineas = match (&app.formulario, &app.edicion_columnas) {
-        (Some(formulario), _) => lineas_formulario(formulario, app.input.value()),
-        (None, Some(edicion)) => lineas_selector_columnas(app, *edicion),
-        (None, None) => lineas_contexto(
+    let lineas = if let Some(formulario) = &app.formulario {
+        lineas_formulario(formulario, app.input.value())
+    } else if let Some(edicion) = &app.edicion_columnas {
+        lineas_selector_columnas(app, *edicion)
+    } else if let Some(historial) = &app.historial {
+        lineas_historial(historial, app.input.value(), area_contexto.width)
+    } else {
+        lineas_contexto(
             &app.contexto,
             area_contexto.width,
             &app.columnas_busqueda,
             &app.columnas_activos,
-        ),
+        )
     };
     frame.render_widget(Paragraph::new(lineas), area_contexto);
 
@@ -176,6 +183,18 @@ fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
                 "↑↓ columna · Space marcar/desmarcar · Esc cerrar",
                 muted(),
             ))),
+            area,
+        );
+        return;
+    }
+    if let Some(historial) = &app.historial {
+        let pista = if historial.resultado.is_some() {
+            "↑↓ moverse · PageUp/PageDown más resultados · Esc editar filtro"
+        } else {
+            "escriba clave:valor · Enter aplica · Esc cierra Historial"
+        };
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(pista, muted()))),
             area,
         );
         return;
@@ -265,40 +284,57 @@ fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState, paleta: Option<&
 /// como sin ella. Sólo se llama en fase `Operando`: el login tiene su propia
 /// composición sin caja (`render_login`), nunca pasa por acá.
 fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
-    let (etiqueta, valor, cursor_visible, cursor_chars) = match &app.formulario {
-        // Con el formulario abierto el input edita el campo activo (o
-        // filtra empresas en el selector): la etiqueta lo anuncia y el
-        // cursor sólo aparece cuando hay algo que teclear.
-        Some(formulario) => {
-            let etiqueta = match formulario.subfase {
-                Subfase::EligiendoEmpresa { .. } => "empresa › ".to_string(),
-                Subfase::Resumen => "confirmar › ".to_string(),
-                Subfase::Editando => match formulario.campo {
-                    Campo::Cedula => "cédula › ".to_string(),
-                    Campo::Nombre => "nombre › ".to_string(),
-                    Campo::FechaPraind => "fecha praind › ".to_string(),
-                    campo => format!("{} › ", campo.etiqueta().to_lowercase()),
-                },
-            };
-            let editable = matches!(formulario.subfase, Subfase::EligiendoEmpresa { .. })
-                || formulario.campo.es_texto();
-            (
-                etiqueta,
-                app.input.value().to_string(),
-                editable,
-                if editable {
-                    app.input.visual_cursor()
-                } else {
-                    0
-                },
-            )
-        }
-        None => (
-            "> ".to_string(),
+    let (etiqueta, valor, cursor_visible, cursor_chars) = if let Some(historial) = &app.historial {
+        // Editando: el input escribe el filtro clave:valor. Mostrando
+        // resultado (Enter ya aplicó, DEC-024): el texto queda congelado
+        // hasta Esc, sin cursor — no se edita mientras se navega.
+        let editable = historial.resultado.is_none();
+        (
+            "historial › ".to_string(),
             app.input.value().to_string(),
-            true,
-            app.input.visual_cursor(),
-        ),
+            editable,
+            if editable {
+                app.input.visual_cursor()
+            } else {
+                0
+            },
+        )
+    } else {
+        match &app.formulario {
+            // Con el formulario abierto el input edita el campo activo (o
+            // filtra empresas en el selector): la etiqueta lo anuncia y el
+            // cursor sólo aparece cuando hay algo que teclear.
+            Some(formulario) => {
+                let etiqueta = match formulario.subfase {
+                    Subfase::EligiendoEmpresa { .. } => "empresa › ".to_string(),
+                    Subfase::Resumen => "confirmar › ".to_string(),
+                    Subfase::Editando => match formulario.campo {
+                        Campo::Cedula => "cédula › ".to_string(),
+                        Campo::Nombre => "nombre › ".to_string(),
+                        Campo::FechaPraind => "fecha praind › ".to_string(),
+                        campo => format!("{} › ", campo.etiqueta().to_lowercase()),
+                    },
+                };
+                let editable = matches!(formulario.subfase, Subfase::EligiendoEmpresa { .. })
+                    || formulario.campo.es_texto();
+                (
+                    etiqueta,
+                    app.input.value().to_string(),
+                    editable,
+                    if editable {
+                        app.input.visual_cursor()
+                    } else {
+                        0
+                    },
+                )
+            }
+            None => (
+                "> ".to_string(),
+                app.input.value().to_string(),
+                true,
+                app.input.visual_cursor(),
+            ),
+        }
     };
 
     let ancho_etiqueta = etiqueta.chars().count() as u16;
@@ -608,6 +644,7 @@ fn lineas_contexto(
         ContextState::FichaContratista { resumen } => lineas_ficha(resumen),
         ContextState::ConfirmarCerrarSesion => lineas_cerrar_sesion(),
         ContextState::NuevoContratista => lineas_nuevo_contratista(),
+        ContextState::AbrirHistorial => lineas_abrir_historial(),
         ContextState::Ayuda => lineas_ayuda(),
         ContextState::MensajeError { mensaje } => vec![
             Line::from(""),
@@ -644,6 +681,7 @@ fn descripcion_comando(comando: Comando) -> &'static str {
         Comando::Activos => "quién está dentro ahora",
         Comando::Nuevo => "dar de alta un contratista",
         Comando::Editar => "editar un contratista — /editar <nombre>",
+        Comando::Historial => "explorar movimientos — filtro empresa/tipo/fecha…",
         Comando::Ayuda => "sintaxis completa y ejemplos",
         Comando::CerrarSesion => "cerrar sesión y volver al login",
     }
@@ -1134,6 +1172,20 @@ fn lineas_nuevo_contratista() -> Vec<Line<'static>> {
     ]
 }
 
+fn lineas_abrir_historial() -> Vec<Line<'static>> {
+    vec![
+        Line::from(Span::styled("HISTORIAL", muted())),
+        Line::from(""),
+        Line::from("Se abrirá el explorador de movimientos: filtro clave:valor"),
+        Line::from("(empresa/tipo/estado/gafete/ingreso/salida/desde/hasta)."),
+        Line::from(""),
+        Line::from(Span::styled(
+            "ENTER para abrir · Esc para cancelar",
+            acento(),
+        )),
+    ]
+}
+
 // ── Selector de columnas (F4) ────────────────────────────────────────────
 
 /// Segunda Surface enclavada (§5.2, junto al formulario): `[✓]`/`[ ]` con
@@ -1170,6 +1222,222 @@ fn lineas_selector_columnas(app: &AppState, edicion: EdicionColumnas) -> Vec<Lin
             Line::from(Span::styled(texto, muted()))
         });
     }
+    lineas
+}
+
+// ── Historial (Surface enclavada, §5.2/DEC-023/024) ──────────────────────
+
+fn ancho_fijo_historial(columna: ColumnaHistorial) -> Option<usize> {
+    match columna {
+        ColumnaHistorial::Ingreso | ColumnaHistorial::Salida => Some(13),
+        ColumnaHistorial::Tipo => Some(12),
+        ColumnaHistorial::Gafete => Some(8),
+        ColumnaHistorial::Nombre | ColumnaHistorial::Empresa | ColumnaHistorial::Usuario => None,
+    }
+}
+
+fn derecha_historial(columna: ColumnaHistorial) -> bool {
+    matches!(columna, ColumnaHistorial::Gafete)
+}
+
+fn fecha_hora_corta(instante: chrono::DateTime<Utc>) -> String {
+    a_costa_rica(instante).format("%d/%m %H:%M").to_string()
+}
+
+/// `FiltroHistorial::hasta` es el límite exclusivo (inicio del día
+/// siguiente al último incluido) — para mostrarlo como la fecha "hasta" que
+/// el operador espera ver, se resta un día antes de formatear.
+fn fecha_hasta_visual(hasta: chrono::DateTime<Utc>) -> String {
+    a_costa_rica(hasta - chrono::Duration::days(1))
+        .format("%d/%m/%Y")
+        .to_string()
+}
+
+fn valor_historial(
+    m: &crate::database::queries::ingresos::MovimientoIngresoResumen,
+    columna: ColumnaHistorial,
+) -> String {
+    match columna {
+        ColumnaHistorial::Ingreso => fecha_hora_corta(m.fecha_hora_ingreso),
+        ColumnaHistorial::Nombre => m.contratista_nombre.clone(),
+        ColumnaHistorial::Empresa => m.empresa_nombre.clone(),
+        ColumnaHistorial::Tipo => tipo_texto(m.tipo_ingreso).to_string(),
+        ColumnaHistorial::Gafete => m
+            .gafete_numero
+            .map(|numero| numero.to_string())
+            .unwrap_or_else(|| "—".to_string()),
+        ColumnaHistorial::Salida => m
+            .fecha_hora_salida
+            .map(fecha_hora_corta)
+            .unwrap_or_else(|| "— activo".to_string()),
+        ColumnaHistorial::Usuario => m.usuario_ingreso_nombre.clone(),
+    }
+}
+
+/// Resume el filtro vigente en una línea ("empresa: Brisas · tipo: PRAIND
+/// o SWAT · ⚠ sin interpretar: clave:x"), igual criterio que la etiqueta de
+/// búsqueda de la TUI clásica — para que el operador vea qué se aplicó de
+/// verdad sin tener que releer lo que tecleó.
+fn resumen_filtro_historial(historial: &HistorialState) -> String {
+    let f = &historial.filtro;
+    let mut partes = Vec::new();
+    partes.push(format!(
+        "{} – {}",
+        a_costa_rica(f.desde).format("%d/%m/%Y"),
+        fecha_hasta_visual(f.hasta)
+    ));
+    if let Some(empresa_id) = &f.empresa_id {
+        let nombre = historial
+            .empresas
+            .iter()
+            .find(|e| e.id == *empresa_id.valor())
+            .map_or("?", |e| e.nombre.as_str());
+        let signo = if matches!(empresa_id, crate::database::queries::Igualdad::Excluye(_)) {
+            "≠"
+        } else {
+            ""
+        };
+        partes.push(format!("empresa: {signo}{nombre}"));
+    }
+    if let Some(tipos) = &f.tipos_incluidos {
+        partes.push(format!(
+            "tipo: {}",
+            tipos
+                .iter()
+                .map(|t| tipo_texto(*t))
+                .collect::<Vec<_>>()
+                .join(" o ")
+        ));
+    }
+    if f.estado != crate::database::queries::ingresos::EstadoMovimiento::Todos {
+        let texto = match f.estado {
+            crate::database::queries::ingresos::EstadoMovimiento::Activos => "Activos",
+            crate::database::queries::ingresos::EstadoMovimiento::Cerrados => "Cerrados",
+            crate::database::queries::ingresos::EstadoMovimiento::Todos => unreachable!(),
+        };
+        partes.push(format!("estado: {texto}"));
+    }
+    if let Some(gafete) = &f.gafete_numero {
+        let signo = if matches!(gafete, crate::database::queries::Igualdad::Excluye(_)) {
+            "≠"
+        } else {
+            ""
+        };
+        partes.push(format!("gafete: {signo}{}", gafete.valor()));
+    }
+    if let Some(usuario) = &f.usuario_ingreso {
+        let signo = if f.usuario_ingreso_negado { "≠" } else { "" };
+        partes.push(format!("ingreso: {signo}{usuario}"));
+    }
+    if let Some(usuario) = &f.usuario_salida {
+        let signo = if f.usuario_salida_negado { "≠" } else { "" };
+        partes.push(format!("salida: {signo}{usuario}"));
+    }
+    if let Some(texto) = &f.texto_persona {
+        partes.push(format!("\"{texto}\""));
+    }
+    partes.join(" · ")
+}
+
+fn lineas_historial(
+    historial: &HistorialState,
+    texto_input: &str,
+    ancho: u16,
+) -> Vec<Line<'static>> {
+    let Some(resultado) = &historial.resultado else {
+        // Editando: todavía no se aplicó ninguna consulta (o se volvió a
+        // editar con Esc) — sin filtrado en vivo, DEC-024.
+        let rango = format!(
+            "Rango actual: {} – {}",
+            a_costa_rica(historial.filtro.desde).format("%d/%m/%Y"),
+            fecha_hasta_visual(historial.filtro.hasta)
+        );
+        return vec![
+            Line::from(Span::styled("HISTORIAL", muted())),
+            Line::from(""),
+            Line::from(Span::styled(rango, muted())),
+            Line::from(Span::styled(
+                "empresa: · tipo: · estado: · gafete: · ingreso: · salida: · desde: · hasta:",
+                muted(),
+            )),
+            Line::from(Span::styled(
+                "Ejemplo: empresa:brisas tipo:praind,swat desde:01/08/2026 -salida:ana",
+                muted(),
+            )),
+            Line::from(""),
+            Line::from(if texto_input.is_empty() {
+                Span::styled(
+                    "Enter aplica el rango del mes actual sin más filtro",
+                    muted(),
+                )
+            } else {
+                Span::raw(texto_input.to_string())
+            }),
+        ];
+    };
+
+    let mut lineas = vec![Line::from(Span::styled(
+        resumen_filtro_historial(historial),
+        muted(),
+    ))];
+    if !historial.no_reconocidos.is_empty() {
+        lineas.push(Line::from(Span::styled(
+            format!("⚠ sin interpretar: {}", historial.no_reconocidos.join(", ")),
+            advertencia(),
+        )));
+    }
+    lineas.push(Line::from(""));
+
+    if resultado.items.is_empty() {
+        lineas.push(Line::from(Span::styled(
+            "Sin movimientos para este filtro",
+            muted(),
+        )));
+        return lineas;
+    }
+
+    let anchos = anchos_columnas(
+        ancho,
+        ColumnaHistorial::TODAS.iter().copied(),
+        ancho_fijo_historial,
+    );
+    lineas.push(Line::from(Span::styled(
+        format!(
+            "  {}",
+            fila_columnas(&anchos, derecha_historial, |c| c.etiqueta().to_uppercase())
+        ),
+        Style::default().add_modifier(Modifier::BOLD),
+    )));
+    lineas.push(Line::from(Span::styled(
+        "─".repeat(ancho as usize),
+        muted(),
+    )));
+    for (indice, item) in resultado.items.iter().enumerate() {
+        let marcador = if indice == historial.seleccion {
+            "› "
+        } else {
+            "  "
+        };
+        let texto = format!(
+            "{marcador}{}",
+            fila_columnas(&anchos, derecha_historial, |c| valor_historial(item, c))
+        );
+        lineas.push(if indice == historial.seleccion {
+            Line::from(Span::styled(texto, estilo_seleccion()))
+        } else {
+            Line::from(texto)
+        });
+    }
+    lineas.push(Line::from(""));
+    let desde = historial.filtro.offset + 1;
+    let hasta = historial.filtro.offset + resultado.items.len();
+    lineas.push(Line::from(Span::styled(
+        format!(
+            "{desde}–{hasta} de {} · PageUp/PageDown para más",
+            resultado.total
+        ),
+        muted(),
+    )));
     lineas
 }
 
@@ -1382,7 +1650,7 @@ fn lineas_ayuda() -> Vec<Line<'static>> {
         )),
         Line::from(""),
     ];
-    let ejemplos: [(&str, &str); 11] = [
+    let ejemplos: [(&str, &str); 13] = [
         ("/ingreso <nombre> G:<n> M:<medio>", "registrar un ingreso"),
         ("/ingreso 119430546 G:12", "también por cédula"),
         ("/salida <nombre>", "registrar salida por nombre"),
@@ -1390,12 +1658,17 @@ fn lineas_ayuda() -> Vec<Line<'static>> {
         ("/activos", "tabla de personas dentro"),
         ("/nuevo", "dar de alta un contratista"),
         ("/editar <nombre>", "editar un contratista"),
+        ("/historial", "explorar movimientos (alias /h)"),
         ("/cerrarsesion", "cerrar sesión y volver al login"),
         ("/ayuda", "esta ayuda"),
         ("texto sin /", "búsqueda de contratistas"),
         (
             "<nombre> --i G:<n> M:<medio>",
             "atajo: mismo resultado que /ingreso, /salida o /editar",
+        ),
+        (
+            "empresa:x tipo:a,b -salida:ana",
+            "dentro de /historial: filtro clave:valor, negable con -",
         ),
     ];
     for (sintaxis, descripcion) in ejemplos {
@@ -1406,7 +1679,7 @@ fn lineas_ayuda() -> Vec<Line<'static>> {
     }
     lineas.push(Line::from(""));
     lineas.push(Line::from(Span::styled(
-        "Claves: G: gafete · M: caminando|vehiculo (por defecto caminando) · alias: /i /s /a /n /e /cs",
+        "Claves: G: gafete · M: caminando|vehiculo (por defecto caminando) · alias: /i /s /a /n /e /h /cs",
         muted(),
     )));
     lineas.push(Line::from(Span::styled(

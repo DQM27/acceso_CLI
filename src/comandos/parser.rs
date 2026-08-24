@@ -43,18 +43,20 @@ pub enum Comando {
     Activos,
     Nuevo,
     Editar,
+    Historial,
     Ayuda,
     CerrarSesion,
 }
 
 impl Comando {
-    /// Los 7 comandos en el orden en que se presentan en la ayuda.
-    pub const TODOS: [Self; 7] = [
+    /// Los 8 comandos en el orden en que se presentan en la ayuda.
+    pub const TODOS: [Self; 8] = [
         Self::Ingreso,
         Self::Salida,
         Self::Activos,
         Self::Nuevo,
         Self::Editar,
+        Self::Historial,
         Self::Ayuda,
         Self::CerrarSesion,
     ];
@@ -66,6 +68,7 @@ impl Comando {
             Self::Activos => "activos",
             Self::Nuevo => "nuevo",
             Self::Editar => "editar",
+            Self::Historial => "historial",
             Self::Ayuda => "ayuda",
             Self::CerrarSesion => "cerrarsesion",
         }
@@ -81,6 +84,7 @@ impl Comando {
             "activos" | "a" => Some(Self::Activos),
             "nuevo" | "n" => Some(Self::Nuevo),
             "editar" | "e" => Some(Self::Editar),
+            "historial" | "h" => Some(Self::Historial),
             "ayuda" => Some(Self::Ayuda),
             "cerrarsesion" | "cs" => Some(Self::CerrarSesion),
             _ => None,
@@ -478,7 +482,15 @@ mod tests {
         assert_eq!(comando(parsear("/a")).0, Comando::Activos);
         assert_eq!(comando(parsear("/n")).0, Comando::Nuevo);
         assert_eq!(comando(parsear("/e Ana")).0, Comando::Editar);
+        assert_eq!(comando(parsear("/h")).0, Comando::Historial);
         assert_eq!(comando(parsear("/cs")).0, Comando::CerrarSesion);
+    }
+
+    #[test]
+    fn historial_sin_argumentos() {
+        let (cmd, consulta, _, _) = comando(parsear("/historial"));
+        assert_eq!(cmd, Comando::Historial);
+        assert_eq!(consulta, "");
     }
 
     #[test]
