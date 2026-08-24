@@ -40,6 +40,7 @@ use crate::models::medio_ingreso::MedioIngreso;
 pub enum Comando {
     Ingreso,
     Salida,
+    Gafete,
     Activos,
     Nuevo,
     Editar,
@@ -49,10 +50,11 @@ pub enum Comando {
 }
 
 impl Comando {
-    /// Los 8 comandos en el orden en que se presentan en la ayuda.
-    pub const TODOS: [Self; 8] = [
+    /// Los 9 comandos en el orden en que se presentan en la ayuda.
+    pub const TODOS: [Self; 9] = [
         Self::Ingreso,
         Self::Salida,
+        Self::Gafete,
         Self::Activos,
         Self::Nuevo,
         Self::Editar,
@@ -65,6 +67,7 @@ impl Comando {
         match self {
             Self::Ingreso => "ingreso",
             Self::Salida => "salida",
+            Self::Gafete => "gafete",
             Self::Activos => "activos",
             Self::Nuevo => "nuevo",
             Self::Editar => "editar",
@@ -81,6 +84,7 @@ impl Comando {
         match texto.to_lowercase().as_str() {
             "ingreso" | "i" => Some(Self::Ingreso),
             "salida" | "s" => Some(Self::Salida),
+            "gafete" | "g" => Some(Self::Gafete),
             "activos" | "a" => Some(Self::Activos),
             "nuevo" | "n" => Some(Self::Nuevo),
             "editar" | "e" => Some(Self::Editar),
@@ -368,6 +372,13 @@ mod tests {
     }
 
     #[test]
+    fn gafete_conserva_una_lista_con_comas() {
+        let (cmd, consulta, _, _) = comando(parsear("/gafete 2, 25, 85, 11"));
+        assert_eq!(cmd, Comando::Gafete);
+        assert_eq!(consulta, "2, 25, 85, 11");
+    }
+
+    #[test]
     fn editar_conserva_la_consulta() {
         let (cmd, consulta, _, _) = comando(parsear("/editar carlos"));
         assert_eq!(cmd, Comando::Editar);
@@ -479,6 +490,7 @@ mod tests {
     fn aliases_cortos() {
         assert_eq!(comando(parsear("/i Ana")).0, Comando::Ingreso);
         assert_eq!(comando(parsear("/s Ana")).0, Comando::Salida);
+        assert_eq!(comando(parsear("/g 27")).0, Comando::Gafete);
         assert_eq!(comando(parsear("/a")).0, Comando::Activos);
         assert_eq!(comando(parsear("/n")).0, Comando::Nuevo);
         assert_eq!(comando(parsear("/e Ana")).0, Comando::Editar);

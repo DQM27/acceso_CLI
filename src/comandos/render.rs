@@ -41,6 +41,7 @@ use super::formulario_usuario::{
 use super::historial::HistorialState;
 use super::parser::Comando;
 use super::resolver::MIN_CONSULTA;
+use super::salida_gafete::SalidaGafeteState;
 
 /// Mínimos razonables: por debajo de esto no cabe ni la tarjeta más simple —
 /// se muestra un aviso en vez de romper el prompt.
@@ -148,6 +149,8 @@ pub fn render(frame: &mut Frame, app: &AppState) {
             &app.columnas_historial,
             &opacidades,
         )
+    } else if let Some(sg) = &app.salida_gafete {
+        lineas_salida_gafete(sg)
     } else {
         lineas_contexto(
             &app.contexto,
@@ -260,6 +263,16 @@ fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
         };
         frame.render_widget(
             Paragraph::new(Line::from(Span::styled(pista, muted()))),
+            area,
+        );
+        return;
+    }
+    if app.salida_gafete.is_some() {
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                "número(s) de gafete, separados por coma · Enter confirma salida · Esc cierra",
+                muted(),
+            ))),
             area,
         );
         return;
@@ -394,6 +407,13 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
             } else {
                 0
             },
+        )
+    } else if app.salida_gafete.is_some() {
+        (
+            "gafete › ".to_string(),
+            app.input.value().to_string(),
+            true,
+            app.input.visual_cursor(),
         )
     } else {
         match &app.formulario {
@@ -790,6 +810,7 @@ fn lineas_contexto(
         ContextState::NuevoEmpresa => lineas_nuevo_empresa(),
         ContextState::NuevoUsuario => lineas_nuevo_usuario(),
         ContextState::AbrirHistorial => lineas_abrir_historial(),
+        ContextState::AbrirSalidaGafete { texto } => lineas_abrir_salida_gafete(texto),
         ContextState::Ayuda => lineas_ayuda(),
         ContextState::MensajeError { mensaje } => vec![
             Line::from(""),
@@ -823,6 +844,7 @@ fn descripcion_comando(comando: Comando) -> &'static str {
     match comando {
         Comando::Ingreso => "registrar ingreso — /ingreso <nombre> G:<n> M:<medio>",
         Comando::Salida => "registrar salida — /salida <nombre> o /salida G:<n>",
+        Comando::Gafete => "salida rápida por gafete — uno o varios, separados por coma",
         Comando::Activos => "quién está dentro ahora",
         Comando::Nuevo => "dar de alta — contratista (default), empresa o usuario",
         Comando::Editar => "editar — contratista (default), empresa o usuario",
@@ -1247,6 +1269,43 @@ fn lineas_resumen_ingreso(contexto: &ContextState) -> Vec<Line<'static>> {
     lineas
 }
 
+/// Superficie del modo enclavado de salida por gafete (DEC-057): una fila
+/// por número reconocido en `estado.texto`, con el nombre ya resuelto en
+/// vivo — esa vista previa es la confirmación (no hay una segunda
+/// pantalla): lo que se ve acá es exactamente a quién se le va a registrar
+/// la salida al presionar Enter.
+fn lineas_salida_gafete(estado: &SalidaGafeteState) -> Vec<Line<'static>> {
+    let mut lineas = vec![
+        Line::from(Span::styled("SALIDA POR GAFETE", muted())),
+        Line::from(""),
+    ];
+    if estado.coincidencias.is_empty() {
+        lineas.push(Line::from(Span::styled(
+            "Escriba uno o varios números de gafete, separados por coma…",
+            muted(),
+        )));
+        return lineas;
+    }
+    for (numero, item) in &estado.coincidencias {
+        let linea = match item {
+            Some(item) => Line::from(vec![
+                Span::styled(format!("  {numero:<5}"), acento()),
+                Span::styled(
+                    item.contratista_nombre.clone(),
+                    Style::default().add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(format!(" — {}", item.empresa_nombre), muted()),
+            ]),
+            None => Line::from(vec![
+                Span::styled(format!("  {numero:<5}"), estilo_error()),
+                Span::styled("sin ingreso activo con ese gafete", estilo_error()),
+            ]),
+        };
+        lineas.push(linea);
+    }
+    lineas
+}
+
 fn lineas_resumen_salida(activo: &IngresoActivoResumen) -> Vec<Line<'static>> {
     let gafete = activo
         .gafete_numero
@@ -1448,6 +1507,31 @@ fn lineas_abrir_historial() -> Vec<Line<'static>> {
             acento(),
         )),
     ]
+}
+
+/// `texto` es lo que ya se escribió después de `/gafete` — si no está
+/// vacío, Enter lo procesa de una vez (DEC-057), así que la tarjeta lo
+/// anticipa en vez de mostrar el mismo texto genérico siempre.
+fn lineas_abrir_salida_gafete(texto: &str) -> Vec<Line<'static>> {
+    let mut lineas = vec![
+        Line::from(Span::styled("SALIDA POR GAFETE", muted())),
+        Line::from(""),
+        Line::from("Se abrirá el modo de salida rápida: sólo números de gafete,"),
+        Line::from("uno o varios separados por coma. Queda abierto para el siguiente."),
+        Line::from(""),
+    ];
+    if texto.trim().is_empty() {
+        lineas.push(Line::from(Span::styled(
+            "ENTER para abrir · Esc para cancelar",
+            acento(),
+        )));
+    } else {
+        lineas.push(Line::from(Span::styled(
+            format!("ENTER registra la salida de: {}", texto.trim()),
+            acento(),
+        )));
+    }
+    lineas
 }
 
 // ── Selector de columnas (F4) ────────────────────────────────────────────
@@ -2159,12 +2243,16 @@ fn lineas_ayuda() -> Vec<Line<'static>> {
         )),
         Line::from(""),
     ];
-    let ejemplos: [(&str, &str); 17] = [
+    let ejemplos: [(&str, &str); 18] = [
         ("/ingreso <nombre> G:<n> M:<medio>", "registrar un ingreso"),
         ("/ingreso 119430546 G:12", "también por cédula"),
         ("/salida <nombre>", "registrar salida por nombre"),
         ("/salida G:27", "registrar salida por gafete"),
-        ("/activos", "tabla de personas dentro"),
+        (
+            "/gafete 2, 25, 85",
+            "salida rápida de uno o varios gafetes (alias /g)",
+        ),
+        ("/activos", "tabla de personas dentro, ↑↓ Enter da salida"),
         ("/nuevo", "dar de alta un contratista (default)"),
         ("/nuevo empresa", "dar de alta una empresa (alias /n em)"),
         (

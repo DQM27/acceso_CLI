@@ -737,6 +737,25 @@ DEC-056  `/activos` navega con ↑↓ y Enter sobre una fila lleva a
          Reutiliza el mismo `ContextState::ResumenSalida` y el mismo
          marcador `›` que ya usa `CoincidenciasActivos` — misma fuente de
          datos (`IngresoActivoResumen`), sólo cambia de dónde se llega.
+DEC-057  `/gafete` (alias `/g`) abre un modo enclavado dedicado a la salida
+         más frecuente de la portería: alguien entrega el gafete y se va,
+         sin que siempre se sepa el nombre. A diferencia de `/salida`
+         (texto libre O `G:`, puede devolver varias coincidencias por
+         cédulas que contienen el número), acá sólo hay dígitos — uno o
+         varios separados por coma (`2, 25, 85`, para un grupo que sale
+         junto) — y el gafete es único entre ingresos activos: match
+         exacto, sin ambigüedad. Enter confirma directo, **sin** una
+         segunda pantalla de "¿está seguro?": la vista previa en vivo
+         (nombre de cada gafete mientras se teclea) ya cumple ese papel —
+         reducir esto a "encolar y confirmar" fue pedido explícito, no
+         sólo conveniencia de implementación. A diferencia de toda otra
+         Surface, no se cierra sola tras confirmar — el campo se limpia y
+         el modo se queda abierto para el siguiente gafete (o grupo); sólo
+         Esc lo cierra. Si `/gafete 2, 25` llega con la lista ya escrita
+         antes del primer Enter, se procesa de una vez en el mismo paso
+         (`ContextState::AbrirSalidaGafete { texto }` la lleva) — no hace
+         falta un segundo Enter sobre la Surface recién abierta y vacía
+         para algo que el operador ya escribió.
 
 ## 14.1 Escena de login (implementada)
 

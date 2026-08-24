@@ -22,6 +22,7 @@ use super::formulario_empresa::FormularioEmpresa;
 use super::formulario_usuario::FormularioUsuario;
 use super::historial::HistorialState;
 use super::presentation;
+use super::salida_gafete::SalidaGafeteState;
 
 /// Sobre qué tabla actúa el selector de columnas (`F4`) — determina qué
 /// `SelectorColumnas` de `AppState` edita y a qué contexto vuelve al cerrar.
@@ -53,6 +54,7 @@ pub enum SurfaceActiva {
     FormularioUsuario,
     Columnas,
     Historial,
+    SalidaGafete,
     Ninguna,
 }
 
@@ -235,6 +237,14 @@ pub enum ContextState {
     /// `/historial`: tarjeta de entrada — Enter abre la Surface de
     /// Historial (§5.2/DEC-023/024), Esc cancela.
     AbrirHistorial,
+    /// `/gafete` (`/g`): tarjeta de entrada al modo de salida por gafete
+    /// (DEC-057) — `texto` es lo que ya se escribió después del comando
+    /// (posiblemente vacío); si al confirmar con Enter no está vacío, se
+    /// procesa de una vez en el mismo paso en vez de abrir la Surface en
+    /// blanco (`/gafete 2, 25` + Enter saca a los tres de un tiro).
+    AbrirSalidaGafete {
+        texto: String,
+    },
     Ayuda,
     /// Comando desconocido, parámetro inválido o error de consulta: se muestra
     /// el mensaje con `✗` y la sugerencia de `/ayuda` cuando aplica.
@@ -293,6 +303,10 @@ pub struct AppState {
     /// es `Some`, el input deja de ser línea de comandos y edita el filtro
     /// clave:valor de Historial.
     pub historial: Option<HistorialState>,
+    /// Modo enclavado de salida por gafete abierto, si lo hay (DEC-057) —
+    /// a diferencia de las demás Surfaces no se cierra sola tras confirmar,
+    /// pensado para uso repetido (gafete tras gafete).
+    pub salida_gafete: Option<SalidaGafeteState>,
     /// Pistas de la línea de sugerencias (autocompletado contextual, teclas).
     pub sugerencias: Vec<String>,
     pub feedback: Option<(Instant, Feedback)>,
@@ -324,6 +338,7 @@ impl AppState {
             columnas_historial: SelectorColumnas::todas_visibles(),
             edicion_columnas: None,
             historial: None,
+            salida_gafete: None,
             sugerencias: Vec::new(),
             feedback: None,
             salir: false,
@@ -398,6 +413,8 @@ impl AppState {
             SurfaceActiva::Columnas
         } else if self.historial.is_some() {
             SurfaceActiva::Historial
+        } else if self.salida_gafete.is_some() {
+            SurfaceActiva::SalidaGafete
         } else {
             SurfaceActiva::Ninguna
         }

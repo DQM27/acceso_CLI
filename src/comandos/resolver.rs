@@ -94,6 +94,9 @@ pub fn resolver(core: &AppCore, entrada: &Entrada, sesion: &UsuarioSesion) -> Co
             match comando {
                 Comando::Ingreso => resolver_busqueda_contratistas(core, consulta),
                 Comando::Salida => resolver_salida(core, consulta, gafete_numero),
+                Comando::Gafete => ContextState::AbrirSalidaGafete {
+                    texto: consulta.clone(),
+                },
                 Comando::Activos => resolver_activos(core, consulta),
                 Comando::Nuevo => match sujeto_nuevo(consulta) {
                     Some(SujetoNuevo::Contratista) => ContextState::NuevoContratista,
@@ -455,6 +458,10 @@ pub fn calcular_sugerencias(core: &AppCore, texto: &str, entrada: &Entrada) -> V
             comando: Comando::Salida,
             ..
         } => vec!["nombre o G:<número> del gafete · ↑↓ elegir · Enter confirmar".into()],
+        Entrada::Comando {
+            comando: Comando::Gafete,
+            ..
+        } => vec!["número(s) de gafete, separados por coma · Enter registra la salida".into()],
         Entrada::Comando {
             comando: Comando::Activos,
             ..

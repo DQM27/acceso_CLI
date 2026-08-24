@@ -37,6 +37,8 @@ mod presentation;
 mod query_lang;
 mod render;
 mod resolver;
+mod salida_gafete;
+mod salida_gafete_controller;
 mod terminal;
 
 /// Nombre visual de la app en la escena de login — única fuente de verdad:
@@ -69,6 +71,7 @@ pub use formulario_empresa::FormularioEmpresa;
 pub use formulario_usuario::{CampoUsuario, FormularioUsuario, SubfaseUsuario};
 pub use historial::HistorialState;
 pub use parser::{Comando, Entrada, GafeteParse, MedioParse, parsear};
+pub use salida_gafete::SalidaGafeteState;
 pub use resolver::{
     autocompletar, calcular_sugerencias, ficha_desde_resumen, preparar_resumen_ingreso, resolver,
 };

@@ -46,6 +46,10 @@ pub(super) fn manejar_operando(core: &AppCore, app: &mut AppState, key: KeyEvent
             super::historial_controller::manejar_historial(core, app, key);
             return;
         }
+        SurfaceActiva::SalidaGafete => {
+            super::salida_gafete_controller::manejar_salida_gafete(core, app, key);
+            return;
+        }
         SurfaceActiva::Ninguna => {}
     }
     match key.code {
@@ -259,6 +263,9 @@ fn confirmar(core: &AppCore, app: &mut AppState) {
             super::formulario_usuario_controller::abrir_formulario_nuevo_usuario(app)
         }
         ContextState::AbrirHistorial => super::historial_controller::abrir_historial(core, app),
+        ContextState::AbrirSalidaGafete { texto } => {
+            super::salida_gafete_controller::abrir_salida_gafete(core, app, &texto)
+        }
         ContextState::ConfirmarCerrarSesion => {
             app.input.reset();
             app.feedback = None;
@@ -362,7 +369,7 @@ fn motivo_texto(error: &RegistroIngresoServiceError) -> String {
     }
 }
 
-fn mensaje_error_salida(error: &RegistroIngresoServiceError) -> String {
+pub(super) fn mensaje_error_salida(error: &RegistroIngresoServiceError) -> String {
     use RegistroIngresoServiceError::*;
     match error {
         RegistroNoActivo => "El ingreso ya no está activo".into(),
