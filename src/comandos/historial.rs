@@ -37,6 +37,11 @@ pub struct HistorialState {
     pub no_reconocidos: Vec<String>,
     /// Catálogo cargado al abrir Historial, para resolver `empresa:nombre`.
     pub empresas: Vec<Empresa>,
+    /// Ruta de exportación en edición (`F5`), o `None` si no se está
+    /// exportando. Input propio, no comparte `app.input` — así no pisa el
+    /// texto del filtro que sigue mostrándose congelado detrás mientras se
+    /// exporta (DEC-024: Esc a la exportación no debe perder la consulta).
+    pub exportacion_destino: Option<tui_input::Input>,
 }
 
 impl HistorialState {
@@ -55,6 +60,7 @@ impl HistorialState {
             seleccion: 0,
             no_reconocidos: Vec::new(),
             empresas,
+            exportacion_destino: None,
         }
     }
 
@@ -73,6 +79,16 @@ impl HistorialState {
         filtro.texto_persona = (!libre.is_empty()).then(|| libre.to_string());
         (filtro, resolucion.no_reconocidos)
     }
+}
+
+/// Nombre de archivo sugerido para la exportación — la ruta completa
+/// (carpeta por defecto, si existe) la resuelve `historial_controller.rs`,
+/// que es quien conoce el entorno (`%USERPROFILE%`).
+pub fn nombre_exportacion_predeterminado() -> String {
+    format!(
+        "historial_{}.xlsx",
+        ahora_costa_rica().format("%Y-%m-%d_%H%M")
+    )
 }
 
 fn fecha(valor: &str) -> Option<chrono::DateTime<chrono::Utc>> {

@@ -520,6 +520,17 @@ DEC-035  `F4` sobre la tabla de Historial (sólo con resultado ya aplicado
          consultar. `ObjetivoColumnas::Historial` es el tercer caso del
          mismo selector genérico; se persiste en `columnas_historial` del
          mismo archivo de preferencias (DEC-029).
+DEC-036  `F5` exporta el filtro completo de Historial a XLSX (mismo atajo
+         que la TUI clásica) — reusa `AppCore::exportar_historial` tal cual
+         (ya existía, no era exclusivo de la TUI clásica). El destino se
+         edita en un `tui_input::Input` propio de `HistorialState`
+         (`exportacion_destino`), no en `app.input`, para no pisar el
+         filtro que sigue congelado detrás mientras se exporta (DEC-024).
+         Primera versión: todas las columnas del exportador
+         (`historial::exportacion::ColumnaHistorial::ALL`, un enum de
+         dominio con más detalle que el `ColumnaHistorial` de
+         `comandos::columnas` usado para la vista) — elegir un subconjunto
+         para exportar queda fuera de esta pasada, es todo o nada.
 ```
 
 ## 14.1 Escena de login (implementada)

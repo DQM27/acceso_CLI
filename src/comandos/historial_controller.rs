@@ -3,10 +3,14 @@
 //! clave:valor); este archivo es el único que traduce teclas, consulta
 //! `AppCore::buscar_historial` y decide cuándo abrir/cerrar la Surface.
 
+use std::path::PathBuf;
+
 use crossterm::event::{Event, KeyCode, KeyEvent};
+use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
 
 use crate::application::AppCore;
+use crate::historial::exportacion::ColumnaHistorial as ColumnaExportacion;
 use crate::services::error::RegistroIngresoServiceError;
 
 use super::estado::{EdicionColumnas, ObjetivoColumnas};
@@ -31,6 +35,14 @@ fn cerrar_historial(core: &AppCore, app: &mut AppState) {
 }
 
 pub(super) fn manejar_historial(core: &AppCore, app: &mut AppState, key: KeyEvent) {
+    let exportando = app
+        .historial
+        .as_ref()
+        .is_some_and(|h| h.exportacion_destino.is_some());
+    if exportando {
+        manejar_exportacion(core, app, key);
+        return;
+    }
     let mostrando_resultado = app
         .historial
         .as_ref()
@@ -75,8 +87,118 @@ fn manejar_resultado(core: &AppCore, app: &mut AppState, key: KeyEvent) {
                 seleccion: 0,
             });
         }
+        // F5 abre el destino de exportación — mismo atajo que la TUI
+        // clásica, sobre el resultado ya aplicado en pantalla (exporta el
+        // filtro completo, no sólo la página visible).
+        KeyCode::F(5) => abrir_exportacion(app),
         _ => {}
     }
+}
+
+fn abrir_exportacion(app: &mut AppState) {
+    let Some(historial) = &mut app.historial else {
+        return;
+    };
+    let sin_resultados = historial
+        .resultado
+        .as_ref()
+        .is_none_or(|resultado| resultado.total == 0);
+    if sin_resultados {
+        app.mostrar_feedback(
+            "No hay movimientos para exportar".to_string(),
+            NivelFeedback::Advertencia,
+        );
+        return;
+    }
+    historial.exportacion_destino = Some(Input::new(ruta_exportacion_predeterminada()));
+}
+
+fn manejar_exportacion(core: &AppCore, app: &mut AppState, key: KeyEvent) {
+    match key.code {
+        // Cancela la exportación y vuelve a mostrar el mismo resultado —
+        // el filtro y la consulta ya aplicada no se tocan.
+        KeyCode::Esc => {
+            if let Some(historial) = &mut app.historial {
+                historial.exportacion_destino = None;
+            }
+        }
+        KeyCode::Enter => confirmar_exportacion(core, app),
+        _ => {
+            if let Some(historial) = &mut app.historial
+                && let Some(destino) = &mut historial.exportacion_destino
+            {
+                destino.handle_event(&Event::Key(key));
+            }
+        }
+    }
+}
+
+/// Exporta el filtro completo (no sólo la página en pantalla) con todas las
+/// columnas del exportador (`ColumnaExportacion::ALL`) — elegir un
+/// subconjunto de columnas para exportar queda deliberadamente fuera de
+/// esta primera versión; hoy es todo o nada.
+fn confirmar_exportacion(core: &AppCore, app: &mut AppState) {
+    let Some(historial) = &app.historial else {
+        return;
+    };
+    let Some(destino_input) = &historial.exportacion_destino else {
+        return;
+    };
+    let destino = match normalizar_destino(destino_input.value()) {
+        Ok(destino) => destino,
+        Err(mensaje) => {
+            app.mostrar_feedback(mensaje, NivelFeedback::Error);
+            return;
+        }
+    };
+    let mut filtro = historial.filtro.clone();
+    filtro.offset = 0;
+
+    let resultado = core.exportar_historial(&filtro, &ColumnaExportacion::ALL, &destino);
+    if let Some(historial) = &mut app.historial {
+        historial.exportacion_destino = None;
+    }
+    match resultado {
+        Ok(cantidad) => app.mostrar_feedback(
+            format!("Exportado — {cantidad} movimientos → {}", destino.display()),
+            NivelFeedback::Exito,
+        ),
+        Err(error) => app.mostrar_feedback(
+            format!("No se pudo exportar: {error}"),
+            NivelFeedback::Error,
+        ),
+    }
+}
+
+/// Mismo criterio que `ruta_exportacion_predeterminada` de la TUI clásica
+/// (reescrito, no importado — DEC-002/DEC-014): nombre con fecha/hora en
+/// `Documents` si existe una carpeta de usuario válida, si no sólo el
+/// nombre (relativo al directorio de trabajo).
+fn ruta_exportacion_predeterminada() -> String {
+    let nombre = super::historial::nombre_exportacion_predeterminado();
+    std::env::var_os("USERPROFILE")
+        .map(PathBuf::from)
+        .filter(|ruta| ruta.is_absolute())
+        .map(|ruta| ruta.join("Documents"))
+        .filter(|ruta| ruta.is_dir())
+        .map(|ruta| ruta.join(&nombre))
+        .unwrap_or_else(|| PathBuf::from(nombre))
+        .display()
+        .to_string()
+}
+
+fn normalizar_destino(valor: &str) -> Result<PathBuf, String> {
+    let valor = valor.trim();
+    if valor.is_empty() {
+        return Err("Ingrese una ruta para el archivo XLSX".to_string());
+    }
+    let mut destino = PathBuf::from(valor);
+    match destino.extension().and_then(|extension| extension.to_str()) {
+        None => destino.set_extension("xlsx"),
+        Some(extension) if extension.eq_ignore_ascii_case("xlsx") => true,
+        Some(_) => return Err("La exportación debe usar la extensión .xlsx".to_string()),
+    };
+    Ok(destino)
 }
 
 fn mover_seleccion(app: &mut AppState, delta: isize) {
@@ -158,5 +280,33 @@ fn mensaje_error(error: &RegistroIngresoServiceError) -> String {
             "El rango de fechas no es válido (desde debe ser antes que hasta)".to_string()
         }
         _ => "No se pudo consultar el historial".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ruta_vacia_es_error() {
+        assert!(normalizar_destino("").is_err());
+        assert!(normalizar_destino("   ").is_err());
+    }
+
+    #[test]
+    fn sin_extension_agrega_xlsx() {
+        let destino = normalizar_destino("historial").unwrap();
+        assert_eq!(destino.extension().and_then(|e| e.to_str()), Some("xlsx"));
+    }
+
+    #[test]
+    fn extension_xlsx_se_conserva_sin_distinguir_mayusculas() {
+        let destino = normalizar_destino("historial.XLSX").unwrap();
+        assert_eq!(destino.extension().and_then(|e| e.to_str()), Some("XLSX"));
+    }
+
+    #[test]
+    fn otra_extension_es_error() {
+        assert!(normalizar_destino("historial.csv").is_err());
     }
 }

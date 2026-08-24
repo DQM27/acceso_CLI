@@ -193,8 +193,10 @@ fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
         return;
     }
     if let Some(historial) = &app.historial {
-        let pista = if historial.resultado.is_some() {
-            "↑↓ moverse · PageUp/PageDown más resultados · F4 columnas · Esc editar filtro"
+        let pista = if historial.exportacion_destino.is_some() {
+            "escriba la ruta del XLSX · Enter exporta · Esc cancela"
+        } else if historial.resultado.is_some() {
+            "↑↓ moverse · PageUp/PageDown más · F4 columnas · F5 exportar · Esc editar filtro"
         } else {
             "escriba clave:valor · Enter aplica · Esc cierra Historial"
         };
@@ -289,7 +291,20 @@ fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState, paleta: Option<&
 /// como sin ella. Sólo se llama en fase `Operando`: el login tiene su propia
 /// composición sin caja (`render_login`), nunca pasa por acá.
 fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
-    let (etiqueta, valor, cursor_visible, cursor_chars) = if let Some(historial) = &app.historial {
+    let (etiqueta, valor, cursor_visible, cursor_chars) = if let Some(destino) = app
+        .historial
+        .as_ref()
+        .and_then(|h| h.exportacion_destino.as_ref())
+    {
+        // F5: el input edita la ruta de exportación — propio, no
+        // `app.input`, para no pisar el filtro congelado detrás.
+        (
+            "destino xlsx › ".to_string(),
+            destino.value().to_string(),
+            true,
+            destino.visual_cursor(),
+        )
+    } else if let Some(historial) = &app.historial {
         // Editando: el input escribe el filtro clave:valor. Mostrando
         // resultado (Enter ya aplicó, DEC-024): el texto queda congelado
         // hasta Esc, sin cursor — no se edita mientras se navega.
@@ -344,10 +359,18 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
 
     let ancho_etiqueta = etiqueta.chars().count() as u16;
     let viewport = area.width.saturating_sub(ancho_etiqueta + 1) as usize;
-    let scroll = if cursor_visible {
-        app.input.visual_scroll(viewport)
-    } else {
-        0
+    // El scroll se calcula sobre el `Input` que de verdad gobierna el
+    // cursor en este frame — con la exportación abierta es
+    // `exportacion_destino`, no `app.input` (que sigue congelado detrás).
+    let scroll = match (
+        cursor_visible,
+        app.historial
+            .as_ref()
+            .and_then(|h| h.exportacion_destino.as_ref()),
+    ) {
+        (false, _) => 0,
+        (true, Some(destino)) => destino.visual_scroll(viewport),
+        (true, None) => app.input.visual_scroll(viewport),
     };
     let visible: String = valor.chars().skip(scroll).take(viewport).collect();
 
@@ -1356,6 +1379,21 @@ fn lineas_historial(
     ancho: u16,
     columnas: &SelectorColumnas<ColumnaHistorial>,
 ) -> Vec<Line<'static>> {
+    if historial.exportacion_destino.is_some() {
+        let total = historial.resultado.as_ref().map_or(0, |r| r.total);
+        return vec![
+            Line::from(Span::styled("EXPORTAR HISTORIAL", muted())),
+            Line::from(""),
+            Line::from(format!(
+                "Se exportarán los {total} movimientos del filtro vigente a un archivo XLSX."
+            )),
+            Line::from(""),
+            Line::from(Span::styled(
+                "Enter para exportar · Esc para cancelar",
+                acento(),
+            )),
+        ];
+    }
     let Some(resultado) = &historial.resultado else {
         // Editando: todavía no se aplicó ninguna consulta (o se volvió a
         // editar con Esc) — sin filtrado en vivo, DEC-024.
@@ -1696,6 +1734,10 @@ fn lineas_ayuda() -> Vec<Line<'static>> {
     )));
     lineas.push(Line::from(Span::styled(
         "F4 sobre una tabla de resultados: elegir qué columnas mostrar",
+        muted(),
+    )));
+    lineas.push(Line::from(Span::styled(
+        "F5 con resultados de /historial: exportar el filtro completo a XLSX",
         muted(),
     )));
     lineas.push(Line::from(Span::styled(
