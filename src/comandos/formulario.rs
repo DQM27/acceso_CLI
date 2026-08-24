@@ -264,8 +264,7 @@ impl FormularioContratista {
     /// Misma regla de negocio que `Contratista::requiere_praind`: ruta o
     /// (Praind ∨ InHouse).
     pub fn requiere_praind(&self) -> bool {
-        self.es_personal_ruta
-            || matches!(self.tipo, TipoIngreso::Praind | TipoIngreso::InHouse)
+        self.es_personal_ruta || matches!(self.tipo, TipoIngreso::Praind | TipoIngreso::InHouse)
     }
 
     /// Empresas elegibles filtradas por el texto del selector: sólo activas,
@@ -278,8 +277,7 @@ impl FormularioContratista {
             .iter()
             .filter(|empresa| empresa.activo || Some(empresa.id) == empresa_actual)
             .filter(|empresa| {
-                consulta.is_empty()
-                    || plegar_para_busqueda(&empresa.nombre).contains(&consulta)
+                consulta.is_empty() || plegar_para_busqueda(&empresa.nombre).contains(&consulta)
             })
             .collect()
     }
@@ -316,7 +314,9 @@ impl FormularioContratista {
 
     /// Los mismos datos validados pero para actualizar. Llama a `validar`
     /// antes implícitamente: si hay errores quedan registrados igual.
-    pub fn datos_actualizacion(&mut self) -> Result<DatosActualizacionContratista, Vec<(Campo, String)>> {
+    pub fn datos_actualizacion(
+        &mut self,
+    ) -> Result<DatosActualizacionContratista, Vec<(Campo, String)>> {
         let datos = self.validar()?;
         Ok(DatosActualizacionContratista {
             cedula: datos.cedula,
@@ -641,7 +641,11 @@ mod tests {
         form.es_personal_ruta = true;
         form.fecha_praind.clear();
         let errores = form.validar().err().expect("ruta requiere PRAIND");
-        assert!(errores.iter().any(|(campo, _)| *campo == Campo::FechaPraind));
+        assert!(
+            errores
+                .iter()
+                .any(|(campo, _)| *campo == Campo::FechaPraind)
+        );
     }
 
     // ── Edición ──────────────────────────────────────────────────────────

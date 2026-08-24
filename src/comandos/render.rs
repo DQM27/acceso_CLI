@@ -9,7 +9,7 @@
 use chrono::{DateTime, Utc};
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout, Rect},
+    layout::{Alignment, Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Paragraph},
@@ -22,7 +22,9 @@ use crate::services::registro_ingreso_service::IngresoActivoResumen;
 use crate::tiempo::a_costa_rica;
 
 use super::estado::{AppState, ContextState, Fase, NivelFeedback};
-use super::formulario::{Campo, FormularioContratista, MAX_VISIBLES_EMPRESAS, ModoFormulario, Subfase};
+use super::formulario::{
+    Campo, FormularioContratista, MAX_VISIBLES_EMPRESAS, ModoFormulario, Subfase,
+};
 use super::parser::Comando;
 use super::resolver::MIN_CONSULTA;
 
@@ -53,6 +55,25 @@ fn estilo_seleccion() -> Style {
     Style::default().add_modifier(Modifier::REVERSED)
 }
 
+/// Gramática visual compartida por toda la app (ver
+/// `docs/lenguaje-visual-mutaciones.md`): el glifo nunca depende del color
+/// para transmitir significado — el color sólo refuerza.
+///
+/// ```text
+/// ●  procesando / sistema activo
+/// ›  esperando entrada / foco
+/// ✓  completado
+/// !  advertencia
+/// ×  falló / error / rechazo
+/// ```
+fn glifo_feedback(nivel: NivelFeedback) -> (&'static str, Style) {
+    match nivel {
+        NivelFeedback::Exito => ("✓", exito()),
+        NivelFeedback::Advertencia => ("!", advertencia()),
+        NivelFeedback::Error => ("×", estilo_error()),
+    }
+}
+
 pub fn render(frame: &mut Frame, app: &AppState) {
     let area = frame.area();
     if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
@@ -62,6 +83,13 @@ pub fn render(frame: &mut Frame, app: &AppState) {
             )),
             area,
         );
+        return;
+    }
+
+    // El login vive en una composición propia, sin cajas ni el prompt de
+    // línea de comandos — no comparte layout con la interfaz operativa.
+    if !matches!(app.fase, Fase::Operando { .. }) {
+        render_login(frame, area, app);
         return;
     }
 
@@ -84,12 +112,9 @@ pub fn render(frame: &mut Frame, app: &AppState) {
     ])
     .areas(area);
 
-    let lineas = match &app.fase {
-        Fase::Operando { .. } => match &app.formulario {
-            Some(formulario) => lineas_formulario(formulario, app.input.value()),
-            None => lineas_contexto(&app.contexto, area_contexto.width),
-        },
-        fase => lineas_login(fase),
+    let lineas = match &app.formulario {
+        Some(formulario) => lineas_formulario(formulario, app.input.value()),
+        None => lineas_contexto(&app.contexto, area_contexto.width),
     };
     frame.render_widget(Paragraph::new(lineas), area_contexto);
 
@@ -124,11 +149,7 @@ fn paleta_comandos(app: &AppState) -> Option<Vec<Comando>> {
 /// autocompletado contextual, truncadas al ancho disponible.
 fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
     if let Some(feedback) = app.feedback_vigente() {
-        let (simbolo, estilo) = match feedback.nivel {
-            NivelFeedback::Exito => ("✓", exito()),
-            NivelFeedback::Advertencia => ("⚠", advertencia()),
-            NivelFeedback::Error => ("✗", estilo_error()),
-        };
+        let (simbolo, estilo) = glifo_feedback(feedback.nivel);
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::styled(format!("{simbolo} "), estilo),
@@ -220,51 +241,43 @@ fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState, paleta: Option<&
 
 /// Sólo la línea de texto del input (etiqueta + valor + cursor), sin marco —
 /// el marco lo pone `render_prompt`, que reutiliza esto tanto con paleta
-/// como sin ella.
+/// como sin ella. Sólo se llama en fase `Operando`: el login tiene su propia
+/// composición sin caja (`render_login`), nunca pasa por acá.
 fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
-    let (etiqueta, valor, cursor_visible, cursor_chars) = match &app.fase {
-        Fase::LoginCedula { .. } => (
-            "cédula › ".to_string(),
+    let (etiqueta, valor, cursor_visible, cursor_chars) = match &app.formulario {
+        // Con el formulario abierto el input edita el campo activo (o
+        // filtra empresas en el selector): la etiqueta lo anuncia y el
+        // cursor sólo aparece cuando hay algo que teclear.
+        Some(formulario) => {
+            let etiqueta = match formulario.subfase {
+                Subfase::EligiendoEmpresa { .. } => "empresa › ".to_string(),
+                Subfase::Resumen => "confirmar › ".to_string(),
+                Subfase::Editando => match formulario.campo {
+                    Campo::Cedula => "cédula › ".to_string(),
+                    Campo::Nombre => "nombre › ".to_string(),
+                    Campo::FechaPraind => "fecha praind › ".to_string(),
+                    campo => format!("{} › ", campo.etiqueta().to_lowercase()),
+                },
+            };
+            let editable = matches!(formulario.subfase, Subfase::EligiendoEmpresa { .. })
+                || formulario.campo.es_texto();
+            (
+                etiqueta,
+                app.input.value().to_string(),
+                editable,
+                if editable {
+                    app.input.visual_cursor()
+                } else {
+                    0
+                },
+            )
+        }
+        None => (
+            "> ".to_string(),
             app.input.value().to_string(),
             true,
             app.input.visual_cursor(),
         ),
-        Fase::LoginPassword { .. } => {
-            let largo = app.input.value().chars().count();
-            ("contraseña › ".to_string(), "•".repeat(largo), true, largo)
-        }
-        Fase::Verificando => ("verificando › ".to_string(), String::new(), false, 0),
-        Fase::Operando { .. } => match &app.formulario {
-            // Con el formulario abierto el input edita el campo activo (o
-            // filtra empresas en el selector): la etiqueta lo anuncia y el
-            // cursor sólo aparece cuando hay algo que teclear.
-            Some(formulario) => {
-                let etiqueta = match formulario.subfase {
-                    Subfase::EligiendoEmpresa { .. } => "empresa › ".to_string(),
-                    Subfase::Resumen => "confirmar › ".to_string(),
-                    Subfase::Editando => match formulario.campo {
-                        Campo::Cedula => "cédula › ".to_string(),
-                        Campo::Nombre => "nombre › ".to_string(),
-                        Campo::FechaPraind => "fecha praind › ".to_string(),
-                        campo => format!("{} › ", campo.etiqueta().to_lowercase()),
-                    },
-                };
-                let editable = matches!(formulario.subfase, Subfase::EligiendoEmpresa { .. })
-                    || formulario.campo.es_texto();
-                (
-                    etiqueta,
-                    app.input.value().to_string(),
-                    editable,
-                    if editable { app.input.visual_cursor() } else { 0 },
-                )
-            }
-            None => (
-                "> ".to_string(),
-                app.input.value().to_string(),
-                true,
-                app.input.visual_cursor(),
-            ),
-        },
     };
 
     let ancho_etiqueta = etiqueta.chars().count() as u16;
@@ -286,47 +299,119 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
 }
 
 // ── Login ────────────────────────────────────────────────────────────────
+//
+// Escena propia, sin cajas ni bordes: identidad, foco y aviso apoyados sólo
+// en espaciado, alineación y la gramática de glifos (● › ✓ ! ×). El cursor
+// es un "_" con estilo, nunca el bloque parpadeante del terminal — por eso
+// esta función jamás llama a `frame.set_cursor_position`.
 
-fn lineas_login(fase: &Fase) -> Vec<Line<'static>> {
-    let mut lineas = vec![
-        Line::from(Span::styled(
-            "BRISAS CLI",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
+const NOMBRE_APP: &str = "Brisas CLI";
+
+fn render_login(frame: &mut Frame, area: Rect, app: &AppState) {
+    let lineas = lineas_login(app);
+    let alto = (lineas.len() as u16).min(area.height);
+    // El bloque arranca un poco antes de la mitad de la pantalla — arriba
+    // del centro, no exactamente centrado ni pegado al borde — dejando aire
+    // debajo para que la escena respire.
+    let margen_superior = area.height.saturating_sub(alto) / 3;
+    let bloque = Rect::new(area.x, area.y + margen_superior, area.width, alto);
+    frame.render_widget(Paragraph::new(lineas).alignment(Alignment::Center), bloque);
+}
+
+fn lineas_login(app: &AppState) -> Vec<Line<'static>> {
+    vec![
+        titulo_identidad(&app.fase),
         Line::from(""),
-    ];
-    match fase {
-        Fase::LoginCedula { error } => {
-            lineas.push(Line::from(
-                "Escriba su cédula y presione Enter para iniciar sesión.",
-            ));
-            if let Some(mensaje) = error {
-                lineas.push(Line::from(""));
-                lineas.push(Line::from(Span::styled(
-                    format!("✗ {mensaje}"),
-                    estilo_error(),
-                )));
-            }
+        linea_estado_login(&app.fase, app),
+        Line::from(""),
+        linea_aviso_login(app),
+    ]
+}
+
+/// El título muta: "Brisas CLI" mientras no hay identidad reconocida, y el
+/// nombre del operador desde que la cédula se resolvió contra SQLite — la
+/// misma "ranura" visual cambia de contenido, no desaparece una y aparece
+/// otra.
+fn titulo_identidad(fase: &Fase) -> Line<'static> {
+    let texto = match fase {
+        Fase::LoginCedula => NOMBRE_APP,
+        Fase::LoginPassword { nombre, .. } | Fase::Verificando { nombre } => nombre.as_str(),
+        Fase::Operando { .. } => "",
+    };
+    titulo_grande(texto)
+}
+
+/// Título "un poco grande" sin ASCII art multilínea (se rompe fácil en una
+/// terminal angosta) ni una crate nueva: el tamaño sale del espaciado entre
+/// letras + negrita + acento — suficiente para distinguirlo del resto del
+/// texto sin sentirse a banner.
+fn titulo_grande(texto: &str) -> Line<'static> {
+    let mut espaciado = String::new();
+    for caracter in texto.chars() {
+        if caracter == ' ' {
+            espaciado.push_str("   ");
+        } else {
+            espaciado.push(caracter);
+            espaciado.push(' ');
         }
-        Fase::LoginPassword { cedula, error } => {
-            lineas.push(Line::from(format!("Cédula: {cedula}")));
-            lineas.push(Line::from(
-                "Escriba su contraseña y presione Enter. Esc vuelve a la cédula.",
-            ));
-            if let Some(mensaje) = error {
-                lineas.push(Line::from(""));
-                lineas.push(Line::from(Span::styled(
-                    format!("✗ {mensaje}"),
-                    estilo_error(),
-                )));
-            }
-        }
-        Fase::Verificando => {
-            lineas.push(Line::from("Verificando…"));
-        }
-        Fase::Operando { .. } => {}
     }
-    lineas
+    Line::from(Span::styled(
+        espaciado.trim_end().to_string(),
+        Style::default()
+            .add_modifier(Modifier::BOLD)
+            .fg(Color::Cyan),
+    ))
+}
+
+fn linea_estado_login(fase: &Fase, app: &AppState) -> Line<'static> {
+    match fase {
+        Fase::LoginCedula => {
+            let vacio = app.input.value().is_empty();
+            linea_prompt("Identificación", app.input.value(), vacio)
+        }
+        Fase::LoginPassword { .. } => {
+            let vacio = app.input.value().is_empty();
+            let oculto = "•".repeat(app.input.value().chars().count());
+            linea_prompt("Contraseña", &oculto, vacio)
+        }
+        // Trabajo real (Argon2 en un hilo aparte), no una animación
+        // decorativa: el glifo ● es el mismo que en el resto de la app para
+        // "sistema activo".
+        Fase::Verificando { .. } => Line::from(Span::styled("● Verificando", muted())),
+        Fase::Operando { .. } => Line::from(""),
+    }
+}
+
+/// `vacio`: sin nada tecleado se muestra la etiqueta como pista (el foco `›`
+/// ya está puesto, no hace falta cursor todavía); en cuanto hay texto, la
+/// etiqueta se retira y el valor ocupa su lugar con el cursor `_` al final —
+/// la etiqueta se simplifica en el propio valor, no coexisten.
+fn linea_prompt(etiqueta: &str, valor_mostrado: &str, vacio: bool) -> Line<'static> {
+    if vacio {
+        Line::from(vec![
+            Span::styled("› ", acento()),
+            Span::styled(etiqueta.to_string(), muted()),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled("› ", acento()),
+            Span::raw(valor_mostrado.to_string()),
+            Span::styled("_", acento()),
+        ])
+    }
+}
+
+fn linea_aviso_login(app: &AppState) -> Line<'static> {
+    match app.feedback_vigente() {
+        Some(feedback) => {
+            let (simbolo, estilo) = glifo_feedback(feedback.nivel);
+            Line::from(vec![
+                Span::styled(format!("{simbolo} "), estilo),
+                Span::styled(feedback.texto.clone(), estilo),
+            ])
+        }
+        None => Line::from(""),
+    }
 }
 
 // ── Contexto operativo ───────────────────────────────────────────────────
@@ -628,10 +713,7 @@ fn lineas_resumen_salida(activo: &IngresoActivoResumen) -> Vec<Line<'static>> {
             Span::styled("Tipo:    ", muted()),
             Span::raw(tipo_texto(activo.tipo_ingreso)),
         ]),
-        Line::from(vec![
-            Span::styled("Gafete:  ", muted()),
-            Span::raw(gafete),
-        ]),
+        Line::from(vec![Span::styled("Gafete:  ", muted()), Span::raw(gafete)]),
         Line::from(""),
         Line::from(format!(
             "Ingresó {} · lleva {} dentro",
@@ -793,10 +875,7 @@ fn lineas_campos_formulario(
         ModoFormulario::Nuevo => "NUEVO CONTRATISTA".to_string(),
         ModoFormulario::Editar { .. } => format!("EDITAR CONTRATISTA — {}", formulario.nombre),
     };
-    let mut lineas = vec![
-        Line::from(Span::styled(titulo, muted())),
-        Line::from(""),
-    ];
+    let mut lineas = vec![Line::from(Span::styled(titulo, muted())), Line::from("")];
 
     for campo in Campo::ORDEN {
         lineas.push(linea_campo(formulario, campo));
@@ -829,7 +908,10 @@ fn lineas_campos_formulario(
 /// errores de validación en ✗ junto al valor.
 fn linea_campo(formulario: &FormularioContratista, campo: Campo) -> Line<'static> {
     let activo = formulario.campo == campo
-        && matches!(formulario.subfase, Subfase::Editando | Subfase::EligiendoEmpresa { .. });
+        && matches!(
+            formulario.subfase,
+            Subfase::Editando | Subfase::EligiendoEmpresa { .. }
+        );
     let habilitado = formulario.campo_habilitado(campo);
     let marcador = if activo { "▸ " } else { "  " };
     let etiqueta = format!("{:<16}", campo.etiqueta());
@@ -844,7 +926,10 @@ fn linea_campo(formulario: &FormularioContratista, campo: Campo) -> Line<'static
 
     if !habilitado {
         return Line::from(Span::styled(
-            format!("{marcador}{etiqueta}{} (sin permiso)", valor_campo(formulario, campo)),
+            format!(
+                "{marcador}{etiqueta}{} (sin permiso)",
+                valor_campo(formulario, campo)
+            ),
             muted(),
         ));
     }
@@ -926,7 +1011,10 @@ fn lineas_resumen_formulario(formulario: &FormularioContratista) -> Vec<Line<'st
         ("Empresa", empresa),
         ("Tipo", tipo_texto(formulario.tipo).to_string()),
         ("Fecha PRAIND", fecha),
-        ("Personal de ruta", si_no(formulario.es_personal_ruta).to_string()),
+        (
+            "Personal de ruta",
+            si_no(formulario.es_personal_ruta).to_string(),
+        ),
         ("Acceso", si_no(formulario.tiene_acceso).to_string()),
     ];
     let mut lineas = vec![

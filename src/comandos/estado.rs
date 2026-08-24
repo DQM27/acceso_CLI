@@ -35,17 +35,27 @@ pub struct Feedback {
 
 /// Fase global de la interfaz: primero el login (cédula y contraseña en el
 /// mismo input), luego la operación normal dirigida por comandos.
+///
+/// Los errores de login (usuario no válido, credenciales inválidas) ya no
+/// viajan como campo de la fase: usan el mismo `feedback` transitorio que el
+/// resto de la aplicación — una sola gramática de aviso (`✓ ! ×`) en vez de
+/// una variante propia por pantalla.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Fase {
-    LoginCedula {
-        error: Option<String>,
-    },
+    LoginCedula,
+    /// `nombre` ya se resolvió contra SQLite al confirmar la cédula (lectura
+    /// rápida, sin Argon2) — es lo que muta el título "Brisas CLI" en la
+    /// identidad del operador durante el resto del login.
     LoginPassword {
         cedula: String,
-        error: Option<String>,
+        nombre: String,
     },
-    /// Argon2 corriendo en un hilo aparte; el input queda bloqueado.
-    Verificando,
+    /// Argon2 corriendo en un hilo aparte; el input queda bloqueado. Conserva
+    /// `nombre` para que la identidad reconocida siga en pantalla mientras
+    /// se verifica.
+    Verificando {
+        nombre: String,
+    },
     Operando {
         sesion: UsuarioSesion,
     },
@@ -155,7 +165,7 @@ impl AppState {
     pub fn new() -> Self {
         Self {
             input: Input::default(),
-            fase: Fase::LoginCedula { error: None },
+            fase: Fase::LoginCedula,
             contexto: ContextState::Ayuda,
             formulario: None,
             sugerencias: Vec::new(),
@@ -178,14 +188,21 @@ impl AppState {
         self.feedback = Some((Instant::now(), Feedback { texto, nivel }));
     }
 
-    /// El feedback transitorio expira solo; se revisa en cada vuelta del bucle
-    /// (que ya hace poll con timeout corto por el cursor y los hilos).
-    pub fn expirar_feedback(&mut self) {
-        if let Some((instante, _)) = &self.feedback
-            && instante.elapsed() >= DURACION_FEEDBACK
-        {
+    /// El feedback transitorio expira solo. Devuelve `true` si acaba de
+    /// expirar (el llamador lo usa para saber si hace falta redibujar).
+    pub fn expirar_feedback(&mut self) -> bool {
+        let expiro = matches!(&self.feedback, Some((instante, _)) if instante.elapsed() >= DURACION_FEEDBACK);
+        if expiro {
             self.feedback = None;
         }
+        expiro
+    }
+
+    /// Tiempo que falta para que el feedback vigente expire por sí solo, si
+    /// hay uno. Lo usa el scheduler del loop para no despertar antes de tiempo.
+    pub fn feedback_restante(&self) -> Option<std::time::Duration> {
+        let (instante, _) = self.feedback.as_ref()?;
+        Some(DURACION_FEEDBACK.saturating_sub(instante.elapsed()))
     }
 
     pub fn feedback_vigente(&self) -> Option<&Feedback> {

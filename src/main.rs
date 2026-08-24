@@ -11,10 +11,9 @@ use control_acceso::tui::app::SalidaApp;
 /// de datos (ver comentario en `AppCore::resetear_password_root`).
 const FLAG_RESET_ROOT: &str = "--reset-root";
 
-/// Interfaz alternativa dirigida por comandos (input persistente + área
-/// contextual adaptativa). Sin este flag el comportamiento es idéntico al de
-/// siempre: la TUI clásica.
-const FLAG_COMANDOS: &str = "--comandos";
+/// Interfaz clásica (menús y paneles). La ruta por defecto (sin flags) es
+/// ahora la interfaz de comandos; este flag existe mientras ambas conviven.
+const FLAG_TUI_CLASICA: &str = "--tui-clasica";
 
 #[derive(Debug, thiserror::Error)]
 enum StartupError {
@@ -40,13 +39,30 @@ fn run() -> Result<(), StartupError> {
     let ruta_base_datos = ruta_base_datos().map_err(StartupError::RutaBaseDatos)?;
     let _instancia = InstanciaGuard::adquirir(&ruta_base_datos).map_err(StartupError::Instancia)?;
 
-    if std::env::args().any(|arg| arg == FLAG_COMANDOS) {
-        return run_comandos(&ruta_base_datos);
+    if std::env::args().any(|arg| arg == FLAG_TUI_CLASICA) {
+        return run_tui_clasica(&ruta_base_datos);
     }
 
+    run_comandos(&ruta_base_datos)
+}
+
+/// Ruta por defecto: la interfaz de comandos. Mismo guard de instancia (lo
+/// adquiere `run` antes de bifurcar) y mismo respaldo diario que la TUI
+/// clásica; la configuración inicial la detecta y la explica la propia
+/// interfaz de comandos (remite a `--tui-clasica` para crear el ROOT).
+fn run_comandos(ruta_base_datos: &std::path::Path) -> Result<(), StartupError> {
+    let core = AppCore::abrir(ruta_base_datos).map_err(StartupError::Bootstrap)?;
+    let _ = core.respaldo_automatico_diario_si_hace_falta();
+    control_acceso::comandos::run(core, None).map_err(StartupError::Comandos)
+}
+
+/// `--tui-clasica`: la interfaz original de menús y paneles. Sigue siendo la
+/// única que crea el usuario ROOT inicial y la que permite saltar al modo
+/// comandos reusando la sesión ya autenticada (`SalidaApp::ModoComandos`).
+fn run_tui_clasica(ruta_base_datos: &std::path::Path) -> Result<(), StartupError> {
     let mut mensaje_inicial = None;
     loop {
-        let core = match AppCore::abrir(&ruta_base_datos) {
+        let core = match AppCore::abrir(ruta_base_datos) {
             Ok(core) => core,
             Err(error) => {
                 // Muestra el error en la TUI (mismo mecanismo que usa un fallo de
@@ -84,7 +100,7 @@ fn run() -> Result<(), StartupError> {
                 drop(core); // cierra la conexión SQLite antes de tocar el archivo activo
                 if let Err(error) = control_acceso::database::backup::restaurar_respaldo(
                     &candidata,
-                    &ruta_base_datos,
+                    ruta_base_datos,
                 ) {
                     mensaje_inicial = Some(format!(
                         "No se pudo restaurar: {error}. Se conservó la base anterior."
@@ -93,15 +109,6 @@ fn run() -> Result<(), StartupError> {
             }
         }
     }
-}
-
-/// Ruta `--comandos`: mismo guard de instancia (lo adquiere `run` antes de
-/// bifurcar) y mismo respaldo diario que la ruta clásica; la configuración
-/// inicial la detecta y la explica la propia interfaz de comandos.
-fn run_comandos(ruta_base_datos: &std::path::Path) -> Result<(), StartupError> {
-    let core = AppCore::abrir(ruta_base_datos).map_err(StartupError::Bootstrap)?;
-    let _ = core.respaldo_automatico_diario_si_hace_falta();
-    control_acceso::comandos::run(core, None).map_err(StartupError::Comandos)
 }
 
 fn leer_linea(prompt: &str) -> Result<String, StartupError> {
