@@ -11,6 +11,15 @@
 //! cualquier prefijo no ambiguo). El resto de los tokens forman la consulta de
 //! búsqueda libre.
 //!
+//! Segunda forma de llegar a un comando "de ítem" (`ingreso`/`salida`/
+//! `editar`): un modificador `--letra`/`--palabra` sobre texto libre, p. ej.
+//! `Ana --e` o `Ana --i G:27` — produce exactamente la misma [`Entrada`] que
+//! `/editar Ana` o `/ingreso Ana G:27`. Ver §5.1 y DEC-018/DEC-021 de
+//! `docs/lenguaje-visual-mutaciones.md`. Los comandos globales (`nuevo`,
+//! `activos`, `ayuda`, `cerrarsesion`) no tienen esta segunda forma: no
+//! actúan sobre un resultado de búsqueda, así que sólo existen como
+//! `/comando`.
+//!
 //! Decisiones de diseño:
 //! - No existe un comando `/buscar`: el texto sin `/` inicial YA es la
 //!   búsqueda (la acción más común después de ingresos, y la única sin
@@ -20,6 +29,9 @@
 //!   entrada parcial en cada pulsación de tecla.
 //! - Un token `clave:valor` con clave desconocida (p. ej. `X:3`) se conserva
 //!   como texto de la consulta, no como error.
+//! - Los parámetros `G:`/`M:` sólo se interpretan cuando hay una acción
+//!   seleccionada (`/comando` o `--modificador`): una búsqueda libre sin
+//!   acción nunca pierde texto por parecerse a un parámetro.
 
 use crate::models::medio_ingreso::MedioIngreso;
 
@@ -74,6 +86,13 @@ impl Comando {
             _ => None,
         }
     }
+
+    /// Comandos que actúan sobre un resultado de búsqueda ya encontrado —
+    /// los únicos que, además de `/comando`, aceptan un modificador
+    /// `--letra`/`--palabra` sobre texto libre (DEC-021).
+    pub fn es_de_item(self) -> bool {
+        matches!(self, Self::Ingreso | Self::Salida | Self::Editar)
+    }
 }
 
 /// Resultado de interpretar un parámetro `G:valor`.
@@ -123,11 +142,7 @@ pub fn parsear(texto: &str) -> Entrada {
     let mut tokens = recortado.split_whitespace();
     let primero = tokens.next().unwrap_or_default();
     let Some(nombre) = primero.strip_prefix('/') else {
-        // Texto libre sin comando: se conserva el texto completo (con sus
-        // espacios internos) como consulta de búsqueda.
-        return Entrada::BusquedaLibre {
-            consulta: recortado.to_string(),
-        };
+        return parsear_busqueda_libre(recortado);
     };
 
     // "/" a secas no es un error: el operador apenas empezó a escribir un
@@ -147,6 +162,56 @@ pub fn parsear(texto: &str) -> Entrada {
     let mut medio: Option<MedioParse> = None;
 
     for token in tokens {
+        match clasificar_token(token) {
+            Clasificacion::Gafete(valor) => gafete = Some(valor),
+            Clasificacion::Medio(valor) => medio = Some(valor),
+            Clasificacion::Ignorado => {}
+            Clasificacion::Texto => consulta.push(token),
+        }
+    }
+
+    Entrada::Comando {
+        comando,
+        consulta: consulta.join(" "),
+        gafete,
+        medio,
+    }
+}
+
+/// Texto sin `/` inicial: por defecto es búsqueda libre y se conserva
+/// exactamente como se escribió (§5.1). Si contiene un modificador de acción
+/// `--letra`/`--palabra` de un comando "de ítem" (`es_de_item`), en cambio
+/// produce la misma [`Entrada::Comando`] que `/comando` generaría — los
+/// parámetros `G:`/`M:` sólo se interpretan en ese caso, nunca sobre una
+/// búsqueda sin acción seleccionada.
+fn parsear_busqueda_libre(recortado: &str) -> Entrada {
+    let comando = recortado.split_whitespace().find_map(|token| {
+        token
+            .strip_prefix("--")
+            .and_then(Comando::desde_texto)
+            .filter(|c| c.es_de_item())
+    });
+
+    let Some(comando) = comando else {
+        // Texto libre sin acción: se conserva el texto completo (con sus
+        // espacios internos) tal cual, sin interpretar nada.
+        return Entrada::BusquedaLibre {
+            consulta: recortado.to_string(),
+        };
+    };
+
+    let mut consulta: Vec<&str> = Vec::new();
+    let mut gafete: Option<GafeteParse> = None;
+    let mut medio: Option<MedioParse> = None;
+
+    for token in recortado.split_whitespace() {
+        let es_el_modificador = token
+            .strip_prefix("--")
+            .and_then(Comando::desde_texto)
+            .is_some_and(|c| c == comando);
+        if es_el_modificador {
+            continue;
+        }
         match clasificar_token(token) {
             Clasificacion::Gafete(valor) => gafete = Some(valor),
             Clasificacion::Medio(valor) => medio = Some(valor),
@@ -422,6 +487,86 @@ mod tests {
         assert_eq!(consulta, "Carlos X:3");
         assert_eq!(gafete, None);
         assert_eq!(medio, None);
+    }
+
+    // ── Modificador de acción `--letra`/`--palabra` (§5.1) ──────────────
+
+    #[test]
+    fn modificador_letra_equivale_al_comando_lider() {
+        assert_eq!(comando(parsear("Ana --e")), comando(parsear("/editar Ana")),);
+    }
+
+    #[test]
+    fn modificador_palabra_completa_tambien_funciona() {
+        let (cmd, consulta, _, _) = comando(parsear("Ana --editar"));
+        assert_eq!(cmd, Comando::Editar);
+        assert_eq!(consulta, "Ana");
+    }
+
+    #[test]
+    fn modificador_ingreso_admite_parametros() {
+        let (cmd, consulta, gafete, medio) = comando(parsear("Ana --i G:27 M:vehiculo"));
+        assert_eq!(cmd, Comando::Ingreso);
+        assert_eq!(consulta, "Ana");
+        assert_eq!(gafete, Some(GafeteParse::Valido(27)));
+        assert_eq!(medio, Some(MedioParse::Valido(MedioIngreso::Vehiculo)));
+    }
+
+    #[test]
+    fn modificador_no_distingue_mayusculas_ni_posicion() {
+        let (cmd, consulta, ..) = comando(parsear("--S Ana"));
+        assert_eq!(cmd, Comando::Salida);
+        assert_eq!(consulta, "Ana");
+    }
+
+    #[test]
+    fn modificador_de_comando_global_no_es_valido_queda_como_texto() {
+        // "nuevo"/"activos"/etc. no actúan sobre un resultado de búsqueda
+        // (DEC-021): el texto se conserva tal cual, sin interpretar el "--".
+        assert_eq!(
+            parsear("Ana --n"),
+            Entrada::BusquedaLibre {
+                consulta: "Ana --n".to_string()
+            }
+        );
+        assert_eq!(
+            parsear("Ana --activos"),
+            Entrada::BusquedaLibre {
+                consulta: "Ana --activos".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn modificador_desconocido_queda_como_texto() {
+        assert_eq!(
+            parsear("Ana --xyz"),
+            Entrada::BusquedaLibre {
+                consulta: "Ana --xyz".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn dos_modificadores_solo_el_primero_se_interpreta() {
+        // El segundo, ya sin sentido, degrada a texto libre en vez de
+        // generar un error o pelear con el primero.
+        let (cmd, consulta, ..) = comando(parsear("Ana --e --i"));
+        assert_eq!(cmd, Comando::Editar);
+        assert_eq!(consulta, "Ana --i");
+    }
+
+    #[test]
+    fn busqueda_libre_sin_modificador_no_interpreta_clave_valor() {
+        // Sin acción seleccionada, "G:27" es texto de búsqueda tal cual, no
+        // un parámetro — evita perder texto de una búsqueda que sólo se
+        // parece a un parámetro.
+        assert_eq!(
+            parsear("Ana G:27"),
+            Entrada::BusquedaLibre {
+                consulta: "Ana G:27".to_string()
+            }
+        );
     }
 
     #[test]
