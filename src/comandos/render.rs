@@ -382,13 +382,40 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
     };
     let visible: String = valor.chars().skip(scroll).take(viewport).collect();
 
-    let linea = Line::from(vec![Span::styled(etiqueta, acento()), Span::raw(visible)]);
-    frame.render_widget(Paragraph::new(linea), area);
-
+    let mut spans = vec![Span::styled(etiqueta, acento())];
     if cursor_visible {
-        let columna = cursor_chars.saturating_sub(scroll).min(viewport) as u16;
-        frame.set_cursor_position((area.x + ancho_etiqueta + columna, area.y));
+        // Cursor propio (celda resaltada), nunca el bloque real del
+        // terminal — mismo criterio que ya usa el login (`linea_prompt`) y
+        // por la misma razón: el cursor real de cada emulador de terminal
+        // parpadea y se reposiciona con su propio timing, fuera de nuestro
+        // control, y se veía aparecer/desaparecer de forma inconsistente.
+        // A diferencia del login (que sólo escribe al final), acá el
+        // cursor puede estar a mitad del texto (←/→/Home/End de
+        // `tui_input`), así que se resalta el carácter bajo el cursor en
+        // vez de insertar un "_" que correría el resto del texto.
+        let columna = cursor_chars.saturating_sub(scroll).min(viewport);
+        let (antes, resto) = visible.split_at(
+            visible
+                .char_indices()
+                .nth(columna)
+                .map_or(visible.len(), |(i, _)| i),
+        );
+        let mut caracteres = resto.chars();
+        let bajo_cursor = caracteres
+            .next()
+            .map(String::from)
+            .unwrap_or_else(|| " ".to_string());
+        let despues: String = caracteres.collect();
+        spans.push(Span::raw(antes.to_string()));
+        spans.push(Span::styled(
+            bajo_cursor,
+            Style::default().add_modifier(Modifier::REVERSED),
+        ));
+        spans.push(Span::raw(despues));
+    } else {
+        spans.push(Span::raw(visible));
     }
+    frame.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
 // ── Login ────────────────────────────────────────────────────────────────
@@ -1597,10 +1624,14 @@ fn lineas_selector_empresa(
         .collect()
 }
 
-/// Una línea por campo: `›` en el activo, bloqueados apagados con su motivo,
-/// `✓`/`×` de estado en los campos que admiten quedar vacíos o inválidos
-/// (`Campo::admite_estado`) — mismo vocabulario de glifos que el resto de la
-/// app (`glifo_feedback`, §5), no un marcador propio del formulario.
+/// Una línea por campo: un solo glifo a la izquierda resume el estado —
+/// `›` en edición (el campo activo ahora mismo), `×` con error, `✓`
+/// completo, o nada si todavía no aplica ninguno — mismo vocabulario que el
+/// resto de la app (`glifo_feedback`, §5), un slot en vez de dos (antes el
+/// foco vivía a la izquierda y la validez a la derecha, por separado, sin
+/// necesidad: son estados del mismo lugar, nunca simultáneos). `›` gana
+/// mientras el campo está activo — es la información más útil en ese
+/// momento — y `×`/`✓` aparecen recién al alejarse.
 fn linea_campo(
     formulario: &FormularioContratista,
     campo: Campo,
@@ -1612,33 +1643,46 @@ fn linea_campo(
             Subfase::Editando | Subfase::EligiendoEmpresa { .. }
         );
     let habilitado = formulario.campo_habilitado(campo);
-    let marcador = if activo { "› " } else { "  " };
     let etiqueta = format!("{:<16}", campo.etiqueta());
+    let valor = valor_campo(formulario, campo);
+    let valor_presente = !valor.is_empty();
     // El campo activo funde su acento en vez de aparecer a color pleno de
     // golpe — mismo mecanismo que el título del login (Fase 5), sobre el
     // mismo `estilo_fundido`.
     let estilo_activo = || estilo_fundido(FADE_ACENTO, opacidades.campo, Modifier::empty());
 
+    let (glifo, estilo_glifo) = if activo {
+        ("›", estilo_activo())
+    } else if formulario.error_de(campo).is_some() {
+        (
+            "×",
+            estilo_fundido(FADE_ERROR, opacidades.error, Modifier::empty()),
+        )
+    } else if campo.admite_estado() && valor_presente {
+        ("✓", exito())
+    } else {
+        (" ", Style::default())
+    };
+    let marcador = format!("{glifo} ");
+
     if !habilitado {
         return Line::from(Span::styled(
-            format!(
-                "{marcador}{etiqueta}{} (sin permiso)",
-                valor_campo(formulario, campo)
-            ),
+            format!("{marcador}{etiqueta}{valor} (sin permiso)"),
             muted(),
         ));
     }
 
-    let mut spans = vec![Span::styled(
-        format!("{marcador}{etiqueta}"),
-        if activo {
-            estilo_activo()
-        } else {
-            Style::default()
-        },
-    )];
-    let valor = valor_campo(formulario, campo);
-    let valor_presente = !valor.is_empty();
+    let mut spans = vec![
+        Span::styled(marcador, estilo_glifo),
+        Span::styled(
+            etiqueta,
+            if activo {
+                estilo_activo()
+            } else {
+                Style::default()
+            },
+        ),
+    ];
     let valor_mostrado = if valor.is_empty() {
         match campo {
             Campo::FechaPraind => "DD/MM/AAAA".to_string(),
@@ -1667,13 +1711,13 @@ fn linea_campo(
         valor_mostrado
     };
     spans.push(Span::styled(valor_final, estilo_valor));
+    // El glifo de error ya vive a la izquierda (`×`, junto al foco) — acá
+    // sólo queda el texto del motivo, sin repetirlo.
     if let Some(mensaje) = formulario.error_de(campo) {
         spans.push(Span::styled(
-            format!("  × {mensaje}"),
+            format!("  {mensaje}"),
             estilo_fundido(FADE_ERROR, opacidades.error, Modifier::empty()),
         ));
-    } else if campo.admite_estado() && valor_presente {
-        spans.push(Span::styled("  ✓", exito()));
     }
     Line::from(spans)
 }

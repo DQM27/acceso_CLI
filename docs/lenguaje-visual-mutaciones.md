@@ -587,6 +587,27 @@ DEC-040  Fase 5 extendida a formulario e Historial, mismo mecanismo que el
          `estilo_seleccion()` (`Modifier::REVERSED`) con una opacidad
          interpolada es una combinación visual no verificada todavía en
          runtime real, se deja para cuando se pueda confirmar cómo se ve.
+DEC-041  El prompt de Operando (`render_prompt_linea` — línea de comandos,
+         campos del formulario, filtro de Historial, destino de
+         exportación) usa un cursor propio, nunca el cursor real del
+         terminal — mismo criterio que ya usaba sólo el login. Reportado en
+         runtime real: el cursor real parpadeaba y desaparecía de forma
+         inconsistente (comportamiento del emulador, fuera de nuestro
+         control). A diferencia del login (que sólo escribe al final), acá
+         el cursor puede quedar a mitad del texto (←/→/Home/End de
+         `tui_input`), así que en vez de un "_" insertado se resalta
+         (`Modifier::REVERSED`) el carácter que está bajo el cursor — un
+         espacio reversado si no hay carácter ahí (fin de línea).
+DEC-042  El estado de cada campo del formulario vive en un solo glifo a la
+         izquierda (`›` en edición, `×` con error, `✓` completo, nada si
+         ninguno aplica todavía) en vez de dos indicadores separados como
+         antes (foco a la izquierda, validez a la derecha) — son estados
+         del mismo lugar, nunca simultáneos, y por eso comparten slot. `›`
+         gana mientras el campo está activo (es la información más útil en
+         ese momento); `×`/`✓` sólo aparecen al alejarse. Reportado en
+         runtime real: el `✓` aparecía a la derecha mientras se seguía
+         escribiendo, antes de confirmar nada — confuso, parecía validado
+         cuando sólo estaba "no vacío".
 ```
 
 ## 14.1 Escena de login (implementada)
