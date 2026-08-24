@@ -168,6 +168,47 @@ configuración.
 Motor de query (`clave:valor`, listas, negación) documentado en §14
 (Registro de decisiones) y en el análisis de `query_lang.rs`.
 
+## 5.2 Enclavado de Surfaces
+
+Un `Surface` (§4) que necesita su propia gramática de input **enclava** el
+teclado: mientras está activa, el input deja de interpretarse con la
+gramática de nivel superior (`/comando`, `--modificador`, búsqueda) y pasa
+a la gramática propia de esa Surface. No es un mecanismo nuevo — es el
+mismo que ya usa el formulario de `/nuevo` (`app.formulario.is_some()`
+capturando el teclado en `operando.rs`), generalizado a cualquier Surface
+futura.
+
+**Caso guía: Historial** (aún no construido, primer consumidor real del
+motor de query de §5.1/DEC-022):
+
+```text
+/h  Enter                                → enclava, abre la Surface de
+                                            Historial
+desde:10/12/2025 hasta:12/02/2026  Enter → aplica la consulta una vez,
+                                            muestra resultados navegables
+                                            (↑↓ para moverse, Enter entra
+                                            al detalle de un resultado)
+Esc                                      → vuelve a editar la MISMA
+                                            consulta, sin perder lo ya
+                                            escrito
+Esc de nuevo (sin filtro activo)          → sale de la Surface, vuelve a
+                                            Operando
+```
+
+**Por qué Enter-aplica en vez de filtrado en vivo** (a diferencia del resto
+de `--comandos`, que sí recalcula en cada tecla): Historial consulta contra
+el histórico completo de movimientos, no contra una lista corta como
+"activos ahora" — repetir esa consulta en cada tecla es gasto real de
+recursos, no sólo un matiz estético. Decisión explícita, no un descuido de
+consistencia (principio 1: la practicidad tiene prioridad sobre la
+estética).
+
+**Esc nunca borra** — mismo comportamiento que ya existe en
+`formulario_controller.rs::manejar_resumen_formulario`: `Esc` desde el
+resumen del formulario vuelve a `Subfase::Editando` conservando todos los
+campos, nunca los vacía. Historial reusa esa misma regla en vez de inventar
+una tercera.
+
 ## 6. Arquitectura de interacción
 
 ```text
@@ -394,7 +435,19 @@ DEC-022  El motor clave:valor de --comandos se construye sobre el crate
          directamente (DEC-002/DEC-014). El pilar de uso de este motor es
          Historial (filtrado por tipo/empresa/fecha/etc., aún no
          construido); activos/ingreso/salida son consumidores secundarios
-         de parámetros con valor (G:/M:).
+         de parámetros con valor (G:/M:). No se crea el archivo hasta que
+         Historial exista de verdad — sin eso sería código sin llamador.
+DEC-023  Toda Surface que necesita su propia gramática de input enclava el
+         teclado (§5.2): mientras está activa, el input deja de
+         interpretarse como /comando, --modificador o búsqueda y pasa a la
+         gramática propia de esa Surface. Generaliza el mecanismo ya
+         existente de app.formulario.is_some() en operando.rs.
+DEC-024  Historial (Surface, aún no construida) aplica su filtro clave:valor
+         con Enter explícito, no en vivo tecla por tecla como el resto de
+         --comandos — consulta contra el histórico completo, no contra una
+         lista corta, así que recalcular en cada tecla es gasto real. Esc
+         nunca borra la consulta ya escrita, vuelve a editarla — mismo
+         comportamiento que Esc en el resumen del formulario de /nuevo.
 ```
 
 ## 14.1 Escena de login (implementada)
