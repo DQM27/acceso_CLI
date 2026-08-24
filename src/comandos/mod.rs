@@ -18,12 +18,14 @@
 //! (alta/edición de contratista) — los tres leen y escriben el mismo
 //! [`AppState`], nunca estado propio.
 
+mod columnas;
 mod estado;
 mod formulario;
 mod formulario_controller;
 mod login;
 mod operando;
 mod parser;
+mod preferencias;
 mod presentation;
 mod render;
 mod resolver;
@@ -47,7 +49,8 @@ use crate::application::AppCore;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::error::{AutenticacionError, UsuarioServiceError};
 
-pub use estado::{AppState, ContextState, Fase, NivelFeedback};
+pub use columnas::{Columna, ColumnaActivos, ColumnaBusqueda, SelectorColumnas};
+pub use estado::{AppState, ContextState, EdicionColumnas, Fase, NivelFeedback, ObjetivoColumnas};
 pub use formulario::{
     Campo, FormularioContratista, MAX_VISIBLES_EMPRESAS, ModoFormulario, Subfase,
 };
@@ -93,6 +96,18 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<(), C
         Some(sesion) => AppState::con_sesion(sesion),
         None => AppState::new(),
     };
+    // Preferencias propias de --comandos (hoy sólo columnas visibles),
+    // archivo independiente del de la TUI clásica (DEC-002/DEC-014). Un
+    // disco sin permiso de escritura o sin %LOCALAPPDATA% nunca impide
+    // arrancar: sin store, todas las columnas quedan visibles y ese estado
+    // simplemente no se persiste.
+    let mut preferencias = preferencias::PreferenciasStore::load_default();
+    if let Some(store) = &preferencias {
+        app.columnas_busqueda
+            .aplicar_preferencia(&store.actual().columnas_busqueda);
+        app.columnas_activos
+            .aplicar_preferencia(&store.actual().columnas_activos);
+    }
     let mut autenticacion: AutenticacionPendiente = None;
     recomputar(&core, &mut app);
 
@@ -138,6 +153,12 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<(), C
                 _ => {}
             }
         }
+    }
+    if let Some(store) = &mut preferencias {
+        let _ = store.guardar_si_cambio(preferencias::Preferencias {
+            columnas_busqueda: app.columnas_busqueda.preferencia(),
+            columnas_activos: app.columnas_activos.preferencia(),
+        });
     }
     Ok(())
 }

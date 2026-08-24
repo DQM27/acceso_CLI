@@ -13,9 +13,11 @@ use crate::models::medio_ingreso::MedioIngreso;
 use crate::services::error::RegistroIngresoServiceError;
 use crate::tiempo::hora_actual_texto;
 
+use super::estado::{EdicionColumnas, ObjetivoColumnas};
 use super::formulario_controller::{abrir_formulario_edicion, abrir_formulario_nuevo};
 use super::{
-    AppState, Comando, ContextState, Entrada, Fase, GafeteParse, MedioParse, NivelFeedback,
+    AppState, Columna, ColumnaActivos, ColumnaBusqueda, Comando, ContextState, Entrada, Fase,
+    GafeteParse, MedioParse, NivelFeedback,
 };
 
 pub(super) fn manejar_operando(core: &AppCore, app: &mut AppState, key: KeyEvent) {
@@ -23,6 +25,12 @@ pub(super) fn manejar_operando(core: &AppCore, app: &mut AppState, key: KeyEvent
     // son del formulario: el input edita campos, no comandos.
     if app.formulario.is_some() {
         super::formulario_controller::manejar_formulario(core, app, key);
+        return;
+    }
+    // Selector de columnas (F4): segunda Surface enclavada, mismo mecanismo
+    // que el formulario (§5.2) — mientras está abierta, el teclado es suyo.
+    if app.edicion_columnas.is_some() {
+        manejar_columnas(app, key);
         return;
     }
     match key.code {
@@ -39,6 +47,7 @@ pub(super) fn manejar_operando(core: &AppCore, app: &mut AppState, key: KeyEvent
         }
         KeyCode::Up => mover_seleccion(app, -1),
         KeyCode::Down => mover_seleccion(app, 1),
+        KeyCode::F(4) => abrir_selector_columnas(app),
         KeyCode::Tab => {
             if let Some(nuevo) = super::resolver::autocompletar(core, app.input.value()) {
                 app.input = Input::new(nuevo);
@@ -72,6 +81,69 @@ fn mover_seleccion(app: &mut AppState, delta: isize) {
             items, seleccion, ..
         } => ajustar(seleccion, items.len()),
         _ => {}
+    }
+}
+
+/// `F4` sólo tiene efecto sobre una tabla — determina cuál según el
+/// contexto vigente y abre el picker sobre ella. En cualquier otro contexto
+/// (tarjetas, formulario, ayuda…) no hace nada: no hay tabla que editar.
+fn abrir_selector_columnas(app: &mut AppState) {
+    let objetivo = match &app.contexto {
+        ContextState::Coincidencias { .. } => ObjetivoColumnas::Busqueda,
+        ContextState::CoincidenciasActivos { .. } | ContextState::TablaActivos { .. } => {
+            ObjetivoColumnas::Activos
+        }
+        _ => return,
+    };
+    app.edicion_columnas = Some(EdicionColumnas {
+        objetivo,
+        seleccion: 0,
+    });
+}
+
+/// ↑↓ mueve, Space marca/desmarca (con el mismo guardrail de "al menos una
+/// visible" que `SelectorColumnas::alternar`, mostrado como feedback en vez
+/// de bloquear en silencio), Esc cierra — la Surface se cierra sola, no hay
+/// un "guardar": cada cambio ya vive en `AppState` y se persiste al salir
+/// de la app (`mod.rs::run`).
+fn manejar_columnas(app: &mut AppState, key: KeyEvent) {
+    if app.edicion_columnas.is_none() {
+        return;
+    }
+    match key.code {
+        KeyCode::Esc => app.edicion_columnas = None,
+        KeyCode::Up => mover_seleccion_columnas(app, -1),
+        KeyCode::Down => mover_seleccion_columnas(app, 1),
+        KeyCode::Char(' ') => alternar_columna(app),
+        _ => {}
+    }
+}
+
+fn mover_seleccion_columnas(app: &mut AppState, delta: isize) {
+    let Some(edicion) = &mut app.edicion_columnas else {
+        return;
+    };
+    let total = match edicion.objetivo {
+        ObjetivoColumnas::Busqueda => ColumnaBusqueda::TODAS.len(),
+        ObjetivoColumnas::Activos => ColumnaActivos::TODAS.len(),
+    };
+    if total == 0 {
+        return;
+    }
+    let actual = edicion.seleccion as isize;
+    edicion.seleccion = (actual + delta).clamp(0, total as isize - 1) as usize;
+}
+
+fn alternar_columna(app: &mut AppState) {
+    let Some(edicion) = app.edicion_columnas else {
+        return;
+    };
+    let resultado = match edicion.objetivo {
+        ObjetivoColumnas::Busqueda => app.columnas_busqueda.alternar(edicion.seleccion),
+        ObjetivoColumnas::Activos => app.columnas_activos.alternar(edicion.seleccion),
+    };
+    if let Err(mensaje) = resultado {
+        app.mostrar_feedback(mensaje.to_string(), NivelFeedback::Advertencia);
     }
 }
 

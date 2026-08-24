@@ -466,6 +466,21 @@ DEC-027  El formulario aplica la gramática de glifos de §5/`glifo_feedback`
          valor válido (`Campo::admite_estado`) — es el indicador de estado
          del proceso que reemplaza al texto "Confirmar — revisar y
          guardar".
+DEC-028  Selector de columnas (`F4`), mismo mecanismo que la TUI clásica
+         (lista con `[✓]`/`[ ]`, guardrail de "al menos una visible") pero
+         reescrito en src/comandos/columnas.rs — no se importa
+         src/tui/contratistas ni ningún otro módulo de la TUI clásica
+         (DEC-002/DEC-014). Es la tercera Surface enclavada (§5.2), junto al
+         formulario y al futuro Historial. Un conjunto de columnas por
+         tabla (búsqueda de contratistas y activos), no uno genérico —
+         mismo criterio de separación que ya usaba la TUI clásica
+         (`activos_columns` ≠ `contratistas_columns`).
+DEC-029  Las columnas visibles se persisten en un archivo propio de
+         --comandos (`src/comandos/preferencias.rs`,
+         `comandos-preferencias.conf`, mismo directorio de datos de la app
+         pero nombre distinto), no en `src/tui/preferences.rs` — igual
+         criterio de independencia que DEC-028. Se carga al arrancar y se
+         guarda sólo si cambió algo, al salir de la app.
 ```
 
 ## 14.1 Escena de login (implementada)

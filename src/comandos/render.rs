@@ -23,7 +23,10 @@ use crate::models::tipo_ingreso::TipoIngreso;
 use crate::services::registro_ingreso_service::IngresoActivoResumen;
 use crate::tiempo::a_costa_rica;
 
-use super::estado::{AppState, ContextState, Fase, NivelFeedback};
+use super::columnas::{Columna, ColumnaActivos, ColumnaBusqueda, SelectorColumnas};
+use super::estado::{
+    AppState, ContextState, EdicionColumnas, Fase, NivelFeedback, ObjetivoColumnas,
+};
 use super::formulario::{
     Campo, FormularioContratista, MAX_VISIBLES_EMPRESAS, ModoFormulario, Subfase,
 };
@@ -114,9 +117,15 @@ pub fn render(frame: &mut Frame, app: &AppState) {
     ])
     .areas(area);
 
-    let lineas = match &app.formulario {
-        Some(formulario) => lineas_formulario(formulario, app.input.value()),
-        None => lineas_contexto(&app.contexto, area_contexto.width),
+    let lineas = match (&app.formulario, &app.edicion_columnas) {
+        (Some(formulario), _) => lineas_formulario(formulario, app.input.value()),
+        (None, Some(edicion)) => lineas_selector_columnas(app, *edicion),
+        (None, None) => lineas_contexto(
+            &app.contexto,
+            area_contexto.width,
+            &app.columnas_busqueda,
+            &app.columnas_activos,
+        ),
     };
     frame.render_widget(Paragraph::new(lineas), area_contexto);
 
@@ -157,6 +166,16 @@ fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
                 Span::styled(format!("{simbolo} "), estilo),
                 Span::styled(&feedback.texto, estilo),
             ])),
+            area,
+        );
+        return;
+    }
+    if app.edicion_columnas.is_some() {
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                "↑↓ columna · Space marcar/desmarcar · Esc cerrar",
+                muted(),
+            ))),
             area,
         );
         return;
@@ -563,22 +582,29 @@ fn linea_aviso_login(app: &AppState, opacidad: f32) -> Line<'static> {
 
 // ── Contexto operativo ───────────────────────────────────────────────────
 
-fn lineas_contexto(contexto: &ContextState, ancho: u16) -> Vec<Line<'static>> {
+fn lineas_contexto(
+    contexto: &ContextState,
+    ancho: u16,
+    columnas_busqueda: &SelectorColumnas<ColumnaBusqueda>,
+    columnas_activos: &SelectorColumnas<ColumnaActivos>,
+) -> Vec<Line<'static>> {
     match contexto {
         ContextState::Inicio { total_dentro } => lineas_inicio(*total_dentro),
         ContextState::Coincidencias {
             consulta,
             items,
             seleccion,
-        } => lineas_coincidencias(consulta, items, *seleccion, ancho),
+        } => lineas_coincidencias(consulta, items, *seleccion, ancho, columnas_busqueda),
         ContextState::CoincidenciasActivos {
             descripcion,
             items,
             seleccion,
-        } => lineas_coincidencias_activos(descripcion, items, *seleccion, ancho),
+        } => lineas_coincidencias_activos(descripcion, items, *seleccion, ancho, columnas_activos),
         ContextState::ResumenIngreso { .. } => lineas_resumen_ingreso(contexto),
         ContextState::ResumenSalida { activo } => lineas_resumen_salida(activo),
-        ContextState::TablaActivos { items, total } => lineas_tabla_activos(items, *total, ancho),
+        ContextState::TablaActivos { items, total } => {
+            lineas_tabla_activos(items, *total, ancho, columnas_activos)
+        }
         ContextState::FichaContratista { resumen } => lineas_ficha(resumen),
         ContextState::ConfirmarCerrarSesion => lineas_cerrar_sesion(),
         ContextState::NuevoContratista => lineas_nuevo_contratista(),
@@ -623,15 +649,34 @@ fn descripcion_comando(comando: Comando) -> &'static str {
     }
 }
 
-/// Reparte el espacio libre entre NOMBRE y EMPRESA una vez descontadas las
-/// columnas de ancho fijo de cada tabla (marcador, cédula/gafete, tipo/hora)
-/// — así el nombre deja de truncarse apenas la terminal tiene espacio, igual
-/// que ya hacía `/activos` con su propio ancho completo/reducido.
-fn anchos_nombre_empresa(ancho: u16, fijo: u16) -> (usize, usize) {
-    let disponible = ancho.saturating_sub(fijo).max(30) as usize;
-    let nombre = (disponible * 55 / 100).max(18);
-    let empresa = disponible.saturating_sub(nombre).max(14);
-    (nombre, empresa)
+/// Reparte `disponible` entre `n` columnas flexibles iguales, con un mínimo
+/// razonable para que nunca queden ilegibles.
+fn repartir_flexible(disponible: u16, n: usize) -> Vec<usize> {
+    if n == 0 {
+        return Vec::new();
+    }
+    let por_columna = (disponible / n as u16).max(12);
+    vec![por_columna as usize; n]
+}
+
+/// Concatena celdas `(ancho, texto)` con relleno hasta `ancho`, salvo la
+/// última (que crece sin relleno hasta el borde) — mismo criterio visual que
+/// ya usaban estas tablas antes de que las columnas fueran ocultables (F4);
+/// como sólo se listan las columnas visibles, "la última" cambia sola según
+/// cuál quede más a la derecha.
+fn fila_columnas(celdas: &[(usize, String)]) -> String {
+    let ultimo = celdas.len().saturating_sub(1);
+    celdas
+        .iter()
+        .enumerate()
+        .map(|(indice, (ancho, texto))| {
+            if indice == ultimo {
+                texto.clone()
+            } else {
+                format!("{texto:<ancho$}")
+            }
+        })
+        .collect()
 }
 
 fn lineas_coincidencias(
@@ -639,6 +684,7 @@ fn lineas_coincidencias(
     items: &[crate::database::queries::contratistas::ContratistaResumen],
     seleccion: usize,
     ancho: u16,
+    columnas: &SelectorColumnas<ColumnaBusqueda>,
 ) -> Vec<Line<'static>> {
     if consulta.chars().count() < MIN_CONSULTA {
         return vec![
@@ -660,28 +706,77 @@ fn lineas_coincidencias(
     }
     // Mismo orden de columnas que la tabla de contratistas de la TUI clásica
     // (cédula → nombre → empresa → tipo) y mismo estilo de encabezado que
-    // `/activos`, para que todas las listas se lean igual.
+    // `/activos`, para que todas las listas se lean igual. Sólo se listan
+    // las columnas visibles (F4, ColumnaBusqueda): Cédula y Tipo son de
+    // ancho fijo, Nombre/Empresa se reparten lo que sobra.
     const CEDULA: usize = 14;
-    let (nombre_ancho, empresa_ancho) = anchos_nombre_empresa(ancho, 2 + CEDULA as u16 + 10);
+    const TIPO_RESERVADO: u16 = 10;
+    let cedula_on = columnas.visible(ColumnaBusqueda::Cedula);
+    let nombre_on = columnas.visible(ColumnaBusqueda::Nombre);
+    let empresa_on = columnas.visible(ColumnaBusqueda::Empresa);
+    let tipo_on = columnas.visible(ColumnaBusqueda::Tipo);
+
+    let fijo =
+        2 + if cedula_on { CEDULA as u16 } else { 0 } + if tipo_on { TIPO_RESERVADO } else { 0 };
+    let flex = repartir_flexible(
+        ancho.saturating_sub(fijo).max(24),
+        nombre_on as usize + empresa_on as usize,
+    );
+    let mut flex = flex.into_iter();
+    let nombre_ancho = if nombre_on {
+        flex.next().unwrap_or(18)
+    } else {
+        0
+    };
+    let empresa_ancho = if empresa_on {
+        flex.next().unwrap_or(14)
+    } else {
+        0
+    };
+
+    let mut encabezado = Vec::new();
+    if cedula_on {
+        encabezado.push((CEDULA, "CÉDULA".to_string()));
+    }
+    if nombre_on {
+        encabezado.push((nombre_ancho, "NOMBRE".to_string()));
+    }
+    if empresa_on {
+        encabezado.push((empresa_ancho, "EMPRESA".to_string()));
+    }
+    if tipo_on {
+        encabezado.push((0, "TIPO".to_string()));
+    }
+
     let mut lineas = vec![
         Line::from(Span::styled(
-            format!(
-                "  {:<CEDULA$}{:<nombre_ancho$}{:<empresa_ancho$}TIPO",
-                "CÉDULA", "NOMBRE", "EMPRESA"
-            ),
+            format!("  {}", fila_columnas(&encabezado)),
             Style::default().add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled("─".repeat(ancho as usize), muted())),
     ];
     for (indice, item) in items.iter().enumerate() {
         let marcador = if indice == seleccion { "› " } else { "  " };
-        let texto = format!(
-            "{marcador}{:<CEDULA$}{:<nombre_ancho$}{:<empresa_ancho$}{}",
-            recortar(&item.cedula, CEDULA - 1),
-            recortar(&item.nombre, nombre_ancho.saturating_sub(1)),
-            recortar(&item.empresa_nombre, empresa_ancho.saturating_sub(1)),
-            tipo_texto(item.tipo_ingreso)
-        );
+        let mut celdas = Vec::new();
+        if cedula_on {
+            celdas.push((CEDULA, recortar(&item.cedula, CEDULA.saturating_sub(1))));
+        }
+        if nombre_on {
+            celdas.push((
+                nombre_ancho,
+                recortar(&item.nombre, nombre_ancho.saturating_sub(1)),
+            ));
+        }
+        if empresa_on {
+            celdas.push((
+                empresa_ancho,
+                recortar(&item.empresa_nombre, empresa_ancho.saturating_sub(1)),
+            ));
+        }
+        if tipo_on {
+            celdas.push((0, tipo_texto(item.tipo_ingreso).to_string()));
+        }
+        let texto = format!("{marcador}{}", fila_columnas(&celdas));
         lineas.push(if indice == seleccion {
             Line::from(Span::styled(texto, estilo_seleccion()))
         } else {
@@ -696,6 +791,7 @@ fn lineas_coincidencias_activos(
     items: &[IngresoActivoResumen],
     seleccion: usize,
     ancho: u16,
+    columnas: &SelectorColumnas<ColumnaActivos>,
 ) -> Vec<Line<'static>> {
     if items.is_empty() {
         let mensaje = if descripcion.is_empty() {
@@ -706,15 +802,51 @@ fn lineas_coincidencias_activos(
         return vec![Line::from(""), Line::from(Span::styled(mensaje, muted()))];
     }
     // Mismo encabezado y orden de columnas que `/activos` — es la misma
-    // fuente de datos (ingresos activos), sólo que filtrada por la búsqueda.
+    // fuente de datos (ingresos activos), sólo que filtrada por la
+    // búsqueda. Sólo se listan las columnas visibles (F4, ColumnaActivos).
     const GAFETE: usize = 8;
-    let (nombre_ancho, empresa_ancho) = anchos_nombre_empresa(ancho, 2 + GAFETE as u16 + 6);
+    const INGRESO_RESERVADO: u16 = 6;
+    let gafete_on = columnas.visible(ColumnaActivos::Gafete);
+    let nombre_on = columnas.visible(ColumnaActivos::Nombre);
+    let empresa_on = columnas.visible(ColumnaActivos::Empresa);
+    let ingreso_on = columnas.visible(ColumnaActivos::Ingreso);
+
+    let fijo = 2
+        + if gafete_on { GAFETE as u16 } else { 0 }
+        + if ingreso_on { INGRESO_RESERVADO } else { 0 };
+    let flex = repartir_flexible(
+        ancho.saturating_sub(fijo).max(24),
+        nombre_on as usize + empresa_on as usize,
+    );
+    let mut flex = flex.into_iter();
+    let nombre_ancho = if nombre_on {
+        flex.next().unwrap_or(18)
+    } else {
+        0
+    };
+    let empresa_ancho = if empresa_on {
+        flex.next().unwrap_or(14)
+    } else {
+        0
+    };
+
+    let mut encabezado = Vec::new();
+    if gafete_on {
+        encabezado.push((GAFETE, "GAFETE".to_string()));
+    }
+    if nombre_on {
+        encabezado.push((nombre_ancho, "NOMBRE".to_string()));
+    }
+    if empresa_on {
+        encabezado.push((empresa_ancho, "EMPRESA".to_string()));
+    }
+    if ingreso_on {
+        encabezado.push((0, "INGRESO".to_string()));
+    }
+
     let mut lineas = vec![
         Line::from(Span::styled(
-            format!(
-                "  {:<GAFETE$}{:<nombre_ancho$}{:<empresa_ancho$}INGRESO",
-                "GAFETE", "NOMBRE", "EMPRESA"
-            ),
+            format!("  {}", fila_columnas(&encabezado)),
             Style::default().add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled("─".repeat(ancho as usize), muted())),
@@ -725,13 +857,26 @@ fn lineas_coincidencias_activos(
             .gafete_numero
             .map(|numero| numero.to_string())
             .unwrap_or_else(|| "—".into());
-        let texto = format!(
-            "{marcador}{:<GAFETE$}{:<nombre_ancho$}{:<empresa_ancho$}{}",
-            recortar(&gafete, GAFETE - 1),
-            recortar(&item.contratista_nombre, nombre_ancho.saturating_sub(1)),
-            recortar(&item.empresa_nombre, empresa_ancho.saturating_sub(1)),
-            hora_cr(item.fecha_hora_ingreso)
-        );
+        let mut celdas = Vec::new();
+        if gafete_on {
+            celdas.push((GAFETE, recortar(&gafete, GAFETE.saturating_sub(1))));
+        }
+        if nombre_on {
+            celdas.push((
+                nombre_ancho,
+                recortar(&item.contratista_nombre, nombre_ancho.saturating_sub(1)),
+            ));
+        }
+        if empresa_on {
+            celdas.push((
+                empresa_ancho,
+                recortar(&item.empresa_nombre, empresa_ancho.saturating_sub(1)),
+            ));
+        }
+        if ingreso_on {
+            celdas.push((0, hora_cr(item.fecha_hora_ingreso)));
+        }
+        let texto = format!("{marcador}{}", fila_columnas(&celdas));
         lineas.push(if indice == seleccion {
             Line::from(Span::styled(texto, estilo_seleccion()))
         } else {
@@ -879,19 +1024,53 @@ fn lineas_tabla_activos(
     items: &[IngresoActivoResumen],
     total: usize,
     ancho: u16,
+    columnas: &SelectorColumnas<ColumnaActivos>,
 ) -> Vec<Line<'static>> {
-    let completa = ancho >= ANCHO_TABLA_COMPLETA;
-    let encabezado = if completa {
-        format!(
-            "{:<8}{:<30}{:<24}{}",
-            "GAFETE", "NOMBRE", "EMPRESA", "INGRESO"
-        )
+    // Terminal angosta: Empresa se apaga sola además de lo que haya elegido
+    // el operador con F4 — mismo umbral que ya tenía esta tabla.
+    let angosto = ancho < ANCHO_TABLA_COMPLETA;
+    const GAFETE: usize = 8;
+    const INGRESO_RESERVADO: u16 = 6;
+    let gafete_on = columnas.visible(ColumnaActivos::Gafete);
+    let nombre_on = columnas.visible(ColumnaActivos::Nombre);
+    let empresa_on = columnas.visible(ColumnaActivos::Empresa) && !angosto;
+    let ingreso_on = columnas.visible(ColumnaActivos::Ingreso);
+
+    let fijo =
+        if gafete_on { GAFETE as u16 } else { 0 } + if ingreso_on { INGRESO_RESERVADO } else { 0 };
+    let flex = repartir_flexible(
+        ancho.saturating_sub(fijo).max(24),
+        nombre_on as usize + empresa_on as usize,
+    );
+    let mut flex = flex.into_iter();
+    let nombre_ancho = if nombre_on {
+        flex.next().unwrap_or(18)
     } else {
-        format!("{:<8}{:<24}{}", "GAFETE", "NOMBRE", "INGRESO")
+        0
     };
+    let empresa_ancho = if empresa_on {
+        flex.next().unwrap_or(14)
+    } else {
+        0
+    };
+
+    let mut encabezado = Vec::new();
+    if gafete_on {
+        encabezado.push((GAFETE, "GAFETE".to_string()));
+    }
+    if nombre_on {
+        encabezado.push((nombre_ancho, "NOMBRE".to_string()));
+    }
+    if empresa_on {
+        encabezado.push((empresa_ancho, "EMPRESA".to_string()));
+    }
+    if ingreso_on {
+        encabezado.push((0, "INGRESO".to_string()));
+    }
+
     let mut lineas = vec![
         Line::from(Span::styled(
-            encabezado,
+            fila_columnas(&encabezado),
             Style::default().add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled("─".repeat(ancho as usize), muted())),
@@ -901,23 +1080,26 @@ fn lineas_tabla_activos(
             .gafete_numero
             .map(|numero| numero.to_string())
             .unwrap_or_else(|| "—".into());
-        let hora = hora_cr(item.fecha_hora_ingreso);
-        lineas.push(Line::from(if completa {
-            format!(
-                "{:<8}{:<30}{:<24}{}",
-                recortar(&gafete, 8),
-                recortar(&item.contratista_nombre, 29),
-                recortar(&item.empresa_nombre, 23),
-                hora
-            )
-        } else {
-            format!(
-                "{:<8}{:<24}{}",
-                recortar(&gafete, 8),
-                recortar(&item.contratista_nombre, 23),
-                hora
-            )
-        }));
+        let mut celdas = Vec::new();
+        if gafete_on {
+            celdas.push((GAFETE, recortar(&gafete, GAFETE.saturating_sub(1))));
+        }
+        if nombre_on {
+            celdas.push((
+                nombre_ancho,
+                recortar(&item.contratista_nombre, nombre_ancho.saturating_sub(1)),
+            ));
+        }
+        if empresa_on {
+            celdas.push((
+                empresa_ancho,
+                recortar(&item.empresa_nombre, empresa_ancho.saturating_sub(1)),
+            ));
+        }
+        if ingreso_on {
+            celdas.push((0, hora_cr(item.fecha_hora_ingreso)));
+        }
+        lineas.push(Line::from(fila_columnas(&celdas)));
     }
     if items.is_empty() {
         lineas.push(Line::from(Span::styled(
@@ -1000,6 +1182,45 @@ fn lineas_nuevo_contratista() -> Vec<Line<'static>> {
             acento(),
         )),
     ]
+}
+
+// ── Selector de columnas (F4) ────────────────────────────────────────────
+
+/// Segunda Surface enclavada (§5.2, junto al formulario): `[✓]`/`[ ]` con
+/// `›` en la activa — mismo vocabulario de foco que el resto de la app.
+fn lineas_selector_columnas(app: &AppState, edicion: EdicionColumnas) -> Vec<Line<'static>> {
+    let titulo = match edicion.objetivo {
+        ObjetivoColumnas::Busqueda => "COLUMNAS — resultados de búsqueda",
+        ObjetivoColumnas::Activos => "COLUMNAS — activos",
+    };
+    let filas: Vec<(&'static str, bool)> = match edicion.objetivo {
+        ObjetivoColumnas::Busqueda => app
+            .columnas_busqueda
+            .iter()
+            .map(|(c, v)| (c.etiqueta(), v))
+            .collect(),
+        ObjetivoColumnas::Activos => app
+            .columnas_activos
+            .iter()
+            .map(|(c, v)| (c.etiqueta(), v))
+            .collect(),
+    };
+
+    let mut lineas = vec![Line::from(Span::styled(titulo, muted())), Line::from("")];
+    for (indice, (etiqueta, visible)) in filas.into_iter().enumerate() {
+        let activo = indice == edicion.seleccion;
+        let marcador = if activo { "› " } else { "  " };
+        let casillero = if visible { "[✓] " } else { "[ ] " };
+        let texto = format!("{marcador}{casillero}{etiqueta}");
+        lineas.push(if activo {
+            Line::from(Span::styled(texto, estilo_seleccion()))
+        } else if visible {
+            Line::from(texto)
+        } else {
+            Line::from(Span::styled(texto, muted()))
+        });
+    }
+    lineas
 }
 
 // ── Formulario de contratista ────────────────────────────────────────────
@@ -1240,6 +1461,10 @@ fn lineas_ayuda() -> Vec<Line<'static>> {
     )));
     lineas.push(Line::from(Span::styled(
         "Modificador sobre una búsqueda: --i/--ingreso, --s/--salida, --e/--editar (sólo éstos tres)",
+        muted(),
+    )));
+    lineas.push(Line::from(Span::styled(
+        "F4 sobre una tabla de resultados: elegir qué columnas mostrar",
         muted(),
     )));
     lineas.push(Line::from(Span::styled(

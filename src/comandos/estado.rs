@@ -14,8 +14,27 @@ use crate::models::medio_ingreso::MedioIngreso;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::registro_ingreso_service::{IngresoActivoResumen, PreparacionIngreso};
 
+use super::columnas::{ColumnaActivos, ColumnaBusqueda, SelectorColumnas};
 use super::formulario::FormularioContratista;
 use super::presentation;
+
+/// Sobre qué tabla actúa el selector de columnas (`F4`) — determina qué
+/// `SelectorColumnas` de `AppState` edita y a qué contexto vuelve al cerrar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ObjetivoColumnas {
+    Busqueda,
+    Activos,
+}
+
+/// Selector de columnas abierto (Surface enclavada, §5.2): mientras es
+/// `Some`, el teclado deja la gramática de comandos y pasa a la del picker
+/// (↑↓ mueve, Space marca/desmarca, Esc cierra) — mismo mecanismo que ya usa
+/// `formulario`, generalizado a una segunda Surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EdicionColumnas {
+    pub objetivo: ObjetivoColumnas,
+    pub seleccion: usize,
+}
 
 /// Cuánto permanece visible un mensaje de feedback transitorio (también
 /// desaparece en cuanto el operador vuelve a escribir).
@@ -179,6 +198,12 @@ pub struct AppState {
     /// deja de ser línea de comandos y edita el campo activo del formulario —
     /// `recomputar` no toca el contexto hasta que el formulario se cierra.
     pub formulario: Option<FormularioContratista>,
+    /// Columnas visibles de cada tabla — `F4` abre `edicion_columnas` sobre
+    /// una de las dos (según `app.contexto` en ese momento).
+    pub columnas_busqueda: SelectorColumnas<ColumnaBusqueda>,
+    pub columnas_activos: SelectorColumnas<ColumnaActivos>,
+    /// Selector de columnas abierto, si lo hay (ver `EdicionColumnas`).
+    pub edicion_columnas: Option<EdicionColumnas>,
     /// Pistas de la línea de sugerencias (autocompletado contextual, teclas).
     pub sugerencias: Vec<String>,
     pub feedback: Option<(Instant, Feedback)>,
@@ -199,6 +224,9 @@ impl AppState {
             fase: Fase::LoginCedula,
             contexto: ContextState::Ayuda,
             formulario: None,
+            columnas_busqueda: SelectorColumnas::todas_visibles(),
+            columnas_activos: SelectorColumnas::todas_visibles(),
+            edicion_columnas: None,
             sugerencias: Vec::new(),
             feedback: None,
             salir: false,
