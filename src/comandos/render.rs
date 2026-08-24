@@ -1190,7 +1190,7 @@ fn lineas_ayuda() -> Vec<Line<'static>> {
         )),
         Line::from(""),
     ];
-    let ejemplos: [(&str, &str); 10] = [
+    let ejemplos: [(&str, &str); 11] = [
         ("/ingreso <nombre> G:<n> M:<medio>", "registrar un ingreso"),
         ("/ingreso 119430546 G:12", "también por cédula"),
         ("/salida <nombre>", "registrar salida por nombre"),
@@ -1201,6 +1201,10 @@ fn lineas_ayuda() -> Vec<Line<'static>> {
         ("/cerrarsesion", "cerrar sesión y volver al login"),
         ("/ayuda", "esta ayuda"),
         ("texto sin /", "búsqueda de contratistas"),
+        (
+            "<nombre> --i G:<n> M:<medio>",
+            "atajo: mismo resultado que /ingreso, /salida o /editar",
+        ),
     ];
     for (sintaxis, descripcion) in ejemplos {
         lineas.push(Line::from(vec![
@@ -1211,6 +1215,10 @@ fn lineas_ayuda() -> Vec<Line<'static>> {
     lineas.push(Line::from(""));
     lineas.push(Line::from(Span::styled(
         "Claves: G: gafete · M: caminando|vehiculo (por defecto caminando) · alias: /i /s /a /n /e /cs",
+        muted(),
+    )));
+    lineas.push(Line::from(Span::styled(
+        "Modificador sobre una búsqueda: --i/--ingreso, --s/--salida, --e/--editar (sólo éstos tres)",
         muted(),
     )));
     lineas.push(Line::from(Span::styled(
