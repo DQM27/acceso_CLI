@@ -15,6 +15,7 @@ use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::registro_ingreso_service::{IngresoActivoResumen, PreparacionIngreso};
 
 use super::formulario::FormularioContratista;
+use super::presentation;
 
 /// Cuánto permanece visible un mensaje de feedback transitorio (también
 /// desaparece en cuanto el operador vuelve a escribir).
@@ -59,6 +60,29 @@ pub enum Fase {
     Operando {
         sesion: UsuarioSesion,
     },
+}
+
+/// Qué tipo de prompt ocupa la fila de login — no el texto tecleado, sólo el
+/// "tipo de contenido". Cambia una vez por transición de fase, nunca tecla a
+/// tecla: por eso es justo lo que hace falta comparar para saber cuándo el
+/// motor de presentación tiene que animar algo (ver `FirmaLogin`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TipoPromptLogin {
+    Cedula,
+    Password,
+    Verificando,
+}
+
+/// Resumen mínimo de "qué debería verse" en la escena de login — no el
+/// estado completo, sólo lo que le importa al motor de presentación para
+/// decidir si algo mutó de contenido (título, tipo de prompt, aparición de
+/// aviso) y arrancar una aparición. Comparar dos `FirmaLogin` nunca da un
+/// falso positivo por typing: el texto tecleado no forma parte de la firma.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FirmaLogin {
+    pub titulo: String,
+    pub prompt: TipoPromptLogin,
+    pub feedback: bool,
 }
 
 /// Lo que ocupa el área contextual en este momento. Se reconstruye entero cada
@@ -159,6 +183,13 @@ pub struct AppState {
     pub sugerencias: Vec<String>,
     pub feedback: Option<(Instant, Feedback)>,
     pub salir: bool,
+    /// Motor de presentación (Fase 4): sabe qué está apareciendo y a qué
+    /// opacidad, nada más — no conoce reglas de negocio.
+    pub presentacion: presentation::Engine,
+    pub calidad: presentation::VisualQuality,
+    /// Última `FirmaLogin` vista, para que el loop detecte mutaciones de
+    /// contenido comparándola contra la actual (ver `firma_login`).
+    pub firma_login_previa: Option<FirmaLogin>,
 }
 
 impl AppState {
@@ -171,7 +202,27 @@ impl AppState {
             sugerencias: Vec::new(),
             feedback: None,
             salir: false,
+            presentacion: presentation::Engine::new(),
+            calidad: presentation::VisualQuality::default(),
+            firma_login_previa: None,
         }
+    }
+
+    /// `None` fuera de las fases de login: `Operando` todavía no tiene
+    /// ninguna mutación animada (llega en una fase posterior, sobre esta
+    /// misma base).
+    pub fn firma_login(&self) -> Option<FirmaLogin> {
+        let (titulo, prompt) = match &self.fase {
+            Fase::LoginCedula => (super::NOMBRE_APP.to_string(), TipoPromptLogin::Cedula),
+            Fase::LoginPassword { nombre, .. } => (nombre.clone(), TipoPromptLogin::Password),
+            Fase::Verificando { nombre } => (nombre.clone(), TipoPromptLogin::Verificando),
+            Fase::Operando { .. } => return None,
+        };
+        Some(FirmaLogin {
+            titulo,
+            prompt,
+            feedback: self.feedback.is_some(),
+        })
     }
 
     /// Arranca ya autenticado — para cuando la TUI clásica hizo el login y el

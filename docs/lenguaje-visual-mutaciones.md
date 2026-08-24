@@ -253,7 +253,22 @@ ratatui 0.30.2 (default-features = false, features = ["crossterm"])
 crossterm 0.29.0 — una sola versión en el árbol, sin duplicados
 tui-input 0.15.4 — ya integrado, se reutiliza
 insta 1.48.0 — ya integrado, se reutiliza para snapshots de --comandos
+tui-big-text 0.8.8 — nueva (ver justificación abajo)
 ```
+
+**`tui-big-text`** (nueva, §14.1): renderiza texto grande con glifos de
+bloque (fuente `font8x8` vía la crate `font8x8`) directamente como widget de
+Ratatui. Verificado antes de añadirla (`cargo tree -p ratatui`/`-p
+crossterm`): no duplica ninguna versión mayor de ninguna de las dos. Se
+prefirió sobre dibujar ASCII art a mano porque siete letras bien
+proporcionadas a mano es fácil que salgan desalineadas o ilegibles en
+terminales angostas; la crate ya resuelve el layout carácter por carácter y
+respeta el `Style` (por lo tanto el fundido de `estilo_fundido` funciona
+igual que con texto normal). Se usa en un único lugar (el título "Brisas
+CLI"), con `PixelSize::Quadrant` — el tamaño más chico que sigue usando sólo
+glifos de cuadrante ampliamente soportados (`ThirdHeight`/`Sextant`/
+`QuarterHeight`/`Octant` avisan en su propia documentación que pueden verse
+mal según la fuente del terminal).
 
 No están en el proyecto y no se agregan preventivamente: `tachyonfx`,
 `tracing`/`tracing-subscriber`, `criterion`, `sysinfo`, `windows`. Cada una
@@ -354,10 +369,66 @@ a la identidad → Enter arma el hilo de Argon2 → `Verificando { nombre }`
    `✓ Bienvenido, <nombre>` (el mismo canal transitorio de toda la app),
    sin bloquear el primer comando que el operador quiera escribir.
 
-Falta explícitamente por diseñar (no implementado): esta escena todavía no
-tiene mutación *animada* real (posición/tamaño interpolados) — es la mutación
-de *contenido* (título → identidad, label → valor) sin `PresentationEngine`
-todavía. Eso llega en Fase 4/5 sobre esta misma base.
+**Revisión tras feedback visual** (captura real de `cargo run`): el título
+pasó de texto espaciado a `BigText` con glifos de bloque de verdad (ver
+dependencias, abajo) — sólo para "Brisas CLI"; el nombre del operador quedó
+deliberadamente en texto normal, más chico y sin el acento de la marca, para
+no competir en jerarquía. El punto de anclaje del prompt se recalculó para
+centrarse con el mismo eje que el título (antes usaban dos cálculos de
+centrado distintos y quedaban visualmente desalineados). La duración de
+aparición subió de 180ms a 320ms (extremo alto de "transición grande") por
+sentirse demasiado rápida.
+
+## 14.2 Presentation Engine mínimo (Fase 4, implementada)
+
+`src/comandos/presentation/` — reloj, easing, calidad y motor de aparición.
+Sólo lo que hace falta para que el login tenga una mutación *animada* real
+(no sólo de contenido): sin foco, sin breakpoints, sin métricas, sin calidad
+adaptativa — eso sigue siendo de fases posteriores.
+
+```text
+presentation/
+├── mod.rs        — re-exporta Engine y VisualQuality
+├── quality.rs     — VisualQuality::{Off, Normal} (DEC-007)
+├── easing.rs      — Linear, EaseIn, EaseOut, EaseInOut
+├── animation.rs   — Animacion: valor interpolado por tiempo, nunca por frame
+└── engine.rs       — Engine: HashMap<id, Animacion> + aparecer()/opacidad()/activo()
+```
+
+**Cómo se dispara**: en el loop (`mod.rs::run`), entre actualizar estado y
+renderizar, `actualizar_presentacion` compara `AppState::firma_login()`
+(título/tipo de prompt/presencia de aviso — nunca el texto tecleado) contra
+la firma de la vuelta anterior. Cada diferencia real arranca una aparición
+(`Engine::aparecer`) con `EaseOut` en ~180ms. Escribir no dispara nada: la
+firma es ciega al contenido del input, así que tecla a tecla sigue siendo
+instantáneo (cumple "nunca animes el input").
+
+**Cómo se ve**: `render.rs` lee `app.presentacion.opacidad(id)` y funde el
+color desde un fondo oscuro (`FADE_FONDO`) hacia el color final de cada
+elemento (`estilo_fundido`). Con `VisualQuality::Off` la animación queda
+resuelta en el valor final desde el primer frame — mismo resultado
+funcional, sin diferencia visual (DEC-012 verificable a simple vista).
+
+**Scheduler**: `proxima_espera` ahora también pregunta `app.presentacion
+.activo()` — con una animación en curso el poll baja a ~33ms (30 fps, de
+sobra para un fundido de texto); en reposo vuelve a esperar casi
+indefinidamente. El teclado sigue respondiendo en la misma vuelta en que
+llega, nunca atado al tick de animación.
+
+**Qué falta, deliberadamente**:
+- Sólo hay *aparición*. La *desaparición* (p. ej. el aviso `×`
+  desvaneciéndose en vez de cortar seco cuando expira) no está cableada —
+  requeriría que el motor recuerde el último contenido visible incluso
+  después de que `AppState` ya lo limpió, que es más máquina de la que
+  hacía falta para esta primera pasada. `Easing::EaseIn` ya existe en el
+  vocabulario (documentado para ese caso) pero no se usa todavía.
+- No hay interrupción/reversión de una animación a mitad de camino (DEC-003
+  la exige en general, pero hoy sólo hay apariciones de ~180ms que rara vez
+  se alcanzan a interrumpir de forma perceptible; se revisará si aparece un
+  caso real que lo necesite).
+- `VisualQuality` no tiene todavía ninguna tecla que la cambie en runtime —
+  el campo existe y el motor ya la respeta, falta sólo la superficie de UI
+  para alternarla.
 
 ## 15. Decisiones pendientes
 

@@ -24,9 +24,15 @@ mod formulario_controller;
 mod login;
 mod operando;
 mod parser;
+mod presentation;
 mod render;
 mod resolver;
 mod terminal;
+
+/// Nombre visual de la app en la escena de login — única fuente de verdad:
+/// `render.rs` lo pinta, `estado.rs::firma_login` lo usa para detectar
+/// cuándo el título mutó hacia/desde la identidad del operador.
+const NOMBRE_APP: &str = "Brisas CLI";
 
 use std::io::{self, stdout};
 use std::sync::mpsc;
@@ -103,6 +109,18 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<(), C
         if app.expirar_feedback() {
             redibujar = true;
         }
+        // Paso "Transition/Animation State" del pipeline (ver
+        // docs/lenguaje-visual-mutaciones.md §6), entre actualizar estado y
+        // renderizar: detecta mutaciones de contenido y arranca la
+        // aparición correspondiente en el motor de presentación.
+        if actualizar_presentacion(&mut app) {
+            redibujar = true;
+        }
+        // Con una animación en curso hay que seguir pintando cada tick
+        // aunque no haya llegado ningún evento nuevo.
+        if app.presentacion.activo() {
+            redibujar = true;
+        }
 
         if redibujar {
             terminal.draw(|frame| render::render(frame, &app))?;
@@ -124,20 +142,64 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<(), C
     Ok(())
 }
 
+/// Compara qué debería verse en la escena de login contra lo que se vio la
+/// vuelta anterior (`FirmaLogin`) y arranca en el motor de presentación una
+/// aparición por cada elemento que mutó de contenido. Nunca se dispara tecla
+/// a tecla: la firma no incluye el texto tecleado, sólo título/tipo de
+/// prompt/presencia de aviso — typing es instantáneo, como exige DEC-004 en
+/// espíritu ("nunca animes el input"). Devuelve `true` si algo cambió.
+fn actualizar_presentacion(app: &mut AppState) -> bool {
+    let firma_actual = app.firma_login();
+    if firma_actual == app.firma_login_previa {
+        return false;
+    }
+    match (&app.firma_login_previa, &firma_actual) {
+        // Primer frame de la escena: título y prompt aparecen juntos.
+        (None, Some(_)) => {
+            app.presentacion.aparecer("titulo", app.calidad);
+            app.presentacion.aparecer("prompt", app.calidad);
+        }
+        (Some(anterior), Some(actual)) => {
+            if anterior.titulo != actual.titulo {
+                app.presentacion.aparecer("titulo", app.calidad);
+            }
+            if anterior.prompt != actual.prompt {
+                app.presentacion.aparecer("prompt", app.calidad);
+            }
+            // Sólo la aparición anima; que desaparezca (expira solo, ver
+            // `AppState::expirar_feedback`) queda instantáneo por ahora —
+            // ver nota en docs/lenguaje-visual-mutaciones.md §14.1.
+            if !anterior.feedback && actual.feedback {
+                app.presentacion.aparecer("feedback", app.calidad);
+            }
+        }
+        _ => {}
+    }
+    app.firma_login_previa = firma_actual;
+    true
+}
+
 /// Cuánto puede esperar el próximo `poll` antes de que el loop necesite
 /// revisar algo por su cuenta (sin que haya llegado un evento de teclado).
 ///
 /// - Con Argon2 corriendo, hay que revisar el canal seguido.
+/// - Con una animación en curso, al ritmo de frame que le corresponde.
 /// - Con feedback transitorio visible, sólo hace falta despertar cuando
 ///   está por expirar.
 /// - En reposo, esperar casi indefinidamente: el teclado despierta el poll
 ///   de inmediato, no hace falta sondear nada más.
 fn proxima_espera(app: &AppState, autenticacion: &AutenticacionPendiente) -> Duration {
     const ESPERA_VERIFICACION: Duration = Duration::from_millis(30);
+    // ~30 fps: de sobra para una transición de texto/color; no hay razón
+    // para gastar más CPU persiguiendo 60 en una interfaz de terminal.
+    const ESPERA_ANIMACION: Duration = Duration::from_millis(33);
     const ESPERA_REPOSO: Duration = Duration::from_secs(60 * 60);
 
     if autenticacion.is_some() {
         return ESPERA_VERIFICACION;
+    }
+    if app.presentacion.activo() {
+        return ESPERA_ANIMACION;
     }
     if let Some(restante) = app.feedback_restante() {
         return restante.max(Duration::from_millis(1));

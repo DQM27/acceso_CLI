@@ -15,6 +15,8 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 
+use tui_big_text::{BigText, PixelSize};
+
 use crate::domain::resultado_acceso::{MotivoDenegacion, ResultadoAcceso};
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::models::tipo_ingreso::TipoIngreso;
@@ -305,47 +307,155 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
 // es un "_" con estilo, nunca el bloque parpadeante del terminal — por eso
 // esta función jamás llama a `frame.set_cursor_position`.
 
-const NOMBRE_APP: &str = "Brisas CLI";
+/// Alto en filas del título grande (`PixelSize::Quadrant`: 4 filas, 4
+/// columnas por carácter — suficiente para distinguirse sin ocupar media
+/// pantalla ni depender de glifos de bloque más finos, que no todos los
+/// terminales dibujan igual).
+const ALTO_TITULO_GRANDE: u16 = 4;
+
+/// Paleta propia del login en RGB explícito (no los `Color` con nombre del
+/// resto del archivo): un fundido necesita interpolar componentes, y sólo
+/// `Color::Rgb` los tiene. Fondo asumido oscuro — es la base de todo el tema
+/// actual (ver `muted()`/`acento()`), no una novedad de esta escena.
+const FADE_FONDO: (u8, u8, u8) = (10, 10, 12);
+const FADE_ACENTO: (u8, u8, u8) = (86, 200, 214);
+const FADE_MUTED: (u8, u8, u8) = (120, 120, 130);
+const FADE_TEXTO: (u8, u8, u8) = (225, 225, 230);
+const FADE_EXITO: (u8, u8, u8) = (94, 201, 133);
+const FADE_ADVERTENCIA: (u8, u8, u8) = (214, 181, 92);
+const FADE_ERROR: (u8, u8, u8) = (214, 92, 92);
+
+fn interpolar_color(desde: (u8, u8, u8), hasta: (u8, u8, u8), t: f32) -> Color {
+    let t = t.clamp(0.0, 1.0);
+    let mezclar = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * t).round() as u8;
+    Color::Rgb(
+        mezclar(desde.0, hasta.0),
+        mezclar(desde.1, hasta.1),
+        mezclar(desde.2, hasta.2),
+    )
+}
+
+/// Estilo que funde desde `FADE_FONDO` hacia `color` según `opacidad`
+/// (0.0 = invisible, fundido con el fondo; 1.0 = color final). Con
+/// `opacidad` en 1.0 (elemento ya resuelto, o `VisualQuality::Off`) el color
+/// resultante coincide exactamente con el color final, sin diferencia visual.
+fn estilo_fundido(color: (u8, u8, u8), opacidad: f32, modificador: Modifier) -> Style {
+    Style::default()
+        .fg(interpolar_color(FADE_FONDO, color, opacidad))
+        .add_modifier(modificador)
+}
 
 fn render_login(frame: &mut Frame, area: Rect, app: &AppState) {
-    let lineas = lineas_login(app);
-    let alto = (lineas.len() as u16).min(area.height);
+    let opacidad_titulo = app.presentacion.opacidad("titulo");
+    let opacidad_prompt = app.presentacion.opacidad("prompt");
+    let opacidad_aviso = app.presentacion.opacidad("feedback");
+
+    // Sólo el nombre de la app ("Brisas CLI") usa el tratamiento grande: es
+    // la marca. La identidad del operador, que ocupa la misma ranura visual
+    // después, es deliberadamente más chica y de otro color — es la sesión
+    // de una persona, no compite en jerarquía con la marca.
+    let titulo_grande = matches!(app.fase, Fase::LoginCedula);
+    let titulo_alto = if titulo_grande { ALTO_TITULO_GRANDE } else { 1 };
+    // Aire entre bloques: dos filas, no una — con una sola el conjunto se
+    // veía apretado y perdido en el resto de la pantalla vacía.
+    const AIRE: u16 = 2;
+    // título + aire + prompt + aire + aviso.
+    let alto_total = (titulo_alto + 2 * AIRE + 2).min(area.height);
     // El bloque arranca un poco antes de la mitad de la pantalla — arriba
     // del centro, no exactamente centrado ni pegado al borde — dejando aire
     // debajo para que la escena respire.
-    let margen_superior = area.height.saturating_sub(alto) / 3;
-    let bloque = Rect::new(area.x, area.y + margen_superior, area.width, alto);
-    frame.render_widget(Paragraph::new(lineas).alignment(Alignment::Center), bloque);
+    let y = area.y + area.height.saturating_sub(alto_total) / 3;
+
+    let area_titulo = Rect::new(area.x, y, area.width, titulo_alto.min(area.height));
+    if titulo_grande {
+        let titulo = BigText::builder()
+            .pixel_size(PixelSize::Quadrant)
+            .centered()
+            .style(estilo_fundido(FADE_ACENTO, opacidad_titulo, Modifier::BOLD))
+            .lines(vec![Line::from(super::NOMBRE_APP.to_uppercase())])
+            .build();
+        frame.render_widget(titulo, area_titulo);
+    } else {
+        frame.render_widget(
+            Paragraph::new(linea_identidad_operador(&app.fase, opacidad_titulo))
+                .alignment(Alignment::Center),
+            area_titulo,
+        );
+    }
+
+    let y_prompt = y + titulo_alto + AIRE;
+    if alto_total > titulo_alto + AIRE {
+        match etiqueta_prompt(&app.fase) {
+            // Espaciado entre letras, igual que el nombre del operador: sin
+            // eso el prompt se leía diminuto al lado del título/identidad, y
+            // el aviso transitorio (una oración normal, sin espaciar) pesaba
+            // visualmente más que el propio input — justo al revés de la
+            // jerarquía que debería tener.
+            //
+            // El punto de anclaje horizontal se calcula centrando la
+            // ETIQUETA ya espaciada (largo fijo), nunca el valor tecleado:
+            // así coincide con el centro del título (mismo cálculo, mismo
+            // `area.width`) y no se recalcula tecla a tecla — el `›` se
+            // queda quieto y el texto crece hacia la derecha.
+            Some(etiqueta) => {
+                let etiqueta_espaciada = espaciar_texto(etiqueta);
+                let vacio = app.input.value().is_empty();
+                let valor_espaciado = espaciar_texto(&valor_prompt(&app.fase, app));
+                let linea = linea_prompt(
+                    &etiqueta_espaciada,
+                    &valor_espaciado,
+                    vacio,
+                    opacidad_prompt,
+                );
+                let ancho_centrado =
+                    (2 + etiqueta_espaciada.chars().count() as u16).min(area.width);
+                let x_prompt = area.x + area.width.saturating_sub(ancho_centrado) / 2;
+                let ancho_render = area.width.saturating_sub(x_prompt - area.x);
+                frame.render_widget(
+                    Paragraph::new(linea),
+                    Rect::new(x_prompt, y_prompt, ancho_render, 1),
+                );
+            }
+            // Verificando: no crece con tecleo, se centra como el título.
+            None => {
+                frame.render_widget(
+                    Paragraph::new(linea_verificando(opacidad_prompt)).alignment(Alignment::Center),
+                    Rect::new(area.x, y_prompt, area.width, 1),
+                );
+            }
+        }
+    }
+
+    let y_aviso = y_prompt + AIRE;
+    if alto_total > titulo_alto + AIRE + 1 {
+        frame.render_widget(
+            Paragraph::new(linea_aviso_login(app, opacidad_aviso)).alignment(Alignment::Center),
+            Rect::new(area.x, y_aviso, area.width, 1),
+        );
+    }
 }
 
-fn lineas_login(app: &AppState) -> Vec<Line<'static>> {
-    vec![
-        titulo_identidad(&app.fase),
-        Line::from(""),
-        linea_estado_login(&app.fase, app),
-        Line::from(""),
-        linea_aviso_login(app),
-    ]
-}
-
-/// El título muta: "Brisas CLI" mientras no hay identidad reconocida, y el
-/// nombre del operador desde que la cédula se resolvió contra SQLite — la
-/// misma "ranura" visual cambia de contenido, no desaparece una y aparece
-/// otra.
-fn titulo_identidad(fase: &Fase) -> Line<'static> {
-    let texto = match fase {
-        Fase::LoginCedula => NOMBRE_APP,
+/// El nombre del operador ocupa la misma ranura visual que "Brisas CLI",
+/// pero con menos peso a propósito: texto normal (no bloques grandes) y un
+/// color neutro en vez del acento de la marca.
+fn linea_identidad_operador(fase: &Fase, opacidad: f32) -> Line<'static> {
+    let nombre = match fase {
         Fase::LoginPassword { nombre, .. } | Fase::Verificando { nombre } => nombre.as_str(),
-        Fase::Operando { .. } => "",
+        Fase::LoginCedula | Fase::Operando { .. } => "",
     };
-    titulo_grande(texto)
+    // Mayúscula + espaciado entre letras le dan más presencia sin usar el
+    // mismo tratamiento de bloques que la marca — sigue siendo, a
+    // propósito, un peso visual menor que el título grande.
+    Line::from(Span::styled(
+        espaciar_texto(&nombre.to_uppercase()),
+        estilo_fundido(FADE_TEXTO, opacidad, Modifier::BOLD),
+    ))
 }
 
-/// Título "un poco grande" sin ASCII art multilínea (se rompe fácil en una
-/// terminal angosta) ni una crate nueva: el tamaño sale del espaciado entre
-/// letras + negrita + acento — suficiente para distinguirlo del resto del
-/// texto sin sentirse a banner.
-fn titulo_grande(texto: &str) -> Line<'static> {
+/// Inserta un espacio entre cada carácter (y espacio triple donde ya había
+/// uno) para que el texto ocupe más ancho visual sin cambiar de tamaño de
+/// fuente — la terminal no tiene tamaños de fuente, sólo columnas.
+fn espaciar_texto(texto: &str) -> String {
     let mut espaciado = String::new();
     for caracter in texto.chars() {
         if caracter == ' ' {
@@ -355,56 +465,93 @@ fn titulo_grande(texto: &str) -> Line<'static> {
             espaciado.push(' ');
         }
     }
+    espaciado.trim_end().to_string()
+}
+
+fn linea_verificando(opacidad: f32) -> Line<'static> {
+    // Trabajo real (Argon2 en un hilo aparte), no una animación decorativa:
+    // el glifo ● es el mismo que en el resto de la app para "sistema activo".
     Line::from(Span::styled(
-        espaciado.trim_end().to_string(),
-        Style::default()
-            .add_modifier(Modifier::BOLD)
-            .fg(Color::Cyan),
+        "● Verificando",
+        estilo_fundido(FADE_MUTED, opacidad, Modifier::empty()),
     ))
 }
 
-fn linea_estado_login(fase: &Fase, app: &AppState) -> Line<'static> {
+/// Etiqueta de marcador de posición del prompt según la fase — largo fijo,
+/// usado tanto para el texto mostrado cuando no se ha tecleado nada como
+/// para calcular el punto de anclaje horizontal. `None` en `Verificando`:
+/// ahí no hay nada que escribir.
+fn etiqueta_prompt(fase: &Fase) -> Option<&'static str> {
     match fase {
-        Fase::LoginCedula => {
-            let vacio = app.input.value().is_empty();
-            linea_prompt("Identificación", app.input.value(), vacio)
-        }
-        Fase::LoginPassword { .. } => {
-            let vacio = app.input.value().is_empty();
-            let oculto = "•".repeat(app.input.value().chars().count());
-            linea_prompt("Contraseña", &oculto, vacio)
-        }
-        // Trabajo real (Argon2 en un hilo aparte), no una animación
-        // decorativa: el glifo ● es el mismo que en el resto de la app para
-        // "sistema activo".
-        Fase::Verificando { .. } => Line::from(Span::styled("● Verificando", muted())),
-        Fase::Operando { .. } => Line::from(""),
+        Fase::LoginCedula => Some("Identificación"),
+        Fase::LoginPassword { .. } => Some("Contraseña"),
+        Fase::Verificando { .. } | Fase::Operando { .. } => None,
+    }
+}
+
+fn valor_prompt(fase: &Fase, app: &AppState) -> String {
+    match fase {
+        Fase::LoginCedula => app.input.value().to_string(),
+        Fase::LoginPassword { .. } => "•".repeat(app.input.value().chars().count()),
+        Fase::Verificando { .. } | Fase::Operando { .. } => String::new(),
     }
 }
 
 /// `vacio`: sin nada tecleado se muestra la etiqueta como pista (el foco `›`
 /// ya está puesto, no hace falta cursor todavía); en cuanto hay texto, la
 /// etiqueta se retira y el valor ocupa su lugar con el cursor `_` al final —
-/// la etiqueta se simplifica en el propio valor, no coexisten.
-fn linea_prompt(etiqueta: &str, valor_mostrado: &str, vacio: bool) -> Line<'static> {
+/// la etiqueta se simplifica en el propio valor, no coexisten. La aparición
+/// (fade-in) es por transición de fase, nunca por tecla: escribir no anima.
+fn linea_prompt(etiqueta: &str, valor_mostrado: &str, vacio: bool, opacidad: f32) -> Line<'static> {
     if vacio {
         Line::from(vec![
-            Span::styled("› ", acento()),
-            Span::styled(etiqueta.to_string(), muted()),
+            Span::styled(
+                "› ",
+                estilo_fundido(FADE_ACENTO, opacidad, Modifier::empty()),
+            ),
+            Span::styled(
+                etiqueta.to_string(),
+                estilo_fundido(FADE_MUTED, opacidad, Modifier::empty()),
+            ),
         ])
     } else {
         Line::from(vec![
-            Span::styled("› ", acento()),
-            Span::raw(valor_mostrado.to_string()),
-            Span::styled("_", acento()),
+            Span::styled(
+                "› ",
+                estilo_fundido(FADE_ACENTO, opacidad, Modifier::empty()),
+            ),
+            Span::styled(
+                valor_mostrado.to_string(),
+                estilo_fundido(FADE_TEXTO, opacidad, Modifier::empty()),
+            ),
+            Span::styled(
+                "_",
+                estilo_fundido(FADE_ACENTO, opacidad, Modifier::empty()),
+            ),
         ])
     }
 }
 
-fn linea_aviso_login(app: &AppState) -> Line<'static> {
+/// Símbolo de la gramática compartida (`✓ ! ×`) con color propio en RGB —
+/// distinto de `glifo_feedback` (que usa `Color` con nombre) porque acá hace
+/// falta poder fundirlo con `estilo_fundido`.
+fn color_nivel_login(nivel: NivelFeedback) -> (u8, u8, u8) {
+    match nivel {
+        NivelFeedback::Exito => FADE_EXITO,
+        NivelFeedback::Advertencia => FADE_ADVERTENCIA,
+        NivelFeedback::Error => FADE_ERROR,
+    }
+}
+
+fn linea_aviso_login(app: &AppState, opacidad: f32) -> Line<'static> {
     match app.feedback_vigente() {
         Some(feedback) => {
-            let (simbolo, estilo) = glifo_feedback(feedback.nivel);
+            let (simbolo, _) = glifo_feedback(feedback.nivel);
+            let estilo = estilo_fundido(
+                color_nivel_login(feedback.nivel),
+                opacidad,
+                Modifier::empty(),
+            );
             Line::from(vec![
                 Span::styled(format!("{simbolo} "), estilo),
                 Span::styled(feedback.texto.clone(), estilo),
