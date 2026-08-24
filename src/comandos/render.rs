@@ -653,10 +653,18 @@ fn columnas_visibles<C: Columna>(columnas: &SelectorColumnas<C>) -> impl Iterato
     columnas.iter().filter(|(_, v)| *v).map(|(c, _)| c)
 }
 
+/// Tope al ancho de una columna flexible (Nombre/Empresa/Usuario): sin este
+/// tope, en una terminal ancha se comen todo el espacio sobrante y dejan un
+/// hueco enorme antes de las columnas fijas — que es lo que se veía "feo".
+/// Un nombre de persona o empresa rara vez necesita más que esto; el que se
+/// pase igual se trunca con "…", no se pierde información silenciosamente.
+const ANCHO_FLEXIBLE_MAXIMO: usize = 28;
+
 /// Ancho de cada columna visible: la fija (`Some`) se conserva tal cual, la
 /// flexible (`None`, típicamente Nombre/Empresa) se reparte en partes
-/// iguales el espacio que sobra — así una tabla con 3 columnas visibles
-/// aprovecha el ancho que dejó libre la 4ª que se ocultó con F4.
+/// iguales el espacio que sobra, con tope (`ANCHO_FLEXIBLE_MAXIMO`) — así
+/// una tabla con 3 columnas visibles aprovecha el ancho que dejó libre la 4ª
+/// que se ocultó con F4, sin desbordarse en una terminal ancha.
 fn anchos_columnas<C: Columna>(
     ancho_total: u16,
     visibles: impl Iterator<Item = C>,
@@ -678,7 +686,9 @@ fn anchos_columnas<C: Columna>(
         let disponible = ancho_total
             .saturating_sub(fijo_total + 2)
             .max(12 * n_flex as u16);
-        (disponible / n_flex as u16).max(12) as usize
+        (disponible / n_flex as u16)
+            .max(12)
+            .min(ANCHO_FLEXIBLE_MAXIMO as u16) as usize
     };
     visibles
         .into_iter()
@@ -686,14 +696,19 @@ fn anchos_columnas<C: Columna>(
         .collect()
 }
 
-/// Concatena celdas ya resueltas a `(ancho, columna)` con relleno hasta
-/// `ancho`, salvo la última (que crece sin relleno hasta el borde) — mismo
-/// criterio visual que ya usaban estas tablas antes de que las columnas
-/// fueran ocultables (F4); como sólo se listan las visibles, "la última"
-/// cambia sola según cuál quede más a la derecha. Trunca (con `recortar`)
-/// todo lo que no sea la última, para que un valor largo nunca desalinee lo
-/// que sigue.
-fn fila_columnas<C: Columna>(anchos: &[(C, usize)], valor: impl Fn(C) -> String) -> String {
+/// Concatena celdas ya resueltas a `(ancho, columna)`, salvo la última (que
+/// crece sin relleno hasta el borde) — como sólo se listan las visibles,
+/// "la última" cambia sola según cuál quede más a la derecha. Cada columna
+/// reserva 2 espacios de separación (no 1): con columnas numéricas
+/// consecutivas (p. ej. Hora/Gafete en `/activos`) un solo espacio las hacía
+/// leerse como un número pegado. `derecha` alinea a la derecha las columnas
+/// numéricas (Gafete) — separa visualmente sus dígitos de los de la columna
+/// anterior en vez de quedar pegados contra el borde izquierdo.
+fn fila_columnas<C: Columna>(
+    anchos: &[(C, usize)],
+    derecha: impl Fn(C) -> bool,
+    valor: impl Fn(C) -> String,
+) -> String {
     let ultimo = anchos.len().saturating_sub(1);
     anchos
         .iter()
@@ -701,9 +716,14 @@ fn fila_columnas<C: Columna>(anchos: &[(C, usize)], valor: impl Fn(C) -> String)
         .map(|(indice, (columna, ancho))| {
             let texto = valor(*columna);
             if indice == ultimo {
-                texto
+                return texto;
+            }
+            let contenido = ancho.saturating_sub(2);
+            let recortado = recortar(&texto, contenido);
+            if derecha(*columna) {
+                format!("{recortado:>contenido$}  ")
             } else {
-                format!("{:<ancho$}", recortar(&texto, ancho.saturating_sub(1)))
+                format!("{recortado:<contenido$}  ")
             }
         })
         .collect()
@@ -712,9 +732,10 @@ fn fila_columnas<C: Columna>(anchos: &[(C, usize)], valor: impl Fn(C) -> String)
 fn ancho_fijo_busqueda(columna: ColumnaBusqueda) -> Option<usize> {
     match columna {
         ColumnaBusqueda::Cedula => Some(14),
-        ColumnaBusqueda::Tipo => Some(10),
-        ColumnaBusqueda::Praind => Some(11),
-        ColumnaBusqueda::Ruta | ColumnaBusqueda::Acceso => Some(4),
+        ColumnaBusqueda::Tipo => Some(12),
+        ColumnaBusqueda::Praind => Some(12),
+        ColumnaBusqueda::Ruta => Some(6),
+        ColumnaBusqueda::Acceso => Some(8),
         ColumnaBusqueda::Nombre | ColumnaBusqueda::Empresa => None,
     }
 }
@@ -770,7 +791,7 @@ fn lineas_coincidencias(
         Line::from(Span::styled(
             format!(
                 "  {}",
-                fila_columnas(&anchos, |c| c.etiqueta().to_uppercase())
+                fila_columnas(&anchos, |_| false, |c| c.etiqueta().to_uppercase())
             ),
             Style::default().add_modifier(Modifier::BOLD),
         )),
@@ -780,7 +801,7 @@ fn lineas_coincidencias(
         let marcador = if indice == seleccion { "› " } else { "  " };
         let texto = format!(
             "{marcador}{}",
-            fila_columnas(&anchos, |c| valor_busqueda(item, c))
+            fila_columnas(&anchos, |_| false, |c| valor_busqueda(item, c))
         );
         lineas.push(if indice == seleccion {
             Line::from(Span::styled(texto, estilo_seleccion()))
@@ -794,12 +815,19 @@ fn lineas_coincidencias(
 fn ancho_fijo_activos(columna: ColumnaActivos) -> Option<usize> {
     match columna {
         ColumnaActivos::Cedula => Some(14),
-        ColumnaActivos::Tipo => Some(10),
-        ColumnaActivos::Hora => Some(6),
+        ColumnaActivos::Tipo => Some(12),
+        ColumnaActivos::Hora => Some(7),
         ColumnaActivos::Gafete => Some(8),
-        ColumnaActivos::Medio => Some(10),
+        ColumnaActivos::Medio => Some(11),
         ColumnaActivos::Nombre | ColumnaActivos::Empresa | ColumnaActivos::Usuario => None,
     }
+}
+
+/// Sólo Gafete se alinea a la derecha: es la única columna numérica que
+/// queda pegada a otra (Hora) — alinearla a la derecha la separa de sus
+/// dígitos en vez de leerse como un solo número (ver captura real).
+fn derecha_activos(columna: ColumnaActivos) -> bool {
+    matches!(columna, ColumnaActivos::Gafete)
 }
 
 fn valor_activos(item: &IngresoActivoResumen, columna: ColumnaActivos) -> String {
@@ -841,7 +869,7 @@ fn lineas_coincidencias_activos(
         Line::from(Span::styled(
             format!(
                 "  {}",
-                fila_columnas(&anchos, |c| c.etiqueta().to_uppercase())
+                fila_columnas(&anchos, derecha_activos, |c| c.etiqueta().to_uppercase())
             ),
             Style::default().add_modifier(Modifier::BOLD),
         )),
@@ -851,7 +879,7 @@ fn lineas_coincidencias_activos(
         let marcador = if indice == seleccion { "› " } else { "  " };
         let texto = format!(
             "{marcador}{}",
-            fila_columnas(&anchos, |c| valor_activos(item, c))
+            fila_columnas(&anchos, derecha_activos, |c| valor_activos(item, c))
         );
         lineas.push(if indice == seleccion {
             Line::from(Span::styled(texto, estilo_seleccion()))
@@ -1013,13 +1041,13 @@ fn lineas_tabla_activos(
 
     let mut lineas = vec![
         Line::from(Span::styled(
-            fila_columnas(&anchos, |c| c.etiqueta().to_uppercase()),
+            fila_columnas(&anchos, derecha_activos, |c| c.etiqueta().to_uppercase()),
             Style::default().add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled("─".repeat(ancho as usize), muted())),
     ];
     for item in items {
-        lineas.push(Line::from(fila_columnas(&anchos, |c| {
+        lineas.push(Line::from(fila_columnas(&anchos, derecha_activos, |c| {
             valor_activos(item, c)
         })));
     }
