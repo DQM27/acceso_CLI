@@ -779,9 +779,11 @@ fn lineas_contexto(
         } => lineas_coincidencias_usuarios(consulta, items, *seleccion),
         ContextState::ResumenIngreso { .. } => lineas_resumen_ingreso(contexto),
         ContextState::ResumenSalida { activo } => lineas_resumen_salida(activo),
-        ContextState::TablaActivos { items, total } => {
-            lineas_tabla_activos(items, *total, ancho, columnas_activos)
-        }
+        ContextState::TablaActivos {
+            items,
+            total,
+            seleccion,
+        } => lineas_tabla_activos(items, *total, *seleccion, ancho, columnas_activos),
         ContextState::FichaContratista { resumen } => lineas_ficha(resumen),
         ContextState::ConfirmarCerrarSesion => lineas_cerrar_sesion(),
         ContextState::NuevoContratista => lineas_nuevo_contratista(),
@@ -1289,13 +1291,15 @@ fn lineas_resumen_salida(activo: &IngresoActivoResumen) -> Vec<Line<'static>> {
 fn lineas_tabla_activos(
     items: &[IngresoActivoResumen],
     total: usize,
+    seleccion: usize,
     ancho: u16,
     columnas: &SelectorColumnas<ColumnaActivos>,
 ) -> Vec<Line<'static>> {
     // Terminal angosta (Breakpoint::Compact): Empresa se apaga sola además
     // de lo que haya elegido el operador con F4 — mismo umbral que ya tenía
-    // esta tabla. Mismas 8 columnas que la tabla de arriba (ColumnaActivos),
-    // sin marcador de selección: esta vista no navega ítem por ítem.
+    // esta tabla. Mismas 8 columnas que la tabla de arriba (ColumnaActivos).
+    // Navegable con ↑↓ desde DEC-056 — mismo marcador "› " que
+    // `lineas_coincidencias_activos`, con el que comparte fuente de datos.
     let angosto = Breakpoint::desde_ancho(ancho) == Breakpoint::Compact;
     let visibles =
         columnas_visibles(columnas).filter(|c| !(angosto && *c == ColumnaActivos::Empresa));
@@ -1303,15 +1307,25 @@ fn lineas_tabla_activos(
 
     let mut lineas = vec![
         Line::from(Span::styled(
-            fila_columnas(&anchos, derecha_activos, |c| c.etiqueta().to_uppercase()),
+            format!(
+                "  {}",
+                fila_columnas(&anchos, derecha_activos, |c| c.etiqueta().to_uppercase())
+            ),
             Style::default().add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled("─".repeat(ancho as usize), muted())),
     ];
-    for item in items {
-        lineas.push(Line::from(fila_columnas(&anchos, derecha_activos, |c| {
-            valor_activos(item, c)
-        })));
+    for (indice, item) in items.iter().enumerate() {
+        let marcador = if indice == seleccion { "› " } else { "  " };
+        let texto = format!(
+            "{marcador}{}",
+            fila_columnas(&anchos, derecha_activos, |c| valor_activos(item, c))
+        );
+        lineas.push(if indice == seleccion {
+            Line::from(Span::styled(texto, estilo_seleccion()))
+        } else {
+            Line::from(texto)
+        });
     }
     if items.is_empty() {
         lineas.push(Line::from(Span::styled(

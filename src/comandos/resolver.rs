@@ -346,6 +346,7 @@ fn resolver_activos(core: &AppCore, consulta: &str) -> ContextState {
         Ok(lista) => ContextState::TablaActivos {
             items: lista.items,
             total: lista.total,
+            seleccion: 0,
         },
         Err(_) => ContextState::MensajeError {
             mensaje: "No se pudo consultar los ingresos activos".to_string(),
@@ -454,6 +455,10 @@ pub fn calcular_sugerencias(core: &AppCore, texto: &str, entrada: &Entrada) -> V
             comando: Comando::Salida,
             ..
         } => vec!["nombre o G:<número> del gafete · ↑↓ elegir · Enter confirmar".into()],
+        Entrada::Comando {
+            comando: Comando::Activos,
+            ..
+        } => vec!["↑↓ elegir · Enter registrar salida · Esc limpiar".into()],
         Entrada::Comando {
             comando: Comando::Nuevo,
             ..

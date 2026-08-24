@@ -728,6 +728,15 @@ DEC-055  El buscador principal (texto sin `/`, y por extensión `/ingreso`,
          `empresa:` sigue existiendo tal cual dentro de `/historial`
          (`FiltroHistorial::empresa_id`, consulta separada) — ahí sí es
          un criterio explícito que el operador pidió a propósito.
+DEC-056  `/activos` navega con ↑↓ y Enter sobre una fila lleva a
+         `ResumenSalida` — antes era una tabla de sólo lectura (comentario
+         explícito en el código: "esta vista no navega ítem por ítem",
+         decisión que se revierte acá porque en la práctica sí hacía
+         falta: el operador mira `/activos`, reconoce a alguien y quiere
+         darle salida ahí mismo, sin repetir la búsqueda en `/salida`).
+         Reutiliza el mismo `ContextState::ResumenSalida` y el mismo
+         marcador `›` que ya usa `CoincidenciasActivos` — misma fuente de
+         datos (`IngresoActivoResumen`), sólo cambia de dónde se llega.
 
 ## 14.1 Escena de login (implementada)
 

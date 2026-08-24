@@ -95,6 +95,9 @@ fn mover_seleccion(app: &mut AppState, delta: isize) {
         ContextState::CoincidenciasActivos {
             items, seleccion, ..
         } => ajustar(seleccion, items.len()),
+        ContextState::TablaActivos {
+            items, seleccion, ..
+        } => ajustar(seleccion, items.len()),
         ContextState::CoincidenciasEmpresas {
             items, seleccion, ..
         } => ajustar(seleccion, items.len()),
@@ -198,6 +201,15 @@ fn confirmar(core: &AppCore, app: &mut AppState) {
             }
         }
         ContextState::CoincidenciasActivos {
+            items, seleccion, ..
+        } => {
+            if let Some(item) = items.get(seleccion) {
+                app.contexto = ContextState::ResumenSalida {
+                    activo: item.clone(),
+                };
+            }
+        }
+        ContextState::TablaActivos {
             items, seleccion, ..
         } => {
             if let Some(item) = items.get(seleccion) {

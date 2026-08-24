@@ -210,10 +210,13 @@ pub enum ContextState {
     ResumenSalida {
         activo: IngresoActivoResumen,
     },
-    /// `/activos`: tabla de personas dentro ahora mismo.
+    /// `/activos`: tabla de personas dentro ahora mismo. Navegable con ↑↓ —
+    /// Enter sobre una fila lleva a `ResumenSalida` (DEC-056), mismo camino
+    /// que `/salida` ya usa desde `CoincidenciasActivos`.
     TablaActivos {
         items: Vec<IngresoActivoResumen>,
         total: usize,
+        seleccion: usize,
     },
     /// Búsqueda de texto libre resuelta a un contratista concreto.
     FichaContratista {
