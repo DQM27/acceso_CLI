@@ -371,8 +371,12 @@ DEC-006, DEC-013).
 ```text
 Fase 0  — Fundación de latencia: redraw-on-demand + scheduler mínimo. HECHO.
 Fase 1  — Este documento.
-Fase 2  — Breakpoints y foco mínimo.
+Fase 2  — Breakpoints y foco mínimo. PARCIAL: Breakpoint::{Compact,Normal}
+          hecho (DEC-037); FocusTarget deliberadamente sin construir (DEC-038,
+          sin consumidor real todavía).
 Fase 3  — Componentes visuales base (Composer, Surface, Selector, Field, Notice, Summary).
+          PARCIAL: SurfaceActiva unifica el despacho de teclado (DEC-039);
+          Composer/Selector/Field/Notice/Summary como tipos reales, sin empezar.
 Fase 4  — Presentation Engine mínimo (reloj, scheduler, transición, easing, VisualQuality::{Off,Normal}).
 Fase 5  — Primera mutación real: /nuevo.
 Fase 6  — Selector reusable (piloto: Empresa).
@@ -531,6 +535,31 @@ DEC-036  `F5` exporta el filtro completo de Historial a XLSX (mismo atajo
          dominio con más detalle que el `ColumnaHistorial` de
          `comandos::columnas` usado para la vista) — elegir un subconjunto
          para exportar queda fuera de esta pasada, es todo o nada.
+DEC-037  `Breakpoint` (Fase 2, primera mitad) tiene sólo `Compact`/`Normal`,
+         no `Wide` como sugería el bosquejo original de §10 — hoy no hay
+         ningún componente que necesite distinguir "ancho" de "muy ancho";
+         el único umbral real en todo `--comandos` es si `/activos` muestra
+         la columna Empresa (antes `ANCHO_TABLA_COMPLETA`, un `const`
+         suelto, ahora `Breakpoint::desde_ancho`). Mismo criterio que ya se
+         aplicó a `VisualQuality::{Off,Normal}` (§11): no fabricar una
+         variante sin un consumidor real.
+DEC-038  `FocusTarget` (Fase 2, segunda mitad) se deja explícitamente sin
+         construir — hoy ningún componente necesita preguntar "¿qué tiene
+         el foco?" de forma genérica; cada Surface ya resuelve su propio
+         foco (`Campo` en el formulario, el índice de selección en
+         Historial/columnas). Su primer consumidor real llegaría con el
+         motor de presentación animando algo más que el login (Fase 5) —
+         se construye cuando eso pase, no antes.
+DEC-039  `SurfaceActiva` (`AppState::surface_activa()`) es el primer paso
+         real de Fase 3: reemplaza los tres `if x.is_some() {...} else if
+         y.is_some()...` que `operando.rs` encadenaba para decidir qué
+         Surface tiene el teclado, con una sola función que responde eso en
+         un solo lugar. Deliberadamente NO es la Fase 3 completa: sigue
+         siendo tres campos separados de `AppState` con tres controladores
+         separados, no una abstracción `Composer`/`Surface`/`Selector`/
+         `Field`/`Notice`/`Summary` de verdad — ese rediseño es mucho más
+         grande y arriesga romper tres funciones que hoy trabajan bien; se
+         hace aparte, no de paso.
 ```
 
 ## 14.1 Escena de login (implementada)

@@ -23,6 +23,7 @@ use crate::models::tipo_ingreso::TipoIngreso;
 use crate::services::registro_ingreso_service::IngresoActivoResumen;
 use crate::tiempo::a_costa_rica;
 
+use super::breakpoint::Breakpoint;
 use super::columnas::{
     Columna, ColumnaActivos, ColumnaBusqueda, ColumnaHistorial, SelectorColumnas,
 };
@@ -40,9 +41,6 @@ use super::resolver::MIN_CONSULTA;
 /// se muestra un aviso en vez de romper el prompt.
 const ANCHO_MINIMO: u16 = 40;
 const ALTO_MINIMO: u16 = 10;
-
-/// Ancho a partir del cual la tabla de activos muestra también la empresa.
-const ANCHO_TABLA_COMPLETA: u16 = 64;
 
 fn exito() -> Style {
     Style::default().fg(Color::Green)
@@ -1096,11 +1094,11 @@ fn lineas_tabla_activos(
     ancho: u16,
     columnas: &SelectorColumnas<ColumnaActivos>,
 ) -> Vec<Line<'static>> {
-    // Terminal angosta: Empresa se apaga sola además de lo que haya elegido
-    // el operador con F4 — mismo umbral que ya tenía esta tabla. Mismas 8
-    // columnas que la tabla de arriba (ColumnaActivos), sin marcador de
-    // selección: esta vista no navega ítem por ítem.
-    let angosto = ancho < ANCHO_TABLA_COMPLETA;
+    // Terminal angosta (Breakpoint::Compact): Empresa se apaga sola además
+    // de lo que haya elegido el operador con F4 — mismo umbral que ya tenía
+    // esta tabla. Mismas 8 columnas que la tabla de arriba (ColumnaActivos),
+    // sin marcador de selección: esta vista no navega ítem por ítem.
+    let angosto = Breakpoint::desde_ancho(ancho) == Breakpoint::Compact;
     let visibles =
         columnas_visibles(columnas).filter(|c| !(angosto && *c == ColumnaActivos::Empresa));
     let anchos = anchos_columnas(ancho, visibles, ancho_fijo_activos);

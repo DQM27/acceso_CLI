@@ -28,6 +28,28 @@ pub enum ObjetivoColumnas {
     Historial,
 }
 
+/// Qué Surface (§4/§5.2) tiene el teclado ahora mismo — primer paso real de
+/// Fase 3: antes de esto, `operando.rs` decidía lo mismo con tres `if
+/// x.is_some() {...} else if y.is_some()...` encadenados, uno por Surface,
+/// cada uno reinventando la misma pregunta. `surface_activa()` la hace una
+/// sola vez y en un solo lugar; el orden de precedencia (formulario primero)
+/// es el mismo que ya tenía el código, no cambia comportamiento.
+///
+/// No es (todavía) un trait ni una pila de objetos: cada Surface sigue
+/// siendo su propio campo de `AppState` con su propio controlador — eso es
+/// deliberado, no una limitación a resolver ahora. Reescribir formulario/
+/// columnas/historial sobre una abstracción común de verdad (Fase 3
+/// completa: Composer/Surface/Selector/Field/Notice/Summary como tipos) es
+/// un rediseño mucho más grande, con riesgo real de romper tres funciones
+/// que hoy trabajan bien — se hace aparte, no de paso.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SurfaceActiva {
+    Formulario,
+    Columnas,
+    Historial,
+    Ninguna,
+}
+
 /// Selector de columnas abierto (Surface enclavada, §5.2): mientras es
 /// `Some`, el teclado deja la gramática de comandos y pasa a la del picker
 /// (↑↓ mueve, Space marca/desmarca, Esc cierra) — mismo mecanismo que ya usa
@@ -275,6 +297,22 @@ impl AppState {
         }
     }
 
+    /// Ver `SurfaceActiva`. Mismo orden de precedencia que ya tenía
+    /// `operando.rs` antes de unificarse acá — nunca hay dos Surfaces
+    /// abiertas al mismo tiempo en la práctica, pero si algún día lo
+    /// estuvieran, formulario gana.
+    pub fn surface_activa(&self) -> SurfaceActiva {
+        if self.formulario.is_some() {
+            SurfaceActiva::Formulario
+        } else if self.edicion_columnas.is_some() {
+            SurfaceActiva::Columnas
+        } else if self.historial.is_some() {
+            SurfaceActiva::Historial
+        } else {
+            SurfaceActiva::Ninguna
+        }
+    }
+
     pub fn mostrar_feedback(&mut self, texto: String, nivel: NivelFeedback) {
         self.feedback = Some((Instant::now(), Feedback { texto, nivel }));
     }
@@ -307,5 +345,59 @@ impl AppState {
 impl Default for AppState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::usuario::RolUsuario;
+    use crate::services::autenticacion_service::UsuarioSesion;
+
+    fn sesion() -> UsuarioSesion {
+        UsuarioSesion {
+            id: 1,
+            cedula: "119430546".to_string(),
+            nombre: "Operador de prueba".to_string(),
+            rol: RolUsuario::Operador,
+        }
+    }
+
+    #[test]
+    fn sin_ninguna_surface_abierta() {
+        let app = AppState::con_sesion(sesion());
+        assert_eq!(app.surface_activa(), SurfaceActiva::Ninguna);
+    }
+
+    #[test]
+    fn columnas_abierta_se_detecta() {
+        let mut app = AppState::con_sesion(sesion());
+        app.edicion_columnas = Some(EdicionColumnas {
+            objetivo: ObjetivoColumnas::Activos,
+            seleccion: 0,
+        });
+        assert_eq!(app.surface_activa(), SurfaceActiva::Columnas);
+    }
+
+    #[test]
+    fn historial_abierto_se_detecta() {
+        let mut app = AppState::con_sesion(sesion());
+        app.historial = Some(super::super::historial::HistorialState::nuevo(Vec::new()));
+        assert_eq!(app.surface_activa(), SurfaceActiva::Historial);
+    }
+
+    #[test]
+    fn formulario_tiene_precedencia_sobre_las_demas() {
+        let mut app = AppState::con_sesion(sesion());
+        app.edicion_columnas = Some(EdicionColumnas {
+            objetivo: ObjetivoColumnas::Activos,
+            seleccion: 0,
+        });
+        app.historial = Some(super::super::historial::HistorialState::nuevo(Vec::new()));
+        app.formulario = Some(super::super::formulario::FormularioContratista::nuevo(
+            Vec::new(),
+            true,
+        ));
+        assert_eq!(app.surface_activa(), SurfaceActiva::Formulario);
     }
 }

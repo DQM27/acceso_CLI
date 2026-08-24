@@ -18,6 +18,7 @@
 //! (alta/edición de contratista) — los tres leen y escriben el mismo
 //! [`AppState`], nunca estado propio.
 
+mod breakpoint;
 mod columnas;
 mod estado;
 mod formulario;
@@ -52,6 +53,7 @@ use crate::application::AppCore;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::error::{AutenticacionError, UsuarioServiceError};
 
+pub use breakpoint::Breakpoint;
 pub use columnas::{Columna, ColumnaActivos, ColumnaBusqueda, ColumnaHistorial, SelectorColumnas};
 pub use estado::{AppState, ContextState, EdicionColumnas, Fase, NivelFeedback, ObjetivoColumnas};
 pub use formulario::{

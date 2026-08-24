@@ -13,7 +13,7 @@ use crate::models::medio_ingreso::MedioIngreso;
 use crate::services::error::RegistroIngresoServiceError;
 use crate::tiempo::hora_actual_texto;
 
-use super::estado::{EdicionColumnas, ObjetivoColumnas};
+use super::estado::{EdicionColumnas, ObjetivoColumnas, SurfaceActiva};
 use super::formulario_controller::{abrir_formulario_edicion, abrir_formulario_nuevo};
 use super::{
     AppState, Columna, ColumnaActivos, ColumnaBusqueda, ColumnaHistorial, Comando, ContextState,
@@ -21,22 +21,24 @@ use super::{
 };
 
 pub(super) fn manejar_operando(core: &AppCore, app: &mut AppState, key: KeyEvent) {
-    // Con el formulario abierto todas las teclas (salvo Ctrl+C, ya atajada)
-    // son del formulario: el input edita campos, no comandos.
-    if app.formulario.is_some() {
-        super::formulario_controller::manejar_formulario(core, app, key);
-        return;
-    }
-    // Selector de columnas (F4): segunda Surface enclavada, mismo mecanismo
-    // que el formulario (§5.2) — mientras está abierta, el teclado es suyo.
-    if app.edicion_columnas.is_some() {
-        manejar_columnas(app, key);
-        return;
-    }
-    // Historial: tercera Surface enclavada (§5.2/DEC-023/024).
-    if app.historial.is_some() {
-        super::historial_controller::manejar_historial(core, app, key);
-        return;
+    // Con una Surface enclavada abierta (§5.2), el teclado es suyo — sólo
+    // Ctrl+C escapa (ya atajado antes de llegar acá). `surface_activa()`
+    // reemplaza lo que antes eran tres `if x.is_some() {...}` seguidos, uno
+    // por Surface (primer paso de Fase 3, ver `SurfaceActiva`).
+    match app.surface_activa() {
+        SurfaceActiva::Formulario => {
+            super::formulario_controller::manejar_formulario(core, app, key);
+            return;
+        }
+        SurfaceActiva::Columnas => {
+            manejar_columnas(app, key);
+            return;
+        }
+        SurfaceActiva::Historial => {
+            super::historial_controller::manejar_historial(core, app, key);
+            return;
+        }
+        SurfaceActiva::Ninguna => {}
     }
     match key.code {
         // Esc y Ctrl+L: limpiar todo y volver a Inicio.
