@@ -481,13 +481,12 @@ fn render_login(frame: &mut Frame, area: Rect, app: &AppState) {
             Some(etiqueta) => {
                 let etiqueta_espaciada = espaciar_texto(etiqueta);
                 let vacio = app.input.value().is_empty();
-                let valor_espaciado = espaciar_texto(&valor_prompt(&app.fase, app));
-                let linea = linea_prompt(
-                    &etiqueta_espaciada,
-                    &valor_espaciado,
-                    vacio,
-                    opacidad_prompt,
-                );
+                // El valor NO se espacia — a diferencia de la etiqueta (un
+                // rótulo fijo, decorativo), esto es lo que el operador acaba
+                // de teclear: separar sus dígitos o el enmascarado de la
+                // contraseña sólo lo hace más difícil de releer.
+                let valor = valor_prompt(&app.fase, app);
+                let linea = linea_prompt(&etiqueta_espaciada, &valor, vacio, opacidad_prompt);
                 let ancho_centrado =
                     (2 + etiqueta_espaciada.chars().count() as u16).min(area.width);
                 let x_prompt = area.x + area.width.saturating_sub(ancho_centrado) / 2;
@@ -524,11 +523,12 @@ fn linea_identidad_operador(fase: &Fase, opacidad: f32) -> Line<'static> {
         Fase::LoginPassword { nombre, .. } | Fase::Verificando { nombre } => nombre.as_str(),
         Fase::LoginCedula | Fase::Operando { .. } => "",
     };
-    // Mayúscula + espaciado entre letras le dan más presencia sin usar el
-    // mismo tratamiento de bloques que la marca — sigue siendo, a
-    // propósito, un peso visual menor que el título grande.
+    // Mayúscula (sin espaciado entre letras — se sentía impostado en un
+    // nombre real, a diferencia de la etiqueta fija del prompt) le da más
+    // presencia sin usar el mismo tratamiento de bloques que la marca —
+    // sigue siendo, a propósito, un peso visual menor que el título grande.
     Line::from(Span::styled(
-        espaciar_texto(&nombre.to_uppercase()),
+        nombre.to_uppercase(),
         estilo_fundido(FADE_TEXTO, opacidad, Modifier::BOLD),
     ))
 }

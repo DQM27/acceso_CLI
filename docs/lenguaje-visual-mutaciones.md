@@ -620,6 +620,19 @@ centrado distintos y quedaban visualmente desalineados). La duración de
 aparición subió de 180ms a 320ms (extremo alto de "transición grande") por
 sentirse demasiado rápida.
 
+**Segunda revisión tras feedback visual** (captura real de login →
+contraseña, corriendo con credenciales reales): `espaciar_texto` (un
+espacio entre cada letra, pensado para el nombre del operador — ver arriba)
+se había filtrado a dos lugares donde no correspondía: el **valor tecleado**
+del prompt (`valor_espaciado = espaciar_texto(&valor_prompt(...))` —
+espaciaba los dígitos de la cédula y los puntos de la contraseña
+enmascarada, justo lo que el operador necesita releer con más precisión,
+no menos) y el **nombre del operador** mismo, donde se sentía impostado en
+un nombre real ("D A N I E L"). Se sacó de ambos; la etiqueta fija del
+prompt ("Identificación"/"Contraseña") conserva el espaciado — ahí sí es
+deliberado (texto decorativo fijo, no dato que el operador necesita leer
+exacto).
+
 ## 14.2 Presentation Engine mínimo (Fase 4, implementada)
 
 `src/comandos/presentation/` — reloj, easing, calidad y motor de aparición.
