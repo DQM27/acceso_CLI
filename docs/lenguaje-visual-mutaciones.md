@@ -118,6 +118,56 @@ Esc   → cancelar / volver / cerrar contexto
 
 No inventar excepciones gratuitamente por pantalla.
 
+## 5.1 Gramática de comandos
+
+Una línea de `--comandos` se descompone en 5 piezas, cada una con un rol
+fijo:
+
+```text
+/comando            → líder explícito de acción (autocompletable vía /)
+--letra | --palabra → modificador de acción sobre un resultado de búsqueda
+clave:valor          → parámetro con valor (admite listas clave:a,b,c y
+                       comillas para valores con espacios)
+-clave:valor          → negación de un parámetro
+texto libre           → sujeto de la búsqueda (acción implícita, sin comando)
+```
+
+**Búsqueda es la acción por defecto**: texto sin `/` inicial ya es la
+consulta — es la acción más frecuente y no necesita comando propio.
+
+**`/comando` (líder) y `--modificador` son gramáticas mutuamente
+excluyentes por línea.** Si hay un `/comando` explícito, cualquier `--x`
+que aparezca después se trata como texto libre (mismo criterio que ya
+existe para una clave `clave:valor` no reconocida: se degrada a texto en
+vez de aplicarse a medias o dar error). Nunca compiten dos intenciones en
+la misma línea.
+
+**`--modificador` sólo es válido en comandos "de ítem"** — los que actúan
+sobre el resultado ya encontrado (`ingreso`, `salida`, `editar`). Los
+comandos globales (`nuevo`, `activos`, `ayuda`, `cerrarsesion`) no tienen
+sujeto sobre el cual aplicarse como sufijo, así que sólo existen como
+`/comando` líder.
+
+**Guion simple vs. doble guion — no es longitud, es significado.** El
+guion simple (`-clave:valor`) queda reservado exclusivamente para negación
+(ver §14, motor de query). El doble guion identifica un modificador de
+acción, sea de una letra (`--e`) o palabra completa (`--editar`) — no se
+distingue por cantidad de guiones según longitud (a diferencia de la
+convención POSIX `-v`/`--verbose`), porque el guion simple ya está tomado
+por la negación del motor de query y crearía una colisión real de parseo,
+no sólo de estilo.
+
+Dos rutas de sintaxis llegan al mismo destino interno (misma
+`Entrada::Comando`) — no son dos comandos, es el mismo con dos formas de
+invocarlo: `/editar Ana` y `Ana --editar` (o `Ana --e`) producen el mismo
+resultado. Esto es deliberado (progressive disclosure): el operador nuevo
+descubre por `/` con autocompletado; el operador con práctica comprime la
+misma acción en una sola línea sin cambiar de modo ni activar ninguna
+configuración.
+
+Motor de query (`clave:valor`, listas, negación) documentado en §14
+(Registro de decisiones) y en el análisis de `query_lang.rs`.
+
 ## 6. Arquitectura de interacción
 
 ```text
@@ -319,6 +369,32 @@ DEC-017  La interfaz de comandos es la ruta por defecto de la aplicación
          (sin flags). El flag --comandos se eliminó; la TUI clásica quedó
          detrás de --tui-clasica. La configuración inicial (creación del
          ROOT) sigue siendo exclusiva de la TUI clásica.
+DEC-018  Gramática de comandos de 5 piezas: /comando (líder), --letra o
+         --palabra (modificador de acción), clave:valor (parámetro, admite
+         listas y comillas), -clave:valor (negación), texto libre (ver
+         §5.1).
+DEC-019  Guion simple reservado exclusivamente para negación de parámetro
+         (-clave:valor); doble guion identifica un modificador de acción,
+         sin distinguir por longitud (--e y --editar son ambos doble
+         guion). Un modificador de acción con guion simple colisionaría de
+         verdad con la negación del motor de query, no es sólo preferencia
+         de estilo.
+DEC-020  /comando líder y --modificador de acción son gramáticas
+         mutuamente excluyentes por línea: si hay líder explícito,
+         cualquier --x posterior se trata como texto libre, igual que una
+         clave:valor no reconocida.
+DEC-021  --modificador de acción sólo aplica a comandos "de ítem" (ingreso,
+         salida, editar) — actúan sobre el resultado ya encontrado. Los
+         comandos globales (nuevo, activos, ayuda, cerrarsesion) sólo
+         existen como /comando líder.
+DEC-022  El motor clave:valor de --comandos se construye sobre el crate
+         `query-parser` (ya vetado en Cargo.lock vía la TUI clásica,
+         src/tui/ui_kit/query_lang.rs), con wrapper propio dentro de
+         src/comandos/ — no se importa el módulo de la TUI clásica
+         directamente (DEC-002/DEC-014). El pilar de uso de este motor es
+         Historial (filtrado por tipo/empresa/fecha/etc., aún no
+         construido); activos/ingreso/salida son consumidores secundarios
+         de parámetros con valor (G:/M:).
 ```
 
 ## 14.1 Escena de login (implementada)
