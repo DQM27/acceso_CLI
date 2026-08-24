@@ -16,8 +16,8 @@ use crate::tiempo::hora_actual_texto;
 use super::estado::{EdicionColumnas, ObjetivoColumnas};
 use super::formulario_controller::{abrir_formulario_edicion, abrir_formulario_nuevo};
 use super::{
-    AppState, Columna, ColumnaActivos, ColumnaBusqueda, Comando, ContextState, Entrada, Fase,
-    GafeteParse, MedioParse, NivelFeedback,
+    AppState, Columna, ColumnaActivos, ColumnaBusqueda, ColumnaHistorial, Comando, ContextState,
+    Entrada, Fase, GafeteParse, MedioParse, NivelFeedback,
 };
 
 pub(super) fn manejar_operando(core: &AppCore, app: &mut AppState, key: KeyEvent) {
@@ -131,6 +131,7 @@ fn mover_seleccion_columnas(app: &mut AppState, delta: isize) {
     let total = match edicion.objetivo {
         ObjetivoColumnas::Busqueda => ColumnaBusqueda::TODAS.len(),
         ObjetivoColumnas::Activos => ColumnaActivos::TODAS.len(),
+        ObjetivoColumnas::Historial => ColumnaHistorial::TODAS.len(),
     };
     if total == 0 {
         return;
@@ -146,6 +147,7 @@ fn alternar_columna(app: &mut AppState) {
     let resultado = match edicion.objetivo {
         ObjetivoColumnas::Busqueda => app.columnas_busqueda.alternar(edicion.seleccion),
         ObjetivoColumnas::Activos => app.columnas_activos.alternar(edicion.seleccion),
+        ObjetivoColumnas::Historial => app.columnas_historial.alternar(edicion.seleccion),
     };
     if let Err(mensaje) = resultado {
         app.mostrar_feedback(mensaje.to_string(), NivelFeedback::Advertencia);

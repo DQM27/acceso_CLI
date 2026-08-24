@@ -9,6 +9,7 @@ use tui_input::backend::crossterm::EventHandler;
 use crate::application::AppCore;
 use crate::services::error::RegistroIngresoServiceError;
 
+use super::estado::{EdicionColumnas, ObjetivoColumnas};
 use super::historial::HistorialState;
 use super::{AppState, NivelFeedback};
 
@@ -65,6 +66,15 @@ fn manejar_resultado(core: &AppCore, app: &mut AppState, key: KeyEvent) {
         KeyCode::Down => mover_seleccion(app, 1),
         KeyCode::PageDown => paginar(core, app, 1),
         KeyCode::PageUp => paginar(core, app, -1),
+        // F4 abre el selector de columnas de la tabla de Historial — mismo
+        // mecanismo que las otras dos tablas (§5.2), anidado: Esc lo cierra
+        // y vuelve a mostrar los mismos resultados, sin volver a consultar.
+        KeyCode::F(4) => {
+            app.edicion_columnas = Some(EdicionColumnas {
+                objetivo: ObjetivoColumnas::Historial,
+                seleccion: 0,
+            });
+        }
         _ => {}
     }
 }

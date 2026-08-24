@@ -13,6 +13,7 @@ const FILE_NAME: &str = "comandos-preferencias.conf";
 pub struct Preferencias {
     pub columnas_busqueda: String,
     pub columnas_activos: String,
+    pub columnas_historial: String,
 }
 
 impl Preferencias {
@@ -25,6 +26,7 @@ impl Preferencias {
             match clave.trim() {
                 "columnas_busqueda" => preferencias.columnas_busqueda = valor.trim().to_owned(),
                 "columnas_activos" => preferencias.columnas_activos = valor.trim().to_owned(),
+                "columnas_historial" => preferencias.columnas_historial = valor.trim().to_owned(),
                 _ => {}
             }
         }
@@ -33,8 +35,8 @@ impl Preferencias {
 
     fn serialize(&self) -> String {
         format!(
-            "version=1\ncolumnas_busqueda={}\ncolumnas_activos={}\n",
-            self.columnas_busqueda, self.columnas_activos
+            "version=1\ncolumnas_busqueda={}\ncolumnas_activos={}\ncolumnas_historial={}\n",
+            self.columnas_busqueda, self.columnas_activos, self.columnas_historial
         )
     }
 }
@@ -108,6 +110,7 @@ mod tests {
             .guardar_si_cambio(Preferencias {
                 columnas_busqueda: "nombre,tipo".to_string(),
                 columnas_activos: "gafete,nombre".to_string(),
+                columnas_historial: "ingreso_col,nombre".to_string(),
             })
             .unwrap();
         assert!(cambiado);
@@ -115,6 +118,7 @@ mod tests {
         let recargado = PreferenciasStore::load(ruta.clone());
         assert_eq!(recargado.actual().columnas_busqueda, "nombre,tipo");
         assert_eq!(recargado.actual().columnas_activos, "gafete,nombre");
+        assert_eq!(recargado.actual().columnas_historial, "ingreso_col,nombre");
         let _ = fs::remove_file(&ruta);
     }
 

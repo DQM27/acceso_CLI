@@ -125,7 +125,12 @@ pub fn render(frame: &mut Frame, app: &AppState) {
     } else if let Some(edicion) = &app.edicion_columnas {
         lineas_selector_columnas(app, *edicion)
     } else if let Some(historial) = &app.historial {
-        lineas_historial(historial, app.input.value(), area_contexto.width)
+        lineas_historial(
+            historial,
+            app.input.value(),
+            area_contexto.width,
+            &app.columnas_historial,
+        )
     } else {
         lineas_contexto(
             &app.contexto,
@@ -189,7 +194,7 @@ fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
     }
     if let Some(historial) = &app.historial {
         let pista = if historial.resultado.is_some() {
-            "↑↓ moverse · PageUp/PageDown más resultados · Esc editar filtro"
+            "↑↓ moverse · PageUp/PageDown más resultados · F4 columnas · Esc editar filtro"
         } else {
             "escriba clave:valor · Enter aplica · Esc cierra Historial"
         };
@@ -1194,6 +1199,7 @@ fn lineas_selector_columnas(app: &AppState, edicion: EdicionColumnas) -> Vec<Lin
     let titulo = match edicion.objetivo {
         ObjetivoColumnas::Busqueda => "COLUMNAS — resultados de búsqueda",
         ObjetivoColumnas::Activos => "COLUMNAS — activos",
+        ObjetivoColumnas::Historial => "COLUMNAS — historial",
     };
     let filas: Vec<(&'static str, bool)> = match edicion.objetivo {
         ObjetivoColumnas::Busqueda => app
@@ -1203,6 +1209,11 @@ fn lineas_selector_columnas(app: &AppState, edicion: EdicionColumnas) -> Vec<Lin
             .collect(),
         ObjetivoColumnas::Activos => app
             .columnas_activos
+            .iter()
+            .map(|(c, v)| (c.etiqueta(), v))
+            .collect(),
+        ObjetivoColumnas::Historial => app
+            .columnas_historial
             .iter()
             .map(|(c, v)| (c.etiqueta(), v))
             .collect(),
@@ -1343,6 +1354,7 @@ fn lineas_historial(
     historial: &HistorialState,
     texto_input: &str,
     ancho: u16,
+    columnas: &SelectorColumnas<ColumnaHistorial>,
 ) -> Vec<Line<'static>> {
     let Some(resultado) = &historial.resultado else {
         // Editando: todavía no se aplicó ninguna consulta (o se volvió a
@@ -1396,11 +1408,7 @@ fn lineas_historial(
         return lineas;
     }
 
-    let anchos = anchos_columnas(
-        ancho,
-        ColumnaHistorial::TODAS.iter().copied(),
-        ancho_fijo_historial,
-    );
+    let anchos = anchos_columnas(ancho, columnas_visibles(columnas), ancho_fijo_historial);
     lineas.push(Line::from(Span::styled(
         format!(
             "  {}",

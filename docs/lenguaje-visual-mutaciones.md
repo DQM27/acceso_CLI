@@ -511,11 +511,15 @@ DEC-033  La paginación (PageUp/PageDown) fija `corte_id` en la primera
 DEC-034  `ColumnaHistorial` (7 columnas: ingreso, nombre, empresa, tipo,
          gafete, salida, "da ingreso") implementa el mismo trait `Columna`
          que `ColumnaBusqueda`/`ColumnaActivos` para reusar
-         `anchos_columnas`/`fila_columnas` tal cual, pero deliberadamente
-         **sin** `SelectorColumnas`/F4 todavía — la tabla siempre muestra
-         las 7. Sumarle F4 más adelante es sólo agregar el campo a
-         `AppState`, no rehacer el render; no se hizo ahora por no ser lo
-         que se pidió.
+         `anchos_columnas`/`fila_columnas` tal cual. (Superado por DEC-035:
+         el `F4` que acá se dejaba fuera a propósito se agregó después.)
+DEC-035  `F4` sobre la tabla de Historial (sólo con resultado ya aplicado
+         en pantalla): abre `edicion_columnas` igual que las otras dos
+         tablas, anidado dentro de la Surface de Historial — `Esc` lo
+         cierra y vuelve a mostrar el mismo resultado sin volver a
+         consultar. `ObjetivoColumnas::Historial` es el tercer caso del
+         mismo selector genérico; se persiste en `columnas_historial` del
+         mismo archivo de preferencias (DEC-029).
 ```
 
 ## 14.1 Escena de login (implementada)

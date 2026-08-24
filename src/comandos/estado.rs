@@ -14,7 +14,7 @@ use crate::models::medio_ingreso::MedioIngreso;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::registro_ingreso_service::{IngresoActivoResumen, PreparacionIngreso};
 
-use super::columnas::{ColumnaActivos, ColumnaBusqueda, SelectorColumnas};
+use super::columnas::{ColumnaActivos, ColumnaBusqueda, ColumnaHistorial, SelectorColumnas};
 use super::formulario::FormularioContratista;
 use super::historial::HistorialState;
 use super::presentation;
@@ -25,6 +25,7 @@ use super::presentation;
 pub enum ObjetivoColumnas {
     Busqueda,
     Activos,
+    Historial,
 }
 
 /// Selector de columnas abierto (Surface enclavada, §5.2): mientras es
@@ -206,6 +207,7 @@ pub struct AppState {
     /// una de las dos (según `app.contexto` en ese momento).
     pub columnas_busqueda: SelectorColumnas<ColumnaBusqueda>,
     pub columnas_activos: SelectorColumnas<ColumnaActivos>,
+    pub columnas_historial: SelectorColumnas<ColumnaHistorial>,
     /// Selector de columnas abierto, si lo hay (ver `EdicionColumnas`).
     pub edicion_columnas: Option<EdicionColumnas>,
     /// Surface de Historial abierta, si la hay (§5.2/DEC-023/024) — mientras
@@ -234,6 +236,7 @@ impl AppState {
             formulario: None,
             columnas_busqueda: SelectorColumnas::todas_visibles(),
             columnas_activos: SelectorColumnas::todas_visibles(),
+            columnas_historial: SelectorColumnas::todas_visibles(),
             edicion_columnas: None,
             historial: None,
             sugerencias: Vec::new(),

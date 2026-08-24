@@ -111,6 +111,8 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<(), C
             .aplicar_preferencia(&store.actual().columnas_busqueda);
         app.columnas_activos
             .aplicar_preferencia(&store.actual().columnas_activos);
+        app.columnas_historial
+            .aplicar_preferencia(&store.actual().columnas_historial);
     }
     let mut autenticacion: AutenticacionPendiente = None;
     recomputar(&core, &mut app);
@@ -162,6 +164,7 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<(), C
         let _ = store.guardar_si_cambio(preferencias::Preferencias {
             columnas_busqueda: app.columnas_busqueda.preferencia(),
             columnas_activos: app.columnas_activos.preferencia(),
+            columnas_historial: app.columnas_historial.preferencia(),
         });
     }
     Ok(())
