@@ -8,13 +8,24 @@ use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
 
 use crate::application::AppCore;
+use crate::database::queries::empresas::EmpresaResumen;
 
-use super::formulario_empresa::FormularioEmpresa;
+use super::formulario_empresa::{FormularioEmpresa, ModoFormularioEmpresa};
 use super::{AppState, Fase, NivelFeedback};
 
 pub(super) fn abrir_formulario_nuevo_empresa(app: &mut AppState) {
     app.formulario_empresa = Some(FormularioEmpresa::nuevo());
     app.input.reset();
+    app.feedback = None;
+    app.sugerencias.clear();
+}
+
+/// La búsqueda que trajo hasta acá (`CoincidenciasEmpresas`) ya trae el
+/// nombre vigente — precarga el campo y el input del prompt con él, igual
+/// que `abrir_formulario_edicion` hace para contratista.
+pub(super) fn abrir_formulario_editar_empresa(app: &mut AppState, resumen: &EmpresaResumen) {
+    app.formulario_empresa = Some(FormularioEmpresa::editar(resumen.id, &resumen.nombre));
+    app.input = Input::new(resumen.nombre.clone());
     app.feedback = None;
     app.sugerencias.clear();
 }
@@ -56,13 +67,19 @@ fn guardar_formulario_empresa(core: &AppCore, app: &mut AppState) {
         Ok(nombre) => nombre,
         Err(_) => return,
     };
-    match core.crear_empresa(sesion, &nombre) {
-        Ok(_) => {
+    let modo = form.modo;
+    let resultado = match modo {
+        ModoFormularioEmpresa::Nuevo => core.crear_empresa(sesion, &nombre).map(|_| ()),
+        ModoFormularioEmpresa::Editar { id } => core.actualizar_empresa(sesion, id, &nombre),
+    };
+    let mensaje_exito = match modo {
+        ModoFormularioEmpresa::Nuevo => format!("Empresa registrada — {nombre}"),
+        ModoFormularioEmpresa::Editar { .. } => format!("Empresa actualizada — {nombre}"),
+    };
+    match resultado {
+        Ok(()) => {
             cerrar_formulario_empresa(core, app);
-            app.mostrar_feedback(
-                format!("Empresa registrada — {nombre}"),
-                NivelFeedback::Exito,
-            );
+            app.mostrar_feedback(mensaje_exito, NivelFeedback::Exito);
         }
         Err(error) => {
             if let Some(form) = &mut app.formulario_empresa {

@@ -10,6 +10,8 @@ use std::time::Instant;
 use tui_input::Input;
 
 use crate::database::queries::contratistas::ContratistaResumen;
+use crate::database::queries::empresas::EmpresaResumen;
+use crate::database::queries::usuarios::UsuarioResumen;
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::registro_ingreso_service::{IngresoActivoResumen, PreparacionIngreso};
@@ -170,6 +172,22 @@ pub enum ContextState {
     Coincidencias {
         consulta: String,
         items: Vec<ContratistaResumen>,
+        seleccion: usize,
+    },
+    /// Coincidencias de empresas para `/editar empresa <consulta>` (DEC-052)
+    /// — mismo criterio que `Coincidencias`, sin selector de columnas (F4):
+    /// `EmpresaResumen` tiene sólo 3 campos, una lista simple alcanza.
+    CoincidenciasEmpresas {
+        consulta: String,
+        items: Vec<EmpresaResumen>,
+        seleccion: usize,
+    },
+    /// Coincidencias de usuarios para `/editar usuario <consulta>`
+    /// (DEC-052) — sólo llega acá quien tiene `Operacion::GestionarUsuarios`
+    /// (`resolver_busqueda_usuarios` corta antes con `MensajeError`).
+    CoincidenciasUsuarios {
+        consulta: String,
+        items: Vec<UsuarioResumen>,
         seleccion: usize,
     },
     /// Coincidencias de ingresos activos para `/salida`. `descripcion` es la

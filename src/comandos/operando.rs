@@ -95,6 +95,12 @@ fn mover_seleccion(app: &mut AppState, delta: isize) {
         ContextState::CoincidenciasActivos {
             items, seleccion, ..
         } => ajustar(seleccion, items.len()),
+        ContextState::CoincidenciasEmpresas {
+            items, seleccion, ..
+        } => ajustar(seleccion, items.len()),
+        ContextState::CoincidenciasUsuarios {
+            items, seleccion, ..
+        } => ajustar(seleccion, items.len()),
         _ => {}
     }
 }
@@ -269,6 +275,20 @@ fn confirmar(core: &AppCore, app: &mut AppState) {
                 Err(error) => {
                     app.mostrar_feedback(mensaje_error_salida(&error), NivelFeedback::Error);
                 }
+            }
+        }
+        ContextState::CoincidenciasEmpresas {
+            items, seleccion, ..
+        } => {
+            if let Some(item) = items.get(seleccion) {
+                super::formulario_empresa_controller::abrir_formulario_editar_empresa(app, item);
+            }
+        }
+        ContextState::CoincidenciasUsuarios {
+            items, seleccion, ..
+        } => {
+            if let Some(item) = items.get(seleccion) {
+                super::formulario_usuario_controller::abrir_formulario_editar_usuario(app, item);
             }
         }
         _ => {}

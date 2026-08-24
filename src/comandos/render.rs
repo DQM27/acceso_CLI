@@ -29,13 +29,15 @@ use super::columnas::{
     Columna, ColumnaActivos, ColumnaBusqueda, ColumnaHistorial, SelectorColumnas,
 };
 use super::estado::{
-    AppState, ContextState, EdicionColumnas, Fase, NivelFeedback, ObjetivoColumnas,
+    AppState, ContextState, EdicionColumnas, Fase, NivelFeedback, ObjetivoColumnas, SurfaceActiva,
 };
 use super::formulario::{
     Campo, FormularioContratista, MAX_VISIBLES_EMPRESAS, ModoFormulario, Subfase,
 };
-use super::formulario_empresa::FormularioEmpresa;
-use super::formulario_usuario::{CampoUsuario, FormularioUsuario, SubfaseUsuario};
+use super::formulario_empresa::{FormularioEmpresa, ModoFormularioEmpresa};
+use super::formulario_usuario::{
+    CampoUsuario, FormularioUsuario, ModoFormularioUsuario, SubfaseUsuario,
+};
 use super::historial::HistorialState;
 use super::parser::Comando;
 use super::resolver::MIN_CONSULTA;
@@ -283,10 +285,16 @@ fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
 /// esquinas redondeadas encontrándose a mitad de una línea vertical, que es
 /// lo que se veía "cortado".
 fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState, paleta: Option<&[Comando]>) {
+    // Borde en acento cuando el teclado está enclavado en una Surface
+    // (§5.2) — misma señal visual en los cuatro casos (formulario de alta,
+    // formulario de empresa/usuario, columnas, Historial), para que se note
+    // de un vistazo que Esc hace falta para volver a los comandos, sin
+    // tener que leer la pista de abajo.
+    let enclavado = !matches!(app.surface_activa(), SurfaceActiva::Ninguna);
     let bloque = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(muted());
+        .border_style(if enclavado { acento() } else { muted() });
     let interior = bloque.inner(area);
     frame.render_widget(bloque, area);
 
@@ -759,6 +767,16 @@ fn lineas_contexto(
             items,
             seleccion,
         } => lineas_coincidencias_activos(descripcion, items, *seleccion, ancho, columnas_activos),
+        ContextState::CoincidenciasEmpresas {
+            consulta,
+            items,
+            seleccion,
+        } => lineas_coincidencias_empresas(consulta, items, *seleccion),
+        ContextState::CoincidenciasUsuarios {
+            consulta,
+            items,
+            seleccion,
+        } => lineas_coincidencias_usuarios(consulta, items, *seleccion),
         ContextState::ResumenIngreso { .. } => lineas_resumen_ingreso(contexto),
         ContextState::ResumenSalida { activo } => lineas_resumen_salida(activo),
         ContextState::TablaActivos { items, total } => {
@@ -805,7 +823,7 @@ fn descripcion_comando(comando: Comando) -> &'static str {
         Comando::Salida => "registrar salida — /salida <nombre> o /salida G:<n>",
         Comando::Activos => "quién está dentro ahora",
         Comando::Nuevo => "dar de alta — contratista (default), empresa o usuario",
-        Comando::Editar => "editar un contratista — /editar <nombre>",
+        Comando::Editar => "editar — contratista (default), empresa o usuario",
         Comando::Historial => "explorar movimientos — filtro empresa/tipo/fecha…",
         Comando::Ayuda => "sintaxis completa y ejemplos",
         Comando::CerrarSesion => "cerrar sesión y volver al login",
@@ -919,6 +937,87 @@ fn valor_busqueda(
         ColumnaBusqueda::Ruta => si_no(item.es_personal_ruta).to_string(),
         ColumnaBusqueda::Acceso => si_no(item.tiene_acceso).to_string(),
     }
+}
+
+/// Lista simple, sin columnas ni F4: `EmpresaResumen`/`UsuarioResumen`
+/// tienen pocos campos (3 y 4) y esta pantalla es de paso — elegir con ↑↓ y
+/// entrar al formulario de edición — no un reporte que valga la pena poder
+/// reconfigurar (DEC-052).
+fn lineas_coincidencias_empresas(
+    consulta: &str,
+    items: &[crate::database::queries::empresas::EmpresaResumen],
+    seleccion: usize,
+) -> Vec<Line<'static>> {
+    let mut lineas = vec![
+        Line::from(Span::styled("EDITAR EMPRESA", muted())),
+        Line::from(""),
+    ];
+    if consulta.chars().count() < MIN_CONSULTA {
+        lineas.push(Line::from(Span::styled(
+            format!("Escriba al menos {MIN_CONSULTA} letras para buscar…"),
+            muted(),
+        )));
+        return lineas;
+    }
+    if items.is_empty() {
+        lineas.push(Line::from(Span::styled(
+            format!("Sin empresas para \"{consulta}\""),
+            muted(),
+        )));
+        return lineas;
+    }
+    for (indice, empresa) in items.iter().enumerate() {
+        let marcador = if indice == seleccion { "› " } else { "  " };
+        let estado = if empresa.activo { "" } else { " (inactiva)" };
+        let texto = format!("{marcador}{}{estado}", empresa.nombre);
+        lineas.push(if indice == seleccion {
+            Line::from(Span::styled(texto, estilo_seleccion()))
+        } else {
+            Line::from(texto)
+        });
+    }
+    lineas
+}
+
+fn lineas_coincidencias_usuarios(
+    consulta: &str,
+    items: &[crate::database::queries::usuarios::UsuarioResumen],
+    seleccion: usize,
+) -> Vec<Line<'static>> {
+    let mut lineas = vec![
+        Line::from(Span::styled("EDITAR USUARIO", muted())),
+        Line::from(""),
+    ];
+    if consulta.chars().count() < MIN_CONSULTA {
+        lineas.push(Line::from(Span::styled(
+            format!("Escriba al menos {MIN_CONSULTA} letras para buscar…"),
+            muted(),
+        )));
+        return lineas;
+    }
+    if items.is_empty() {
+        lineas.push(Line::from(Span::styled(
+            format!("Sin usuarios para \"{consulta}\""),
+            muted(),
+        )));
+        return lineas;
+    }
+    for (indice, usuario) in items.iter().enumerate() {
+        let marcador = if indice == seleccion { "› " } else { "  " };
+        let estado = if usuario.activo { "" } else { " (inactivo)" };
+        let texto = format!(
+            "{marcador}{} — {} — {}{estado}",
+            usuario.cedula,
+            usuario.nombre,
+            rol_texto(usuario.rol)
+        );
+        lineas.push(if indice == seleccion {
+            Line::from(Span::styled(texto, estilo_seleccion()))
+        } else {
+            Line::from(texto)
+        });
+    }
+    lineas
 }
 
 fn lineas_coincidencias(
@@ -1889,8 +1988,12 @@ fn lineas_formulario_empresa(form: &FormularioEmpresa) -> Vec<Line<'static>> {
     } else {
         ("› ", acento())
     };
+    let titulo = match form.modo {
+        ModoFormularioEmpresa::Nuevo => "NUEVA EMPRESA".to_string(),
+        ModoFormularioEmpresa::Editar { .. } => "EDITAR EMPRESA".to_string(),
+    };
     let mut lineas = vec![
-        Line::from(Span::styled("NUEVA EMPRESA", muted())),
+        Line::from(Span::styled(titulo, muted())),
         Line::from(""),
         Line::from(vec![
             Span::styled(glifo, estilo_glifo),
@@ -1925,10 +2028,11 @@ fn lineas_formulario_usuario(form: &FormularioUsuario) -> Vec<Line<'static>> {
 }
 
 fn lineas_campos_usuario(form: &FormularioUsuario) -> Vec<Line<'static>> {
-    let mut lineas = vec![
-        Line::from(Span::styled("NUEVO USUARIO", muted())),
-        Line::from(""),
-    ];
+    let titulo = match form.modo {
+        ModoFormularioUsuario::Nuevo => "NUEVO USUARIO".to_string(),
+        ModoFormularioUsuario::Editar { .. } => format!("EDITAR USUARIO — {}", form.nombre),
+    };
+    let mut lineas = vec![Line::from(Span::styled(titulo, muted())), Line::from("")];
     for campo in CampoUsuario::ORDEN {
         lineas.push(linea_campo_usuario(form, campo));
     }
@@ -1985,18 +2089,35 @@ fn linea_campo_usuario(form: &FormularioUsuario, campo: CampoUsuario) -> Line<'s
     ));
     if let Some(mensaje) = form.error_de(campo) {
         spans.push(Span::styled(format!("  {mensaje}"), estilo_error()));
+    } else if campo == CampoUsuario::Password
+        && form.password.is_empty()
+        && matches!(form.modo, ModoFormularioUsuario::Editar { .. })
+    {
+        spans.push(Span::styled(
+            "  (dejar en blanco para no cambiarla)",
+            muted(),
+        ));
     }
     Line::from(spans)
 }
 
 fn lineas_resumen_usuario(form: &FormularioUsuario) -> Vec<Line<'static>> {
+    // Nunca se muestra la contraseña, ni en el resumen — sólo si se
+    // definió/cambió. En edición, dejarla en blanco significa "sin
+    // cambios" (DEC-053), distinto de "(definida)" para no sugerir que se
+    // está por sobrescribir algo que en realidad se conserva.
+    let texto_password = if !form.password.is_empty() {
+        "(definida)"
+    } else if matches!(form.modo, ModoFormularioUsuario::Editar { .. }) {
+        "(sin cambios)"
+    } else {
+        "(definida)"
+    };
     let filas = [
         ("Cédula", form.cedula.clone()),
         ("Nombre", form.nombre.clone()),
         ("Rol", rol_texto(form.rol).to_string()),
-        // Nunca se muestra la contraseña, ni en el resumen — sólo que se
-        // definió.
-        ("Contraseña", "(definida)".to_string()),
+        ("Contraseña", texto_password.to_string()),
     ];
     let mut lineas = vec![
         Line::from(Span::styled("REVISAR Y CONFIRMAR", muted())),
@@ -2024,7 +2145,7 @@ fn lineas_ayuda() -> Vec<Line<'static>> {
         )),
         Line::from(""),
     ];
-    let ejemplos: [(&str, &str); 15] = [
+    let ejemplos: [(&str, &str); 17] = [
         ("/ingreso <nombre> G:<n> M:<medio>", "registrar un ingreso"),
         ("/ingreso 119430546 G:12", "también por cédula"),
         ("/salida <nombre>", "registrar salida por nombre"),
@@ -2036,7 +2157,15 @@ fn lineas_ayuda() -> Vec<Line<'static>> {
             "/nuevo usuario",
             "dar de alta un usuario (alias /n u, requiere permiso)",
         ),
-        ("/editar <nombre>", "editar un contratista"),
+        ("/editar <nombre>", "editar un contratista (default)"),
+        (
+            "/editar empresa <nombre>",
+            "editar una empresa (alias /e em)",
+        ),
+        (
+            "/editar usuario <cédula|nombre>",
+            "editar un usuario (alias /e u, requiere permiso)",
+        ),
         ("/historial", "explorar movimientos (alias /h)"),
         ("/cerrarsesion", "cerrar sesión y volver al login"),
         ("/ayuda", "esta ayuda"),

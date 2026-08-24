@@ -14,15 +14,45 @@
 /// Mismo largo máximo que ya usaba la TUI clásica para este campo.
 pub const MAX_NOMBRE_EMPRESA: usize = 80;
 
-#[derive(Debug, Clone, Default)]
+/// `Editar` guarda el `id` de la empresa — necesario para `actualizar_empresa`,
+/// que a diferencia de `crear_empresa` identifica el registro a modificar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModoFormularioEmpresa {
+    Nuevo,
+    Editar { id: i64 },
+}
+
+#[derive(Debug, Clone)]
 pub struct FormularioEmpresa {
     pub nombre: String,
     pub error: Option<String>,
+    pub modo: ModoFormularioEmpresa,
+}
+
+impl Default for FormularioEmpresa {
+    fn default() -> Self {
+        Self {
+            nombre: String::new(),
+            error: None,
+            modo: ModoFormularioEmpresa::Nuevo,
+        }
+    }
 }
 
 impl FormularioEmpresa {
     pub fn nuevo() -> Self {
         Self::default()
+    }
+
+    /// Precarga el nombre vigente — igual criterio que
+    /// `FormularioContratista::editar`: la búsqueda que trajo hasta acá ya
+    /// tiene los datos, no hace falta otra consulta.
+    pub fn editar(id: i64, nombre_actual: &str) -> Self {
+        Self {
+            nombre: nombre_actual.to_string(),
+            error: None,
+            modo: ModoFormularioEmpresa::Editar { id },
+        }
     }
 
     pub fn asignar_texto(&mut self, texto: &str) {
@@ -85,5 +115,12 @@ mod tests {
         let mut form = FormularioEmpresa::nuevo();
         form.asignar_texto("  Brisas del Oeste  ");
         assert_eq!(form.validar(), Ok("Brisas del Oeste".to_string()));
+    }
+
+    #[test]
+    fn editar_precarga_nombre_y_guarda_el_id() {
+        let form = FormularioEmpresa::editar(7, "Constructora Pérez");
+        assert_eq!(form.nombre, "Constructora Pérez");
+        assert_eq!(form.modo, ModoFormularioEmpresa::Editar { id: 7 });
     }
 }

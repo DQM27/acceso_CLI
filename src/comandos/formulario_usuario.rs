@@ -9,9 +9,10 @@
 //! definió, igual criterio que el enmascarado del propio campo mientras se
 //! teclea (nunca se ve en pantalla, ni siquiera en la revisión final).
 
+use crate::database::queries::usuarios::UsuarioResumen;
 use crate::domain::autorizacion::puede_gestionar_usuario;
 use crate::models::usuario::RolUsuario;
-use crate::services::usuario_service::CrearUsuarioInput;
+use crate::services::usuario_service::{ActualizarUsuarioInput, CrearUsuarioInput};
 
 /// Mismo mínimo que exige `usuario_service` (constante privada ahí, no
 /// importable) — validar acá evita un viaje a `AppCore` por algo que ya se
@@ -68,6 +69,29 @@ pub enum SubfaseUsuario {
     Resumen,
 }
 
+/// `Editar` guarda el `id` (para `AppCore::actualizar_usuario`) y el
+/// `activo` vigente — no hay campo para tocarlo en este formulario (alta
+/// separada del activar/desactivar, mismo corte de alcance que Empresa),
+/// así que se conserva tal cual para no pisarlo al guardar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModoFormularioUsuario {
+    Nuevo,
+    Editar { id: i64, activo: bool },
+}
+
+/// Lo que produce `validar()` según el modo — alta necesita una contraseña
+/// siempre; edición la deja opcional (`None` = no cambiarla).
+pub enum DatosUsuario {
+    Crear(CrearUsuarioInput),
+    Actualizar {
+        id: i64,
+        datos: ActualizarUsuarioInput,
+        activo: bool,
+        /// `Some` sólo si el operador escribió algo en Contraseña/Confirmar.
+        password: Option<String>,
+    },
+}
+
 #[derive(Debug, Clone)]
 pub struct FormularioUsuario {
     pub campo: CampoUsuario,
@@ -77,6 +101,7 @@ pub struct FormularioUsuario {
     pub rol: RolUsuario,
     pub password: String,
     pub confirmar_password: String,
+    pub modo: ModoFormularioUsuario,
     /// Rol de quien está creando — determina qué roles puede asignar
     /// (`puede_gestionar_usuario`: nadie salvo Root puede crear otro Root).
     rol_actor: RolUsuario,
@@ -95,6 +120,27 @@ impl FormularioUsuario {
             rol: RolUsuario::Operador,
             password: String::new(),
             confirmar_password: String::new(),
+            modo: ModoFormularioUsuario::Nuevo,
+            rol_actor,
+            errores: Vec::new(),
+        }
+    }
+
+    /// Precarga cédula/nombre/rol desde la búsqueda que trajo hasta acá —
+    /// contraseña siempre en blanco (blanco = no cambiarla, ver `validar`).
+    pub fn editar(resumen: &UsuarioResumen, rol_actor: RolUsuario) -> Self {
+        Self {
+            campo: CampoUsuario::Cedula,
+            subfase: SubfaseUsuario::Editando,
+            cedula: resumen.cedula.clone(),
+            nombre: resumen.nombre.clone(),
+            rol: resumen.rol,
+            password: String::new(),
+            confirmar_password: String::new(),
+            modo: ModoFormularioUsuario::Editar {
+                id: resumen.id,
+                activo: resumen.activo,
+            },
             rol_actor,
             errores: Vec::new(),
         }
@@ -178,7 +224,7 @@ impl FormularioUsuario {
             .map(|(_, m)| m.as_str())
     }
 
-    pub fn validar(&mut self) -> Result<CrearUsuarioInput, Vec<(CampoUsuario, String)>> {
+    pub fn validar(&mut self) -> Result<DatosUsuario, Vec<(CampoUsuario, String)>> {
         let mut errores = Vec::new();
         let cedula = self.cedula.trim().to_string();
         if cedula.is_empty() {
@@ -188,31 +234,52 @@ impl FormularioUsuario {
         if nombre.is_empty() {
             errores.push((CampoUsuario::Nombre, "Escriba el nombre".to_string()));
         }
-        if self.password.chars().count() < LONGITUD_MINIMA_PASSWORD {
-            errores.push((
-                CampoUsuario::Password,
-                format!("Mínimo {LONGITUD_MINIMA_PASSWORD} caracteres"),
-            ));
-        } else if self.password != self.confirmar_password {
-            errores.push((
-                CampoUsuario::ConfirmarPassword,
-                "Las contraseñas no coinciden".to_string(),
-            ));
+
+        // En alta la contraseña siempre hace falta; en edición, dejar ambos
+        // campos en blanco significa "no cambiarla" — sólo se valida si el
+        // operador escribió algo en cualquiera de los dos.
+        let cambia_password = matches!(self.modo, ModoFormularioUsuario::Nuevo)
+            || !self.password.is_empty()
+            || !self.confirmar_password.is_empty();
+        if cambia_password {
+            if self.password.chars().count() < LONGITUD_MINIMA_PASSWORD {
+                errores.push((
+                    CampoUsuario::Password,
+                    format!("Mínimo {LONGITUD_MINIMA_PASSWORD} caracteres"),
+                ));
+            } else if self.password != self.confirmar_password {
+                errores.push((
+                    CampoUsuario::ConfirmarPassword,
+                    "Las contraseñas no coinciden".to_string(),
+                ));
+            }
         }
 
-        if errores.is_empty() {
-            self.errores.clear();
-            Ok(CrearUsuarioInput {
+        if !errores.is_empty() {
+            self.errores = errores.clone();
+            return Err(errores);
+        }
+        self.errores.clear();
+
+        Ok(match self.modo {
+            ModoFormularioUsuario::Nuevo => DatosUsuario::Crear(CrearUsuarioInput {
                 cedula,
                 nombre,
                 password: self.password.clone(),
                 rol: self.rol,
                 activo: true,
-            })
-        } else {
-            self.errores = errores.clone();
-            Err(errores)
-        }
+            }),
+            ModoFormularioUsuario::Editar { id, activo } => DatosUsuario::Actualizar {
+                id,
+                datos: ActualizarUsuarioInput {
+                    cedula,
+                    nombre,
+                    rol: self.rol,
+                },
+                activo,
+                password: cambia_password.then(|| self.password.clone()),
+            },
+        })
     }
 }
 
@@ -314,9 +381,67 @@ mod tests {
     #[test]
     fn formulario_valido_produce_input_con_activo_true() {
         let mut f = valido();
-        let input = f.validar().expect("valido");
+        let datos = f.validar().expect("valido");
+        let DatosUsuario::Crear(input) = datos else {
+            panic!("se esperaba DatosUsuario::Crear");
+        };
         assert_eq!(input.cedula, "119430546");
         assert!(input.activo);
         assert_eq!(input.rol, RolUsuario::Operador);
+    }
+
+    fn resumen_usuario() -> UsuarioResumen {
+        UsuarioResumen {
+            id: 3,
+            cedula: "119430546".to_string(),
+            nombre: "Carlos Pérez".to_string(),
+            rol: RolUsuario::Operador,
+            activo: true,
+        }
+    }
+
+    #[test]
+    fn editar_precarga_campos_y_deja_password_en_blanco() {
+        let f = FormularioUsuario::editar(&resumen_usuario(), RolUsuario::Root);
+        assert_eq!(f.cedula, "119430546");
+        assert_eq!(f.nombre, "Carlos Pérez");
+        assert_eq!(f.password, "");
+        assert_eq!(
+            f.modo,
+            ModoFormularioUsuario::Editar {
+                id: 3,
+                activo: true
+            }
+        );
+    }
+
+    #[test]
+    fn editar_con_passwords_en_blanco_no_las_cambia() {
+        let mut f = FormularioUsuario::editar(&resumen_usuario(), RolUsuario::Root);
+        let datos = f.validar().expect("valido sin tocar la contraseña");
+        let DatosUsuario::Actualizar { password, .. } = datos else {
+            panic!("se esperaba DatosUsuario::Actualizar");
+        };
+        assert_eq!(password, None);
+    }
+
+    #[test]
+    fn editar_con_password_nueva_la_valida_igual_que_en_alta() {
+        let mut f = FormularioUsuario::editar(&resumen_usuario(), RolUsuario::Root);
+        f.password = "corta".to_string();
+        let errores = f.validar().err().expect("password corta no valida");
+        assert!(errores.iter().any(|(c, _)| *c == CampoUsuario::Password));
+    }
+
+    #[test]
+    fn editar_con_password_valida_la_incluye_para_cambiarla() {
+        let mut f = FormularioUsuario::editar(&resumen_usuario(), RolUsuario::Root);
+        f.password = "clave1234".to_string();
+        f.confirmar_password = "clave1234".to_string();
+        let datos = f.validar().expect("valido");
+        let DatosUsuario::Actualizar { password, .. } = datos else {
+            panic!("se esperaba DatosUsuario::Actualizar");
+        };
+        assert_eq!(password, Some("clave1234".to_string()));
     }
 }

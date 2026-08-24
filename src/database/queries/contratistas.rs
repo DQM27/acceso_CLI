@@ -125,12 +125,17 @@ fn construir_where(
     let mut condiciones: Vec<String> = Vec::new();
     let mut parametros: ParametrosSql = Vec::new();
 
+    // Sólo cédula y nombre — el buscador principal (`--comandos`: texto sin
+    // `/`; TUI clásica: mismo filtro) no busca por empresa. Encontrar un
+    // contratista tecleando el nombre de su empresa era una coincidencia
+    // accidental del filtro compartido con `empresa:` de Historial, no un
+    // criterio de búsqueda que el operador esperara — reportado en runtime
+    // real.
     match busqueda.modo {
         1 => {
             condiciones.push(
                 "(PLEGAR(c.cedula) LIKE PLEGAR(:patron) \
-                  OR PLEGAR(c.nombre) LIKE PLEGAR(:patron) \
-                  OR PLEGAR(e.nombre) LIKE PLEGAR(:patron))"
+                  OR PLEGAR(c.nombre) LIKE PLEGAR(:patron))"
                     .into(),
             );
             parametros.push((":patron".into(), Box::new(busqueda.patron_like.clone())));
@@ -139,10 +144,6 @@ fn construir_where(
             condiciones.push(
                 "c.id IN (
                     SELECT rowid FROM contratistas_fts WHERE contratistas_fts MATCH :consulta_fts
-                    UNION
-                    SELECT ct.id FROM empresas_fts
-                    INNER JOIN contratistas AS ct ON ct.empresa_id = empresas_fts.rowid
-                    WHERE empresas_fts MATCH :consulta_fts
                 )"
                 .into(),
             );

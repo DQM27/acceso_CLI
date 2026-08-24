@@ -16,9 +16,10 @@ use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
 
 use crate::application::AppCore;
+use crate::database::queries::usuarios::UsuarioResumen;
 use crate::domain::autorizacion::Operacion;
 
-use super::formulario_usuario::{CampoUsuario, FormularioUsuario, SubfaseUsuario};
+use super::formulario_usuario::{CampoUsuario, DatosUsuario, FormularioUsuario, SubfaseUsuario};
 use super::{AppState, Fase, NivelFeedback};
 
 /// Sólo abre si el actor puede gestionar usuarios (`Operacion::GestionarUsuarios`)
@@ -38,6 +39,28 @@ pub(super) fn abrir_formulario_nuevo_usuario(app: &mut AppState) {
     app.input.reset();
     app.feedback = None;
     app.sugerencias.clear();
+}
+
+/// Mismo gate que `abrir_formulario_nuevo_usuario` — `CoincidenciasUsuarios`
+/// ya lo aplicó en `resolver_busqueda_usuarios`, pero se repite acá como
+/// defensa en profundidad, igual criterio que el resto de aperturas de
+/// Surface. La búsqueda que trajo hasta acá ya trae cédula/nombre/rol, no
+/// hace falta otra consulta.
+pub(super) fn abrir_formulario_editar_usuario(app: &mut AppState, resumen: &UsuarioResumen) {
+    let Fase::Operando { sesion } = &app.fase else {
+        return;
+    };
+    if !sesion.rol.puede(Operacion::GestionarUsuarios) {
+        app.mostrar_feedback(
+            "No tiene permiso para gestionar usuarios".to_string(),
+            NivelFeedback::Error,
+        );
+        return;
+    }
+    app.formulario_usuario = Some(FormularioUsuario::editar(resumen, sesion.rol));
+    app.feedback = None;
+    app.sugerencias.clear();
+    sincronizar_input(app);
 }
 
 fn cerrar_formulario_usuario(core: &AppCore, app: &mut AppState) {
@@ -137,8 +160,8 @@ fn guardar_formulario_usuario(core: &AppCore, app: &mut AppState) {
         return;
     };
     let nombre = form.nombre.trim().to_string();
-    let input = match form.validar() {
-        Ok(input) => input,
+    let datos = match form.validar() {
+        Ok(datos) => datos,
         // No debería pasar (el resumen sólo se abre tras validar), pero si
         // pasa se vuelve a editar con los errores marcados.
         Err(_) => {
@@ -146,20 +169,58 @@ fn guardar_formulario_usuario(core: &AppCore, app: &mut AppState) {
             return;
         }
     };
-    match core.crear_usuario(sesion, input) {
-        Ok(_) => {
-            cerrar_formulario_usuario(core, app);
-            app.mostrar_feedback(
-                format!("Usuario registrado — {nombre}"),
-                NivelFeedback::Exito,
-            );
-        }
-        Err(error) => {
-            if let Some(form) = &mut app.formulario_usuario {
-                form.subfase = SubfaseUsuario::Editando;
+    match datos {
+        DatosUsuario::Crear(input) => match core.crear_usuario(sesion, input) {
+            Ok(_) => {
+                cerrar_formulario_usuario(core, app);
+                app.mostrar_feedback(
+                    format!("Usuario registrado — {nombre}"),
+                    NivelFeedback::Exito,
+                );
             }
-            sincronizar_input(app);
-            app.mostrar_feedback(error.to_string(), NivelFeedback::Error);
-        }
+            Err(error) => {
+                if let Some(form) = &mut app.formulario_usuario {
+                    form.subfase = SubfaseUsuario::Editando;
+                }
+                sincronizar_input(app);
+                app.mostrar_feedback(error.to_string(), NivelFeedback::Error);
+            }
+        },
+        DatosUsuario::Actualizar {
+            id,
+            datos,
+            activo,
+            password,
+        } => match core.actualizar_usuario(sesion, id, datos, activo) {
+            Ok(()) => {
+                // La contraseña es una escritura aparte (`cambiar_password_usuario`,
+                // otra transacción) — si falla, los demás campos ya quedaron
+                // guardados, así que se avisa sin deshacer nada.
+                if let Some(nueva) = password
+                    && let Err(error) = core.cambiar_password_usuario(sesion, id, &nueva)
+                {
+                    cerrar_formulario_usuario(core, app);
+                    app.mostrar_feedback(
+                        format!(
+                            "Usuario actualizado, pero la contraseña no se pudo cambiar: {error}"
+                        ),
+                        NivelFeedback::Advertencia,
+                    );
+                    return;
+                }
+                cerrar_formulario_usuario(core, app);
+                app.mostrar_feedback(
+                    format!("Usuario actualizado — {nombre}"),
+                    NivelFeedback::Exito,
+                );
+            }
+            Err(error) => {
+                if let Some(form) = &mut app.formulario_usuario {
+                    form.subfase = SubfaseUsuario::Editando;
+                }
+                sincronizar_input(app);
+                app.mostrar_feedback(error.to_string(), NivelFeedback::Error);
+            }
+        },
     }
 }

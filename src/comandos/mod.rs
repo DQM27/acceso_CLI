@@ -335,11 +335,14 @@ fn avisar_configuracion_inicial() -> Result<(), ComandosError> {
 /// queda congelado hasta que el formulario se cierra. Comparten esta función
 /// los tres controladores (`login`, `operando`, `formulario_controller`).
 fn recomputar(core: &AppCore, app: &mut AppState) {
-    if !matches!(app.fase, Fase::Operando { .. }) || app.formulario.is_some() {
+    if app.formulario.is_some() {
         return;
     }
+    let Fase::Operando { sesion } = &app.fase else {
+        return;
+    };
     let entrada = parser::parsear(app.input.value());
-    app.contexto = resolver::resolver(core, &entrada);
+    app.contexto = resolver::resolver(core, &entrada, sesion);
     app.sugerencias = resolver::calcular_sugerencias(core, app.input.value(), &entrada);
 }
 

@@ -8,8 +8,12 @@
 use crate::application::AppCore;
 use crate::database::queries::Igualdad;
 use crate::database::queries::contratistas::{ContratistaResumen, FiltroContratistas};
+use crate::database::queries::empresas::FiltroEmpresas;
 use crate::database::queries::ingresos::FiltroIngresosActivos;
+use crate::database::queries::usuarios::FiltroUsuarios;
+use crate::domain::autorizacion::Operacion;
 use crate::models::medio_ingreso::MedioIngreso;
+use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::registro_ingreso_service::IngresoActivoResumen;
 
 use super::estado::ContextState;
@@ -56,7 +60,7 @@ fn sujeto_nuevo(consulta: &str) -> Option<SujetoNuevo> {
 
 /// Deriva el contexto completo a partir del parseo. Punto único de consulta
 /// "mientras se teclea": se llama tras cada cambio del input.
-pub fn resolver(core: &AppCore, entrada: &Entrada) -> ContextState {
+pub fn resolver(core: &AppCore, entrada: &Entrada, sesion: &UsuarioSesion) -> ContextState {
     match entrada {
         Entrada::Inicio => ContextState::Inicio {
             total_dentro: contar_activos(core),
@@ -102,7 +106,15 @@ pub fn resolver(core: &AppCore, entrada: &Entrada) -> ContextState {
                         ),
                     },
                 },
-                Comando::Editar => resolver_busqueda_contratistas(core, consulta),
+                Comando::Editar => match sujeto_editar(consulta) {
+                    (SujetoEditar::Contratista, resto) => {
+                        resolver_busqueda_contratistas(core, &resto)
+                    }
+                    (SujetoEditar::Empresa, resto) => resolver_busqueda_empresas(core, &resto),
+                    (SujetoEditar::Usuario, resto) => {
+                        resolver_busqueda_usuarios(core, &resto, sesion)
+                    }
+                },
                 Comando::Historial => {
                     if consulta.is_empty() {
                         ContextState::AbrirHistorial
@@ -157,6 +169,104 @@ pub fn preparar_resumen_ingreso(
 /// hace falta otra consulta.
 pub fn ficha_desde_resumen(resumen: ContratistaResumen) -> ContextState {
     ContextState::FichaContratista { resumen }
+}
+
+/// Qué edita `/editar <sujeto> <consulta>` — igual idea que `SujetoNuevo`
+/// (DEC-045), pero acá siempre queda texto después del sujeto (la
+/// búsqueda), así que sólo el primer token se interpreta como sujeto, nunca
+/// la consulta completa. Mismos alias que `/nuevo` salvo "c" para
+/// contratista: con `/nuevo` no había ambigüedad posible (no admite
+/// consulta), acá "c" seguido de una búsqueda de una sola palabra sí
+/// generaría una — se prefiere dejar "contratista" (default, sin prefijo)
+/// como el único camino a ese sujeto (DEC-052).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SujetoEditar {
+    Contratista,
+    Empresa,
+    Usuario,
+}
+
+/// Separa el primer token de `consulta` y lo interpreta como sujeto si
+/// coincide con un alias reconocido; si no, todo el texto es la búsqueda de
+/// un contratista (comportamiento previo a los sujetos, sin cambios).
+fn sujeto_editar(consulta: &str) -> (SujetoEditar, String) {
+    let recortado = consulta.trim_start();
+    let mut partes = recortado.splitn(2, char::is_whitespace);
+    let primero = partes.next().unwrap_or_default();
+    match primero.to_lowercase().as_str() {
+        "empresa" | "em" | "emp" => (
+            SujetoEditar::Empresa,
+            partes.next().unwrap_or_default().trim().to_string(),
+        ),
+        "usuario" | "u" => (
+            SujetoEditar::Usuario,
+            partes.next().unwrap_or_default().trim().to_string(),
+        ),
+        _ => (SujetoEditar::Contratista, consulta.to_string()),
+    }
+}
+
+fn resolver_busqueda_empresas(core: &AppCore, consulta: &str) -> ContextState {
+    let items = if consulta.chars().count() >= MIN_CONSULTA {
+        let filtro = FiltroEmpresas {
+            texto: Some(consulta.to_string()),
+            limite: LIMITE_COINCIDENCIAS,
+            ..FiltroEmpresas::default()
+        };
+        match core.buscar_empresas(&filtro) {
+            Ok(items) => items,
+            Err(_) => {
+                return ContextState::MensajeError {
+                    mensaje: "No se pudo consultar las empresas".to_string(),
+                };
+            }
+        }
+    } else {
+        Vec::new()
+    };
+    ContextState::CoincidenciasEmpresas {
+        consulta: consulta.to_string(),
+        items,
+        seleccion: 0,
+    }
+}
+
+/// A diferencia de contratistas/empresas, buscar usuarios exige permiso
+/// (`Operacion::GestionarUsuarios`) — mismo gate que `abrir_formulario_nuevo_usuario`,
+/// aplicado acá para que el operador sin permiso ni siquiera vea una lista
+/// vacía sospechosa, sino el mensaje explícito.
+fn resolver_busqueda_usuarios(
+    core: &AppCore,
+    consulta: &str,
+    sesion: &UsuarioSesion,
+) -> ContextState {
+    if !sesion.rol.puede(Operacion::GestionarUsuarios) {
+        return ContextState::MensajeError {
+            mensaje: "No tiene permiso para gestionar usuarios".to_string(),
+        };
+    }
+    let items = if consulta.chars().count() >= MIN_CONSULTA {
+        let filtro = FiltroUsuarios {
+            texto: Some(consulta.to_string()),
+            limite: LIMITE_COINCIDENCIAS,
+            ..FiltroUsuarios::default()
+        };
+        match core.buscar_usuarios(sesion, &filtro) {
+            Ok(items) => items,
+            Err(_) => {
+                return ContextState::MensajeError {
+                    mensaje: "No se pudo consultar los usuarios".to_string(),
+                };
+            }
+        }
+    } else {
+        Vec::new()
+    };
+    ContextState::CoincidenciasUsuarios {
+        consulta: consulta.to_string(),
+        items,
+        seleccion: 0,
+    }
 }
 
 fn resolver_busqueda_contratistas(core: &AppCore, consulta: &str) -> ContextState {
@@ -350,8 +460,19 @@ pub fn calcular_sugerencias(core: &AppCore, texto: &str, entrada: &Entrada) -> V
         } => vec!["Enter abre el formulario de alta · Esc limpiar".into()],
         Entrada::Comando {
             comando: Comando::Editar,
+            consulta,
             ..
-        } => vec!["nombre o cédula del contratista · ↑↓ elegir · Enter abrir edición".into()],
+        } => match sujeto_editar(consulta).0 {
+            SujetoEditar::Contratista => {
+                vec!["nombre o cédula del contratista · ↑↓ elegir · Enter abrir edición".into()]
+            }
+            SujetoEditar::Empresa => {
+                vec!["nombre de la empresa · ↑↓ elegir · Enter abrir edición".into()]
+            }
+            SujetoEditar::Usuario => {
+                vec!["nombre o cédula del usuario · ↑↓ elegir · Enter abrir edición".into()]
+            }
+        },
         _ => vec!["Enter confirmar · Esc limpiar · Ctrl+C salir".into()],
     }
 }

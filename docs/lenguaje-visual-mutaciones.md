@@ -678,6 +678,56 @@ DEC-051  Existen dos gramáticas `clave:valor` distintas bajo la misma
          cambio se hace explícita la diferencia en `/ayuda` (línea aparte
          bajo "Claves:") para que no dependa de que el operador la infiera
          probando `-G:27` y viendo que simplemente no pasa nada.
+DEC-052  `/editar` gana el mismo argumento posicional que `/nuevo`
+         (DEC-045): `/editar <sujeto> <consulta>`, sujeto opcional
+         (contratista por defecto, `empresa`/`em`/`emp`, `usuario`/`u`).
+         Sólo el primer token de la consulta se interpreta como sujeto —
+         a diferencia de `/nuevo`, acá siempre queda texto después (la
+         búsqueda), así que no se agrega alias corto para "contratista":
+         con `/nuevo` no había ambigüedad posible (no admite consulta),
+         acá "c" seguido de una búsqueda de una sola palabra sí la
+         generaría — se deja "sin prefijo" como el único camino a ese
+         sujeto (ya era el comportamiento antes de que existieran los
+         otros dos). `empresa`/`usuario` abren una búsqueda en vivo nueva
+         (`ContextState::CoincidenciasEmpresas`/`CoincidenciasUsuarios`,
+         mismo patrón que `Coincidencias` de contratista) que al confirmar
+         con Enter abre el mismo `FormularioEmpresa`/`FormularioUsuario`
+         de alta, en modo `Editar { id }`, precargado con la búsqueda
+         (`AppCore::actualizar_empresa`/`actualizar_usuario`). Sin
+         selector de columnas (F4): son listas de paso (elegir y entrar a
+         editar), no reportes — `EmpresaResumen`/`UsuarioResumen` ya
+         tienen pocos campos. Buscar usuarios exige
+         `Operacion::GestionarUsuarios`, mismo gate que crearlos.
+DEC-053  Editar un usuario deja Contraseña/Confirmar en blanco al abrir —
+         blanco significa "no cambiarla", distinto de alta donde siempre
+         es obligatoria. `FormularioUsuario::validar` sólo exige el
+         mínimo de 8 caracteres y que coincidan si el operador escribió
+         algo en cualquiera de los dos campos; si no, `DatosUsuario::
+         Actualizar` viaja con `password: None` y `AppCore::
+         actualizar_usuario` ni se entera de que hubo un campo de
+         contraseña en pantalla. Activar/desactivar el usuario queda
+         fuera de este formulario a propósito (mismo corte de alcance que
+         Empresa): son acciones con consecuencia propia, no un campo más
+         para tocar de pasada.
+DEC-054  El borde del recuadro del prompt cambia a acento (cian) mientras
+         hay una Surface enclavada (§5.2) — formulario, columnas o
+         Historial — y vuelve a `muted()` en cuanto se cierra. Antes la
+         única señal de "el teclado ya no es de comandos" era el
+         contenido de la pantalla y la pista de abajo; el borde da la
+         misma información de un vistazo, sin tener que leer nada.
+DEC-055  El buscador principal (texto sin `/`, y por extensión `/ingreso`,
+         `/salida`, `/editar` — todos comparten `buscar_contratistas`)
+         deja de buscar por nombre de empresa: sólo cédula y nombre del
+         contratista. Encontrar a alguien tecleando el nombre de su
+         empresa era una coincidencia del filtro compartido con
+         `empresa:` de Historial (mismo `FiltroContratistas`), no un
+         criterio que el operador esperara del buscador — reportado en
+         runtime real. El cambio vive en `construir_where`
+         (`database/queries/contratistas.rs`), la capa compartida por
+         ambas interfaces: la TUI clásica hereda la misma acotación.
+         `empresa:` sigue existiendo tal cual dentro de `/historial`
+         (`FiltroHistorial::empresa_id`, consulta separada) — ahí sí es
+         un criterio explícito que el operador pidió a propósito.
 
 ## 14.1 Escena de login (implementada)
 
