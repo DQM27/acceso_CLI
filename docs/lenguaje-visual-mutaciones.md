@@ -378,9 +378,15 @@ Fase 3  — Componentes visuales base (Composer, Surface, Selector, Field, Notic
           PARCIAL: SurfaceActiva unifica el despacho de teclado (DEC-039);
           Composer/Selector/Field/Notice/Summary como tipos reales, sin empezar.
 Fase 4  — Presentation Engine mínimo (reloj, scheduler, transición, easing, VisualQuality::{Off,Normal}).
-Fase 5  — Primera mutación real: /nuevo.
-Fase 6  — Selector reusable (piloto: Empresa).
-Fase 7  — Resumen/Confirmación como transformación del formulario.
+Fase 5  — Primera mutación real: /nuevo. HECHO (DEC-040), extendido a
+          Historial de una vez: el formulario y Historial ya funden sus
+          mutaciones con el Presentation Engine, no sólo el login.
+Fase 6  — Selector reusable (piloto: Empresa). Sigue sin generalizar como
+          componente, pero ya muta en su lugar (DEC-026) y ya funde
+          (DEC-040, vía form_campo) — funcionalmente cubierto.
+Fase 7  — Resumen/Confirmación como transformación del formulario. HECHO
+          (DEC-040): el título y la acción de la tarjeta de resumen funden
+          al aparecer, mismo criterio minimalista que el login.
 Fase 8  — Métricas.
 Fase 9  — TachyonFX experimental (prototipo aislado, subordinado al scheduler propio).
 Fase 10 — Optimización basada en medición.
@@ -549,7 +555,10 @@ DEC-038  `FocusTarget` (Fase 2, segunda mitad) se deja explícitamente sin
          foco (`Campo` en el formulario, el índice de selección en
          Historial/columnas). Su primer consumidor real llegaría con el
          motor de presentación animando algo más que el login (Fase 5) —
-         se construye cuando eso pase, no antes.
+         se construye cuando eso pase, no antes. (Nota tras DEC-040: Fase 5
+         ya pasó y no lo necesitó — cada Surface sumó su propia `Firma*`,
+         el mismo patrón que `FirmaLogin` pero sin unificar en un tipo
+         común. Sigue sin haber un consumidor real de `FocusTarget`.)
 DEC-039  `SurfaceActiva` (`AppState::surface_activa()`) es el primer paso
          real de Fase 3: reemplaza los tres `if x.is_some() {...} else if
          y.is_some()...` que `operando.rs` encadenaba para decidir qué
@@ -560,6 +569,24 @@ DEC-039  `SurfaceActiva` (`AppState::surface_activa()`) es el primer paso
          `Field`/`Notice`/`Summary` de verdad — ese rediseño es mucho más
          grande y arriesga romper tres funciones que hoy trabajan bien; se
          hace aparte, no de paso.
+DEC-040  Fase 5 extendida a formulario e Historial, mismo mecanismo que el
+         login (`Firma*` + `presentacion.aparecer(id, calidad)`), sin
+         generalizar en un tipo común (ver nota en DEC-038):
+         `FirmaFormulario` (campo activo, selector de empresa, resumen,
+         presencia de error) y `FirmaHistorial` (resultado aplicado, total,
+         exportando) en `estado.rs`; `actualizar_presentacion_formulario`/
+         `_historial` en `mod.rs`, junto a la del login (ahora
+         `actualizar_presentacion_login`). Nunca se anima tecla a tecla:
+         ninguna firma incluye texto tecleado. Elementos que funden: el
+         campo activo del formulario (marcador + etiqueta + valor si no es
+         de texto), los `×` de error (todos juntos, no por campo), el
+         título y la acción de la tarjeta de resumen, el encabezado del
+         resultado de Historial (aparece o cambia de página/consulta) y la
+         pantalla de exportación. El desplegable de empresa y las filas de
+         la tabla de Historial quedan sin fundir a propósito — extender
+         `estilo_seleccion()` (`Modifier::REVERSED`) con una opacidad
+         interpolada es una combinación visual no verificada todavía en
+         runtime real, se deja para cuando se pueda confirmar cómo se ve.
 ```
 
 ## 14.1 Escena de login (implementada)

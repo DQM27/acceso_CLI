@@ -119,15 +119,25 @@ pub fn render(frame: &mut Frame, app: &AppState) {
     .areas(area);
 
     let lineas = if let Some(formulario) = &app.formulario {
-        lineas_formulario(formulario, app.input.value())
+        let opacidades = OpacidadesFormulario {
+            campo: app.presentacion.opacidad("form_campo"),
+            resumen: app.presentacion.opacidad("form_resumen"),
+            error: app.presentacion.opacidad("form_error"),
+        };
+        lineas_formulario(formulario, app.input.value(), &opacidades)
     } else if let Some(edicion) = &app.edicion_columnas {
         lineas_selector_columnas(app, *edicion)
     } else if let Some(historial) = &app.historial {
+        let opacidades = OpacidadesHistorial {
+            resultado: app.presentacion.opacidad("historial_resultado"),
+            exportar: app.presentacion.opacidad("historial_exportar"),
+        };
         lineas_historial(
             historial,
             app.input.value(),
             area_contexto.width,
             &app.columnas_historial,
+            &opacidades,
         )
     } else {
         lineas_contexto(
@@ -1371,16 +1381,29 @@ fn resumen_filtro_historial(historial: &HistorialState) -> String {
     partes.join(" · ")
 }
 
+/// Opacidades vigentes de la Surface de Historial (Fase 5).
+struct OpacidadesHistorial {
+    /// Encabezado del resultado aplicado (funde al aparecer o al cambiar de
+    /// página/consulta).
+    resultado: f32,
+    /// Pantalla de exportación (`F5`).
+    exportar: f32,
+}
+
 fn lineas_historial(
     historial: &HistorialState,
     texto_input: &str,
     ancho: u16,
     columnas: &SelectorColumnas<ColumnaHistorial>,
+    opacidades: &OpacidadesHistorial,
 ) -> Vec<Line<'static>> {
     if historial.exportacion_destino.is_some() {
         let total = historial.resultado.as_ref().map_or(0, |r| r.total);
         return vec![
-            Line::from(Span::styled("EXPORTAR HISTORIAL", muted())),
+            Line::from(Span::styled(
+                "EXPORTAR HISTORIAL",
+                estilo_fundido(FADE_MUTED, opacidades.exportar, Modifier::empty()),
+            )),
             Line::from(""),
             Line::from(format!(
                 "Se exportarán los {total} movimientos del filtro vigente a un archivo XLSX."
@@ -1388,7 +1411,7 @@ fn lineas_historial(
             Line::from(""),
             Line::from(Span::styled(
                 "Enter para exportar · Esc para cancelar",
-                acento(),
+                estilo_fundido(FADE_ACENTO, opacidades.exportar, Modifier::empty()),
             )),
         ];
     }
@@ -1426,7 +1449,7 @@ fn lineas_historial(
 
     let mut lineas = vec![Line::from(Span::styled(
         resumen_filtro_historial(historial),
-        muted(),
+        estilo_fundido(FADE_MUTED, opacidades.resultado, Modifier::empty()),
     ))];
     if !historial.no_reconocidos.is_empty() {
         lineas.push(Line::from(Span::styled(
@@ -1487,19 +1510,34 @@ fn lineas_historial(
 
 // ── Formulario de contratista ────────────────────────────────────────────
 
+/// Opacidades vigentes de la Surface del formulario (Fase 5) — una por
+/// elemento que puede fundir, ya resueltas por `render()` desde
+/// `app.presentacion` antes de bajar a estas funciones puras.
+struct OpacidadesFormulario {
+    /// Campo activo (marcador `›` + etiqueta) o fila resaltada del
+    /// selector de empresa.
+    campo: f32,
+    /// Tarjeta "REVISAR Y CONFIRMAR".
+    resumen: f32,
+    /// Glifos `×` de error, todos juntos.
+    error: f32,
+}
+
 fn lineas_formulario(
     formulario: &FormularioContratista,
     consulta_empresa: &str,
+    opacidades: &OpacidadesFormulario,
 ) -> Vec<Line<'static>> {
     match formulario.subfase {
-        Subfase::Resumen => lineas_resumen_formulario(formulario),
-        _ => lineas_campos_formulario(formulario, consulta_empresa),
+        Subfase::Resumen => lineas_resumen_formulario(formulario, opacidades.resumen),
+        _ => lineas_campos_formulario(formulario, consulta_empresa, opacidades),
     }
 }
 
 fn lineas_campos_formulario(
     formulario: &FormularioContratista,
     consulta_empresa: &str,
+    opacidades: &OpacidadesFormulario,
 ) -> Vec<Line<'static>> {
     let titulo = match formulario.modo {
         ModoFormulario::Nuevo => "NUEVO CONTRATISTA".to_string(),
@@ -1508,7 +1546,7 @@ fn lineas_campos_formulario(
     let mut lineas = vec![Line::from(Span::styled(titulo, muted())), Line::from("")];
 
     for campo in Campo::ORDEN {
-        lineas.push(linea_campo(formulario, campo));
+        lineas.push(linea_campo(formulario, campo, opacidades));
         // El desplegable de empresa muta justo debajo de su propio campo, no
         // al final del formulario — mismo criterio que la TUI clásica
         // (`restricciones.insert(indice + 1, ...)`), para que la mutación se
@@ -1563,7 +1601,11 @@ fn lineas_selector_empresa(
 /// `✓`/`×` de estado en los campos que admiten quedar vacíos o inválidos
 /// (`Campo::admite_estado`) — mismo vocabulario de glifos que el resto de la
 /// app (`glifo_feedback`, §5), no un marcador propio del formulario.
-fn linea_campo(formulario: &FormularioContratista, campo: Campo) -> Line<'static> {
+fn linea_campo(
+    formulario: &FormularioContratista,
+    campo: Campo,
+    opacidades: &OpacidadesFormulario,
+) -> Line<'static> {
     let activo = formulario.campo == campo
         && matches!(
             formulario.subfase,
@@ -1572,6 +1614,10 @@ fn linea_campo(formulario: &FormularioContratista, campo: Campo) -> Line<'static
     let habilitado = formulario.campo_habilitado(campo);
     let marcador = if activo { "› " } else { "  " };
     let etiqueta = format!("{:<16}", campo.etiqueta());
+    // El campo activo funde su acento en vez de aparecer a color pleno de
+    // golpe — mismo mecanismo que el título del login (Fase 5), sobre el
+    // mismo `estilo_fundido`.
+    let estilo_activo = || estilo_fundido(FADE_ACENTO, opacidades.campo, Modifier::empty());
 
     if !habilitado {
         return Line::from(Span::styled(
@@ -1585,7 +1631,11 @@ fn linea_campo(formulario: &FormularioContratista, campo: Campo) -> Line<'static
 
     let mut spans = vec![Span::styled(
         format!("{marcador}{etiqueta}"),
-        if activo { acento() } else { Style::default() },
+        if activo {
+            estilo_activo()
+        } else {
+            Style::default()
+        },
     )];
     let valor = valor_campo(formulario, campo);
     let valor_presente = !valor.is_empty();
@@ -1601,7 +1651,7 @@ fn linea_campo(formulario: &FormularioContratista, campo: Campo) -> Line<'static
     let estilo_valor = if valor_mostrado.is_empty() {
         muted()
     } else if activo && !campo.es_texto() {
-        acento()
+        estilo_activo()
     } else if campo == Campo::FechaPraind && valor_mostrado == "DD/MM/AAAA"
         || campo == Campo::Empresa && valor_mostrado == "Space para elegir…"
     {
@@ -1618,7 +1668,10 @@ fn linea_campo(formulario: &FormularioContratista, campo: Campo) -> Line<'static
     };
     spans.push(Span::styled(valor_final, estilo_valor));
     if let Some(mensaje) = formulario.error_de(campo) {
-        spans.push(Span::styled(format!("  × {mensaje}"), estilo_error()));
+        spans.push(Span::styled(
+            format!("  × {mensaje}"),
+            estilo_fundido(FADE_ERROR, opacidades.error, Modifier::empty()),
+        ));
     } else if campo.admite_estado() && valor_presente {
         spans.push(Span::styled("  ✓", exito()));
     }
@@ -1645,7 +1698,10 @@ fn si_no(valor: bool) -> &'static str {
     if valor { "Sí" } else { "No" }
 }
 
-fn lineas_resumen_formulario(formulario: &FormularioContratista) -> Vec<Line<'static>> {
+fn lineas_resumen_formulario(
+    formulario: &FormularioContratista,
+    opacidad: f32,
+) -> Vec<Line<'static>> {
     let fecha = if formulario.requiere_praind() {
         formulario.fecha_praind.clone()
     } else {
@@ -1668,8 +1724,15 @@ fn lineas_resumen_formulario(formulario: &FormularioContratista) -> Vec<Line<'st
         ),
         ("Acceso", si_no(formulario.tiene_acceso).to_string()),
     ];
+    // El título y la acción fundan al aparecer — mismo mecanismo que el
+    // login (Fase 5): sólo esos dos elementos, no la tarjeta entera, igual
+    // criterio minimalista que ya usaba la escena de login (título/prompt/
+    // aviso, no cada línea).
     let mut lineas = vec![
-        Line::from(Span::styled("REVISAR Y CONFIRMAR", muted())),
+        Line::from(Span::styled(
+            "REVISAR Y CONFIRMAR",
+            estilo_fundido(FADE_MUTED, opacidad, Modifier::empty()),
+        )),
         Line::from(""),
     ];
     for (etiqueta, valor) in filas {
@@ -1681,7 +1744,7 @@ fn lineas_resumen_formulario(formulario: &FormularioContratista) -> Vec<Line<'st
     lineas.push(Line::from(""));
     lineas.push(Line::from(Span::styled(
         "ENTER para guardar · Esc para volver a editar",
-        acento(),
+        estilo_fundido(FADE_ACENTO, opacidad, Modifier::empty()),
     )));
     lineas
 }

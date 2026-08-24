@@ -172,13 +172,21 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<(), C
     Ok(())
 }
 
-/// Compara qué debería verse en la escena de login contra lo que se vio la
-/// vuelta anterior (`FirmaLogin`) y arranca en el motor de presentación una
-/// aparición por cada elemento que mutó de contenido. Nunca se dispara tecla
-/// a tecla: la firma no incluye el texto tecleado, sólo título/tipo de
-/// prompt/presencia de aviso — typing es instantáneo, como exige DEC-004 en
-/// espíritu ("nunca animes el input"). Devuelve `true` si algo cambió.
+/// Compara qué debería verse contra lo que se vio la vuelta anterior, por
+/// cada Surface con firma propia (login, formulario, Historial — Fase 5), y
+/// arranca en el motor de presentación una aparición por cada elemento que
+/// mutó de contenido. Nunca se dispara tecla a tecla: ninguna firma incluye
+/// texto tecleado, sólo lo que decide qué se ve — typing es instantáneo,
+/// como exige DEC-004 en espíritu ("nunca animes el input"). Devuelve
+/// `true` si algo cambió en cualquiera de las tres.
 fn actualizar_presentacion(app: &mut AppState) -> bool {
+    let login = actualizar_presentacion_login(app);
+    let formulario = actualizar_presentacion_formulario(app);
+    let historial = actualizar_presentacion_historial(app);
+    login || formulario || historial
+}
+
+fn actualizar_presentacion_login(app: &mut AppState) -> bool {
     let firma_actual = app.firma_login();
     if firma_actual == app.firma_login_previa {
         return false;
@@ -206,6 +214,58 @@ fn actualizar_presentacion(app: &mut AppState) -> bool {
         _ => {}
     }
     app.firma_login_previa = firma_actual;
+    true
+}
+
+/// Mismo mecanismo que el login, sobre `FirmaFormulario`: el campo activo
+/// (o el selector de empresa) funde al cambiar de foco, el resumen funde al
+/// aparecer, y los `×` de error funden juntos la primera vez que aparecen
+/// tras un intento de confirmar — no hay una firma por campo individual, así
+/// que todos los errores vigentes comparten una sola aparición.
+fn actualizar_presentacion_formulario(app: &mut AppState) -> bool {
+    let firma_actual = app.firma_formulario();
+    if firma_actual == app.firma_formulario_previa {
+        return false;
+    }
+    match (&app.firma_formulario_previa, &firma_actual) {
+        (None, Some(_)) => app.presentacion.aparecer("form_campo", app.calidad),
+        (Some(anterior), Some(actual)) => {
+            if anterior.campo != actual.campo
+                || anterior.en_selector_empresa != actual.en_selector_empresa
+            {
+                app.presentacion.aparecer("form_campo", app.calidad);
+            }
+            if !anterior.en_resumen && actual.en_resumen {
+                app.presentacion.aparecer("form_resumen", app.calidad);
+            }
+            if !anterior.tiene_error && actual.tiene_error {
+                app.presentacion.aparecer("form_error", app.calidad);
+            }
+        }
+        _ => {}
+    }
+    app.firma_formulario_previa = firma_actual;
+    true
+}
+
+/// Mismo mecanismo, sobre `FirmaHistorial`: la tabla de resultados funde al
+/// aparecer (o al cambiar de página/consulta — `total` distinto) y la
+/// pantalla de exportación funde al abrirse con `F5`.
+fn actualizar_presentacion_historial(app: &mut AppState) -> bool {
+    let firma_actual = app.firma_historial();
+    if firma_actual == app.firma_historial_previa {
+        return false;
+    }
+    if let (Some(anterior), Some(actual)) = (&app.firma_historial_previa, &firma_actual) {
+        if (!anterior.tiene_resultado && actual.tiene_resultado) || anterior.total != actual.total {
+            app.presentacion
+                .aparecer("historial_resultado", app.calidad);
+        }
+        if !anterior.exportando && actual.exportando {
+            app.presentacion.aparecer("historial_exportar", app.calidad);
+        }
+    }
+    app.firma_historial_previa = firma_actual;
     true
 }
 

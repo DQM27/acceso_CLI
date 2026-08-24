@@ -15,7 +15,7 @@ use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::registro_ingreso_service::{IngresoActivoResumen, PreparacionIngreso};
 
 use super::columnas::{ColumnaActivos, ColumnaBusqueda, ColumnaHistorial, SelectorColumnas};
-use super::formulario::FormularioContratista;
+use super::formulario::{Campo, FormularioContratista, Subfase};
 use super::historial::HistorialState;
 use super::presentation;
 
@@ -126,6 +126,28 @@ pub struct FirmaLogin {
     pub titulo: String,
     pub prompt: TipoPromptLogin,
     pub feedback: bool,
+}
+
+/// Mismo rol que `FirmaLogin`, para la Surface del formulario (Fase 5): qué
+/// campo está activo, si se entró al selector de empresa o al resumen, y si
+/// hay algún error — nunca el texto tecleado en los campos, así comparar dos
+/// `FirmaFormulario` no dispara una aparición por cada tecla.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FirmaFormulario {
+    pub campo: Campo,
+    pub en_selector_empresa: bool,
+    pub en_resumen: bool,
+    pub tiene_error: bool,
+}
+
+/// Mismo rol que `FirmaLogin`, para la Surface de Historial (Fase 5): si hay
+/// resultado aplicado, cuántas filas trae (una consulta nueva o una página
+/// distinta cambia el total) y si se está exportando.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FirmaHistorial {
+    pub tiene_resultado: bool,
+    pub total: usize,
+    pub exportando: bool,
 }
 
 /// Lo que ocupa el área contextual en este momento. Se reconstruye entero cada
@@ -247,6 +269,10 @@ pub struct AppState {
     /// Última `FirmaLogin` vista, para que el loop detecte mutaciones de
     /// contenido comparándola contra la actual (ver `firma_login`).
     pub firma_login_previa: Option<FirmaLogin>,
+    /// Ídem para el formulario y para Historial (Fase 5) — ver
+    /// `firma_formulario`/`firma_historial`.
+    pub firma_formulario_previa: Option<FirmaFormulario>,
+    pub firma_historial_previa: Option<FirmaHistorial>,
 }
 
 impl AppState {
@@ -267,12 +293,14 @@ impl AppState {
             presentacion: presentation::Engine::new(),
             calidad: presentation::VisualQuality::default(),
             firma_login_previa: None,
+            firma_formulario_previa: None,
+            firma_historial_previa: None,
         }
     }
 
-    /// `None` fuera de las fases de login: `Operando` todavía no tiene
-    /// ninguna mutación animada (llega en una fase posterior, sobre esta
-    /// misma base).
+    /// `None` fuera de las fases de login — `Operando` tiene sus propias
+    /// firmas (`firma_formulario`/`firma_historial`), la misma idea sobre
+    /// otra base (Fase 5).
     pub fn firma_login(&self) -> Option<FirmaLogin> {
         let (titulo, prompt) = match &self.fase {
             Fase::LoginCedula => (super::NOMBRE_APP.to_string(), TipoPromptLogin::Cedula),
@@ -284,6 +312,27 @@ impl AppState {
             titulo,
             prompt,
             feedback: self.feedback.is_some(),
+        })
+    }
+
+    /// `None` con el formulario cerrado.
+    pub fn firma_formulario(&self) -> Option<FirmaFormulario> {
+        let formulario = self.formulario.as_ref()?;
+        Some(FirmaFormulario {
+            campo: formulario.campo,
+            en_selector_empresa: matches!(formulario.subfase, Subfase::EligiendoEmpresa { .. }),
+            en_resumen: matches!(formulario.subfase, Subfase::Resumen),
+            tiene_error: !formulario.errores.is_empty(),
+        })
+    }
+
+    /// `None` con Historial cerrado.
+    pub fn firma_historial(&self) -> Option<FirmaHistorial> {
+        let historial = self.historial.as_ref()?;
+        Some(FirmaHistorial {
+            tiene_resultado: historial.resultado.is_some(),
+            total: historial.resultado.as_ref().map_or(0, |r| r.total),
+            exportando: historial.exportacion_destino.is_some(),
         })
     }
 
@@ -399,5 +448,49 @@ mod tests {
             true,
         ));
         assert_eq!(app.surface_activa(), SurfaceActiva::Formulario);
+    }
+
+    #[test]
+    fn firma_formulario_es_none_cerrado_y_refleja_el_campo_activo_abierto() {
+        let mut app = AppState::con_sesion(sesion());
+        assert_eq!(app.firma_formulario(), None);
+
+        app.formulario = Some(super::super::formulario::FormularioContratista::nuevo(
+            Vec::new(),
+            true,
+        ));
+        let firma = app.firma_formulario().expect("formulario abierto");
+        assert_eq!(firma.campo, Campo::Cedula);
+        assert!(!firma.en_resumen);
+        assert!(!firma.en_selector_empresa);
+        assert!(!firma.tiene_error);
+    }
+
+    #[test]
+    fn firma_formulario_no_cambia_por_escribir_en_el_mismo_campo() {
+        // Comparar dos firmas nunca debe dar falso positivo por tecleo — es
+        // justo lo que evita animar en cada tecla (DEC-004).
+        let mut app = AppState::con_sesion(sesion());
+        app.formulario = Some(super::super::formulario::FormularioContratista::nuevo(
+            Vec::new(),
+            true,
+        ));
+        let antes = app.firma_formulario();
+        if let Some(form) = &mut app.formulario {
+            form.asignar_texto("119430546");
+        }
+        assert_eq!(app.firma_formulario(), antes);
+    }
+
+    #[test]
+    fn firma_historial_es_none_cerrado_y_refleja_el_resultado_abierto() {
+        let mut app = AppState::con_sesion(sesion());
+        assert_eq!(app.firma_historial(), None);
+
+        app.historial = Some(super::super::historial::HistorialState::nuevo(Vec::new()));
+        let firma = app.firma_historial().expect("historial abierto");
+        assert!(!firma.tiene_resultado);
+        assert_eq!(firma.total, 0);
+        assert!(!firma.exportando);
     }
 }
