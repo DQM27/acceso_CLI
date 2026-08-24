@@ -481,6 +481,12 @@ DEC-029  Las columnas visibles se persisten en un archivo propio de
          pero nombre distinto), no en `src/tui/preferences.rs` — igual
          criterio de independencia que DEC-028. Se carga al arrancar y se
          guarda sólo si cambió algo, al salir de la app.
+DEC-030  ColumnaBusqueda y ColumnaActivos tienen las mismas 7/8 columnas que
+         `tui::contratistas::Columna`/`tui::activos::Columna` (Praind, Ruta,
+         Acceso, Medio, "Da ingreso"...), no un subconjunto reducido — los
+         datos ya viven en `ContratistaResumen`/`IngresoActivoResumen`, así
+         que no ofrecerlos en el selector era una limitación arbitraria del
+         primer corte, corregida tras revisar la TUI clásica.
 ```
 
 ## 14.1 Escena de login (implementada)

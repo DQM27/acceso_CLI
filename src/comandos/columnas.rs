@@ -88,17 +88,30 @@ impl<C: Columna> SelectorColumnas<C> {
 }
 
 /// Columnas de la tabla de coincidencias (búsqueda de contratistas /
-/// `/ingreso` / `/editar`).
+/// `/ingreso` / `/editar`). Mismas 7 columnas que `tui::contratistas::Columna`
+/// — los mismos datos ya viven en `ContratistaResumen`, sólo faltaba
+/// exponerlos acá (DEC-030).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColumnaBusqueda {
     Cedula,
     Nombre,
     Empresa,
     Tipo,
+    Praind,
+    Ruta,
+    Acceso,
 }
 
 impl Columna for ColumnaBusqueda {
-    const TODAS: &'static [Self] = &[Self::Cedula, Self::Nombre, Self::Empresa, Self::Tipo];
+    const TODAS: &'static [Self] = &[
+        Self::Cedula,
+        Self::Nombre,
+        Self::Empresa,
+        Self::Tipo,
+        Self::Praind,
+        Self::Ruta,
+        Self::Acceso,
+    ];
 
     fn etiqueta(self) -> &'static str {
         match self {
@@ -106,6 +119,9 @@ impl Columna for ColumnaBusqueda {
             Self::Nombre => "Nombre",
             Self::Empresa => "Empresa",
             Self::Tipo => "Tipo",
+            Self::Praind => "Praind",
+            Self::Ruta => "Ruta",
+            Self::Acceso => "Acceso",
         }
     }
 
@@ -115,37 +131,63 @@ impl Columna for ColumnaBusqueda {
             Self::Nombre => "nombre",
             Self::Empresa => "empresa",
             Self::Tipo => "tipo",
+            Self::Praind => "praind",
+            Self::Ruta => "ruta",
+            Self::Acceso => "acceso",
         }
     }
 }
 
-/// Columnas de la tabla de `/activos`.
+/// Columnas de la tabla de `/activos`. Mismas 8 columnas que
+/// `tui::activos::Columna` — los mismos datos ya viven en
+/// `IngresoActivoResumen` (DEC-030).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColumnaActivos {
-    Gafete,
+    Cedula,
     Nombre,
     Empresa,
-    Ingreso,
+    Tipo,
+    Hora,
+    Gafete,
+    Medio,
+    Usuario,
 }
 
 impl Columna for ColumnaActivos {
-    const TODAS: &'static [Self] = &[Self::Gafete, Self::Nombre, Self::Empresa, Self::Ingreso];
+    const TODAS: &'static [Self] = &[
+        Self::Cedula,
+        Self::Nombre,
+        Self::Empresa,
+        Self::Tipo,
+        Self::Hora,
+        Self::Gafete,
+        Self::Medio,
+        Self::Usuario,
+    ];
 
     fn etiqueta(self) -> &'static str {
         match self {
-            Self::Gafete => "Gafete",
+            Self::Cedula => "Cédula",
             Self::Nombre => "Nombre",
             Self::Empresa => "Empresa",
-            Self::Ingreso => "Ingreso",
+            Self::Tipo => "Tipo",
+            Self::Hora => "Hora",
+            Self::Gafete => "Gafete",
+            Self::Medio => "Medio",
+            Self::Usuario => "Da ingreso",
         }
     }
 
     fn clave(self) -> &'static str {
         match self {
-            Self::Gafete => "gafete",
+            Self::Cedula => "cedula",
             Self::Nombre => "nombre",
             Self::Empresa => "empresa",
-            Self::Ingreso => "ingreso",
+            Self::Tipo => "tipo",
+            Self::Hora => "hora",
+            Self::Gafete => "gafete",
+            Self::Medio => "medio",
+            Self::Usuario => "usuario",
         }
     }
 }
@@ -174,20 +216,23 @@ mod tests {
     #[test]
     fn no_permite_ocultar_la_ultima_columna_visible() {
         let mut selector = SelectorColumnas::<ColumnaBusqueda>::todas_visibles();
-        for indice in 0..3 {
+        for indice in 0..6 {
             selector.alternar(indice).unwrap();
         }
-        // Sólo Tipo (índice 3) sigue visible.
+        // Sólo Acceso (índice 6) sigue visible.
         assert_eq!(selector.iter().filter(|(_, v)| *v).count(), 1);
-        assert!(selector.alternar(3).is_err());
-        assert!(selector.visible(ColumnaBusqueda::Tipo));
+        assert!(selector.alternar(6).is_err());
+        assert!(selector.visible(ColumnaBusqueda::Acceso));
     }
 
     #[test]
     fn preferencia_serializa_solo_las_visibles_en_orden() {
         let mut selector = SelectorColumnas::<ColumnaBusqueda>::todas_visibles();
         selector.alternar(0).unwrap(); // oculta Cédula
-        assert_eq!(selector.preferencia(), "nombre,empresa,tipo");
+        assert_eq!(
+            selector.preferencia(),
+            "nombre,empresa,tipo,praind,ruta,acceso"
+        );
     }
 
     #[test]
@@ -203,9 +248,10 @@ mod tests {
     #[test]
     fn aplicar_preferencia_vacia_o_irreconocible_no_cambia_nada() {
         let mut selector = SelectorColumnas::<ColumnaBusqueda>::todas_visibles();
+        let todas = "cedula,nombre,empresa,tipo,praind,ruta,acceso";
         selector.aplicar_preferencia("");
-        assert_eq!(selector.preferencia(), "cedula,nombre,empresa,tipo");
+        assert_eq!(selector.preferencia(), todas);
         selector.aplicar_preferencia("xyz,otra");
-        assert_eq!(selector.preferencia(), "cedula,nombre,empresa,tipo");
+        assert_eq!(selector.preferencia(), todas);
     }
 }
