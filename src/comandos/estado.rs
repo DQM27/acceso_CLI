@@ -87,7 +87,11 @@ pub struct Feedback {
 }
 
 /// Fase global de la interfaz: primero el login (cédula y contraseña en el
-/// mismo input), luego la operación normal dirigida por comandos.
+/// mismo input), luego la operación normal dirigida por comandos. Con la
+/// base recién creada (sin ningún usuario todavía), el login se reemplaza
+/// por la cadena `Root*` — misma mecánica de un solo input que muta de campo
+/// en campo, con los dos campos extra (nombre, confirmar contraseña) que
+/// hacen falta para dar de alta la primera cuenta.
 ///
 /// Los errores de login (usuario no válido, credenciales inválidas) ya no
 /// viajan como campo de la fase: usan el mismo `feedback` transitorio que el
@@ -109,6 +113,26 @@ pub enum Fase {
     Verificando {
         nombre: String,
     },
+    /// Configuración inicial — primer campo (cédula del ROOT). Sólo se
+    /// alcanza cuando `requiere_configuracion_inicial()` da true.
+    RootCedula,
+    RootNombre {
+        cedula: String,
+    },
+    RootPassword {
+        cedula: String,
+        nombre: String,
+    },
+    RootConfirmarPassword {
+        cedula: String,
+        nombre: String,
+        password: String,
+    },
+    /// Hasheando la contraseña en un hilo aparte antes del insert atómico —
+    /// misma idea que `Verificando`, sobre el alta en vez de la entrada.
+    RootCreando {
+        nombre: String,
+    },
     Operando {
         sesion: UsuarioSesion,
     },
@@ -123,6 +147,11 @@ pub enum TipoPromptLogin {
     Cedula,
     Password,
     Verificando,
+    RootCedula,
+    RootNombre,
+    RootPassword,
+    RootConfirmarPassword,
+    RootCreando,
 }
 
 /// Resumen mínimo de "qué debería verse" en la escena de login — no el
@@ -171,27 +200,40 @@ pub enum ContextState {
     /// Coincidencias de contratistas para `/ingreso` o una búsqueda de texto
     /// libre. Con la consulta demasiado corta o sin resultados, `items` queda
     /// vacío y el render muestra la pista correspondiente a partir de
-    /// `consulta`.
+    /// `consulta`. `offset`/`total` habilitan PageUp/PageDown (mismo patrón
+    /// que `paginar` de Historial): `total` es el conteo real que ya
+    /// devuelve `buscar_contratistas`, sin límite.
     Coincidencias {
         consulta: String,
         items: Vec<ContratistaResumen>,
         seleccion: usize,
+        offset: usize,
+        total: usize,
     },
     /// Coincidencias de empresas para `/editar empresa <consulta>` (DEC-052)
     /// — mismo criterio que `Coincidencias`, sin selector de columnas (F4):
     /// `EmpresaResumen` tiene sólo 3 campos, una lista simple alcanza.
+    /// `buscar_empresas` no devuelve un conteo total (a diferencia de
+    /// contratistas): `hay_mas` viene de pedir un elemento de más
+    /// (`LIMITE_COINCIDENCIAS + 1`) y comprobar si sobró, sin tocar la
+    /// capa de base de datos para agregar un `COUNT` aparte.
     CoincidenciasEmpresas {
         consulta: String,
         items: Vec<EmpresaResumen>,
         seleccion: usize,
+        offset: usize,
+        hay_mas: bool,
     },
     /// Coincidencias de usuarios para `/editar usuario <consulta>`
     /// (DEC-052) — sólo llega acá quien tiene `Operacion::GestionarUsuarios`
-    /// (`resolver_busqueda_usuarios` corta antes con `MensajeError`).
+    /// (`resolver_busqueda_usuarios` corta antes con `MensajeError`). Mismo
+    /// truco de `hay_mas` que `CoincidenciasEmpresas`.
     CoincidenciasUsuarios {
         consulta: String,
         items: Vec<UsuarioResumen>,
         seleccion: usize,
+        offset: usize,
+        hay_mas: bool,
     },
     /// Coincidencias de ingresos activos para `/salida`. `descripcion` es la
     /// consulta ya formateada para el mensaje "No hay ingreso activo para …"
@@ -382,6 +424,13 @@ impl AppState {
             Fase::LoginCedula => (super::NOMBRE_APP.to_string(), TipoPromptLogin::Cedula),
             Fase::LoginPassword { nombre, .. } => (nombre.clone(), TipoPromptLogin::Password),
             Fase::Verificando { nombre } => (nombre.clone(), TipoPromptLogin::Verificando),
+            Fase::RootCedula => (super::NOMBRE_APP.to_string(), TipoPromptLogin::RootCedula),
+            Fase::RootNombre { .. } => (super::NOMBRE_APP.to_string(), TipoPromptLogin::RootNombre),
+            Fase::RootPassword { nombre, .. } => (nombre.clone(), TipoPromptLogin::RootPassword),
+            Fase::RootConfirmarPassword { nombre, .. } => {
+                (nombre.clone(), TipoPromptLogin::RootConfirmarPassword)
+            }
+            Fase::RootCreando { nombre } => (nombre.clone(), TipoPromptLogin::RootCreando),
             Fase::Operando { .. } => return None,
         };
         Some(FirmaLogin {
@@ -430,6 +479,15 @@ impl AppState {
     pub fn con_sesion(sesion: UsuarioSesion) -> Self {
         Self {
             fase: Fase::Operando { sesion },
+            ..Self::new()
+        }
+    }
+
+    /// Arranca en la cadena de configuración inicial (`Fase::RootCedula`) en
+    /// vez del login — para cuando la base todavía no tiene ningún usuario.
+    pub fn nueva_configuracion_inicial() -> Self {
+        Self {
+            fase: Fase::RootCedula,
             ..Self::new()
         }
     }

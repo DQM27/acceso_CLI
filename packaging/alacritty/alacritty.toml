@@ -1,0 +1,94 @@
+# Config de Alacritty para correr control_acceso.exe — ver
+# packaging/alacritty/README.md para cómo se arma la carpeta completa
+# (Alacritty.exe + este archivo + control_acceso.exe, uno al lado del otro).
+#
+# Paleta calcada de la de la propia app (`FADE_*` en src/comandos/render.rs,
+# la misma que usan las animaciones de fundido), para que el terminal se vea
+# igual sin importar qué defaults traiga Windows/la máquina de destino.
+#
+# Ventana normal (con barra de título y bordes), no kiosco: si preferís
+# maximizada y sin bordes, cambiá `decorations` a "None" y `startup_mode` a
+# "Maximized" — Alacritty no tiene pestañas ni multi-ventana propia en
+# ningún caso (nada que desactivar ahí); la instancia única la sigue
+# garantizando `InstanciaGuard` dentro de la propia app, no esta config.
+
+[window]
+decorations = "Full"
+startup_mode = "Windowed"
+dynamic_title = true
+
+[window.padding]
+x = 8
+y = 8
+
+[font]
+size = 13.0
+# Alacritty dibuja él mismo los caracteres de línea (─│├┤┌└…) en vez de
+# depender de qué tan bien los tenga la fuente — el `render.rs` de la app
+# usa esos caracteres todo el tiempo para los divisores de tabla, así que
+# esto es lo que los deja continuos y prolijos.
+builtin_box_drawing = true
+
+[font.normal]
+family = "Cascadia Code"
+
+[cursor.style]
+shape = "Block"
+blinking = "Off"
+
+[mouse]
+# La app no usa mouse para nada — sin esto la flechita queda flotando en
+# medio de la pantalla mientras se teclea.
+hide_when_typing = true
+
+[selection]
+# No copiar automáticamente al portapapeles con sólo seleccionar — la
+# pantalla puede tener cédulas y nombres completos a la vista; esto reduce
+# lo fácil que es sacar una lista con un arrastre sin querer. Ojo: Alacritty
+# no tiene una opción para desactivar la selección en sí (arrastrar y
+# marcar texto siempre va a poder hacerse) — esto sólo evita el copiado
+# automático, no reemplaza un control de acceso físico a la máquina.
+save_to_clipboard = false
+
+[colors.primary]
+background = "#0a0a0c"
+foreground = "#e1e1e6"
+
+[colors.normal]
+black   = "#0a0a0c"
+red     = "#d65c5c"
+green   = "#5ec985"
+yellow  = "#d6b55c"
+blue    = "#5c8ad6"
+magenta = "#b55cd6"
+cyan    = "#56c8d6"
+white   = "#e1e1e6"
+
+[colors.bright]
+black   = "#4b4b52"
+red     = "#e58080"
+green   = "#7fdba3"
+yellow  = "#e0c47f"
+blue    = "#7fa6e5"
+magenta = "#cc80e5"
+cyan    = "#7fd6e0"
+white   = "#f5f5f7"
+
+[colors.cursor]
+text    = "#0a0a0c"
+cursor  = "#56c8d6"
+
+[general]
+live_config_reload = true
+
+# F11 y Alt+Enter alternan pantalla completa sin tocar `startup_mode` a
+# mano — misma convención que navegadores/VS/la mayoría de los juegos.
+# Útil para probar el look de kiosco sin editar este archivo cada vez.
+[[keyboard.bindings]]
+key = "F11"
+action = "ToggleFullscreen"
+
+[[keyboard.bindings]]
+key = "Return"
+mods = "Alt"
+action = "ToggleFullscreen"

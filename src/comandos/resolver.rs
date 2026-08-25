@@ -24,9 +24,15 @@ use super::parser::{Comando, Entrada, GafeteParse, MedioParse};
 /// ese umbral y FTS5 a partir de 3 — ambos caminos los resuelve `BusquedaTexto`).
 pub const MIN_CONSULTA: usize = 2;
 
-/// Cuántas coincidencias se cargan como máximo: caben en el área contextual
-/// sin scroll y sobran para elegir con ↑↓.
-pub const LIMITE_COINCIDENCIAS: usize = 9;
+/// Cuántas coincidencias se cargan por página. Antes de tener PageUp/PageDown
+/// (ver `nuevo_offset_coincidencias`) el número tenía que caber sin scroll en
+/// una terminal chica; ahora que hay paginado real, se sube a la misma
+/// magnitud que usa Historial (`LIMITE_HISTORIAL_PREDETERMINADO`, 50) — una
+/// terminal grande no debe quedarse mostrando 9 filas con la mitad de la
+/// pantalla vacía cuando hay espacio de sobra; una chica sigue recortando la
+/// vista igual que ya hace la tabla de Historial (`render.rs` no reserva
+/// scroll propio, es `ratatui` el que recorta lo que no entra en el área).
+pub const LIMITE_COINCIDENCIAS: usize = 50;
 
 /// `*` como consulta pide "todos" en vez de un nombre — sin esto no había
 /// forma de listar contratistas/empresas/usuarios completos desde el
@@ -45,6 +51,22 @@ pub fn es_comodin_todos(consulta: &str) -> bool {
 /// cual en cualquier otro caso.
 fn texto_de_consulta(consulta: &str) -> Option<String> {
     (!es_comodin_todos(consulta) && !consulta.is_empty()).then(|| consulta.to_string())
+}
+
+/// PageUp/PageDown sobre `Coincidencias`/`CoincidenciasEmpresas`/
+/// `CoincidenciasUsuarios` (mismo patrón que `paginar` de
+/// `historial_controller.rs`): `delta > 0` avanza sólo si `hay_mas` (la
+/// página siguiente ya se confirmó al cargar la actual — total real para
+/// contratistas, el truco del elemento de más para empresas/usuarios);
+/// `delta < 0` retrocede si no estamos ya en la primera página. `None`
+/// cuando no hay a dónde moverse, para que el llamador no dispare una
+/// consulta idéntica a la que ya está en pantalla.
+pub fn nuevo_offset_coincidencias(offset: usize, hay_mas: bool, delta: isize) -> Option<usize> {
+    if delta > 0 {
+        hay_mas.then_some(offset + LIMITE_COINCIDENCIAS)
+    } else {
+        (offset > 0).then(|| offset.saturating_sub(LIMITE_COINCIDENCIAS))
+    }
 }
 
 /// Rango de gafetes que se ofrecen en el autocompletado de `G:` — el inventario
@@ -228,15 +250,32 @@ fn sujeto_editar(consulta: &str) -> (SujetoEditar, String) {
     }
 }
 
+/// Página 0 (nueva búsqueda: cambió el texto) de contratistas/empresas/
+/// usuarios comparte offset 0 — `pagina_*` (pública, la usa
+/// `operando.rs::paginar_coincidencias` con el mismo `consulta` y un offset
+/// distinto para PageUp/PageDown, sin reconsultar desde cero).
 fn resolver_busqueda_empresas(core: &AppCore, consulta: &str) -> ContextState {
-    let items = if es_comodin_todos(consulta) || consulta.chars().count() >= MIN_CONSULTA {
+    pagina_empresas(core, consulta, 0)
+}
+
+pub fn pagina_empresas(core: &AppCore, consulta: &str, offset: usize) -> ContextState {
+    let (items, hay_mas) = if es_comodin_todos(consulta) || consulta.chars().count() >= MIN_CONSULTA
+    {
         let filtro = FiltroEmpresas {
             texto: texto_de_consulta(consulta),
-            limite: LIMITE_COINCIDENCIAS,
+            // Un elemento de más para saber si hay página siguiente
+            // (`buscar_empresas` no devuelve un total aparte) — se descarta
+            // antes de guardar `items`.
+            limite: LIMITE_COINCIDENCIAS + 1,
+            offset,
             ..FiltroEmpresas::default()
         };
         match core.buscar_empresas(&filtro) {
-            Ok(items) => items,
+            Ok(mut items) => {
+                let hay_mas = items.len() > LIMITE_COINCIDENCIAS;
+                items.truncate(LIMITE_COINCIDENCIAS);
+                (items, hay_mas)
+            }
             Err(_) => {
                 return ContextState::MensajeError {
                     mensaje: "No se pudo consultar las empresas".to_string(),
@@ -244,12 +283,14 @@ fn resolver_busqueda_empresas(core: &AppCore, consulta: &str) -> ContextState {
             }
         }
     } else {
-        Vec::new()
+        (Vec::new(), false)
     };
     ContextState::CoincidenciasEmpresas {
         consulta: consulta.to_string(),
         items,
         seleccion: 0,
+        offset,
+        hay_mas,
     }
 }
 
@@ -262,19 +303,35 @@ fn resolver_busqueda_usuarios(
     consulta: &str,
     sesion: &UsuarioSesion,
 ) -> ContextState {
+    pagina_usuarios(core, consulta, 0, sesion)
+}
+
+pub fn pagina_usuarios(
+    core: &AppCore,
+    consulta: &str,
+    offset: usize,
+    sesion: &UsuarioSesion,
+) -> ContextState {
     if !sesion.rol.puede(Operacion::GestionarUsuarios) {
         return ContextState::MensajeError {
             mensaje: "No tiene permiso para gestionar usuarios".to_string(),
         };
     }
-    let items = if es_comodin_todos(consulta) || consulta.chars().count() >= MIN_CONSULTA {
+    let (items, hay_mas) = if es_comodin_todos(consulta) || consulta.chars().count() >= MIN_CONSULTA
+    {
         let filtro = FiltroUsuarios {
             texto: texto_de_consulta(consulta),
-            limite: LIMITE_COINCIDENCIAS,
+            // Mismo truco de "un elemento de más" que `pagina_empresas`.
+            limite: LIMITE_COINCIDENCIAS + 1,
+            offset,
             ..FiltroUsuarios::default()
         };
         match core.buscar_usuarios(sesion, &filtro) {
-            Ok(items) => items,
+            Ok(mut items) => {
+                let hay_mas = items.len() > LIMITE_COINCIDENCIAS;
+                items.truncate(LIMITE_COINCIDENCIAS);
+                (items, hay_mas)
+            }
             Err(_) => {
                 return ContextState::MensajeError {
                     mensaje: "No se pudo consultar los usuarios".to_string(),
@@ -282,24 +339,34 @@ fn resolver_busqueda_usuarios(
             }
         }
     } else {
-        Vec::new()
+        (Vec::new(), false)
     };
     ContextState::CoincidenciasUsuarios {
         consulta: consulta.to_string(),
         items,
         seleccion: 0,
+        offset,
+        hay_mas,
     }
 }
 
 fn resolver_busqueda_contratistas(core: &AppCore, consulta: &str) -> ContextState {
-    let items = if es_comodin_todos(consulta) || consulta.chars().count() >= MIN_CONSULTA {
+    pagina_contratistas(core, consulta, 0)
+}
+
+pub fn pagina_contratistas(core: &AppCore, consulta: &str, offset: usize) -> ContextState {
+    let (items, total) = if es_comodin_todos(consulta) || consulta.chars().count() >= MIN_CONSULTA {
         let filtro = FiltroContratistas {
             texto: texto_de_consulta(consulta),
             limite: LIMITE_COINCIDENCIAS,
+            offset,
             ..FiltroContratistas::default()
         };
         match core.buscar_contratistas(&filtro) {
-            Ok(pagina) => pagina.items,
+            // `pagina.total` ya es el conteo real sin límite (query aparte
+            // en `buscar_contratistas`) — a diferencia de empresas/usuarios
+            // no hace falta el truco del elemento de más.
+            Ok(pagina) => (pagina.items, pagina.total),
             Err(_) => {
                 return ContextState::MensajeError {
                     mensaje: "No se pudo consultar los contratistas".to_string(),
@@ -307,12 +374,14 @@ fn resolver_busqueda_contratistas(core: &AppCore, consulta: &str) -> ContextStat
             }
         }
     } else {
-        Vec::new()
+        (Vec::new(), 0)
     };
     ContextState::Coincidencias {
         consulta: consulta.to_string(),
         items,
         seleccion: 0,
+        offset,
+        total,
     }
 }
 
@@ -591,5 +660,30 @@ mod tests {
         assert_eq!(texto_de_consulta("*"), None);
         assert_eq!(texto_de_consulta(""), None);
         assert_eq!(texto_de_consulta("ana"), Some("ana".to_string()));
+    }
+
+    #[test]
+    fn nuevo_offset_avanza_solo_si_hay_mas() {
+        assert_eq!(
+            nuevo_offset_coincidencias(0, true, 1),
+            Some(LIMITE_COINCIDENCIAS)
+        );
+        assert_eq!(nuevo_offset_coincidencias(0, false, 1), None);
+    }
+
+    #[test]
+    fn nuevo_offset_retrocede_solo_si_no_esta_en_la_primera_pagina() {
+        assert_eq!(
+            nuevo_offset_coincidencias(LIMITE_COINCIDENCIAS, true, -1),
+            Some(0)
+        );
+        assert_eq!(nuevo_offset_coincidencias(0, true, -1), None);
+    }
+
+    #[test]
+    fn nuevo_offset_retroceder_nunca_baja_de_cero() {
+        // Offset menor que una página completa (p. ej. tras un total que no
+        // es múltiplo exacto del límite): satura en 0, no resta de más.
+        assert_eq!(nuevo_offset_coincidencias(3, true, -1), Some(0));
     }
 }

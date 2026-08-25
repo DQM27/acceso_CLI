@@ -74,6 +74,13 @@ pub(super) fn manejar_operando(core: &AppCore, app: &mut AppState, key: KeyEvent
         KeyCode::Down if app.paleta_comandos().is_some() => mover_seleccion_paleta(app, 1),
         KeyCode::Up => mover_seleccion(app, -1),
         KeyCode::Down => mover_seleccion(app, 1),
+        // Mismo patrón que `historial_controller.rs::paginar`: re-consulta
+        // con la MISMA `consulta` y un `offset` distinto, sin pasar por
+        // `recomputar` (que reconstruiría desde cero y volvería a la
+        // página 0) — el tecleo sigue siendo lo único que reinicia la
+        // búsqueda.
+        KeyCode::PageDown => paginar_coincidencias(core, app, 1),
+        KeyCode::PageUp => paginar_coincidencias(core, app, -1),
         KeyCode::F(4) => abrir_selector_columnas(app),
         KeyCode::Tab => {
             // Con la paleta visible, completa con la fila resaltada (↑↓) en
@@ -172,6 +179,56 @@ fn mover_seleccion(app: &mut AppState, delta: isize) {
         ContextState::CoincidenciasUsuarios {
             items, seleccion, ..
         } => ajustar(seleccion, items.len()),
+        _ => {}
+    }
+}
+
+/// PageUp/PageDown sobre las tres listas de búsqueda en vivo (contratistas/
+/// empresas/usuarios) — mismo `consulta` de la página actual, sólo cambia el
+/// `offset`. Fuera de esos tres contextos no hace nada (nada que paginar).
+fn paginar_coincidencias(core: &AppCore, app: &mut AppState, delta: isize) {
+    match app.contexto.clone() {
+        ContextState::Coincidencias {
+            consulta,
+            items,
+            offset,
+            total,
+            ..
+        } => {
+            let hay_mas = offset + items.len() < total;
+            if let Some(nuevo) =
+                super::resolver::nuevo_offset_coincidencias(offset, hay_mas, delta)
+            {
+                app.contexto = super::resolver::pagina_contratistas(core, &consulta, nuevo);
+            }
+        }
+        ContextState::CoincidenciasEmpresas {
+            consulta,
+            offset,
+            hay_mas,
+            ..
+        } => {
+            if let Some(nuevo) =
+                super::resolver::nuevo_offset_coincidencias(offset, hay_mas, delta)
+            {
+                app.contexto = super::resolver::pagina_empresas(core, &consulta, nuevo);
+            }
+        }
+        ContextState::CoincidenciasUsuarios {
+            consulta,
+            offset,
+            hay_mas,
+            ..
+        } => {
+            let Fase::Operando { sesion } = &app.fase else {
+                return;
+            };
+            if let Some(nuevo) =
+                super::resolver::nuevo_offset_coincidencias(offset, hay_mas, delta)
+            {
+                app.contexto = super::resolver::pagina_usuarios(core, &consulta, nuevo, sesion);
+            }
+        }
         _ => {}
     }
 }

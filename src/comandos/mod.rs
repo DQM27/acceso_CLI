@@ -37,6 +37,7 @@ mod presentation;
 mod query_lang;
 mod render;
 mod resolver;
+mod root;
 mod salida_gafete;
 mod salida_gafete_controller;
 mod terminal;
@@ -58,6 +59,7 @@ use terminal::TerminalGuard;
 use crate::application::AppCore;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::error::{AutenticacionError, UsuarioServiceError};
+use crate::services::usuario_service::CrearRootInicialInput;
 
 pub use breakpoint::Breakpoint;
 pub use columnas::{Columna, ColumnaActivos, ColumnaBusqueda, ColumnaHistorial, SelectorColumnas};
@@ -93,6 +95,14 @@ type AutenticacionPendiente = Option<(
     mpsc::Receiver<Result<UsuarioSesion, AutenticacionError>>,
 )>;
 
+/// Receptor del hilo que hashea la contraseña del ROOT inicial con Argon2 —
+/// mismo patrón que `AutenticacionPendiente`, sobre el alta en vez del login.
+/// Viaja junto con `CrearRootInicialInput` (no sólo el hash) porque el
+/// insert atómico (`crear_root_inicial_con_hash`) necesita los tres campos,
+/// no sólo la contraseña.
+type RootPendiente =
+    Option<mpsc::Receiver<Result<(CrearRootInicialInput, String), UsuarioServiceError>>>;
+
 /// Punto de entrada de la interfaz de comandos. Consume el `AppCore` (la ruta
 /// por defecto de `main` no hace nada más con él después).
 ///
@@ -102,15 +112,18 @@ type AutenticacionPendiente = Option<(
 /// cédula/contraseña. Con `None` (ruta por defecto, sin flags) hace su
 /// propio login, como siempre.
 pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<(), ComandosError> {
-    if core.requiere_configuracion_inicial()? {
-        return avisar_configuracion_inicial();
-    }
+    let requiere_configuracion_inicial = core.requiere_configuracion_inicial()?;
 
     let _guard = TerminalGuard::acquire()?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
 
     let mut app = match sesion_inicial {
         Some(sesion) => AppState::con_sesion(sesion),
+        // Base sin ningún usuario todavía: arranca en la cadena Root* en vez
+        // del login (ver `estado::Fase`). `sesion_inicial` sólo llega con
+        // `Some` desde la TUI clásica, que ya exige que exista un ROOT para
+        // autenticarse — de ahí que este caso sólo aplique con `None`.
+        None if requiere_configuracion_inicial => AppState::nueva_configuracion_inicial(),
         None => AppState::new(),
     };
     // Preferencias propias de --comandos (hoy sólo columnas visibles),
@@ -128,6 +141,7 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<(), C
             .aplicar_preferencia(&store.actual().columnas_historial);
     }
     let mut autenticacion: AutenticacionPendiente = None;
+    let mut root_pendiente: RootPendiente = None;
     recomputar(&core, &mut app);
 
     // Redraw-on-demand: sólo se dibuja cuando algo realmente cambió. La
@@ -138,6 +152,9 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<(), C
     let mut redibujar = true;
     while !app.salir {
         if login::recibir_autenticacion(&core, &mut app, &mut autenticacion) {
+            redibujar = true;
+        }
+        if root::recibir_root_creado(&core, &mut app, &mut root_pendiente) {
             redibujar = true;
         }
         if app.expirar_feedback() {
@@ -161,11 +178,11 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<(), C
             redibujar = false;
         }
 
-        let espera = proxima_espera(&app, &autenticacion);
+        let espera = proxima_espera(&app, &autenticacion, &root_pendiente);
         if crossterm::event::poll(espera)? {
             match crossterm::event::read()? {
                 Event::Key(key) => {
-                    manejar_tecla(&core, &mut app, key, &mut autenticacion);
+                    manejar_tecla(&core, &mut app, key, &mut autenticacion, &mut root_pendiente);
                     redibujar = true;
                 }
                 Event::Resize(_, _) => redibujar = true,
@@ -349,14 +366,18 @@ fn actualizar_presentacion_paleta(app: &mut AppState) -> bool {
 ///   está por expirar.
 /// - En reposo, esperar casi indefinidamente: el teclado despierta el poll
 ///   de inmediato, no hace falta sondear nada más.
-fn proxima_espera(app: &AppState, autenticacion: &AutenticacionPendiente) -> Duration {
+fn proxima_espera(
+    app: &AppState,
+    autenticacion: &AutenticacionPendiente,
+    root_pendiente: &RootPendiente,
+) -> Duration {
     const ESPERA_VERIFICACION: Duration = Duration::from_millis(30);
     // ~30 fps: de sobra para una transición de texto/color; no hay razón
     // para gastar más CPU persiguiendo 60 en una interfaz de terminal.
     const ESPERA_ANIMACION: Duration = Duration::from_millis(33);
     const ESPERA_REPOSO: Duration = Duration::from_secs(60 * 60);
 
-    if autenticacion.is_some() {
+    if autenticacion.is_some() || root_pendiente.is_some() {
         return ESPERA_VERIFICACION;
     }
     if app.presentacion.activo() {
@@ -366,31 +387,6 @@ fn proxima_espera(app: &AppState, autenticacion: &AutenticacionPendiente) -> Dur
         return restante.max(Duration::from_millis(1));
     }
     ESPERA_REPOSO
-}
-
-/// Aviso para cuando la base todavía no tiene usuario ROOT: la configuración
-/// inicial pertenece a la TUI clásica — acá sólo se explica y se sale con
-/// cualquier tecla.
-fn avisar_configuracion_inicial() -> Result<(), ComandosError> {
-    let _guard = TerminalGuard::acquire()?;
-    let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
-    terminal.draw(|frame| {
-        frame.render_widget(
-            ratatui::widgets::Paragraph::new(
-                "Falta la configuración inicial del sistema.\n\n\
-                 Cierre y arranque con --tui-clasica para crear el usuario ROOT inicial.\n\n\
-                 Presione cualquier tecla para salir.",
-            ),
-            frame.area(),
-        );
-    })?;
-    loop {
-        if let Event::Key(key) = crossterm::event::read()?
-            && key.kind == KeyEventKind::Press
-        {
-            return Ok(());
-        }
-    }
 }
 
 /// Reconstruye parse → contexto → sugerencias tras cualquier cambio del input.
@@ -414,6 +410,7 @@ fn manejar_tecla(
     app: &mut AppState,
     key: KeyEvent,
     autenticacion: &mut AutenticacionPendiente,
+    root_pendiente: &mut RootPendiente,
 ) {
     if key.kind != KeyEventKind::Press {
         return;
@@ -430,6 +427,25 @@ fn manejar_tecla(
             login::manejar_login_password(core, app, key, cedula, nombre, autenticacion)
         }
         Fase::Verificando { .. } => {}
+        Fase::RootCedula => root::manejar_root_cedula(app, key),
+        Fase::RootNombre { cedula } => root::manejar_root_nombre(app, key, cedula),
+        Fase::RootPassword { cedula, nombre } => {
+            root::manejar_root_password(app, key, cedula, nombre)
+        }
+        Fase::RootConfirmarPassword {
+            cedula,
+            nombre,
+            password,
+        } => root::manejar_root_confirmar_password(
+            app,
+            key,
+            core,
+            cedula,
+            nombre,
+            password,
+            root_pendiente,
+        ),
+        Fase::RootCreando { .. } => {}
         Fase::Operando { .. } => operando::manejar_operando(core, app, key),
     }
 }

@@ -15,6 +15,49 @@ const FLAG_RESET_ROOT: &str = "--reset-root";
 /// ahora la interfaz de comandos; este flag existe mientras ambas conviven.
 const FLAG_TUI_CLASICA: &str = "--tui-clasica";
 
+/// Marca al proceso hijo como "ya relanzado dentro de Alacritty" — evita que
+/// se vuelva a relanzar a sí mismo en bucle. El valor no importa, sólo que
+/// exista.
+const ENV_RELANZADO_EN_ALACRITTY: &str = "CONTROL_ACCESO_EN_ALACRITTY";
+
+/// Si hay un `Alacritty.exe` al lado del propio ejecutable (y todavía no nos
+/// relanzamos), lo lanza con este mismo binario como su comando (`-e`) y
+/// termina el proceso actual — el que queda corriendo es el hijo, ya dentro
+/// de la ventana con aceleración por GPU de Alacritty, no en la consola que
+/// haya abierto Windows. Sin `Alacritty.exe` al lado (o si algo falla al
+/// lanzarlo) sigue de largo con el arranque normal: cero cambio de
+/// comportamiento sin la carpeta armada. Deliberadamente NO se usa con
+/// `--reset-root` (ver `main`): ese flujo es de consola/recuperación, no la
+/// experiencia de kiosco que busca Alacritty.
+fn relanzar_en_alacritty() -> bool {
+    if std::env::var_os(ENV_RELANZADO_EN_ALACRITTY).is_some() {
+        return false;
+    }
+    let Ok(exe_actual) = std::env::current_exe() else {
+        return false;
+    };
+    let Some(carpeta) = exe_actual.parent() else {
+        return false;
+    };
+    let alacritty = carpeta.join("Alacritty.exe");
+    if !alacritty.is_file() {
+        return false;
+    }
+
+    let mut comando = std::process::Command::new(&alacritty);
+    comando.env(ENV_RELANZADO_EN_ALACRITTY, "1");
+    // Config propia si está al lado; si no, Alacritty cae a la suya por
+    // defecto (`%APPDATA%\alacritty\alacritty.toml` o los valores de fábrica).
+    let config = carpeta.join("alacritty.toml");
+    if config.is_file() {
+        comando.arg("--config-file").arg(&config);
+    }
+    comando.arg("-e").arg(&exe_actual);
+    comando.args(std::env::args().skip(1));
+
+    comando.spawn().is_ok()
+}
+
 #[derive(Debug, thiserror::Error)]
 enum StartupError {
     #[error(transparent)]
@@ -186,7 +229,12 @@ fn ejecutar_reset_root() -> Result<(), StartupError> {
 }
 
 fn main() {
-    let resultado = if std::env::args().any(|arg| arg == FLAG_RESET_ROOT) {
+    let es_reset_root = std::env::args().any(|arg| arg == FLAG_RESET_ROOT);
+    if !es_reset_root && relanzar_en_alacritty() {
+        return;
+    }
+
+    let resultado = if es_reset_root {
         ejecutar_reset_root()
     } else {
         run()

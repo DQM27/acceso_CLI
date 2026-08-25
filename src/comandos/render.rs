@@ -40,7 +40,7 @@ use super::formulario_usuario::{
 };
 use super::historial::HistorialState;
 use super::parser::{Comando, Entrada};
-use super::resolver::{LIMITE_COINCIDENCIAS, MIN_CONSULTA, es_comodin_todos};
+use super::resolver::{MIN_CONSULTA, es_comodin_todos};
 use super::salida_gafete::SalidaGafeteState;
 
 /// Mínimos razonables: por debajo de esto no cabe ni la tarjeta más simple —
@@ -145,19 +145,22 @@ pub fn render(frame: &mut Frame, app: &AppState) {
     ])
     .areas(area);
 
-    let lineas = if let Some(formulario) = &app.formulario {
+    let (lineas, seleccionada) = if let Some(formulario) = &app.formulario {
         let opacidades = OpacidadesFormulario {
             campo: app.presentacion.opacidad("form_campo"),
             resumen: app.presentacion.opacidad("form_resumen"),
             error: app.presentacion.opacidad("form_error"),
         };
-        lineas_formulario(formulario, app.input.value(), &opacidades)
+        (
+            lineas_formulario(formulario, app.input.value(), &opacidades),
+            None,
+        )
     } else if let Some(fe) = &app.formulario_empresa {
-        lineas_formulario_empresa(fe)
+        (lineas_formulario_empresa(fe), None)
     } else if let Some(fu) = &app.formulario_usuario {
-        lineas_formulario_usuario(fu)
+        (lineas_formulario_usuario(fu), None)
     } else if let Some(edicion) = &app.edicion_columnas {
-        lineas_selector_columnas(app, *edicion)
+        (lineas_selector_columnas(app, *edicion), None)
     } else if let Some(historial) = &app.historial {
         let opacidades = OpacidadesHistorial {
             resultado: app.presentacion.opacidad("historial_resultado"),
@@ -171,19 +174,29 @@ pub fn render(frame: &mut Frame, app: &AppState) {
             &opacidades,
         )
     } else if let Some(sg) = &app.salida_gafete {
-        lineas_salida_gafete(sg)
+        (lineas_salida_gafete(sg), None)
     } else {
-        atenuar(
-            lineas_contexto(
-                &app.contexto,
-                area_contexto.width,
-                &app.columnas_busqueda,
-                &app.columnas_activos,
-            ),
-            app.presentacion.opacidad("area_contexto"),
+        let (lineas, seleccionada) = lineas_contexto(
+            &app.contexto,
+            area_contexto.width,
+            &app.columnas_busqueda,
+            &app.columnas_activos,
+        );
+        (
+            atenuar(lineas, app.presentacion.opacidad("area_contexto")),
+            seleccionada,
         )
     };
-    frame.render_widget(Paragraph::new(lineas), area_contexto);
+    // Mantiene la fila resaltada visible en listas más largas que el área
+    // disponible (Coincidencias/Historial ya pueden traer hasta 50 filas) —
+    // sin esto, ↓ seguía moviendo la selección más allá de lo que se
+    // alcanzaba a dibujar, sin ninguna señal de que se había ido de la
+    // pantalla.
+    let scroll_y = scroll_hacia_seleccion(seleccionada, area_contexto.height);
+    frame.render_widget(
+        Paragraph::new(lineas).scroll((scroll_y, 0)),
+        area_contexto,
+    );
 
     render_prompt(frame, area_prompt, app, paleta.as_deref());
     if paleta.is_none() {
@@ -898,7 +911,10 @@ fn render_login(frame: &mut Frame, area: Rect, app: &AppState) {
     // la marca. La identidad del operador, que ocupa la misma ranura visual
     // después, es deliberadamente más chica y de otro color — es la sesión
     // de una persona, no compite en jerarquía con la marca.
-    let titulo_grande = matches!(app.fase, Fase::LoginCedula);
+    let titulo_grande = matches!(
+        app.fase,
+        Fase::LoginCedula | Fase::RootCedula | Fase::RootNombre { .. }
+    );
     let titulo_alto = if titulo_grande { ALTO_TITULO_GRANDE } else { 1 };
     // Aire entre bloques: dos filas, no una — con una sola el conjunto se
     // veía apretado y perdido en el resto de la pantalla vacía.
@@ -959,10 +975,11 @@ fn render_login(frame: &mut Frame, area: Rect, app: &AppState) {
                     Rect::new(x_prompt, y_prompt, ancho_render, 1),
                 );
             }
-            // Verificando: no crece con tecleo, se centra como el título.
+            // Verificando/Creando: no crece con tecleo, se centra como el título.
             None => {
                 frame.render_widget(
-                    Paragraph::new(linea_verificando(opacidad_prompt)).alignment(Alignment::Center),
+                    Paragraph::new(linea_verificando(&app.fase, opacidad_prompt))
+                        .alignment(Alignment::Center),
                     Rect::new(area.x, y_prompt, area.width, 1),
                 );
             }
@@ -983,8 +1000,12 @@ fn render_login(frame: &mut Frame, area: Rect, app: &AppState) {
 /// color neutro en vez del acento de la marca.
 fn linea_identidad_operador(fase: &Fase, opacidad: f32) -> Line<'static> {
     let nombre = match fase {
-        Fase::LoginPassword { nombre, .. } | Fase::Verificando { nombre } => nombre.as_str(),
-        Fase::LoginCedula | Fase::Operando { .. } => "",
+        Fase::LoginPassword { nombre, .. }
+        | Fase::Verificando { nombre }
+        | Fase::RootPassword { nombre, .. }
+        | Fase::RootConfirmarPassword { nombre, .. }
+        | Fase::RootCreando { nombre } => nombre.as_str(),
+        Fase::LoginCedula | Fase::RootCedula | Fase::RootNombre { .. } | Fase::Operando { .. } => "",
     };
     // Mayúscula (sin espaciado entre letras — se sentía impostado en un
     // nombre real, a diferencia de la etiqueta fija del prompt) le da más
@@ -1012,11 +1033,15 @@ fn espaciar_texto(texto: &str) -> String {
     espaciado.trim_end().to_string()
 }
 
-fn linea_verificando(opacidad: f32) -> Line<'static> {
+fn linea_verificando(fase: &Fase, opacidad: f32) -> Line<'static> {
     // Trabajo real (Argon2 en un hilo aparte), no una animación decorativa:
     // el glifo ● es el mismo que en el resto de la app para "sistema activo".
+    let texto = match fase {
+        Fase::RootCreando { .. } => "● Creando usuario",
+        _ => "● Verificando",
+    };
     Line::from(Span::styled(
-        "● Verificando",
+        texto,
         estilo_fundido(FADE_MUTED, opacidad, Modifier::empty()),
     ))
 }
@@ -1029,15 +1054,25 @@ fn etiqueta_prompt(fase: &Fase) -> Option<&'static str> {
     match fase {
         Fase::LoginCedula => Some("Identificación"),
         Fase::LoginPassword { .. } => Some("Contraseña"),
-        Fase::Verificando { .. } | Fase::Operando { .. } => None,
+        Fase::RootCedula => Some("Cédula"),
+        Fase::RootNombre { .. } => Some("Nombre"),
+        Fase::RootPassword { .. } => Some("Contraseña"),
+        Fase::RootConfirmarPassword { .. } => Some("Confirmar contraseña"),
+        Fase::Verificando { .. } | Fase::RootCreando { .. } | Fase::Operando { .. } => None,
     }
 }
 
 fn valor_prompt(fase: &Fase, app: &AppState) -> String {
     match fase {
-        Fase::LoginCedula => app.input.value().to_string(),
-        Fase::LoginPassword { .. } => "•".repeat(app.input.value().chars().count()),
-        Fase::Verificando { .. } | Fase::Operando { .. } => String::new(),
+        Fase::LoginCedula | Fase::RootCedula | Fase::RootNombre { .. } => {
+            app.input.value().to_string()
+        }
+        Fase::LoginPassword { .. } | Fase::RootPassword { .. } | Fase::RootConfirmarPassword { .. } => {
+            "•".repeat(app.input.value().chars().count())
+        }
+        Fase::Verificando { .. } | Fase::RootCreando { .. } | Fase::Operando { .. } => {
+            String::new()
+        }
     }
 }
 
@@ -1107,53 +1142,120 @@ fn linea_aviso_login(app: &AppState, opacidad: f32) -> Line<'static> {
 
 // ── Contexto operativo ───────────────────────────────────────────────────
 
+/// Las cinco listas navegables (`Coincidencias*`/`TablaActivos`) empiezan
+/// con 2 líneas fijas de encabezado (fila de columnas + divisor, o título +
+/// línea en blanco para Empresas/Usuarios) antes de la primera fila de
+/// ítem — de ahí sale el índice absoluto de la línea resaltada dentro del
+/// `Vec` que devuelve cada `lineas_coincidencias*`/`lineas_tabla_activos`.
+/// Si algún día cambia el preámbulo de alguna de esas funciones, hay que
+/// actualizar también este número (no hay forma de derivarlo automáticamente
+/// sin que cada función devuelva su propio índice).
+const FILAS_ANTES_DE_ITEMS: usize = 2;
+
+/// Índice absoluto (dentro del `Vec<Line>` ya armado) de la fila resaltada
+/// — `None` cuando no hay lista (o está vacía, nada que mantener visible).
+/// Lo usa `render()` para calcular el scroll y que ↓ nunca empuje la
+/// selección fuera del área visible (antes se perdía de vista sin más aviso
+/// que "la flecha ya no se mueve", con listas que ahora pueden traer hasta
+/// `LIMITE_COINCIDENCIAS` = 50 filas).
+fn indice_seleccion_lista(hay_items: bool, seleccion: usize) -> Option<usize> {
+    hay_items.then_some(FILAS_ANTES_DE_ITEMS + seleccion)
+}
+
+/// `scroll.y` del `Paragraph` del área de contexto: el mínimo necesario
+/// para que la línea `seleccionada` (índice absoluto) quede dentro de las
+/// últimas `alto` filas visibles. Sin selección (`None`, pantallas sin
+/// lista navegable) no hay nada que perseguir, arranca en 0 como siempre.
+fn scroll_hacia_seleccion(seleccionada: Option<usize>, alto: u16) -> u16 {
+    let Some(seleccionada) = seleccionada else {
+        return 0;
+    };
+    let alto = alto as usize;
+    if alto == 0 || seleccionada < alto {
+        return 0;
+    }
+    (seleccionada - alto + 1) as u16
+}
+
 fn lineas_contexto(
     contexto: &ContextState,
     ancho: u16,
     columnas_busqueda: &SelectorColumnas<ColumnaBusqueda>,
     columnas_activos: &SelectorColumnas<ColumnaActivos>,
-) -> Vec<Line<'static>> {
+) -> (Vec<Line<'static>>, Option<usize>) {
     match contexto {
-        ContextState::Inicio { total_dentro } => lineas_inicio(*total_dentro),
+        ContextState::Inicio { total_dentro } => (lineas_inicio(*total_dentro), None),
         ContextState::Coincidencias {
             consulta,
             items,
             seleccion,
-        } => lineas_coincidencias(consulta, items, *seleccion, ancho, columnas_busqueda),
+            offset,
+            total,
+        } => (
+            lineas_coincidencias(
+                consulta,
+                items,
+                *seleccion,
+                *offset,
+                *total,
+                ancho,
+                columnas_busqueda,
+            ),
+            indice_seleccion_lista(!items.is_empty(), *seleccion),
+        ),
         ContextState::CoincidenciasActivos {
             descripcion,
             items,
             seleccion,
-        } => lineas_coincidencias_activos(descripcion, items, *seleccion, ancho, columnas_activos),
+        } => (
+            lineas_coincidencias_activos(descripcion, items, *seleccion, ancho, columnas_activos),
+            indice_seleccion_lista(!items.is_empty(), *seleccion),
+        ),
         ContextState::CoincidenciasEmpresas {
             consulta,
             items,
             seleccion,
-        } => lineas_coincidencias_empresas(consulta, items, *seleccion),
+            offset,
+            hay_mas,
+        } => (
+            lineas_coincidencias_empresas(consulta, items, *seleccion, *offset, *hay_mas),
+            indice_seleccion_lista(!items.is_empty(), *seleccion),
+        ),
         ContextState::CoincidenciasUsuarios {
             consulta,
             items,
             seleccion,
-        } => lineas_coincidencias_usuarios(consulta, items, *seleccion),
-        ContextState::ResumenIngreso { .. } => lineas_resumen_ingreso(contexto),
-        ContextState::ResumenSalida { activo } => lineas_resumen_salida(activo),
+            offset,
+            hay_mas,
+        } => (
+            lineas_coincidencias_usuarios(consulta, items, *seleccion, *offset, *hay_mas),
+            indice_seleccion_lista(!items.is_empty(), *seleccion),
+        ),
+        ContextState::ResumenIngreso { .. } => (lineas_resumen_ingreso(contexto), None),
+        ContextState::ResumenSalida { activo } => (lineas_resumen_salida(activo), None),
         ContextState::TablaActivos {
             items,
             total,
             seleccion,
-        } => lineas_tabla_activos(items, *total, *seleccion, ancho, columnas_activos),
-        ContextState::FichaContratista { resumen } => lineas_ficha(resumen),
-        ContextState::ConfirmarCerrarSesion => lineas_cerrar_sesion(),
-        ContextState::NuevoContratista => lineas_nuevo_contratista(),
-        ContextState::NuevoEmpresa => lineas_nuevo_empresa(),
-        ContextState::NuevoUsuario => lineas_nuevo_usuario(),
-        ContextState::AbrirHistorial => lineas_abrir_historial(),
-        ContextState::AbrirSalidaGafete { texto } => lineas_abrir_salida_gafete(texto),
-        ContextState::Ayuda => lineas_ayuda(),
-        ContextState::MensajeError { mensaje } => vec![
-            Line::from(""),
-            Line::from(Span::styled(format!("✗ {mensaje}"), estilo_error())),
-        ],
+        } => (
+            lineas_tabla_activos(items, *total, *seleccion, ancho, columnas_activos),
+            indice_seleccion_lista(!items.is_empty(), *seleccion),
+        ),
+        ContextState::FichaContratista { resumen } => (lineas_ficha(resumen), None),
+        ContextState::ConfirmarCerrarSesion => (lineas_cerrar_sesion(), None),
+        ContextState::NuevoContratista => (lineas_nuevo_contratista(), None),
+        ContextState::NuevoEmpresa => (lineas_nuevo_empresa(), None),
+        ContextState::NuevoUsuario => (lineas_nuevo_usuario(), None),
+        ContextState::AbrirHistorial => (lineas_abrir_historial(), None),
+        ContextState::AbrirSalidaGafete { texto } => (lineas_abrir_salida_gafete(texto), None),
+        ContextState::Ayuda => (lineas_ayuda(), None),
+        ContextState::MensajeError { mensaje } => (
+            vec![
+                Line::from(""),
+                Line::from(Span::styled(format!("✗ {mensaje}"), estilo_error())),
+            ],
+            None,
+        ),
     }
 }
 
@@ -1301,17 +1403,44 @@ fn valor_busqueda(
     }
 }
 
-/// Cuando la lista llega justo al tope (`LIMITE_COINCIDENCIAS`), puede haber
-/// más filas que no se cargaron — sin esto la lista se veía completa aunque
-/// no lo fuera (ni un "..." ni ninguna pista), especialmente notorio con el
-/// comodín `*` ("ver todos"), donde truncar en silencio sería engañoso.
-fn lineas_limite_coincidencias(cantidad: usize) -> Option<Line<'static>> {
-    (cantidad == LIMITE_COINCIDENCIAS).then(|| {
-        Line::from(Span::styled(
-            format!("Mostrando los primeros {cantidad} — afine la búsqueda para ver otros"),
-            muted(),
-        ))
-    })
+/// Pie de paginación con conteo exacto (contratistas: `buscar_contratistas`
+/// ya devuelve `total` sin límite) — "X-Y de Z" más PageUp/PageDown según
+/// corresponda. `None` en la única página que además es la primera: nada
+/// que paginar, no hace falta el pie.
+fn linea_paginacion_exacta(offset: usize, cantidad: usize, total: usize) -> Option<Line<'static>> {
+    if offset == 0 && cantidad >= total {
+        return None;
+    }
+    let desde = offset + 1;
+    let hasta = offset + cantidad;
+    let mas = if hasta < total { " · PageDown más" } else { "" };
+    let atras = if offset > 0 { " · PageUp atrás" } else { "" };
+    Some(Line::from(Span::styled(
+        format!("{desde}-{hasta} de {total}{mas}{atras}"),
+        muted(),
+    )))
+}
+
+/// Mismo pie que `linea_paginacion_exacta`, sin el "de Z": empresas/usuarios
+/// no tienen un conteo total (`hay_mas` viene del truco del elemento de más,
+/// ver `resolver::pagina_empresas`), así que no se puede prometer una cifra
+/// exacta — sólo el rango cargado y si hay para adelante/atrás.
+fn linea_paginacion_aproximada(
+    offset: usize,
+    cantidad: usize,
+    hay_mas: bool,
+) -> Option<Line<'static>> {
+    if offset == 0 && !hay_mas {
+        return None;
+    }
+    let desde = offset + 1;
+    let hasta = offset + cantidad;
+    let mas = if hay_mas { " · PageDown más" } else { "" };
+    let atras = if offset > 0 { " · PageUp atrás" } else { "" };
+    Some(Line::from(Span::styled(
+        format!("{desde}-{hasta}{mas}{atras}"),
+        muted(),
+    )))
 }
 
 /// Lista simple, sin columnas ni F4: `EmpresaResumen`/`UsuarioResumen`
@@ -1322,6 +1451,8 @@ fn lineas_coincidencias_empresas(
     consulta: &str,
     items: &[crate::database::queries::empresas::EmpresaResumen],
     seleccion: usize,
+    offset: usize,
+    hay_mas: bool,
 ) -> Vec<Line<'static>> {
     let mut lineas = vec![
         Line::from(Span::styled("EDITAR EMPRESA", muted())),
@@ -1351,7 +1482,7 @@ fn lineas_coincidencias_empresas(
             Line::from(texto)
         });
     }
-    if let Some(linea) = lineas_limite_coincidencias(items.len()) {
+    if let Some(linea) = linea_paginacion_aproximada(offset, items.len(), hay_mas) {
         lineas.push(Line::from(""));
         lineas.push(linea);
     }
@@ -1362,6 +1493,8 @@ fn lineas_coincidencias_usuarios(
     consulta: &str,
     items: &[crate::database::queries::usuarios::UsuarioResumen],
     seleccion: usize,
+    offset: usize,
+    hay_mas: bool,
 ) -> Vec<Line<'static>> {
     let mut lineas = vec![
         Line::from(Span::styled("EDITAR USUARIO", muted())),
@@ -1396,7 +1529,7 @@ fn lineas_coincidencias_usuarios(
             Line::from(texto)
         });
     }
-    if let Some(linea) = lineas_limite_coincidencias(items.len()) {
+    if let Some(linea) = linea_paginacion_aproximada(offset, items.len(), hay_mas) {
         lineas.push(Line::from(""));
         lineas.push(linea);
     }
@@ -1407,6 +1540,8 @@ fn lineas_coincidencias(
     consulta: &str,
     items: &[crate::database::queries::contratistas::ContratistaResumen],
     seleccion: usize,
+    offset: usize,
+    total: usize,
     ancho: u16,
     columnas: &SelectorColumnas<ColumnaBusqueda>,
 ) -> Vec<Line<'static>> {
@@ -1454,7 +1589,7 @@ fn lineas_coincidencias(
             Line::from(texto)
         });
     }
-    if let Some(linea) = lineas_limite_coincidencias(items.len()) {
+    if let Some(linea) = linea_paginacion_exacta(offset, items.len(), total) {
         lineas.push(Line::from(""));
         lineas.push(linea);
     }
@@ -2071,24 +2206,27 @@ fn lineas_historial(
     ancho: u16,
     columnas: &SelectorColumnas<ColumnaHistorial>,
     opacidades: &OpacidadesHistorial,
-) -> Vec<Line<'static>> {
+) -> (Vec<Line<'static>>, Option<usize>) {
     if historial.exportacion_destino.is_some() {
         let total = historial.resultado.as_ref().map_or(0, |r| r.total);
-        return vec![
-            Line::from(Span::styled(
-                "EXPORTAR HISTORIAL",
-                estilo_fundido(FADE_MUTED, opacidades.exportar, Modifier::empty()),
-            )),
-            Line::from(""),
-            Line::from(format!(
-                "Se exportarán los {total} movimientos del filtro vigente a un archivo XLSX."
-            )),
-            Line::from(""),
-            Line::from(Span::styled(
-                "Enter para exportar · Esc para cancelar",
-                estilo_fundido(FADE_ACENTO, opacidades.exportar, Modifier::empty()),
-            )),
-        ];
+        return (
+            vec![
+                Line::from(Span::styled(
+                    "EXPORTAR HISTORIAL",
+                    estilo_fundido(FADE_MUTED, opacidades.exportar, Modifier::empty()),
+                )),
+                Line::from(""),
+                Line::from(format!(
+                    "Se exportarán los {total} movimientos del filtro vigente a un archivo XLSX."
+                )),
+                Line::from(""),
+                Line::from(Span::styled(
+                    "Enter para exportar · Esc para cancelar",
+                    estilo_fundido(FADE_ACENTO, opacidades.exportar, Modifier::empty()),
+                )),
+            ],
+            None,
+        );
     }
     let Some(resultado) = &historial.resultado else {
         // Editando: todavía no se aplicó ninguna consulta (o se volvió a
@@ -2098,28 +2236,31 @@ fn lineas_historial(
             a_costa_rica(historial.filtro.desde).format("%d/%m/%Y"),
             fecha_hasta_visual(historial.filtro.hasta)
         );
-        return vec![
-            Line::from(Span::styled("HISTORIAL", muted())),
-            Line::from(""),
-            Line::from(Span::styled(rango, muted())),
-            Line::from(Span::styled(
-                "empresa: · tipo: · estado: · gafete: · ingreso: · salida: · desde: · hasta:",
-                muted(),
-            )),
-            Line::from(Span::styled(
-                "Ejemplo: empresa:brisas tipo:praind,swat desde:01/08/2026 -salida:ana",
-                muted(),
-            )),
-            Line::from(""),
-            Line::from(if texto_input.is_empty() {
-                Span::styled(
-                    "Enter aplica el rango del mes actual sin más filtro",
+        return (
+            vec![
+                Line::from(Span::styled("HISTORIAL", muted())),
+                Line::from(""),
+                Line::from(Span::styled(rango, muted())),
+                Line::from(Span::styled(
+                    "empresa: · tipo: · estado: · gafete: · ingreso: · salida: · desde: · hasta:",
                     muted(),
-                )
-            } else {
-                Span::raw(texto_input.to_string())
-            }),
-        ];
+                )),
+                Line::from(Span::styled(
+                    "Ejemplo: empresa:brisas tipo:praind,swat desde:01/08/2026 -salida:ana",
+                    muted(),
+                )),
+                Line::from(""),
+                Line::from(if texto_input.is_empty() {
+                    Span::styled(
+                        "Enter aplica el rango del mes actual sin más filtro",
+                        muted(),
+                    )
+                } else {
+                    Span::raw(texto_input.to_string())
+                }),
+            ],
+            None,
+        );
     };
 
     let mut lineas = vec![Line::from(Span::styled(
@@ -2139,7 +2280,7 @@ fn lineas_historial(
             "Sin movimientos para este filtro",
             muted(),
         )));
-        return lineas;
+        return (lineas, None);
     }
 
     let anchos = anchos_columnas(ancho, columnas_visibles(columnas), ancho_fijo_historial);
@@ -2154,6 +2295,11 @@ fn lineas_historial(
         "─".repeat(ancho as usize),
         muted(),
     )));
+    // El preámbulo hasta acá ya varía (resumen del filtro + aviso opcional
+    // de no-reconocidos + encabezado + divisor) — a diferencia de
+    // `FILAS_ANTES_DE_ITEMS`, acá conviene tomar el largo real en vez de
+    // otra constante que se desincronizaría fácil.
+    let seleccionada = lineas.len() + historial.seleccion;
     for (indice, item) in resultado.items.iter().enumerate() {
         let marcador = if indice == historial.seleccion {
             "› "
@@ -2180,7 +2326,7 @@ fn lineas_historial(
         ),
         muted(),
     )));
-    lineas
+    (lineas, Some(seleccionada))
 }
 
 // ── Formulario de contratista ────────────────────────────────────────────
@@ -2916,5 +3062,67 @@ mod tests {
                 ("Carlos".to_string(), false),
             ]
         );
+    }
+
+    fn texto_linea(linea: &Line<'static>) -> String {
+        linea.spans.iter().map(|s| s.content.to_string()).collect()
+    }
+
+    #[test]
+    fn paginacion_exacta_sin_pie_en_la_unica_pagina() {
+        assert!(linea_paginacion_exacta(0, 5, 5).is_none());
+    }
+
+    #[test]
+    fn paginacion_exacta_muestra_rango_y_pagedown_si_falta() {
+        let linea = linea_paginacion_exacta(0, 9, 23).unwrap();
+        assert_eq!(texto_linea(&linea), "1-9 de 23 · PageDown más");
+    }
+
+    #[test]
+    fn paginacion_exacta_muestra_pageup_en_la_ultima_pagina() {
+        let linea = linea_paginacion_exacta(18, 5, 23).unwrap();
+        assert_eq!(texto_linea(&linea), "19-23 de 23 · PageUp atrás");
+    }
+
+    #[test]
+    fn paginacion_aproximada_sin_pie_en_la_primera_pagina_sin_mas() {
+        assert!(linea_paginacion_aproximada(0, 3, false).is_none());
+    }
+
+    #[test]
+    fn paginacion_aproximada_sin_total_muestra_solo_el_rango() {
+        let linea = linea_paginacion_aproximada(0, 9, true).unwrap();
+        assert_eq!(texto_linea(&linea), "1-9 · PageDown más");
+        let linea = linea_paginacion_aproximada(9, 4, false).unwrap();
+        assert_eq!(texto_linea(&linea), "10-13 · PageUp atrás");
+    }
+
+    #[test]
+    fn scroll_no_se_mueve_sin_seleccion_o_si_ya_entra_en_pantalla() {
+        assert_eq!(scroll_hacia_seleccion(None, 20), 0);
+        // Fila 5 (índice) cabe de sobra en un área de 20 filas.
+        assert_eq!(scroll_hacia_seleccion(Some(5), 20), 0);
+        // Justo la última fila visible (índice 19 en un área de 20): sigue
+        // sin hacer falta scroll.
+        assert_eq!(scroll_hacia_seleccion(Some(19), 20), 0);
+    }
+
+    #[test]
+    fn scroll_sigue_la_seleccion_cuando_se_va_de_la_pantalla() {
+        // Índice 25 en un área de 20 filas: hay que correr 6 para que la
+        // fila 25 sea la última visible (filas 6..=25).
+        assert_eq!(scroll_hacia_seleccion(Some(25), 20), 6);
+    }
+
+    #[test]
+    fn scroll_con_area_de_alto_cero_no_paniquea() {
+        assert_eq!(scroll_hacia_seleccion(Some(3), 0), 0);
+    }
+
+    #[test]
+    fn indice_seleccion_lista_none_sin_items() {
+        assert_eq!(indice_seleccion_lista(false, 0), None);
+        assert_eq!(indice_seleccion_lista(true, 3), Some(FILAS_ANTES_DE_ITEMS + 3));
     }
 }
