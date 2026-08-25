@@ -28,6 +28,7 @@ use super::columnas::{
 };
 use super::estado::{
     AppState, ContextState, EdicionColumnas, Fase, NivelFeedback, ObjetivoColumnas,
+    PERIODO_BLINK_MS,
 };
 use super::formulario::{
     Campo, FormularioContratista, MAX_VISIBLES_EMPRESAS, ModoFormulario, Subfase,
@@ -368,25 +369,10 @@ fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState, paleta: Option<&
             }
         })
         .collect();
-    // Cada fila funde por su cuenta (`super::PALETA_FILAS_IDS`, un id fijo
-    // por posición) en vez de todas juntas con una sola opacidad — la
-    // cascada resultante (ver `RETRASO_PALETA_ESCALON` en `mod.rs`) se nota
-    // mucho más que un fundido sincronizado de las 9 filas a la vez.
-    // `atenuar_fila_paleta`, no `atenuar`: cada fila tiene dos colores
-    // propios (nombre/descripción) y `atenuar` los haría llegar visibles en
-    // momentos distintos (ver su documentación).
-    let lineas_atenuadas: Vec<Line<'static>> = lineas
-        .into_iter()
-        .enumerate()
-        .map(|(indice, linea)| {
-            let id = super::PALETA_FILAS_IDS
-                .get(indice)
-                .copied()
-                .unwrap_or("paleta_fila_8");
-            atenuar_fila_paleta(linea, app.presentacion.opacidad(id))
-        })
-        .collect();
-    frame.render_widget(Paragraph::new(lineas_atenuadas), fila_comandos);
+    // Sin fundido: la paleta aparece de una — el fundido en cascada por fila
+    // que había antes (DEC-062) estorbaba en el uso real, reportado en
+    // runtime.
+    frame.render_widget(Paragraph::new(lineas), fila_comandos);
 }
 
 /// Claves de `/ingreso`/`/salida`/`--modificador` (DEC-021: sólo se
@@ -568,6 +554,7 @@ fn spans_valor(
     visible: &str,
     segmentos: Option<Vec<(String, bool)>>,
     columna_cursor: Option<usize>,
+    mostrar_cursor: bool,
 ) -> Vec<Span<'static>> {
     let piezas = segmentos.unwrap_or_else(|| vec![(visible.to_string(), false)]);
     let estilizar = |texto: String, es_clave: bool| -> Span<'static> {
@@ -605,17 +592,21 @@ fn spans_valor(
         if !antes.is_empty() {
             spans.push(estilizar(antes.to_string(), es_clave));
         }
-        spans.push(Span::styled(
-            bajo_cursor,
-            Style::default().add_modifier(Modifier::REVERSED),
-        ));
+        // Mitad "apagada" del parpadeo: el carácter se ve normal, sin la
+        // celda resaltada — mismo criterio que cualquier cursor de terminal,
+        // sólo que el nuestro nunca desaparece del todo (ver `blink_on`).
+        spans.push(if mostrar_cursor {
+            Span::styled(bajo_cursor, Style::default().add_modifier(Modifier::REVERSED))
+        } else {
+            estilizar(bajo_cursor, es_clave)
+        });
         if !despues.is_empty() {
             spans.push(estilizar(despues, es_clave));
         }
         insertado = true;
         offset += largo;
     }
-    if !insertado {
+    if !insertado && mostrar_cursor {
         spans.push(Span::styled(
             " ".to_string(),
             Style::default().add_modifier(Modifier::REVERSED),
@@ -629,7 +620,16 @@ fn spans_valor(
 /// como sin ella. Sólo se llama en fase `Operando`: el login tiene su propia
 /// composición sin caja (`render_login`), nunca pasa por acá.
 fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
-    let (etiqueta, valor, cursor_visible, cursor_chars, resaltado) = if let Some(destino) = app
+    // `editable` sólo decide DE DÓNDE sale la posición del cursor (del
+    // `Input` real mientras se escribe, o del final del texto congelado
+    // cuando no) — ya no si el cursor se ve. Antes, con una Surface
+    // mostrando resultado (Historial ya aplicado, un campo no-texto de un
+    // formulario…) el cursor desaparecía del todo y no quedaba ninguna
+    // señal de que la línea seguía activa (reportado en runtime real:
+    // "no se sabe dónde se puede escribir"). Como cualquier tecla de texto
+    // vuelve a poner esa Surface en edición (ver los controladores), seguía
+    // siendo verdad que "se puede escribir ahí".
+    let (etiqueta, valor, editable, cursor_chars, resaltado) = if let Some(destino) = app
         .historial
         .as_ref()
         .and_then(|h| h.exportacion_destino.as_ref())
@@ -657,7 +657,7 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
             if editable {
                 app.input.visual_cursor()
             } else {
-                0
+                app.input.value().chars().count()
             },
             Some(EstiloValor::Claves(&CLAVES_HISTORIAL)),
         )
@@ -698,7 +698,7 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
             if editable {
                 app.input.visual_cursor()
             } else {
-                0
+                app.input.value().chars().count()
             },
             None,
         )
@@ -736,7 +736,7 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
                     if editable {
                         app.input.visual_cursor()
                     } else {
-                        0
+                        app.input.value().chars().count()
                     },
                     None,
                 )
@@ -775,7 +775,7 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
     // cursor en este frame — con la exportación abierta es
     // `exportacion_destino`, no `app.input` (que sigue congelado detrás).
     let scroll = match (
-        cursor_visible,
+        editable,
         app.historial
             .as_ref()
             .and_then(|h| h.exportacion_destino.as_ref()),
@@ -788,18 +788,25 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
     let segmentos = resaltado.map(|estilo| segmentar(&visible, &estilo));
 
     // Cursor propio (celda resaltada), nunca el bloque real del terminal —
-    // mismo criterio que ya usa el login (`linea_prompt`) y por la misma
-    // razón: el cursor real de cada emulador de terminal parpadea y se
-    // reposiciona con su propio timing, fuera de nuestro control, y se veía
-    // aparecer/desaparecer de forma inconsistente. A diferencia del login
-    // (que sólo escribe al final), acá el cursor puede estar a mitad del
-    // texto (←/→/Home/End de `tui_input`), así que se resalta el carácter
-    // bajo el cursor en vez de insertar un "_" que correría el resto.
-    let columna_cursor =
-        cursor_visible.then(|| cursor_chars.saturating_sub(scroll).min(viewport));
+    // el cursor real de cada emulador de terminal parpadea y se reposiciona
+    // con su propio timing, fuera de nuestro control, y se veía
+    // aparecer/desaparecer de forma inconsistente entre terminales. Acá el
+    // cursor puede estar a mitad del texto (←/→/Home/End de `tui_input`),
+    // así que se resalta el carácter bajo el cursor en vez de insertar un
+    // "_" que correría el resto. Siempre presente (nunca `None`) — con o
+    // sin Surface, editable o congelado — y parpadea con `blink_on` en vez
+    // de desaparecer del todo, para que la línea nunca se lea como "inerte".
+    let columna_cursor = Some(cursor_chars.saturating_sub(scroll).min(viewport));
     let mut spans = vec![Span::styled(etiqueta, estilo_etiqueta)];
-    spans.extend(spans_valor(&visible, segmentos, columna_cursor));
+    spans.extend(spans_valor(&visible, segmentos, columna_cursor, blink_on(app)));
     frame.render_widget(Paragraph::new(Line::from(spans)), area);
+}
+
+/// `instante_inicio` es fijo por sesión: el parpadeo sigue un reloj propio
+/// (ver `PERIODO_BLINK_MS`), nunca se reinicia al cambiar de Surface o al
+/// tipear.
+pub(super) fn blink_on(app: &AppState) -> bool {
+    (app.instante_inicio.elapsed().as_millis() / PERIODO_BLINK_MS as u128) % 2 == 0
 }
 
 // ── Login ────────────────────────────────────────────────────────────────
@@ -896,35 +903,6 @@ fn atenuar(lineas: Vec<Line<'static>>, opacidad: f32) -> Vec<Line<'static>> {
             Line::from(spans)
         })
         .collect()
-}
-
-/// Variante de `atenuar` para una fila con más de un color propio (nombre en
-/// cian, descripción en gris — la paleta de comandos): interpolar cada
-/// `Span` hacia SU color final (lo que hace `atenuar`) los hace "llegar"
-/// visibles en momentos distintos, aunque compartan la misma `opacidad` — un
-/// cian brillante cruza el umbral de percepción mucho antes que un gris
-/// tenue con la misma fracción de camino recorrido, así que la fila se leía
-/// como dos apariciones desincronizadas en vez de una. Acá, mientras dura el
-/// fundido, todos los `Span` interpolan hacia el mismo `FADE_TEXTO` neutro
-/// (nunca hacia su color propio) — un solo brillo subiendo parejo — y sólo
-/// al terminar (`opacidad >= 1.0`) la fila salta de golpe a sus colores
-/// reales.
-fn atenuar_fila_paleta(linea: Line<'static>, opacidad: f32) -> Line<'static> {
-    if opacidad >= 1.0 {
-        return linea;
-    }
-    let spans: Vec<Span<'static>> = linea
-        .spans
-        .into_iter()
-        .map(|span| {
-            let estilo = Style {
-                fg: Some(interpolar_color(FADE_FONDO, FADE_TEXTO, opacidad)),
-                ..span.style
-            };
-            Span::styled(span.content, estilo)
-        })
-        .collect();
-    Line::from(spans)
 }
 
 fn render_login(frame: &mut Frame, area: Rect, app: &AppState) {

@@ -18,6 +18,13 @@ use crate::services::registro_ingreso_service::{IngresoActivoResumen, Preparacio
 
 use super::columnas::{ColumnaActivos, ColumnaBusqueda, ColumnaHistorial, SelectorColumnas};
 use super::formulario::{Campo, FormularioContratista, Subfase};
+
+/// Ritmo del parpadeo del cursor propio del prompt (`render::blink_on`) —
+/// 530ms es el valor por defecto de Windows Terminal/la mayoría de
+/// emuladores, así que el nuestro se siente igual de "normal" sin depender
+/// del cursor real del terminal. Compartida con `mod.rs` (que la usa para
+/// saber cuánto puede esperar el próximo `poll` sin perderse un toggle).
+pub(crate) const PERIODO_BLINK_MS: u64 = 530;
 use super::formulario_empresa::FormularioEmpresa;
 use super::formulario_usuario::FormularioUsuario;
 use super::historial::HistorialState;
@@ -378,12 +385,12 @@ pub struct AppState {
     /// no funde, sólo `false`→`true` (acaba de aparecer), mismo criterio
     /// asimétrico que el resto de apariciones de esta fase.
     pub prompt_glifo_previo: bool,
-    /// Si la paleta de comandos (`paleta_comandos`) estaba visible en el
-    /// frame anterior — DEC-062. Funde sólo al aparecer la primera vez
-    /// (input vacío → `/`), no en cada tecla mientras se sigue escribiendo
-    /// el nombre y la lista se acorta — mismo criterio que el área de
-    /// contexto (DEC-059): interacción repetida, no transición de estado.
-    pub paleta_previa: bool,
+    /// Referencia de tiempo para el parpadeo del cursor del prompt (ver
+    /// `render::blink_on`) — un solo `Instant` fijado al arrancar, nunca se
+    /// reinicia con la tecla ni con el cambio de Surface, así que el
+    /// parpadeo sigue su propio ritmo constante en vez de "reaparecer" fijo
+    /// cada vez que se abre una Surface distinta.
+    pub instante_inicio: Instant,
 }
 
 impl AppState {
@@ -412,7 +419,7 @@ impl AppState {
             firma_historial_previa: None,
             firma_contexto_previa: None,
             prompt_glifo_previo: false,
-            paleta_previa: false,
+            instante_inicio: Instant::now(),
         }
     }
 

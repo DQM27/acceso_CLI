@@ -159,6 +159,11 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<(), C
     // en filas con `EaseOut` cerca del final, donde el cambio por tick ya
     // es mínimo — hasta que una tecla forzaba el próximo redibujado.
     let mut animacion_activa_previa = false;
+    // El cursor propio del prompt parpadea (`render::blink_on`) mientras haya
+    // una línea de input activa — hoy sólo en `Fase::Operando` (login usa su
+    // propio "_" fijo, sin parpadeo). Sin este chequeo el redraw-on-demand
+    // nunca despertaría solo para alternar el parpadeo entre teclas.
+    let mut blink_previo = false;
     while !app.salir {
         if login::recibir_autenticacion(&core, &mut app, &mut autenticacion) {
             redibujar = true;
@@ -185,6 +190,14 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<(), C
             redibujar = true;
         }
         animacion_activa_previa = animacion_activa;
+
+        if matches!(app.fase, Fase::Operando { .. }) {
+            let blink_ahora = render::blink_on(&app);
+            if blink_ahora != blink_previo {
+                redibujar = true;
+            }
+            blink_previo = blink_ahora;
+        }
 
         if redibujar {
             terminal.draw(|frame| render::render(frame, &app))?;
@@ -226,8 +239,7 @@ fn actualizar_presentacion(app: &mut AppState) -> bool {
     let historial = actualizar_presentacion_historial(app);
     let contexto = actualizar_presentacion_contexto(app);
     let prompt_glifo = actualizar_presentacion_prompt_glifo(app);
-    let paleta = actualizar_presentacion_paleta(app);
-    login || formulario || historial || contexto || prompt_glifo || paleta
+    login || formulario || historial || contexto || prompt_glifo
 }
 
 fn actualizar_presentacion_login(app: &mut AppState) -> bool {
@@ -353,59 +365,6 @@ fn actualizar_presentacion_prompt_glifo(app: &mut AppState) -> bool {
     true
 }
 
-/// Pausa antes de que arranque el fundido de la primera fila de la paleta —
-/// sin esto, el fundido de `DURACION_APARICION` (320ms) sobre una lista que
-/// aparece completa de golpe se percibía como instantáneo. 150ms es el
-/// umbral de percepción que documenta Nielsen Norman Group (el tiempo de un
-/// parpadeo): abajo de eso, un cambio se lee como "ya estaba ahí" en vez de
-/// "acaba de pasar".
-const RETRASO_PALETA_BASE: std::time::Duration = std::time::Duration::from_millis(150);
-
-/// Cuánto se atrasa cada fila siguiente respecto a la anterior — la cascada
-/// resultante (fila 0 primero, la última casi medio segundo después) se nota
-/// mucho más que un fundido sincronizado de las nueve filas a la vez, que es
-/// lo que había antes y seguía leyéndose como instantáneo pese al retraso
-/// base.
-const RETRASO_PALETA_ESCALON: std::time::Duration = std::time::Duration::from_millis(45);
-
-/// Ids fijos de animación, uno por posición dentro de la paleta — como
-/// máximo hay 9 (`Comando::TODOS`), así que un array de literales alcanza
-/// sin necesitar claves dinámicas en el motor de presentación (que sólo
-/// acepta `&'static str`, ver `presentation::Engine`).
-const PALETA_FILAS_IDS: [&str; 9] = [
-    "paleta_fila_0",
-    "paleta_fila_1",
-    "paleta_fila_2",
-    "paleta_fila_3",
-    "paleta_fila_4",
-    "paleta_fila_5",
-    "paleta_fila_6",
-    "paleta_fila_7",
-    "paleta_fila_8",
-];
-
-/// La paleta de comandos funde en cascada al aparecer por primera vez (input
-/// vacío → `/`) — DEC-062, ahora fila por fila en vez de todas a la vez. Al
-/// seguir escribiendo el nombre del comando la lista se acorta (menos
-/// coincidencias) pero eso no cuenta como una aparición nueva, sólo
-/// "aparece"/"desaparece" en el sentido de ir de `None` a `Some` o viceversa.
-fn actualizar_presentacion_paleta(app: &mut AppState) -> bool {
-    let filas_actuales = app.paleta_comandos().map(|comandos| comandos.len());
-    let visible_ahora = filas_actuales.is_some();
-    if visible_ahora == app.paleta_previa {
-        return false;
-    }
-    if let Some(filas) = filas_actuales {
-        for (indice, id) in PALETA_FILAS_IDS.iter().enumerate().take(filas) {
-            let retraso = RETRASO_PALETA_BASE + RETRASO_PALETA_ESCALON * indice as u32;
-            app.presentacion
-                .aparecer_con_retraso(id, app.calidad, retraso);
-        }
-    }
-    app.paleta_previa = visible_ahora;
-    true
-}
-
 /// Cuánto puede esperar el próximo `poll` antes de que el loop necesite
 /// revisar algo por su cuenta (sin que haya llegado un evento de teclado).
 ///
@@ -413,8 +372,11 @@ fn actualizar_presentacion_paleta(app: &mut AppState) -> bool {
 /// - Con una animación en curso, al ritmo de frame que le corresponde.
 /// - Con feedback transitorio visible, sólo hace falta despertar cuando
 ///   está por expirar.
-/// - En reposo, esperar casi indefinidamente: el teclado despierta el poll
-///   de inmediato, no hace falta sondear nada más.
+/// - Con el prompt visible (`Operando`), despertar justo cuando toca el
+///   próximo toggle del parpadeo del cursor (ver `render::blink_on`) — ni
+///   antes (CPU de más) ni después (parpadeo perceptiblemente atrasado).
+/// - En reposo (login, verificando…), esperar casi indefinidamente: el
+///   teclado despierta el poll de inmediato, no hace falta sondear nada más.
 fn proxima_espera(
     app: &AppState,
     autenticacion: &AutenticacionPendiente,
@@ -434,6 +396,12 @@ fn proxima_espera(
     }
     if let Some(restante) = app.feedback_restante() {
         return restante.max(Duration::from_millis(1));
+    }
+    if matches!(app.fase, Fase::Operando { .. }) {
+        let periodo = estado::PERIODO_BLINK_MS;
+        let transcurrido_ms = app.instante_inicio.elapsed().as_millis() as u64;
+        let resto = periodo - (transcurrido_ms % periodo);
+        return Duration::from_millis(resto.max(1));
     }
     ESPERA_REPOSO
 }
