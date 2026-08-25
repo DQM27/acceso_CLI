@@ -28,6 +28,25 @@ pub const MIN_CONSULTA: usize = 2;
 /// sin scroll y sobran para elegir con ↑↓.
 pub const LIMITE_COINCIDENCIAS: usize = 9;
 
+/// `*` como consulta pide "todos" en vez de un nombre — sin esto no había
+/// forma de listar contratistas/empresas/usuarios completos desde el
+/// buscador sin escribir al menos `MIN_CONSULTA` letras de un nombre real
+/// (reportado en runtime real: "cómo veo todas las empresas"). Mismo
+/// comodín en los tres buscadores, sin necesitar una pantalla nueva:
+/// `/activos` ya listaba todo con la consulta vacía porque no tiene el
+/// umbral de `MIN_CONSULTA` (no hay riesgo de escanear la tabla completa
+/// con cada tecla); acá sí lo hay, así que hace falta un gesto explícito.
+pub fn es_comodin_todos(consulta: &str) -> bool {
+    consulta.trim() == "*"
+}
+
+/// El filtro de texto a mandarle a la consulta: `None` con el comodín
+/// (sin filtrar nada, trae todos) o con la consulta vacía; el texto tal
+/// cual en cualquier otro caso.
+fn texto_de_consulta(consulta: &str) -> Option<String> {
+    (!es_comodin_todos(consulta) && !consulta.is_empty()).then(|| consulta.to_string())
+}
+
 /// Rango de gafetes que se ofrecen en el autocompletado de `G:` — el inventario
 /// físico de la portería no pasa de unas pocas decenas.
 pub const GAFETE_SUGERIDO_MIN: i64 = 1;
@@ -210,9 +229,9 @@ fn sujeto_editar(consulta: &str) -> (SujetoEditar, String) {
 }
 
 fn resolver_busqueda_empresas(core: &AppCore, consulta: &str) -> ContextState {
-    let items = if consulta.chars().count() >= MIN_CONSULTA {
+    let items = if es_comodin_todos(consulta) || consulta.chars().count() >= MIN_CONSULTA {
         let filtro = FiltroEmpresas {
-            texto: Some(consulta.to_string()),
+            texto: texto_de_consulta(consulta),
             limite: LIMITE_COINCIDENCIAS,
             ..FiltroEmpresas::default()
         };
@@ -248,9 +267,9 @@ fn resolver_busqueda_usuarios(
             mensaje: "No tiene permiso para gestionar usuarios".to_string(),
         };
     }
-    let items = if consulta.chars().count() >= MIN_CONSULTA {
+    let items = if es_comodin_todos(consulta) || consulta.chars().count() >= MIN_CONSULTA {
         let filtro = FiltroUsuarios {
-            texto: Some(consulta.to_string()),
+            texto: texto_de_consulta(consulta),
             limite: LIMITE_COINCIDENCIAS,
             ..FiltroUsuarios::default()
         };
@@ -273,9 +292,9 @@ fn resolver_busqueda_usuarios(
 }
 
 fn resolver_busqueda_contratistas(core: &AppCore, consulta: &str) -> ContextState {
-    let items = if consulta.chars().count() >= MIN_CONSULTA {
+    let items = if es_comodin_todos(consulta) || consulta.chars().count() >= MIN_CONSULTA {
         let filtro = FiltroContratistas {
-            texto: Some(consulta.to_string()),
+            texto: texto_de_consulta(consulta),
             limite: LIMITE_COINCIDENCIAS,
             ..FiltroContratistas::default()
         };
@@ -551,5 +570,26 @@ fn reemplazar_ultimo_token(texto: &str, nuevo: &str) -> String {
     match recortado.rfind(char::is_whitespace) {
         Some(posicion) => format!("{} {nuevo}", &recortado[..posicion]),
         None => nuevo.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn comodin_todos_reconoce_asterisco_con_espacios_alrededor() {
+        assert!(es_comodin_todos("*"));
+        assert!(es_comodin_todos("  *  "));
+        assert!(!es_comodin_todos("*ana"));
+        assert!(!es_comodin_todos("ana"));
+        assert!(!es_comodin_todos(""));
+    }
+
+    #[test]
+    fn texto_de_consulta_es_none_para_comodin_y_vacio() {
+        assert_eq!(texto_de_consulta("*"), None);
+        assert_eq!(texto_de_consulta(""), None);
+        assert_eq!(texto_de_consulta("ana"), Some("ana".to_string()));
     }
 }

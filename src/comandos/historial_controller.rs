@@ -73,12 +73,7 @@ fn manejar_resultado(core: &AppCore, app: &mut AppState, key: KeyEvent) {
     match key.code {
         // Esc vuelve a editar la MISMA consulta, sin perder lo ya escrito
         // (DEC-024) — no borra `app.input` ni el filtro ya resuelto.
-        KeyCode::Esc => {
-            if let Some(historial) = &mut app.historial {
-                historial.resultado = None;
-                historial.no_reconocidos.clear();
-            }
-        }
+        KeyCode::Esc => volver_a_edicion(app),
         KeyCode::Up => mover_seleccion(app, -1),
         KeyCode::Down => mover_seleccion(app, 1),
         KeyCode::PageDown => paginar(core, app, 1),
@@ -96,7 +91,32 @@ fn manejar_resultado(core: &AppCore, app: &mut AppState, key: KeyEvent) {
         // clásica, sobre el resultado ya aplicado en pantalla (exporta el
         // filtro completo, no sólo la página visible).
         KeyCode::F(5) => abrir_exportacion(app),
+        // Cualquier tecla de edición de texto (escribir, borrar, mover el
+        // cursor) vuelve a editar la consulta de una vez, con esa tecla ya
+        // aplicada — antes hacía falta un Esc explícito sólo para poder
+        // empezar a escribir el siguiente filtro, un paso que no aportaba
+        // nada (reportado en runtime real).
+        KeyCode::Char(_)
+        | KeyCode::Backspace
+        | KeyCode::Delete
+        | KeyCode::Left
+        | KeyCode::Right
+        | KeyCode::Home
+        | KeyCode::End => {
+            volver_a_edicion(app);
+            app.input.handle_event(&Event::Key(key));
+        }
         _ => {}
+    }
+}
+
+/// Mismo efecto que Esc sobre el resultado (DEC-024: la consulta y el filtro
+/// ya resuelto no se tocan) — factorizado porque ahora también lo dispara
+/// cualquier tecla de edición, no sólo Esc.
+fn volver_a_edicion(app: &mut AppState) {
+    if let Some(historial) = &mut app.historial {
+        historial.resultado = None;
+        historial.no_reconocidos.clear();
     }
 }
 

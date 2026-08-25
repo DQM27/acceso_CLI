@@ -39,8 +39,8 @@ use super::formulario_usuario::{
     CampoUsuario, FormularioUsuario, ModoFormularioUsuario, SubfaseUsuario,
 };
 use super::historial::HistorialState;
-use super::parser::Comando;
-use super::resolver::MIN_CONSULTA;
+use super::parser::{Comando, Entrada};
+use super::resolver::{LIMITE_COINCIDENCIAS, MIN_CONSULTA, es_comodin_todos};
 use super::salida_gafete::SalidaGafeteState;
 
 /// Mínimos razonables: por debajo de esto no cabe ni la tarjeta más simple —
@@ -65,6 +65,19 @@ fn acento() -> Style {
 }
 fn estilo_seleccion() -> Style {
     Style::default().add_modifier(Modifier::REVERSED)
+}
+/// Color del borde del prompt: un solo acento (cian, el mismo de Historial)
+/// para cualquier Surface enclavada, `muted()` en el prompt de comandos
+/// suelto — se probó un color por grupo (lectura/escritura/confirmación) y
+/// no aportó frente a la señal más simple de "enclavado sí/no", que ya da
+/// la mayúscula de la etiqueta; un solo color evita que el operador tenga
+/// que aprender una segunda escala de significado.
+fn color_surface(app: &AppState) -> Style {
+    if app.surface_activa() == SurfaceActiva::Ninguna {
+        muted()
+    } else {
+        acento()
+    }
 }
 
 /// Gramática visual compartida por toda la app (ver
@@ -300,16 +313,10 @@ const ANCHO_NOMBRE_PALETA: usize = 13;
 /// esquinas redondeadas encontrándose a mitad de una línea vertical, que es
 /// lo que se veía "cortado".
 fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState, paleta: Option<&[Comando]>) {
-    // Borde en acento cuando el teclado está enclavado en una Surface
-    // (§5.2) — misma señal visual en los cuatro casos (formulario de alta,
-    // formulario de empresa/usuario, columnas, Historial), para que se note
-    // de un vistazo que Esc hace falta para volver a los comandos, sin
-    // tener que leer la pista de abajo.
-    let enclavado = !matches!(app.surface_activa(), SurfaceActiva::Ninguna);
     let bloque = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(if enclavado { acento() } else { muted() });
+        .border_style(color_surface(app));
     let interior = bloque.inner(area);
     frame.render_widget(bloque, area);
 
@@ -374,12 +381,247 @@ fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState, paleta: Option<&
     );
 }
 
+/// Claves de `/ingreso`/`/salida`/`--modificador` (DEC-021: sólo se
+/// interpretan con un comando de ítem activo, nunca sobre texto libre suelto
+/// — `resaltado_parametros` ya respeta eso mirando el `Entrada` resuelto).
+const CLAVES_PARAMETRO: [&str; 2] = ["g", "m"];
+/// Claves de `/historial` (DEC-031) — mismo vocabulario que `historial.rs`.
+const CLAVES_HISTORIAL: [&str; 8] = [
+    "empresa", "tipo", "estado", "gafete", "ingreso", "salida", "desde", "hasta",
+];
+
+/// Blanco: mismo criterio de "esto ya no es texto libre" en cualquier
+/// input clave:valor de la app (DEC-0XX) — un color propio, distinto del
+/// acento (cian, ya reservado para "foco/Surface") y de `muted()` (texto
+/// secundario), para no competir con esos dos significados ya establecidos.
+fn estilo_clave() -> Style {
+    Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+}
+
+/// Qué reconocer como estructura (blanco+negrita) en el valor del prompt —
+/// dos gramáticas distintas: Historial es siempre `clave:valor`; el prompt
+/// de comandos sin Surface además tiene el propio nombre del comando y, en
+/// `/nuevo`/`/editar`, la palabra-sujeto (`empresa`/`usuario`/`contratista`),
+/// ninguna de las dos con `:` — de ahí que no compartan un solo mecanismo.
+enum EstiloValor {
+    Claves(&'static [&'static str]),
+    Comando,
+}
+
+fn segmentar(texto: &str, estilo: &EstiloValor) -> Vec<(String, bool)> {
+    match estilo {
+        EstiloValor::Claves(claves) => segmentar_claves(texto, claves),
+        EstiloValor::Comando => segmentar_comando(texto),
+    }
+}
+
+/// Mismos alias que `resolver::sujeto_nuevo` (DEC-045) — duplicados a
+/// propósito: ese resolutor decide qué se crea, éste sólo decide qué
+/// palabra pintar en blanco; si la lista de alias cambia allá, hay que
+/// repetir el cambio acá.
+fn sujeto_nuevo_valido(consulta: &str) -> bool {
+    matches!(
+        consulta.trim().to_lowercase().as_str(),
+        "contratista" | "c" | "empresa" | "em" | "emp" | "usuario" | "u"
+    )
+}
+
+/// Mismos alias que `resolver::sujeto_editar` (DEC-052) — sólo el primer
+/// token de la consulta cuenta como sujeto, el resto ya es la búsqueda.
+fn sujeto_editar_es_palabra_clave(consulta: &str) -> bool {
+    let primero = consulta.trim_start().split_whitespace().next().unwrap_or_default();
+    matches!(
+        primero.to_lowercase().as_str(),
+        "empresa" | "em" | "emp" | "usuario" | "u"
+    )
+}
+
+/// Resalta, en el prompt de comandos sin Surface: el nombre del comando ya
+/// reconocido (líder `/algo` o `--modificador` sobre un comando de ítem,
+/// DEC-021) y, si aplica, la palabra-sujeto de `/nuevo`/`/editar` — más
+/// `G:`/`M:` con el mismo mecanismo de `segmentar_claves`. Con texto que no
+/// resolvió a ningún comando (búsqueda libre, comando desconocido, vacío),
+/// nada se resalta: no hay estructura que señalar todavía.
+fn segmentar_comando(texto: &str) -> Vec<(String, bool)> {
+    let Entrada::Comando {
+        comando, consulta, ..
+    } = super::parser::parsear(texto)
+    else {
+        return vec![(texto.to_string(), false)];
+    };
+    // `None` en vez de `false` para Ingreso/Salida/etc.: ahí la primera
+    // palabra tras el líder es la búsqueda (o un `G:`/`M:`), no una posición
+    // de sujeto — sin esta distinción, un `G:27` justo después del líder
+    // caía en la rama de "sujeto" (con `false`) y nunca llegaba a
+    // `clave_de_token`, perdiendo el resaltado de parámetro.
+    let sujeto_tras_lider: Option<bool> = match comando {
+        Comando::Nuevo => Some(sujeto_nuevo_valido(&consulta)),
+        Comando::Editar => Some(sujeto_editar_es_palabra_clave(&consulta)),
+        _ => None,
+    };
+
+    let mut segmentos = Vec::new();
+    let mut resto = texto;
+    let mut lider_visto = false;
+    let mut primero_tras_lider = false;
+    while !resto.is_empty() {
+        let espacios = resto.len() - resto.trim_start().len();
+        if espacios > 0 {
+            segmentos.push((resto[..espacios].to_string(), false));
+            resto = &resto[espacios..];
+            continue;
+        }
+        let fin_palabra = resto.find(char::is_whitespace).unwrap_or(resto.len());
+        let palabra = &resto[..fin_palabra];
+        let es_lider = !lider_visto
+            && (palabra
+                .strip_prefix('/')
+                .is_some_and(|nombre| Comando::desde_texto(nombre) == Some(comando))
+                || palabra
+                    .strip_prefix("--")
+                    .is_some_and(|nombre| Comando::desde_texto(nombre) == Some(comando)));
+        if es_lider {
+            lider_visto = true;
+            primero_tras_lider = sujeto_tras_lider.is_some();
+            segmentos.push((palabra.to_string(), true));
+        } else if primero_tras_lider {
+            primero_tras_lider = false;
+            segmentos.push((palabra.to_string(), sujeto_tras_lider.unwrap_or(false)));
+        } else if let Some(fin_clave) = clave_de_token(palabra, &CLAVES_PARAMETRO) {
+            segmentos.push((palabra[..fin_clave].to_uppercase(), true));
+            if fin_clave < palabra.len() {
+                segmentos.push((palabra[fin_clave..].to_string(), false));
+            }
+        } else {
+            segmentos.push((palabra.to_string(), false));
+        }
+        resto = &resto[fin_palabra..];
+    }
+    segmentos
+}
+
+/// Si `token` (con o sin `-` de negación) es `clave:...` para alguna de
+/// `claves` (sin distinguir mayúsculas), el largo de esa porción inicial
+/// (negación + clave + `:`) — el resto (el valor) no se toca.
+fn clave_de_token(token: &str, claves: &[&str]) -> Option<usize> {
+    let (largo_negacion, cuerpo) = match token.strip_prefix('-') {
+        Some(resto) => (1, resto),
+        None => (0, token),
+    };
+    let (clave, _) = cuerpo.split_once(':')?;
+    if clave.is_empty() {
+        return None;
+    }
+    claves
+        .iter()
+        .any(|c| c.eq_ignore_ascii_case(clave))
+        .then_some(largo_negacion + clave.len() + 1)
+}
+
+/// Divide `texto` en segmentos `(texto, es_clave)` en el mismo orden y con
+/// el mismo largo total que el original (para no correr el cálculo del
+/// cursor, que trabaja en caracteres): cada `clave:` reconocida se separa y
+/// se pasa a mayúscula para mostrarse en blanco; el resto — espacios,
+/// valores, texto libre — queda intacto. No valida el valor (eso lo sigue
+/// haciendo `parser::clasificar_token`/`historial::aplicar_clave`): esto es
+/// sólo la señal visual de "esto ya no es texto libre".
+fn segmentar_claves(texto: &str, claves: &[&str]) -> Vec<(String, bool)> {
+    let mut segmentos = Vec::new();
+    let mut resto = texto;
+    while !resto.is_empty() {
+        let espacios = resto.len() - resto.trim_start().len();
+        if espacios > 0 {
+            segmentos.push((resto[..espacios].to_string(), false));
+            resto = &resto[espacios..];
+            continue;
+        }
+        let fin_palabra = resto.find(char::is_whitespace).unwrap_or(resto.len());
+        let palabra = &resto[..fin_palabra];
+        match clave_de_token(palabra, claves) {
+            Some(fin_clave) => {
+                segmentos.push((palabra[..fin_clave].to_uppercase(), true));
+                if fin_clave < palabra.len() {
+                    segmentos.push((palabra[fin_clave..].to_string(), false));
+                }
+            }
+            None => segmentos.push((palabra.to_string(), false)),
+        }
+        resto = &resto[fin_palabra..];
+    }
+    segmentos
+}
+
+/// Arma los `Span` del valor del prompt a partir de los segmentos de
+/// `segmentar_claves` (o un único segmento sin resaltar si `segmentos` es
+/// `None`), insertando la celda resaltada del cursor en `columna` cuando
+/// corresponde — mismo cursor propio de siempre (nunca el del terminal),
+/// ahora consciente de que puede caer en medio de un segmento coloreado.
+fn spans_valor(
+    visible: &str,
+    segmentos: Option<Vec<(String, bool)>>,
+    columna_cursor: Option<usize>,
+) -> Vec<Span<'static>> {
+    let piezas = segmentos.unwrap_or_else(|| vec![(visible.to_string(), false)]);
+    let estilizar = |texto: String, es_clave: bool| -> Span<'static> {
+        if es_clave {
+            Span::styled(texto, estilo_clave())
+        } else {
+            Span::raw(texto)
+        }
+    };
+    let Some(columna) = columna_cursor else {
+        return piezas
+            .into_iter()
+            .map(|(texto, es_clave)| estilizar(texto, es_clave))
+            .collect();
+    };
+    let mut spans = Vec::new();
+    let mut offset = 0usize;
+    let mut insertado = false;
+    for (texto, es_clave) in piezas {
+        let largo = texto.chars().count();
+        if insertado || columna >= offset + largo {
+            spans.push(estilizar(texto, es_clave));
+            offset += largo;
+            continue;
+        }
+        let local = columna - offset;
+        let indice_byte = texto
+            .char_indices()
+            .nth(local)
+            .map_or(texto.len(), |(i, _)| i);
+        let (antes, resto) = texto.split_at(indice_byte);
+        let mut caracteres = resto.chars();
+        let bajo_cursor = caracteres.next().map(String::from).unwrap_or_default();
+        let despues: String = caracteres.collect();
+        if !antes.is_empty() {
+            spans.push(estilizar(antes.to_string(), es_clave));
+        }
+        spans.push(Span::styled(
+            bajo_cursor,
+            Style::default().add_modifier(Modifier::REVERSED),
+        ));
+        if !despues.is_empty() {
+            spans.push(estilizar(despues, es_clave));
+        }
+        insertado = true;
+        offset += largo;
+    }
+    if !insertado {
+        spans.push(Span::styled(
+            " ".to_string(),
+            Style::default().add_modifier(Modifier::REVERSED),
+        ));
+    }
+    spans
+}
+
 /// Sólo la línea de texto del input (etiqueta + valor + cursor), sin marco —
 /// el marco lo pone `render_prompt`, que reutiliza esto tanto con paleta
 /// como sin ella. Sólo se llama en fase `Operando`: el login tiene su propia
 /// composición sin caja (`render_login`), nunca pasa por acá.
 fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
-    let (etiqueta, valor, cursor_visible, cursor_chars) = if let Some(destino) = app
+    let (etiqueta, valor, cursor_visible, cursor_chars, resaltado) = if let Some(destino) = app
         .historial
         .as_ref()
         .and_then(|h| h.exportacion_destino.as_ref())
@@ -391,14 +633,17 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
             destino.value().to_string(),
             true,
             destino.visual_cursor(),
+            None,
         )
     } else if let Some(historial) = &app.historial {
         // Editando: el input escribe el filtro clave:valor. Mostrando
         // resultado (Enter ya aplicó, DEC-024): el texto queda congelado
-        // hasta Esc, sin cursor — no se edita mientras se navega.
+        // hasta Esc, sin cursor — no se edita mientras se navega. En los dos
+        // casos las claves reconocidas (`empresa:`, `tipo:`…) se resaltan
+        // igual, tecleando o ya aplicadas.
         let editable = historial.resultado.is_none();
         (
-            "historial › ".to_string(),
+            "HISTORIAL › ".to_string(),
             app.input.value().to_string(),
             editable,
             if editable {
@@ -406,18 +651,29 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
             } else {
                 0
             },
+            Some(EstiloValor::Claves(&CLAVES_HISTORIAL)),
         )
-    } else if app.formulario_empresa.is_some() {
+    } else if let Some(empresa) = &app.formulario_empresa {
+        let etiqueta = match empresa.modo {
+            ModoFormularioEmpresa::Nuevo => "NUEVA EMPRESA › ".to_string(),
+            ModoFormularioEmpresa::Editar { .. } => "EDITAR EMPRESA › ".to_string(),
+        };
         (
-            "empresa › ".to_string(),
+            etiqueta,
             app.input.value().to_string(),
             true,
             app.input.visual_cursor(),
+            None,
         )
     } else if let Some(fu) = &app.formulario_usuario {
-        let etiqueta = match fu.subfase {
-            SubfaseUsuario::Resumen => "confirmar › ".to_string(),
-            SubfaseUsuario::Editando => format!("{} › ", fu.campo.etiqueta().to_lowercase()),
+        // La etiqueta identifica la Surface (mismo nombre en Editando y
+        // Resumen) en vez de cambiar por campo — antes mutaba a "cédula › ",
+        // "nombre › "… en cada campo, duplicando (con retraso, lejos del
+        // foco real) la misma señal que ya da el glifo por fila arriba, y
+        // encima le hacía perder de vista en qué formulario estaba.
+        let etiqueta = match fu.modo {
+            ModoFormularioUsuario::Nuevo => "NUEVO USUARIO › ".to_string(),
+            ModoFormularioUsuario::Editar { .. } => "EDITAR USUARIO › ".to_string(),
         };
         let editable = matches!(fu.subfase, SubfaseUsuario::Editando) && fu.campo.es_texto();
         // Password/Confirmar se enmascaran también acá — no sólo en el
@@ -436,29 +692,30 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
             } else {
                 0
             },
+            None,
         )
     } else if app.salida_gafete.is_some() {
         (
-            "gafete › ".to_string(),
+            "GAFETE › ".to_string(),
             app.input.value().to_string(),
             true,
             app.input.visual_cursor(),
+            None,
         )
     } else {
         match &app.formulario {
-            // Con el formulario abierto el input edita el campo activo (o
-            // filtra empresas en el selector): la etiqueta lo anuncia y el
-            // cursor sólo aparece cuando hay algo que teclear.
+            // La etiqueta identifica la Surface (mismo nombre en cualquier
+            // subfase — Editando, EligiendoEmpresa o Resumen) en vez de
+            // cambiar por campo: antes mutaba a "cédula › ", "empresa › ",
+            // "confirmar › "… y esa señal, lejos del campo real (arriba,
+            // marcado por su propio glifo), confundía más de lo que
+            // aclaraba — el operador termina sin saber en qué formulario
+            // está. El color del borde (`color_surface`) distingue edición
+            // de confirmación en su lugar.
             Some(formulario) => {
-                let etiqueta = match formulario.subfase {
-                    Subfase::EligiendoEmpresa { .. } => "empresa › ".to_string(),
-                    Subfase::Resumen => "confirmar › ".to_string(),
-                    Subfase::Editando => match formulario.campo {
-                        Campo::Cedula => "cédula › ".to_string(),
-                        Campo::Nombre => "nombre › ".to_string(),
-                        Campo::FechaPraind => "fecha praind › ".to_string(),
-                        campo => format!("{} › ", campo.etiqueta().to_lowercase()),
-                    },
+                let etiqueta = match formulario.modo {
+                    ModoFormulario::Nuevo => "NUEVO CONTRATISTA › ".to_string(),
+                    ModoFormulario::Editar { .. } => "EDITAR CONTRATISTA › ".to_string(),
                 };
                 let editable = matches!(formulario.subfase, Subfase::EligiendoEmpresa { .. })
                     || formulario.campo.es_texto();
@@ -471,6 +728,7 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
                     } else {
                         0
                     },
+                    None,
                 )
             }
             None => (
@@ -478,6 +736,7 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
                 app.input.value().to_string(),
                 true,
                 app.input.visual_cursor(),
+                Some(EstiloValor::Comando),
             ),
         }
     };
@@ -516,40 +775,20 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
         (true, None) => app.input.visual_scroll(viewport),
     };
     let visible: String = valor.chars().skip(scroll).take(viewport).collect();
+    let segmentos = resaltado.map(|estilo| segmentar(&visible, &estilo));
 
+    // Cursor propio (celda resaltada), nunca el bloque real del terminal —
+    // mismo criterio que ya usa el login (`linea_prompt`) y por la misma
+    // razón: el cursor real de cada emulador de terminal parpadea y se
+    // reposiciona con su propio timing, fuera de nuestro control, y se veía
+    // aparecer/desaparecer de forma inconsistente. A diferencia del login
+    // (que sólo escribe al final), acá el cursor puede estar a mitad del
+    // texto (←/→/Home/End de `tui_input`), así que se resalta el carácter
+    // bajo el cursor en vez de insertar un "_" que correría el resto.
+    let columna_cursor =
+        cursor_visible.then(|| cursor_chars.saturating_sub(scroll).min(viewport));
     let mut spans = vec![Span::styled(etiqueta, estilo_etiqueta)];
-    if cursor_visible {
-        // Cursor propio (celda resaltada), nunca el bloque real del
-        // terminal — mismo criterio que ya usa el login (`linea_prompt`) y
-        // por la misma razón: el cursor real de cada emulador de terminal
-        // parpadea y se reposiciona con su propio timing, fuera de nuestro
-        // control, y se veía aparecer/desaparecer de forma inconsistente.
-        // A diferencia del login (que sólo escribe al final), acá el
-        // cursor puede estar a mitad del texto (←/→/Home/End de
-        // `tui_input`), así que se resalta el carácter bajo el cursor en
-        // vez de insertar un "_" que correría el resto del texto.
-        let columna = cursor_chars.saturating_sub(scroll).min(viewport);
-        let (antes, resto) = visible.split_at(
-            visible
-                .char_indices()
-                .nth(columna)
-                .map_or(visible.len(), |(i, _)| i),
-        );
-        let mut caracteres = resto.chars();
-        let bajo_cursor = caracteres
-            .next()
-            .map(String::from)
-            .unwrap_or_else(|| " ".to_string());
-        let despues: String = caracteres.collect();
-        spans.push(Span::raw(antes.to_string()));
-        spans.push(Span::styled(
-            bajo_cursor,
-            Style::default().add_modifier(Modifier::REVERSED),
-        ));
-        spans.push(Span::raw(despues));
-    } else {
-        spans.push(Span::raw(visible));
-    }
+    spans.extend(spans_valor(&visible, segmentos, columna_cursor));
     frame.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
@@ -1062,6 +1301,19 @@ fn valor_busqueda(
     }
 }
 
+/// Cuando la lista llega justo al tope (`LIMITE_COINCIDENCIAS`), puede haber
+/// más filas que no se cargaron — sin esto la lista se veía completa aunque
+/// no lo fuera (ni un "..." ni ninguna pista), especialmente notorio con el
+/// comodín `*` ("ver todos"), donde truncar en silencio sería engañoso.
+fn lineas_limite_coincidencias(cantidad: usize) -> Option<Line<'static>> {
+    (cantidad == LIMITE_COINCIDENCIAS).then(|| {
+        Line::from(Span::styled(
+            format!("Mostrando los primeros {cantidad} — afine la búsqueda para ver otros"),
+            muted(),
+        ))
+    })
+}
+
 /// Lista simple, sin columnas ni F4: `EmpresaResumen`/`UsuarioResumen`
 /// tienen pocos campos (3 y 4) y esta pantalla es de paso — elegir con ↑↓ y
 /// entrar al formulario de edición — no un reporte que valga la pena poder
@@ -1075,9 +1327,9 @@ fn lineas_coincidencias_empresas(
         Line::from(Span::styled("EDITAR EMPRESA", muted())),
         Line::from(""),
     ];
-    if consulta.chars().count() < MIN_CONSULTA {
+    if !es_comodin_todos(consulta) && consulta.chars().count() < MIN_CONSULTA {
         lineas.push(Line::from(Span::styled(
-            format!("Escriba al menos {MIN_CONSULTA} letras para buscar…"),
+            format!("Escriba al menos {MIN_CONSULTA} letras para buscar, o \"*\" para ver todas"),
             muted(),
         )));
         return lineas;
@@ -1099,6 +1351,10 @@ fn lineas_coincidencias_empresas(
             Line::from(texto)
         });
     }
+    if let Some(linea) = lineas_limite_coincidencias(items.len()) {
+        lineas.push(Line::from(""));
+        lineas.push(linea);
+    }
     lineas
 }
 
@@ -1111,9 +1367,9 @@ fn lineas_coincidencias_usuarios(
         Line::from(Span::styled("EDITAR USUARIO", muted())),
         Line::from(""),
     ];
-    if consulta.chars().count() < MIN_CONSULTA {
+    if !es_comodin_todos(consulta) && consulta.chars().count() < MIN_CONSULTA {
         lineas.push(Line::from(Span::styled(
-            format!("Escriba al menos {MIN_CONSULTA} letras para buscar…"),
+            format!("Escriba al menos {MIN_CONSULTA} letras para buscar, o \"*\" para ver todos"),
             muted(),
         )));
         return lineas;
@@ -1140,6 +1396,10 @@ fn lineas_coincidencias_usuarios(
             Line::from(texto)
         });
     }
+    if let Some(linea) = lineas_limite_coincidencias(items.len()) {
+        lineas.push(Line::from(""));
+        lineas.push(linea);
+    }
     lineas
 }
 
@@ -1150,11 +1410,11 @@ fn lineas_coincidencias(
     ancho: u16,
     columnas: &SelectorColumnas<ColumnaBusqueda>,
 ) -> Vec<Line<'static>> {
-    if consulta.chars().count() < MIN_CONSULTA {
+    if !es_comodin_todos(consulta) && consulta.chars().count() < MIN_CONSULTA {
         return vec![
             Line::from(""),
             Line::from(Span::styled(
-                format!("Escriba al menos {MIN_CONSULTA} letras para buscar…"),
+                format!("Escriba al menos {MIN_CONSULTA} letras para buscar, o \"*\" para ver todos"),
                 muted(),
             )),
         ];
@@ -1193,6 +1453,10 @@ fn lineas_coincidencias(
         } else {
             Line::from(texto)
         });
+    }
+    if let Some(linea) = lineas_limite_coincidencias(items.len()) {
+        lineas.push(Line::from(""));
+        lineas.push(linea);
     }
     lineas
 }
@@ -2520,4 +2784,137 @@ fn recortar(texto: &str, ancho: usize) -> String {
     let mut recortado: String = texto.chars().take(ancho.saturating_sub(1)).collect();
     recortado.push('…');
     recortado
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clave_de_token_reconoce_clave_conocida_sin_distinguir_mayusculas() {
+        assert_eq!(clave_de_token("EMPRESA:bac", &CLAVES_HISTORIAL), Some(8));
+        assert_eq!(clave_de_token("empresa:bac", &CLAVES_HISTORIAL), Some(8));
+    }
+
+    #[test]
+    fn clave_de_token_respeta_la_negacion() {
+        assert_eq!(clave_de_token("-estado:cerrados", &CLAVES_HISTORIAL), Some(8));
+    }
+
+    #[test]
+    fn clave_de_token_ignora_clave_desconocida_o_sin_dos_puntos() {
+        assert_eq!(clave_de_token("xyz:algo", &CLAVES_HISTORIAL), None);
+        assert_eq!(clave_de_token("texto libre", &CLAVES_HISTORIAL), None);
+    }
+
+    #[test]
+    fn segmentar_claves_mayuscula_solo_la_clave_y_conserva_el_valor() {
+        let segmentos = segmentar_claves("empresa:bac", &CLAVES_HISTORIAL);
+        assert_eq!(
+            segmentos,
+            vec![
+                ("EMPRESA:".to_string(), true),
+                ("bac".to_string(), false),
+            ]
+        );
+    }
+
+    #[test]
+    fn segmentar_claves_preserva_espacios_y_texto_libre() {
+        let segmentos = segmentar_claves("Ana g:25 Perez", &CLAVES_PARAMETRO);
+        assert_eq!(
+            segmentos,
+            vec![
+                ("Ana".to_string(), false),
+                (" ".to_string(), false),
+                ("G:".to_string(), true),
+                ("25".to_string(), false),
+                (" ".to_string(), false),
+                ("Perez".to_string(), false),
+            ]
+        );
+    }
+
+    #[test]
+    fn segmentar_claves_mismo_largo_total_que_el_original() {
+        let texto = "-tipo:praind,swat desde:01/08/2026 texto suelto";
+        let segmentos = segmentar_claves(texto, &CLAVES_HISTORIAL);
+        let largo: usize = segmentos.iter().map(|(s, _)| s.chars().count()).sum();
+        assert_eq!(largo, texto.chars().count());
+    }
+
+    #[test]
+    fn segmentar_comando_resalta_lider_y_parametro() {
+        let segmentos = segmentar_comando("/ingreso Carlos G:27");
+        assert_eq!(
+            segmentos,
+            vec![
+                ("/ingreso".to_string(), true),
+                (" ".to_string(), false),
+                ("Carlos".to_string(), false),
+                (" ".to_string(), false),
+                ("G:".to_string(), true),
+                ("27".to_string(), false),
+            ]
+        );
+    }
+
+    #[test]
+    fn segmentar_comando_resalta_el_modificador_no_solo_el_lider() {
+        let segmentos = segmentar_comando("Ana --i G:27");
+        assert_eq!(
+            segmentos,
+            vec![
+                ("Ana".to_string(), false),
+                (" ".to_string(), false),
+                ("--i".to_string(), true),
+                (" ".to_string(), false),
+                ("G:".to_string(), true),
+                ("27".to_string(), false),
+            ]
+        );
+    }
+
+    #[test]
+    fn segmentar_comando_no_resalta_parametro_sobre_texto_libre_sin_modificador() {
+        // DEC-021: sin comando de ítem activo, G: es literal.
+        let segmentos = segmentar_comando("Ana G:27");
+        assert_eq!(segmentos, vec![("Ana G:27".to_string(), false)]);
+    }
+
+    #[test]
+    fn segmentar_comando_resalta_sujeto_valido_de_nuevo_y_editar() {
+        assert_eq!(
+            segmentar_comando("/nuevo empresa"),
+            vec![
+                ("/nuevo".to_string(), true),
+                (" ".to_string(), false),
+                ("empresa".to_string(), true),
+            ]
+        );
+        assert_eq!(
+            segmentar_comando("/editar usuario Ana"),
+            vec![
+                ("/editar".to_string(), true),
+                (" ".to_string(), false),
+                ("usuario".to_string(), true),
+                (" ".to_string(), false),
+                ("Ana".to_string(), false),
+            ]
+        );
+    }
+
+    #[test]
+    fn segmentar_comando_no_resalta_nombre_de_contratista_en_editar() {
+        // Sin sujeto (default Contratista): la primera palabra es la
+        // búsqueda, no una palabra-clave — no debe resaltarse.
+        assert_eq!(
+            segmentar_comando("/editar Carlos"),
+            vec![
+                ("/editar".to_string(), true),
+                (" ".to_string(), false),
+                ("Carlos".to_string(), false),
+            ]
+        );
+    }
 }

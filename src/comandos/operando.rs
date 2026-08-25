@@ -88,14 +88,19 @@ pub(super) fn manejar_operando(core: &AppCore, app: &mut AppState, key: KeyEvent
             }
         }
         KeyCode::Enter => {
-            // Mismo criterio: con la paleta visible, Enter completa el
-            // nombre del comando (como Tab) en vez de intentar confirmar un
-            // input que todavía no es un comando válido (`/c`, `/ay`… no
-            // resuelven por sí solos sin alias). El Enter que de verdad
-            // confirma la acción es el siguiente, ya con el comando
-            // completo en el input — mismo patrón de "un Enter más" que
-            // Coincidencias → Resumen.
-            if completar_desde_paleta(core, app) {
+            // Con la paleta visible y más de un candidato (`/a` → activos/
+            // ayuda), Enter sigue completando el nombre (como Tab) en vez de
+            // confirmar — todavía hay que elegir cuál. Pero con un único
+            // candidato el nombre ya está decidido (por alias, como `/h`, o
+            // porque ya se escribió completo) y exigir un segundo Enter sólo
+            // para "confirmar lo que ya era la única opción" es la fricción
+            // reportada en runtime real. Completar y confirmar en el mismo
+            // paso cuando no hay ambigüedad.
+            if let Some(candidatos) = app.paleta_comandos() {
+                completar_desde_paleta(core, app);
+                if candidatos.len() == 1 {
+                    confirmar(core, app);
+                }
                 return;
             }
             confirmar(core, app);
