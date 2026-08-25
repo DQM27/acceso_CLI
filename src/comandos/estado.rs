@@ -328,6 +328,8 @@ pub struct AppState {
     /// `firma_formulario`/`firma_historial`.
     pub firma_formulario_previa: Option<FirmaFormulario>,
     pub firma_historial_previa: Option<FirmaHistorial>,
+    /// Ídem para el área de contexto (DEC-059) — ver `firma_contexto`.
+    pub firma_contexto_previa: Option<std::mem::Discriminant<ContextState>>,
 }
 
 impl AppState {
@@ -354,6 +356,7 @@ impl AppState {
             firma_login_previa: None,
             firma_formulario_previa: None,
             firma_historial_previa: None,
+            firma_contexto_previa: None,
         }
     }
 
@@ -393,6 +396,18 @@ impl AppState {
             total: historial.resultado.as_ref().map_or(0, |r| r.total),
             exportando: historial.exportacion_destino.is_some(),
         })
+    }
+
+    /// Firma del área de contexto (DEC-059): a diferencia de
+    /// `firma_formulario`/`firma_historial`, no hay un struct dedicado con
+    /// los campos que importan — `ContextState` tiene más de 15 variantes
+    /// y comparar el valor completo dispararía una aparición en cada tecla
+    /// (cambia `items`/`consulta` todo el tiempo). El discriminante de la
+    /// variante alcanza: sólo importa "cambió de tipo de pantalla"
+    /// (Inicio → resultados, resultados → tarjeta de confirmación…), no
+    /// qué trae adentro mientras se sigue en la misma.
+    pub fn firma_contexto(&self) -> std::mem::Discriminant<ContextState> {
+        std::mem::discriminant(&self.contexto)
     }
 
     /// Arranca ya autenticado — para cuando la TUI clásica hizo el login y el
@@ -566,6 +581,27 @@ mod tests {
         app.input = Input::new("/g".to_string());
         app.historial = Some(super::super::historial::HistorialState::nuevo(Vec::new()));
         assert_eq!(app.paleta_comandos(), None);
+    }
+
+    #[test]
+    fn firma_contexto_distingue_variantes_distintas() {
+        let mut app = AppState::con_sesion(sesion());
+        app.contexto = ContextState::Inicio { total_dentro: 0 };
+        let inicio = app.firma_contexto();
+        app.contexto = ContextState::Ayuda;
+        let ayuda = app.firma_contexto();
+        assert_ne!(inicio, ayuda);
+    }
+
+    #[test]
+    fn firma_contexto_ignora_los_datos_dentro_de_la_misma_variante() {
+        let mut app = AppState::con_sesion(sesion());
+        app.contexto = ContextState::Inicio { total_dentro: 0 };
+        let antes = app.firma_contexto();
+        // Mismo tipo de pantalla (Inicio), sólo cambia el conteo — no debe
+        // verse como una pantalla distinta (evita fundir en cada tecla).
+        app.contexto = ContextState::Inicio { total_dentro: 5 };
+        assert_eq!(antes, app.firma_contexto());
     }
 
     #[test]

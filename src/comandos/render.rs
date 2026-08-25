@@ -152,11 +152,14 @@ pub fn render(frame: &mut Frame, app: &AppState) {
     } else if let Some(sg) = &app.salida_gafete {
         lineas_salida_gafete(sg)
     } else {
-        lineas_contexto(
-            &app.contexto,
-            area_contexto.width,
-            &app.columnas_busqueda,
-            &app.columnas_activos,
+        atenuar(
+            lineas_contexto(
+                &app.contexto,
+                area_contexto.width,
+                &app.columnas_busqueda,
+                &app.columnas_activos,
+            ),
+            app.presentacion.opacidad("area_contexto"),
         )
     };
     frame.render_widget(Paragraph::new(lineas), area_contexto);
@@ -548,6 +551,58 @@ fn estilo_fundido(color: (u8, u8, u8), opacidad: f32, modificador: Modifier) -> 
     Style::default()
         .fg(interpolar_color(FADE_FONDO, color, opacidad))
         .add_modifier(modificador)
+}
+
+/// Contraparte de `estilo_fundido` para el color con nombre (`Color::Cyan`,
+/// no `Color::Rgb`) que ya usan `acento()`/`muted()`/etc. — sólo hace falta
+/// para re-interpolar líneas ya construidas (`atenuar`), donde no hay forma
+/// de saber con qué constante `FADE_*` se armaron originalmente salvo
+/// leyendo qué `Color` terminaron usando.
+fn color_a_rgb(color: Option<Color>) -> (u8, u8, u8) {
+    match color {
+        Some(Color::Cyan) => FADE_ACENTO,
+        Some(Color::DarkGray) => FADE_MUTED,
+        Some(Color::Red) => FADE_ERROR,
+        Some(Color::Green) => FADE_EXITO,
+        Some(Color::Yellow) => FADE_ADVERTENCIA,
+        _ => FADE_TEXTO,
+    }
+}
+
+/// Re-interpola el color de cada `Span` ya construido hacia `FADE_FONDO`
+/// según `opacidad`, sin tocar el modificador (BOLD/REVERSED se
+/// conservan tal cual). Alternativa a enhebrar un parámetro de opacidad
+/// por cada función de `lineas_contexto` (como sí hacen login/formulario/
+/// historial, DEC-040): el área de contexto tiene más de 15 variantes de
+/// pantalla, y reescribir cada `Span::styled` en cada una para una sola
+/// aparición no se justificaba — re-interpolar el color que la línea ya
+/// trae logra el mismo resultado visual desde un solo punto (DEC-059).
+/// Con `opacidad >= 1.0` no toca nada, así que el color en reposo sigue
+/// siendo exactamente el original — nunca una aproximación de
+/// `color_a_rgb` (que sólo entra en juego mientras la aparición está en
+/// curso, un par de cientos de ms, no en reposo).
+fn atenuar(lineas: Vec<Line<'static>>, opacidad: f32) -> Vec<Line<'static>> {
+    if opacidad >= 1.0 {
+        return lineas;
+    }
+    lineas
+        .into_iter()
+        .map(|linea| {
+            let spans: Vec<Span<'static>> = linea
+                .spans
+                .into_iter()
+                .map(|span| {
+                    let rgb = color_a_rgb(span.style.fg);
+                    let estilo = Style {
+                        fg: Some(interpolar_color(FADE_FONDO, rgb, opacidad)),
+                        ..span.style
+                    };
+                    Span::styled(span.content, estilo)
+                })
+                .collect();
+            Line::from(spans)
+        })
+        .collect()
 }
 
 fn render_login(frame: &mut Frame, area: Rect, app: &AppState) {

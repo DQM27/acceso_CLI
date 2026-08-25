@@ -194,7 +194,8 @@ fn actualizar_presentacion(app: &mut AppState) -> bool {
     let login = actualizar_presentacion_login(app);
     let formulario = actualizar_presentacion_formulario(app);
     let historial = actualizar_presentacion_historial(app);
-    login || formulario || historial
+    let contexto = actualizar_presentacion_contexto(app);
+    login || formulario || historial || contexto
 }
 
 fn actualizar_presentacion_login(app: &mut AppState) -> bool {
@@ -277,6 +278,27 @@ fn actualizar_presentacion_historial(app: &mut AppState) -> bool {
         }
     }
     app.firma_historial_previa = firma_actual;
+    true
+}
+
+/// Mismo mecanismo sobre `firma_contexto` (DEC-059) — el área de contexto
+/// funde al cambiar de "tipo de pantalla" (Inicio → resultados, resultados
+/// → tarjeta de confirmación…). Con una Surface abierta el área de
+/// contexto ni se dibuja (`render.rs` renderiza la Surface en su lugar),
+/// así que no hace falta pedir una aparición que nadie vería — cuando la
+/// Surface cierre y el contexto vuelva a mostrarse, la firma habrá
+/// cambiado igual (el reset que hace cada `cerrar_*` ya lo garantiza) y
+/// se detectará en el frame siguiente sin ayuda especial acá.
+fn actualizar_presentacion_contexto(app: &mut AppState) -> bool {
+    if app.surface_activa() != SurfaceActiva::Ninguna {
+        return false;
+    }
+    let firma_actual = app.firma_contexto();
+    if app.firma_contexto_previa == Some(firma_actual) {
+        return false;
+    }
+    app.presentacion.aparecer("area_contexto", app.calidad);
+    app.firma_contexto_previa = Some(firma_actual);
     true
 }
 

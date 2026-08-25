@@ -774,6 +774,26 @@ DEC-058  La paleta de comandos (la lista que aparece bajo el input al
          acción es el siguiente, ya con el comando completo: mismo
          patrón de "un paso más" que Coincidencias → Resumen, no una
          excepción nueva.
+DEC-059  El área de contexto (`ContextState`, lo que se ve arriba del
+         prompt) funde al cambiar de "tipo de pantalla" — mismo mecanismo
+         de Fase 5 (Firma comparada tick-a-tick) que ya usaban login,
+         formulario e Historial, aplicado acá por fin. Dos decisiones que
+         lo distinguen de esos tres:
+         (1) La firma es sólo `std::mem::discriminant(&contexto)`, sin un
+         struct `FirmaContexto` dedicado — `ContextState` tiene más de 15
+         variantes y compararlo completo dispararía una aparición en cada
+         tecla (`items`/`consulta` cambian todo el tiempo); el
+         discriminante ignora eso y sólo reacciona al cambio real de
+         pantalla (Inicio → resultados, resultados → tarjeta…).
+         (2) En vez de enhebrar un parámetro de opacidad por cada función
+         de `lineas_contexto` (15+ funciones, reescribir cada
+         `Span::styled`), `render.rs::atenuar()` re-interpola el color que
+         cada línea ya trae hacia `FADE_FONDO` — un solo punto de cambio.
+         `color_a_rgb` traduce el `Color` con nombre (`Cyan`, `DarkGray`…)
+         de vuelta a su constante `FADE_*`; con `opacidad >= 1.0` no toca
+         nada, así que en reposo el color sigue siendo exactamente el
+         original — la aproximación de `color_a_rgb` sólo se nota (si acaso)
+         durante los ~200-400ms de la propia aparición, nunca en reposo.
 
 ## 14.1 Escena de login (implementada)
 
