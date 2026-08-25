@@ -195,7 +195,8 @@ fn actualizar_presentacion(app: &mut AppState) -> bool {
     let formulario = actualizar_presentacion_formulario(app);
     let historial = actualizar_presentacion_historial(app);
     let contexto = actualizar_presentacion_contexto(app);
-    login || formulario || historial || contexto
+    let prompt_glifo = actualizar_presentacion_prompt_glifo(app);
+    login || formulario || historial || contexto || prompt_glifo
 }
 
 fn actualizar_presentacion_login(app: &mut AppState) -> bool {
@@ -299,6 +300,25 @@ fn actualizar_presentacion_contexto(app: &mut AppState) -> bool {
     }
     app.presentacion.aparecer("area_contexto", app.calidad);
     app.firma_contexto_previa = Some(firma_actual);
+    true
+}
+
+/// El `> ` de la línea de comandos (sin ninguna Surface abierta) muta al
+/// símbolo de feedback vigente (✓/!/×) mientras dure, y funde al aparecer —
+/// DEC-060. Sólo aplica en `Operando`: el login tiene su propio glifo de
+/// feedback, ya cubierto por `actualizar_presentacion_login`.
+fn actualizar_presentacion_prompt_glifo(app: &mut AppState) -> bool {
+    if !matches!(app.fase, Fase::Operando { .. }) {
+        return false;
+    }
+    let visible_ahora = app.feedback_vigente().is_some();
+    if visible_ahora == app.prompt_glifo_previo {
+        return false;
+    }
+    if visible_ahora {
+        app.presentacion.aparecer("prompt_glifo", app.calidad);
+    }
+    app.prompt_glifo_previo = visible_ahora;
     true
 }
 

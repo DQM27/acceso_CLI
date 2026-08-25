@@ -86,6 +86,14 @@ fn glifo_feedback(nivel: NivelFeedback) -> (&'static str, Style) {
     }
 }
 
+/// Mismo símbolo que `glifo_feedback`, en RGB para fundir (`estilo_fundido`
+/// necesita interpolar componentes) — reutiliza esa función en vez de
+/// repetir el `match` de símbolos por nivel.
+fn glifo_feedback_color(nivel: NivelFeedback) -> (&'static str, (u8, u8, u8)) {
+    let (simbolo, estilo) = glifo_feedback(nivel);
+    (simbolo, color_a_rgb(estilo.fg))
+}
+
 pub fn render(frame: &mut Frame, app: &AppState) {
     let area = frame.area();
     if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
@@ -455,6 +463,24 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
         }
     };
 
+    // El `> ` de la línea de comandos (ninguna Surface abierta) muta al
+    // símbolo del feedback vigente mientras dure — DEC-060. Mismo largo
+    // (2 caracteres) que "> ", así que no afecta el cálculo de ancho de
+    // abajo. Sólo en ese caso puntual: los demás prompts (`gafete › `,
+    // `historial › `…) ya llevan su propia etiqueta descriptiva, sin un
+    // símbolo suelto que reemplazar.
+    let opacidad_glifo = app.presentacion.opacidad("prompt_glifo");
+    let (etiqueta, estilo_etiqueta) = match (etiqueta.as_str(), app.feedback_vigente()) {
+        ("> ", Some(feedback)) => {
+            let (simbolo, color) = glifo_feedback_color(feedback.nivel);
+            (
+                format!("{simbolo} "),
+                estilo_fundido(color, opacidad_glifo, Modifier::empty()),
+            )
+        }
+        _ => (etiqueta, acento()),
+    };
+
     let ancho_etiqueta = etiqueta.chars().count() as u16;
     let viewport = area.width.saturating_sub(ancho_etiqueta + 1) as usize;
     // El scroll se calcula sobre el `Input` que de verdad gobierna el
@@ -472,7 +498,7 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
     };
     let visible: String = valor.chars().skip(scroll).take(viewport).collect();
 
-    let mut spans = vec![Span::styled(etiqueta, acento())];
+    let mut spans = vec![Span::styled(etiqueta, estilo_etiqueta)];
     if cursor_visible {
         // Cursor propio (celda resaltada), nunca el bloque real del
         // terminal — mismo criterio que ya usa el login (`linea_prompt`) y

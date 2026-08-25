@@ -794,6 +794,23 @@ DEC-059  El área de contexto (`ContextState`, lo que se ve arriba del
          nada, así que en reposo el color sigue siendo exactamente el
          original — la aproximación de `color_a_rgb` sólo se nota (si acaso)
          durante los ~200-400ms de la propia aparición, nunca en reposo.
+DEC-060  El `> ` de la línea de comandos (sin ninguna Surface abierta)
+         muta al símbolo del feedback vigente (✓/!/×, mismo vocabulario de
+         siempre) mientras dure — no sólo el color, el símbolo mismo — y
+         funde al aparecer (asimétrico: al expirar vuelve a `> ` sin
+         fundido, igual criterio que el resto de esta fase). Patrón
+         explícitamente pedido tras revisar precedente ("success
+         checkmark replaces label, then reverts" — Pencil & Paper,
+         pencilandpaper.io/articles/success-ux): confirmación inline en
+         el mismo lugar donde ya está la atención del operador, sin
+         toast ni modal aparte. Deliberadamente NO se aplica a ↑↓ sobre
+         listas (Coincidencias, `/activos`…): es una interacción repetida
+         como el propio tecleo, no una transición de estado — mismo
+         espíritu de DEC-004 ("nunca animes el input"). Tampoco se
+         extiende a las demás etiquetas del prompt (`gafete › `,
+         `historial › `…): ésas ya llevan texto descriptivo propio, no
+         hay un símbolo suelto de una posición que reemplazar sin perder
+         esa etiqueta.
 
 ## 14.1 Escena de login (implementada)
 

@@ -330,6 +330,12 @@ pub struct AppState {
     pub firma_historial_previa: Option<FirmaHistorial>,
     /// Ídem para el área de contexto (DEC-059) — ver `firma_contexto`.
     pub firma_contexto_previa: Option<std::mem::Discriminant<ContextState>>,
+    /// Si el glifo del prompt (el `> ` del inicio de línea, sólo con la
+    /// línea de comandos vacía de Surface) mostraba el símbolo de feedback
+    /// en el frame anterior — DEC-060. `true`→`false` (dejó de mostrarse)
+    /// no funde, sólo `false`→`true` (acaba de aparecer), mismo criterio
+    /// asimétrico que el resto de apariciones de esta fase.
+    pub prompt_glifo_previo: bool,
 }
 
 impl AppState {
@@ -357,6 +363,7 @@ impl AppState {
             firma_formulario_previa: None,
             firma_historial_previa: None,
             firma_contexto_previa: None,
+            prompt_glifo_previo: false,
         }
     }
 
