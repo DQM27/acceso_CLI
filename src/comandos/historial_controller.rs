@@ -18,14 +18,19 @@ use super::historial::HistorialState;
 use super::{AppState, NivelFeedback};
 
 /// Abre la Surface con el catálogo de empresas (para resolver `empresa:`) y
-/// el rango de fechas por defecto (mes actual). Todavía sin resultado: hace
-/// falta un Enter para aplicar la primera consulta (DEC-024).
+/// el rango de fechas por defecto (mes actual) — y aplica esa consulta de
+/// una vez, sin filtro todavía (DEC-063): antes hacía falta un Enter más
+/// sobre la pantalla vacía sólo para ver "todo" antes de poder filtrar.
+/// Si el operador necesita un filtro puntual, Esc vuelve a editar la
+/// consulta (DEC-024) — el mecanismo ya existía, sólo faltaba no obligar a
+/// pasar por él para ver el resultado sin filtrar.
 pub(super) fn abrir_historial(core: &AppCore, app: &mut AppState) {
     let empresas = core.listar_empresas().unwrap_or_default();
     app.historial = Some(HistorialState::nuevo(empresas));
     app.input.reset();
     app.feedback = None;
     app.sugerencias.clear();
+    aplicar_consulta(core, app);
 }
 
 fn cerrar_historial(core: &AppCore, app: &mut AppState) {

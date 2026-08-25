@@ -840,6 +840,17 @@ DEC-062  Dos arreglos a la paleta de comandos, reportados en runtime real:
          cada tecla mientras se acorta la lista — mismo criterio de
          "aparición real vs. interacción repetida" que el área de
          contexto (DEC-059), reutilizando `atenuar()` tal cual.
+DEC-063  `/historial` + Enter aplica la consulta de una vez al abrir la
+         Surface (rango de fechas por defecto, sin filtro) — antes hacía
+         falta un Enter más sobre la pantalla vacía sólo para ver "todo"
+         antes de poder filtrar nada, reportado en runtime real como
+         "muchas teclas para algo simple". `abrir_historial` ahora llama a
+         `aplicar_consulta` (con `app.input` recién reseteado, o sea
+         filtro en blanco) en el mismo paso que abre la Surface. No hizo
+         falta un mecanismo nuevo: Esc para volver a editar la consulta ya
+         existía (DEC-024, "vuelve a editar la MISMA consulta sin perder
+         lo escrito") — sólo dejó de ser obligatorio pasar por ahí para
+         ver el resultado sin filtrar.
 
 ## 14.1 Escena de login (implementada)
 
