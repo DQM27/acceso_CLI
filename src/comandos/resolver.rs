@@ -268,7 +268,6 @@ pub fn pagina_empresas(core: &AppCore, consulta: &str, offset: usize) -> Context
             // antes de guardar `items`.
             limite: LIMITE_COINCIDENCIAS + 1,
             offset,
-            ..FiltroEmpresas::default()
         };
         match core.buscar_empresas(&filtro) {
             Ok(mut items) => {
@@ -324,7 +323,6 @@ pub fn pagina_usuarios(
             // Mismo truco de "un elemento de más" que `pagina_empresas`.
             limite: LIMITE_COINCIDENCIAS + 1,
             offset,
-            ..FiltroUsuarios::default()
         };
         match core.buscar_usuarios(sesion, &filtro) {
             Ok(mut items) => {

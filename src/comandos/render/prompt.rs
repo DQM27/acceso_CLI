@@ -162,7 +162,7 @@ fn sujeto_nuevo_valido(consulta: &str) -> bool {
 /// Mismos alias que `resolver::sujeto_editar` (DEC-052) — sólo el primer
 /// token de la consulta cuenta como sujeto, el resto ya es la búsqueda.
 fn sujeto_editar_es_palabra_clave(consulta: &str) -> bool {
-    let primero = consulta.trim_start().split_whitespace().next().unwrap_or_default();
+    let primero = consulta.split_whitespace().next().unwrap_or_default();
     matches!(
         primero.to_lowercase().as_str(),
         "empresa" | "em" | "emp" | "usuario" | "u"
