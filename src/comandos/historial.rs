@@ -47,14 +47,21 @@ pub struct HistorialState {
 }
 
 impl HistorialState {
-    /// Mismo rango por defecto que la TUI clásica: desde el día 1 del mes
-    /// actual hasta hoy.
+    /// Sin recorte por fecha al abrir — trae todo el historial (el paginado
+    /// ya evita cargarlo entero de una vez, así que limitar de entrada al
+    /// mes actual sólo escondía movimientos viejos sin necesidad; el
+    /// operador filtra por fecha cuando de verdad la necesita, con
+    /// `desde:`/`hasta:`). `desde` un margen amplio hacia atrás en vez de
+    /// un límite real: `FiltroHistorial` no tiene forma de expresar "sin
+    /// piso", así que se usa una fecha lo bastante vieja como para no
+    /// recortar ningún registro real de esta app.
     pub fn nuevo(empresas: Vec<Empresa>) -> Self {
         let hoy = ahora_costa_rica().date_naive();
-        let inicio_mes = NaiveDate::from_ymd_opt(hoy.year(), hoy.month(), 1).unwrap_or(hoy);
+        let hace_diez_anios =
+            NaiveDate::from_ymd_opt(hoy.year() - 10, hoy.month(), hoy.day()).unwrap_or(hoy);
         let manana = hoy.succ_opt().unwrap_or(hoy);
         let ahora_utc = ahora_costa_rica().to_utc();
-        let desde = inicio_dia_costa_rica_utc(inicio_mes).unwrap_or(ahora_utc);
+        let desde = inicio_dia_costa_rica_utc(hace_diez_anios).unwrap_or(ahora_utc);
         let hasta = inicio_dia_costa_rica_utc(manana).unwrap_or(ahora_utc);
         Self {
             filtro: FiltroHistorial::nuevo(desde, hasta),
@@ -249,10 +256,14 @@ mod tests {
     }
 
     #[test]
-    fn rango_por_defecto_es_desde_a_hoy() {
+    fn rango_por_defecto_trae_todo_sin_recortar_al_mes_actual() {
         let estado = HistorialState::nuevo(empresas());
         assert!(estado.filtro.desde <= estado.filtro.hasta);
         assert_eq!(estado.filtro.estado, EstadoMovimiento::Todos);
+        // Cualquier movimiento de esta app (creada en 2026) tiene que caer
+        // dentro del rango por defecto — no debe quedar acotado al mes
+        // actual como antes.
+        assert!(estado.filtro.desde.year() <= 2026 - 5);
     }
 
     #[test]
