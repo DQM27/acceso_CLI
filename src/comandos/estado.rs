@@ -336,6 +336,12 @@ pub struct AppState {
     /// no funde, sólo `false`→`true` (acaba de aparecer), mismo criterio
     /// asimétrico que el resto de apariciones de esta fase.
     pub prompt_glifo_previo: bool,
+    /// Si la paleta de comandos (`paleta_comandos`) estaba visible en el
+    /// frame anterior — DEC-062. Funde sólo al aparecer la primera vez
+    /// (input vacío → `/`), no en cada tecla mientras se sigue escribiendo
+    /// el nombre y la lista se acorta — mismo criterio que el área de
+    /// contexto (DEC-059): interacción repetida, no transición de estado.
+    pub paleta_previa: bool,
 }
 
 impl AppState {
@@ -364,6 +370,7 @@ impl AppState {
             firma_historial_previa: None,
             firma_contexto_previa: None,
             prompt_glifo_previo: false,
+            paleta_previa: false,
         }
     }
 

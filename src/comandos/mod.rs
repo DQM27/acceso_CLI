@@ -196,7 +196,8 @@ fn actualizar_presentacion(app: &mut AppState) -> bool {
     let historial = actualizar_presentacion_historial(app);
     let contexto = actualizar_presentacion_contexto(app);
     let prompt_glifo = actualizar_presentacion_prompt_glifo(app);
-    login || formulario || historial || contexto || prompt_glifo
+    let paleta = actualizar_presentacion_paleta(app);
+    login || formulario || historial || contexto || prompt_glifo || paleta
 }
 
 fn actualizar_presentacion_login(app: &mut AppState) -> bool {
@@ -319,6 +320,23 @@ fn actualizar_presentacion_prompt_glifo(app: &mut AppState) -> bool {
         app.presentacion.aparecer("prompt_glifo", app.calidad);
     }
     app.prompt_glifo_previo = visible_ahora;
+    true
+}
+
+/// La paleta de comandos funde al aparecer por primera vez (input vacío →
+/// `/`) — DEC-062. Al seguir escribiendo el nombre del comando la lista se
+/// acorta (menos coincidencias) pero eso no cuenta como una aparición
+/// nueva, sólo "aparece"/"desaparece" en el sentido de ir de `None` a
+/// `Some` o viceversa.
+fn actualizar_presentacion_paleta(app: &mut AppState) -> bool {
+    let visible_ahora = app.paleta_comandos().is_some();
+    if visible_ahora == app.paleta_previa {
+        return false;
+    }
+    if visible_ahora {
+        app.presentacion.aparecer("paleta", app.calidad);
+    }
+    app.paleta_previa = visible_ahora;
     true
 }
 

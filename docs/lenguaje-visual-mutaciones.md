@@ -824,6 +824,22 @@ DEC-061  `/ayuda` se reorganiza en 5 secciones (FRECUENTES, GESTIÓN,
          `seccion_ayuda()` arma encabezado (negrita) + filas (sintaxis en
          acento, descripción en muted) con el mismo ancho de columna en
          todas las secciones, para que quede alineado de punta a punta.
+DEC-062  Dos arreglos a la paleta de comandos, reportados en runtime real:
+         (1) el ancho fijo de la columna de nombre (`{:<8}`) no alcanzaba
+         para "historial" (9) ni "cerrarsesion" (12) — el nombre quedaba
+         pegado a la descripción sin espacio entre medio ("líneas que no
+         están completas"). `ANCHO_NOMBRE_PALETA` (13) cubre el comando más
+         largo. (2) La fila resaltada armaba un solo `Span` con
+         `estilo_seleccion()`, perdiendo la distinción de color entre
+         nombre y descripción justo en la fila marcada — la que más
+         importa distinguir. Ponerle color propio a cada mitad daría dos
+         fondos distintos dentro de la misma barra (`REVERSED` intercambia
+         fg/bg por `Span`, no por línea); en cambio, negrita en el nombre
+         mantiene una sola barra sólida y sigue marcando la jerarquía.
+         De paso, la paleta funde al aparecer (input vacío → `/`), no en
+         cada tecla mientras se acorta la lista — mismo criterio de
+         "aparición real vs. interacción repetida" que el área de
+         contexto (DEC-059), reutilizando `atenuar()` tal cual.
 
 ## 14.1 Escena de login (implementada)
 

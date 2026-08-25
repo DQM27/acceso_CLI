@@ -283,6 +283,13 @@ fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
     }
 }
 
+/// Ancho de la columna de nombre en la paleta de comandos — cubre el más
+/// largo (`cerrarsesion`, 12 caracteres) más un espacio de separación. Con
+/// el ancho fijo anterior (8) los nombres largos ("historial",
+/// "cerrarsesion") quedaban pegados a la descripción sin espacio entre
+/// medio — reportado en runtime real ("líneas que no están completas").
+const ANCHO_NOMBRE_PALETA: usize = 13;
+
 /// El prompt nunca desaparece: vive dentro de un recuadro de línea fina
 /// (bordes redondeados) y cambia de etiqueta según la fase (cédula, contraseña
 /// enmascarada, o el `>` de comandos), siempre con el cursor visible.
@@ -332,29 +339,39 @@ fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState, paleta: Option<&
     // movida con ↑↓ — ver `operando.rs`). Se acota por si la lista se achicó
     // al seguir escribiendo y el índice quedó desactualizado.
     let seleccionada = app.seleccion_paleta.min(comandos.len().saturating_sub(1));
-    let lineas: Vec<Line> = comandos
+    let opacidad_paleta = app.presentacion.opacidad("paleta");
+    let lineas: Vec<Line<'static>> = comandos
         .iter()
         .enumerate()
         .map(|(indice, comando)| {
             let marcador = if indice == seleccionada { "› " } else { "  " };
+            let nombre = format!("{marcador}/{:<ANCHO_NOMBRE_PALETA$}", comando.nombre());
+            let descripcion = descripcion_comando(*comando).to_string();
             if indice == seleccionada {
-                Line::from(Span::styled(
-                    format!(
-                        "{marcador}/{:<8}{}",
-                        comando.nombre(),
-                        descripcion_comando(*comando)
-                    ),
-                    estilo_seleccion(),
-                ))
+                // Antes era un solo `Span` con `estilo_seleccion()` y
+                // perdía toda jerarquía justo en la fila que el operador
+                // tiene marcada — la que más importa distinguir. Ponerle
+                // color propio a cada mitad (en vez de negrita) daría dos
+                // fondos distintos dentro de la misma barra resaltada (el
+                // reversed intercambia fg/bg de cada `Span` por separado);
+                // negrita en el nombre mantiene una sola barra de color
+                // sólida y sigue marcando la diferencia.
+                Line::from(vec![
+                    Span::styled(nombre, estilo_seleccion().add_modifier(Modifier::BOLD)),
+                    Span::styled(descripcion, estilo_seleccion()),
+                ])
             } else {
                 Line::from(vec![
-                    Span::styled(format!("{marcador}/{:<8}", comando.nombre()), acento()),
-                    Span::styled(descripcion_comando(*comando), muted()),
+                    Span::styled(nombre, acento()),
+                    Span::styled(descripcion, muted()),
                 ])
             }
         })
         .collect();
-    frame.render_widget(Paragraph::new(lineas), fila_comandos);
+    frame.render_widget(
+        Paragraph::new(atenuar(lineas, opacidad_paleta)),
+        fila_comandos,
+    );
 }
 
 /// Sólo la línea de texto del input (etiqueta + valor + cursor), sin marco —
