@@ -2,6 +2,9 @@ use chrono::NaiveDate;
 use control_acceso::database::queries::contratistas::{
     ContratistasQuery, FiltroContratistas, SqliteContratistasQuery,
 };
+use control_acceso::database::queries::empresas::{
+    EmpresasQuery, FiltroEmpresas, SqliteEmpresasQuery,
+};
 use control_acceso::database::queries::ingresos::{
     FiltroHistorial, FiltroIngresosActivos, IngresosQuery, SqliteIngresosQuery,
 };
@@ -51,7 +54,11 @@ fn contratistas_busca_subcadenas_sin_distinguir_tildes_o_mayusculas() {
     let connection = base();
     let query = SqliteContratistasQuery::new(&connection);
 
-    for texto in ["pena", "PEÑA", "aria", "alvarez", "ÁLVA"] {
+    // Sólo cédula/nombre propios del contratista (`pena`/`PEÑA` matchean
+    // "Peña", `aria` matchea "María") — el nombre de la empresa quedó fuera
+    // del buscador principal a propósito (DEC-055, ver `construir_where` en
+    // `database/queries/contratistas.rs`), así que no se prueba acá.
+    for texto in ["pena", "PEÑA", "aria"] {
         assert_eq!(
             query
                 .buscar(&filtro_contratista(texto))
@@ -194,14 +201,16 @@ fn triggers_mantienen_indices_en_insert_update_delete() {
             .items
             .is_empty()
     );
-    assert_eq!(
-        contratistas
-            .buscar(&filtro_contratista("compania"))
-            .unwrap()
-            .items
-            .len(),
-        1
-    );
+    // El nombre de empresa se busca con `SqliteEmpresasQuery` (su propio
+    // índice, `empresas_fts`) — el buscador de contratistas no lo indexa
+    // (DEC-055), así que la verificación real del trigger de UPDATE sobre
+    // `empresas` va por acá, no por `contratistas.buscar(...)`.
+    let empresas = SqliteEmpresasQuery::new(&connection);
+    let filtro_empresa = FiltroEmpresas {
+        texto: Some("compania".to_owned()),
+        ..Default::default()
+    };
+    assert_eq!(empresas.buscar(&filtro_empresa).unwrap().len(), 1);
     assert!(
         contratistas
             .buscar(&filtro_contratista("alvarez"))
@@ -258,9 +267,13 @@ fn migracion_desde_v2_reconstruye_indices_con_datos_existentes() {
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .unwrap();
     assert_eq!(version, SCHEMA_VERSION);
+    // "maria" prueba que `contratistas_fts` se reconstruyó con el dato que
+    // ya existía antes de migrar (`INSERT ... VALUES ('rebuild')` de
+    // MIGRACION_3) — el nombre de la empresa no sirve para esto: el
+    // buscador principal no indexa `empresas.nombre` (DEC-055).
     assert_eq!(
         SqliteContratistasQuery::new(&connection)
-            .buscar(&filtro_contratista("alvarez"))
+            .buscar(&filtro_contratista("maria"))
             .unwrap()
             .items
             .len(),

@@ -194,7 +194,13 @@ fn busca_parcialmente_por_nombre() {
 }
 
 #[test]
-fn busca_por_nombre_de_empresa() {
+fn no_busca_por_nombre_de_empresa() {
+    // El buscador principal de contratistas dejó de matchear por nombre de
+    // empresa a propósito (DEC-055, `construir_where` en
+    // `database/queries/contratistas.rs`): encontrar un contratista
+    // tecleando el nombre de su empresa era una coincidencia accidental, no
+    // un criterio de búsqueda esperado. `empresa:` sigue intacto en
+    // `/historial`, filtro aparte.
     let connection = preparar_base();
     let empresa = crear_empresa(&connection, "Servicios Electromecánicos");
     crear_contratista(
@@ -207,10 +213,7 @@ fn busca_por_nombre_de_empresa() {
         false,
         true,
     );
-    assert_eq!(
-        buscar(&connection, Some("Electromecánicos"))[0].empresa_nombre,
-        "Servicios Electromecánicos"
-    );
+    assert!(buscar(&connection, Some("Electromecánicos")).is_empty());
 }
 
 #[test]
@@ -228,7 +231,10 @@ fn busqueda_ascii_es_case_insensitive() {
         true,
     );
     assert_eq!(buscar(&connection, Some("carlos rojas")).len(), 1);
-    assert_eq!(buscar(&connection, Some("constructora alfa")).len(), 1);
+    // El nombre de empresa no participa del buscador principal (DEC-055,
+    // ver `no_busca_por_nombre_de_empresa`) — case-insensitive o no, nunca
+    // matchea acá.
+    assert!(buscar(&connection, Some("constructora alfa")).is_empty());
 }
 
 /// Regresión de "Búsquedas de 1-2 caracteres no pliegan tildes ni Ñ"

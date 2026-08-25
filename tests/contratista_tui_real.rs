@@ -95,7 +95,11 @@ fn persistencia_busqueda_fts_y_empresa_id_sobreviven_reapertura() {
                 ),
             )
             .unwrap();
-        for q in ["jose", "hernandez", "nandez", "alvarez", "tructora"] {
+        // "alvarez"/"tructora" (nombre de la empresa) se excluyen a
+        // propósito: el buscador principal de contratistas no matchea por
+        // empresa (DEC-055, ver `construir_where` en
+        // `database/queries/contratistas.rs`).
+        for q in ["jose", "hernandez", "nandez"] {
             let r = core.buscar_contratistas(&filtro(q)).unwrap().items;
             assert_eq!(r[0].id, id);
             assert_eq!(r[0].empresa_id, e);
