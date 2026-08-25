@@ -331,9 +331,7 @@ fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState, paleta: Option<&
     // Fila resaltada = la que Tab/Enter completarían (`app.seleccion_paleta`,
     // movida con ↑↓ — ver `operando.rs`). Se acota por si la lista se achicó
     // al seguir escribiendo y el índice quedó desactualizado.
-    let seleccionada = app
-        .seleccion_paleta
-        .min(comandos.len().saturating_sub(1));
+    let seleccionada = app.seleccion_paleta.min(comandos.len().saturating_sub(1));
     let lineas: Vec<Line> = comandos
         .iter()
         .enumerate()
@@ -341,7 +339,11 @@ fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState, paleta: Option<&
             let marcador = if indice == seleccionada { "› " } else { "  " };
             if indice == seleccionada {
                 Line::from(Span::styled(
-                    format!("{marcador}/{:<8}{}", comando.nombre(), descripcion_comando(*comando)),
+                    format!(
+                        "{marcador}/{:<8}{}",
+                        comando.nombre(),
+                        descripcion_comando(*comando)
+                    ),
                     estilo_seleccion(),
                 ))
             } else {
@@ -2315,6 +2317,37 @@ fn lineas_resumen_usuario(form: &FormularioUsuario) -> Vec<Line<'static>> {
     lineas
 }
 
+/// Ancho fijo de la columna de sintaxis — igual en todas las secciones para
+/// que las descripciones queden alineadas de punta a punta de la pantalla,
+/// no sólo dentro de cada bloque.
+const ANCHO_SINTAXIS_AYUDA: usize = 34;
+
+/// Un encabezado de sección + sus filas `(sintaxis, descripción)`. Agrupar
+/// por categoría (en vez de una lista plana de 18 filas, como era antes)
+/// sigue la misma guía que ya usan las CLIs de referencia — agrupar por
+/// categoría lógica y dejar la sintaxis avanzada aparte de los comandos en
+/// sí ("progressive disclosure", clig.dev / bettercli.org) — y de paso
+/// refleja en la propia ayuda la distinción frecuente/ocasional que ya
+/// rige el resto del diseño (§5.1), en vez de esconderla en una lista sin
+/// jerarquía.
+fn seccion_ayuda(lineas: &mut Vec<Line<'static>>, titulo: &str, filas: &[(&str, &str)]) {
+    // El encabezado va en negrita simple (sin color) — un peso más que la
+    // sintaxis de cada fila (acento) y dos más que su descripción (muted),
+    // para que la jerarquía se lea de un vistazo: título > comando >
+    // explicación.
+    lineas.push(Line::from(Span::styled(
+        titulo.to_string(),
+        Style::default().add_modifier(Modifier::BOLD),
+    )));
+    for (sintaxis, descripcion) in filas {
+        lineas.push(Line::from(vec![
+            Span::styled(format!("  {sintaxis:<ANCHO_SINTAXIS_AYUDA$}"), acento()),
+            Span::styled(descripcion.to_string(), muted()),
+        ]));
+    }
+    lineas.push(Line::from(""));
+}
+
 fn lineas_ayuda() -> Vec<Line<'static>> {
     let mut lineas = vec![
         Line::from(Span::styled(
@@ -2323,75 +2356,91 @@ fn lineas_ayuda() -> Vec<Line<'static>> {
         )),
         Line::from(""),
     ];
-    let ejemplos: [(&str, &str); 18] = [
-        ("/ingreso <nombre> G:<n> M:<medio>", "registrar un ingreso"),
-        ("/ingreso 119430546 G:12", "también por cédula"),
-        ("/salida <nombre>", "registrar salida por nombre"),
-        ("/salida G:27", "registrar salida por gafete"),
-        (
-            "/gafete 2, 25, 85",
-            "salida rápida de uno o varios gafetes (alias /g)",
-        ),
-        ("/activos", "tabla de personas dentro, ↑↓ Enter da salida"),
-        ("/nuevo", "dar de alta un contratista (default)"),
-        ("/nuevo empresa", "dar de alta una empresa (alias /n em)"),
-        (
-            "/nuevo usuario",
-            "dar de alta un usuario (alias /n u, requiere permiso)",
-        ),
-        ("/editar <nombre>", "editar un contratista (default)"),
-        (
-            "/editar empresa <nombre>",
-            "editar una empresa (alias /e em)",
-        ),
-        (
-            "/editar usuario <cédula|nombre>",
-            "editar un usuario (alias /e u, requiere permiso)",
-        ),
-        ("/historial", "explorar movimientos (alias /h)"),
-        ("/cerrarsesion", "cerrar sesión y volver al login"),
-        ("/ayuda", "esta ayuda"),
-        ("texto sin /", "búsqueda de contratistas"),
-        (
-            "<nombre> --i G:<n> M:<medio>",
-            "atajo: mismo resultado que /ingreso, /salida o /editar",
-        ),
-        (
-            "empresa:x tipo:a,b -salida:ana",
-            "dentro de /historial: filtro clave:valor, negable con -",
-        ),
-    ];
-    for (sintaxis, descripcion) in ejemplos {
-        lineas.push(Line::from(vec![
-            Span::styled(format!("{sintaxis:<36}"), acento()),
-            Span::styled(descripcion, muted()),
-        ]));
-    }
-    lineas.push(Line::from(""));
-    lineas.push(Line::from(Span::styled(
-        "Claves: G: gafete · M: caminando|vehiculo (por defecto caminando) · alias: /i /s /a /n /e /h /cs",
-        muted(),
-    )));
-    lineas.push(Line::from(Span::styled(
-        "G:/M: admiten un solo valor, sin lista ni negación — listas (a,b,c) y -clave sólo existen dentro de /historial",
-        muted(),
-    )));
-    lineas.push(Line::from(Span::styled(
-        "Modificador sobre una búsqueda: --i/--ingreso, --s/--salida, --e/--editar (sólo éstos tres)",
-        muted(),
-    )));
-    lineas.push(Line::from(Span::styled(
-        "F4 sobre una tabla de resultados: elegir qué columnas mostrar",
-        muted(),
-    )));
-    lineas.push(Line::from(Span::styled(
-        "F5 con resultados de /historial: exportar el filtro completo a XLSX",
-        muted(),
-    )));
-    lineas.push(Line::from(Span::styled(
-        "Tab completa comandos, gafetes libres y medios · Esc limpia · Ctrl+C sale",
-        muted(),
-    )));
+
+    seccion_ayuda(
+        &mut lineas,
+        "FRECUENTES",
+        &[
+            ("/ingreso <nombre> G:<n> M:<medio>", "registrar un ingreso"),
+            ("/ingreso 119430546 G:12", "también por cédula"),
+            ("/salida <nombre>", "registrar salida por nombre"),
+            ("/salida G:27", "registrar salida por gafete"),
+            (
+                "/gafete 2, 25, 85",
+                "salida rápida de uno o varios gafetes (alias /g)",
+            ),
+            ("/activos", "tabla de personas dentro, ↑↓ Enter da salida"),
+            ("texto sin /", "búsqueda de contratistas por cédula/nombre"),
+        ],
+    );
+
+    seccion_ayuda(
+        &mut lineas,
+        "GESTIÓN",
+        &[
+            ("/nuevo", "dar de alta un contratista (default)"),
+            ("/nuevo empresa", "dar de alta una empresa (alias /n em)"),
+            (
+                "/nuevo usuario",
+                "dar de alta un usuario (alias /n u, requiere permiso)",
+            ),
+            ("/editar <nombre>", "editar un contratista (default)"),
+            (
+                "/editar empresa <nombre>",
+                "editar una empresa (alias /e em)",
+            ),
+            (
+                "/editar usuario <cédula|nombre>",
+                "editar un usuario (alias /e u, requiere permiso)",
+            ),
+        ],
+    );
+
+    seccion_ayuda(
+        &mut lineas,
+        "HISTORIAL",
+        &[
+            ("/historial", "explorar movimientos (alias /h)"),
+            (
+                "empresa:x tipo:a,b -salida:ana",
+                "filtro clave:valor · listas con coma · negable con -",
+            ),
+            ("F5 con resultados", "exportar el filtro completo a XLSX"),
+        ],
+    );
+
+    seccion_ayuda(
+        &mut lineas,
+        "SISTEMA",
+        &[
+            ("/ayuda", "esta ayuda"),
+            ("/cerrarsesion", "cerrar sesión y volver al login"),
+        ],
+    );
+
+    seccion_ayuda(
+        &mut lineas,
+        "SINTAXIS Y ATAJOS",
+        &[
+            (
+                "<nombre> --i G:<n> M:<medio>",
+                "atajo: mismo resultado que /ingreso, /salida o /editar",
+            ),
+            (
+                "G: gafete · M: caminando|vehiculo",
+                "un solo valor cada uno, sin lista ni negación (eso es sólo de /historial)",
+            ),
+            ("Alias", "/i /s /g /a /n /e /h /cs"),
+            ("F4 sobre una tabla", "elegir qué columnas mostrar"),
+            ("Tab", "completa comandos, gafetes libres y medios"),
+            ("Esc · Ctrl+C", "limpia el input · sale de la app"),
+        ],
+    );
+
+    // La última sección ya deja una línea en blanco de más (el mismo
+    // separador entre bloques): se recorta para no dejar aire de sobra al
+    // final de la pantalla.
+    lineas.pop();
     lineas
 }
 

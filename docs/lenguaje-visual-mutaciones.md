@@ -811,6 +811,19 @@ DEC-060  El `> ` de la línea de comandos (sin ninguna Surface abierta)
          `historial › `…): ésas ya llevan texto descriptivo propio, no
          hay un símbolo suelto de una posición que reemplazar sin perder
          esa etiqueta.
+DEC-061  `/ayuda` se reorganiza en 5 secciones (FRECUENTES, GESTIÓN,
+         HISTORIAL, SISTEMA, SINTAXIS Y ATAJOS) en vez de una lista plana
+         de 18 filas seguida de 6 líneas sueltas de sintaxis avanzada, sin
+         jerarquía entre "comando" y "regla de gramática". Agrupar por
+         categoría lógica y separar la sintaxis avanzada de los comandos
+         en sí es la práctica de referencia en ayudas de CLI ("progressive
+         disclosure" — clig.dev, bettercli.org/design/cli-help-page).
+         Las categorías no son nuevas: son las mismas que ya usa el resto
+         del diseño (frecuente/ocasional de §5.1, gestión vs. exploración
+         vs. sistema) — la ayuda no las inventa, sólo por fin las muestra.
+         `seccion_ayuda()` arma encabezado (negrita) + filas (sintaxis en
+         acento, descripción en muted) con el mismo ancho de columna en
+         todas las secciones, para que quede alineado de punta a punta.
 
 ## 14.1 Escena de login (implementada)
 
