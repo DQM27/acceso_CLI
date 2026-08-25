@@ -105,7 +105,7 @@ pub fn render(frame: &mut Frame, app: &AppState) {
         return;
     }
 
-    let paleta = paleta_comandos(app);
+    let paleta = app.paleta_comandos();
     let filas_comandos = paleta.as_ref().map_or(0, |comandos| comandos.len() as u16);
     // Con paleta, el input y la lista viven en un único recuadro (2 bordes +
     // input + divisor + N filas); sin paleta, el recuadro del input solo.
@@ -171,22 +171,6 @@ pub fn render(frame: &mut Frame, app: &AppState) {
 /// teclea el nombre del comando (`/`, `/in`, …) — antes del primer espacio.
 /// En cuanto hay un espacio (ya se eligió comando y se sigue con argumentos)
 /// el desplegable desaparece y vuelve la línea de pistas normal.
-fn paleta_comandos(app: &AppState) -> Option<Vec<Comando>> {
-    if !matches!(app.fase, Fase::Operando { .. }) || app.formulario.is_some() {
-        return None;
-    }
-    let texto = app.input.value();
-    if !texto.starts_with('/') || texto.contains(' ') {
-        return None;
-    }
-    let prefijo = texto[1..].to_lowercase();
-    let coincidentes: Vec<Comando> = Comando::TODOS
-        .into_iter()
-        .filter(|comando| comando.nombre().starts_with(&prefijo))
-        .collect();
-    (!coincidentes.is_empty()).then_some(coincidentes)
-}
-
 /// Línea debajo del recuadro del input (estilo CLI moderna): el feedback
 /// transitorio tiene prioridad; sin feedback, las sugerencias del
 /// autocompletado contextual, truncadas al ancho disponible.
@@ -333,13 +317,28 @@ fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState, paleta: Option<&
         interior.width,
         filas_disponibles,
     );
+    // Fila resaltada = la que Tab/Enter completarían (`app.seleccion_paleta`,
+    // movida con ↑↓ — ver `operando.rs`). Se acota por si la lista se achicó
+    // al seguir escribiendo y el índice quedó desactualizado.
+    let seleccionada = app
+        .seleccion_paleta
+        .min(comandos.len().saturating_sub(1));
     let lineas: Vec<Line> = comandos
         .iter()
-        .map(|comando| {
-            Line::from(vec![
-                Span::styled(format!("/{:<8}", comando.nombre()), acento()),
-                Span::styled(descripcion_comando(*comando), muted()),
-            ])
+        .enumerate()
+        .map(|(indice, comando)| {
+            let marcador = if indice == seleccionada { "› " } else { "  " };
+            if indice == seleccionada {
+                Line::from(Span::styled(
+                    format!("{marcador}/{:<8}{}", comando.nombre(), descripcion_comando(*comando)),
+                    estilo_seleccion(),
+                ))
+            } else {
+                Line::from(vec![
+                    Span::styled(format!("{marcador}/{:<8}", comando.nombre()), acento()),
+                    Span::styled(descripcion_comando(*comando), muted()),
+                ])
+            }
         })
         .collect();
     frame.render_widget(Paragraph::new(lineas), fila_comandos);

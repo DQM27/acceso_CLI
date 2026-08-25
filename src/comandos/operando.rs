@@ -57,31 +57,90 @@ pub(super) fn manejar_operando(core: &AppCore, app: &mut AppState, key: KeyEvent
         KeyCode::Esc => {
             app.input.reset();
             app.feedback = None;
+            app.seleccion_paleta = 0;
             super::recomputar(core, app);
         }
         KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             app.input.reset();
             app.feedback = None;
+            app.seleccion_paleta = 0;
             super::recomputar(core, app);
         }
+        // Con la paleta de comandos visible (`/algo` a medio escribir), ↑↓
+        // mueven la fila resaltada en vez de la selección de resultados —
+        // son mutuamente excluyentes (la paleta sólo aparece antes de
+        // cualquier resultado real).
+        KeyCode::Up if app.paleta_comandos().is_some() => mover_seleccion_paleta(app, -1),
+        KeyCode::Down if app.paleta_comandos().is_some() => mover_seleccion_paleta(app, 1),
         KeyCode::Up => mover_seleccion(app, -1),
         KeyCode::Down => mover_seleccion(app, 1),
         KeyCode::F(4) => abrir_selector_columnas(app),
         KeyCode::Tab => {
+            // Con la paleta visible, completa con la fila resaltada (↑↓) en
+            // vez de la primera coincidencia alfabética — antes Tab siempre
+            // tomaba esa aunque el operador hubiera marcado otra.
+            if completar_desde_paleta(core, app) {
+                return;
+            }
             if let Some(nuevo) = super::resolver::autocompletar(core, app.input.value()) {
                 app.input = Input::new(nuevo);
                 super::recomputar(core, app);
             }
         }
-        KeyCode::Enter => confirmar(core, app),
+        KeyCode::Enter => {
+            // Mismo criterio: con la paleta visible, Enter completa el
+            // nombre del comando (como Tab) en vez de intentar confirmar un
+            // input que todavía no es un comando válido (`/c`, `/ay`… no
+            // resuelven por sí solos sin alias). El Enter que de verdad
+            // confirma la acción es el siguiente, ya con el comando
+            // completo en el input — mismo patrón de "un Enter más" que
+            // Coincidencias → Resumen.
+            if completar_desde_paleta(core, app) {
+                return;
+            }
+            confirmar(core, app);
+        }
         _ => {
             if app.input.handle_event(&Event::Key(key)).is_some() {
-                // Escribir de nuevo despeja el feedback transitorio.
+                // Escribir de nuevo despeja el feedback transitorio y
+                // reinicia la selección: la lista filtrada ya no es la
+                // misma, el índice viejo no tiene por qué seguir teniendo
+                // sentido.
                 app.feedback = None;
+                app.seleccion_paleta = 0;
                 super::recomputar(core, app);
             }
         }
     }
+}
+
+fn mover_seleccion_paleta(app: &mut AppState, delta: isize) {
+    let Some(total) = app.paleta_comandos().map(|c| c.len()) else {
+        return;
+    };
+    if total == 0 {
+        return;
+    }
+    let actual = app.seleccion_paleta as isize;
+    app.seleccion_paleta = (actual + delta).clamp(0, total as isize - 1) as usize;
+}
+
+/// Completa el input con `/<nombre> ` de la fila resaltada de la paleta —
+/// mismo texto que produciría `resolver::autocompletar` para la primera
+/// coincidencia, pero respetando cuál marcó el operador con ↑↓. `false` si
+/// la paleta no está visible (nada que completar).
+fn completar_desde_paleta(core: &AppCore, app: &mut AppState) -> bool {
+    let Some(coincidencias) = app.paleta_comandos() else {
+        return false;
+    };
+    let indice = app.seleccion_paleta.min(coincidencias.len().saturating_sub(1));
+    let Some(comando) = coincidencias.get(indice) else {
+        return false;
+    };
+    app.input = Input::new(format!("/{} ", comando.nombre()));
+    app.seleccion_paleta = 0;
+    super::recomputar(core, app);
+    true
 }
 
 fn mover_seleccion(app: &mut AppState, delta: isize) {

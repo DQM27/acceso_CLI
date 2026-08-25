@@ -756,6 +756,24 @@ DEC-057  `/gafete` (alias `/g`) abre un modo enclavado dedicado a la salida
          (`ContextState::AbrirSalidaGafete { texto }` la lleva) — no hace
          falta un segundo Enter sobre la Surface recién abierta y vacía
          para algo que el operador ya escribió.
+DEC-058  La paleta de comandos (la lista que aparece bajo el input al
+         escribir `/algo`, antes sólo visual) ahora navega con ↑↓ y
+         Tab/Enter completan con la fila resaltada — no la primera
+         alfabética. Motivación funcional, no cosmética: comandos sin
+         alias de una letra (`/ay` para Ayuda, `/c...` para
+         CerrarSesion — no existe alias "c") ya mostraban la coincidencia
+         en la paleta pero Enter no la usaba, porque `parser::parsear`
+         nunca llega a `Comando::desde_texto` con un prefijo parcial sin
+         alias exacto — el operador tenía que terminar de escribir el
+         nombre completo. `AppState::paleta_comandos()` (movido desde
+         `render.rs`, antes privado ahí) es ahora el único punto de
+         verdad de qué muestra la paleta — lo consultan tanto el render
+         como `operando.rs`, que antes no tenían forma de saberlo.
+         Enter con la paleta visible completa el texto (mismo resultado
+         que Tab) en vez de confirmar — el Enter que de verdad ejecuta la
+         acción es el siguiente, ya con el comando completo: mismo
+         patrón de "un paso más" que Coincidencias → Resumen, no una
+         excepción nueva.
 
 ## 14.1 Escena de login (implementada)
 

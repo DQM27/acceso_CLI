@@ -21,6 +21,7 @@ use super::formulario::{Campo, FormularioContratista, Subfase};
 use super::formulario_empresa::FormularioEmpresa;
 use super::formulario_usuario::FormularioUsuario;
 use super::historial::HistorialState;
+use super::parser::Comando;
 use super::presentation;
 use super::salida_gafete::SalidaGafeteState;
 
@@ -307,6 +308,11 @@ pub struct AppState {
     /// a diferencia de las demás Surfaces no se cierra sola tras confirmar,
     /// pensado para uso repetido (gafete tras gafete).
     pub salida_gafete: Option<SalidaGafeteState>,
+    /// Fila resaltada de la paleta de comandos (`paleta_comandos`) mientras
+    /// se escribe `/algo` — ↑↓ la mueve, Tab/Enter completan con la
+    /// seleccionada en vez de la primera alfabética. Se reinicia a 0 cada
+    /// vez que el texto cambia (la lista filtrada ya no es la misma).
+    pub seleccion_paleta: usize,
     /// Pistas de la línea de sugerencias (autocompletado contextual, teclas).
     pub sugerencias: Vec<String>,
     pub feedback: Option<(Instant, Feedback)>,
@@ -339,6 +345,7 @@ impl AppState {
             edicion_columnas: None,
             historial: None,
             salida_gafete: None,
+            seleccion_paleta: 0,
             sugerencias: Vec::new(),
             feedback: None,
             salir: false,
@@ -418,6 +425,30 @@ impl AppState {
         } else {
             SurfaceActiva::Ninguna
         }
+    }
+
+    /// Comandos cuyo nombre empieza con lo tecleado tras la `/` — `Some`
+    /// sólo mientras se está escribiendo el nombre del comando en sí
+    /// (`/algo`, sin espacio todavía) y ninguna Surface tiene el teclado.
+    /// Único punto de verdad de "qué muestra la paleta ahora": lo usan
+    /// tanto el render (qué lista pintar) como `operando.rs` (qué mueve
+    /// ↑↓, qué completan Tab/Enter) — antes vivía sólo en `render.rs` y
+    /// por eso ↑↓/Enter no podían usarlo.
+    pub fn paleta_comandos(&self) -> Option<Vec<Comando>> {
+        if !matches!(self.fase, Fase::Operando { .. }) || self.surface_activa() != SurfaceActiva::Ninguna
+        {
+            return None;
+        }
+        let texto = self.input.value();
+        if !texto.starts_with('/') || texto.contains(' ') {
+            return None;
+        }
+        let prefijo = texto[1..].to_lowercase();
+        let coincidentes: Vec<Comando> = Comando::TODOS
+            .into_iter()
+            .filter(|comando| comando.nombre().starts_with(&prefijo))
+            .collect();
+        (!coincidentes.is_empty()).then_some(coincidentes)
     }
 
     pub fn mostrar_feedback(&mut self, texto: String, nivel: NivelFeedback) {
@@ -506,6 +537,35 @@ mod tests {
             true,
         ));
         assert_eq!(app.surface_activa(), SurfaceActiva::Formulario);
+    }
+
+    #[test]
+    fn paleta_vacia_sin_barra_inicial() {
+        let mut app = AppState::con_sesion(sesion());
+        app.input = Input::new("gafete".to_string());
+        assert_eq!(app.paleta_comandos(), None);
+    }
+
+    #[test]
+    fn paleta_filtra_por_prefijo() {
+        let mut app = AppState::con_sesion(sesion());
+        app.input = Input::new("/g".to_string());
+        assert_eq!(app.paleta_comandos(), Some(vec![Comando::Gafete]));
+    }
+
+    #[test]
+    fn paleta_desaparece_tras_el_primer_espacio() {
+        let mut app = AppState::con_sesion(sesion());
+        app.input = Input::new("/gafete ".to_string());
+        assert_eq!(app.paleta_comandos(), None);
+    }
+
+    #[test]
+    fn paleta_ausente_con_una_surface_abierta() {
+        let mut app = AppState::con_sesion(sesion());
+        app.input = Input::new("/g".to_string());
+        app.historial = Some(super::super::historial::HistorialState::nuevo(Vec::new()));
+        assert_eq!(app.paleta_comandos(), None);
     }
 
     #[test]
