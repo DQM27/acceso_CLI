@@ -9,13 +9,11 @@
 use chrono::{DateTime, Utc};
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Layout, Rect},
+    layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Paragraph},
+    widgets::Paragraph,
 };
-
-use tui_big_text::{BigText, PixelSize};
 
 use crate::domain::resultado_acceso::{MotivoDenegacion, ResultadoAcceso};
 use crate::models::medio_ingreso::MedioIngreso;
@@ -29,7 +27,7 @@ use super::columnas::{
     Columna, ColumnaActivos, ColumnaBusqueda, ColumnaHistorial, SelectorColumnas,
 };
 use super::estado::{
-    AppState, ContextState, EdicionColumnas, Fase, NivelFeedback, ObjetivoColumnas, SurfaceActiva,
+    AppState, ContextState, EdicionColumnas, Fase, NivelFeedback, ObjetivoColumnas,
 };
 use super::formulario::{
     Campo, FormularioContratista, MAX_VISIBLES_EMPRESAS, ModoFormulario, Subfase,
@@ -65,19 +63,6 @@ fn acento() -> Style {
 }
 fn estilo_seleccion() -> Style {
     Style::default().add_modifier(Modifier::REVERSED)
-}
-/// Color del borde del prompt: un solo acento (cian, el mismo de Historial)
-/// para cualquier Surface enclavada, `muted()` en el prompt de comandos
-/// suelto — se probó un color por grupo (lectura/escritura/confirmación) y
-/// no aportó frente a la señal más simple de "enclavado sí/no", que ya da
-/// la mayúscula de la etiqueta; un solo color evita que el operador tenga
-/// que aprender una segunda escala de significado.
-fn color_surface(app: &AppState) -> Style {
-    if app.surface_activa() == SurfaceActiva::Ninguna {
-        muted()
-    } else {
-        acento()
-    }
 }
 
 /// Gramática visual compartida por toda la app (ver
@@ -128,20 +113,31 @@ pub fn render(frame: &mut Frame, app: &AppState) {
 
     let paleta = app.paleta_comandos();
     let filas_comandos = paleta.as_ref().map_or(0, |comandos| comandos.len() as u16);
-    // Con paleta, el input y la lista viven en un único recuadro (2 bordes +
-    // input + divisor + N filas); sin paleta, el recuadro del input solo.
+    // Sin borde en ningún caso (ver `render_prompt`): sin paleta, sólo la
+    // fila del input; con paleta, input + divisor + N filas.
     // El cap deja al menos 3 filas para el área de contexto arriba.
     let cap = area.height.saturating_sub(3);
     let alto_bloque_prompt = match &paleta {
-        Some(_) => (4 + filas_comandos).min(cap.max(4)),
-        None => 3,
+        Some(_) => (2 + filas_comandos).min(cap.max(2)),
+        None => 1,
     };
-    let alto_pista = if paleta.is_some() { 0 } else { 1 };
+    // Siempre 1, con o sin paleta — si desapareciera al abrir la paleta, esa
+    // fila liberada se la comía el bloque de arriba, corriendo 1 fila hacia
+    // abajo el resto del prompt justo al escribir `/`. Reservarla siempre
+    // mantiene esa esquina del layout completamente fija.
+    //
+    // Va arriba del input (no abajo, como antes): probando el layout previo
+    // en runtime, el input quedaba encajonado entre la paginación de la
+    // lista (arriba) y esta fila (abajo), las dos en gris, sin leerse como
+    // "la línea activa" — se sentía flotando en el medio. Con la pista
+    // arriba, el input vuelve a ser la última línea de la pantalla, sin nada
+    // debajo, como en cualquier CLI.
+    let alto_pista = 1;
 
-    let [area_contexto, area_prompt, area_pista] = Layout::vertical([
+    let [area_contexto, area_pista, area_prompt] = Layout::vertical([
         Constraint::Min(3),
-        Constraint::Length(alto_bloque_prompt),
         Constraint::Length(alto_pista),
+        Constraint::Length(alto_bloque_prompt),
     ])
     .areas(area);
 
@@ -198,10 +194,8 @@ pub fn render(frame: &mut Frame, app: &AppState) {
         area_contexto,
     );
 
+    render_pista(frame, area_pista, app);
     render_prompt(frame, area_prompt, app, paleta.as_deref());
-    if paleta.is_none() {
-        render_pista(frame, area_pista, app);
-    }
 }
 
 /// Comandos a mostrar en el desplegable bajo el input: sólo mientras se
@@ -211,27 +205,25 @@ pub fn render(frame: &mut Frame, app: &AppState) {
 /// Línea debajo del recuadro del input (estilo CLI moderna): el feedback
 /// transitorio tiene prioridad; sin feedback, las sugerencias del
 /// autocompletado contextual, truncadas al ancho disponible.
-fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
+/// Contenido "de la izquierda" de la línea de pista — feedback, la ayuda de
+/// teclas de la Surface abierta, o las sugerencias del autocompletado, en ese
+/// orden de precedencia. `None` cuando no hay nada que decir (input vacío,
+/// sin Surface, sin feedback vigente) — la identidad de la derecha (ver
+/// `render_pista`) sigue mostrándose igual, esta función sólo decide la
+/// mitad izquierda.
+fn contenido_pista(app: &AppState) -> Option<Line<'static>> {
     if let Some(feedback) = app.feedback_vigente() {
         let (simbolo, estilo) = glifo_feedback(feedback.nivel);
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(format!("{simbolo} "), estilo),
-                Span::styled(&feedback.texto, estilo),
-            ])),
-            area,
-        );
-        return;
+        return Some(Line::from(vec![
+            Span::styled(format!("{simbolo} "), estilo),
+            Span::styled(feedback.texto.clone(), estilo),
+        ]));
     }
     if app.edicion_columnas.is_some() {
-        frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                "↑↓ columna · Space marcar/desmarcar · Esc cerrar",
-                muted(),
-            ))),
-            area,
-        );
-        return;
+        return Some(Line::from(Span::styled(
+            "↑↓ columna · Space marcar/desmarcar · Esc cerrar",
+            muted(),
+        )));
     }
     if let Some(historial) = &app.historial {
         let pista = if historial.exportacion_destino.is_some() {
@@ -241,11 +233,7 @@ fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
         } else {
             "escriba clave:valor · Enter aplica · Esc cierra Historial"
         };
-        frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(pista, muted()))),
-            area,
-        );
-        return;
+        return Some(Line::from(Span::styled(pista, muted())));
     }
     // Con el formulario abierto, la pista describe las teclas de la sub-fase
     // (las sugerencias del autocompletado no aplican: el input edita campos).
@@ -259,21 +247,13 @@ fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
             }
             Subfase::Resumen => "Enter guardar · Esc volver a editar",
         };
-        frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(pista, muted()))),
-            area,
-        );
-        return;
+        return Some(Line::from(Span::styled(pista, muted())));
     }
     if app.formulario_empresa.is_some() {
-        frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                "Enter guardar · Esc cancelar",
-                muted(),
-            ))),
-            area,
-        );
-        return;
+        return Some(Line::from(Span::styled(
+            "Enter guardar · Esc cancelar",
+            muted(),
+        )));
     }
     if let Some(fu) = &app.formulario_usuario {
         let pista = match fu.subfase {
@@ -282,30 +262,31 @@ fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
             }
             SubfaseUsuario::Resumen => "Enter guardar · Esc volver a editar",
         };
-        frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(pista, muted()))),
-            area,
-        );
-        return;
+        return Some(Line::from(Span::styled(pista, muted())));
     }
     if app.salida_gafete.is_some() {
-        frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                "número(s) de gafete, separados por coma · Enter confirma salida · Esc cierra",
-                muted(),
-            ))),
-            area,
-        );
-        return;
+        return Some(Line::from(Span::styled(
+            "número(s) de gafete, separados por coma · Enter confirma salida · Esc cierra",
+            muted(),
+        )));
     }
     if !app.sugerencias.is_empty() {
-        frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                app.sugerencias.join("   "),
-                muted(),
-            ))),
-            area,
-        );
+        return Some(Line::from(Span::styled(
+            app.sugerencias.join("   "),
+            muted(),
+        )));
+    }
+    None
+}
+
+/// Línea de pista, ahora arriba del input (no abajo — probando layout, ver
+/// el comentario de `alto_pista` en `render()`): el contenido contextual
+/// (feedback, ayuda de la Surface, sugerencias), o nada si no hay nada que
+/// decir. La identidad del operador que vivía acá se sacó por ahora — a
+/// definir dónde va (no era el problema, pero compartía fila con esto).
+fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
+    if let Some(linea) = contenido_pista(app) {
+        frame.render_widget(Paragraph::new(linea), area);
     }
 }
 
@@ -316,50 +297,49 @@ fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
 /// medio — reportado en runtime real ("líneas que no están completas").
 const ANCHO_NOMBRE_PALETA: usize = 13;
 
-/// El prompt nunca desaparece: vive dentro de un recuadro de línea fina
-/// (bordes redondeados) y cambia de etiqueta según la fase (cédula, contraseña
-/// enmascarada, o el `>` de comandos), siempre con el cursor visible.
+/// Sin paleta: el prompt nunca desaparece, vive dentro de un recuadro de
+/// línea fina, sin caja ni borde — texto plano sobre el fondo, mismo
+/// criterio que `fzf` sin `--border` (la mayoría de sus usuarios ni lo
+/// activa): ninguna Surface necesita una caja para leerse, cada una ya se
+/// identifica con su propia etiqueta en mayúscula (`HISTORIAL ›`, `NUEVA
+/// EMPRESA ›`…) o, en la paleta, con la lista misma. Cambia de etiqueta
+/// según la fase (cédula, contraseña enmascarada, o el `>` de comandos),
+/// siempre con el cursor visible.
 ///
-/// Con `paleta` en `Some`, el desplegable de comandos se dibuja **dentro del
-/// mismo marco** que el input, separado por un divisor real (`├──┤`) en vez
-/// de un segundo recuadro pegado al primero — así no quedan dos juegos de
-/// esquinas redondeadas encontrándose a mitad de una línea vertical, que es
-/// lo que se veía "cortado".
+/// La fila de input queda anclada **abajo** (no arriba) y lo que haya
+/// encima (el desplegable de la paleta) crece hacia arriba desde ahí —
+/// mismo layout que `fzf --layout=reverse-list`. `render()` calcula el alto
+/// para que quepan todas las filas, y como el área de contexto de arriba
+/// absorbe ese crecimiento (`Constraint::Min`), la fila de input se queda
+/// fija en la misma posición sin importar cuántas coincidencias haya —
+/// antes, con el input arriba, cada tecla que cambiaba el alto de la lista
+/// hacía saltar el propio `>` de lugar.
 fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState, paleta: Option<&[Comando]>) {
-    let bloque = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(color_surface(app));
-    let interior = bloque.inner(area);
-    frame.render_widget(bloque, area);
-
-    let fila_input = Rect::new(interior.x, interior.y, interior.width, 1);
-    render_prompt_linea(frame, fila_input, app);
-
-    let Some(comandos) = paleta else { return };
-    if interior.height < 2 {
+    let Some(comandos) = paleta else {
+        let fila_input = Rect::new(area.x, area.y, area.width, 1);
+        render_prompt_linea(frame, fila_input, app);
+        return;
+    };
+    if area.height < 2 {
+        let fila_input = Rect::new(
+            area.x,
+            area.y + area.height.saturating_sub(1),
+            area.width,
+            1,
+        );
+        render_prompt_linea(frame, fila_input, app);
         return;
     }
 
-    // El divisor se dibuja sobre el ancho completo del recuadro exterior
-    // (no del interior) para que "├"/"┤" caigan exactamente sobre las
-    // líneas verticales del marco y se empalmen con ellas.
-    let fila_divisor = Rect::new(area.x, interior.y + 1, area.width, 1);
-    let divisor = format!("├{}┤", "─".repeat((area.width as usize).saturating_sub(2)));
-    frame.render_widget(Paragraph::new(divisor).style(muted()), fila_divisor);
+    let fila_input = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
+    render_prompt_linea(frame, fila_input, app);
 
-    let filas_disponibles = interior.height.saturating_sub(2);
-    let fila_comandos = Rect::new(
-        interior.x,
-        interior.y + 2,
-        interior.width,
-        filas_disponibles,
-    );
+    let filas_disponibles = fila_input.y.saturating_sub(area.y);
+    let fila_comandos = Rect::new(area.x, area.y, area.width, filas_disponibles);
     // Fila resaltada = la que Tab/Enter completarían (`app.seleccion_paleta`,
     // movida con ↑↓ — ver `operando.rs`). Se acota por si la lista se achicó
     // al seguir escribiendo y el índice quedó desactualizado.
     let seleccionada = app.seleccion_paleta.min(comandos.len().saturating_sub(1));
-    let opacidad_paleta = app.presentacion.opacidad("paleta");
     let lineas: Vec<Line<'static>> = comandos
         .iter()
         .enumerate()
@@ -388,10 +368,25 @@ fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState, paleta: Option<&
             }
         })
         .collect();
-    frame.render_widget(
-        Paragraph::new(atenuar(lineas, opacidad_paleta)),
-        fila_comandos,
-    );
+    // Cada fila funde por su cuenta (`super::PALETA_FILAS_IDS`, un id fijo
+    // por posición) en vez de todas juntas con una sola opacidad — la
+    // cascada resultante (ver `RETRASO_PALETA_ESCALON` en `mod.rs`) se nota
+    // mucho más que un fundido sincronizado de las 9 filas a la vez.
+    // `atenuar_fila_paleta`, no `atenuar`: cada fila tiene dos colores
+    // propios (nombre/descripción) y `atenuar` los haría llegar visibles en
+    // momentos distintos (ver su documentación).
+    let lineas_atenuadas: Vec<Line<'static>> = lineas
+        .into_iter()
+        .enumerate()
+        .map(|(indice, linea)| {
+            let id = super::PALETA_FILAS_IDS
+                .get(indice)
+                .copied()
+                .unwrap_or("paleta_fila_8");
+            atenuar_fila_paleta(linea, app.presentacion.opacidad(id))
+        })
+        .collect();
+    frame.render_widget(Paragraph::new(lineas_atenuadas), fila_comandos);
 }
 
 /// Claves de `/ingreso`/`/salida`/`--modificador` (DEC-021: sólo se
@@ -723,8 +718,10 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
             // "confirmar › "… y esa señal, lejos del campo real (arriba,
             // marcado por su propio glifo), confundía más de lo que
             // aclaraba — el operador termina sin saber en qué formulario
-            // está. El color del borde (`color_surface`) distingue edición
-            // de confirmación en su lugar.
+            // está. Editando vs. Resumen (antes distinguidos por el color
+            // del borde, ya sin recuadro) los sigue diferenciando el área de
+            // contexto: `Subfase::Resumen` es la única que muestra la
+            // tarjeta de revisión completa antes de guardar.
             Some(formulario) => {
                 let etiqueta = match formulario.modo {
                     ModoFormulario::Nuevo => "NUEVO CONTRATISTA › ".to_string(),
@@ -807,16 +804,15 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
 
 // ── Login ────────────────────────────────────────────────────────────────
 //
-// Escena propia, sin cajas ni bordes: identidad, foco y aviso apoyados sólo
-// en espaciado, alineación y la gramática de glifos (● › ✓ ! ×). El cursor
-// es un "_" con estilo, nunca el bloque parpadeante del terminal — por eso
-// esta función jamás llama a `frame.set_cursor_position`.
-
-/// Alto en filas del título grande (`PixelSize::Quadrant`: 4 filas, 4
-/// columnas por carácter — suficiente para distinguirse sin ocupar media
-/// pantalla ni depender de glifos de bloque más finos, que no todos los
-/// terminales dibujan igual).
-const ALTO_TITULO_GRANDE: u16 = 4;
+// Alineado a la izquierda, pegado a la esquina superior — la misma esquina
+// que usa cualquier otra pantalla (Inicio, Coincidencias...), no una escena
+// aparte flotando a mitad de terminal: es una interfaz de comandos, y el
+// login es la acción que un operador repite más veces por turno (entra y
+// sale de sesión constantemente, ver `/cerrarsesion`), así que no se paga
+// ceremonia visual cada vez. Identidad, foco y aviso se apoyan sólo en
+// espaciado, alineación y la gramática de glifos (● › ✓ ! ×). El cursor es
+// un "_" con estilo, nunca el bloque parpadeante del terminal — por eso esta
+// función jamás llama a `frame.set_cursor_position`.
 
 /// Paleta propia del login en RGB explícito (no los `Color` con nombre del
 /// resto del archivo): un fundido necesita interpolar componentes, y sólo
@@ -902,135 +898,102 @@ fn atenuar(lineas: Vec<Line<'static>>, opacidad: f32) -> Vec<Line<'static>> {
         .collect()
 }
 
+/// Variante de `atenuar` para una fila con más de un color propio (nombre en
+/// cian, descripción en gris — la paleta de comandos): interpolar cada
+/// `Span` hacia SU color final (lo que hace `atenuar`) los hace "llegar"
+/// visibles en momentos distintos, aunque compartan la misma `opacidad` — un
+/// cian brillante cruza el umbral de percepción mucho antes que un gris
+/// tenue con la misma fracción de camino recorrido, así que la fila se leía
+/// como dos apariciones desincronizadas en vez de una. Acá, mientras dura el
+/// fundido, todos los `Span` interpolan hacia el mismo `FADE_TEXTO` neutro
+/// (nunca hacia su color propio) — un solo brillo subiendo parejo — y sólo
+/// al terminar (`opacidad >= 1.0`) la fila salta de golpe a sus colores
+/// reales.
+fn atenuar_fila_paleta(linea: Line<'static>, opacidad: f32) -> Line<'static> {
+    if opacidad >= 1.0 {
+        return linea;
+    }
+    let spans: Vec<Span<'static>> = linea
+        .spans
+        .into_iter()
+        .map(|span| {
+            let estilo = Style {
+                fg: Some(interpolar_color(FADE_FONDO, FADE_TEXTO, opacidad)),
+                ..span.style
+            };
+            Span::styled(span.content, estilo)
+        })
+        .collect();
+    Line::from(spans)
+}
+
 fn render_login(frame: &mut Frame, area: Rect, app: &AppState) {
     let opacidad_titulo = app.presentacion.opacidad("titulo");
     let opacidad_prompt = app.presentacion.opacidad("prompt");
     let opacidad_aviso = app.presentacion.opacidad("feedback");
 
-    // Sólo el nombre de la app ("Brisas CLI") usa el tratamiento grande: es
-    // la marca. La identidad del operador, que ocupa la misma ranura visual
-    // después, es deliberadamente más chica y de otro color — es la sesión
-    // de una persona, no compite en jerarquía con la marca.
-    let titulo_grande = matches!(
-        app.fase,
-        Fase::LoginCedula | Fase::RootCedula | Fase::RootNombre { .. }
+    // Un renglón de aire entre bloques — pegado a la esquina superior
+    // izquierda, la misma que usa cualquier otra pantalla, no flotando a
+    // mitad de terminal.
+    const AIRE: u16 = 1;
+    let y_titulo = area.y;
+    let y_prompt = y_titulo + 1 + AIRE;
+    let y_aviso = y_prompt + 1 + AIRE;
+
+    frame.render_widget(
+        Paragraph::new(linea_titulo_login(&app.fase, opacidad_titulo)),
+        Rect::new(area.x, y_titulo, area.width, 1.min(area.height)),
     );
-    let titulo_alto = if titulo_grande { ALTO_TITULO_GRANDE } else { 1 };
-    // Aire entre bloques: dos filas, no una — con una sola el conjunto se
-    // veía apretado y perdido en el resto de la pantalla vacía.
-    const AIRE: u16 = 2;
-    // título + aire + prompt + aire + aviso.
-    let alto_total = (titulo_alto + 2 * AIRE + 2).min(area.height);
-    // El bloque arranca un poco antes de la mitad de la pantalla — arriba
-    // del centro, no exactamente centrado ni pegado al borde — dejando aire
-    // debajo para que la escena respire.
-    let y = area.y + area.height.saturating_sub(alto_total) / 3;
 
-    let area_titulo = Rect::new(area.x, y, area.width, titulo_alto.min(area.height));
-    if titulo_grande {
-        let titulo = BigText::builder()
-            .pixel_size(PixelSize::Quadrant)
-            .centered()
-            .style(estilo_fundido(FADE_ACENTO, opacidad_titulo, Modifier::BOLD))
-            .lines(vec![Line::from(super::NOMBRE_APP.to_uppercase())])
-            .build();
-        frame.render_widget(titulo, area_titulo);
-    } else {
-        frame.render_widget(
-            Paragraph::new(linea_identidad_operador(&app.fase, opacidad_titulo))
-                .alignment(Alignment::Center),
-            area_titulo,
-        );
-    }
-
-    let y_prompt = y + titulo_alto + AIRE;
-    if alto_total > titulo_alto + AIRE {
+    if area.height > 1 + AIRE {
         match etiqueta_prompt(&app.fase) {
-            // Espaciado entre letras, igual que el nombre del operador: sin
-            // eso el prompt se leía diminuto al lado del título/identidad, y
-            // el aviso transitorio (una oración normal, sin espaciar) pesaba
-            // visualmente más que el propio input — justo al revés de la
-            // jerarquía que debería tener.
-            //
-            // El punto de anclaje horizontal se calcula centrando la
-            // ETIQUETA ya espaciada (largo fijo), nunca el valor tecleado:
-            // así coincide con el centro del título (mismo cálculo, mismo
-            // `area.width`) y no se recalcula tecla a tecla — el `›` se
-            // queda quieto y el texto crece hacia la derecha.
             Some(etiqueta) => {
-                let etiqueta_espaciada = espaciar_texto(etiqueta);
                 let vacio = app.input.value().is_empty();
-                // El valor NO se espacia — a diferencia de la etiqueta (un
-                // rótulo fijo, decorativo), esto es lo que el operador acaba
-                // de teclear: separar sus dígitos o el enmascarado de la
-                // contraseña sólo lo hace más difícil de releer.
                 let valor = valor_prompt(&app.fase, app);
-                let linea = linea_prompt(&etiqueta_espaciada, &valor, vacio, opacidad_prompt);
-                let ancho_centrado =
-                    (2 + etiqueta_espaciada.chars().count() as u16).min(area.width);
-                let x_prompt = area.x + area.width.saturating_sub(ancho_centrado) / 2;
-                let ancho_render = area.width.saturating_sub(x_prompt - area.x);
+                let linea = linea_prompt(etiqueta, &valor, vacio, opacidad_prompt);
                 frame.render_widget(
                     Paragraph::new(linea),
-                    Rect::new(x_prompt, y_prompt, ancho_render, 1),
+                    Rect::new(area.x, y_prompt, area.width, 1),
                 );
             }
-            // Verificando/Creando: no crece con tecleo, se centra como el título.
+            // Verificando/Creando: no crece con tecleo.
             None => {
                 frame.render_widget(
-                    Paragraph::new(linea_verificando(&app.fase, opacidad_prompt))
-                        .alignment(Alignment::Center),
+                    Paragraph::new(linea_verificando(&app.fase, opacidad_prompt)),
                     Rect::new(area.x, y_prompt, area.width, 1),
                 );
             }
         }
     }
 
-    let y_aviso = y_prompt + AIRE;
-    if alto_total > titulo_alto + AIRE + 1 {
+    if area.height > 1 + 2 * AIRE + 1 {
         frame.render_widget(
-            Paragraph::new(linea_aviso_login(app, opacidad_aviso)).alignment(Alignment::Center),
+            Paragraph::new(linea_aviso_login(app, opacidad_aviso)),
             Rect::new(area.x, y_aviso, area.width, 1),
         );
     }
 }
 
-/// El nombre del operador ocupa la misma ranura visual que "Brisas CLI",
-/// pero con menos peso a propósito: texto normal (no bloques grandes) y un
-/// color neutro en vez del acento de la marca.
-fn linea_identidad_operador(fase: &Fase, opacidad: f32) -> Line<'static> {
-    let nombre = match fase {
+/// El nombre de la app muta a la identidad del operador en cuanto se
+/// resuelve (misma ranura, misma línea — mutación, no aparición de un
+/// elemento nuevo, DEC §1) y de vuelta al nombre de la app si la cuenta deja
+/// de ser válida a mitad de camino (ver `login::manejar_login_password`).
+fn linea_titulo_login(fase: &Fase, opacidad: f32) -> Line<'static> {
+    let (texto, color) = match fase {
+        Fase::LoginCedula | Fase::RootCedula | Fase::RootNombre { .. } => {
+            (super::NOMBRE_APP.to_uppercase(), FADE_ACENTO)
+        }
         Fase::LoginPassword { nombre, .. }
         | Fase::Verificando { nombre }
         | Fase::RootPassword { nombre, .. }
         | Fase::RootConfirmarPassword { nombre, .. }
-        | Fase::RootCreando { nombre } => nombre.as_str(),
-        Fase::LoginCedula | Fase::RootCedula | Fase::RootNombre { .. } | Fase::Operando { .. } => "",
+        | Fase::RootCreando { nombre } => (nombre.to_uppercase(), FADE_TEXTO),
+        Fase::Operando { .. } => (String::new(), FADE_TEXTO),
     };
-    // Mayúscula (sin espaciado entre letras — se sentía impostado en un
-    // nombre real, a diferencia de la etiqueta fija del prompt) le da más
-    // presencia sin usar el mismo tratamiento de bloques que la marca —
-    // sigue siendo, a propósito, un peso visual menor que el título grande.
     Line::from(Span::styled(
-        nombre.to_uppercase(),
-        estilo_fundido(FADE_TEXTO, opacidad, Modifier::BOLD),
+        texto,
+        estilo_fundido(color, opacidad, Modifier::BOLD),
     ))
-}
-
-/// Inserta un espacio entre cada carácter (y espacio triple donde ya había
-/// uno) para que el texto ocupe más ancho visual sin cambiar de tamaño de
-/// fuente — la terminal no tiene tamaños de fuente, sólo columnas.
-fn espaciar_texto(texto: &str) -> String {
-    let mut espaciado = String::new();
-    for caracter in texto.chars() {
-        if caracter == ' ' {
-            espaciado.push_str("   ");
-        } else {
-            espaciado.push(caracter);
-            espaciado.push(' ');
-        }
-    }
-    espaciado.trim_end().to_string()
 }
 
 fn linea_verificando(fase: &Fase, opacidad: f32) -> Line<'static> {
@@ -1259,17 +1222,14 @@ fn lineas_contexto(
     }
 }
 
+// El nombre de la app ya lo dice el título de la ventana (`BRISAS CLI` en
+// la barra) — repetirlo acá era ruido, no identidad: esta pantalla es la
+// única señal de vida real cuando el input está vacío.
 fn lineas_inicio(total_dentro: usize) -> Vec<Line<'static>> {
-    vec![
-        Line::from(Span::styled(
-            "BRISAS CLI",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Line::from(format!(
-            "{} actualmente dentro",
-            cantidad_personas(total_dentro)
-        )),
-    ]
+    vec![Line::from(format!(
+        "{} actualmente dentro",
+        cantidad_personas(total_dentro)
+    ))]
 }
 
 fn cantidad_personas(total: usize) -> String {

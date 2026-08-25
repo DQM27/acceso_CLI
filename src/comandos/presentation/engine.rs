@@ -29,11 +29,27 @@ impl Engine {
     /// `VisualQuality::Off` queda resuelta al instante en el valor final —
     /// cero dependencia funcional de la animación (DEC-012).
     pub fn aparecer(&mut self, id: &'static str, calidad: VisualQuality) {
+        self.aparecer_con_retraso(id, calidad, Duration::ZERO);
+    }
+
+    /// Como `aparecer`, con una pausa de `retraso` antes de arrancar el fade
+    /// — para apariciones que se sienten "instantáneas" cuando el fade solo
+    /// dura `DURACION_APARICION` a secas (ver la paleta de comandos).
+    pub fn aparecer_con_retraso(
+        &mut self,
+        id: &'static str,
+        calidad: VisualQuality,
+        retraso: Duration,
+    ) {
         let animacion = match calidad {
             VisualQuality::Off => Animacion::resuelta(1.0),
-            VisualQuality::Normal => {
-                Animacion::nueva(0.0, 1.0, DURACION_APARICION, Easing::EaseOut)
-            }
+            VisualQuality::Normal => Animacion::con_retraso(
+                0.0,
+                1.0,
+                retraso,
+                DURACION_APARICION,
+                Easing::EaseOut,
+            ),
         };
         self.animaciones.insert(id, animacion);
     }

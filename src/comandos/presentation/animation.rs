@@ -9,6 +9,7 @@ use super::easing::Easing;
 #[derive(Debug, Clone, Copy)]
 pub struct Animacion {
     inicio: Instant,
+    retraso: Duration,
     duracion: Duration,
     desde: f32,
     hasta: f32,
@@ -17,8 +18,23 @@ pub struct Animacion {
 
 impl Animacion {
     pub fn nueva(desde: f32, hasta: f32, duracion: Duration, easing: Easing) -> Self {
+        Self::con_retraso(desde, hasta, Duration::ZERO, duracion, easing)
+    }
+
+    /// Como `nueva`, pero el valor se queda fijo en `desde` durante
+    /// `retraso` antes de arrancar la interpolación — una pausa deliberada
+    /// (no una animación en cámara lenta) para que la aparición se sienta
+    /// como una decisión, no como un parpadeo instantáneo.
+    pub fn con_retraso(
+        desde: f32,
+        hasta: f32,
+        retraso: Duration,
+        duracion: Duration,
+        easing: Easing,
+    ) -> Self {
         Self {
             inicio: Instant::now(),
+            retraso,
             duracion,
             desde,
             hasta,
@@ -36,7 +52,7 @@ impl Animacion {
         if self.duracion.is_zero() {
             return 1.0;
         }
-        let transcurrido = self.inicio.elapsed().as_secs_f32();
+        let transcurrido = self.inicio.elapsed().saturating_sub(self.retraso).as_secs_f32();
         (transcurrido / self.duracion.as_secs_f32()).clamp(0.0, 1.0)
     }
 

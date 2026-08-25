@@ -480,20 +480,13 @@ fn gafetes_libres(core: &AppCore) -> Vec<i64> {
 
 /// Pistas de la línea de sugerencias, según lo que hay tecleado. No alteran el
 /// estado: son el "qué puedo escribir ahora" del autocompletado contextual.
+///
+/// Tecleando el nombre del comando (`/`, `/in`…) no hay pista propia acá: la
+/// paleta de comandos (`AppState::paleta_comandos`, misma condición —
+/// `texto.starts_with('/') && !texto.contains(' ')`) ya muestra esa misma
+/// lista, con descripción y todo, en el desplegable — repetirla en la línea
+/// de pista era ruido debajo de una información que ya está en pantalla.
 pub fn calcular_sugerencias(core: &AppCore, texto: &str, entrada: &Entrada) -> Vec<String> {
-    // Tecleando el nombre del comando: sugerir los que empiecen igual.
-    if texto.starts_with('/') && !texto.contains(' ') {
-        let prefijo = texto[1..].to_lowercase();
-        let coinciden: Vec<String> = Comando::TODOS
-            .iter()
-            .filter(|comando| comando.nombre().starts_with(&prefijo))
-            .map(|comando| format!("/{}", comando.nombre()))
-            .collect();
-        if !coinciden.is_empty() {
-            return vec![format!("comandos: {}", coinciden.join("  "))];
-        }
-    }
-
     // Completando un parámetro a medio escribir.
     if let Some(ultimo) = texto.split_whitespace().last() {
         let minusculas = ultimo.to_lowercase();
@@ -519,6 +512,15 @@ pub fn calcular_sugerencias(core: &AppCore, texto: &str, entrada: &Entrada) -> V
                 return vec![format!("medio: {}", opciones.join("  "))];
             }
         }
+    }
+
+    // La paleta (misma condición del docstring de arriba) ya cubre este
+    // estado por completo — sin este corte, `texto == "/"` sigue
+    // resolviendo a `Entrada::Inicio` (ver `parser::parsear`) y el `match`
+    // de abajo mostraba igual el hint genérico de input vacío debajo de
+    // una paleta que ya está mostrando la lista completa.
+    if texto.starts_with('/') && !texto.contains(' ') {
+        return Vec::new();
     }
 
     match entrada {

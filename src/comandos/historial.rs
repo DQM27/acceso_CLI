@@ -21,12 +21,14 @@ use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{ahora_costa_rica, inicio_dia_costa_rica_utc};
 
 use super::query_lang::{Term, resolver_terminos, valores};
+use super::resolver::es_comodin_todos;
 
 #[derive(Debug, Clone)]
 pub struct HistorialState {
-    /// Filtro vigente: fechas + lo que ya se resolvió de la última consulta
-    /// aplicada con Enter (base sobre la que se reinterpreta el texto cada
-    /// vez que se vuelve a aplicar).
+    /// Filtro vigente: resultado de la última consulta aplicada con Enter.
+    /// Sólo `desde`/`hasta` sirven de base pegajosa para la próxima
+    /// interpretación (ver `resolver_filtro`) — el resto se reconstruye de
+    /// cero desde el texto cada vez.
     pub filtro: FiltroHistorial,
     /// `Some` sólo tras aplicar con Enter — Historial no filtra en vivo
     /// (DEC-024): mientras se edita el texto esto es `None`.
@@ -64,19 +66,29 @@ impl HistorialState {
         }
     }
 
-    /// Interpreta `texto` sobre el filtro vigente (fechas incluidas: un
-    /// `desde:`/`hasta:` en el texto reemplaza el rango). No consulta SQLite
-    /// — sólo deja el `FiltroHistorial` listo; `historial_controller.rs`
-    /// hace la consulta con el resultado. Devuelve también las claves que no
-    /// se reconocieron, para mostrarlas como aviso sin bloquear el resto.
+    /// Interpreta `texto` de cero cada vez, partiendo sólo del rango de
+    /// fechas vigente (`desde`/`hasta` quedan pegajosos entre consultas si
+    /// el texto no trae los suyos propios; el resto no). Antes partía de
+    /// `self.filtro.clone()` completo, así que una clave que ya se había
+    /// aplicado (`empresa:x`, `tipo:...`) seguía filtrando aunque se borrara
+    /// del texto — reportado en runtime real ("aplico un filtro, lo borro y
+    /// se queda cargado"). No consulta SQLite — sólo deja el
+    /// `FiltroHistorial` listo; `historial_controller.rs` hace la consulta
+    /// con el resultado. Devuelve también las claves que no se
+    /// reconocieron, para mostrarlas como aviso sin bloquear el resto.
     pub fn resolver_filtro(&self, texto: &str) -> (FiltroHistorial, Vec<String>) {
-        let mut filtro = self.filtro.clone();
+        let mut filtro = FiltroHistorial::nuevo(self.filtro.desde, self.filtro.hasta);
         let empresas = &self.empresas;
         let resolucion = resolver_terminos(texto, &mut filtro, |f, term| {
             aplicar_clave(f, term, empresas)
         });
         let libre = resolucion.texto_libre.trim();
-        filtro.texto_persona = (!libre.is_empty()).then(|| libre.to_string());
+        // Mismo comodín `*` = "ver todo" que usan las otras tres búsquedas
+        // (contratistas/empresas/usuarios, ver `resolver::es_comodin_todos`)
+        // — sin este intercepto, `*` viajaba literal a `texto_persona` y la
+        // consulta buscaba el carácter `*` en vez de traer todo.
+        filtro.texto_persona =
+            (!libre.is_empty() && !es_comodin_todos(libre)).then(|| libre.to_string());
         (filtro, resolucion.no_reconocidos)
     }
 }
@@ -318,6 +330,21 @@ mod tests {
         assert!(!filtro.usuario_ingreso_negado);
         assert_eq!(filtro.usuario_salida, Some("ana".to_string()));
         assert!(filtro.usuario_salida_negado);
+    }
+
+    #[test]
+    fn borrar_una_clave_del_texto_la_quita_del_filtro() {
+        let mut estado = HistorialState::nuevo(empresas());
+        let (filtro, _) = estado.resolver_filtro("empresa:electrica tipo:praind");
+        estado.filtro = filtro;
+        assert_eq!(estado.filtro.empresa_id, Some(Igualdad::Incluye(2)));
+
+        // El operador borra "empresa:electrica" del input y vuelve a
+        // aplicar — el filtro de empresa debe desaparecer, no seguir
+        // filtrando con el valor que ya no está en el texto.
+        let (filtro, _) = estado.resolver_filtro("tipo:praind");
+        assert_eq!(filtro.empresa_id, None);
+        assert_eq!(filtro.tipos_incluidos, Some(vec![TipoIngreso::Praind]));
     }
 
     #[test]

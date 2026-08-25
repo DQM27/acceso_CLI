@@ -150,6 +150,15 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<(), C
     // teclado (el evento se procesa y se dibuja en la misma vuelta en que
     // llega, nunca atado a un tick fijo).
     let mut redibujar = true;
+    // Si la última vuelta dibujó con una animación en curso, la vuelta que
+    // la encuentra ya terminada tiene que dibujar una vez más — sin este
+    // flag, el bucle deja de redibujar en la MISMA vuelta en que
+    // `activo()` pasa a `false`, y el último frame pintado queda un pelín
+    // antes del 100% (el redibujado anterior fue con el reloj de esa
+    // vuelta, no el de ésta). Quedaba "congelado" ahí — visible sobre todo
+    // en filas con `EaseOut` cerca del final, donde el cambio por tick ya
+    // es mínimo — hasta que una tecla forzaba el próximo redibujado.
+    let mut animacion_activa_previa = false;
     while !app.salir {
         if login::recibir_autenticacion(&core, &mut app, &mut autenticacion) {
             redibujar = true;
@@ -168,10 +177,14 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<(), C
             redibujar = true;
         }
         // Con una animación en curso hay que seguir pintando cada tick
-        // aunque no haya llegado ningún evento nuevo.
-        if app.presentacion.activo() {
+        // aunque no haya llegado ningún evento nuevo — y una vuelta más
+        // cuando termina, para que el frame final refleje el valor
+        // realmente asentado (ver el comentario de `animacion_activa_previa`).
+        let animacion_activa = app.presentacion.activo();
+        if animacion_activa || animacion_activa_previa {
             redibujar = true;
         }
+        animacion_activa_previa = animacion_activa;
 
         if redibujar {
             terminal.draw(|frame| render::render(frame, &app))?;
@@ -340,18 +353,54 @@ fn actualizar_presentacion_prompt_glifo(app: &mut AppState) -> bool {
     true
 }
 
-/// La paleta de comandos funde al aparecer por primera vez (input vacío →
-/// `/`) — DEC-062. Al seguir escribiendo el nombre del comando la lista se
-/// acorta (menos coincidencias) pero eso no cuenta como una aparición
-/// nueva, sólo "aparece"/"desaparece" en el sentido de ir de `None` a
-/// `Some` o viceversa.
+/// Pausa antes de que arranque el fundido de la primera fila de la paleta —
+/// sin esto, el fundido de `DURACION_APARICION` (320ms) sobre una lista que
+/// aparece completa de golpe se percibía como instantáneo. 150ms es el
+/// umbral de percepción que documenta Nielsen Norman Group (el tiempo de un
+/// parpadeo): abajo de eso, un cambio se lee como "ya estaba ahí" en vez de
+/// "acaba de pasar".
+const RETRASO_PALETA_BASE: std::time::Duration = std::time::Duration::from_millis(150);
+
+/// Cuánto se atrasa cada fila siguiente respecto a la anterior — la cascada
+/// resultante (fila 0 primero, la última casi medio segundo después) se nota
+/// mucho más que un fundido sincronizado de las nueve filas a la vez, que es
+/// lo que había antes y seguía leyéndose como instantáneo pese al retraso
+/// base.
+const RETRASO_PALETA_ESCALON: std::time::Duration = std::time::Duration::from_millis(45);
+
+/// Ids fijos de animación, uno por posición dentro de la paleta — como
+/// máximo hay 9 (`Comando::TODOS`), así que un array de literales alcanza
+/// sin necesitar claves dinámicas en el motor de presentación (que sólo
+/// acepta `&'static str`, ver `presentation::Engine`).
+const PALETA_FILAS_IDS: [&str; 9] = [
+    "paleta_fila_0",
+    "paleta_fila_1",
+    "paleta_fila_2",
+    "paleta_fila_3",
+    "paleta_fila_4",
+    "paleta_fila_5",
+    "paleta_fila_6",
+    "paleta_fila_7",
+    "paleta_fila_8",
+];
+
+/// La paleta de comandos funde en cascada al aparecer por primera vez (input
+/// vacío → `/`) — DEC-062, ahora fila por fila en vez de todas a la vez. Al
+/// seguir escribiendo el nombre del comando la lista se acorta (menos
+/// coincidencias) pero eso no cuenta como una aparición nueva, sólo
+/// "aparece"/"desaparece" en el sentido de ir de `None` a `Some` o viceversa.
 fn actualizar_presentacion_paleta(app: &mut AppState) -> bool {
-    let visible_ahora = app.paleta_comandos().is_some();
+    let filas_actuales = app.paleta_comandos().map(|comandos| comandos.len());
+    let visible_ahora = filas_actuales.is_some();
     if visible_ahora == app.paleta_previa {
         return false;
     }
-    if visible_ahora {
-        app.presentacion.aparecer("paleta", app.calidad);
+    if let Some(filas) = filas_actuales {
+        for (indice, id) in PALETA_FILAS_IDS.iter().enumerate().take(filas) {
+            let retraso = RETRASO_PALETA_BASE + RETRASO_PALETA_ESCALON * indice as u32;
+            app.presentacion
+                .aparecer_con_retraso(id, app.calidad, retraso);
+        }
     }
     app.paleta_previa = visible_ahora;
     true
