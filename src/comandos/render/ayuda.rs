@@ -124,6 +124,7 @@ pub(super) fn lineas_ayuda() -> Vec<Line<'static>> {
             ("F4 sobre una tabla", "elegir qué columnas mostrar"),
             ("Tab", "completa comandos, gafetes libres y medios"),
             ("Esc · Ctrl+C", "limpia el input · sale de la app"),
+            ("Ctrl+Q", "atajo de /cerrarsesion — Enter la confirma"),
         ],
     );
 

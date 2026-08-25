@@ -27,6 +27,20 @@ fn ancho_fijo_activos(columna: ColumnaActivos) -> Option<usize> {
     }
 }
 
+/// Mismo criterio que `busqueda.rs::ancho_maximo_busqueda`: Nombre (persona
+/// que entra) necesita bastante más que Empresa (nombre de empresa, casi
+/// siempre corto); Usuario ("Da ingreso", el nombre de quien opera) es
+/// persona también, pero el mismo operador se repite fila tras fila y rara
+/// vez hace falta verlo tan ancho como el contratista — se le da un tope
+/// intermedio, no el mínimo de Empresa.
+fn ancho_maximo_activos(columna: ColumnaActivos) -> usize {
+    match columna {
+        ColumnaActivos::Empresa => 22,
+        ColumnaActivos::Usuario => 26,
+        _ => 40,
+    }
+}
+
 /// Sólo Gafete se alinea a la derecha: es la única columna numérica que
 /// queda pegada a otra (Hora) — alinearla a la derecha la separa de sus
 /// dígitos en vez de leerse como un solo número (ver captura real).
@@ -68,7 +82,7 @@ pub(super) fn lineas_coincidencias_activos(
     // Mismas 8 columnas que `/activos` — es la misma fuente de datos
     // (ingresos activos), sólo que filtrada por la búsqueda. Sólo se listan
     // las columnas visibles (F4, ColumnaActivos).
-    let anchos = anchos_columnas(ancho, columnas_visibles(columnas), ancho_fijo_activos);
+    let anchos = anchos_columnas(ancho, columnas_visibles(columnas), ancho_fijo_activos, ancho_maximo_activos);
     let mut lineas = vec![
         Line::from(Span::styled(
             format!(
@@ -296,7 +310,7 @@ pub(super) fn lineas_tabla_activos(
     let angosto = Breakpoint::desde_ancho(ancho) == Breakpoint::Compact;
     let visibles =
         columnas_visibles(columnas).filter(|c| !(angosto && *c == ColumnaActivos::Empresa));
-    let anchos = anchos_columnas(ancho, visibles, ancho_fijo_activos);
+    let anchos = anchos_columnas(ancho, visibles, ancho_fijo_activos, ancho_maximo_activos);
 
     let mut lineas = vec![
         Line::from(Span::styled(

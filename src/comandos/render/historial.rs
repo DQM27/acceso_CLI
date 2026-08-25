@@ -16,10 +16,24 @@ use super::util::tipo_texto;
 
 fn ancho_fijo_historial(columna: ColumnaHistorial) -> Option<usize> {
     match columna {
-        ColumnaHistorial::Ingreso | ColumnaHistorial::Salida => Some(13),
+        // 18 = "25/08/2026 15:44" (16 caracteres) + los 2 de separación —
+        // antes eran 13, pensados para el formato sin año ("25/08 15:44").
+        ColumnaHistorial::Ingreso | ColumnaHistorial::Salida => Some(18),
         ColumnaHistorial::Tipo => Some(12),
         ColumnaHistorial::Gafete => Some(8),
         ColumnaHistorial::Nombre | ColumnaHistorial::Empresa | ColumnaHistorial::Usuario => None,
+    }
+}
+
+/// Mismo criterio que `busqueda.rs::ancho_maximo_busqueda`/
+/// `activos.rs::ancho_maximo_activos`: Nombre (persona) más ancho que
+/// Empresa (nombre de empresa, casi siempre corto); Usuario ("Da ingreso")
+/// con un tope intermedio.
+fn ancho_maximo_historial(columna: ColumnaHistorial) -> usize {
+    match columna {
+        ColumnaHistorial::Empresa => 22,
+        ColumnaHistorial::Usuario => 26,
+        _ => 40,
     }
 }
 
@@ -27,8 +41,13 @@ fn derecha_historial(columna: ColumnaHistorial) -> bool {
     matches!(columna, ColumnaHistorial::Gafete)
 }
 
+/// Mismo formato `%d/%m/%Y %H:%M` que ya usa el resto de la app para fecha +
+/// hora (`tui::activos::render`, `tui::auditoria::render`,
+/// `tui::configuracion::state`) — acá mostraba sólo `%d/%m %H:%M`, sin año,
+/// inconsistente con el resto y ambiguo en un historial que sí puede cruzar
+/// años (reportado en runtime real).
 fn fecha_hora_corta(instante: chrono::DateTime<Utc>) -> String {
-    a_costa_rica(instante).format("%d/%m %H:%M").to_string()
+    a_costa_rica(instante).format("%d/%m/%Y %H:%M").to_string()
 }
 
 /// `FiltroHistorial::hasta` es el límite exclusivo (inicio del día
@@ -218,7 +237,12 @@ pub(super) fn lineas_historial(
         return (lineas, None);
     }
 
-    let anchos = anchos_columnas(ancho, columnas_visibles(columnas), ancho_fijo_historial);
+    let anchos = anchos_columnas(
+        ancho,
+        columnas_visibles(columnas),
+        ancho_fijo_historial,
+        ancho_maximo_historial,
+    );
     lineas.push(Line::from(Span::styled(
         format!(
             "  {}",

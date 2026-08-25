@@ -8,7 +8,7 @@ use ratatui::text::{Line, Span};
 use crate::comandos::columnas::{Columna, ColumnaBusqueda, SelectorColumnas};
 use crate::comandos::resolver::{es_comodin_todos, MIN_CONSULTA};
 
-use super::estilos::{estilo_seleccion, muted};
+use super::estilos::{acento, estilo_seleccion, muted};
 use super::tabla::{anchos_columnas, columnas_visibles, fila_columnas};
 use super::util::{rol_texto, si_no, tipo_texto};
 
@@ -19,7 +19,22 @@ fn ancho_fijo_busqueda(columna: ColumnaBusqueda) -> Option<usize> {
         ColumnaBusqueda::Praind => Some(12),
         ColumnaBusqueda::Ruta => Some(6),
         ColumnaBusqueda::Acceso => Some(8),
+        ColumnaBusqueda::Estado => Some(8),
         ColumnaBusqueda::Nombre | ColumnaBusqueda::Empresa => None,
+    }
+}
+
+/// Tope propio por columna flexible: nombre de persona (Nombre) suele
+/// necesitar bastante más que nombre de empresa (Empresa, en la práctica casi
+/// siempre corto) — antes ambas repartían el mismo `ANCHO_FLEXIBLE_MAXIMO` en
+/// partes iguales, dejando a Empresa con espacio de sobra sin usar mientras
+/// Nombre truncaba con "…" (reportado en runtime real). Sólo se invoca sobre
+/// columnas flexibles (`ancho_fijo_busqueda` devuelve `None`), así que el
+/// resto de variantes no importa acá.
+fn ancho_maximo_busqueda(columna: ColumnaBusqueda) -> usize {
+    match columna {
+        ColumnaBusqueda::Empresa => 22,
+        _ => 40,
     }
 }
 
@@ -38,6 +53,13 @@ fn valor_busqueda(
             .unwrap_or_else(|| "—".to_string()),
         ColumnaBusqueda::Ruta => si_no(item.es_personal_ruta).to_string(),
         ColumnaBusqueda::Acceso => si_no(item.tiene_acceso).to_string(),
+        ColumnaBusqueda::Estado => {
+            if item.tiene_ingreso_activo {
+                "DENTRO".to_string()
+            } else {
+                "FUERA".to_string()
+            }
+        }
     }
 }
 
@@ -204,7 +226,12 @@ pub(super) fn lineas_coincidencias(
     // Mismas 7 columnas que la tabla de contratistas de la TUI clásica
     // (cédula/nombre/empresa/tipo/praind/ruta/acceso) — sólo se listan las
     // que estén visibles (F4, ColumnaBusqueda).
-    let anchos = anchos_columnas(ancho, columnas_visibles(columnas), ancho_fijo_busqueda);
+    let anchos = anchos_columnas(
+        ancho,
+        columnas_visibles(columnas),
+        ancho_fijo_busqueda,
+        ancho_maximo_busqueda,
+    );
     let mut lineas = vec![
         Line::from(Span::styled(
             format!(
@@ -215,17 +242,68 @@ pub(super) fn lineas_coincidencias(
         )),
         Line::from(Span::styled("─".repeat(ancho as usize), muted())),
     ];
+    // `Estado` (DENTRO/FUERA) se separa del resto en su propio `Span` para
+    // llevar color propio (mismo criterio que `lineas_ficha`: DENTRO en
+    // acento, FUERA atenuado). La fila se arma completa con un solo
+    // `fila_columnas(&anchos, ...)` — igual que antes de esta columna — y
+    // recién después se corta el string resultante en el punto donde
+    // empieza Estado; partir directamente el slice `anchos` en dos (como en
+    // un primer intento) hacía que la penúltima columna (Acceso) perdiera su
+    // padding, por quedar marcada como "la última" de su propio segmento
+    // (`fila_columnas` no rellena la última celda) — acá sigue siendo la
+    // penúltima de la fila real, así que conserva su ancho fijo de siempre.
+    let ancho_prefijo_estado: usize = anchos
+        .iter()
+        .filter(|(c, _)| *c != ColumnaBusqueda::Estado)
+        .map(|(_, ancho)| *ancho)
+        .sum();
+    let hay_estado = anchos.iter().any(|(c, _)| *c == ColumnaBusqueda::Estado);
     for (indice, item) in items.iter().enumerate() {
         let marcador = if indice == seleccion { "› " } else { "  " };
-        let texto = format!(
+        let seleccionado = indice == seleccion;
+        let texto_completo = format!(
             "{marcador}{}",
             fila_columnas(&anchos, |_| false, |c| valor_busqueda(item, c))
         );
-        lineas.push(if indice == seleccion {
-            Line::from(Span::styled(texto, estilo_seleccion()))
+        if !hay_estado {
+            lineas.push(if seleccionado {
+                Line::from(Span::styled(texto_completo, estilo_seleccion()))
+            } else {
+                Line::from(texto_completo)
+            });
+            continue;
+        }
+        // Posición en CARACTERES (no bytes: `marcador` trae "›", 3 bytes en
+        // UTF-8 pero 1 solo carácter) del corte, resuelta después a un
+        // índice de byte válido con `char_indices` — cortar por bytes a
+        // secas partiría un carácter multi-byte del nombre a la mitad y
+        // haría panic.
+        let corte_caracteres = marcador.chars().count() + ancho_prefijo_estado;
+        let corte_bytes = texto_completo
+            .char_indices()
+            .nth(corte_caracteres)
+            .map(|(indice_byte, _)| indice_byte)
+            .unwrap_or(texto_completo.len());
+        let (resto, estado) = texto_completo.split_at(corte_bytes);
+        let estilo_resto = if seleccionado {
+            estilo_seleccion()
         } else {
-            Line::from(texto)
-        });
+            Style::default()
+        };
+        let color_estado = if item.tiene_ingreso_activo {
+            acento()
+        } else {
+            muted()
+        };
+        let estilo_estado = if seleccionado {
+            color_estado.add_modifier(Modifier::REVERSED)
+        } else {
+            color_estado
+        };
+        lineas.push(Line::from(vec![
+            Span::styled(resto.to_string(), estilo_resto),
+            Span::styled(estado.to_string(), estilo_estado),
+        ]));
     }
     if let Some(linea) = linea_paginacion_exacta(offset, items.len(), total) {
         lineas.push(Line::from(""));

@@ -66,6 +66,16 @@ pub(super) fn manejar_operando(core: &AppCore, app: &mut AppState, key: KeyEvent
             app.seleccion_paleta = 0;
             super::recomputar(core, app);
         }
+        // Ctrl+Q: mismo atajo que teclear `/cerrarsesion` — deja la pantalla
+        // de confirmación en pantalla, Enter la cierra de verdad (mismo
+        // guardrail que ya tiene el comando: no cierra sesión de un solo
+        // toque de tecla).
+        KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.input = Input::new("/cerrarsesion".to_string());
+            app.feedback = None;
+            app.seleccion_paleta = 0;
+            super::recomputar(core, app);
+        }
         // Con la paleta de comandos visible (`/algo` a medio escribir), ↑↓
         // mueven la fila resaltada en vez de la selección de resultados —
         // son mutuamente excluyentes (la paleta sólo aparece antes de
@@ -368,7 +378,22 @@ fn confirmar(core: &AppCore, app: &mut AppState) {
                         ),
                         NivelFeedback::Exito,
                     );
-                    app.input.reset();
+                    // Enclavar sólo aplica a `/ingreso` (o `/i`) tecleado
+                    // como comando explícito — el operador ya decidió repetir
+                    // esta acción varias veces. El modificador `--i` sobre el
+                    // buscador principal ("Ana --i") produce la misma
+                    // `Entrada::Comando` que `/ingreso Ana` (parser.rs, DEC-018),
+                    // pero es una acción puntual sobre un resultado ya
+                    // encontrado, no una intención de quedarse registrando
+                    // ingresos — por eso hace falta mirar el texto crudo, no
+                    // la `Entrada` ya parseada (que no distingue las dos
+                    // formas), para no forzar al operador de vuelta a un modo
+                    // que nunca pidió.
+                    if es_comando_explicito(app.input.value()) {
+                        app.input = Input::new("/ingreso ".to_string());
+                    } else {
+                        app.input.reset();
+                    }
                     super::recomputar(core, app);
                 }
                 Err(error) => {
@@ -409,7 +434,13 @@ fn confirmar(core: &AppCore, app: &mut AppState) {
                         format!("Salida registrada — {}{detalle}", activo.contratista_nombre),
                         NivelFeedback::Exito,
                     );
-                    app.input.reset();
+                    // Igual criterio que `/ingreso` (operando.rs arriba): la
+                    // salida rara vez es de una sola persona (un turno
+                    // completo saliendo junto) — no se resetea `app.input`,
+                    // así que `recomputar` vuelve a resolver con el mismo
+                    // `/activos` o `/salida <texto>` que ya estaba tecleado,
+                    // en vez de volver a Inicio y obligar a retipear el
+                    // comando por cada salida.
                     super::recomputar(core, app);
                 }
                 Err(error) => {
@@ -497,5 +528,31 @@ pub(super) fn mensaje_error_salida(error: &RegistroIngresoServiceError) -> Strin
         SalidaAnteriorAIngreso => "La salida no puede ser anterior al ingreso".into(),
         RelojRetrocedido => "Revise la fecha y hora del equipo antes de continuar".into(),
         _ => "No se pudo registrar la salida".into(),
+    }
+}
+
+/// `/ingreso`/`/i` tecleado como comando explícito vs. el modificador `--i`
+/// sobre el buscador principal ("Ana --i"): el parser produce la misma
+/// `Entrada::Comando` para ambos (DEC-018), así que la única forma de
+/// distinguirlos es el texto crudo — nunca lo confunde con un `--i` en medio
+/// de una consulta más larga porque ahí el primer carácter ya no es `/`.
+fn es_comando_explicito(texto: &str) -> bool {
+    texto.trim_start().starts_with('/')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn comando_explicito_reconoce_la_barra_inicial_con_o_sin_espacios() {
+        assert!(es_comando_explicito("/ingreso Ana"));
+        assert!(es_comando_explicito("  /i Ana"));
+    }
+
+    #[test]
+    fn modificador_sobre_busqueda_libre_no_es_comando_explicito() {
+        assert!(!es_comando_explicito("Ana --i"));
+        assert!(!es_comando_explicito("Ana --i G:27"));
     }
 }
