@@ -1,7 +1,7 @@
 //! Despachadores de administración: Usuarios, Auditoría y Respaldos.
 
 use crate::application::AppCore;
-use crate::tui::app::error_messages::mensaje_usuario;
+use crate::mensajes::mensaje_usuario;
 use crate::tui::app::{App, Vista};
 use crate::tui::auditoria::AccionAuditoria;
 use crate::tui::configuracion::{AccionAjustes, AccionRespaldos};

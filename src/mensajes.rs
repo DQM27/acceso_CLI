@@ -1,9 +1,13 @@
+//! Mensajes de error en español, compartidos por cualquier interfaz (TUI
+//! clásica, comandos, futura GUI): traducen errores de servicio a texto
+//! accionable sin exponer detalles internos de base de datos.
+
 use crate::domain::resultado_acceso::MotivoDenegacion;
 use crate::services::error::{
     ContratistaServiceError, EmpresaServiceError, RegistroIngresoServiceError, UsuarioServiceError,
 };
 
-pub(super) fn mensaje_empresa(error: EmpresaServiceError) -> String {
+pub fn mensaje_empresa(error: EmpresaServiceError) -> String {
     match error {
         EmpresaServiceError::NombreDuplicado => "Ya existe una empresa con ese nombre".into(),
         EmpresaServiceError::NombreEmpresaVacio => "El nombre es obligatorio".into(),
@@ -15,7 +19,7 @@ pub(super) fn mensaje_empresa(error: EmpresaServiceError) -> String {
     }
 }
 
-pub(super) fn mensaje_contratista(error: ContratistaServiceError) -> String {
+pub fn mensaje_contratista(error: ContratistaServiceError) -> String {
     use ContratistaServiceError::*;
 
     match error {
@@ -30,7 +34,7 @@ pub(super) fn mensaje_contratista(error: ContratistaServiceError) -> String {
     }
 }
 
-pub(super) fn mensaje_usuario(error: UsuarioServiceError) -> String {
+pub fn mensaje_usuario(error: UsuarioServiceError) -> String {
     match error {
         UsuarioServiceError::UsuarioNoEncontrado => "El usuario ya no existe".into(),
         UsuarioServiceError::CedulaVacia => "La cédula es obligatoria".into(),
@@ -52,7 +56,7 @@ pub(super) fn mensaje_usuario(error: UsuarioServiceError) -> String {
     }
 }
 
-pub(super) fn mensaje_salida(error: RegistroIngresoServiceError) -> String {
+pub fn mensaje_salida(error: RegistroIngresoServiceError) -> String {
     use RegistroIngresoServiceError::*;
 
     match error {
@@ -63,7 +67,7 @@ pub(super) fn mensaje_salida(error: RegistroIngresoServiceError) -> String {
     }
 }
 
-pub(super) fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
+pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
     use RegistroIngresoServiceError::*;
 
     match error {

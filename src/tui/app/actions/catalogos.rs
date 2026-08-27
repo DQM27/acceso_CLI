@@ -1,7 +1,7 @@
 //! Despachadores de catálogos: Contratistas y Empresas.
 
 use crate::application::AppCore;
-use crate::tui::app::error_messages::{mensaje_contratista, mensaje_empresa};
+use crate::mensajes::{mensaje_contratista, mensaje_empresa};
 use crate::tui::app::{App, Vista};
 use crate::tui::contratistas::AccionContratistas;
 use crate::tui::empresas::AccionEmpresas;

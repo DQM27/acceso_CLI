@@ -2,8 +2,8 @@
 //! overlay global de Salida Rápida (F2).
 
 use crate::application::AppCore;
+use crate::mensajes::{mensaje_ingreso, mensaje_salida};
 use crate::tui::activos::AccionActivos;
-use crate::tui::app::error_messages::{mensaje_ingreso, mensaje_salida};
 use crate::tui::app::{App, Vista};
 use crate::tui::historial::AccionHistorial;
 use crate::tui::nuevo_ingreso::AccionNuevoIngreso;

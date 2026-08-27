@@ -8,7 +8,6 @@ use ratatui::{Terminal, backend::Backend};
 
 mod actions;
 mod auth_jobs;
-mod error_messages;
 
 use auth_jobs::{HiloUsuarioPendiente, ReceptorAutenticacion, ReceptorCambioPropio, ReceptorHash};
 

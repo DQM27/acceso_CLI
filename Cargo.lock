@@ -181,6 +181,7 @@ dependencies = [
  "rpassword",
  "rusqlite",
  "rust_xlsxwriter",
+ "serde",
  "tempfile",
  "thiserror",
  "tui-input",

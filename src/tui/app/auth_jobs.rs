@@ -12,8 +12,8 @@ use crate::services::error::{AutenticacionError, PasswordError, UsuarioServiceEr
 use crate::services::usuario_service::CrearRootInicialInput;
 use crate::tui::configuracion_inicial::SolicitudRoot;
 
-use super::error_messages::mensaje_usuario;
 use super::{App, Vista};
+use crate::mensajes::mensaje_usuario;
 
 /// Datos ya validados de un usuario nuevo, a la espera del hash de Argon2 —
 /// no incluye `password` en texto plano, que ya se movió al hilo que calcula
