@@ -42,7 +42,7 @@ expression: volcado
                                                                                                                                             
                                                                                                                                             
  Registrar la entrada de un contratista.                                                                                                    
- ↑↓ Seleccionar  ENTER Abrir  1-9 Acceso rápido  M Modo comandos  L Cerrar sesión  Q Salir  F2 Salida rápida  F7 Tema                       
+ ↑↓ Seleccionar  ENTER Abrir  1-9 Acceso rápido  M Modo comandos  L Cerrar sesión  Q Salir  F2 Salida rápida  CTRL+Q Cerrar sesión  F7 Tema 
                                                                                                                                             
 
 === estilos ===
@@ -121,6 +121,8 @@ expression: volcado
 " Salir  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "F2" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
 " Salida rápida  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"CTRL+Q" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+" Cerrar sesión  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "F7" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
-" Tema                       " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" Tema " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE

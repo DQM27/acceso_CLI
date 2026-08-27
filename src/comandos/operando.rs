@@ -70,15 +70,17 @@ pub(super) fn manejar_operando(core: &AppCore, app: &mut AppState, key: KeyEvent
             app.seleccion_paleta = 0;
             super::recomputar(core, app);
         }
-        // Ctrl+Q: mismo atajo que teclear `/cerrarsesion` — deja la pantalla
-        // de confirmación en pantalla, Enter la cierra de verdad (mismo
-        // guardrail que ya tiene el comando: no cierra sesión de un solo
-        // toque de tecla).
+        // Ctrl+Q: atajo de teclado puro a la tarjeta de confirmación de
+        // cerrar sesión — no es un comando: a diferencia de antes, no llena
+        // el input con `/cerrarsesion` (reportado en runtime real, no se
+        // quería ver texto tecleado solo). Enter la confirma, Esc la
+        // cancela, igual que cualquier otra tarjeta.
         KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.input = Input::new("/cerrarsesion".to_string());
+            app.input.reset();
             app.feedback = None;
             app.seleccion_paleta = 0;
-            super::recomputar(core, app);
+            app.sugerencias.clear();
+            app.contexto = ContextState::ConfirmarCerrarSesion;
         }
         // Con la paleta de comandos visible (`/algo` a medio escribir), ↑↓
         // mueven la fila resaltada en vez de la selección de resultados —

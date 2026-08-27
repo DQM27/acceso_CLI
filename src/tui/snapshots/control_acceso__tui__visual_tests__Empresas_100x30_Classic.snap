@@ -15,7 +15,6 @@ expression: volcado
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
                                       Sin empresas registradas                                      
                                                                                                     
                                                                                                     
@@ -31,7 +30,8 @@ expression: volcado
                                                                                                     
                                                                                                     
                                                                                                     
- ↑↓ Mover  ENTER Editar  N Nueva  A Estado  / Buscar  ESC Volver  F2 Salida rápida  F7 Tema         
+ ↑↓ Mover  ENTER Editar  N Nueva  A Estado  / Buscar  ESC Volver  F2 Salida rápida                  
+ CTRL+Q Cerrar sesión  F7 Tema                                                                      
                                                                                                     
 
 === estilos ===
@@ -61,7 +61,6 @@ expression: volcado
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "NOMBRE                                                                   CONTRATISTAS   ESTADO    " fg=Rgb(105, 135, 111) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
@@ -115,7 +114,10 @@ expression: volcado
 "ESC" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
 " Volver  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "F2" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
-" Salida rápida  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" Salida rápida                  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"CTRL+Q" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+" Cerrar sesión  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "F7" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
-" Tema         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" Tema                                                                      " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE

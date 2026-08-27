@@ -31,7 +31,7 @@ expression: volcado
                                                                                                    
                                                                                                    
  ↑↓ Mover  PGUP/PGDN Página  ENTER Editar  N Nuevo  / Buscar  F4 Columnas  ESC Volver  F1 más      
- F2 Salida rápida  F7 Tema                                                                         
+ F2 Salida rápida  CTRL+Q Cerrar sesión  F7 Tema                                                   
                                                                                                    
 
 === estilos ===
@@ -124,6 +124,8 @@ expression: volcado
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "F2" fg=Rgb(70, 200, 215) bg=Black mod=BOLD
 " Salida rápida  " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"CTRL+Q" fg=Rgb(70, 200, 215) bg=Black mod=BOLD
+" Cerrar sesión  " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "F7" fg=Rgb(70, 200, 215) bg=Black mod=BOLD
-" Tema                                                                         " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+" Tema                                                   " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "                                                                                                   " fg=Rgb(220, 225, 228) bg=Black mod=NONE

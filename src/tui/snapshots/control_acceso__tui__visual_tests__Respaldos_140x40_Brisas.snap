@@ -41,7 +41,7 @@ expression: volcado
                                                                                         │                                                   
                                                                                         │                                                   
  0 respaldo(s)                                                                                                                              
- ↑↓ Mover  C Crear  V Revalidar  E Exportar  R Restaurar  L Actualizar  ESC Volver  F2 Salida rápida  F7 Tema                               
+ ↑↓ Mover  C Crear  V Revalidar  E Exportar  R Restaurar  L Actualizar  ESC Volver  F2 Salida rápida  CTRL+Q Cerrar sesión  F7 Tema         
                                                                                                                                             
 
 === estilos ===
@@ -215,6 +215,8 @@ expression: volcado
 " Volver  " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "F2" fg=Rgb(70, 200, 215) bg=Black mod=BOLD
 " Salida rápida  " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"CTRL+Q" fg=Rgb(70, 200, 215) bg=Black mod=BOLD
+" Cerrar sesión  " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "F7" fg=Rgb(70, 200, 215) bg=Black mod=BOLD
-" Tema                               " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+" Tema         " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "                                                                                                                                            " fg=Rgb(220, 225, 228) bg=Black mod=NONE

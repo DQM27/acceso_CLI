@@ -570,24 +570,28 @@ fn escape_raiz_regresa_al_menu_y_estados_internos_se_cierran_primero() {
 }
 
 #[test]
-fn login_exitoso_pregunta_interfaz_y_elegir_tui_entra_al_menu_con_nuevo_ingreso_seleccionado() {
+fn login_exitoso_entra_directo_al_menu_con_nuevo_ingreso_seleccionado() {
     let mut app = App::default();
     app.menu.seleccion = OpcionMenu::Usuarios;
     app.iniciar_sesion(sesion("Daniel Quintana"), None);
-    // No entra directo al menú: primero pregunta TUI o CLI.
-    assert_eq!(app.vista, Vista::ElegirInterfaz);
-    assert_eq!(app.sesion().unwrap().nombre, "Daniel Quintana");
-
-    app.procesar_tecla_vista(tecla(KeyCode::Char('1')));
+    // Ya no pregunta TUI o CLI en cada login (`ElegirInterfaz` dejó de
+    // alcanzarse desde acá): la elección de interfaz ahora es explícita y
+    // persistente — "Modo comandos" en el Menú, o `/clasico` en comandos —
+    // así que login entra directo, con la selección ya reiniciada.
     assert_eq!(app.vista, Vista::MenuPrincipal);
     assert_eq!(app.menu.seleccion, OpcionMenu::NuevoIngreso);
+    assert_eq!(app.sesion().unwrap().nombre, "Daniel Quintana");
 }
 
 #[test]
-fn login_exitoso_elegir_cli_sale_con_salidaapp_modocomandos_y_la_misma_sesion() {
+fn elegir_interfaz_cli_sigue_saliendo_con_salidaapp_modocomandos() {
+    // El login ya no pasa por `ElegirInterfaz` (ver el test de arriba), pero
+    // la Vista y su mecanismo siguen existiendo — se ejercitan directamente
+    // acá para no perder cobertura de `SalidaApp::ModoComandos` mientras el
+    // único camino que los alcanzaba (elegir CLI al loguear) queda retirado.
     let mut app = App::default();
     app.iniciar_sesion(sesion("Daniel Quintana"), None);
-    assert_eq!(app.vista, Vista::ElegirInterfaz);
+    app.vista = Vista::ElegirInterfaz;
 
     app.procesar_tecla_vista(tecla(KeyCode::Char('2')));
     assert!(app.salir);

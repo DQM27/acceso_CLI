@@ -31,7 +31,7 @@ expression: volcado
                                                                                                     
                                                                                                     
  ↑↓ Mover  ENTER Editar  N Nuevo  P Clave  A Estado  / Buscar  ESC Volver  F2 Salida rápida         
- F7 Tema                                                                                            
+ CTRL+Q Cerrar sesión  F7 Tema                                                                      
                                                                                                     
 
 === estilos ===
@@ -116,6 +116,8 @@ expression: volcado
 "F2" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
 " Salida rápida         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"CTRL+Q" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+" Cerrar sesión  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "F7" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
-" Tema                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" Tema                                                                      " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE

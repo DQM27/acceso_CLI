@@ -29,9 +29,9 @@ expression: volcado
                                                                                                    
                                                                                                    
                                                                                                    
-                                                                                                   
  0–0 de 0 cambios                                                                                  
- ↑↓ Seleccionar  PgUp/PgDn Página  ESC Volver  F2 Salida rápida  CTRL+←/→ Pestañas  F7 Tema        
+ ↑↓ Seleccionar  PgUp/PgDn Página  ESC Volver  F2 Salida rápida  CTRL+Q Cerrar sesión              
+ CTRL+←/→ Pestañas  F7 Tema                                                                        
                                                                                                    
 
 === estilos ===
@@ -99,7 +99,6 @@ expression: volcado
 "                                                                                                   " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
 "                                                                                                   " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
 "                                                                                                   " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
-"                                                                                                   " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
 " " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
 "0–0 de 0 cambios                                                                                 " fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
 " " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
@@ -112,8 +111,11 @@ expression: volcado
 " Volver  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
 "F2" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
 " Salida rápida  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"CTRL+Q" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+" Cerrar sesión              " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
 "CTRL+←/→" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
 " Pestañas  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
 "F7" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
-" Tema        " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+" Tema                                                                        " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
 "                                                                                                   " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE

@@ -5,6 +5,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Paragraph, Tabs},
 };
 
+use super::keyboard::CERRAR_SESION_HINT;
 use super::{MARCADOR_SELECCION, Theme};
 use crate::{models::usuario::RolUsuario, services::autenticacion_service::UsuarioSesion};
 
@@ -325,6 +326,7 @@ impl ScreenShell<'_> {
         }
         if self.authenticated {
             primary.push(CommandHint::new("F2", "Salida rápida"));
+            primary.push(CERRAR_SESION_HINT);
         }
         if self.tabs.is_some() {
             primary.push(CommandHint::new("CTRL+←/→", "Pestañas"));

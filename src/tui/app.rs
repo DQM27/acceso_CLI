@@ -27,7 +27,7 @@ use super::{
     empresas::{self, AccionEmpresas, EmpresasState},
     historial::{self, AccionHistorial, HistorialState},
     login::{self, AccionLogin, LoginState},
-    menu_principal::{self, AccionMenu, MenuPrincipalState, OpcionMenu},
+    menu_principal::{self, AccionMenu, ConfirmacionMenu, MenuPrincipalState, OpcionMenu},
     nuevo_ingreso::{self, AccionNuevoIngreso, NuevoIngresoState},
     preferences::{PreferencesStore, UiPreferences},
     salida_rapida::{self, AccionSalidaRapida, SalidaRapidaState},
@@ -515,6 +515,16 @@ impl App {
                 self.salir = true;
                 return;
             }
+            // Ctrl+Q: cerrar sesión desde cualquier pantalla, con la misma
+            // confirmación (Enter/Esc) que ya usa la opción "L" del Menú —
+            // se arma directamente sobre `menu.confirmacion` y se salta a
+            // esa pantalla para reusar su tarjeta, en vez de duplicar un
+            // segundo mecanismo de confirmación sólo para este atajo.
+            Some(StandardCommand::CerrarSesion) if self.sesion.is_some() => {
+                self.menu.confirmacion = Some(ConfirmacionMenu::CerrarSesion);
+                self.vista = Vista::MenuPrincipal;
+                return;
+            }
             Some(StandardCommand::Theme) => {
                 self.tema = self.tema.next();
                 self.persistir_preferencias_si_cambiaron();
@@ -827,15 +837,18 @@ impl App {
         }
     }
 
-    fn iniciar_sesion(&mut self, sesion: UsuarioSesion, _core: Option<&AppCore>) {
+    fn iniciar_sesion(&mut self, sesion: UsuarioSesion, core: Option<&AppCore>) {
         self.sesion = Some(sesion);
         self.pestanas_visitadas = [false; 9];
         self.menu.nueva_sesion();
-        self.elegir_interfaz.reiniciar();
-        // No entra directo al Menú/pestañas: primero pregunta TUI o CLI en
-        // `ElegirInterfaz` (`sincronizar_vista_con_tema` se aplica recién si
-        // elige TUI, ver `procesar_tecla_vista_con_core`).
-        self.vista = Vista::ElegirInterfaz;
+        // Ya no pregunta TUI o CLI en cada login (`ElegirInterfaz`): con la
+        // preferencia persistente de interfaz (`interfaz_preferida`) y
+        // "Modo comandos" ya disponible como opción explícita del Menú
+        // Principal, esa pantalla extra antes de cada sesión sólo repetía
+        // una elección que el operador ya hizo (o puede hacer cuando
+        // quiera) sin necesidad de pasar por acá.
+        self.vista = Vista::MenuPrincipal;
+        self.sincronizar_vista_con_tema(core);
     }
 
     /// El Menú Principal y la navegación por pestañas son dos modos

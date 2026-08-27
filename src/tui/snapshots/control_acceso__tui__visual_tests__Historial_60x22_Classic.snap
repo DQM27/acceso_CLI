@@ -21,9 +21,9 @@ expression: volcado
                                                             
                                                             
                                                             
-                                                            
  ↑↓ Mover  PGUP/PGDN Página  F3 CLÁSICA  F5 Exportar        
- ESC Volver  F1 más  F2 Salida rápida  F7 Tema              
+ ESC Volver  F1 más  F2 Salida rápida  CTRL+Q Cerrar sesión 
+ F7 Tema                                                    
                                                             
 
 === estilos ===
@@ -76,9 +76,6 @@ expression: volcado
 "                                                          " fg=Rgb(105, 135, 111) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                          " fg=Rgb(105, 135, 111) bg=Black mod=NONE
-" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "↑↓" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
 " Mover  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "PGUP/PGDN" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
@@ -94,6 +91,9 @@ expression: volcado
 " más  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "F2" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
 " Salida rápida  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"CTRL+Q" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+" Cerrar sesión " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "F7" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
-" Tema              " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" Tema                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE

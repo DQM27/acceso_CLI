@@ -7,8 +7,10 @@ use super::shell::CommandHint;
 /// Las acciones de dominio siguen perteneciendo a cada vista; este módulo solo
 /// define el significado estable de las teclas comunes.
 ///
-/// Adopción real desigual: `Help`, `Cancel`, `Theme`, `QuickExit` y
-/// `EmergencyExit` las usan todas las pantallas relevantes. `Primary`,
+/// Adopción real desigual: `Help`, `Cancel`, `Theme`, `QuickExit`,
+/// `EmergencyExit` y `CerrarSesion` las usan todas las pantallas relevantes
+/// (las tres últimas se resuelven en `procesar_tecla_global`, antes de
+/// despachar por vista — nunca dentro de una vista individual). `Primary`,
 /// `FocusNext` y `FocusPrevious` sólo las consume `historial/state.rs` de
 /// verdad — el resto de pantallas maneja Tab/BackTab/Enter con su propio
 /// `match` local en vez de pasar por `standard_command`. No es un bug (cada
@@ -26,6 +28,10 @@ pub enum StandardCommand {
     NextTab,
     QuickExit,
     EmergencyExit,
+    /// Ctrl+Q, alcanzable desde cualquier pantalla con sesión iniciada
+    /// (igual criterio que `EmergencyExit`) — a diferencia de esa, pide
+    /// confirmación (Enter/Esc) en vez de cerrar de un solo toque.
+    CerrarSesion,
 }
 
 pub const HELP_KEY: KeyCode = KeyCode::F(1);
@@ -38,6 +44,7 @@ pub const THEME_HINT: CommandHint<'static> = CommandHint::new("F7", "Tema");
 pub const CANCEL_HINT: CommandHint<'static> = CommandHint::new("ESC", "Cancelar");
 pub const EMERGENCY_EXIT_HINT: CommandHint<'static> =
     CommandHint::new("CTRL+C", "Salida de emergencia");
+pub const CERRAR_SESION_HINT: CommandHint<'static> = CommandHint::new("CTRL+Q", "Cerrar sesión");
 
 /// Traduce únicamente comandos transversales. Flechas, paginación y letras de
 /// acceso rápido se resuelven en la vista que conoce su contexto.
@@ -47,6 +54,13 @@ pub fn standard_command(key: KeyEvent) -> Option<StandardCommand> {
         && matches!(key.code, KeyCode::Char(character) if character.eq_ignore_ascii_case(&'c'))
     {
         return Some(StandardCommand::EmergencyExit);
+    }
+
+    if key.modifiers.contains(KeyModifiers::CONTROL)
+        && !key.modifiers.contains(KeyModifiers::ALT)
+        && matches!(key.code, KeyCode::Char(character) if character.eq_ignore_ascii_case(&'q'))
+    {
+        return Some(StandardCommand::CerrarSesion);
     }
 
     if key.modifiers.contains(KeyModifiers::CONTROL) && !key.modifiers.contains(KeyModifiers::ALT) {

@@ -22,8 +22,8 @@ pub use fields::{
     ChoiceFieldOptions, empty_state, panel_vacio, render_choice_field, render_form_field,
 };
 pub use keyboard::{
-    CANCEL_HINT, EMERGENCY_EXIT_HINT, HELP_HINT, HELP_KEY, QUICK_EXIT_HINT, QUICK_EXIT_KEY,
-    StandardCommand, THEME_HINT, THEME_KEY, standard_command,
+    CANCEL_HINT, CERRAR_SESION_HINT, EMERGENCY_EXIT_HINT, HELP_HINT, HELP_KEY, QUICK_EXIT_HINT,
+    QUICK_EXIT_KEY, StandardCommand, THEME_HINT, THEME_KEY, standard_command,
 };
 pub use layout::{
     MASTER_DETAIL_BREAKPOINT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, MasterDetailAreas,
