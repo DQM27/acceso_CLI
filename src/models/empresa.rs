@@ -1,4 +1,5 @@
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct Empresa {
     pub id: i64,
     pub nombre: String,

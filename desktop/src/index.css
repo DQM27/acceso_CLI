@@ -66,7 +66,8 @@ input {
   font-size: 0.85rem;
 }
 
-.campo input {
+.campo input,
+.campo select {
   padding: 0.6rem 0.8rem;
   border-radius: var(--radio-chico);
   border: 1px solid var(--borde);
@@ -77,11 +78,13 @@ input {
   transition: border-color 0.15s ease;
 }
 
-.campo input:focus {
+.campo input:focus,
+.campo select:focus {
   border-color: var(--acento);
 }
 
-.campo input:disabled {
+.campo input:disabled,
+.campo select:disabled {
   opacity: 0.6;
 }
 

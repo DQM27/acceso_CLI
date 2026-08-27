@@ -391,6 +391,7 @@ dependencies = [
 name = "control-acceso-desktop"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "control_acceso",
  "log",
  "serde",

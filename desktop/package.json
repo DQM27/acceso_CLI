@@ -16,10 +16,13 @@
     "vite": "^8.2.2"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.9.1",
     "@tauri-apps/api": "^2",
     "ag-grid-community": "^36.1.0",
     "ag-grid-react": "^36.1.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-hook-form": "^7.86.0",
+    "zod": "^4.4.3"
   }
 }
