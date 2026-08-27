@@ -5,3 +5,4 @@
 pub mod autenticacion;
 pub mod contratistas;
 pub mod empresas;
+pub mod usuarios;

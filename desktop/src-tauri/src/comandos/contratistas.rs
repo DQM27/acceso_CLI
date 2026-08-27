@@ -1,6 +1,6 @@
 use control_acceso::database::queries::contratistas::PaginaContratistas;
 
-use crate::dto::{DatosContratistaEntrada, FiltroContratistasEntrada};
+use crate::dto::contratistas::{DatosContratistaEntrada, FiltroContratistasEntrada};
 use crate::estado::GuiState;
 
 #[tauri::command]
@@ -16,22 +16,13 @@ pub fn buscar_contratistas(
         .map_err(|error| error.to_string())
 }
 
-fn sesion_activa(state: &GuiState) -> Result<control_acceso::services::autenticacion_service::UsuarioSesion, String> {
-    state
-        .sesion
-        .lock()
-        .unwrap()
-        .clone()
-        .ok_or_else(|| "No hay una sesión activa".to_string())
-}
-
-/// Formulario de alta — usa el mismo DTO que editar (ver dto.rs).
+/// Formulario de alta — usa el mismo DTO que editar (ver dto/contratistas.rs).
 #[tauri::command]
 pub fn crear_contratista(
     datos: DatosContratistaEntrada,
     state: tauri::State<GuiState>,
 ) -> Result<i64, String> {
-    let sesion = sesion_activa(&state)?;
+    let sesion = state.sesion_activa()?;
     state
         .core
         .lock()
@@ -49,7 +40,7 @@ pub fn actualizar_contratista(
     datos: DatosContratistaEntrada,
     state: tauri::State<GuiState>,
 ) -> Result<(), String> {
-    let sesion = sesion_activa(&state)?;
+    let sesion = state.sesion_activa()?;
     state
         .core
         .lock()

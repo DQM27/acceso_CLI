@@ -6,3 +6,4 @@
 export * from "./autenticacion";
 export * from "./contratistas";
 export * from "./empresas";
+export * from "./usuarios";

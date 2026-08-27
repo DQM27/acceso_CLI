@@ -6,6 +6,7 @@ use crate::database::queries::{
 use crate::database::{error::DatabaseError, search::BusquedaTexto};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct EmpresaResumen {
     pub id: i64,
     pub nombre: String,

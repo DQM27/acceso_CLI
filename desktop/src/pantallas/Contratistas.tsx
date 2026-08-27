@@ -9,7 +9,6 @@ import type {
   EstadoPraind,
   FiltroContratistas,
   TipoIngreso,
-  UsuarioSesion,
 } from "../api";
 
 // "es de ruta"/"tiene acceso" se pueden tocar directo desde la grilla (ambos
@@ -41,13 +40,7 @@ const columnas: ColDef<ContratistaResumen>[] = [
 const TIPOS: TipoIngreso[] = ["Praind", "InHouse", "PorCorreo", "Swat"];
 const FILTRO_VACIO: FiltroContratistas = {};
 
-export default function Contratistas({
-  sesion,
-  onCerrarSesion,
-}: {
-  sesion: UsuarioSesion;
-  onCerrarSesion: () => void;
-}) {
+export default function Contratistas() {
   const [filtro, setFiltro] = useState<FiltroContratistas>(FILTRO_VACIO);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [filas, setFilas] = useState<ContratistaResumen[]>([]);
@@ -230,18 +223,10 @@ export default function Contratistas({
           marginBottom: "0.75rem",
         }}
       >
-        <div>
-          <strong style={{ color: "var(--acento)" }}>{sesion.nombre}</strong>{" "}
-          <span style={{ color: "var(--muted)" }}>({sesion.rol})</span>
-        </div>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <button className="boton boton-primario" onClick={() => setFormularioAbierto("crear")}>
-            + Nuevo contratista
-          </button>
-          <button className="boton" onClick={onCerrarSesion}>
-            Cerrar sesión
-          </button>
-        </div>
+        <h1 style={{ margin: 0, fontSize: "1.2rem", color: "var(--acento)" }}>Contratistas</h1>
+        <button className="boton boton-primario" onClick={() => setFormularioAbierto("crear")}>
+          + Nuevo contratista
+        </button>
       </div>
 
       {error && <p style={{ color: "var(--error)" }}>{error}</p>}

@@ -46,6 +46,14 @@ pub fn run() {
             comandos::contratistas::crear_contratista,
             comandos::contratistas::actualizar_contratista,
             comandos::empresas::listar_empresas,
+            comandos::empresas::buscar_empresas,
+            comandos::empresas::crear_empresa,
+            comandos::empresas::actualizar_empresa,
+            comandos::empresas::establecer_empresa_activa,
+            comandos::usuarios::buscar_usuarios,
+            comandos::usuarios::crear_usuario,
+            comandos::usuarios::actualizar_usuario,
+            comandos::usuarios::cambiar_password_usuario,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

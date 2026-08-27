@@ -9,6 +9,7 @@ use crate::models::usuario::RolUsuario;
 
 /// Contrato de lectura administrativa; nunca contiene material de autenticación.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct UsuarioResumen {
     pub id: i64,
     pub cedula: String,

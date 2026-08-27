@@ -15,3 +15,15 @@ pub struct GuiState {
     /// que `main.rs` con `_instancia`).
     pub _instancia: InstanciaGuard,
 }
+
+impl GuiState {
+    /// Sesión actual o el error que ya usan todos los comandos que la
+    /// necesitan — un solo lugar para ese chequeo repetido.
+    pub fn sesion_activa(&self) -> Result<UsuarioSesion, String> {
+        self.sesion
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or_else(|| "No hay una sesión activa".to_string())
+    }
+}

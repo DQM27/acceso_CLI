@@ -1,9 +1,3 @@
-//! Tipos de frontera: traducen el shape que le conviene a un formulario web
-//! (campos opcionales sueltos) hacia los tipos reales del núcleo
-//! (`FiltroContratistas`, con `Igualdad`/`FiltroPraind` propios). "hoy" para
-//! PRAIND se calcula acá, nunca lo manda el cliente — es una regla de
-//! negocio, no una decisión de la UI.
-
 use chrono::NaiveDate;
 
 use control_acceso::database::queries::Igualdad;
