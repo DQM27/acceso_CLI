@@ -43,13 +43,9 @@ impl Engine {
     ) {
         let animacion = match calidad {
             VisualQuality::Off => Animacion::resuelta(1.0),
-            VisualQuality::Normal => Animacion::con_retraso(
-                0.0,
-                1.0,
-                retraso,
-                DURACION_APARICION,
-                Easing::EaseOut,
-            ),
+            VisualQuality::Normal => {
+                Animacion::con_retraso(0.0, 1.0, retraso, DURACION_APARICION, Easing::EaseOut)
+            }
         };
         self.animaciones.insert(id, animacion);
     }

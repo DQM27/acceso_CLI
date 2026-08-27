@@ -52,7 +52,11 @@ impl Animacion {
         if self.duracion.is_zero() {
             return 1.0;
         }
-        let transcurrido = self.inicio.elapsed().saturating_sub(self.retraso).as_secs_f32();
+        let transcurrido = self
+            .inicio
+            .elapsed()
+            .saturating_sub(self.retraso)
+            .as_secs_f32();
         (transcurrido / self.duracion.as_secs_f32()).clamp(0.0, 1.0)
     }
 

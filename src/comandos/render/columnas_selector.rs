@@ -10,7 +10,10 @@ use super::estilos::{estilo_seleccion, muted};
 
 /// `[✓]`/`[ ]` con `›` en la activa — mismo vocabulario de foco que el
 /// resto de la app.
-pub(super) fn lineas_selector_columnas(app: &AppState, edicion: EdicionColumnas) -> Vec<Line<'static>> {
+pub(super) fn lineas_selector_columnas(
+    app: &AppState,
+    edicion: EdicionColumnas,
+) -> Vec<Line<'static>> {
     let titulo = match edicion.objetivo {
         ObjetivoColumnas::Busqueda => "COLUMNAS — resultados de búsqueda",
         ObjetivoColumnas::Activos => "COLUMNAS — activos",

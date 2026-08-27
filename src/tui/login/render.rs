@@ -1,22 +1,19 @@
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout, Rect},
-    style::{Color, Style},
-    text::Line,
-    widgets::{Block, Borders, Paragraph},
+    text::{Line, Span},
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 
 use super::*;
-use crate::tui::ui_kit::{MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, Theme, render_terminal_too_small};
+use crate::tui::ui_kit::{
+    MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, TextInputFocus, Theme, render_terminal_too_small,
+};
 
-const ANCHO_CAJA: u16 = 34;
-const ALTO_CAJA: u16 = 3;
+const ANCHO_PANEL: u16 = 56;
+const ALTO_PANEL: u16 = 16;
+const ALTO_CAMPO: u16 = 3;
 
-/// Login minimalista, estilo consola: sólo un par de cajas delgadas, blancas
-/// y centradas, sin ningún texto — ni título, ni etiquetas, ni formulario.
-/// La cédula en una, Enter, y la contraseña aparece debajo en otra
-/// (enmascarada). El estado (error, verificando) se avisa aparte, debajo de
-/// las cajas, para no meterle texto adentro.
 pub fn render(frame: &mut Frame, area: Rect, state: &LoginState, theme: Theme) {
     if area.width < MIN_TERMINAL_WIDTH || area.height < MIN_TERMINAL_HEIGHT {
         render_terminal_too_small(
@@ -33,84 +30,146 @@ pub fn render(frame: &mut Frame, area: Rect, state: &LoginState, theme: Theme) {
     frame.render_widget(Block::default().style(theme.base()), area);
 
     let validando = matches!(state.estado(), EstadoLogin::Validando { .. });
-    let muestra_password = state.campo_activo() == CampoLogin::Password || validando;
+    let ancho = ANCHO_PANEL.min(area.width.saturating_sub(4));
+    let alto = ALTO_PANEL.min(area.height.saturating_sub(2));
+    let panel = centrar(area, ancho, alto);
 
-    let ancho = ANCHO_CAJA.min(area.width.saturating_sub(4));
-    let alto_bloque = if muestra_password {
-        ALTO_CAJA * 2 + 1
+    frame.render_widget(Clear, panel);
+    let borde = if validando {
+        theme.warning()
     } else {
-        ALTO_CAJA
+        theme.border()
     };
-    let bloque = centrar(area, ancho, alto_bloque);
+    let bloque = Block::default()
+        .borders(Borders::ALL)
+        .border_style(borde)
+        .style(theme.base());
+    let interior = bloque.inner(panel);
+    frame.render_widget(bloque, panel);
+    let contenido = Rect::new(
+        interior.x.saturating_add(1),
+        interior.y,
+        interior.width.saturating_sub(2),
+        interior.height,
+    );
 
-    if muestra_password {
-        let filas = Layout::vertical([
-            Constraint::Length(ALTO_CAJA),
-            Constraint::Length(1),
-            Constraint::Length(ALTO_CAJA),
-        ])
-        .split(bloque);
-        render_caja(frame, filas[0], state.cedula.value(), state.cedula.cursor(), false);
-        render_caja(
-            frame,
-            filas[2],
-            &state.password_enmascarado(),
-            state.password.cursor(),
-            !validando,
-        );
-        render_estado(
-            frame,
-            Rect::new(bloque.x, filas[2].y + ALTO_CAJA, ancho, 1),
-            state,
-            theme,
-        );
-    } else {
-        let filas = Layout::vertical([Constraint::Length(ALTO_CAJA)]).split(bloque);
-        render_caja(frame, filas[0], state.cedula.value(), state.cedula.cursor(), true);
-        render_estado(
-            frame,
-            Rect::new(bloque.x, filas[0].y + ALTO_CAJA, ancho, 1),
-            state,
-            theme,
-        );
-    }
+    let filas = Layout::vertical([
+        Constraint::Length(2),
+        Constraint::Length(1),
+        Constraint::Length(ALTO_CAMPO),
+        Constraint::Length(ALTO_CAMPO),
+        Constraint::Length(1),
+        Constraint::Min(1),
+    ])
+    .split(contenido);
+
+    render_encabezado(frame, filas[0], theme);
+    render_pasos(frame, filas[1], state.campo_activo(), validando, theme);
+
+    state.cedula.render_with_cursor(
+        frame,
+        filas[2],
+        "CEDULA",
+        "1-1111-1111",
+        TextInputFocus::new(
+            state.campo_activo() == CampoLogin::Cedula && !validando,
+            state.cursor_visible,
+        ),
+        theme,
+    );
+    state.password.render_masked_with_cursor(
+        frame,
+        filas[3],
+        "CONTRASENA",
+        "Clave de acceso",
+        TextInputFocus::new(
+            state.campo_activo() == CampoLogin::Password && !validando,
+            state.cursor_visible,
+        ),
+        theme,
+    );
+
+    render_estado(frame, filas[4], state, theme);
+    render_ayuda(frame, filas[5], state, theme);
 }
 
-/// Caja blanca sin título ni etiqueta — la activa en blanco pleno, la ya
-/// completada (cédula, una vez que el foco pasó a contraseña) atenuada para
-/// marcar cuál sigue editable sin dejar de ser "sólo la caja".
-fn render_caja(frame: &mut Frame, area: Rect, valor: &str, cursor: usize, activa: bool) {
-    let color = if activa { Color::White } else { Color::Gray };
-    let estilo = Style::default().fg(color);
-    let bloque = Block::default().borders(Borders::ALL).border_style(estilo);
-    let interior = bloque.inner(area);
-    frame.render_widget(bloque, area);
-
-    let viewport = interior.width.saturating_sub(1) as usize;
-    let scroll = cursor.saturating_sub(viewport);
-    let texto: String = valor.chars().skip(scroll).take(viewport).collect();
-    frame.render_widget(Paragraph::new(Line::from(texto).style(estilo)), interior);
-
-    if activa {
-        let columna = cursor.saturating_sub(scroll).min(viewport) as u16;
-        frame.set_cursor_position((interior.x + columna, interior.y));
-    }
-}
-
-/// Única línea de texto de toda la pantalla, y sólo cuando hace falta:
-/// verificando o un error. Sin eso, no hay nada debajo de las cajas.
 fn render_estado(frame: &mut Frame, area: Rect, state: &LoginState, theme: Theme) {
     let (texto, estilo) = match state.estado() {
-        EstadoLogin::Normal | EstadoLogin::Exito => return,
-        EstadoLogin::Validando { .. } => {
-            (format!("{} Verificando…", state.spinner()), theme.warning())
-        }
-        EstadoLogin::Error(mensaje) => (format!("✗ {mensaje}"), theme.danger()),
+        EstadoLogin::Normal => ("Enter avanza o confirma".to_owned(), theme.muted()),
+        EstadoLogin::Exito => ("Acceso concedido".to_owned(), theme.success()),
+        EstadoLogin::Validando { .. } => (
+            format!("{} Verificando credenciales...", state.spinner()),
+            theme.warning(),
+        ),
+        EstadoLogin::Error(mensaje) => (format!("Error: {mensaje}"), theme.danger()),
     };
     frame.render_widget(
         Paragraph::new(texto)
             .style(estilo)
             .alignment(Alignment::Center),
+        area,
+    );
+}
+
+fn render_encabezado(frame: &mut Frame, area: Rect, theme: Theme) {
+    let lineas = vec![
+        Line::from("CONTROL DE ACCESO").style(theme.title()),
+        Line::from("Inicio de sesion local").style(theme.muted()),
+    ];
+    frame.render_widget(Paragraph::new(lineas).alignment(Alignment::Center), area);
+}
+
+fn render_pasos(
+    frame: &mut Frame,
+    area: Rect,
+    campo_activo: CampoLogin,
+    validando: bool,
+    theme: Theme,
+) {
+    let paso_cedula = estilo_paso(
+        "1 CEDULA",
+        campo_activo == CampoLogin::Cedula && !validando,
+        theme,
+    );
+    let paso_password = estilo_paso(
+        "2 CONTRASENA",
+        campo_activo == CampoLogin::Password && !validando,
+        theme,
+    );
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            paso_cedula,
+            Span::styled("  >  ", theme.muted()),
+            paso_password,
+        ]))
+        .alignment(Alignment::Center),
+        area,
+    );
+}
+
+fn estilo_paso(texto: &'static str, activo: bool, theme: Theme) -> Span<'static> {
+    if activo {
+        Span::styled(texto, theme.accent())
+    } else {
+        Span::styled(texto, theme.muted())
+    }
+}
+
+fn render_ayuda(frame: &mut Frame, area: Rect, state: &LoginState, theme: Theme) {
+    if area.height == 0 {
+        return;
+    }
+
+    let texto = if state.ayuda_expandida {
+        "Tab cambia de campo. Enter avanza o inicia sesion. Esc sale."
+    } else {
+        "Tab cambiar campo  |  Enter continuar  |  ? ayuda  |  Esc salir"
+    };
+    frame.render_widget(
+        Paragraph::new(texto)
+            .style(theme.muted())
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true }),
         area,
     );
 }

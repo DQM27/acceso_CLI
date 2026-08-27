@@ -10,7 +10,9 @@ use crate::comandos::columnas::{Columna, ColumnaHistorial, SelectorColumnas};
 use crate::comandos::historial::HistorialState;
 use crate::tiempo::a_costa_rica;
 
-use super::estilos::{advertencia, estilo_fundido, estilo_seleccion, muted, FADE_ACENTO, FADE_MUTED};
+use super::estilos::{
+    FADE_ACENTO, FADE_MUTED, advertencia, estilo_fundido, estilo_seleccion, muted,
+};
 use super::tabla::{anchos_columnas, columnas_visibles, fila_columnas};
 use super::util::tipo_texto;
 

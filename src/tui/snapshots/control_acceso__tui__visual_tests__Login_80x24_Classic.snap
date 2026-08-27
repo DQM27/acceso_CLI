@@ -7,22 +7,22 @@ expression: volcado
                                                                                 
                                                                                 
                                                                                 
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                       ┌────────────────────────────────┐                       
-                       │                                │                       
-                       └────────────────────────────────┘                       
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
+            ┌──────────────────────────────────────────────────────┐            
+            │                   CONTROL DE ACCESO                  │            
+            │                Inicio de sesion local                │            
+            │               1 CEDULA  >  2 CONTRASENA              │            
+            │ ┌ CEDULA ──────────────────────────────────────────┐ │            
+            │ │                                                  │ │            
+            │ └──────────────────────────────────────────────────┘ │            
+            │ ┌ CONTRASENA ──────────────────────────────────────┐ │            
+            │ │Clave de acceso                                   │ │            
+            │ └──────────────────────────────────────────────────┘ │            
+            │                Enter avanza o confirma               │            
+            │ Tab cambiar campo  |  Enter continuar  |  ? ayuda  | │            
+            │                       Esc salir                      │            
+            │                                                      │            
+            │                                                      │            
+            └──────────────────────────────────────────────────────┘            
                                                                                 
                                                                                 
                                                                                 
@@ -33,30 +33,116 @@ expression: volcado
 "                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                       " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"┌────────────────────────────────┐" fg=White bg=Black mod=NONE
-"                       " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                       " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"│" fg=White bg=Black mod=NONE
-"                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"│" fg=White bg=Black mod=NONE
-"                       " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                       " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"└────────────────────────────────┘" fg=White bg=Black mod=NONE
-"                       " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"┌──────────────────────────────────────────────────────┐" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"                   " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"CONTROL DE ACCESO" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+"                  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"Inicio de sesion local" fg=Rgb(105, 135, 111) bg=Black mod=NONE
+"                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"               " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"1 CEDULA" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+"  >  2 CONTRASENA" fg=Rgb(105, 135, 111) bg=Black mod=NONE
+"              " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"┌ CEDULA ──────────────────────────────────────────┐" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+"                                                  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"└──────────────────────────────────────────────────┘" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"┌ CONTRASENA ──────────────────────────────────────┐" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"Clave de acceso" fg=Rgb(105, 135, 111) bg=Black mod=NONE
+"                                   " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"└──────────────────────────────────────────────────┘" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"               Enter avanza o confirma              " fg=Rgb(105, 135, 111) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"Tab cambiar campo  |  Enter continuar  |  ? ayuda  |" fg=Rgb(105, 135, 111) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                      Esc salir                     " fg=Rgb(105, 135, 111) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                    " fg=Rgb(105, 135, 111) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                    " fg=Rgb(105, 135, 111) bg=Black mod=NONE
+" " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"│" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"└──────────────────────────────────────────────────────┘" fg=Rgb(76, 119, 85) bg=Black mod=NONE
+"            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE

@@ -79,8 +79,20 @@ pub fn render(frame: &mut Frame, area: Rect, state: &ElegirInterfazState, theme:
     );
     let filas = Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).split(bloque);
 
-    render_opcion(frame, filas[0], ETIQUETA_TUI, state.seleccion == Opcion::Tui, theme);
-    render_opcion(frame, filas[1], ETIQUETA_CLI, state.seleccion == Opcion::Cli, theme);
+    render_opcion(
+        frame,
+        filas[0],
+        ETIQUETA_TUI,
+        state.seleccion == Opcion::Tui,
+        theme,
+    );
+    render_opcion(
+        frame,
+        filas[1],
+        ETIQUETA_CLI,
+        state.seleccion == Opcion::Cli,
+        theme,
+    );
 }
 
 fn render_opcion(frame: &mut Frame, area: Rect, etiqueta: &str, seleccionada: bool, theme: Theme) {
@@ -95,7 +107,9 @@ fn render_opcion(frame: &mut Frame, area: Rect, etiqueta: &str, seleccionada: bo
         format!("  {etiqueta}")
     };
     frame.render_widget(
-        Paragraph::new(texto).style(estilo).alignment(Alignment::Center),
+        Paragraph::new(texto)
+            .style(estilo)
+            .alignment(Alignment::Center),
         area,
     );
 }

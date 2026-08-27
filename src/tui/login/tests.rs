@@ -17,12 +17,8 @@ fn login_completo() -> LoginState {
     state
 }
 
-/// El login ya no es un formulario: sin título, sin etiquetas, sin siquiera
-/// el nombre del producto — sólo una caja delgada y centrada para la cédula
-/// (la de la contraseña recién aparece cuando `Enter` avanza el foco, eso lo
-/// cubre `enter_desde_cedula_avanza_a_password`, acá sólo el estado inicial).
 #[test]
-fn presenta_solo_una_caja_sin_texto_para_la_cedula() {
+fn presenta_contexto_y_dos_campos_desde_el_inicio() {
     use ratatui::{Terminal, backend::TestBackend};
 
     let ancho = 100;
@@ -39,38 +35,21 @@ fn presenta_solo_una_caja_sin_texto_para_la_cedula() {
         .unwrap();
 
     let buffer = terminal.backend().buffer();
-    let filas: Vec<String> = (0..buffer.area.height)
+    let texto: String = (0..buffer.area.height)
         .map(|y| {
             (0..buffer.area.width)
                 .map(|x| buffer[(x, y)].symbol())
                 .collect()
         })
-        .collect();
-    let texto = filas.join("\n");
+        .collect::<Vec<String>>()
+        .join("\n");
 
-    assert!(!filas.iter().any(|fila| contiene_hora(fila)), "{texto}");
-    // Sin formulario: nada de título, marca de producto, etiquetas de campo
-    // ni contraseña visible todavía (el foco arranca en cédula).
-    assert!(!texto.contains("BRISAS CLI"), "{texto}");
-    assert!(!texto.contains("CONTROL DE ACCESO"), "{texto}");
-    assert!(!texto.contains("INICIO DE SESIÓN"), "{texto}");
-    assert!(!texto.contains("CÉDULA"), "{texto}");
-    assert!(!texto.contains("CONTRASEÑA"), "{texto}");
-
-    // Una única caja delgada y centrada — se ubica por sus bordes, no por
-    // ningún texto dentro (no lleva ninguno).
-    assert_eq!(texto.matches('┌').count(), 1, "{texto}");
-    assert_eq!(texto.matches('┘').count(), 1, "{texto}");
-}
-
-fn contiene_hora(texto: &str) -> bool {
-    texto.as_bytes().windows(5).any(|ventana| {
-        ventana[0].is_ascii_digit()
-            && ventana[1].is_ascii_digit()
-            && ventana[2] == b':'
-            && ventana[3].is_ascii_digit()
-            && ventana[4].is_ascii_digit()
-    })
+    assert!(texto.contains("CONTROL DE ACCESO"), "{texto}");
+    assert!(texto.contains("Inicio de sesion local"), "{texto}");
+    assert!(texto.contains("CEDULA"), "{texto}");
+    assert!(texto.contains("CONTRASENA"), "{texto}");
+    assert!(texto.contains("Enter continuar"), "{texto}");
+    assert_eq!(texto.matches('┌').count(), 3, "{texto}");
 }
 
 #[test]

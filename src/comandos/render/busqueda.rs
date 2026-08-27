@@ -6,7 +6,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
 use crate::comandos::columnas::{Columna, ColumnaBusqueda, SelectorColumnas};
-use crate::comandos::resolver::{es_comodin_todos, MIN_CONSULTA};
+use crate::comandos::resolver::{MIN_CONSULTA, es_comodin_todos};
 
 use super::estilos::{acento, estilo_seleccion, muted};
 use super::tabla::{anchos_columnas, columnas_visibles, fila_columnas};
@@ -73,7 +73,11 @@ fn linea_paginacion_exacta(offset: usize, cantidad: usize, total: usize) -> Opti
     }
     let desde = offset + 1;
     let hasta = offset + cantidad;
-    let mas = if hasta < total { " · PageDown más" } else { "" };
+    let mas = if hasta < total {
+        " · PageDown más"
+    } else {
+        ""
+    };
     let atras = if offset > 0 { " · PageUp atrás" } else { "" };
     Some(Line::from(Span::styled(
         format!("{desde}-{hasta} de {total}{mas}{atras}"),
@@ -209,7 +213,9 @@ pub(super) fn lineas_coincidencias(
         return vec![
             Line::from(""),
             Line::from(Span::styled(
-                format!("Escriba al menos {MIN_CONSULTA} letras para buscar, o \"*\" para ver todos"),
+                format!(
+                    "Escriba al menos {MIN_CONSULTA} letras para buscar, o \"*\" para ver todos"
+                ),
                 muted(),
             )),
         ];

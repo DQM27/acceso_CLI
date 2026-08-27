@@ -1,25 +1,21 @@
-//! Pantalla de login/root, alineada a la izquierda, pegada a la esquina
-//! superior — la misma esquina que usa cualquier otra pantalla (Inicio,
-//! Coincidencias...), no una escena aparte flotando a mitad de terminal: es
-//! una interfaz de comandos, y el login es la acción que un operador repite
-//! más veces por turno (entra y sale de sesión constantemente, ver
-//! `/cerrarsesion`), así que no se paga ceremonia visual cada vez. Identidad,
-//! foco y aviso se apoyan sólo en espaciado, alineación y la gramática de
-//! glifos (● › ✓ ! ×). El cursor es un "_" con estilo, nunca el bloque
-//! parpadeante del terminal — por eso esta función jamás llama a
+//! Pantalla de login/root para la interfaz de comandos. Sigue siendo una
+//! composición de texto, sin recuadros ni superficies pesadas, pero ahora
+//! muestra estado, paso actual y salida disponible: suficiente orientación
+//! para no parecer un campo suelto. El cursor es un "_" con estilo, nunca el
+//! bloque parpadeante del terminal — por eso esta función jamás llama a
 //! `frame.set_cursor_position`.
 
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 
 use crate::comandos::estado::{AppState, Fase, NivelFeedback};
 
 use super::estilos::{
-    estilo_fundido, glifo_feedback, FADE_ACENTO, FADE_ADVERTENCIA, FADE_ERROR, FADE_EXITO,
-    FADE_MUTED, FADE_TEXTO,
+    FADE_ACENTO, FADE_ADVERTENCIA, FADE_ERROR, FADE_EXITO, FADE_MUTED, FADE_TEXTO, estilo_fundido,
+    glifo_feedback,
 };
 
 pub(super) fn render_login(frame: &mut Frame, area: Rect, app: &AppState) {
@@ -27,20 +23,26 @@ pub(super) fn render_login(frame: &mut Frame, area: Rect, app: &AppState) {
     let opacidad_prompt = app.presentacion.opacidad("prompt");
     let opacidad_aviso = app.presentacion.opacidad("feedback");
 
-    // Un renglón de aire entre bloques — pegado a la esquina superior
-    // izquierda, la misma que usa cualquier otra pantalla, no flotando a
-    // mitad de terminal.
     const AIRE: u16 = 1;
     let y_titulo = area.y;
-    let y_prompt = y_titulo + 1 + AIRE;
-    let y_aviso = y_prompt + 1 + AIRE;
+    let y_estado = y_titulo + 1;
+    let y_prompt = y_estado + 1 + AIRE;
+    let y_ayuda = y_prompt + 1;
+    let y_aviso = y_ayuda + 1 + AIRE;
 
     frame.render_widget(
         Paragraph::new(linea_titulo_login(&app.fase, opacidad_titulo)),
         Rect::new(area.x, y_titulo, area.width, 1.min(area.height)),
     );
 
-    if area.height > 1 + AIRE {
+    if area.height > 1 {
+        frame.render_widget(
+            Paragraph::new(linea_estado_login(&app.fase, opacidad_prompt)),
+            Rect::new(area.x, y_estado, area.width, 1),
+        );
+    }
+
+    if area.height > 2 + AIRE {
         match etiqueta_prompt(&app.fase) {
             Some(etiqueta) => {
                 let vacio = app.input.value().is_empty();
@@ -61,7 +63,14 @@ pub(super) fn render_login(frame: &mut Frame, area: Rect, app: &AppState) {
         }
     }
 
-    if area.height > 1 + 2 * AIRE + 1 {
+    if area.height > 3 + AIRE {
+        frame.render_widget(
+            Paragraph::new(linea_ayuda_login(&app.fase, opacidad_prompt)),
+            Rect::new(area.x, y_ayuda, area.width, 1),
+        );
+    }
+
+    if area.height > 4 + 2 * AIRE {
         frame.render_widget(
             Paragraph::new(linea_aviso_login(app, opacidad_aviso)),
             Rect::new(area.x, y_aviso, area.width, 1),
@@ -88,6 +97,48 @@ fn linea_titulo_login(fase: &Fase, opacidad: f32) -> Line<'static> {
     Line::from(Span::styled(
         texto,
         estilo_fundido(color, opacidad, Modifier::BOLD),
+    ))
+}
+
+fn linea_estado_login(fase: &Fase, opacidad: f32) -> Line<'static> {
+    let (texto, color, modificador) = match fase {
+        Fase::LoginCedula => (
+            "● Paso 1 de 2 · Identificación",
+            FADE_MUTED,
+            Modifier::empty(),
+        ),
+        Fase::LoginPassword { .. } => (
+            "✓ Identidad reconocida · Paso 2 de 2",
+            FADE_EXITO,
+            Modifier::empty(),
+        ),
+        Fase::Verificando { .. } => ("● Verificando credenciales", FADE_MUTED, Modifier::empty()),
+        Fase::RootCedula => (
+            "● Configuración inicial · Paso 1 de 4",
+            FADE_MUTED,
+            Modifier::empty(),
+        ),
+        Fase::RootNombre { .. } => (
+            "● Configuración inicial · Paso 2 de 4",
+            FADE_MUTED,
+            Modifier::empty(),
+        ),
+        Fase::RootPassword { .. } => (
+            "● Configuración inicial · Paso 3 de 4",
+            FADE_MUTED,
+            Modifier::empty(),
+        ),
+        Fase::RootConfirmarPassword { .. } => (
+            "● Configuración inicial · Paso 4 de 4",
+            FADE_MUTED,
+            Modifier::empty(),
+        ),
+        Fase::RootCreando { .. } => ("● Creando usuario ROOT", FADE_MUTED, Modifier::empty()),
+        Fase::Operando { .. } => ("", FADE_MUTED, Modifier::empty()),
+    };
+    Line::from(Span::styled(
+        texto,
+        estilo_fundido(color, opacidad, modificador),
     ))
 }
 
@@ -125,9 +176,9 @@ fn valor_prompt(fase: &Fase, app: &AppState) -> String {
         Fase::LoginCedula | Fase::RootCedula | Fase::RootNombre { .. } => {
             app.input.value().to_string()
         }
-        Fase::LoginPassword { .. } | Fase::RootPassword { .. } | Fase::RootConfirmarPassword { .. } => {
-            "•".repeat(app.input.value().chars().count())
-        }
+        Fase::LoginPassword { .. }
+        | Fase::RootPassword { .. }
+        | Fase::RootConfirmarPassword { .. } => "•".repeat(app.input.value().chars().count()),
         Fase::Verificando { .. } | Fase::RootCreando { .. } | Fase::Operando { .. } => {
             String::new()
         }
@@ -147,8 +198,12 @@ fn linea_prompt(etiqueta: &str, valor_mostrado: &str, vacio: bool, opacidad: f32
                 estilo_fundido(FADE_ACENTO, opacidad, Modifier::empty()),
             ),
             Span::styled(
-                etiqueta.to_string(),
+                format!("{etiqueta}: "),
                 estilo_fundido(FADE_MUTED, opacidad, Modifier::empty()),
+            ),
+            Span::styled(
+                "_",
+                estilo_fundido(FADE_ACENTO, opacidad, Modifier::empty()),
             ),
         ])
     } else {
@@ -156,6 +211,10 @@ fn linea_prompt(etiqueta: &str, valor_mostrado: &str, vacio: bool, opacidad: f32
             Span::styled(
                 "› ",
                 estilo_fundido(FADE_ACENTO, opacidad, Modifier::empty()),
+            ),
+            Span::styled(
+                format!("{etiqueta}: "),
+                estilo_fundido(FADE_MUTED, opacidad, Modifier::empty()),
             ),
             Span::styled(
                 valor_mostrado.to_string(),
@@ -167,6 +226,26 @@ fn linea_prompt(etiqueta: &str, valor_mostrado: &str, vacio: bool, opacidad: f32
             ),
         ])
     }
+}
+
+fn linea_ayuda_login(fase: &Fase, opacidad: f32) -> Line<'static> {
+    let texto = match fase {
+        Fase::LoginCedula => "Enter continúa · Esc limpia · Ctrl+C sale",
+        Fase::LoginPassword { .. } => "Enter inicia sesión · Esc cambia usuario · Ctrl+C sale",
+        Fase::Verificando { .. } => "Espere un momento · Ctrl+C sale",
+        Fase::RootCedula | Fase::RootNombre { .. } | Fase::RootPassword { .. } => {
+            "Enter continúa · Esc vuelve al campo anterior · Ctrl+C sale"
+        }
+        Fase::RootConfirmarPassword { .. } => {
+            "Enter crea el usuario · Esc vuelve al campo anterior · Ctrl+C sale"
+        }
+        Fase::RootCreando { .. } => "Espere un momento · Ctrl+C sale",
+        Fase::Operando { .. } => "",
+    };
+    Line::from(Span::styled(
+        texto,
+        estilo_fundido(FADE_MUTED, opacidad, Modifier::empty()),
+    ))
 }
 
 /// Símbolo de la gramática compartida (`✓ ! ×`) con color propio en RGB —
@@ -195,5 +274,57 @@ fn linea_aviso_login(app: &AppState, opacidad: f32) -> Line<'static> {
             ])
         }
         None => Line::from(""),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ratatui::{Terminal, backend::TestBackend};
+    use tui_input::Input;
+
+    use super::*;
+
+    fn renderizar(app: &AppState) -> String {
+        let mut terminal = Terminal::new(TestBackend::new(80, 16)).expect("backend de prueba");
+        terminal
+            .draw(|frame| render_login(frame, frame.area(), app))
+            .expect("render");
+        let buffer = terminal.backend().buffer();
+        (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn login_de_comandos_muestra_paso_prompt_y_ayuda() {
+        let app = AppState::new();
+        let texto = renderizar(&app);
+
+        assert!(texto.contains("BRISAS CLI"), "{texto}");
+        assert!(texto.contains("Paso 1 de 2"), "{texto}");
+        assert!(texto.contains("Identificación: _"), "{texto}");
+        assert!(texto.contains("Enter continúa"), "{texto}");
+    }
+
+    #[test]
+    fn login_de_comandos_enmascara_password_y_conserva_identidad() {
+        let mut app = AppState::new();
+        app.fase = Fase::LoginPassword {
+            cedula: "1-1111-1111".to_string(),
+            nombre: "Ana Operadora".to_string(),
+        };
+        app.input = Input::new("secreto".to_string());
+
+        let texto = renderizar(&app);
+
+        assert!(texto.contains("ANA OPERADORA"), "{texto}");
+        assert!(texto.contains("Paso 2 de 2"), "{texto}");
+        assert!(texto.contains("Contraseña: •••••••_"), "{texto}");
+        assert!(!texto.contains("secreto"), "{texto}");
     }
 }

@@ -9,7 +9,7 @@ use crate::comandos::formulario::{
     Campo, FormularioContratista, MAX_VISIBLES_EMPRESAS, ModoFormulario, Subfase,
 };
 
-use super::estilos::{estilo_fundido, exito, muted, FADE_ACENTO, FADE_ERROR};
+use super::estilos::{FADE_ACENTO, FADE_ERROR, estilo_fundido, exito, muted};
 use super::util::si_no;
 
 /// Opacidades vigentes de la Surface del formulario (Fase 5) — una por

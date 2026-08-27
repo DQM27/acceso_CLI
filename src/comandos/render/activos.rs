@@ -82,7 +82,12 @@ pub(super) fn lineas_coincidencias_activos(
     // Mismas 8 columnas que `/activos` — es la misma fuente de datos
     // (ingresos activos), sólo que filtrada por la búsqueda. Sólo se listan
     // las columnas visibles (F4, ColumnaActivos).
-    let anchos = anchos_columnas(ancho, columnas_visibles(columnas), ancho_fijo_activos, ancho_maximo_activos);
+    let anchos = anchos_columnas(
+        ancho,
+        columnas_visibles(columnas),
+        ancho_fijo_activos,
+        ancho_maximo_activos,
+    );
     let mut lineas = vec![
         Line::from(Span::styled(
             format!(
@@ -379,7 +384,10 @@ pub(super) fn lineas_ficha(
         )),
         Line::from(Span::styled("─".repeat(56), muted())),
         Line::from(vec![
-            Span::raw(format!("{:<14}", super::util::recortar(&resumen.cedula, 13))),
+            Span::raw(format!(
+                "{:<14}",
+                super::util::recortar(&resumen.cedula, 13)
+            )),
             Span::raw(format!(
                 "{:<24}",
                 super::util::recortar(&resumen.empresa_nombre, 23)
