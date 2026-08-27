@@ -9,6 +9,7 @@ pub struct Usuario {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum RolUsuario {
     Root,
     Administrador,

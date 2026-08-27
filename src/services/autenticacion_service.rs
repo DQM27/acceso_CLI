@@ -6,6 +6,7 @@ use super::password::verificar_password;
 
 /// Identidad autenticada que puede cruzar hacia aplicación/presentación sin exponer el hash.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct UsuarioSesion {
     pub id: i64,
     pub cedula: String,

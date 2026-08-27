@@ -13,6 +13,7 @@ use crate::models::tipo_ingreso::TipoIngreso;
 /// Página de resultados: `items` respeta `limite`/`offset`, `total` es el conteo real sin
 /// recortar por el filtro — así la UI puede mostrar "100 de 120" en vez de un tope silencioso.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct PaginaContratistas {
     pub items: Vec<ContratistaResumen>,
     pub total: usize,
@@ -20,6 +21,7 @@ pub struct PaginaContratistas {
 
 /// Lectura compuesta lista para presentar sin resolver la empresa por separado.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct ContratistaResumen {
     pub id: i64,
     pub empresa_id: i64,

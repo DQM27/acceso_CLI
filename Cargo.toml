@@ -13,6 +13,10 @@ default = ["terminal-ui"]
 # necesita cualquier interfaz, no sólo la terminal.
 terminal-ui = ["dep:ratatui", "dep:crossterm", "dep:tui-input", "dep:query-parser", "dep:rpassword"]
 dev-auth = []
+# Habilita Serialize en los tipos de frontera que la GUI necesita devolver al
+# webview (ver src/mensajes.rs y los DTOs en application/*); también activa el
+# soporte serde de chrono para que NaiveDate serialice sin un wrapper propio.
+serde = ["dep:serde", "chrono/serde"]
 
 [dependencies]
 chrono = "0.4.45"

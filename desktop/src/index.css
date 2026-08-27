@@ -1,0 +1,125 @@
+/* Paleta reutilizada de src/comandos/render/estilos.rs (FADE_*) — mismo
+   lenguaje visual que la interfaz de comandos, no una paleta nueva. */
+:root {
+  --fondo: #0a0a0c;
+  --acento: #56c8d6;
+  --muted: #787882;
+  --texto: #e1e1e6;
+  --exito: #5ec985;
+  --advertencia: #d6b55c;
+  --error: #d65c5c;
+  --panel: #16161a;
+  --borde: #2a2a30;
+  --campo-fondo: #0f0f12;
+  --radio: 8px;
+  --radio-chico: 6px;
+
+  color-scheme: dark;
+  font-family:
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--fondo);
+  color: var(--texto);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input {
+  font-family: inherit;
+}
+
+/* Componentes compartidos — un solo punto para el estilo de formularios en
+   toda la app (login hoy, formularios de Grupo 2 después). No son
+   componentes React, son clases: cualquier pantalla las reutiliza sin
+   depender de un componente nuevo. */
+
+.tarjeta {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.campo input {
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--borde);
+  background: var(--campo-fondo);
+  color: var(--texto);
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.campo input:focus {
+  border-color: var(--acento);
+}
+
+.campo input:disabled {
+  opacity: 0.6;
+}
+
+.boton {
+  padding: 0.6rem 1.1rem;
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--borde);
+  background: #1c1c22;
+  color: var(--texto);
+  font-size: 0.9rem;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    filter 0.15s ease;
+}
+
+.boton:hover:not(:disabled) {
+  border-color: var(--acento);
+}
+
+.boton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.boton-primario {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: #06181b;
+  font-weight: 600;
+}
+
+.boton-primario:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.boton-primario:disabled {
+  background: var(--muted);
+  border-color: var(--muted);
+  color: var(--fondo);
+}

@@ -11,17 +11,23 @@ rust-version = "1.89"
 
 [lib]
 name = "control_acceso_desktop_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# Sin "cdylib": esa variante sólo hace falta para móvil (Android/iOS cargan la
+# lib como .so/dylib) y en Windows con el toolchain GNU/MinGW hace que el
+# linker intente exportar como símbolos de DLL absolutamente todo lo público
+# alcanzable desde el stack de WebView2/wry/tao — desborda el límite de
+# ordinales de ld.exe ("export ordinal too large"). Esta app es 100%
+# escritorio, no necesita cdylib.
+crate-type = ["staticlib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.6.3" }
+tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
 control_acceso = { path = "../..", default-features = false, features = ["serde"] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2.11.3" }
+tauri = { version = "2.11.3", features = [] }
 tauri-plugin-log = "2"
 # tauri-plugin-dialog se agrega recién cuando se construya exportar/respaldos (más adelante)
 
