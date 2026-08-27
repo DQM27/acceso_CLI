@@ -2,11 +2,11 @@
 //! (`render_prompt`) y el resaltado de sintaxis clave:valor/comando dentro
 //! de la línea (`render_prompt_linea`, `segmentar_comando`, `segmentar_claves`).
 
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 
 use crate::comandos::estado::AppState;
 use crate::comandos::formulario::{ModoFormulario, Subfase};
@@ -14,7 +14,7 @@ use crate::comandos::formulario_empresa::ModoFormularioEmpresa;
 use crate::comandos::formulario_usuario::{ModoFormularioUsuario, SubfaseUsuario};
 use crate::comandos::parser::{Comando, Entrada};
 
-use super::estilos::{acento, estilo_seleccion, glifo_feedback_color, muted, estilo_fundido};
+use super::estilos::{acento, estilo_fundido, estilo_seleccion, glifo_feedback_color, muted};
 
 /// Ancho de la columna de nombre en la paleta de comandos — cubre el más
 /// largo (`cerrarsesion`, 12 caracteres) más un espacio de separación. Con
@@ -32,7 +32,10 @@ fn descripcion_comando(comando: Comando) -> &'static str {
         Comando::Nuevo => "dar de alta — contratista (default), empresa o usuario",
         Comando::Editar => "editar — contratista (default), empresa o usuario",
         Comando::Historial => "explorar movimientos — filtro empresa/tipo/fecha…",
+        Comando::Auditoria => "cambios auditados de contratistas (admin/root)",
         Comando::Ayuda => "sintaxis completa y ejemplos",
+        Comando::Clave => "cambiar mi propia contraseña",
+        Comando::Clasico => "reiniciar en la TUI clásica (queda como default)",
         Comando::CerrarSesion => "cerrar sesión y volver al login",
     }
 }
@@ -54,7 +57,12 @@ fn descripcion_comando(comando: Comando) -> &'static str {
 /// fija en la misma posición sin importar cuántas coincidencias haya —
 /// antes, con el input arriba, cada tecla que cambiaba el alto de la lista
 /// hacía saltar el propio `>` de lugar.
-pub(super) fn render_prompt(frame: &mut Frame, area: Rect, app: &AppState, paleta: Option<&[Comando]>) {
+pub(super) fn render_prompt(
+    frame: &mut Frame,
+    area: Rect,
+    app: &AppState,
+    paleta: Option<&[Comando]>,
+) {
     let Some(comandos) = paleta else {
         let fila_input = Rect::new(area.x, area.y, area.width, 1);
         render_prompt_linea(frame, fila_input, app);
@@ -128,7 +136,9 @@ const CLAVES_HISTORIAL: [&str; 8] = [
 /// acento (cian, ya reservado para "foco/Surface") y de `muted()` (texto
 /// secundario), para no competir con esos dos significados ya establecidos.
 fn estilo_clave() -> Style {
-    Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+    Style::default()
+        .fg(Color::White)
+        .add_modifier(Modifier::BOLD)
 }
 
 /// Qué reconocer como estructura (blanco+negrita) en el valor del prompt —
@@ -335,7 +345,10 @@ fn spans_valor(
         // celda resaltada — mismo criterio que cualquier cursor de terminal,
         // sólo que el nuestro nunca desaparece del todo (ver `blink_on`).
         spans.push(if mostrar_cursor {
-            Span::styled(bajo_cursor, Style::default().add_modifier(Modifier::REVERSED))
+            Span::styled(
+                bajo_cursor,
+                Style::default().add_modifier(Modifier::REVERSED),
+            )
         } else {
             estilizar(bajo_cursor, es_clave)
         });
@@ -439,6 +452,17 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
             } else {
                 app.input.value().chars().count()
             },
+            None,
+        )
+    } else if app.formulario_password.is_some() {
+        // Los tres campos (Actual/Nueva/Confirmar) son secretos siempre —
+        // a diferencia de `formulario_usuario` no hace falta mirar cuál
+        // está activo, acá nunca hay un campo de texto plano que mostrar.
+        (
+            "CAMBIAR CONTRASEÑA › ".to_string(),
+            "•".repeat(app.input.value().chars().count()),
+            true,
+            app.input.visual_cursor(),
             None,
         )
     } else if app.salida_gafete.is_some() {
@@ -558,7 +582,10 @@ mod tests {
 
     #[test]
     fn clave_de_token_respeta_la_negacion() {
-        assert_eq!(clave_de_token("-estado:cerrados", &CLAVES_HISTORIAL), Some(8));
+        assert_eq!(
+            clave_de_token("-estado:cerrados", &CLAVES_HISTORIAL),
+            Some(8)
+        );
     }
 
     #[test]
@@ -572,10 +599,7 @@ mod tests {
         let segmentos = segmentar_claves("empresa:bac", &CLAVES_HISTORIAL);
         assert_eq!(
             segmentos,
-            vec![
-                ("EMPRESA:".to_string(), true),
-                ("bac".to_string(), false),
-            ]
+            vec![("EMPRESA:".to_string(), true), ("bac".to_string(), false),]
         );
     }
 

@@ -9,6 +9,7 @@ use std::time::Instant;
 
 use tui_input::Input;
 
+use crate::database::queries::auditoria_contratistas::CambioContratistaAuditado;
 use crate::database::queries::contratistas::ContratistaResumen;
 use crate::database::queries::empresas::EmpresaResumen;
 use crate::database::queries::usuarios::UsuarioResumen;
@@ -26,6 +27,7 @@ use super::formulario::{Campo, FormularioContratista, Subfase};
 /// saber cuánto puede esperar el próximo `poll` sin perderse un toggle).
 pub(crate) const PERIODO_BLINK_MS: u64 = 530;
 use super::formulario_empresa::FormularioEmpresa;
+use super::formulario_password::FormularioPassword;
 use super::formulario_usuario::FormularioUsuario;
 use super::historial::HistorialState;
 use super::parser::Comando;
@@ -60,6 +62,7 @@ pub enum SurfaceActiva {
     Formulario,
     FormularioEmpresa,
     FormularioUsuario,
+    FormularioPassword,
     Columnas,
     Historial,
     SalidaGafete,
@@ -270,6 +273,17 @@ pub enum ContextState {
         total: usize,
         seleccion: usize,
     },
+    /// `/auditoria`: cambios auditados de contratistas — sólo Administrador
+    /// y Root (`Operacion::VerAuditoria`, verificado tanto acá como en
+    /// `AppCore::buscar_auditoria_contratistas`). Sin filtro ni exportación,
+    /// a diferencia de Historial: sólo lectura paginada con PageUp/PageDown,
+    /// mismo `total` real que ya trae `PaginaAuditoriaContratistas`.
+    TablaAuditoria {
+        items: Vec<CambioContratistaAuditado>,
+        seleccion: usize,
+        offset: usize,
+        total: usize,
+    },
     /// Búsqueda de texto libre resuelta a un contratista concreto.
     FichaContratista {
         resumen: ContratistaResumen,
@@ -277,6 +291,12 @@ pub enum ContextState {
     /// `/cerrarsesion`: tarjeta de confirmación — Enter cierra la sesión y
     /// vuelve al login, Esc cancela.
     ConfirmarCerrarSesion,
+    /// `/clave`: tarjeta de entrada — Enter abre la Surface de cambio de
+    /// contraseña propia (primero pide la actual, luego la nueva).
+    ConfirmarCambioPassword,
+    /// `/clasico`: tarjeta de confirmación — Enter guarda la preferencia de
+    /// interfaz y reinicia la aplicación en la TUI clásica; Esc cancela.
+    ConfirmarModoClasico,
     /// `/nuevo` (o `/nuevo contratista`/`/n c`): tarjeta de entrada al alta
     /// — Enter abre el formulario de contratista, Esc cancela.
     NuevoContratista,
@@ -342,6 +362,10 @@ pub struct AppState {
     /// `/nuevo usuario` (`/n u`) — Surface separada de `formulario`, mismo
     /// patrón (campos, Resumen) que contratista; ver `formulario_usuario.rs`.
     pub formulario_usuario: Option<FormularioUsuario>,
+    /// `/clave` — Surface separada de `formulario_usuario`: cambia la
+    /// contraseña de quien está logueado, nunca la de otro (ver
+    /// `formulario_password.rs`).
+    pub formulario_password: Option<FormularioPassword>,
     /// Columnas visibles de cada tabla — `F4` abre `edicion_columnas` sobre
     /// una de las dos (según `app.contexto` en ese momento).
     pub columnas_busqueda: SelectorColumnas<ColumnaBusqueda>,
@@ -366,6 +390,11 @@ pub struct AppState {
     pub sugerencias: Vec<String>,
     pub feedback: Option<(Instant, Feedback)>,
     pub salir: bool,
+    /// `/clasico` (ver `formulario` correspondiente en `operando.rs`): pide
+    /// salir para que `mod.rs::run` avise a `main.rs` que hay que reiniciar
+    /// en la TUI clásica — la preferencia (`interfaz_preferida::guardar`) ya
+    /// se guarda al confirmar, antes de llegar a este flag.
+    pub reiniciar_en_clasica: bool,
     /// Motor de presentación (Fase 4): sabe qué está apareciendo y a qué
     /// opacidad, nada más — no conoce reglas de negocio.
     pub presentacion: presentation::Engine,
@@ -402,6 +431,7 @@ impl AppState {
             formulario: None,
             formulario_empresa: None,
             formulario_usuario: None,
+            formulario_password: None,
             columnas_busqueda: SelectorColumnas::todas_visibles(),
             columnas_activos: SelectorColumnas::todas_visibles(),
             columnas_historial: SelectorColumnas::todas_visibles(),
@@ -412,6 +442,7 @@ impl AppState {
             sugerencias: Vec::new(),
             feedback: None,
             salir: false,
+            reiniciar_en_clasica: false,
             presentacion: presentation::Engine::new(),
             calidad: presentation::VisualQuality::default(),
             firma_login_previa: None,
@@ -510,6 +541,8 @@ impl AppState {
             SurfaceActiva::FormularioEmpresa
         } else if self.formulario_usuario.is_some() {
             SurfaceActiva::FormularioUsuario
+        } else if self.formulario_password.is_some() {
+            SurfaceActiva::FormularioPassword
         } else if self.edicion_columnas.is_some() {
             SurfaceActiva::Columnas
         } else if self.historial.is_some() {
@@ -529,7 +562,8 @@ impl AppState {
     /// ↑↓, qué completan Tab/Enter) — antes vivía sólo en `render.rs` y
     /// por eso ↑↓/Enter no podían usarlo.
     pub fn paleta_comandos(&self) -> Option<Vec<Comando>> {
-        if !matches!(self.fase, Fase::Operando { .. }) || self.surface_activa() != SurfaceActiva::Ninguna
+        if !matches!(self.fase, Fase::Operando { .. })
+            || self.surface_activa() != SurfaceActiva::Ninguna
         {
             return None;
         }

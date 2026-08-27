@@ -15,6 +15,7 @@ const COMANDOS_NORMALES: &[CommandHint<'static>] = &[
     CommandHint::new("↑↓", "Seleccionar"),
     CommandHint::new("ENTER", "Abrir"),
     CommandHint::new("1-9", "Acceso rápido"),
+    CommandHint::new("M", "Modo comandos"),
     CommandHint::new("L", "Cerrar sesión"),
     CommandHint::new("Q", "Salir"),
 ];
@@ -79,6 +80,12 @@ fn estado_shell(state: &MenuPrincipalState, sesion: &UsuarioSesion) -> (String, 
         Some(ConfirmacionMenu::Salir) => {
             ("¿Desea cerrar BRISAS CLI?".to_owned(), StatusKind::Warning)
         }
+        Some(ConfirmacionMenu::ModoComandos) => (
+            "La aplicación se reiniciará en la interfaz de comandos, que quedará como \
+             default. ¿Continuar?"
+                .to_owned(),
+            StatusKind::Warning,
+        ),
         // Mensaje genérico a propósito, sin el detalle técnico (disco lleno,
         // permisos, etc.) — ese detalle vive en Respaldos, sólo alcanzable
         // por Root. Cualquier rol ve este aviso porque cualquiera puede ser
@@ -142,7 +149,10 @@ fn render_lista(
         .filter(|o| {
             matches!(
                 o,
-                OpcionMenu::CambiarPassword | OpcionMenu::CerrarSesion | OpcionMenu::Salir
+                OpcionMenu::CambiarPassword
+                    | OpcionMenu::ModoComandos
+                    | OpcionMenu::CerrarSesion
+                    | OpcionMenu::Salir
             )
         })
         .collect();

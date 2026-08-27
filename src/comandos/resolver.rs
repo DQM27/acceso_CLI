@@ -7,6 +7,7 @@
 
 use crate::application::AppCore;
 use crate::database::queries::Igualdad;
+use crate::database::queries::auditoria_contratistas::FiltroAuditoriaContratistas;
 use crate::database::queries::contratistas::{ContratistaResumen, FiltroContratistas};
 use crate::database::queries::empresas::FiltroEmpresas;
 use crate::database::queries::ingresos::FiltroIngresosActivos;
@@ -169,7 +170,19 @@ pub fn resolver(core: &AppCore, entrada: &Entrada, sesion: &UsuarioSesion) -> Co
                         }
                     }
                 }
+                Comando::Auditoria => {
+                    if consulta.is_empty() {
+                        pagina_auditoria(core, 0, sesion)
+                    } else {
+                        ContextState::MensajeError {
+                            mensaje: "La auditoría no toma argumentos: escriba /auditoria a secas"
+                                .to_string(),
+                        }
+                    }
+                }
                 Comando::Ayuda => ContextState::Ayuda,
+                Comando::Clave => ContextState::ConfirmarCambioPassword,
+                Comando::Clasico => ContextState::ConfirmarModoClasico,
                 Comando::CerrarSesion => ContextState::ConfirmarCerrarSesion,
             }
         }
@@ -350,6 +363,33 @@ pub fn pagina_usuarios(
 
 fn resolver_busqueda_contratistas(core: &AppCore, consulta: &str) -> ContextState {
     pagina_contratistas(core, consulta, 0)
+}
+
+/// `/auditoria` — sólo lectura, sin filtro (a diferencia de Historial): el
+/// gate de rol se repite acá (mismo criterio de defensa en profundidad que
+/// `pagina_usuarios`) aunque `AppCore::buscar_auditoria_contratistas` ya lo
+/// verifica de nuevo contra SQLite antes de consultar.
+pub fn pagina_auditoria(core: &AppCore, offset: usize, sesion: &UsuarioSesion) -> ContextState {
+    if !sesion.rol.puede(Operacion::VerAuditoria) {
+        return ContextState::MensajeError {
+            mensaje: "No tiene permiso para ver la auditoría".to_string(),
+        };
+    }
+    let filtro = FiltroAuditoriaContratistas {
+        limite: crate::database::queries::auditoria_contratistas::LIMITE_AUDITORIA_PREDETERMINADO,
+        offset,
+    };
+    match core.buscar_auditoria_contratistas(sesion, &filtro) {
+        Ok(pagina) => ContextState::TablaAuditoria {
+            items: pagina.items,
+            seleccion: 0,
+            offset,
+            total: pagina.total,
+        },
+        Err(_) => ContextState::MensajeError {
+            mensaje: "No se pudo consultar la auditoría".to_string(),
+        },
+    }
 }
 
 pub fn pagina_contratistas(core: &AppCore, consulta: &str, offset: usize) -> ContextState {

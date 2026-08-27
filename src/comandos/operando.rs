@@ -38,6 +38,10 @@ pub(super) fn manejar_operando(core: &AppCore, app: &mut AppState, key: KeyEvent
             super::formulario_usuario_controller::manejar_formulario_usuario(core, app, key);
             return;
         }
+        SurfaceActiva::FormularioPassword => {
+            super::formulario_password_controller::manejar_formulario_password(core, app, key);
+            return;
+        }
         SurfaceActiva::Columnas => {
             manejar_columnas(app, key);
             return;
@@ -155,7 +159,9 @@ fn completar_desde_paleta(core: &AppCore, app: &mut AppState) -> bool {
     let Some(coincidencias) = app.paleta_comandos() else {
         return false;
     };
-    let indice = app.seleccion_paleta.min(coincidencias.len().saturating_sub(1));
+    let indice = app
+        .seleccion_paleta
+        .min(coincidencias.len().saturating_sub(1));
     let Some(comando) = coincidencias.get(indice) else {
         return false;
     };
@@ -189,6 +195,9 @@ fn mover_seleccion(app: &mut AppState, delta: isize) {
         ContextState::CoincidenciasUsuarios {
             items, seleccion, ..
         } => ajustar(seleccion, items.len()),
+        ContextState::TablaAuditoria {
+            items, seleccion, ..
+        } => ajustar(seleccion, items.len()),
         _ => {}
     }
 }
@@ -206,8 +215,7 @@ fn paginar_coincidencias(core: &AppCore, app: &mut AppState, delta: isize) {
             ..
         } => {
             let hay_mas = offset + items.len() < total;
-            if let Some(nuevo) =
-                super::resolver::nuevo_offset_coincidencias(offset, hay_mas, delta)
+            if let Some(nuevo) = super::resolver::nuevo_offset_coincidencias(offset, hay_mas, delta)
             {
                 app.contexto = super::resolver::pagina_contratistas(core, &consulta, nuevo);
             }
@@ -218,8 +226,7 @@ fn paginar_coincidencias(core: &AppCore, app: &mut AppState, delta: isize) {
             hay_mas,
             ..
         } => {
-            if let Some(nuevo) =
-                super::resolver::nuevo_offset_coincidencias(offset, hay_mas, delta)
+            if let Some(nuevo) = super::resolver::nuevo_offset_coincidencias(offset, hay_mas, delta)
             {
                 app.contexto = super::resolver::pagina_empresas(core, &consulta, nuevo);
             }
@@ -233,10 +240,24 @@ fn paginar_coincidencias(core: &AppCore, app: &mut AppState, delta: isize) {
             let Fase::Operando { sesion } = &app.fase else {
                 return;
             };
-            if let Some(nuevo) =
-                super::resolver::nuevo_offset_coincidencias(offset, hay_mas, delta)
+            if let Some(nuevo) = super::resolver::nuevo_offset_coincidencias(offset, hay_mas, delta)
             {
                 app.contexto = super::resolver::pagina_usuarios(core, &consulta, nuevo, sesion);
+            }
+        }
+        ContextState::TablaAuditoria {
+            items,
+            offset,
+            total,
+            ..
+        } => {
+            let Fase::Operando { sesion } = &app.fase else {
+                return;
+            };
+            let hay_mas = offset + items.len() < total;
+            if let Some(nuevo) = super::resolver::nuevo_offset_coincidencias(offset, hay_mas, delta)
+            {
+                app.contexto = super::resolver::pagina_auditoria(core, nuevo, sesion);
             }
         }
         _ => {}
@@ -409,6 +430,14 @@ fn confirmar(core: &AppCore, app: &mut AppState) {
             super::formulario_usuario_controller::abrir_formulario_nuevo_usuario(app)
         }
         ContextState::AbrirHistorial => super::historial_controller::abrir_historial(core, app),
+        ContextState::ConfirmarCambioPassword => {
+            super::formulario_password_controller::abrir_formulario_cambio_password(app)
+        }
+        ContextState::ConfirmarModoClasico => {
+            crate::interfaz_preferida::guardar(crate::interfaz_preferida::Interfaz::Clasica);
+            app.reiniciar_en_clasica = true;
+            app.salir = true;
+        }
         ContextState::AbrirSalidaGafete { texto } => {
             super::salida_gafete_controller::abrir_salida_gafete(core, app, &texto)
         }

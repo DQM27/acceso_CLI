@@ -1,5 +1,6 @@
 ---
 source: src/tui/visual_tests.rs
+assertion_line: 308
 expression: volcado
 ---
 === texto ===
@@ -7,7 +8,6 @@ expression: volcado
  BRISAS CLI                                                                                                       Operador de prueba · ROOT 
  CONTROL DE ACCESO                                                   MENÚ PRINCIPAL                                                   ··:·· 
  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── 
-                                                                                                                                            
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
@@ -29,6 +29,7 @@ expression: volcado
                                                                                                                                             
                                                         SESIÓN                                                                              
                                                           9   Cambiar mi contraseña                                                         
+                                                          M   Modo comandos                                                                 
                                                           L   Cerrar sesión                                                                 
                                                           Q   Salir                                                                         
                                                                                                                                             
@@ -41,7 +42,7 @@ expression: volcado
                                                                                                                                             
                                                                                                                                             
  Registrar la entrada de un contratista.                                                                                                    
- ↑↓ Seleccionar  ENTER Abrir  1-9 Acceso rápido  L Cerrar sesión  Q Salir  F2 Salida rápida  F7 Tema                                        
+ ↑↓ Seleccionar  ENTER Abrir  1-9 Acceso rápido  M Modo comandos  L Cerrar sesión  Q Salir  F2 Salida rápida  F7 Tema                       
                                                                                                                                             
 
 === estilos ===
@@ -61,7 +62,6 @@ expression: volcado
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────" fg=Rgb(76, 119, 85) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
@@ -91,6 +91,7 @@ expression: volcado
 "SESIÓN" fg=Rgb(105, 135, 111) bg=Black mod=NONE
 "                                                                              " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                          9   Cambiar mi contraseña                                                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                                          M   Modo comandos                                                                 " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                          L   Cerrar sesión                                                                 " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                          Q   Salir                                                                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
@@ -112,6 +113,8 @@ expression: volcado
 " Abrir  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "1-9" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
 " Acceso rápido  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"M" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+" Modo comandos  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "L" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
 " Cerrar sesión  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "Q" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
@@ -119,5 +122,5 @@ expression: volcado
 "F2" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
 " Salida rápida  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "F7" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
-" Tema                                        " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+" Tema                       " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE

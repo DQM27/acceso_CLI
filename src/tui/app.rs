@@ -76,9 +76,10 @@ impl Vista {
             Self::Auditoria => Some(OpcionMenu::Auditoria),
             Self::Respaldos => Some(OpcionMenu::Respaldos),
             Self::CambiarPassword => Some(OpcionMenu::CambiarPassword),
-            Self::ConfiguracionInicial | Self::Login | Self::ElegirInterfaz | Self::MenuPrincipal => {
-                None
-            }
+            Self::ConfiguracionInicial
+            | Self::Login
+            | Self::ElegirInterfaz
+            | Self::MenuPrincipal => None,
         }
     }
 }
@@ -89,11 +90,22 @@ impl Vista {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SalidaApp {
     Cerrar,
-    Restaurar { candidata: std::path::PathBuf },
+    Restaurar {
+        candidata: std::path::PathBuf,
+    },
     /// El operador ya se autenticó y eligió el modo CLI en `ElegirInterfaz`:
     /// `main.rs` arranca `comandos::run` con esta misma sesión, sin volver a
     /// pedir cédula/contraseña.
-    ModoComandos { sesion: UsuarioSesion },
+    ModoComandos {
+        sesion: UsuarioSesion,
+    },
+    /// "Modo comandos" del Menú Principal (`OpcionMenu::ModoComandos`): a
+    /// diferencia de `ModoComandos` (que reusa la sesión sin reiniciar), acá
+    /// el operador pidió dejar `--comandos` como interfaz por defecto — la
+    /// preferencia ya se guardó (`interfaz_preferida::guardar`) antes de
+    /// llegar a esta variante; `main.rs` sólo tiene que cerrar esta conexión
+    /// y relanzar el ejecutable.
+    ReiniciarEnComandos,
 }
 
 #[cfg(test)]
@@ -264,9 +276,12 @@ impl App {
                             theme,
                         ),
                         Vista::Login => login::render(frame, frame.area(), &self.login, theme),
-                        Vista::ElegirInterfaz => {
-                            elegir_interfaz::render(frame, frame.area(), &self.elegir_interfaz, theme)
-                        }
+                        Vista::ElegirInterfaz => elegir_interfaz::render(
+                            frame,
+                            frame.area(),
+                            &self.elegir_interfaz,
+                            theme,
+                        ),
                         Vista::MenuPrincipal => {
                             if let Some(sesion) = &self.sesion {
                                 menu_principal::render(
@@ -675,6 +690,11 @@ impl App {
                 self.vista = Vista::Login;
             }
             AccionMenu::Salir => self.salir = true,
+            AccionMenu::ModoComandos => {
+                crate::interfaz_preferida::guardar(crate::interfaz_preferida::Interfaz::Comandos);
+                self.salida = SalidaApp::ReiniciarEnComandos;
+                self.salir = true;
+            }
         }
     }
 
@@ -783,7 +803,10 @@ impl App {
                 let accion = self.configuracion.reiniciar();
                 self.procesar_accion_configuracion(accion, core);
             }
-            OpcionMenu::CerrarSesion | OpcionMenu::Salir => {}
+            // Ninguna abre pantalla propia: `ModoComandos` sale por la
+            // confirmación (como `CerrarSesion`/`Salir`), nunca llega acá
+            // como `AccionMenu::Abrir`.
+            OpcionMenu::ModoComandos | OpcionMenu::CerrarSesion | OpcionMenu::Salir => {}
         }
     }
 
@@ -798,7 +821,9 @@ impl App {
             OpcionMenu::CambiarPassword => Vista::CambiarPassword,
             OpcionMenu::Auditoria => Vista::Auditoria,
             OpcionMenu::Respaldos => Vista::Respaldos,
-            OpcionMenu::CerrarSesion | OpcionMenu::Salir => Vista::MenuPrincipal,
+            OpcionMenu::ModoComandos | OpcionMenu::CerrarSesion | OpcionMenu::Salir => {
+                Vista::MenuPrincipal
+            }
         }
     }
 

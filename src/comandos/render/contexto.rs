@@ -12,8 +12,11 @@ use super::activos::{
     lineas_coincidencias_activos, lineas_ficha, lineas_resumen_ingreso, lineas_resumen_salida,
     lineas_tabla_activos,
 };
+use super::auditoria::lineas_tabla_auditoria;
 use super::ayuda::lineas_ayuda;
-use super::busqueda::{lineas_coincidencias, lineas_coincidencias_empresas, lineas_coincidencias_usuarios};
+use super::busqueda::{
+    lineas_coincidencias, lineas_coincidencias_empresas, lineas_coincidencias_usuarios,
+};
 use super::estilos::{acento, estilo_error, muted};
 use super::util::cantidad_personas;
 
@@ -117,7 +120,18 @@ pub(super) fn lineas_contexto(
             indice_seleccion_lista(!items.is_empty(), *seleccion),
         ),
         ContextState::FichaContratista { resumen } => (lineas_ficha(resumen), None),
+        ContextState::TablaAuditoria {
+            items,
+            seleccion,
+            total,
+            ..
+        } => (
+            lineas_tabla_auditoria(items, *total, *seleccion, ancho),
+            indice_seleccion_lista(!items.is_empty(), *seleccion),
+        ),
         ContextState::ConfirmarCerrarSesion => (lineas_cerrar_sesion(), None),
+        ContextState::ConfirmarCambioPassword => (lineas_cambio_password(), None),
+        ContextState::ConfirmarModoClasico => (lineas_modo_clasico(), None),
         ContextState::NuevoContratista => (lineas_nuevo_contratista(), None),
         ContextState::NuevoEmpresa => (lineas_nuevo_empresa(), None),
         ContextState::NuevoUsuario => (lineas_nuevo_usuario(), None),
@@ -152,6 +166,33 @@ fn lineas_cerrar_sesion() -> Vec<Line<'static>> {
         Line::from(""),
         Line::from(Span::styled(
             "ENTER para cerrar sesión · Esc para cancelar",
+            acento(),
+        )),
+    ]
+}
+
+fn lineas_cambio_password() -> Vec<Line<'static>> {
+    vec![
+        Line::from(Span::styled("CAMBIAR CONTRASEÑA", muted())),
+        Line::from(""),
+        Line::from("Digite su contraseña."),
+        Line::from(""),
+        Line::from(Span::styled(
+            "ENTER para continuar · Esc para cancelar",
+            acento(),
+        )),
+    ]
+}
+
+fn lineas_modo_clasico() -> Vec<Line<'static>> {
+    vec![
+        Line::from(Span::styled("MODO CLÁSICO", muted())),
+        Line::from(""),
+        Line::from("La aplicación se reiniciará en la TUI clásica, que quedará"),
+        Line::from("como interfaz por defecto."),
+        Line::from(""),
+        Line::from(Span::styled(
+            "ENTER para reiniciar · Esc para cancelar",
             acento(),
         )),
     ]
@@ -265,6 +306,9 @@ mod tests {
     #[test]
     fn indice_seleccion_lista_none_sin_items() {
         assert_eq!(indice_seleccion_lista(false, 0), None);
-        assert_eq!(indice_seleccion_lista(true, 3), Some(FILAS_ANTES_DE_ITEMS + 3));
+        assert_eq!(
+            indice_seleccion_lista(true, 3),
+            Some(FILAS_ANTES_DE_ITEMS + 3)
+        );
     }
 }

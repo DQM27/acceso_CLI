@@ -25,6 +25,8 @@ mod formulario;
 mod formulario_controller;
 mod formulario_empresa;
 mod formulario_empresa_controller;
+mod formulario_password;
+mod formulario_password_controller;
 mod formulario_usuario;
 mod formulario_usuario_controller;
 mod historial;
@@ -70,13 +72,14 @@ pub use formulario::{
     Campo, FormularioContratista, MAX_VISIBLES_EMPRESAS, ModoFormulario, Subfase,
 };
 pub use formulario_empresa::FormularioEmpresa;
+pub use formulario_password::FormularioPassword;
 pub use formulario_usuario::{CampoUsuario, FormularioUsuario, SubfaseUsuario};
 pub use historial::HistorialState;
 pub use parser::{Comando, Entrada, GafeteParse, MedioParse, parsear};
-pub use salida_gafete::SalidaGafeteState;
 pub use resolver::{
     autocompletar, calcular_sugerencias, ficha_desde_resumen, preparar_resumen_ingreso, resolver,
 };
+pub use salida_gafete::SalidaGafeteState;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ComandosError {
@@ -111,7 +114,11 @@ type RootPendiente =
 /// — en ese caso se arranca directo en `Fase::Operando`, sin repetir
 /// cédula/contraseña. Con `None` (ruta por defecto, sin flags) hace su
 /// propio login, como siempre.
-pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<(), ComandosError> {
+/// Devuelve `true` cuando el operador pidió `/clasico`: la preferencia de
+/// interfaz ya quedó guardada en disco (`interfaz_preferida::guardar`,
+/// llamado desde `operando.rs` al confirmar) — el `bool` sólo le dice a
+/// `main.rs` que además tiene que relanzar el ejecutable en la TUI clásica.
+pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<bool, ComandosError> {
     let requiere_configuracion_inicial = core.requiere_configuracion_inicial()?;
 
     let _guard = TerminalGuard::acquire()?;
@@ -208,7 +215,13 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<(), C
         if crossterm::event::poll(espera)? {
             match crossterm::event::read()? {
                 Event::Key(key) => {
-                    manejar_tecla(&core, &mut app, key, &mut autenticacion, &mut root_pendiente);
+                    manejar_tecla(
+                        &core,
+                        &mut app,
+                        key,
+                        &mut autenticacion,
+                        &mut root_pendiente,
+                    );
                     redibujar = true;
                 }
                 Event::Resize(_, _) => redibujar = true,
@@ -223,7 +236,7 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<(), C
             columnas_historial: app.columnas_historial.preferencia(),
         });
     }
-    Ok(())
+    Ok(app.reiniciar_en_clasica)
 }
 
 /// Compara qué debería verse contra lo que se vio la vuelta anterior, por

@@ -201,6 +201,25 @@ impl AppCore {
         Ok(())
     }
 
+    /// Verifica la contraseña actual sin cambiar nada — gate de `/clave` en
+    /// la interfaz de comandos antes de mostrar los campos de contraseña
+    /// nueva: verificar primero evita pedirla dos veces sólo para
+    /// descartarla al final porque la actual estaba mal.
+    pub fn verificar_mi_password(
+        &self,
+        actor: &UsuarioSesion,
+        password: &str,
+    ) -> Result<(), UsuarioServiceError> {
+        let actor_actual = verificar_actor_activo(&self.connection, actor)?
+            .ok_or(UsuarioServiceError::OperacionNoAutorizada)?;
+        match crate::services::password::verificar_password(password, &actor_actual.password_hash)
+        {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(UsuarioServiceError::PasswordActualIncorrecta),
+            Err(error) => Err(error.into()),
+        }
+    }
+
     pub fn cambiar_mi_password(
         &self,
         actor: &UsuarioSesion,

@@ -45,13 +45,16 @@ pub enum Comando {
     Nuevo,
     Editar,
     Historial,
+    Auditoria,
     Ayuda,
+    Clave,
+    Clasico,
     CerrarSesion,
 }
 
 impl Comando {
-    /// Los 9 comandos en el orden en que se presentan en la ayuda.
-    pub const TODOS: [Self; 9] = [
+    /// Los 12 comandos en el orden en que se presentan en la ayuda.
+    pub const TODOS: [Self; 12] = [
         Self::Ingreso,
         Self::Salida,
         Self::Gafete,
@@ -59,7 +62,10 @@ impl Comando {
         Self::Nuevo,
         Self::Editar,
         Self::Historial,
+        Self::Auditoria,
         Self::Ayuda,
+        Self::Clave,
+        Self::Clasico,
         Self::CerrarSesion,
     ];
 
@@ -72,7 +78,10 @@ impl Comando {
             Self::Nuevo => "nuevo",
             Self::Editar => "editar",
             Self::Historial => "historial",
+            Self::Auditoria => "auditoria",
             Self::Ayuda => "ayuda",
+            Self::Clave => "clave",
+            Self::Clasico => "clasico",
             Self::CerrarSesion => "cerrarsesion",
         }
     }
@@ -89,7 +98,10 @@ impl Comando {
             "nuevo" | "n" => Some(Self::Nuevo),
             "editar" | "e" => Some(Self::Editar),
             "historial" | "h" => Some(Self::Historial),
+            "auditoria" => Some(Self::Auditoria),
             "ayuda" => Some(Self::Ayuda),
+            "clave" => Some(Self::Clave),
+            "clasico" => Some(Self::Clasico),
             "cerrarsesion" | "cs" => Some(Self::CerrarSesion),
             _ => None,
         }

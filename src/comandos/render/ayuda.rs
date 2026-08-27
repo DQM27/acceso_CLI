@@ -101,9 +101,23 @@ pub(super) fn lineas_ayuda() -> Vec<Line<'static>> {
 
     seccion_ayuda(
         &mut lineas,
+        "AUDITORÍA",
+        &[(
+            "/auditoria",
+            "cambios de contratistas, sin filtro (requiere permiso: admin/root)",
+        )],
+    );
+
+    seccion_ayuda(
+        &mut lineas,
         "SISTEMA",
         &[
             ("/ayuda", "esta ayuda"),
+            ("/clave", "cambiar mi propia contraseña"),
+            (
+                "/clasico",
+                "reiniciar en la TUI clásica y dejarla como default",
+            ),
             ("/cerrarsesion", "cerrar sesión y volver al login"),
         ],
     );

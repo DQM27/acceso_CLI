@@ -15,6 +15,7 @@
 //! por todos — este archivo sólo arma el layout y despacha.
 
 mod activos;
+mod auditoria;
 mod ayuda;
 mod busqueda;
 mod columnas_selector;
@@ -22,6 +23,7 @@ mod contexto;
 mod estilos;
 mod formulario;
 mod formulario_empresa;
+mod formulario_password;
 mod formulario_usuario;
 mod historial;
 mod login;
@@ -29,13 +31,14 @@ mod prompt;
 mod tabla;
 mod util;
 
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 
 use crate::comandos::estado::{AppState, Fase, PERIODO_BLINK_MS};
 use crate::comandos::formulario::Subfase;
+use crate::comandos::formulario_password::SubfasePassword;
 use crate::comandos::formulario_usuario::SubfaseUsuario;
 
 use contexto::scroll_hacia_seleccion;
@@ -112,8 +115,13 @@ pub fn render(frame: &mut Frame, app: &AppState) {
         (formulario_empresa::lineas_formulario_empresa(fe), None)
     } else if let Some(fu) = &app.formulario_usuario {
         (formulario_usuario::lineas_formulario_usuario(fu), None)
+    } else if let Some(fp) = &app.formulario_password {
+        (formulario_password::lineas_formulario_password(fp), None)
     } else if let Some(edicion) = &app.edicion_columnas {
-        (columnas_selector::lineas_selector_columnas(app, *edicion), None)
+        (
+            columnas_selector::lineas_selector_columnas(app, *edicion),
+            None,
+        )
     } else if let Some(historial) = &app.historial {
         let opacidades = OpacidadesHistorial {
             resultado: app.presentacion.opacidad("historial_resultado"),
@@ -146,10 +154,7 @@ pub fn render(frame: &mut Frame, app: &AppState) {
     // alcanzaba a dibujar, sin ninguna señal de que se había ido de la
     // pantalla.
     let scroll_y = scroll_hacia_seleccion(seleccionada, area_contexto.height);
-    frame.render_widget(
-        Paragraph::new(lineas).scroll((scroll_y, 0)),
-        area_contexto,
-    );
+    frame.render_widget(Paragraph::new(lineas).scroll((scroll_y, 0)), area_contexto);
 
     render_pista(frame, area_pista, app);
     prompt::render_prompt(frame, area_prompt, app, paleta.as_deref());
@@ -218,6 +223,15 @@ fn contenido_pista(app: &AppState) -> Option<Line<'static>> {
                 "↑↓ campo · Space/←/→ cambiar rol · Enter guardar · Esc cancelar"
             }
             SubfaseUsuario::Resumen => "Enter guardar · Esc volver a editar",
+        };
+        return Some(Line::from(Span::styled(pista, muted())));
+    }
+    if let Some(fp) = &app.formulario_password {
+        let pista = match fp.subfase {
+            SubfasePassword::VerificandoActual => "Enter verificar · Esc cancelar",
+            SubfasePassword::Cambiando => {
+                "↑↓/Tab campo · Enter guardar · Esc volver a la actual"
+            }
         };
         return Some(Line::from(Span::styled(pista, muted())));
     }

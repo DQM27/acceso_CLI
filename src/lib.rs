@@ -4,6 +4,7 @@ pub mod database;
 pub mod domain;
 pub mod historial;
 pub mod instancia;
+pub mod interfaz_preferida;
 pub mod models;
 pub mod services;
 pub mod texto;
