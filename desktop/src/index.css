@@ -18,25 +18,84 @@
 /* Paleta reutilizada de src/comandos/render/estilos.rs (FADE_*) — mismo
    lenguaje visual que la interfaz de comandos, no una paleta nueva. */
 :root {
-  --fondo: #0a0a0c;
-  --acento: #56c8d6;
-  --muted: #787882;
-  --texto: #e1e1e6;
-  --exito: #5ec985;
-  --advertencia: #d6b55c;
-  --error: #d65c5c;
-  --panel: #16161a;
-  --borde: #2a2a30;
-  --campo-fondo: #0f0f12;
+  --fondo: #f6f8f9;
+  --acento: #087f91;
+  --muted: #63717c;
+  --texto: #172026;
+  --exito: #287c4d;
+  --advertencia: #9a6a12;
+  --error: #b42318;
+  --panel: #ffffff;
+  --borde: #d8e0e5;
+  --campo-fondo: #fbfcfd;
+  --panel-suave: #eef3f5;
+  --acento-suave: #d9f1f5;
+  --sombra-panel: 0 22px 70px rgba(14, 29, 36, 0.12), 0 2px 10px rgba(14, 29, 36, 0.06);
   --radio: 8px;
   --radio-chico: 6px;
 
-  color-scheme: dark;
+  color-scheme: light;
   font-family:
     "Segoe UI",
     system-ui,
     -apple-system,
     sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fondo: #0a0d0f;
+    --acento: #56c8d6;
+    --muted: #8a949c;
+    --texto: #e8eef1;
+    --exito: #5ec985;
+    --advertencia: #d6b55c;
+    --error: #ff8a80;
+    --panel: #12171a;
+    --borde: #263238;
+    --campo-fondo: #0d1113;
+    --panel-suave: #101518;
+    --acento-suave: rgba(86, 200, 214, 0.12);
+    --sombra-panel: 0 26px 80px rgba(0, 0, 0, 0.38), 0 2px 12px rgba(0, 0, 0, 0.2);
+
+    color-scheme: dark;
+  }
+}
+
+[data-theme="light"] {
+  --fondo: #f6f8f9;
+  --acento: #087f91;
+  --muted: #63717c;
+  --texto: #172026;
+  --exito: #287c4d;
+  --advertencia: #9a6a12;
+  --error: #b42318;
+  --panel: #ffffff;
+  --borde: #d8e0e5;
+  --campo-fondo: #fbfcfd;
+  --panel-suave: #eef3f5;
+  --acento-suave: #d9f1f5;
+  --sombra-panel: 0 22px 70px rgba(14, 29, 36, 0.12), 0 2px 10px rgba(14, 29, 36, 0.06);
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --fondo: #0a0d0f;
+  --acento: #56c8d6;
+  --muted: #8a949c;
+  --texto: #e8eef1;
+  --exito: #5ec985;
+  --advertencia: #d6b55c;
+  --error: #ff8a80;
+  --panel: #12171a;
+  --borde: #263238;
+  --campo-fondo: #0d1113;
+  --panel-suave: #101518;
+  --acento-suave: rgba(86, 200, 214, 0.12);
+  --sombra-panel: 0 26px 80px rgba(0, 0, 0, 0.38), 0 2px 12px rgba(0, 0, 0, 0.2);
+
+  color-scheme: dark;
 }
 
 * {
@@ -112,7 +171,7 @@ input {
   padding: 0.6rem 1.1rem;
   border-radius: var(--radio-chico);
   border: 1px solid var(--borde);
-  background: #1c1c22;
+  background: var(--panel-suave);
   color: var(--texto);
   font-size: 0.9rem;
   transition:
@@ -123,11 +182,11 @@ input {
 
 .boton:hover:not(:disabled) {
   border-color: var(--acento);
-  background: #232329;
+  background: color-mix(in srgb, var(--panel-suave) 82%, var(--acento));
 }
 
 .boton:active:not(:disabled) {
-  background: #16161a;
+  background: var(--campo-fondo);
 }
 
 .boton:focus-visible {
@@ -144,7 +203,7 @@ input {
 .boton-primario {
   background: var(--acento);
   border-color: var(--acento);
-  color: #06181b;
+  color: #ffffff;
   font-weight: 600;
 }
 
@@ -162,6 +221,68 @@ input {
   background: var(--muted);
   border-color: var(--muted);
   color: var(--fondo);
+}
+
+.login-superficie {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--acento) 8%, transparent), transparent 34%),
+    linear-gradient(180deg, var(--fondo), color-mix(in srgb, var(--panel-suave) 55%, var(--fondo)));
+}
+
+.login-card {
+  backdrop-filter: blur(16px);
+}
+
+.marca-sello {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--acento) 36%, var(--borde));
+  border-radius: var(--radio);
+  background: linear-gradient(180deg, var(--acento-suave), color-mix(in srgb, var(--panel) 88%, var(--acento)));
+  color: var(--acento);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.marca-sello-compacto {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.login-indicador {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: color-mix(in srgb, var(--panel) 74%, transparent);
+}
+
+.login-indicador span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.login-indicador strong {
+  color: var(--texto);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.login-error {
+  margin: 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--error) 45%, var(--borde));
+  border-radius: var(--radio-chico);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  color: var(--error);
+  font-size: 0.88rem;
+  line-height: 1.4;
 }
 
 /* Ítem del sidebar de navegación (App.tsx) — mismo lenguaje de hover/foco
