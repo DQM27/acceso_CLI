@@ -10,9 +10,7 @@ pub fn buscar_usuarios(
 ) -> Result<Vec<UsuarioResumen>, String> {
     let sesion = state.sesion_activa()?;
     state
-        .core
-        .lock()
-        .unwrap()
+        .core()
         .buscar_usuarios(&sesion, &filtro.construir())
         .map_err(control_acceso::mensajes::mensaje_usuario)
 }
@@ -23,9 +21,7 @@ pub fn buscar_usuarios(
 pub fn crear_usuario(datos: CrearUsuarioEntrada, state: tauri::State<GuiState>) -> Result<i64, String> {
     let sesion = state.sesion_activa()?;
     state
-        .core
-        .lock()
-        .unwrap()
+        .core()
         .crear_usuario(&sesion, datos.into())
         .map_err(control_acceso::mensajes::mensaje_usuario)
 }
@@ -40,9 +36,7 @@ pub fn actualizar_usuario(
     let sesion = state.sesion_activa()?;
     let activo = datos.activo;
     state
-        .core
-        .lock()
-        .unwrap()
+        .core()
         .actualizar_usuario(&sesion, id, datos.input(), activo)
         .map_err(control_acceso::mensajes::mensaje_usuario)
 }
@@ -55,9 +49,7 @@ pub fn cambiar_password_usuario(
 ) -> Result<(), String> {
     let sesion = state.sesion_activa()?;
     state
-        .core
-        .lock()
-        .unwrap()
+        .core()
         .cambiar_password_usuario(&sesion, id, &password)
         .map_err(control_acceso::mensajes::mensaje_usuario)
 }

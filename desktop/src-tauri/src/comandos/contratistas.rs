@@ -3,15 +3,19 @@ use control_acceso::database::queries::contratistas::PaginaContratistas;
 use crate::dto::contratistas::{DatosContratistaEntrada, FiltroContratistasEntrada};
 use crate::estado::GuiState;
 
+/// El núcleo no exige sesión para esta lectura (ver
+/// `application::catalogos::buscar_contratistas`), pero la GUI sí la exige
+/// acá: a diferencia de la TUI, donde la navegación es la barrera, cualquier
+/// pantalla del webview puede invocar este comando directamente, así que el
+/// chequeo tiene que vivir en el comando mismo.
 #[tauri::command]
 pub fn buscar_contratistas(
     filtro: FiltroContratistasEntrada,
     state: tauri::State<GuiState>,
 ) -> Result<PaginaContratistas, String> {
+    state.sesion_activa()?;
     state
-        .core
-        .lock()
-        .unwrap()
+        .core()
         .buscar_contratistas(&filtro.construir())
         .map_err(|error| error.to_string())
 }
@@ -24,9 +28,7 @@ pub fn crear_contratista(
 ) -> Result<i64, String> {
     let sesion = state.sesion_activa()?;
     state
-        .core
-        .lock()
-        .unwrap()
+        .core()
         .crear_contratista(&sesion, datos.into())
         .map_err(control_acceso::mensajes::mensaje_contratista)
 }
@@ -42,9 +44,7 @@ pub fn actualizar_contratista(
 ) -> Result<(), String> {
     let sesion = state.sesion_activa()?;
     state
-        .core
-        .lock()
-        .unwrap()
+        .core()
         .actualizar_contratista(&sesion, id, datos.into())
         .map_err(control_acceso::mensajes::mensaje_contratista)
 }

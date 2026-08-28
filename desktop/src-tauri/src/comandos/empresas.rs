@@ -5,13 +5,14 @@ use crate::dto::empresas::FiltroEmpresasEntrada;
 use crate::estado::GuiState;
 
 /// Lista completa sin filtro — usada por los desplegables de "Empresa" en
-/// otras pantallas (Contratistas hoy).
+/// otras pantallas (Contratistas hoy). El núcleo no exige sesión para esta
+/// lectura, pero la GUI sí la exige acá — ver el comentario equivalente en
+/// `comandos::contratistas::buscar_contratistas`.
 #[tauri::command]
 pub fn listar_empresas(state: tauri::State<GuiState>) -> Result<Vec<Empresa>, String> {
+    state.sesion_activa()?;
     state
-        .core
-        .lock()
-        .unwrap()
+        .core()
         .listar_empresas()
         .map_err(|error| error.to_string())
 }
@@ -21,10 +22,9 @@ pub fn buscar_empresas(
     filtro: FiltroEmpresasEntrada,
     state: tauri::State<GuiState>,
 ) -> Result<Vec<EmpresaResumen>, String> {
+    state.sesion_activa()?;
     state
-        .core
-        .lock()
-        .unwrap()
+        .core()
         .buscar_empresas(&filtro.construir())
         .map_err(control_acceso::mensajes::mensaje_empresa)
 }
@@ -33,9 +33,7 @@ pub fn buscar_empresas(
 pub fn crear_empresa(nombre: String, state: tauri::State<GuiState>) -> Result<i64, String> {
     let sesion = state.sesion_activa()?;
     state
-        .core
-        .lock()
-        .unwrap()
+        .core()
         .crear_empresa(&sesion, &nombre)
         .map_err(control_acceso::mensajes::mensaje_empresa)
 }
@@ -48,9 +46,7 @@ pub fn actualizar_empresa(
 ) -> Result<(), String> {
     let sesion = state.sesion_activa()?;
     state
-        .core
-        .lock()
-        .unwrap()
+        .core()
         .actualizar_empresa(&sesion, id, &nombre)
         .map_err(control_acceso::mensajes::mensaje_empresa)
 }
@@ -62,7 +58,7 @@ pub fn establecer_empresa_activa(
     state: tauri::State<GuiState>,
 ) -> Result<(), String> {
     let sesion = state.sesion_activa()?;
-    let core = state.core.lock().unwrap();
+    let core = state.core();
     let resultado = if activa {
         core.activar_empresa(&sesion, id)
     } else {

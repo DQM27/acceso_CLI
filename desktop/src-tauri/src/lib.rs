@@ -1,5 +1,3 @@
-use std::sync::Mutex;
-
 use control_acceso::application::AppCore;
 use control_acceso::database::connection::ruta_base_datos;
 use control_acceso::instancia::InstanciaGuard;
@@ -23,11 +21,7 @@ pub fn run() {
     let core = AppCore::abrir(&ruta_base_datos).expect("no se pudo abrir la base de datos");
 
     tauri::Builder::default()
-        .manage(GuiState {
-            core: Mutex::new(core),
-            sesion: Mutex::new(None),
-            _instancia: instancia,
-        })
+        .manage(GuiState::new(core, instancia))
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
