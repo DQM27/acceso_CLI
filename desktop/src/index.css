@@ -301,6 +301,17 @@ input {
   transition: width 0.15s ease;
 }
 
+/* Encabezados de columna centrados por defecto en las 4 grillas — ver
+   `columnaPorDefecto` en Tabla.tsx. */
+.columna-centrada .ag-header-cell-label {
+  justify-content: center;
+}
+
+/* Encabezados de columna en mayúscula en las 4 grillas. */
+.ag-header-cell-text {
+  text-transform: uppercase;
+}
+
 .shell-sidebar-colapsada {
   width: 3.75rem;
 }

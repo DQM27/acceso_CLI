@@ -8,8 +8,8 @@ import { actualizarUsuario, buscarUsuarios } from "../api";
 import type { UsuarioResumen } from "../api";
 
 const columnas: ColDef<UsuarioResumen>[] = [
-  { field: "cedula", headerName: "Cédula", width: 140 },
-  { field: "nombre", headerName: "Nombre", flex: 1 },
+  { field: "cedula", headerName: "Cédula", width: 140, cellStyle: { textAlign: "left" } },
+  { field: "nombre", headerName: "Nombre", flex: 1, cellStyle: { textAlign: "left" } },
   { field: "rol", headerName: "Rol", width: 140 },
   { field: "activo", headerName: "Activo", width: 100, cellDataType: "boolean", editable: true },
 ];

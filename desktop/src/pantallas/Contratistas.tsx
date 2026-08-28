@@ -18,8 +18,8 @@ import type {
 // pasa por FormularioContratista (doble click en una fila para editar, botón
 // "+ Nuevo contratista" para dar de alta).
 const columnas: ColDef<ContratistaResumen>[] = [
-  { field: "cedula", headerName: "Cédula", width: 140 },
-  { field: "nombre", headerName: "Nombre", flex: 1 },
+  { field: "cedula", headerName: "Cédula", width: 140, cellStyle: { textAlign: "left" } },
+  { field: "nombre", headerName: "Nombre", flex: 1, cellStyle: { textAlign: "left" } },
   { field: "empresa_nombre", headerName: "Empresa", flex: 1 },
   { field: "tipo_ingreso", headerName: "Tipo", width: 120 },
   { field: "fecha_vencimiento_praind", headerName: "PRAIND vence", width: 140 },

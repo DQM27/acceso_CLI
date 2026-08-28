@@ -10,6 +10,29 @@ function textoMedio(medio: IngresoActivoResumen["medio_ingreso"]): string {
   return medio === "Vehiculo" ? "Vehículo" : "Caminando";
 }
 
+/** Formato de 24 horas a propósito (hour12: false) — sin esto
+ * toLocaleTimeString usa AM/PM según el locale del sistema. */
+function textoHora(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+/** Año-mes-día en hora LOCAL (no UTC) como string ordenable ("2026-08-28")
+ * — año-mes-día en vez de `toLocaleDateString()` para que el filtro/orden
+ * de la columna funcione como texto plano cronológico, sin volver a pasar
+ * por `Date` (que interpretaría "2026-08-28" como medianoche UTC y podría
+ * mostrar el día anterior en un huso horario negativo como Costa Rica). */
+function fechaLocalYMD(iso: string): string {
+  const d = new Date(iso);
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mes}-${dia}`;
+}
+
+function textoFechaDDMMYYYY(ymd: string): string {
+  const [anio, mes, dia] = ymd.split("-");
+  return `${dia}/${mes}/${anio}`;
+}
+
 /** Texto plano del estado — separado del componente visual `EstadoAcceso`
  * para que la columna tenga un `field` real: sin eso no aparece en el
  * selector "Columnas ▾" (que sólo lista columnas con `field`) ni el filtro
@@ -41,13 +64,15 @@ type FilaActiva = IngresoActivoResumen & { estado_texto: string };
 export default function Activos({
   refrescarSenal,
   onAbrirNuevoIngreso,
+  onAbrirSalida,
 }: {
-  /** El modal de Nuevo Ingreso vive en el Shell (se dispara desde cualquier
-   * pantalla vía Ctrl+Shift+N, no sólo desde acá) — este número sube cada
-   * vez que registra algo, para que la grilla se refresque aunque ya
-   * estuviera montada. */
+  /** Los modales de Nuevo Ingreso y Salida viven en el Shell (se disparan
+   * desde cualquier pantalla vía Ctrl+Shift+N/S, no sólo desde acá) —
+   * este número sube cada vez que registran algo, para que la grilla se
+   * refresque aunque ya estuviera montada. */
   refrescarSenal?: number;
   onAbrirNuevoIngreso: () => void;
+  onAbrirSalida: () => void;
 }) {
   const [filas, setFilas] = useState<FilaActiva[]>([]);
   const [total, setTotal] = useState(0);
@@ -115,8 +140,14 @@ export default function Activos({
   // `Tabla`/localStorage quedaba pisado en el siguiente refresco.
   const columnas: ColDef<FilaActiva>[] = useMemo(
     () => [
-      { field: "cedula", headerName: "Cédula", width: 120 },
-      { field: "contratista_nombre", headerName: "Nombre", flex: 1.6, minWidth: 170 },
+      { field: "cedula", headerName: "Cédula", width: 120, cellStyle: { textAlign: "left" } },
+      {
+        field: "contratista_nombre",
+        headerName: "Nombre",
+        flex: 1.6,
+        minWidth: 170,
+        cellStyle: { textAlign: "left" },
+      },
       { field: "empresa_nombre", headerName: "Empresa", flex: 1.1, minWidth: 140 },
       { field: "tipo_ingreso", headerName: "Tipo", width: 100 },
       {
@@ -128,24 +159,29 @@ export default function Activos({
       { field: "gafete_numero", headerName: "Gafete", width: 90 },
       {
         colId: "fecha_ingreso",
-        field: "fecha_hora_ingreso",
         headerName: "Fecha",
         width: 110,
-        valueFormatter: (p) => new Date(p.value).toLocaleDateString(),
+        // `valueGetter` (no `field`) a propósito, igual que Hora: si la
+        // columna lee el string ISO crudo, AG Grid la infiere como fecha y
+        // el filtro flotante termina siendo el selector nativo de
+        // fecha+hora del navegador (`datetime-local`) en vez de un texto
+        // simple — igual que le pasaba a Hora. `fechaLocalYMD` mantiene el
+        // orden cronológico correcto como texto ("2026-08-28" ordena bien
+        // sin volver a pasar por `Date`); `valueFormatter` sólo reacomoda
+        // ese mismo string a DD/MM/AAAA para mostrar, sin re-parsearlo.
+        valueGetter: (p) => (p.data ? fechaLocalYMD(p.data.fecha_hora_ingreso) : ""),
+        valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
       },
       {
         colId: "hora_ingreso",
-        field: "fecha_hora_ingreso",
         headerName: "Hora",
         width: 90,
-        // Formato de 24 horas a propósito (hour12: false) — sin esto
-        // toLocaleTimeString usa AM/PM según el locale del sistema.
-        valueFormatter: (p) =>
-          new Date(p.value).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false,
-          }),
+        // `valueGetter` (no `field`+`valueFormatter`) a propósito: si lee
+        // el string ISO crudo, AG Grid vuelve a inferirla como fecha (con
+        // el mismo problema de la columna Fecha). Devolviendo ya el texto
+        // "HH:MM", la columna se filtra/ordena como texto plano — mismo
+        // comportamiento que el resto de columnas de texto, sin ícono raro.
+        valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora_ingreso) : ""),
       },
       { field: "usuario_ingreso_nombre", headerName: "Dio ingreso", width: 130 },
       {
@@ -160,7 +196,11 @@ export default function Activos({
         width: 90,
         filter: false,
         sortable: false,
-        pinned: "right",
+        // Sin pinned a propósito: una columna fijada reserva el ancho del
+        // scrollbar vertical aunque no haga falta scroll, dejando un
+        // espacio en blanco justo antes de ella — con las 10 columnas ya
+        // entrando sin scroll horizontal (ver el ajuste de anchos previo),
+        // fijarla no aporta nada y sí ese espacio no deseado.
         cellRenderer: (p: ICellRendererParams<FilaActiva>) =>
           p.data ? (
             <button
@@ -182,9 +222,14 @@ export default function Activos({
       <PantallaEncabezado
         titulo="Ingresos activos"
         acciones={
-          <button className="boton" title="Ctrl+Shift+N" onClick={onAbrirNuevoIngreso}>
-            + Nuevo ingreso
-          </button>
+          <>
+            <button className="boton" title="Ctrl+Shift+S" onClick={onAbrirSalida}>
+              Salida
+            </button>
+            <button className="boton" title="Ctrl+Shift+N" onClick={onAbrirNuevoIngreso}>
+              + Nuevo ingreso
+            </button>
+          </>
         }
       />
 

@@ -249,7 +249,7 @@ export default function NuevoIngresoModal({
                   }}
                 >
                   <span>
-                    <span style={{ fontWeight: 500 }}>{contratista.nombre}</span>{" "}
+                    {contratista.nombre}{" "}
                     <span style={{ color: "var(--muted)" }}>· {contratista.cedula}</span>
                   </span>
                   <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>

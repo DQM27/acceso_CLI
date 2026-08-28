@@ -8,7 +8,7 @@ import { buscarEmpresas, establecerEmpresaActiva } from "../api";
 import type { EmpresaResumen } from "../api";
 
 const columnas: ColDef<EmpresaResumen>[] = [
-  { field: "nombre", headerName: "Nombre", flex: 1 },
+  { field: "nombre", headerName: "Nombre", flex: 1, cellStyle: { textAlign: "left" } },
   { field: "contratistas", headerName: "Contratistas", width: 130 },
   { field: "activo", headerName: "Activa", width: 100, cellDataType: "boolean", editable: true },
 ];

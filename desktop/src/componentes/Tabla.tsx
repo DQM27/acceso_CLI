@@ -43,7 +43,15 @@ const columnaPorDefecto: ColDef = {
   sortable: true,
   resizable: true,
   minWidth: 90,
+  // Centrado por defecto (encabezado y dato) en las 4 grillas — la
+  // columna de nombre es la excepción explícita, cada pantalla la anula
+  // con `cellStyle: { textAlign: "left" }` (el encabezado se queda
+  // centrado igual, sólo el dato cambia).
+  headerClass: "columna-centrada",
+  cellStyle: { textAlign: "center" },
 };
+
+const MENSAJE_SIN_FILAS = `<span style="color: var(--muted); font-size: 0.9rem;">Sin resultados</span>`;
 
 const columnaPorDefectoConFiltro: ColDef = {
   ...columnaPorDefecto,
@@ -56,8 +64,12 @@ interface EstadoGuardado {
   columnas: ColumnState[];
 }
 
+// v2: el layout guardado incluye `pinned` por columna — al sacar el pin
+// fijo de Acción (Activos) del código, un layout viejo lo seguía trayendo
+// de vuelta desde acá. Subir la versión descarta ese estado guardado
+// obsoleto en vez de tener que migrarlo a mano.
 function claveAlmacenamiento(id: string): string {
-  return `tabla:${id}`;
+  return `tabla:${id}:v2`;
 }
 
 function leerEstadoGuardado(id: string | undefined): EstadoGuardado | null {
@@ -262,6 +274,7 @@ export default function Tabla<T>({
           defaultColDef={filtrosPorColumna ? columnaPorDefectoConFiltro : columnaPorDefecto}
           rowData={filas}
           columnDefs={columnasConVisibilidad}
+          overlayNoRowsTemplate={MENSAJE_SIN_FILAS}
           // Resguardo además de memoizar `columnas` en cada pantalla: si de
           // todos modos algo le pasa un `columnDefs` nuevo, esto evita que
           // AG Grid reordene según el orden literal del array en vez de

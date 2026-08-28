@@ -6,6 +6,7 @@ import Contratistas from "./pantallas/Contratistas";
 import Empresas from "./pantallas/Empresas";
 import Usuarios from "./pantallas/Usuarios";
 import NuevoIngresoModal from "./pantallas/NuevoIngresoModal";
+import SalidaModal from "./pantallas/SalidaModal";
 import { cerrarSesion, requiereConfiguracionInicial } from "./api";
 import type { UsuarioSesion } from "./api";
 
@@ -86,17 +87,20 @@ function Shell({
   const [colapsado, setColapsado] = useState(false);
 
   const [modalNuevoIngreso, setModalNuevoIngreso] = useState(false);
-  // Sube en cada registro exitoso — Activos lo usa para refrescar su
-  // grilla aunque el registro haya salido desde otra pantalla.
+  const [modalSalida, setModalSalida] = useState(false);
+  // Sube en cada registro/salida exitosa — Activos lo usa para refrescar su
+  // grilla aunque haya salido desde otra pantalla.
   const [refrescarActivos, setRefrescarActivos] = useState(0);
 
-  // Ctrl+Shift+N (no Ctrl+N solo — esa convención queda libre para un
-  // "nuevo" más genérico más adelante) desde cualquier pantalla: el modal
-  // es autosuficiente (busca y registra sin depender de qué sección esté
-  // abierta), así que no tiene sentido atarlo a un botón dentro de Activos
-  // únicamente. Deshabilitado por defecto mientras se escribe en un campo
-  // de texto (comportamiento por defecto de la librería).
+  // Ctrl+Shift+N/S (no Ctrl+N/S solos — esas convenciones quedan libres
+  // para un "nuevo"/"salida" más genéricos más adelante) desde cualquier
+  // pantalla: ambos modales son autosuficientes (buscan y registran sin
+  // depender de qué sección esté abierta), así que no tiene sentido
+  // atarlos a un botón dentro de Activos únicamente. Deshabilitados por
+  // defecto mientras se escribe en un campo de texto (comportamiento por
+  // defecto de la librería).
   useHotkeys("ctrl+shift+n", () => setModalNuevoIngreso(true), { preventDefault: true });
+  useHotkeys("ctrl+shift+s", () => setModalSalida(true), { preventDefault: true });
 
   return (
     <div style={{ display: "flex", height: "100%" }}>
@@ -192,6 +196,7 @@ function Shell({
           <Activos
             refrescarSenal={refrescarActivos}
             onAbrirNuevoIngreso={() => setModalNuevoIngreso(true)}
+            onAbrirSalida={() => setModalSalida(true)}
           />
         )}
         {seccion === "contratistas" && <Contratistas />}
@@ -203,6 +208,13 @@ function Shell({
         <NuevoIngresoModal
           onRegistrado={() => setRefrescarActivos((n) => n + 1)}
           onCerrar={() => setModalNuevoIngreso(false)}
+        />
+      )}
+
+      {modalSalida && (
+        <SalidaModal
+          onRegistrado={() => setRefrescarActivos((n) => n + 1)}
+          onCerrar={() => setModalSalida(false)}
         />
       )}
     </div>
