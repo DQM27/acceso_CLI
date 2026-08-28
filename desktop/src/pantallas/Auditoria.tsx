@@ -27,11 +27,32 @@ function textoFechaDDMMYYYY(ymd: string): string {
 }
 
 type FilaAuditoria = CambioAuditado & {
+  /** Nombre más reciente conocido de este registro (ver `nombresActuales`
+   * más abajo) — no el snapshot de ESTA fila puntual. Cuando el cambio
+   * auditado es justo el nombre, `entidad_nombre` cambia de fila en fila
+   * (ej. "BAC" → "BACA" → "BAC") y esta columna parece hablar de dos
+   * entidades distintas; con el nombre más reciente, todas las filas del
+   * mismo registro se identifican igual — el renombre en sí ya se ve en
+   * "Valor anterior"/"Valor nuevo". */
+  entidad_actual: string;
   entidad_texto: string;
   campo_texto: string;
   anterior_texto: string;
   nuevo_texto: string;
 };
+
+/** Para cada (entidad, entidad_id), el `entidad_nombre` de la fila con la
+ * `fecha_hora` más reciente — `items` ya viene ordenado por fecha DESC
+ * desde el núcleo, así que la primera fila vista por combinación ya es la
+ * más nueva. */
+function nombresActuales(items: CambioAuditado[]): Map<string, string> {
+  const nombres = new Map<string, string>();
+  for (const item of items) {
+    const clave = `${item.entidad}:${item.entidad_id}`;
+    if (!nombres.has(clave)) nombres.set(clave, item.entidad_nombre);
+  }
+  return nombres;
+}
 
 export default function Auditoria() {
   const [filas, setFilas] = useState<FilaAuditoria[]>([]);
@@ -42,18 +63,20 @@ export default function Auditoria() {
     let vigente = true;
     setCargando(true);
     listarAuditoria()
-      .then((items) =>
-        vigente &&
+      .then((items) => {
+        if (!vigente) return;
+        const actuales = nombresActuales(items);
         setFilas(
           items.map((item) => ({
             ...item,
+            entidad_actual: actuales.get(`${item.entidad}:${item.entidad_id}`) ?? item.entidad_nombre,
             entidad_texto: etiquetaEntidad(item.entidad),
             campo_texto: etiquetaCampo(item.campo),
             anterior_texto: valorPresentable(item.campo, item.valor_anterior),
             nuevo_texto: valorPresentable(item.campo, item.valor_nuevo),
           })),
-        ),
-      )
+        );
+      })
       .catch((error) => vigente && toast.error(String(error)))
       .finally(() => vigente && setCargando(false));
     return () => {
@@ -80,7 +103,7 @@ export default function Auditoria() {
         valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora) : ""),
       },
       {
-        field: "entidad_nombre",
+        field: "entidad_actual",
         headerName: "Entidad",
         flex: 1.3,
         minWidth: 160,
