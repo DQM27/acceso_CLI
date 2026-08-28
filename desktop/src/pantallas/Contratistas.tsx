@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
@@ -47,7 +48,6 @@ export default function Contratistas() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [filas, setFilas] = useState<ContratistaResumen[]>([]);
   const [total, setTotal] = useState(0);
-  const [error, setError] = useState<string | null>(null);
   const [seleccionadas, setSeleccionadas] = useState<ContratistaResumen[]>([]);
   const [formularioAbierto, setFormularioAbierto] = useState<"crear" | ContratistaResumen | null>(
     null,
@@ -70,9 +70,7 @@ export default function Contratistas() {
 
   useEffect(() => {
     let vigente = true;
-    recargar()
-      .then(() => vigente && setError(null))
-      .catch((error) => vigente && setError(String(error)));
+    recargar().catch((error) => vigente && toast.error(String(error)));
     return () => {
       vigente = false;
     };
@@ -89,12 +87,11 @@ export default function Contratistas() {
         es_personal_ruta: fila.es_personal_ruta,
         tiene_acceso: fila.tiene_acceso,
       });
-      setError(null);
     } catch (error) {
       // La grilla ya muestra el valor nuevo (edición optimista de AG Grid) —
       // si el guardado falla, hay que volver a pedir los datos reales para
       // que la celda no quede mintiendo.
-      setError(String(error));
+      toast.error(String(error));
       recargar();
     }
   }
@@ -233,7 +230,6 @@ export default function Contratistas() {
       />
 
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
-        {error && <p style={{ color: "var(--error)", margin: 0 }}>{error}</p>}
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<ContratistaResumen>
             id="contratistas"

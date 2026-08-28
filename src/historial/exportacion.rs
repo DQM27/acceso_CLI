@@ -32,13 +32,23 @@ pub enum ColumnaHistorial {
 pub(crate) struct FormatosHistorial {
     fecha: Format,
     hora: Format,
+    /// Centrado plano (sin formato numérico) — todas las columnas de texto
+    /// salvo [`ColumnaHistorial::Nombre`]/[`ColumnaHistorial::Cedula`]
+    /// (esas quedan alineadas a la izquierda, que es lo que Excel ya hace
+    /// por defecto con texto, así que no necesitan `Format` propio).
+    centrado: Format,
 }
 
 impl Default for FormatosHistorial {
     fn default() -> Self {
         Self {
-            fecha: Format::new().set_num_format("dd/mm/yyyy"),
-            hora: Format::new().set_num_format("hh:mm"),
+            fecha: Format::new()
+                .set_num_format("dd/mm/yyyy")
+                .set_align(FormatAlign::Center),
+            hora: Format::new()
+                .set_num_format("hh:mm")
+                .set_align(FormatAlign::Center),
+            centrado: Format::new().set_align(FormatAlign::Center),
         }
     }
 }
@@ -163,7 +173,7 @@ pub(crate) fn escribir_movimiento(
                     )?;
                 }
                 None => {
-                    hoja.write_string(fila, indice, "Activo")?;
+                    hoja.write_string_with_format(fila, indice, "Activo", &formatos.centrado)?;
                 }
             },
             ColumnaHistorial::Nombre => {
@@ -174,10 +184,20 @@ pub(crate) fn escribir_movimiento(
                 hoja.write_string(fila, indice, &movimiento.cedula)?;
             }
             ColumnaHistorial::Empresa => {
-                hoja.write_string(fila, indice, &movimiento.empresa_nombre)?;
+                hoja.write_string_with_format(
+                    fila,
+                    indice,
+                    &movimiento.empresa_nombre,
+                    &formatos.centrado,
+                )?;
             }
             ColumnaHistorial::Tipo => {
-                hoja.write_string(fila, indice, tipo_texto(movimiento.tipo_ingreso))?;
+                hoja.write_string_with_format(
+                    fila,
+                    indice,
+                    tipo_texto(movimiento.tipo_ingreso),
+                    &formatos.centrado,
+                )?;
             }
             ColumnaHistorial::Entrada => {
                 hoja.write_with_format(fila, indice, &ingreso_local.time(), &formatos.hora)?;
@@ -192,26 +212,37 @@ pub(crate) fn escribir_movimiento(
                     )?;
                 }
                 None => {
-                    hoja.write_string(fila, indice, "Activo")?;
+                    hoja.write_string_with_format(fila, indice, "Activo", &formatos.centrado)?;
                 }
             },
             ColumnaHistorial::Gafete => {
                 let valor = movimiento
                     .gafete_numero
                     .map_or_else(|| "S/G".to_owned(), |numero| numero.to_string());
-                hoja.write_string(fila, indice, &valor)?;
+                hoja.write_string_with_format(fila, indice, &valor, &formatos.centrado)?;
             }
             ColumnaHistorial::Medio => {
-                hoja.write_string(fila, indice, medio_texto(movimiento.medio_ingreso))?;
+                hoja.write_string_with_format(
+                    fila,
+                    indice,
+                    medio_texto(movimiento.medio_ingreso),
+                    &formatos.centrado,
+                )?;
             }
             ColumnaHistorial::Ingreso => {
-                hoja.write_string(fila, indice, &movimiento.usuario_ingreso_nombre)?;
+                hoja.write_string_with_format(
+                    fila,
+                    indice,
+                    &movimiento.usuario_ingreso_nombre,
+                    &formatos.centrado,
+                )?;
             }
             ColumnaHistorial::Egreso => {
-                hoja.write_string(
+                hoja.write_string_with_format(
                     fila,
                     indice,
                     movimiento.usuario_salida_nombre.as_deref().unwrap_or("—"),
+                    &formatos.centrado,
                 )?;
             }
         }

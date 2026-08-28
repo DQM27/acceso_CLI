@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
@@ -16,7 +17,6 @@ const columnas: ColDef<EmpresaResumen>[] = [
 export default function Empresas() {
   const [texto, setTexto] = useState("");
   const [filas, setFilas] = useState<EmpresaResumen[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [formularioAbierto, setFormularioAbierto] = useState<"crear" | EmpresaResumen | null>(
     null,
   );
@@ -29,9 +29,7 @@ export default function Empresas() {
 
   useEffect(() => {
     let vigente = true;
-    recargar()
-      .then(() => vigente && setError(null))
-      .catch((error) => vigente && setError(String(error)));
+    recargar().catch((error) => vigente && toast.error(String(error)));
     return () => {
       vigente = false;
     };
@@ -40,9 +38,8 @@ export default function Empresas() {
   async function manejarEdicion(fila: EmpresaResumen) {
     try {
       await establecerEmpresaActiva(fila.id, fila.activo);
-      setError(null);
     } catch (error) {
-      setError(String(error));
+      toast.error(String(error));
       recargar();
     }
   }
@@ -63,7 +60,6 @@ export default function Empresas() {
       />
 
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
-        {error && <p style={{ color: "var(--error)", margin: 0 }}>{error}</p>}
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<EmpresaResumen>
             id="empresas"

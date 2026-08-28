@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
+import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
@@ -57,22 +58,16 @@ const CLAVES_COLUMNA: Record<string, string> = {
 
 export default function Historial() {
   const [filas, setFilas] = useState<FilaHistorial[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
   const [exportando, setExportando] = useState(false);
-  const [mensajeExportacion, setMensajeExportacion] = useState<string | null>(null);
   const tablaRef = useRef<TablaHandle<FilaHistorial>>(null);
 
   useEffect(() => {
     let vigente = true;
     setCargando(true);
     listarHistorial()
-      .then((items) => {
-        if (!vigente) return;
-        setFilas(items);
-        setError(null);
-      })
-      .catch((error) => vigente && setError(String(error)))
+      .then((items) => vigente && setFilas(items))
+      .catch((error) => vigente && toast.error(String(error)))
       .finally(() => vigente && setCargando(false));
     return () => {
       vigente = false;
@@ -80,23 +75,20 @@ export default function Historial() {
   }, []);
 
   async function exportar() {
-    setMensajeExportacion(null);
-    setError(null);
-
     // Lo que la grilla tiene visible AHORA (filtro por columna y selector
     // "Columnas ▾" de AG Grid, ambos del lado del cliente) — exportar
     // respeta ese recorte en vez de siempre mandar todo el historial sin
     // acotar.
     const visibles = tablaRef.current?.filasFiltradas() ?? filas;
     if (visibles.length === 0) {
-      setError("No hay filas para exportar con el filtro actual.");
+      toast.error("No hay filas para exportar con el filtro actual.");
       return;
     }
     const claves = (tablaRef.current?.columnasVisibles() ?? Object.keys(CLAVES_COLUMNA))
       .map((colId) => CLAVES_COLUMNA[colId])
       .filter((clave): clave is string => clave !== undefined);
     if (claves.length === 0) {
-      setError("No hay columnas visibles para exportar.");
+      toast.error("No hay columnas visibles para exportar.");
       return;
     }
 
@@ -106,19 +98,20 @@ export default function Historial() {
       filters: [{ name: "Excel", extensions: ["xlsx"] }],
     });
     if (!destino) return;
+
     setExportando(true);
-    try {
-      const cantidad = await exportarHistorial(
+    toast.promise(
+      exportarHistorial(
         destino,
         visibles.map((fila) => fila.registro_id),
         claves,
-      );
-      setMensajeExportacion(`${cantidad} fila(s) exportadas.`);
-    } catch (error) {
-      setError(String(error));
-    } finally {
-      setExportando(false);
-    }
+      ).finally(() => setExportando(false)),
+      {
+        loading: "Exportando…",
+        success: (cantidad) => `${cantidad} fila(s) exportadas.`,
+        error: (error) => String(error),
+      },
+    );
   }
 
   // useMemo a propósito — mismo motivo que Activos.tsx: si `columnas` se
@@ -163,17 +156,24 @@ export default function Historial() {
         valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora_ingreso) : ""),
       },
       {
+        // "Activo" (no sólo vacío) cuando no hay salida — mismo texto que
+        // ya escribe la exportación a Excel (`escribir_movimiento`,
+        // `src/historial/exportacion.rs`) para un movimiento sin
+        // `fecha_hora_salida`; antes la grilla dejaba la celda en blanco y
+        // no coincidía con lo que se veía en el archivo exportado.
         colId: "fecha_salida",
         headerName: "Fecha salida",
         width: 120,
-        valueGetter: (p) => (p.data?.fecha_hora_salida ? fechaLocalYMD(p.data.fecha_hora_salida) : ""),
-        valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
+        valueGetter: (p) =>
+          p.data?.fecha_hora_salida ? fechaLocalYMD(p.data.fecha_hora_salida) : "Activo",
+        valueFormatter: (p) => (p.value === "Activo" ? "Activo" : textoFechaDDMMYYYY(p.value)),
       },
       {
         colId: "hora_salida",
         headerName: "Hora salida",
         width: 110,
-        valueGetter: (p) => (p.data?.fecha_hora_salida ? textoHora(p.data.fecha_hora_salida) : ""),
+        valueGetter: (p) =>
+          p.data?.fecha_hora_salida ? textoHora(p.data.fecha_hora_salida) : "Activo",
       },
       { field: "usuario_ingreso_nombre", headerName: "Dio ingreso", width: 130 },
       { field: "usuario_salida_nombre", headerName: "Dio salida", width: 130 },
@@ -198,9 +198,6 @@ export default function Historial() {
       />
 
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
-        {error && <p style={{ color: "var(--error)", margin: 0 }}>{error}</p>}
-        {mensajeExportacion && <p style={{ color: "var(--exito)", margin: 0 }}>{mensajeExportacion}</p>}
-
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<FilaHistorial>
             ref={tablaRef}

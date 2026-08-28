@@ -223,21 +223,65 @@ input {
   color: var(--fondo);
 }
 
+/* Botón con ícono (lucide-react) + texto opcional al lado — hoy sólo
+   "Cerrar sesión". Centrado también cuando sólo lleva ícono (texto
+   condicional en `false` desde React, no un `display:none` en CSS). */
+.boton-icono {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.boton-salir {
+  width: 100%;
+}
+
+/* Sidebar colapsada (App.tsx, doble click sobre el logo/espacio vacío):
+   el botón de ancho completo con borde se veía como una caja apretada en
+   la columna angosta (3.75rem). Colapsado pasa a "fantasma" circular, del
+   mismo tamaño que `.shell-avatar` justo arriba — combina con él en vez de
+   verse como un control de formulario suelto; el color/borde sólo aparece
+   al pasar el mouse. `align-items: center` en `.shell-usuario` (no
+   `margin: 0 auto` acá) es lo que lo centra — mismo mecanismo que ya
+   alinea el resto de la columna, en vez de una segunda técnica de centrado
+   que terminaba un poco corrida respecto a los íconos de arriba. */
+.shell-sidebar-colapsada .boton-salir {
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  border-radius: 999px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.shell-sidebar-colapsada .boton-salir:hover {
+  border-color: color-mix(in srgb, var(--acento) 36%, var(--borde));
+  background: var(--campo-fondo);
+}
+
 .login-card {
   backdrop-filter: blur(16px);
 }
 
+/* El ícono real (waves+leaf, `src/assets/marca.png`) ya trae su propio
+   fondo oscuro y esquinas redondeadas horneadas en el PNG — el contenedor
+   sólo lo tamaña/recorta, sin agregar un segundo fondo/borde que se vería
+   como un marco doble alrededor del ícono. */
 .marca-sello {
   display: grid;
   width: 2.75rem;
   height: 2.75rem;
+  flex-shrink: 0;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--acento) 36%, var(--borde));
+  overflow: hidden;
   border-radius: var(--radio);
-  background: linear-gradient(180deg, var(--acento-suave), color-mix(in srgb, var(--panel) 88%, var(--acento)));
-  color: var(--acento);
-  font-weight: 700;
-  letter-spacing: 0;
+}
+
+.marca-sello img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .login-error {
@@ -261,16 +305,40 @@ input {
    acción, es un item de lista). El estado activo lo decide React con
    .nav-item-activo; acá sólo hover/foco, que antes no existían en absoluto. */
 .nav-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
   width: 100%;
   text-align: left;
   padding: 0.6rem 1rem;
   border: none;
+  border-radius: var(--radio-chico);
   background: transparent;
   color: var(--texto);
   font-size: 0.95rem;
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.nav-item svg {
+  flex-shrink: 0;
+}
+
+/* Colapsada: sólo el ícono, centrado — sin el `gap` del texto (que ya no
+   se renderiza) para que quede perfectamente centrado en la columna
+   angosta, no corrido a la izquierda por el padding horizontal normal. */
+.shell-sidebar-colapsada .nav-item {
+  justify-content: center;
+  padding: 0.65rem 0;
+}
+
+/* `align-items: center` en el eje transversal (horizontal, contenedor en
+   columna) centra `.boton-salir` — que en colapsado tiene ancho fijo
+   (2.1rem) en vez de `width: 100%` — sin afectar la fila del avatar
+   (sigue estirada a lo ancho completo por defecto; su propio
+   `justifyContent` ya la centra por dentro). */
+.shell-sidebar-colapsada .shell-usuario {
+  align-items: center;
 }
 
 .nav-item:hover:not(.nav-item-activo) {
@@ -597,4 +665,30 @@ input {
   padding: 0 0.3rem;
   color: var(--c-acento);
   font-family: inherit;
+}
+
+/* Toasts (sonner, ver App.tsx <Toaster theme="system" />) con la misma
+   paleta clara/oscura del resto de la app en vez de sus colores por
+   defecto. `!important`: sonner inyecta su propia hoja de estilos en
+   tiempo de ejecución (al montar <Toaster/>), después de que esta hoja ya
+   cargó — sin !important, su regla (mismo selector, mismas variables) gana
+   por orden de aparición sin importar qué esté antes acá. */
+[data-sonner-toaster] {
+  --normal-bg: var(--panel) !important;
+  --normal-border: var(--borde) !important;
+  --normal-text: var(--texto) !important;
+  --success-bg: var(--panel) !important;
+  --success-border: var(--exito) !important;
+  --success-text: var(--exito) !important;
+  --error-bg: var(--panel) !important;
+  --error-border: var(--error) !important;
+  --error-text: var(--error) !important;
+  --warning-bg: var(--panel) !important;
+  --warning-border: var(--advertencia) !important;
+  --warning-text: var(--advertencia) !important;
+  --info-bg: var(--panel) !important;
+  --info-border: var(--acento) !important;
+  --info-text: var(--acento) !important;
+  --border-radius: var(--radio-chico) !important;
+  font-family: inherit !important;
 }

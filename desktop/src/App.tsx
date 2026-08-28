@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { Toaster } from "sonner";
+import { Building2, History, LogOut, UserCheck, UserCog, Users } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import marca from "./assets/marca.png";
 import Login from "./pantallas/Login";
 import Activos from "./pantallas/Activos";
 import Contratistas from "./pantallas/Contratistas";
@@ -65,12 +69,12 @@ export default function App() {
 
 type Seccion = "activos" | "historial" | "contratistas" | "empresas" | "usuarios";
 
-const SECCIONES: { id: Seccion; etiqueta: string }[] = [
-  { id: "activos", etiqueta: "Ingresos activos" },
-  { id: "historial", etiqueta: "Historial" },
-  { id: "contratistas", etiqueta: "Contratistas" },
-  { id: "empresas", etiqueta: "Empresas" },
-  { id: "usuarios", etiqueta: "Usuarios" },
+const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
+  { id: "activos", etiqueta: "Ingresos activos", Icono: UserCheck },
+  { id: "historial", etiqueta: "Historial", Icono: History },
+  { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
+  { id: "empresas", etiqueta: "Empresas", Icono: Building2 },
+  { id: "usuarios", etiqueta: "Usuarios", Icono: UserCog },
 ];
 
 /**
@@ -108,9 +112,13 @@ function Shell({
   return (
     <div style={{ display: "flex", height: "100%" }}>
       <nav className={`shell-sidebar ${colapsado ? "shell-sidebar-colapsada" : ""}`}>
-        <div className="shell-marca">
-          <div className="marca-sello" aria-hidden="true">
-            B
+        <div
+          className="shell-marca"
+          title="Doble click para colapsar/expandir"
+          onDoubleClick={() => setColapsado((c) => !c)}
+        >
+          <div className="marca-sello">
+            <img src={marca} alt="" />
           </div>
           {!colapsado && (
             <div style={{ minWidth: 0 }}>
@@ -124,33 +132,25 @@ function Shell({
           )}
         </div>
 
-        <div style={{ padding: "0 0.6rem 0.5rem" }}>
-          <button
-            type="button"
-            className="boton"
-            style={{ width: "100%" }}
-            title={colapsado ? "Expandir menú" : "Colapsar menú"}
-            onClick={() => setColapsado((c) => !c)}
-          >
-            {colapsado ? "»" : "« Colapsar"}
-          </button>
-        </div>
-
         <div className="shell-nav">
-          {SECCIONES.map((item) => (
+          {SECCIONES.map(({ id, etiqueta, Icono }) => (
             <button
-              key={item.id}
-              onClick={() => setSeccion(item.id)}
-              title={colapsado ? item.etiqueta : undefined}
-              className={`nav-item ${seccion === item.id ? "nav-item-activo" : ""}`}
-              style={colapsado ? { textAlign: "center", padding: "0.6rem 0" } : undefined}
+              key={id}
+              onClick={() => setSeccion(id)}
+              title={colapsado ? etiqueta : undefined}
+              className={`nav-item ${seccion === id ? "nav-item-activo" : ""}`}
             >
-              {colapsado ? item.etiqueta.charAt(0) : item.etiqueta}
+              <Icono size={18} strokeWidth={2} aria-hidden="true" />
+              {!colapsado && etiqueta}
             </button>
           ))}
         </div>
 
-        <div style={{ flex: 1 }} />
+        <div
+          style={{ flex: 1 }}
+          title="Doble click para colapsar/expandir"
+          onDoubleClick={() => setColapsado((c) => !c)}
+        />
 
         <div className="shell-usuario">
           <div
@@ -184,12 +184,12 @@ function Shell({
             )}
           </div>
           <button
-            className="boton"
-            style={{ width: "100%" }}
+            className="boton boton-icono boton-salir"
             title={colapsado ? "Cerrar sesión" : undefined}
             onClick={onCerrarSesion}
           >
-            {colapsado ? "⏻" : "Cerrar sesión"}
+            <LogOut size={17} strokeWidth={2} aria-hidden="true" />
+            {!colapsado && "Cerrar sesión"}
           </button>
         </div>
       </nav>
@@ -223,6 +223,11 @@ function Shell({
       )}
 
       <Consola />
+      {/* theme="system": mismo criterio que el resto de la app (paleta
+          clara/oscura sigue `prefers-color-scheme`, sin toggle manual
+          todavía) — estilizado con las variables propias en index.css, no
+          los colores por defecto de sonner. */}
+      <Toaster theme="system" position="bottom-right" richColors={false} />
     </div>
   );
 }

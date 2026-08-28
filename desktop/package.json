@@ -23,10 +23,12 @@
     "@tauri-apps/plugin-dialog": "^2.7.2",
     "ag-grid-community": "^36.1.0",
     "ag-grid-react": "^36.1.0",
+    "lucide-react": "^1.35.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.86.0",
     "react-hotkeys-hook": "^5.3.3",
+    "sonner": "^2.0.8",
     "zod": "^4.4.3"
   }
 }

@@ -37,6 +37,17 @@ resuelve.** Si se descarta en vez de hacerse, se marca `[x]` igual con una nota 
   `desktop/src-tauri/src/comandos/historial.rs`) porque `FiltroHistorial` exige
   `desde`/`hasta` siempre. La vista Timeline (vs. la Clásica/tabla ya implementada) queda
   para una fase posterior — no implementar sin retomarlo con el usuario primero.
-  (La exportación SÍ respeta ahora el filtro por fila y las columnas ocultas de la grilla
-  — ver `AppCore::exportar_historial_seleccion` y `ColumnaHistorial::from_clave` — eso ya
-  no está diferido.)
+  (La exportación SÍ respeta ahora el filtro por fila, las columnas ocultas y el orden de
+  la grilla — ver `AppCore::exportar_historial_seleccion`, `ColumnaHistorial::from_clave` y
+  `AppCore::movimientos_en_orden` — eso ya no está diferido.)
+
+- [ ] **Módulo de exportación avanzado: fuente/tamaño de letra y formato de celda
+  configurables.** `rust_xlsxwriter` (ya en uso) sí soporta esto sin herramienta adicional
+  — `Format::set_font_name`/`set_font_size`/`set_bold`/`set_font_color` para tipografía,
+  `set_num_format` para tipo de celda (numérico vs. texto; ya se usa para fecha/hora en
+  `FormatosHistorial`, `src/historial/exportacion.rs`), más bordes/alineación/color de
+  fondo (hoy sólo aplicados al encabezado, no a las filas de datos). Decisión explícita del
+  usuario (2026-08-28): no se define el alcance todavía — se retoma como un módulo de
+  exportación avanzado más adelante, con el usuario definiendo primero qué configurar
+  (tipografía general, Gafete como celda numérica en vez de texto, bordes/zebra en filas de
+  datos, u otra cosa puntual).

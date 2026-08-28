@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
@@ -76,7 +77,6 @@ export default function Activos({
 }) {
   const [filas, setFilas] = useState<FilaActiva[]>([]);
   const [total, setTotal] = useState(0);
-  const [error, setError] = useState<string | null>(null);
   const [seleccionadas, setSeleccionadas] = useState<FilaActiva[]>([]);
   const [confirmarSalidaMasiva, setConfirmarSalidaMasiva] = useState(false);
   const [procesando, setProcesando] = useState(false);
@@ -91,9 +91,7 @@ export default function Activos({
 
   useEffect(() => {
     let vigente = true;
-    recargar()
-      .then(() => vigente && setError(null))
-      .catch((error) => vigente && setError(String(error)));
+    recargar().catch((error) => vigente && toast.error(String(error)));
     return () => {
       vigente = false;
     };
@@ -106,12 +104,11 @@ export default function Activos({
   // (ver el comentario junto a `columnas`).
   const salidaIndividual = useCallback(
     async (id: number) => {
-      setError(null);
       try {
         await registrarSalida(id);
         recargar();
       } catch (error) {
-        setError(String(error));
+        toast.error(String(error));
       }
     },
     [recargar],
@@ -119,7 +116,6 @@ export default function Activos({
 
   async function confirmarSalidasSeleccionadas() {
     setProcesando(true);
-    setError(null);
     try {
       for (const fila of seleccionadas) {
         await registrarSalida(fila.registro_id);
@@ -127,7 +123,7 @@ export default function Activos({
       setConfirmarSalidaMasiva(false);
       await recargar();
     } catch (error) {
-      setError(String(error));
+      toast.error(String(error));
     } finally {
       setProcesando(false);
     }
@@ -239,8 +235,6 @@ export default function Activos({
       />
 
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
-        {error && <p style={{ color: "var(--error)", margin: 0 }}>{error}</p>}
-
         {seleccionadas.length > 0 && (
           <div
             style={{
