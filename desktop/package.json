@@ -25,6 +25,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.86.0",
+    "react-hotkeys-hook": "^5.3.3",
     "zod": "^4.4.3"
   }
 }

@@ -298,6 +298,16 @@ input {
   flex-shrink: 0;
   background: var(--panel);
   border-right: 1px solid var(--borde);
+  transition: width 0.15s ease;
+}
+
+.shell-sidebar-colapsada {
+  width: 3.75rem;
+}
+
+.shell-sidebar-colapsada .shell-marca {
+  padding: 1.25rem 0.5rem;
+  justify-content: center;
 }
 
 .shell-marca {

@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
-import NuevoIngresoModal from "./NuevoIngresoModal";
 import { listarIngresosActivos, mensajeMotivoDenegacion, registrarSalida } from "../api";
 import type { IngresoActivoResumen } from "../api";
 
@@ -11,41 +10,55 @@ function textoMedio(medio: IngresoActivoResumen["medio_ingreso"]): string {
   return medio === "Vehiculo" ? "Vehículo" : "Caminando";
 }
 
-function EstadoAcceso({ fila }: { fila: IngresoActivoResumen }) {
+/** Texto plano del estado — separado del componente visual `EstadoAcceso`
+ * para que la columna tenga un `field` real: sin eso no aparece en el
+ * selector "Columnas ▾" (que sólo lista columnas con `field`) ni el filtro
+ * por columna puede buscar sobre ella. */
+function textoEstado(fila: IngresoActivoResumen): string {
   const r = fila.resultado_acceso;
-  if (r === "Permitido") {
-    return <span className="chip" style={{ ["--chip-color" as string]: "var(--exito)" }}>Al día</span>;
-  }
-  if (r === "PermitidoConAdvertencia") {
-    return (
-      <span className="chip" style={{ ["--chip-color" as string]: "var(--advertencia)" }}>
-        PRAIND próximo
-      </span>
-    );
-  }
+  if (r === "Permitido") return "Al día";
+  if (r === "PermitidoConAdvertencia") return "PRAIND próximo a vencer";
+  return mensajeMotivoDenegacion(r.Denegado);
+}
+
+function colorEstado(fila: IngresoActivoResumen): string {
+  const r = fila.resultado_acceso;
+  if (r === "Permitido") return "var(--exito)";
+  if (r === "PermitidoConAdvertencia") return "var(--advertencia)";
+  return "var(--error)";
+}
+
+function EstadoAcceso({ fila }: { fila: IngresoActivoResumen }) {
   return (
-    <span
-      className="chip"
-      style={{ ["--chip-color" as string]: "var(--error)" }}
-      title={mensajeMotivoDenegacion(r.Denegado)}
-    >
-      {mensajeMotivoDenegacion(r.Denegado)}
+    <span className="chip" style={{ ["--chip-color" as string]: colorEstado(fila) }}>
+      {textoEstado(fila)}
     </span>
   );
 }
 
-export default function Activos() {
-  const [filas, setFilas] = useState<IngresoActivoResumen[]>([]);
+type FilaActiva = IngresoActivoResumen & { estado_texto: string };
+
+export default function Activos({
+  refrescarSenal,
+  onAbrirNuevoIngreso,
+}: {
+  /** El modal de Nuevo Ingreso vive en el Shell (se dispara desde cualquier
+   * pantalla vía Ctrl+Shift+N, no sólo desde acá) — este número sube cada
+   * vez que registra algo, para que la grilla se refresque aunque ya
+   * estuviera montada. */
+  refrescarSenal?: number;
+  onAbrirNuevoIngreso: () => void;
+}) {
+  const [filas, setFilas] = useState<FilaActiva[]>([]);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [seleccionadas, setSeleccionadas] = useState<IngresoActivoResumen[]>([]);
-  const [modalNuevoIngreso, setModalNuevoIngreso] = useState(false);
+  const [seleccionadas, setSeleccionadas] = useState<FilaActiva[]>([]);
   const [confirmarSalidaMasiva, setConfirmarSalidaMasiva] = useState(false);
   const [procesando, setProcesando] = useState(false);
 
   const recargar = useCallback(() => {
     return listarIngresosActivos().then((pagina) => {
-      setFilas(pagina.items);
+      setFilas(pagina.items.map((item) => ({ ...item, estado_texto: textoEstado(item) })));
       setTotal(pagina.total);
       setSeleccionadas([]);
     });
@@ -59,17 +72,25 @@ export default function Activos() {
     return () => {
       vigente = false;
     };
-  }, [recargar]);
+  }, [recargar, refrescarSenal]);
 
-  async function salidaIndividual(id: number) {
-    setError(null);
-    try {
-      await registrarSalida(id);
-      recargar();
-    } catch (error) {
-      setError(String(error));
-    }
-  }
+  // useCallback a propósito: esta función se cierra dentro de una celda de
+  // `columnas` — sin identidad estable, `columnas` (memoizado más abajo)
+  // se recrearía en cada render igual, y con eso AG Grid reasignaría el
+  // orden/ancho originales del código encima de lo que el usuario acomodó
+  // (ver el comentario junto a `columnas`).
+  const salidaIndividual = useCallback(
+    async (id: number) => {
+      setError(null);
+      try {
+        await registrarSalida(id);
+        recargar();
+      } catch (error) {
+        setError(String(error));
+      }
+    },
+    [recargar],
+  );
 
   async function confirmarSalidasSeleccionadas() {
     setProcesando(true);
@@ -87,56 +108,81 @@ export default function Activos() {
     }
   }
 
-  const columnas: ColDef<IngresoActivoResumen>[] = [
-    { field: "cedula", headerName: "Cédula", width: 130 },
-    { field: "contratista_nombre", headerName: "Nombre", flex: 1.4, minWidth: 160 },
-    { field: "empresa_nombre", headerName: "Empresa", flex: 1, minWidth: 140 },
-    { field: "tipo_ingreso", headerName: "Tipo", width: 110 },
-    {
-      headerName: "Medio",
-      width: 110,
-      valueGetter: (p) => (p.data ? textoMedio(p.data.medio_ingreso) : ""),
-    },
-    { field: "gafete_numero", headerName: "Gafete", width: 100 },
-    {
-      headerName: "Ingreso",
-      width: 160,
-      valueGetter: (p) => (p.data ? new Date(p.data.fecha_hora_ingreso).toLocaleString() : ""),
-    },
-    { field: "usuario_ingreso_nombre", headerName: "Dio ingreso", width: 150 },
-    {
-      headerName: "Estado",
-      width: 170,
-      filter: false,
-      cellRenderer: (p: ICellRendererParams<IngresoActivoResumen>) =>
-        p.data ? <EstadoAcceso fila={p.data} /> : null,
-    },
-    {
-      headerName: "",
-      width: 110,
-      filter: false,
-      sortable: false,
-      pinned: "right",
-      cellRenderer: (p: ICellRendererParams<IngresoActivoResumen>) =>
-        p.data ? (
-          <button
-            type="button"
-            className="boton"
-            style={{ padding: "0.25rem 0.7rem", fontSize: "0.8rem" }}
-            onClick={() => salidaIndividual(p.data!.registro_id)}
-          >
-            Salida
-          </button>
-        ) : null,
-    },
-  ];
+  // useMemo a propósito: si `columnas` se recrea en cada render (ej. cada
+  // vez que `recargar()` trae datos nuevos), AG Grid recibe un `columnDefs`
+  // "nuevo" y reaplica el orden/ancho literales de acá encima de lo que el
+  // usuario ya había acomodado a mano — el layout persistido en
+  // `Tabla`/localStorage quedaba pisado en el siguiente refresco.
+  const columnas: ColDef<FilaActiva>[] = useMemo(
+    () => [
+      { field: "cedula", headerName: "Cédula", width: 120 },
+      { field: "contratista_nombre", headerName: "Nombre", flex: 1.6, minWidth: 170 },
+      { field: "empresa_nombre", headerName: "Empresa", flex: 1.1, minWidth: 140 },
+      { field: "tipo_ingreso", headerName: "Tipo", width: 100 },
+      {
+        field: "medio_ingreso",
+        headerName: "Medio",
+        width: 100,
+        valueFormatter: (p) => textoMedio(p.value),
+      },
+      { field: "gafete_numero", headerName: "Gafete", width: 90 },
+      {
+        colId: "fecha_ingreso",
+        field: "fecha_hora_ingreso",
+        headerName: "Fecha",
+        width: 110,
+        valueFormatter: (p) => new Date(p.value).toLocaleDateString(),
+      },
+      {
+        colId: "hora_ingreso",
+        field: "fecha_hora_ingreso",
+        headerName: "Hora",
+        width: 90,
+        // Formato de 24 horas a propósito (hour12: false) — sin esto
+        // toLocaleTimeString usa AM/PM según el locale del sistema.
+        valueFormatter: (p) =>
+          new Date(p.value).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }),
+      },
+      { field: "usuario_ingreso_nombre", headerName: "Dio ingreso", width: 130 },
+      {
+        field: "estado_texto",
+        headerName: "Estado",
+        width: 170,
+        cellRenderer: (p: ICellRendererParams<FilaActiva>) =>
+          p.data ? <EstadoAcceso fila={p.data} /> : null,
+      },
+      {
+        headerName: "Acción",
+        width: 90,
+        filter: false,
+        sortable: false,
+        pinned: "right",
+        cellRenderer: (p: ICellRendererParams<FilaActiva>) =>
+          p.data ? (
+            <button
+              type="button"
+              className="boton"
+              style={{ padding: "0.15rem 0.55rem", fontSize: "0.78rem" }}
+              onClick={() => salidaIndividual(p.data!.registro_id)}
+            >
+              Salida
+            </button>
+          ) : null,
+      },
+    ],
+    [salidaIndividual],
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PantallaEncabezado
         titulo="Ingresos activos"
         acciones={
-          <button className="boton boton-primario" onClick={() => setModalNuevoIngreso(true)}>
+          <button className="boton" title="Ctrl+Shift+N" onClick={onAbrirNuevoIngreso}>
             + Nuevo ingreso
           </button>
         }
@@ -171,7 +217,8 @@ export default function Activos() {
         )}
 
         <div style={{ flex: 1, minHeight: 0 }}>
-          <Tabla<IngresoActivoResumen>
+          <Tabla<FilaActiva>
+            id="activos"
             columnas={columnas}
             filas={filas}
             filtrosPorColumna
@@ -181,13 +228,6 @@ export default function Activos() {
         </div>
         <p style={{ color: "var(--muted)", margin: 0 }}>{total} adentro</p>
       </div>
-
-      {modalNuevoIngreso && (
-        <NuevoIngresoModal
-          onRegistrado={recargar}
-          onCerrar={() => setModalNuevoIngreso(false)}
-        />
-      )}
 
       {confirmarSalidaMasiva && (
         <Modal titulo="Confirmar salida" onCerrar={() => setConfirmarSalidaMasiva(false)}>

@@ -1,8 +1,16 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { themeQuartz } from "ag-grid-community";
-import type { ColDef } from "ag-grid-community";
+import type {
+  ColDef,
+  ColumnMovedEvent,
+  ColumnPinnedEvent,
+  ColumnResizedEvent,
+  ColumnState,
+  GridReadyEvent,
+  SortChangedEvent,
+} from "ag-grid-community";
 
 /**
  * Tema y comportamiento compartido de TODAS las tablas de la app — un solo
@@ -43,6 +51,35 @@ const columnaPorDefectoConFiltro: ColDef = {
   floatingFilter: true,
 };
 
+interface EstadoGuardado {
+  ocultas: string[];
+  columnas: ColumnState[];
+}
+
+function claveAlmacenamiento(id: string): string {
+  return `tabla:${id}`;
+}
+
+function leerEstadoGuardado(id: string | undefined): EstadoGuardado | null {
+  if (!id) return null;
+  try {
+    const crudo = localStorage.getItem(claveAlmacenamiento(id));
+    return crudo ? (JSON.parse(crudo) as EstadoGuardado) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Identidad de una columna para visibilidad/orden — `colId` si está
+ * explícito (ej. dos columnas que leen el mismo `field`, como Fecha/Hora),
+ * si no el `field`. Mismo criterio que usa AG Grid internamente para su
+ * propio `getColumnState`. */
+function identidad(columna: ColDef<unknown>): string | undefined {
+  if (typeof columna.colId === "string") return columna.colId;
+  if (typeof columna.field === "string") return columna.field;
+  return undefined;
+}
+
 export interface TablaProps<T> {
   columnas: ColDef<T>[];
   filas: T[];
@@ -66,6 +103,12 @@ export interface TablaProps<T> {
    * una vez y se filtran del lado del cliente (ej. Activos), a diferencia
    * de pantallas como Contratistas que filtran contra el servidor. */
   filtrosPorColumna?: boolean;
+  /** Identificador estable de esta grilla (ej. "activos", "contratistas").
+   * Habilita persistir en localStorage el orden, ancho, orden de columnas
+   * (sort) y cuáles están ocultas — sin esto la grilla siempre arranca con
+   * el layout por defecto. Cada pantalla usa su propio id, así que el
+   * layout de una no pisa el de otra. */
+  id?: string;
 }
 
 export default function Tabla<T>({
@@ -77,30 +120,77 @@ export default function Tabla<T>({
   onCeldaEditada,
   onFilaDobleClic,
   filtrosPorColumna,
+  id,
 }: TablaProps<T>) {
-  const [ocultas, setOcultas] = useState<Set<string>>(new Set());
+  const [ocultas, setOcultas] = useState<Set<string>>(
+    () => new Set(leerEstadoGuardado(id)?.ocultas ?? []),
+  );
   const [selectorAbierto, setSelectorAbierto] = useState(false);
+  const apiRef = useRef<GridReadyEvent<T>["api"] | null>(null);
 
   const columnasConVisibilidad = useMemo(
     () =>
-      columnas.map((columna) =>
-        typeof columna.field === "string"
-          ? { ...columna, hide: ocultas.has(columna.field) }
-          : columna,
-      ),
+      columnas.map((columna) => {
+        const clave = identidad(columna as ColDef<unknown>);
+        return clave ? { ...columna, hide: ocultas.has(clave) } : columna;
+      }),
     [columnas, ocultas],
   );
 
-  function alternar(campo: string) {
+  function alternar(clave: string) {
     setOcultas((actual) => {
       const siguiente = new Set(actual);
-      if (siguiente.has(campo)) {
-        siguiente.delete(campo);
+      if (siguiente.has(clave)) {
+        siguiente.delete(clave);
       } else {
-        siguiente.add(campo);
+        siguiente.add(clave);
       }
+      guardarLayout(siguiente);
       return siguiente;
     });
+  }
+
+  /** Guarda ocultas + el estado de columnas (orden, ancho, sort, pin) tal
+   * cual lo tiene la grilla en este momento — se llama tanto al tocar el
+   * selector como al mover/redimensionar/ordenar una columna. `hide` se
+   * excluye del estado de AG Grid a propósito: `ocultas` ya es la única
+   * fuente de verdad para visibilidad (ver `columnasConVisibilidad`); si el
+   * estado de AG Grid trajera su propio `hide`, ambas fuentes podrían
+   * contradecirse. */
+  function guardarLayout(ocultasActual: Set<string>) {
+    if (!id || !apiRef.current) return;
+    const columnState = apiRef.current.getColumnState().map(({ hide: _hide, ...resto }) => resto);
+    const estado: EstadoGuardado = { ocultas: Array.from(ocultasActual), columnas: columnState };
+    try {
+      localStorage.setItem(claveAlmacenamiento(id), JSON.stringify(estado));
+    } catch {
+      // localStorage puede fallar (modo privado, cuota llena) — perder el
+      // layout guardado no es motivo para romper la grilla.
+    }
+  }
+
+  function alListo(evento: GridReadyEvent<T>) {
+    apiRef.current = evento.api;
+    const guardado = leerEstadoGuardado(id);
+    if (guardado?.columnas?.length) {
+      evento.api.applyColumnState({ state: guardado.columnas, applyOrder: true });
+    }
+  }
+
+  function alMoverColumna(evento: ColumnMovedEvent<T>) {
+    if (evento.finished) guardarLayout(ocultas);
+  }
+
+  function alRedimensionarColumna(evento: ColumnResizedEvent<T>) {
+    if (evento.finished) guardarLayout(ocultas);
+  }
+
+  function alOrdenar(_evento: SortChangedEvent<T>) {
+    guardarLayout(ocultas);
+  }
+
+  function alFijarColumna(_evento: ColumnPinnedEvent<T>) {
+    guardarLayout(ocultas);
   }
 
   return (
@@ -145,20 +235,19 @@ export default function Tabla<T>({
                 }}
               >
                 {columnas
-                  .filter((columna): columna is ColDef<T> & { field: string } =>
-                    typeof columna.field === "string",
+                  .map((columna) => ({ columna, clave: identidad(columna as ColDef<unknown>) }))
+                  .filter(
+                    (entrada): entrada is { columna: ColDef<T>; clave: string } =>
+                      entrada.clave !== undefined,
                   )
-                  .map((columna) => (
-                    <label
-                      key={columna.field}
-                      style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
-                    >
+                  .map(({ columna, clave }) => (
+                    <label key={clave} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                       <input
                         type="checkbox"
-                        checked={!ocultas.has(columna.field)}
-                        onChange={() => alternar(columna.field)}
+                        checked={!ocultas.has(clave)}
+                        onChange={() => alternar(clave)}
                       />
-                      {columna.headerName ?? columna.field}
+                      {columna.headerName ?? clave}
                     </label>
                   ))}
               </div>
@@ -173,6 +262,11 @@ export default function Tabla<T>({
           defaultColDef={filtrosPorColumna ? columnaPorDefectoConFiltro : columnaPorDefecto}
           rowData={filas}
           columnDefs={columnasConVisibilidad}
+          // Resguardo además de memoizar `columnas` en cada pantalla: si de
+          // todos modos algo le pasa un `columnDefs` nuevo, esto evita que
+          // AG Grid reordene según el orden literal del array en vez de
+          // conservar el que el usuario ya acomodó a mano.
+          maintainColumnOrder
           rowHeight={36}
           headerHeight={38}
           rowSelection={
@@ -180,6 +274,11 @@ export default function Tabla<T>({
               ? { mode: "multiRow", checkboxes: true, headerCheckbox: true }
               : undefined
           }
+          onGridReady={alListo}
+          onColumnMoved={alMoverColumna}
+          onColumnResized={alRedimensionarColumna}
+          onSortChanged={alOrdenar}
+          onColumnPinned={alFijarColumna}
           onSelectionChanged={
             onSeleccionCambia
               ? (evento) => onSeleccionCambia(evento.api.getSelectedRows())

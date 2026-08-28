@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
+import PantallaEncabezado from "../componentes/PantallaEncabezado";
 import FormularioEmpresa from "./FormularioEmpresa";
 import { buscarEmpresas, establecerEmpresaActiva } from "../api";
 import type { EmpresaResumen } from "../api";
@@ -18,6 +20,8 @@ export default function Empresas() {
   const [formularioAbierto, setFormularioAbierto] = useState<"crear" | EmpresaResumen | null>(
     null,
   );
+
+  useHotkeys("ctrl+n", () => setFormularioAbierto("crear"), { preventDefault: true });
 
   const recargar = useCallback(() => {
     return buscarEmpresas({ texto: texto || undefined }).then(setFilas);
@@ -44,39 +48,41 @@ export default function Empresas() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "1rem" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "0.75rem",
-        }}
-      >
-        <h1 style={{ margin: 0, fontSize: "1.2rem", color: "var(--acento)" }}>Empresas</h1>
-        <button className="boton boton-primario" onClick={() => setFormularioAbierto("crear")}>
-          + Nueva empresa
-        </button>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <PantallaEncabezado
+        titulo="Empresas"
+        acciones={
+          <button
+            className="boton boton-primario"
+            title="Ctrl+N"
+            onClick={() => setFormularioAbierto("crear")}
+          >
+            + Nueva empresa
+          </button>
+        }
+      />
 
-      {error && <p style={{ color: "var(--error)" }}>{error}</p>}
-      <div style={{ flex: 1, minHeight: 0 }}>
-        <Tabla<EmpresaResumen>
-          columnas={columnas}
-          filas={filas}
-          onCeldaEditada={manejarEdicion}
-          onFilaDobleClic={setFormularioAbierto}
-          controles={
-            <div className="campo" style={{ flex: "1 1 16rem" }}>
-              Buscar
-              <input
-                placeholder="Nombre…"
-                value={texto}
-                onChange={(evento) => setTexto(evento.target.value)}
-              />
-            </div>
-          }
-        />
+      <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
+        {error && <p style={{ color: "var(--error)", margin: 0 }}>{error}</p>}
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <Tabla<EmpresaResumen>
+            id="empresas"
+            columnas={columnas}
+            filas={filas}
+            onCeldaEditada={manejarEdicion}
+            onFilaDobleClic={setFormularioAbierto}
+            controles={
+              <div className="campo" style={{ flex: "1 1 16rem" }}>
+                Buscar
+                <input
+                  placeholder="Nombre…"
+                  value={texto}
+                  onChange={(evento) => setTexto(evento.target.value)}
+                />
+              </div>
+            }
+          />
+        </div>
       </div>
 
       {formularioAbierto && (

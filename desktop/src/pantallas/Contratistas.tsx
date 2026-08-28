@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
+import PantallaEncabezado from "../componentes/PantallaEncabezado";
 import FormularioContratista from "./FormularioContratista";
 import { actualizarContratista, buscarContratistas, listarEmpresas } from "../api";
 import type {
@@ -50,6 +52,8 @@ export default function Contratistas() {
   const [formularioAbierto, setFormularioAbierto] = useState<"crear" | ContratistaResumen | null>(
     null,
   );
+
+  useHotkeys("ctrl+n", () => setFormularioAbierto("crear"), { preventDefault: true });
 
   useEffect(() => {
     listarEmpresas()
@@ -214,37 +218,39 @@ export default function Contratistas() {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "1rem" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "0.75rem",
-        }}
-      >
-        <h1 style={{ margin: 0, fontSize: "1.2rem", color: "var(--acento)" }}>Contratistas</h1>
-        <button className="boton boton-primario" onClick={() => setFormularioAbierto("crear")}>
-          + Nuevo contratista
-        </button>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <PantallaEncabezado
+        titulo="Contratistas"
+        acciones={
+          <button
+            className="boton boton-primario"
+            title="Ctrl+N"
+            onClick={() => setFormularioAbierto("crear")}
+          >
+            + Nuevo contratista
+          </button>
+        }
+      />
 
-      {error && <p style={{ color: "var(--error)" }}>{error}</p>}
-      <div style={{ flex: 1, minHeight: 0 }}>
-        <Tabla<ContratistaResumen>
-          columnas={columnas}
-          filas={filas}
-          controles={controlesDeFiltro}
-          seleccionMultiple
-          onSeleccionCambia={setSeleccionadas}
-          onCeldaEditada={manejarEdicion}
-          onFilaDobleClic={setFormularioAbierto}
-        />
+      <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
+        {error && <p style={{ color: "var(--error)", margin: 0 }}>{error}</p>}
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <Tabla<ContratistaResumen>
+            id="contratistas"
+            columnas={columnas}
+            filas={filas}
+            controles={controlesDeFiltro}
+            seleccionMultiple
+            onSeleccionCambia={setSeleccionadas}
+            onCeldaEditada={manejarEdicion}
+            onFilaDobleClic={setFormularioAbierto}
+          />
+        </div>
+        <p style={{ color: "var(--muted)", margin: 0 }}>
+          {total} resultado(s)
+          {seleccionadas.length > 0 && ` · ${seleccionadas.length} seleccionado(s)`}
+        </p>
       </div>
-      <p style={{ color: "var(--muted)", margin: "0.5rem 0 0" }}>
-        {total} resultado(s)
-        {seleccionadas.length > 0 && ` · ${seleccionadas.length} seleccionado(s)`}
-      </p>
 
       {formularioAbierto && (
         <FormularioContratista

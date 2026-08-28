@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import Modal from "../componentes/Modal";
 import {
   buscarContratistas,
@@ -10,18 +12,21 @@ import {
 import type { ContratistaResumen, MedioIngreso, PreparacionIngreso } from "../api";
 
 const DEBOUNCE_MS = 120;
+const MAX_RESULTADOS = 4;
 
-type Etapa =
-  | { tipo: "buscar" }
-  | { tipo: "bloqueado"; nombre: string; mensaje: string }
-  | { tipo: "formulario"; preparacion: PreparacionIngreso };
+type Seleccion =
+  | { tipo: "ninguna" }
+  | { tipo: "cargando"; contratista: ContratistaResumen }
+  | { tipo: "bloqueada"; contratista: ContratistaResumen; mensaje: string }
+  | { tipo: "formulario"; contratista: ContratistaResumen; preparacion: PreparacionIngreso };
 
 /**
- * Modal que se transforma en dos etapas (buscar → formulario) en vez de
- * navegar a otra pantalla — así el operador no pierde el listado/contexto
- * de búsqueda entre un registro y el siguiente. Al confirmar un ingreso NO
- * se cierra: vuelve a la etapa de búsqueda con un mensaje de confirmación,
- * lista para la siguiente persona (mismo criterio que
+ * El buscador queda siempre visible arriba; al elegir un contratista el
+ * panel correspondiente (formulario o motivo de bloqueo) se expande debajo
+ * en el mismo flujo del documento — nada de saltar a otra vista ni cambiar
+ * el ancho del modal. Al confirmar un ingreso NO se cierra: colapsa de
+ * vuelta al buscador (vacío) con un mensaje de confirmación, listo para la
+ * siguiente persona (mismo criterio que
  * `src/tui/nuevo_ingreso/state.rs::completar_registro`). Sólo se cierra si
  * el operador lo cierra a propósito.
  */
@@ -36,50 +41,122 @@ export default function NuevoIngresoModal({
 }) {
   const [filtro, setFiltro] = useState("");
   const [resultados, setResultados] = useState<ContratistaResumen[]>([]);
-  const [etapa, setEtapa] = useState<Etapa>({ tipo: "buscar" });
+  const [seleccion, setSeleccion] = useState<Seleccion>({ tipo: "ninguna" });
   const [medio, setMedio] = useState<MedioIngreso>("Caminando");
   const [gafeteTexto, setGafeteTexto] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
-  const [cargando, setCargando] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [resaltado, setResaltado] = useState(0);
+  const campoRef = useRef<HTMLDivElement>(null);
+  const buscadorRef = useRef<HTMLInputElement>(null);
+  const confirmarRef = useRef<HTMLButtonElement>(null);
+  const [posicionLista, setPosicionLista] = useState<{ top: number; left: number; width: number } | null>(
+    null,
+  );
+
+  const listaVisible = seleccion.tipo === "ninguna" && filtro.trim().length > 0;
+
+  // El resaltado sigue al primer resultado cada vez que la lista cambia —
+  // si no se reinicia, una tecla nueva puede dejarlo apuntando a un índice
+  // que ya no existe (la búsqueda anterior tenía más resultados).
+  useEffect(() => {
+    setResaltado(0);
+  }, [resultados]);
+
+  // El modal (Modal.tsx) tiene overflow-y:auto para formularios largos — un
+  // hijo `position: absolute` normal queda recortado por ese scroll en vez
+  // de flotar sobre el resto de la ventana. Un portal a `document.body` con
+  // `position: fixed` posicionado por coordenadas reales del campo evita
+  // ese recorte sin tener que tocar el overflow del modal (lo necesita el
+  // formulario cuando requiere gafete).
+  useLayoutEffect(() => {
+    if (!listaVisible || !campoRef.current) {
+      setPosicionLista(null);
+      return;
+    }
+    const actualizar = () => {
+      const rect = campoRef.current!.getBoundingClientRect();
+      setPosicionLista({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    };
+    actualizar();
+    window.addEventListener("resize", actualizar);
+    return () => window.removeEventListener("resize", actualizar);
+  }, [listaVisible]);
+
+  // Sin gafete no hay ningún campo que se lleve el `autoFocus` del
+  // formulario — sin esto el foco se queda en el buscador y Enter no llega
+  // a disparar el `<form>` de abajo. Enfocar el botón alcanza: Enter sobre
+  // un botón dentro de un <form> lo envía igual que sobre un input de texto.
+  useEffect(() => {
+    if (seleccion.tipo === "formulario" && !seleccion.preparacion.requiere_gafete) {
+      confirmarRef.current?.focus();
+    }
+  }, [seleccion]);
 
   useEffect(() => {
+    if (!filtro.trim()) {
+      setResultados([]);
+      return;
+    }
     const id = setTimeout(() => {
-      buscarContratistas({ texto: filtro || undefined })
-        .then((pagina) => setResultados(pagina.items))
+      buscarContratistas({ texto: filtro })
+        .then((pagina) => setResultados(pagina.items.slice(0, MAX_RESULTADOS)))
         .catch((error) => setError(String(error)));
     }, DEBOUNCE_MS);
     return () => clearTimeout(id);
   }, [filtro]);
 
+  function cambiarFiltro(texto: string) {
+    setFiltro(texto);
+    setMensaje(null);
+    // Escribir de nuevo abandona lo que estaba seleccionado — vuelve a
+    // buscar en vez de dejar un panel expandido con datos ya viejos.
+    if (seleccion.tipo !== "ninguna") {
+      setSeleccion({ tipo: "ninguna" });
+    }
+  }
+
   async function elegirContratista(contratista: ContratistaResumen) {
     setError(null);
-    setMensaje(null);
-    setCargando(true);
+    setSeleccion({ tipo: "cargando", contratista });
     try {
       const preparacion = await prepararIngreso(contratista.id);
       if (puedeContinuar(preparacion)) {
         setMedio("Caminando");
         setGafeteTexto("");
-        setEtapa({ tipo: "formulario", preparacion });
+        setSeleccion({ tipo: "formulario", contratista, preparacion });
       } else {
-        setEtapa({
-          tipo: "bloqueado",
-          nombre: contratista.nombre,
-          mensaje: mensajeBloqueo(preparacion),
-        });
+        setSeleccion({ tipo: "bloqueada", contratista, mensaje: mensajeBloqueo(preparacion) });
       }
     } catch (error) {
       setError(String(error));
-    } finally {
-      setCargando(false);
+      setSeleccion({ tipo: "ninguna" });
+    }
+  }
+
+  function cambiarSeleccion() {
+    setError(null);
+    setSeleccion({ tipo: "ninguna" });
+  }
+
+  function manejarTeclaBuscador(evento: KeyboardEvent<HTMLInputElement>) {
+    if (!listaVisible || resultados.length === 0) return;
+    if (evento.key === "ArrowDown") {
+      evento.preventDefault();
+      setResaltado((actual) => Math.min(actual + 1, resultados.length - 1));
+    } else if (evento.key === "ArrowUp") {
+      evento.preventDefault();
+      setResaltado((actual) => Math.max(actual - 1, 0));
+    } else if (evento.key === "Enter") {
+      evento.preventDefault();
+      elegirContratista(resultados[resaltado]);
     }
   }
 
   async function confirmarIngreso() {
-    if (etapa.tipo !== "formulario") return;
-    const { preparacion } = etapa;
+    if (seleccion.tipo !== "formulario") return;
+    const { preparacion } = seleccion;
     let gafete: number | null = null;
     if (preparacion.requiere_gafete) {
       const numero = Number.parseInt(gafeteTexto.trim(), 10);
@@ -96,7 +173,9 @@ export default function NuevoIngresoModal({
     try {
       await registrarIngreso(preparacion.contratista_id, medio, gafete);
       setMensaje(`✓ Ingreso registrado — ${preparacion.nombre}`);
-      setEtapa({ tipo: "buscar" });
+      setSeleccion({ tipo: "ninguna" });
+      setFiltro("");
+      buscadorRef.current?.focus();
       onRegistrado();
     } catch (error) {
       setError(String(error));
@@ -105,167 +184,199 @@ export default function NuevoIngresoModal({
     }
   }
 
-  function volverABuscar() {
-    setError(null);
-    setEtapa({ tipo: "buscar" });
-  }
-
   return (
     <Modal titulo="Nuevo ingreso" onCerrar={onCerrar}>
-      {etapa.tipo === "buscar" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        <div ref={campoRef}>
           <label className="campo">
             Buscar contratista
             <input
+              ref={buscadorRef}
               value={filtro}
-              onChange={(evento) => {
-                setFiltro(evento.target.value);
-                setMensaje(null);
-              }}
+              onChange={(evento) => cambiarFiltro(evento.target.value)}
+              onKeyDown={manejarTeclaBuscador}
               autoFocus
               placeholder="Cédula o nombre…"
             />
           </label>
+        </div>
 
-          {mensaje && <p style={{ color: "var(--exito)", margin: 0 }}>{mensaje}</p>}
-          {error && <p style={{ color: "var(--error)", margin: 0 }}>{error}</p>}
+        {/* Flotante a propósito, vía portal (ver comentario junto a
+            posicionLista): los resultados no deben empujar el resto del
+            modal ni cambiar su tamaño — se superponen a lo que haya debajo
+            (como un autocompletar), y desaparecen solos al elegir o al
+            borrar el texto. */}
+        {listaVisible &&
+          posicionLista &&
+          createPortal(
+            <div
+              className="tarjeta"
+              style={{
+                position: "fixed",
+                top: posicionLista.top,
+                left: posicionLista.left,
+                width: posicionLista.width,
+                zIndex: 1000,
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+                boxShadow: "var(--sombra-panel)",
+              }}
+            >
+              {resultados.length === 0 && (
+                <p style={{ margin: 0, padding: "0.75rem", color: "var(--muted)" }}>
+                  Sin resultados.
+                </p>
+              )}
+              {resultados.map((contratista, indice) => (
+                <button
+                  key={contratista.id}
+                  type="button"
+                  onClick={() => elegirContratista(contratista)}
+                  onMouseEnter={() => setResaltado(indice)}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "0.75rem",
+                    padding: "0.6rem 0.8rem",
+                    border: "none",
+                    borderBottom: "1px solid var(--borde)",
+                    background: indice === resaltado ? "var(--acento-suave)" : "var(--panel)",
+                    boxShadow: indice === resaltado ? "inset 3px 0 0 var(--acento)" : "none",
+                    color: "var(--texto)",
+                    textAlign: "left",
+                    cursor: "pointer",
+                  }}
+                >
+                  <span>
+                    <span style={{ fontWeight: 500 }}>{contratista.nombre}</span>{" "}
+                    <span style={{ color: "var(--muted)" }}>· {contratista.cedula}</span>
+                  </span>
+                  <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                    {contratista.empresa_nombre}
+                    {contratista.tiene_ingreso_activo && (
+                      <span className="chip" style={{ ["--chip-color" as string]: "var(--acento)" }}>
+                        Adentro
+                      </span>
+                    )}
+                  </span>
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )}
 
+        {mensaje && <p style={{ color: "var(--exito)", margin: 0 }}>{mensaje}</p>}
+        {error && seleccion.tipo !== "formulario" && (
+          <p className="login-error" role="alert">
+            {error}
+          </p>
+        )}
+
+        {seleccion.tipo !== "ninguna" && (
           <div
             style={{
               display: "flex",
               flexDirection: "column",
-              maxHeight: "18rem",
-              overflowY: "auto",
+              gap: "0.9rem",
+              padding: "0.85rem",
               border: "1px solid var(--borde)",
               borderRadius: "var(--radio-chico)",
+              background: "var(--campo-fondo)",
             }}
           >
-            {resultados.length === 0 && (
-              <p style={{ margin: 0, padding: "0.75rem", color: "var(--muted)" }}>
-                {filtro ? "Sin resultados." : "Escriba para buscar un contratista."}
-              </p>
-            )}
-            {resultados.map((contratista) => (
-              <button
-                key={contratista.id}
-                type="button"
-                disabled={cargando}
-                onClick={() => elegirContratista(contratista)}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: "0.75rem",
-                  padding: "0.6rem 0.8rem",
-                  border: "none",
-                  borderBottom: "1px solid var(--borde)",
-                  background: "transparent",
-                  color: "var(--texto)",
-                  textAlign: "left",
-                  cursor: "pointer",
-                }}
-              >
-                <span>
-                  <strong>{contratista.nombre}</strong>{" "}
-                  <span style={{ color: "var(--muted)" }}>· {contratista.cedula}</span>
-                </span>
-                <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-                  {contratista.empresa_nombre}
-                  {contratista.tiene_ingreso_activo && (
-                    <span className="chip" style={{ ["--chip-color" as string]: "var(--acento)" }}>
-                      Adentro
-                    </span>
-                  )}
-                </span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <p style={{ margin: 0, fontWeight: 600, color: "var(--texto)" }}>
+                  {seleccion.contratista.nombre}
+                </p>
+                <p style={{ margin: "0.15rem 0 0", color: "var(--muted)", fontSize: "0.85rem" }}>
+                  {seleccion.contratista.cedula} · {seleccion.contratista.empresa_nombre}
+                </p>
+              </div>
+              <button type="button" className="boton" style={{ fontSize: "0.8rem" }} onClick={cambiarSeleccion}>
+                Cambiar
               </button>
-            ))}
-          </div>
-        </div>
-      )}
+            </div>
 
-      {etapa.tipo === "bloqueado" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <p style={{ margin: 0 }}>
-            <strong>{etapa.nombre}</strong>
-          </p>
-          <p className="login-error" role="alert">
-            {etapa.mensaje}
-          </p>
-          <button type="button" className="boton" onClick={volverABuscar}>
-            Volver a buscar
-          </button>
-        </div>
-      )}
+            {seleccion.tipo === "cargando" && (
+              <p style={{ margin: 0, color: "var(--muted)" }}>Verificando…</p>
+            )}
 
-      {etapa.tipo === "formulario" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <div>
-            <p style={{ margin: 0, fontWeight: 600, color: "var(--texto)" }}>
-              {etapa.preparacion.nombre}
-            </p>
-            <p style={{ margin: "0.15rem 0 0", color: "var(--muted)", fontSize: "0.85rem" }}>
-              {etapa.preparacion.cedula} · {etapa.preparacion.empresa_nombre}
-            </p>
-            {etapa.preparacion.resultado_acceso === "PermitidoConAdvertencia" && (
-              <p style={{ margin: "0.5rem 0 0", color: "var(--advertencia)", fontSize: "0.85rem" }}>
-                ⚠ PRAIND próximo a vencer
+            {seleccion.tipo === "bloqueada" && (
+              <p className="login-error" role="alert">
+                {seleccion.mensaje}
               </p>
             )}
+
+            {seleccion.tipo === "formulario" && (
+              <form
+                onSubmit={(evento) => {
+                  evento.preventDefault();
+                  confirmarIngreso();
+                }}
+                style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}
+              >
+                {seleccion.preparacion.resultado_acceso === "PermitidoConAdvertencia" && (
+                  <p style={{ margin: 0, color: "var(--advertencia)", fontSize: "0.85rem" }}>
+                    ⚠ PRAIND próximo a vencer
+                  </p>
+                )}
+
+                <div className="campo">
+                  Medio de ingreso
+                  <div style={{ display: "flex", gap: "0.75rem" }}>
+                    {(["Caminando", "Vehiculo"] as const).map((opcion) => (
+                      <label
+                        key={opcion}
+                        style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--texto)" }}
+                      >
+                        <input
+                          type="radio"
+                          name="medio"
+                          checked={medio === opcion}
+                          onChange={() => setMedio(opcion)}
+                        />
+                        {opcion === "Caminando" ? "Caminando" : "Vehículo"}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {seleccion.preparacion.requiere_gafete && (
+                  <label className="campo">
+                    Número de gafete
+                    <input
+                      value={gafeteTexto}
+                      onChange={(evento) => setGafeteTexto(evento.target.value.replace(/\D/g, ""))}
+                      inputMode="numeric"
+                      autoFocus
+                      placeholder="Número de gafete"
+                    />
+                  </label>
+                )}
+
+                {error && (
+                  <p className="login-error" role="alert">
+                    {error}
+                  </p>
+                )}
+
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <button
+                    ref={confirmarRef}
+                    type="submit"
+                    className="boton boton-primario"
+                    disabled={enviando}
+                  >
+                    {enviando ? "Registrando…" : "Registrar entrada"}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
-
-          <div className="campo">
-            Medio de ingreso
-            <div style={{ display: "flex", gap: "0.75rem" }}>
-              {(["Caminando", "Vehiculo"] as const).map((opcion) => (
-                <label
-                  key={opcion}
-                  style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--texto)" }}
-                >
-                  <input
-                    type="radio"
-                    name="medio"
-                    checked={medio === opcion}
-                    onChange={() => setMedio(opcion)}
-                  />
-                  {opcion === "Caminando" ? "Caminando" : "Vehículo"}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {etapa.preparacion.requiere_gafete && (
-            <label className="campo">
-              Número de gafete
-              <input
-                value={gafeteTexto}
-                onChange={(evento) => setGafeteTexto(evento.target.value.replace(/\D/g, ""))}
-                inputMode="numeric"
-                autoFocus
-                placeholder="Número de gafete"
-              />
-            </label>
-          )}
-
-          {error && (
-            <p className="login-error" role="alert">
-              {error}
-            </p>
-          )}
-
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-            <button type="button" className="boton" onClick={volverABuscar}>
-              Volver
-            </button>
-            <button
-              type="button"
-              className="boton boton-primario"
-              disabled={enviando}
-              onClick={confirmarIngreso}
-            >
-              {enviando ? "Registrando…" : "Registrar entrada"}
-            </button>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </Modal>
   );
 }

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { ReactNode } from "react";
 
 /**
@@ -5,6 +6,11 @@ import type { ReactNode } from "react";
  * ni de ningún dominio en particular: cualquier pantalla lo usa para
  * cualquier contenido (formulario de alta/edición hoy, confirmaciones u
  * otros diálogos después).
+ *
+ * El backdrop NO cierra al hacer click a propósito — un click fuera de
+ * lugar (frecuente al operar rápido, buscando o llenando un formulario) no
+ * debe descartar en silencio lo que ya se escribió. Cerrar es explícito:
+ * la X o Esc.
  */
 export default function Modal({
   titulo,
@@ -15,6 +21,14 @@ export default function Modal({
   onCerrar: () => void;
   children: ReactNode;
 }) {
+  useEffect(() => {
+    function alTeclear(evento: KeyboardEvent) {
+      if (evento.key === "Escape") onCerrar();
+    }
+    window.addEventListener("keydown", alTeclear);
+    return () => window.removeEventListener("keydown", alTeclear);
+  }, [onCerrar]);
+
   return (
     <div
       style={{
@@ -26,11 +40,9 @@ export default function Modal({
         justifyContent: "center",
         zIndex: 100,
       }}
-      onClick={onCerrar}
     >
       <div
         className="tarjeta"
-        onClick={(evento) => evento.stopPropagation()}
         style={{
           width: "32rem",
           maxWidth: "calc(100% - 2rem)",

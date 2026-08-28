@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
+import PantallaEncabezado from "../componentes/PantallaEncabezado";
 import FormularioUsuario from "./FormularioUsuario";
 import { actualizarUsuario, buscarUsuarios } from "../api";
 import type { UsuarioResumen } from "../api";
@@ -19,6 +21,8 @@ export default function Usuarios() {
   const [formularioAbierto, setFormularioAbierto] = useState<"crear" | UsuarioResumen | null>(
     null,
   );
+
+  useHotkeys("ctrl+n", () => setFormularioAbierto("crear"), { preventDefault: true });
 
   const recargar = useCallback(() => {
     return buscarUsuarios({ texto: texto || undefined }).then(setFilas);
@@ -50,39 +54,41 @@ export default function Usuarios() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "1rem" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "0.75rem",
-        }}
-      >
-        <h1 style={{ margin: 0, fontSize: "1.2rem", color: "var(--acento)" }}>Usuarios</h1>
-        <button className="boton boton-primario" onClick={() => setFormularioAbierto("crear")}>
-          + Nuevo usuario
-        </button>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <PantallaEncabezado
+        titulo="Usuarios"
+        acciones={
+          <button
+            className="boton boton-primario"
+            title="Ctrl+N"
+            onClick={() => setFormularioAbierto("crear")}
+          >
+            + Nuevo usuario
+          </button>
+        }
+      />
 
-      {error && <p style={{ color: "var(--error)" }}>{error}</p>}
-      <div style={{ flex: 1, minHeight: 0 }}>
-        <Tabla<UsuarioResumen>
-          columnas={columnas}
-          filas={filas}
-          onCeldaEditada={manejarEdicion}
-          onFilaDobleClic={setFormularioAbierto}
-          controles={
-            <div className="campo" style={{ flex: "1 1 16rem" }}>
-              Buscar
-              <input
-                placeholder="Cédula o nombre…"
-                value={texto}
-                onChange={(evento) => setTexto(evento.target.value)}
-              />
-            </div>
-          }
-        />
+      <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
+        {error && <p style={{ color: "var(--error)", margin: 0 }}>{error}</p>}
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <Tabla<UsuarioResumen>
+            id="usuarios"
+            columnas={columnas}
+            filas={filas}
+            onCeldaEditada={manejarEdicion}
+            onFilaDobleClic={setFormularioAbierto}
+            controles={
+              <div className="campo" style={{ flex: "1 1 16rem" }}>
+                Buscar
+                <input
+                  placeholder="Cédula o nombre…"
+                  value={texto}
+                  onChange={(evento) => setTexto(evento.target.value)}
+                />
+              </div>
+            }
+          />
+        </div>
       </div>
 
       {formularioAbierto && (
