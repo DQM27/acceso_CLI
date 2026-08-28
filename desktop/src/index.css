@@ -115,11 +115,22 @@ input {
   transition:
     border-color 0.15s ease,
     background-color 0.15s ease,
-    filter 0.15s ease;
+    box-shadow 0.15s ease;
 }
 
 .boton:hover:not(:disabled) {
   border-color: var(--acento);
+  background: #232329;
+}
+
+.boton:active:not(:disabled) {
+  background: #16161a;
+}
+
+.boton:focus-visible {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--acento) 35%, transparent);
 }
 
 .boton:disabled {
@@ -135,7 +146,13 @@ input {
 }
 
 .boton-primario:hover:not(:disabled) {
-  filter: brightness(1.08);
+  background: color-mix(in srgb, var(--acento) 85%, black);
+  border-color: color-mix(in srgb, var(--acento) 85%, black);
+}
+
+.boton-primario:active:not(:disabled) {
+  background: color-mix(in srgb, var(--acento) 72%, black);
+  border-color: color-mix(in srgb, var(--acento) 72%, black);
 }
 
 .boton-primario:disabled {
