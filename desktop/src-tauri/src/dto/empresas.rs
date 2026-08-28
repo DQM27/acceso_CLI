@@ -16,3 +16,28 @@ impl FiltroEmpresasEntrada {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn el_texto_en_blanco_se_convierte_en_ninguno() {
+        let filtro = FiltroEmpresasEntrada {
+            texto: Some("   ".to_owned()),
+        }
+        .construir();
+
+        assert_eq!(filtro.texto, None);
+    }
+
+    #[test]
+    fn el_texto_se_recorta_de_espacios() {
+        let filtro = FiltroEmpresasEntrada {
+            texto: Some("  brisas  ".to_owned()),
+        }
+        .construir();
+
+        assert_eq!(filtro.texto, Some("brisas".to_owned()));
+    }
+}

@@ -93,3 +93,117 @@ impl From<DatosContratistaEntrada> for DatosActualizacionContratista {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn el_texto_en_blanco_se_convierte_en_ninguno() {
+        let filtro = FiltroContratistasEntrada {
+            texto: Some("   ".to_owned()),
+            ..Default::default()
+        }
+        .construir();
+
+        assert_eq!(filtro.texto, None);
+    }
+
+    #[test]
+    fn el_texto_se_recorta_de_espacios() {
+        let filtro = FiltroContratistasEntrada {
+            texto: Some("  ana  ".to_owned()),
+            ..Default::default()
+        }
+        .construir();
+
+        assert_eq!(filtro.texto, Some("ana".to_owned()));
+    }
+
+    #[test]
+    fn el_empresa_id_se_mapea_a_igualdad_incluye() {
+        let filtro = FiltroContratistasEntrada {
+            empresa_id: Some(7),
+            ..Default::default()
+        }
+        .construir();
+
+        assert_eq!(filtro.empresa_id, Some(Igualdad::Incluye(7)));
+    }
+
+    #[test]
+    fn la_lista_de_tipos_vacia_se_convierte_en_ninguno() {
+        let filtro = FiltroContratistasEntrada {
+            tipos: Some(Vec::new()),
+            ..Default::default()
+        }
+        .construir();
+
+        assert_eq!(filtro.tipos_incluidos, None);
+    }
+
+    #[test]
+    fn la_lista_de_tipos_no_vacia_se_conserva() {
+        let filtro = FiltroContratistasEntrada {
+            tipos: Some(vec![TipoIngreso::Praind, TipoIngreso::Swat]),
+            ..Default::default()
+        }
+        .construir();
+
+        assert_eq!(
+            filtro.tipos_incluidos,
+            Some(vec![TipoIngreso::Praind, TipoIngreso::Swat])
+        );
+    }
+
+    #[test]
+    fn cada_estado_praind_se_mapea_a_su_variante_con_la_fecha_de_hoy() {
+        let hoy = ahora_costa_rica().date_naive();
+
+        let vencido = FiltroContratistasEntrada {
+            praind: Some(EstadoPraind::Vencido),
+            ..Default::default()
+        }
+        .construir();
+        assert_eq!(vencido.praind, Some(FiltroPraind::Vencido { hoy }));
+
+        let proximo = FiltroContratistasEntrada {
+            praind: Some(EstadoPraind::Proximo),
+            ..Default::default()
+        }
+        .construir();
+        assert_eq!(proximo.praind, Some(FiltroPraind::ProximoAVencer { hoy }));
+
+        let sin_fecha = FiltroContratistasEntrada {
+            praind: Some(EstadoPraind::SinFecha),
+            ..Default::default()
+        }
+        .construir();
+        assert_eq!(sin_fecha.praind, Some(FiltroPraind::SinFecha));
+    }
+
+    /// `praind_negado` no tiene equivalente en la entrada — el filtro de la
+    /// GUI siempre pregunta por la condición positiva ("está vencido"), nunca
+    /// por su negación ("-praind:vencido", que sólo existe en el lenguaje de
+    /// `--comandos`). Fija ese `false` para que un cambio futuro que lo
+    /// rompa falle acá y no en producción.
+    #[test]
+    fn praind_negado_siempre_es_falso() {
+        let filtro = FiltroContratistasEntrada::default().construir();
+
+        assert!(!filtro.praind_negado);
+    }
+
+    #[test]
+    fn personal_ruta_y_tiene_acceso_pasan_directo() {
+        let filtro = FiltroContratistasEntrada {
+            personal_ruta: Some(true),
+            tiene_acceso: Some(false),
+            ..Default::default()
+        }
+        .construir();
+
+        assert_eq!(filtro.personal_ruta, Some(true));
+        assert_eq!(filtro.tiene_acceso, Some(false));
+    }
+}
