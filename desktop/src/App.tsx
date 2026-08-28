@@ -100,15 +100,7 @@ function Shell({
           <button
             key={item.id}
             onClick={() => setSeccion(item.id)}
-            style={{
-              textAlign: "left",
-              padding: "0.6rem 1rem",
-              border: "none",
-              background: seccion === item.id ? "var(--campo-fondo)" : "transparent",
-              color: seccion === item.id ? "var(--acento)" : "var(--texto)",
-              cursor: "pointer",
-              fontSize: "0.95rem",
-            }}
+            className={`nav-item ${seccion === item.id ? "nav-item-activo" : ""}`}
           >
             {item.etiqueta}
           </button>

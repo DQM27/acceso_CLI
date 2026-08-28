@@ -163,3 +163,34 @@ input {
   border-color: var(--muted);
   color: var(--fondo);
 }
+
+/* Ítem del sidebar de navegación (App.tsx) — mismo lenguaje de hover/foco
+   nítido que .boton, pero de ancho completo y sin borde (no es un botón de
+   acción, es un item de lista). El estado activo lo decide React con
+   .nav-item-activo; acá sólo hover/foco, que antes no existían en absoluto. */
+.nav-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.6rem 1rem;
+  border: none;
+  background: transparent;
+  color: var(--texto);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.nav-item:hover:not(.nav-item-activo) {
+  background: color-mix(in srgb, var(--campo-fondo) 60%, transparent);
+}
+
+.nav-item:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--acento);
+}
+
+.nav-item-activo {
+  background: var(--campo-fondo);
+  color: var(--acento);
+}
