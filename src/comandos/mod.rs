@@ -33,12 +33,10 @@ mod historial;
 mod historial_controller;
 mod login;
 mod operando;
-mod parser;
 mod preferencias;
 mod presentation;
 mod query_lang;
 mod render;
-mod resolver;
 mod root;
 mod salida_gafete;
 mod salida_gafete_controller;
@@ -75,11 +73,22 @@ pub use formulario_empresa::FormularioEmpresa;
 pub use formulario_password::FormularioPassword;
 pub use formulario_usuario::{CampoUsuario, FormularioUsuario, SubfaseUsuario};
 pub use historial::HistorialState;
-pub use parser::{Comando, Entrada, GafeteParse, MedioParse, parsear};
-pub use resolver::{
-    autocompletar, calcular_sugerencias, ficha_desde_resumen, preparar_resumen_ingreso, resolver,
-};
 pub use salida_gafete::SalidaGafeteState;
+
+// Re-exportado desde `lenguaje_comandos` (sin dependencia de terminal) para
+// no romper a quien ya importaba estos nombres/rutas como
+// `comandos::parsear`, `comandos::parser::parsear`,
+// `comandos::resolver::pagina_contratistas`, etc. — ver el doc-comment de
+// ese módulo. `parser`/`resolver` como alias de módulo (no chocan con la
+// función `resolver` de abajo: viven en el namespace de tipos, no el de
+// valores).
+// `resolver` (el módulo) ya trae consigo `resolver::resolver` (la función) —
+// no se re-exporta también suelta para no chocar con el nombre del módulo.
+pub use crate::lenguaje_comandos::{parser, resolver};
+pub use crate::lenguaje_comandos::{
+    Comando, Entrada, GafeteParse, MedioParse, autocompletar, calcular_sugerencias,
+    ficha_desde_resumen, parsear, preparar_resumen_ingreso,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ComandosError {

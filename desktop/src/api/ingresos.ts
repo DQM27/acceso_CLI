@@ -96,6 +96,30 @@ export function mensajeMotivoDenegacion(motivo: MotivoDenegacion): string {
   }
 }
 
+const MAX_LARGO_GAFETES = 60;
+
+/** Mismo criterio que `SalidaGafeteState::asignar_texto` (`--comandos`):
+ * sólo dígitos, coma (separador de lista) y espacio. Compartido por
+ * `SalidaModal` y la consola — ambos implementan el mismo modo enclavado
+ * de "sacar por gafete", uno como panel de formulario, el otro como modo
+ * de la línea de comandos. */
+export function sanearGafetes(texto: string): string {
+  return texto
+    .split("")
+    .filter((c) => /[\d,\s]/.test(c))
+    .slice(0, MAX_LARGO_GAFETES)
+    .join("");
+}
+
+export function gafetesDe(texto: string): number[] {
+  return texto
+    .split(",")
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0)
+    .map(Number)
+    .filter((n) => Number.isInteger(n));
+}
+
 export function listarIngresosActivos(): Promise<ListaIngresosActivosResumen> {
   return invoke("listar_ingresos_activos");
 }

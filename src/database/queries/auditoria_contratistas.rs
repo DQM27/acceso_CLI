@@ -10,6 +10,7 @@ pub const LIMITE_AUDITORIA_PREDETERMINADO: usize = 50;
 pub const LIMITE_AUDITORIA_MAXIMO: usize = 200;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct CambioContratistaAuditado {
     pub id: i64,
     pub fecha_hora: DateTime<Utc>,

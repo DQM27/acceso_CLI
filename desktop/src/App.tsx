@@ -7,6 +7,7 @@ import Empresas from "./pantallas/Empresas";
 import Usuarios from "./pantallas/Usuarios";
 import NuevoIngresoModal from "./pantallas/NuevoIngresoModal";
 import SalidaModal from "./pantallas/SalidaModal";
+import Consola from "./pantallas/Consola";
 import { cerrarSesion, requiereConfiguracionInicial } from "./api";
 import type { UsuarioSesion } from "./api";
 
@@ -217,6 +218,8 @@ function Shell({
           onCerrar={() => setModalSalida(false)}
         />
       )}
+
+      <Consola />
     </div>
   );
 }

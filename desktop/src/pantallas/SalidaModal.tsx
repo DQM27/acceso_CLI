@@ -2,30 +2,10 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import Modal from "../componentes/Modal";
-import { listarIngresosActivos, registrarSalida } from "../api";
+import { gafetesDe, listarIngresosActivos, registrarSalida, sanearGafetes } from "../api";
 import type { IngresoActivoResumen } from "../api";
 
 const MAX_RESULTADOS = 4;
-const MAX_LARGO_GAFETES = 60;
-
-/** Mismo criterio que `SalidaGafeteState::asignar_texto` (`--comandos`):
- * sólo dígitos, coma (separador de lista) y espacio. */
-function sanearGafetes(texto: string): string {
-  return texto
-    .split("")
-    .filter((c) => /[\d,\s]/.test(c))
-    .slice(0, MAX_LARGO_GAFETES)
-    .join("");
-}
-
-function gafetesDe(texto: string): number[] {
-  return texto
-    .split(",")
-    .map((token) => token.trim())
-    .filter((token) => token.length > 0)
-    .map(Number)
-    .filter((n) => Number.isInteger(n));
-}
 
 function coincideTexto(activo: IngresoActivoResumen, textoBuscado: string): boolean {
   const buscado = textoBuscado.toLowerCase();

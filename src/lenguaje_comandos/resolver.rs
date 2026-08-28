@@ -17,7 +17,7 @@ use crate::models::medio_ingreso::MedioIngreso;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::registro_ingreso_service::IngresoActivoResumen;
 
-use super::estado::ContextState;
+use super::contexto::ContextState;
 use super::parser::{Comando, Entrada, GafeteParse, MedioParse};
 
 /// Mínimo de caracteres de consulta para disparar la búsqueda en vivo. Con 1

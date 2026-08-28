@@ -52,6 +52,8 @@ pub fn run() {
             comandos::ingresos::preparar_ingreso,
             comandos::ingresos::registrar_ingreso,
             comandos::ingresos::registrar_salida,
+            comandos::consola::ejecutar_comando,
+            comandos::consola::autocompletar_comando,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
