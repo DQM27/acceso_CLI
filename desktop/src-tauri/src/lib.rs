@@ -48,6 +48,10 @@ pub fn run() {
             comandos::usuarios::crear_usuario,
             comandos::usuarios::actualizar_usuario,
             comandos::usuarios::cambiar_password_usuario,
+            comandos::ingresos::listar_ingresos_activos,
+            comandos::ingresos::preparar_ingreso,
+            comandos::ingresos::registrar_ingreso,
+            comandos::ingresos::registrar_salida,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

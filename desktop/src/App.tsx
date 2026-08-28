@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Login from "./pantallas/Login";
+import Activos from "./pantallas/Activos";
 import Contratistas from "./pantallas/Contratistas";
 import Empresas from "./pantallas/Empresas";
 import Usuarios from "./pantallas/Usuarios";
@@ -57,9 +58,10 @@ export default function App() {
   );
 }
 
-type Seccion = "contratistas" | "empresas" | "usuarios";
+type Seccion = "activos" | "contratistas" | "empresas" | "usuarios";
 
 const SECCIONES: { id: Seccion; etiqueta: string }[] = [
+  { id: "activos", etiqueta: "Ingresos activos" },
   { id: "contratistas", etiqueta: "Contratistas" },
   { id: "empresas", etiqueta: "Empresas" },
   { id: "usuarios", etiqueta: "Usuarios" },
@@ -77,40 +79,59 @@ function Shell({
   sesion: UsuarioSesion;
   onCerrarSesion: () => void;
 }) {
-  const [seccion, setSeccion] = useState<Seccion>("contratistas");
+  const [seccion, setSeccion] = useState<Seccion>("activos");
+  const inicial = sesion.nombre.trim().charAt(0).toUpperCase() || "?";
 
   return (
     <div style={{ display: "flex", height: "100%" }}>
-      <nav
-        style={{
-          width: "13rem",
-          flexShrink: 0,
-          background: "var(--panel)",
-          borderRight: "1px solid var(--borde)",
-          display: "flex",
-          flexDirection: "column",
-          padding: "1rem 0",
-        }}
-      >
-        <div style={{ padding: "0 1rem 1rem", color: "var(--acento)", fontWeight: 600 }}>
-          Brisas
+      <nav className="shell-sidebar">
+        <div className="shell-marca">
+          <div className="marca-sello" aria-hidden="true">
+            B
+          </div>
+          <div>
+            <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: 600, color: "var(--texto)" }}>
+              Brisas
+            </p>
+            <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--muted)" }}>
+              Control de acceso
+            </p>
+          </div>
         </div>
 
-        {SECCIONES.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setSeccion(item.id)}
-            className={`nav-item ${seccion === item.id ? "nav-item-activo" : ""}`}
-          >
-            {item.etiqueta}
-          </button>
-        ))}
+        <div className="shell-nav">
+          {SECCIONES.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setSeccion(item.id)}
+              className={`nav-item ${seccion === item.id ? "nav-item-activo" : ""}`}
+            >
+              {item.etiqueta}
+            </button>
+          ))}
+        </div>
 
         <div style={{ flex: 1 }} />
 
-        <div style={{ padding: "0 1rem" }}>
-          <div style={{ color: "var(--muted)", fontSize: "0.8rem", marginBottom: "0.5rem" }}>
-            {sesion.nombre} ({sesion.rol})
+        <div className="shell-usuario">
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+            <div className="shell-avatar">{inicial}</div>
+            <div style={{ minWidth: 0 }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  color: "var(--texto)",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {sesion.nombre}
+              </p>
+              <span className="chip">{sesion.rol}</span>
+            </div>
           </div>
           <button className="boton" style={{ width: "100%" }} onClick={onCerrarSesion}>
             Cerrar sesión
@@ -118,7 +139,8 @@ function Shell({
         </div>
       </nav>
 
-      <main style={{ flex: 1, minWidth: 0 }}>
+      <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+        {seccion === "activos" && <Activos />}
         {seccion === "contratistas" && <Contratistas />}
         {seccion === "empresas" && <Empresas />}
         {seccion === "usuarios" && <Usuarios />}

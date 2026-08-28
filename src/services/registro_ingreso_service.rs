@@ -21,6 +21,7 @@ use crate::tiempo::fecha_costa_rica;
 use super::error::RegistroIngresoServiceError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct ResultadoRegistroEntrada {
     pub registro_id: i64,
     pub resultado_acceso: ResultadoAcceso,
@@ -31,6 +32,7 @@ pub struct ResultadoRegistroEntrada {
 /// No constituye una autorización cacheada: `registrar_entrada()` vuelve a consultar
 /// y validar todas las reglas inmediatamente antes de persistir.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct PreparacionIngreso {
     pub contratista_id: i64,
     pub cedula: String,
@@ -43,6 +45,7 @@ pub struct PreparacionIngreso {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct IngresoActivoResumen {
     pub registro_id: i64,
     pub contratista_id: i64,
@@ -61,6 +64,7 @@ pub struct IngresoActivoResumen {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct ListaIngresosActivosResumen {
     pub items: Vec<IngresoActivoResumen>,
     /// Total real de personas dentro, independiente del filtro aplicado.

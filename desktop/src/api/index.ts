@@ -6,4 +6,5 @@
 export * from "./autenticacion";
 export * from "./contratistas";
 export * from "./empresas";
+export * from "./ingresos";
 export * from "./usuarios";

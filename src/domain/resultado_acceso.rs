@@ -1,4 +1,5 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum MotivoDenegacion {
     SinAcceso,
     /// Tiene fecha de vencimiento registrada y ya pasó. Distinto de
@@ -13,6 +14,7 @@ pub enum MotivoDenegacion {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum ResultadoAcceso {
     Permitido,
     PermitidoConAdvertencia,

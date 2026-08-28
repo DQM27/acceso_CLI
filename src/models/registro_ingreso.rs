@@ -9,6 +9,7 @@ use super::tipo_ingreso::TipoIngreso;
 pub use crate::domain::acceso::VERSION_REGLAS_ACCESO;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum ResultadoIngresoRegistrado {
     Permitido,
     /// Carga el motivo en vez de dejar que quien persista lo adivine — hoy
@@ -21,6 +22,7 @@ pub enum ResultadoIngresoRegistrado {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum MotivoResultadoIngreso {
     PraindProximoVencer,
     DatosReconstruidos,

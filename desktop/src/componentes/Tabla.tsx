@@ -6,8 +6,10 @@ import type { ColDef } from "ag-grid-community";
 
 /**
  * Tema y comportamiento compartido de TODAS las tablas de la app — un solo
- * punto para cambiar cómo se ven/comportan las grillas. Paleta igual a
- * index.css (FADE_* de src/comandos/render/estilos.rs).
+ * punto para cambiar cómo se ven/comportan las grillas. Usa las mismas
+ * custom properties que el resto de la app (index.css) en vez de colores
+ * fijos, para que la grilla siga el tema claro/oscuro del sistema en lugar
+ * de quedar siempre oscura sin importar el resto de la interfaz.
  *
  * Deliberadamente NO expone cualquier prop de AgGridReact. Mostrar/ocultar
  * columnas es capacidad permanente (no un flag opcional) porque ya es un
@@ -18,12 +20,13 @@ import type { ColDef } from "ag-grid-community";
  * necesite — no antes.
  */
 const temaBrisas = themeQuartz.withParams({
-  backgroundColor: "#0a0a0c",
-  foregroundColor: "#e1e1e6",
-  headerBackgroundColor: "#16161a",
-  borderColor: "#2a2a30",
-  accentColor: "#56c8d6",
-  oddRowBackgroundColor: "#111114",
+  backgroundColor: "var(--panel)",
+  foregroundColor: "var(--texto)",
+  headerBackgroundColor: "var(--panel-suave)",
+  headerTextColor: "var(--muted)",
+  borderColor: "var(--borde)",
+  accentColor: "var(--acento)",
+  oddRowBackgroundColor: "var(--campo-fondo)",
   borderRadius: 8,
   wrapperBorderRadius: 8,
 });
@@ -32,6 +35,12 @@ const columnaPorDefecto: ColDef = {
   sortable: true,
   resizable: true,
   minWidth: 90,
+};
+
+const columnaPorDefectoConFiltro: ColDef = {
+  ...columnaPorDefecto,
+  filter: true,
+  floatingFilter: true,
 };
 
 export interface TablaProps<T> {
@@ -52,6 +61,11 @@ export interface TablaProps<T> {
   onCeldaEditada?: (fila: T) => void;
   /** Doble click en una fila — pensado para abrir edición. */
   onFilaDobleClic?: (fila: T) => void;
+  /** Filtro por columna (fila de filtros bajo el encabezado) en vez del
+   * `controles` propio de la pantalla — para listas que se cargan enteras
+   * una vez y se filtran del lado del cliente (ej. Activos), a diferencia
+   * de pantallas como Contratistas que filtran contra el servidor. */
+  filtrosPorColumna?: boolean;
 }
 
 export default function Tabla<T>({
@@ -62,6 +76,7 @@ export default function Tabla<T>({
   onSeleccionCambia,
   onCeldaEditada,
   onFilaDobleClic,
+  filtrosPorColumna,
 }: TablaProps<T>) {
   const [ocultas, setOcultas] = useState<Set<string>>(new Set());
   const [selectorAbierto, setSelectorAbierto] = useState(false);
@@ -155,7 +170,7 @@ export default function Tabla<T>({
       <div style={{ flex: 1, minHeight: 0 }}>
         <AgGridReact<T>
           theme={temaBrisas}
-          defaultColDef={columnaPorDefecto}
+          defaultColDef={filtrosPorColumna ? columnaPorDefectoConFiltro : columnaPorDefecto}
           rowData={filas}
           columnDefs={columnasConVisibilidad}
           rowHeight={36}
