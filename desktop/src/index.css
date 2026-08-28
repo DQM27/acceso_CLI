@@ -92,12 +92,15 @@ input {
   color: var(--texto);
   font-size: 0.95rem;
   outline: none;
-  transition: border-color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .campo input:focus,
 .campo select:focus {
   border-color: var(--acento);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--acento) 35%, transparent);
 }
 
 .campo input:disabled,
