@@ -4,7 +4,7 @@ use control_acceso::{
     application::AppCore,
     database::{
         queries::{
-            auditoria_contratistas::FiltroAuditoriaContratistas, contratistas::FiltroContratistas,
+            auditoria::FiltroAuditoria, contratistas::FiltroContratistas,
             usuarios::FiltroUsuarios,
         },
         schema::initialize_database,
@@ -107,7 +107,7 @@ fn operador_no_puede_invocar_comandos_administrativos_directamente() {
         Err(UsuarioServiceError::OperacionNoAutorizada)
     ));
     assert!(matches!(
-        core.buscar_auditoria_contratistas(&operador, &FiltroAuditoriaContratistas::default()),
+        core.buscar_auditoria(&operador, &FiltroAuditoria::default()),
         Err(ContratistaServiceError::OperacionNoAutorizada)
     ));
 

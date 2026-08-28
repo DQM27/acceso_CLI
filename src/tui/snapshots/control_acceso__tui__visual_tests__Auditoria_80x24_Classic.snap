@@ -1,13 +1,14 @@
 ---
 source: src/tui/visual_tests.rs
+assertion_line: 308
 expression: volcado
 ---
 === texto ===
                                                                                 
  BRISAS CLI                                           Operador de prueba · ROOT 
- AUDITORÍA DE CONTRATISTAS                                                ··:·· 
+ AUDITORÍA DE CAMBIOS                                                     ··:·· 
  ────────────────────────────────────────────────────────────────────────────── 
- FECHA Y HORA (CR)  CONTRATISTA    CAMBIO REALIZADO              MODIFICADO POR 
+ FECHA Y HORA (CR)  ENTIDAD        CAMBIO REALIZADO              MODIFICADO POR 
                                                                                 
                                                                                 
                                                                                 
@@ -36,15 +37,15 @@ expression: volcado
 "Operador de prueba · ROOT" fg=Rgb(105, 135, 111) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"AUDITORÍA DE CONTRATISTAS" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
-"                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"AUDITORÍA DE CAMBIOS" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+"                                                     " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "··:··" fg=Rgb(238, 184, 78) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "──────────────────────────────────────────────────────────────────────────────" fg=Rgb(76, 119, 85) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"FECHA Y HORA (CR)  CONTRATISTA    CAMBIO REALIZADO              MODIFICADO POR" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+"FECHA Y HORA (CR)  ENTIDAD        CAMBIO REALIZADO              MODIFICADO POR" fg=Rgb(91, 224, 123) bg=Black mod=BOLD
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                " fg=Rgb(196, 220, 199) bg=Black mod=NONE

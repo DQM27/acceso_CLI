@@ -7,7 +7,7 @@
 
 use crate::application::AppCore;
 use crate::database::queries::Igualdad;
-use crate::database::queries::auditoria_contratistas::FiltroAuditoriaContratistas;
+use crate::database::queries::auditoria::FiltroAuditoria;
 use crate::database::queries::contratistas::{ContratistaResumen, FiltroContratistas};
 use crate::database::queries::empresas::FiltroEmpresas;
 use crate::database::queries::ingresos::FiltroIngresosActivos;
@@ -367,19 +367,19 @@ fn resolver_busqueda_contratistas(core: &AppCore, consulta: &str) -> ContextStat
 
 /// `/auditoria` — sólo lectura, sin filtro (a diferencia de Historial): el
 /// gate de rol se repite acá (mismo criterio de defensa en profundidad que
-/// `pagina_usuarios`) aunque `AppCore::buscar_auditoria_contratistas` ya lo
-/// verifica de nuevo contra SQLite antes de consultar.
+/// `pagina_usuarios`) aunque `AppCore::buscar_auditoria` ya lo verifica de
+/// nuevo contra SQLite antes de consultar.
 pub fn pagina_auditoria(core: &AppCore, offset: usize, sesion: &UsuarioSesion) -> ContextState {
     if !sesion.rol.puede(Operacion::VerAuditoria) {
         return ContextState::MensajeError {
             mensaje: "No tiene permiso para ver la auditoría".to_string(),
         };
     }
-    let filtro = FiltroAuditoriaContratistas {
-        limite: crate::database::queries::auditoria_contratistas::LIMITE_AUDITORIA_PREDETERMINADO,
+    let filtro = FiltroAuditoria {
+        limite: crate::database::queries::auditoria::LIMITE_AUDITORIA_PREDETERMINADO,
         offset,
     };
-    match core.buscar_auditoria_contratistas(sesion, &filtro) {
+    match core.buscar_auditoria(sesion, &filtro) {
         Ok(pagina) => ContextState::TablaAuditoria {
             items: pagina.items,
             seleccion: 0,

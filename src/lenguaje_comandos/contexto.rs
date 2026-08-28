@@ -5,7 +5,7 @@
 //! pueda usar el lenguaje de comandos sin arrastrar `ratatui`/`crossterm`/
 //! `tui-input` como dependencias compiladas.
 
-use crate::database::queries::auditoria_contratistas::CambioContratistaAuditado;
+use crate::database::queries::auditoria::CambioAuditado;
 use crate::database::queries::contratistas::ContratistaResumen;
 use crate::database::queries::empresas::EmpresaResumen;
 use crate::database::queries::usuarios::UsuarioResumen;
@@ -88,13 +88,13 @@ pub enum ContextState {
         total: usize,
         seleccion: usize,
     },
-    /// `/auditoria`: cambios auditados de contratistas — sólo Administrador
-    /// y Root (`Operacion::VerAuditoria`, verificado tanto acá como en
-    /// `AppCore::buscar_auditoria_contratistas`). Sin filtro ni exportación,
-    /// a diferencia de Historial: sólo lectura paginada con PageUp/PageDown,
-    /// mismo `total` real que ya trae `PaginaAuditoriaContratistas`.
+    /// `/auditoria`: cambios auditados de contratistas, empresas y usuarios
+    /// — sólo Administrador y Root (`Operacion::VerAuditoria`, verificado
+    /// tanto acá como en `AppCore::buscar_auditoria`). Sin filtro ni
+    /// exportación, a diferencia de Historial: sólo lectura paginada con
+    /// PageUp/PageDown, mismo `total` real que ya trae `PaginaAuditoria`.
     TablaAuditoria {
-        items: Vec<CambioContratistaAuditado>,
+        items: Vec<CambioAuditado>,
         seleccion: usize,
         offset: usize,
         total: usize,

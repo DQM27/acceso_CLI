@@ -3,6 +3,7 @@
 // Rust — un archivo por área de negocio, nada de archivo único creciendo sin
 // límite).
 
+export * from "./auditoria";
 export * from "./autenticacion";
 export * from "./consola";
 export * from "./contratistas";

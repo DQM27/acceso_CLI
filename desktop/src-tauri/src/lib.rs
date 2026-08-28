@@ -57,6 +57,7 @@ pub fn run() {
             comandos::consola::autocompletar_comando,
             comandos::historial::listar_historial,
             comandos::historial::exportar_historial,
+            comandos::auditoria::listar_auditoria,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -151,7 +151,15 @@ fn base_vacia_llega_a_version_actual_y_es_idempotente() {
 }
 
 #[test]
-fn migracion_10_conserva_auditoria_y_admite_cambios_de_acceso() {
+fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
+    // MIGRACION_13 (más reciente que ésta) termina descartando
+    // `auditoria_contratistas` por completo (reemplazada por
+    // `auditoria_cambios`, ver el comentario junto a `MIGRACION_13` en
+    // `schema.rs`) — así que ya no tiene sentido afirmar que esta fila
+    // "se conserva" hasta el final de la cadena. Lo que sigue valiendo la
+    // pena probar es que una base real congelada en v9, con filas ya
+    // escritas en la forma vieja de la tabla, atraviesa el resto de la
+    // cadena de migraciones (10 → 11 → 12 → 13) sin errores de SQL.
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
     insertar_referencias(&connection);
@@ -159,7 +167,7 @@ fn migracion_10_conserva_auditoria_y_admite_cambios_de_acceso() {
     connection
         .execute_batch(
             "DROP INDEX idx_registro_ingresos_fecha_salida;
-             DROP TABLE auditoria_contratistas;
+             DROP TABLE auditoria_cambios;
              CREATE TABLE auditoria_contratistas (
                 id INTEGER PRIMARY KEY,
                 fecha_hora TEXT NOT NULL,
@@ -184,22 +192,19 @@ fn migracion_10_conserva_auditoria_y_admite_cambios_de_acceso() {
     initialize_database(&connection).unwrap();
 
     assert_eq!(version(&connection), SCHEMA_VERSION);
-    let conservados: i64 = connection
-        .query_row("SELECT COUNT(*) FROM auditoria_contratistas", [], |row| {
+    connection
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='auditoria_contratistas'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .expect_err("auditoria_contratistas debe haber desaparecido tras MIGRACION_13");
+    let total: i64 = connection
+        .query_row("SELECT COUNT(*) FROM auditoria_cambios", [], |row| {
             row.get(0)
         })
         .unwrap();
-    assert_eq!(conservados, 1);
-    connection
-        .execute(
-            "INSERT INTO auditoria_contratistas(
-                fecha_hora,usuario_id,contratista_id,campo,valor_anterior,valor_nuevo
-             ) VALUES(
-                '2026-08-20T22:01:00Z',1,1,'tiene_acceso','HABILITADO','DESHABILITADO'
-             )",
-            [],
-        )
-        .unwrap();
+    assert_eq!(total, 0);
 }
 
 #[test]
@@ -220,6 +225,24 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
     connection
         .execute_batch(
             "DROP INDEX idx_registro_ingresos_fecha_salida;
+             -- MIGRACION_12 (que corre después de ésta al rebobinar a v10)
+             -- necesita `auditoria_contratistas` en pie — el `initialize_database`
+             -- de arriba ya la reemplazó por `auditoria_cambios` (MIGRACION_13),
+             -- así que hay que recrearla en la forma que dejó MIGRACION_10 antes
+             -- de simular que la base está congelada en v10.
+             DROP TABLE auditoria_cambios;
+             CREATE TABLE auditoria_contratistas (
+                id INTEGER PRIMARY KEY,
+                fecha_hora TEXT NOT NULL,
+                usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+                contratista_id INTEGER NOT NULL REFERENCES contratistas(id) ON DELETE RESTRICT,
+                campo TEXT NOT NULL CHECK (
+                    campo IN ('tipo_ingreso', 'fecha_vencimiento_praind', 'tiene_acceso')
+                ),
+                valor_anterior TEXT,
+                valor_nuevo TEXT,
+                CHECK (valor_anterior IS NOT valor_nuevo)
+             );
              PRAGMA user_version = 10;",
         )
         .unwrap();
@@ -257,24 +280,20 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
 }
 
 #[test]
-fn migracion_12_habilita_cambio_de_cedula_y_conserva_auditoria() {
+fn migracion_12_habilita_cambio_de_cedula() {
+    // Igual comentario que en `migracion_10_...`: MIGRACION_13 termina
+    // reemplazando `auditoria_contratistas` por `auditoria_cambios`, así que
+    // ya no tiene sentido afirmar "se conserva la auditoría" al final de la
+    // cadena — lo que sigue probando esta prueba es lo que le da nombre: que
+    // el trigger que bloqueaba cambiar la cédula queda eliminado.
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
     insertar_referencias(&connection);
-    connection
-        .execute(
-            "INSERT INTO auditoria_contratistas(
-                fecha_hora,usuario_id,contratista_id,campo,valor_anterior,valor_nuevo
-             ) VALUES(
-                '2026-08-21T12:00:00Z',1,1,'tipo_ingreso','SWAT','PRAIND'
-             )",
-            [],
-        )
-        .unwrap();
     crear_trigger_cedula_inmutable(&connection);
     connection
         .execute_batch(
-            "CREATE TABLE auditoria_contratistas_v11 (
+            "DROP TABLE auditoria_cambios;
+             CREATE TABLE auditoria_contratistas (
                 id INTEGER PRIMARY KEY,
                 fecha_hora TEXT NOT NULL,
                 usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
@@ -286,10 +305,11 @@ fn migracion_12_habilita_cambio_de_cedula_y_conserva_auditoria() {
                 valor_nuevo TEXT,
                 CHECK (valor_anterior IS NOT valor_nuevo)
              );
-             INSERT INTO auditoria_contratistas_v11
-             SELECT * FROM auditoria_contratistas;
-             DROP TABLE auditoria_contratistas;
-             ALTER TABLE auditoria_contratistas_v11 RENAME TO auditoria_contratistas;
+             INSERT INTO auditoria_contratistas(
+                fecha_hora,usuario_id,contratista_id,campo,valor_anterior,valor_nuevo
+             ) VALUES(
+                '2026-08-21T12:00:00Z',1,1,'tipo_ingreso','SWAT','PRAIND'
+             );
              CREATE INDEX idx_auditoria_contratistas_fecha
              ON auditoria_contratistas(fecha_hora DESC, id DESC);
              CREATE INDEX idx_auditoria_contratistas_contratista
@@ -310,22 +330,79 @@ fn migracion_12_habilita_cambio_de_cedula_y_conserva_auditoria() {
         })
         .unwrap();
     assert_eq!(cedula, "OTRA");
-    let conservados: i64 = connection
-        .query_row("SELECT COUNT(*) FROM auditoria_contratistas", [], |row| {
-            row.get(0)
-        })
-        .unwrap();
-    assert_eq!(conservados, 1);
+}
+
+#[test]
+fn migracion_13_reemplaza_auditoria_contratistas_por_auditoria_cambios() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    insertar_referencias(&connection);
+
+    connection
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='auditoria_contratistas'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .expect_err("auditoria_contratistas no debe existir en una base nueva");
+
     connection
         .execute(
-            "INSERT INTO auditoria_contratistas(
-                fecha_hora,usuario_id,contratista_id,campo,valor_anterior,valor_nuevo
+            "INSERT INTO auditoria_cambios(
+                fecha_hora,usuario_id,usuario_nombre,entidad,entidad_id,entidad_nombre,
+                campo,valor_anterior,valor_nuevo
              ) VALUES(
-                '2026-08-21T12:01:00Z',1,1,'cedula','2001','OTRA'
+                '2026-08-28T12:00:00Z',1,'Operador','contratista',1,'Persona',
+                'nombre','Persona','Persona Nueva'
              )",
             [],
         )
         .unwrap();
+    connection
+        .execute(
+            "INSERT INTO auditoria_cambios(
+                fecha_hora,usuario_id,usuario_nombre,entidad,entidad_id,entidad_nombre,
+                campo,valor_anterior,valor_nuevo
+             ) VALUES(
+                '2026-08-28T12:01:00Z',1,'Operador','empresa',1,'Empresa',
+                'activo','1','0'
+             )",
+            [],
+        )
+        .unwrap();
+    // Cambio de contraseña: sólo la fecha importa, sin valores.
+    connection
+        .execute(
+            "INSERT INTO auditoria_cambios(
+                fecha_hora,usuario_id,usuario_nombre,entidad,entidad_id,entidad_nombre,campo
+             ) VALUES(
+                '2026-08-28T12:02:00Z',1,'Operador','usuario',1,'Operador','password'
+             )",
+            [],
+        )
+        .unwrap();
+
+    let error = connection
+        .execute(
+            "INSERT INTO auditoria_cambios(
+                fecha_hora,usuario_id,usuario_nombre,entidad,entidad_id,entidad_nombre,campo
+             ) VALUES(
+                '2026-08-28T12:03:00Z',1,'Operador','otra_cosa',1,'Lo que sea','campo'
+             )",
+            [],
+        )
+        .unwrap_err();
+    assert!(
+        error.to_string().to_lowercase().contains("check"),
+        "{error}"
+    );
+
+    let total: i64 = connection
+        .query_row("SELECT COUNT(*) FROM auditoria_cambios", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(total, 3);
 }
 
 #[test]

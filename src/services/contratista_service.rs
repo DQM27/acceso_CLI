@@ -1,7 +1,7 @@
 use chrono::{DateTime, NaiveDate, Utc};
 
 use crate::database::error::DatabaseError;
-use crate::database::queries::auditoria_contratistas::AuditoriaContratistasWriter;
+use crate::database::queries::auditoria::{AuditoriaWriter, EntidadAuditada};
 use crate::database::queries::contratistas::{
     ContratistasQuery, FiltroContratistas, PaginaContratistas,
 };
@@ -107,67 +107,102 @@ where
             .map_err(mapear_cedula_duplicada)
     }
 
-    pub fn actualizar_auditado<A: AuditoriaContratistasWriter + ?Sized>(
+    #[allow(clippy::too_many_arguments)]
+    pub fn actualizar_auditado<A: AuditoriaWriter + ?Sized>(
         &self,
         id: i64,
         datos: DatosActualizacionContratista,
         actor_id: i64,
+        actor_nombre: &str,
         fecha_hora: DateTime<Utc>,
         auditoria: &A,
     ) -> Result<(), ContratistaServiceError> {
         let actual = self.buscar_por_id(id)?;
         let cedula_anterior = actual.cedula.clone();
+        let nombre_anterior = actual.nombre.clone();
+        let empresa_anterior = actual.empresa_id;
         let tipo_anterior = actual.tipo_ingreso.as_str_sql().to_owned();
         let fecha_anterior = actual
             .fecha_vencimiento_praind
             .map(|fecha| fecha.format("%Y-%m-%d").to_string());
+        let ruta_anterior = actual.es_personal_ruta;
         let acceso_anterior = actual.tiene_acceso;
         let contratista = self.construir_actualizacion(actual, datos)?;
         let cedula_nueva = contratista.cedula.clone();
+        let nombre_nuevo = contratista.nombre.clone();
+        let empresa_nueva = contratista.empresa_id;
         let tipo_nuevo = contratista.tipo_ingreso.as_str_sql().to_owned();
         let fecha_nueva = contratista
             .fecha_vencimiento_praind
             .map(|fecha| fecha.format("%Y-%m-%d").to_string());
+        let ruta_nueva = contratista.es_personal_ruta;
         let acceso_nuevo = contratista.tiene_acceso;
 
         self.contratistas
             .actualizar(&contratista)
             .map_err(mapear_cedula_duplicada)?;
-        if cedula_anterior != cedula_nueva {
+
+        // `entidad_nombre` es el nombre YA actualizado (post-guardado) en
+        // cada fila de este lote de cambios — así todas las filas de una
+        // misma edición (incluida la que audita el propio cambio de
+        // nombre) identifican a la misma persona de la misma forma.
+        let registrar = |campo: &str, anterior: Option<&str>, nuevo: Option<&str>| {
             auditoria.registrar_cambio(
                 fecha_hora,
                 actor_id,
+                actor_nombre,
+                EntidadAuditada::Contratista,
                 id,
-                "cedula",
-                Some(&cedula_anterior),
-                Some(&cedula_nueva),
+                &nombre_nuevo,
+                campo,
+                anterior,
+                nuevo,
+            )
+        };
+        if cedula_anterior != cedula_nueva {
+            registrar("cedula", Some(&cedula_anterior), Some(&cedula_nueva))?;
+        }
+        if nombre_anterior != nombre_nuevo {
+            registrar("nombre", Some(&nombre_anterior), Some(&nombre_nuevo))?;
+        }
+        if empresa_anterior != empresa_nueva {
+            // Nombre de la empresa en vez del id crudo — mucho más legible
+            // en la auditoría; si por lo que sea ya no se puede resolver
+            // (no debería pasar, `empresa_id` es `NOT NULL REFERENCES`),
+            // cae al id como texto en vez de fallar el guardado entero.
+            let nombre_empresa = |empresa_id: i64| -> String {
+                self.empresas
+                    .buscar_por_id(empresa_id)
+                    .ok()
+                    .flatten()
+                    .map(|empresa| empresa.nombre)
+                    .unwrap_or_else(|| empresa_id.to_string())
+            };
+            registrar(
+                "empresa_id",
+                Some(&nombre_empresa(empresa_anterior)),
+                Some(&nombre_empresa(empresa_nueva)),
             )?;
         }
         if tipo_anterior != tipo_nuevo {
-            auditoria.registrar_cambio(
-                fecha_hora,
-                actor_id,
-                id,
-                "tipo_ingreso",
-                Some(&tipo_anterior),
-                Some(&tipo_nuevo),
-            )?;
+            registrar("tipo_ingreso", Some(&tipo_anterior), Some(&tipo_nuevo))?;
         }
         if fecha_anterior != fecha_nueva {
-            auditoria.registrar_cambio(
-                fecha_hora,
-                actor_id,
-                id,
+            registrar(
                 "fecha_vencimiento_praind",
                 fecha_anterior.as_deref(),
                 fecha_nueva.as_deref(),
             )?;
         }
+        if ruta_anterior != ruta_nueva {
+            registrar(
+                "es_personal_ruta",
+                Some(texto_si_no(ruta_anterior)),
+                Some(texto_si_no(ruta_nueva)),
+            )?;
+        }
         if acceso_anterior != acceso_nuevo {
-            auditoria.registrar_cambio(
-                fecha_hora,
-                actor_id,
-                id,
+            registrar(
                 "tiene_acceso",
                 Some(texto_estado_acceso(acceso_anterior)),
                 Some(texto_estado_acceso(acceso_nuevo)),
@@ -265,6 +300,10 @@ fn texto_estado_acceso(tiene_acceso: bool) -> &'static str {
     } else {
         "DESHABILITADO"
     }
+}
+
+fn texto_si_no(valor: bool) -> &'static str {
+    if valor { "SI" } else { "NO" }
 }
 
 fn mapear_cedula_duplicada(error: DatabaseError) -> ContratistaServiceError {

@@ -1,9 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::{
-    database::queries::auditoria_contratistas::{
-        CambioContratistaAuditado, LIMITE_AUDITORIA_PREDETERMINADO, PaginaAuditoriaContratistas,
-    },
+    database::queries::auditoria::{CambioAuditado, LIMITE_AUDITORIA_PREDETERMINADO, PaginaAuditoria},
     tui::ui_kit::{StandardCommand, mover_seleccion, standard_command},
 };
 
@@ -23,7 +21,7 @@ pub enum AccionAuditoria {
 
 #[derive(Debug, Default)]
 pub struct AuditoriaState {
-    pub(super) items: Vec<CambioContratistaAuditado>,
+    pub(super) items: Vec<CambioAuditado>,
     pub(super) total: usize,
     pub(super) offset: usize,
     pub(super) seleccion: Option<usize>,
@@ -37,7 +35,7 @@ impl AuditoriaState {
         AccionAuditoria::Cargar { offset: 0 }
     }
 
-    pub fn completar(&mut self, resultado: Result<PaginaAuditoriaContratistas, String>) {
+    pub fn completar(&mut self, resultado: Result<PaginaAuditoria, String>) {
         match resultado {
             Ok(pagina) => {
                 self.items = pagina.items;

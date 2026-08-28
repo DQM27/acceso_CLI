@@ -1,4 +1,5 @@
 use super::*;
+use crate::database::queries::auditoria::EntidadAuditada;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 fn tecla(code: KeyCode) -> KeyEvent {
@@ -24,18 +25,17 @@ fn pagina_siguiente_respeta_el_total_real() {
     };
     state
         .items
-        .resize_with(LIMITE_AUDITORIA_PREDETERMINADO, || {
-            CambioContratistaAuditado {
-                id: 1,
-                fecha_hora: chrono::Utc::now(),
-                usuario_id: 1,
-                usuario_nombre: "Root".into(),
-                contratista_id: 1,
-                contratista_nombre: "Persona".into(),
-                campo: "tipo_ingreso".into(),
-                valor_anterior: Some("SWAT".into()),
-                valor_nuevo: Some("IN_HOUSE".into()),
-            }
+        .resize_with(LIMITE_AUDITORIA_PREDETERMINADO, || CambioAuditado {
+            id: 1,
+            fecha_hora: chrono::Utc::now(),
+            usuario_id: 1,
+            usuario_nombre: "Root".into(),
+            entidad: EntidadAuditada::Contratista,
+            entidad_id: 1,
+            entidad_nombre: "Persona".into(),
+            campo: "tipo_ingreso".into(),
+            valor_anterior: Some("SWAT".into()),
+            valor_nuevo: Some("IN_HOUSE".into()),
         });
     assert_eq!(
         state.handle_key(tecla(KeyCode::PageDown)),
@@ -49,14 +49,15 @@ fn render_usa_hora_de_costa_rica_y_el_orden_operativo_de_columnas() {
     use ratatui::{Terminal, backend::TestBackend};
 
     let mut state = AuditoriaState::default();
-    state.completar(Ok(PaginaAuditoriaContratistas {
-        items: vec![CambioContratistaAuditado {
+    state.completar(Ok(PaginaAuditoria {
+        items: vec![CambioAuditado {
             id: 1,
             fecha_hora: Utc.with_ymd_and_hms(2026, 8, 20, 22, 13, 0).unwrap(),
             usuario_id: 1,
             usuario_nombre: "Daniel Quintana".into(),
-            contratista_id: 1,
-            contratista_nombre: "Omar Pasos Leon".into(),
+            entidad: EntidadAuditada::Contratista,
+            entidad_id: 1,
+            entidad_nombre: "Omar Pasos Leon".into(),
             campo: "tiene_acceso".into(),
             valor_anterior: Some("HABILITADO".into()),
             valor_nuevo: Some("DESHABILITADO".into()),
@@ -93,27 +94,29 @@ fn render_usa_hora_de_costa_rica_y_el_orden_operativo_de_columnas() {
 
     assert!(texto.contains("FECHA Y HORA (CR)"));
     assert!(texto.contains("20/08/2026 16:13"));
+    assert!(texto.contains("Omar Pasos Leon (contratista)"));
     assert!(texto.contains("Acceso: Habilitado → Deshabilitado"));
     let encabezado = texto
         .lines()
         .find(|linea| linea.contains("FECHA Y HORA (CR)"))
         .unwrap();
     let fecha = encabezado.find("FECHA Y HORA (CR)").unwrap();
-    let contratista = encabezado.find("CONTRATISTA").unwrap();
+    let entidad = encabezado.find("ENTIDAD").unwrap();
     let cambio = encabezado.find("CAMBIO REALIZADO").unwrap();
     let usuario = encabezado.find("MODIFICADO POR").unwrap();
-    assert!(fecha < contratista && contratista < cambio && cambio < usuario);
+    assert!(fecha < entidad && entidad < cambio && cambio < usuario);
 }
 
 #[test]
 fn cambio_de_praind_usa_la_convencion_de_fecha_de_la_ui() {
-    let cambio = CambioContratistaAuditado {
+    let cambio = CambioAuditado {
         id: 1,
         fecha_hora: chrono::Utc::now(),
         usuario_id: 1,
         usuario_nombre: "Root".into(),
-        contratista_id: 1,
-        contratista_nombre: "Persona".into(),
+        entidad: EntidadAuditada::Contratista,
+        entidad_id: 1,
+        entidad_nombre: "Persona".into(),
         campo: "fecha_vencimiento_praind".into(),
         valor_anterior: Some("2028-05-01".into()),
         valor_nuevo: Some("2026-05-01".into()),
@@ -127,13 +130,14 @@ fn cambio_de_praind_usa_la_convencion_de_fecha_de_la_ui() {
 
 #[test]
 fn cambio_de_cedula_usa_una_etiqueta_legible() {
-    let cambio = CambioContratistaAuditado {
+    let cambio = CambioAuditado {
         id: 1,
         fecha_hora: chrono::Utc::now(),
         usuario_id: 1,
         usuario_nombre: "Administradora".into(),
-        contratista_id: 1,
-        contratista_nombre: "Persona".into(),
+        entidad: EntidadAuditada::Contratista,
+        entidad_id: 1,
+        entidad_nombre: "Persona".into(),
         campo: "cedula".into(),
         valor_anterior: Some("1-1111-1111".into()),
         valor_nuevo: Some("1-2222-2222".into()),
@@ -143,4 +147,22 @@ fn cambio_de_cedula_usa_una_etiqueta_legible() {
         render::descripcion_cambio(&cambio),
         "Cédula: 1-1111-1111 → 1-2222-2222"
     );
+}
+
+#[test]
+fn cambio_de_password_no_muestra_valores() {
+    let cambio = CambioAuditado {
+        id: 1,
+        fecha_hora: chrono::Utc::now(),
+        usuario_id: 1,
+        usuario_nombre: "Root".into(),
+        entidad: EntidadAuditada::Usuario,
+        entidad_id: 2,
+        entidad_nombre: "Operador".into(),
+        campo: "password".into(),
+        valor_anterior: None,
+        valor_nuevo: None,
+    };
+
+    assert_eq!(render::descripcion_cambio(&cambio), "Contraseña actualizada");
 }

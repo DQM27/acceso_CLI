@@ -51,3 +51,39 @@ resuelve.** Si se descarta en vez de hacerse, se marca `[x]` igual con una nota 
   exportación avanzado más adelante, con el usuario definiendo primero qué configurar
   (tipografía general, Gafete como celda numérica en vez de texto, bordes/zebra en filas de
   datos, u otra cosa puntual).
+
+## Pantallas del plan original (`docs/plan-tauri.md`, grupo 4-5) aún sin construir
+
+- [x] **Auditoría — genérica (contratistas, empresas, usuarios), no sólo contratistas.**
+  Pantalla `desktop/src/pantallas/Auditoria.tsx` agregada (2026-08-28), ampliada el mismo
+  día a las tres entidades — decisión explícita del usuario, incluyendo `nombre`/`empresa_id`
+  de Contratista (antes no se auditaban) y un marcador de "se cambió la contraseña" para
+  Usuario (sólo fecha, sin valores, a propósito). Mismo patrón que Historial: fetch-all sin
+  paginado (`AppCore::buscar_auditoria_completo`, núcleo) + AG Grid virtualiza del lado del
+  cliente, un solo buscador (`quickFilterText`), sin exportación (no se pidió). Columnas
+  separadas (Fecha, Hora, Entidad, Tipo, Campo, Valor anterior, Valor nuevo, Modificado por)
+  en vez del texto combinado "Campo: antes → después" que usa `--comandos`/TUI clásica —
+  mejor para ordenar/buscar en una grilla.
+  - Tabla vieja `auditoria_contratistas` reemplazada por `auditoria_cambios` (genérica,
+    `entidad`/`entidad_id`/`entidad_nombre` + snapshot de `usuario_nombre`/`entidad_nombre`
+    en la propia fila en vez de `JOIN` en vivo — antes un contratista renombrado/borrado le
+    hacía perder sentido a filas viejas) — `MIGRACION_13` en `src/database/schema.rs`. Los
+    datos existentes eran de prueba, se descartaron sin migrar (decisión explícita).
+  - Sin filtro por entidad/fecha/tipo de cambio (ninguna de las otras dos interfaces lo tiene
+    tampoco hoy — `FiltroAuditoria` sólo soporta `limite`/`offset`); se agrega si hace falta
+    más adelante.
+
+- [x] **Respaldos — descartado de la GUI a propósito (2026-08-28).** Decisión explícita del
+  usuario, por seguridad: Respaldos se queda exclusivo de la consola (`--comandos`/TUI
+  clásica), no se construye una pantalla en la GUI. No es un "todavía no" — es la decisión
+  final salvo que el usuario lo retome explícitamente.
+
+- [x] **RBAC visual en el sidebar.** Resuelto (2026-08-28): `SECCIONES` en `App.tsx` ahora
+  acepta un campo opcional `rolesPermitidos: RolUsuario[]` — sección sin ese campo es
+  visible para cualquier rol logueado, con el campo se filtra contra `sesion.rol`
+  (`seccionesVisibles`, antes de renderizar `.shell-nav`). Sólo "Auditoría" lo usa hoy
+  (`["Root", "Administrador"]`, espejo de `RolUsuario::puede(Operacion::VerAuditoria)` en
+  `src/domain/autorizacion.rs`) — decisión explícita del usuario de que el resto de las
+  pantallas no necesita ocultarse por rol (las acciones puntuales restringidas adentro,
+  como activar/desactivar, ya las rechaza el comando correspondiente sin necesidad de
+  esconder la sección entera).

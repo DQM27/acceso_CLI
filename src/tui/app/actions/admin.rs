@@ -133,9 +133,9 @@ impl App {
                         .sesion
                         .as_ref()
                         .ok_or_else(|| "No hay una sesión activa".to_owned())?;
-                    core.buscar_auditoria_contratistas(
+                    core.buscar_auditoria(
                         actor,
-                        &crate::database::queries::auditoria_contratistas::FiltroAuditoriaContratistas {
+                        &crate::database::queries::auditoria::FiltroAuditoria {
                             offset,
                             ..Default::default()
                         },

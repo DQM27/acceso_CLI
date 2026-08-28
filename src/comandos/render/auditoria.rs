@@ -1,14 +1,14 @@
-//! Tabla de `/auditoria` — cambios auditados de contratistas, sólo lectura.
-//! Mismo estilo visual que `/activos` (encabezado en negrita, marcador `›`,
-//! pie con el total), pero con columnas fijas: a diferencia de Historial no
-//! hay filtro ni exportación, así que no se justifica un selector de
-//! columnas (F4) — son siempre las mismas cuatro.
+//! Tabla de `/auditoria` — cambios auditados de contratistas, empresas y
+//! usuarios, sólo lectura. Mismo estilo visual que `/activos` (encabezado en
+//! negrita, marcador `›`, pie con el total), pero con columnas fijas: a
+//! diferencia de Historial no hay filtro ni exportación, así que no se
+//! justifica un selector de columnas (F4) — son siempre las mismas cuatro.
 
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
 use crate::comandos::columnas::Columna;
-use crate::database::queries::auditoria_contratistas::CambioContratistaAuditado;
+use crate::database::queries::auditoria::CambioAuditado;
 use crate::tiempo::a_costa_rica;
 
 use super::estilos::{estilo_seleccion, muted};
@@ -17,18 +17,18 @@ use super::tabla::{anchos_columnas, fila_columnas};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ColumnaAuditoria {
     Fecha,
-    Contratista,
+    Entidad,
     Cambio,
     Usuario,
 }
 
 impl Columna for ColumnaAuditoria {
-    const TODAS: &'static [Self] = &[Self::Fecha, Self::Contratista, Self::Cambio, Self::Usuario];
+    const TODAS: &'static [Self] = &[Self::Fecha, Self::Entidad, Self::Cambio, Self::Usuario];
 
     fn etiqueta(self) -> &'static str {
         match self {
             Self::Fecha => "Fecha y hora",
-            Self::Contratista => "Contratista",
+            Self::Entidad => "Entidad",
             Self::Cambio => "Cambio realizado",
             Self::Usuario => "Modificado por",
         }
@@ -37,7 +37,7 @@ impl Columna for ColumnaAuditoria {
     fn clave(self) -> &'static str {
         match self {
             Self::Fecha => "fecha",
-            Self::Contratista => "contratista",
+            Self::Entidad => "entidad",
             Self::Cambio => "cambio",
             Self::Usuario => "usuario",
         }
@@ -47,41 +47,58 @@ impl Columna for ColumnaAuditoria {
 fn ancho_fijo(columna: ColumnaAuditoria) -> Option<usize> {
     match columna {
         ColumnaAuditoria::Fecha => Some(18),
-        ColumnaAuditoria::Contratista | ColumnaAuditoria::Cambio | ColumnaAuditoria::Usuario => {
-            None
-        }
+        ColumnaAuditoria::Entidad | ColumnaAuditoria::Cambio | ColumnaAuditoria::Usuario => None,
     }
 }
 
 fn ancho_maximo(columna: ColumnaAuditoria) -> usize {
     match columna {
-        ColumnaAuditoria::Contratista => 24,
+        ColumnaAuditoria::Entidad => 26,
         ColumnaAuditoria::Usuario => 26,
         ColumnaAuditoria::Cambio => 60,
         ColumnaAuditoria::Fecha => 18,
     }
 }
 
-fn valor(item: &CambioContratistaAuditado, columna: ColumnaAuditoria) -> String {
+fn valor(item: &CambioAuditado, columna: ColumnaAuditoria) -> String {
     match columna {
         ColumnaAuditoria::Fecha => a_costa_rica(item.fecha_hora)
             .format("%d/%m/%Y %H:%M")
             .to_string(),
-        ColumnaAuditoria::Contratista => item.contratista_nombre.clone(),
+        ColumnaAuditoria::Entidad => format!("{} ({})", item.entidad_nombre, texto_entidad(item)),
         ColumnaAuditoria::Cambio => descripcion_cambio(item),
         ColumnaAuditoria::Usuario => item.usuario_nombre.clone(),
     }
 }
 
+fn texto_entidad(item: &CambioAuditado) -> &'static str {
+    use crate::database::queries::auditoria::EntidadAuditada;
+    match item.entidad {
+        EntidadAuditada::Contratista => "contratista",
+        EntidadAuditada::Empresa => "empresa",
+        EntidadAuditada::Usuario => "usuario",
+    }
+}
+
 /// Reescrito de `tui::auditoria::render::descripcion_cambio` (DEC-002/
 /// DEC-014: `src/tui/` no se toca ni se comparte) — mismas etiquetas y
-/// formato "Campo: antes → después".
-fn descripcion_cambio(item: &CambioContratistaAuditado) -> String {
+/// formato "Campo: antes → después", salvo `password` (marcador de evento
+/// sin valores, ver `UsuarioService::cambiar_password_con_hash_auditado`):
+/// ahí no hay antes/después que mostrar, sólo que ocurrió.
+fn descripcion_cambio(item: &CambioAuditado) -> String {
+    if item.campo == "password" {
+        return "Contraseña actualizada".to_owned();
+    }
     let etiqueta = match item.campo.as_str() {
         "cedula" => "Cédula",
+        "nombre" => "Nombre",
+        "empresa_id" => "Empresa",
         "tipo_ingreso" => "Tipo de ingreso",
         "fecha_vencimiento_praind" => "Vencimiento PRAIND",
+        "es_personal_ruta" => "Personal de ruta",
         "tiene_acceso" => "Acceso",
+        "rol" => "Rol",
+        "activo" => "Activo",
         _ => item.campo.as_str(),
     };
     let anterior = valor_presentable(&item.campo, item.valor_anterior.as_deref());
@@ -105,12 +122,14 @@ fn valor_presentable(campo: &str, valor: Option<&str>) -> String {
             .unwrap_or_else(|_| valor.to_owned()),
         ("tiene_acceso", "HABILITADO") => "Habilitado".to_owned(),
         ("tiene_acceso", "DESHABILITADO") => "Deshabilitado".to_owned(),
+        ("es_personal_ruta" | "activo", "SI") => "Sí".to_owned(),
+        ("es_personal_ruta" | "activo", "NO") => "No".to_owned(),
         _ => valor.to_owned(),
     }
 }
 
 pub(super) fn lineas_tabla_auditoria(
-    items: &[CambioContratistaAuditado],
+    items: &[CambioAuditado],
     total: usize,
     seleccion: usize,
     ancho: u16,

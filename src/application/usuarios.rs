@@ -4,6 +4,7 @@
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 use crate::database::error::DatabaseError;
+use crate::database::queries::auditoria::SqliteAuditoria;
 use crate::database::queries::usuarios::{FiltroUsuarios, SqliteUsuariosQuery, UsuarioResumen};
 use crate::database::repositories::usuario_repository::{
     SqliteUsuarioRepository, UsuarioRepository,
@@ -137,7 +138,15 @@ impl AppCore {
             return Err(UsuarioServiceError::OperacionNoAutorizada);
         }
         UsuarioService::new(&SqliteUsuarioRepository::new(&transaction))
-            .actualizar_administracion(id, input, activo)?;
+            .actualizar_administracion_auditada(
+                id,
+                input,
+                activo,
+                actor_actual.id,
+                &actor_actual.nombre,
+                self.reloj.ahora_utc(),
+                &SqliteAuditoria::new(&transaction),
+            )?;
         transaction.commit().map_err(DatabaseError::from)?;
         Ok(())
     }
@@ -167,9 +176,15 @@ impl AppCore {
         let transaction =
             Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
                 .map_err(DatabaseError::from)?;
-        verificar_gestion_usuario(&transaction, actor, id, false)?;
-        UsuarioService::new(&SqliteUsuarioRepository::new(&transaction))
-            .cambiar_password(id, password)?;
+        let actor_actual = verificar_gestion_usuario(&transaction, actor, id, false)?;
+        UsuarioService::new(&SqliteUsuarioRepository::new(&transaction)).cambiar_password_auditado(
+            id,
+            password,
+            actor_actual.id,
+            &actor_actual.nombre,
+            self.reloj.ahora_utc(),
+            &SqliteAuditoria::new(&transaction),
+        )?;
         transaction.commit().map_err(DatabaseError::from)?;
         Ok(())
     }
@@ -194,9 +209,16 @@ impl AppCore {
         let transaction =
             Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
                 .map_err(DatabaseError::from)?;
-        verificar_gestion_usuario(&transaction, actor, id, false)?;
+        let actor_actual = verificar_gestion_usuario(&transaction, actor, id, false)?;
         UsuarioService::new(&SqliteUsuarioRepository::new(&transaction))
-            .cambiar_password_con_hash(id, password_hash)?;
+            .cambiar_password_con_hash_auditado(
+                id,
+                password_hash,
+                actor_actual.id,
+                &actor_actual.nombre,
+                self.reloj.ahora_utc(),
+                &SqliteAuditoria::new(&transaction),
+            )?;
         transaction.commit().map_err(DatabaseError::from)?;
         Ok(())
     }
@@ -239,11 +261,15 @@ impl AppCore {
         ) {
             return Err(UsuarioServiceError::OperacionNoAutorizada);
         }
-        UsuarioService::new(&SqliteUsuarioRepository::new(&transaction)).cambiar_password_propio(
-            actor_actual.id,
-            password_actual,
-            nueva_password,
-        )?;
+        UsuarioService::new(&SqliteUsuarioRepository::new(&transaction))
+            .cambiar_password_propio_auditado(
+                actor_actual.id,
+                password_actual,
+                nueva_password,
+                &actor_actual.nombre,
+                self.reloj.ahora_utc(),
+                &SqliteAuditoria::new(&transaction),
+            )?;
         transaction.commit().map_err(DatabaseError::from)?;
         Ok(())
     }
@@ -286,7 +312,14 @@ impl AppCore {
             return Err(UsuarioServiceError::PasswordActualIncorrecta);
         }
         UsuarioService::new(&SqliteUsuarioRepository::new(&transaction))
-            .cambiar_password_con_hash(actor_actual.id, nuevo_hash)?;
+            .cambiar_password_con_hash_auditado(
+                actor_actual.id,
+                nuevo_hash,
+                actor_actual.id,
+                &actor_actual.nombre,
+                self.reloj.ahora_utc(),
+                &SqliteAuditoria::new(&transaction),
+            )?;
         transaction.commit().map_err(DatabaseError::from)?;
         Ok(())
     }
@@ -300,14 +333,17 @@ impl AppCore {
         let transaction =
             Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
                 .map_err(DatabaseError::from)?;
-        verificar_gestion_usuario(&transaction, actor, id, true)?;
+        let actor_actual = verificar_gestion_usuario(&transaction, actor, id, true)?;
         let repositorio = SqliteUsuarioRepository::new(&transaction);
         let servicio = UsuarioService::new(&repositorio);
-        if activo {
-            servicio.activar(id)?;
-        } else {
-            servicio.desactivar(id)?;
-        }
+        servicio.establecer_activo_auditado(
+            id,
+            activo,
+            actor_actual.id,
+            &actor_actual.nombre,
+            self.reloj.ahora_utc(),
+            &SqliteAuditoria::new(&transaction),
+        )?;
         transaction.commit().map_err(DatabaseError::from)?;
         Ok(())
     }

@@ -95,9 +95,18 @@ function identidad(columna: ColDef<unknown>): string | undefined {
 export interface TablaProps<T> {
   columnas: ColDef<T>[];
   filas: T[];
-  /** Controles propios de la pantalla (filtros) — se muestran en la misma
-   * línea que "Columnas ▾", a la izquierda. */
+  /** Controles propios de la pantalla (ej. buscador, "+ Nuevo…") — se
+   * muestran en la misma línea que "Columnas ▾", a la izquierda. */
   controles?: ReactNode;
+  /** Igual que `controles`, pero a la derecha, junto a "Columnas ▾" (ej. un
+   * botón de acción que tiene más sentido cerca del selector que mezclado
+   * con el buscador de la izquierda). */
+  accionesDerecha?: ReactNode;
+  /** Texto de búsqueda global (una sola caja, busca en todas las columnas)
+   * — alternativa a `filtrosPorColumna` para listas donde un filtro por
+   * columna es más de lo que hace falta. La pantalla es dueña del estado
+   * del input; esto sólo se lo pasa a AG Grid (`quickFilterText`). */
+  busqueda?: string;
   /** Checkbox por fila + checkbox de encabezado para seleccionar varias a la
    * vez. Opcional (no toda pantalla necesita selección múltiple) — cuando se
    * activa, `onSeleccionCambia` avisa a la pantalla qué filas quedaron
@@ -143,6 +152,8 @@ function TablaBase<T>(
     columnas,
     filas,
     controles,
+    accionesDerecha,
+    busqueda,
     seleccionMultiple,
     onSeleccionCambia,
     onCeldaEditada,
@@ -248,55 +259,70 @@ function TablaBase<T>(
           marginBottom: "0.5rem",
         }}
       >
-        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", flex: 1 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            gap: "0.75rem",
+            flexWrap: "wrap",
+            flex: 1,
+          }}
+        >
           {controles}
         </div>
 
-        <div style={{ position: "relative" }}>
-          <button type="button" className="boton" onClick={() => setSelectorAbierto((a) => !a)}>
-            Columnas ▾
-          </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          {accionesDerecha}
 
-          {selectorAbierto && (
-            <>
-              {/* Backdrop invisible: cierra el selector al hacer click afuera. */}
-              <div
-                onClick={() => setSelectorAbierto(false)}
-                style={{ position: "fixed", inset: 0, zIndex: 9 }}
-              />
-              <div
-                className="tarjeta"
-                style={{
-                  position: "absolute",
-                  top: "2.35rem",
-                  right: 0,
-                  zIndex: 10,
-                  padding: "0.75rem 1rem",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.4rem",
-                  minWidth: "13rem",
-                }}
-              >
-                {columnas
-                  .map((columna) => ({ columna, clave: identidad(columna as ColDef<unknown>) }))
-                  .filter(
-                    (entrada): entrada is { columna: ColDef<T>; clave: string } =>
-                      entrada.clave !== undefined,
-                  )
-                  .map(({ columna, clave }) => (
-                    <label key={clave} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <input
-                        type="checkbox"
-                        checked={!ocultas.has(clave)}
-                        onChange={() => alternar(clave)}
-                      />
-                      {columna.headerName ?? clave}
-                    </label>
-                  ))}
-              </div>
-            </>
-          )}
+          <div style={{ position: "relative" }}>
+            <button type="button" className="boton" onClick={() => setSelectorAbierto((a) => !a)}>
+              Columnas ▾
+            </button>
+
+            {selectorAbierto && (
+              <>
+                {/* Backdrop invisible: cierra el selector al hacer click afuera. */}
+                <div
+                  onClick={() => setSelectorAbierto(false)}
+                  style={{ position: "fixed", inset: 0, zIndex: 9 }}
+                />
+                <div
+                  className="tarjeta"
+                  style={{
+                    position: "absolute",
+                    top: "2.35rem",
+                    right: 0,
+                    zIndex: 10,
+                    padding: "0.75rem 1rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.4rem",
+                    minWidth: "13rem",
+                  }}
+                >
+                  {columnas
+                    .map((columna) => ({ columna, clave: identidad(columna as ColDef<unknown>) }))
+                    .filter(
+                      (entrada): entrada is { columna: ColDef<T>; clave: string } =>
+                        entrada.clave !== undefined,
+                    )
+                    .map(({ columna, clave }) => (
+                      <label
+                        key={clave}
+                        style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!ocultas.has(clave)}
+                          onChange={() => alternar(clave)}
+                        />
+                        {columna.headerName ?? clave}
+                      </label>
+                    ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -306,6 +332,7 @@ function TablaBase<T>(
           defaultColDef={filtrosPorColumna ? columnaPorDefectoConFiltro : columnaPorDefecto}
           rowData={filas}
           columnDefs={columnasConVisibilidad}
+          quickFilterText={busqueda}
           overlayNoRowsTemplate={MENSAJE_SIN_FILAS}
           // Resguardo además de memoizar `columnas` en cada pantalla: si de
           // todos modos algo le pasa un `columnDefs` nuevo, esto evita que

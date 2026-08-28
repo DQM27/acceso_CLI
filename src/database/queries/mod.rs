@@ -12,7 +12,7 @@ pub mod usuarios;
 /// (es un tope de seguridad, no una página) — no comparten este criterio.
 pub(crate) const LIMITE_LISTADO_PREDETERMINADO: usize = 100;
 pub(crate) const LIMITE_LISTADO_MAXIMO: usize = 500;
-pub mod auditoria_contratistas;
+pub mod auditoria;
 
 /// Filtro de igualdad que también admite su negación (`-clave:valor` en el
 /// lenguaje `clave:valor` de la TUI) — `Incluye(v)` arma `col = v`,

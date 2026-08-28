@@ -3,9 +3,7 @@
 use rusqlite::{Transaction, TransactionBehavior};
 
 use crate::database::error::DatabaseError;
-use crate::database::queries::auditoria_contratistas::{
-    FiltroAuditoriaContratistas, PaginaAuditoriaContratistas, SqliteAuditoriaContratistas,
-};
+use crate::database::queries::auditoria::{CambioAuditado, FiltroAuditoria, SqliteAuditoria};
 use crate::database::queries::contratistas::{
     FiltroContratistas, PaginaContratistas, SqliteContratistasQuery,
 };
@@ -31,17 +29,55 @@ impl AppCore {
         ContratistaConsultaService::new(&query).buscar_para_tabla(filtro)
     }
 
-    pub fn buscar_auditoria_contratistas(
+    /// Auditoría genérica (contratistas, empresas, usuarios — ver
+    /// `EntidadAuditada`, `src/database/queries/auditoria.rs`), no sólo de
+    /// contratistas. Sigue gateada por `Operacion::VerAuditoria`: da igual
+    /// de qué entidad sea el cambio, es la misma información sensible.
+    pub fn buscar_auditoria(
         &self,
         actor: &UsuarioSesion,
-        filtro: &FiltroAuditoriaContratistas,
-    ) -> Result<PaginaAuditoriaContratistas, ContratistaServiceError> {
+        filtro: &FiltroAuditoria,
+    ) -> Result<crate::database::queries::auditoria::PaginaAuditoria, ContratistaServiceError>
+    {
         let actor_actual = verificar_actor_activo(&self.connection, actor)?
             .ok_or(ContratistaServiceError::OperacionNoAutorizada)?;
         if !actor_actual.rol.puede(Operacion::VerAuditoria) {
             return Err(ContratistaServiceError::OperacionNoAutorizada);
         }
-        Ok(SqliteAuditoriaContratistas::new(&self.connection).buscar(filtro)?)
+        Ok(SqliteAuditoria::new(&self.connection).buscar(filtro)?)
+    }
+
+    /// Todo el conjunto en un solo `Vec`, no sólo una página — mismo
+    /// criterio que `buscar_historial_completo`
+    /// (`src/application/historial.rs`) para una interfaz que virtualiza del
+    /// lado del cliente (AG Grid) en vez de paginar por su cuenta. A
+    /// diferencia de historial, `FiltroAuditoria` no tiene un `corte_id` —
+    /// `auditoria_cambios` también es append-only, así que un cambio nuevo
+    /// insertado justo mientras se pagina podría, en teoría, correr una fila
+    /// entre páginas; caso raro (auditoría no se llena tan rápido como los
+    /// ingresos) y no hay mecanismo de corte que reutilizar sin agregarlo
+    /// primero a la consulta de abajo.
+    pub fn buscar_auditoria_completo(
+        &self,
+        actor: &UsuarioSesion,
+    ) -> Result<Vec<CambioAuditado>, ContratistaServiceError> {
+        let mut consulta = FiltroAuditoria {
+            limite: usize::MAX,
+            offset: 0,
+        };
+        let mut todos = Vec::new();
+        loop {
+            let pagina = self.buscar_auditoria(actor, &consulta)?;
+            if pagina.items.is_empty() {
+                break;
+            }
+            todos.extend(pagina.items);
+            if todos.len() >= pagina.total {
+                break;
+            }
+            consulta.offset = todos.len();
+        }
+        Ok(todos)
     }
 
     pub fn crear_contratista(
@@ -101,8 +137,9 @@ impl AppCore {
             id,
             datos,
             actor_actual.id,
+            &actor_actual.nombre,
             self.reloj.ahora_utc(),
-            &SqliteAuditoriaContratistas::new(&transaction),
+            &SqliteAuditoria::new(&transaction),
         )?;
         transaction
             .commit()
@@ -152,10 +189,17 @@ impl AppCore {
         let transaction =
             Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
                 .map_err(DatabaseError::from)?;
-        verificar_actor_activo(&transaction, actor)
+        let actor_actual = verificar_actor_activo(&transaction, actor)
             .map_err(EmpresaServiceError::Database)?
             .ok_or(EmpresaServiceError::OperacionNoAutorizada)?;
-        EmpresaService::new(&SqliteEmpresaRepository::new(&transaction)).actualizar(id, nombre)?;
+        EmpresaService::new(&SqliteEmpresaRepository::new(&transaction)).actualizar_auditado(
+            id,
+            nombre,
+            actor_actual.id,
+            &actor_actual.nombre,
+            self.reloj.ahora_utc(),
+            &SqliteAuditoria::new(&transaction),
+        )?;
         transaction
             .commit()
             .map_err(DatabaseError::from)
@@ -195,11 +239,14 @@ impl AppCore {
         }
         let repositorio = SqliteEmpresaRepository::new(&transaction);
         let servicio = EmpresaService::new(&repositorio);
-        if activa {
-            servicio.activar(id)?;
-        } else {
-            servicio.desactivar(id)?;
-        }
+        servicio.establecer_activo_auditado(
+            id,
+            activa,
+            actor_actual.id,
+            &actor_actual.nombre,
+            self.reloj.ahora_utc(),
+            &SqliteAuditoria::new(&transaction),
+        )?;
         transaction
             .commit()
             .map_err(DatabaseError::from)

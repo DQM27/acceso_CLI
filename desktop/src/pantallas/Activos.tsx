@@ -77,6 +77,7 @@ export default function Activos({
 }) {
   const [filas, setFilas] = useState<FilaActiva[]>([]);
   const [total, setTotal] = useState(0);
+  const [busqueda, setBusqueda] = useState("");
   const [seleccionadas, setSeleccionadas] = useState<FilaActiva[]>([]);
   const [confirmarSalidaMasiva, setConfirmarSalidaMasiva] = useState(false);
   const [procesando, setProcesando] = useState(false);
@@ -220,19 +221,7 @@ export default function Activos({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PantallaEncabezado
-        titulo="Ingresos activos"
-        acciones={
-          <>
-            <button className="boton" title="Ctrl+Shift+S" onClick={onAbrirSalida}>
-              Salida
-            </button>
-            <button className="boton" title="Ctrl+Shift+N" onClick={onAbrirNuevoIngreso}>
-              + Nuevo ingreso
-            </button>
-          </>
-        }
-      />
+      <PantallaEncabezado titulo="Ingresos activos" />
 
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         {seleccionadas.length > 0 && (
@@ -265,9 +254,29 @@ export default function Activos({
             id="activos"
             columnas={columnas}
             filas={filas}
-            filtrosPorColumna
+            busqueda={busqueda}
             seleccionMultiple
             onSeleccionCambia={setSeleccionadas}
+            controles={
+              <>
+                <button className="boton" title="Ctrl+Shift+N" onClick={onAbrirNuevoIngreso}>
+                  + Nuevo ingreso
+                </button>
+                <div className="campo" style={{ flex: "1 1 16rem" }}>
+                  Buscar
+                  <input
+                    placeholder="Cédula, nombre, empresa…"
+                    value={busqueda}
+                    onChange={(evento) => setBusqueda(evento.target.value)}
+                  />
+                </div>
+              </>
+            }
+            accionesDerecha={
+              <button className="boton" title="Ctrl+Shift+S" onClick={onAbrirSalida}>
+                Salida
+              </button>
+            }
           />
         </div>
         <p style={{ color: "var(--muted)", margin: 0 }}>{total} adentro</p>

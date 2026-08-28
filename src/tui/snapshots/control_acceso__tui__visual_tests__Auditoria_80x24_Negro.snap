@@ -1,5 +1,6 @@
 ---
 source: src/tui/visual_tests.rs
+assertion_line: 308
 expression: volcado
 ---
 === texto ===
@@ -8,7 +9,7 @@ expression: volcado
                                                                           ··:·· 
                            1  2  3  4  5  6  7  8  9                            
  ────────────────────────────────────────────────────────────────────────────── 
- FECHA Y HORA (CR)  CONTRATISTA    CAMBIO REALIZADO              MODIFICADO POR 
+ FECHA Y HORA (CR)  ENTIDAD        CAMBIO REALIZADO              MODIFICADO POR 
                                                                                 
                                                                                 
                                                                                 
@@ -61,7 +62,7 @@ expression: volcado
 "──────────────────────────────────────────────────────────────────────────────" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
 " " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
 " " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
-"FECHA Y HORA (CR)  CONTRATISTA    CAMBIO REALIZADO              MODIFICADO POR" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
+"FECHA Y HORA (CR)  ENTIDAD        CAMBIO REALIZADO              MODIFICADO POR" fg=Rgb(184, 177, 255) bg=Rgb(36, 36, 39) mod=BOLD
 " " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
 "                                                                                " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
 "                                                                                " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE

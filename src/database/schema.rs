@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 12;
+pub const SCHEMA_VERSION: i64 = 13;
 
 /// Identifica un archivo SQLite como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -121,6 +121,11 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
     if version == 11 {
         aplicar_migracion(&transaction, MIGRACION_12, 12)?;
         version = 12;
+    }
+
+    if version == 12 {
+        aplicar_migracion(&transaction, MIGRACION_13, 13)?;
+        version = 13;
     }
 
     if version != SCHEMA_VERSION {
@@ -861,4 +866,44 @@ ON auditoria_contratistas(fecha_hora DESC, id DESC);
 
 CREATE INDEX idx_auditoria_contratistas_contratista
 ON auditoria_contratistas(contratista_id, id DESC);
+"#;
+
+// Generaliza la auditoría de "sólo contratistas" a las tres entidades de
+// catálogo (contratistas, empresas, usuarios) en una tabla única en vez de
+// triplicar `auditoria_contratistas` por entidad — la GUI necesita mostrar
+// "todos los cambios" en una sola grilla. `usuario_nombre`/`entidad_nombre`
+// quedan como snapshot en la propia fila (a diferencia de antes, que
+// resolvía `contratista_nombre` con un JOIN en vivo a `contratistas`): así
+// un contratista/usuario renombrado o dado de baja no le hace perder
+// sentido a una fila de auditoría vieja. Decisión explícita del usuario:
+// los datos existentes en `auditoria_contratistas` son de prueba, no hace
+// falta migrarlos — se descartan.
+const MIGRACION_13: &str = r#"
+DROP TABLE auditoria_contratistas;
+
+CREATE TABLE auditoria_cambios (
+    id INTEGER PRIMARY KEY,
+    fecha_hora TEXT NOT NULL,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+    usuario_nombre TEXT NOT NULL,
+    entidad TEXT NOT NULL CHECK (entidad IN ('contratista', 'empresa', 'usuario')),
+    entidad_id INTEGER NOT NULL,
+    entidad_nombre TEXT NOT NULL,
+    campo TEXT NOT NULL,
+    valor_anterior TEXT,
+    valor_nuevo TEXT,
+    -- Bloquea registrar un "cambio" sin cambio real (anterior == nuevo,
+    -- ambos no nulos) — mismo backstop que tenía `auditoria_contratistas`.
+    -- La excepción es `valor_anterior IS NULL`: cubre tanto el caso ya
+    -- existente (ej. PRAIND sin fecha previa) como un marcador de evento
+    -- sin valores (ej. "se cambió la contraseña", donde sólo importa la
+    -- fecha — no hay antes/después que registrar).
+    CHECK (valor_anterior IS NOT valor_nuevo OR valor_anterior IS NULL)
+);
+
+CREATE INDEX idx_auditoria_cambios_fecha
+ON auditoria_cambios(fecha_hora DESC, id DESC);
+
+CREATE INDEX idx_auditoria_cambios_entidad
+ON auditoria_cambios(entidad, entidad_id, id DESC);
 "#;

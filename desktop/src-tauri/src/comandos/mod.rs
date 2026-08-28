@@ -22,6 +22,7 @@
 //!    "armar el DTO de entrada y llamar a `AppCore`", esa lógica va al
 //!    núcleo (`application`/`services`), no acá.
 
+pub mod auditoria;
 pub mod autenticacion;
 pub mod consola;
 pub mod contratistas;

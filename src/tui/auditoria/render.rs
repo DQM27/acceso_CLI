@@ -45,7 +45,7 @@ pub fn render(
     let tabs = OpcionMenu::barra_pestanas(sesion.rol, OpcionMenu::Auditoria);
     let shell = ScreenShell {
         product: "BRISAS CLI",
-        screen: "AUDITORÍA DE CONTRATISTAS",
+        screen: "AUDITORÍA DE CAMBIOS",
         context: &contexto,
         clock: &hora,
         status: &status,
@@ -63,7 +63,7 @@ pub fn render(
     let areas = shell.render(frame, area, theme);
     let encabezado = Row::new([
         "FECHA Y HORA (CR)",
-        "CONTRATISTA",
+        "ENTIDAD",
         "CAMBIO REALIZADO",
         "MODIFICADO POR",
     ])
@@ -75,7 +75,7 @@ pub fn render(
                     .format("%d/%m/%Y %H:%M")
                     .to_string(),
             ),
-            Cell::from(item.contratista_nombre.clone()),
+            Cell::from(format!("{} ({})", item.entidad_nombre, texto_entidad(item))),
             Cell::from(descripcion_cambio(item)),
             Cell::from(item.usuario_nombre.clone()),
         ])
@@ -99,14 +99,36 @@ pub fn render(
     );
 }
 
+fn texto_entidad(
+    item: &crate::database::queries::auditoria::CambioAuditado,
+) -> &'static str {
+    use crate::database::queries::auditoria::EntidadAuditada;
+    match item.entidad {
+        EntidadAuditada::Contratista => "contratista",
+        EntidadAuditada::Empresa => "empresa",
+        EntidadAuditada::Usuario => "usuario",
+    }
+}
+
+/// `password` es un marcador de evento sin valores (ver
+/// `UsuarioService::cambiar_password_con_hash_auditado`) — no hay
+/// antes/después que mostrar, sólo que ocurrió.
 pub(super) fn descripcion_cambio(
-    item: &crate::database::queries::auditoria_contratistas::CambioContratistaAuditado,
+    item: &crate::database::queries::auditoria::CambioAuditado,
 ) -> String {
+    if item.campo == "password" {
+        return "Contraseña actualizada".to_owned();
+    }
     let etiqueta = match item.campo.as_str() {
         "cedula" => "Cédula",
+        "nombre" => "Nombre",
+        "empresa_id" => "Empresa",
         "tipo_ingreso" => "Tipo de ingreso",
         "fecha_vencimiento_praind" => "Vencimiento PRAIND",
+        "es_personal_ruta" => "Personal de ruta",
         "tiene_acceso" => "Acceso",
+        "rol" => "Rol",
+        "activo" => "Activo",
         _ => item.campo.as_str(),
     };
     let anterior = valor_presentable(&item.campo, item.valor_anterior.as_deref());
@@ -130,6 +152,8 @@ fn valor_presentable(campo: &str, valor: Option<&str>) -> String {
             .unwrap_or_else(|_| valor.to_owned()),
         ("tiene_acceso", "HABILITADO") => "Habilitado".to_owned(),
         ("tiene_acceso", "DESHABILITADO") => "Deshabilitado".to_owned(),
+        ("es_personal_ruta" | "activo", "SI") => "Sí".to_owned(),
+        ("es_personal_ruta" | "activo", "NO") => "No".to_owned(),
         _ => valor.to_owned(),
     }
 }

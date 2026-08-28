@@ -5,9 +5,9 @@ expression: volcado
 === texto ===
                                                                                                                                             
  BRISAS CLI                                                                                                       Operador de prueba · ROOT 
- CONTROL DE ACCESO                                              AUDITORÍA DE CONTRATISTAS                                             ··:·· 
+ CONTROL DE ACCESO                                                AUDITORÍA DE CAMBIOS                                                ··:·· 
  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── 
- FECHA Y HORA (CR)  CONTRATISTA                   CAMBIO REALIZADO                                            MODIFICADO POR                
+ FECHA Y HORA (CR)  ENTIDAD                       CAMBIO REALIZADO                                            MODIFICADO POR                
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
@@ -54,7 +54,7 @@ expression: volcado
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "CONTROL DE ACCESO" fg=Rgb(105, 135, 111) bg=Black mod=NONE
 "                                   " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"           AUDITORÍA DE CONTRATISTAS           " fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+"             AUDITORÍA DE CAMBIOS              " fg=Rgb(91, 224, 123) bg=Black mod=BOLD
 "                                  " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "··:··" fg=Rgb(238, 184, 78) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
@@ -62,7 +62,7 @@ expression: volcado
 "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────" fg=Rgb(76, 119, 85) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"FECHA Y HORA (CR)  CONTRATISTA                   CAMBIO REALIZADO                                            MODIFICADO POR               " fg=Rgb(91, 224, 123) bg=Black mod=BOLD
+"FECHA Y HORA (CR)  ENTIDAD                       CAMBIO REALIZADO                                            MODIFICADO POR               " fg=Rgb(91, 224, 123) bg=Black mod=BOLD
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE

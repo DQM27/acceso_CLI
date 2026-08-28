@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Toaster } from "sonner";
-import { Building2, History, LogOut, UserCheck, UserCog, Users } from "lucide-react";
+import {
+  Building2,
+  ClipboardList,
+  History,
+  LogOut,
+  UserCheck,
+  UserCog,
+  Users,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import marca from "./assets/marca.png";
 import Login from "./pantallas/Login";
@@ -10,11 +18,12 @@ import Contratistas from "./pantallas/Contratistas";
 import Empresas from "./pantallas/Empresas";
 import Usuarios from "./pantallas/Usuarios";
 import Historial from "./pantallas/Historial";
+import Auditoria from "./pantallas/Auditoria";
 import NuevoIngresoModal from "./pantallas/NuevoIngresoModal";
 import SalidaModal from "./pantallas/SalidaModal";
 import Consola from "./pantallas/Consola";
 import { cerrarSesion, requiereConfiguracionInicial } from "./api";
-import type { UsuarioSesion } from "./api";
+import type { RolUsuario, UsuarioSesion } from "./api";
 
 type Pantalla =
   | { tipo: "cargando" }
@@ -67,12 +76,38 @@ export default function App() {
   );
 }
 
-type Seccion = "activos" | "historial" | "contratistas" | "empresas" | "usuarios";
+type Seccion =
+  | "activos"
+  | "historial"
+  | "contratistas"
+  | "auditoria"
+  | "empresas"
+  | "usuarios";
 
-const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
+/** `rolesPermitidos` ausente = visible para cualquier rol logueado. Sólo
+ * Auditoría lo restringe hoy — espejo de `RolUsuario::puede(VerAuditoria)`
+ * en `src/domain/autorizacion.rs` (Root y Administrador sí, Operador no).
+ * El resto de las pantallas no tiene una operación de sólo-lectura
+ * restringida por rol en el núcleo (algunas acciones puntuales adentro sí,
+ * ej. activar/desactivar, pero eso ya lo rechaza el comando — no hace falta
+ * ocultar la sección entera por eso). Si el núcleo agrega otra operación de
+ * rol para "ver X", el mismo patrón (agregar `rolesPermitidos` acá) alcanza
+ * — no hace falta un mecanismo más genérico todavía. */
+const SECCIONES: {
+  id: Seccion;
+  etiqueta: string;
+  Icono: LucideIcon;
+  rolesPermitidos?: RolUsuario[];
+}[] = [
   { id: "activos", etiqueta: "Ingresos activos", Icono: UserCheck },
   { id: "historial", etiqueta: "Historial", Icono: History },
   { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
+  {
+    id: "auditoria",
+    etiqueta: "Auditoría",
+    Icono: ClipboardList,
+    rolesPermitidos: ["Root", "Administrador"],
+  },
   { id: "empresas", etiqueta: "Empresas", Icono: Building2 },
   { id: "usuarios", etiqueta: "Usuarios", Icono: UserCog },
 ];
@@ -109,6 +144,10 @@ function Shell({
   useHotkeys("ctrl+shift+n", () => setModalNuevoIngreso(true), { preventDefault: true });
   useHotkeys("ctrl+shift+s", () => setModalSalida(true), { preventDefault: true });
 
+  const seccionesVisibles = SECCIONES.filter(
+    (item) => !item.rolesPermitidos || item.rolesPermitidos.includes(sesion.rol),
+  );
+
   return (
     <div style={{ display: "flex", height: "100%" }}>
       <nav className={`shell-sidebar ${colapsado ? "shell-sidebar-colapsada" : ""}`}>
@@ -133,7 +172,7 @@ function Shell({
         </div>
 
         <div className="shell-nav">
-          {SECCIONES.map(({ id, etiqueta, Icono }) => (
+          {seccionesVisibles.map(({ id, etiqueta, Icono }) => (
             <button
               key={id}
               onClick={() => setSeccion(id)}
@@ -204,6 +243,7 @@ function Shell({
         )}
         {seccion === "historial" && <Historial />}
         {seccion === "contratistas" && <Contratistas />}
+        {seccion === "auditoria" && <Auditoria />}
         {seccion === "empresas" && <Empresas />}
         {seccion === "usuarios" && <Usuarios />}
       </main>

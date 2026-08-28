@@ -1,4 +1,7 @@
+use chrono::{DateTime, Utc};
+
 use crate::database::error::DatabaseError;
+use crate::database::queries::auditoria::{AuditoriaWriter, EntidadAuditada};
 use crate::database::queries::usuarios::{FiltroUsuarios, UsuarioResumen, UsuariosQuery};
 use crate::database::repositories::usuario_repository::UsuarioRepository;
 use crate::models::usuario::{RolUsuario, Usuario};
@@ -234,6 +237,182 @@ where
             .map_err(mapear_escritura_usuario)
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub fn actualizar_administracion_auditada<A: AuditoriaWriter + ?Sized>(
+        &self,
+        id: i64,
+        input: ActualizarUsuarioInput,
+        activo: bool,
+        actor_id: i64,
+        actor_nombre: &str,
+        fecha_hora: DateTime<Utc>,
+        auditoria: &A,
+    ) -> Result<(), UsuarioServiceError> {
+        let mut usuario = self.buscar_por_id(id)?;
+        let cedula_anterior = usuario.cedula.clone();
+        let nombre_anterior = usuario.nombre.clone();
+        let rol_anterior = usuario.rol;
+        let activo_anterior = usuario.activo;
+
+        usuario.cedula =
+            normalizar_requerido(&input.cedula, UsuarioServiceError::CedulaVacia)?.into();
+        usuario.nombre =
+            normalizar_requerido(&input.nombre, UsuarioServiceError::NombreVacio)?.into();
+        usuario.rol = input.rol;
+        usuario.activo = activo;
+        self.usuarios
+            .actualizar(&usuario)
+            .map_err(mapear_escritura_usuario)?;
+
+        // `entidad_nombre` es el nombre ya actualizado — mismo criterio que
+        // `ContratistaService::actualizar_auditado`.
+        let registrar = |campo: &str, anterior: Option<&str>, nuevo: Option<&str>| {
+            auditoria.registrar_cambio(
+                fecha_hora,
+                actor_id,
+                actor_nombre,
+                EntidadAuditada::Usuario,
+                id,
+                &usuario.nombre,
+                campo,
+                anterior,
+                nuevo,
+            )
+        };
+        if cedula_anterior != usuario.cedula {
+            registrar("cedula", Some(&cedula_anterior), Some(&usuario.cedula))?;
+        }
+        if nombre_anterior != usuario.nombre {
+            registrar("nombre", Some(&nombre_anterior), Some(&usuario.nombre))?;
+        }
+        if rol_anterior != usuario.rol {
+            registrar(
+                "rol",
+                Some(&texto_rol(rol_anterior)),
+                Some(&texto_rol(usuario.rol)),
+            )?;
+        }
+        if activo_anterior != usuario.activo {
+            registrar(
+                "activo",
+                Some(texto_si_no(activo_anterior)),
+                Some(texto_si_no(usuario.activo)),
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Igual que `activar`/`desactivar`, auditado — usado por el toggle
+    /// rápido de la grilla (sin pasar por el formulario completo de
+    /// `actualizar_administracion_auditada`).
+    pub fn establecer_activo_auditado<A: AuditoriaWriter + ?Sized>(
+        &self,
+        id: i64,
+        activo: bool,
+        actor_id: i64,
+        actor_nombre: &str,
+        fecha_hora: DateTime<Utc>,
+        auditoria: &A,
+    ) -> Result<(), UsuarioServiceError> {
+        let actual = self.buscar_por_id(id)?;
+        self.usuarios
+            .establecer_activo(id, activo)
+            .map_err(mapear_escritura_usuario)?;
+        if actual.activo != activo {
+            auditoria.registrar_cambio(
+                fecha_hora,
+                actor_id,
+                actor_nombre,
+                EntidadAuditada::Usuario,
+                id,
+                &actual.nombre,
+                "activo",
+                Some(texto_si_no(actual.activo)),
+                Some(texto_si_no(activo)),
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Igual que `cambiar_password_con_hash`, pero deja un marcador en la
+    /// auditoría — sólo la fecha importa (decisión explícita del usuario:
+    /// "no valores, solo fecha"), así que `valor_anterior`/`valor_nuevo`
+    /// quedan en blanco a propósito, no es un descuido.
+    pub fn cambiar_password_con_hash_auditado<A: AuditoriaWriter + ?Sized>(
+        &self,
+        id: i64,
+        password_hash: &str,
+        actor_id: i64,
+        actor_nombre: &str,
+        fecha_hora: DateTime<Utc>,
+        auditoria: &A,
+    ) -> Result<(), UsuarioServiceError> {
+        let objetivo = self.buscar_por_id(id)?;
+        self.cambiar_password_con_hash(id, password_hash)?;
+        auditoria.registrar_cambio(
+            fecha_hora,
+            actor_id,
+            actor_nombre,
+            EntidadAuditada::Usuario,
+            id,
+            &objetivo.nombre,
+            "password",
+            None,
+            None,
+        )?;
+        Ok(())
+    }
+
+    /// Camino síncrono (`cambiar_password`, con Argon2 adentro) + auditoría
+    /// — para interfaces sin el paso off-thread de la TUI/GUI (hoy,
+    /// `--comandos`). Reset administrativo: `actor` distinto del usuario que
+    /// recibe la contraseña nueva.
+    #[allow(clippy::too_many_arguments)]
+    pub fn cambiar_password_auditado<A: AuditoriaWriter + ?Sized>(
+        &self,
+        id: i64,
+        nueva_password: &str,
+        actor_id: i64,
+        actor_nombre: &str,
+        fecha_hora: DateTime<Utc>,
+        auditoria: &A,
+    ) -> Result<(), UsuarioServiceError> {
+        self.validar_password_para_cambio(id, nueva_password)?;
+        let password_hash = generar_hash(nueva_password)?;
+        self.cambiar_password_con_hash_auditado(
+            id,
+            &password_hash,
+            actor_id,
+            actor_nombre,
+            fecha_hora,
+            auditoria,
+        )
+    }
+
+    /// Igual que `cambiar_password_propio` + auditoría — el propio usuario
+    /// es tanto el actor como el objetivo del cambio.
+    pub fn cambiar_password_propio_auditado<A: AuditoriaWriter + ?Sized>(
+        &self,
+        id: i64,
+        password_actual: &str,
+        nueva_password: &str,
+        actor_nombre: &str,
+        fecha_hora: DateTime<Utc>,
+        auditoria: &A,
+    ) -> Result<(), UsuarioServiceError> {
+        self.validar_password_para_cambio(id, nueva_password)?;
+        self.validar_password_actual(id, password_actual)?;
+        let password_hash = generar_hash(nueva_password)?;
+        self.cambiar_password_con_hash_auditado(
+            id,
+            &password_hash,
+            id,
+            actor_nombre,
+            fecha_hora,
+            auditoria,
+        )
+    }
+
     pub fn listar(&self) -> Result<Vec<Usuario>, UsuarioServiceError> {
         Ok(self.usuarios.listar()?)
     }
@@ -327,6 +506,14 @@ fn validar_password(password: &str) -> Result<(), UsuarioServiceError> {
         return Err(UsuarioServiceError::PasswordDemasiadoCorto);
     }
     Ok(())
+}
+
+fn texto_si_no(valor: bool) -> &'static str {
+    if valor { "SI" } else { "NO" }
+}
+
+fn texto_rol(rol: RolUsuario) -> String {
+    format!("{rol:?}")
 }
 
 #[cfg(test)]
