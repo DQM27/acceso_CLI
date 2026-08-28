@@ -414,8 +414,8 @@ function TablaSalida({ items, total }: { items: IngresoActivoResumen[]; total: n
               Salida
             </button>
             <span>
-              {a.contratista_nombre} · {a.empresa_nombre}
-              {a.gafete_numero !== null && ` · gafete ${a.gafete_numero}`}
+              {a.contratista_nombre} · {a.empresa_nombre} · gafete{" "}
+              {a.gafete_numero !== null ? a.gafete_numero : "S/G"}
             </span>
           </div>
         ))}

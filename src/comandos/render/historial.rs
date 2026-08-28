@@ -73,7 +73,7 @@ fn valor_historial(
         ColumnaHistorial::Gafete => m
             .gafete_numero
             .map(|numero| numero.to_string())
-            .unwrap_or_else(|| "—".to_string()),
+            .unwrap_or_else(|| "S/G".to_string()),
         ColumnaHistorial::Salida => m
             .fecha_hora_salida
             .map(fecha_hora_corta)

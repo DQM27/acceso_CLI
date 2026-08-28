@@ -5,6 +5,7 @@ import Activos from "./pantallas/Activos";
 import Contratistas from "./pantallas/Contratistas";
 import Empresas from "./pantallas/Empresas";
 import Usuarios from "./pantallas/Usuarios";
+import Historial from "./pantallas/Historial";
 import NuevoIngresoModal from "./pantallas/NuevoIngresoModal";
 import SalidaModal from "./pantallas/SalidaModal";
 import Consola from "./pantallas/Consola";
@@ -62,10 +63,11 @@ export default function App() {
   );
 }
 
-type Seccion = "activos" | "contratistas" | "empresas" | "usuarios";
+type Seccion = "activos" | "historial" | "contratistas" | "empresas" | "usuarios";
 
 const SECCIONES: { id: Seccion; etiqueta: string }[] = [
   { id: "activos", etiqueta: "Ingresos activos" },
+  { id: "historial", etiqueta: "Historial" },
   { id: "contratistas", etiqueta: "Contratistas" },
   { id: "empresas", etiqueta: "Empresas" },
   { id: "usuarios", etiqueta: "Usuarios" },
@@ -200,6 +202,7 @@ function Shell({
             onAbrirSalida={() => setModalSalida(true)}
           />
         )}
+        {seccion === "historial" && <Historial />}
         {seccion === "contratistas" && <Contratistas />}
         {seccion === "empresas" && <Empresas />}
         {seccion === "usuarios" && <Usuarios />}

@@ -21,6 +21,7 @@ pub fn run() {
     let core = AppCore::abrir(&ruta_base_datos).expect("no se pudo abrir la base de datos");
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(GuiState::new(core, instancia))
         .setup(|app| {
             if cfg!(debug_assertions) {
@@ -54,6 +55,8 @@ pub fn run() {
             comandos::ingresos::registrar_salida,
             comandos::consola::ejecutar_comando,
             comandos::consola::autocompletar_comando,
+            comandos::historial::listar_historial,
+            comandos::historial::exportar_historial,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

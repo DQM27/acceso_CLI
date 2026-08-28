@@ -2,7 +2,9 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::database::queries::ingresos::{FiltroHistorial, PaginaHistorial, SqliteIngresosQuery};
+use crate::database::queries::ingresos::{
+    FiltroHistorial, MovimientoIngresoResumen, PaginaHistorial, SqliteIngresosQuery,
+};
 use crate::historial::exportacion::{
     ColumnaHistorial, FormatosHistorial, escribir_movimiento, preparar_hoja,
 };
@@ -38,6 +40,36 @@ impl AppCore {
             .buscar_historial(filtro)
     }
 
+    /// Todo el conjunto filtrado en un solo `Vec`, no sólo una página — para
+    /// una interfaz que virtualiza del lado del cliente (AG Grid) en vez de
+    /// paginar por su cuenta. Mismo lote/`corte_id` que ya usa
+    /// `exportar_historial`, extraído para no repetir el loop en cada lugar
+    /// que necesite "todo, no una página". Sin tope artificial de filas: a
+    /// diferencia de la exportación (que sí choca con el límite real de una
+    /// hoja de Excel), acá no hay ninguna razón técnica para cortar antes.
+    pub fn buscar_historial_completo(
+        &self,
+        filtro: &FiltroHistorial,
+    ) -> Result<Vec<MovimientoIngresoResumen>, RegistroIngresoServiceError> {
+        let mut consulta = filtro.clone();
+        consulta.offset = 0;
+        consulta.limite = usize::MAX;
+        let mut todos = Vec::new();
+        loop {
+            let pagina = self.buscar_historial(&consulta)?;
+            consulta.corte_id = Some(pagina.corte_id);
+            if pagina.items.is_empty() {
+                break;
+            }
+            todos.extend(pagina.items);
+            if todos.len() >= pagina.total {
+                break;
+            }
+            consulta.offset = todos.len();
+        }
+        Ok(todos)
+    }
+
     /// Exporta todo el conjunto filtrado que representa la pantalla, no sólo
     /// su página actual. Se conserva `corte_id`, por lo que ingresos creados
     /// después de cargar Historial no aparecen inesperadamente en el XLSX.
@@ -47,10 +79,72 @@ impl AppCore {
         columnas: &[ColumnaHistorial],
         destino: &Path,
     ) -> Result<usize, ExportarHistorialError> {
+        self.exportar_historial_seleccion(filtro, None, columnas, destino)
+    }
+
+    /// Resuelve, en el orden exacto de `ids`, los movimientos de `filtro`
+    /// cuyo `registro_id` esté en esa lista — un id que no matchea nada se
+    /// omite en silencio (la GUI pudo haber armado `ids` de una foto de la
+    /// grilla ligeramente vieja). Extraído de
+    /// [`Self::exportar_historial_seleccion`] para poder probar el orden
+    /// resultante sin tener que leer de vuelta un XLSX (`rust_xlsxwriter`
+    /// sólo escribe, no lee).
+    pub fn movimientos_en_orden(
+        &self,
+        filtro: &FiltroHistorial,
+        ids: &[i64],
+    ) -> Result<Vec<MovimientoIngresoResumen>, RegistroIngresoServiceError> {
+        let pendientes: std::collections::HashSet<i64> = ids.iter().copied().collect();
+        let mut encontrados: std::collections::HashMap<i64, MovimientoIngresoResumen> =
+            std::collections::HashMap::with_capacity(ids.len());
+        let mut consulta = filtro.clone();
+        consulta.offset = 0;
+        consulta.limite = usize::MAX;
+        loop {
+            let pagina = self.buscar_historial(&consulta)?;
+            consulta.corte_id = Some(pagina.corte_id);
+            let hay_mas = !pagina.items.is_empty();
+            let total_pagina = pagina.total;
+            let items_en_pagina = pagina.items.len();
+            for movimiento in pagina.items {
+                if pendientes.contains(&movimiento.registro_id) {
+                    encontrados.insert(movimiento.registro_id, movimiento);
+                }
+            }
+            if !hay_mas || encontrados.len() >= pendientes.len() {
+                break;
+            }
+            consulta.offset += items_en_pagina;
+            if consulta.offset >= total_pagina {
+                break;
+            }
+        }
+        Ok(ids.iter().filter_map(|id| encontrados.remove(id)).collect())
+    }
+
+    /// Igual que [`Self::exportar_historial`], pero cuando `ids` es `Some`
+    /// sólo escribe los movimientos cuyo `registro_id` esté en esa lista, EN
+    /// ESE ORDEN — la GUI manda exactamente el orden visible en pantalla
+    /// (`AG Grid`, tras su propio filtro y orden de columna, que
+    /// `FiltroHistorial`/la consulta SQL no conocen) en vez de siempre el
+    /// orden cronológico de la consulta. `None` exporta todo el conjunto de
+    /// `filtro` en el orden de la consulta, igual que antes.
+    pub fn exportar_historial_seleccion(
+        &self,
+        filtro: &FiltroHistorial,
+        ids: Option<&[i64]>,
+        columnas: &[ColumnaHistorial],
+        destino: &Path,
+    ) -> Result<usize, ExportarHistorialError> {
         const MAX_FILAS_DATOS_XLSX: usize = 1_048_575;
 
         if columnas.is_empty() {
             return Err(ExportarHistorialError::SinColumnas);
+        }
+        if let Some(ids) = ids
+            && ids.len() > MAX_FILAS_DATOS_XLSX
+        {
+            return Err(ExportarHistorialError::DemasiadasFilas(ids.len()));
         }
         if destino.exists() {
             return Err(ExportarHistorialError::DestinoExiste(destino.to_owned()));
@@ -65,6 +159,17 @@ impl AppCore {
             ));
         }
 
+        // Con `ids` (recorte + orden de la GUI) hace falta juntar primero
+        // los movimientos pedidos antes de poder escribirlos en ESE orden —
+        // a diferencia del camino sin `ids`, que puede ir escribiendo
+        // página a página según llega de la consulta (orden cronológico) sin
+        // retener nada. El tamaño de lo que se retiene está acotado por
+        // `ids.len()`, no por el total del historial.
+        let ordenados: Option<Vec<MovimientoIngresoResumen>> = match ids {
+            Some(ids) => Some(self.movimientos_en_orden(filtro, ids)?),
+            None => None,
+        };
+
         let mut libro = rust_xlsxwriter::Workbook::new();
         let mut exportados = 0usize;
         {
@@ -72,29 +177,43 @@ impl AppCore {
             preparar_hoja(hoja, columnas)?;
             let formatos = FormatosHistorial::default();
 
-            let mut consulta = filtro.clone();
-            consulta.offset = 0;
-            // La consulta limita internamente cada página a 200 filas. El
-            // exportador las consume por lotes para no retener todo en RAM.
-            consulta.limite = usize::MAX;
-            loop {
-                let pagina = self.buscar_historial(&consulta)?;
-                if pagina.total > MAX_FILAS_DATOS_XLSX {
-                    return Err(ExportarHistorialError::DemasiadasFilas(pagina.total));
+            match &ordenados {
+                Some(movimientos) => {
+                    for movimiento in movimientos {
+                        let fila = u32::try_from(exportados + 1).unwrap_or(u32::MAX);
+                        escribir_movimiento(hoja, fila, columnas, movimiento, &formatos)?;
+                        exportados += 1;
+                    }
                 }
-                consulta.corte_id = Some(pagina.corte_id);
-                if pagina.items.is_empty() {
-                    break;
+                None => {
+                    let mut consulta = filtro.clone();
+                    consulta.offset = 0;
+                    // La consulta limita internamente cada página a 200
+                    // filas. El exportador las consume por lotes para no
+                    // retener todo en RAM.
+                    consulta.limite = usize::MAX;
+                    loop {
+                        let pagina = self.buscar_historial(&consulta)?;
+                        if pagina.total > MAX_FILAS_DATOS_XLSX {
+                            return Err(ExportarHistorialError::DemasiadasFilas(pagina.total));
+                        }
+                        consulta.corte_id = Some(pagina.corte_id);
+                        let hay_mas = !pagina.items.is_empty();
+                        let total_pagina = pagina.total;
+                        for movimiento in &pagina.items {
+                            let fila = u32::try_from(exportados + 1).unwrap_or(u32::MAX);
+                            escribir_movimiento(hoja, fila, columnas, movimiento, &formatos)?;
+                            exportados += 1;
+                        }
+                        if !hay_mas {
+                            break;
+                        }
+                        consulta.offset += pagina.items.len();
+                        if consulta.offset >= total_pagina {
+                            break;
+                        }
+                    }
                 }
-                for movimiento in &pagina.items {
-                    let fila = u32::try_from(exportados + 1).unwrap_or(u32::MAX);
-                    escribir_movimiento(hoja, fila, columnas, movimiento, &formatos)?;
-                    exportados += 1;
-                }
-                if exportados >= pagina.total {
-                    break;
-                }
-                consulta.offset = exportados;
             }
 
             let ultima_columna = u16::try_from(columnas.len() - 1).unwrap_or(u16::MAX);

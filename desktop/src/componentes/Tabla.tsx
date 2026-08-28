@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { themeQuartz } from "ag-grid-community";
@@ -123,22 +123,54 @@ export interface TablaProps<T> {
   id?: string;
 }
 
-export default function Tabla<T>({
-  columnas,
-  filas,
-  controles,
-  seleccionMultiple,
-  onSeleccionCambia,
-  onCeldaEditada,
-  onFilaDobleClic,
-  filtrosPorColumna,
-  id,
-}: TablaProps<T>) {
+/** Mango imperativo opcional (`ref`) para que la pantalla pida datos que
+ * viven adentro de la grilla sin tener que duplicar su estado — hoy "las
+ * filas que quedaron visibles tras el filtro por columna" y "qué columnas
+ * están visibles ahora (selector Columnas ▾)", que usa Historial para
+ * exportar exactamente lo que se ve en pantalla (AG Grid filtra filas y
+ * oculta columnas del lado del cliente; `AppCore` no tiene forma de saber
+ * ninguna de las dos cosas por su cuenta). */
+export interface TablaHandle<T> {
+  filasFiltradas: () => T[];
+  /** Identidades (`colId`/`field`) de las columnas visibles ahora mismo, en
+   * el orden real de la grilla — el que queda después de que el usuario
+   * arrastra columnas para reordenarlas, no el orden fijo en el código. */
+  columnasVisibles: () => string[];
+}
+
+function TablaBase<T>(
+  {
+    columnas,
+    filas,
+    controles,
+    seleccionMultiple,
+    onSeleccionCambia,
+    onCeldaEditada,
+    onFilaDobleClic,
+    filtrosPorColumna,
+    id,
+  }: TablaProps<T>,
+  ref: React.ForwardedRef<TablaHandle<T>>,
+) {
   const [ocultas, setOcultas] = useState<Set<string>>(
     () => new Set(leerEstadoGuardado(id)?.ocultas ?? []),
   );
   const [selectorAbierto, setSelectorAbierto] = useState(false);
   const apiRef = useRef<GridReadyEvent<T>["api"] | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    filasFiltradas: () => {
+      const resultado: T[] = [];
+      apiRef.current?.forEachNodeAfterFilter((nodo) => {
+        if (nodo.data) resultado.push(nodo.data);
+      });
+      return resultado;
+    },
+    columnasVisibles: () =>
+      (apiRef.current?.getColumnState() ?? [])
+        .filter((columna) => !columna.hide)
+        .map((columna) => columna.colId),
+  }));
 
   const columnasConVisibilidad = useMemo(
     () =>
@@ -308,3 +340,11 @@ export default function Tabla<T>({
     </div>
   );
 }
+
+// `forwardRef` no admite tipos genéricos por su cuenta — el `as` restaura la
+// firma genérica de `TablaBase` para quien use `<Tabla<T> ref={...} />`.
+const Tabla = forwardRef(TablaBase) as <T>(
+  props: TablaProps<T> & { ref?: React.ForwardedRef<TablaHandle<T>> },
+) => ReturnType<typeof TablaBase>;
+
+export default Tabla;

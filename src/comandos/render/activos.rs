@@ -58,7 +58,7 @@ fn valor_activos(item: &IngresoActivoResumen, columna: ColumnaActivos) -> String
         ColumnaActivos::Gafete => item
             .gafete_numero
             .map(|numero| numero.to_string())
-            .unwrap_or_else(|| "—".to_string()),
+            .unwrap_or_else(|| "S/G".to_string()),
         ColumnaActivos::Medio => medio_texto(item.medio_ingreso).to_string(),
         ColumnaActivos::Usuario => item.usuario_ingreso_nombre.clone(),
     }
@@ -263,7 +263,7 @@ pub(super) fn lineas_resumen_salida(activo: &IngresoActivoResumen) -> Vec<Line<'
     let gafete = activo
         .gafete_numero
         .map(|numero| numero.to_string())
-        .unwrap_or_else(|| "Sin gafete".to_string());
+        .unwrap_or_else(|| "S/G".to_string());
     vec![
         Line::from(Span::styled("SALIDA", muted())),
         Line::from(vec![

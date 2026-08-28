@@ -156,7 +156,12 @@ export default function Activos({
         width: 100,
         valueFormatter: (p) => textoMedio(p.value),
       },
-      { field: "gafete_numero", headerName: "Gafete", width: 90 },
+      {
+        field: "gafete_numero",
+        headerName: "Gafete",
+        width: 90,
+        valueFormatter: (p) => (p.value == null ? "S/G" : String(p.value)),
+      },
       {
         colId: "fecha_ingreso",
         headerName: "Fecha",

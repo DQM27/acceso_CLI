@@ -71,7 +71,7 @@ fn exporta_todos_los_resultados_aunque_superen_una_pagina_sql() {
     let exportados = core
         .exportar_historial(
             &filtro,
-            &[ColumnaHistorial::Fecha, ColumnaHistorial::Nombre],
+            &[ColumnaHistorial::FechaIngreso, ColumnaHistorial::Nombre],
             &destino,
         )
         .unwrap();
@@ -83,4 +83,68 @@ fn exporta_todos_los_resultados_aunque_superen_una_pagina_sql() {
         core.exportar_historial(&filtro, &[ColumnaHistorial::Nombre], &destino),
         Err(ExportarHistorialError::DestinoExiste(_))
     ));
+}
+
+/// La GUI filtra del lado del cliente (AG Grid) y manda sólo los
+/// `registro_id` que quedaron visibles — `exportar_historial_seleccion`
+/// tiene que recortar a esos ids aunque el conjunto sin acotar cruce el
+/// límite de una página SQL (200), es decir que el recorte no puede
+/// depender de que todo entre en una sola página.
+#[test]
+fn exporta_solo_los_ids_seleccionados_aunque_crucen_una_pagina_sql() {
+    let core = core_con_movimientos(205);
+    let filtro = FiltroHistorial::nuevo(instante(1, 0), instante(31, 23));
+    let directorio = tempfile::tempdir().unwrap();
+    let destino = directorio.path().join("historial.xlsx");
+
+    // Ids 1..=205 (autoincrement) — se elige un subconjunto que cruza el
+    // límite de página (200): algunos antes, algunos después. Orden a
+    // propósito fuera de lo cronológico: `exportar_historial_seleccion`
+    // debe escribir en ESTE orden, no en el que devuelve la consulta SQL.
+    let ids: Vec<i64> = vec![199, 1, 205, 100, 200, 201];
+
+    let exportados = core
+        .exportar_historial_seleccion(
+            &filtro,
+            Some(&ids),
+            &[ColumnaHistorial::FechaIngreso, ColumnaHistorial::Nombre],
+            &destino,
+        )
+        .unwrap();
+
+    assert_eq!(exportados, ids.len());
+    let contenido = std::fs::read(&destino).unwrap();
+    assert!(contenido.starts_with(b"PK"));
+}
+
+/// `rust_xlsxwriter` sólo escribe, no lee — así que el orden de escritura
+/// se prueba a nivel de `movimientos_en_orden` (lo que
+/// `exportar_historial_seleccion` usa por dentro cuando hay `ids`) en vez
+/// de abrir el XLSX resultante. Ids en un orden a propósito NO cronológico
+/// (la GUI manda el orden visible en pantalla tras un reordenamiento de
+/// columnas, no el orden de la consulta SQL).
+#[test]
+fn movimientos_en_orden_respeta_el_orden_de_ids_no_el_de_la_consulta() {
+    let core = core_con_movimientos(205);
+    let filtro = FiltroHistorial::nuevo(instante(1, 0), instante(31, 23));
+    let ids = vec![199i64, 1, 205, 100, 200, 201];
+
+    let movimientos = core.movimientos_en_orden(&filtro, &ids).unwrap();
+
+    let ids_resultantes: Vec<i64> = movimientos.iter().map(|m| m.registro_id).collect();
+    assert_eq!(ids_resultantes, ids);
+}
+
+/// Un id que no existe en el conjunto filtrado (foto vieja de la grilla) se
+/// omite en silencio en vez de fallar toda la exportación.
+#[test]
+fn movimientos_en_orden_omite_ids_inexistentes() {
+    let core = core_con_movimientos(5);
+    let filtro = FiltroHistorial::nuevo(instante(1, 0), instante(31, 23));
+    let ids = vec![3i64, 9999, 1];
+
+    let movimientos = core.movimientos_en_orden(&filtro, &ids).unwrap();
+
+    let ids_resultantes: Vec<i64> = movimientos.iter().map(|m| m.registro_id).collect();
+    assert_eq!(ids_resultantes, vec![3, 1]);
 }

@@ -11,12 +11,17 @@ use crate::{
 /// archivo XLSX diverjan con el tiempo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColumnaHistorial {
-    Fecha,
+    FechaIngreso,
     Nombre,
     Cedula,
     Empresa,
     Tipo,
     Entrada,
+    /// Fecha del `fecha_hora_salida` — columna separada de [`Self::FechaIngreso`]
+    /// porque un movimiento puede entrar un día y salir otro (turno nocturno);
+    /// antes no existía y la exportación no tenía forma de reflejarlo, sólo
+    /// la hora (ver [`Self::Salida`]).
+    FechaSalida,
     Salida,
     Gafete,
     Medio,
@@ -39,13 +44,14 @@ impl Default for FormatosHistorial {
 }
 
 impl ColumnaHistorial {
-    pub const ALL: [Self; 11] = [
-        Self::Fecha,
+    pub const ALL: [Self; 12] = [
+        Self::FechaIngreso,
         Self::Nombre,
         Self::Cedula,
         Self::Empresa,
         Self::Tipo,
         Self::Entrada,
+        Self::FechaSalida,
         Self::Salida,
         Self::Gafete,
         Self::Medio,
@@ -55,12 +61,13 @@ impl ColumnaHistorial {
 
     pub const fn label(self) -> &'static str {
         match self {
-            Self::Fecha => "FECHA",
+            Self::FechaIngreso => "FECHA INGRESO",
             Self::Cedula => "CÉDULA",
             Self::Nombre => "NOMBRE",
             Self::Empresa => "EMPRESA",
             Self::Tipo => "TIPO",
             Self::Entrada => "ENTRADA",
+            Self::FechaSalida => "FECHA SALIDA",
             Self::Salida => "SALIDA",
             Self::Gafete => "GAFETE",
             Self::Medio => "MEDIO",
@@ -71,12 +78,13 @@ impl ColumnaHistorial {
 
     pub const fn clave(self) -> &'static str {
         match self {
-            Self::Fecha => "fecha",
+            Self::FechaIngreso => "fecha",
             Self::Nombre => "nombre",
             Self::Cedula => "cedula",
             Self::Empresa => "empresa",
             Self::Tipo => "tipo",
             Self::Entrada => "entrada",
+            Self::FechaSalida => "fecha_salida",
             Self::Salida => "salida",
             Self::Gafete => "gafete",
             Self::Medio => "medio",
@@ -85,9 +93,19 @@ impl ColumnaHistorial {
         }
     }
 
+    /// Inverso de [`Self::clave`] — la GUI manda qué columnas tiene visibles
+    /// como claves de texto (mismo identificador que usan sus `colId`/
+    /// `field` de AG Grid) en vez de un enum que no puede cruzar el borde de
+    /// Tauri sin duplicar este tipo en TypeScript. `None` si no matchea
+    /// ninguna — quien llama decide si eso es un error o simplemente se
+    /// ignora esa clave.
+    pub fn from_clave(clave: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|columna| columna.clave() == clave)
+    }
+
     const fn ancho_excel(self) -> f64 {
         match self {
-            Self::Fecha => 12.0,
+            Self::FechaIngreso | Self::FechaSalida => 12.0,
             Self::Nombre => 30.0,
             Self::Cedula => 18.0,
             Self::Empresa => 26.0,
@@ -132,9 +150,22 @@ pub(crate) fn escribir_movimiento(
     for (indice, columna) in columnas.iter().copied().enumerate() {
         let indice = u16::try_from(indice).unwrap_or(u16::MAX);
         match columna {
-            ColumnaHistorial::Fecha => {
+            ColumnaHistorial::FechaIngreso => {
                 hoja.write_with_format(fila, indice, &ingreso_local.date_naive(), &formatos.fecha)?;
             }
+            ColumnaHistorial::FechaSalida => match movimiento.fecha_hora_salida {
+                Some(salida) => {
+                    hoja.write_with_format(
+                        fila,
+                        indice,
+                        &a_costa_rica(salida).date_naive(),
+                        &formatos.fecha,
+                    )?;
+                }
+                None => {
+                    hoja.write_string(fila, indice, "Activo")?;
+                }
+            },
             ColumnaHistorial::Nombre => {
                 hoja.write_string(fila, indice, &movimiento.contratista_nombre)?;
             }
@@ -243,7 +274,7 @@ mod tests {
         let directorio = tempfile::tempdir().unwrap();
         let destino = directorio.path().join("historial.xlsx");
         let columnas = [
-            ColumnaHistorial::Fecha,
+            ColumnaHistorial::FechaIngreso,
             ColumnaHistorial::Cedula,
             ColumnaHistorial::Nombre,
             ColumnaHistorial::Salida,

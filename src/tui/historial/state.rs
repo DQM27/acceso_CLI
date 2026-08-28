@@ -52,7 +52,7 @@ impl ColumnaHistorial {
     pub(super) const fn constraint(self) -> ratatui::layout::Constraint {
         use ratatui::layout::Constraint;
         match self {
-            Self::Fecha => Constraint::Length(10),
+            Self::FechaIngreso | Self::FechaSalida => Constraint::Length(10),
             Self::Cedula => Constraint::Length(14),
             Self::Nombre | Self::Empresa => Constraint::Fill(3),
             Self::Tipo => Constraint::Length(11),

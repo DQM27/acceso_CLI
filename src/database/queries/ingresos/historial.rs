@@ -25,6 +25,7 @@ const LIMITE_HISTORIAL_PREDETERMINADO: usize = 50;
 const LIMITE_HISTORIAL_MAXIMO: usize = 200;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct MovimientoIngresoResumen {
     pub registro_id: i64,
     pub contratista_id: i64,

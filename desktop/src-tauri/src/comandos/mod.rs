@@ -26,5 +26,6 @@ pub mod autenticacion;
 pub mod consola;
 pub mod contratistas;
 pub mod empresas;
+pub mod historial;
 pub mod ingresos;
 pub mod usuarios;

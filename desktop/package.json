@@ -20,6 +20,7 @@
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
     "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2.7.2",
     "ag-grid-community": "^36.1.0",
     "ag-grid-react": "^36.1.0",
     "react": "^19.0.0",

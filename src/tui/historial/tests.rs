@@ -275,7 +275,7 @@ fn f5_pide_columnas_y_ruta_antes_de_exportar_todo_el_filtro() {
     assert_eq!(filtro.offset, 0);
     assert_eq!(filtro.corte_id, Some(100));
     assert_eq!(columnas.len(), ColumnaHistorial::ALL.len() - 1);
-    assert!(!columnas.contains(&ColumnaHistorial::Fecha));
+    assert!(!columnas.contains(&ColumnaHistorial::FechaIngreso));
     assert_eq!(destino.extension().and_then(|e| e.to_str()), Some("xlsx"));
 }
 

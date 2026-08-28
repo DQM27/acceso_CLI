@@ -1,0 +1,70 @@
+import { invoke } from "@tauri-apps/api/core";
+import type { MedioIngreso, ResultadoIngresoRegistrado } from "./ingresos";
+import type { TipoIngreso } from "./contratistas";
+
+// Espejo de comandos/historial.rs y
+// src/database/queries/ingresos/historial.rs (`MovimientoIngresoResumen`)
+// del núcleo. Sin paginado a propósito: la pantalla trae todo el historial
+// de una vez y deja que AG Grid filtre/ordene/virtualice del lado del
+// cliente (igual criterio que Activos, ver `Historial.tsx`).
+//
+// `ResultadoIngresoRegistrado` se reusa de `api/ingresos.ts` — mismo enum
+// del núcleo (`src/models/registro_ingreso.rs`), no una copia.
+
+export type MotivoResultadoIngreso = "PraindProximoVencer" | "DatosReconstruidos";
+
+export interface MovimientoIngresoResumen {
+  registro_id: number;
+  contratista_id: number;
+  cedula: string;
+  contratista_nombre: string;
+  empresa_nombre: string;
+  tipo_ingreso: TipoIngreso;
+  medio_ingreso: MedioIngreso;
+  /** ISO 8601 (UTC) — convertir con `new Date(...)` antes de mostrar. */
+  fecha_hora_ingreso: string;
+  /** ISO 8601 (UTC), `null` si el movimiento sigue activo (sin salida). */
+  fecha_hora_salida: string | null;
+  gafete_numero: number | null;
+  usuario_ingreso_nombre: string;
+  usuario_salida_nombre: string | null;
+  resultado_acceso: ResultadoIngresoRegistrado;
+  motivo_resultado: MotivoResultadoIngreso | null;
+  reglas_version: number;
+  empresa_activa_snapshot: boolean;
+}
+
+export function mensajeResultado(fila: MovimientoIngresoResumen): string {
+  const r = fila.resultado_acceso;
+  if (r === "Permitido") return "Permitido";
+  if (r === "Migrado") return "Migrado";
+  return mensajeMotivoResultado(r.PermitidoConAdvertencia);
+}
+
+function mensajeMotivoResultado(motivo: MotivoResultadoIngreso): string {
+  switch (motivo) {
+    case "PraindProximoVencer":
+      return "PRAIND próximo a vencer";
+    case "DatosReconstruidos":
+      return "Datos reconstruidos";
+  }
+}
+
+export function listarHistorial(): Promise<MovimientoIngresoResumen[]> {
+  return invoke("listar_historial");
+}
+
+/** `ids`: los `registro_id` que la grilla tiene visibles tras su propio
+ * filtro por columna. `columnas`: claves de `ColumnaHistorial::clave`
+ * (núcleo, `src/historial/exportacion.rs`) de las columnas que la grilla
+ * tiene visibles ahora — ver `CLAVES_COLUMNA` en `Historial.tsx` para el
+ * mapeo colId → clave. Ambos son filtros del lado del cliente (AG Grid);
+ * el núcleo no los conoce por su cuenta, así que se le pasa el recorte ya
+ * resuelto en vez de siempre exportar todo el historial sin acotar. */
+export function exportarHistorial(
+  destino: string,
+  ids: number[],
+  columnas: string[],
+): Promise<number> {
+  return invoke("exportar_historial", { destino, ids, columnas });
+}

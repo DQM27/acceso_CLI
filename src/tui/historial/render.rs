@@ -298,7 +298,7 @@ fn fila_movimiento(
 fn render_detalle(frame: &mut Frame, area: Rect, r: &MovimientoIngresoResumen, theme: Theme) {
     let gafete_texto = r
         .gafete_numero
-        .map_or_else(|| "Sin gafete".to_owned(), |g| g.to_string());
+        .map_or_else(|| "S/G".to_owned(), |g| g.to_string());
     let mut lineas = vec![
         Line::from(r.contratista_nombre.clone()).style(theme.title()),
         detail_line("Cédula", r.cedula.clone(), theme),
@@ -419,7 +419,7 @@ fn render_tabla_clasica(frame: &mut Frame, area: Rect, state: &HistorialState, t
 
 fn valor_columna_clasica(r: &MovimientoIngresoResumen, c: ColumnaHistorial) -> String {
     match c {
-        ColumnaHistorial::Fecha => a_costa_rica(r.fecha_hora_ingreso)
+        ColumnaHistorial::FechaIngreso => a_costa_rica(r.fecha_hora_ingreso)
             .format("%d/%m/%Y")
             .to_string(),
         ColumnaHistorial::Cedula => r.cedula.clone(),
@@ -429,6 +429,10 @@ fn valor_columna_clasica(r: &MovimientoIngresoResumen, c: ColumnaHistorial) -> S
         ColumnaHistorial::Entrada => a_costa_rica(r.fecha_hora_ingreso)
             .format("%H:%M")
             .to_string(),
+        ColumnaHistorial::FechaSalida => r.fecha_hora_salida.map_or_else(
+            || "Activo".into(),
+            |f| a_costa_rica(f).format("%d/%m/%Y").to_string(),
+        ),
         ColumnaHistorial::Salida => r.fecha_hora_salida.map_or_else(
             || "Activo".into(),
             |f| a_costa_rica(f).format("%H:%M").to_string(),
