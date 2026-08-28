@@ -1,3 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --color-fondo: var(--fondo);
+  --color-panel: var(--panel);
+  --color-borde: var(--borde);
+  --color-campo: var(--campo-fondo);
+  --color-texto: var(--texto);
+  --color-muted: var(--muted);
+  --color-acento: var(--acento);
+  --color-exito: var(--exito);
+  --color-advertencia: var(--advertencia);
+  --color-error: var(--error);
+  --radius-DEFAULT: var(--radio);
+  --radius-chico: var(--radio-chico);
+}
+
 /* Paleta reutilizada de src/comandos/render/estilos.rs (FADE_*) — mismo
    lenguaje visual que la interfaz de comandos, no una paleta nueva. */
 :root {
