@@ -7,30 +7,10 @@ import type { TablaHandle } from "../componentes/Tabla";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
 import { exportarHistorial, listarHistorial } from "../api";
 import type { MovimientoIngresoResumen } from "../api";
+import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
 export function textoMedio(medio: MovimientoIngresoResumen["medio_ingreso"]): string {
   return medio === "Vehiculo" ? "Vehículo" : "Caminando";
-}
-
-/** Formato de 24 horas a propósito (hour12: false) — ver el mismo criterio
- * en Activos.tsx. */
-export function textoHora(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
-}
-
-/** Mismo criterio que Activos.tsx: año-mes-día en hora LOCAL como string
- * ordenable, para que el filtro/orden de columna funcione como texto plano
- * sin volver a inferir "fecha" y disparar el selector nativo del navegador. */
-export function fechaLocalYMD(iso: string): string {
-  const d = new Date(iso);
-  const mes = String(d.getMonth() + 1).padStart(2, "0");
-  const dia = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${mes}-${dia}`;
-}
-
-export function textoFechaDDMMYYYY(ymd: string): string {
-  const [anio, mes, dia] = ymd.split("-");
-  return `${dia}/${mes}/${anio}`;
 }
 
 type FilaHistorial = MovimientoIngresoResumen;

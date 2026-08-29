@@ -6,32 +6,10 @@ import Modal from "../componentes/Modal";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
 import { listarIngresosActivos, mensajeMotivoDenegacion, registrarSalida } from "../api";
 import type { IngresoActivoResumen } from "../api";
+import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
 export function textoMedio(medio: IngresoActivoResumen["medio_ingreso"]): string {
   return medio === "Vehiculo" ? "Vehículo" : "Caminando";
-}
-
-/** Formato de 24 horas a propósito (hour12: false) — sin esto
- * toLocaleTimeString usa AM/PM según el locale del sistema. */
-export function textoHora(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
-}
-
-/** Año-mes-día en hora LOCAL (no UTC) como string ordenable ("2026-08-28")
- * — año-mes-día en vez de `toLocaleDateString()` para que el filtro/orden
- * de la columna funcione como texto plano cronológico, sin volver a pasar
- * por `Date` (que interpretaría "2026-08-28" como medianoche UTC y podría
- * mostrar el día anterior en un huso horario negativo como Costa Rica). */
-export function fechaLocalYMD(iso: string): string {
-  const d = new Date(iso);
-  const mes = String(d.getMonth() + 1).padStart(2, "0");
-  const dia = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${mes}-${dia}`;
-}
-
-export function textoFechaDDMMYYYY(ymd: string): string {
-  const [anio, mes, dia] = ymd.split("-");
-  return `${dia}/${mes}/${anio}`;
 }
 
 /** Texto plano del estado — separado del componente visual `EstadoAcceso`

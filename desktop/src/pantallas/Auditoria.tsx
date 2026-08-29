@@ -5,26 +5,7 @@ import Tabla from "../componentes/Tabla";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
 import { etiquetaCampo, etiquetaEntidad, listarAuditoria, valorPresentable } from "../api";
 import type { CambioAuditado } from "../api";
-
-/** Formato de 24 horas a propósito — ver el mismo criterio en Activos.tsx. */
-export function textoHora(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
-}
-
-/** Año-mes-día en hora LOCAL como string ordenable — mismo criterio que
- * Activos.tsx/Historial.tsx (evita que AG Grid infiera "fecha" y dispare el
- * selector nativo del navegador). */
-export function fechaLocalYMD(iso: string): string {
-  const d = new Date(iso);
-  const mes = String(d.getMonth() + 1).padStart(2, "0");
-  const dia = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${mes}-${dia}`;
-}
-
-export function textoFechaDDMMYYYY(ymd: string): string {
-  const [anio, mes, dia] = ymd.split("-");
-  return `${dia}/${mes}/${anio}`;
-}
+import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
 type FilaAuditoria = CambioAuditado & {
   /** Nombre más reciente conocido de este registro (ver `nombresActuales`
