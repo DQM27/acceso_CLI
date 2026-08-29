@@ -45,6 +45,13 @@ export default function Consola() {
   const [sugerencias, setSugerencias] = useState<string[]>([]);
   const [completado, setCompletado] = useState<string | null>(null);
   const [tamano, setTamano] = useState(TAMANO_INICIAL);
+  // Historial de comandos confirmados (no de gafetes) para navegar con
+  // ↑/↓, como cualquier terminal. `indiceHistorial` es `null` mientras se
+  // escribe en punta (sin navegar); `borradorRef` guarda lo que había en el
+  // input antes de la primera flecha, para devolverlo al pasarse de largo.
+  const [historialComandos, setHistorialComandos] = useState<string[]>([]);
+  const [indiceHistorial, setIndiceHistorial] = useState<number | null>(null);
+  const borradorRef = useRef("");
   const contadorRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -54,12 +61,20 @@ export default function Consola() {
   }, [abierta]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    const prefiereMenosMovimiento = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: prefiereMenosMovimiento ? "auto" : "smooth",
+    });
   }, [historial]);
 
   // Autocompletado en vivo, mismo par sugerencias/Tab que ya tiene
   // `--comandos` en cada tecla — no aplica en modo gafete (ahí el texto es
-  // sólo números, no hay nada que sugerir).
+  // sólo números, no hay nada que sugerir). Con debounce: sin esto, cada
+  // tecla dispara un invoke() completo a Rust en el acto — al escribir
+  // rápido se siente como micro-tirones en vez de fluido.
   useEffect(() => {
     if (modoGafete || !texto.trim()) {
       setSugerencias([]);
@@ -67,15 +82,41 @@ export default function Consola() {
       return;
     }
     let vigente = true;
-    autocompletarComando(texto).then((r) => {
-      if (!vigente) return;
-      setSugerencias(r.sugerencias);
-      setCompletado(r.completado);
-    });
+    const temporizador = window.setTimeout(() => {
+      autocompletarComando(texto).then((r) => {
+        if (!vigente) return;
+        setSugerencias(r.sugerencias);
+        setCompletado(r.completado);
+      });
+    }, 120);
     return () => {
       vigente = false;
+      window.clearTimeout(temporizador);
     };
   }, [texto, modoGafete]);
+
+  function historialAnterior() {
+    if (historialComandos.length === 0) return;
+    if (indiceHistorial === null) borradorRef.current = texto;
+    const nuevo =
+      indiceHistorial === null
+        ? historialComandos.length - 1
+        : Math.max(0, indiceHistorial - 1);
+    setIndiceHistorial(nuevo);
+    setTexto(historialComandos[nuevo]);
+  }
+
+  function historialSiguiente() {
+    if (indiceHistorial === null) return;
+    const nuevo = indiceHistorial + 1;
+    if (nuevo >= historialComandos.length) {
+      setIndiceHistorial(null);
+      setTexto(borradorRef.current);
+      return;
+    }
+    setIndiceHistorial(nuevo);
+    setTexto(historialComandos[nuevo]);
+  }
 
   function alArrastrarBorde(eventoInicial: ReactMouseEvent) {
     eventoInicial.preventDefault();
@@ -156,6 +197,7 @@ export default function Consola() {
   }
 
   function cambiarTexto(valor: string) {
+    setIndiceHistorial(null);
     setTexto(modoGafete ? sanearGafetes(valor) : valor);
   }
 
@@ -169,6 +211,16 @@ export default function Consola() {
     if (evento.key === "Tab" && completado) {
       evento.preventDefault();
       setTexto(completado);
+      return;
+    }
+    if (evento.key === "ArrowUp" && !modoGafete) {
+      evento.preventDefault();
+      historialAnterior();
+      return;
+    }
+    if (evento.key === "ArrowDown" && !modoGafete) {
+      evento.preventDefault();
+      historialSiguiente();
     }
   }
 
@@ -186,6 +238,10 @@ export default function Consola() {
     }
     if (!valor.trim()) return;
     setHistorial((actual) => [...actual, { tipo: "entrada", texto: valor }]);
+    setHistorialComandos((actual) =>
+      actual[actual.length - 1] === valor ? actual : [...actual, valor],
+    );
+    setIndiceHistorial(null);
     await ejecutar(valor);
   }
 

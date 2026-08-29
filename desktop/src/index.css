@@ -556,6 +556,46 @@ input {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
   z-index: 200;
   overflow: hidden;
+  animation: consola-aparece 0.15s ease;
+}
+
+@keyframes consola-aparece {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* Cada línea nueva del historial (entrada o salida) es un nodo del DOM
+   recién montado — la animación de CSS se dispara sola en cada una, sin
+   coordinar nada desde React. Mismo espíritu que el fade-in de
+   `src/comandos/presentation/engine.rs` en la terminal real. */
+@keyframes consola-linea-aparece {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.consola-linea-entrada,
+.consola-linea-salida {
+  animation: consola-linea-aparece 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .consola-ventana,
+  .consola-linea-entrada,
+  .consola-linea-salida {
+    animation: none;
+  }
 }
 
 .consola-resize {
