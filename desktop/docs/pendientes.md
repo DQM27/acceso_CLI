@@ -11,6 +11,40 @@ resuelve.** Si se descarta en vez de hacerse, se marca `[x]` igual con una nota 
 
 ---
 
+## Empaquetado y actualizaciones
+
+- [x] **Pipeline de release para la GUI (2026-08-29).** Antes `.github/workflows/release.yml`
+  sólo compilaba y publicaba `control_acceso.exe` (consola) al pushear un tag `v*` — no
+  existía ningún paso que generara un instalador de `desktop/`. Se agregó el job
+  `build-gui` (mismo workflow, mismo trigger): instala Node, `npm ci` en `desktop/`, corre
+  `npm run test` (Vitest) y `cargo test` en `desktop/src-tauri`, y finalmente
+  `npm run tauri build` — publica `.msi`/`.exe` (`bundle/msi/`, `bundle/nsis/`) como
+  artefacto (`actions/upload-artifact`, igual que el binario de consola). Se agregó
+  `@tauri-apps/cli` como dependencia y el script `"tauri": "tauri"` a `desktop/package.json`
+  (no existía ninguno de los dos). Validado localmente con `npm run tauri build --no-bundle`
+  (el build de instaladores Windows — MSI/NSIS — no se puede probar en este entorno Linux;
+  se valida recién en el runner `windows-latest` de CI).
+- [x] **Decisión: las actualizaciones de la app son vía GitHub (2026-08-29).** Decisión
+  explícita del usuario — sin plugin `tauri-plugin-updater`, sin servidor de actualización
+  propio. Publicar una nueva versión = pushear un tag `v*`, que dispara `release.yml` y deja
+  el instalador nuevo listo para descargar. **Pendiente aparte, sin resolver todavía:** el
+  job de release (tanto `build` como `build-gui`) usa `actions/upload-artifact`, que deja el
+  archivo colgado del run de Actions (hace falta acceso al repo para encontrarlo), no una
+  entrada pública en la página de Releases de GitHub. Si "vía GitHub" quiere decir que
+  alguien sin acceso al repo pueda entrar a Releases y bajar el instalador directo, falta
+  agregar un paso que publique un GitHub Release de verdad (p. ej. `softprops/action-gh-release`)
+  con el `.msi`/`.exe` adjunto — no se agregó todavía porque cambiar eso también afecta al
+  job del binario de consola, que es una decisión aparte.
+
+## Robustez
+
+- [x] **Error Boundary de React (2026-08-29).** No existía ninguno — un error de render sin
+  capturar en cualquier pantalla tumbaba todo el árbol de React (pantalla en blanco, sin
+  mensaje, sin forma de recuperarse salvo reiniciar la app a mano). Se agregó
+  `componentes/ErrorBoundary.tsx` envolviendo `<App />` en `main.tsx`: pantalla de error con
+  el mensaje y un botón "Reiniciar" (recarga la ventana) en vez del blanco total. Con tests
+  (`ErrorBoundary.test.tsx`).
+
 ## Errores
 
 - [ ] **`AutenticacionError::Database` filtra el mensaje crudo de SQLite al login.**
