@@ -47,6 +47,7 @@ insta = "1.48.0"
 opt-level = 3
 lto = "thin"
 codegen-units = 1
+strip = true
 
 # Variante opcional para un ejecutable ligado a la CPU de la máquina que lo
 # compila. El alias `cargo build-native` aplica target-cpu=native; el perfil

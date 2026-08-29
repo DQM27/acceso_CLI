@@ -37,3 +37,4 @@ tauri-plugin-dialog = "2.7.2"
 opt-level = 3
 lto = "thin"
 codegen-units = 1
+strip = true
