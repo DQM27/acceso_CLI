@@ -13,7 +13,7 @@ use crate::services::usuario_service::CrearRootInicialInput;
 use crate::tui::configuracion_inicial::SolicitudRoot;
 
 use super::{App, Vista};
-use crate::mensajes::mensaje_usuario;
+use crate::mensajes::{mensaje_autenticacion, mensaje_usuario};
 
 /// Datos ya validados de un usuario nuevo, a la espera del hash de Argon2 —
 /// no incluye `password` en texto plano, que ya se movió al hilo que calcula
@@ -62,7 +62,7 @@ impl App {
                 self.login.completar_validacion(None);
                 self.iniciar_sesion(sesion, core);
             }
-            Err(error) => self.login.completar_validacion(Some(error.to_string())),
+            Err(error) => self.login.completar_validacion(Some(mensaje_autenticacion(error))),
         }
     }
 
@@ -98,7 +98,7 @@ impl App {
                 });
                 self.autenticacion_pendiente = Some(receptor);
             }
-            Err(error) => self.login.completar_validacion(Some(error.to_string())),
+            Err(error) => self.login.completar_validacion(Some(mensaje_autenticacion(error))),
         }
     }
 

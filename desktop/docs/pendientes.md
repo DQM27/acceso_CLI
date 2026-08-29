@@ -66,19 +66,16 @@ resuelve.** Si se descarta en vez de hacerse, se marca `[x]` igual con una nota 
 
 ## Errores
 
-- [ ] **`AutenticacionError::Database` filtra el mensaje crudo de SQLite al login.**
-  `AutenticacionError` (`src/services/error.rs`) tiene `#[error(transparent)]
-  Database(#[from] DatabaseError)`, y `DatabaseError::Sqlite` interpola el error crudo de
-  rusqlite (`"Error de SQLite: {0}"`). El comando `login`
-  (`desktop/src-tauri/src/comandos/autenticacion.rs:29`) hace `error.to_string()` sin
-  distinguir variantes, así que un fallo de infraestructura (base bloqueada, corrupta,
-  columna inesperada) mostraría ese mensaje interno en pantalla en vez de un genérico. El
-  camino normal (cédula inexistente / contraseña incorrecta) sí está bien: ambos colapsan
-  a `CredencialesInvalidas` a propósito, sin filtrar cuál de las dos falló. Caso raro en la
-  práctica — sólo pasa con fallos reales de la base, no con credenciales mal digitadas.
-  Corrección si se retoma: mapear `AutenticacionError::Database` a un mensaje genérico
-  ("Error interno, intenta de nuevo") en el comando, en vez de dejar pasar el `to_string()`
-  transparente.
+- [x] **`AutenticacionError::Database` filtraba el mensaje crudo de SQLite al login
+  (2026-08-29).** Se agregó `mensaje_autenticacion` a `src/mensajes.rs` (mismo criterio que
+  `mensaje_empresa`/`mensaje_contratista`/etc.): `CredencialesInvalidas`/`UsuarioInactivo`
+  conservan su texto, `HashInvalido` y `Database(_)` colapsan juntos a "No se pudo iniciar
+  sesión, intentá de nuevo" — los dos son fallos de infraestructura, no algo que el usuario
+  hizo mal, así que no hace falta distinguirlos en pantalla. **El bug no era sólo de la
+  GUI:** `src/tui/app/auth_jobs.rs` (líneas 65 y 101) hacía el mismo `error.to_string()`
+  directo sobre `AutenticacionError` — se corrigió ahí también, no sólo en
+  `desktop/src-tauri/src/comandos/autenticacion.rs`. Con tests
+  (`mensajes::tests::un_fallo_de_sqlite_en_el_login_no_filtra_el_mensaje_crudo`).
 
 ## Diferido a propósito (Historial v1)
 

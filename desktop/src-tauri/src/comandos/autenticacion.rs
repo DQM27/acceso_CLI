@@ -25,8 +25,9 @@ pub fn login(
     let candidato = state
         .core()
         .buscar_candidato_autenticacion(&cedula)
-        .map_err(|error| error.to_string())?;
-    let sesion = verificar_candidato(candidato, &password).map_err(|error| error.to_string())?;
+        .map_err(control_acceso::mensajes::mensaje_autenticacion)?;
+    let sesion = verificar_candidato(candidato, &password)
+        .map_err(control_acceso::mensajes::mensaje_autenticacion)?;
     state.iniciar_sesion(sesion.clone());
     Ok(sesion)
 }

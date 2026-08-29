@@ -4,8 +4,25 @@
 
 use crate::domain::resultado_acceso::MotivoDenegacion;
 use crate::services::error::{
-    ContratistaServiceError, EmpresaServiceError, RegistroIngresoServiceError, UsuarioServiceError,
+    AutenticacionError, ContratistaServiceError, EmpresaServiceError, RegistroIngresoServiceError,
+    UsuarioServiceError,
 };
+
+/// `HashInvalido` va junto con `Database` a propósito: ambos son fallos de
+/// infraestructura (hash corrupto en la fila, SQLite bloqueada/dañada), no
+/// algo que el usuario hizo mal — no tiene sentido distinguirlos en pantalla,
+/// y mucho menos dejar pasar el mensaje crudo de SQLite (`Database` es
+/// `#[error(transparent)]` sobre `DatabaseError`, que sí interpola detalles
+/// internos en su propio `Display`).
+pub fn mensaje_autenticacion(error: AutenticacionError) -> String {
+    match error {
+        AutenticacionError::CredencialesInvalidas => "Credenciales inválidas".into(),
+        AutenticacionError::UsuarioInactivo => "Usuario inactivo".into(),
+        AutenticacionError::HashInvalido | AutenticacionError::Database(_) => {
+            "No se pudo iniciar sesión, intentá de nuevo".into()
+        }
+    }
+}
 
 pub fn mensaje_empresa(error: EmpresaServiceError) -> String {
     match error {
@@ -99,6 +116,30 @@ mod tests {
 
         assert_eq!(mensaje_empresa(empresa), "No se pudo guardar la empresa");
         assert_eq!(mensaje_usuario(usuario), "No se pudo guardar el usuario");
+    }
+
+    #[test]
+    fn un_fallo_de_sqlite_en_el_login_no_filtra_el_mensaje_crudo() {
+        let error = AutenticacionError::Database(DatabaseError::FechaCorrupta(
+            "Error de SQLite: detalle interno".into(),
+        ));
+        assert_eq!(mensaje_autenticacion(error), "No se pudo iniciar sesión, intentá de nuevo");
+        assert_eq!(
+            mensaje_autenticacion(AutenticacionError::HashInvalido),
+            "No se pudo iniciar sesión, intentá de nuevo"
+        );
+    }
+
+    #[test]
+    fn credenciales_invalidas_y_usuario_inactivo_conservan_su_mensaje() {
+        assert_eq!(
+            mensaje_autenticacion(AutenticacionError::CredencialesInvalidas),
+            "Credenciales inválidas"
+        );
+        assert_eq!(
+            mensaje_autenticacion(AutenticacionError::UsuarioInactivo),
+            "Usuario inactivo"
+        );
     }
 
     #[test]
