@@ -1,17 +1,9 @@
 import { useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Toaster } from "sonner";
-import {
-  Building2,
-  ClipboardList,
-  History,
-  LogOut,
-  UserCheck,
-  UserCog,
-  Users,
-} from "lucide-react";
+import { Building2, ClipboardList, History, UserCheck, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import marca from "./assets/marca.png";
+import Sidebar from "./componentes/Sidebar";
 import Login from "./pantallas/Login";
 import Activos from "./pantallas/Activos";
 import Contratistas from "./pantallas/Contratistas";
@@ -125,7 +117,6 @@ function Shell({
   onCerrarSesion: () => void;
 }) {
   const [seccion, setSeccion] = useState<Seccion>("activos");
-  const inicial = sesion.nombre.trim().charAt(0).toUpperCase() || "?";
   const [colapsado, setColapsado] = useState(false);
 
   const [modalNuevoIngreso, setModalNuevoIngreso] = useState(false);
@@ -150,88 +141,15 @@ function Shell({
 
   return (
     <div style={{ display: "flex", height: "100%" }}>
-      <nav className={`shell-sidebar ${colapsado ? "shell-sidebar-colapsada" : ""}`}>
-        <div
-          className="shell-marca"
-          title="Doble click para colapsar/expandir"
-          onDoubleClick={() => setColapsado((c) => !c)}
-        >
-          <div className="marca-sello">
-            <img src={marca} alt="" />
-          </div>
-          {!colapsado && (
-            <div style={{ minWidth: 0 }}>
-              <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: 600, color: "var(--texto)" }}>
-                Brisas
-              </p>
-              <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--muted)" }}>
-                Control de acceso
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div className="shell-nav">
-          {seccionesVisibles.map(({ id, etiqueta, Icono }) => (
-            <button
-              key={id}
-              onClick={() => setSeccion(id)}
-              title={colapsado ? etiqueta : undefined}
-              className={`nav-item ${seccion === id ? "nav-item-activo" : ""}`}
-            >
-              <Icono size={18} strokeWidth={2} aria-hidden="true" />
-              {!colapsado && etiqueta}
-            </button>
-          ))}
-        </div>
-
-        <div
-          style={{ flex: 1 }}
-          title="Doble click para colapsar/expandir"
-          onDoubleClick={() => setColapsado((c) => !c)}
-        />
-
-        <div className="shell-usuario">
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.6rem",
-              justifyContent: colapsado ? "center" : "flex-start",
-            }}
-          >
-            <div className="shell-avatar" title={colapsado ? sesion.nombre : undefined}>
-              {inicial}
-            </div>
-            {!colapsado && (
-              <div style={{ minWidth: 0 }}>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "0.85rem",
-                    fontWeight: 600,
-                    color: "var(--texto)",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {sesion.nombre}
-                </p>
-                <span className="chip">{sesion.rol}</span>
-              </div>
-            )}
-          </div>
-          <button
-            className="boton boton-icono boton-salir"
-            title={colapsado ? "Cerrar sesión" : undefined}
-            onClick={onCerrarSesion}
-          >
-            <LogOut size={17} strokeWidth={2} aria-hidden="true" />
-            {!colapsado && "Cerrar sesión"}
-          </button>
-        </div>
-      </nav>
+      <Sidebar
+        secciones={seccionesVisibles}
+        seccionActual={seccion}
+        onCambiarSeccion={setSeccion}
+        colapsado={colapsado}
+        onToggleColapsado={() => setColapsado((c) => !c)}
+        sesion={sesion}
+        onCerrarSesion={onCerrarSesion}
+      />
 
       <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         {seccion === "activos" && (
