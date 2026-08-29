@@ -1,7 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useRef, useState } from "react";
 import Modal from "../componentes/Modal";
+import {
+  FilaListaFlotante,
+  ListaFlotante,
+  SinResultados,
+  useListaFlotante,
+  useNavegacionFlechas,
+} from "../componentes/ListaFlotante";
 import {
   buscarContratistas,
   mensajeBloqueo,
@@ -47,42 +52,16 @@ export default function NuevoIngresoModal({
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
-  const [resaltado, setResaltado] = useState(0);
-  const campoRef = useRef<HTMLDivElement>(null);
   const buscadorRef = useRef<HTMLInputElement>(null);
   const confirmarRef = useRef<HTMLButtonElement>(null);
-  const [posicionLista, setPosicionLista] = useState<{ top: number; left: number; width: number } | null>(
-    null,
-  );
 
   const listaVisible = seleccion.tipo === "ninguna" && filtro.trim().length > 0;
-
-  // El resaltado sigue al primer resultado cada vez que la lista cambia —
-  // si no se reinicia, una tecla nueva puede dejarlo apuntando a un índice
-  // que ya no existe (la búsqueda anterior tenía más resultados).
-  useEffect(() => {
-    setResaltado(0);
-  }, [resultados]);
-
-  // El modal (Modal.tsx) tiene overflow-y:auto para formularios largos — un
-  // hijo `position: absolute` normal queda recortado por ese scroll en vez
-  // de flotar sobre el resto de la ventana. Un portal a `document.body` con
-  // `position: fixed` posicionado por coordenadas reales del campo evita
-  // ese recorte sin tener que tocar el overflow del modal (lo necesita el
-  // formulario cuando requiere gafete).
-  useLayoutEffect(() => {
-    if (!listaVisible || !campoRef.current) {
-      setPosicionLista(null);
-      return;
-    }
-    const actualizar = () => {
-      const rect = campoRef.current!.getBoundingClientRect();
-      setPosicionLista({ top: rect.bottom + 4, left: rect.left, width: rect.width });
-    };
-    actualizar();
-    window.addEventListener("resize", actualizar);
-    return () => window.removeEventListener("resize", actualizar);
-  }, [listaVisible]);
+  const { campoRef, posicion: posicionLista } = useListaFlotante(listaVisible);
+  const { resaltado, setResaltado, manejarTecla: manejarTeclaBuscador } = useNavegacionFlechas(
+    resultados,
+    listaVisible,
+    elegirContratista,
+  );
 
   // Sin gafete no hay ningún campo que se lleve el `autoFocus` del
   // formulario — sin esto el foco se queda en el buscador y Enter no llega
@@ -140,20 +119,6 @@ export default function NuevoIngresoModal({
     setSeleccion({ tipo: "ninguna" });
   }
 
-  function manejarTeclaBuscador(evento: KeyboardEvent<HTMLInputElement>) {
-    if (!listaVisible || resultados.length === 0) return;
-    if (evento.key === "ArrowDown") {
-      evento.preventDefault();
-      setResaltado((actual) => Math.min(actual + 1, resultados.length - 1));
-    } else if (evento.key === "ArrowUp") {
-      evento.preventDefault();
-      setResaltado((actual) => Math.max(actual - 1, 0));
-    } else if (evento.key === "Enter") {
-      evento.preventDefault();
-      elegirContratista(resultados[resaltado]);
-    }
-  }
-
   async function confirmarIngreso() {
     if (seleccion.tipo !== "formulario") return;
     const { preparacion } = seleccion;
@@ -201,70 +166,32 @@ export default function NuevoIngresoModal({
           </label>
         </div>
 
-        {/* Flotante a propósito, vía portal (ver comentario junto a
-            posicionLista): los resultados no deben empujar el resto del
-            modal ni cambiar su tamaño — se superponen a lo que haya debajo
-            (como un autocompletar), y desaparecen solos al elegir o al
-            borrar el texto. */}
-        {listaVisible &&
-          posicionLista &&
-          createPortal(
-            <div
-              className="tarjeta"
-              style={{
-                position: "fixed",
-                top: posicionLista.top,
-                left: posicionLista.left,
-                width: posicionLista.width,
-                zIndex: 1000,
-                display: "flex",
-                flexDirection: "column",
-                overflow: "hidden",
-                boxShadow: "var(--sombra-panel)",
-              }}
-            >
-              {resultados.length === 0 && (
-                <p style={{ margin: 0, padding: "0.75rem", color: "var(--muted)" }}>
-                  Sin resultados.
-                </p>
-              )}
-              {resultados.map((contratista, indice) => (
-                <button
-                  key={contratista.id}
-                  type="button"
-                  onClick={() => elegirContratista(contratista)}
-                  onMouseEnter={() => setResaltado(indice)}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: "0.75rem",
-                    padding: "0.6rem 0.8rem",
-                    border: "none",
-                    borderBottom: "1px solid var(--borde)",
-                    background: indice === resaltado ? "var(--acento-suave)" : "var(--panel)",
-                    boxShadow: indice === resaltado ? "inset 3px 0 0 var(--acento)" : "none",
-                    color: "var(--texto)",
-                    textAlign: "left",
-                    cursor: "pointer",
-                  }}
-                >
-                  <span>
-                    {contratista.nombre}{" "}
-                    <span style={{ color: "var(--muted)" }}>· {contratista.cedula}</span>
-                  </span>
-                  <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-                    {contratista.empresa_nombre}
-                    {contratista.tiene_ingreso_activo && (
-                      <span className="chip" style={{ ["--chip-color" as string]: "var(--acento)" }}>
-                        Adentro
-                      </span>
-                    )}
-                  </span>
-                </button>
-              ))}
-            </div>,
-            document.body,
-          )}
+        {listaVisible && posicionLista && (
+          <ListaFlotante posicion={posicionLista}>
+            {resultados.length === 0 && <SinResultados />}
+            {resultados.map((contratista, indice) => (
+              <FilaListaFlotante
+                key={contratista.id}
+                resaltada={indice === resaltado}
+                onClick={() => elegirContratista(contratista)}
+                onMouseEnter={() => setResaltado(indice)}
+              >
+                <span>
+                  {contratista.nombre}{" "}
+                  <span style={{ color: "var(--muted)" }}>· {contratista.cedula}</span>
+                </span>
+                <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                  {contratista.empresa_nombre}
+                  {contratista.tiene_ingreso_activo && (
+                    <span className="chip" style={{ ["--chip-color" as string]: "var(--acento)" }}>
+                      Adentro
+                    </span>
+                  )}
+                </span>
+              </FilaListaFlotante>
+            ))}
+          </ListaFlotante>
+        )}
 
         {mensaje && <p style={{ color: "var(--exito)", margin: 0 }}>{mensaje}</p>}
         {error && seleccion.tipo !== "formulario" && (

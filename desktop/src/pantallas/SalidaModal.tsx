@@ -1,7 +1,12 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Modal from "../componentes/Modal";
+import {
+  FilaListaFlotante,
+  ListaFlotante,
+  SinResultados,
+  useListaFlotante,
+  useNavegacionFlechas,
+} from "../componentes/ListaFlotante";
 import { gafetesDe, listarIngresosActivos, registrarSalida, sanearGafetes } from "../api";
 import type { IngresoActivoResumen } from "../api";
 
@@ -47,16 +52,11 @@ export default function SalidaModal({
   const [modoGafete, setModoGafete] = useState(false);
   const [texto, setTexto] = useState("");
   const [seleccion, setSeleccion] = useState<Seleccion>({ tipo: "ninguna" });
-  const [resaltado, setResaltado] = useState(0);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
-  const campoRef = useRef<HTMLDivElement>(null);
   const buscadorRef = useRef<HTMLInputElement>(null);
-  const [posicionLista, setPosicionLista] = useState<{ top: number; left: number; width: number } | null>(
-    null,
-  );
 
   const cargarActivos = () => listarIngresosActivos().then((p) => setActivos(p.items));
 
@@ -81,27 +81,12 @@ export default function SalidaModal({
   }, [modoGafete, texto, activos]);
 
   const listaNombreVisible = !modoGafete && seleccion.tipo === "ninguna" && texto.trim().length > 0;
-
-  useEffect(() => {
-    setResaltado(0);
-  }, [resultadosNombre]);
-
-  // Igual que en Nuevo Ingreso: portal a `document.body` para que la lista
-  // flote sobre el resto del modal sin que el overflow del contenedor la
-  // recorte, posicionada por coordenadas reales del campo.
-  useLayoutEffect(() => {
-    if (!listaNombreVisible || !campoRef.current) {
-      setPosicionLista(null);
-      return;
-    }
-    const actualizar = () => {
-      const rect = campoRef.current!.getBoundingClientRect();
-      setPosicionLista({ top: rect.bottom + 4, left: rect.left, width: rect.width });
-    };
-    actualizar();
-    window.addEventListener("resize", actualizar);
-    return () => window.removeEventListener("resize", actualizar);
-  }, [listaNombreVisible]);
+  const { campoRef, posicion: posicionLista } = useListaFlotante(listaNombreVisible);
+  const { resaltado, setResaltado, manejarTecla: manejarTeclaBuscador } = useNavegacionFlechas(
+    resultadosNombre,
+    listaNombreVisible,
+    (activo) => setSeleccion({ tipo: "elegido", activo }),
+  );
 
   function cambiarModo(gafete: boolean) {
     setModoGafete(gafete);
@@ -119,20 +104,6 @@ export default function SalidaModal({
     setMensaje(null);
     setError(null);
     if (seleccion.tipo !== "ninguna") setSeleccion({ tipo: "ninguna" });
-  }
-
-  function manejarTeclaBuscador(evento: KeyboardEvent<HTMLInputElement>) {
-    if (modoGafete || !listaNombreVisible || resultadosNombre.length === 0) return;
-    if (evento.key === "ArrowDown") {
-      evento.preventDefault();
-      setResaltado((actual) => Math.min(actual + 1, resultadosNombre.length - 1));
-    } else if (evento.key === "ArrowUp") {
-      evento.preventDefault();
-      setResaltado((actual) => Math.max(actual - 1, 0));
-    } else if (evento.key === "Enter") {
-      evento.preventDefault();
-      setSeleccion({ tipo: "elegido", activo: resultadosNombre[resaltado] });
-    }
   }
 
   async function confirmarNombre() {
@@ -229,62 +200,27 @@ export default function SalidaModal({
           </label>
         </div>
 
-        {/* Lista de nombre/cédula, flotante — no debe empujar el resto del
-            modal (ver mismo criterio en NuevoIngresoModal). */}
-        {listaNombreVisible &&
-          posicionLista &&
-          createPortal(
-            <div
-              className="tarjeta"
-              style={{
-                position: "fixed",
-                top: posicionLista.top,
-                left: posicionLista.left,
-                width: posicionLista.width,
-                zIndex: 1000,
-                display: "flex",
-                flexDirection: "column",
-                overflow: "hidden",
-                boxShadow: "var(--sombra-panel)",
-              }}
-            >
-              {resultadosNombre.length === 0 && (
-                <p style={{ margin: 0, padding: "0.75rem", color: "var(--muted)" }}>
-                  Sin resultados.
-                </p>
-              )}
-              {resultadosNombre.map((activo, indice) => (
-                <button
-                  key={activo.registro_id}
-                  type="button"
-                  onClick={() => setSeleccion({ tipo: "elegido", activo })}
-                  onMouseEnter={() => setResaltado(indice)}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: "0.75rem",
-                    padding: "0.6rem 0.8rem",
-                    border: "none",
-                    borderBottom: "1px solid var(--borde)",
-                    background: indice === resaltado ? "var(--acento-suave)" : "var(--panel)",
-                    boxShadow: indice === resaltado ? "inset 3px 0 0 var(--acento)" : "none",
-                    color: "var(--texto)",
-                    textAlign: "left",
-                    cursor: "pointer",
-                  }}
-                >
-                  <span>
-                    {activo.contratista_nombre}{" "}
-                    <span style={{ color: "var(--muted)" }}>· {activo.cedula}</span>
-                  </span>
-                  <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-                    {activo.empresa_nombre}
-                  </span>
-                </button>
-              ))}
-            </div>,
-            document.body,
-          )}
+        {listaNombreVisible && posicionLista && (
+          <ListaFlotante posicion={posicionLista}>
+            {resultadosNombre.length === 0 && <SinResultados />}
+            {resultadosNombre.map((activo, indice) => (
+              <FilaListaFlotante
+                key={activo.registro_id}
+                resaltada={indice === resaltado}
+                onClick={() => setSeleccion({ tipo: "elegido", activo })}
+                onMouseEnter={() => setResaltado(indice)}
+              >
+                <span>
+                  {activo.contratista_nombre}{" "}
+                  <span style={{ color: "var(--muted)" }}>· {activo.cedula}</span>
+                </span>
+                <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                  {activo.empresa_nombre}
+                </span>
+              </FilaListaFlotante>
+            ))}
+          </ListaFlotante>
+        )}
 
         {mensaje && <p style={{ color: "var(--exito)", margin: 0 }}>{mensaje}</p>}
         {error && (
