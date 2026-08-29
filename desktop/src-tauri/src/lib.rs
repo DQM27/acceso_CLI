@@ -49,6 +49,7 @@ pub fn run() {
             comandos::usuarios::crear_usuario,
             comandos::usuarios::actualizar_usuario,
             comandos::usuarios::cambiar_password_usuario,
+            comandos::usuarios::cambiar_mi_password,
             comandos::ingresos::listar_ingresos_activos,
             comandos::ingresos::preparar_ingreso,
             comandos::ingresos::registrar_ingreso,

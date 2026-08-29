@@ -76,7 +76,7 @@ export default function App() {
   );
 }
 
-type Seccion =
+export type Seccion =
   | "activos"
   | "historial"
   | "contratistas"
@@ -262,7 +262,7 @@ function Shell({
         />
       )}
 
-      <Consola />
+      <Consola onNavegar={setSeccion} onCerrarSesion={onCerrarSesion} />
       {/* theme="system": mismo criterio que el resto de la app (paleta
           clara/oscura sigue `prefers-color-scheme`, sin toggle manual
           todavía) — estilizado con las variables propias en index.css, no

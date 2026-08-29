@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode } from "react";
+import type { Seccion } from "../App";
+import FormularioContratista from "./FormularioContratista";
+import FormularioEmpresa from "./FormularioEmpresa";
+import FormularioUsuario from "./FormularioUsuario";
 import {
   autocompletarComando,
+  cambiarMiPassword,
   ejecutarComando,
+  etiquetaCampo,
+  etiquetaEntidad,
   gafetesDe,
+  listarEmpresas,
   listarIngresosActivos,
   mensajeMotivoDenegacion,
   prepararIngreso,
@@ -11,10 +19,13 @@ import {
   registrarIngreso,
   registrarSalida,
   sanearGafetes,
+  valorPresentable,
 } from "../api";
 import type {
+  CambioAuditado,
   ContextState,
   ContratistaResumen,
+  Empresa,
   IngresoActivoResumen,
   MedioIngreso,
   PreparacionIngreso,
@@ -23,6 +34,11 @@ import type {
 type Linea =
   | { tipo: "entrada"; texto: string }
   | { tipo: "salida"; id: number; contenido: ReactNode };
+
+/** `/nuevo [contratista|empresa|usuario]` abre el formulario correspondiente
+ * directo desde la consola, en vez de una tarjeta "Enter para abrir" — un
+ * único paso, igual que cualquier otro comando de la consola. */
+type ModalNuevo = "contratista" | "empresa" | "usuario" | null;
 
 /**
  * Piloto de consola tipo terminal — otro lenguaje para hacer lo mismo que
@@ -37,7 +53,13 @@ type Linea =
 const TAMANO_INICIAL = { ancho: 900, alto: 620 };
 const TAMANO_MINIMO = { ancho: 480, alto: 320 };
 
-export default function Consola() {
+export default function Consola({
+  onNavegar,
+  onCerrarSesion,
+}: {
+  onNavegar: (seccion: Seccion) => void;
+  onCerrarSesion: () => void;
+}) {
   const [abierta, setAbierta] = useState(false);
   const [historial, setHistorial] = useState<Linea[]>([]);
   const [texto, setTexto] = useState("");
@@ -45,6 +67,8 @@ export default function Consola() {
   const [sugerencias, setSugerencias] = useState<string[]>([]);
   const [completado, setCompletado] = useState<string | null>(null);
   const [tamano, setTamano] = useState(TAMANO_INICIAL);
+  const [modalNuevo, setModalNuevo] = useState<ModalNuevo>(null);
+  const [empresasParaFormulario, setEmpresasParaFormulario] = useState<Empresa[]>([]);
   // Historial de comandos confirmados (no de gafetes) para navegar con
   // ↑/↓, como cualquier terminal. `indiceHistorial` es `null` mientras se
   // escribe en punta (sin navegar); `borradorRef` guarda lo que había en el
@@ -183,6 +207,19 @@ export default function Consola() {
     setModoGafete(pagina.items);
   }
 
+  /** Abre el formulario de alta correspondiente y cierra la consola — el
+   * formulario es un `Modal` propio (z-index 100) y la consola flota por
+   * encima (z-index 200); dejar ambos abiertos los superpone en el mismo
+   * centro de pantalla. El historial de la consola no se pierde, sigue ahí
+   * para cuando se vuelva a abrir. */
+  async function abrirNuevo(tipo: "contratista" | "empresa" | "usuario") {
+    if (tipo === "contratista") {
+      setEmpresasParaFormulario(await listarEmpresas());
+    }
+    setModalNuevo(tipo);
+    setAbierta(false);
+  }
+
   async function ejecutar(entrada: string) {
     try {
       const resultado = await ejecutarComando(entrada);
@@ -190,7 +227,24 @@ export default function Consola() {
         await entrarModoGafete(resultado.AbrirSalidaGafete.texto);
         return;
       }
-      agregar(<RenderContextState resultado={resultado} />);
+      if (resultado === "AbrirHistorial") {
+        onNavegar("historial");
+        setAbierta(false);
+        return;
+      }
+      if (resultado === "NuevoContratista") {
+        await abrirNuevo("contratista");
+        return;
+      }
+      if (resultado === "NuevoEmpresa") {
+        await abrirNuevo("empresa");
+        return;
+      }
+      if (resultado === "NuevoUsuario") {
+        await abrirNuevo("usuario");
+        return;
+      }
+      agregar(<RenderContextState resultado={resultado} onCerrarSesion={onCerrarSesion} />);
     } catch (error) {
       agregar(<span style={{ color: "var(--c-error)" }}>{String(error)}</span>);
     }
@@ -348,11 +402,46 @@ export default function Consola() {
           <div className="consola-resize" onMouseDown={alArrastrarBorde} title="Arrastrar para redimensionar" />
         </div>
       )}
+
+      {modalNuevo === "contratista" && (
+        <FormularioContratista
+          empresas={empresasParaFormulario}
+          onCerrar={() => setModalNuevo(null)}
+          onGuardado={() => {
+            setModalNuevo(null);
+            agregar(<span style={{ color: "var(--c-exito)" }}>✓ Contratista creado.</span>);
+          }}
+        />
+      )}
+      {modalNuevo === "empresa" && (
+        <FormularioEmpresa
+          onCerrar={() => setModalNuevo(null)}
+          onGuardado={() => {
+            setModalNuevo(null);
+            agregar(<span style={{ color: "var(--c-exito)" }}>✓ Empresa creada.</span>);
+          }}
+        />
+      )}
+      {modalNuevo === "usuario" && (
+        <FormularioUsuario
+          onCerrar={() => setModalNuevo(null)}
+          onGuardado={() => {
+            setModalNuevo(null);
+            agregar(<span style={{ color: "var(--c-exito)" }}>✓ Usuario creado.</span>);
+          }}
+        />
+      )}
     </>
   );
 }
 
-function RenderContextState({ resultado }: { resultado: ContextState }) {
+function RenderContextState({
+  resultado,
+  onCerrarSesion,
+}: {
+  resultado: ContextState;
+  onCerrarSesion: () => void;
+}) {
   if (typeof resultado === "string") {
     switch (resultado) {
       case "Ayuda":
@@ -364,6 +453,17 @@ function RenderContextState({ resultado }: { resultado: ContextState }) {
               Escribir texto libre busca contratistas por nombre o cédula.
             </p>
           </div>
+        );
+      case "ConfirmarCerrarSesion":
+        return <ConfirmarCerrarSesionCard onConfirmar={onCerrarSesion} />;
+      case "ConfirmarCambioPassword":
+        return <CambiarPasswordCard />;
+      case "ConfirmarModoClasico":
+        return (
+          <span style={{ color: "var(--c-muted)" }}>
+            La interfaz clásica es de la consola de Windows — no aplica en esta ventana. Cerrá
+            esta app y abrí <code>control_acceso.exe --tui-clasica</code> si la necesitás.
+          </span>
         );
       default:
         return (
@@ -385,6 +485,15 @@ function RenderContextState({ resultado }: { resultado: ContextState }) {
   if ("TablaActivos" in resultado) {
     const { items, total } = resultado.TablaActivos;
     return <TablaSalida items={items} total={total} />;
+  }
+
+  if ("TablaAuditoria" in resultado) {
+    // El rol ya lo verificó el resolver (Operacion::VerAuditoria) — si
+    // llegó hasta acá, el actor está autorizado; no hace falta repetir el
+    // chequeo del lado del cliente. `items`/`total` vienen ya paginados del
+    // resolver, igual que TablaActivos arriba — sin un segundo fetch.
+    const { items, total } = resultado.TablaAuditoria;
+    return <TablaAuditoriaSalida items={items} total={total} />;
   }
 
   if ("CoincidenciasActivos" in resultado) {
@@ -476,6 +585,116 @@ function TablaSalida({ items, total }: { items: IngresoActivoResumen[]; total: n
           </div>
         ))}
       <p style={{ margin: "0.15rem 0 0", color: "var(--c-muted)" }}>{total} adentro.</p>
+    </div>
+  );
+}
+
+/** `/auditoria` — `items`/`total` ya vienen paginados del resolver (ver
+ * arriba), en líneas compactas en vez de la grilla AG Grid completa de la
+ * pantalla Auditoría; mismas etiquetas (`etiquetaEntidad`/`etiquetaCampo`/
+ * `valorPresentable`) para no inventar una traducción distinta. */
+function TablaAuditoriaSalida({ items, total }: { items: CambioAuditado[]; total: number }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+      {items.map((item) => (
+        <div key={item.id} style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+          <span style={{ color: "var(--c-muted)" }}>
+            {new Date(item.fecha_hora).toLocaleString("es-CR", {
+              dateStyle: "short",
+              timeStyle: "short",
+            })}
+          </span>
+          <span>{item.usuario_nombre}</span>
+          <span style={{ color: "var(--c-muted)" }}>
+            {etiquetaEntidad(item.entidad)} "{item.entidad_nombre}" · {etiquetaCampo(item.campo)}
+          </span>
+          <span>
+            {valorPresentable(item.campo, item.valor_anterior)} →{" "}
+            {valorPresentable(item.campo, item.valor_nuevo)}
+          </span>
+        </div>
+      ))}
+      <p style={{ margin: "0.15rem 0 0", color: "var(--c-muted)" }}>{total} cambio(s).</p>
+    </div>
+  );
+}
+
+/** `/cerrarsesion` — confirmación explícita con clic, mismo criterio que el
+ * resto de la consola (botones en vez del ciclo Enter/Esc del resolver). */
+function ConfirmarCerrarSesionCard({ onConfirmar }: { onConfirmar: () => void }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+      <span>¿Cerrar la sesión actual?</span>
+      <button type="button" className="boton boton-primario" onClick={onConfirmar}>
+        Cerrar sesión
+      </button>
+    </div>
+  );
+}
+
+/** `/clave` — cambio de la propia contraseña en un solo paso. El núcleo ya
+ * verifica `passwordActual` y valida la nueva en la misma llamada
+ * (`AppCore::cambiar_mi_password`), así que a diferencia de la TUI no hace
+ * falta un paso de verificación aparte antes de pedir la nueva. */
+function CambiarPasswordCard() {
+  const [passwordActual, setPasswordActual] = useState("");
+  const [nuevaPassword, setNuevaPassword] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [mensaje, setMensaje] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function confirmar() {
+    if (nuevaPassword.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres");
+      return;
+    }
+    setEnviando(true);
+    setError(null);
+    try {
+      await cambiarMiPassword(passwordActual, nuevaPassword);
+      setMensaje("✓ Contraseña actualizada.");
+      setPasswordActual("");
+      setNuevaPassword("");
+    } catch (error) {
+      setError(String(error));
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  if (mensaje) {
+    return <span style={{ color: "var(--c-exito)" }}>{mensaje}</span>;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", maxWidth: "20rem" }}>
+      <input
+        type="password"
+        value={passwordActual}
+        onChange={(evento) => setPasswordActual(evento.target.value)}
+        placeholder="Contraseña actual"
+        className="consola-input-chico"
+        autoComplete="current-password"
+      />
+      <input
+        type="password"
+        value={nuevaPassword}
+        onChange={(evento) => setNuevaPassword(evento.target.value)}
+        placeholder="Contraseña nueva (mínimo 8 caracteres)"
+        className="consola-input-chico"
+        autoComplete="new-password"
+      />
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+        <button
+          type="button"
+          className="boton boton-primario"
+          disabled={enviando || !passwordActual || !nuevaPassword}
+          onClick={confirmar}
+        >
+          Cambiar contraseña
+        </button>
+        {error && <span style={{ color: "var(--c-error)" }}>{error}</span>}
+      </div>
     </div>
   );
 }

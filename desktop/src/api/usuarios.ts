@@ -46,3 +46,8 @@ export function actualizarUsuario(id: number, datos: DatosActualizarUsuario): Pr
 export function cambiarPasswordUsuario(id: number, password: string): Promise<void> {
   return invoke("cambiar_password_usuario", { id, password });
 }
+
+/** `/clave` en la consola — cambia la contraseña de la sesión actual. */
+export function cambiarMiPassword(passwordActual: string, nuevaPassword: string): Promise<void> {
+  return invoke("cambiar_mi_password", { passwordActual, nuevaPassword });
+}

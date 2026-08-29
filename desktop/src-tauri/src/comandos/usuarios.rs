@@ -53,3 +53,22 @@ pub fn cambiar_password_usuario(
         .cambiar_password_usuario(&sesion, id, &password)
         .map_err(control_acceso::mensajes::mensaje_usuario)
 }
+
+/// `/clave` en la consola — cambiar la contraseña de la propia sesión.
+/// `AppCore::cambiar_mi_password` ya verifica `password_actual` (Argon2) y
+/// valida la nueva en un solo paso, así que no hace falta el
+/// `verificar_mi_password` aparte que sí usa la TUI para no pedir la
+/// contraseña nueva dos veces por si la actual estaba mal — acá alcanza con
+/// un solo formulario con ambos campos.
+#[tauri::command]
+pub fn cambiar_mi_password(
+    password_actual: String,
+    nueva_password: String,
+    state: tauri::State<GuiState>,
+) -> Result<(), String> {
+    let sesion = state.sesion_activa()?;
+    state
+        .core()
+        .cambiar_mi_password(&sesion, &password_actual, &nueva_password)
+        .map_err(control_acceso::mensajes::mensaje_usuario)
+}
