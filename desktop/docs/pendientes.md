@@ -24,17 +24,36 @@ resuelve.** Si se descarta en vez de hacerse, se marca `[x]` igual con una nota 
   (no existía ninguno de los dos). Validado localmente con `npm run tauri build --no-bundle`
   (el build de instaladores Windows — MSI/NSIS — no se puede probar en este entorno Linux;
   se valida recién en el runner `windows-latest` de CI).
-- [x] **Decisión: las actualizaciones de la app son vía GitHub (2026-08-29).** Decisión
-  explícita del usuario — sin plugin `tauri-plugin-updater`, sin servidor de actualización
-  propio. Publicar una nueva versión = pushear un tag `v*`, que dispara `release.yml` y deja
-  el instalador nuevo listo para descargar. **Pendiente aparte, sin resolver todavía:** el
-  job de release (tanto `build` como `build-gui`) usa `actions/upload-artifact`, que deja el
-  archivo colgado del run de Actions (hace falta acceso al repo para encontrarlo), no una
-  entrada pública en la página de Releases de GitHub. Si "vía GitHub" quiere decir que
-  alguien sin acceso al repo pueda entrar a Releases y bajar el instalador directo, falta
-  agregar un paso que publique un GitHub Release de verdad (p. ej. `softprops/action-gh-release`)
-  con el `.msi`/`.exe` adjunto — no se agregó todavía porque cambiar eso también afecta al
-  job del binario de consola, que es una decisión aparte.
+- [x] **Decisión revisada: actualizaciones vía GitHub, automáticas (2026-08-29 → ampliado
+  el mismo día).** Primero se documentó como "vía GitHub, manual" (sin plugin, el usuario
+  baja el instalador a mano). El mismo día se decidió ir por la versión automática en vez
+  de esa — sigue siendo "vía GitHub" (GitHub Releases como origen, sin servidor propio),
+  pero ahora con `tauri-plugin-updater` avisando sola cuando hay versión nueva. El job
+  `build-gui` de `release.yml` se reescribió para usar `tauri-apps/tauri-action` en vez de
+  `npm run tauri build` + `actions/upload-artifact` — esa acción compila, firma cada bundle
+  y publica un GitHub Release de verdad (con `latest.json` adjunto), no un artifact de
+  Actions — así queda resuelto también el pendiente que había quedado abierto sobre
+  artifact-vs-Release-público. `releaseDraft: true` a propósito: alguien revisa y publica a
+  mano en vez de que cada tag quede público apenas termina el build.
+
+- [ ] **Falta el paso manual: generar el par de llaves de firma y cargarlo como secretos del
+  repo.** El código ya está listo (`tauri-plugin-updater`/`tauri-plugin-process` en
+  `desktop/src-tauri/Cargo.toml`, registrados en `lib.rs`; `plugins.updater` en
+  `tauri.conf.json` con `pubkey` todavía en `"REEMPLAZAR_CON_LA_LLAVE_PUBLICA_DE_TAURI_SIGNER_GENERATE"`;
+  chequeo + toast de `sonner` con botón "Actualizar" en `App.tsx`/`Shell`, ver
+  `api/actualizaciones.ts`), pero sin la llave real el updater no puede verificar nada. A
+  propósito no se generó la llave privada dentro de esta sesión — es un secreto de firma de
+  código, no algo que deba pasar por un log o un archivo de un contenedor efímero. Falta,
+  hecho por una persona con acceso al repo:
+  1. `npx tauri signer generate -w ~/.tauri/control-acceso.key` (local, fuera de CI).
+  2. Pegar la llave pública que imprime en `tauri.conf.json` → `plugins.updater.pubkey`,
+     reemplazando el placeholder.
+  3. Cargar la llave privada y su contraseña como secretos del repo en GitHub:
+     `TAURI_SIGNING_PRIVATE_KEY` y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (Settings → Secrets
+     and variables → Actions) — nunca committeados, nunca en texto plano fuera de ahí.
+  Hasta que esto se haga, un tag `v*` va a fallar el paso de firma del job `build-gui` (o
+  publicar un bundle sin firmar si `createUpdaterArtifacts` llegara a tolerarlo, lo cual no
+  hay que asumir sin probarlo).
 
 ## Robustez
 

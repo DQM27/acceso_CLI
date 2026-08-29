@@ -22,8 +22,15 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
         .manage(GuiState::new(core, instancia))
         .setup(|app| {
+            // El updater no existe en móvil — esta app es 100% escritorio (ver
+            // el comentario de crate-type arriba), pero se guarda el gate
+            // igual, mismo criterio que el ejemplo oficial de Tauri.
+            #[cfg(desktop)]
+            app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()

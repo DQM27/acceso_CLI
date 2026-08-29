@@ -33,6 +33,8 @@ jobs:
           path: target/release/control_acceso.exe
 
   build-gui:
+    permissions:
+      contents: write
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -63,20 +65,27 @@ jobs:
         working-directory: desktop/src-tauri
         run: cargo test --verbose
 
-      # Genera los instaladores de Windows (.msi vía WiX, .exe vía NSIS) en
-      # desktop/src-tauri/target/release/bundle/ — mismo perfil de release
-      # que ya usa el binario de consola (opt-level=3, lto=thin,
-      # codegen-units=1, ver desktop/src-tauri/Cargo.toml).
-      - name: Build de la GUI (Tauri)
-        working-directory: desktop
-        run: npm run tauri build
-
-      # Mismo TODO que el binario de consola arriba: sin firmar hasta
-      # aprobar el proyecto en SignPath Foundation.
-      - name: Publicar los instaladores como artefacto
-        uses: actions/upload-artifact@v4
+      # tauri-action compila, empaqueta (.msi/.exe, mismo perfil de release
+      # de siempre — ver desktop/src-tauri/Cargo.toml), firma cada bundle con
+      # TAURI_SIGNING_PRIVATE_KEY (produce los .sig que el updater verifica
+      # contra plugins.updater.pubkey en tauri.conf.json) y publica un
+      # GitHub Release de verdad con los instaladores + latest.json
+      # adjuntos — no un artifact de Actions, que necesitaría estar logueado
+      # en el repo para encontrarlo. Ver desktop/docs/pendientes.md para el
+      # setup de las llaves (no están acá, son secretos del repo).
+      - name: Build, firma y release (Tauri)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          name: control-acceso-desktop-${{ github.ref_name }}
-          path: |
-            desktop/src-tauri/target/release/bundle/msi/*.msi
-            desktop/src-tauri/target/release/bundle/nsis/*.exe
+          projectPath: desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: "Control de Acceso Brisas ${{ github.ref_name }}"
+          releaseBody: "Ver desktop/docs/pendientes.md / CHANGELOG en el repo para el detalle de esta versión."
+          # Draft a propósito: alguien revisa y publica a mano en vez de que
+          # quede pública apenas termina el build. Pasar a `false` es una
+          # decisión aparte, cuando el pipeline ya generó confianza.
+          releaseDraft: true
+          prerelease: false

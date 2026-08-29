@@ -33,8 +33,17 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "createUpdaterArtifacts": true,
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "REEMPLAZAR_CON_LA_LLAVE_PUBLICA_DE_TAURI_SIGNER_GENERATE",
+      "endpoints": [
+        "https://github.com/DQM27/acceso_CLI/releases/latest/download/latest.json"
+      ]
     }
   }
 }

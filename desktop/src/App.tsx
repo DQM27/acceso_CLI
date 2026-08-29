@@ -24,7 +24,7 @@
  */
 import { useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import { Building2, ClipboardList, History, UserCheck, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
@@ -38,7 +38,7 @@ import Auditoria from "./pantallas/Auditoria";
 import NuevoIngresoModal from "./pantallas/NuevoIngresoModal";
 import SalidaModal from "./pantallas/SalidaModal";
 import Consola from "./pantallas/Consola";
-import { cerrarSesion, requiereConfiguracionInicial } from "./api";
+import { buscarActualizacion, cerrarSesion, instalarActualizacion, requiereConfiguracionInicial } from "./api";
 import type { RolUsuario, UsuarioSesion } from "./api";
 
 type Pantalla =
@@ -158,6 +158,36 @@ function Shell({
   // defecto de la librería).
   useHotkeys("ctrl+shift+n", () => setModalNuevoIngreso(true), { preventDefault: true });
   useHotkeys("ctrl+shift+s", () => setModalSalida(true), { preventDefault: true });
+
+  // Una sola vez por sesión (no cada X minutos todavía — la app se abre y
+  // cierra bastante seguido, esto ya cubre el caso normal). Falla en
+  // silencio a propósito: sin conexión o GitHub caído no debe interrumpir a
+  // alguien que ya está trabajando, sólo no hay novedad que avisar.
+  useEffect(() => {
+    let vigente = true;
+    buscarActualizacion()
+      .then((actualizacion) => {
+        if (!vigente || !actualizacion) return;
+        toast(`Versión ${actualizacion.version} disponible`, {
+          description: "Se descarga, se instala y la app se reinicia sola.",
+          duration: Infinity,
+          action: {
+            label: "Actualizar",
+            onClick: () => {
+              toast.promise(instalarActualizacion(actualizacion), {
+                loading: "Descargando actualización…",
+                success: "Actualizado — reiniciando…",
+                error: (error) => `No se pudo actualizar: ${String(error)}`,
+              });
+            },
+          },
+        });
+      })
+      .catch((error) => console.error("No se pudo buscar actualizaciones:", error));
+    return () => {
+      vigente = false;
+    };
+  }, []);
 
   const seccionesVisibles = SECCIONES.filter(
     (item) => !item.rolesPermitidos || item.rolesPermitidos.includes(sesion.rol),
