@@ -7,21 +7,21 @@ import { etiquetaCampo, etiquetaEntidad, listarAuditoria, valorPresentable } fro
 import type { CambioAuditado } from "../api";
 
 /** Formato de 24 horas a propósito — ver el mismo criterio en Activos.tsx. */
-function textoHora(iso: string): string {
+export function textoHora(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 /** Año-mes-día en hora LOCAL como string ordenable — mismo criterio que
  * Activos.tsx/Historial.tsx (evita que AG Grid infiera "fecha" y dispare el
  * selector nativo del navegador). */
-function fechaLocalYMD(iso: string): string {
+export function fechaLocalYMD(iso: string): string {
   const d = new Date(iso);
   const mes = String(d.getMonth() + 1).padStart(2, "0");
   const dia = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${mes}-${dia}`;
 }
 
-function textoFechaDDMMYYYY(ymd: string): string {
+export function textoFechaDDMMYYYY(ymd: string): string {
   const [anio, mes, dia] = ymd.split("-");
   return `${dia}/${mes}/${anio}`;
 }
@@ -45,7 +45,7 @@ type FilaAuditoria = CambioAuditado & {
  * `fecha_hora` más reciente — `items` ya viene ordenado por fecha DESC
  * desde el núcleo, así que la primera fila vista por combinación ya es la
  * más nueva. */
-function nombresActuales(items: CambioAuditado[]): Map<string, string> {
+export function nombresActuales(items: CambioAuditado[]): Map<string, string> {
   const nombres = new Map<string, string>();
   for (const item of items) {
     const clave = `${item.entidad}:${item.entidad_id}`;

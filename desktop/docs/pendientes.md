@@ -11,6 +11,31 @@ resuelve.** Si se descarta en vez de hacerse, se marca `[x]` igual con una nota 
 
 ---
 
+## Exportación PDF de Historial con Typst — diseño listo, sin empezar (2026-08-29)
+
+- [ ] **Resumen del día en PDF (entradas/salidas), maquetado con Typst.** Decisión del
+  usuario: baja prioridad, retomar en otra sesión — necesita ver vistas previas del PDF en
+  el camino, que no se puede hacer desde acá sin gastar una cantidad enorme de tokens
+  (esta sesión no tiene forma de abrir/renderizar un PDF para iterar el diseño visual).
+  Los datos ya están listos sin tocar el backend: `MovimientoIngresoResumen`
+  (`src/database/queries/ingresos/historial.rs`, lo mismo que ya alimenta la exportación a
+  Excel) ya trae fecha/hora de entrada y salida, nombre, cédula, empresa, tipo, gafete y
+  medio — filtrar "los del día X" es sencillo sobre lo que ya existe.
+  Costo real de la integración, para tenerlo claro antes de arrancar: embeber el
+  compilador de Typst en Rust no es un `cargo add typst` y listo — hay que implementarle
+  (o usar `typst-kit`, que ya viene con resolución de fuentes lista) un `World`, y agrega
+  varios crates nuevos al árbol de dependencias (parsing de fuentes, manejo de imágenes) —
+  pesa más que `rust_xlsxwriter`, que es autocontenido sin pedir fuentes ni paquetes
+  externos. Además de la plantilla `.typ` en sí, que hay que escribir y mantener aparte del
+  código Rust.
+  Dónde encajaría si se retoma: un módulo hermano de `historial/exportacion.rs` (p. ej.
+  `historial/exportacion_pdf.rs`), un comando nuevo en
+  `desktop/src-tauri/src/comandos/historial.rs` (`exportar_resumen_dia_pdf` o similar),
+  reusando el mismo fetch de movimientos que ya usa la exportación a Excel. Antes de
+  escribir la plantilla real, vale la pena una prueba de concepto chica (compilar un PDF de
+  una sola página hardcodeada) para confirmar que el pipeline de Typst funciona bien en
+  Windows/CI antes de invertir en el diseño visual de verdad.
+
 ## Empaquetado y actualizaciones
 
 - [x] **Pipeline de release para la GUI (2026-08-29).** Antes `.github/workflows/release.yml`

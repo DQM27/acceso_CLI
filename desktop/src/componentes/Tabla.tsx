@@ -59,7 +59,7 @@ const columnaPorDefectoConFiltro: ColDef = {
   floatingFilter: true,
 };
 
-interface EstadoGuardado {
+export interface EstadoGuardado {
   ocultas: string[];
   columnas: ColumnState[];
 }
@@ -68,11 +68,11 @@ interface EstadoGuardado {
 // fijo de Acción (Activos) del código, un layout viejo lo seguía trayendo
 // de vuelta desde acá. Subir la versión descarta ese estado guardado
 // obsoleto en vez de tener que migrarlo a mano.
-function claveAlmacenamiento(id: string): string {
+export function claveAlmacenamiento(id: string): string {
   return `tabla:${id}:v2`;
 }
 
-function leerEstadoGuardado(id: string | undefined): EstadoGuardado | null {
+export function leerEstadoGuardado(id: string | undefined): EstadoGuardado | null {
   if (!id) return null;
   try {
     const crudo = localStorage.getItem(claveAlmacenamiento(id));
@@ -86,7 +86,7 @@ function leerEstadoGuardado(id: string | undefined): EstadoGuardado | null {
  * explícito (ej. dos columnas que leen el mismo `field`, como Fecha/Hora),
  * si no el `field`. Mismo criterio que usa AG Grid internamente para su
  * propio `getColumnState`. */
-function identidad(columna: ColDef<unknown>): string | undefined {
+export function identidad(columna: ColDef<unknown>): string | undefined {
   if (typeof columna.colId === "string") return columna.colId;
   if (typeof columna.field === "string") return columna.field;
   return undefined;

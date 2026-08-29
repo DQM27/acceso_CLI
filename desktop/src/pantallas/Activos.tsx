@@ -7,13 +7,13 @@ import PantallaEncabezado from "../componentes/PantallaEncabezado";
 import { listarIngresosActivos, mensajeMotivoDenegacion, registrarSalida } from "../api";
 import type { IngresoActivoResumen } from "../api";
 
-function textoMedio(medio: IngresoActivoResumen["medio_ingreso"]): string {
+export function textoMedio(medio: IngresoActivoResumen["medio_ingreso"]): string {
   return medio === "Vehiculo" ? "Vehículo" : "Caminando";
 }
 
 /** Formato de 24 horas a propósito (hour12: false) — sin esto
  * toLocaleTimeString usa AM/PM según el locale del sistema. */
-function textoHora(iso: string): string {
+export function textoHora(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
@@ -22,14 +22,14 @@ function textoHora(iso: string): string {
  * de la columna funcione como texto plano cronológico, sin volver a pasar
  * por `Date` (que interpretaría "2026-08-28" como medianoche UTC y podría
  * mostrar el día anterior en un huso horario negativo como Costa Rica). */
-function fechaLocalYMD(iso: string): string {
+export function fechaLocalYMD(iso: string): string {
   const d = new Date(iso);
   const mes = String(d.getMonth() + 1).padStart(2, "0");
   const dia = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${mes}-${dia}`;
 }
 
-function textoFechaDDMMYYYY(ymd: string): string {
+export function textoFechaDDMMYYYY(ymd: string): string {
   const [anio, mes, dia] = ymd.split("-");
   return `${dia}/${mes}/${anio}`;
 }
@@ -38,14 +38,14 @@ function textoFechaDDMMYYYY(ymd: string): string {
  * para que la columna tenga un `field` real: sin eso no aparece en el
  * selector "Columnas ▾" (que sólo lista columnas con `field`) ni el filtro
  * por columna puede buscar sobre ella. */
-function textoEstado(fila: IngresoActivoResumen): string {
+export function textoEstado(fila: IngresoActivoResumen): string {
   const r = fila.resultado_acceso;
   if (r === "Permitido") return "Al día";
   if (r === "PermitidoConAdvertencia") return "PRAIND próximo a vencer";
   return mensajeMotivoDenegacion(r.Denegado);
 }
 
-function colorEstado(fila: IngresoActivoResumen): string {
+export function colorEstado(fila: IngresoActivoResumen): string {
   const r = fila.resultado_acceso;
   if (r === "Permitido") return "var(--exito)";
   if (r === "PermitidoConAdvertencia") return "var(--advertencia)";

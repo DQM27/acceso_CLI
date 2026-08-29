@@ -18,7 +18,7 @@ interface ValoresFormulario {
 // Distinto esquema según el modo: en alta la contraseña es obligatoria, en
 // edición es opcional (vacío = "no cambiarla") pero si se escribe algo,
 // tiene que cumplir el mínimo igual que al crear.
-function construirEsquema(esCreacion: boolean) {
+export function construirEsquema(esCreacion: boolean) {
   return z.object({
     cedula: z
       .string()

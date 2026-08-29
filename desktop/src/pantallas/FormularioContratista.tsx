@@ -19,7 +19,7 @@ interface ValoresFormulario {
 
 // La validación real vive en el core (services/contratista_service.rs) — este
 // esquema es sólo para dar feedback inmediato sin ida y vuelta al backend.
-const esquema = z
+export const esquema = z
   .object({
     cedula: z
       .string()

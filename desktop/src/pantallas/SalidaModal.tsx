@@ -12,7 +12,7 @@ import type { IngresoActivoResumen } from "../api";
 
 const MAX_RESULTADOS = 4;
 
-function coincideTexto(activo: IngresoActivoResumen, textoBuscado: string): boolean {
+export function coincideTexto(activo: IngresoActivoResumen, textoBuscado: string): boolean {
   const buscado = textoBuscado.toLowerCase();
   return (
     activo.contratista_nombre.toLowerCase().includes(buscado) ||
