@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
+import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import FormularioEmpresa from "./FormularioEmpresa";
 import { buscarEmpresas, establecerEmpresaActiva } from "../api";
 import type { EmpresaResumen } from "../api";
@@ -27,13 +28,7 @@ export default function Empresas() {
     return buscarEmpresas({ texto: texto || undefined }).then(setFilas);
   }, [texto]);
 
-  useEffect(() => {
-    let vigente = true;
-    recargar().catch((error) => vigente && toast.error(String(error)));
-    return () => {
-      vigente = false;
-    };
-  }, [recargar]);
+  useCargaAlCambiar(recargar);
 
   async function manejarEdicion(fila: EmpresaResumen) {
     try {

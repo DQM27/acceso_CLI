@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import Modal from "../componentes/Modal";
 import { actualizarUsuario, cambiarPasswordUsuario, crearUsuario } from "../api";
 import type { RolUsuario, UsuarioResumen } from "../api";
+import { cedulaSchema, nombreSchema, sanearSoloDigitos, sanearSoloLetras } from "../validacion";
 
 const ROLES = ["Root", "Administrador", "Operador"] as const;
 
@@ -20,14 +21,8 @@ interface ValoresFormulario {
 // tiene que cumplir el mínimo igual que al crear.
 export function construirEsquema(esCreacion: boolean) {
   return z.object({
-    cedula: z
-      .string()
-      .min(1, "La cédula es obligatoria")
-      .regex(/^\d+$/, "La cédula sólo puede tener números"),
-    nombre: z
-      .string()
-      .min(1, "El nombre es obligatorio")
-      .regex(/^[\p{L}\s'-]+$/u, "El nombre no puede tener números ni símbolos"),
+    cedula: cedulaSchema,
+    nombre: nombreSchema,
     password: esCreacion
       ? z.string().min(8, "La contraseña debe tener al menos 8 caracteres")
       : z
@@ -114,7 +109,7 @@ export default function FormularioUsuario({
           <input
             {...register("cedula", {
               onChange: (evento) => {
-                evento.target.value = evento.target.value.replace(/\D/g, "");
+                evento.target.value = sanearSoloDigitos(evento.target.value);
               },
             })}
             inputMode="numeric"
@@ -128,7 +123,7 @@ export default function FormularioUsuario({
           <input
             {...register("nombre", {
               onChange: (evento) => {
-                evento.target.value = evento.target.value.replace(/[^\p{L}\s'-]/gu, "");
+                evento.target.value = sanearSoloLetras(evento.target.value);
               },
             })}
           />

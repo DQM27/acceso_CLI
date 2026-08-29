@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
+import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import FormularioContratista from "./FormularioContratista";
 import { actualizarContratista, buscarContratistas, listarEmpresas } from "../api";
 import type {
@@ -68,13 +69,7 @@ export default function Contratistas() {
     });
   }, [filtro]);
 
-  useEffect(() => {
-    let vigente = true;
-    recargar().catch((error) => vigente && toast.error(String(error)));
-    return () => {
-      vigente = false;
-    };
-  }, [recargar]);
+  useCargaAlCambiar(recargar);
 
   async function manejarEdicion(fila: ContratistaResumen) {
     try {

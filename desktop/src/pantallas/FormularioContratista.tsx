@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import Modal from "../componentes/Modal";
 import { actualizarContratista, crearContratista, requierePraind } from "../api";
 import type { ContratistaResumen, DatosContratista, Empresa, TipoIngreso } from "../api";
+import { cedulaSchema, nombreSchema, sanearSoloDigitos, sanearSoloLetras } from "../validacion";
 
 const TIPOS = ["Praind", "InHouse", "PorCorreo", "Swat"] as const;
 
@@ -21,14 +22,8 @@ interface ValoresFormulario {
 // esquema es sólo para dar feedback inmediato sin ida y vuelta al backend.
 export const esquema = z
   .object({
-    cedula: z
-      .string()
-      .min(1, "La cédula es obligatoria")
-      .regex(/^\d+$/, "La cédula sólo puede tener números"),
-    nombre: z
-      .string()
-      .min(1, "El nombre es obligatorio")
-      .regex(/^[\p{L}\s'-]+$/u, "El nombre no puede tener números ni símbolos"),
+    cedula: cedulaSchema,
+    nombre: nombreSchema,
     empresa_id: z.string().min(1, "Seleccioná una empresa"),
     tipo_ingreso: z.enum(TIPOS),
     fecha_vencimiento_praind: z.string(),
@@ -119,7 +114,7 @@ export default function FormularioContratista({
           <input
             {...register("cedula", {
               onChange: (evento) => {
-                evento.target.value = evento.target.value.replace(/\D/g, "");
+                evento.target.value = sanearSoloDigitos(evento.target.value);
               },
             })}
             inputMode="numeric"
@@ -133,7 +128,7 @@ export default function FormularioContratista({
           <input
             {...register("nombre", {
               onChange: (evento) => {
-                evento.target.value = evento.target.value.replace(/[^\p{L}\s'-]/gu, "");
+                evento.target.value = sanearSoloLetras(evento.target.value);
               },
             })}
           />
