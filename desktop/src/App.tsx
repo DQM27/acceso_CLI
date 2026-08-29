@@ -1,3 +1,27 @@
+/**
+ * Convención para pantallas y componentes nuevos — mismo criterio que ya
+ * sigue `comandos/mod.rs` del lado Tauri, ahora escrito acá:
+ *
+ * 1. Una pantalla nunca importa a otra pantalla. Si dos pantallas necesitan
+ *    lo mismo, eso va a `componentes/` (ver `ListaFlotante.tsx`) o a un
+ *    hook — nunca una pantalla llamando directo a otra. Única excepción
+ *    real: cada pantalla con SU PROPIO Formulario* (Contratistas ↔
+ *    FormularioContratista, etc.), que sigue siendo padre → hijo, no
+ *    acoplamiento entre hermanas.
+ * 2. `api/*.ts` es la única capa que llama `invoke()`. Ningún componente o
+ *    pantalla invoca Tauri directo — el mapeo de tipos/errores del lado
+ *    Rust queda en un solo lugar por dominio.
+ * 3. Antes de escribir un `useState`/`useEffect` que "se parece a algo que
+ *    ya vi" en otra pantalla, revisar `componentes/` primero. La
+ *    duplicación que había entre `NuevoIngresoModal`/`SalidaModal`
+ *    (buscador con lista flotante + navegación de flechas, casi idéntica
+ *    en los dos) es justo el tipo de cosa que este punto evita — ya se
+ *    sacó a `ListaFlotante.tsx`, no se vuelve a copiar.
+ * 4. Un componente se separa a su propio archivo cuando mezcla markup con
+ *    lógica que no le pertenece a la función que lo contiene — la señal
+ *    que llevó a sacar `Sidebar.tsx` de `Shell` (que sí hace enrutamiento
+ *    y orquesta modales, eso es responsabilidad suya).
+ */
 import { useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Toaster } from "sonner";
