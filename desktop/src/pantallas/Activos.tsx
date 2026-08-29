@@ -4,13 +4,9 @@ import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
-import { listarIngresosActivos, mensajeMotivoDenegacion, registrarSalida } from "../api";
+import { listarIngresosActivos, mensajeMotivoDenegacion, registrarSalida, textoMedio } from "../api";
 import type { IngresoActivoResumen } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
-
-export function textoMedio(medio: IngresoActivoResumen["medio_ingreso"]): string {
-  return medio === "Vehiculo" ? "Vehículo" : "Caminando";
-}
 
 /** Texto plano del estado — separado del componente visual `EstadoAcceso`
  * para que la columna tenga un `field` real: sin eso no aparece en el

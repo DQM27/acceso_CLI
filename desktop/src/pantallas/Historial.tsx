@@ -5,13 +5,9 @@ import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
-import { exportarHistorial, listarHistorial } from "../api";
+import { exportarHistorial, listarHistorial, textoMedio } from "../api";
 import type { MovimientoIngresoResumen } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
-
-export function textoMedio(medio: MovimientoIngresoResumen["medio_ingreso"]): string {
-  return medio === "Vehiculo" ? "Vehículo" : "Caminando";
-}
 
 type FilaHistorial = MovimientoIngresoResumen;
 

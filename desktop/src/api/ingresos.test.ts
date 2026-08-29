@@ -5,8 +5,16 @@ import {
   mensajeMotivoDenegacion,
   puedeContinuar,
   sanearGafetes,
+  textoMedio,
 } from "./ingresos";
 import type { PreparacionIngreso } from "./ingresos";
+
+describe("textoMedio", () => {
+  it("Vehiculo -> Vehículo, cualquier otro -> Caminando", () => {
+    expect(textoMedio("Vehiculo")).toBe("Vehículo");
+    expect(textoMedio("Caminando")).toBe("Caminando");
+  });
+});
 
 function preparacion(overrides: Partial<PreparacionIngreso> = {}): PreparacionIngreso {
   return {

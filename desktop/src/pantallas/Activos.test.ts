@@ -1,16 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { colorEstado, textoEstado, textoMedio } from "./Activos";
+import { colorEstado, textoEstado } from "./Activos";
 import type { IngresoActivoResumen } from "../api";
 
 // fechaLocalYMD/textoHora/textoFechaDDMMYYYY se probaron en
-// src/tiempo.test.ts — Activos las importa de ahí, no las define más.
-
-describe("textoMedio", () => {
-  it("Vehiculo -> Vehículo, cualquier otro -> Caminando", () => {
-    expect(textoMedio("Vehiculo")).toBe("Vehículo");
-    expect(textoMedio("Caminando")).toBe("Caminando");
-  });
-});
+// src/tiempo.test.ts, y textoMedio en api/ingresos.test.ts — Activos las
+// importa de ahí, no las define más.
 
 describe("textoEstado / colorEstado", () => {
   function fila(

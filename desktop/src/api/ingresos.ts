@@ -7,6 +7,12 @@ import type { TipoIngreso } from "./contratistas";
 export type MedioIngreso = "Caminando" | "Vehiculo";
 export const MEDIOS_INGRESO: MedioIngreso[] = ["Caminando", "Vehiculo"];
 
+/** Estaba duplicada igual en Activos.tsx e Historial.tsx (las dos grillas
+ * que muestran esta columna) — un solo lugar para el texto en español. */
+export function textoMedio(medio: MedioIngreso): string {
+  return medio === "Vehiculo" ? "Vehículo" : "Caminando";
+}
+
 export type MotivoDenegacion =
   | "SinAcceso"
   | "PraindVencido"
