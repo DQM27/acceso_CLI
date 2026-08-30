@@ -66,6 +66,9 @@ mod tests {
             estado: Some(EstadoGafeteEntrada::Perdido),
         }
         .construir();
-        assert_eq!(filtro.estado, Some(Igualdad::Incluye(EstadoGafete::Perdido)));
+        assert_eq!(
+            filtro.estado,
+            Some(Igualdad::Incluye(EstadoGafete::Perdido))
+        );
     }
 }

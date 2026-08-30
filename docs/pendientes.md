@@ -197,6 +197,53 @@ suite completa + Clippy estricto.
   `tests/ingreso_queries.rs::historial_filtra_por_quien_dio_ingreso_y_quien_dio_salida`
   (ya existente, no hizo falta un test nuevo).
 
+## Catálogo de gafetes (`docs/plan-gafetes.md`)
+
+Plan aprobado el 2026-08-22, implementado el 2026-08-30 — antes `gafete_numero` en
+`registro_ingresos` era un `INTEGER` libre sin relación con los gafetes físicos reales,
+sin forma de sacar de circulación uno perdido ni de saber quién lo debe.
+
+- [x] **Núcleo (2026-08-30).** `MIGRACION_14` (el plan pedía `MIGRACION_13`, ya ocupada por
+  la generalización de auditoría): tablas `gafetes` (estado DISPONIBLE/PERDIDO/DE_BAJA +
+  deudor) y `gafetes_incidentes` (historial append-only). `GafeteService` valida las
+  transiciones (Disponible ↔ Perdido, Disponible → DeBaja) y el alta individual/por rango
+  (tope defensivo de 200, atómica — si un número del rango falla, ninguno queda creado).
+  `RegistroIngresoService` gana un tercer genérico (`GafeteRepository`): `registrar_entrada`
+  valida el catálogo (no existe/perdido/de baja) antes del chequeo de ocupación existente, y
+  `PreparacionIngreso.gafetes_deuda` viaja no bloqueante. Tocó los ~40 call sites de
+  `RegistroIngresoService::new(...)` (3 en `application/accesos.rs`, 37 repartidos en 4
+  archivos de test) más fixtures de gafete en los tests que registran entradas reales.
+  `AppCore::gafetes` (fachada) sin restricción de rol a propósito — decisión explícita del
+  usuario, a diferencia de Empresas/Usuarios: cualquier operador con sesión gestiona el
+  catálogo completo.
+- [x] **TUI (2026-08-30).** Aviso de deuda no bloqueante en Nuevo Ingreso. Pantalla
+  `src/tui/gafetes/` completa (maestro-detalle, alta individual/rango con Tab, marcar
+  perdido con buscador de contratista deudor, resolver con 1=Pagado/2=Apareció, dar de
+  baja). `OpcionMenu::GestionGafetes`, atajo por letra `G` — deliberadamente fuera de la
+  barra de pestañas del tema Negro (mismo grupo que ModoComandos/CerrarSesion/Salir, los
+  otros accesos por letra) para no tocar el corpus de snapshots visuales de las 9 pantallas
+  que sí son pestaña; único snapshot que cambió fue el propio Menú Principal (3 temas),
+  regenerado y revisado. Filtro de búsqueda del catálogo simplificado a propósito (número
+  exacto o `estado:`/`-estado:`) en vez del motor `clave:valor` completo — el catálogo es
+  chico, no lo justifica.
+- [x] **GUI (2026-08-30) — decisión explícita al retomar el plan: paridad con la TUI, no
+  sólo la validación heredada.** El plan original (pre-GUI) sólo cubría la TUI; al
+  retomarlo se decidió construir también la pantalla de gestión en `desktop/`, mismo
+  criterio de paridad que ya tienen Contratistas/Empresas/Usuarios/Auditoría. Comandos
+  Tauri (`comandos::gafetes`, sin restricción de rol, mismo criterio que el núcleo) +
+  `Gafetes.tsx`/`FormularioGafete.tsx`/`GestionGafeteModal.tsx` (el buscador de deudor
+  reusa el mecanismo de `ListaFlotante` que ya tenía `NuevoIngresoModal`). Aviso de deuda
+  no bloqueante también en el modal de Nuevo Ingreso de la GUI.
+- [x] **Corregido de paso: `AppCore::marcar_gafete_perdido`/`resolver_gafete` calculaban
+  "ahora" fuera de `AppCore`.** El plan (sección 7) no detallaba este punto a nivel de
+  firma; el resto de `AppCore` siempre calcula la fecha/hora con `self.reloj.ahora_utc()`
+  adentro, nunca como parámetro del llamador — se corrigió para seguir esa única
+  convención en vez de quedar como la excepción.
+
+`cargo fmt`, Clippy estricto (`-D warnings`) y la suite completa en verde en los tres
+proyectos (raíz: 491 tests; `desktop/src-tauri`: 20 tests; `desktop/`: `npx tsc --noEmit` +
+`npm run build` + 130 tests de Vitest).
+
 ## Sistema visual / UI
 
 - [x] **Tema Negro y navegación por pestañas (2026-08-22).** Se agregó un tercer tema

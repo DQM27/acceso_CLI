@@ -1,8 +1,20 @@
-# Catálogo de gafetes y deuda por pérdida (plan aprobado, sin implementar)
+# Catálogo de gafetes y deuda por pérdida (implementado — ver `docs/pendientes.md`)
 
-> Diseñado y aprobado con el usuario el 2026-08-22. No se implementó nada todavía —
-> este documento es el plan completo para retomarlo en otra sesión. Al implementarlo,
-> seguir el orden de la sección 11 y actualizar `docs/pendientes.md` al terminar.
+> Diseñado y aprobado con el usuario el 2026-08-22. Implementado el 2026-08-30
+> siguiendo el orden de la sección 11, con tres adaptaciones respecto a lo que
+> dice este documento (nada cambia en el diseño, sólo en dónde encaja):
+> 1. `MIGRACION_13` ya la había usado la generalización de auditoría
+>    (`auditoria_cambios`) — quedó en `MIGRACION_14`, `SCHEMA_VERSION` 13→14.
+> 2. Los mensajes de error (sección 2) ya no viven en
+>    `src/tui/app/error_messages.rs` (no existe más) — están en
+>    `src/mensajes.rs`, compartido por TUI y GUI.
+> 3. La GUI (`desktop/`, inexistente cuando se aprobó este plan) también
+>    recibió pantalla propia (`desktop/src/pantallas/Gafetes.tsx` +
+>    `GestionGafeteModal.tsx` + `FormularioGafete.tsx`), decisión explícita
+>    del usuario al retomarlo — no sólo la validación heredada del núcleo.
+> El detalle de qué se hizo y el estado de cada paso vive en
+> `docs/pendientes.md`, sección "Catálogo de gafetes". Este documento queda
+> como referencia de diseño, no como rastreador de progreso.
 
 ## Contexto
 
