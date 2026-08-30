@@ -29,26 +29,53 @@ pub enum ColumnaHistorial {
     Egreso,
 }
 
+/// Azul claro de banda alterna ("cebra") — un tono distinto al del
+/// encabezado (`D9EAF7`, ver `preparar_hoja`) para que no se confundan.
+const COLOR_ZEBRA: &str = "BDD7EE";
+
+/// Arial 10 negrita — pedido explícito del usuario para todo el archivo, no
+/// sólo el encabezado (que ya era negrita por su cuenta).
+fn con_fuente_base(formato: Format) -> Format {
+    formato.set_font_name("Arial").set_font_size(10).set_bold()
+}
+
+/// `[fila impar, fila par]` del mismo formato — la única diferencia es el
+/// fondo. `escribir_movimiento` elige el índice según `fila % 2`.
+fn con_cebra(formato: Format) -> [Format; 2] {
+    [formato.clone(), formato.set_background_color(COLOR_ZEBRA)]
+}
+
 pub(crate) struct FormatosHistorial {
-    fecha: Format,
-    hora: Format,
-    /// Centrado plano (sin formato numérico) — todas las columnas de texto
-    /// salvo [`ColumnaHistorial::Nombre`]/[`ColumnaHistorial::Cedula`]
-    /// (esas quedan alineadas a la izquierda, que es lo que Excel ya hace
-    /// por defecto con texto, así que no necesitan `Format` propio).
-    centrado: Format,
+    fecha: [Format; 2],
+    hora: [Format; 2],
+    /// Centrado (sin formato numérico) — columnas de texto salvo
+    /// [`ColumnaHistorial::Nombre`]/[`ColumnaHistorial::Cedula`] (esas usan
+    /// [`Self::texto`], alineado a la izquierda).
+    centrado: [Format; 2],
+    /// Mismo formato base que [`Self::centrado`] pero sin `set_align`
+    /// (izquierda, el default de Excel para texto) — antes Nombre/Cédula se
+    /// escribían sin ningún `Format`, lo cual ya no alcanza para que les
+    /// llegue la fuente base o la cebra.
+    texto: [Format; 2],
 }
 
 impl Default for FormatosHistorial {
     fn default() -> Self {
         Self {
-            fecha: Format::new()
-                .set_num_format("dd/mm/yyyy")
-                .set_align(FormatAlign::Center),
-            hora: Format::new()
-                .set_num_format("hh:mm")
-                .set_align(FormatAlign::Center),
-            centrado: Format::new().set_align(FormatAlign::Center),
+            fecha: con_cebra(con_fuente_base(
+                Format::new()
+                    .set_num_format("dd/mm/yyyy")
+                    .set_align(FormatAlign::Center),
+            )),
+            hora: con_cebra(con_fuente_base(
+                Format::new()
+                    .set_num_format("hh:mm")
+                    .set_align(FormatAlign::Center),
+            )),
+            centrado: con_cebra(con_fuente_base(
+                Format::new().set_align(FormatAlign::Center),
+            )),
+            texto: con_cebra(con_fuente_base(Format::new())),
         }
     }
 }
@@ -134,11 +161,12 @@ pub(crate) fn preparar_hoja(
     hoja: &mut Worksheet,
     columnas: &[ColumnaHistorial],
 ) -> Result<(), XlsxError> {
-    let encabezado = Format::new()
-        .set_bold()
-        .set_align(FormatAlign::Center)
-        .set_border(FormatBorder::Thin)
-        .set_background_color("D9EAF7");
+    let encabezado = con_fuente_base(
+        Format::new()
+            .set_align(FormatAlign::Center)
+            .set_border(FormatBorder::Thin)
+            .set_background_color("D9EAF7"),
+    );
 
     hoja.set_name("Movimientos")?;
     hoja.set_freeze_panes(1, 0)?;
@@ -158,12 +186,22 @@ pub(crate) fn escribir_movimiento(
     formatos: &FormatosHistorial,
 ) -> Result<(), XlsxError> {
     let ingreso_local = a_costa_rica(movimiento.fecha_hora_ingreso);
+    // Alterna cebra según la fila real de Excel (1 = primera fila de datos,
+    // ver `application/historial.rs`) — no un contador propio, para que dos
+    // llamadas consecutivas con la misma `fila` (no debería pasar, pero si
+    // pasara) no desincronicen el patrón del resto de la hoja.
+    let variante = (fila % 2) as usize;
 
     for (indice, columna) in columnas.iter().copied().enumerate() {
         let indice = u16::try_from(indice).unwrap_or(u16::MAX);
         match columna {
             ColumnaHistorial::FechaIngreso => {
-                hoja.write_with_format(fila, indice, &ingreso_local.date_naive(), &formatos.fecha)?;
+                hoja.write_with_format(
+                    fila,
+                    indice,
+                    &ingreso_local.date_naive(),
+                    &formatos.fecha[variante],
+                )?;
             }
             ColumnaHistorial::FechaSalida => match movimiento.fecha_hora_salida {
                 Some(salida) => {
@@ -171,26 +209,41 @@ pub(crate) fn escribir_movimiento(
                         fila,
                         indice,
                         &a_costa_rica(salida).date_naive(),
-                        &formatos.fecha,
+                        &formatos.fecha[variante],
                     )?;
                 }
                 None => {
-                    hoja.write_string_with_format(fila, indice, "Activo", &formatos.centrado)?;
+                    hoja.write_string_with_format(
+                        fila,
+                        indice,
+                        "Activo",
+                        &formatos.centrado[variante],
+                    )?;
                 }
             },
             ColumnaHistorial::Nombre => {
-                hoja.write_string(fila, indice, &movimiento.contratista_nombre)?;
+                hoja.write_string_with_format(
+                    fila,
+                    indice,
+                    &movimiento.contratista_nombre,
+                    &formatos.texto[variante],
+                )?;
             }
             ColumnaHistorial::Cedula => {
                 // Cédula siempre es texto: Excel no debe eliminar ceros iniciales.
-                hoja.write_string(fila, indice, &movimiento.cedula)?;
+                hoja.write_string_with_format(
+                    fila,
+                    indice,
+                    &movimiento.cedula,
+                    &formatos.texto[variante],
+                )?;
             }
             ColumnaHistorial::Empresa => {
                 hoja.write_string_with_format(
                     fila,
                     indice,
                     &movimiento.empresa_nombre,
-                    &formatos.centrado,
+                    &formatos.centrado[variante],
                 )?;
             }
             ColumnaHistorial::Tipo => {
@@ -198,11 +251,16 @@ pub(crate) fn escribir_movimiento(
                     fila,
                     indice,
                     tipo_texto(movimiento.tipo_ingreso),
-                    &formatos.centrado,
+                    &formatos.centrado[variante],
                 )?;
             }
             ColumnaHistorial::Entrada => {
-                hoja.write_with_format(fila, indice, &ingreso_local.time(), &formatos.hora)?;
+                hoja.write_with_format(
+                    fila,
+                    indice,
+                    &ingreso_local.time(),
+                    &formatos.hora[variante],
+                )?;
             }
             ColumnaHistorial::Salida => match movimiento.fecha_hora_salida {
                 Some(salida) => {
@@ -210,25 +268,30 @@ pub(crate) fn escribir_movimiento(
                         fila,
                         indice,
                         &a_costa_rica(salida).time(),
-                        &formatos.hora,
+                        &formatos.hora[variante],
                     )?;
                 }
                 None => {
-                    hoja.write_string_with_format(fila, indice, "Activo", &formatos.centrado)?;
+                    hoja.write_string_with_format(
+                        fila,
+                        indice,
+                        "Activo",
+                        &formatos.centrado[variante],
+                    )?;
                 }
             },
             ColumnaHistorial::Gafete => {
                 let valor = movimiento
                     .gafete_numero
                     .map_or_else(|| "S/G".to_owned(), |numero| numero.to_string());
-                hoja.write_string_with_format(fila, indice, &valor, &formatos.centrado)?;
+                hoja.write_string_with_format(fila, indice, &valor, &formatos.centrado[variante])?;
             }
             ColumnaHistorial::Medio => {
                 hoja.write_string_with_format(
                     fila,
                     indice,
                     medio_texto(movimiento.medio_ingreso),
-                    &formatos.centrado,
+                    &formatos.centrado[variante],
                 )?;
             }
             ColumnaHistorial::Ingreso => {
@@ -236,7 +299,7 @@ pub(crate) fn escribir_movimiento(
                     fila,
                     indice,
                     &movimiento.usuario_ingreso_nombre,
-                    &formatos.centrado,
+                    &formatos.centrado[variante],
                 )?;
             }
             ColumnaHistorial::Egreso => {
@@ -244,7 +307,7 @@ pub(crate) fn escribir_movimiento(
                     fila,
                     indice,
                     movimiento.usuario_salida_nombre.as_deref().unwrap_or("—"),
-                    &formatos.centrado,
+                    &formatos.centrado[variante],
                 )?;
             }
         }
