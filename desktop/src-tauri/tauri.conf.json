@@ -40,7 +40,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "REEMPLAZAR_CON_LA_LLAVE_PUBLICA_DE_TAURI_SIGNER_GENERATE",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhEOEU4OTRBNDVBMjAyOTUKUldTVkFxSkZTb21PamZvUHVHMDBlRnFhY3JWN2N2U0pyemI2VXo3UGs4MEYzWEs4V1QwZzYwd0kK",
       "endpoints": [
         "https://github.com/DQM27/acceso_CLI/releases/latest/download/latest.json"
       ]
