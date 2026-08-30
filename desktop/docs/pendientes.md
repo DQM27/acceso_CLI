@@ -129,24 +129,15 @@ que sí filtran correctamente. Encontradas en una revisión completa del modelo 
   artifact-vs-Release-público. `releaseDraft: true` a propósito: alguien revisa y publica a
   mano en vez de que cada tag quede público apenas termina el build.
 
-- [ ] **Falta el paso manual: generar el par de llaves de firma y cargarlo como secretos del
-  repo.** El código ya está listo (`tauri-plugin-updater`/`tauri-plugin-process` en
-  `desktop/src-tauri/Cargo.toml`, registrados en `lib.rs`; `plugins.updater` en
-  `tauri.conf.json` con `pubkey` todavía en `"REEMPLAZAR_CON_LA_LLAVE_PUBLICA_DE_TAURI_SIGNER_GENERATE"`;
-  chequeo + toast de `sonner` con botón "Actualizar" en `App.tsx`/`Shell`, ver
-  `api/actualizaciones.ts`), pero sin la llave real el updater no puede verificar nada. A
-  propósito no se generó la llave privada dentro de esta sesión — es un secreto de firma de
-  código, no algo que deba pasar por un log o un archivo de un contenedor efímero. Falta,
-  hecho por una persona con acceso al repo:
-  1. `npx tauri signer generate -w ~/.tauri/control-acceso.key` (local, fuera de CI).
-  2. Pegar la llave pública que imprime en `tauri.conf.json` → `plugins.updater.pubkey`,
-     reemplazando el placeholder.
-  3. Cargar la llave privada y su contraseña como secretos del repo en GitHub:
-     `TAURI_SIGNING_PRIVATE_KEY` y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (Settings → Secrets
-     and variables → Actions) — nunca committeados, nunca en texto plano fuera de ahí.
-  Hasta que esto se haga, un tag `v*` va a fallar el paso de firma del job `build-gui` (o
-  publicar un bundle sin firmar si `createUpdaterArtifacts` llegara a tolerarlo, lo cual no
-  hay que asumir sin probarlo).
+- [x] **Hecho (2026-08-29, confirmado 2026-08-30): llave de firma generada y cargada —
+  updater firma bien.** Paso manual completado por el usuario, fuera de esta sesión (correcto:
+  es un secreto de firma de código, no algo que deba pasar por un log o un archivo de un
+  contenedor efímero). `tauri.conf.json` → `plugins.updater.pubkey` tiene la llave pública
+  real (ya no el placeholder `REEMPLAZAR_CON_LA_LLAVE_PUBLICA_DE_TAURI_SIGNER_GENERATE`,
+  commit `c0c1be1` "carga la llave pública real del updater y regenera íconos"); la llave
+  privada y su contraseña quedaron como secretos del repo en GitHub
+  (`TAURI_SIGNING_PRIVATE_KEY`/`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). Confirmado por el
+  usuario que el job `build-gui` firma los bundles sin error en un tag `v*` real.
 
 ## Robustez
 
