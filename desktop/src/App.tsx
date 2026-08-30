@@ -25,7 +25,7 @@
 import { useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Toaster, toast } from "sonner";
-import { Building2, ClipboardList, History, UserCheck, UserCog, Users } from "lucide-react";
+import { Building2, ClipboardList, History, IdCard, UserCheck, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import ErrorBoundary from "./componentes/ErrorBoundary";
@@ -36,6 +36,7 @@ import Empresas from "./pantallas/Empresas";
 import Usuarios from "./pantallas/Usuarios";
 import Historial from "./pantallas/Historial";
 import Auditoria from "./pantallas/Auditoria";
+import Gafetes from "./pantallas/Gafetes";
 import NuevoIngresoModal from "./pantallas/NuevoIngresoModal";
 import SalidaModal from "./pantallas/SalidaModal";
 import Consola from "./pantallas/Consola";
@@ -121,7 +122,8 @@ export type Seccion =
   | "contratistas"
   | "auditoria"
   | "empresas"
-  | "usuarios";
+  | "usuarios"
+  | "gafetes";
 
 /** `rolesPermitidos` ausente = visible para cualquier rol logueado.
  * Auditoría lo restringe — espejo de `RolUsuario::puede(VerAuditoria)` en
@@ -157,6 +159,7 @@ const SECCIONES: {
     Icono: UserCog,
     rolesPermitidos: ["Root", "Administrador"],
   },
+  { id: "gafetes", etiqueta: "Gafetes", Icono: IdCard },
 ];
 
 /**
@@ -263,6 +266,7 @@ function Shell({
           {seccion === "auditoria" && <Auditoria />}
           {seccion === "empresas" && <Empresas />}
           {seccion === "usuarios" && <Usuarios actorRol={sesion.rol} />}
+          {seccion === "gafetes" && <Gafetes />}
         </ErrorBoundary>
       </main>
 

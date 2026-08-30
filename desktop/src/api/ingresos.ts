@@ -37,6 +37,10 @@ export interface PreparacionIngreso {
   resultado_acceso: ResultadoAcceso;
   requiere_gafete: boolean;
   tiene_ingreso_activo: boolean;
+  /** Números de gafete que este contratista debe actualmente
+   * (`docs/plan-gafetes.md`) — puramente informativo, no bloquea el
+   * ingreso. */
+  gafetes_deuda: number[];
 }
 
 export interface ResultadoRegistroEntrada {

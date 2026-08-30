@@ -26,6 +26,7 @@ function preparacion(overrides: Partial<PreparacionIngreso> = {}): PreparacionIn
     resultado_acceso: "Permitido",
     requiere_gafete: false,
     tiene_ingreso_activo: false,
+    gafetes_deuda: [],
     ...overrides,
   };
 }

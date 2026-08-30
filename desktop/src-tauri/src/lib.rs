@@ -69,6 +69,12 @@ pub fn run() {
             comandos::historial::exportar_historial,
             comandos::historial::exportar_historial_pdf,
             comandos::auditoria::listar_auditoria,
+            comandos::gafetes::buscar_gafetes,
+            comandos::gafetes::crear_gafete,
+            comandos::gafetes::crear_gafetes_rango,
+            comandos::gafetes::dar_de_baja_gafete,
+            comandos::gafetes::marcar_gafete_perdido,
+            comandos::gafetes::resolver_gafete,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

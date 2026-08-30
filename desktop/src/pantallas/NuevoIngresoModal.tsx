@@ -250,6 +250,15 @@ export default function NuevoIngresoModal({
                   </p>
                 )}
 
+                {seleccion.preparacion.gafetes_deuda.length > 0 && (
+                  <p style={{ margin: 0, color: "var(--advertencia)", fontSize: "0.85rem" }}>
+                    ⚠ Este contratista debe el gafete{" "}
+                    {seleccion.preparacion.gafetes_deuda
+                      .map((numero) => `#${String(numero).padStart(2, "0")}`)
+                      .join(", ")}
+                  </p>
+                )}
+
                 <div className="campo">
                   Medio de ingreso
                   <div style={{ display: "flex", gap: "0.75rem" }}>

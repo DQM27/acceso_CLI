@@ -9,6 +9,7 @@ export * from "./autenticacion";
 export * from "./consola";
 export * from "./contratistas";
 export * from "./empresas";
+export * from "./gafetes";
 export * from "./historial";
 export * from "./ingresos";
 export * from "./usuarios";
