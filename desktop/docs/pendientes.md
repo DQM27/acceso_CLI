@@ -122,16 +122,14 @@ resuelve.** Si se descarta en vez de hacerse, se marca `[x]` igual con una nota 
   explícitamente. La vista Clásica (tabla, ya implementada) queda como única vista de
   Historial.
 
-- [ ] **Módulo de exportación avanzado: fuente/tamaño de letra y formato de celda
-  configurables.** `rust_xlsxwriter` (ya en uso) sí soporta esto sin herramienta adicional
-  — `Format::set_font_name`/`set_font_size`/`set_bold`/`set_font_color` para tipografía,
-  `set_num_format` para tipo de celda (numérico vs. texto; ya se usa para fecha/hora en
-  `FormatosHistorial`, `src/historial/exportacion.rs`), más bordes/alineación/color de
-  fondo (hoy sólo aplicados al encabezado, no a las filas de datos). Decisión explícita del
-  usuario (2026-08-28): no se define el alcance todavía — se retoma como un módulo de
-  exportación avanzado más adelante, con el usuario definiendo primero qué configurar
-  (tipografía general, Gafete como celda numérica en vez de texto, bordes/zebra en filas de
-  datos, u otra cosa puntual).
+- [x] **Tipografía y cebra en la exportación a Excel (2026-08-29).** Toda la hoja (antes
+  sólo el encabezado) pasa a Arial 10 negrita, con filas de datos alternadas
+  celeste/blanco — pedido explícito del usuario, confirmado contra una muestra generada a
+  mano antes de commitear. `FormatosHistorial` (`src/historial/exportacion.rs`) pasó de un
+  `Format` por tipo de columna a `[Format; 2]` (fila impar/par), elegido según `fila % 2`
+  en `escribir_movimiento`. Gafete como celda numérica y bordes en filas de datos quedan
+  fuera de este cambio — no se pidieron, se agregan si hace falta más adelante (misma
+  API de `rust_xlsxwriter`, `set_num_format`/`set_border` ya en uso para otras columnas).
 
 ## Pantallas del plan original (`docs/plan-tauri.md`, grupo 4-5) aún sin construir
 
