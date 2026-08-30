@@ -41,6 +41,34 @@ resuelve.** Si se descarta en vez de hacerse, se marca `[x]` igual con una nota 
   forma aislada valdría la pena reportarlo río arriba (wry/webview2-com), pero no se
   investigó ese camino todavía.
 
+## RBAC en la GUI — fisuras encontradas en análisis de roles (2026-08-30)
+
+No son bypass de seguridad — `AppCore` sigue rechazando estas operaciones del lado del
+núcleo en los dos casos — pero sí inconsistencias reales entre la GUI y el TUI/`--comandos`,
+que sí filtran correctamente. Encontradas en una revisión completa del modelo de roles
+(`src/domain/autorizacion.rs`) y su aplicación en las tres interfaces.
+
+- [ ] **Sidebar muestra "Usuarios" a un Operador, que no puede ni listarlos.** `SECCIONES`
+  en `desktop/src/App.tsx` sólo pone `rolesPermitidos` en "Auditoría"; "Usuarios" queda sin
+  ese campo, visible para cualquier rol logueado. Pero `AppCore::buscar_usuarios`
+  (`src/application/usuarios.rs`) exige `Operacion::GestionarUsuarios`, que un Operador no
+  tiene — entra a la pantalla y la tabla queda vacía con un toast de error, en vez de no ver
+  la sección. El comentario que justifica el punto anterior ("RBAC visual en el sidebar",
+  arriba) da por hecho que "el resto de las pantallas no tiene una operación de sólo-lectura
+  restringida por rol en el núcleo" — para Usuarios eso es falso. El TUI sí lo hace bien
+  (`OpcionMenu::visible_para` en `src/tui/menu_principal/state.rs` oculta Usuarios y
+  Auditoría para Operador). Arreglo: agregar `rolesPermitidos: ["Root", "Administrador"]` a
+  la entrada `usuarios` en `SECCIONES`.
+
+- [ ] **Formulario de usuario ofrece "Root" como rol asignable sin importar quién lo esté
+  llenando.** `ROLES` en `desktop/src/pantallas/FormularioUsuario.tsx` es una lista fija
+  (`["Root", "Administrador", "Operador"]`) para el `<select>` de rol, sin filtrar contra el
+  actor de la sesión. Un Administrador puede elegir Root y recién se entera del rechazo al
+  enviar (`puede_gestionar_usuario` en el núcleo). El TUI/`--comandos` sí filtra las opciones
+  (`FormularioUsuario::roles_disponibles` en `src/comandos/formulario_usuario.rs`, que usa
+  `puede_gestionar_usuario` para que "un Administrador nunca vea Root"). Arreglo: calcular
+  las opciones del `<select>` según `sesion.rol` con la misma regla, en vez de la lista fija.
+
 ## Entorno de desarrollo
 
 - [ ] **`cargo test` en `desktop/src-tauri` crashea en esta PC — toolchain GNU sin Visual
