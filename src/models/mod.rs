@@ -1,5 +1,6 @@
 pub mod contratista;
 pub mod empresa;
+pub mod gafete;
 pub mod medio_ingreso;
 pub mod registro_ingreso;
 pub mod tipo_ingreso;

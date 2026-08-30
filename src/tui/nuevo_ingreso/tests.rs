@@ -91,6 +91,7 @@ fn preparar(requiere: bool) -> PreparacionIngreso {
         resultado_acceso: ResultadoAcceso::Permitido,
         requiere_gafete: requiere,
         tiene_ingreso_activo: false,
+        gafetes_deuda: Vec::new(),
     }
 }
 #[test]

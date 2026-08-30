@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 13;
+pub const SCHEMA_VERSION: i64 = 14;
 
 /// Identifica un archivo SQLite como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -126,6 +126,11 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
     if version == 12 {
         aplicar_migracion(&transaction, MIGRACION_13, 13)?;
         version = 13;
+    }
+
+    if version == 13 {
+        aplicar_migracion(&transaction, MIGRACION_14, 14)?;
+        version = 14;
     }
 
     if version != SCHEMA_VERSION {
@@ -906,4 +911,48 @@ ON auditoria_cambios(fecha_hora DESC, id DESC);
 
 CREATE INDEX idx_auditoria_cambios_entidad
 ON auditoria_cambios(entidad, entidad_id, id DESC);
+"#;
+
+// Catálogo real de gafetes físicos (`docs/plan-gafetes.md`). Hasta acá
+// `registro_ingresos.gafete_numero` era un INTEGER libre sin relación con
+// los gafetes físicos reales — cualquier número servía, sin forma de sacar
+// de circulación uno perdido ni de saber quién lo debe. `gafetes` guarda
+// sólo el estado vigente; `gafetes_incidentes` es el historial
+// append-only (mismo patrón que `auditoria_cambios`), necesario para
+// "quién debe qué" y para no perder el rastro de cuándo se marcó/resolvió
+// un incidente. `registro_ingresos.gafete_numero` NO se vuelve FK a
+// `gafetes.numero` a propósito: hay filas históricas con números que el
+// catálogo (creado vacío) no tiene por qué conocer.
+const MIGRACION_14: &str = r#"
+CREATE TABLE gafetes (
+    id INTEGER PRIMARY KEY,
+    numero INTEGER NOT NULL UNIQUE,
+    estado TEXT NOT NULL CHECK (estado IN ('DISPONIBLE', 'PERDIDO', 'DE_BAJA')),
+    contratista_deudor_id INTEGER REFERENCES contratistas(id) ON DELETE RESTRICT,
+    CHECK (
+        (estado = 'PERDIDO' AND contratista_deudor_id IS NOT NULL)
+        OR (estado <> 'PERDIDO' AND contratista_deudor_id IS NULL)
+    )
+);
+CREATE INDEX idx_gafetes_estado ON gafetes(estado);
+CREATE INDEX idx_gafetes_contratista_deudor
+ON gafetes(contratista_deudor_id) WHERE contratista_deudor_id IS NOT NULL;
+
+CREATE TABLE gafetes_incidentes (
+    id INTEGER PRIMARY KEY,
+    gafete_id INTEGER NOT NULL REFERENCES gafetes(id) ON DELETE RESTRICT,
+    tipo TEXT NOT NULL CHECK (tipo IN ('PERDIDO', 'RESUELTO')),
+    fecha_hora TEXT NOT NULL,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+    contratista_id INTEGER REFERENCES contratistas(id) ON DELETE RESTRICT,
+    motivo_resolucion TEXT CHECK (
+        motivo_resolucion IS NULL OR motivo_resolucion IN ('PAGADO', 'APARECIDO')
+    ),
+    CHECK (
+        (tipo = 'PERDIDO' AND contratista_id IS NOT NULL AND motivo_resolucion IS NULL)
+        OR (tipo = 'RESUELTO' AND contratista_id IS NULL AND motivo_resolucion IS NOT NULL)
+    )
+);
+CREATE INDEX idx_gafetes_incidentes_gafete ON gafetes_incidentes(gafete_id, id DESC);
+CREATE INDEX idx_gafetes_incidentes_fecha ON gafetes_incidentes(fecha_hora DESC, id DESC);
 "#;

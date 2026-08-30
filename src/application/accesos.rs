@@ -6,6 +6,7 @@ use crate::database::error::DatabaseError;
 use crate::database::queries::ingresos::{FiltroIngresosActivos, SqliteIngresosQuery};
 use crate::database::repositories::contratista_repository::SqliteContratistaRepository;
 use crate::database::repositories::empresa_repository::SqliteEmpresaRepository;
+use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
 use crate::database::repositories::registro_ingreso_repository::SqliteRegistroIngresoRepository;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::error::RegistroIngresoServiceError;
@@ -25,7 +26,8 @@ impl AppCore {
         let contratistas = SqliteContratistaRepository::new(&self.connection);
         let empresas = SqliteEmpresaRepository::new(&self.connection);
         let registros = SqliteRegistroIngresoRepository::new(&self.connection);
-        RegistroIngresoService::new(&contratistas, &registros).preparar_ingreso(
+        let gafetes = SqliteGafeteRepository::new(&self.connection);
+        RegistroIngresoService::new(&contratistas, &registros, &gafetes).preparar_ingreso(
             &empresas,
             contratista_id,
             fecha_costa_rica(self.reloj.ahora_utc()),
@@ -89,7 +91,8 @@ impl AppCore {
         self.en_transaccion_con_reloj_validado(actor, |transaction, ahora| {
             let contratistas = SqliteContratistaRepository::new(transaction);
             let registros = SqliteRegistroIngresoRepository::new(transaction);
-            RegistroIngresoService::new(&contratistas, &registros).registrar_entrada(
+            let gafetes = SqliteGafeteRepository::new(transaction);
+            RegistroIngresoService::new(&contratistas, &registros, &gafetes).registrar_entrada(
                 contratista_id,
                 medio,
                 gafete,
@@ -115,7 +118,8 @@ impl AppCore {
         self.en_transaccion_con_reloj_validado(actor, |transaction, ahora| {
             let contratistas = SqliteContratistaRepository::new(transaction);
             let registros = SqliteRegistroIngresoRepository::new(transaction);
-            RegistroIngresoService::new(&contratistas, &registros)
+            let gafetes = SqliteGafeteRepository::new(transaction);
+            RegistroIngresoService::new(&contratistas, &registros, &gafetes)
                 .registrar_salida(id, ahora, actor.id)
         })
     }

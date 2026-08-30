@@ -3,6 +3,7 @@ use rusqlite::Connection;
 
 use control_acceso::database::repositories::contratista_repository::SqliteContratistaRepository;
 use control_acceso::database::repositories::empresa_repository::SqliteEmpresaRepository;
+use control_acceso::database::repositories::gafete_repository::SqliteGafeteRepository;
 use control_acceso::database::repositories::registro_ingreso_repository::{
     RegistroIngresoRepository, SqliteRegistroIngresoRepository,
 };
@@ -30,6 +31,12 @@ fn preparar_base() -> (Connection, i64) {
         )
         .unwrap();
     let usuario_id = connection.last_insert_rowid();
+    connection
+        .execute_batch(
+            "INSERT INTO gafetes (numero, estado) VALUES
+                (5, 'DISPONIBLE'), (6, 'DISPONIBLE'), (8, 'DISPONIBLE')",
+        )
+        .unwrap();
     (connection, usuario_id)
 }
 
@@ -102,8 +109,9 @@ fn flujo_completo_praind_libera_y_reutiliza_gafete() {
     let contratistas = SqliteContratistaRepository::new(&connection);
     let empresas = SqliteEmpresaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
+    let gafetes = SqliteGafeteRepository::new(&connection);
     let contratista_service = ContratistaService::new(&contratistas, &empresas);
-    let ingreso_service = RegistroIngresoService::new(&contratistas, &registros);
+    let ingreso_service = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
 
     let contratista = contratista_service
         .buscar_por_id(primer_contratista_id)
@@ -232,7 +240,8 @@ fn comprobar_flujo_sin_gafete(
     );
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
 
     let ingreso_id = servicio
         .registrar_entrada(
@@ -284,7 +293,8 @@ fn flujo_por_correo_exige_y_persiste_gafete() {
     );
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
 
     assert!(matches!(
         servicio.registrar_entrada(
@@ -336,7 +346,8 @@ fn intentar_ingreso_restringido(
     );
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    RegistroIngresoService::new(&contratistas, &registros)
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    RegistroIngresoService::new(&contratistas, &registros, &gafetes)
         .registrar_entrada(
             contratista_id,
             MedioIngreso::Caminando,

@@ -561,6 +561,7 @@ fn escape_raiz_regresa_al_menu_y_estados_internos_se_cierran_primero() {
             resultado_acceso: crate::domain::resultado_acceso::ResultadoAcceso::Permitido,
             requiere_gafete: false,
             tiene_ingreso_activo: false,
+            gafetes_deuda: Vec::new(),
         },
     ));
     app.procesar_tecla_vista(tecla(KeyCode::Esc));
@@ -873,6 +874,12 @@ fn usuarios_self_edit_actualiza_sesion_segura_desde_sqlite() {
 fn f2_registra_una_salida_real_por_gafete_desde_cualquier_pantalla() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
+    connection
+        .execute(
+            "INSERT INTO gafetes (numero, estado) VALUES (77, 'DISPONIBLE')",
+            [],
+        )
+        .unwrap();
     let core = AppCore::new(connection);
     let usuario_id = core
         .crear_root_inicial(crate::services::usuario_service::CrearRootInicialInput {
@@ -963,6 +970,12 @@ fn f2_registra_una_salida_real_por_gafete_desde_cualquier_pantalla() {
 fn f2_registra_salida_refresca_historial_sin_navegar() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
+    connection
+        .execute(
+            "INSERT INTO gafetes (numero, estado) VALUES (77, 'DISPONIBLE')",
+            [],
+        )
+        .unwrap();
     let core = AppCore::new(connection);
     let usuario_id = core
         .crear_root_inicial(crate::services::usuario_service::CrearRootInicialInput {
@@ -1040,6 +1053,12 @@ fn f2_registra_salida_refresca_historial_sin_navegar() {
 fn registrar_ingreso_se_queda_en_nuevo_ingreso_en_vez_de_saltar_a_activos() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
+    connection
+        .execute(
+            "INSERT INTO gafetes (numero, estado) VALUES (77, 'DISPONIBLE')",
+            [],
+        )
+        .unwrap();
     let core = AppCore::new(connection);
     let usuario_id = core
         .crear_root_inicial(crate::services::usuario_service::CrearRootInicialInput {
@@ -1195,6 +1214,12 @@ fn f2_registra_salida_refresca_nuevo_ingreso_sin_navegar() {
 
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
+    connection
+        .execute(
+            "INSERT INTO gafetes (numero, estado) VALUES (77, 'DISPONIBLE')",
+            [],
+        )
+        .unwrap();
     let core = AppCore::new(connection);
     let usuario_id = core
         .crear_root_inicial(crate::services::usuario_service::CrearRootInicialInput {

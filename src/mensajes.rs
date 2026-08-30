@@ -3,9 +3,10 @@
 //! accionable sin exponer detalles internos de base de datos.
 
 use crate::domain::resultado_acceso::MotivoDenegacion;
+use crate::models::gafete::EstadoGafete;
 use crate::services::error::{
-    AutenticacionError, ContratistaServiceError, EmpresaServiceError, RegistroIngresoServiceError,
-    UsuarioServiceError,
+    AutenticacionError, ContratistaServiceError, EmpresaServiceError, GafeteServiceError,
+    RegistroIngresoServiceError, UsuarioServiceError,
 };
 
 /// `HashInvalido` va junto con `Database` a propósito: ambos son fallos de
@@ -73,6 +74,26 @@ pub fn mensaje_usuario(error: UsuarioServiceError) -> String {
     }
 }
 
+pub fn mensaje_gafete(error: GafeteServiceError) -> String {
+    match error {
+        GafeteServiceError::NumeroInvalido => "El número de gafete debe ser mayor a cero".into(),
+        GafeteServiceError::NumeroDuplicado => "Ya existe un gafete con ese número".into(),
+        GafeteServiceError::GafeteNoEncontrado => "El gafete ya no existe".into(),
+        GafeteServiceError::RangoInvalido => "El rango de números no es válido".into(),
+        GafeteServiceError::ContratistaDeudorRequerido => {
+            "Debe indicar el contratista deudor".into()
+        }
+        GafeteServiceError::ContratistaNoEncontrado => "El contratista ya no existe".into(),
+        GafeteServiceError::EstadoInvalido => {
+            "El gafete no está en un estado válido para esa operación".into()
+        }
+        GafeteServiceError::OperacionNoAutorizada => {
+            "Su sesión no está autorizada para esta operación".into()
+        }
+        GafeteServiceError::Database(_) => "No se pudo guardar el gafete".into(),
+    }
+}
+
 pub fn mensaje_salida(error: RegistroIngresoServiceError) -> String {
     use RegistroIngresoServiceError::*;
 
@@ -92,6 +113,12 @@ pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
         IngresoActivo => "El contratista ya tiene un ingreso activo".into(),
         GafeteRequerido => "El gafete es requerido".into(),
         GafeteOcupado => "El gafete ya está en uso".into(),
+        GafeteNoRegistrado => "El número de gafete no existe en el catálogo".into(),
+        GafeteNoDisponible(EstadoGafete::Perdido) => "El gafete está marcado como perdido".into(),
+        GafeteNoDisponible(EstadoGafete::DeBaja) => "El gafete está dado de baja".into(),
+        GafeteNoDisponible(EstadoGafete::Disponible) => {
+            unreachable!("GafeteNoDisponible nunca se genera con estado Disponible")
+        }
         AccesoDenegado(MotivoDenegacion::SinAcceso) => "No tiene acceso autorizado".into(),
         AccesoDenegado(MotivoDenegacion::PraindVencido) => "PRAIND vencido".into(),
         AccesoDenegado(MotivoDenegacion::PraindNoRegistrado) => {

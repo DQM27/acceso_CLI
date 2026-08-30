@@ -4,6 +4,7 @@ pub mod contratista_service;
 pub mod dev_auth;
 pub mod empresa_service;
 pub mod error;
+pub mod gafete_service;
 pub mod password;
 pub mod registro_ingreso_service;
 pub mod usuario_service;

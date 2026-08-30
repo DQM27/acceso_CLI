@@ -6,10 +6,12 @@ use crate::database::queries::ingresos::{
 };
 use crate::database::repositories::contratista_repository::ContratistaRepository;
 use crate::database::repositories::empresa_repository::EmpresaRepository;
+use crate::database::repositories::gafete_repository::GafeteRepository;
 use crate::database::repositories::registro_ingreso_repository::RegistroIngresoRepository;
 use crate::domain::acceso::verificar_acceso;
 use crate::domain::registro_ingreso::salida_es_cronologicamente_valida;
 use crate::domain::resultado_acceso::ResultadoAcceso;
+use crate::models::gafete::EstadoGafete;
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::models::registro_ingreso::{
     DatosHistoricosEntrada, MotivoResultadoIngreso, NuevoRegistroIngreso, RegistroIngreso,
@@ -42,6 +44,11 @@ pub struct PreparacionIngreso {
     pub resultado_acceso: ResultadoAcceso,
     pub requiere_gafete: bool,
     pub tiene_ingreso_activo: bool,
+    /// Números de gafete que este contratista debe actualmente
+    /// (`docs/plan-gafetes.md`) — puramente informativo, no bloquea el
+    /// ingreso. `Vec` y no `Option<i64>`: nada impide más de una deuda
+    /// simultánea.
+    pub gafetes_deuda: Vec<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -143,24 +150,28 @@ fn convertir_activo(lectura: IngresoActivoLectura, hoy: NaiveDate) -> IngresoAct
     }
 }
 
-pub struct RegistroIngresoService<'a, C, R>
+pub struct RegistroIngresoService<'a, C, R, G>
 where
     C: ContratistaRepository + ?Sized,
     R: RegistroIngresoRepository + ?Sized,
+    G: GafeteRepository + ?Sized,
 {
     contratistas: &'a C,
     registros: &'a R,
+    gafetes: &'a G,
 }
 
-impl<'a, C, R> RegistroIngresoService<'a, C, R>
+impl<'a, C, R, G> RegistroIngresoService<'a, C, R, G>
 where
     C: ContratistaRepository + ?Sized,
     R: RegistroIngresoRepository + ?Sized,
+    G: GafeteRepository + ?Sized,
 {
-    pub fn new(contratistas: &'a C, registros: &'a R) -> Self {
+    pub fn new(contratistas: &'a C, registros: &'a R, gafetes: &'a G) -> Self {
         Self {
             contratistas,
             registros,
+            gafetes,
         }
     }
 
@@ -190,6 +201,7 @@ where
             .registros
             .buscar_ingreso_activo(contratista.id)?
             .is_some();
+        let gafetes_deuda = self.gafetes.deuda_de_contratista(contratista.id)?;
 
         Ok(PreparacionIngreso {
             contratista_id: contratista.id,
@@ -200,6 +212,7 @@ where
             resultado_acceso,
             requiere_gafete,
             tiene_ingreso_activo,
+            gafetes_deuda,
         })
     }
 
@@ -237,6 +250,19 @@ where
 
         let gafete_numero = if contratista.requiere_gafete() {
             let numero = gafete_numero.ok_or(RegistroIngresoServiceError::GafeteRequerido)?;
+
+            // Catálogo primero (¿existe y está disponible?), ocupación
+            // después (¿está en uso ahora?) — precondiciones en orden de
+            // especificidad creciente (`docs/plan-gafetes.md`).
+            match self.gafetes.buscar_por_numero(numero)? {
+                None => return Err(RegistroIngresoServiceError::GafeteNoRegistrado),
+                Some(gafete) if gafete.estado != EstadoGafete::Disponible => {
+                    return Err(RegistroIngresoServiceError::GafeteNoDisponible(
+                        gafete.estado,
+                    ));
+                }
+                Some(_) => {}
+            }
 
             if self
                 .registros

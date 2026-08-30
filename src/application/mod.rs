@@ -19,6 +19,7 @@ mod autenticacion;
 // sin feature gate, a diferencia de `comandos/` (el loop real).
 mod catalogos;
 mod comandos;
+mod gafetes;
 mod historial;
 mod respaldos;
 mod usuarios;

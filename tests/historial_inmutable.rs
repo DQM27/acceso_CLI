@@ -7,6 +7,7 @@ use control_acceso::database::queries::ingresos::{
 use control_acceso::database::repositories::contratista_repository::{
     ContratistaRepository, SqliteContratistaRepository,
 };
+use control_acceso::database::repositories::gafete_repository::SqliteGafeteRepository;
 use control_acceso::database::repositories::registro_ingreso_repository::{
     RegistroIngresoRepository, SqliteRegistroIngresoRepository,
 };
@@ -44,6 +45,12 @@ fn preparar() -> (Connection, i64, i64, i64) {
             [],
         )
         .unwrap();
+    connection
+        .execute(
+            "INSERT INTO gafetes (numero, estado) VALUES (18, 'DISPONIBLE')",
+            [],
+        )
+        .unwrap();
     let contratista_id = SqliteContratistaRepository::new(&connection)
         .crear(&Contratista {
             id: 0,
@@ -74,7 +81,8 @@ fn historial_reconstruye_el_estado_de_la_empresa_al_momento_del_ingreso() {
     let (connection, contratista_id, usuario_entrada, _usuario_salida) = preparar();
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
     servicio
         .registrar_entrada(
             contratista_id,
@@ -109,7 +117,8 @@ fn cambios_maestros_no_reescriben_el_movimiento_historico() {
     let (connection, contratista_id, usuario_entrada, usuario_salida) = preparar();
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
     let entrada = fecha("2026-08-12 08:00:00");
     let registro_id = servicio
         .registrar_entrada(
@@ -216,7 +225,8 @@ fn sqlite_impide_reescribir_o_eliminar_un_movimiento() {
     let (connection, contratista_id, usuario_entrada, usuario_salida) = preparar();
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
     let registro_id = servicio
         .registrar_entrada(
             contratista_id,

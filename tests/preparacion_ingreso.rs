@@ -5,6 +5,7 @@ use control_acceso::database::repositories::contratista_repository::{
     ContratistaRepository, SqliteContratistaRepository,
 };
 use control_acceso::database::repositories::empresa_repository::SqliteEmpresaRepository;
+use control_acceso::database::repositories::gafete_repository::SqliteGafeteRepository;
 use control_acceso::database::repositories::registro_ingreso_repository::{
     RegistroIngresoRepository, SqliteRegistroIngresoRepository,
 };
@@ -34,6 +35,12 @@ fn base() -> Base {
     let empresa_id = connection.last_insert_rowid();
     connection.execute("INSERT INTO usuarios(cedula,nombre,password_hash,rol,activo) VALUES ('1','Operador','hash','OPERADOR',1)", []).unwrap();
     let usuario_id = connection.last_insert_rowid();
+    connection
+        .execute(
+            "INSERT INTO gafetes (numero, estado) VALUES (10, 'DISPONIBLE')",
+            [],
+        )
+        .unwrap();
     Base {
         connection,
         empresa_id,
@@ -82,7 +89,8 @@ fn prepara_identidad_empresa_tipo_y_acceso_permitido() {
     let contratistas = SqliteContratistaRepository::new(&base.connection);
     let empresas = SqliteEmpresaRepository::new(&base.connection);
     let registros = SqliteRegistroIngresoRepository::new(&base.connection);
-    let preparacion = RegistroIngresoService::new(&contratistas, &registros)
+    let gafetes = SqliteGafeteRepository::new(&base.connection);
+    let preparacion = RegistroIngresoService::new(&contratistas, &registros, &gafetes)
         .preparar_ingreso(&empresas, id, hoy())
         .unwrap();
 
@@ -105,9 +113,10 @@ fn empresa_inactiva_deniega_el_acceso_aunque_el_contratista_lo_tenga() {
     let contratistas = SqliteContratistaRepository::new(&base.connection);
     let empresas = SqliteEmpresaRepository::new(&base.connection);
     let registros = SqliteRegistroIngresoRepository::new(&base.connection);
+    let gafetes = SqliteGafeteRepository::new(&base.connection);
     empresas.establecer_activo(base.empresa_id, false).unwrap();
 
-    let preparacion = RegistroIngresoService::new(&contratistas, &registros)
+    let preparacion = RegistroIngresoService::new(&contratistas, &registros, &gafetes)
         .preparar_ingreso(&empresas, id, hoy())
         .unwrap();
 
@@ -131,7 +140,8 @@ fn hoy_explicito_controla_advertencia_y_vencimiento() {
     let contratistas = SqliteContratistaRepository::new(&base.connection);
     let empresas = SqliteEmpresaRepository::new(&base.connection);
     let registros = SqliteRegistroIngresoRepository::new(&base.connection);
-    let service = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&base.connection);
+    let service = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
 
     assert_eq!(
         service
@@ -156,7 +166,8 @@ fn acceso_administrativo_denegado_se_devuelve_como_resultado() {
     let contratistas = SqliteContratistaRepository::new(&base.connection);
     let empresas = SqliteEmpresaRepository::new(&base.connection);
     let registros = SqliteRegistroIngresoRepository::new(&base.connection);
-    let resultado = RegistroIngresoService::new(&contratistas, &registros)
+    let gafetes = SqliteGafeteRepository::new(&base.connection);
+    let resultado = RegistroIngresoService::new(&contratistas, &registros, &gafetes)
         .preparar_ingreso(&empresas, id, hoy())
         .unwrap();
     assert_eq!(
@@ -187,7 +198,8 @@ fn gafete_respeta_tipo_y_personal_de_ruta() {
         let contratistas = SqliteContratistaRepository::new(&base.connection);
         let empresas = SqliteEmpresaRepository::new(&base.connection);
         let registros = SqliteRegistroIngresoRepository::new(&base.connection);
-        let preparacion = RegistroIngresoService::new(&contratistas, &registros)
+        let gafetes = SqliteGafeteRepository::new(&base.connection);
+        let preparacion = RegistroIngresoService::new(&contratistas, &registros, &gafetes)
             .preparar_ingreso(&empresas, id, hoy())
             .unwrap();
         assert_eq!(preparacion.requiere_gafete, esperado);
@@ -201,7 +213,8 @@ fn personal_de_ruta_sigue_requiriendo_praind_para_acceso() {
     let contratistas = SqliteContratistaRepository::new(&base.connection);
     let empresas = SqliteEmpresaRepository::new(&base.connection);
     let registros = SqliteRegistroIngresoRepository::new(&base.connection);
-    let resultado = RegistroIngresoService::new(&contratistas, &registros)
+    let gafetes = SqliteGafeteRepository::new(&base.connection);
+    let resultado = RegistroIngresoService::new(&contratistas, &registros, &gafetes)
         .preparar_ingreso(&empresas, id, hoy())
         .unwrap();
     assert_eq!(
@@ -225,7 +238,8 @@ fn detecta_ingreso_activo_sin_cargar_listado() {
     let contratistas = SqliteContratistaRepository::new(&base.connection);
     let empresas = SqliteEmpresaRepository::new(&base.connection);
     let registros = SqliteRegistroIngresoRepository::new(&base.connection);
-    let service = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&base.connection);
+    let service = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
     assert!(
         !service
             .preparar_ingreso(&empresas, id, hoy())
@@ -263,7 +277,8 @@ fn preparar_no_persiste_ni_reserva_gafete() {
     let contratistas = SqliteContratistaRepository::new(&base.connection);
     let empresas = SqliteEmpresaRepository::new(&base.connection);
     let registros = SqliteRegistroIngresoRepository::new(&base.connection);
-    let service = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&base.connection);
+    let service = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
     let antes: i64 = base
         .connection
         .query_row("SELECT COUNT(*) FROM registro_ingresos", [], |r| r.get(0))
@@ -288,8 +303,9 @@ fn contratista_inexistente_es_error_esperado() {
     let contratistas = SqliteContratistaRepository::new(&base.connection);
     let empresas = SqliteEmpresaRepository::new(&base.connection);
     let registros = SqliteRegistroIngresoRepository::new(&base.connection);
+    let gafetes = SqliteGafeteRepository::new(&base.connection);
     assert!(matches!(
-        RegistroIngresoService::new(&contratistas, &registros).preparar_ingreso(
+        RegistroIngresoService::new(&contratistas, &registros, &gafetes).preparar_ingreso(
             &empresas,
             999,
             hoy()
@@ -305,7 +321,8 @@ fn registrar_entrada_revalida_cambio_de_acceso_despues_de_preparar() {
     let contratistas = SqliteContratistaRepository::new(&base.connection);
     let empresas = SqliteEmpresaRepository::new(&base.connection);
     let registros = SqliteRegistroIngresoRepository::new(&base.connection);
-    let service = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&base.connection);
+    let service = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
     assert_eq!(
         service
             .preparar_ingreso(&empresas, id, hoy())
@@ -337,7 +354,8 @@ fn registrar_entrada_revalida_ingreso_creado_despues_de_preparar() {
     let contratistas = SqliteContratistaRepository::new(&base.connection);
     let empresas = SqliteEmpresaRepository::new(&base.connection);
     let registros = SqliteRegistroIngresoRepository::new(&base.connection);
-    let service = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&base.connection);
+    let service = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
     assert!(
         !service
             .preparar_ingreso(&empresas, id, hoy())
@@ -376,8 +394,9 @@ fn error_de_datos_persistidos_se_propaga_como_database() {
     let contratistas = SqliteContratistaRepository::new(&base.connection);
     let empresas = SqliteEmpresaRepository::new(&base.connection);
     let registros = SqliteRegistroIngresoRepository::new(&base.connection);
+    let gafetes = SqliteGafeteRepository::new(&base.connection);
     assert!(matches!(
-        RegistroIngresoService::new(&contratistas, &registros).preparar_ingreso(
+        RegistroIngresoService::new(&contratistas, &registros, &gafetes).preparar_ingreso(
             &empresas,
             id,
             hoy()

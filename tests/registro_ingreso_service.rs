@@ -4,6 +4,7 @@ use rusqlite::Connection;
 use control_acceso::database::repositories::contratista_repository::{
     ContratistaRepository, SqliteContratistaRepository,
 };
+use control_acceso::database::repositories::gafete_repository::SqliteGafeteRepository;
 use control_acceso::database::repositories::registro_ingreso_repository::{
     RegistroIngresoRepository, SqliteRegistroIngresoRepository,
 };
@@ -36,6 +37,14 @@ fn preparar_base() -> (Connection, i64, i64) {
         )
         .unwrap();
     let usuario_id = connection.last_insert_rowid();
+
+    connection
+        .execute_batch(
+            "INSERT INTO gafetes (numero, estado) VALUES
+                (10, 'DISPONIBLE'), (11, 'DISPONIBLE'), (15, 'DISPONIBLE'),
+                (20, 'DISPONIBLE'), (30, 'DISPONIBLE'), (40, 'DISPONIBLE')",
+        )
+        .unwrap();
 
     (connection, empresa_id, usuario_id)
 }
@@ -93,7 +102,8 @@ fn resultado_praind_con_vencimiento(
     );
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    RegistroIngresoService::new(&contratistas, &registros)
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    RegistroIngresoService::new(&contratistas, &registros, &gafetes)
         .registrar_entrada(
             id,
             MedioIngreso::Caminando,
@@ -120,14 +130,16 @@ fn empresa_inactiva_deniega_registrar_entrada() {
         .unwrap();
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
+    let gafetes = SqliteGafeteRepository::new(&connection);
 
-    let resultado = RegistroIngresoService::new(&contratistas, &registros).registrar_entrada(
-        id,
-        MedioIngreso::Caminando,
-        None,
-        usuario_id,
-        fecha_ingreso(),
-    );
+    let resultado = RegistroIngresoService::new(&contratistas, &registros, &gafetes)
+        .registrar_entrada(
+            id,
+            MedioIngreso::Caminando,
+            None,
+            usuario_id,
+            fecha_ingreso(),
+        );
 
     assert!(matches!(
         resultado,
@@ -193,7 +205,8 @@ fn praind_normal_con_gafete_libre_crea_ingreso() {
     );
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
 
     let registro_id = servicio
         .registrar_entrada(
@@ -229,7 +242,8 @@ fn praind_normal_sin_gafete_es_rechazado() {
     );
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
 
     let resultado = servicio.registrar_entrada(
         id,
@@ -254,7 +268,8 @@ fn por_correo_con_gafete_libre_crea_ingreso() {
     );
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
 
     let registro_id = servicio
         .registrar_entrada(
@@ -297,7 +312,8 @@ fn probar_ingreso_sin_gafete(
     );
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
 
     let registro_id = servicio
         .registrar_entrada(
@@ -332,7 +348,8 @@ fn personal_de_ruta_con_praind_vigente_guarda_none() {
     let id = guardar_contratista(&connection, &persona);
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
 
     let registro_id = servicio
         .registrar_entrada(
@@ -367,7 +384,8 @@ fn personal_de_ruta_con_praind_vencido_es_rechazado() {
     let id = guardar_contratista(&connection, &persona);
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
 
     let resultado = servicio.registrar_entrada(
         id,
@@ -393,7 +411,8 @@ fn contratista_sin_acceso_es_rechazado() {
     let id = guardar_contratista(&connection, &persona);
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
 
     let resultado = servicio.registrar_entrada(
         id,
@@ -420,7 +439,8 @@ fn contratista_con_ingreso_activo_es_rechazado() {
     );
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
     servicio
         .registrar_entrada(
             id,
@@ -463,7 +483,8 @@ fn gafete_ocupado_es_rechazado() {
     );
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
     servicio
         .registrar_entrada(
             primero,
@@ -504,7 +525,8 @@ fn empresa_y_tipo_salen_del_contratista() {
     );
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
 
     let registro_id = servicio
         .registrar_entrada(
@@ -533,7 +555,8 @@ fn salida_por_id_funciona() {
     );
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
     let registro_id = servicio
         .registrar_entrada(
             id,
@@ -560,7 +583,8 @@ fn salida_igual_al_ingreso_es_permitida_y_conserva_usuario() {
     );
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
     let entrada = servicio
         .registrar_entrada(
             id,
@@ -597,7 +621,8 @@ fn salida_anterior_es_rechazada_y_no_modifica_sqlite() {
     );
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
     let entrada = servicio
         .registrar_entrada(
             id,
@@ -637,7 +662,8 @@ fn salida_por_gafete_funciona() {
     );
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
     servicio
         .registrar_entrada(
             id,
@@ -665,7 +691,8 @@ fn gafete_no_asignado_produce_error() {
     let (connection, _, usuario_id) = preparar_base();
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
 
     assert!(matches!(
         servicio.buscar_ingreso_activo_por_gafete(99),
@@ -682,7 +709,8 @@ fn contratista_inexistente_es_rechazado() {
     let (connection, _, usuario_id) = preparar_base();
     let contratistas = SqliteContratistaRepository::new(&connection);
     let registros = SqliteRegistroIngresoRepository::new(&connection);
-    let servicio = RegistroIngresoService::new(&contratistas, &registros);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
 
     let resultado = servicio.registrar_entrada(
         999,

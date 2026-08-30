@@ -185,6 +185,11 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
              ) VALUES(
                 '2026-08-20T22:00:00Z',1,1,'tipo_ingreso','SWAT','PRAIND'
              );
+             -- MIGRACION_14 (que corre al final al rebobinar) recrea
+             -- `gafetes`/`gafetes_incidentes` — el `initialize_database` de
+             -- arriba ya las creó, hay que soltarlas antes de simular v9.
+             DROP TABLE gafetes_incidentes;
+             DROP TABLE gafetes;
              PRAGMA user_version = 9;",
         )
         .unwrap();
@@ -243,6 +248,10 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
                 valor_nuevo TEXT,
                 CHECK (valor_anterior IS NOT valor_nuevo)
              );
+             -- Mismo motivo que en `migracion_10_...`: soltar lo que
+             -- MIGRACION_14 ya creó antes de simular v10.
+             DROP TABLE gafetes_incidentes;
+             DROP TABLE gafetes;
              PRAGMA user_version = 10;",
         )
         .unwrap();
@@ -314,6 +323,10 @@ fn migracion_12_habilita_cambio_de_cedula() {
              ON auditoria_contratistas(fecha_hora DESC, id DESC);
              CREATE INDEX idx_auditoria_contratistas_contratista
              ON auditoria_contratistas(contratista_id, id DESC);
+             -- Mismo motivo que en `migracion_10_...`: soltar lo que
+             -- MIGRACION_14 ya creó antes de simular v11.
+             DROP TABLE gafetes_incidentes;
+             DROP TABLE gafetes;
              PRAGMA user_version = 11;",
         )
         .unwrap();

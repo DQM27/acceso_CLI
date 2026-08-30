@@ -1,5 +1,6 @@
 use crate::database::error::DatabaseError;
 use crate::domain::resultado_acceso::MotivoDenegacion;
+use crate::models::gafete::EstadoGafete;
 
 #[derive(Debug, thiserror::Error)]
 pub enum PasswordError {
@@ -97,6 +98,15 @@ pub enum RegistroIngresoServiceError {
     GafeteOcupado,
     #[error("El gafete no está asignado actualmente")]
     GafeteNoAsignado,
+    /// El número no existe en el catálogo (`gafetes`) — distinto de
+    /// `GafeteOcupado` (existe, pero ya está en uso en otro ingreso activo).
+    #[error("El gafete no está registrado en el catálogo")]
+    GafeteNoRegistrado,
+    /// Existe en el catálogo pero su estado actual no permite asignarlo
+    /// (`Perdido`/`DeBaja`) — el estado concreto viaja en la variante para
+    /// que cada interfaz arme su propio mensaje sin volver a consultar.
+    #[error("El gafete no está disponible: {0:?}")]
+    GafeteNoDisponible(EstadoGafete),
     #[error("El registro de ingreso no está activo")]
     RegistroNoActivo,
     #[error("La salida no puede ser anterior al ingreso")]
@@ -111,6 +121,30 @@ pub enum RegistroIngresoServiceError {
     /// entre la verificación y la escritura.
     #[error("La sesión que registra el movimiento no existe o está inactiva")]
     OperadorNoAutorizado,
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum GafeteServiceError {
+    #[error("El número de gafete debe ser mayor a cero")]
+    NumeroInvalido,
+    #[error("Ya existe un gafete con ese número")]
+    NumeroDuplicado,
+    #[error("Gafete no encontrado")]
+    GafeteNoEncontrado,
+    #[error("El rango de números no es válido")]
+    RangoInvalido,
+    #[error("Marcar un gafete perdido requiere indicar el contratista deudor")]
+    ContratistaDeudorRequerido,
+    #[error("Contratista no encontrado")]
+    ContratistaNoEncontrado,
+    /// La transición pedida no aplica al estado actual (ej. dar de baja uno
+    /// ya perdido, o resolver uno que no está perdido).
+    #[error("El gafete no está en un estado válido para esta operación")]
+    EstadoInvalido,
+    #[error("La sesión actual no está autorizada para realizar esta operación")]
+    OperacionNoAutorizada,
     #[error(transparent)]
     Database(#[from] DatabaseError),
 }
