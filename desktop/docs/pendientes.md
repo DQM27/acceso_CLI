@@ -11,30 +11,35 @@ resuelve.** Si se descarta en vez de hacerse, se marca `[x]` igual con una nota 
 
 ---
 
-## Exportación PDF de Historial con Typst — diseño listo, sin empezar (2026-08-29)
+## Exportación PDF de Historial (2026-08-30)
 
-- [ ] **Resumen del día en PDF (entradas/salidas), maquetado con Typst.** Decisión del
-  usuario: baja prioridad, retomar en otra sesión — necesita ver vistas previas del PDF en
-  el camino, que no se puede hacer desde acá sin gastar una cantidad enorme de tokens
-  (esta sesión no tiene forma de abrir/renderizar un PDF para iterar el diseño visual).
-  Los datos ya están listos sin tocar el backend: `MovimientoIngresoResumen`
-  (`src/database/queries/ingresos/historial.rs`, lo mismo que ya alimenta la exportación a
-  Excel) ya trae fecha/hora de entrada y salida, nombre, cédula, empresa, tipo, gafete y
-  medio — filtrar "los del día X" es sencillo sobre lo que ya existe.
-  Costo real de la integración, para tenerlo claro antes de arrancar: embeber el
-  compilador de Typst en Rust no es un `cargo add typst` y listo — hay que implementarle
-  (o usar `typst-kit`, que ya viene con resolución de fuentes lista) un `World`, y agrega
-  varios crates nuevos al árbol de dependencias (parsing de fuentes, manejo de imágenes) —
-  pesa más que `rust_xlsxwriter`, que es autocontenido sin pedir fuentes ni paquetes
-  externos. Además de la plantilla `.typ` en sí, que hay que escribir y mantener aparte del
-  código Rust.
-  Dónde encajaría si se retoma: un módulo hermano de `historial/exportacion.rs` (p. ej.
-  `historial/exportacion_pdf.rs`), un comando nuevo en
-  `desktop/src-tauri/src/comandos/historial.rs` (`exportar_resumen_dia_pdf` o similar),
-  reusando el mismo fetch de movimientos que ya usa la exportación a Excel. Antes de
-  escribir la plantilla real, vale la pena una prueba de concepto chica (compilar un PDF de
-  una sola página hardcodeada) para confirmar que el pipeline de Typst funciona bien en
-  Windows/CI antes de invertir en el diseño visual de verdad.
+- [x] **Historial a PDF, implementado — terminó siendo HTML/CSS + WebView2, no Typst.**
+  Se retomó esta idea con el usuario y, tras comparar Typst / `printpdf`-`genpdf` / HTML
+  renderizado por el WebView2 que la app ya trae, se eligió esta última: cero dependencias
+  de tipografía/parsing nuevas, y el diseño se pudo iterar como una página web común
+  (`.html` abierto directo en el navegador) en vez de a ciegas — el bloqueo original de
+  "sin forma de previsualizar un PDF" quedó resuelto así, no evitado.
+  Mismo criterio que Excel: exporta exactamente los `ids`/columnas que la grilla tiene
+  filtrados/visibles (`pdf::generador::generar_pdf`, `desktop/src-tauri/src/pdf/`), no un
+  "resumen del día" aparte — ese tipo de reporte específico (y cualquier otro tipo de
+  generación — por contratista, etc.) queda pendiente como su propia fase si se pide.
+  **Alcance de bajo nivel — no armar sin retomarlo primero:** numeración de página
+  estilizada ("Página X de Y") necesita el DevTools Protocol de WebView2
+  (`Page.printToPDF` vía `CallDevToolsProtocolMethod`, no `ICoreWebView2PrintSettings`,
+  que sólo da un footer fijo de Chromium sin estilo propio) — no investigado a fondo,
+  descartado para esta vuelta.
+  **Bug real encontrado y resuelto durante la implementación, dejar registrado por si
+  reaparece en otro lado:** el completion handler de `PrintToPdf` no es confiable en este
+  embedding (Tauri 2.11 + wry 0.55 + `webview2-com` 0.38.2) — probadas tres formas de
+  esperarlo (channel manual, `PrintToPdfCompletedHandler::wait_for_async_operation` —la
+  función de la librería pensada justo para esto—, y esa misma función movida afuera del
+  callback `on_page_load`), y en las tres el PDF se escribía bien y rápido en disco pero el
+  aviso de "terminé" nunca llegaba a Rust (confirmado con logging contra datos reales, no
+  es una suposición). La solución que quedó: disparar `PrintToPdf` sin esperar su
+  callback y confirmar que terminó sondeando el archivo en disco hasta que su tamaño se
+  estabiliza (`pdf/generador.rs`, `esperar_archivo_listo`). Si esto se puede reproducir de
+  forma aislada valdría la pena reportarlo río arriba (wry/webview2-com), pero no se
+  investigó ese camino todavía.
 
 ## Empaquetado y actualizaciones
 
