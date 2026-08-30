@@ -16,11 +16,14 @@ export function textoHora(iso: string): string {
  * plano cronológico, sin volver a pasar por `Date` (que interpretaría
  * "2026-08-28" como medianoche UTC y podría mostrar el día anterior en un
  * huso horario negativo como Costa Rica). */
-export function fechaLocalYMD(iso: string): string {
-  const d = new Date(iso);
+export function fechaYMD(d: Date): string {
   const mes = String(d.getMonth() + 1).padStart(2, "0");
   const dia = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${mes}-${dia}`;
+}
+
+export function fechaLocalYMD(iso: string): string {
+  return fechaYMD(new Date(iso));
 }
 
 export function textoFechaDDMMYYYY(ymd: string): string {
@@ -32,8 +35,5 @@ export function textoFechaDDMMYYYY(ymd: string): string {
  * `meses` atrás — para valores por defecto de un filtro de rango (ver
  * Historial.tsx). `hoy` es inyectable para que el test sea determinístico. */
 export function fechaHaceMeses(meses: number, hoy: Date = new Date()): string {
-  const d = new Date(hoy.getFullYear(), hoy.getMonth() - meses, hoy.getDate());
-  const mes = String(d.getMonth() + 1).padStart(2, "0");
-  const dia = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${mes}-${dia}`;
+  return fechaYMD(new Date(hoy.getFullYear(), hoy.getMonth() - meses, hoy.getDate()));
 }

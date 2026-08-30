@@ -6,6 +6,7 @@ import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
+import SelectorRangoFecha from "../componentes/SelectorRangoFecha";
 import { exportarHistorial, listarHistorial, textoMedio } from "../api";
 import type { MovimientoIngresoResumen } from "../api";
 import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
@@ -168,24 +169,14 @@ export default function Historial() {
         titulo="Historial"
         acciones={
           <>
-            <label style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-              Desde
-              <input
-                type="date"
-                value={desde}
-                max={hasta || undefined}
-                onChange={(e) => setDesde(e.target.value)}
-              />
-            </label>
-            <label style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-              Hasta
-              <input
-                type="date"
-                value={hasta}
-                min={desde || undefined}
-                onChange={(e) => setHasta(e.target.value)}
-              />
-            </label>
+            <SelectorRangoFecha
+              desde={desde}
+              hasta={hasta}
+              onAplicar={(nuevoDesde, nuevoHasta) => {
+                setDesde(nuevoDesde);
+                setHasta(nuevoHasta);
+              }}
+            />
             <button
               className="boton"
               title="Exporta lo que está filtrado en la grilla, no todo el historial"
