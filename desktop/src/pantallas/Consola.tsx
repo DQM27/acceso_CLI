@@ -558,10 +558,16 @@ function RenderContextState({
  * individual no pide confirmación aparte, ya es un solo clic explícito. */
 function TablaSalida({ items, total }: { items: IngresoActivoResumen[]; total: number }) {
   const [ocultos, setOcultos] = useState<Set<number>>(new Set());
+  const [error, setError] = useState<string | null>(null);
 
   async function salida(id: number) {
-    await registrarSalida(id);
-    setOcultos((actual) => new Set(actual).add(id));
+    setError(null);
+    try {
+      await registrarSalida(id);
+      setOcultos((actual) => new Set(actual).add(id));
+    } catch (error) {
+      setError(String(error));
+    }
   }
 
   return (
@@ -585,6 +591,7 @@ function TablaSalida({ items, total }: { items: IngresoActivoResumen[]; total: n
           </div>
         ))}
       <p style={{ margin: "0.15rem 0 0", color: "var(--c-muted)" }}>{total} adentro.</p>
+      {error && <p style={{ color: "var(--c-error)", margin: "0.15rem 0 0" }}>{error}</p>}
     </div>
   );
 }
@@ -716,19 +723,23 @@ function ListaIngreso({ items }: { items: ContratistaResumen[] }) {
     setPreparacion(null);
     setBloqueo(null);
     setError(null);
-    const p = await prepararIngreso(contratista.id);
-    if (puedeContinuar(p)) {
-      setPreparacion(p);
-      setMedio("Caminando");
-      setGafete("");
-    } else {
-      setBloqueo(
-        p.tiene_ingreso_activo
-          ? "Ya tiene un ingreso activo."
-          : typeof p.resultado_acceso === "object"
-            ? mensajeMotivoDenegacion(p.resultado_acceso.Denegado)
-            : "No se puede continuar.",
-      );
+    try {
+      const p = await prepararIngreso(contratista.id);
+      if (puedeContinuar(p)) {
+        setPreparacion(p);
+        setMedio("Caminando");
+        setGafete("");
+      } else {
+        setBloqueo(
+          p.tiene_ingreso_activo
+            ? "Ya tiene un ingreso activo."
+            : typeof p.resultado_acceso === "object"
+              ? mensajeMotivoDenegacion(p.resultado_acceso.Denegado)
+              : "No se puede continuar.",
+        );
+      }
+    } catch (error) {
+      setError(String(error));
     }
   }
 

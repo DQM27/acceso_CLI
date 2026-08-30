@@ -51,17 +51,21 @@ export default function Activos({
 }) {
   const [filas, setFilas] = useState<FilaActiva[]>([]);
   const [total, setTotal] = useState(0);
+  const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [seleccionadas, setSeleccionadas] = useState<FilaActiva[]>([]);
   const [confirmarSalidaMasiva, setConfirmarSalidaMasiva] = useState(false);
   const [procesando, setProcesando] = useState(false);
 
   const recargar = useCallback(() => {
-    return listarIngresosActivos().then((pagina) => {
-      setFilas(pagina.items.map((item) => ({ ...item, estado_texto: textoEstado(item) })));
-      setTotal(pagina.total);
-      setSeleccionadas([]);
-    });
+    setCargando(true);
+    return listarIngresosActivos()
+      .then((pagina) => {
+        setFilas(pagina.items.map((item) => ({ ...item, estado_texto: textoEstado(item) })));
+        setTotal(pagina.total);
+        setSeleccionadas([]);
+      })
+      .finally(() => setCargando(false));
   }, []);
 
   useEffect(() => {
@@ -253,7 +257,9 @@ export default function Activos({
             }
           />
         </div>
-        <p style={{ color: "var(--muted)", margin: 0 }}>{total} adentro</p>
+        <p style={{ color: "var(--muted)", margin: 0 }}>
+          {cargando ? "Cargando…" : `${total} adentro`}
+        </p>
       </div>
 
       {confirmarSalidaMasiva && (

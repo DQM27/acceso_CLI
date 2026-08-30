@@ -28,6 +28,7 @@ import { Toaster, toast } from "sonner";
 import { Building2, ClipboardList, History, UserCheck, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
+import ErrorBoundary from "./componentes/ErrorBoundary";
 import Login from "./pantallas/Login";
 import Activos from "./pantallas/Activos";
 import Contratistas from "./pantallas/Contratistas";
@@ -234,18 +235,27 @@ function Shell({
       />
 
       <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-        {seccion === "activos" && (
-          <Activos
-            refrescarSenal={refrescarActivos}
-            onAbrirNuevoIngreso={() => setModalNuevoIngreso(true)}
-            onAbrirSalida={() => setModalSalida(true)}
-          />
-        )}
-        {seccion === "historial" && <Historial />}
-        {seccion === "contratistas" && <Contratistas />}
-        {seccion === "auditoria" && <Auditoria />}
-        {seccion === "empresas" && <Empresas />}
-        {seccion === "usuarios" && <Usuarios />}
+        {/* `key={seccion}` resetea el boundary al cambiar de sección — sin
+            esto, una vez que una pantalla rompe, el error queda "pegado" acá
+            aunque se elija otra sección del menú, porque este `<main>` nunca
+            se desmonta. */}
+        <ErrorBoundary
+          key={seccion}
+          mensaje="Esta sección no pudo cargar. La sesión sigue activa — elegí otra desde el menú, o reiniciá la app si el problema persiste."
+        >
+          {seccion === "activos" && (
+            <Activos
+              refrescarSenal={refrescarActivos}
+              onAbrirNuevoIngreso={() => setModalNuevoIngreso(true)}
+              onAbrirSalida={() => setModalSalida(true)}
+            />
+          )}
+          {seccion === "historial" && <Historial />}
+          {seccion === "contratistas" && <Contratistas />}
+          {seccion === "auditoria" && <Auditoria />}
+          {seccion === "empresas" && <Empresas />}
+          {seccion === "usuarios" && <Usuarios />}
+        </ErrorBoundary>
       </main>
 
       {modalNuevoIngreso && (

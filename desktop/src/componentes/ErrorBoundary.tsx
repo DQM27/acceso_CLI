@@ -8,11 +8,16 @@ import type { ErrorInfo, ReactNode } from "react";
  * recuperarse salvo reiniciar la app a mano. Los error boundaries siguen
  * siendo componentes de clase en React — no hay equivalente con hooks
  * todavía (`getDerivedStateFromError`/`componentDidCatch` no existen como
- * hook). Envuelve `<App />` entero en `main.tsx`: un error en una pantalla
- * no debe dejar sin login/sidebar a alguien que ya estaba adentro.
+ * hook). Dos instancias en la app: una alrededor de `<App />` entero en
+ * `main.tsx` (red de último recurso para login/configuración inicial, antes
+ * de que exista sidebar) y otra en `Shell` (`App.tsx`) envolviendo sólo el
+ * `<main>` de contenido, con `key={seccion}` para que se resetee sola al
+ * cambiar de sección — así un error en, por ejemplo, Historial no deja sin
+ * sidebar ni sesión a alguien que ya estaba adentro, y basta con elegir otra
+ * sección del menú para recuperarse sin reiniciar la app.
  */
 export default class ErrorBoundary extends Component<
-  { children: ReactNode },
+  { children: ReactNode; mensaje?: ReactNode },
   { error: Error | null }
 > {
   state: { error: Error | null } = { error: null };
@@ -54,8 +59,12 @@ export default class ErrorBoundary extends Component<
             Ocurrió un error inesperado
           </h2>
           <p style={{ margin: 0, color: "var(--muted)" }}>
-            La ventana no puede seguir en este estado. Los datos ya guardados no se
-            pierden — reiniciá la app para continuar.
+            {this.props.mensaje ?? (
+              <>
+                La ventana no puede seguir en este estado. Los datos ya guardados no se
+                pierden — reiniciá la app para continuar.
+              </>
+            )}
           </p>
           <p
             style={{

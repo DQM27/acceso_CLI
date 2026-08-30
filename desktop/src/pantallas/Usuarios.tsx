@@ -19,15 +19,26 @@ const columnas: ColDef<UsuarioResumen>[] = [
 export default function Usuarios() {
   const [texto, setTexto] = useState("");
   const [filas, setFilas] = useState<UsuarioResumen[]>([]);
+  const [cargando, setCargando] = useState(true);
   const [formularioAbierto, setFormularioAbierto] = useState<"crear" | UsuarioResumen | null>(
     null,
   );
 
   useHotkeys("ctrl+n", () => setFormularioAbierto("crear"), { preventDefault: true });
 
-  const recargar = useCallback(() => {
-    return buscarUsuarios({ texto: texto || undefined }).then(setFilas);
-  }, [texto]);
+  const recargar = useCallback(
+    (estaVigente: () => boolean = () => true) => {
+      setCargando(true);
+      return buscarUsuarios({ texto: texto || undefined })
+        .then((datos) => {
+          if (estaVigente()) setFilas(datos);
+        })
+        .finally(() => {
+          if (estaVigente()) setCargando(false);
+        });
+    },
+    [texto],
+  );
 
   useCargaAlCambiar(recargar);
 
@@ -80,6 +91,9 @@ export default function Usuarios() {
             }
           />
         </div>
+        <p style={{ color: "var(--muted)", margin: 0 }}>
+          {cargando ? "Cargando…" : `${filas.length} resultado(s)`}
+        </p>
       </div>
 
       {formularioAbierto && (

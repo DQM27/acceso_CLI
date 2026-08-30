@@ -47,14 +47,18 @@ export default function Historial() {
   const [hasta, setHasta] = useState("");
   const tablaRef = useRef<TablaHandle<FilaHistorial>>(null);
 
-  const recargar = useCallback(async () => {
-    setCargando(true);
-    try {
-      setFilas(await listarHistorial(desde || undefined, hasta || undefined));
-    } finally {
-      setCargando(false);
-    }
-  }, [desde, hasta]);
+  const recargar = useCallback(
+    async (estaVigente: () => boolean = () => true) => {
+      setCargando(true);
+      try {
+        const datos = await listarHistorial(desde || undefined, hasta || undefined);
+        if (estaVigente()) setFilas(datos);
+      } finally {
+        if (estaVigente()) setCargando(false);
+      }
+    },
+    [desde, hasta],
+  );
   useCargaAlCambiar(recargar);
 
   // Lo que la grilla tiene visible AHORA (filtro por columna y selector
@@ -92,9 +96,13 @@ export default function Historial() {
 
     setExportando(true);
     toast.promise(
-      exportarHistorial(destino, seleccion.ids, seleccion.claves).finally(() =>
-        setExportando(false),
-      ),
+      exportarHistorial(
+        destino,
+        seleccion.ids,
+        seleccion.claves,
+        desde || undefined,
+        hasta || undefined,
+      ).finally(() => setExportando(false)),
       {
         loading: "Exportando…",
         success: (cantidad) => `${cantidad} fila(s) exportadas.`,
@@ -121,6 +129,8 @@ export default function Historial() {
         seleccion.ids,
         seleccion.claves,
         `Filtro: ${textoRangoFecha(desde, hasta)}`,
+        desde || undefined,
+        hasta || undefined,
       ).finally(() => setExportando(false)),
       {
         loading: "Exportando…",

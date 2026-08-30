@@ -49,6 +49,7 @@ export default function Contratistas() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [filas, setFilas] = useState<ContratistaResumen[]>([]);
   const [total, setTotal] = useState(0);
+  const [cargando, setCargando] = useState(true);
   const [seleccionadas, setSeleccionadas] = useState<ContratistaResumen[]>([]);
   const [formularioAbierto, setFormularioAbierto] = useState<"crear" | ContratistaResumen | null>(
     null,
@@ -59,15 +60,24 @@ export default function Contratistas() {
   useEffect(() => {
     listarEmpresas()
       .then(setEmpresas)
-      .catch((error) => console.error(error));
+      .catch((error) => toast.error(String(error)));
   }, []);
 
-  const recargar = useCallback(() => {
-    return buscarContratistas(filtro).then((pagina) => {
-      setFilas(pagina.items);
-      setTotal(pagina.total);
-    });
-  }, [filtro]);
+  const recargar = useCallback(
+    (estaVigente: () => boolean = () => true) => {
+      setCargando(true);
+      return buscarContratistas(filtro)
+        .then((pagina) => {
+          if (!estaVigente()) return;
+          setFilas(pagina.items);
+          setTotal(pagina.total);
+        })
+        .finally(() => {
+          if (estaVigente()) setCargando(false);
+        });
+    },
+    [filtro],
+  );
 
   useCargaAlCambiar(recargar);
 
@@ -238,8 +248,8 @@ export default function Contratistas() {
           />
         </div>
         <p style={{ color: "var(--muted)", margin: 0 }}>
-          {total} resultado(s)
-          {seleccionadas.length > 0 && ` · ${seleccionadas.length} seleccionado(s)`}
+          {cargando ? "Cargando…" : `${total} resultado(s)`}
+          {!cargando && seleccionadas.length > 0 && ` · ${seleccionadas.length} seleccionado(s)`}
         </p>
       </div>
 
