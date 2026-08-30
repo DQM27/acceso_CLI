@@ -152,7 +152,7 @@ export default function SelectorRangoFecha({
         </button>
       </div>
       {abierto && posicion && (
-        <ListaFlotante posicion={posicion}>
+        <ListaFlotante posicion={posicion} ancho={280}>
           <div
             ref={popoverRef}
             style={{
@@ -160,7 +160,6 @@ export default function SelectorRangoFecha({
               display: "flex",
               flexDirection: "column",
               gap: "0.75rem",
-              width: 280,
             }}
           >
             <div>

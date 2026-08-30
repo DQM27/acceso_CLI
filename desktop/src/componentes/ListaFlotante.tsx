@@ -80,9 +80,15 @@ export function useNavegacionFlechas<T>(
  * al borrar el texto. */
 export function ListaFlotante({
   posicion,
+  ancho,
   children,
 }: {
   posicion: PosicionLista;
+  /** Ancho fijo, en vez del ancho de `posicion` (el del campo/botón que
+   * dispara la lista) — para contenido que no tiene por qué calzar con eso,
+   * como el popover de `SelectorRangoFecha` (si no, un botón disparador con
+   * texto corto deja el popover angosto y su contenido se recorta). */
+  ancho?: number;
   children: ReactNode;
 }) {
   return createPortal(
@@ -92,7 +98,7 @@ export function ListaFlotante({
         position: "fixed",
         top: posicion.top,
         left: posicion.left,
-        width: posicion.width,
+        width: ancho ?? posicion.width,
         zIndex: 1000,
         display: "flex",
         flexDirection: "column",

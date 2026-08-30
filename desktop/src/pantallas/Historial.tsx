@@ -165,29 +165,7 @@ export default function Historial() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PantallaEncabezado
-        titulo="Historial"
-        acciones={
-          <>
-            <SelectorRangoFecha
-              desde={desde}
-              hasta={hasta}
-              onAplicar={(nuevoDesde, nuevoHasta) => {
-                setDesde(nuevoDesde);
-                setHasta(nuevoHasta);
-              }}
-            />
-            <button
-              className="boton"
-              title="Exporta lo que está filtrado en la grilla, no todo el historial"
-              onClick={exportar}
-              disabled={exportando}
-            >
-              {exportando ? "Exportando…" : "Exportar a Excel"}
-            </button>
-          </>
-        }
-      />
+      <PantallaEncabezado titulo="Historial" />
 
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
@@ -197,6 +175,26 @@ export default function Historial() {
             columnas={columnas}
             filas={filas}
             filtrosPorColumna
+            accionesDerecha={
+              <>
+                <SelectorRangoFecha
+                  desde={desde}
+                  hasta={hasta}
+                  onAplicar={(nuevoDesde, nuevoHasta) => {
+                    setDesde(nuevoDesde);
+                    setHasta(nuevoHasta);
+                  }}
+                />
+                <button
+                  className="boton"
+                  title="Exporta lo que está filtrado en la grilla, no todo el historial"
+                  onClick={exportar}
+                  disabled={exportando}
+                >
+                  {exportando ? "Exportando…" : "Exportar a Excel"}
+                </button>
+              </>
+            }
           />
         </div>
         <p style={{ color: "var(--muted)", margin: 0 }}>
