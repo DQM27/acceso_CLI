@@ -8,6 +8,15 @@ import { cedulaSchema, nombreSchema, sanearSoloDigitos, sanearSoloLetras } from 
 
 const ROLES = ["Root", "Administrador", "Operador"] as const;
 
+/** Espejo de `puede_gestionar_usuario` (`src/domain/autorizacion.rs`): nadie
+ * asigna Root salvo otro Root. Mismo criterio que ya aplica la TUI en
+ * `FormularioUsuario::roles_disponibles` (`src/comandos/formulario_usuario.rs`)
+ * — acá sólo hace falta la mitad de la regla (quien abre este formulario ya
+ * tiene `GestionarUsuarios`, si no, ni llega a la pantalla). */
+function rolesAsignables(actorRol: RolUsuario): readonly RolUsuario[] {
+  return actorRol === "Root" ? ROLES : ROLES.filter((rol) => rol !== "Root");
+}
+
 interface ValoresFormulario {
   cedula: string;
   nombre: string;
@@ -37,16 +46,20 @@ export function construirEsquema(esCreacion: boolean) {
 }
 
 export default function FormularioUsuario({
+  actorRol,
   usuario,
   onGuardado,
   onCerrar,
 }: {
+  /** Rol de quien tiene la sesión abierta — filtra qué roles puede asignar. */
+  actorRol: RolUsuario;
   /** Si viene, es edición; si no, alta. */
   usuario?: UsuarioResumen;
   onGuardado: () => void;
   onCerrar: () => void;
 }) {
   const esCreacion = !usuario;
+  const roles = rolesAsignables(actorRol);
   const {
     register,
     handleSubmit,
@@ -141,7 +154,7 @@ export default function FormularioUsuario({
         <label className="campo">
           Rol
           <select {...register("rol")}>
-            {ROLES.map((rol) => (
+            {roles.map((rol) => (
               <option key={rol} value={rol}>
                 {rol}
               </option>

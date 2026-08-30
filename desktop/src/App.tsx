@@ -123,12 +123,15 @@ export type Seccion =
   | "empresas"
   | "usuarios";
 
-/** `rolesPermitidos` ausente = visible para cualquier rol logueado. Sólo
- * Auditoría lo restringe hoy — espejo de `RolUsuario::puede(VerAuditoria)`
- * en `src/domain/autorizacion.rs` (Root y Administrador sí, Operador no).
- * El resto de las pantallas no tiene una operación de sólo-lectura
- * restringida por rol en el núcleo (algunas acciones puntuales adentro sí,
- * ej. activar/desactivar, pero eso ya lo rechaza el comando — no hace falta
+/** `rolesPermitidos` ausente = visible para cualquier rol logueado.
+ * Auditoría lo restringe — espejo de `RolUsuario::puede(VerAuditoria)` en
+ * `src/domain/autorizacion.rs` (Root y Administrador sí, Operador no).
+ * Usuarios también — espejo de `Operacion::GestionarUsuarios`
+ * (`AppCore::buscar_usuarios` la exige; un Operador entraba y veía la
+ * tabla vacía con un toast de error en vez de no ver la sección). El resto
+ * de las pantallas no tiene una operación de sólo-lectura restringida por
+ * rol en el núcleo (algunas acciones puntuales adentro sí, ej.
+ * activar/desactivar, pero eso ya lo rechaza el comando — no hace falta
  * ocultar la sección entera por eso). Si el núcleo agrega otra operación de
  * rol para "ver X", el mismo patrón (agregar `rolesPermitidos` acá) alcanza
  * — no hace falta un mecanismo más genérico todavía. */
@@ -148,7 +151,12 @@ const SECCIONES: {
     rolesPermitidos: ["Root", "Administrador"],
   },
   { id: "empresas", etiqueta: "Empresas", Icono: Building2 },
-  { id: "usuarios", etiqueta: "Usuarios", Icono: UserCog },
+  {
+    id: "usuarios",
+    etiqueta: "Usuarios",
+    Icono: UserCog,
+    rolesPermitidos: ["Root", "Administrador"],
+  },
 ];
 
 /**
@@ -254,7 +262,7 @@ function Shell({
           {seccion === "contratistas" && <Contratistas />}
           {seccion === "auditoria" && <Auditoria />}
           {seccion === "empresas" && <Empresas />}
-          {seccion === "usuarios" && <Usuarios />}
+          {seccion === "usuarios" && <Usuarios actorRol={sesion.rol} />}
         </ErrorBoundary>
       </main>
 
@@ -272,7 +280,7 @@ function Shell({
         />
       )}
 
-      <Consola onNavegar={setSeccion} onCerrarSesion={onCerrarSesion} />
+      <Consola actorRol={sesion.rol} onNavegar={setSeccion} onCerrarSesion={onCerrarSesion} />
       {/* theme="system": mismo criterio que el resto de la app (paleta
           clara/oscura sigue `prefers-color-scheme`, sin toggle manual
           todavía) — estilizado con las variables propias en index.css, no

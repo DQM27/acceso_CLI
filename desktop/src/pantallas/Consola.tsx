@@ -29,6 +29,7 @@ import type {
   IngresoActivoResumen,
   MedioIngreso,
   PreparacionIngreso,
+  RolUsuario,
 } from "../api";
 
 type Linea =
@@ -54,9 +55,11 @@ const TAMANO_INICIAL = { ancho: 900, alto: 620 };
 const TAMANO_MINIMO = { ancho: 480, alto: 320 };
 
 export default function Consola({
+  actorRol,
   onNavegar,
   onCerrarSesion,
 }: {
+  actorRol: RolUsuario;
   onNavegar: (seccion: Seccion) => void;
   onCerrarSesion: () => void;
 }) {
@@ -424,6 +427,7 @@ export default function Consola({
       )}
       {modalNuevo === "usuario" && (
         <FormularioUsuario
+          actorRol={actorRol}
           onCerrar={() => setModalNuevo(null)}
           onGuardado={() => {
             setModalNuevo(null);

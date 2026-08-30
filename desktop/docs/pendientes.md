@@ -48,26 +48,32 @@ núcleo en los dos casos — pero sí inconsistencias reales entre la GUI y el T
 que sí filtran correctamente. Encontradas en una revisión completa del modelo de roles
 (`src/domain/autorizacion.rs`) y su aplicación en las tres interfaces.
 
-- [ ] **Sidebar muestra "Usuarios" a un Operador, que no puede ni listarlos.** `SECCIONES`
-  en `desktop/src/App.tsx` sólo pone `rolesPermitidos` en "Auditoría"; "Usuarios" queda sin
-  ese campo, visible para cualquier rol logueado. Pero `AppCore::buscar_usuarios`
-  (`src/application/usuarios.rs`) exige `Operacion::GestionarUsuarios`, que un Operador no
-  tiene — entra a la pantalla y la tabla queda vacía con un toast de error, en vez de no ver
-  la sección. El comentario que justifica el punto anterior ("RBAC visual en el sidebar",
-  arriba) da por hecho que "el resto de las pantallas no tiene una operación de sólo-lectura
-  restringida por rol en el núcleo" — para Usuarios eso es falso. El TUI sí lo hace bien
-  (`OpcionMenu::visible_para` en `src/tui/menu_principal/state.rs` oculta Usuarios y
-  Auditoría para Operador). Arreglo: agregar `rolesPermitidos: ["Root", "Administrador"]` a
-  la entrada `usuarios` en `SECCIONES`.
+- [x] **Reparado (2026-08-30): sidebar ya no muestra "Usuarios" a un Operador.** `SECCIONES`
+  en `desktop/src/App.tsx` sólo ponía `rolesPermitidos` en "Auditoría"; se agregó
+  `rolesPermitidos: ["Root", "Administrador"]` a la entrada `usuarios`, mismo patrón. Antes
+  un Operador entraba y la tabla quedaba vacía con un toast de error (`AppCore::buscar_usuarios`
+  exige `Operacion::GestionarUsuarios`), en vez de no ver la sección — el TUI ya lo hacía bien
+  (`OpcionMenu::visible_para`).
 
-- [ ] **Formulario de usuario ofrece "Root" como rol asignable sin importar quién lo esté
-  llenando.** `ROLES` en `desktop/src/pantallas/FormularioUsuario.tsx` es una lista fija
-  (`["Root", "Administrador", "Operador"]`) para el `<select>` de rol, sin filtrar contra el
-  actor de la sesión. Un Administrador puede elegir Root y recién se entera del rechazo al
-  enviar (`puede_gestionar_usuario` en el núcleo). El TUI/`--comandos` sí filtra las opciones
-  (`FormularioUsuario::roles_disponibles` en `src/comandos/formulario_usuario.rs`, que usa
-  `puede_gestionar_usuario` para que "un Administrador nunca vea Root"). Arreglo: calcular
-  las opciones del `<select>` según `sesion.rol` con la misma regla, en vez de la lista fija.
+- [x] **Reparado (2026-08-30): el formulario de usuario ya no ofrece "Root" si quien lo llena
+  no puede asignarlo.** `FormularioUsuario.tsx` recibe ahora `actorRol` (prop-drilling desde
+  `sesion.rol`, igual que ya bajaba a `Sidebar`: `App.tsx` → `Usuarios`/`Consola` →
+  `FormularioUsuario`) y filtra las opciones del `<select>` con `rolesAsignables` — mismo
+  criterio que `puede_gestionar_usuario` en el núcleo (nadie asigna Root salvo otro Root),
+  espejo de `FormularioUsuario::roles_disponibles` que ya usa la TUI. Se corrigieron **los
+  dos** lugares donde se abre este formulario en la GUI: la pantalla `Usuarios` y el comando
+  `/nuevo usuario` de la Consola — antes sólo se tocó el primero, pero `Consola.tsx` también
+  monta `FormularioUsuario` y no compilaba sin la prop nueva. `npx tsc --noEmit` y
+  `npm run test` (125 tests) en verde.
+  **Fisura relacionada, encontrada al arreglar esto y no corregida todavía:** el comando de
+  consola `/nuevo usuario` (`/n u`) en sí no está gateado por rol — `resolver()`
+  (`src/lenguaje_comandos/resolver.rs`, compartido por TUI y GUI) devuelve
+  `ContextState::NuevoUsuario` sin mirar `sesion.rol`, así que un Operador puede escribir
+  `/nuevo usuario` y ver el formulario abrirse (ahora ya sin Root en el desplegable, pero
+  igual sin poder guardar — el backend rechaza la creación real en `verificar_creacion_usuario`).
+  Mismo patrón que el bug del sidebar, en una tercera superficie. No es un hueco de
+  seguridad (el núcleo sigue rechazando), pero es la misma inconsistencia de UX. Toca código
+  compartido con la TUI clásica, así que no se tocó sin decisión explícita.
 
 ## Entorno de desarrollo
 
