@@ -104,17 +104,23 @@ resuelve.** Si se descarta en vez de hacerse, se marca `[x]` igual con una nota 
 
 ## Diferido a propósito (Historial v1)
 
-- [ ] **Historial: sin filtro de fecha, sin vista Timeline.** Decisión explícita del
-  usuario: v1 de la pantalla Historial (`desktop/src/pantallas/Historial.tsx`) trae todo
-  el historial de una vez (`buscar_historial_completo`, sin paginado — AG Grid
-  virtualiza/filtra del lado del cliente, igual que Activos) con un rango de fechas fijo y
-  abierto (año 2000 a mañana, `filtro_sin_acotar()` en
-  `desktop/src-tauri/src/comandos/historial.rs`) porque `FiltroHistorial` exige
-  `desde`/`hasta` siempre. La vista Timeline (vs. la Clásica/tabla ya implementada) queda
-  para una fase posterior — no implementar sin retomarlo con el usuario primero.
-  (La exportación SÍ respeta ahora el filtro por fila, las columnas ocultas y el orden de
-  la grilla — ver `AppCore::exportar_historial_seleccion`, `ColumnaHistorial::from_clave` y
-  `AppCore::movimientos_en_orden` — eso ya no está diferido.)
+- [x] **Historial: filtro de fecha real, agregado (2026-08-29).** Ya no trae el rango fijo
+  abierto (año 2000 a mañana) — `desktop/src-tauri/src/comandos/historial.rs` acepta
+  `desde`/`hasta` opcionales desde la pantalla (`SelectorRangoFecha.tsx`: botón "Período"
+  con accesos rápidos — Hoy/Ayer/Esta semana/Semana pasada/Este mes/Mes pasado/Últimos
+  7-30 días — más los dos campos para un rango custom). Por defecto trae los últimos 6
+  meses. Sigue sin paginar (AG Grid virtualiza/filtra del lado del cliente sobre lo que
+  trae el rango elegido, igual criterio que Activos).
+  (La exportación SÍ respeta el filtro por fila, las columnas ocultas y el orden de la
+  grilla — ver `AppCore::exportar_historial_seleccion`, `ColumnaHistorial::from_clave` y
+  `AppCore::movimientos_en_orden`.)
+
+- [x] **Vista Timeline: descartada (2026-08-29).** Se evaluaron 4 enfoques (agenda de un
+  día, feed cronológico por día, calendario con densidad, timeline continua sobre el
+  rango) — decisión explícita del usuario tras verlos: no le encuentra utilidad real para
+  este proyecto. No es un "todavía no" — es la decisión final salvo que se retome
+  explícitamente. La vista Clásica (tabla, ya implementada) queda como única vista de
+  Historial.
 
 - [ ] **Módulo de exportación avanzado: fuente/tamaño de letra y formato de celda
   configurables.** `rust_xlsxwriter` (ya en uso) sí soporta esto sin herramienta adicional
