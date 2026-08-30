@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
+import { FileSpreadsheet } from "lucide-react";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
@@ -186,12 +187,17 @@ export default function Historial() {
                   }}
                 />
                 <button
-                  className="boton"
-                  title="Exporta lo que está filtrado en la grilla, no todo el historial"
+                  type="button"
+                  className="boton boton-icono"
+                  title={
+                    exportando
+                      ? "Exportando…"
+                      : "Exportar a Excel — respeta el filtro/orden/columnas actuales de la grilla"
+                  }
                   onClick={exportar}
                   disabled={exportando}
                 >
-                  {exportando ? "Exportando…" : "Exportar a Excel"}
+                  <FileSpreadsheet size={16} />
                 </button>
               </>
             }
