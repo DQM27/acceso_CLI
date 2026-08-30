@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
+import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { exportarHistorial, listarHistorial, textoMedio } from "../api";
 import type { MovimientoIngresoResumen } from "../api";
-import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
 type FilaHistorial = MovimientoIngresoResumen;
 
@@ -36,19 +37,23 @@ export default function Historial() {
   const [filas, setFilas] = useState<FilaHistorial[]>([]);
   const [cargando, setCargando] = useState(true);
   const [exportando, setExportando] = useState(false);
+  // Por defecto trae los últimos 6 meses — antes traía todo desde el año
+  // 2000 (rango fijo en el backend). `hasta` vacío queda abierto (hoy + 1
+  // día en el backend, ver `rango_utc`), así no se pierden movimientos del
+  // día en curso. El usuario puede ampliar `desde` para ver más atrás.
+  const [desde, setDesde] = useState(() => fechaHaceMeses(6));
+  const [hasta, setHasta] = useState("");
   const tablaRef = useRef<TablaHandle<FilaHistorial>>(null);
 
-  useEffect(() => {
-    let vigente = true;
+  const recargar = useCallback(async () => {
     setCargando(true);
-    listarHistorial()
-      .then((items) => vigente && setFilas(items))
-      .catch((error) => vigente && toast.error(String(error)))
-      .finally(() => vigente && setCargando(false));
-    return () => {
-      vigente = false;
-    };
-  }, []);
+    try {
+      setFilas(await listarHistorial(desde || undefined, hasta || undefined));
+    } finally {
+      setCargando(false);
+    }
+  }, [desde, hasta]);
+  useCargaAlCambiar(recargar);
 
   async function exportar() {
     // Lo que la grilla tiene visible AHORA (filtro por columna y selector
@@ -162,14 +167,34 @@ export default function Historial() {
       <PantallaEncabezado
         titulo="Historial"
         acciones={
-          <button
-            className="boton"
-            title="Exporta lo que está filtrado en la grilla, no todo el historial"
-            onClick={exportar}
-            disabled={exportando}
-          >
-            {exportando ? "Exportando…" : "Exportar a Excel"}
-          </button>
+          <>
+            <label style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+              Desde
+              <input
+                type="date"
+                value={desde}
+                max={hasta || undefined}
+                onChange={(e) => setDesde(e.target.value)}
+              />
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+              Hasta
+              <input
+                type="date"
+                value={hasta}
+                min={desde || undefined}
+                onChange={(e) => setHasta(e.target.value)}
+              />
+            </label>
+            <button
+              className="boton"
+              title="Exporta lo que está filtrado en la grilla, no todo el historial"
+              onClick={exportar}
+              disabled={exportando}
+            >
+              {exportando ? "Exportando…" : "Exportar a Excel"}
+            </button>
+          </>
         }
       />
 

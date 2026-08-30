@@ -50,8 +50,15 @@ function mensajeMotivoResultado(motivo: MotivoResultadoIngreso): string {
   }
 }
 
-export function listarHistorial(): Promise<MovimientoIngresoResumen[]> {
-  return invoke("listar_historial");
+/** `desde`/`hasta`: `"YYYY-MM-DD"` (calendario, Costa Rica) o `undefined`
+ * para no acotar ese extremo — ver `rango_utc` en
+ * `desktop/src-tauri/src/comandos/historial.rs`. `hasta` es inclusivo del
+ * día completo. */
+export function listarHistorial(
+  desde?: string,
+  hasta?: string,
+): Promise<MovimientoIngresoResumen[]> {
+  return invoke("listar_historial", { desde: desde ?? null, hasta: hasta ?? null });
 }
 
 /** `ids`: los `registro_id` que la grilla tiene visibles tras su propio

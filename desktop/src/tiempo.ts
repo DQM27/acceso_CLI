@@ -27,3 +27,13 @@ export function textoFechaDDMMYYYY(ymd: string): string {
   const [anio, mes, dia] = ymd.split("-");
   return `${dia}/${mes}/${anio}`;
 }
+
+/** Año-mes-día (hora LOCAL, mismo criterio que `fechaLocalYMD`) de la fecha
+ * `meses` atrás — para valores por defecto de un filtro de rango (ver
+ * Historial.tsx). `hoy` es inyectable para que el test sea determinístico. */
+export function fechaHaceMeses(meses: number, hoy: Date = new Date()): string {
+  const d = new Date(hoy.getFullYear(), hoy.getMonth() - meses, hoy.getDate());
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mes}-${dia}`;
+}
