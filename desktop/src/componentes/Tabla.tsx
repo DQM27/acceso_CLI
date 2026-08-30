@@ -62,6 +62,10 @@ const columnaPorDefectoConFiltro: ColDef = {
 export interface EstadoGuardado {
   ocultas: string[];
   columnas: ColumnState[];
+  /** `undefined` en layouts guardados antes de que existiera esta opción —
+   * se toma como visible (comportamiento de siempre) para no ocultarle a
+   * nadie los filtros sin que lo haya pedido. */
+  filtrosVisibles?: boolean;
 }
 
 // v2: el layout guardado incluye `pinned` por columna — al sacar el pin
@@ -166,6 +170,9 @@ function TablaBase<T>(
   const [ocultas, setOcultas] = useState<Set<string>>(
     () => new Set(leerEstadoGuardado(id)?.ocultas ?? []),
   );
+  const [filtrosVisibles, setFiltrosVisibles] = useState(
+    () => leerEstadoGuardado(id)?.filtrosVisibles ?? true,
+  );
   const [selectorAbierto, setSelectorAbierto] = useState(false);
   const apiRef = useRef<GridReadyEvent<T>["api"] | null>(null);
 
@@ -212,16 +219,28 @@ function TablaBase<T>(
    * fuente de verdad para visibilidad (ver `columnasConVisibilidad`); si el
    * estado de AG Grid trajera su propio `hide`, ambas fuentes podrían
    * contradecirse. */
-  function guardarLayout(ocultasActual: Set<string>) {
+  function guardarLayout(ocultasActual: Set<string>, filtrosVisiblesActual: boolean = filtrosVisibles) {
     if (!id || !apiRef.current) return;
     const columnState = apiRef.current.getColumnState().map(({ hide: _hide, ...resto }) => resto);
-    const estado: EstadoGuardado = { ocultas: Array.from(ocultasActual), columnas: columnState };
+    const estado: EstadoGuardado = {
+      ocultas: Array.from(ocultasActual),
+      columnas: columnState,
+      filtrosVisibles: filtrosVisiblesActual,
+    };
     try {
       localStorage.setItem(claveAlmacenamiento(id), JSON.stringify(estado));
     } catch {
       // localStorage puede fallar (modo privado, cuota llena) — perder el
       // layout guardado no es motivo para romper la grilla.
     }
+  }
+
+  function alternarFiltrosVisibles() {
+    setFiltrosVisibles((actual) => {
+      const siguiente = !actual;
+      guardarLayout(ocultas, siguiente);
+      return siguiente;
+    });
   }
 
   function alListo(evento: GridReadyEvent<T>) {
@@ -319,6 +338,19 @@ function TablaBase<T>(
                         {columna.headerName ?? clave}
                       </label>
                     ))}
+                  {filtrosPorColumna && (
+                    <>
+                      <hr style={{ width: "100%", border: "none", borderTop: "1px solid var(--borde)", margin: "0.2rem 0" }} />
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <input
+                          type="checkbox"
+                          checked={filtrosVisibles}
+                          onChange={alternarFiltrosVisibles}
+                        />
+                        Filtros por columna
+                      </label>
+                    </>
+                  )}
                 </div>
               </>
             )}
@@ -329,7 +361,9 @@ function TablaBase<T>(
       <div style={{ flex: 1, minHeight: 0 }}>
         <AgGridReact<T>
           theme={temaBrisas}
-          defaultColDef={filtrosPorColumna ? columnaPorDefectoConFiltro : columnaPorDefecto}
+          defaultColDef={
+            filtrosPorColumna && filtrosVisibles ? columnaPorDefectoConFiltro : columnaPorDefecto
+          }
           rowData={filas}
           columnDefs={columnasConVisibilidad}
           quickFilterText={busqueda}
