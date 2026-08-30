@@ -1,9 +1,11 @@
 use std::path::PathBuf;
 
 use chrono::{DateTime, Duration, NaiveDate, TimeZone, Utc};
+use control_acceso::application::ExportarHistorialError;
 use control_acceso::database::queries::ingresos::{FiltroHistorial, MovimientoIngresoResumen};
 use control_acceso::historial::exportacion::ColumnaHistorial;
 use control_acceso::tiempo::{self, TiempoError};
+use tauri::Manager;
 
 use crate::estado::GuiState;
 use crate::pdf;
@@ -73,6 +75,8 @@ pub fn exportar_historial(
     destino: String,
     ids: Vec<i64>,
     columnas: Vec<String>,
+    desde: Option<NaiveDate>,
+    hasta: Option<NaiveDate>,
     state: tauri::State<GuiState>,
 ) -> Result<usize, String> {
     state.sesion_activa()?;
@@ -80,15 +84,32 @@ pub fn exportar_historial(
         .iter()
         .filter_map(|clave| ColumnaHistorial::from_clave(clave))
         .collect();
+    let (desde_utc, hasta_utc) = rango_utc(desde, hasta).map_err(|error| error.to_string())?;
+    let destino = PathBuf::from(destino);
+    quitar_si_existe(&destino)?;
     state
         .core()
         .exportar_historial_seleccion(
-            &filtro_sin_acotar(),
+            &FiltroHistorial::nuevo(desde_utc, hasta_utc),
             Some(&ids),
             &columnas,
-            &PathBuf::from(destino),
+            &destino,
         )
         .map_err(|error| error.to_string())
+}
+
+/// El diálogo nativo de "Guardar como" (`@tauri-apps/plugin-dialog`) ya le
+/// preguntó al usuario si quiere reemplazar el archivo antes de devolver
+/// esta ruta — si igual existe acá es porque confirmó. Se quita antes de
+/// exportar para no chocar con el chequeo de `exportar_historial_seleccion`
+/// (pensado para quien llama sin ese paso previo, ej. la TUI) y para que
+/// nunca quede un archivo viejo confundiendo la exportación a PDF con datos
+/// obsoletos.
+fn quitar_si_existe(destino: &std::path::Path) -> Result<(), String> {
+    if destino.exists() {
+        std::fs::remove_file(destino).map_err(|error| error.to_string())?;
+    }
+    Ok(())
 }
 
 /// Exporta a PDF los mismos `ids`/`columnas` que ya resuelve
@@ -101,12 +122,15 @@ pub fn exportar_historial(
 /// la sesión activa, no del frontend — no hay razón para confiar en un
 /// nombre que mande el cliente para algo que es, en la práctica, un dato de
 /// auditoría.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn exportar_historial_pdf(
     destino: String,
     ids: Vec<i64>,
     columnas: Vec<String>,
     filtro_descripcion: String,
+    desde: Option<NaiveDate>,
+    hasta: Option<NaiveDate>,
     state: tauri::State<'_, GuiState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
@@ -115,13 +139,32 @@ pub async fn exportar_historial_pdf(
         .iter()
         .filter_map(|clave| ColumnaHistorial::from_clave(clave))
         .collect();
-    let movimientos = state
-        .core()
-        .movimientos_en_orden(&filtro_sin_acotar(), &ids)
-        .map_err(|error| error.to_string())?;
+    if columnas.is_empty() {
+        return Err(ExportarHistorialError::SinColumnas.to_string());
+    }
+    let (desde_utc, hasta_utc) = rango_utc(desde, hasta).map_err(|error| error.to_string())?;
+    // La consulta a SQLite es trabajo bloqueante — con un historial grande
+    // puede tardar lo suficiente como para acaparar un hilo del runtime de
+    // tokio si corriera inline en esta función `async` (a diferencia de
+    // `exportar_historial`, que al ser un comando NO async ya corre por su
+    // cuenta en el pool de hilos bloqueantes de Tauri). `spawn_blocking` la
+    // manda a ese mismo pool en vez de competir con otros `invoke()` async
+    // en curso.
+    let app_para_consulta = app.clone();
+    let movimientos = tauri::async_runtime::spawn_blocking(move || {
+        app_para_consulta
+            .state::<GuiState>()
+            .core()
+            .movimientos_en_orden(&FiltroHistorial::nuevo(desde_utc, hasta_utc), &ids)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+    .map_err(|error| error.to_string())?;
     let html =
         pdf::html::generar_html(&movimientos, &columnas, &sesion.nombre, &filtro_descripcion);
-    pdf::generador::generar_pdf(&app, html, PathBuf::from(destino)).await
+    let destino = PathBuf::from(destino);
+    quitar_si_existe(&destino)?;
+    pdf::generador::generar_pdf(&app, html, destino).await
 }
 
 #[cfg(test)]

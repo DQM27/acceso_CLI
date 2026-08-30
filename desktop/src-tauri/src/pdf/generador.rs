@@ -94,10 +94,16 @@ async fn generar_pdf_desde_archivo(
     resultado
 }
 
-/// Sondea `destino` hasta que exista y su tamaño se mantenga estable
-/// durante [`SONDEOS_ESTABLE`] chequeos seguidos, o hasta
-/// [`TIMEOUT_ESCRITURA`]. No bloquea ningún hilo del runtime — usa
-/// `tokio::time::sleep`, no `std::thread::sleep`.
+/// Sondea `destino` hasta que exista, su tamaño se mantenga estable durante
+/// [`SONDEOS_ESTABLE`] chequeos seguidos Y termine en el marcador `%%EOF` de
+/// un PDF válido, o hasta [`TIMEOUT_ESCRITURA`]. El chequeo de `%%EOF` es
+/// necesario además de la estabilidad de tamaño: un tamaño que se estabiliza
+/// por un instante a mitad de escritura (ej. WebView2 hace una pausa entre
+/// dos bloques) igual pasaría [`SONDEOS_ESTABLE`] sondeos seguidos y se
+/// daría por terminado con un PDF en realidad truncado. No bloquea ningún
+/// hilo del runtime más allá de la misma lectura sincrónica y chica
+/// (`std::fs::metadata`/últimos bytes del archivo) que ya hacía esta
+/// función — usa `tokio::time::sleep`, no `std::thread::sleep`.
 async fn esperar_archivo_listo(destino: &Path) -> Result<(), String> {
     let inicio = tokio::time::Instant::now();
     let mut ultimo_tamano: Option<u64> = None;
@@ -108,7 +114,7 @@ async fn esperar_archivo_listo(destino: &Path) -> Result<(), String> {
             let tamano = metadatos.len();
             if tamano > 0 && Some(tamano) == ultimo_tamano {
                 sondeos_iguales += 1;
-                if sondeos_iguales >= SONDEOS_ESTABLE {
+                if sondeos_iguales >= SONDEOS_ESTABLE && termina_en_marcador_eof(destino) {
                     return Ok(());
                 }
             } else {
@@ -125,6 +131,31 @@ async fn esperar_archivo_listo(destino: &Path) -> Result<(), String> {
         }
         tokio::time::sleep(INTERVALO_SONDEO).await;
     }
+}
+
+/// Todo PDF válido termina con `%%EOF` (posiblemente seguido de espacio en
+/// blanco) — leer sólo la cola del archivo alcanza para confirmarlo sin
+/// releerlo entero en cada sondeo, incluso si termina siendo grande.
+fn termina_en_marcador_eof(destino: &Path) -> bool {
+    use std::io::{Read, Seek, SeekFrom};
+
+    const BYTES_DE_COLA: u64 = 32;
+
+    let Ok(mut archivo) = std::fs::File::open(destino) else {
+        return false;
+    };
+    let Ok(metadatos) = archivo.metadata() else {
+        return false;
+    };
+    let inicio_cola = metadatos.len().saturating_sub(BYTES_DE_COLA);
+    if archivo.seek(SeekFrom::Start(inicio_cola)).is_err() {
+        return false;
+    }
+    let mut cola = Vec::new();
+    if archivo.read_to_end(&mut cola).is_err() {
+        return false;
+    }
+    String::from_utf8_lossy(&cola).trim_end().ends_with("%%EOF")
 }
 
 #[cfg(windows)]
