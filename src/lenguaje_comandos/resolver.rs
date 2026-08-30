@@ -143,7 +143,20 @@ pub fn resolver(core: &AppCore, entrada: &Entrada, sesion: &UsuarioSesion) -> Co
                 Comando::Nuevo => match sujeto_nuevo(consulta) {
                     Some(SujetoNuevo::Contratista) => ContextState::NuevoContratista,
                     Some(SujetoNuevo::Empresa) => ContextState::NuevoEmpresa,
-                    Some(SujetoNuevo::Usuario) => ContextState::NuevoUsuario,
+                    // Mismo gate que `pagina_usuarios`/`abrir_formulario_nuevo_usuario`
+                    // (TUI): sin esto, la GUI (que llama a `resolver` directo desde
+                    // `ejecutar_comando`, sin pasar por el controlador de teclado de
+                    // `--comandos` que sí repite este chequeo) dejaba a un Operador
+                    // abrir el formulario de alta de usuario sin ningún filtro.
+                    Some(SujetoNuevo::Usuario) => {
+                        if sesion.rol.puede(Operacion::GestionarUsuarios) {
+                            ContextState::NuevoUsuario
+                        } else {
+                            ContextState::MensajeError {
+                                mensaje: "No tiene permiso para gestionar usuarios".to_string(),
+                            }
+                        }
+                    }
                     None => ContextState::MensajeError {
                         mensaje: format!(
                             "Sujeto no reconocido: /nuevo contratista|empresa|usuario \

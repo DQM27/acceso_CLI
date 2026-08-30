@@ -65,15 +65,19 @@ que sí filtran correctamente. Encontradas en una revisión completa del modelo 
   `/nuevo usuario` de la Consola — antes sólo se tocó el primero, pero `Consola.tsx` también
   monta `FormularioUsuario` y no compilaba sin la prop nueva. `npx tsc --noEmit` y
   `npm run test` (125 tests) en verde.
-  **Fisura relacionada, encontrada al arreglar esto y no corregida todavía:** el comando de
-  consola `/nuevo usuario` (`/n u`) en sí no está gateado por rol — `resolver()`
-  (`src/lenguaje_comandos/resolver.rs`, compartido por TUI y GUI) devuelve
-  `ContextState::NuevoUsuario` sin mirar `sesion.rol`, así que un Operador puede escribir
-  `/nuevo usuario` y ver el formulario abrirse (ahora ya sin Root en el desplegable, pero
-  igual sin poder guardar — el backend rechaza la creación real en `verificar_creacion_usuario`).
-  Mismo patrón que el bug del sidebar, en una tercera superficie. No es un hueco de
-  seguridad (el núcleo sigue rechazando), pero es la misma inconsistencia de UX. Toca código
-  compartido con la TUI clásica, así que no se tocó sin decisión explícita.
+  **Fisura relacionada, encontrada al arreglar esto — también reparada (2026-08-30):** el
+  comando de consola `/nuevo usuario` (`/n u`) no estaba gateado por rol en el núcleo —
+  `resolver()` (`src/lenguaje_comandos/resolver.rs`, compartido por TUI y GUI) devolvía
+  `ContextState::NuevoUsuario` sin mirar `sesion.rol` en esa rama. La TUI lo tapaba con una
+  segunda capa en el controlador de teclado (`abrir_formulario_nuevo_usuario`,
+  `src/comandos/formulario_usuario_controller.rs`), pero la GUI llama a `resolver` directo
+  desde `ejecutar_comando` (`desktop/src-tauri/src/comandos/consola.rs`) sin pasar por esa
+  segunda capa — así que a un Operador se le abría el formulario sin ningún filtro. Se agregó
+  el mismo gate (`sesion.rol.puede(Operacion::GestionarUsuarios)`) directo en `resolver()`,
+  mismo criterio que ya usan `pagina_usuarios`/`pagina_auditoria` en el mismo archivo — ahora
+  es un solo lugar que las tres interfaces (TUI, `--comandos`, GUI) consultan, en vez de que
+  cada una tenga que acordarse de repetir el chequeo. `cargo fmt`, Clippy estricto
+  (`-D warnings`) y la suite completa (467 tests) en verde.
 
 ## Entorno de desarrollo
 
