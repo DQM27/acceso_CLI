@@ -33,7 +33,18 @@ export function textoFechaDDMMYYYY(ymd: string): string {
 
 /** Año-mes-día (hora LOCAL, mismo criterio que `fechaLocalYMD`) de la fecha
  * `meses` atrás — para valores por defecto de un filtro de rango (ver
- * Historial.tsx). `hoy` es inyectable para que el test sea determinístico. */
+ * Historial.tsx). `hoy` es inyectable para que el test sea determinístico.
+ * Si el mes destino es más corto (31 de agosto − 6 meses cae en un
+ * "31 de febrero" inexistente), se ajusta (clamp) al último día válido de
+ * ese mes en vez de dejar que rebalse al mes siguiente — mismo criterio que
+ * `subMonths` de date-fns para fechas de cara al usuario. */
 export function fechaHaceMeses(meses: number, hoy: Date = new Date()): string {
-  return fechaYMD(new Date(hoy.getFullYear(), hoy.getMonth() - meses, hoy.getDate()));
+  const anio = hoy.getFullYear();
+  const mesDestino = hoy.getMonth() - meses;
+  // Día 0 del mes SIGUIENTE al destino = último día del mes destino —
+  // `Date` ya normaliza mes/año fuera de rango (negativo o >11) de forma
+  // consistente entre sí, así que alcanza con este único cálculo.
+  const ultimoDiaMesDestino = new Date(anio, mesDestino + 1, 0).getDate();
+  const dia = Math.min(hoy.getDate(), ultimoDiaMesDestino);
+  return fechaYMD(new Date(anio, mesDestino, dia));
 }

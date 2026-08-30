@@ -45,11 +45,14 @@ describe("fechaHaceMeses", () => {
     expect(fechaHaceMeses(6, new Date(2026, 2, 15))).toBe("2025-09-15");
   });
 
-  it("cae en un mes más corto: JS corrige el desborde de día en vez de tirar error", () => {
+  it("cae en un mes más corto: se ajusta (clamp) a su último día, no rebalsa al siguiente", () => {
     // 31 de marzo menos 1 mes "debería" ser 31 de febrero, que no existe —
-    // Date normaliza al 3 de marzo. Test documenta ese comportamiento, no lo
-    // esconde: para un rango "hace N meses" el corrimiento de unos días en
-    // un caso límite no importa (es sólo el valor por defecto del filtro).
-    expect(fechaHaceMeses(1, new Date(2026, 2, 31))).toBe("2026-03-03");
+    // en vez de dejar que rebalse al 3 de marzo (comportamiento crudo de
+    // `Date`), se ajusta al último día real de febrero.
+    expect(fechaHaceMeses(1, new Date(2026, 2, 31))).toBe("2026-02-28");
+  });
+
+  it("año bisiesto: el último día de febrero es el 29, no el 28", () => {
+    expect(fechaHaceMeses(1, new Date(2028, 2, 31))).toBe("2028-02-29");
   });
 });
