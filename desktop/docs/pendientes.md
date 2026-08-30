@@ -41,6 +41,31 @@ resuelve.** Si se descarta en vez de hacerse, se marca `[x]` igual con una nota 
   forma aislada valdría la pena reportarlo río arriba (wry/webview2-com), pero no se
   investigó ese camino todavía.
 
+## Entorno de desarrollo
+
+- [ ] **`cargo test` en `desktop/src-tauri` crashea en esta PC — toolchain GNU sin Visual
+  Studio Build Tools (2026-08-30).** El toolchain de Rust por defecto en esta máquina es
+  `stable-x86_64-pc-windows-gnu` (MinGW), no MSVC. El binario de tests de este crate
+  (`control_acceso_desktop_lib-*.exe`) crashea al cargar, ANTES de correr un solo test, con
+  `STATUS_ENTRYPOINT_NOT_FOUND` (0xC0000139) — pasa igual con el código sin tocar (confirmado
+  con `git stash`), así que no es un bug del código. Causa más probable: `webview2-com`
+  (interop COM de WebView2, usado en `pdf/generador.rs` para `PrintToPdfCompletedHandler`) es
+  una categoría de crate frágil bajo el ABI de GNU en Windows — Microsoft/`windows-rs`
+  recomiendan MSVC para este tipo de interop.
+  **Confirmado que la app en sí NO está afectada:** el `.exe` real
+  (`target/debug/control-acceso-desktop.exe`), compilado con el mismo toolchain GNU, abre y
+  corre normal — el crash es específico del binario de test de este crate, no de la app.
+  **Por qué no se arregló ahora:** forzar `cargo +stable-x86_64-pc-windows-msvc test` falla
+  al enlazar (hasta crates sin relación con WebView2, como `quote`/`proc-macro2`) porque esta
+  PC no tiene Visual Studio Build Tools ni Windows SDK instalados — sólo hay un `link.exe` de
+  Git for Windows (no sirve como linker de MSVC). Instalar Visual Studio Build Tools requiere
+  permisos de administrador que no están disponibles en esta PC (no es sólo cuestión de
+  tiempo/espacio). El usuario va a probar con MSVC en otra máquina (su casa) más adelante.
+  **Mientras tanto:** este crate se sigue validando con `cargo build`/`cargo clippy` (sí
+  funcionan bajo GNU) — sólo la ejecución de los tests unitarios queda bloqueada acá. Los
+  tests del crate raíz (`cargo test` desde la raíz del repo) y los del frontend (`npm run
+  test` en `desktop/`) no están afectados y corren normal.
+
 ## Empaquetado y actualizaciones
 
 - [x] **Pipeline de release para la GUI (2026-08-29).** Antes `.github/workflows/release.yml`
