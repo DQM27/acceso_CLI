@@ -18,7 +18,10 @@ pub fn buscar_usuarios(
 /// Contraseña en texto plano — a diferencia de la TUI, no hace falta el hilo
 /// aparte para Argon2 (Tauri ya despacha este comando en su propio pool).
 #[tauri::command]
-pub fn crear_usuario(datos: CrearUsuarioEntrada, state: tauri::State<GuiState>) -> Result<i64, String> {
+pub fn crear_usuario(
+    datos: CrearUsuarioEntrada,
+    state: tauri::State<GuiState>,
+) -> Result<i64, String> {
     let sesion = state.sesion_activa()?;
     state
         .core()

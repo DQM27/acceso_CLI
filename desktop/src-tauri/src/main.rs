@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-  control_acceso_desktop_lib::run();
+    control_acceso_desktop_lib::run();
 }

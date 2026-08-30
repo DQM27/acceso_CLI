@@ -10,7 +10,10 @@ use crate::estado::GuiState;
 /// este comando no necesita mapear errores de dominio, sólo la falta de
 /// sesión.
 #[tauri::command]
-pub fn ejecutar_comando(texto: String, state: tauri::State<GuiState>) -> Result<ContextState, String> {
+pub fn ejecutar_comando(
+    texto: String,
+    state: tauri::State<GuiState>,
+) -> Result<ContextState, String> {
     let sesion = state.sesion_activa()?;
     Ok(state.core().ejecutar_comando(&sesion, &texto))
 }
