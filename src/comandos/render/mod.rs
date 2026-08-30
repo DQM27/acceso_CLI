@@ -229,9 +229,7 @@ fn contenido_pista(app: &AppState) -> Option<Line<'static>> {
     if let Some(fp) = &app.formulario_password {
         let pista = match fp.subfase {
             SubfasePassword::VerificandoActual => "Enter verificar · Esc cancelar",
-            SubfasePassword::Cambiando => {
-                "↑↓/Tab campo · Enter guardar · Esc volver a la actual"
-            }
+            SubfasePassword::Cambiando => "↑↓/Tab campo · Enter guardar · Esc volver a la actual",
         };
         return Some(Line::from(Span::styled(pista, muted())));
     }

@@ -84,11 +84,11 @@ pub use salida_gafete::SalidaGafeteState;
 // valores).
 // `resolver` (el módulo) ya trae consigo `resolver::resolver` (la función) —
 // no se re-exporta también suelta para no chocar con el nombre del módulo.
-pub use crate::lenguaje_comandos::{parser, resolver};
 pub use crate::lenguaje_comandos::{
     Comando, Entrada, GafeteParse, MedioParse, autocompletar, calcular_sugerencias,
     ficha_desde_resumen, parsear, preparar_resumen_ingreso,
 };
+pub use crate::lenguaje_comandos::{parser, resolver};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ComandosError {

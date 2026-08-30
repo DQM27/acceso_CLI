@@ -163,16 +163,10 @@ pub(super) fn lineas_tabla_auditoria(
         });
     }
     if items.is_empty() {
-        lineas.push(Line::from(Span::styled(
-            "Sin cambios auditados",
-            muted(),
-        )));
+        lineas.push(Line::from(Span::styled("Sin cambios auditados", muted())));
     }
     lineas.push(Line::from(""));
-    lineas.push(Line::from(Span::styled(
-        cantidad_cambios(total),
-        muted(),
-    )));
+    lineas.push(Line::from(Span::styled(cantidad_cambios(total), muted())));
     lineas
 }
 

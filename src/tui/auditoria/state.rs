@@ -1,7 +1,9 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::{
-    database::queries::auditoria::{CambioAuditado, LIMITE_AUDITORIA_PREDETERMINADO, PaginaAuditoria},
+    database::queries::auditoria::{
+        CambioAuditado, LIMITE_AUDITORIA_PREDETERMINADO, PaginaAuditoria,
+    },
     tui::ui_kit::{StandardCommand, mover_seleccion, standard_command},
 };
 

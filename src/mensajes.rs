@@ -123,7 +123,10 @@ mod tests {
         let error = AutenticacionError::Database(DatabaseError::FechaCorrupta(
             "Error de SQLite: detalle interno".into(),
         ));
-        assert_eq!(mensaje_autenticacion(error), "No se pudo iniciar sesión, intentá de nuevo");
+        assert_eq!(
+            mensaje_autenticacion(error),
+            "No se pudo iniciar sesión, intentá de nuevo"
+        );
         assert_eq!(
             mensaje_autenticacion(AutenticacionError::HashInvalido),
             "No se pudo iniciar sesión, intentá de nuevo"

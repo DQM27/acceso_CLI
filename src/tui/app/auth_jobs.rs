@@ -62,7 +62,9 @@ impl App {
                 self.login.completar_validacion(None);
                 self.iniciar_sesion(sesion, core);
             }
-            Err(error) => self.login.completar_validacion(Some(mensaje_autenticacion(error))),
+            Err(error) => self
+                .login
+                .completar_validacion(Some(mensaje_autenticacion(error))),
         }
     }
 
@@ -98,7 +100,9 @@ impl App {
                 });
                 self.autenticacion_pendiente = Some(receptor);
             }
-            Err(error) => self.login.completar_validacion(Some(mensaje_autenticacion(error))),
+            Err(error) => self
+                .login
+                .completar_validacion(Some(mensaje_autenticacion(error))),
         }
     }
 

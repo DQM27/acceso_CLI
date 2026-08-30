@@ -17,8 +17,8 @@ mod accesos;
 mod autenticacion;
 // Reusa `lenguaje_comandos` (parser+resolver), que no depende de terminal —
 // sin feature gate, a diferencia de `comandos/` (el loop real).
-mod comandos;
 mod catalogos;
+mod comandos;
 mod historial;
 mod respaldos;
 mod usuarios;

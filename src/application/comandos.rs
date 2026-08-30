@@ -7,7 +7,9 @@
 //! `crossterm`, detrás de la feature `terminal-ui`) no se toca ni se
 //! ejecuta acá — por eso este puente no necesita esa feature.
 
-use crate::lenguaje_comandos::{ContextState, autocompletar, calcular_sugerencias, parsear, resolver};
+use crate::lenguaje_comandos::{
+    ContextState, autocompletar, calcular_sugerencias, parsear, resolver,
+};
 use crate::services::autenticacion_service::UsuarioSesion;
 
 use super::AppCore;

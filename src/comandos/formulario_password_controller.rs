@@ -170,9 +170,7 @@ fn confirmar_cambio(core: &AppCore, app: &mut AppState) {
 
 fn mensaje_error(error: &UsuarioServiceError) -> String {
     match error {
-        UsuarioServiceError::PasswordActualIncorrecta => {
-            "Contraseña actual incorrecta".to_string()
-        }
+        UsuarioServiceError::PasswordActualIncorrecta => "Contraseña actual incorrecta".to_string(),
         UsuarioServiceError::OperacionNoAutorizada => "La sesión ya no es válida".to_string(),
         other => other.to_string(),
     }

@@ -37,8 +37,7 @@ impl AppCore {
         &self,
         actor: &UsuarioSesion,
         filtro: &FiltroAuditoria,
-    ) -> Result<crate::database::queries::auditoria::PaginaAuditoria, ContratistaServiceError>
-    {
+    ) -> Result<crate::database::queries::auditoria::PaginaAuditoria, ContratistaServiceError> {
         let actor_actual = verificar_actor_activo(&self.connection, actor)?
             .ok_or(ContratistaServiceError::OperacionNoAutorizada)?;
         if !actor_actual.rol.puede(Operacion::VerAuditoria) {

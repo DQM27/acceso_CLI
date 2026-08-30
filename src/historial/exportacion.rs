@@ -110,7 +110,9 @@ impl ColumnaHistorial {
     /// ninguna — quien llama decide si eso es un error o simplemente se
     /// ignora esa clave.
     pub fn from_clave(clave: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|columna| columna.clave() == clave)
+        Self::ALL
+            .into_iter()
+            .find(|columna| columna.clave() == clave)
     }
 
     const fn ancho_excel(self) -> f64 {

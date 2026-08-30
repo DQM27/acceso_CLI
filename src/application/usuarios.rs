@@ -177,14 +177,15 @@ impl AppCore {
             Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
                 .map_err(DatabaseError::from)?;
         let actor_actual = verificar_gestion_usuario(&transaction, actor, id, false)?;
-        UsuarioService::new(&SqliteUsuarioRepository::new(&transaction)).cambiar_password_auditado(
-            id,
-            password,
-            actor_actual.id,
-            &actor_actual.nombre,
-            self.reloj.ahora_utc(),
-            &SqliteAuditoria::new(&transaction),
-        )?;
+        UsuarioService::new(&SqliteUsuarioRepository::new(&transaction))
+            .cambiar_password_auditado(
+                id,
+                password,
+                actor_actual.id,
+                &actor_actual.nombre,
+                self.reloj.ahora_utc(),
+                &SqliteAuditoria::new(&transaction),
+            )?;
         transaction.commit().map_err(DatabaseError::from)?;
         Ok(())
     }
@@ -234,8 +235,7 @@ impl AppCore {
     ) -> Result<(), UsuarioServiceError> {
         let actor_actual = verificar_actor_activo(&self.connection, actor)?
             .ok_or(UsuarioServiceError::OperacionNoAutorizada)?;
-        match crate::services::password::verificar_password(password, &actor_actual.password_hash)
-        {
+        match crate::services::password::verificar_password(password, &actor_actual.password_hash) {
             Ok(true) => Ok(()),
             Ok(false) => Err(UsuarioServiceError::PasswordActualIncorrecta),
             Err(error) => Err(error.into()),

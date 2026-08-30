@@ -164,5 +164,8 @@ fn cambio_de_password_no_muestra_valores() {
         valor_nuevo: None,
     };
 
-    assert_eq!(render::descripcion_cambio(&cambio), "Contraseña actualizada");
+    assert_eq!(
+        render::descripcion_cambio(&cambio),
+        "Contraseña actualizada"
+    );
 }

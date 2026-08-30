@@ -99,9 +99,7 @@ pub fn render(
     );
 }
 
-fn texto_entidad(
-    item: &crate::database::queries::auditoria::CambioAuditado,
-) -> &'static str {
+fn texto_entidad(item: &crate::database::queries::auditoria::CambioAuditado) -> &'static str {
     use crate::database::queries::auditoria::EntidadAuditada;
     match item.entidad {
         EntidadAuditada::Contratista => "contratista",

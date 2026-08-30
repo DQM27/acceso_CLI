@@ -4,8 +4,7 @@ use control_acceso::{
     application::AppCore,
     database::{
         queries::{
-            auditoria::FiltroAuditoria, contratistas::FiltroContratistas,
-            usuarios::FiltroUsuarios,
+            auditoria::FiltroAuditoria, contratistas::FiltroContratistas, usuarios::FiltroUsuarios,
         },
         schema::initialize_database,
     },
