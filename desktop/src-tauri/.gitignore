@@ -2,3 +2,12 @@
 # will have compiled files and executables
 /target/
 /gen/schemas
+
+# `tauri icon` regenera de más: íconos de Android/iOS y tamaños intermedios
+# que ningún target de esta app (100% desktop Windows) usa — ver
+# bundle.icon en tauri.conf.json, que sólo lista 32x32/128x128/128x128@2x/
+# icon.icns/icon.ico. Ignorados para no ensuciar `git status` cada vez que
+# se corre ese comando de nuevo.
+/icons/android/
+/icons/ios/
+/icons/64x64.png

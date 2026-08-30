@@ -139,6 +139,12 @@ Ratatui controla caracteres, espaciado, líneas y colores, pero no la fuente de 
 terminal. Para conservar la apariencia prevista se recomienda una terminal moderna con
 Cascadia Mono, Cascadia Code, JetBrains Mono o una fuente monoespaciada similar.
 
+Por la misma razón, el desempeño de refresco de la TUI depende de qué terminal la
+renderiza, no de Ratatui: [Alacritty](https://alacritty.org/) usa aceleración por GPU y
+da el mejor frame time frente a Windows Terminal o `cmd.exe`. No es un requisito — la
+TUI funciona en cualquiera — pero si se nota lag visual, cambiar de terminal antes de
+sospechar de la aplicación.
+
 ### Compilación optimizada para una sola computadora
 
 El release normal ya usa optimización nivel 3, ThinLTO y una sola unidad de generación

@@ -356,6 +356,48 @@ Nada de esto es un bug ni tiene prioridad definida — quedan acá como banco de
 retomar cuando se decida invertir tiempo en pulido visual, no porque haya un problema de
 rendimiento real que resolver.
 
+## Empaquetado — ideas de lujo, no para v1
+
+- [ ] **Instalador único que incluya la CLI (`control_acceso.exe`) además del bundle de
+  Tauri.** Es técnicamente posible: el bundler de Tauri (NSIS/WiX en Windows) admite
+  copiar binarios extra al directorio de instalación vía `bundle.resources` en
+  `tauri.conf.json`, y un template NSIS custom podría agregarle su propio acceso directo
+  de Start Menu. Explícitamente catalogado por el usuario como "lujo", no una necesidad —
+  se descartó para v1: hoy los dos binarios ya se generan en el mismo `release.yml`
+  (jobs `build` y `build-gui`, ver más abajo), sólo que en destinos separados (artifact de
+  Actions vs. GitHub Release). Fusionarlos en un solo instalador suma un template NSIS a
+  mantener y no cambia nada para quien sólo usa la GUI — se retoma si en algún momento hay
+  una razón concreta (ej. onboarding de alguien que necesita ambas interfaces a la vez).
+
+- [ ] **CLI: detectar Alacritty instalado y usarlo como terminal por defecto, con una
+  preferencia en config para elegir cuál usar.** Anotado a pedido del usuario, sin
+  acordar todavía — opinión técnica para cuando se retome:
+  - La CLI hoy no elige su terminal: `control_acceso.exe` simplemente renderiza con
+    Ratatui dentro del proceso que ya lo lanzó (conhost, PowerShell, Windows Terminal,
+    lo que sea). "Usar Alacritty automáticamente" implicaría que el binario se
+    re-ejecute a sí mismo envuelto en `alacritty -e control_acceso.exe` y cierre la
+    ventana original — no es una config que se lee, es reemplazar el proceso en
+    marcha.
+  - Eso trae riesgos que no tiene la recomendación pasiva que ya está en el README
+    ([línea 142](../README.md#L142)): parpadeo de ventana (se abre una, se cierra,
+    abre otra), y sobre todo **una carrera con `InstanciaGuard`** (el candado de
+    instancia única que ya usa tanto la CLI como la GUI) — si el proceso padre suelta
+    el candado antes de que el hijo lo tome, hay una ventana donde en teoría podría
+    colarse otra instancia.
+  - Además, si alguien ya abrió la CLI a propósito desde su terminal de siempre
+    (PowerShell, Windows Terminal), reemplazarle la ventana por Alacritty sin que lo
+    pida es sorpresivo — va contra elegir la terminal, que es justamente lo que se
+    quiere respetar con la preferencia de config.
+  - **Alternativa más simple que da el mismo resultado práctico:** un acceso directo
+    opcional ("Control de Acceso (Alacritty)") que invoque
+    `alacritty -e control_acceso.exe`, generado sólo si el instalador detecta
+    Alacritty presente. Cero código nuevo en el binario, cero relanzamiento, cero
+    carrera con el candado — es packaging, no lógica de la app. La preferencia de
+    config seguiría teniendo sentido aparte (qué terminal *recuerda* la app la
+    próxima vez que haya que decirle algo al usuario, no cuál usar para lanzarla).
+  - Sin decidir todavía si vale la pena ninguna de las dos — es la línea de base para
+    cuando se retome.
+
 ## Roadmap de producto (V2/V3, fuera del alcance actual)
 
 - V2: visitas/proveedores y "a quién viene a ver"; notificación proactiva de PRAIND
