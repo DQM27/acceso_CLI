@@ -5,6 +5,7 @@ use control_acceso::instancia::InstanciaGuard;
 mod comandos;
 mod dto;
 mod estado;
+mod pdf;
 
 use estado::GuiState;
 
@@ -29,7 +30,8 @@ pub fn run() {
             // el comentario de crate-type arriba), pero se guarda el gate
             // igual, mismo criterio que el ejemplo oficial de Tauri.
             #[cfg(desktop)]
-            app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
 
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -65,6 +67,7 @@ pub fn run() {
             comandos::consola::autocompletar_comando,
             comandos::historial::listar_historial,
             comandos::historial::exportar_historial,
+            comandos::historial::exportar_historial_pdf,
             comandos::auditoria::listar_auditoria,
         ])
         .run(tauri::generate_context!())

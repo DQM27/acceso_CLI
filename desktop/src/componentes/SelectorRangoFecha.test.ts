@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PRESETS } from "./SelectorRangoFecha";
+import { PRESETS, textoRangoFecha } from "./SelectorRangoFecha";
 
 function rangoDe(etiqueta: string, hoy: Date) {
   const preset = PRESETS.find((p) => p.etiqueta === etiqueta);
@@ -48,5 +48,23 @@ describe("PRESETS de SelectorRangoFecha", () => {
 
   it("Últimos 30 días incluye hoy (29 días atrás + hoy = 30)", () => {
     expect(rangoDe("Últimos 30 días", hoy)).toEqual({ desde: "2026-07-14", hasta: "2026-08-12" });
+  });
+});
+
+describe("textoRangoFecha", () => {
+  it("ambos extremos: rango con guion", () => {
+    expect(textoRangoFecha("2026-07-30", "2026-08-29")).toBe("30/07/2026 – 29/08/2026");
+  });
+
+  it("sólo desde: abierto hacia adelante", () => {
+    expect(textoRangoFecha("2026-07-30", "")).toBe("Desde 30/07/2026");
+  });
+
+  it("sólo hasta: abierto hacia atrás", () => {
+    expect(textoRangoFecha("", "2026-08-29")).toBe("Hasta 29/08/2026");
+  });
+
+  it("ninguno: sin filtro", () => {
+    expect(textoRangoFecha("", "")).toBe("Todo el historial");
   });
 });

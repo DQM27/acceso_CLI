@@ -6,6 +6,7 @@ use control_acceso::historial::exportacion::ColumnaHistorial;
 use control_acceso::tiempo::{self, TiempoError};
 
 use crate::estado::GuiState;
+use crate::pdf;
 
 /// Rango de fechas abierto a propósito (año 2000 hasta mañana) — usado como
 /// techo para exportar (ver `exportar_historial`) y como valor por defecto
@@ -88,6 +89,39 @@ pub fn exportar_historial(
             &PathBuf::from(destino),
         )
         .map_err(|error| error.to_string())
+}
+
+/// Exporta a PDF los mismos `ids`/`columnas` que ya resuelve
+/// `exportar_historial` para Excel — mismo criterio de "lo que la grilla
+/// tiene visible ahora", pero HTML/CSS renderizado por WebView2
+/// (`pdf::generador`) en vez de `rust_xlsxwriter`. `filtro_descripcion` es
+/// el texto ya formateado que arma la pantalla (ej. "Filtro: rango de
+/// fechas 30/07/2026 – 29/08/2026") — no se recalcula acá para no duplicar
+/// el formateo de fechas que ya vive en el frontend. `generado_por` sale de
+/// la sesión activa, no del frontend — no hay razón para confiar en un
+/// nombre que mande el cliente para algo que es, en la práctica, un dato de
+/// auditoría.
+#[tauri::command]
+pub async fn exportar_historial_pdf(
+    destino: String,
+    ids: Vec<i64>,
+    columnas: Vec<String>,
+    filtro_descripcion: String,
+    state: tauri::State<'_, GuiState>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let sesion = state.sesion_activa()?;
+    let columnas: Vec<ColumnaHistorial> = columnas
+        .iter()
+        .filter_map(|clave| ColumnaHistorial::from_clave(clave))
+        .collect();
+    let movimientos = state
+        .core()
+        .movimientos_en_orden(&filtro_sin_acotar(), &ids)
+        .map_err(|error| error.to_string())?;
+    let html =
+        pdf::html::generar_html(&movimientos, &columnas, &sesion.nombre, &filtro_descripcion);
+    pdf::generador::generar_pdf(&app, html, PathBuf::from(destino)).await
 }
 
 #[cfg(test)]

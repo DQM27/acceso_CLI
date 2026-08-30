@@ -1,14 +1,14 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
-import { FileSpreadsheet } from "lucide-react";
+import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
-import SelectorRangoFecha from "../componentes/SelectorRangoFecha";
-import { exportarHistorial, listarHistorial, textoMedio } from "../api";
+import SelectorRangoFecha, { textoRangoFecha } from "../componentes/SelectorRangoFecha";
+import { exportarHistorial, exportarHistorialPdf, listarHistorial, textoMedio } from "../api";
 import type { MovimientoIngresoResumen } from "../api";
 import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
@@ -57,23 +57,31 @@ export default function Historial() {
   }, [desde, hasta]);
   useCargaAlCambiar(recargar);
 
-  async function exportar() {
-    // Lo que la grilla tiene visible AHORA (filtro por columna y selector
-    // "Columnas ▾" de AG Grid, ambos del lado del cliente) — exportar
-    // respeta ese recorte en vez de siempre mandar todo el historial sin
-    // acotar.
+  // Lo que la grilla tiene visible AHORA (filtro por columna y selector
+  // "Columnas ▾" de AG Grid, ambos del lado del cliente) — Excel y PDF
+  // exportan ese mismo recorte en vez de siempre mandar todo el historial
+  // sin acotar. Devuelve `null` (con el toast de error ya disparado) si no
+  // hay nada exportable, para que quien llama corte ahí sin duplicar el
+  // chequeo.
+  function seleccionParaExportar(): { ids: number[]; claves: string[] } | null {
     const visibles = tablaRef.current?.filasFiltradas() ?? filas;
     if (visibles.length === 0) {
       toast.error("No hay filas para exportar con el filtro actual.");
-      return;
+      return null;
     }
     const claves = (tablaRef.current?.columnasVisibles() ?? Object.keys(CLAVES_COLUMNA))
       .map((colId) => CLAVES_COLUMNA[colId])
       .filter((clave): clave is string => clave !== undefined);
     if (claves.length === 0) {
       toast.error("No hay columnas visibles para exportar.");
-      return;
+      return null;
     }
+    return { ids: visibles.map((fila) => fila.registro_id), claves };
+  }
+
+  async function exportar() {
+    const seleccion = seleccionParaExportar();
+    if (!seleccion) return;
 
     const destino = await save({
       title: "Exportar historial a Excel",
@@ -84,14 +92,39 @@ export default function Historial() {
 
     setExportando(true);
     toast.promise(
-      exportarHistorial(
-        destino,
-        visibles.map((fila) => fila.registro_id),
-        claves,
-      ).finally(() => setExportando(false)),
+      exportarHistorial(destino, seleccion.ids, seleccion.claves).finally(() =>
+        setExportando(false),
+      ),
       {
         loading: "Exportando…",
         success: (cantidad) => `${cantidad} fila(s) exportadas.`,
+        error: (error) => String(error),
+      },
+    );
+  }
+
+  async function exportarPdf() {
+    const seleccion = seleccionParaExportar();
+    if (!seleccion) return;
+
+    const destino = await save({
+      title: "Exportar historial a PDF",
+      defaultPath: "historial.pdf",
+      filters: [{ name: "PDF", extensions: ["pdf"] }],
+    });
+    if (!destino) return;
+
+    setExportando(true);
+    toast.promise(
+      exportarHistorialPdf(
+        destino,
+        seleccion.ids,
+        seleccion.claves,
+        `Filtro: ${textoRangoFecha(desde, hasta)}`,
+      ).finally(() => setExportando(false)),
+      {
+        loading: "Exportando…",
+        success: "PDF exportado.",
         error: (error) => String(error),
       },
     );
@@ -198,6 +231,19 @@ export default function Historial() {
                   disabled={exportando}
                 >
                   <FileSpreadsheet size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="boton boton-icono"
+                  title={
+                    exportando
+                      ? "Exportando…"
+                      : "Exportar a PDF — respeta el filtro/orden/columnas actuales de la grilla"
+                  }
+                  onClick={exportarPdf}
+                  disabled={exportando}
+                >
+                  <FileText size={16} />
                 </button>
               </>
             }

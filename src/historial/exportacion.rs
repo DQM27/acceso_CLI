@@ -315,7 +315,10 @@ pub(crate) fn escribir_movimiento(
     Ok(())
 }
 
-pub(crate) const fn tipo_texto(tipo: TipoIngreso) -> &'static str {
+/// `pub` (no `pub(crate)`) a propósito — la exportación a PDF de la GUI
+/// (`desktop/src-tauri`, un crate distinto) reusa el mismo texto que ya
+/// usa la exportación a Excel en vez de duplicar el `match`.
+pub const fn tipo_texto(tipo: TipoIngreso) -> &'static str {
     match tipo {
         TipoIngreso::Praind => "PRAIND",
         TipoIngreso::InHouse => "IN-HOUSE",
@@ -324,7 +327,8 @@ pub(crate) const fn tipo_texto(tipo: TipoIngreso) -> &'static str {
     }
 }
 
-pub(crate) const fn medio_texto(medio: MedioIngreso) -> &'static str {
+/// `pub` por el mismo motivo que [`tipo_texto`].
+pub const fn medio_texto(medio: MedioIngreso) -> &'static str {
     match medio {
         MedioIngreso::Caminando => "Caminando",
         MedioIngreso::Vehiculo => "Vehículo",

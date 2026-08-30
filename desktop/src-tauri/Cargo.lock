@@ -411,6 +411,10 @@ dependencies = [
  "tauri-plugin-log",
  "tauri-plugin-process",
  "tauri-plugin-updater",
+ "tokio",
+ "url",
+ "webview2-com",
+ "windows",
 ]
 
 [[package]]

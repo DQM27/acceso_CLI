@@ -16,6 +16,19 @@ import { fechaYMD, textoFechaDDMMYYYY } from "../tiempo";
  * confirmar (o "Cancelar" y no cambiar nada).
  */
 
+/** Mismo texto que muestra el botón "Período: ..." — se exporta para que
+ * quien necesite describir el filtro activo en otro lado (ej. el
+ * encabezado del PDF exportado) no reimplemente este formateo. `desde`/
+ * `hasta` vacíos son extremos abiertos (ver `rango_utc` en el backend); se
+ * describe cada combinación en vez de asumir que "falta uno" significa
+ * "sin filtro" (el caso normal es `desde` fijo, `hasta` abierto hasta hoy). */
+export function textoRangoFecha(desde: string, hasta: string): string {
+  if (desde && hasta) return `${textoFechaDDMMYYYY(desde)} – ${textoFechaDDMMYYYY(hasta)}`;
+  if (desde) return `Desde ${textoFechaDDMMYYYY(desde)}`;
+  if (hasta) return `Hasta ${textoFechaDDMMYYYY(hasta)}`;
+  return "Todo el historial";
+}
+
 export interface Preset {
   etiqueta: string;
   calcular: (hoy: Date) => { desde: string; hasta: string };
@@ -130,18 +143,7 @@ export default function SelectorRangoFecha({
     setAbierto(false);
   }
 
-  // `desde`/`hasta` vacíos son extremos abiertos (ver `rango_utc` en el
-  // backend) — la etiqueta refleja cada combinación en vez de asumir que
-  // "falta uno" significa "sin filtro" (el caso normal es `desde` fijo,
-  // `hasta` abierto hasta hoy).
-  const etiqueta =
-    desde && hasta
-      ? `${textoFechaDDMMYYYY(desde)} – ${textoFechaDDMMYYYY(hasta)}`
-      : desde
-        ? `Desde ${textoFechaDDMMYYYY(desde)}`
-        : hasta
-          ? `Hasta ${textoFechaDDMMYYYY(hasta)}`
-          : "Todo el historial";
+  const etiqueta = textoRangoFecha(desde, hasta);
 
   return (
     <>

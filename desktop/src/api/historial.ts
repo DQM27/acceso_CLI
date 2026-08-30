@@ -75,3 +75,17 @@ export function exportarHistorial(
 ): Promise<number> {
   return invoke("exportar_historial", { destino, ids, columnas });
 }
+
+/** Mismo recorte que `exportarHistorial` (`ids`/`columnas`), a PDF en vez
+ * de Excel. `filtroDescripcion`: texto ya formateado para el encabezado del
+ * PDF (ver `textoRangoFecha` en `SelectorRangoFecha.tsx`) — el backend no
+ * recalcula el formateo de fechas, sólo lo muestra tal cual. `generadoPor`
+ * no se manda: el backend lo saca de la sesión activa, no del cliente. */
+export function exportarHistorialPdf(
+  destino: string,
+  ids: number[],
+  columnas: string[],
+  filtroDescripcion: string,
+): Promise<void> {
+  return invoke("exportar_historial_pdf", { destino, ids, columnas, filtroDescripcion });
+}

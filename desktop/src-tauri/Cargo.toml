@@ -37,6 +37,17 @@ tauri-plugin-dialog = "2.7.2"
 # aporta `relaunch()` para reiniciar la app después de instalar.
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+url = "=2.5.8"
+tokio = { version = "=1.53.1", features = ["sync"] }
+
+[target.'cfg(windows)'.dependencies]
+# Exportar Historial a PDF: WebView2 (ya viene con Tauri en Windows) sabe
+# imprimir a PDF nativamente (`ICoreWebView2_7::PrintToPdf`), evita meter un
+# motor de tipografía nuevo (ver desktop/docs/pendientes.md). Versiones
+# fijadas a lo que `wry` ya trae transitivamente (ver Cargo.lock) — dos
+# copias de estas crates en el árbol sería un dolor de cabeza innecesario.
+webview2-com = "=0.38.2"
+windows = "=0.61.3"
 
 [profile.release]
 opt-level = 3
