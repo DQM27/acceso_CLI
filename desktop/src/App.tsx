@@ -47,6 +47,28 @@ type Pantalla =
   | { tipo: "login" }
   | { tipo: "shell"; sesion: UsuarioSesion };
 
+const CLAVE_SIDEBAR_COLAPSADO = "sidebar:colapsado";
+
+/** `localStorage` puede fallar (modo privado, cuota llena) — mismo criterio
+ * que `leerEstadoGuardado`/`guardarLayout` en `Tabla.tsx`: perder la
+ * preferencia guardada no es motivo para romper nada, sólo se vuelve al
+ * valor por defecto (expandido). */
+function leerSidebarColapsado(): boolean {
+  try {
+    return localStorage.getItem(CLAVE_SIDEBAR_COLAPSADO) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function guardarSidebarColapsado(colapsado: boolean) {
+  try {
+    localStorage.setItem(CLAVE_SIDEBAR_COLAPSADO, colapsado ? "1" : "0");
+  } catch {
+    // Ver comentario de leerSidebarColapsado.
+  }
+}
+
 export default function App() {
   const [pantalla, setPantalla] = useState<Pantalla>({ tipo: "cargando" });
 
@@ -141,7 +163,7 @@ function Shell({
   onCerrarSesion: () => void;
 }) {
   const [seccion, setSeccion] = useState<Seccion>("activos");
-  const [colapsado, setColapsado] = useState(false);
+  const [colapsado, setColapsado] = useState(leerSidebarColapsado);
 
   const [modalNuevoIngreso, setModalNuevoIngreso] = useState(false);
   const [modalSalida, setModalSalida] = useState(false);
@@ -200,7 +222,13 @@ function Shell({
         seccionActual={seccion}
         onCambiarSeccion={setSeccion}
         colapsado={colapsado}
-        onToggleColapsado={() => setColapsado((c) => !c)}
+        onToggleColapsado={() =>
+          setColapsado((actual) => {
+            const siguiente = !actual;
+            guardarSidebarColapsado(siguiente);
+            return siguiente;
+          })
+        }
         sesion={sesion}
         onCerrarSesion={onCerrarSesion}
       />
