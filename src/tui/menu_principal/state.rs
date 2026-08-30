@@ -23,13 +23,14 @@ pub enum OpcionMenu {
     Auditoria,
     Respaldos,
     CambiarPassword,
+    GestionGafetes,
     ModoComandos,
     CerrarSesion,
     Salir,
 }
 
 impl OpcionMenu {
-    pub const TODAS: [Self; 12] = [
+    pub const TODAS: [Self; 13] = [
         Self::NuevoIngreso,
         Self::IngresosActivos,
         Self::Historial,
@@ -39,6 +40,7 @@ impl OpcionMenu {
         Self::Auditoria,
         Self::Respaldos,
         Self::CambiarPassword,
+        Self::GestionGafetes,
         Self::ModoComandos,
         Self::CerrarSesion,
         Self::Salir,
@@ -55,6 +57,7 @@ impl OpcionMenu {
             Self::Auditoria => "7   Auditoría",
             Self::Respaldos => "8   Respaldos",
             Self::CambiarPassword => "9   Cambiar mi contraseña",
+            Self::GestionGafetes => "G   Gestión de gafetes",
             Self::ModoComandos => "M   Modo comandos",
             Self::CerrarSesion => "L   Cerrar sesión",
             Self::Salir => "Q   Salir",
@@ -72,6 +75,7 @@ impl OpcionMenu {
             Self::CambiarPassword => "Actualizar la contraseña de la sesión actual.",
             Self::Auditoria => "Consultar cambios en campos críticos de contratistas.",
             Self::Respaldos => "Crear, validar, exportar y restaurar respaldos.",
+            Self::GestionGafetes => "Catálogo de gafetes: alta, baja, pérdidas y deudas.",
             Self::ModoComandos => "Reiniciar en la interfaz de comandos y dejarla como default.",
             Self::CerrarSesion => "Volver a la pantalla de autenticación.",
             Self::Salir => "Cerrar BRISAS CLI.",
@@ -139,7 +143,7 @@ impl OpcionMenu {
             Self::Auditoria => Some(6),
             Self::Respaldos => Some(7),
             Self::CambiarPassword => Some(8),
-            Self::ModoComandos | Self::CerrarSesion | Self::Salir => None,
+            Self::GestionGafetes | Self::ModoComandos | Self::CerrarSesion | Self::Salir => None,
         }
     }
 
@@ -158,7 +162,9 @@ impl OpcionMenu {
             Self::Auditoria => TabItem::new("7", "Auditoría", "Aud."),
             Self::Respaldos => TabItem::new("8", "Respaldos", "Resp."),
             Self::CambiarPassword => TabItem::new("9", "Mi contraseña", "Clave"),
-            Self::ModoComandos | Self::CerrarSesion | Self::Salir => return None,
+            Self::GestionGafetes | Self::ModoComandos | Self::CerrarSesion | Self::Salir => {
+                return None;
+            }
         };
         Some(item)
     }
@@ -253,6 +259,7 @@ impl MenuPrincipalState {
             KeyCode::Char('9') => {
                 return AccionMenu::Abrir(OpcionMenu::CambiarPassword);
             }
+            KeyCode::Char('g' | 'G') => return AccionMenu::Abrir(OpcionMenu::GestionGafetes),
             KeyCode::Char('m' | 'M') => self.solicitar(ConfirmacionMenu::ModoComandos),
             KeyCode::Char('l' | 'L') => self.solicitar(ConfirmacionMenu::CerrarSesion),
             KeyCode::Char('q' | 'Q') => self.solicitar(ConfirmacionMenu::Salir),

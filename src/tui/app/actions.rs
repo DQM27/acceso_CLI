@@ -7,3 +7,4 @@
 mod accesos;
 mod admin;
 mod catalogos;
+mod gafetes;

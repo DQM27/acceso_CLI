@@ -5,7 +5,6 @@
 //! un usuario activo (`verificar_actor_activo`), mismo mínimo que el resto
 //! de `AppCore`.
 
-use chrono::{DateTime, Utc};
 use rusqlite::{Transaction, TransactionBehavior};
 
 use crate::database::error::DatabaseError;
@@ -92,7 +91,6 @@ impl AppCore {
         actor: &UsuarioSesion,
         id: i64,
         contratista_deudor_id: i64,
-        ahora: DateTime<Utc>,
     ) -> Result<(), GafeteServiceError> {
         let transaction =
             Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
@@ -108,7 +106,7 @@ impl AppCore {
             id,
             contratista_deudor_id,
             actor_actual.id,
-            ahora,
+            self.reloj.ahora_utc(),
         )?;
         transaction.commit().map_err(DatabaseError::from)?;
         Ok(())
@@ -119,7 +117,6 @@ impl AppCore {
         actor: &UsuarioSesion,
         id: i64,
         motivo: MotivoResolucionGafete,
-        ahora: DateTime<Utc>,
     ) -> Result<(), GafeteServiceError> {
         let transaction =
             Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
@@ -135,7 +132,7 @@ impl AppCore {
             id,
             motivo,
             actor_actual.id,
-            ahora,
+            self.reloj.ahora_utc(),
         )?;
         transaction.commit().map_err(DatabaseError::from)?;
         Ok(())

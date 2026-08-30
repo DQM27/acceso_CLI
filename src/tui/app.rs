@@ -24,6 +24,7 @@ use super::{
     contratistas::{self, AccionContratistas, ContratistasState},
     elegir_interfaz::{self, AccionElegirInterfaz, ElegirInterfazState},
     empresas::{self, AccionEmpresas, EmpresasState},
+    gafetes::{self, AccionGafetes, GafetesState},
     historial::{self, AccionHistorial, HistorialState},
     login::{self, AccionLogin, LoginState},
     menu_principal::{self, AccionMenu, ConfirmacionMenu, MenuPrincipalState, OpcionMenu},
@@ -61,6 +62,7 @@ pub enum Vista {
     Auditoria,
     Respaldos,
     NuevoIngreso,
+    GestionGafetes,
 }
 
 impl Vista {
@@ -75,7 +77,11 @@ impl Vista {
             Self::Auditoria => Some(OpcionMenu::Auditoria),
             Self::Respaldos => Some(OpcionMenu::Respaldos),
             Self::CambiarPassword => Some(OpcionMenu::CambiarPassword),
-            Self::ConfiguracionInicial
+            // `GestionGafetes` no es pestaña (acceso por letra, no
+            // numérico) — mismo grupo sin `OpcionMenu` de pestaña que el
+            // resto de pantallas fuera de la barra del tema Negro.
+            Self::GestionGafetes
+            | Self::ConfiguracionInicial
             | Self::Login
             | Self::ElegirInterfaz
             | Self::MenuPrincipal => None,
@@ -128,6 +134,7 @@ pub struct App {
     configuracion: ConfiguracionState,
     nuevo_ingreso: NuevoIngresoState,
     salida_rapida: SalidaRapidaState,
+    gafetes: GafetesState,
     salir: bool,
     salida: SalidaApp,
     sesion: Option<UsuarioSesion>,
@@ -167,6 +174,7 @@ impl Default for App {
             configuracion: ConfiguracionState::default(),
             nuevo_ingreso: NuevoIngresoState::default(),
             salida_rapida: SalidaRapidaState::default(),
+            gafetes: GafetesState::default(),
             salir: false,
             salida: SalidaApp::Cerrar,
             sesion: None,
@@ -373,6 +381,11 @@ impl App {
                                 )
                             }
                         }
+                        Vista::GestionGafetes => {
+                            if let Some(sesion) = &self.sesion {
+                                gafetes::render(frame, frame.area(), &self.gafetes, sesion, theme)
+                            }
+                        }
                     }
                     salida_rapida::render(frame, frame.area(), &self.salida_rapida, theme);
                 })?;
@@ -462,6 +475,12 @@ impl App {
             let accion = self.salida_rapida.tick(ahora);
             cambio_visible |= !matches!(&accion, AccionSalidaRapida::Ninguna);
             self.procesar_accion_salida_rapida(accion, core);
+            let accion = self.gafetes.tick(ahora);
+            cambio_visible |= !matches!(&accion, AccionGafetes::Ninguna);
+            self.procesar_accion_gafetes(accion, core);
+            let accion = self.gafetes.tick_deudor(ahora);
+            cambio_visible |= !matches!(&accion, AccionGafetes::Ninguna);
+            self.procesar_accion_gafetes(accion, core);
 
             // Login y configuración inicial sí tienen animación (spinner/cursor).
             // El resto sólo se invalida por una entrada, un resultado, un resize o
@@ -666,6 +685,10 @@ impl App {
                 let accion = self.nuevo_ingreso.handle_key(key);
                 self.procesar_accion_nuevo_ingreso(accion, core);
             }
+            Vista::GestionGafetes => {
+                let accion = self.gafetes.handle_key(key);
+                self.procesar_accion_gafetes(accion, core);
+            }
         }
     }
 
@@ -745,11 +768,15 @@ impl App {
     /// reinicia la pantalla. Cambiar entre pestañas sólo hace esa preparación
     /// en la primera visita de la sesión y después conserva filtros/formularios.
     fn abrir_opcion(&mut self, opcion: OpcionMenu, core: Option<&AppCore>) {
-        let Some(indice) = opcion.indice_pestana() else {
-            return;
-        };
         self.preparar_opcion(opcion, core);
-        self.pestanas_visitadas[indice] = true;
+        // `indice_pestana` es `None` para las pantallas fuera de la barra
+        // de pestañas del tema Negro (`GestionGafetes` incluida, acceso por
+        // letra en vez de numérico) — esa reserva de índice es sólo para la
+        // caché de "primera visita" entre pestañas, no para decidir si la
+        // pantalla se puede abrir desde el menú.
+        if let Some(indice) = opcion.indice_pestana() {
+            self.pestanas_visitadas[indice] = true;
+        }
         self.menu.seleccion = opcion;
         self.vista = Self::vista_de_opcion(opcion);
     }
@@ -812,6 +839,11 @@ impl App {
                 let accion = self.configuracion.reiniciar();
                 self.procesar_accion_configuracion(accion, core);
             }
+            OpcionMenu::GestionGafetes => {
+                if core.is_some() {
+                    self.procesar_accion_gafetes(self.gafetes.solicitar_carga(), core);
+                }
+            }
             // Ninguna abre pantalla propia: `ModoComandos` sale por la
             // confirmación (como `CerrarSesion`/`Salir`), nunca llega acá
             // como `AccionMenu::Abrir`.
@@ -830,6 +862,7 @@ impl App {
             OpcionMenu::CambiarPassword => Vista::CambiarPassword,
             OpcionMenu::Auditoria => Vista::Auditoria,
             OpcionMenu::Respaldos => Vista::Respaldos,
+            OpcionMenu::GestionGafetes => Vista::GestionGafetes,
             OpcionMenu::ModoComandos | OpcionMenu::CerrarSesion | OpcionMenu::Salir => {
                 Vista::MenuPrincipal
             }

@@ -1,6 +1,5 @@
 ---
 source: src/tui/visual_tests.rs
-assertion_line: 308
 expression: volcado
 ---
 === texto ===
@@ -17,10 +16,10 @@ expression: volcado
                   7   Auditoría                             
                   8   Respaldos                             
                   9   Cambiar mi contraseña                 
+                  G   Gestión de gafetes                    
                   M   Modo comandos                         
                   L   Cerrar sesión                         
                   Q   Salir                                 
-                                                            
  Registrar la entrada de un contratista.                    
  ↑↓ Seleccionar  ENTER Abrir  1-9 Acceso rápido             
  M Modo comandos  L Cerrar sesión  Q Salir                  
@@ -53,10 +52,10 @@ expression: volcado
 "                  7   Auditoría                             " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                  8   Respaldos                             " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                  9   Cambiar mi contraseña                 " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                  G   Gestión de gafetes                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                  M   Modo comandos                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                  L   Cerrar sesión                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                  Q   Salir                                 " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "Registrar la entrada de un contratista.                   " fg=Rgb(105, 135, 111) bg=Black mod=NONE
 " " fg=Rgb(196, 220, 199) bg=Black mod=NONE

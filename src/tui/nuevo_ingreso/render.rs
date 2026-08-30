@@ -322,6 +322,18 @@ fn render_formulario(
         Line::from(format!("Tipo de ingreso    {}", texto_tipo(p.tipo_ingreso)))
             .style(theme.base()),
     );
+    if !p.gafetes_deuda.is_empty() {
+        let numeros = p
+            .gafetes_deuda
+            .iter()
+            .map(|numero| format!("#{numero:02}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        lineas.push(
+            Line::from(format!("⚠ Este contratista debe el gafete {numeros}"))
+                .style(theme.warning()),
+        );
+    }
     lineas.push(Line::from(""));
 
     let filas = Layout::vertical(if requiere_gafete {

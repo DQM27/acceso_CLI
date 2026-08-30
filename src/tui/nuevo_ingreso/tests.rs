@@ -166,6 +166,32 @@ fn preparacion_con_gafete_pasa_directo_al_formulario_unico() {
     ));
 }
 #[test]
+fn deuda_de_gafete_no_bloquea_el_formulario() {
+    let mut s = NuevoIngresoState::default();
+    s.completar_busqueda(Ok(PaginaContratistas {
+        items: vec![resumen()],
+        total: 1,
+    }));
+    s.completar_preparacion(Ok(PreparacionIngreso {
+        gafetes_deuda: vec![5, 9],
+        ..preparar(true)
+    }));
+    assert_eq!(s.etapa, EtapaNuevoIngreso::Formulario);
+
+    s.handle_key(k(KeyCode::Tab));
+    for c in "26".chars() {
+        s.handle_key(k(KeyCode::Char(c)));
+    }
+    assert!(matches!(
+        s.handle_key(k(KeyCode::Enter)),
+        AccionNuevoIngreso::Registrar {
+            contratista_id: 7,
+            gafete: Some(26),
+            ..
+        }
+    ));
+}
+#[test]
 fn sin_gafete_enter_registra_directo_desde_medio() {
     let mut s = NuevoIngresoState::default();
     s.completar_busqueda(Ok(PaginaContratistas {
