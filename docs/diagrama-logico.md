@@ -1,5 +1,9 @@
 # Diagrama lógico de Control de Acceso
 
+> Este documento conserva el recorrido lógico detallado del núcleo y la TUI. Para una
+> vista actualizada que también incluya GUI Tauri/React, comandos puente, gafetes físicos
+> y auditoría general, ver [Diagramas de arquitectura y operación](diagramas-arquitectura.md).
+
 Este documento describe el funcionamiento interno de la aplicación. Omite el dibujo de
 pantallas, colores y distribución visual de la TUI.
 

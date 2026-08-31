@@ -5,7 +5,6 @@ pub mod cambio_password;
 pub mod configuracion;
 pub mod configuracion_inicial;
 pub mod contratistas;
-pub mod elegir_interfaz;
 pub mod empresas;
 pub mod gafetes;
 pub mod historial;

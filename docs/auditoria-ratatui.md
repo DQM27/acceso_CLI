@@ -4,6 +4,10 @@ Fecha: 2026-08-23
 Rama en la que se hizo la auditoría: `tui-comandos` (working tree limpio, `origin/tui-comandos` al día).
 Propósito: evaluar el estado actual de la TUI como base para diseñar un nuevo lenguaje visual de "mutaciones" (transiciones, foco explícito, layout responsivo por breakpoints, patrones reutilizables). No se modificó código para este reporte.
 
+Nota posterior: este reporte es histórico. La pantalla puente para elegir entre TUI
+clásica y `--comandos` fue eliminada; tras el login la TUI clásica entra directo al
+menú, y el cambio a comandos se hace desde el Menú Principal.
+
 ## 0. Aclaración sobre `examples/brisas_cli/*_v2.rs`
 
 Esos archivos (`empresas_v2.rs`, `usuarios_v2.rs`, `historial_v2.rs`, `configuracion_inicial_v2.rs`, `login_v2.rs`, `menu_v2.rs`, `activos_v2.rs`, `contratistas_v2.rs`, `ingreso_v2.rs`) existieron entre los commits `1250a3e` → `e0a5f7f` ("Crea piloto visual reutilizable de BRISAS CLI" → "Completa los pilotos visuales _v2 de las nueve pantallas de BRISAS CLI", 16 ago 2026), pero **fueron eliminados por completo** en el commit `4d2eb20` ("En proceso de actualizacion", 18 ago 2026), junto con `examples/brisas_cli.rs`, `app.rs`, `terminal.rs`, `login.rs`, `menu.rs`, `ingreso.rs`, `quick_exit.rs` (14 761 líneas borradas de golpe). Ese mismo commit ya tocaba `src/tui/menu_principal` y `src/tui/ui_kit/theme.rs`.
@@ -39,7 +43,6 @@ src/tui/app/auth_jobs.rs    — hilos Argon2 (login, alta ROOT, crear usuario, c
 src/tui/app/error_messages.rs
 src/tui/terminal.rs         — TerminalGuard (raw mode/alt screen) + run()/run_sin_core()
 src/tui/preferences.rs      — persistencia de tema elegido
-src/tui/elegir_interfaz.rs  — pantalla puente (TUI clásica vs. --comandos)
 src/tui/visual_tests.rs     — snapshots con insta (cfg(test))
 ```
 
@@ -79,7 +82,9 @@ src/comandos/render.rs (1047)     — dibuja según ContextState
 src/comandos/formulario.rs (673)  — FormularioContratista (alta/edición embebida en esta UI)
 ```
 
-**Activación**: `src/main.rs:43` — `if std::env::args().any(|arg| arg == "--comandos") { return run_comandos(&ruta_base_datos); }`. Es un flag de arranque; también se llega vía `SalidaApp::ModoComandos { sesion }` desde `elegir_interfaz.rs` cuando el operador ya se autenticó en la TUI clásica y elige el modo CLI (reusa la sesión).
+**Activación**: `src/main.rs` decide entre `--tui-clasica`, `--comandos` o la
+preferencia guardada. Desde la TUI clásica se cambia con "Modo comandos" en el Menú
+Principal, que guarda la preferencia y relanza el proceso.
 
 **Integración con lógica de negocio**: completa. `comandos::run(core: AppCore, sesion_inicial: Option<UsuarioSesion>)` consume el mismo `AppCore` que la TUI clásica — mismas queries, mismo `services::autenticacion_service` con hilo Argon2 en background. No hay lógica de negocio duplicada ni divergente.
 

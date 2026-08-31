@@ -575,31 +575,28 @@ fn login_exitoso_entra_directo_al_menu_con_nuevo_ingreso_seleccionado() {
     let mut app = App::default();
     app.menu.seleccion = OpcionMenu::Usuarios;
     app.iniciar_sesion(sesion("Daniel Quintana"), None);
-    // Ya no pregunta TUI o CLI en cada login (`ElegirInterfaz` dejó de
-    // alcanzarse desde acá): la elección de interfaz ahora es explícita y
-    // persistente — "Modo comandos" en el Menú, o `/clasico` en comandos —
-    // así que login entra directo, con la selección ya reiniciada.
+    // La elección de entorno es explícita y persistente: "Modo comandos" en
+    // el Menú, o `/clasico` en comandos. Login entra directo a operar.
     assert_eq!(app.vista, Vista::MenuPrincipal);
     assert_eq!(app.menu.seleccion, OpcionMenu::NuevoIngreso);
     assert_eq!(app.sesion().unwrap().nombre, "Daniel Quintana");
 }
 
 #[test]
-fn elegir_interfaz_cli_sigue_saliendo_con_salidaapp_modocomandos() {
-    // El login ya no pasa por `ElegirInterfaz` (ver el test de arriba), pero
-    // la Vista y su mecanismo siguen existiendo — se ejercitan directamente
-    // acá para no perder cobertura de `SalidaApp::ModoComandos` mientras el
-    // único camino que los alcanzaba (elegir CLI al loguear) queda retirado.
-    let mut app = App::default();
+fn modo_comandos_desde_menu_pide_reinicio() {
+    let mut app = App {
+        vista: Vista::MenuPrincipal,
+        sesion: Some(sesion("Daniel Quintana")),
+        ..App::default()
+    };
     app.iniciar_sesion(sesion("Daniel Quintana"), None);
-    app.vista = Vista::ElegirInterfaz;
 
-    app.procesar_tecla_vista(tecla(KeyCode::Char('2')));
+    app.procesar_tecla_vista(tecla(KeyCode::Char('m')));
+    assert!(!app.salir);
+    app.procesar_tecla_vista(tecla(KeyCode::Enter));
+
     assert!(app.salir);
-    match app.salida {
-        SalidaApp::ModoComandos { sesion } => assert_eq!(sesion.nombre, "Daniel Quintana"),
-        otra => panic!("se esperaba SalidaApp::ModoComandos, llegó {otra:?}"),
-    }
+    assert_eq!(app.salida, SalidaApp::ReiniciarEnComandos);
 }
 
 #[test]

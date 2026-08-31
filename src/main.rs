@@ -153,14 +153,10 @@ fn run_comandos(ruta_base_datos: &std::path::Path) -> Result<Option<Interfaz>, S
 }
 
 /// `--tui-clasica`: la interfaz original de menús y paneles. Sigue siendo la
-/// única que crea el usuario ROOT inicial y la que permite saltar al modo
-/// comandos reusando la sesión ya autenticada (`SalidaApp::ModoComandos`).
-/// El resultado puede pedir un reinicio en cualquiera de las dos
-/// direcciones: `Some(Interfaz::Comandos)` si el operador confirmó "Modo
-/// comandos" en el Menú Principal (`SalidaApp::ReiniciarEnComandos`), o
-/// `Some(Interfaz::Clasica)` si, tras saltar a comandos vía `ModoComandos`
-/// (reusando la sesión, sin reiniciar), ahí adentro confirmó `/clasico` —
-/// en los dos casos la preferencia ya quedó guardada antes de llegar acá.
+/// única que crea el usuario ROOT inicial. Si el operador confirma "Modo
+/// comandos" en el Menú Principal (`SalidaApp::ReiniciarEnComandos`), la
+/// preferencia ya queda guardada y `run()` relanza el proceso con
+/// `--comandos`.
 fn run_tui_clasica(ruta_base_datos: &std::path::Path) -> Result<Option<Interfaz>, StartupError> {
     let mut mensaje_inicial = None;
     loop {
@@ -191,14 +187,6 @@ fn run_tui_clasica(ruta_base_datos: &std::path::Path) -> Result<Option<Interfaz>
 
         match salida {
             SalidaApp::Cerrar => return Ok(None),
-            // El operador ya se autenticó y eligió el modo CLI: se reusa la
-            // misma conexión (`core`) y la misma sesión, sin volver a pedir
-            // cédula/contraseña.
-            SalidaApp::ModoComandos { sesion } => {
-                let reiniciar_en_clasica = control_acceso::comandos::run(core, Some(sesion))
-                    .map_err(StartupError::Comandos)?;
-                return Ok(reiniciar_en_clasica.then_some(Interfaz::Clasica));
-            }
             // "Modo comandos" del Menú Principal: la preferencia ya se
             // guardó al confirmar (`AccionMenu::ModoComandos` en
             // `tui::app`) — acá sólo hace falta cerrar esta conexión y

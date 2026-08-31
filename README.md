@@ -127,8 +127,10 @@ caracteres usan el `LIKE` existente, siempre limitado por la consulta correspond
 Si la base está vacía, el núcleo exige crear el ROOT inicial antes del login. La pantalla
 de configuración ejecuta ese caso de uso mediante `AppCore::crear_root_inicial`.
 
-El [diagrama lógico completo](docs/diagrama-logico.md) documenta el arranque, la sesión,
-las reglas de entrada y salida, la administración y las relaciones persistidas.
+El [mapa de diagramas actualizado](docs/diagramas-arquitectura.md) reúne las vistas de
+GUI, TUI, núcleo, flujos operativos y persistencia. El
+[diagrama lógico detallado](docs/diagrama-logico.md) conserva una lectura más profunda
+del flujo interno clásico.
 
 El [plan de saneamiento técnico](docs/plan-saneamiento.md) mantiene el listado priorizado
 de ajustes y sus criterios de finalización.

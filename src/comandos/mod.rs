@@ -118,11 +118,10 @@ type RootPendiente =
 /// Punto de entrada de la interfaz de comandos. Consume el `AppCore` (la ruta
 /// por defecto de `main` no hace nada más con él después).
 ///
-/// `sesion_inicial` viene con `Some` cuando el operador ya se autenticó en la
-/// TUI clásica (`--tui-clasica`) y eligió el modo CLI desde `ElegirInterfaz`
-/// — en ese caso se arranca directo en `Fase::Operando`, sin repetir
-/// cédula/contraseña. Con `None` (ruta por defecto, sin flags) hace su
-/// propio login, como siempre.
+/// `sesion_inicial` conserva el soporte para arrancar directo en
+/// `Fase::Operando`, pero el cambio de entorno desde la TUI clásica hoy
+/// relanza el proceso y vuelve a pedir login. Con `None` (ruta por defecto,
+/// sin flags) hace su propio login, como siempre.
 /// Devuelve `true` cuando el operador pidió `/clasico`: la preferencia de
 /// interfaz ya quedó guardada en disco (`interfaz_preferida::guardar`,
 /// llamado desde `operando.rs` al confirmar) — el `bool` sólo le dice a

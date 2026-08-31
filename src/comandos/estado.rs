@@ -387,9 +387,9 @@ impl AppState {
         std::mem::discriminant(&self.contexto)
     }
 
-    /// Arranca ya autenticado — para cuando la TUI clásica hizo el login y el
-    /// operador eligió el modo CLI desde `ElegirInterfaz`, sin volver a pedir
-    /// cédula/contraseña.
+    /// Arranca ya autenticado. El cambio desde la TUI clásica hoy relanza el
+    /// proceso y vuelve a pedir login, pero esta entrada sigue útil para
+    /// pruebas o integraciones futuras.
     pub fn con_sesion(sesion: UsuarioSesion) -> Self {
         Self {
             fase: Fase::Operando { sesion },
