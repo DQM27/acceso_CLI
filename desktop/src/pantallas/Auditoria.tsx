@@ -48,6 +48,17 @@ export default function Auditoria() {
   const [filas, setFilas] = useState<FilaAuditoria[]>([]);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
+  // `true` cuando el total real de `auditoria_cambios` supera el tope de
+  // carga completa del núcleo (`LIMITE_CARGA_COMPLETA_MAXIMO`,
+  // `CargaCompleta.truncado`) — mismo criterio que `Historial.tsx`, con un
+  // aviso persistente en vez de un toast que desaparece a los pocos
+  // segundos y puede perderse si el usuario sigue mirando la grilla.
+  // `cambiosCargados` es el conteo de sólo `auditoria_cambios` (no
+  // `filas.length`, que mezcla cambios + incidentes de gafetes, estos
+  // últimos sin tope) — el número que se muestra en el banner debe ser el
+  // que de verdad se truncó.
+  const [truncado, setTruncado] = useState(false);
+  const [cambiosCargados, setCambiosCargados] = useState(0);
 
   useEffect(() => {
     let vigente = true;
@@ -55,11 +66,8 @@ export default function Auditoria() {
     Promise.all([listarAuditoria(), listarAuditoriaGafetes()])
       .then(([{ items: cambios, truncado }, incidentesGafetes]) => {
         if (!vigente) return;
-        if (truncado) {
-          toast.warning(
-            `Se muestran los primeros ${cambios.length.toLocaleString("es-CR")} cambios de auditoría — el registro completo es más grande.`,
-          );
-        }
+        setTruncado(truncado);
+        setCambiosCargados(cambios.length);
         const actuales = nombresActuales(cambios);
         const filasCambios: FilaAuditoria[] = cambios.map((item) => ({
           id: `cambio-${item.id}`,
@@ -150,6 +158,23 @@ export default function Auditoria() {
       <PantallaEncabezado titulo="Auditoría" />
 
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
+        {truncado && (
+          <p
+            role="status"
+            style={{
+              margin: "0 0 0.5rem",
+              padding: "0.5rem 0.75rem",
+              borderRadius: "var(--radio-chico)",
+              border: "1px solid var(--advertencia)",
+              color: "var(--advertencia)",
+              fontSize: "0.85rem",
+            }}
+          >
+            Hay más de {cambiosCargados.toLocaleString("es-CR")} cambios de auditoría — se
+            muestran solo los primeros. El buscador sólo filtra sobre lo cargado, no sobre el
+            registro completo.
+          </p>
+        )}
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<FilaAuditoria>
             id="auditoria"
