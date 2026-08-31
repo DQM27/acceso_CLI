@@ -387,6 +387,30 @@ proyectos (raíz: 491 tests; `desktop/src-tauri`: 20 tests; `desktop/`: `npx tsc
 - [ ] Eliminar un respaldo no utilizado, con confirmación (mismo patrón que Exportar). No
   se acordó para la pasada de Fases 1-4 de respaldos; sigue disponible si se quiere.
 
+## Respaldos en la GUI (Tauri) — no existe todavía
+
+- [ ] **Pantalla de Respaldos en `desktop/`.** Hoy la GUI no tiene ni comando Tauri ni
+  pantalla para Respaldos (no hay `comandos/respaldos.rs` ni `pantallas/Respaldos.tsx`) —
+  sería construirla de cero, no portar algo existente. Paridad pendiente con la TUI, que
+  sí la tiene completa (crear/listar/validar/exportar/restaurar).
+  - **La creación del respaldo en Tauri es más simple que en la TUI**, no igual de
+    complicada: un comando `#[tauri::command]` que NO es `async fn` ya corre solo en el
+    pool de hilos bloqueantes de Tauri — nunca toca el hilo de la interfaz, sin necesitar
+    `std::thread::spawn` manual como en `tui/app/backup_jobs.rs`. Si hiciera falta que
+    fuera `async` (para encadenar con otra llamada async), ya hay precedente en el
+    propio repo: `exportar_historial_pdf` (`desktop/src-tauri/src/comandos/historial.rs`)
+    usa `tauri::async_runtime::spawn_blocking` exactamente para esto.
+  - **Trampa real a no repetir:** `GuiState.core` es un `Mutex<AppCore>` compartido por
+    *todos* los comandos (`desktop/src-tauri/src/estado.rs`). Si el comando de respaldo
+    mantiene ese lock durante los ~200ms–2s que tarda copiar+validar (medido,
+    ver más abajo "Respaldo automático"), **cualquier otro comando de la GUI** (buscar
+    contratistas, registrar ingreso, lo que sea) se queda esperando el mismo lock — la
+    ventana no se congela visualmente, pero la app entera deja de responder igual que
+    antes se congelaba la TUI. La solución es la misma idea que ya se usó en
+    `tui/app/backup_jobs.rs`: abrir una conexión de lectura aparte al mismo archivo
+    (`Connection::open(core.ruta_base_datos())` + `busy_timeout`) y soltar el lock de
+    `GuiState` apenas se lee la ruta y se autoriza, antes de copiar/validar.
+
 ## Módulo futuro de actualizaciones (no iniciado, condicionado)
 
 Sólo aplica si se decide construir un actualizador. Nada de esto es una carencia del
@@ -466,6 +490,34 @@ brecha perceptual, en orden de costo/beneficio:
   medio de una sesión activa. `cargo fmt`, Clippy estricto y la suite completa (499
   tests) en verde, con pruebas nuevas de la creación real en un hilo aparte
   (`tui/app/tests.rs`) y del límite de decisión "hace falta hoy" (`tests/configuracion_respaldos.rs`).
+- [x] **Medido y reparado (2026-08-31): exportar Historial a XLSX (F5) era el punto
+  realmente bloqueante, peor que el respaldo.** Al verificar si el respaldo era el
+  único proceso que necesitaba su propio hilo, se midió también la exportación:
+  armar el XLSX de 100,000 movimientos tarda **~33 segundos** — muy por encima de los
+  ~2 segundos del respaldo, y corría igual de síncrona en el hilo que dibuja la
+  pantalla. Peor todavía: el aviso "Exportando historial…" que ya existía en el
+  código nunca llegaba a pintarse — se fijaba en el mismo tick que arrancaba la
+  exportación, pero el `terminal.draw()` que lo hubiera mostrado corre en la vuelta
+  *siguiente* del bucle, que nunca llegaba hasta que la exportación (síncrona)
+  terminaba. El operador se quedaba con la pantalla congelada sin ninguna señal.
+
+  Reparado con el mismo patrón que `backup_jobs.rs`: módulo nuevo
+  `tui/app/historial_jobs.rs` (hilo + `mpsc::Receiver`, conexión de sólo lectura
+  propia). El núcleo de `AppCore::{buscar_historial, movimientos_en_orden,
+  exportar_historial_seleccion}` se extrajo a funciones libres que reciben
+  `&Connection` en vez de `&self` (`buscar_historial_con_conexion`,
+  `movimientos_en_orden_con_conexion`, `exportar_historial_seleccion_con_conexion`,
+  `application/historial.rs`, reexportada la última desde `application::mod`) —
+  mismo motivo que separar `crear_respaldo` de `AppCore`: el hilo necesita operar
+  sobre una conexión que no es la de `AppCore` sin duplicar la lógica de consulta.
+  Los métodos de `AppCore` quedaron como delegadores finos sobre `&self.connection`,
+  API pública sin cambios (la GUI/Tauri, que sí usa estos métodos directo, no se vio
+  afectada). Historial muestra "⠋ Exportando historial…"
+  (`HistorialState::exportando`, mismo patrón que `RespaldosState::creando`) y F5
+  no encola una segunda exportación mientras la primera sigue en vuelo. `cargo fmt`,
+  Clippy estricto y la suite completa (501 tests) en verde, con pruebas nuevas del
+  guard de F5 (`tui/historial/tests.rs`) y de la exportación real en un hilo aparte
+  con el archivo terminando en disco (`tui/app/tests.rs`).
 - [x] **Frame de transición mínimo en cambios de vista: descartado (2026-08-22).** La
   navegación por pestañas se pidió sin animaciones ni transiciones; se conserva el cambio
   inmediato y no se agrega trabajo visual ajeno al alcance.

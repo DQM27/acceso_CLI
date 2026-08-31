@@ -23,7 +23,7 @@ mod historial;
 mod respaldos;
 mod usuarios;
 
-pub use historial::ExportarHistorialError;
+pub use historial::{ExportarHistorialError, exportar_historial_seleccion_con_conexion};
 pub use respaldos::EstadoRespaldoAutomatico;
 
 /// Tope de seguridad para las cargas "todo en un `Vec`" que alimentan AG

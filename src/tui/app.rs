@@ -9,9 +9,11 @@ use ratatui::{Terminal, backend::Backend};
 mod actions;
 mod auth_jobs;
 mod backup_jobs;
+mod historial_jobs;
 
 use auth_jobs::{HiloUsuarioPendiente, ReceptorAutenticacion, ReceptorCambioPropio, ReceptorHash};
 use backup_jobs::ReceptorRespaldo;
+use historial_jobs::ReceptorExportacion;
 
 use crate::application::AppCore;
 use crate::models::usuario::RolUsuario;
@@ -153,6 +155,9 @@ pub struct App {
     /// `revisar_respaldo_automatico` no dispara uno si ya hay otro en
     /// vuelo, sea manual o automático.
     respaldo_automatico_pendiente: Option<ReceptorRespaldo>,
+    /// Exportación de Historial a XLSX corriendo en un hilo aparte — ver
+    /// `historial_jobs.rs`.
+    historial_exportacion_pendiente: Option<ReceptorExportacion>,
 }
 
 impl Default for App {
@@ -185,6 +190,7 @@ impl Default for App {
             root_inicial_pendiente: None,
             respaldo_manual_pendiente: None,
             respaldo_automatico_pendiente: None,
+            historial_exportacion_pendiente: None,
         }
     }
 }
@@ -430,6 +436,7 @@ impl App {
             self.recibir_hilo_usuario_si_lista(core);
             self.recibir_cambio_password_propio(core);
             cambio_visible |= self.recibir_respaldo_manual_si_listo();
+            cambio_visible |= self.recibir_exportacion_historial_si_lista();
             let trabajos_despues = (
                 self.autenticacion_pendiente.is_some(),
                 self.hilo_usuario_pendiente.is_some(),

@@ -120,11 +120,12 @@ fn comandos_para(state: &HistorialState) -> Vec<CommandHint<'static>> {
 }
 
 fn estado_shell(state: &HistorialState) -> (String, StatusKind) {
+    if state.exportando {
+        return ("⠋ Exportando historial…".to_owned(), StatusKind::Warning);
+    }
     if let Some(m) = &state.mensaje {
         let tipo = if m.starts_with('✓') {
             StatusKind::Success
-        } else if m.contains("Exportando") {
-            StatusKind::Warning
         } else {
             StatusKind::Error
         };

@@ -108,6 +108,11 @@ pub struct HistorialState {
     corte_id: Option<i64>,
     ayuda_expandida: bool,
     busqueda_debounce: Debounce,
+    /// `true` mientras se espera el resultado real de exportar a XLSX (hilo
+    /// aparte, `tui/app/historial_jobs.rs`) — bloquea disparar otra
+    /// exportación mientras tanto, mismo criterio que
+    /// `RespaldosState::creando`.
+    exportando: bool,
 }
 impl Default for HistorialState {
     fn default() -> Self {
@@ -129,6 +134,7 @@ impl Default for HistorialState {
             corte_id: None,
             ayuda_expandida: false,
             busqueda_debounce: Debounce::default(),
+            exportando: false,
         }
     }
 }
@@ -213,7 +219,20 @@ impl HistorialState {
         }
     }
 
+    /// Marca que ya se disparó el hilo aparte que exporta a XLSX (ver
+    /// `tui/app/historial_jobs.rs`) — la pantalla muestra "Exportando
+    /// historial…" hasta que llegue el resultado real por
+    /// `completar_exportacion`.
+    pub fn marcar_exportando(&mut self) {
+        self.exportando = true;
+    }
+
+    pub fn exportando(&self) -> bool {
+        self.exportando
+    }
+
     pub fn completar_exportacion(&mut self, resultado: Result<usize, String>, destino: &Path) {
+        self.exportando = false;
         self.mensaje = Some(match resultado {
             Ok(filas) => format!("✓ Exportados {filas} movimientos a {}", destino.display()),
             Err(error) => format!("✕ {error}"),
@@ -262,7 +281,10 @@ impl HistorialState {
             return AccionHistorial::Ninguna;
         }
         if let KeyCode::F(5) = k.code {
-            if self.total == 0 {
+            if self.exportando {
+                // No hace nada — ya hay una exportación en vuelo, no se
+                // encola una segunda.
+            } else if self.total == 0 {
                 self.mensaje = Some("No hay movimientos para exportar".into());
             } else {
                 self.mensaje = None;
@@ -388,7 +410,6 @@ impl HistorialState {
                     .filter_map(|(columna, visible)| visible.then_some(*columna))
                     .collect();
                 self.modo = ModoHistorial::Normal;
-                self.mensaje = Some("Exportando historial…".into());
                 AccionHistorial::Exportar {
                     filtro,
                     columnas,

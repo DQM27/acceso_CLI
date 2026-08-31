@@ -1518,6 +1518,46 @@ fn crear_respaldo_manual_en_hilo_aparte_termina_creado_en_disco() {
     std::fs::remove_dir_all(&directorio).ok();
 }
 
+#[test]
+fn exportar_historial_en_hilo_aparte_termina_con_el_archivo_real_en_disco() {
+    use crate::database::queries::ingresos::FiltroHistorial;
+    use crate::historial::ColumnaHistorial;
+    use chrono::TimeZone;
+
+    let (core, directorio, actor) = core_temporal("exportar_historial");
+    let mut app = App {
+        sesion: Some(actor),
+        vista: Vista::Historial,
+        ..App::default()
+    };
+    let destino = directorio.join("export.xlsx");
+    let filtro = FiltroHistorial::nuevo(
+        chrono::Utc.with_ymd_and_hms(2000, 1, 1, 0, 0, 0).unwrap(),
+        chrono::Utc.with_ymd_and_hms(2030, 1, 1, 0, 0, 0).unwrap(),
+    );
+
+    app.iniciar_exportacion_historial(
+        filtro,
+        ColumnaHistorial::ALL.to_vec(),
+        destino.clone(),
+        Some(&core),
+    );
+    assert!(app.historial.exportando());
+
+    for _ in 0..200 {
+        app.recibir_exportacion_historial_si_lista();
+        if !app.historial.exportando() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+
+    assert!(!app.historial.exportando());
+    assert!(destino.exists(), "el archivo real debía quedar en disco");
+
+    std::fs::remove_dir_all(&directorio).ok();
+}
+
 /// Regresión del hallazgo #5 de `docs/auditoria-dominio-2026-08-20.md`:
 /// "El login diferido puede aceptar credenciales revocadas". La cuenta se
 /// desactiva *después* de arrancar el hilo de Argon2 pero *antes* de que

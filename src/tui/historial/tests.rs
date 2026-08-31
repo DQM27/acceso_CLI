@@ -291,6 +291,38 @@ fn f5_sin_resultados_no_abre_el_flujo_de_exportacion() {
 }
 
 #[test]
+fn f5_no_encola_una_segunda_exportacion_mientras_la_primera_sigue_en_vuelo() {
+    let mut state = HistorialState::default();
+    state.completar(Ok(pagina(2, 73)));
+    state.marcar_exportando();
+    assert!(state.exportando());
+
+    assert_eq!(
+        state.handle_key(tecla(KeyCode::F(5))),
+        AccionHistorial::Ninguna
+    );
+    assert_eq!(
+        state.modo,
+        ModoHistorial::Normal,
+        "no debía abrir el flujo de columnas mientras hay una exportación en vuelo"
+    );
+
+    state.completar_exportacion(Ok(73), std::path::Path::new("historial.xlsx"));
+    assert!(!state.exportando());
+    assert_eq!(
+        state.handle_key(tecla(KeyCode::F(5))),
+        AccionHistorial::Ninguna
+    );
+    assert!(matches!(
+        state.modo,
+        ModoHistorial::Columnas {
+            proposito: PropositoColumnas::Exportacion,
+            ..
+        }
+    ));
+}
+
+#[test]
 fn parsear_consulta_resuelve_empresa_por_nombre_parcial_y_deja_texto_libre() {
     let empresas = vec![
         Empresa {
