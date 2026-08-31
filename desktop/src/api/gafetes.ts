@@ -22,8 +22,30 @@ export interface FiltroGafetes {
   estado?: "disponible" | "perdido" | "de_baja";
 }
 
+export type TipoIncidenteGafete = "Perdido" | "Resuelto";
+
+/** Una fila del historial de un gafete puntual — espejo de `IncidenteGafete`
+ * (`src/database/queries/gafetes_incidentes.rs`). */
+export interface IncidenteGafete {
+  id: number;
+  tipo: TipoIncidenteGafete;
+  /** ISO 8601 (UTC) — convertir con `new Date(...)` antes de mostrar. */
+  fecha_hora: string;
+  usuario_nombre: string;
+  contratista_nombre: string | null;
+  motivo_resolucion: MotivoResolucionGafete | null;
+  /** A qué gafete pertenece — no hace falta cuando ya se sabe por contexto
+   * (`historialGafete`), pero es indispensable en la vista global de
+   * Auditoría (`listarAuditoriaGafetes`, `../pantallas/Auditoria.tsx`). */
+  gafete_numero: number;
+}
+
 export function buscarGafetes(filtro: FiltroGafetes): Promise<GafeteResumen[]> {
   return invoke("buscar_gafetes", { filtro });
+}
+
+export function historialGafete(id: number): Promise<IncidenteGafete[]> {
+  return invoke("historial_gafete", { id });
 }
 
 export function crearGafete(numero: number): Promise<number> {

@@ -7,12 +7,7 @@ import {
   useListaFlotante,
   useNavegacionFlechas,
 } from "../componentes/ListaFlotante";
-import {
-  buscarContratistas,
-  darDeBajaGafete,
-  marcarGafetePerdido,
-  resolverGafete,
-} from "../api";
+import { buscarContratistas, darDeBajaGafete, marcarGafetePerdido, resolverGafete } from "../api";
 import type { ContratistaResumen, GafeteResumen, MotivoResolucionGafete } from "../api";
 
 const DEBOUNCE_MS = 120;
@@ -107,7 +102,7 @@ export default function GestionGafeteModal({
         </p>
         {gafete.contratista_deudor_nombre && (
           <p style={{ margin: 0, color: "var(--muted)" }}>
-            Deudor: <strong style={{ color: "var(--texto)" }}>{gafete.contratista_deudor_nombre}</strong>
+            Asignado a: <strong style={{ color: "var(--texto)" }}>{gafete.contratista_deudor_nombre}</strong>
           </p>
         )}
 
@@ -141,7 +136,7 @@ export default function GestionGafeteModal({
         {gafete.estado === "Disponible" && buscandoDeudor && (
           <div ref={campoRef}>
             <label className="campo">
-              Deudor · cédula o nombre
+              Asignado a · cédula o nombre
               <input
                 value={filtro}
                 onChange={(evento) => setFiltro(evento.target.value)}

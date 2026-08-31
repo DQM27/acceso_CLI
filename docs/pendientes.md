@@ -244,6 +244,31 @@ sin forma de sacar de circulación uno perdido ni de saber quién lo debe.
 proyectos (raíz: 491 tests; `desktop/src-tauri`: 20 tests; `desktop/`: `npx tsc --noEmit` +
 `npm run build` + 130 tests de Vitest).
 
+- [x] **Historial por gafete (2026-08-30).** `gafetes_incidentes` ya guardaba
+  `usuario_id` de quién marcó perdido/resolvió, pero sin lector ni pantalla. Se agregó
+  `GafetesIncidentesQuery::historial` (núcleo, sin paginar — un gafete tiene a lo sumo un
+  puñado de incidentes) y se mostró en un modal propio (`HistorialGafeteModal.tsx`, tabla
+  simple sin AG Grid), separado de `GestionGafeteModal.tsx` (que sólo maneja acciones) —
+  columna "Historial" en el catálogo, botón "Detalles". Columna "Resolver" también agregada
+  (visible sólo en estado Perdido, abre el mismo modal de gestión) para que el operador no
+  dependa de conocer el doble click. Columna "Deudor" renombrada a "Asignado a" en los tres
+  lugares donde aparecía (catálogo, modal de gestión, modal de historial) — sólo el texto
+  visible, los campos internos (`contratista_deudor_*`) quedan igual.
+  - [ ] **Falta réplica en TUI (`src/tui/gafetes/`).** Alcance de esta vuelta fue sólo GUI
+    — la TUI necesita cablear un estado async nuevo (carga + tick) sólo para esto, se deja
+    para una sesión aparte.
+- [x] **Incidentes de gafetes en Auditoría general (2026-08-30).** El historial por gafete
+  (arriba) sigue sin restricción de rol; además se sumaron los mismos incidentes
+  (`gafetes_incidentes`, vía `GafetesIncidentesQuery::historial_completo`, nuevo) a la
+  pantalla de Auditoría general (`Auditoria.tsx`), gateados por `Operacion::VerAuditoria`
+  igual que el resto — mismo patrón que contratistas/empresas: el registro completo se ve
+  sin restricción, su auditoría de cambios no. `AppCore::buscar_auditoria_gafetes`
+  (`application/catalogos.rs`, junto a `buscar_auditoria`) reusa `ContratistaServiceError`
+  a propósito, mismo criterio que el resto de la auditoría genérica. Sin tabla nueva ni
+  duplicar el dato — `gafetes_incidentes` sigue siendo la única fuente; el merge de las dos
+  listas (`auditoria_cambios` + `gafetes_incidentes`) es puramente de presentación en
+  `Auditoria.tsx`, ordenado por fecha.
+
 ## Sistema visual / UI
 
 - [x] **Tema Negro y navegación por pestañas (2026-08-22).** Se agregó un tercer tema

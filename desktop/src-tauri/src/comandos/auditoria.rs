@@ -1,4 +1,5 @@
 use control_acceso::database::queries::auditoria::CambioAuditado;
+use control_acceso::database::queries::gafetes_incidentes::IncidenteGafete;
 
 use crate::estado::GuiState;
 
@@ -14,5 +15,18 @@ pub fn listar_auditoria(state: tauri::State<GuiState>) -> Result<Vec<CambioAudit
     state
         .core()
         .buscar_auditoria_completo(&sesion)
+        .map_err(control_acceso::mensajes::mensaje_contratista)
+}
+
+/// Incidentes de gafetes (marcar perdido/resolver) para la misma pantalla —
+/// tabla aparte (`gafetes_incidentes`), mismo gate (`Operacion::VerAuditoria`).
+#[tauri::command]
+pub fn listar_auditoria_gafetes(
+    state: tauri::State<GuiState>,
+) -> Result<Vec<IncidenteGafete>, String> {
+    let sesion = state.sesion_activa()?;
+    state
+        .core()
+        .buscar_auditoria_gafetes(&sesion)
         .map_err(control_acceso::mensajes::mensaje_contratista)
 }

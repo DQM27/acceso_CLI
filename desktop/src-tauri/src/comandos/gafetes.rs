@@ -1,4 +1,5 @@
 use control_acceso::database::queries::gafetes::GafeteResumen;
+use control_acceso::database::queries::gafetes_incidentes::IncidenteGafete;
 use control_acceso::models::gafete::MotivoResolucionGafete;
 
 use crate::dto::gafetes::FiltroGafetesEntrada;
@@ -16,6 +17,19 @@ pub fn buscar_gafetes(
     state
         .core()
         .buscar_gafetes(&filtro.construir())
+        .map_err(control_acceso::mensajes::mensaje_gafete)
+}
+
+/// Historial de un gafete puntual — misma falta de restricción de sesión
+/// que `buscar_gafetes` (lectura del catálogo).
+#[tauri::command]
+pub fn historial_gafete(
+    id: i64,
+    state: tauri::State<GuiState>,
+) -> Result<Vec<IncidenteGafete>, String> {
+    state
+        .core()
+        .historial_gafete(id)
         .map_err(control_acceso::mensajes::mensaje_gafete)
 }
 

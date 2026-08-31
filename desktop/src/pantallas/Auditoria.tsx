@@ -3,24 +3,33 @@ import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
-import { etiquetaCampo, etiquetaEntidad, listarAuditoria, valorPresentable } from "../api";
-import type { CambioAuditado } from "../api";
+import {
+  etiquetaCampo,
+  etiquetaEntidad,
+  listarAuditoria,
+  listarAuditoriaGafetes,
+  valorPresentable,
+} from "../api";
+import type { CambioAuditado, IncidenteGafete } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
-type FilaAuditoria = CambioAuditado & {
-  /** Nombre más reciente conocido de este registro (ver `nombresActuales`
-   * más abajo) — no el snapshot de ESTA fila puntual. Cuando el cambio
-   * auditado es justo el nombre, `entidad_nombre` cambia de fila en fila
-   * (ej. "BAC" → "BACA" → "BAC") y esta columna parece hablar de dos
-   * entidades distintas; con el nombre más reciente, todas las filas del
-   * mismo registro se identifican igual — el renombre en sí ya se ve en
-   * "Valor anterior"/"Valor nuevo". */
+/** Una fila de la grilla — de `auditoria_cambios` (Contratista/Empresa/
+ * Usuario) o de `gafetes_incidentes` (marcar perdido/resolver), ya
+ * normalizadas a la misma forma de presentación. Sólo lleva los campos que
+ * la grilla realmente pinta — ninguna columna lee `entidad`/`campo`/
+ * `valor_anterior`/`valor_nuevo`/`usuario_id`/`entidad_id` crudos, así que no
+ * hace falta inventarles un valor a las filas de gafetes (que no tienen
+ * esos campos en ese sentido). */
+interface FilaAuditoria {
+  id: string;
+  fecha_hora: string;
+  usuario_nombre: string;
   entidad_actual: string;
   entidad_texto: string;
   campo_texto: string;
   anterior_texto: string;
   nuevo_texto: string;
-};
+}
 
 /** Para cada (entidad, entidad_id), el `entidad_nombre` de la fila con la
  * `fecha_hora` más reciente — `items` ya viene ordenado por fecha DESC
@@ -43,19 +52,37 @@ export default function Auditoria() {
   useEffect(() => {
     let vigente = true;
     setCargando(true);
-    listarAuditoria()
-      .then((items) => {
+    Promise.all([listarAuditoria(), listarAuditoriaGafetes()])
+      .then(([cambios, incidentesGafetes]) => {
         if (!vigente) return;
-        const actuales = nombresActuales(items);
+        const actuales = nombresActuales(cambios);
+        const filasCambios: FilaAuditoria[] = cambios.map((item) => ({
+          id: `cambio-${item.id}`,
+          fecha_hora: item.fecha_hora,
+          usuario_nombre: item.usuario_nombre,
+          entidad_actual: actuales.get(`${item.entidad}:${item.entidad_id}`) ?? item.entidad_nombre,
+          entidad_texto: etiquetaEntidad(item.entidad),
+          campo_texto: etiquetaCampo(item.campo),
+          anterior_texto: valorPresentable(item.campo, item.valor_anterior),
+          nuevo_texto: valorPresentable(item.campo, item.valor_nuevo),
+        }));
+        const filasGafetes: FilaAuditoria[] = incidentesGafetes.map((incidente) => {
+          const numero = `Gafete ${String(incidente.gafete_numero).padStart(2, "0")}`;
+          return {
+            id: `gafete-${incidente.id}`,
+            fecha_hora: incidente.fecha_hora,
+            usuario_nombre: incidente.usuario_nombre,
+            entidad_actual: numero,
+            entidad_texto: "Gafete",
+            campo_texto: "Estado",
+            anterior_texto: textoEstadoAnterior(incidente),
+            nuevo_texto: textoEstadoNuevo(incidente),
+          };
+        });
         setFilas(
-          items.map((item) => ({
-            ...item,
-            entidad_actual: actuales.get(`${item.entidad}:${item.entidad_id}`) ?? item.entidad_nombre,
-            entidad_texto: etiquetaEntidad(item.entidad),
-            campo_texto: etiquetaCampo(item.campo),
-            anterior_texto: valorPresentable(item.campo, item.valor_anterior),
-            nuevo_texto: valorPresentable(item.campo, item.valor_nuevo),
-          })),
+          [...filasCambios, ...filasGafetes].sort((a, b) =>
+            b.fecha_hora.localeCompare(a.fecha_hora),
+          ),
         );
       })
       .catch((error) => vigente && toast.error(String(error)))
@@ -142,4 +169,16 @@ export default function Auditoria() {
       </div>
     </div>
   );
+}
+
+function textoEstadoAnterior(incidente: IncidenteGafete): string {
+  return incidente.tipo === "Perdido" ? "Disponible" : "Perdido";
+}
+
+function textoEstadoNuevo(incidente: IncidenteGafete): string {
+  if (incidente.tipo === "Perdido") {
+    return `Perdido — asignado a ${incidente.contratista_nombre ?? "—"}`;
+  }
+  const motivo = incidente.motivo_resolucion === "Pagado" ? "pagado" : "apareció";
+  return `Disponible — ${motivo}`;
 }

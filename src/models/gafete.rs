@@ -68,6 +68,33 @@ impl MotivoResolucionGafete {
     }
 }
 
+/// Tipo de fila de `gafetes_incidentes` — espejo de la columna `tipo`
+/// (`PERDIDO`/`RESUELTO`), usado por la lectura del historial
+/// (`database::queries::gafetes_incidentes::GafetesIncidentesQuery`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum TipoIncidenteGafete {
+    Perdido,
+    Resuelto,
+}
+
+impl TipoIncidenteGafete {
+    pub fn as_str_sql(self) -> &'static str {
+        match self {
+            Self::Perdido => "PERDIDO",
+            Self::Resuelto => "RESUELTO",
+        }
+    }
+
+    pub fn from_str_sql(texto: &str) -> Option<Self> {
+        match texto {
+            "PERDIDO" => Some(Self::Perdido),
+            "RESUELTO" => Some(Self::Resuelto),
+            _ => None,
+        }
+    }
+}
+
 /// Fila del catálogo (`gafetes`): sólo el estado vigente, no el historial —
 /// eso vive en `gafetes_incidentes` (`database::queries::gafetes_incidentes`).
 #[derive(Debug, Clone, PartialEq, Eq)]

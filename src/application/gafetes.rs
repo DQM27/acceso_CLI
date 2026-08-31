@@ -9,7 +9,9 @@ use rusqlite::{Transaction, TransactionBehavior};
 
 use crate::database::error::DatabaseError;
 use crate::database::queries::gafetes::{FiltroGafetes, GafeteResumen, SqliteGafetesQuery};
-use crate::database::queries::gafetes_incidentes::SqliteGafetesIncidentes;
+use crate::database::queries::gafetes_incidentes::{
+    GafetesIncidentesQuery, IncidenteGafete, SqliteGafetesIncidentes,
+};
 use crate::database::repositories::contratista_repository::SqliteContratistaRepository;
 use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
 use crate::models::gafete::MotivoResolucionGafete;
@@ -26,6 +28,17 @@ impl AppCore {
     ) -> Result<Vec<GafeteResumen>, GafeteServiceError> {
         let query = SqliteGafetesQuery::new(&self.connection);
         GafeteConsultaService::new(&query).buscar(filtro)
+    }
+
+    /// Historial de incidentes de un gafete puntual (quién lo marcó perdido,
+    /// quién lo resolvió y cuándo) — sin actor, mismo criterio sin
+    /// restricción que `buscar_gafetes`.
+    pub fn historial_gafete(
+        &self,
+        gafete_id: i64,
+    ) -> Result<Vec<IncidenteGafete>, GafeteServiceError> {
+        let incidentes = SqliteGafetesIncidentes::new(&self.connection);
+        Ok(incidentes.historial(gafete_id)?)
     }
 
     pub fn crear_gafete(

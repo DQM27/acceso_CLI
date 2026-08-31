@@ -8,6 +8,9 @@ use crate::database::queries::contratistas::{
     FiltroContratistas, PaginaContratistas, SqliteContratistasQuery,
 };
 use crate::database::queries::empresas::{EmpresaResumen, FiltroEmpresas, SqliteEmpresasQuery};
+use crate::database::queries::gafetes_incidentes::{
+    GafetesIncidentesQuery, IncidenteGafete, SqliteGafetesIncidentes,
+};
 use crate::database::repositories::contratista_repository::SqliteContratistaRepository;
 use crate::database::repositories::empresa_repository::SqliteEmpresaRepository;
 use crate::domain::autorizacion::Operacion;
@@ -77,6 +80,25 @@ impl AppCore {
             consulta.offset = todos.len();
         }
         Ok(todos)
+    }
+
+    /// Incidentes de gafetes (marcar perdido/resolver, `gafetes_incidentes`)
+    /// para la pantalla general de Auditoría — mismo gate que
+    /// `buscar_auditoria`, aunque el dato viene de una tabla aparte
+    /// (`gafetes_incidentes`, no `auditoria_cambios`): es la misma
+    /// información sensible sin importar de qué tabla salga. A diferencia
+    /// del historial por gafete puntual (`AppCore::historial_gafete`, sin
+    /// restricción), acá sí aplica `Operacion::VerAuditoria`.
+    pub fn buscar_auditoria_gafetes(
+        &self,
+        actor: &UsuarioSesion,
+    ) -> Result<Vec<IncidenteGafete>, ContratistaServiceError> {
+        let actor_actual = verificar_actor_activo(&self.connection, actor)?
+            .ok_or(ContratistaServiceError::OperacionNoAutorizada)?;
+        if !actor_actual.rol.puede(Operacion::VerAuditoria) {
+            return Err(ContratistaServiceError::OperacionNoAutorizada);
+        }
+        Ok(SqliteGafetesIncidentes::new(&self.connection).historial_completo()?)
     }
 
     pub fn crear_contratista(

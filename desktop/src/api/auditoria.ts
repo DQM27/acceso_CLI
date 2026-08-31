@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { IncidenteGafete } from "./gafetes";
 
 // Espejo de comandos/auditoria.rs y
 // src/database/queries/auditoria.rs (`CambioAuditado`) del núcleo. Sin
@@ -97,4 +98,11 @@ export function valorPresentable(campo: string, valor: string | null): string {
 
 export function listarAuditoria(): Promise<CambioAuditado[]> {
   return invoke("listar_auditoria");
+}
+
+/** Incidentes de gafetes (marcar perdido/resolver) — misma pantalla de
+ * Auditoría, tabla de origen distinta (`gafetes_incidentes`, no
+ * `auditoria_cambios`), mismo gate (`Operacion::VerAuditoria`). */
+export function listarAuditoriaGafetes(): Promise<IncidenteGafete[]> {
+  return invoke("listar_auditoria_gafetes");
 }
