@@ -53,8 +53,13 @@ export default function Auditoria() {
     let vigente = true;
     setCargando(true);
     Promise.all([listarAuditoria(), listarAuditoriaGafetes()])
-      .then(([cambios, incidentesGafetes]) => {
+      .then(([{ items: cambios, truncado }, incidentesGafetes]) => {
         if (!vigente) return;
+        if (truncado) {
+          toast.warning(
+            `Se muestran los primeros ${cambios.length.toLocaleString("es-CR")} cambios de auditoría — el registro completo es más grande.`,
+          );
+        }
         const actuales = nombresActuales(cambios);
         const filasCambios: FilaAuditoria[] = cambios.map((item) => ({
           id: `cambio-${item.id}`,

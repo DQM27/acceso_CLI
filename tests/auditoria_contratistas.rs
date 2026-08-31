@@ -230,5 +230,6 @@ fn buscar_auditoria_completo_trae_todo_aunque_supere_una_pagina_sql() {
 
     let todos = core.buscar_auditoria_completo(&actor).unwrap();
 
-    assert_eq!(todos.len(), 205);
+    assert_eq!(todos.items.len(), 205);
+    assert!(!todos.truncado);
 }

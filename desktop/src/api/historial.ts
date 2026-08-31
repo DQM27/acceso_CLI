@@ -1,12 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { MedioIngreso, ResultadoIngresoRegistrado } from "./ingresos";
 import type { TipoIngreso } from "./contratistas";
+import type { CargaCompleta } from "./comun";
 
 // Espejo de comandos/historial.rs y
 // src/database/queries/ingresos/historial.rs (`MovimientoIngresoResumen`)
 // del núcleo. Sin paginado a propósito: la pantalla trae todo el historial
 // de una vez y deja que AG Grid filtre/ordene/virtualice del lado del
-// cliente (igual criterio que Activos, ver `Historial.tsx`).
+// cliente (igual criterio que Activos, ver `Historial.tsx`) — acotado por
+// `CargaCompleta.truncado` (ver `api/comun.ts`) para un rango sin acotar.
 //
 // `ResultadoIngresoRegistrado` se reusa de `api/ingresos.ts` — mismo enum
 // del núcleo (`src/models/registro_ingreso.rs`), no una copia.
@@ -57,7 +59,7 @@ function mensajeMotivoResultado(motivo: MotivoResultadoIngreso): string {
 export function listarHistorial(
   desde?: string,
   hasta?: string,
-): Promise<MovimientoIngresoResumen[]> {
+): Promise<CargaCompleta<MovimientoIngresoResumen>> {
   return invoke("listar_historial", { desde: desde ?? null, hasta: hasta ?? null });
 }
 

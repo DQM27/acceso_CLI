@@ -6,6 +6,7 @@
 export * from "./actualizaciones";
 export * from "./auditoria";
 export * from "./autenticacion";
+export * from "./comun";
 export * from "./contratistas";
 export * from "./empresas";
 export * from "./gafetes";

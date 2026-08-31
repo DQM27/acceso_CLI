@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use chrono::{DateTime, Duration, NaiveDate, TimeZone, Utc};
-use control_acceso::application::ExportarHistorialError;
+use control_acceso::application::{CargaCompleta, ExportarHistorialError};
 use control_acceso::database::queries::ingresos::{FiltroHistorial, MovimientoIngresoResumen};
 use control_acceso::historial::exportacion::ColumnaHistorial;
 use control_acceso::tiempo::{self, TiempoError};
@@ -51,7 +51,7 @@ pub fn listar_historial(
     desde: Option<NaiveDate>,
     hasta: Option<NaiveDate>,
     state: tauri::State<GuiState>,
-) -> Result<Vec<MovimientoIngresoResumen>, String> {
+) -> Result<CargaCompleta<MovimientoIngresoResumen>, String> {
     state.sesion_activa()?;
     let (desde_utc, hasta_utc) = rango_utc(desde, hasta).map_err(|error| error.to_string())?;
     state

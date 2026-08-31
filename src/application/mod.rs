@@ -26,6 +26,28 @@ mod usuarios;
 pub use historial::ExportarHistorialError;
 pub use respaldos::EstadoRespaldoAutomatico;
 
+/// Tope de seguridad para las cargas "todo en un `Vec`" que alimentan AG
+/// Grid (`buscar_historial_completo`, `buscar_auditoria_completo`) — la
+/// virtualización del lado del cliente sigue siendo la estrategia elegida
+/// (ver `docs/pendientes.md`), pero sin un tope una tabla append-only sin
+/// filtro de fecha acotado (Auditoría no tiene selector de rango) podría
+/// intentar traer años de datos en un solo mensaje IPC y congelar la UI.
+/// `CargaCompleta::truncado` avisa a la pantalla en vez de devolver menos
+/// filas en silencio.
+pub(crate) const LIMITE_CARGA_COMPLETA_MAXIMO: usize = 20_000;
+
+/// Resultado de una carga "todo de una vez" acotada por
+/// [`LIMITE_CARGA_COMPLETA_MAXIMO`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct CargaCompleta<T> {
+    pub items: Vec<T>,
+    /// `true` si el conjunto real supera el tope y se cortó antes de
+    /// traerlo completo — la pantalla debe pedir acotar el filtro en vez de
+    /// asumir que ve todo.
+    pub truncado: bool,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum BootstrapError {
     #[error("No se pudo preparar SQLite: {0}")]

@@ -21,7 +21,7 @@ use crate::services::contratista_service::{
 use crate::services::empresa_service::{EmpresaConsultaService, EmpresaService};
 use crate::services::error::{ContratistaServiceError, EmpresaServiceError};
 
-use super::{AppCore, verificar_actor_activo};
+use super::{AppCore, CargaCompleta, LIMITE_CARGA_COMPLETA_MAXIMO, verificar_actor_activo};
 
 impl AppCore {
     pub fn buscar_contratistas(
@@ -58,28 +58,36 @@ impl AppCore {
     /// insertado justo mientras se pagina podría, en teoría, correr una fila
     /// entre páginas; caso raro (auditoría no se llena tan rápido como los
     /// ingresos) y no hay mecanismo de corte que reutilizar sin agregarlo
-    /// primero a la consulta de abajo.
+    /// primero a la consulta de abajo. Se corta en
+    /// [`LIMITE_CARGA_COMPLETA_MAXIMO`] — a diferencia de Historial, esta
+    /// pantalla no tiene selector de rango de fechas, así que es la única
+    /// barrera real contra un total que crezca sin límite.
     pub fn buscar_auditoria_completo(
         &self,
         actor: &UsuarioSesion,
-    ) -> Result<Vec<CambioAuditado>, ContratistaServiceError> {
+    ) -> Result<CargaCompleta<CambioAuditado>, ContratistaServiceError> {
         let mut consulta = FiltroAuditoria {
             limite: usize::MAX,
             offset: 0,
         };
         let mut todos = Vec::new();
+        let mut total;
         loop {
             let pagina = self.buscar_auditoria(actor, &consulta)?;
+            total = pagina.total;
             if pagina.items.is_empty() {
                 break;
             }
             todos.extend(pagina.items);
-            if todos.len() >= pagina.total {
+            if todos.len() >= total || todos.len() >= LIMITE_CARGA_COMPLETA_MAXIMO {
                 break;
             }
             consulta.offset = todos.len();
         }
-        Ok(todos)
+        Ok(CargaCompleta {
+            truncado: todos.len() < total,
+            items: todos,
+        })
     }
 
     /// Incidentes de gafetes (marcar perdido/resolver, `gafetes_incidentes`)

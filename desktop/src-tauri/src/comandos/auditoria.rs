@@ -1,3 +1,4 @@
+use control_acceso::application::CargaCompleta;
 use control_acceso::database::queries::auditoria::CambioAuditado;
 use control_acceso::database::queries::gafetes_incidentes::IncidenteGafete;
 
@@ -10,7 +11,9 @@ use crate::estado::GuiState;
 /// del actor); no hace falta un chequeo redundante acá salvo `sesion_activa`
 /// para no llamar al núcleo sin sesión.
 #[tauri::command]
-pub fn listar_auditoria(state: tauri::State<GuiState>) -> Result<Vec<CambioAuditado>, String> {
+pub fn listar_auditoria(
+    state: tauri::State<GuiState>,
+) -> Result<CargaCompleta<CambioAuditado>, String> {
     let sesion = state.sesion_activa()?;
     state
         .core()

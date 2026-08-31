@@ -11,7 +11,7 @@ use crate::historial::exportacion::{
 use crate::services::error::RegistroIngresoServiceError;
 use crate::services::registro_ingreso_service::RegistroIngresoConsultaService;
 
-use super::AppCore;
+use super::{AppCore, CargaCompleta, LIMITE_CARGA_COMPLETA_MAXIMO};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExportarHistorialError {
@@ -44,30 +44,36 @@ impl AppCore {
     /// una interfaz que virtualiza del lado del cliente (AG Grid) en vez de
     /// paginar por su cuenta. Mismo lote/`corte_id` que ya usa
     /// `exportar_historial`, extraído para no repetir el loop en cada lugar
-    /// que necesite "todo, no una página". Sin tope artificial de filas: a
-    /// diferencia de la exportación (que sí choca con el límite real de una
-    /// hoja de Excel), acá no hay ninguna razón técnica para cortar antes.
+    /// que necesite "todo, no una página". Se corta en
+    /// [`LIMITE_CARGA_COMPLETA_MAXIMO`] — con la pantalla acotando por rango
+    /// de fechas (`Historial.tsx`) es raro llegar ahí, pero un rango muy
+    /// abierto no debe congelar la UI ni el mensaje IPC.
     pub fn buscar_historial_completo(
         &self,
         filtro: &FiltroHistorial,
-    ) -> Result<Vec<MovimientoIngresoResumen>, RegistroIngresoServiceError> {
+    ) -> Result<CargaCompleta<MovimientoIngresoResumen>, RegistroIngresoServiceError> {
         let mut consulta = filtro.clone();
         consulta.offset = 0;
         consulta.limite = usize::MAX;
         let mut todos = Vec::new();
+        let mut total;
         loop {
             let pagina = self.buscar_historial(&consulta)?;
             consulta.corte_id = Some(pagina.corte_id);
+            total = pagina.total;
             if pagina.items.is_empty() {
                 break;
             }
             todos.extend(pagina.items);
-            if todos.len() >= pagina.total {
+            if todos.len() >= total || todos.len() >= LIMITE_CARGA_COMPLETA_MAXIMO {
                 break;
             }
             consulta.offset = todos.len();
         }
-        Ok(todos)
+        Ok(CargaCompleta {
+            truncado: todos.len() < total,
+            items: todos,
+        })
     }
 
     /// Exporta todo el conjunto filtrado que representa la pantalla, no sólo

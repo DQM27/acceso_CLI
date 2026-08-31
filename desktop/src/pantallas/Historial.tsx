@@ -51,8 +51,14 @@ export default function Historial() {
     async (estaVigente: () => boolean = () => true) => {
       setCargando(true);
       try {
-        const datos = await listarHistorial(desde || undefined, hasta || undefined);
-        if (estaVigente()) setFilas(datos);
+        const { items, truncado } = await listarHistorial(desde || undefined, hasta || undefined);
+        if (!estaVigente()) return;
+        setFilas(items);
+        if (truncado) {
+          toast.warning(
+            `Se muestran los primeros ${items.length.toLocaleString("es-CR")} movimientos — acotá el rango de fechas para ver el resto.`,
+          );
+        }
       } finally {
         if (estaVigente()) setCargando(false);
       }

@@ -1,12 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { IncidenteGafete } from "./gafetes";
+import type { CargaCompleta } from "./comun";
 
 // Espejo de comandos/auditoria.rs y
 // src/database/queries/auditoria.rs (`CambioAuditado`) del núcleo. Sin
 // paginado a propósito — mismo criterio que Historial: trae todo de una vez
-// y deja que AG Grid virtualice del lado del cliente. Auditoría genérica
-// (contratistas, empresas, usuarios) desde 2026-08-28 — antes era sólo de
-// contratistas.
+// y deja que AG Grid virtualice del lado del cliente, acotado por
+// `CargaCompleta.truncado` (ver `api/comun.ts`) — a diferencia de
+// Historial, esta pantalla no tiene selector de rango de fechas. Auditoría
+// genérica (contratistas, empresas, usuarios) desde 2026-08-28 — antes era
+// sólo de contratistas.
 
 export type EntidadAuditada = "Contratista" | "Empresa" | "Usuario";
 
@@ -96,7 +99,7 @@ export function valorPresentable(campo: string, valor: string | null): string {
   return valor;
 }
 
-export function listarAuditoria(): Promise<CambioAuditado[]> {
+export function listarAuditoria(): Promise<CargaCompleta<CambioAuditado>> {
   return invoke("listar_auditoria");
 }
 
