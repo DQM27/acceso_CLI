@@ -20,13 +20,15 @@ pub fn buscar_gafetes(
         .map_err(control_acceso::mensajes::mensaje_gafete)
 }
 
-/// Historial de un gafete puntual — misma falta de restricción de sesión
-/// que `buscar_gafetes` (lectura del catálogo).
+/// Historial de un gafete puntual — el núcleo no gatea esta lectura por
+/// actor (mismo criterio que `buscar_gafetes`), pero la GUI igual exige
+/// sesión activa, por convención (ver `comandos/mod.rs`).
 #[tauri::command]
 pub fn historial_gafete(
     id: i64,
     state: tauri::State<GuiState>,
 ) -> Result<Vec<IncidenteGafete>, String> {
+    state.sesion_activa()?;
     state
         .core()
         .historial_gafete(id)

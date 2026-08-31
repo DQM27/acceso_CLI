@@ -87,6 +87,9 @@ pub fn mensaje_gafete(error: GafeteServiceError) -> String {
         GafeteServiceError::EstadoInvalido => {
             "El gafete no está en un estado válido para esa operación".into()
         }
+        GafeteServiceError::GafeteConIngresoActivo => {
+            "El gafete está asignado a un ingreso activo".into()
+        }
         GafeteServiceError::OperacionNoAutorizada => {
             "Su sesión no está autorizada para esta operación".into()
         }

@@ -8,6 +8,7 @@ use crate::database::queries::gafetes::{FiltroGafetes, GafeteResumen, GafetesQue
 use crate::database::queries::gafetes_incidentes::GafetesIncidentesWriter;
 use crate::database::repositories::contratista_repository::ContratistaRepository;
 use crate::database::repositories::gafete_repository::GafeteRepository;
+use crate::database::repositories::registro_ingreso_repository::RegistroIngresoRepository;
 use crate::models::gafete::MotivoResolucionGafete;
 
 use super::error::GafeteServiceError;
@@ -79,17 +80,31 @@ where
             .collect()
     }
 
-    pub fn dar_de_baja(&self, id: i64) -> Result<(), GafeteServiceError> {
+    pub fn dar_de_baja<I: RegistroIngresoRepository + ?Sized>(
+        &self,
+        registros: &I,
+        id: i64,
+    ) -> Result<(), GafeteServiceError> {
         let gafete = self.buscar_por_id(id)?;
         if !crate::domain::gafete::puede_darse_de_baja(gafete.estado) {
             return Err(GafeteServiceError::EstadoInvalido);
         }
+        if registros
+            .buscar_ingreso_activo_por_gafete(gafete.numero)?
+            .is_some()
+        {
+            return Err(GafeteServiceError::GafeteConIngresoActivo);
+        }
         Ok(self.gafetes.dar_de_baja(id)?)
     }
 
-    pub fn marcar_perdido<W: GafetesIncidentesWriter + ?Sized>(
+    pub fn marcar_perdido<
+        W: GafetesIncidentesWriter + ?Sized,
+        I: RegistroIngresoRepository + ?Sized,
+    >(
         &self,
         incidentes: &W,
+        registros: &I,
         id: i64,
         contratista_id: i64,
         usuario_id: i64,
@@ -98,6 +113,12 @@ where
         let gafete = self.buscar_por_id(id)?;
         if !crate::domain::gafete::puede_marcarse_perdido(gafete.estado) {
             return Err(GafeteServiceError::EstadoInvalido);
+        }
+        if registros
+            .buscar_ingreso_activo_por_gafete(gafete.numero)?
+            .is_some()
+        {
+            return Err(GafeteServiceError::GafeteConIngresoActivo);
         }
         if self.contratistas.buscar_por_id(contratista_id)?.is_none() {
             return Err(GafeteServiceError::ContratistaNoEncontrado);
@@ -131,7 +152,10 @@ mod tests {
     use crate::database::queries::gafetes_incidentes::SqliteGafetesIncidentes;
     use crate::database::repositories::contratista_repository::SqliteContratistaRepository;
     use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
+    use crate::database::repositories::registro_ingreso_repository::SqliteRegistroIngresoRepository;
     use crate::database::schema::initialize_database;
+    use crate::models::registro_ingreso::NuevoRegistroIngreso;
+    use crate::models::tipo_ingreso::TipoIngreso;
     use rusqlite::Connection;
 
     fn conexion_con_contratista() -> (Connection, i64) {
@@ -147,6 +171,32 @@ mod tests {
             )
             .unwrap();
         (connection, 1)
+    }
+
+    fn abrir_ingreso_con_gafete(connection: &Connection, contratista_id: i64, gafete_numero: i64) {
+        let registros = SqliteRegistroIngresoRepository::new(connection);
+        registros
+            .crear(&NuevoRegistroIngreso {
+                contratista_id,
+                empresa_id: 1,
+                fecha_hora_ingreso: Utc::now(),
+                medio_ingreso: crate::models::medio_ingreso::MedioIngreso::Caminando,
+                tipo_ingreso: TipoIngreso::Praind,
+                gafete_numero: Some(gafete_numero),
+                usuario_ingreso_id: 1,
+                datos_historicos: crate::models::registro_ingreso::DatosHistoricosEntrada {
+                    contratista_cedula: "1".to_owned(),
+                    contratista_nombre: "Juan".to_owned(),
+                    fecha_vencimiento_praind: None,
+                    es_personal_ruta: false,
+                    tiene_acceso: true,
+                    empresa_activa: true,
+                    resultado_acceso:
+                        crate::models::registro_ingreso::ResultadoIngresoRegistrado::Permitido,
+                    reglas_version: crate::domain::acceso::VERSION_REGLAS_ACCESO,
+                },
+            })
+            .unwrap();
     }
 
     #[test]
@@ -201,15 +251,16 @@ mod tests {
         let gafetes = SqliteGafeteRepository::new(&connection);
         let contratistas = SqliteContratistaRepository::new(&connection);
         let incidentes = SqliteGafetesIncidentes::new(&connection);
+        let registros = SqliteRegistroIngresoRepository::new(&connection);
         let servicio = GafeteService::new(&gafetes, &contratistas);
         let id = servicio.crear_uno(1).unwrap();
         let ahora = Utc::now();
 
         servicio
-            .marcar_perdido(&incidentes, id, contratista_id, 1, ahora)
+            .marcar_perdido(&incidentes, &registros, id, contratista_id, 1, ahora)
             .unwrap();
         assert!(matches!(
-            servicio.marcar_perdido(&incidentes, id, contratista_id, 1, ahora),
+            servicio.marcar_perdido(&incidentes, &registros, id, contratista_id, 1, ahora),
             Err(GafeteServiceError::EstadoInvalido)
         ));
 
@@ -228,14 +279,15 @@ mod tests {
         let gafetes = SqliteGafeteRepository::new(&connection);
         let contratistas = SqliteContratistaRepository::new(&connection);
         let incidentes = SqliteGafetesIncidentes::new(&connection);
+        let registros = SqliteRegistroIngresoRepository::new(&connection);
         let servicio = GafeteService::new(&gafetes, &contratistas);
         let id = servicio.crear_uno(1).unwrap();
 
         servicio
-            .marcar_perdido(&incidentes, id, contratista_id, 1, Utc::now())
+            .marcar_perdido(&incidentes, &registros, id, contratista_id, 1, Utc::now())
             .unwrap();
         assert!(matches!(
-            servicio.dar_de_baja(id),
+            servicio.dar_de_baja(&registros, id),
             Err(GafeteServiceError::EstadoInvalido)
         ));
     }
@@ -246,12 +298,46 @@ mod tests {
         let gafetes = SqliteGafeteRepository::new(&connection);
         let contratistas = SqliteContratistaRepository::new(&connection);
         let incidentes = SqliteGafetesIncidentes::new(&connection);
+        let registros = SqliteRegistroIngresoRepository::new(&connection);
         let servicio = GafeteService::new(&gafetes, &contratistas);
         let id = servicio.crear_uno(1).unwrap();
 
         assert!(matches!(
-            servicio.marcar_perdido(&incidentes, id, 999, 1, Utc::now()),
+            servicio.marcar_perdido(&incidentes, &registros, id, 999, 1, Utc::now()),
             Err(GafeteServiceError::ContratistaNoEncontrado)
+        ));
+    }
+
+    #[test]
+    fn dar_de_baja_con_ingreso_activo_se_bloquea() {
+        let (connection, contratista_id) = conexion_con_contratista();
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let contratistas = SqliteContratistaRepository::new(&connection);
+        let registros = SqliteRegistroIngresoRepository::new(&connection);
+        let servicio = GafeteService::new(&gafetes, &contratistas);
+        let id = servicio.crear_uno(1).unwrap();
+        abrir_ingreso_con_gafete(&connection, contratista_id, 1);
+
+        assert!(matches!(
+            servicio.dar_de_baja(&registros, id),
+            Err(GafeteServiceError::GafeteConIngresoActivo)
+        ));
+    }
+
+    #[test]
+    fn marcar_perdido_con_ingreso_activo_se_bloquea() {
+        let (connection, contratista_id) = conexion_con_contratista();
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let contratistas = SqliteContratistaRepository::new(&connection);
+        let incidentes = SqliteGafetesIncidentes::new(&connection);
+        let registros = SqliteRegistroIngresoRepository::new(&connection);
+        let servicio = GafeteService::new(&gafetes, &contratistas);
+        let id = servicio.crear_uno(1).unwrap();
+        abrir_ingreso_con_gafete(&connection, contratista_id, 1);
+
+        assert!(matches!(
+            servicio.marcar_perdido(&incidentes, &registros, id, contratista_id, 1, Utc::now()),
+            Err(GafeteServiceError::GafeteConIngresoActivo)
         ));
     }
 }

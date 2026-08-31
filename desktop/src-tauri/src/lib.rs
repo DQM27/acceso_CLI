@@ -9,17 +9,44 @@ mod pdf;
 
 use estado::GuiState;
 
+/// Muestra un diálogo nativo con el error y termina el proceso — para los
+/// fallos de arranque previos a `tauri::Builder` (base dañada/bloqueada,
+/// doble instancia), donde antes había un `.expect()`/`panic!` crudo sin
+/// ventana ni mensaje legible para quien no lee consola.
+fn mostrar_error_fatal_y_salir(mensaje: &str) -> ! {
+    #[cfg(windows)]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
+        use windows::core::HSTRING;
+        let texto = HSTRING::from(mensaje);
+        let titulo = HSTRING::from("Control de Acceso — Error al iniciar");
+        unsafe {
+            MessageBoxW(None, &texto, &titulo, MB_OK | MB_ICONERROR);
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        eprintln!("{mensaje}");
+    }
+    std::process::exit(1)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let ruta_base_datos =
-        ruta_base_datos().expect("no se pudo resolver la ruta de la base de datos");
-    let instancia = InstanciaGuard::adquirir(&ruta_base_datos).unwrap_or_else(|error| {
-        panic!(
-            "no se pudo adquirir el candado de instancia (¿ya hay otra ventana abierta con esta \
-             misma base de datos?): {error}"
-        )
+    let ruta_base_datos = ruta_base_datos().unwrap_or_else(|error| {
+        mostrar_error_fatal_y_salir(&format!(
+            "No se pudo resolver la ruta de la base de datos: {error}"
+        ))
     });
-    let core = AppCore::abrir(&ruta_base_datos).expect("no se pudo abrir la base de datos");
+    let instancia = InstanciaGuard::adquirir(&ruta_base_datos).unwrap_or_else(|error| {
+        mostrar_error_fatal_y_salir(&format!(
+            "No se pudo adquirir el candado de instancia (¿ya hay otra ventana abierta con esta \
+             misma base de datos?): {error}"
+        ))
+    });
+    let core = AppCore::abrir(&ruta_base_datos).unwrap_or_else(|error| {
+        mostrar_error_fatal_y_salir(&format!("No se pudo abrir la base de datos: {error}"))
+    });
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -63,8 +90,6 @@ pub fn run() {
             comandos::ingresos::preparar_ingreso,
             comandos::ingresos::registrar_ingreso,
             comandos::ingresos::registrar_salida,
-            comandos::consola::ejecutar_comando,
-            comandos::consola::autocompletar_comando,
             comandos::historial::listar_historial,
             comandos::historial::exportar_historial,
             comandos::historial::exportar_historial_pdf,

@@ -1,4 +1,4 @@
-//! Motor de creación y validación de respaldos (Fase 1 de `docs/plan-respaldos.md`).
+//! Motor de creación y validación de respaldos (ver `docs/pendientes.md`).
 //!
 //! Usa la [Online Backup API de SQLite](https://www.sqlite.org/backup.html) vía
 //! `rusqlite::backup` — nunca una copia directa del archivo mientras SQLite está
@@ -226,7 +226,7 @@ pub fn crear_respaldo(
     })
 }
 
-/// Reemplaza `ruta_activa` por `ruta_candidata` (Fase 2 de `plan-respaldos.md`).
+/// Reemplaza `ruta_activa` por `ruta_candidata` (ver `docs/pendientes.md`).
 ///
 /// **Debe llamarse con la conexión de `ruta_activa` ya cerrada.** SQLite
 /// documenta los riesgos de mover o reemplazar un archivo con una
@@ -438,7 +438,7 @@ fn coincide_sufijo(resto: &str, sufijo: &str) -> bool {
 /// resto. Sólo actúa sobre el `tipo` recibido: nunca se le pasa
 /// `TipoRespaldo::Manual`, `TipoRespaldo::PreRestauracion` ni
 /// `TipoRespaldo::PorFlag`, así que esos no se tocan jamás desde esta función
-/// — la política de retención de `docs/plan-respaldos.md` sólo cubre
+/// — la política de retención documentada en `docs/pendientes.md` sólo cubre
 /// respaldos automáticos y pre-migración. Un respaldo `PorFlag` es un punto
 /// de recuperación deliberado (p. ej. antes de `--reset-root`); borrarlo solo
 /// junto con los demás automáticos derrotaría su propósito.

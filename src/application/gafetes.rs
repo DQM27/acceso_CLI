@@ -14,6 +14,7 @@ use crate::database::queries::gafetes_incidentes::{
 };
 use crate::database::repositories::contratista_repository::SqliteContratistaRepository;
 use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
+use crate::database::repositories::registro_ingreso_repository::SqliteRegistroIngresoRepository;
 use crate::models::gafete::MotivoResolucionGafete;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::error::GafeteServiceError;
@@ -94,7 +95,8 @@ impl AppCore {
             .ok_or(GafeteServiceError::OperacionNoAutorizada)?;
         let gafetes = SqliteGafeteRepository::new(&transaction);
         let contratistas = SqliteContratistaRepository::new(&transaction);
-        GafeteService::new(&gafetes, &contratistas).dar_de_baja(id)?;
+        let registros = SqliteRegistroIngresoRepository::new(&transaction);
+        GafeteService::new(&gafetes, &contratistas).dar_de_baja(&registros, id)?;
         transaction.commit().map_err(DatabaseError::from)?;
         Ok(())
     }
@@ -114,8 +116,10 @@ impl AppCore {
         let gafetes = SqliteGafeteRepository::new(&transaction);
         let contratistas = SqliteContratistaRepository::new(&transaction);
         let incidentes = SqliteGafetesIncidentes::new(&transaction);
+        let registros = SqliteRegistroIngresoRepository::new(&transaction);
         GafeteService::new(&gafetes, &contratistas).marcar_perdido(
             &incidentes,
+            &registros,
             id,
             contratista_deudor_id,
             actor_actual.id,

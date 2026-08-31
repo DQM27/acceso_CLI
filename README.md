@@ -132,8 +132,8 @@ GUI, TUI, núcleo, flujos operativos y persistencia. El
 [diagrama lógico detallado](docs/diagrama-logico.md) conserva una lectura más profunda
 del flujo interno clásico.
 
-El [plan de saneamiento técnico](docs/plan-saneamiento.md) mantiene el listado priorizado
-de ajustes y sus criterios de finalización.
+[`docs/pendientes.md`](docs/pendientes.md) mantiene el listado priorizado de ajustes
+pendientes y sus criterios de finalización.
 
 La TUI para uso real se ejecuta optimizada con `cargo run --release`. `cargo run` sin
 `--release` se reserva para depuración y puede sentirse considerablemente más lento.

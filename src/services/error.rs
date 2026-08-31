@@ -143,6 +143,11 @@ pub enum GafeteServiceError {
     /// ya perdido, o resolver uno que no está perdido).
     #[error("El gafete no está en un estado válido para esta operación")]
     EstadoInvalido,
+    /// Hay un ingreso activo con este gafete asignado — dar de baja o
+    /// marcar perdido dejaría el inventario contradiciendo un movimiento en
+    /// curso. Se revisa dentro de la misma transacción que la transición.
+    #[error("El gafete está asignado a un ingreso activo")]
+    GafeteConIngresoActivo,
     #[error("La sesión actual no está autorizada para realizar esta operación")]
     OperacionNoAutorizada,
     #[error(transparent)]

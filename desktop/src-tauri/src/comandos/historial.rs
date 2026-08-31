@@ -86,8 +86,8 @@ pub fn exportar_historial(
         .collect();
     let (desde_utc, hasta_utc) = rango_utc(desde, hasta).map_err(|error| error.to_string())?;
     let destino = PathBuf::from(destino);
-    quitar_si_existe(&destino)?;
-    state
+    let respaldo = RespaldoDestino::apartar(&destino)?;
+    let resultado = state
         .core()
         .exportar_historial_seleccion(
             &FiltroHistorial::nuevo(desde_utc, hasta_utc),
@@ -95,21 +95,63 @@ pub fn exportar_historial(
             &columnas,
             &destino,
         )
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string());
+    if resultado.is_ok() {
+        respaldo.confirmar();
+    }
+    resultado
 }
 
 /// El diálogo nativo de "Guardar como" (`@tauri-apps/plugin-dialog`) ya le
 /// preguntó al usuario si quiere reemplazar el archivo antes de devolver
-/// esta ruta — si igual existe acá es porque confirmó. Se quita antes de
-/// exportar para no chocar con el chequeo de `exportar_historial_seleccion`
-/// (pensado para quien llama sin ese paso previo, ej. la TUI) y para que
-/// nunca quede un archivo viejo confundiendo la exportación a PDF con datos
-/// obsoletos.
-fn quitar_si_existe(destino: &std::path::Path) -> Result<(), String> {
-    if destino.exists() {
-        std::fs::remove_file(destino).map_err(|error| error.to_string())?;
+/// esta ruta — si igual existe acá es porque confirmó. En vez de borrarlo
+/// directo (lo que dejaría el destino vacío si la generación falla a mitad
+/// de camino), lo aparta a un archivo temporal en el mismo directorio:
+/// [`RespaldoDestino::confirmar`] lo borra recién cuando la exportación tuvo
+/// éxito; si nunca se llama (error, `?` temprano), el `Drop` lo restaura.
+/// También evita chocar con el chequeo de `exportar_historial_seleccion`
+/// (pensado para quien llama sin este paso previo, ej. la TUI).
+struct RespaldoDestino {
+    original: PathBuf,
+    respaldo: Option<PathBuf>,
+}
+
+impl RespaldoDestino {
+    fn apartar(destino: &std::path::Path) -> Result<Self, String> {
+        let respaldo = if destino.exists() {
+            let nombre = format!(
+                ".{}.bak-{}",
+                destino
+                    .file_name()
+                    .and_then(|nombre| nombre.to_str())
+                    .unwrap_or("historial"),
+                std::process::id()
+            );
+            let ruta_respaldo = destino.with_file_name(nombre);
+            std::fs::rename(destino, &ruta_respaldo).map_err(|error| error.to_string())?;
+            Some(ruta_respaldo)
+        } else {
+            None
+        };
+        Ok(Self {
+            original: destino.to_owned(),
+            respaldo,
+        })
     }
-    Ok(())
+
+    fn confirmar(mut self) {
+        if let Some(respaldo) = self.respaldo.take() {
+            let _ = std::fs::remove_file(respaldo);
+        }
+    }
+}
+
+impl Drop for RespaldoDestino {
+    fn drop(&mut self) {
+        if let Some(respaldo) = self.respaldo.take() {
+            let _ = std::fs::rename(&respaldo, &self.original);
+        }
+    }
 }
 
 /// Exporta a PDF los mismos `ids`/`columnas` que ya resuelve
@@ -163,8 +205,12 @@ pub async fn exportar_historial_pdf(
     let html =
         pdf::html::generar_html(&movimientos, &columnas, &sesion.nombre, &filtro_descripcion);
     let destino = PathBuf::from(destino);
-    quitar_si_existe(&destino)?;
-    pdf::generador::generar_pdf(&app, html, destino).await
+    let respaldo = RespaldoDestino::apartar(&destino)?;
+    let resultado = pdf::generador::generar_pdf(&app, html, destino).await;
+    if resultado.is_ok() {
+        respaldo.confirmar();
+    }
+    resultado
 }
 
 #[cfg(test)]
