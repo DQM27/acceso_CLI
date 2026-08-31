@@ -64,19 +64,20 @@ export function listarHistorial(
 }
 
 /** `ids`: los `registro_id` que la grilla tiene visibles tras su propio
- * filtro por columna. `columnas`: claves de `ColumnaHistorial::clave`
- * (núcleo, `src/historial/exportacion.rs`) de las columnas que la grilla
- * tiene visibles ahora — ver `CLAVES_COLUMNA` en `Historial.tsx` para el
- * mapeo colId → clave. Ambos son filtros del lado del cliente (AG Grid);
- * el núcleo no los conoce por su cuenta, así que se le pasa el recorte ya
- * resuelto en vez de siempre exportar todo el historial sin acotar.
- * `desde`/`hasta`: el mismo rango que ya filtró `listarHistorial` para traer
- * `ids` — se manda de nuevo para que la consulta SQL de la exportación
- * quede acotada a ese rango en vez de escanear todo el historial acumulado
- * y recortar recién después por `ids`. */
+ * filtro por columna, en `null` cuando la carga se truncó
+ * (`CargaCompleta.truncado`) y ya no representa el total real — en ese caso
+ * el backend exporta todo el rango `desde`/`hasta` directo de la base en
+ * vez de sólo lo que el cliente alcanzó a cargar (ver `Historial.tsx`).
+ * `columnas`: claves de `ColumnaHistorial::clave` (núcleo,
+ * `src/historial/exportacion.rs`) de las columnas que la grilla tiene
+ * visibles ahora — ver `CLAVES_COLUMNA` en `Historial.tsx` para el mapeo
+ * colId → clave. `desde`/`hasta`: el mismo rango que ya filtró
+ * `listarHistorial` — se manda de nuevo para que la consulta SQL de la
+ * exportación quede acotada a ese rango en vez de escanear todo el
+ * historial acumulado. */
 export function exportarHistorial(
   destino: string,
-  ids: number[],
+  ids: number[] | null,
   columnas: string[],
   desde?: string,
   hasta?: string,
@@ -90,15 +91,16 @@ export function exportarHistorial(
   });
 }
 
-/** Mismo recorte que `exportarHistorial` (`ids`/`columnas`/`desde`/`hasta`),
- * a PDF en vez de Excel. `filtroDescripcion`: texto ya formateado para el
- * encabezado del PDF (ver `textoRangoFecha` en `SelectorRangoFecha.tsx`) —
- * el backend no recalcula el formateo de fechas, sólo lo muestra tal cual.
- * `generadoPor` no se manda: el backend lo saca de la sesión activa, no del
- * cliente. */
+/** Mismo recorte que `exportarHistorial` (`ids`/`columnas`/`desde`/`hasta`,
+ * `ids: null` con el mismo significado — todo el rango, no sólo lo
+ * cargado), a PDF en vez de Excel. `filtroDescripcion`: texto ya formateado
+ * para el encabezado del PDF (ver `textoRangoFecha` en
+ * `SelectorRangoFecha.tsx`) — el backend no recalcula el formateo de
+ * fechas, sólo lo muestra tal cual. `generadoPor` no se manda: el backend
+ * lo saca de la sesión activa, no del cliente. */
 export function exportarHistorialPdf(
   destino: string,
-  ids: number[],
+  ids: number[] | null,
   columnas: string[],
   filtroDescripcion: string,
   desde?: string,

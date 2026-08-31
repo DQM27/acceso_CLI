@@ -60,20 +60,24 @@ pub fn listar_historial(
         .map_err(|error| error.to_string())
 }
 
-/// Exporta el historial a un XLSX en `destino`, recortado a los
-/// `registro_id` de `ids` (EN ESE ORDEN — el orden visible en la grilla
-/// tras un reordenamiento de columna, no el cronológico de la consulta) y
-/// sólo con las `columnas` pedidas (sus claves, ver
-/// `ColumnaHistorial::clave`) — la grilla (AG Grid) filtra filas, las
-/// ordena y oculta columnas del lado del cliente, `AppCore` no conoce nada
-/// de eso, así que la pantalla manda exactamente lo que tiene visible en
-/// ese momento en vez de siempre exportar todo en el orden de la consulta.
-/// Una clave que no matchea ninguna columna se ignora en silencio (mismo
-/// criterio que `SelectorColumnas::aplicar_preferencia`).
+/// Exporta el historial a un XLSX en `destino`, sólo con las `columnas`
+/// pedidas (sus claves, ver `ColumnaHistorial::clave`). Con `ids` en
+/// `Some` (EN ESE ORDEN — el orden visible en la grilla tras un
+/// reordenamiento de columna, no el cronológico de la consulta), recorta a
+/// esos `registro_id` — la grilla (AG Grid) filtra filas, las ordena y
+/// oculta columnas del lado del cliente, `AppCore` no conoce nada de eso,
+/// así que la pantalla manda exactamente lo que tiene visible en ese
+/// momento. `ids: None` exporta todo el rango `desde`/`hasta` tal cual está
+/// en la base, sin pasar por el array cargado en el cliente — la pantalla
+/// lo usa cuando el historial superó el tope de carga completa
+/// (`CargaCompleta::truncado`, ver `AppCore::buscar_historial_completo`) y
+/// ya no tiene en memoria más que una porción del total. Una clave que no
+/// matchea ninguna columna se ignora en silencio (mismo criterio que
+/// `SelectorColumnas::aplicar_preferencia`).
 #[tauri::command]
 pub fn exportar_historial(
     destino: String,
-    ids: Vec<i64>,
+    ids: Option<Vec<i64>>,
     columnas: Vec<String>,
     desde: Option<NaiveDate>,
     hasta: Option<NaiveDate>,
@@ -91,7 +95,7 @@ pub fn exportar_historial(
         .core()
         .exportar_historial_seleccion(
             &FiltroHistorial::nuevo(desde_utc, hasta_utc),
-            Some(&ids),
+            ids.as_deref(),
             &columnas,
             &destino,
         )
@@ -163,12 +167,16 @@ impl Drop for RespaldoDestino {
 /// el formateo de fechas que ya vive en el frontend. `generado_por` sale de
 /// la sesión activa, no del frontend — no hay razón para confiar en un
 /// nombre que mande el cliente para algo que es, en la práctica, un dato de
-/// auditoría.
+/// auditoría. A diferencia de Excel, un PDF necesita cada fila entera en
+/// memoria para armar el HTML antes de imprimir — así que el camino sin
+/// `ids` (`buscar_historial_completo`) sigue acotado por
+/// `LIMITE_CARGA_COMPLETA_MAXIMO`; un PDF de cientos de miles de filas no
+/// es un formato razonable de todos modos (para eso está Excel).
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn exportar_historial_pdf(
     destino: String,
-    ids: Vec<i64>,
+    ids: Option<Vec<i64>>,
     columnas: Vec<String>,
     filtro_descripcion: String,
     desde: Option<NaiveDate>,
@@ -194,10 +202,15 @@ pub async fn exportar_historial_pdf(
     // en curso.
     let app_para_consulta = app.clone();
     let movimientos = tauri::async_runtime::spawn_blocking(move || {
-        app_para_consulta
-            .state::<GuiState>()
-            .core()
-            .movimientos_en_orden(&FiltroHistorial::nuevo(desde_utc, hasta_utc), &ids)
+        let state = app_para_consulta.state::<GuiState>();
+        let core = state.core();
+        let filtro = FiltroHistorial::nuevo(desde_utc, hasta_utc);
+        match ids {
+            Some(ids) => core.movimientos_en_orden(&filtro, &ids),
+            None => core
+                .buscar_historial_completo(&filtro)
+                .map(|carga| carga.items),
+        }
     })
     .await
     .map_err(|error| error.to_string())?

@@ -39,6 +39,15 @@ export default function Historial() {
   const [filas, setFilas] = useState<FilaHistorial[]>([]);
   const [cargando, setCargando] = useState(true);
   const [exportando, setExportando] = useState(false);
+  // `true` cuando el rango actual supera el tope de carga completa del
+  // núcleo (`LIMITE_CARGA_COMPLETA_MAXIMO`, `CargaCompleta.truncado`) — la
+  // grilla sigue funcionando exactamente igual (client-side, filtro por
+  // columna instantáneo) sobre las filas que sí trajo, pero el filtro por
+  // columna y "exportar lo visible" dejan de representar el rango
+  // completo. Mientras el total esté bajo el tope (el caso normal) nada de
+  // esto se activa — un solo camino de código, sin modo aparte que
+  // mantener.
+  const [truncado, setTruncado] = useState(false);
   // Por defecto trae los últimos 6 meses — antes traía todo desde el año
   // 2000 (rango fijo en el backend). `hasta` vacío queda abierto (hoy + 1
   // día en el backend, ver `rango_utc`), así no se pierden movimientos del
@@ -54,11 +63,7 @@ export default function Historial() {
         const { items, truncado } = await listarHistorial(desde || undefined, hasta || undefined);
         if (!estaVigente()) return;
         setFilas(items);
-        if (truncado) {
-          toast.warning(
-            `Se muestran los primeros ${items.length.toLocaleString("es-CR")} movimientos — acotá el rango de fechas para ver el resto.`,
-          );
-        }
+        setTruncado(truncado);
       } finally {
         if (estaVigente()) setCargando(false);
       }
@@ -72,18 +77,24 @@ export default function Historial() {
   // exportan ese mismo recorte en vez de siempre mandar todo el historial
   // sin acotar. Devuelve `null` (con el toast de error ya disparado) si no
   // hay nada exportable, para que quien llama corte ahí sin duplicar el
-  // chequeo.
-  function seleccionParaExportar(): { ids: number[]; claves: string[] } | null {
-    const visibles = tablaRef.current?.filasFiltradas() ?? filas;
-    if (visibles.length === 0) {
-      toast.error("No hay filas para exportar con el filtro actual.");
-      return null;
-    }
+  // chequeo. Cuando `truncado` es `true`, el cliente sólo tiene una
+  // porción del rango — `ids: null` le dice al backend que exporte todo
+  // `desde`/`hasta` directo de la base en vez de la porción cargada (ver
+  // `exportarHistorial`/`exportarHistorialPdf`); el filtro por columna deja
+  // de aplicar ahí porque ya no puede evaluarse sobre el total real.
+  function seleccionParaExportar(): { ids: number[] | null; claves: string[] } | null {
     const claves = (tablaRef.current?.columnasVisibles() ?? Object.keys(CLAVES_COLUMNA))
       .map((colId) => CLAVES_COLUMNA[colId])
       .filter((clave): clave is string => clave !== undefined);
     if (claves.length === 0) {
       toast.error("No hay columnas visibles para exportar.");
+      return null;
+    }
+    if (truncado) return { ids: null, claves };
+
+    const visibles = tablaRef.current?.filasFiltradas() ?? filas;
+    if (visibles.length === 0) {
+      toast.error("No hay filas para exportar con el filtro actual.");
       return null;
     }
     return { ids: visibles.map((fila) => fila.registro_id), claves };
@@ -221,6 +232,24 @@ export default function Historial() {
       <PantallaEncabezado titulo="Historial" />
 
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
+        {truncado && (
+          <p
+            role="status"
+            style={{
+              margin: "0 0 0.5rem",
+              padding: "0.5rem 0.75rem",
+              borderRadius: "var(--radio-chico)",
+              border: "1px solid var(--advertencia)",
+              color: "var(--advertencia)",
+              fontSize: "0.85rem",
+            }}
+          >
+            Este rango tiene más de {filas.length.toLocaleString("es-CR")} movimientos — se
+            muestran solo los primeros. El filtro por columna sólo aplica a lo cargado; acotá las
+            fechas para verlo todo, o exportá igual: Excel y PDF traen el rango completo aunque no
+            esté cargado en pantalla.
+          </p>
+        )}
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<FilaHistorial>
             ref={tablaRef}
@@ -244,7 +273,9 @@ export default function Historial() {
                   title={
                     exportando
                       ? "Exportando…"
-                      : "Exportar a Excel — respeta el filtro/orden/columnas actuales de la grilla"
+                      : truncado
+                        ? "Exportar a Excel — trae todo el rango de fechas, no sólo lo cargado"
+                        : "Exportar a Excel — respeta el filtro/orden/columnas actuales de la grilla"
                   }
                   onClick={exportar}
                   disabled={exportando}
@@ -257,7 +288,9 @@ export default function Historial() {
                   title={
                     exportando
                       ? "Exportando…"
-                      : "Exportar a PDF — respeta el filtro/orden/columnas actuales de la grilla"
+                      : truncado
+                        ? "Exportar a PDF — trae todo el rango de fechas, no sólo lo cargado"
+                        : "Exportar a PDF — respeta el filtro/orden/columnas actuales de la grilla"
                   }
                   onClick={exportarPdf}
                   disabled={exportando}
@@ -269,7 +302,11 @@ export default function Historial() {
           />
         </div>
         <p style={{ color: "var(--muted)", margin: 0 }}>
-          {cargando ? "Cargando…" : `${filas.length} movimiento(s)`}
+          {cargando
+            ? "Cargando…"
+            : truncado
+              ? `${filas.length}+ movimiento(s) (rango truncado)`
+              : `${filas.length} movimiento(s)`}
         </p>
       </div>
     </div>
