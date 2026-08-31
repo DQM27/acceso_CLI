@@ -18,13 +18,11 @@ mod autenticacion;
 // Reusa `lenguaje_comandos` (parser+resolver), que no depende de terminal —
 // sin feature gate, a diferencia de `comandos/` (el loop real).
 mod catalogos;
-mod comandos;
 mod gafetes;
 mod historial;
 mod respaldos;
 mod usuarios;
 
-pub use comandos::Autocompletado;
 pub use historial::ExportarHistorialError;
 pub use respaldos::EstadoRespaldoAutomatico;
 

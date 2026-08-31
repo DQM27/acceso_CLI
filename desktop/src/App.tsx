@@ -39,7 +39,6 @@ import Auditoria from "./pantallas/Auditoria";
 import Gafetes from "./pantallas/Gafetes";
 import NuevoIngresoModal from "./pantallas/NuevoIngresoModal";
 import SalidaModal from "./pantallas/SalidaModal";
-import Consola from "./pantallas/Consola";
 import { buscarActualizacion, cerrarSesion, instalarActualizacion, requiereConfiguracionInicial } from "./api";
 import type { RolUsuario, UsuarioSesion } from "./api";
 
@@ -192,6 +191,11 @@ function Shell({
   // defecto de la librería).
   useHotkeys("ctrl+shift+n", () => setModalNuevoIngreso(true), { preventDefault: true });
   useHotkeys("ctrl+shift+s", () => setModalSalida(true), { preventDefault: true });
+  // Mismo atajo que la TUI clásica y --comandos (Ctrl+Q cierra sesión desde
+  // cualquier pantalla) — acá sin tarjeta de confirmación porque el botón
+  // "Cerrar sesión" del sidebar tampoco la pide, así el atajo y el botón se
+  // comportan igual.
+  useHotkeys("ctrl+q", onCerrarSesion, { preventDefault: true });
 
   // Una sola vez por sesión (no cada X minutos todavía — la app se abre y
   // cierra bastante seguido, esto ya cubre el caso normal). Falla en
@@ -284,7 +288,6 @@ function Shell({
         />
       )}
 
-      <Consola actorRol={sesion.rol} onNavegar={setSeccion} onCerrarSesion={onCerrarSesion} />
       {/* theme="system": mismo criterio que el resto de la app (paleta
           clara/oscura sigue `prefers-color-scheme`, sin toggle manual
           todavía) — estilizado con las variables propias en index.css, no

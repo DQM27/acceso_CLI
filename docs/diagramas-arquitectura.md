@@ -113,7 +113,6 @@ flowchart TD
 
     E --> NI["Modal Nuevo ingreso<br/>Ctrl+Shift+N"]
     E --> SA["Modal Salida<br/>Ctrl+Shift+S"]
-    E --> CMD["Consola embebida<br/>comandos textuales"]
     E --> UPD["Aviso de actualización<br/>una vez por sesión"]
 
     NI --> REF["Señal de refresco"]
