@@ -69,17 +69,17 @@ fn contratista(
     tipo_ingreso: TipoIngreso,
     fecha_vencimiento_praind: Option<NaiveDate>,
 ) -> Contratista {
-    Contratista {
-        id: 0,
-        cedula: cedula.to_string(),
-        nombre: format!("Contratista {cedula}"),
+    Contratista::reconstruir(
+        0,
+        cedula.to_string(),
+        format!("Contratista {cedula}"),
         empresa_id,
         tipo_ingreso,
         fecha_vencimiento_praind,
-        es_personal_ruta: false,
-        tiene_acceso: true,
-        empresa_activa: true,
-    }
+        false,
+        true,
+        true,
+    )
 }
 
 fn guardar_contratista(connection: &Connection, contratista: &Contratista) -> i64 {

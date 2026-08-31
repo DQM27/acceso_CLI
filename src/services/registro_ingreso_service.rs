@@ -120,17 +120,17 @@ where
 }
 
 fn convertir_activo(lectura: IngresoActivoLectura, hoy: NaiveDate) -> IngresoActivoResumen {
-    let contratista = crate::models::contratista::Contratista {
-        id: lectura.contratista_id,
-        cedula: lectura.cedula.clone(),
-        nombre: lectura.contratista_nombre.clone(),
-        empresa_id: lectura.empresa_id,
-        tipo_ingreso: lectura.tipo_ingreso,
-        fecha_vencimiento_praind: lectura.fecha_vencimiento_praind,
-        es_personal_ruta: lectura.es_personal_ruta,
-        tiene_acceso: lectura.tiene_acceso,
-        empresa_activa: lectura.empresa_activa,
-    };
+    let contratista = crate::models::contratista::Contratista::reconstruir(
+        lectura.contratista_id,
+        lectura.cedula.clone(),
+        lectura.contratista_nombre.clone(),
+        lectura.empresa_id,
+        lectura.tipo_ingreso,
+        lectura.fecha_vencimiento_praind,
+        lectura.es_personal_ruta,
+        lectura.tiene_acceso,
+        lectura.empresa_activa,
+    );
     let resultado_acceso = verificar_acceso(&contratista, hoy);
 
     IngresoActivoResumen {
@@ -283,6 +283,10 @@ where
             }
             ResultadoAcceso::Denegado(_) => unreachable!("el acceso denegado ya fue rechazado"),
         };
+        // Se lee antes de mover `cedula`/`nombre` hacia `datos_historicos`
+        // — `empresa_activa()` pide `&contratista`, que ya no se puede
+        // tomar una vez que el struct queda parcialmente movido.
+        let empresa_activa = contratista.empresa_activa();
         let registro = NuevoRegistroIngreso {
             contratista_id: contratista.id,
             empresa_id: contratista.empresa_id,
@@ -297,7 +301,7 @@ where
                 fecha_vencimiento_praind: contratista.fecha_vencimiento_praind,
                 es_personal_ruta: contratista.es_personal_ruta,
                 tiene_acceso: contratista.tiene_acceso,
-                empresa_activa: contratista.empresa_activa,
+                empresa_activa,
                 resultado_acceso: resultado_registrado,
                 reglas_version: VERSION_REGLAS_ACCESO,
             },

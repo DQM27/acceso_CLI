@@ -52,17 +52,17 @@ fn preparar() -> (Connection, i64, i64, i64) {
         )
         .unwrap();
     let contratista_id = SqliteContratistaRepository::new(&connection)
-        .crear(&Contratista {
-            id: 0,
-            cedula: "1-1111-1111".into(),
-            nombre: "Juan Original".into(),
-            empresa_id: 1,
-            tipo_ingreso: TipoIngreso::Praind,
-            fecha_vencimiento_praind: NaiveDate::from_ymd_opt(2027, 12, 31),
-            es_personal_ruta: false,
-            tiene_acceso: true,
-            empresa_activa: true,
-        })
+        .crear(&Contratista::reconstruir(
+            0,
+            "1-1111-1111".into(),
+            "Juan Original".into(),
+            1,
+            TipoIngreso::Praind,
+            NaiveDate::from_ymd_opt(2027, 12, 31),
+            false,
+            true,
+            true,
+        ))
         .unwrap();
     (connection, contratista_id, 1, 2)
 }

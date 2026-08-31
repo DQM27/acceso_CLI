@@ -177,17 +177,17 @@ impl FormularioContratista {
         }
     }
     fn requiere_praind(&self) -> bool {
-        Contratista {
-            id: 0,
-            cedula: String::new(),
-            nombre: String::new(),
-            empresa_id: 0,
-            tipo_ingreso: self.tipo,
-            fecha_vencimiento_praind: None,
-            es_personal_ruta: self.personal_ruta,
-            tiene_acceso: self.tiene_acceso,
-            empresa_activa: true,
-        }
+        Contratista::reconstruir(
+            0,
+            String::new(),
+            String::new(),
+            0,
+            self.tipo,
+            None,
+            self.personal_ruta,
+            self.tiene_acceso,
+            true,
+        )
         .requiere_praind()
     }
 }

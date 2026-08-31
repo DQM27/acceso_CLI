@@ -39,17 +39,17 @@ fn poblar(connection: &Connection, nombre_empresa: &str, cedula: &str) {
         })
         .unwrap();
     SqliteContratistaRepository::new(connection)
-        .crear(&Contratista {
-            id: 0,
-            cedula: cedula.into(),
-            nombre: "Ana Solano".into(),
+        .crear(&Contratista::reconstruir(
+            0,
+            cedula.into(),
+            "Ana Solano".into(),
             empresa_id,
-            tipo_ingreso: TipoIngreso::Swat,
-            fecha_vencimiento_praind: None,
-            es_personal_ruta: false,
-            tiene_acceso: true,
-            empresa_activa: true,
-        })
+            TipoIngreso::Swat,
+            None,
+            false,
+            true,
+            true,
+        ))
         .unwrap();
 }
 

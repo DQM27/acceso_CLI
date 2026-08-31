@@ -19,7 +19,7 @@ pub fn verificar_acceso(contratista: &Contratista, hoy: NaiveDate) -> ResultadoA
     // Regla 0:
     // Si la empresa del contratista está inactiva, no puede ingresar bajo
     // ninguna circunstancia — sin importar su acceso individual.
-    if !contratista.empresa_activa {
+    if !contratista.empresa_activa() {
         return ResultadoAcceso::Denegado(MotivoDenegacion::EmpresaInactiva);
     }
 

@@ -76,33 +76,33 @@ fn debe_actualizar_un_contratista() {
         .crear(&empresa)
         .expect("No se pudo crear la empresa");
 
-    let contratista = Contratista {
-        id: 0,
-        cedula: "109870123".to_string(),
-        nombre: "Juan Pérez".to_string(),
+    let contratista = Contratista::reconstruir(
+        0,
+        "109870123".to_string(),
+        "Juan Pérez".to_string(),
         empresa_id,
-        tipo_ingreso: TipoIngreso::Praind,
-        fecha_vencimiento_praind: Some(NaiveDate::from_ymd_opt(2026, 12, 31).unwrap()),
-        es_personal_ruta: false,
-        tiene_acceso: true,
-        empresa_activa: true,
-    };
+        TipoIngreso::Praind,
+        Some(NaiveDate::from_ymd_opt(2026, 12, 31).unwrap()),
+        false,
+        true,
+        true,
+    );
 
     let id = contratista_repository
         .crear(&contratista)
         .expect("No se pudo crear el contratista");
 
-    let actualizado = Contratista {
+    let actualizado = Contratista::reconstruir(
         id,
-        cedula: "209870123".to_string(),
-        nombre: "Juan Pérez Actualizado".to_string(),
+        "209870123".to_string(),
+        "Juan Pérez Actualizado".to_string(),
         empresa_id,
-        tipo_ingreso: TipoIngreso::InHouse,
-        fecha_vencimiento_praind: Some(NaiveDate::from_ymd_opt(2027, 12, 31).unwrap()),
-        es_personal_ruta: false,
-        tiene_acceso: false,
-        empresa_activa: true,
-    };
+        TipoIngreso::InHouse,
+        Some(NaiveDate::from_ymd_opt(2027, 12, 31).unwrap()),
+        false,
+        false,
+        true,
+    );
 
     contratista_repository
         .actualizar(&actualizado)
@@ -166,17 +166,17 @@ fn debe_guardar_los_cuatro_tipos_de_ingreso() {
     ];
 
     for (cedula, tipo_ingreso, fecha) in casos {
-        let contratista = Contratista {
-            id: 0,
-            cedula: cedula.to_string(),
-            nombre: "Contratista de Prueba".to_string(),
+        let contratista = Contratista::reconstruir(
+            0,
+            cedula.to_string(),
+            "Contratista de Prueba".to_string(),
             empresa_id,
             tipo_ingreso,
-            fecha_vencimiento_praind: fecha,
-            es_personal_ruta: false,
-            tiene_acceso: true,
-            empresa_activa: true,
-        };
+            fecha,
+            false,
+            true,
+            true,
+        );
 
         contratista_repository
             .crear(&contratista)
@@ -230,17 +230,17 @@ fn debe_identificar_si_un_tipo_requiere_praind() {
         (TipoIngreso::PorCorreo, false),
         (TipoIngreso::Swat, false),
     ] {
-        let contratista = Contratista {
-            id: 0,
-            cedula: String::new(),
-            nombre: String::new(),
+        let contratista = Contratista::reconstruir(
+            0,
+            String::new(),
+            String::new(),
             empresa_id,
             tipo_ingreso,
-            fecha_vencimiento_praind: None,
-            es_personal_ruta: false,
-            tiene_acceso: true,
-            empresa_activa: true,
-        };
+            None,
+            false,
+            true,
+            true,
+        );
 
         assert_eq!(contratista.requiere_praind(), esperado);
     }

@@ -202,17 +202,17 @@ fn app_core_compone_query_n1_y_preparacion_n3_sin_persistir() {
         .unwrap();
     let contratistas = SqliteContratistaRepository::new(&connection);
     let contratista_id = contratistas
-        .crear(&Contratista {
-            id: 0,
-            cedula: "1001".to_owned(),
-            nombre: "Contratista Uno".to_owned(),
+        .crear(&Contratista::reconstruir(
+            0,
+            "1001".to_owned(),
+            "Contratista Uno".to_owned(),
             empresa_id,
-            tipo_ingreso: TipoIngreso::PorCorreo,
-            fecha_vencimiento_praind: None,
-            es_personal_ruta: false,
-            tiene_acceso: true,
-            empresa_activa: true,
-        })
+            TipoIngreso::PorCorreo,
+            None,
+            false,
+            true,
+            true,
+        ))
         .unwrap();
     let core = AppCore::new(connection);
 

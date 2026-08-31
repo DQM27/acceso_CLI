@@ -10,17 +10,31 @@ fn contratista(
     fecha_vencimiento_praind: Option<NaiveDate>,
     tiene_acceso: bool,
 ) -> Contratista {
-    Contratista {
-        id: 1,
-        cedula: "123456789".to_string(),
-        nombre: "Juan Pérez".to_string(),
-        empresa_id: 1,
+    contratista_con_empresa_activa(tipo_ingreso, fecha_vencimiento_praind, tiene_acceso, true)
+}
+
+/// Igual que `contratista()`, pero con `empresa_activa` explícito — para
+/// los 2 casos de la Regla 0 (empresa inactiva) que antes mutaban el campo
+/// directo (`contratista.empresa_activa = false`); `Contratista` ya no
+/// expone ese campo como `pub` (ver `models::contratista::Contratista`),
+/// así que el valor se fija en la construcción.
+fn contratista_con_empresa_activa(
+    tipo_ingreso: TipoIngreso,
+    fecha_vencimiento_praind: Option<NaiveDate>,
+    tiene_acceso: bool,
+    empresa_activa: bool,
+) -> Contratista {
+    Contratista::reconstruir(
+        1,
+        "123456789".to_string(),
+        "Juan Pérez".to_string(),
+        1,
         tipo_ingreso,
         fecha_vencimiento_praind,
-        es_personal_ruta: false,
+        false,
         tiene_acceso,
-        empresa_activa: true,
-    }
+        empresa_activa,
+    )
 }
 
 #[test]
@@ -45,8 +59,7 @@ fn debe_denegar_si_no_tiene_acceso() {
 fn debe_denegar_si_la_empresa_esta_inactiva() {
     let hoy = NaiveDate::from_ymd_opt(2026, 8, 10).unwrap();
 
-    let mut contratista = contratista(TipoIngreso::PorCorreo, None, true);
-    contratista.empresa_activa = false;
+    let contratista = contratista_con_empresa_activa(TipoIngreso::PorCorreo, None, true, false);
 
     let resultado = verificar_acceso(&contratista, hoy);
 
@@ -60,12 +73,12 @@ fn debe_denegar_si_la_empresa_esta_inactiva() {
 fn empresa_inactiva_bloquea_incluso_con_acceso_individual_y_praind_vigente() {
     let hoy = NaiveDate::from_ymd_opt(2026, 8, 10).unwrap();
 
-    let mut contratista = contratista(
+    let contratista = contratista_con_empresa_activa(
         TipoIngreso::Praind,
         Some(NaiveDate::from_ymd_opt(2026, 12, 31).unwrap()),
         true,
+        false,
     );
-    contratista.empresa_activa = false;
 
     let resultado = verificar_acceso(&contratista, hoy);
 

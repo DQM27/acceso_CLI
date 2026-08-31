@@ -235,17 +235,16 @@ where
             .buscar_por_id(datos.empresa_id)?
             .ok_or(ContratistaServiceError::EmpresaNoEncontrada)?;
 
-        let contratista = Contratista {
+        let contratista = Contratista::nuevo(
             id,
-            cedula: cedula.to_string(),
-            nombre: nombre.to_string(),
-            empresa_id: datos.empresa_id,
-            tipo_ingreso: datos.tipo_ingreso,
-            fecha_vencimiento_praind: datos.fecha_vencimiento_praind,
-            es_personal_ruta: datos.es_personal_ruta,
-            tiene_acceso: datos.tiene_acceso,
-            empresa_activa: empresa.activo,
-        };
+            cedula.to_string(),
+            nombre.to_string(),
+            &empresa,
+            datos.tipo_ingreso,
+            datos.fecha_vencimiento_praind,
+            datos.es_personal_ruta,
+            datos.tiene_acceso,
+        );
 
         if contratista.requiere_praind() && contratista.fecha_vencimiento_praind.is_none() {
             return Err(ContratistaServiceError::PraindRequerido);
@@ -274,17 +273,16 @@ where
             .buscar_por_id(datos.empresa_id)?
             .ok_or(ContratistaServiceError::EmpresaNoEncontrada)?;
 
-        let contratista = Contratista {
-            id: actual.id,
-            cedula: cedula.to_string(),
-            nombre: nombre.to_string(),
-            empresa_id: datos.empresa_id,
-            tipo_ingreso: datos.tipo_ingreso,
-            fecha_vencimiento_praind: datos.fecha_vencimiento_praind,
-            es_personal_ruta: datos.es_personal_ruta,
-            tiene_acceso: datos.tiene_acceso,
-            empresa_activa: empresa.activo,
-        };
+        let contratista = Contratista::nuevo(
+            actual.id,
+            cedula.to_string(),
+            nombre.to_string(),
+            &empresa,
+            datos.tipo_ingreso,
+            datos.fecha_vencimiento_praind,
+            datos.es_personal_ruta,
+            datos.tiene_acceso,
+        );
 
         if contratista.requiere_praind() && contratista.fecha_vencimiento_praind.is_none() {
             return Err(ContratistaServiceError::PraindRequerido);

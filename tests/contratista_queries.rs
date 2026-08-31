@@ -46,17 +46,17 @@ fn crear_contratista(
     acceso: bool,
 ) -> i64 {
     SqliteContratistaRepository::new(connection)
-        .crear(&Contratista {
-            id: 0,
-            cedula: cedula.to_owned(),
-            nombre: nombre.to_owned(),
+        .crear(&Contratista::reconstruir(
+            0,
+            cedula.to_owned(),
+            nombre.to_owned(),
             empresa_id,
             tipo_ingreso,
-            fecha_vencimiento_praind: fecha,
-            es_personal_ruta: ruta,
-            tiene_acceso: acceso,
-            empresa_activa: true,
-        })
+            fecha,
+            ruta,
+            acceso,
+            true,
+        ))
         .unwrap()
 }
 

@@ -52,17 +52,17 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<Contratista> {
         })
         .transpose()?;
 
-    Ok(Contratista {
-        id: row.get(0)?,
-        cedula: row.get(1)?,
-        nombre: row.get(2)?,
-        empresa_id: row.get(3)?,
+    Ok(Contratista::reconstruir(
+        row.get(0)?,
+        row.get(1)?,
+        row.get(2)?,
+        row.get(3)?,
         tipo_ingreso,
         fecha_vencimiento_praind,
-        es_personal_ruta: row.get::<_, i64>(6)? != 0,
-        tiene_acceso: row.get::<_, i64>(7)? != 0,
-        empresa_activa: row.get::<_, i64>(8)? != 0,
-    })
+        row.get::<_, i64>(6)? != 0,
+        row.get::<_, i64>(7)? != 0,
+        row.get::<_, i64>(8)? != 0,
+    ))
 }
 
 impl<'a> ContratistaRepository for SqliteContratistaRepository<'a> {
