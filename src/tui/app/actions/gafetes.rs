@@ -120,6 +120,15 @@ impl App {
                     self.procesar_accion_gafetes(recarga, core);
                 }
             }
+            AccionGafetes::VerHistorial { id, numero } => {
+                let resultado = core
+                    .ok_or_else(|| "No se pudo cargar el historial del gafete".to_owned())
+                    .and_then(|core| {
+                        core.historial_gafete(id)
+                            .map_err(|_| "No se pudo cargar el historial del gafete".to_owned())
+                    });
+                self.gafetes.completar_historial(resultado, numero);
+            }
         }
     }
 }

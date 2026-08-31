@@ -254,9 +254,16 @@ proyectos (raíz: 491 tests; `desktop/src-tauri`: 20 tests; `desktop/`: `npx tsc
   dependa de conocer el doble click. Columna "Deudor" renombrada a "Asignado a" en los tres
   lugares donde aparecía (catálogo, modal de gestión, modal de historial) — sólo el texto
   visible, los campos internos (`contratista_deudor_*`) quedan igual.
-  - [ ] **Falta réplica en TUI (`src/tui/gafetes/`).** Alcance de esta vuelta fue sólo GUI
-    — la TUI necesita cablear un estado async nuevo (carga + tick) sólo para esto, se deja
-    para una sesión aparte.
+  - [x] **Réplica en TUI (2026-08-31).** Atajo `H` en Gestión de Gafetes (Normal, sobre el
+    gafete seleccionado): `ModoGafetes::Historial` reemplaza el maestro-detalle por una
+    tabla de ancho completo (mismo patrón que `auditoria/render.rs`), con las mismas
+    columnas que `HistorialGafeteModal.tsx` (fecha, evento, operador, asignado a, motivo).
+    Sin estado "cargando" — a diferencia de lo previsto, no hizo falta cablear un tick
+    async nuevo: la app es de instancia única y un solo hilo, así que
+    `AppCore::historial_gafete` (ya existía, usado hasta ahora sólo por el comando Tauri)
+    se llama y resuelve dentro del mismo tick que procesa `AccionGafetes::VerHistorial`,
+    igual que el resto de acciones de este dispatcher. `cargo fmt`, Clippy estricto y la
+    suite completa (497 tests) en verde.
 - [x] **Incidentes de gafetes en Auditoría general (2026-08-30).** El historial por gafete
   (arriba) sigue sin restricción de rol; además se sumaron los mismos incidentes
   (`gafetes_incidentes`, vía `GafetesIncidentesQuery::historial_completo`, nuevo) a la

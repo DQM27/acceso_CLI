@@ -7,10 +7,10 @@ use ratatui::{
 
 use super::*;
 use crate::{
-    database::queries::gafetes::GafeteResumen,
-    models::gafete::{EstadoGafete, MotivoResolucionGafete},
+    database::queries::{gafetes::GafeteResumen, gafetes_incidentes::IncidenteGafete},
+    models::gafete::{EstadoGafete, MotivoResolucionGafete, TipoIncidenteGafete},
     services::autenticacion_service::UsuarioSesion,
-    tiempo::hora_actual_texto,
+    tiempo::{a_costa_rica, hora_actual_texto},
     tui::ui_kit::{
         CommandHint, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme,
         clasificar_mensaje, detail_line, empty_state, identidad_sesion, marcador_seleccion,
@@ -25,9 +25,11 @@ const COMANDOS_NORMAL: &[CommandHint<'static>] = &[
     CommandHint::new("B", "Baja"),
     CommandHint::new("P", "Perdido"),
     CommandHint::new("R", "Resolver"),
+    CommandHint::new("H", "Historial"),
     CommandHint::new("/", "Buscar"),
     CommandHint::new("ESC", "Volver"),
 ];
+const COMANDOS_HISTORIAL: &[CommandHint<'static>] = &[CommandHint::new("ESC", "Volver")];
 const COMANDOS_BUSQUEDA: &[CommandHint<'static>] = &[
     CommandHint::new("ENTER", "Aplicar"),
     CommandHint::new("ESC", "Limpiar"),
@@ -82,6 +84,7 @@ pub fn render(
         ModoGafetes::MarcarPerdidoBuscarDeudor(_) => COMANDOS_BUSCAR_DEUDOR,
         ModoGafetes::ConfirmacionResolver { .. } => COMANDOS_CONFIRMACION_RESOLVER,
         ModoGafetes::ConfirmacionBaja { .. } => COMANDOS_CONFIRMACION,
+        ModoGafetes::Historial { .. } => COMANDOS_HISTORIAL,
     };
 
     // Sin pestañas a propósito: `GestionGafetes` es un acceso por letra (G),
@@ -103,10 +106,24 @@ pub fn render(
     };
     let areas = shell.render(frame, area, theme);
 
-    render_cuerpo(frame, areas.body, state, theme);
+    match &state.modo {
+        ModoGafetes::Historial { incidentes, .. } => {
+            render_historial(frame, areas.body, incidentes, theme)
+        }
+        _ => render_cuerpo(frame, areas.body, state, theme),
+    }
 }
 
 fn estado_shell(state: &GafetesState) -> (String, StatusKind) {
+    if let ModoGafetes::Historial { numero, incidentes } = &state.modo {
+        return (
+            format!(
+                "HISTORIAL · Gafete {numero:02} · {} incidente(s)",
+                incidentes.len()
+            ),
+            StatusKind::Normal,
+        );
+    }
     if let ModoGafetes::Alta(formulario) = &state.modo
         && let Some(error) = &formulario.error
     {
@@ -241,7 +258,8 @@ fn render_panel(
         ModoGafetes::Normal
         | ModoGafetes::Busqueda { .. }
         | ModoGafetes::ConfirmacionBaja { .. }
-        | ModoGafetes::ConfirmacionResolver { .. } => {
+        | ModoGafetes::ConfirmacionResolver { .. }
+        | ModoGafetes::Historial { .. } => {
             match state.gafete_seleccionado() {
                 Some(g) => render_detalle(frame, area, g, theme),
                 None => panel_vacio(frame, area, "No hay un gafete seleccionado.", theme),
@@ -353,6 +371,77 @@ fn render_buscar_deudor(
         frame.render_widget(Paragraph::new(filas_resultados), filas[1]);
     }
     (area_campo, buscar.texto.clone())
+}
+
+/// Tabla de ancho completo (mismo patrón que `auditoria/render.rs`) en vez de
+/// mantener el maestro-detalle de `render_cuerpo` — el historial de un
+/// gafete puntual es una lista chica y no necesita el catálogo a la
+/// izquierda mientras se consulta.
+fn render_historial(frame: &mut Frame, area: Rect, incidentes: &[IncidenteGafete], theme: Theme) {
+    let encabezado = Row::new([
+        "FECHA Y HORA (CR)",
+        "EVENTO",
+        "OPERADOR",
+        "ASIGNADO A",
+        "MOTIVO",
+    ])
+    .style(theme.muted())
+    .bottom_margin(1);
+    let filas = incidentes.iter().map(|incidente| {
+        Row::new([
+            Cell::from(
+                a_costa_rica(incidente.fecha_hora)
+                    .format("%d/%m/%Y %H:%M")
+                    .to_string(),
+            ),
+            Cell::from(texto_tipo_incidente(incidente.tipo)),
+            Cell::from(incidente.usuario_nombre.clone()),
+            Cell::from(
+                incidente
+                    .contratista_nombre
+                    .clone()
+                    .unwrap_or_else(|| "—".into()),
+            ),
+            Cell::from(texto_motivo_opcional(incidente.motivo_resolucion)),
+        ])
+    });
+    frame.render_widget(
+        Table::new(
+            filas,
+            [
+                Constraint::Length(17),
+                Constraint::Length(16),
+                Constraint::Fill(1),
+                Constraint::Fill(1),
+                Constraint::Length(10),
+            ],
+        )
+        .header(encabezado)
+        .column_spacing(1),
+        area,
+    );
+    if incidentes.is_empty() {
+        empty_state(
+            frame,
+            area,
+            "Este gafete no tiene incidentes registrados.",
+            theme,
+        );
+    }
+}
+
+fn texto_tipo_incidente(tipo: TipoIncidenteGafete) -> &'static str {
+    match tipo {
+        TipoIncidenteGafete::Perdido => "Marcado perdido",
+        TipoIncidenteGafete::Resuelto => "Resuelto",
+    }
+}
+
+fn texto_motivo_opcional(motivo: Option<MotivoResolucionGafete>) -> &'static str {
+    match motivo {
+        Some(motivo) => texto_motivo(motivo),
+        None => "—",
+    }
 }
 
 fn texto_estado(estado: EstadoGafete) -> &'static str {

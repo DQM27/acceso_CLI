@@ -5,6 +5,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use crate::database::queries::Igualdad;
 use crate::database::queries::contratistas::ContratistaResumen;
 use crate::database::queries::gafetes::{FiltroGafetes, GafeteResumen};
+use crate::database::queries::gafetes_incidentes::IncidenteGafete;
 use crate::models::gafete::{EstadoGafete, MotivoResolucionGafete};
 use crate::tui::ui_kit::{Debounce, StandardCommand, TextInput, standard_command};
 
@@ -120,6 +121,15 @@ enum ModoGafetes {
         gafete_id: i64,
         numero: i64,
     },
+    /// Historial de incidentes de un gafete puntual — se abre con `incidentes`
+    /// vacío y `AppCore::historial_gafete` lo llena en el mismo tick (la app
+    /// es de instancia única y un solo hilo, no hay estado "cargando" real
+    /// que mostrar), mismo dato que ya consume `HistorialGafeteModal` en la
+    /// GUI (`docs/pendientes.md`).
+    Historial {
+        numero: i64,
+        incidentes: Vec<IncidenteGafete>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -153,6 +163,10 @@ pub enum AccionGafetes {
         id: i64,
         numero: i64,
         motivo: MotivoResolucionGafete,
+    },
+    VerHistorial {
+        id: i64,
+        numero: i64,
     },
 }
 
@@ -212,6 +226,7 @@ impl GafetesState {
             ModoGafetes::ConfirmacionBaja { gafete_id, numero } => {
                 self.handle_confirmacion_baja(key, gafete_id, numero)
             }
+            ModoGafetes::Historial { .. } => self.handle_historial(key),
         }
     }
 
@@ -389,10 +404,28 @@ impl GafetesState {
         }
     }
 
+    /// Completa la carga disparada por `AccionGafetes::VerHistorial` — un
+    /// error vuelve a `Normal` con el mensaje de estado, igual que
+    /// `completar_marcar_perdido`/`completar_resolver`.
+    pub fn completar_historial(
+        &mut self,
+        resultado: Result<Vec<IncidenteGafete>, String>,
+        numero: i64,
+    ) {
+        match resultado {
+            Ok(incidentes) => self.modo = ModoGafetes::Historial { numero, incidentes },
+            Err(error) => {
+                self.modo = ModoGafetes::Normal;
+                self.mensaje = Some(error);
+            }
+        }
+    }
+
     fn handle_normal(&mut self, key: KeyEvent) -> AccionGafetes {
         if matches!(
             key.code,
-            KeyCode::Char('n' | 'N' | 'b' | 'B' | 'p' | 'P' | 'r' | 'R' | '/') | KeyCode::Esc
+            KeyCode::Char('n' | 'N' | 'b' | 'B' | 'p' | 'P' | 'r' | 'R' | 'h' | 'H' | '/')
+                | KeyCode::Esc
         ) {
             self.mensaje = None;
         }
@@ -400,6 +433,16 @@ impl GafetesState {
             KeyCode::Up => self.mover(-1),
             KeyCode::Down => self.mover(1),
             KeyCode::Char('n' | 'N') => self.modo = ModoGafetes::Alta(FormularioAlta::nuevo()),
+            KeyCode::Char('h' | 'H') => {
+                if let Some(g) = self.gafete_seleccionado() {
+                    let (id, numero) = (g.id, g.numero);
+                    self.modo = ModoGafetes::Historial {
+                        numero,
+                        incidentes: Vec::new(),
+                    };
+                    return AccionGafetes::VerHistorial { id, numero };
+                }
+            }
             KeyCode::Char('b' | 'B') => {
                 if let Some(g) = self.gafete_seleccionado()
                     && g.estado == EstadoGafete::Disponible
@@ -619,6 +662,13 @@ impl GafetesState {
             }
             _ => AccionGafetes::Ninguna,
         }
+    }
+
+    fn handle_historial(&mut self, key: KeyEvent) -> AccionGafetes {
+        if key.code == KeyCode::Esc {
+            self.modo = ModoGafetes::Normal;
+        }
+        AccionGafetes::Ninguna
     }
 
     fn error_alta(&mut self, error: String) {

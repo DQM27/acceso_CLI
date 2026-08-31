@@ -209,6 +209,56 @@ fn buscar_deudor_navega_resultados_y_enter_marca_perdido() {
 }
 
 #[test]
+fn h_abre_historial_vacio_y_completar_lo_llena() {
+    use crate::models::gafete::TipoIncidenteGafete;
+
+    let mut s = GafetesState::default();
+    s.completar_busqueda(Ok(datos()), None); // selecciona id 1, numero 5
+
+    assert_eq!(
+        s.handle_key(k(KeyCode::Char('H'))),
+        AccionGafetes::VerHistorial { id: 1, numero: 5 }
+    );
+    assert!(matches!(
+        &s.modo,
+        ModoGafetes::Historial { numero: 5, incidentes } if incidentes.is_empty()
+    ));
+
+    let incidente = crate::database::queries::gafetes_incidentes::IncidenteGafete {
+        id: 1,
+        tipo: TipoIncidenteGafete::Perdido,
+        fecha_hora: chrono::Utc::now(),
+        usuario_nombre: "Root".into(),
+        contratista_nombre: Some("Juan".into()),
+        motivo_resolucion: None,
+        gafete_numero: 5,
+    };
+    s.completar_historial(Ok(vec![incidente.clone()]), 5);
+    assert!(matches!(
+        &s.modo,
+        ModoGafetes::Historial { numero: 5, incidentes } if incidentes == &vec![incidente]
+    ));
+
+    assert_eq!(s.handle_key(k(KeyCode::Esc)), AccionGafetes::Ninguna);
+    assert!(matches!(s.modo, ModoGafetes::Normal));
+}
+
+#[test]
+fn completar_historial_con_error_vuelve_a_normal_con_mensaje() {
+    let mut s = GafetesState::default();
+    s.completar_busqueda(Ok(datos()), None);
+    s.handle_key(k(KeyCode::Char('H')));
+
+    s.completar_historial(Err("No se pudo cargar el historial del gafete".into()), 5);
+
+    assert!(matches!(s.modo, ModoGafetes::Normal));
+    assert_eq!(
+        s.mensaje.as_deref(),
+        Some("No se pudo cargar el historial del gafete")
+    );
+}
+
+#[test]
 fn interpretar_filtro_reconoce_numero_y_estado_negado() {
     assert_eq!(
         interpretar_filtro("9"),
