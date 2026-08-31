@@ -358,10 +358,22 @@ proyectos (raíz: 491 tests; `desktop/src-tauri`: 20 tests; `desktop/`: `npx tsc
   `docs/evaluacion-sqlite.md` sección 8 para el detalle. Cifrar sólo los respaldos
   exportados es la alternativa más liviana si la amenaza real es "un respaldo en un
   medio sin cifrar". Requiere decisión de política antes de tocar código, no es un bug.
-- [ ] **Evaluar tablas `STRICT`.** Refuerzan tipos almacenados; no urgente porque el
-  modelo Rust y las restricciones actuales ya cubren la mayoría del riesgo. Convertir
-  las tablas existentes exige una migración completa — evaluar junto con la próxima
-  migración real, no aparte.
+- [x] **Hecho (2026-08-31): tablas `STRICT`.** `MIGRACION_15` (`SCHEMA_VERSION` 14 → 15)
+  recreó las 7 tablas normales (`empresas`, `usuarios`, `contratistas`, `gafetes`,
+  `gafetes_incidentes`, `registro_ingresos`, `auditoria_cambios`) con `STRICT` —
+  `docs/evaluacion-sqlite.md` sección 7 sigue teniendo el detalle de qué hace `STRICT`,
+  ya no dice "pendiente". Las tablas FTS5 (`*_fts` y sus tablas sombra) no admiten
+  `STRICT` y quedaron igual. Hallazgo real durante la migración: `DROP TABLE` sobre una
+  tabla con hijos (`empresas`/`usuarios`/`contratistas`/`gafetes`) dispara `ON DELETE
+  RESTRICT` en cada uno — SQLite trata el drop como si borrara todas las filas antes de
+  eliminarla. `foreign_keys` no se puede tocar dentro de una transacción activa, así
+  que `MIGRACION_15` corre en su propia transacción (`aplicar_migracion_15`,
+  `schema.rs`), separada de la de migraciones 1-14, con `foreign_keys=OFF` sólo
+  mientras dura y un `PRAGMA foreign_key_check` antes de reactivarlo. Verificado con
+  `cargo test --lib --tests` completo (incluye una prueba nueva,
+  `migracion_15_deja_tablas_strict_sin_romper_claves_foraneas`, que confirma que
+  `STRICT` rechaza un tipo incorrecto y que ninguna FK quedó rota) y build limpio de
+  `desktop/src-tauri`.
 
 ## Respaldos — acción menor no acordada
 

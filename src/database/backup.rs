@@ -172,6 +172,16 @@ impl From<SchemaError> for RespaldoError {
                     "la base quedó en la versión de esquema {encontrada} tras migrar, un estado interno inconsistente"
                 )))
             }
+            // No lo produce ningún camino real (las 7 tablas se recrean
+            // copiando exactamente los mismos datos), pero el match debe
+            // seguir siendo exhaustivo — mismo criterio que
+            // `RespaldoPreMigracionFallido` arriba.
+            SchemaError::MigracionStrictReferenciasInvalidas => {
+                Self::ValidacionFallida(ResultadoValidacion::Invalido(
+                    "la migración a tablas STRICT dejó filas con una clave foránea inválida"
+                        .to_owned(),
+                ))
+            }
         }
     }
 }

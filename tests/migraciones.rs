@@ -503,6 +503,75 @@ fn migra_version_1_y_conserva_datos_validos_e_indices() {
     }
 }
 
+/// Regresión de `MIGRACION_15` (tablas `STRICT`, `docs/pendientes.md`
+/// "Evaluar tablas STRICT"): confirma que las 7 tablas recreadas de verdad
+/// quedan `STRICT` (rechazan un tipo incorrecto, algo que la versión
+/// anterior aceptaba en silencio por tipado dinámico) y que la migración en
+/// sí no dejó ninguna clave foránea rota — `DROP TABLE` sobre una tabla con
+/// hijos (`empresas`, `usuarios`, `contratistas`, `gafetes`) dispara
+/// `ON DELETE RESTRICT` en cada uno si `foreign_keys` sigue activo durante
+/// el recambio; `aplicar_migracion_15` lo apaga a propósito para esto.
+#[test]
+fn migracion_15_deja_tablas_strict_sin_romper_claves_foraneas() {
+    let connection = Connection::open_in_memory().unwrap();
+    crear_esquema_version_1(&connection);
+    insertar_referencias(&connection);
+    connection
+        .execute(
+            "INSERT INTO registro_ingresos VALUES (1,1,1,'2026-08-11 08:00:00','CAMINANDO','PRAIND',5,1,NULL,NULL)",
+            [],
+        )
+        .unwrap();
+
+    initialize_database(&connection).unwrap();
+    assert_eq!(version(&connection), SCHEMA_VERSION);
+
+    // `foreign_keys` debe seguir activo después de migrar — no es que
+    // `aplicar_migracion_15` lo haya dejado apagado.
+    let fk_activas: i64 = connection
+        .query_row("PRAGMA foreign_keys", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(fk_activas, 1);
+
+    // El propio `PRAGMA foreign_key_check` (mismo que usa `aplicar_migracion_15`
+    // antes de dar la migración por buena) no debe encontrar nada roto.
+    assert!(
+        !connection
+            .prepare("PRAGMA foreign_key_check")
+            .unwrap()
+            .exists([])
+            .unwrap()
+    );
+
+    // STRICT en acción: `activo` es INTEGER — antes de MIGRACION_15, SQLite
+    // (tipado dinámico) habría aceptado guardar texto ahí sin quejarse.
+    let error = connection
+        .execute(
+            "UPDATE empresas SET activo = 'no-es-un-entero' WHERE id = 1",
+            [],
+        )
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("cannot store TEXT value in INTEGER column"),
+        "{error}"
+    );
+
+    // Los datos reales de todas las tablas con FK sobrevivieron el recambio.
+    for (tabla, esperado) in [
+        ("empresas", 1),
+        ("usuarios", 1),
+        ("contratistas", 1),
+        ("registro_ingresos", 1),
+    ] {
+        let total: i64 = connection
+            .query_row(&format!("SELECT COUNT(*) FROM {tabla}"), [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(total, esperado, "tabla {tabla}");
+    }
+}
+
 #[test]
 fn esquema_actual_solo_admite_fechas_utc_normalizadas() {
     let connection = Connection::open_in_memory().unwrap();
