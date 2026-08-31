@@ -159,18 +159,6 @@ input {
   background: transparent;
 }
 
-/* La terminal (Consola) tiene su propia paleta fija (--c-*, ver más abajo)
-   que no seguía el resto de este archivo — el scrollbar temático de arriba
-   tampoco debería, o el hover se vería con el acento equivocado sobre
-   fondo negro. */
-.consola-ventana ::-webkit-scrollbar-thumb {
-  background-color: color-mix(in srgb, var(--c-muted, var(--muted)) 45%, transparent);
-}
-
-.consola-ventana ::-webkit-scrollbar-thumb:hover {
-  background-color: color-mix(in srgb, var(--c-acento, var(--acento)) 60%, transparent);
-}
-
 /* Componentes compartidos — un solo punto para el estilo de formularios en
    toda la app (login hoy, formularios de Grupo 2 después). No son
    componentes React, son clases: cualquier pantalla las reutiliza sin
