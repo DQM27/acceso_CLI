@@ -1,6 +1,6 @@
 [package]
 name = "control-acceso-desktop"
-version = "1.0.0"
+version = "1.1.0"
 description = "Interfaz gráfica de escritorio para Control de Acceso Brisas"
 authors = ["DQM27"]
 license = "MIT"
