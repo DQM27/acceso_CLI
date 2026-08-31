@@ -1486,6 +1486,38 @@ fn cambiar_password_en_hilo_aparte_actualiza_la_autenticacion_real() {
     std::fs::remove_dir_all(&directorio).ok();
 }
 
+#[test]
+fn crear_respaldo_manual_en_hilo_aparte_termina_creado_en_disco() {
+    let (core, directorio, actor) = core_temporal("crear_respaldo_manual");
+    let mut app = App {
+        sesion: Some(actor.clone()),
+        vista: Vista::Respaldos,
+        ..App::default()
+    };
+
+    app.iniciar_creacion_respaldo_manual(Some(&core));
+    assert!(app.configuracion.creando_respaldo());
+
+    for _ in 0..200 {
+        app.recibir_respaldo_manual_si_listo();
+        if !app.configuracion.creando_respaldo() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+
+    assert!(!app.configuracion.creando_respaldo());
+    let listado = core.listar_respaldos(&actor).unwrap();
+    assert_eq!(listado.len(), 1);
+    assert_eq!(
+        listado[0].tipo,
+        crate::database::backup::TipoRespaldo::Manual
+    );
+    assert!(listado[0].ruta.exists());
+
+    std::fs::remove_dir_all(&directorio).ok();
+}
+
 /// Regresión del hallazgo #5 de `docs/auditoria-dominio-2026-08-20.md`:
 /// "El login diferido puede aceptar credenciales revocadas". La cuenta se
 /// desactiva *después* de arrancar el hilo de Argon2 pero *antes* de que

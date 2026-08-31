@@ -118,6 +118,9 @@ fn render_respaldos(
 }
 
 fn estado_shell(estado: &RespaldosState) -> (String, StatusKind) {
+    if estado.creando {
+        return ("⠋ Creando respaldo…".to_owned(), StatusKind::Warning);
+    }
     if let Some(mensaje) = &estado.mensaje {
         let tipo = if mensaje.starts_with('✓') {
             StatusKind::Success

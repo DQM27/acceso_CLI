@@ -60,6 +60,57 @@ impl AppCore {
         )
     }
 
+    /// Sólo autoriza — no crea nada. Separado de `crear_respaldo` para que
+    /// la creación real (copiar + validar toda la base, medido en varios
+    /// cientos de ms con unos pocos miles de movimientos y un par de
+    /// segundos con ~100,000, `docs/pendientes.md`) pueda correr en un hilo
+    /// aparte sin bloquear el bucle de la TUI (`tui/app/backup_jobs.rs`): la
+    /// autorización es una consulta de una fila y se resuelve en el hilo
+    /// principal, antes de disparar el hilo.
+    pub fn autorizar_creacion_respaldo(&self, actor: &UsuarioSesion) -> Result<(), RespaldoError> {
+        self.autorizar_respaldo(actor)
+    }
+
+    /// Ruta del archivo de base de datos activo — para que el hilo de
+    /// respaldo abra su propia conexión de lectura al mismo archivo en vez
+    /// de compartir la conexión viva de `AppCore` entre hilos.
+    pub fn ruta_base_datos(&self) -> &Path {
+        &self.ruta_base_datos
+    }
+
+    /// Decide si hace falta un respaldo automático hoy, sin crearlo —
+    /// separado de `respaldo_automatico_diario_si_hace_falta` para que la
+    /// creación real corra en un hilo aparte. Ese método síncrono se
+    /// conserva tal cual para los llamadores que corren antes de que arranque
+    /// el bucle de la TUI (`main.rs`), donde un respaldo no compite con nada
+    /// que el operador esté mirando.
+    pub fn hace_falta_respaldo_automatico_hoy(&self) -> Result<bool, RespaldoError> {
+        let ahora = a_costa_rica(self.reloj.ahora_utc());
+        if ahora.hour() < HORA_RESPALDO_AUTOMATICO {
+            return Ok(false);
+        }
+        let listado = self.listar_respaldos_sistema()?;
+        let hoy = ahora.date_naive();
+        let ya_existe_hoy = listado.iter().any(|respaldo| {
+            respaldo.tipo == TipoRespaldo::Automatico
+                && crate::tiempo::fecha_costa_rica(respaldo.creado_en) == hoy
+        });
+        Ok(!ya_existe_hoy)
+    }
+
+    /// Aplica la retención de respaldos automáticos tras uno creado en un
+    /// hilo aparte — mismo criterio de "mejor esfuerzo" que ya tenía
+    /// `respaldo_automatico_diario_si_hace_falta`: un fallo acá se descarta
+    /// en silencio, porque acumular respaldos de más no arriesga datos, a
+    /// diferencia de no poder crear uno nuevo.
+    pub fn aplicar_retencion_automatica(&self) {
+        let _ = crate::database::backup::aplicar_retencion(
+            &self.directorio_respaldos(),
+            TipoRespaldo::Automatico,
+            crate::database::backup::RETENCION_AUTOMATICOS,
+        );
+    }
+
     pub fn listar_respaldos(
         &self,
         actor: &UsuarioSesion,
@@ -148,7 +199,9 @@ impl AppCore {
         Ok(())
     }
 
-    fn directorio_respaldos(&self) -> PathBuf {
+    /// Público para que el hilo de respaldo (`tui/app/backup_jobs.rs`) sepa
+    /// dónde escribir sin necesitar el resto de `AppCore`.
+    pub fn directorio_respaldos(&self) -> PathBuf {
         self.ruta_base_datos
             .parent()
             .unwrap_or_else(|| Path::new("."))

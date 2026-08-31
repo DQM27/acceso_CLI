@@ -94,6 +94,26 @@ fn crear_y_revalidar_disparan_las_acciones_correctas_solo_con_seleccion() {
 }
 
 #[test]
+fn marcar_creando_respaldo_bloquea_c_hasta_que_completar_creacion_lo_libera() {
+    let mut estado = ConfiguracionState::default();
+    estado.marcar_creando_respaldo();
+    assert!(estado.creando_respaldo());
+
+    assert_eq!(
+        estado.handle_key(tecla(KeyCode::Char('c'))),
+        AccionAjustes::Respaldos(AccionRespaldos::Ninguna),
+        "no debía disparar un segundo respaldo mientras el primero sigue en vuelo"
+    );
+
+    estado.completar_creacion(Err("fallo".into()));
+    assert!(!estado.creando_respaldo());
+    assert_eq!(
+        estado.handle_key(tecla(KeyCode::Char('c'))),
+        AccionAjustes::Respaldos(AccionRespaldos::Crear)
+    );
+}
+
+#[test]
 fn completar_listado_puebla_la_tabla_y_permite_revalidar_la_fila_seleccionada() {
     use crate::database::backup::{RespaldoResumen, TipoRespaldo};
 

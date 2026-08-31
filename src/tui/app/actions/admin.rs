@@ -175,18 +175,7 @@ impl App {
                     });
                 self.configuracion.completar_listado(resultado);
             }
-            AccionRespaldos::Crear => {
-                let resultado = core
-                    .ok_or_else(|| "No se pudo crear el respaldo".to_owned())
-                    .and_then(|core| {
-                        let actor = actor
-                            .as_ref()
-                            .ok_or_else(|| "No hay una sesión activa".to_owned())?;
-                        core.crear_respaldo(actor, crate::database::backup::TipoRespaldo::Manual)
-                            .map_err(|error| error.to_string())
-                    });
-                self.configuracion.completar_creacion(resultado);
-            }
+            AccionRespaldos::Crear => self.iniciar_creacion_respaldo_manual(core),
             AccionRespaldos::Revalidar { ruta } => {
                 let resultado = core
                     .ok_or_else(|| "No se pudo validar el respaldo".to_owned())

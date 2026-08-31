@@ -56,6 +56,17 @@ impl ConfiguracionState {
         self.respaldos.completar_listado(resultado);
     }
 
+    /// Marca que ya se disparó el hilo aparte que crea el respaldo (ver
+    /// `tui/app/backup_jobs.rs`) — la pantalla muestra "Creando respaldo…"
+    /// hasta que llegue el resultado real por `completar_creacion`.
+    pub fn marcar_creando_respaldo(&mut self) {
+        self.respaldos.creando = true;
+    }
+
+    pub fn creando_respaldo(&self) -> bool {
+        self.respaldos.creando
+    }
+
     pub fn completar_creacion(&mut self, resultado: Result<RespaldoResumen, String>) {
         self.respaldos.completar_creacion(resultado);
     }
@@ -121,6 +132,10 @@ struct RespaldosState {
     /// resuelva — no debe desaparecer solo porque el operador movió la
     /// selección.
     fallo_automatico: Option<String>,
+    /// `true` mientras se espera el resultado real de crear un respaldo
+    /// (copiar + validar toda la base en un hilo aparte) — bloquea disparar
+    /// otro mientras tanto, mismo criterio que `UsuariosState::guardando`.
+    creando: bool,
 }
 
 impl Default for RespaldosState {
@@ -131,6 +146,7 @@ impl Default for RespaldosState {
             modo: ModoRespaldos::Normal,
             mensaje: None,
             fallo_automatico: None,
+            creando: false,
         }
     }
 }
@@ -160,7 +176,7 @@ impl RespaldosState {
                 self.mover(1);
                 AccionRespaldos::Ninguna
             }
-            KeyCode::Char('c' | 'C') => AccionRespaldos::Crear,
+            KeyCode::Char('c' | 'C') if !self.creando => AccionRespaldos::Crear,
             // `A` está reservado en el resto de la app para "Activar/
             // Desactivar" (Empresas, Usuarios) — usar `L` (Listar) aquí en
             // vez de reutilizar la misma letra con un significado distinto.
@@ -288,6 +304,7 @@ impl RespaldosState {
     }
 
     fn completar_creacion(&mut self, resultado: Result<RespaldoResumen, String>) {
+        self.creando = false;
         match resultado {
             Ok(resumen) => {
                 self.mensaje = Some(format!(

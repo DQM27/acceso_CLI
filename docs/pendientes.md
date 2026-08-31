@@ -434,11 +434,38 @@ brecha perceptual, en orden de costo/beneficio:
 - [ ] **Confirmación visual breve tras guardar/registrar** (p. ej. resaltar la fila
   recién creada/editada por un instante) en vez de sólo el mensaje de estado en texto —
   hoy el cambio es instantáneo y silencioso, lo que puede leerse como "¿pasó algo?".
-- [ ] **Indicador durante operaciones de disco más pesadas** (crear/restaurar respaldo,
-  `configuracion`/`render.rs`): si alguna tarda más de ~200ms, mostrar un estado
-  "trabajando" explícito en vez de dejar la pantalla congelada hasta que vuelve.
-  Requiere primero medir si alguna realmente tarda eso — no está confirmado, sólo es el
-  candidato más probable de una demora real (I/O de archivo) en vez de percibida.
+- [x] **Medido y reparado (2026-08-31): crear respaldo sí bloqueaba, y de verdad.**
+  Medición real (no sólo lectura de código) con datos de volumen creciente: copiar +
+  validar la base completa (Online Backup API + `integrity_check` + `foreign_key_check`)
+  tarda ~200ms con unos pocos miles de movimientos y **~2 segundos con ~100,000** — ya
+  perceptible hoy, y empeora con la antigüedad de la instalación. Antes corría
+  síncrono en el mismo hilo que dibuja la pantalla, tanto para el botón manual
+  (Respaldos → Crear) como para la revisión automática diaria (`run_internal`, cada
+  60s). El resto de la app se midió también y está lejos de ser un problema: cada
+  escritura normal (Nuevo Ingreso, contratistas, gafetes) tarda ~1.3ms pese al perfil
+  de durabilidad estricto (`journal_mode=DELETE` + `synchronous=EXTRA`), y las
+  búsquedas/Historial son sub-milisegundo incluso con 10,000 filas — los índices están
+  bien puestos.
+
+  Reparado con el mismo patrón que `auth_jobs.rs` (hilo + `mpsc::Receiver` sondeado en
+  el bucle) en un módulo nuevo, `tui/app/backup_jobs.rs`: el hilo abre su PROPIA
+  conexión de sólo lectura al mismo archivo (`Connection::open` + `busy_timeout`) en
+  vez de compartir la conexión viva de `AppCore` entre hilos — SQLite admite varias
+  conexiones concurrentes al mismo archivo, y `Backup::run_to_completion` ya reintenta
+  solo ante un bloqueo transitorio. `AppCore` ganó `autorizar_creacion_respaldo`
+  (autorización sola, rápida, en el hilo principal), `ruta_base_datos()`,
+  `directorio_respaldos()` (ahora público) y `hace_falta_respaldo_automatico_hoy`
+  (la mitad "decidir" de `respaldo_automatico_diario_si_hace_falta`, que se conserva
+  intacta para los llamadores previos al bucle de la TUI en `main.rs`, donde un
+  respaldo síncrono no compite con nadie mirando la pantalla). Respaldos → Crear
+  muestra "⠋ Creando respaldo…" (`RespaldosState::creando`, mismo patrón que
+  `UsuariosState::guardando`) y bloquea disparar uno segundo mientras el primero sigue
+  en vuelo. El respaldo previo a una restauración (`AccionRespaldos::Restaurar`) se
+  dejó síncrono a propósito: la app sale inmediatamente después
+  (`SalidaApp::Restaurar`), así que un freno breve ahí importa mucho menos que uno en
+  medio de una sesión activa. `cargo fmt`, Clippy estricto y la suite completa (499
+  tests) en verde, con pruebas nuevas de la creación real en un hilo aparte
+  (`tui/app/tests.rs`) y del límite de decisión "hace falta hoy" (`tests/configuracion_respaldos.rs`).
 - [x] **Frame de transición mínimo en cambios de vista: descartado (2026-08-22).** La
   navegación por pestañas se pidió sin animaciones ni transiciones; se conserva el cambio
   inmediato y no se agrega trabajo visual ajeno al alcance.

@@ -8,10 +8,12 @@ use ratatui::{Terminal, backend::Backend};
 
 mod actions;
 mod auth_jobs;
+mod backup_jobs;
 
 use auth_jobs::{HiloUsuarioPendiente, ReceptorAutenticacion, ReceptorCambioPropio, ReceptorHash};
+use backup_jobs::ReceptorRespaldo;
 
-use crate::application::{AppCore, EstadoRespaldoAutomatico};
+use crate::application::AppCore;
 use crate::models::usuario::RolUsuario;
 use crate::services::autenticacion_service::UsuarioSesion;
 
@@ -143,6 +145,14 @@ pub struct App {
     cambio_password_pendiente: Option<ReceptorCambioPropio>,
     /// Hash de Argon2 en camino para crear el usuario ROOT inicial.
     root_inicial_pendiente: Option<(ReceptorHash, SolicitudRoot)>,
+    /// Respaldo manual (Respaldos → Crear) corriendo en un hilo aparte —
+    /// ver `backup_jobs.rs`.
+    respaldo_manual_pendiente: Option<ReceptorRespaldo>,
+    /// Respaldo automático diario corriendo en un hilo aparte. Nunca
+    /// coincide con `respaldo_manual_pendiente` a la vez —
+    /// `revisar_respaldo_automatico` no dispara uno si ya hay otro en
+    /// vuelo, sea manual o automático.
+    respaldo_automatico_pendiente: Option<ReceptorRespaldo>,
 }
 
 impl Default for App {
@@ -173,6 +183,8 @@ impl Default for App {
             hilo_usuario_pendiente: None,
             cambio_password_pendiente: None,
             root_inicial_pendiente: None,
+            respaldo_manual_pendiente: None,
+            respaldo_automatico_pendiente: None,
         }
     }
 }
@@ -409,22 +421,15 @@ impl App {
                         >= REVISION_RESPALDO_AUTOMATICO
                     {
                         ultima_revision_respaldo = ahora;
-                        let fallo = match core.respaldo_automatico_diario_si_hace_falta() {
-                            EstadoRespaldoAutomatico::Fallo(mensaje) => Some(mensaje),
-                            EstadoRespaldoAutomatico::SinCambios
-                            | EstadoRespaldoAutomatico::Creado => None,
-                        };
-                        cambio_visible |=
-                            fallo.is_some() != self.menu.fallo_respaldo_automatico.is_some();
-                        self.menu.fallo_respaldo_automatico = fallo.clone();
-                        self.configuracion
-                            .actualizar_fallo_respaldo_automatico(fallo);
+                        self.revisar_respaldo_automatico(core);
                     }
+                    cambio_visible |= self.recibir_respaldo_automatico_si_listo(core);
                 }
                 None => self.abortar_configuracion_inicial_sin_core(),
             }
             self.recibir_hilo_usuario_si_lista(core);
             self.recibir_cambio_password_propio(core);
+            cambio_visible |= self.recibir_respaldo_manual_si_listo();
             let trabajos_despues = (
                 self.autenticacion_pendiente.is_some(),
                 self.hilo_usuario_pendiente.is_some(),

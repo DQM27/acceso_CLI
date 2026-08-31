@@ -184,3 +184,41 @@ fn respaldo_automatico_diario_crea_uno_nuevo_si_el_ultimo_es_de_otro_dia() {
     assert_eq!(listado.len(), 2); // el sembrado de "ayer" + el nuevo de "hoy"
     assert!(listado.iter().all(|r| r.tipo == TipoRespaldo::Automatico));
 }
+
+// `hace_falta_respaldo_automatico_hoy` es la mitad "decidir" de
+// `respaldo_automatico_diario_si_hace_falta`, separada para que la creación
+// real corra en un hilo aparte (`tui/app/backup_jobs.rs`) sin bloquear el
+// bucle de la TUI — mismos tres límites que las pruebas de arriba, pero sin
+// crear nada.
+
+#[test]
+fn hace_falta_respaldo_automatico_hoy_es_falso_si_ya_hay_uno_de_hoy() {
+    let ruta = archivo_temporal("hace_falta_mismo_dia");
+    let hoy = Utc.with_ymd_and_hms(2026, 1, 16, 8, 0, 0).unwrap();
+    sembrar_automatico(&ruta.parent().unwrap().join("backups"), "2026-01-16");
+    let core = AppCore::abrir_con_reloj(&ruta, Arc::new(RelojFijo::new(hoy))).unwrap();
+
+    assert!(!core.hace_falta_respaldo_automatico_hoy().unwrap());
+}
+
+#[test]
+fn hace_falta_respaldo_automatico_hoy_es_falso_antes_de_la_una_am_costa_rica() {
+    let ruta = archivo_temporal("hace_falta_antes_de_la_una");
+    let antes_de_la_una = Utc.with_ymd_and_hms(2026, 1, 16, 6, 30, 0).unwrap();
+    let core = AppCore::abrir_con_reloj(&ruta, Arc::new(RelojFijo::new(antes_de_la_una))).unwrap();
+
+    assert!(!core.hace_falta_respaldo_automatico_hoy().unwrap());
+}
+
+#[test]
+fn hace_falta_respaldo_automatico_hoy_es_verdadero_desde_la_una_am_sin_uno_previo() {
+    let ruta = archivo_temporal("hace_falta_desde_la_una");
+    let la_una_en_punto = Utc.with_ymd_and_hms(2026, 1, 16, 7, 0, 0).unwrap();
+    let core = AppCore::abrir_con_reloj(&ruta, Arc::new(RelojFijo::new(la_una_en_punto))).unwrap();
+
+    assert!(core.hace_falta_respaldo_automatico_hoy().unwrap());
+    // A diferencia de `respaldo_automatico_diario_si_hace_falta`, sólo decide
+    // — no debe haber creado nada.
+    let actor = root(&core);
+    assert_eq!(core.listar_respaldos(&actor).unwrap().len(), 0);
+}
