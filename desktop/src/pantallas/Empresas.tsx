@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
+import InterruptorCelda from "../componentes/InterruptorCelda";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import FormularioEmpresa from "./FormularioEmpresa";
 import { buscarEmpresas, establecerEmpresaActiva } from "../api";
@@ -12,7 +13,7 @@ import type { EmpresaResumen } from "../api";
 const columnas: ColDef<EmpresaResumen>[] = [
   { field: "nombre", headerName: "Nombre", flex: 1, cellStyle: { textAlign: "left" } },
   { field: "contratistas", headerName: "Contratistas", width: 130 },
-  { field: "activo", headerName: "Activa", width: 100, cellDataType: "boolean", editable: true },
+  { field: "activo", headerName: "Activa", width: 100, cellRenderer: InterruptorCelda },
 ];
 
 export default function Empresas() {
@@ -52,18 +53,7 @@ export default function Empresas() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PantallaEncabezado
-        titulo="Empresas"
-        acciones={
-          <button
-            className="boton boton-primario"
-            title="Ctrl+N"
-            onClick={() => setFormularioAbierto("crear")}
-          >
-            + Nueva empresa
-          </button>
-        }
-      />
+      <PantallaEncabezado titulo="Empresas" />
 
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
@@ -74,14 +64,22 @@ export default function Empresas() {
             onCeldaEditada={manejarEdicion}
             onFilaDobleClic={setFormularioAbierto}
             controles={
-              <div className="campo" style={{ flex: "1 1 16rem" }}>
-                Buscar
-                <input
-                  placeholder="Nombre…"
-                  value={texto}
-                  onChange={(evento) => setTexto(evento.target.value)}
-                />
-              </div>
+              <>
+                <button
+                  className="boton"
+                  title="Ctrl+N"
+                  onClick={() => setFormularioAbierto("crear")}
+                >
+                  + Nuevo
+                </button>
+                <div className="campo" style={{ flex: "1 1 16rem" }}>
+                  <input
+                    placeholder="Nombre…"
+                    value={texto}
+                    onChange={(evento) => setTexto(evento.target.value)}
+                  />
+                </div>
+              </>
             }
           />
         </div>

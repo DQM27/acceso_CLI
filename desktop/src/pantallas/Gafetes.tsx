@@ -104,18 +104,7 @@ export default function Gafetes() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PantallaEncabezado
-        titulo="Gafetes"
-        acciones={
-          <button
-            className="boton boton-primario"
-            title="Ctrl+N"
-            onClick={() => setFormularioAbierto(true)}
-          >
-            + Nuevo gafete
-          </button>
-        }
-      />
+      <PantallaEncabezado titulo="Gafetes" />
 
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
@@ -125,15 +114,19 @@ export default function Gafetes() {
             filas={filas}
             onFilaDobleClic={setGestionAbierta}
             controles={
-              <div className="campo" style={{ flex: "1 1 16rem" }}>
-                Buscar por número
-                <input
-                  placeholder="Número…"
-                  value={texto}
-                  onChange={(evento) => setTexto(evento.target.value.replace(/\D/g, ""))}
-                  inputMode="numeric"
-                />
-              </div>
+              <>
+                <button className="boton" title="Ctrl+N" onClick={() => setFormularioAbierto(true)}>
+                  + Nuevo
+                </button>
+                <div className="campo" style={{ flex: "1 1 16rem" }}>
+                  <input
+                    placeholder="Número…"
+                    value={texto}
+                    onChange={(evento) => setTexto(evento.target.value.replace(/\D/g, ""))}
+                    inputMode="numeric"
+                  />
+                </div>
+              </>
             }
           />
         </div>

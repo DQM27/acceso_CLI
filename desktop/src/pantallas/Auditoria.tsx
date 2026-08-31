@@ -153,7 +153,6 @@ export default function Auditoria() {
             busqueda={busqueda}
             controles={
               <div className="campo" style={{ flex: "1 1 16rem" }}>
-                Buscar
                 <input
                   placeholder="Entidad, campo, valor…"
                   value={busqueda}

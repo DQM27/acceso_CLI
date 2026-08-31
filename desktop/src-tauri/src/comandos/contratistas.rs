@@ -8,6 +8,14 @@ use crate::estado::GuiState;
 /// acá: a diferencia de la TUI, donde la navegación es la barrera, cualquier
 /// pantalla del webview puede invocar este comando directamente, así que el
 /// chequeo tiene que vivir en el comando mismo.
+///
+/// `filtro.texto` es lo único que sigue viajando desde el frontend — lo usan
+/// el buscador en vivo de `NuevoIngresoModal`/`GestionGafeteModal`, con
+/// `filtro: {}` (sin texto) para la grilla de Contratistas, que ya no manda
+/// cédula/empresa/tipo/PRAIND/etc.: carga el universo completo una sola vez
+/// y filtra/ordena del lado del cliente (ver
+/// `desktop/src/pantallas/Contratistas.tsx`). Ninguno de los dos casos pagina
+/// — `FiltroContratistasEntrada::construir` siempre pide `limite: usize::MAX`.
 #[tauri::command]
 pub fn buscar_contratistas(
     filtro: FiltroContratistasEntrada,

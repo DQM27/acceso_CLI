@@ -171,14 +171,17 @@ export default function Historial() {
       {
         colId: "fecha_ingreso",
         headerName: "Fecha ingreso",
-        width: 120,
+        // 120 truncaba el título en mayúscula ("FECHA ING…") mientras el
+        // resto de encabezados entraba completo — 140 es lo que necesita
+        // "FECHA INGRESO" para no cortarse.
+        width: 140,
         valueGetter: (p) => (p.data ? fechaLocalYMD(p.data.fecha_hora_ingreso) : ""),
         valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
       },
       {
         colId: "hora_ingreso",
         headerName: "Hora ingreso",
-        width: 110,
+        width: 130,
         valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora_ingreso) : ""),
       },
       {
@@ -189,7 +192,7 @@ export default function Historial() {
         // no coincidía con lo que se veía en el archivo exportado.
         colId: "fecha_salida",
         headerName: "Fecha salida",
-        width: 120,
+        width: 140,
         valueGetter: (p) =>
           p.data?.fecha_hora_salida ? fechaLocalYMD(p.data.fecha_hora_salida) : "Activo",
         valueFormatter: (p) => (p.value === "Activo" ? "Activo" : textoFechaDDMMYYYY(p.value)),
@@ -197,7 +200,7 @@ export default function Historial() {
       {
         colId: "hora_salida",
         headerName: "Hora salida",
-        width: 110,
+        width: 130,
         valueGetter: (p) =>
           p.data?.fecha_hora_salida ? textoHora(p.data.fecha_hora_salida) : "Activo",
       },

@@ -33,6 +33,11 @@
   --sombra-panel: 0 22px 70px rgba(14, 29, 36, 0.12), 0 2px 10px rgba(14, 29, 36, 0.06);
   --radio: 8px;
   --radio-chico: 6px;
+  /* Altura compartida por `.shell-marca` (logo del sidebar) y
+     `.pantalla-encabezado` (título de cada pantalla) — así sus bordes
+     inferiores quedan a la misma altura en vez de cada uno calcular la
+     suya con su propio padding/contenido. */
+  --alto-encabezado: 4.75rem;
 
   color-scheme: light;
   font-family:
@@ -121,6 +126,49 @@ button {
 
 input {
   font-family: inherit;
+}
+
+/* Scrollbar temático en toda la app (WebView2 es Chromium, entiende
+   ::-webkit-scrollbar) — sin esto se ve el scrollbar gris plano del SO en
+   vez de seguir la paleta clara/oscura. AG Grid no dibuja el suyo propio:
+   usa un contenedor `overflow:scroll` normal, así que esto también alcanza
+   a las grillas (vertical y horizontal) sin tocar su tema. El `border`
+   transparente + `background-clip: padding-box` separa el thumb del borde
+   del track, para que no quede pegado de canto a canto. */
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--muted) 45%, transparent);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--acento) 60%, transparent);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* La terminal (Consola) tiene su propia paleta fija (--c-*, ver más abajo)
+   que no seguía el resto de este archivo — el scrollbar temático de arriba
+   tampoco debería, o el hover se vería con el acento equivocado sobre
+   fondo negro. */
+.consola-ventana ::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--c-muted, var(--muted)) 45%, transparent);
+}
+
+.consola-ventana ::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--c-acento, var(--acento)) 60%, transparent);
 }
 
 /* Componentes compartidos — un solo punto para el estilo de formularios en
@@ -385,7 +433,7 @@ input {
 }
 
 .shell-sidebar-colapsada .shell-marca {
-  padding: 1.25rem 0.5rem;
+  padding: 0 0.5rem;
   justify-content: center;
 }
 
@@ -393,7 +441,8 @@ input {
   display: flex;
   align-items: center;
   gap: 0.65rem;
-  padding: 1.25rem 1.1rem;
+  height: var(--alto-encabezado);
+  padding: 0 1.1rem;
   border-bottom: 1px solid var(--borde);
   margin-bottom: 0.5rem;
 }
@@ -466,12 +515,63 @@ input {
   background: var(--chip-color, var(--muted));
 }
 
+/* Switch on/off de las columnas booleanas editables (Personal de ruta,
+   Acceso, Activo/Activa) — reemplaza al checkbox nativo de AG Grid, que con
+   el border-radius del tema (8px) sobre una casilla de ~18px se veía casi
+   circular y se confundía con un radio button. */
+.interruptor {
+  --interruptor-ancho: 2.15rem;
+  --interruptor-alto: 1.15rem;
+  width: var(--interruptor-ancho);
+  height: var(--interruptor-alto);
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--borde);
+  background: var(--campo-fondo);
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.interruptor::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: calc(var(--interruptor-alto) - 4px);
+  height: calc(var(--interruptor-alto) - 4px);
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.interruptor:hover {
+  border-color: color-mix(in srgb, var(--acento) 45%, var(--borde));
+}
+
+.interruptor:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--acento) 35%, transparent);
+}
+
+.interruptor-activo {
+  background: var(--acento-suave);
+  border-color: var(--acento);
+}
+
+.interruptor-activo::after {
+  background: var(--acento);
+  transform: translateX(calc(var(--interruptor-ancho) - var(--interruptor-alto)));
+}
+
 .pantalla-encabezado {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1.1rem 1.5rem;
+  height: var(--alto-encabezado);
+  padding: 0 1.5rem;
   border-bottom: 1px solid var(--borde);
   background: var(--panel);
 }

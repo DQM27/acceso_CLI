@@ -238,10 +238,9 @@ export default function Activos({
             controles={
               <>
                 <button className="boton" title="Ctrl+Shift+N" onClick={onAbrirNuevoIngreso}>
-                  + Nuevo ingreso
+                  + Nuevo
                 </button>
                 <div className="campo" style={{ flex: "1 1 16rem" }}>
-                  Buscar
                   <input
                     placeholder="Cédula, nombre, empresa…"
                     value={busqueda}

@@ -26,15 +26,13 @@ export interface PaginaContratistas {
   total: number;
 }
 
-export type EstadoPraind = "vencido" | "proximo" | "sin_fecha";
-
+// Sólo texto: la grilla de Contratistas ya no lo usa (carga el universo
+// completo y filtra/ordena del lado del cliente con AG Grid — ver
+// Contratistas.tsx), pero el buscador en vivo de NuevoIngresoModal y
+// GestionGafeteModal sigue necesitando una búsqueda de texto contra el
+// servidor.
 export interface FiltroContratistas {
   texto?: string;
-  empresa_id?: number;
-  tipos?: TipoIngreso[];
-  praind?: EstadoPraind;
-  personal_ruta?: boolean;
-  tiene_acceso?: boolean;
 }
 
 export interface DatosContratista {
@@ -62,7 +60,7 @@ export function requierePraind(datos: {
   );
 }
 
-export function buscarContratistas(filtro: FiltroContratistas): Promise<PaginaContratistas> {
+export function buscarContratistas(filtro: FiltroContratistas = {}): Promise<PaginaContratistas> {
   return invoke("buscar_contratistas", { filtro });
 }
 

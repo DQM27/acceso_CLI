@@ -1,6 +1,6 @@
-//! Lógica de negocio del catálogo de gafetes (`docs/plan-gafetes.md`):
-//! transiciones de estado válidas (Disponible → Perdido → Disponible,
-//! Disponible → DeBaja) y alta individual/por rango.
+//! Orquestación del catálogo de gafetes (`docs/plan-gafetes.md`): valida
+//! contra las transiciones de estado de `domain::gafete`, delega en los
+//! repositorios y registra los incidentes de alta individual/por rango.
 
 use chrono::{DateTime, Utc};
 
@@ -8,7 +8,7 @@ use crate::database::queries::gafetes::{FiltroGafetes, GafeteResumen, GafetesQue
 use crate::database::queries::gafetes_incidentes::GafetesIncidentesWriter;
 use crate::database::repositories::contratista_repository::ContratistaRepository;
 use crate::database::repositories::gafete_repository::GafeteRepository;
-use crate::models::gafete::{EstadoGafete, MotivoResolucionGafete};
+use crate::models::gafete::MotivoResolucionGafete;
 
 use super::error::GafeteServiceError;
 
@@ -81,7 +81,7 @@ where
 
     pub fn dar_de_baja(&self, id: i64) -> Result<(), GafeteServiceError> {
         let gafete = self.buscar_por_id(id)?;
-        if gafete.estado != EstadoGafete::Disponible {
+        if !crate::domain::gafete::puede_darse_de_baja(gafete.estado) {
             return Err(GafeteServiceError::EstadoInvalido);
         }
         Ok(self.gafetes.dar_de_baja(id)?)
@@ -96,7 +96,7 @@ where
         ahora: DateTime<Utc>,
     ) -> Result<(), GafeteServiceError> {
         let gafete = self.buscar_por_id(id)?;
-        if gafete.estado != EstadoGafete::Disponible {
+        if !crate::domain::gafete::puede_marcarse_perdido(gafete.estado) {
             return Err(GafeteServiceError::EstadoInvalido);
         }
         if self.contratistas.buscar_por_id(contratista_id)?.is_none() {
@@ -116,7 +116,7 @@ where
         ahora: DateTime<Utc>,
     ) -> Result<(), GafeteServiceError> {
         let gafete = self.buscar_por_id(id)?;
-        if gafete.estado != EstadoGafete::Perdido {
+        if !crate::domain::gafete::puede_resolverse(gafete.estado) {
             return Err(GafeteServiceError::EstadoInvalido);
         }
         self.gafetes.resolver(id)?;

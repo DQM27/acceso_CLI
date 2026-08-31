@@ -1,21 +1,13 @@
-import type { ReactNode } from "react";
-
 /**
- * Encabezado uniforme de pantalla — título a la izquierda, acciones (botón
- * "+ Nuevo…", etc.) a la derecha. Reemplaza al header improvisado que cada
- * pantalla armaba por su cuenta con estilos en línea propios.
+ * Encabezado uniforme de pantalla — sólo el título. Las acciones de cada
+ * pantalla ("+ Nuevo…", buscador, etc.) van sobre la grilla (`controles`/
+ * `accionesDerecha` de `Tabla`), no acá — ver Ingresos activos como
+ * referencia del patrón que siguen las demás pantallas.
  */
-export default function PantallaEncabezado({
-  titulo,
-  acciones,
-}: {
-  titulo: string;
-  acciones?: ReactNode;
-}) {
+export default function PantallaEncabezado({ titulo }: { titulo: string }) {
   return (
     <div className="pantalla-encabezado">
       <h1>{titulo}</h1>
-      {acciones && <div style={{ display: "flex", gap: "0.5rem" }}>{acciones}</div>}
     </div>
   );
 }

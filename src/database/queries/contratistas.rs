@@ -2,13 +2,20 @@ use chrono::{Duration, NaiveDate};
 use rusqlite::{Connection, Row};
 
 use crate::database::error::DatabaseError;
-use crate::database::queries::{
-    Igualdad, LIMITE_LISTADO_MAXIMO as LIMITE_MAXIMO,
-    LIMITE_LISTADO_PREDETERMINADO as LIMITE_PREDETERMINADO,
-};
+use crate::database::queries::{Igualdad, LIMITE_LISTADO_PREDETERMINADO as LIMITE_PREDETERMINADO};
 use crate::database::search::BusquedaTexto;
 use crate::domain::acceso::DIAS_ADVERTENCIA_PRAIND;
 use crate::models::tipo_ingreso::TipoIngreso;
+
+/// Tope propio de esta consulta, muy por encima de `LIMITE_LISTADO_MAXIMO`
+/// (500, pensado para listados paginados como el de la TUI/`--comandos`) —
+/// la GUI (Tauri) dejó de paginar contratistas: carga el universo completo
+/// una sola vez y deja que AG Grid filtre/ordene del lado del cliente (ver
+/// `desktop/src/pantallas/Contratistas.tsx`), pidiendo `limite: usize::MAX`
+/// (`desktop/src-tauri/src/dto/contratistas.rs`). TUI/`--comandos` siguen
+/// usando `LIMITE_PREDETERMINADO`/`LIMITE_LISTADO_MAXIMO` normales porque sí
+/// paginan de verdad.
+const LIMITE_LISTADO_MAXIMO_CARGA_COMPLETA: usize = 100_000;
 
 /// Página de resultados: `items` respeta `limite`/`offset`, `total` es el conteo real sin
 /// recortar por el filtro — así la UI puede mostrar "100 de 120" en vez de un tope silencioso.
@@ -228,7 +235,7 @@ fn construir_where(
 impl ContratistasQuery for SqliteContratistasQuery<'_> {
     fn buscar(&self, filtro: &FiltroContratistas) -> Result<PaginaContratistas, DatabaseError> {
         let busqueda = BusquedaTexto::preparar(filtro.texto.as_deref());
-        let limite = filtro.limite.clamp(1, LIMITE_MAXIMO) as i64;
+        let limite = filtro.limite.clamp(1, LIMITE_LISTADO_MAXIMO_CARGA_COMPLETA) as i64;
         let offset = filtro.offset as i64;
         let (where_sql, parametros) = construir_where(&busqueda, filtro);
         let params_comunes: Vec<(&str, &dyn rusqlite::ToSql)> = parametros

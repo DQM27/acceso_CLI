@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
+import InterruptorCelda from "../componentes/InterruptorCelda";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import FormularioUsuario from "./FormularioUsuario";
 import { actualizarUsuario, buscarUsuarios } from "../api";
@@ -13,7 +14,7 @@ const columnas: ColDef<UsuarioResumen>[] = [
   { field: "cedula", headerName: "Cédula", width: 140, cellStyle: { textAlign: "left" } },
   { field: "nombre", headerName: "Nombre", flex: 1, cellStyle: { textAlign: "left" } },
   { field: "rol", headerName: "Rol", width: 140 },
-  { field: "activo", headerName: "Activo", width: 100, cellDataType: "boolean", editable: true },
+  { field: "activo", headerName: "Activo", width: 100, cellRenderer: InterruptorCelda },
 ];
 
 export default function Usuarios({ actorRol }: { actorRol: RolUsuario }) {
@@ -58,18 +59,7 @@ export default function Usuarios({ actorRol }: { actorRol: RolUsuario }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PantallaEncabezado
-        titulo="Usuarios"
-        acciones={
-          <button
-            className="boton boton-primario"
-            title="Ctrl+N"
-            onClick={() => setFormularioAbierto("crear")}
-          >
-            + Nuevo usuario
-          </button>
-        }
-      />
+      <PantallaEncabezado titulo="Usuarios" />
 
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
@@ -80,14 +70,22 @@ export default function Usuarios({ actorRol }: { actorRol: RolUsuario }) {
             onCeldaEditada={manejarEdicion}
             onFilaDobleClic={setFormularioAbierto}
             controles={
-              <div className="campo" style={{ flex: "1 1 16rem" }}>
-                Buscar
-                <input
-                  placeholder="Cédula o nombre…"
-                  value={texto}
-                  onChange={(evento) => setTexto(evento.target.value)}
-                />
-              </div>
+              <>
+                <button
+                  className="boton"
+                  title="Ctrl+N"
+                  onClick={() => setFormularioAbierto("crear")}
+                >
+                  + Nuevo
+                </button>
+                <div className="campo" style={{ flex: "1 1 16rem" }}>
+                  <input
+                    placeholder="Cédula o nombre…"
+                    value={texto}
+                    onChange={(evento) => setTexto(evento.target.value)}
+                  />
+                </div>
+              </>
             }
           />
         </div>

@@ -32,7 +32,7 @@ pub fn verificar_acceso(contratista: &Contratista, hoy: NaiveDate) -> ResultadoA
 
     // Regla 2:
     // Si el contratista no requiere PRAIND, puede ingresar.
-    if !contratista.requiere_praind() {
+    if !super::contratista::requiere_praind(contratista) {
         return ResultadoAcceso::Permitido;
     }
 
