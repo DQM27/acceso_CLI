@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import marca from "../assets/marca.png";
 import { login } from "../api";
 import type { UsuarioSesion } from "../api";
 
@@ -43,7 +44,7 @@ export default function Login({
       >
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="marca-sello" aria-hidden="true">
-            B
+            <img src={marca} alt="" />
           </div>
           <div>
             <h1 className="text-lg font-semibold text-texto">Control de acceso</h1>

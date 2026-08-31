@@ -14,13 +14,14 @@ import { textoFechaDDMMYYYY } from "../tiempo";
 // "es de ruta"/"tiene acceso" se pueden tocar directo desde la grilla (ambos
 // booleanos, bajo riesgo) — el resto (cédula, nombre, empresa, tipo, PRAIND)
 // pasa por FormularioContratista (doble click en una fila para editar, botón
-// "+ Nuevo" para dar de alta). Sin filtro propio de la pantalla: filtra/
-// ordena con los filtros nativos de AG Grid por columna (mismo enfoque que
-// Historial) en vez de un formulario de filtros a medida — la grilla carga
-// el universo completo una sola vez (ver `buscarContratistas`) y el resto
-// pasa del lado del cliente. Los dos booleanos no llevan filtro de columna
-// (`filter: false`): AG Grid Community no tiene un filtro booleano nativo
-// decente, y ya se ven/tocan directo con el switch.
+// "+ Nuevo" para dar de alta). Sin formulario de filtros a medida: el
+// buscador de arriba (`busqueda`, quickFilterText de AG Grid) más los
+// filtros nativos por columna (`filtrosPorColumna`, mismo enfoque que
+// Historial) alcanzan — la grilla carga el universo completo una sola vez
+// (ver `buscarContratistas`) y el resto pasa del lado del cliente. Los dos
+// booleanos no llevan filtro de columna (`filter: false`): AG Grid Community
+// no tiene un filtro booleano nativo decente, y ya se ven/tocan directo con
+// el switch.
 const columnas: ColDef<ContratistaResumen>[] = [
   { field: "cedula", headerName: "Cédula", width: 140, cellStyle: { textAlign: "left" } },
   { field: "nombre", headerName: "Nombre", flex: 1, cellStyle: { textAlign: "left" } },
@@ -50,6 +51,7 @@ const columnas: ColDef<ContratistaResumen>[] = [
 
 export default function Contratistas() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [busqueda, setBusqueda] = useState("");
   const [filas, setFilas] = useState<ContratistaResumen[]>([]);
   const [cargando, setCargando] = useState(true);
   const [seleccionadas, setSeleccionadas] = useState<ContratistaResumen[]>([]);
@@ -109,11 +111,21 @@ export default function Contratistas() {
             id="contratistas"
             columnas={columnas}
             filas={filas}
+            busqueda={busqueda}
             filtrosPorColumna
             controles={
-              <button className="boton" title="Ctrl+N" onClick={() => setFormularioAbierto("crear")}>
-                + Nuevo
-              </button>
+              <>
+                <button className="boton" title="Ctrl+N" onClick={() => setFormularioAbierto("crear")}>
+                  + Nuevo
+                </button>
+                <div className="campo" style={{ flex: "1 1 16rem" }}>
+                  <input
+                    placeholder="Cédula o nombre…"
+                    value={busqueda}
+                    onChange={(evento) => setBusqueda(evento.target.value)}
+                  />
+                </div>
+              </>
             }
             seleccionMultiple
             onSeleccionCambia={setSeleccionadas}
