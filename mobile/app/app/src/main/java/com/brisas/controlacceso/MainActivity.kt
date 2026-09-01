@@ -165,16 +165,13 @@ fun PantallaLogin(nucleo: Nucleo) {
     }
 }
 
-/// Sólo las pantallas de uso frecuente son pestañas (Buscar, Activos) — las
-/// de creación (uso esporádico: dar de alta un contratista o una empresa
-/// nuevos) viven detrás del botón "+", no compitiendo por espacio en la
-/// barra de pestañas.
+/// Sólo las pantallas de uso frecuente son pestañas (Activos, Historial) —
+/// las de creación (uso esporádico: dar de alta un contratista, empresa o
+/// usuario nuevos) viven detrás del botón "+", no compitiendo por espacio en
+/// la barra de pestañas. `Principal` es la única bandera "no es pantalla de
+/// creación" — qué pestaña se ve la decide el `pestana` local más abajo.
 private sealed class Pantalla {
-    data object Buscar : Pantalla()
-
-    data object Activos : Pantalla()
-
-    data object Historial : Pantalla()
+    data object Principal : Pantalla()
 
     data object NuevoContratista : Pantalla()
 
@@ -185,7 +182,7 @@ private sealed class Pantalla {
 
 @Composable
 fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, onCerrarSesion: () -> Unit) {
-    var pantalla by remember { mutableStateOf<Pantalla>(Pantalla.Buscar) }
+    var pantalla by remember { mutableStateOf<Pantalla>(Pantalla.Principal) }
     var menuCreacionAbierto by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -243,7 +240,7 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, onCerrarSesion: () 
 
         when (val actual = pantalla) {
             is Pantalla.NuevoContratista, is Pantalla.NuevaEmpresa, is Pantalla.NuevoUsuario -> {
-                TextButton(onClick = { pantalla = Pantalla.Buscar }, modifier = Modifier.padding(start = 8.dp)) {
+                TextButton(onClick = { pantalla = Pantalla.Principal }, modifier = Modifier.padding(start = 8.dp)) {
                     Text("← Volver")
                 }
                 when (actual) {
@@ -255,13 +252,11 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, onCerrarSesion: () 
             else -> {
                 var pestana by remember { mutableIntStateOf(0) }
                 PrimaryTabRow(selectedTabIndex = pestana) {
-                    Tab(selected = pestana == 0, onClick = { pestana = 0 }, text = { Text("Buscar") })
-                    Tab(selected = pestana == 1, onClick = { pestana = 1 }, text = { Text("Activos") })
-                    Tab(selected = pestana == 2, onClick = { pestana = 2 }, text = { Text("Historial") })
+                    Tab(selected = pestana == 0, onClick = { pestana = 0 }, text = { Text("Activos") })
+                    Tab(selected = pestana == 1, onClick = { pestana = 1 }, text = { Text("Historial") })
                 }
                 when (pestana) {
-                    0 -> PantallaContratistas(nucleo)
-                    1 -> PantallaActivos(nucleo)
+                    0 -> PantallaActivos(nucleo)
                     else -> PantallaHistorial(nucleo)
                 }
             }
