@@ -80,8 +80,8 @@ fn estado_shell(state: &MenuPrincipalState, sesion: &UsuarioSesion) -> (String, 
         Some(ConfirmacionMenu::Salir) => {
             ("¿Desea cerrar BRISAS CLI?".to_owned(), StatusKind::Warning)
         }
-        Some(ConfirmacionMenu::ModoComandos) => (
-            "La aplicación se reiniciará en la interfaz de comandos, que quedará como \
+        Some(ConfirmacionMenu::Cli) => (
+            "La aplicación se reiniciará en la CLI, que quedará como \
              default. ¿Continuar?"
                 .to_owned(),
             StatusKind::Warning,
@@ -150,7 +150,7 @@ fn render_lista(
             matches!(
                 o,
                 OpcionMenu::CambiarPassword
-                    | OpcionMenu::ModoComandos
+                    | OpcionMenu::Cli
                     | OpcionMenu::CerrarSesion
                     | OpcionMenu::Salir
             )

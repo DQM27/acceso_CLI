@@ -8,11 +8,11 @@ use crate::domain::acceso::DIAS_ADVERTENCIA_PRAIND;
 use crate::models::tipo_ingreso::TipoIngreso;
 
 /// Tope propio de esta consulta, muy por encima de `LIMITE_LISTADO_MAXIMO`
-/// (500, pensado para listados paginados como el de la TUI/`--comandos`) —
+/// (500, pensado para listados paginados como el de la TUI/`--cli`) —
 /// la GUI (Tauri) dejó de paginar contratistas: carga el universo completo
 /// una sola vez y deja que AG Grid filtre/ordene del lado del cliente (ver
 /// `desktop/src/pantallas/Contratistas.tsx`), pidiendo `limite: usize::MAX`
-/// (`desktop/src-tauri/src/dto/contratistas.rs`). TUI/`--comandos` siguen
+/// (`desktop/src-tauri/src/dto/contratistas.rs`). TUI/`--cli` siguen
 /// usando `LIMITE_PREDETERMINADO`/`LIMITE_LISTADO_MAXIMO` normales porque sí
 /// paginan de verdad.
 const LIMITE_LISTADO_MAXIMO_CARGA_COMPLETA: usize = 100_000;
@@ -134,7 +134,7 @@ fn construir_where(
     let mut condiciones: Vec<String> = Vec::new();
     let mut parametros: ParametrosSql = Vec::new();
 
-    // Sólo cédula y nombre — el buscador principal (`--comandos`: texto sin
+    // Sólo cédula y nombre — el buscador principal (`--cli`: texto sin
     // `/`; TUI clásica: mismo filtro) no busca por empresa. Encontrar un
     // contratista tecleando el nombre de su empresa era una coincidencia
     // accidental del filtro compartido con `empresa:` de Historial, no un

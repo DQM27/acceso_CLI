@@ -44,7 +44,7 @@ resuelve.** Si se descarta en vez de hacerse, se marca `[x]` igual con una nota 
 ## RBAC en la GUI — fisuras encontradas en análisis de roles (2026-08-30)
 
 No son bypass de seguridad — `AppCore` sigue rechazando estas operaciones del lado del
-núcleo en los dos casos — pero sí inconsistencias reales entre la GUI y el TUI/`--comandos`,
+núcleo en los dos casos — pero sí inconsistencias reales entre la GUI y el TUI/`--cli`,
 que sí filtran correctamente. Encontradas en una revisión completa del modelo de roles
 (`src/domain/autorizacion.rs`) y su aplicación en las tres interfaces.
 
@@ -70,12 +70,12 @@ que sí filtran correctamente. Encontradas en una revisión completa del modelo 
   `resolver()` (`src/lenguaje_comandos/resolver.rs`, compartido por TUI y GUI) devolvía
   `ContextState::NuevoUsuario` sin mirar `sesion.rol` en esa rama. La TUI lo tapaba con una
   segunda capa en el controlador de teclado (`abrir_formulario_nuevo_usuario`,
-  `src/comandos/formulario_usuario_controller.rs`), pero la GUI llama a `resolver` directo
+  `src/cli/formulario_usuario_controller.rs`), pero la GUI llama a `resolver` directo
   desde `ejecutar_comando` (`desktop/src-tauri/src/comandos/consola.rs`) sin pasar por esa
   segunda capa — así que a un Operador se le abría el formulario sin ningún filtro. Se agregó
   el mismo gate (`sesion.rol.puede(Operacion::GestionarUsuarios)`) directo en `resolver()`,
   mismo criterio que ya usan `pagina_usuarios`/`pagina_auditoria` en el mismo archivo — ahora
-  es un solo lugar que las tres interfaces (TUI, `--comandos`, GUI) consultan, en vez de que
+  es un solo lugar que las tres interfaces (TUI, `--cli`, GUI) consultan, en vez de que
   cada una tenga que acordarse de repetir el chequeo. `cargo fmt`, Clippy estricto
   (`-D warnings`) y la suite completa (467 tests) en verde.
 
@@ -200,7 +200,7 @@ que sí filtran correctamente. Encontradas en una revisión completa del modelo 
   paginado (`AppCore::buscar_auditoria_completo`, núcleo) + AG Grid virtualiza del lado del
   cliente, un solo buscador (`quickFilterText`), sin exportación (no se pidió). Columnas
   separadas (Fecha, Hora, Entidad, Tipo, Campo, Valor anterior, Valor nuevo, Modificado por)
-  en vez del texto combinado "Campo: antes → después" que usa `--comandos`/TUI clásica —
+  en vez del texto combinado "Campo: antes → después" que usa `--cli`/TUI clásica —
   mejor para ordenar/buscar en una grilla.
   - Tabla vieja `auditoria_contratistas` reemplazada por `auditoria_cambios` (genérica,
     `entidad`/`entidad_id`/`entidad_nombre` + snapshot de `usuario_nombre`/`entidad_nombre`
@@ -212,7 +212,7 @@ que sí filtran correctamente. Encontradas en una revisión completa del modelo 
     más adelante.
 
 - [x] **Respaldos — descartado de la GUI a propósito (2026-08-28).** Decisión explícita del
-  usuario, por seguridad: Respaldos se queda exclusivo de la consola (`--comandos`/TUI
+  usuario, por seguridad: Respaldos se queda exclusivo de la consola (`--cli`/TUI
   clásica), no se construye una pantalla en la GUI. No es un "todavía no" — es la decisión
   final salvo que el usuario lo retome explícitamente.
 

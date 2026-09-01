@@ -1,11 +1,11 @@
 //! Preferencia persistente de qué interfaz abrir por defecto al arrancar sin
 //! flags — la lee `main.rs` antes de decidir la ruta de arranque, y la
 //! escriben los dos gestos que cambian de interfaz "para siempre": el
-//! comando `/clasico` de `--comandos` y la opción "Modo comandos" del Menú
+//! comando `/clasico` de `--cli` y la opción "Modo CLI" del Menú
 //! Principal de la TUI clásica. Mismo directorio de datos que
-//! `comandos::preferencias` (`%LOCALAPPDATA%\ControlAcceso`), archivo propio.
+//! `cli::preferencias` (`%LOCALAPPDATA%\ControlAcceso`), archivo propio.
 //!
-//! Los flags `--tui-clasica`/`--comandos` siguen siendo overrides puntuales
+//! Los flags `--tui-clasica`/`--cli` siguen siendo overrides puntuales
 //! de un solo arranque (ver `main.rs`): ni leen ni escriben este archivo, así
 //! que probar la otra interfaz una vez no cambia el default sin querer.
 
@@ -16,21 +16,21 @@ const FILE_NAME: &str = "interfaz-preferida.conf";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Interfaz {
     Clasica,
-    Comandos,
+    Cli,
 }
 
 impl Interfaz {
     fn como_texto(self) -> &'static str {
         match self {
             Self::Clasica => "clasica",
-            Self::Comandos => "comandos",
+            Self::Cli => "cli",
         }
     }
 
     fn desde_texto(texto: &str) -> Option<Self> {
         match texto.trim() {
             "clasica" => Some(Self::Clasica),
-            "comandos" => Some(Self::Comandos),
+            "cli" => Some(Self::Cli),
             _ => None,
         }
     }
@@ -47,13 +47,13 @@ fn ruta() -> Option<PathBuf> {
 
 /// `None` sin preferencia guardada (archivo ausente, contenido irreconocible
 /// o sin `%LOCALAPPDATA%` disponible) — el llamador cae al default vigente
-/// (hoy, `--comandos`).
+/// (hoy, `--cli`).
 pub fn leer() -> Option<Interfaz> {
     Interfaz::desde_texto(&fs::read_to_string(ruta()?).ok()?)
 }
 
 /// Nunca falla el flujo que la llama (mismo criterio que
-/// `comandos::preferencias`): sin `%LOCALAPPDATA%` o sin permiso de
+/// `cli::preferencias`): sin `%LOCALAPPDATA%` o sin permiso de
 /// escritura, sigue como si no se hubiera llamado — el peor caso es que la
 /// próxima vez arranque en la interfaz de siempre en vez de la recién
 /// elegida, nunca un error visible a mitad de un reinicio.
@@ -74,7 +74,7 @@ mod tests {
     #[test]
     fn desde_texto_reconoce_los_dos_valores() {
         assert_eq!(Interfaz::desde_texto("clasica"), Some(Interfaz::Clasica));
-        assert_eq!(Interfaz::desde_texto("comandos"), Some(Interfaz::Comandos));
+        assert_eq!(Interfaz::desde_texto("cli"), Some(Interfaz::Cli));
     }
 
     #[test]

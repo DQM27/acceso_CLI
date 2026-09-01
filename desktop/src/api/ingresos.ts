@@ -108,7 +108,7 @@ export function mensajeMotivoDenegacion(motivo: MotivoDenegacion): string {
 
 const MAX_LARGO_GAFETES = 60;
 
-/** Mismo criterio que `SalidaGafeteState::asignar_texto` (`--comandos`):
+/** Mismo criterio que `SalidaGafeteState::asignar_texto` (`--cli`):
  * sólo dígitos, coma (separador de lista) y espacio. Compartido por
  * `SalidaModal` y la consola — ambos implementan el mismo modo enclavado
  * de "sacar por gafete", uno como panel de formulario, el otro como modo

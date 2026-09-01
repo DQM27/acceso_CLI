@@ -1,8 +1,8 @@
-# Plan: alta y edición de contratistas en la interfaz `--comandos`
+# Plan: alta y edición de contratistas en la interfaz `--cli`
 
 ## Contexto y decisión (ya acordada con el usuario)
 
-- La CLI (`src/comandos/`) hoy cubre el ciclo ingreso/salida. Faltan altas/ediciones de contratistas, empresas y usuarios. **Se empieza por contratistas.**
+- La CLI (`src/cli/`) hoy cubre el ciclo ingreso/salida. Faltan altas/ediciones de contratistas, empresas y usuarios. **Se empieza por contratistas.**
 - UX elegida por el usuario: **formulario en pantalla** dentro del área contextual, y **el mismo formulario precargado** sirve para editar (se llega con `/editar <nombre>` → lista → elegir).
 - Todo se apoya en `AppCore` existente; la autorización real ya vive ahí (el rol se re-lee de SQLite en cada operación). No se toca la TUI clásica.
 
@@ -50,9 +50,9 @@
 
 1. **`docs/plan-cli-contratistas.md`** (PRIMER PASO, lo pidió el usuario): copiar este plan tal cual para poder retomar si la app se cierra.
 
-2. **`src/comandos/parser.rs`**: variantes `Nuevo` y `Editar` en `Comando` (+ `TODOS` a 7, `nombre()`, `desde_texto()` con alias `n`/`e`). Tests: `/nuevo`, `/editar car`, `/n`, `/e`, largo de `TODOS`.
+2. **`src/cli/parser.rs`**: variantes `Nuevo` y `Editar` en `Comando` (+ `TODOS` a 7, `nombre()`, `desde_texto()` con alias `n`/`e`). Tests: `/nuevo`, `/editar car`, `/n`, `/e`, largo de `TODOS`.
 
-3. **`src/comandos/formulario.rs` (NUEVO, lógica pura sin terminal ni AppCore):**
+3. **`src/cli/formulario.rs` (NUEVO, lógica pura sin terminal ni AppCore):**
    - `enum ModoFormulario { Nuevo, Editar { id: i64 } }`
    - `enum Campo { Cedula, Nombre, Empresa, Tipo, FechaPraind, Ruta, Acceso, Confirmar }`
    - `enum Subfase { Editando, EligiendoEmpresa { seleccion: usize }, Resumen }`
@@ -60,18 +60,18 @@
    - Métodos: `nuevo(empresas, acceso_editable)`, `editar(&ContratistaResumen, empresas, cedula_editable, acceso_editable)`, `campos_navegables()` (omite bloqueados), `siguiente()/anterior()`, `alternar(delta)`, `agregar_fecha(digito)` / `borrar_fecha()` (auto `/`), `empresas_filtradas(consulta)`, `validar() -> Result<DatosContratista, Vec<(Campo, String)>>` (cédula/nombre no vacíos tras trim, empresa presente, fecha `%d/%m/%Y` obligatoria sólo si `requiere_praind()`), `datos_actualizacion()` (misma forma, otro struct).
    - Tests unitarios aquí mismo: navegación salta bloqueados, fecha auto-`/`, validación (vacíos, fecha inválida/requerida/no requerida, sin empresa), ciclo de tipo, precarga en edición, cédula bloqueada no modificable.
 
-4. **`src/comandos/estado.rs`:** variante `ContextState::NuevoContratista`; campo `AppState.formulario: Option<FormularioContratista>`.
+4. **`src/cli/estado.rs`:** variante `ContextState::NuevoContratista`; campo `AppState.formulario: Option<FormularioContratista>`.
 
-5. **`src/comandos/resolver.rs`:** `Comando::Nuevo` → `NuevoContratista` o `MensajeError` si trae consulta; `Comando::Editar` → `resolver_busqueda_contratistas`. `calcular_sugerencias`: pistas para `/nuevo` y `/editar`.
+5. **`src/cli/resolver.rs`:** `Comando::Nuevo` → `NuevoContratista` o `MensajeError` si trae consulta; `Comando::Editar` → `resolver_busqueda_contratistas`. `calcular_sugerencias`: pistas para `/nuevo` y `/editar`.
 
-6. **`src/comandos/render.rs`:**
+6. **`src/cli/render.rs`:**
    - `descripcion_comando`: Nuevo → "dar de alta un contratista", Editar → "editar un contratista — /editar <nombre>".
    - `lineas_formulario(&FormularioContratista, ancho)`: título "NUEVO CONTRATISTA" / "EDITAR CONTRATISTA — <nombre>", una línea por campo (`▸` en el activo, bloqueados apagados con "(sin permiso)", `✗` + mensaje junto a campos con error, bools como Sí/No, tipo con su etiqueta). En `EligiendoEmpresa`: lista filtrada (máx. 7) bajo los campos con selección resaltada. En `Resumen`: tarjeta "REVISAR Y CONFIRMAR".
    - `lineas_contexto`: nueva variante `NuevoContratista` (tarjeta de entrada).
    - `lineas_ayuda`: añadir `/nuevo` y `/editar <nombre>`; actualizar línea de alias (`/i /s /a /n /e /cs`).
    - Prompt: etiqueta según campo activo cuando hay formulario; línea de pistas por sub-fase ("↑↓ campo · Enter siguiente · Esc cancelar", "escriba para filtrar · ↑↓ elegir · Enter aceptar", etc.).
 
-7. **`src/comandos/mod.rs`:**
+7. **`src/cli/mod.rs`:**
    - `recomputar`: no-op mientras `app.formulario.is_some()`.
    - `manejar_operando`: si hay formulario, delegar en `manejar_formulario` (nuevo) antes que el manejo normal.
    - `manejar_formulario(core, app, key)`: rutas de teclas descritas arriba, sincronizando input ↔ campo activo; la persistencia (Enter en Resumen) llama `core.crear_contratista`/`core.actualizar_contratista` con la `sesion` de `Fase::Operando`, feedback según resultado, y al cerrar formulario: `input.reset()` + `recomputar`.
@@ -84,5 +84,5 @@
 
 - No se añaden comandos de activar/desactivar ni borrado: el acceso se controla con el campo Acceso del formulario de edición (igual que la TUI, que no tiene "desactivar contratista" aparte).
 - Empresas y usuarios quedan para fases siguientes sobre este mismo patrón (el doc en `docs/` debe mencionarlo como pendiente, quizá también en `docs/pendientes.md` si aplica).
-- Restricción vigente del proyecto: no tocar la TUI clásica (`src/tui/`); todo vive en `src/comandos/`.
+- Restricción vigente del proyecto: no tocar la TUI clásica (`src/tui/`); todo vive en `src/cli/`.
 - Nunca usar la palabra prohibida por el usuario (ver AGENTS.md): "puesto de control" / "portería".

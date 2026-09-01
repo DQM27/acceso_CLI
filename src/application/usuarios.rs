@@ -225,7 +225,7 @@ impl AppCore {
     }
 
     /// Verifica la contraseña actual sin cambiar nada — gate de `/clave` en
-    /// la interfaz de comandos antes de mostrar los campos de contraseña
+    /// la CLI antes de mostrar los campos de contraseña
     /// nueva: verificar primero evita pedirla dos veces sólo para
     /// descartarla al final porque la actual estaba mal.
     pub fn verificar_mi_password(

@@ -17,7 +17,7 @@ expression: volcado
                   8   Respaldos                             
                   9   Cambiar mi contraseña                 
                   G   Gestión de gafetes                    
-                  M   Modo comandos                         
+                  M   Modo CLI                              
                   L   Cerrar sesión                         
                   Q   Salir                                 
  Registrar la entrada de un contratista.                    
@@ -53,7 +53,7 @@ expression: volcado
 "                  8   Respaldos                             " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "                  9   Cambiar mi contraseña                 " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "                  G   Gestión de gafetes                    " fg=Rgb(220, 225, 228) bg=Black mod=NONE
-"                  M   Modo comandos                         " fg=Rgb(220, 225, 228) bg=Black mod=NONE
+"                  M   Modo CLI                              " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "                  L   Cerrar sesión                         " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 "                  Q   Salir                                 " fg=Rgb(220, 225, 228) bg=Black mod=NONE
 " " fg=Rgb(220, 225, 228) bg=Black mod=NONE

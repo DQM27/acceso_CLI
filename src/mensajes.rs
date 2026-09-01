@@ -1,5 +1,5 @@
 //! Mensajes de error en español, compartidos por cualquier interfaz (TUI
-//! clásica, comandos, futura GUI): traducen errores de servicio a texto
+//! clásica, CLI, futura GUI): traducen errores de servicio a texto
 //! accionable sin exponer detalles internos de base de datos.
 
 use crate::domain::resultado_acceso::MotivoDenegacion;

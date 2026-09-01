@@ -1,10 +1,14 @@
-# Lenguaje visual de mutaciones — interfaz de comandos
+# Lenguaje visual de mutaciones — interfaz de comandos (hoy "CLI")
 
-> **Nota de nomenclatura:** el flag `--comandos` ya no existe — la interfaz
-> de comandos es ahora la ruta por defecto al arrancar la aplicación (sin
-> flags). La TUI clásica quedó detrás de `--tui-clasica`. Donde este
-> documento diga "`--comandos`" léase "la interfaz de comandos" (el nombre
-> del módulo `src/comandos/` no cambió). Ver DEC-017.
+> **Nota de nomenclatura:** el flag `--comandos` ya no existe — primero pasó a
+> ser la ruta por defecto al arrancar la aplicación (sin flags, ver DEC-017),
+> y esa misma interfaz se renombró después a "CLI" (2026-09-01): el módulo
+> pasó de `src/comandos/` a `src/cli/`, el flag de override puntual es ahora
+> `--cli`, y "Modo comandos" del Menú Principal es ahora "Modo CLI". La TUI
+> clásica quedó detrás de `--tui-clasica`. Donde este documento diga
+> "`--comandos`"/"interfaz de comandos"/"`src/comandos/`" léase "`--cli`"/"la
+> CLI"/"`src/cli/`" — es sólo el nombre, el diseño y el comportamiento
+> descritos acá no cambiaron.
 
 Este documento es la referencia técnica y visual oficial de la nueva capa
 interactiva de comandos. Complementa a [`docs/auditoria-ratatui.md`](auditoria-ratatui.md),

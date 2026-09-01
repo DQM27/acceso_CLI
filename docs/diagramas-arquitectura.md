@@ -146,7 +146,7 @@ flowchart TD
     M --> G["Gafetes"]
     M --> R["Respaldos<br/>Root"]
     M --> P["Cambiar contraseña"]
-    M --> MC["Modo comandos<br/>reinicia el entorno"]
+    M --> MC["Modo CLI<br/>reinicia el entorno"]
 
     E --> F2["Salida rápida global<br/>F2"]
     I --> M

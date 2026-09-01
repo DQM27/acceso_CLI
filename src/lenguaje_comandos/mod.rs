@@ -1,4 +1,4 @@
-//! El lenguaje de comandos de `--comandos` (parser + resolver + resultado),
+//! El lenguaje de comandos de `--cli` (parser + resolver + resultado),
 //! separado de `comandos/` a propósito: ninguno de estos tres archivos
 //! depende de `ratatui`/`crossterm`/`tui-input` (ver sus propios
 //! doc-comments), así que viven en un módulo siempre disponible, sin la

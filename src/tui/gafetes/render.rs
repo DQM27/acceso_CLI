@@ -88,7 +88,7 @@ pub fn render(
     };
 
     // Sin pestañas a propósito: `GestionGafetes` es un acceso por letra (G),
-    // no numérico — mismo grupo que ModoComandos/CerrarSesion/Salir, que
+    // no numérico — mismo grupo que Cli/CerrarSesion/Salir, que
     // tampoco participan de la barra de pestañas del tema Negro
     // (`OpcionMenu::indice_pestana`).
     let shell = ScreenShell {

@@ -2,7 +2,7 @@
 # packaging/alacritty/README.md para cómo se arma la carpeta completa
 # (Alacritty.exe + este archivo + control_acceso.exe, uno al lado del otro).
 #
-# Paleta calcada de la de la propia app (`FADE_*` en src/comandos/render.rs,
+# Paleta calcada de la de la propia app (`FADE_*` en src/cli/render/estilos.rs,
 # la misma que usan las animaciones de fundido), para que el terminal se vea
 # igual sin importar qué defaults traiga Windows/la máquina de destino.
 #

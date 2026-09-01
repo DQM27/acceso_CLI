@@ -1,6 +1,5 @@
 ---
 source: src/tui/visual_tests.rs
-assertion_line: 308
 expression: volcado
 ---
 === texto ===
@@ -24,7 +23,7 @@ expression: volcado
                                                                                                    
                                     SESIÓN                                                         
                                       9   Cambiar mi contraseña                                    
-                                      M   Modo comandos                                            
+                                      M   Modo CLI                                                 
                                       L   Cerrar sesión                                            
                                       Q   Salir                                                    
                                                                                                    
@@ -76,7 +75,7 @@ expression: volcado
 "SESIÓN" fg=Rgb(105, 135, 111) bg=Black mod=NONE
 "                                                         " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                      9   Cambiar mi contraseña                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
-"                                      M   Modo comandos                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
+"                                      M   Modo CLI                                                 " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                      L   Cerrar sesión                                            " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                      Q   Salir                                                    " fg=Rgb(196, 220, 199) bg=Black mod=NONE
 "                                                                                                   " fg=Rgb(196, 220, 199) bg=Black mod=NONE

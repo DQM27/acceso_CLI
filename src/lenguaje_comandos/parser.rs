@@ -1,4 +1,4 @@
-//! Parseo puro de la línea de comandos de la interfaz `--comandos`.
+//! Parseo puro de la línea de comandos de la interfaz `--cli`.
 //!
 //! Sin IO, sin ratatui, sin SQLite: toma el texto crudo del input y devuelve
 //! una [`Entrada`] estructurada. Todo lo inválido (comando desconocido, gafete

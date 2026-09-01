@@ -1,6 +1,5 @@
 ---
 source: src/tui/visual_tests.rs
-assertion_line: 308
 expression: volcado
 ---
 === texto ===
@@ -24,7 +23,7 @@ expression: volcado
                                                                                                     
                                     SESIÓN                                                          
                                       9   Cambiar mi contraseña                                     
-                                      M   Modo comandos                                             
+                                      M   Modo CLI                                                  
                                       L   Cerrar sesión                                             
                                       Q   Salir                                                     
                                                                                                     
@@ -76,7 +75,7 @@ expression: volcado
 "SESIÓN" fg=Rgb(148, 148, 158) bg=Rgb(36, 36, 39) mod=NONE
 "                                                          " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
 "                                      9   Cambiar mi contraseña                                     " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
-"                                      M   Modo comandos                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
+"                                      M   Modo CLI                                                  " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
 "                                      L   Cerrar sesión                                             " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
 "                                      Q   Salir                                                     " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE
 "                                                                                                    " fg=Rgb(232, 232, 235) bg=Rgb(36, 36, 39) mod=NONE

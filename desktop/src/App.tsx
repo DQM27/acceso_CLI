@@ -95,7 +95,7 @@ export default function App() {
       <div style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center" }}>
         <p style={{ maxWidth: "24rem", textAlign: "center", color: "var(--muted)" }}>
           Todavía no existe un usuario ROOT. Creá el usuario ROOT inicial desde la consola
-          (<code>--tui-clasica</code> o <code>--comandos</code>) y volvé a abrir esta ventana.
+          (<code>--tui-clasica</code> o <code>--cli</code>) y volvé a abrir esta ventana.
         </p>
       </div>
     );
@@ -191,7 +191,7 @@ function Shell({
   // defecto de la librería).
   useHotkeys("ctrl+shift+n", () => setModalNuevoIngreso(true), { preventDefault: true });
   useHotkeys("ctrl+shift+s", () => setModalSalida(true), { preventDefault: true });
-  // Mismo atajo que la TUI clásica y --comandos (Ctrl+Q cierra sesión desde
+  // Mismo atajo que la TUI clásica y --cli (Ctrl+Q cierra sesión desde
   // cualquier pantalla) — acá sin tarjeta de confirmación porque el botón
   // "Cerrar sesión" del sidebar tampoco la pide, así el atajo y el botón se
   // comportan igual.

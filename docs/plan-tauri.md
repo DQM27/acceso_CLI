@@ -9,7 +9,7 @@
 ## Contexto
 
 `control_acceso` tiene hoy dos interfaces de terminal que conviven sobre el mismo núcleo: la TUI
-clásica (`src/tui/`, ratatui+crossterm) y `--comandos` (`src/comandos/`, la interfaz por defecto).
+clásica (`src/tui/`, ratatui+crossterm) y `--cli` (`src/cli/`, la interfaz por defecto).
 Este documento agrega una tercera: una GUI de escritorio con Tauri v2.
 
 **Decisión de producto explícita: la GUI complementa, no reemplaza.** La meta es tener **tres
@@ -18,7 +18,7 @@ negocio se escribe **una sola vez**; cada interfaz sólo conecta su propia forma
 datos. Ninguna interfaz tiene fecha de congelamiento ni de reemplazo.
 
 **La GUI no es un calco.** Cada pantalla, al construirse, se diseña como su propio sistema gráfico
-(tablas, mouse, modales) — no una traducción literal del layout de texto de la TUI/comandos. Sólo
+(tablas, mouse, modales) — no una traducción literal del layout de texto de la TUI/CLI. Sólo
 se reutiliza la lógica detrás (qué datos, qué reglas, qué errores), nunca el layout.
 
 **Estado actual: sólo planeación.** No hay código de la GUI todavía. Cuando se decida empezar, el
@@ -34,18 +34,18 @@ no sólo asumido:
   binario nuevo reutilice el núcleo ya existe hoy, sin cambios.
 - Cero archivos de `application/`, `services/`, `domain/`, `database/`, `models/` importan
   `ratatui`/`crossterm`/`tui-input` (grep exhaustivo: 79 archivos con esos crates, 100% dentro de
-  `src/tui/**` o `src/comandos/**`).
+  `src/tui/**` o `src/cli/**`).
 - `AppCore` (`src/application/mod.rs`) ya es consumido hoy por **dos** interfaces de terminal
   distintas sin una sola regla de negocio duplicada — precedente real de que "una interfaz nueva
   sobre `AppCore`" funciona en este proyecto.
 - ~375 tests de negocio/persistencia no dependen de ninguna interfaz (instancian `AppCore`
   directamente).
 
-Lo único que falta antes de empezar: un feature flag en Cargo que aísle `comandos`/`tui` (y por lo
+Lo único que falta antes de empezar: un feature flag en Cargo que aísle `cli`/`tui` (y por lo
 tanto `ratatui`/`crossterm`/`tui-input`) para que el binario GUI no los arrastre (Fase 0, abajo).
 
 Dimensión honesta del esfuerzo: de 37 247 líneas en `src/`, el 79% (29 574 líneas) es interfaz
-(`tui/`+`comandos/`) y sólo 18% es núcleo. Sumar una tercera interfaz es escribir una capa de
+(`tui/`+`cli/`) y sólo 18% es núcleo. Sumar una tercera interfaz es escribir una capa de
 presentación nueva de tamaño comparable a las que ya existen — eso es inherente a "3 formas de ver
 lo mismo", no un atajo posible. Lo que sí se evita es duplicar lógica de negocio.
 
@@ -53,7 +53,7 @@ lo mismo", no un atajo posible. Lo que sí se evita es duplicar lógica de negoc
 
 ```
 TUI clásica ─┐
-comandos ────┼──► AppCore (src/application/) ──► services/ ──► database/ (9 traits + SQLite) ──► SQLite
+cli ────┼──► AppCore (src/application/) ──► services/ ──► database/ (9 traits + SQLite) ──► SQLite
 Tauri (nuevo)┘         (fachada única,              (genéricos sobre
                      sin reglas propias)              traits de repo)
 ```
@@ -73,7 +73,7 @@ crates mismos `optional = true` y ligarlos a la feature con `dep:`:
 ```toml
 [features]
 default = ["terminal-ui"]
-# Verificado por grep: cero uso fuera de src/tui/** y src/comandos/**.
+# Verificado por grep: cero uso fuera de src/tui/** y src/cli/**.
 # rust_xlsxwriter queda AFUERA a propósito — application/historial.rs lo usa
 # para exportar, y eso lo necesita cualquier interfaz, no sólo la terminal.
 terminal-ui = ["dep:ratatui", "dep:crossterm", "dep:tui-input", "dep:query-parser", "dep:rpassword"]
@@ -89,7 +89,7 @@ rpassword = { version = "7", optional = true }
 En `src/lib.rs`:
 ```rust
 #[cfg(feature = "terminal-ui")]
-pub mod comandos;
+pub mod cli;
 #[cfg(feature = "terminal-ui")]
 pub mod tui;
 ```
@@ -103,12 +103,12 @@ también intenta compilar el binario de consola, que sí necesita esos crates) �
 
 **2. Extraer `src/tui/app/error_messages.rs`** (mapea errores de servicio a texto humano) a
 `src/mensajes.rs`, un módulo neutral público (`pub mod mensajes;` en `lib.rs`, sin feature-gate —
-lo van a usar tanto `tui`/`comandos` como, más adelante, los comandos Tauri). Ya hecho: funciones
+lo van a usar tanto `tui`/`cli` como, más adelante, los comandos Tauri). Ya hecho: funciones
 pasaron de `pub(super)` a `pub`, y se actualizaron los 4 imports que lo usaban dentro de `tui/`
 (`auth_jobs.rs`, `actions/{catalogos,admin,accesos}.rs`). Deliberadamente **no** se tocó la copia
-manual paralela en `src/comandos/operando.rs` (~línea 519) — su texto difiere un poco del de
+manual paralela en `src/cli/operando.rs` (~línea 519) — su texto difiere un poco del de
 `mensajes.rs` (p. ej. antepone "Acceso denegado: " al motivo), y unificarla ahora habría cambiado
-el texto que ve el usuario de `comandos` — eso es un cambio de comportamiento, fuera del alcance de
+el texto que ve el usuario de `cli` — eso es un cambio de comportamiento, fuera del alcance de
 "cero cambio" de esta fase. Se consolida cuando se escriba el primer comando Tauri que mapee esos
 mismos errores.
 
@@ -121,7 +121,7 @@ cargo test --features dev-auth
 cargo clippy --all-targets -- -D warnings
 cargo check --no-default-features   # confirma que el núcleo solo compila sin ratatui/crossterm
 ```
-Manual: `cargo run --release` y confirmar que login/menú/comandos/`--tui-clasica` se comportan
+Manual: `cargo run --release` y confirmar que login/menú/cli/`--tui-clasica` se comportan
 exactamente igual que antes.
 
 ## Estructura para `desktop/` (ya generada)
@@ -260,7 +260,7 @@ plan de "portar 13 archivos", es por dónde conviene empezar y qué depende de q
 2. **CRUD de catálogo**: contratistas (alta/edición completa), empresas, usuarios, cambiar
    contraseña propia.
 3. **Operación diaria**: nuevo ingreso (matriz PRAIND/gafete de
-   `docs/radiografia-dominio-comandos.md`), salida rápida, activos.
+   `docs/radiografia-dominio-cli.md`), salida rápida, activos.
 4. **Consulta pesada**: historial (paginado + export XLSX vía `tauri-plugin-dialog`), auditoría de
    contratistas.
 5. **Administración sensible**: respaldos (crear/listar/validar/exportar es simple; **restaurar**
@@ -271,11 +271,11 @@ Aclaraciones de mapeo: el menú principal de la TUI no se migra como "pantalla" 
 absorbe el shell/barra lateral de la GUI); la pantalla "Configuración" de la TUI clásica es, por
 dentro, la de Respaldos (grupo 5).
 
-## `comandos` / TUI clásica: tres interfaces conviviendo por diseño
+## `cli` / TUI clásica: tres interfaces conviviendo por diseño
 
 No hay congelamiento ni fecha de reemplazo. La lógica de negocio se escribe una sola vez
 (`application/services/domain/database/models`), y cada interfaz decide, a su propio ritmo, si y
-cuándo construye la presentación de una funcionalidad nueva. `comandos` sigue siendo hoy la
+cuándo construye la presentación de una funcionalidad nueva. `cli` sigue siendo hoy la
 interfaz de uso diario y puede seguir recibiendo trabajo normalmente en paralelo a la GUI.
 
 **Nota no bloqueante:** `docs/plan-gafetes.md` (aprobado 2026-08-22, sin implementar) está escrito
@@ -307,12 +307,12 @@ Node.js instalado en la máquina de build. CI no se toca hasta que el primer tra
 
 ## Verificación end-to-end (cuando se empiece a construir)
 
-- **Fase 0**: comandos de arriba en verde, sin tocar `src/tui/` ni `src/comandos/` salvo el import
+- **Fase 0**: comandos de arriba en verde, sin tocar `src/tui/` ni `src/cli/` salvo el import
   mecánico de `error_messages`.
 - **Primer tramo (login + contratistas)**: `cargo check` y `cargo tree -i ratatui` dentro de
   `desktop/src-tauri` (debe fallar/no encontrar el paquete), `cargo tauri dev`; a mano: login
   correcto e incorrecto, mover/redimensionar la ventana durante el cálculo de Argon2 (no debe
-  congelarse), comparar una búsqueda de contratista contra el mismo filtro en `comandos`/
+  congelarse), comparar una búsqueda de contratista contra el mismo filtro en `cli`/
   `--tui-clasica` (con la GUI cerrada, por el candado de instancia).
 - **Cada tramo siguiente**: `cargo check`/`cargo clippy` en `desktop/src-tauri`, recorrido manual
   de cada operación, y verificación cruzada: lo que la GUI escribe en SQLite debe verse
@@ -326,5 +326,5 @@ Node.js instalado en la máquina de build. CI no se toca hasta que el primer tra
 - `src/application/mod.rs` y submódulos — API que consumen los comandos Tauri
 - `src/services/autenticacion_service.rs`, `src/tui/app/auth_jobs.rs` — patrón de Argon2 en dos pasos
 - `src/models/usuario.rs` — motivo del DTO obligatorio
-- `docs/radiografia-dominio-comandos.md` — reglas de negocio (PRAIND/gafete) que la GUI consume sin reimplementar
+- `docs/radiografia-dominio-cli.md` — reglas de negocio (PRAIND/gafete) que la GUI consume sin reimplementar
 - `docs/plan-gafetes.md` — pendiente, revisar contra qué interfaz antes de retomarlo

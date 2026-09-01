@@ -13,15 +13,15 @@ use control_acceso::tui::app::SalidaApp;
 const FLAG_RESET_ROOT: &str = "--reset-root";
 
 /// Interfaz clásica (menús y paneles). Sin flags, la ruta por defecto es la
-/// que diga `interfaz_preferida::leer()` (comandos si no hay ninguna
-/// guardada todavía) — este flag y `FLAG_COMANDOS` son overrides puntuales
+/// que diga `interfaz_preferida::leer()` (CLI si no hay ninguna
+/// guardada todavía) — este flag y `FLAG_CLI` son overrides puntuales
 /// de un solo arranque, no tocan esa preferencia.
 const FLAG_TUI_CLASICA: &str = "--tui-clasica";
 
-/// Override puntual hacia la interfaz de comandos, simétrico a
+/// Override puntual hacia la CLI, simétrico a
 /// `FLAG_TUI_CLASICA` — hace falta cuando la preferencia guardada es
-/// "clasica" pero se quiere probar comandos una sola vez sin cambiarla.
-const FLAG_COMANDOS: &str = "--comandos";
+/// "clasica" pero se quiere probar la CLI una sola vez sin cambiarla.
+const FLAG_CLI: &str = "--cli";
 
 /// Marca al proceso hijo como "ya relanzado dentro de Alacritty" — evita que
 /// se vuelva a relanzar a sí mismo en bucle. El valor no importa, sólo que
@@ -83,7 +83,7 @@ enum StartupError {
     #[error("No se pudo crear el respaldo previo: {0}")]
     Respaldo(#[source] control_acceso::database::backup::RespaldoError),
     #[error(transparent)]
-    Comandos(#[from] control_acceso::comandos::ComandosError),
+    Cli(#[from] control_acceso::cli::CliError),
 }
 
 fn run() -> Result<(), StartupError> {
@@ -91,10 +91,10 @@ fn run() -> Result<(), StartupError> {
     let instancia = InstanciaGuard::adquirir(&ruta_base_datos).map_err(StartupError::Instancia)?;
 
     let flag_clasica = std::env::args().any(|arg| arg == FLAG_TUI_CLASICA);
-    let flag_comandos = std::env::args().any(|arg| arg == FLAG_COMANDOS);
+    let flag_cli = std::env::args().any(|arg| arg == FLAG_CLI);
     let usar_clasica = if flag_clasica {
         true
-    } else if flag_comandos {
+    } else if flag_cli {
         false
     } else {
         interfaz_preferida::leer() == Some(Interfaz::Clasica)
@@ -103,7 +103,7 @@ fn run() -> Result<(), StartupError> {
     let relanzar_en = if usar_clasica {
         run_tui_clasica(&ruta_base_datos)?
     } else {
-        run_comandos(&ruta_base_datos)?
+        run_cli(&ruta_base_datos)?
     };
 
     // Libera el lock de instancia única ANTES de relanzar — si no,
@@ -128,7 +128,7 @@ fn relanzar_en_interfaz(interfaz: Interfaz) {
     let mut comando = std::process::Command::new(&exe_actual);
     comando.arg(match interfaz {
         Interfaz::Clasica => FLAG_TUI_CLASICA,
-        Interfaz::Comandos => FLAG_COMANDOS,
+        Interfaz::Cli => FLAG_CLI,
     });
     // Conserva la relación con Alacritty si este proceso ya está relanzado
     // ahí — evita que el hijo intente relanzarse de nuevo en otra ventana.
@@ -138,25 +138,24 @@ fn relanzar_en_interfaz(interfaz: Interfaz) {
     let _ = comando.spawn();
 }
 
-/// Ruta por defecto: la interfaz de comandos. Mismo guard de instancia (lo
+/// Ruta por defecto: la CLI. Mismo guard de instancia (lo
 /// adquiere `run` antes de bifurcar) y mismo respaldo diario que la TUI
 /// clásica; la configuración inicial la detecta y la explica la propia
-/// interfaz de comandos (remite a `--tui-clasica` para crear el ROOT).
+/// CLI (remite a `--tui-clasica` para crear el ROOT).
 /// `Some(Interfaz::Clasica)` cuando el operador confirmó `/clasico`: la
 /// preferencia ya quedó guardada, sólo falta que `run()` relance el proceso.
-fn run_comandos(ruta_base_datos: &std::path::Path) -> Result<Option<Interfaz>, StartupError> {
+fn run_cli(ruta_base_datos: &std::path::Path) -> Result<Option<Interfaz>, StartupError> {
     let core = AppCore::abrir(ruta_base_datos).map_err(StartupError::Bootstrap)?;
     let _ = core.respaldo_automatico_diario_si_hace_falta();
-    let reiniciar_en_clasica =
-        control_acceso::comandos::run(core, None).map_err(StartupError::Comandos)?;
+    let reiniciar_en_clasica = control_acceso::cli::run(core, None).map_err(StartupError::Cli)?;
     Ok(reiniciar_en_clasica.then_some(Interfaz::Clasica))
 }
 
 /// `--tui-clasica`: la interfaz original de menús y paneles. Sigue siendo la
 /// única que crea el usuario ROOT inicial. Si el operador confirma "Modo
-/// comandos" en el Menú Principal (`SalidaApp::ReiniciarEnComandos`), la
+/// CLI" en el Menú Principal (`SalidaApp::ReiniciarEnCli`), la
 /// preferencia ya queda guardada y `run()` relanza el proceso con
-/// `--comandos`.
+/// `--cli`.
 fn run_tui_clasica(ruta_base_datos: &std::path::Path) -> Result<Option<Interfaz>, StartupError> {
     let mut mensaje_inicial = None;
     loop {
@@ -187,13 +186,13 @@ fn run_tui_clasica(ruta_base_datos: &std::path::Path) -> Result<Option<Interfaz>
 
         match salida {
             SalidaApp::Cerrar => return Ok(None),
-            // "Modo comandos" del Menú Principal: la preferencia ya se
-            // guardó al confirmar (`AccionMenu::ModoComandos` en
+            // "Modo CLI" del Menú Principal: la preferencia ya se
+            // guardó al confirmar (`AccionMenu::Cli` en
             // `tui::app`) — acá sólo hace falta cerrar esta conexión y
-            // avisarle a `run()` que relance en comandos.
-            SalidaApp::ReiniciarEnComandos => {
+            // avisarle a `run()` que relance en la CLI.
+            SalidaApp::ReiniciarEnCli => {
                 drop(core);
-                return Ok(Some(Interfaz::Comandos));
+                return Ok(Some(Interfaz::Cli));
             }
             SalidaApp::Restaurar { candidata } => {
                 drop(core); // cierra la conexión SQLite antes de tocar el archivo activo

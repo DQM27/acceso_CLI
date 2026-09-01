@@ -8,6 +8,12 @@ Nota posterior: este reporte es histórico. La pantalla puente para elegir entre
 clásica y `--comandos` fue eliminada; tras el login la TUI clásica entra directo al
 menú, y el cambio a comandos se hace desde el Menú Principal.
 
+Nota de nomenclatura (2026-09-01): la interfaz que este reporte llama "`--comandos`"/
+"`src/comandos/`" se renombró a "CLI"/`src/cli/` — mismo diseño y comportamiento, sólo
+cambió el nombre. Las rutas de archivo y recuentos de líneas de este reporte quedan tal
+como estaban en la fecha de la auditoría (`src/comandos/...`); no se actualizaron para no
+falsear la fotografía histórica.
+
 ## 0. Aclaración sobre `examples/brisas_cli/*_v2.rs`
 
 Esos archivos (`empresas_v2.rs`, `usuarios_v2.rs`, `historial_v2.rs`, `configuracion_inicial_v2.rs`, `login_v2.rs`, `menu_v2.rs`, `activos_v2.rs`, `contratistas_v2.rs`, `ingreso_v2.rs`) existieron entre los commits `1250a3e` → `e0a5f7f` ("Crea piloto visual reutilizable de BRISAS CLI" → "Completa los pilotos visuales _v2 de las nueve pantallas de BRISAS CLI", 16 ago 2026), pero **fueron eliminados por completo** en el commit `4d2eb20` ("En proceso de actualizacion", 18 ago 2026), junto con `examples/brisas_cli.rs`, `app.rs`, `terminal.rs`, `login.rs`, `menu.rs`, `ingreso.rs`, `quick_exit.rs` (14 761 líneas borradas de golpe). Ese mismo commit ya tocaba `src/tui/menu_principal` y `src/tui/ui_kit/theme.rs`.

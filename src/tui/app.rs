@@ -99,12 +99,12 @@ pub enum SalidaApp {
     Restaurar {
         candidata: std::path::PathBuf,
     },
-    /// "Modo comandos" del Menú Principal (`OpcionMenu::ModoComandos`): a
-    /// el operador pidió dejar `--comandos` como interfaz por defecto; la
+    /// "Modo CLI" del Menú Principal (`OpcionMenu::Cli`): a
+    /// el operador pidió dejar `--cli` como interfaz por defecto; la
     /// preferencia ya se guardó (`interfaz_preferida::guardar`) antes de
     /// llegar a esta variante, y `main.rs` sólo cierra esta conexión y
     /// relanza el ejecutable.
-    ReiniciarEnComandos,
+    ReiniciarEnCli,
 }
 
 #[cfg(test)]
@@ -703,9 +703,9 @@ impl App {
                 self.vista = Vista::Login;
             }
             AccionMenu::Salir => self.salir = true,
-            AccionMenu::ModoComandos => {
-                crate::interfaz_preferida::guardar(crate::interfaz_preferida::Interfaz::Comandos);
-                self.salida = SalidaApp::ReiniciarEnComandos;
+            AccionMenu::Cli => {
+                crate::interfaz_preferida::guardar(crate::interfaz_preferida::Interfaz::Cli);
+                self.salida = SalidaApp::ReiniciarEnCli;
                 self.salir = true;
             }
         }
@@ -825,10 +825,10 @@ impl App {
                     self.procesar_accion_gafetes(self.gafetes.solicitar_carga(), core);
                 }
             }
-            // Ninguna abre pantalla propia: `ModoComandos` sale por la
+            // Ninguna abre pantalla propia: `Cli` sale por la
             // confirmación (como `CerrarSesion`/`Salir`), nunca llega acá
             // como `AccionMenu::Abrir`.
-            OpcionMenu::ModoComandos | OpcionMenu::CerrarSesion | OpcionMenu::Salir => {}
+            OpcionMenu::Cli | OpcionMenu::CerrarSesion | OpcionMenu::Salir => {}
         }
     }
 
@@ -844,9 +844,7 @@ impl App {
             OpcionMenu::Auditoria => Vista::Auditoria,
             OpcionMenu::Respaldos => Vista::Respaldos,
             OpcionMenu::GestionGafetes => Vista::GestionGafetes,
-            OpcionMenu::ModoComandos | OpcionMenu::CerrarSesion | OpcionMenu::Salir => {
-                Vista::MenuPrincipal
-            }
+            OpcionMenu::Cli | OpcionMenu::CerrarSesion | OpcionMenu::Salir => Vista::MenuPrincipal,
         }
     }
 
@@ -855,7 +853,7 @@ impl App {
         self.pestanas_visitadas = [false; 9];
         self.menu.nueva_sesion();
         // Si el proceso ya arrancó en la TUI clásica, login entra directo al
-        // Menú Principal. Cambiar a comandos es una decisión explícita del
+        // Menú Principal. Cambiar a la CLI es una decisión explícita del
         // menú, no una pregunta intermedia en cada sesión.
         self.vista = Vista::MenuPrincipal;
         self.sincronizar_vista_con_tema(core);

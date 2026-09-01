@@ -5,7 +5,7 @@ use control_acceso::models::gafete::EstadoGafete;
 /// Espejo de `EstadoGafete` — un enum propio en vez de reusar el del núcleo
 /// directamente en el filtro de entrada porque el frontend nunca pide la
 /// negación (`-estado:...`, sólo existe en el lenguaje `clave:valor` de
-/// `--comandos`).
+/// `--cli`).
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EstadoGafeteEntrada {

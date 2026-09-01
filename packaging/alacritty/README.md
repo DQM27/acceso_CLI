@@ -42,7 +42,7 @@ kiosco.
 ## Ajustar la config
 
 `alacritty.toml` ya trae la paleta calcada de `FADE_*` en
-`src/comandos/render.rs` (mismos colores que usan los fundidos de la app).
+`src/cli/render/estilos.rs` (mismos colores que usan los fundidos de la app).
 Con `general.live_config_reload = true`, cualquier cambio al archivo se
 aplica sin reiniciar Alacritty — cómodo para seguir ajustando fuente o
 colores a ojo.

@@ -220,7 +220,7 @@ sin forma de sacar de circulación uno perdido ni de saber quién lo debe.
   `src/tui/gafetes/` completa (maestro-detalle, alta individual/rango con Tab, marcar
   perdido con buscador de contratista deudor, resolver con 1=Pagado/2=Apareció, dar de
   baja). `OpcionMenu::GestionGafetes`, atajo por letra `G` — deliberadamente fuera de la
-  barra de pestañas del tema Negro (mismo grupo que ModoComandos/CerrarSesion/Salir, los
+  barra de pestañas del tema Negro (mismo grupo que Cli/CerrarSesion/Salir, los
   otros accesos por letra) para no tocar el corpus de snapshots visuales de las 9 pantallas
   que sí son pestaña; único snapshot que cambió fue el propio Menú Principal (3 temas),
   regenerado y revisado. Filtro de búsqueda del catálogo simplificado a propósito (número

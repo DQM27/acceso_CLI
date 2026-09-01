@@ -15,6 +15,6 @@ pub mod texto;
 pub mod tiempo;
 
 #[cfg(feature = "terminal-ui")]
-pub mod comandos;
+pub mod cli;
 #[cfg(feature = "terminal-ui")]
 pub mod tui;

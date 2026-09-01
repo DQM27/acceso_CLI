@@ -146,7 +146,7 @@ pub fn resolver(core: &AppCore, entrada: &Entrada, sesion: &UsuarioSesion) -> Co
                     // Mismo gate que `pagina_usuarios`/`abrir_formulario_nuevo_usuario`
                     // (TUI): sin esto, la GUI (que llama a `resolver` directo desde
                     // `ejecutar_comando`, sin pasar por el controlador de teclado de
-                    // `--comandos` que sí repite este chequeo) dejaba a un Operador
+                    // `--cli` que sí repite este chequeo) dejaba a un Operador
                     // abrir el formulario de alta de usuario sin ningún filtro.
                     Some(SujetoNuevo::Usuario) => {
                         if sesion.rol.puede(Operacion::GestionarUsuarios) {

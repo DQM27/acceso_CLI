@@ -15,8 +15,8 @@
   --radius-chico: var(--radio-chico);
 }
 
-/* Paleta reutilizada de src/comandos/render/estilos.rs (FADE_*) — mismo
-   lenguaje visual que la interfaz de comandos, no una paleta nueva. */
+/* Paleta reutilizada de src/cli/render/estilos.rs (FADE_*) — mismo
+   lenguaje visual que la CLI, no una paleta nueva. */
 :root {
   --fondo: #f6f8f9;
   --acento: #087f91;

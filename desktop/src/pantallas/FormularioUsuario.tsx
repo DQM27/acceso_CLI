@@ -10,7 +10,7 @@ const ROLES = ["Root", "Administrador", "Operador"] as const;
 
 /** Espejo de `puede_gestionar_usuario` (`src/domain/autorizacion.rs`): nadie
  * asigna Root salvo otro Root. Mismo criterio que ya aplica la TUI en
- * `FormularioUsuario::roles_disponibles` (`src/comandos/formulario_usuario.rs`)
+ * `FormularioUsuario::roles_disponibles` (`src/cli/formulario_usuario.rs`)
  * — acá sólo hace falta la mitad de la regla (quien abre este formulario ya
  * tiene `GestionarUsuarios`, si no, ni llega a la pantalla). */
 function rolesAsignables(actorRol: RolUsuario): readonly RolUsuario[] {

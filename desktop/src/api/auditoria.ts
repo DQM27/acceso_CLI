@@ -43,7 +43,7 @@ export function etiquetaEntidad(entidad: EntidadAuditada): string {
 }
 
 /** Espejo de `descripcion_cambio`/`valor_presentable`
- * (`src/comandos/render/auditoria.rs`) — mismas etiquetas, para que la GUI
+ * (`src/cli/render/auditoria.rs`) — mismas etiquetas, para que la GUI
  * no invente una traducción distinta de las mismas claves crudas. */
 export function etiquetaCampo(campo: string): string {
   switch (campo) {

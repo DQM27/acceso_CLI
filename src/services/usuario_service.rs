@@ -365,7 +365,7 @@ where
 
     /// Camino síncrono (`cambiar_password`, con Argon2 adentro) + auditoría
     /// — para interfaces sin el paso off-thread de la TUI/GUI (hoy,
-    /// `--comandos`). Reset administrativo: `actor` distinto del usuario que
+    /// `--cli`). Reset administrativo: `actor` distinto del usuario que
     /// recibe la contraseña nueva.
     #[allow(clippy::too_many_arguments)]
     pub fn cambiar_password_auditado<A: AuditoriaWriter + ?Sized>(

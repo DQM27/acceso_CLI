@@ -583,7 +583,7 @@ fn login_exitoso_entra_directo_al_menu_con_nuevo_ingreso_seleccionado() {
 }
 
 #[test]
-fn modo_comandos_desde_menu_pide_reinicio() {
+fn modo_cli_desde_menu_pide_reinicio() {
     let mut app = App {
         vista: Vista::MenuPrincipal,
         sesion: Some(sesion("Daniel Quintana")),
@@ -596,7 +596,7 @@ fn modo_comandos_desde_menu_pide_reinicio() {
     app.procesar_tecla_vista(tecla(KeyCode::Enter));
 
     assert!(app.salir);
-    assert_eq!(app.salida, SalidaApp::ReiniciarEnComandos);
+    assert_eq!(app.salida, SalidaApp::ReiniciarEnCli);
 }
 
 #[test]
