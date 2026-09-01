@@ -357,14 +357,15 @@ proyectos (raíz: 491 tests; `desktop/src-tauri`: 20 tests; `desktop/`: `npx tsc
 
 ## SQLite — decisiones abiertas
 
-- [ ] **Política de cifrado en reposo.** `secure_delete=FAST` ya reduce restos
-  recuperables pero no cifra la base. Si se decide que hace falta proteger contra robo
-  del equipo o copia del archivo: BitLocker es una decisión de despliegue (no toca
-  código); SQLCipher es más fuerte pero su integración vía `rusqlite` es frágil en
-  Windows (exige Perl+NASM o un `OPENSSL_DIR` externo) — ver
-  `docs/evaluacion-sqlite.md` sección 8 para el detalle. Cifrar sólo los respaldos
-  exportados es la alternativa más liviana si la amenaza real es "un respaldo en un
-  medio sin cifrar". Requiere decisión de política antes de tocar código, no es un bug.
+- [x] **Descartado del todo (2026-09-01): sin cifrado en reposo.** `secure_delete=FAST` ya
+  reduce restos recuperables pero no cifra la base — se evaluaron BitLocker (decisión de
+  despliegue, no toca código) y SQLCipher (más fuerte, pero su integración vía `rusqlite`
+  es frágil en Windows: exige Perl+NASM o un `OPENSSL_DIR` externo, ver
+  `docs/evaluacion-sqlite.md` sección 8). Decisión explícita del usuario: no se implementa
+  ninguna de las dos, ni siquiera cifrar sólo los respaldos exportados. No queda como
+  "abierto para más adelante" — si la amenaza cambia (ej. equipos que salen de las
+  instalaciones sin BitLocker propio), se reevalúa desde cero con ese caso concreto
+  delante, no se retoma esta nota.
 - [x] **Hecho (2026-08-31): tablas `STRICT`.** `MIGRACION_15` (`SCHEMA_VERSION` 14 → 15)
   recreó las 7 tablas normales (`empresas`, `usuarios`, `contratistas`, `gafetes`,
   `gafetes_incidentes`, `registro_ingresos`, `auditoria_cambios`) con `STRICT` —
@@ -440,16 +441,39 @@ proyectos (raíz: 491 tests; `desktop/src-tauri`: 20 tests; `desktop/`: `npx tsc
   mismo archivo (`Connection::open(core.ruta_base_datos())` + `busy_timeout`) y soltar el
   lock de `GuiState` apenas se lee la ruta y se autoriza, antes de copiar/validar.
 
-## Módulo futuro de actualizaciones (no iniciado, condicionado)
+## Módulo de actualizaciones — ya construido (esta nota estaba desactualizada)
 
-Sólo aplica si se decide construir un actualizador. Nada de esto es una carencia del
-sistema actual:
+Esta sección decía "no iniciado, condicionado" — quedó obsoleta: el actualizador ya está
+construido, firmado y funcionando en CI (`desktop/docs/pendientes.md`, sección "Empaquetado
+y actualizaciones", tiene el detalle completo — no se duplica acá). Repaso de los 5 puntos
+que esta nota dejaba como condición, contra lo que de verdad se construyó:
 
-- [ ] El fallo de red o del servidor de actualizaciones nunca impide iniciar la app.
-- [ ] Descargar a un archivo temporal y verificar firma criptográfica antes de instalar.
-- [ ] Impedir la actualización mientras la aplicación tenga el bloqueo de instancia.
-- [ ] Respaldar SQLite antes de migrar y conservar un mecanismo probado de rollback.
-- [ ] Separar completamente el cliente de actualización del núcleo de control de acceso.
+- [x] **El fallo de red nunca impide iniciar la app.** `buscarActualizacion()` corre en un
+  `useEffect` de `Shell` (`App.tsx`) que ya arrancó con la sesión autenticada — un `catch`
+  sólo hace `console.error`, nunca bloquea el render. Confirmado leyendo el código.
+- [x] **Descargar y verificar firma antes de instalar.** `instalarActualizacion()`
+  (`api/actualizaciones.ts`) delega en `Update.downloadAndInstall()` de
+  `tauri-plugin-updater`, que verifica contra `plugins.updater.pubkey`
+  (`tauri.conf.json`) antes de instalar — si no coincide, la promesa rechaza sin tocar
+  nada. Llave real cargada y confirmada firmando bien en CI (`desktop/docs/pendientes.md`).
+- [ ] **Impedir la actualización mientras la app tenga el bloqueo de instancia — sin
+  verificar de verdad.** A diferencia de los otros cuatro puntos, no encontré evidencia de
+  que esto se haya probado explícitamente: `relaunch()` reinicia el mismo proceso (no hay
+  un instalador externo separado corriendo mientras `InstanciaGuard` sigue en pie), así que
+  el riesgo original probablemente no aplica tal cual se pensó, pero eso es una suposición
+  mía, no algo confirmado. Si se quiere cerrar del todo, valdría instalar una actualización
+  real en una máquina con otra ventana de la app abierta y confirmar qué pasa.
+- [x] **Respaldar antes de migrar, con rollback.** Ya existe independientemente del
+  actualizador — `respaldar_antes_de_migrar` (`src/database/connection.rs`) crea un
+  respaldo `TipoRespaldo::PreMigracion` antes de que `initialize_database` aplique
+  cualquier migración pendiente, obligatorio (si el respaldo falla, la migración no corre).
+  Cubre una actualización nueva igual que cualquier apertura con esquema pendiente.
+- [x] **Cliente de actualización separado del núcleo.** `api/actualizaciones.ts` sólo usa
+  `@tauri-apps/plugin-updater`/`@tauri-apps/plugin-process` — ningún comando en
+  `desktop/src-tauri/src/comandos/` ni tipo de `control_acceso` está involucrado.
+
+4 de 5 confirmados; el de instancia queda anotado como el único punto realmente sin
+verificar, no descartado ni dado por hecho.
 
 ## Permisos granulares por usuario — descartado por ahora
 
