@@ -1,7 +1,10 @@
 use std::path::PathBuf;
 
 use chrono::{DateTime, Duration, NaiveDate, TimeZone, Utc};
-use control_acceso::application::{CargaCompleta, ExportarHistorialError};
+use control_acceso::application::{
+    CargaCompleta, ExportarHistorialError, buscar_historial_completo_con_conexion,
+    exportar_historial_seleccion_con_conexion,
+};
 use control_acceso::database::queries::ingresos::{FiltroHistorial, MovimientoIngresoResumen};
 use control_acceso::historial::exportacion::ColumnaHistorial;
 use control_acceso::tiempo::{self, TiempoError};
@@ -54,9 +57,8 @@ pub fn listar_historial(
 ) -> Result<CargaCompleta<MovimientoIngresoResumen>, String> {
     state.sesion_activa()?;
     let (desde_utc, hasta_utc) = rango_utc(desde, hasta).map_err(|error| error.to_string())?;
-    state
-        .core()
-        .buscar_historial_completo(&FiltroHistorial::nuevo(desde_utc, hasta_utc))
+    let conexion = state.conexion_secundaria()?;
+    buscar_historial_completo_con_conexion(&conexion, &FiltroHistorial::nuevo(desde_utc, hasta_utc))
         .map_err(|error| error.to_string())
 }
 
@@ -91,15 +93,20 @@ pub fn exportar_historial(
     let (desde_utc, hasta_utc) = rango_utc(desde, hasta).map_err(|error| error.to_string())?;
     let destino = PathBuf::from(destino);
     let respaldo = RespaldoDestino::apartar(&destino)?;
-    let resultado = state
-        .core()
-        .exportar_historial_seleccion(
-            &FiltroHistorial::nuevo(desde_utc, hasta_utc),
-            ids.as_deref(),
-            &columnas,
-            &destino,
-        )
-        .map_err(|error| error.to_string());
+    // Conexión propia (ver `GuiState::conexion_secundaria`): armar el XLSX
+    // de un historial grande puede tardar decenas de segundos (~33s medidos
+    // con 100,000 filas, `docs/pendientes.md`) — retener acá el
+    // `Mutex<AppCore>` compartido dejaría sin núcleo a cualquier otro
+    // comando mientras dura la exportación.
+    let conexion = state.conexion_secundaria()?;
+    let resultado = exportar_historial_seleccion_con_conexion(
+        &conexion,
+        &FiltroHistorial::nuevo(desde_utc, hasta_utc),
+        ids.as_deref(),
+        &columnas,
+        &destino,
+    )
+    .map_err(|error| error.to_string());
     if resultado.is_ok() {
         respaldo.confirmar();
     }

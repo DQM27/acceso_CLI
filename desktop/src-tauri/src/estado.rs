@@ -1,8 +1,10 @@
 use std::sync::{Mutex, MutexGuard};
+use std::time::Duration;
 
 use control_acceso::application::AppCore;
 use control_acceso::instancia::InstanciaGuard;
 use control_acceso::services::autenticacion_service::UsuarioSesion;
+use rusqlite::Connection;
 
 /// Estado administrado por Tauri. Dos mutexes separados porque ningún flujo
 /// necesita actualizar sesión y base de datos como una sola operación atómica
@@ -36,6 +38,26 @@ impl GuiState {
         self.core
             .lock()
             .unwrap_or_else(|envenenado| envenenado.into_inner())
+    }
+
+    /// Conexión propia al mismo archivo, independiente de la que vive
+    /// dentro de `core` — para comandos cuya consulta puede tardar cientos
+    /// de milisegundos o más con datos grandes (exportar/cargar Historial y
+    /// Auditoría completos, ver `comandos/historial.rs`/`comandos/auditoria.rs`)
+    /// y no deben retener el mutex compartido mientras tanto: aunque el
+    /// comando ya corre en el pool de hilos bloqueantes de Tauri (no
+    /// congela la ventana), retener `core` sí bloquearía a cualquier OTRO
+    /// comando que también lo necesite (mismo hallazgo que motivó el hilo
+    /// propio en TUI/CLI para exportar, ver `docs/pendientes.md`). El
+    /// candado sólo se toma para leer la ruta del archivo, no durante la
+    /// consulta.
+    pub fn conexion_secundaria(&self) -> Result<Connection, String> {
+        let ruta_base_datos = self.core().ruta_base_datos().to_path_buf();
+        let conexion = Connection::open(&ruta_base_datos).map_err(|error| error.to_string())?;
+        conexion
+            .busy_timeout(Duration::from_secs(5))
+            .map_err(|error| error.to_string())?;
+        Ok(conexion)
     }
 
     /// Sesión actual o el error que ya usan todos los comandos que la

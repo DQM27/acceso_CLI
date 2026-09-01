@@ -23,6 +23,55 @@ use crate::services::error::{ContratistaServiceError, EmpresaServiceError};
 
 use super::{AppCore, CargaCompleta, LIMITE_CARGA_COMPLETA_MAXIMO, verificar_actor_activo};
 
+/// Núcleo de [`AppCore::buscar_auditoria`] sobre una `Connection` cualquiera
+/// — mismo motivo que `buscar_historial_con_conexion`
+/// (`src/application/historial.rs`): un comando Tauri puede abrir su propia
+/// conexión en vez de retener el `Mutex<AppCore>` compartido.
+pub fn buscar_auditoria_con_conexion(
+    connection: &rusqlite::Connection,
+    actor: &UsuarioSesion,
+    filtro: &FiltroAuditoria,
+) -> Result<crate::database::queries::auditoria::PaginaAuditoria, ContratistaServiceError> {
+    let actor_actual = verificar_actor_activo(connection, actor)?
+        .ok_or(ContratistaServiceError::OperacionNoAutorizada)?;
+    if !actor_actual.rol.puede(Operacion::VerAuditoria) {
+        return Err(ContratistaServiceError::OperacionNoAutorizada);
+    }
+    Ok(SqliteAuditoria::new(connection).buscar(filtro)?)
+}
+
+/// Núcleo de [`AppCore::buscar_auditoria_completo`] sobre una `Connection`
+/// cualquiera — mismo motivo que [`buscar_auditoria_con_conexion`]: evita
+/// retener el núcleo compartido durante los ~750ms que puede tardar esta
+/// consulta (medido en la auditoría de las tres capas, `docs/pendientes.md`).
+pub fn buscar_auditoria_completo_con_conexion(
+    connection: &rusqlite::Connection,
+    actor: &UsuarioSesion,
+) -> Result<CargaCompleta<CambioAuditado>, ContratistaServiceError> {
+    let mut consulta = FiltroAuditoria {
+        limite: usize::MAX,
+        offset: 0,
+    };
+    let mut todos = Vec::new();
+    let mut total;
+    loop {
+        let pagina = buscar_auditoria_con_conexion(connection, actor, &consulta)?;
+        total = pagina.total;
+        if pagina.items.is_empty() {
+            break;
+        }
+        todos.extend(pagina.items);
+        if todos.len() >= total || todos.len() >= LIMITE_CARGA_COMPLETA_MAXIMO {
+            break;
+        }
+        consulta.offset = todos.len();
+    }
+    Ok(CargaCompleta {
+        truncado: todos.len() < total,
+        items: todos,
+    })
+}
+
 impl AppCore {
     pub fn buscar_contratistas(
         &self,
@@ -41,12 +90,7 @@ impl AppCore {
         actor: &UsuarioSesion,
         filtro: &FiltroAuditoria,
     ) -> Result<crate::database::queries::auditoria::PaginaAuditoria, ContratistaServiceError> {
-        let actor_actual = verificar_actor_activo(&self.connection, actor)?
-            .ok_or(ContratistaServiceError::OperacionNoAutorizada)?;
-        if !actor_actual.rol.puede(Operacion::VerAuditoria) {
-            return Err(ContratistaServiceError::OperacionNoAutorizada);
-        }
-        Ok(SqliteAuditoria::new(&self.connection).buscar(filtro)?)
+        buscar_auditoria_con_conexion(&self.connection, actor, filtro)
     }
 
     /// Todo el conjunto en un solo `Vec`, no sólo una página — mismo
@@ -66,28 +110,7 @@ impl AppCore {
         &self,
         actor: &UsuarioSesion,
     ) -> Result<CargaCompleta<CambioAuditado>, ContratistaServiceError> {
-        let mut consulta = FiltroAuditoria {
-            limite: usize::MAX,
-            offset: 0,
-        };
-        let mut todos = Vec::new();
-        let mut total;
-        loop {
-            let pagina = self.buscar_auditoria(actor, &consulta)?;
-            total = pagina.total;
-            if pagina.items.is_empty() {
-                break;
-            }
-            todos.extend(pagina.items);
-            if todos.len() >= total || todos.len() >= LIMITE_CARGA_COMPLETA_MAXIMO {
-                break;
-            }
-            consulta.offset = todos.len();
-        }
-        Ok(CargaCompleta {
-            truncado: todos.len() < total,
-            items: todos,
-        })
+        buscar_auditoria_completo_con_conexion(&self.connection, actor)
     }
 
     /// Incidentes de gafetes (marcar perdido/resolver, `gafetes_incidentes`)

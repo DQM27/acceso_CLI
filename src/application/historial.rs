@@ -15,6 +15,41 @@ use crate::services::registro_ingreso_service::RegistroIngresoConsultaService;
 
 use super::{AppCore, CargaCompleta, LIMITE_CARGA_COMPLETA_MAXIMO};
 
+/// Núcleo de [`AppCore::buscar_historial_completo`] sobre una `Connection`
+/// cualquiera — mismo motivo que [`buscar_historial_con_conexion`]: permite
+/// a un comando Tauri abrir su propia conexión en vez de retener el
+/// `Mutex<AppCore>` compartido durante los ~750ms que puede tardar esta
+/// consulta con historiales grandes (medido en la auditoría de las tres
+/// capas, `docs/pendientes.md`), bloqueando mientras tanto cualquier otro
+/// comando que también necesite el núcleo.
+pub fn buscar_historial_completo_con_conexion(
+    connection: &Connection,
+    filtro: &FiltroHistorial,
+) -> Result<CargaCompleta<MovimientoIngresoResumen>, RegistroIngresoServiceError> {
+    let mut consulta = filtro.clone();
+    consulta.offset = 0;
+    consulta.limite = usize::MAX;
+    let mut todos = Vec::new();
+    let mut total;
+    loop {
+        let pagina = buscar_historial_con_conexion(connection, &consulta)?;
+        consulta.corte_id = Some(pagina.corte_id);
+        total = pagina.total;
+        if pagina.items.is_empty() {
+            break;
+        }
+        todos.extend(pagina.items);
+        if todos.len() >= total || todos.len() >= LIMITE_CARGA_COMPLETA_MAXIMO {
+            break;
+        }
+        consulta.offset = todos.len();
+    }
+    Ok(CargaCompleta {
+        truncado: todos.len() < total,
+        items: todos,
+    })
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ExportarHistorialError {
     #[error("Seleccione al menos una columna")]
@@ -220,28 +255,7 @@ impl AppCore {
         &self,
         filtro: &FiltroHistorial,
     ) -> Result<CargaCompleta<MovimientoIngresoResumen>, RegistroIngresoServiceError> {
-        let mut consulta = filtro.clone();
-        consulta.offset = 0;
-        consulta.limite = usize::MAX;
-        let mut todos = Vec::new();
-        let mut total;
-        loop {
-            let pagina = self.buscar_historial(&consulta)?;
-            consulta.corte_id = Some(pagina.corte_id);
-            total = pagina.total;
-            if pagina.items.is_empty() {
-                break;
-            }
-            todos.extend(pagina.items);
-            if todos.len() >= total || todos.len() >= LIMITE_CARGA_COMPLETA_MAXIMO {
-                break;
-            }
-            consulta.offset = todos.len();
-        }
-        Ok(CargaCompleta {
-            truncado: todos.len() < total,
-            items: todos,
-        })
+        buscar_historial_completo_con_conexion(&self.connection, filtro)
     }
 
     /// Exporta todo el conjunto filtrado que representa la pantalla, no sólo

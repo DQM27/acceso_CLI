@@ -1,4 +1,4 @@
-use control_acceso::application::CargaCompleta;
+use control_acceso::application::{CargaCompleta, buscar_auditoria_completo_con_conexion};
 use control_acceso::database::queries::auditoria::CambioAuditado;
 use control_acceso::database::queries::gafetes_incidentes::IncidenteGafete;
 
@@ -15,9 +15,12 @@ pub fn listar_auditoria(
     state: tauri::State<GuiState>,
 ) -> Result<CargaCompleta<CambioAuditado>, String> {
     let sesion = state.sesion_activa()?;
-    state
-        .core()
-        .buscar_auditoria_completo(&sesion)
+    // Conexión propia (ver `GuiState::conexion_secundaria`): esta consulta
+    // puede tardar ~750ms con auditoría grande (`docs/pendientes.md`, tope
+    // `LIMITE_CARGA_COMPLETA_MAXIMO`) — retener acá el `Mutex<AppCore>`
+    // compartido dejaría sin núcleo a cualquier otro comando mientras dura.
+    let conexion = state.conexion_secundaria()?;
+    buscar_auditoria_completo_con_conexion(&conexion, &sesion)
         .map_err(control_acceso::mensajes::mensaje_contratista)
 }
 

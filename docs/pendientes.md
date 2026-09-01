@@ -521,6 +521,52 @@ brecha perceptual, en orden de costo/beneficio:
 - [x] **Frame de transición mínimo en cambios de vista: descartado (2026-08-22).** La
   navegación por pestañas se pidió sin animaciones ni transiciones; se conserva el cambio
   inmediato y no se agrega trabajo visual ajeno al alcance.
+- [x] **Auditoría de cuellos de botella en las tres capas (2026-09-01): mismo bug de
+  exportar Historial replicado en CLI, más dos hallazgos propios de Tauri.** Con el fix
+  de la TUI ya en pie, se auditaron también CLI (`src/cli/`) y la GUI de escritorio
+  (`desktop/src-tauri/`) buscando el mismo patrón (trabajo bloqueante retenido en un
+  lugar compartido). Tres hallazgos, los tres reparados:
+
+  1. **CLI: exportar Historial (F5) tenía el mismo freeze que la TUI antes del fix.**
+     El bucle de eventos del CLI es igual de single-thread que el de la TUI, y
+     `confirmar_exportacion` llamaba `exportar_historial_seleccion` de forma síncrona.
+     Reparado reusando las mismas funciones libres `_con_conexion` extraídas para la
+     TUI: `src/cli/historial_controller.rs` ahora lanza un hilo con conexión propia y
+     un `mpsc::Receiver` sondeado en `run()` (`recibir_exportacion_si_lista`, agregado
+     también a `proxima_espera` para no dormir hasta 1h sin notar que terminó). La
+     Surface de Historial muestra "⠋ Exportando…" y bloquea el input mientras dura
+     (`HistorialState::exportando`). Prueba nueva de la exportación real en un hilo
+     aparte con el archivo terminando en disco.
+  2. **Tauri: `exportar_historial` retenía el `Mutex<AppCore>` compartido durante toda
+     la exportación.** A diferencia de la TUI/CLI, un comando Tauri no-async ya corre
+     en el pool de hilos bloqueantes propio de Tauri (no congela la ventana) — pero
+     retener el núcleo compartido sí bloqueaba cualquier OTRO comando (Activos,
+     Contratistas, etc.) mientras duraban esos ~33s con un historial grande. No hizo
+     falta un hilo propio: alcanzó con no abrir el mutex durante la consulta.
+     `GuiState` ganó `conexion_secundaria()` (`desktop/src-tauri/src/estado.rs`), que
+     sólo toma el candado para leer `ruta_base_datos()` y abre una `Connection`
+     independiente (mismo patrón `busy_timeout` que TUI/CLI); `exportar_historial`
+     ahora la usa con `exportar_historial_seleccion_con_conexion` en vez de
+     `state.core().exportar_historial_seleccion(...)`.
+  3. **Tauri: `listar_historial`/`listar_auditoria` retenían el mismo mutex ~750ms al
+     tope de carga completa (20,000 filas, `LIMITE_CARGA_COMPLETA_MAXIMO`).** Menos
+     grave que el punto 2, pero mismo problema de fondo. Se extrajeron
+     `buscar_historial_completo_con_conexion` (`src/application/historial.rs`) y
+     `buscar_auditoria_con_conexion`/`buscar_auditoria_completo_con_conexion`
+     (`src/application/catalogos.rs`), reexportadas desde `application::mod`; los
+     métodos de `AppCore` quedaron como delegadores finos, igual criterio que ya
+     se usó para historial. Ambos comandos Tauri pasaron a usar
+     `GuiState::conexion_secundaria()` en vez de `state.core()`.
+
+  `desktop/src-tauri` sumó `rusqlite` como dependencia directa (misma versión que fija
+  el crate raíz, Cargo unifica una sola copia) para poder abrir esa segunda conexión.
+  No se pudo compilar `desktop/src-tauri` en el entorno de esta sesión (siguen
+  faltando las librerías de desarrollo de GTK, mismo límite ya documentado al renombrar
+  `comandos/` → `cli/`) — los cambios se verificaron con la máxima revisión manual
+  posible y comparando contra el patrón ya probado de TUI/CLI, pero quedan pendientes
+  de una compilación real (`cargo check`) en un entorno con el toolchain completo antes
+  de darlos por definitivos. El núcleo (`cargo fmt`, Clippy estricto, 502 tests) sí está
+  verde.
 
 Nada de esto es un bug ni tiene prioridad definida — quedan acá como banco de ideas para
 retomar cuando se decida invertir tiempo en pulido visual, no porque haya un problema de
