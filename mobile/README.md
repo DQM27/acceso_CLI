@@ -39,3 +39,28 @@ echo "sdk.dir=<ruta al SDK, con / no \\>" > local.properties
 
 `local.properties` usa formato Java Properties — `\` es carácter de escape,
 así que la ruta del SDK debe ir con `/` (o `\\` si se insiste en backslash).
+
+## Base de datos de desarrollo (emulador/dispositivo de prueba)
+
+`rust-core/examples/seed_dev_db.rs` crea una base SQLite con el esquema real
+(las mismas migraciones que usa `AppCore::abrir`) y la llena con:
+- los contratistas reales de `importar_contratistas_db_browser.sql` (raíz del repo),
+- un usuario ROOT de acceso rápido: cédula `123456789`, contraseña `daniel27`
+  (hash Argon2 real en `rust-core/examples/seed_usuario_root.sql`, no texto plano).
+
+```sh
+cd rust-core
+cargo run --example seed_dev_db -- seed_dev.db
+```
+
+Para subirla al almacenamiento privado de la app (el emulador/dispositivo
+debe tener la app ya instalada al menos una vez):
+
+```sh
+adb push seed_dev.db /data/local/tmp/control_acceso.db
+adb shell run-as com.brisas.controlacceso cp /data/local/tmp/control_acceso.db files/control_acceso.db
+```
+
+Esto es solo para desarrollo — no reemplaza el flujo real de alta de
+usuarios, que sigue sin resolver (ver puntos abiertos en
+`docs/plan-app-movil.md`).

@@ -9,8 +9,8 @@ android {
 
     defaultConfig {
         applicationId = "com.brisas.controlacceso"
-        // El piloto es un solo teléfono conocido (Samsung A51, arm64) — ver
-        // docs/plan-app-movil.md. jniLibs sólo trae arm64-v8a a propósito.
+        // El piloto es un solo teléfono conocido (Samsung A25 5G, arm64) —
+        // ver docs/plan-app-movil.md. jniLibs sólo trae arm64-v8a a propósito.
         minSdk = 26
         targetSdk = 36
         versionCode = 1

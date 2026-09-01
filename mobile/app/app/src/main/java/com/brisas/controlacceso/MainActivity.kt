@@ -50,7 +50,7 @@ fun PantallaPruebaDeVida(rutaBaseDatos: String) {
     }
 
     Column(modifier = Modifier.padding(24.dp)) {
-        Text("Control de Acceso — piloto móvil", style = MaterialTheme.typography.titleLarge)
+        Text("Brisas Control de Acceso — piloto móvil", style = MaterialTheme.typography.titleLarge)
         Text(resultado, modifier = Modifier.padding(top = 16.dp))
     }
 }
