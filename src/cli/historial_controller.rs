@@ -4,18 +4,22 @@
 //! `AppCore::buscar_historial` y decide cuándo abrir/cerrar la Surface.
 
 use std::path::PathBuf;
+use std::sync::mpsc;
+use std::time::Duration;
 
 use crossterm::event::{Event, KeyCode, KeyEvent};
+use rusqlite::Connection;
 use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
 
-use crate::application::AppCore;
+use crate::application::{AppCore, exportar_historial_seleccion_con_conexion};
+use crate::database::queries::ingresos::FiltroHistorial;
 use crate::historial::exportacion::ColumnaHistorial as ColumnaExportacion;
 use crate::services::error::RegistroIngresoServiceError;
 
 use super::estado::{EdicionColumnas, ObjetivoColumnas};
 use super::historial::HistorialState;
-use super::{AppState, NivelFeedback};
+use super::{AppState, HistorialExportacionPendiente, NivelFeedback};
 
 /// Abre la Surface con el catálogo de empresas (para resolver `empresa:`) y
 /// el rango de fechas por defecto (mes actual) — y aplica esa consulta de
@@ -39,13 +43,26 @@ fn cerrar_historial(core: &AppCore, app: &mut AppState) {
     super::recomputar(core, app);
 }
 
-pub(super) fn manejar_historial(core: &AppCore, app: &mut AppState, key: KeyEvent) {
-    let exportando = app
+pub(super) fn manejar_historial(
+    core: &AppCore,
+    app: &mut AppState,
+    key: KeyEvent,
+    pendiente: &mut HistorialExportacionPendiente,
+) {
+    // Con el hilo de exportación en vuelo, el teclado no tiene nada que
+    // hacer acá — no hay forma de cancelarlo (mismo criterio que
+    // `tui/app/historial_jobs.rs`), así que se ignora hasta que
+    // `recibir_exportacion_si_lista` lo resuelva.
+    let exportando_en_hilo = app.historial.as_ref().is_some_and(|h| h.exportando);
+    if exportando_en_hilo {
+        return;
+    }
+    let editando_destino = app
         .historial
         .as_ref()
         .is_some_and(|h| h.exportacion_destino.is_some());
-    if exportando {
-        manejar_exportacion(core, app, key);
+    if editando_destino {
+        manejar_exportacion(core, app, key, pendiente);
         return;
     }
     let mostrando_resultado = app
@@ -138,7 +155,12 @@ fn abrir_exportacion(app: &mut AppState) {
     historial.exportacion_destino = Some(Input::new(ruta_exportacion_predeterminada()));
 }
 
-fn manejar_exportacion(core: &AppCore, app: &mut AppState, key: KeyEvent) {
+fn manejar_exportacion(
+    core: &AppCore,
+    app: &mut AppState,
+    key: KeyEvent,
+    pendiente: &mut HistorialExportacionPendiente,
+) {
     match key.code {
         // Cancela la exportación y vuelve a mostrar el mismo resultado —
         // el filtro y la consulta ya aplicada no se tocan.
@@ -147,7 +169,7 @@ fn manejar_exportacion(core: &AppCore, app: &mut AppState, key: KeyEvent) {
                 historial.exportacion_destino = None;
             }
         }
-        KeyCode::Enter => confirmar_exportacion(core, app),
+        KeyCode::Enter => confirmar_exportacion(core, app, pendiente),
         _ => {
             if let Some(historial) = &mut app.historial
                 && let Some(destino) = &mut historial.exportacion_destino
@@ -158,11 +180,22 @@ fn manejar_exportacion(core: &AppCore, app: &mut AppState, key: KeyEvent) {
     }
 }
 
-/// Exporta el filtro completo (no sólo la página en pantalla) con todas las
-/// columnas del exportador (`ColumnaExportacion::ALL`) — elegir un
-/// subconjunto de columnas para exportar queda deliberadamente fuera de
-/// esta primera versión; hoy es todo o nada.
-fn confirmar_exportacion(core: &AppCore, app: &mut AppState) {
+/// Dispara la exportación en un hilo aparte en vez de bloquear el bucle —
+/// medido (`docs/pendientes.md`): armar el XLSX de 100,000 movimientos
+/// tarda ~33 segundos, y esta interfaz no tiene ningún otro mecanismo para
+/// seguir respondiendo mientras tanto (un solo hilo, sin runtime async).
+/// Mismo patrón que `tui/app/historial_jobs.rs`: hilo con su propia conexión
+/// de sólo lectura al archivo, reusando `exportar_historial_seleccion_con_conexion`
+/// (extraída del núcleo específicamente para esto). Exporta el filtro
+/// completo (no sólo la página en pantalla) con todas las columnas del
+/// exportador (`ColumnaExportacion::ALL`) — elegir un subconjunto de
+/// columnas para exportar queda deliberadamente fuera de esta primera
+/// versión; hoy es todo o nada.
+fn confirmar_exportacion(
+    core: &AppCore,
+    app: &mut AppState,
+    pendiente: &mut HistorialExportacionPendiente,
+) {
     let Some(historial) = &app.historial else {
         return;
     };
@@ -179,9 +212,60 @@ fn confirmar_exportacion(core: &AppCore, app: &mut AppState) {
     let mut filtro = historial.filtro.clone();
     filtro.offset = 0;
 
-    let resultado = core.exportar_historial(&filtro, &ColumnaExportacion::ALL, &destino);
     if let Some(historial) = &mut app.historial {
         historial.exportacion_destino = None;
+        historial.exportando = true;
+    }
+    *pendiente = Some(exportar_en_hilo(
+        core.ruta_base_datos().to_path_buf(),
+        filtro,
+        destino,
+    ));
+}
+
+fn exportar_en_hilo(
+    ruta_base_datos: PathBuf,
+    filtro: FiltroHistorial,
+    destino: PathBuf,
+) -> mpsc::Receiver<(Result<usize, String>, PathBuf)> {
+    let (emisor, receptor) = mpsc::channel();
+    std::thread::spawn(move || {
+        let resultado: Result<usize, String> = (|| {
+            let conexion = Connection::open(&ruta_base_datos).map_err(|error| error.to_string())?;
+            conexion
+                .busy_timeout(Duration::from_secs(5))
+                .map_err(|error| error.to_string())?;
+            exportar_historial_seleccion_con_conexion(
+                &conexion,
+                &filtro,
+                None,
+                &ColumnaExportacion::ALL,
+                &destino,
+            )
+            .map_err(|error| error.to_string())
+        })();
+        let _ = emisor.send((resultado, destino));
+    });
+    receptor
+}
+
+/// Revisa sin bloquear si la exportación en curso ya terminó — llamado en
+/// cada vuelta del bucle principal (`mod.rs::run`), igual que
+/// `login::recibir_autenticacion`/`root::recibir_root_creado`. Devuelve si
+/// acaba de resolverse, para que el bucle sepa que hay que redibujar.
+pub(super) fn recibir_exportacion_si_lista(
+    app: &mut AppState,
+    pendiente: &mut HistorialExportacionPendiente,
+) -> bool {
+    let Some(receptor) = pendiente.as_ref() else {
+        return false;
+    };
+    let Ok((resultado, destino)) = receptor.try_recv() else {
+        return false;
+    };
+    *pendiente = None;
+    if let Some(historial) = &mut app.historial {
+        historial.exportando = false;
     }
     match resultado {
         Ok(cantidad) => app.mostrar_feedback(
@@ -193,6 +277,7 @@ fn confirmar_exportacion(core: &AppCore, app: &mut AppState) {
             NivelFeedback::Error,
         ),
     }
+    true
 }
 
 /// Mismo criterio que `ruta_exportacion_predeterminada` de la TUI clásica
@@ -333,5 +418,59 @@ mod tests {
     #[test]
     fn otra_extension_es_error() {
         assert!(normalizar_destino("historial.csv").is_err());
+    }
+
+    #[test]
+    fn exportar_en_hilo_aparte_termina_con_el_archivo_real_en_disco() {
+        use chrono::{TimeZone, Utc};
+
+        use crate::services::usuario_service::CrearRootInicialInput;
+
+        let unico = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directorio = std::env::temp_dir().join(format!(
+            "control_acceso_cli_exportar_{}_{unico}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&directorio).unwrap();
+        let ruta_base_datos = directorio.join("control_acceso.sqlite");
+        let core = AppCore::abrir(&ruta_base_datos).unwrap();
+        core.crear_root_inicial(CrearRootInicialInput {
+            cedula: "ROOT-1".into(),
+            nombre: "Ana".into(),
+            password: "password1".into(),
+        })
+        .unwrap();
+        let actor = core.autenticar("ROOT-1", "password1").unwrap();
+
+        let mut app = AppState::con_sesion(actor);
+        let mut historial = HistorialState::nuevo(Vec::new());
+        historial.filtro = FiltroHistorial::nuevo(
+            Utc.with_ymd_and_hms(2000, 1, 1, 0, 0, 0).unwrap(),
+            Utc.with_ymd_and_hms(2030, 1, 1, 0, 0, 0).unwrap(),
+        );
+        let destino = directorio.join("export.xlsx");
+        historial.exportacion_destino = Some(Input::new(destino.display().to_string()));
+        app.historial = Some(historial);
+
+        let mut pendiente: HistorialExportacionPendiente = None;
+        confirmar_exportacion(&core, &mut app, &mut pendiente);
+        assert!(app.historial.as_ref().unwrap().exportando);
+        assert!(pendiente.is_some());
+
+        for _ in 0..200 {
+            if recibir_exportacion_si_lista(&mut app, &mut pendiente) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+
+        assert!(!app.historial.as_ref().unwrap().exportando);
+        assert!(pendiente.is_none());
+        assert!(destino.exists(), "el archivo real debía quedar en disco");
+
+        std::fs::remove_dir_all(&directorio).ok();
     }
 }

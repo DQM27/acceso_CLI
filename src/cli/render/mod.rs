@@ -188,7 +188,9 @@ fn contenido_pista(app: &AppState) -> Option<Line<'static>> {
         )));
     }
     if let Some(historial) = &app.historial {
-        let pista = if historial.exportacion_destino.is_some() {
+        let pista = if historial.exportando {
+            "exportando… espere"
+        } else if historial.exportacion_destino.is_some() {
             "escriba la ruta del XLSX · Enter exporta · Esc cancela"
         } else if historial.resultado.is_some() {
             "↑↓ moverse · PageUp/PageDown más · F4 columnas · F5 exportar · Esc editar filtro"

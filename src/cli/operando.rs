@@ -17,10 +17,15 @@ use super::estado::{EdicionColumnas, ObjetivoColumnas, SurfaceActiva};
 use super::formulario_controller::{abrir_formulario_edicion, abrir_formulario_nuevo};
 use super::{
     AppState, Columna, ColumnaActivos, ColumnaBusqueda, ColumnaHistorial, Comando, ContextState,
-    Entrada, Fase, GafeteParse, MedioParse, NivelFeedback,
+    Entrada, Fase, GafeteParse, HistorialExportacionPendiente, MedioParse, NivelFeedback,
 };
 
-pub(super) fn manejar_operando(core: &AppCore, app: &mut AppState, key: KeyEvent) {
+pub(super) fn manejar_operando(
+    core: &AppCore,
+    app: &mut AppState,
+    key: KeyEvent,
+    historial_exportacion_pendiente: &mut HistorialExportacionPendiente,
+) {
     // Con una Surface enclavada abierta (§5.2), el teclado es suyo — sólo
     // Ctrl+C escapa (ya atajado antes de llegar acá). `surface_activa()`
     // reemplaza lo que antes eran tres `if x.is_some() {...}` seguidos, uno
@@ -47,7 +52,12 @@ pub(super) fn manejar_operando(core: &AppCore, app: &mut AppState, key: KeyEvent
             return;
         }
         SurfaceActiva::Historial => {
-            super::historial_controller::manejar_historial(core, app, key);
+            super::historial_controller::manejar_historial(
+                core,
+                app,
+                key,
+                historial_exportacion_pendiente,
+            );
             return;
         }
         SurfaceActiva::SalidaGafete => {

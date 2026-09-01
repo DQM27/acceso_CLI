@@ -40,10 +40,18 @@ pub struct HistorialState {
     /// Catálogo cargado al abrir Historial, para resolver `empresa:nombre`.
     pub empresas: Vec<Empresa>,
     /// Ruta de exportación en edición (`F5`), o `None` si no se está
-    /// exportando. Input propio, no comparte `app.input` — así no pisa el
-    /// texto del filtro que sigue mostrándose congelado detrás mientras se
-    /// exporta (DEC-024: Esc a la exportación no debe perder la consulta).
+    /// editando el destino. Input propio, no comparte `app.input` — así no
+    /// pisa el texto del filtro que sigue mostrándose congelado detrás
+    /// mientras se exporta (DEC-024: Esc a la exportación no debe perder la
+    /// consulta).
     pub exportacion_destino: Option<tui_input::Input>,
+    /// `true` mientras el hilo aparte de exportación (ver
+    /// `historial_controller::exportar_en_hilo`) está en vuelo — medido:
+    /// exportar 100,000 movimientos tarda ~33 segundos, por eso no corre en
+    /// el mismo hilo que dibuja la pantalla. Distinto de
+    /// `exportacion_destino`: ese es "editando la ruta", esto es "ya
+    /// confirmó, esperando el resultado real".
+    pub exportando: bool,
 }
 
 impl HistorialState {
@@ -70,6 +78,7 @@ impl HistorialState {
             no_reconocidos: Vec::new(),
             empresas,
             exportacion_destino: None,
+            exportando: false,
         }
     }
 

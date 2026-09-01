@@ -163,6 +163,22 @@ pub(super) fn lineas_historial(
     columnas: &SelectorColumnas<ColumnaHistorial>,
     opacidades: &OpacidadesHistorial,
 ) -> (Vec<Line<'static>>, Option<usize>) {
+    if historial.exportando {
+        return (
+            vec![
+                Line::from(Span::styled(
+                    "EXPORTAR HISTORIAL",
+                    estilo_fundido(FADE_MUTED, opacidades.exportar, Modifier::empty()),
+                )),
+                Line::from(""),
+                Line::from(Span::styled(
+                    "⠋ Exportando…",
+                    estilo_fundido(FADE_ACENTO, opacidades.exportar, Modifier::empty()),
+                )),
+            ],
+            None,
+        );
+    }
     if historial.exportacion_destino.is_some() {
         let total = historial.resultado.as_ref().map_or(0, |r| r.total);
         return (

@@ -115,6 +115,13 @@ type AutenticacionPendiente = Option<(
 type RootPendiente =
     Option<mpsc::Receiver<Result<(CrearRootInicialInput, String), UsuarioServiceError>>>;
 
+/// Receptor del hilo que exporta Historial a XLSX (ver
+/// `historial_controller::exportar_en_hilo`) — el destino viaja junto con el
+/// resultado, así `historial_controller::recibir_exportacion_si_lista` no
+/// necesita guardarlo aparte mientras el hilo está en vuelo.
+type HistorialExportacionPendiente =
+    Option<mpsc::Receiver<(Result<usize, String>, std::path::PathBuf)>>;
+
 /// Punto de entrada de la CLI. Consume el `AppCore` (la ruta
 /// por defecto de `main` no hace nada más con él después).
 ///
@@ -157,6 +164,7 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<bool,
     }
     let mut autenticacion: AutenticacionPendiente = None;
     let mut root_pendiente: RootPendiente = None;
+    let mut historial_exportacion_pendiente: HistorialExportacionPendiente = None;
     recomputar(&core, &mut app);
 
     // Redraw-on-demand: sólo se dibuja cuando algo realmente cambió. La
@@ -184,6 +192,12 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<bool,
             redibujar = true;
         }
         if root::recibir_root_creado(&core, &mut app, &mut root_pendiente) {
+            redibujar = true;
+        }
+        if historial_controller::recibir_exportacion_si_lista(
+            &mut app,
+            &mut historial_exportacion_pendiente,
+        ) {
             redibujar = true;
         }
         if app.expirar_feedback() {
@@ -219,7 +233,12 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<bool,
             redibujar = false;
         }
 
-        let espera = proxima_espera(&app, &autenticacion, &root_pendiente);
+        let espera = proxima_espera(
+            &app,
+            &autenticacion,
+            &root_pendiente,
+            &historial_exportacion_pendiente,
+        );
         if crossterm::event::poll(espera)? {
             match crossterm::event::read()? {
                 Event::Key(key) => {
@@ -229,6 +248,7 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<bool,
                         key,
                         &mut autenticacion,
                         &mut root_pendiente,
+                        &mut historial_exportacion_pendiente,
                     );
                     redibujar = true;
                 }
@@ -402,6 +422,7 @@ fn proxima_espera(
     app: &AppState,
     autenticacion: &AutenticacionPendiente,
     root_pendiente: &RootPendiente,
+    historial_exportacion_pendiente: &HistorialExportacionPendiente,
 ) -> Duration {
     const ESPERA_VERIFICACION: Duration = Duration::from_millis(30);
     // ~30 fps: de sobra para una transición de texto/color; no hay razón
@@ -409,7 +430,10 @@ fn proxima_espera(
     const ESPERA_ANIMACION: Duration = Duration::from_millis(33);
     const ESPERA_REPOSO: Duration = Duration::from_secs(60 * 60);
 
-    if autenticacion.is_some() || root_pendiente.is_some() {
+    if autenticacion.is_some()
+        || root_pendiente.is_some()
+        || historial_exportacion_pendiente.is_some()
+    {
         return ESPERA_VERIFICACION;
     }
     if app.presentacion.activo() {
@@ -449,6 +473,7 @@ fn manejar_tecla(
     key: KeyEvent,
     autenticacion: &mut AutenticacionPendiente,
     root_pendiente: &mut RootPendiente,
+    historial_exportacion_pendiente: &mut HistorialExportacionPendiente,
 ) {
     if key.kind != KeyEventKind::Press {
         return;
@@ -484,6 +509,8 @@ fn manejar_tecla(
             root_pendiente,
         ),
         Fase::RootCreando { .. } => {}
-        Fase::Operando { .. } => operando::manejar_operando(core, app, key),
+        Fase::Operando { .. } => {
+            operando::manejar_operando(core, app, key, historial_exportacion_pendiente)
+        }
     }
 }
