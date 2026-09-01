@@ -677,7 +677,11 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_empresa(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas(
     ): Int
@@ -719,7 +723,11 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_contratistas(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_contratista(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_empresa(`ptr`: Long,`nombre`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_empresas(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -856,7 +864,13 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas() != 3985) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion() != 60001) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista() != 57741) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_empresa() != 5879) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas() != 65509) {
@@ -1257,6 +1271,14 @@ public interface NucleoInterface {
     fun `buscarContratistas`(`texto`: kotlin.String): List<ContratistaResumen>
     
     /**
+     * Sólo olvida el actor en memoria — el `AppCore`/la conexión `SQLite`
+     * se quedan abiertos (son del teléfono, no de la sesión) para que
+     * `Nucleo::autenticar` pueda loguear al siguiente usuario sin
+     * reabrir la base.
+     */
+    fun `cerrarSesion`()
+    
+    /**
      * Alta de contratista — mismo formulario que
      * `desktop/src/pantallas/FormularioContratista.tsx`, sólo creación
      * (ver docs/plan-app-movil.md). La validación real y definitiva vuelve
@@ -1264,6 +1286,8 @@ public interface NucleoInterface {
      * lógica, sólo convierte tipos en la frontera uniffi.
      */
     fun `crearContratista`(`datos`: DatosContratista): kotlin.Long
+    
+    fun `crearEmpresa`(`nombre`: kotlin.String): kotlin.Long
     
     fun `listarEmpresas`(): List<Empresa>
     
@@ -1439,6 +1463,24 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Sólo olvida el actor en memoria — el `AppCore`/la conexión `SQLite`
+     * se quedan abiertos (son del teléfono, no de la sesión) para que
+     * `Nucleo::autenticar` pueda loguear al siguiente usuario sin
+     * reabrir la base.
+     */override fun `cerrarSesion`()
+        = 
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion(
+        it,
+        _status)
+}
+    }
+    
+    
+
+    
+    /**
      * Alta de contratista — mismo formulario que
      * `desktop/src/pantallas/FormularioContratista.tsx`, sólo creación
      * (ver docs/plan-app-movil.md). La validación real y definitiva vuelve
@@ -1453,6 +1495,21 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         it,
         
         FfiConverterTypeDatosContratista.lower(`datos`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    @Throws(NucleoException::class)override fun `crearEmpresa`(`nombre`: kotlin.String): kotlin.Long {
+            return FfiConverterLong.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_crear_empresa(
+        it,
+        
+        FfiConverterString.lower(`nombre`),_status)
 }
     }
     )

@@ -33,7 +33,6 @@ import uniffi.control_acceso_mobile.ContratistaResumen
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.PreparacionIngreso
 import uniffi.control_acceso_mobile.TipoIngreso
-import uniffi.control_acceso_mobile.UsuarioSesion
 
 /// Mismo árbol de estados que `Seleccion` en NuevoIngresoModal.tsx: sin
 /// selección (buscador visible), verificando (prepararIngreso en vuelo),
@@ -54,7 +53,7 @@ private sealed class Seleccion {
 // de nuevo a Nucleo.buscarContratistas — la decisión de qué cuenta como
 // coincidencia sigue siendo de Rust (BusquedaTexto), esta pantalla solo pinta.
 @Composable
-fun PantallaContratistas(nucleo: Nucleo, sesion: UsuarioSesion) {
+fun PantallaContratistas(nucleo: Nucleo) {
     var texto by remember { mutableStateOf("") }
     var resultados by remember { mutableStateOf<List<ContratistaResumen>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -109,12 +108,6 @@ fun PantallaContratistas(nucleo: Nucleo, sesion: UsuarioSesion) {
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(
-            "Hola, ${sesion.nombre}",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 12.dp),
-        )
-
         OutlinedTextField(
             value = texto,
             onValueChange = { texto = it },

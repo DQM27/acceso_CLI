@@ -531,6 +531,25 @@ impl Nucleo {
             },
         )?)
     }
+
+    pub fn crear_empresa(&self, nombre: String) -> Result<i64, NucleoError> {
+        let actor = self
+            .sesion
+            .lock()
+            .expect("mutex de sesión envenenado")
+            .clone()
+            .ok_or(NucleoError::NoAutenticado)?;
+        let core = self.core.lock().expect("mutex de AppCore envenenado");
+        Ok(core.crear_empresa(&actor, &nombre)?)
+    }
+
+    /// Sólo olvida el actor en memoria — el `AppCore`/la conexión `SQLite`
+    /// se quedan abiertos (son del teléfono, no de la sesión) para que
+    /// `Nucleo::autenticar` pueda loguear al siguiente usuario sin
+    /// reabrir la base.
+    pub fn cerrar_sesion(&self) {
+        *self.sesion.lock().expect("mutex de sesión envenenado") = None;
+    }
 }
 
 #[cfg(test)]
@@ -727,6 +746,36 @@ mod tests {
         });
 
         assert!(matches!(resultado, Err(NucleoError::FechaInvalida { .. })));
+    }
+
+    #[test]
+    fn crear_empresa_y_cerrar_sesion() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$FZShq0MtV2bGh9nFBgvrGA$dYNDyh7up/wmAY+t/Vf6V5LTCS9sNkQgaH81G650xfM',
+                     'ROOT', 1
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar("999999999".to_string(), "daniel27".to_string())
+            .unwrap();
+
+        let id = nucleo.crear_empresa("Empresa Nueva".to_string()).unwrap();
+        assert!(id > 0);
+
+        nucleo.cerrar_sesion();
+
+        let resultado = nucleo.crear_empresa("Otra Empresa".to_string());
+        assert!(matches!(resultado, Err(NucleoError::NoAutenticado)));
     }
 
     #[test]
