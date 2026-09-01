@@ -68,7 +68,16 @@ pub(super) const FADE_ERROR: (u8, u8, u8) = (214, 92, 92);
 
 pub(super) fn interpolar_color(desde: (u8, u8, u8), hasta: (u8, u8, u8), t: f32) -> Color {
     let t = t.clamp(0.0, 1.0);
-    let mezclar = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * t).round() as u8;
+    // El `.clamp(0.0, 255.0)` ya deja el valor dentro de lo que `u8` puede
+    // representar — Clippy no razona sobre el resultado de un `clamp` en
+    // tiempo de compilación, así que sigue viendo el cast como arriesgado
+    // aunque ya no lo sea.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let mezclar = |a: u8, b: u8| {
+        (a as f32 + (b as f32 - a as f32) * t)
+            .round()
+            .clamp(0.0, 255.0) as u8
+    };
     Color::Rgb(
         mezclar(desde.0, hasta.0),
         mezclar(desde.1, hasta.1),

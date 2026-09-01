@@ -115,7 +115,7 @@ fn render_lista(
     // esté centrado.
     let ancho_contenido = OpcionMenu::TODAS
         .iter()
-        .map(|o| o.etiqueta().chars().count() as u16 + 2)
+        .map(|o| u16::try_from(o.etiqueta().chars().count()).unwrap_or(u16::MAX) + 2)
         .max()
         .unwrap_or(20);
     let operacion: Vec<OpcionMenu> = visibles
@@ -187,7 +187,9 @@ fn render_lista(
     }
 
     let ancho = area.width.min(ancho_contenido);
-    let alto = area.height.min(lineas.len() as u16);
+    let alto = area
+        .height
+        .min(u16::try_from(lineas.len()).unwrap_or(u16::MAX));
     let lista = centrar(area, ancho, alto);
 
     frame.render_widget(Paragraph::new(lineas), lista);

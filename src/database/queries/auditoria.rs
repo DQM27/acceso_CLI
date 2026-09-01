@@ -109,7 +109,8 @@ impl<'a> SqliteAuditoria<'a> {
     }
 
     pub fn buscar(&self, filtro: &FiltroAuditoria) -> Result<PaginaAuditoria, DatabaseError> {
-        let limite = filtro.limite.clamp(1, LIMITE_AUDITORIA_MAXIMO) as i64;
+        let limite =
+            i64::try_from(filtro.limite.clamp(1, LIMITE_AUDITORIA_MAXIMO)).unwrap_or(i64::MAX);
         let offset = i64::try_from(filtro.offset).unwrap_or(i64::MAX);
         let transaction = self.connection.unchecked_transaction()?;
         let total: i64 =

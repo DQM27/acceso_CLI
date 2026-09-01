@@ -116,6 +116,11 @@ fn debe_actualizar_usuario() {
 }
 
 #[test]
+// `usuarios` (la lista resultante) vs. `usuario1`/`usuario2`/`usuario3` (las
+// fixtures que la arman) no es un error de tipeo — el lint ignora dígitos al
+// final del nombre y los ve "parecidos", pero acá son cosas distintas a
+// propósito: tres fixtures numeradas y el resultado de listarlas.
+#[allow(clippy::similar_names)]
 fn debe_listar_usuarios() {
     let connection = crear_base_datos();
 

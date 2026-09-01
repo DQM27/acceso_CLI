@@ -54,7 +54,11 @@ fn core_con_movimientos(cantidad: usize) -> AppCore {
                  VALUES (1,1,?1,'CAMINANDO','PRAIND',?2,1,?3,1,\
                  '00101','Ana Solano','Brisas','Quintana','Quintana','2027-01-01',\
                  0,1,'PERMITIDO',NULL,1)",
-                params![ingreso, indice as i64 + 1, salida],
+                params![
+                    ingreso,
+                    i64::try_from(indice).unwrap_or(i64::MAX) + 1,
+                    salida
+                ],
             )
             .unwrap();
     }

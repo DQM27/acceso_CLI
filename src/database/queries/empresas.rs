@@ -48,7 +48,7 @@ impl<'a> SqliteEmpresasQuery<'a> {
 impl EmpresasQuery for SqliteEmpresasQuery<'_> {
     fn buscar(&self, filtro: &FiltroEmpresas) -> Result<Vec<EmpresaResumen>, DatabaseError> {
         let busqueda = BusquedaTexto::preparar(filtro.texto.as_deref());
-        let limite = filtro.limite.clamp(1, LIMITE_MAXIMO) as i64;
+        let limite = i64::try_from(filtro.limite.clamp(1, LIMITE_MAXIMO)).unwrap_or(i64::MAX);
         let offset = i64::try_from(filtro.offset).unwrap_or(i64::MAX);
         let (sql, parametros): (&str, Vec<rusqlite::types::Value>) = match busqueda.modo {
             1 => (

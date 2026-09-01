@@ -462,7 +462,8 @@ fn render_columnas_editor(
     let popup = centered_rect(
         franja_superior,
         44.min(area.width),
-        (ColumnaHistorial::ALL.len() as u16 + 4).min(franja_superior.height),
+        (u16::try_from(ColumnaHistorial::ALL.len()).unwrap_or(u16::MAX) + 4)
+            .min(franja_superior.height),
     );
     frame.render_widget(Clear, popup);
     let titulo = if proposito == PropositoColumnas::Exportacion {

@@ -424,9 +424,10 @@ fn activos_convierte_los_cuatro_tipos() {
         .iter()
         .enumerate()
     {
+        let id = i64::try_from(i).unwrap_or(i64::MAX) + 1;
         insertar(
             &base,
-            i as i64 + 1,
+            id,
             if i % 2 == 0 {
                 base.empresa_uno
             } else {
@@ -435,7 +436,7 @@ fn activos_convierte_los_cuatro_tipos() {
             &format!("2026-08-{:02} 07:00:00", 10 + i),
             "CAMINANDO",
             tipo,
-            Some(i as i64 + 1),
+            Some(id),
             None,
             None,
         );
@@ -947,7 +948,7 @@ fn historial_convierte_tipos_medios_y_fechas_seguras() {
             &format!("2026-08-{:02} 07:00:00", 10 + i),
             if i % 2 == 0 { "CAMINANDO" } else { "VEHICULO" },
             tipo,
-            Some(i as i64 + 1),
+            Some(i64::try_from(i).unwrap_or(i64::MAX) + 1),
             Some(&format!("2026-08-{:02} 08:00:00", 10 + i)),
             Some(base.usuario_salida),
         );

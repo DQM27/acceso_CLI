@@ -23,7 +23,7 @@ fn pagina(cantidad: usize, total: usize) -> PaginaHistorial {
     PaginaHistorial {
         items: (0..cantidad)
             .map(|i| MovimientoIngresoResumen {
-                registro_id: i as i64 + 1,
+                registro_id: i64::try_from(i).unwrap_or(i64::MAX) + 1,
                 contratista_id: 10,
                 cedula: "101010101".into(),
                 contratista_nombre: "Ana Solano".into(),

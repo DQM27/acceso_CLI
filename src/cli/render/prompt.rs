@@ -532,7 +532,7 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
         _ => (etiqueta, acento()),
     };
 
-    let ancho_etiqueta = etiqueta.chars().count() as u16;
+    let ancho_etiqueta = u16::try_from(etiqueta.chars().count()).unwrap_or(u16::MAX);
     let viewport = area.width.saturating_sub(ancho_etiqueta + 1) as usize;
     // El scroll se calcula sobre el `Input` que de verdad gobierna el
     // cursor en este frame — con la exportación abierta es

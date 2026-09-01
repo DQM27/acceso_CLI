@@ -88,7 +88,8 @@ pub(super) fn listar_activos(
         |row| row.get(0),
     )?;
 
-    let limite = filtro.limite.clamp(1, LIMITE_ACTIVOS_PREDETERMINADO) as i64;
+    let limite =
+        i64::try_from(filtro.limite.clamp(1, LIMITE_ACTIVOS_PREDETERMINADO)).unwrap_or(i64::MAX);
     let (where_sql, parametros) = construir_where_activos(&busqueda, filtro);
     let mut params: Vec<(&str, &dyn rusqlite::ToSql)> = parametros
         .iter()

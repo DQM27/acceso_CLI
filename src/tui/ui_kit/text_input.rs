@@ -297,7 +297,10 @@ impl TextInput {
                 .max(scroll as usize)
                 .saturating_sub(scroll as usize)
                 .min(viewport_width);
-            frame.set_cursor_position((inner.x + cursor_column as u16, inner.y));
+            frame.set_cursor_position((
+                inner.x + u16::try_from(cursor_column).unwrap_or(u16::MAX),
+                inner.y,
+            ));
         }
     }
 }
@@ -316,7 +319,7 @@ fn limited(value: &str, max_chars: usize) -> String {
 /// (contraseñas), donde `contenido` es una máscara sintética y no el valor
 /// real.
 pub fn posicionar_cursor(frame: &mut Frame, area: Rect, contenido: &str) {
-    let ancho_visible = Line::from(contenido).width() as u16;
+    let ancho_visible = u16::try_from(Line::from(contenido).width()).unwrap_or(u16::MAX);
     let x = area.x.saturating_add(ancho_visible.min(area.width));
     frame.set_cursor_position((x, area.y));
 }

@@ -389,6 +389,11 @@ fn etiqueta_esquema(validacion: Option<&ResultadoValidacion>) -> String {
 
 fn tamano_legible(bytes: u64) -> String {
     const UNIDAD: f64 = 1024.0;
+    // Sólo para mostrar KB/MB legibles — un tamaño de archivo real (bytes de
+    // un respaldo) está lejísimos del punto donde `f64` empieza a perder
+    // precisión (2^52), y aunque lo estuviera sólo afectaría el redondeo
+    // mostrado, nunca una decisión real del programa.
+    #[allow(clippy::cast_precision_loss)]
     let bytes_f = bytes as f64;
     if bytes_f < UNIDAD {
         format!("{bytes} B")

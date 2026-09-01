@@ -237,7 +237,10 @@ fn manejar_selector_empresa(core: &AppCore, app: &mut AppState, key: KeyEvent) {
                 && let Subfase::EligiendoEmpresa { seleccion } = &mut form.subfase
                 && total > 0
             {
-                *seleccion = (*seleccion as isize + delta).clamp(0, total as isize - 1) as usize;
+                let actual_isize = isize::try_from(*seleccion).unwrap_or(isize::MAX);
+                let total_isize = isize::try_from(total).unwrap_or(isize::MAX);
+                *seleccion =
+                    usize::try_from((actual_isize + delta).clamp(0, total_isize - 1)).unwrap_or(0);
             }
         }
         KeyCode::Enter => {

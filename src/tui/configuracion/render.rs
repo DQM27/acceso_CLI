@@ -226,9 +226,12 @@ fn render_exportar(frame: &mut Frame, area: Rect, destino: &TextInput, theme: Th
     frame.set_cursor_position((
         filas[1].x
             + 1
-            + destino
-                .cursor()
-                .min(filas[1].width.saturating_sub(3) as usize) as u16,
+            + u16::try_from(
+                destino
+                    .cursor()
+                    .min(filas[1].width.saturating_sub(3) as usize),
+            )
+            .unwrap_or(u16::MAX),
         filas[1].y + 1,
     ));
 }

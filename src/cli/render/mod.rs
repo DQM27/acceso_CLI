@@ -72,7 +72,9 @@ pub fn render(frame: &mut Frame, app: &AppState) {
     }
 
     let paleta = app.paleta_comandos();
-    let filas_comandos = paleta.as_ref().map_or(0, |comandos| comandos.len() as u16);
+    let filas_comandos = paleta.as_ref().map_or(0, |comandos| {
+        u16::try_from(comandos.len()).unwrap_or(u16::MAX)
+    });
     // Sin borde en ningún caso (ver `prompt::render_prompt`): sin paleta,
     // sólo la fila del input; con paleta, input + divisor + N filas.
     // El cap deja al menos 3 filas para el área de contexto arriba.

@@ -186,7 +186,7 @@ fn altura_panel(state: &UsuariosState) -> u16 {
                 };
             }
             if f.selector_rol.is_some() {
-                total += ROLES.len() as u16;
+                total += u16::try_from(ROLES.len()).unwrap_or(u16::MAX);
             }
             total + 1
         }
@@ -331,7 +331,10 @@ fn render_formulario(frame: &mut Frame, area: Rect, f: &FormularioUsuario, theme
         .collect();
     let indice_rol = campos.iter().position(|c| *c == CampoUsuario::Rol);
     if let (Some(indice_rol), Some(_)) = (indice_rol, f.selector_rol) {
-        restricciones.insert(indice_rol + 1, Constraint::Length(ROLES.len() as u16));
+        restricciones.insert(
+            indice_rol + 1,
+            Constraint::Length(u16::try_from(ROLES.len()).unwrap_or(u16::MAX)),
+        );
     }
     restricciones.push(Constraint::Length(1));
     let filas = Layout::vertical(restricciones).split(area);

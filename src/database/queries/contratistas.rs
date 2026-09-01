@@ -235,8 +235,9 @@ fn construir_where(
 impl ContratistasQuery for SqliteContratistasQuery<'_> {
     fn buscar(&self, filtro: &FiltroContratistas) -> Result<PaginaContratistas, DatabaseError> {
         let busqueda = BusquedaTexto::preparar(filtro.texto.as_deref());
-        let limite = filtro.limite.clamp(1, LIMITE_LISTADO_MAXIMO_CARGA_COMPLETA) as i64;
-        let offset = filtro.offset as i64;
+        let limite = i64::try_from(filtro.limite.clamp(1, LIMITE_LISTADO_MAXIMO_CARGA_COMPLETA))
+            .unwrap_or(i64::MAX);
+        let offset = i64::try_from(filtro.offset).unwrap_or(i64::MAX);
         let (where_sql, parametros) = construir_where(&busqueda, filtro);
         let params_comunes: Vec<(&str, &dyn rusqlite::ToSql)> = parametros
             .iter()

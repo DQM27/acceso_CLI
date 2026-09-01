@@ -276,7 +276,14 @@ impl App {
         let mut ultimo_refresco_reloj = Instant::now();
         // Arranca vencido a propósito: la primera vuelta del bucle ya debe
         // revisar el respaldo automático, no esperar un minuto entero.
-        let mut ultima_revision_respaldo = Instant::now() - REVISION_RESPALDO_AUTOMATICO;
+        // `checked_sub` en vez de `-` directo: si la máquina lleva menos de
+        // `REVISION_RESPALDO_AUTOMATICO` encendida (arranque en frío muy
+        // reciente), restar entraría en pánico — en ese caso extremo, la
+        // primera revisión simplemente espera el minuto completo en vez de
+        // ser inmediata, degradación aceptable frente a un crash real.
+        let mut ultima_revision_respaldo = Instant::now()
+            .checked_sub(REVISION_RESPALDO_AUTOMATICO)
+            .unwrap_or_else(Instant::now);
         while !self.salir {
             if redibujar {
                 let theme = self.tema.theme();
@@ -722,8 +729,10 @@ impl App {
         let Some(indice) = visibles.iter().position(|opcion| *opcion == actual) else {
             return;
         };
+        let indice_isize = isize::try_from(indice).unwrap_or(isize::MAX);
+        let total_isize = isize::try_from(visibles.len()).unwrap_or(isize::MAX);
         let destino =
-            (indice as isize + desplazamiento).rem_euclid(visibles.len() as isize) as usize;
+            usize::try_from((indice_isize + desplazamiento).rem_euclid(total_isize)).unwrap_or(0);
         self.navegar_a_pestana(visibles[destino], core);
     }
 

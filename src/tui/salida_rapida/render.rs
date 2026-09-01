@@ -87,7 +87,8 @@ fn render_busqueda(frame: &mut Frame, area: Rect, state: &SalidaRapidaState, the
         .chars()
         .take(state.busqueda.cursor())
         .collect();
-    let ancho_visible = Line::from(format!("{ETIQUETA}{antes_del_cursor}")).width() as u16;
+    let ancho_visible = u16::try_from(Line::from(format!("{ETIQUETA}{antes_del_cursor}")).width())
+        .unwrap_or(u16::MAX);
     let x = area.x.saturating_add(ancho_visible.min(area.width));
     frame.set_cursor_position((x, area.y));
 }

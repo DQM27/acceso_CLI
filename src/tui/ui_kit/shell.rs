@@ -210,7 +210,7 @@ impl ScreenShell<'_> {
         } else {
             compact
         };
-        let width = tabs_width(&titles).min(max_width) as u16;
+        let width = u16::try_from(tabs_width(&titles).min(max_width)).unwrap_or(u16::MAX);
         let centered = Rect::new(
             area.x + area.width.saturating_sub(width) / 2,
             area.y,

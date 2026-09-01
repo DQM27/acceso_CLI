@@ -321,9 +321,9 @@ fn mover_seleccion(app: &mut AppState, delta: isize) {
     if resultado.items.is_empty() {
         return;
     }
-    let actual = historial.seleccion as isize;
-    let ultimo = resultado.items.len() as isize - 1;
-    historial.seleccion = (actual + delta).clamp(0, ultimo) as usize;
+    let actual = isize::try_from(historial.seleccion).unwrap_or(isize::MAX);
+    let ultimo = isize::try_from(resultado.items.len()).unwrap_or(isize::MAX) - 1;
+    historial.seleccion = usize::try_from((actual + delta).clamp(0, ultimo)).unwrap_or(0);
 }
 
 /// Interpreta el texto tecleado, arma un filtro "de cero" (sin `corte_id`:

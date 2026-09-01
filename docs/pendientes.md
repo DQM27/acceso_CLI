@@ -57,14 +57,29 @@ complexity/perf) se sigue verificando igual que siempre con
   a nivel de módulo de test en `cli/presentation/{easing,engine}.rs`, con la razón anotada.
   `cargo fmt`, la suite completa y `cargo clippy --all-targets --all-features -- -A
   clippy::pedantic -A clippy::nursery -D warnings` (la vara de siempre) en verde.
-- [ ] **Capa 2 (próxima, alto valor real) — casts que truncan/wrappean/pierden signo
-  (~69 casos) + 1 resta de `Duration` sin checar (puede entrar en pánico si el resultado
-  sería negativo) + 1 nombre de variable "demasiado parecido a otro" (revisar si es un
-  typo).** La mayoría de los casts `usize→u16` son coordenadas de layout de Ratatui
-  (anchos/altos de terminal, acotados en la práctica pero no probados al compilador) — ya
-  hay un patrón establecido en el propio repo para esto
-  (`u32::try_from(x).unwrap_or(u32::MAX)`, ver `application/historial.rs`), aplicar el mismo
-  criterio en vez de inventar uno nuevo.
+- [x] **Capa 2 (2026-09-01) — casts que truncan/wrappean/pierden signo/precisión (~69
+  casos) + 1 resta de `Duration` sin checar + 1 nombre de variable "demasiado parecido a
+  otro".** Los ~69 casts se resolvieron con el mismo patrón que ya usaba el repo
+  (`X::try_from(v).unwrap_or(X::MAX)`, antes sólo en `offset`/`total` de las consultas SQL
+  y en `application/historial.rs`) — ahora también en las coordenadas de layout de Ratatui
+  (`usize→u16`, ~30 casos) y en el movimiento de índices con signo (`usize↔isize` con
+  `.clamp()`/`.rem_euclid()`, ~25 casos). En `cli/operando.rs`, que tenía el mismo cálculo
+  de "mover índice acotado" repetido 3 veces dentro del propio archivo, se extrajo
+  `mover_indice_clamped` — simplificación real (duplicación comprobada dentro de un mismo
+  archivo), no una abstracción nueva de gran alcance. Dos casos quedaron con
+  `#[allow]` puntual en vez de forzar `try_from`: la mezcla de color en
+  `cli/render/estilos.rs` (ya acotada por un `.clamp(0.0, 255.0)` que Clippy no razona en
+  tiempo de compilación) y el tamaño de archivo en `tui/configuracion/state.rs` (conversión
+  a `f64` sólo para mostrar KB/MB, la precisión de un tamaño de archivo real nunca se
+  acerca al límite de 2^52 de todos modos). La resta de `Duration`
+  (`tui/app.rs`, inicializar "última revisión" 60s atrás para que la primera vuelta del
+  bucle ya dispare la revisión automática) pasó a `checked_sub` con fallback a `Instant::now()`
+  — sin eso, una máquina con menos de 60s de uptime real habría entrado en pánico al abrir
+  la app. El nombre "parecido" (`usuarios` vs. `usuario1/2/3` en un test) era falso
+  positivo, `#[allow]` con nota. `match_same_arms`/`cast_possible_truncation`/
+  `cast_possible_wrap`/`cast_sign_loss`/`cast_precision_loss`/`unchecked_time_subtraction`/
+  `similar_names`/`float_cmp` ya en `"deny"`. `cargo fmt`, la suite completa y la vara de
+  siempre en verde — de 1076 warnings iniciales quedan 931.
 - [ ] **Capa 3 — simplificaciones de `Option`/`Result` y legibilidad menor.**
   `map(f).unwrap_or_else(g)` → `map_or_else`, `map(f).unwrap_or(a)` → `map_or`, closures
   redundantes, `if let`/`match` de un solo patrón → `if let`/`let-else`. Bajo riesgo de bug,

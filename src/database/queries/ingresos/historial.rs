@@ -135,7 +135,7 @@ pub(super) fn buscar_historial(
 ) -> Result<PaginaHistorial, DatabaseError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Deferred)?;
     let busqueda = BusquedaTexto::preparar(filtro.texto_persona.as_deref());
-    let limite = filtro.limite.clamp(1, LIMITE_HISTORIAL_MAXIMO) as i64;
+    let limite = i64::try_from(filtro.limite.clamp(1, LIMITE_HISTORIAL_MAXIMO)).unwrap_or(i64::MAX);
     let offset = offset_sql(filtro.offset);
     let corte_id = match filtro.corte_id {
         Some(corte_id) => corte_id,

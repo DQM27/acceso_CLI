@@ -90,8 +90,9 @@ pub(super) fn mover_campo(f: &mut FormularioContratista, d: isize) {
         .iter()
         .position(|indice| *indice == f.campo)
         .unwrap_or(0);
-    let len = habilitados.len() as isize;
-    let siguiente = (posicion as isize + d).rem_euclid(len) as usize;
+    let len = isize::try_from(habilitados.len()).unwrap_or(isize::MAX);
+    let posicion_isize = isize::try_from(posicion).unwrap_or(isize::MAX);
+    let siguiente = usize::try_from((posicion_isize + d).rem_euclid(len)).unwrap_or(0);
     f.campo = habilitados[siguiente];
 }
 

@@ -52,7 +52,7 @@ pub(super) fn scroll_hacia_seleccion(seleccionada: Option<usize>, alto: u16) -> 
     if alto == 0 || seleccionada < alto {
         return 0;
     }
-    (seleccionada - alto + 1) as u16
+    u16::try_from(seleccionada - alto + 1).unwrap_or(u16::MAX)
 }
 
 pub(super) fn lineas_contexto(

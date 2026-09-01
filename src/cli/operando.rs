@@ -152,15 +152,27 @@ pub(super) fn manejar_operando(
     }
 }
 
+/// Nuevo índice tras mover `actual` por `delta`, acotado a `[0, total - 1]`
+/// — mismo cálculo repetido en varias listas navegables de esta pantalla
+/// (paleta de comandos, selección de fila, edición de columnas). `usize` e
+/// `isize` comparten ancho en cualquier objetivo real de esta app (64 bits),
+/// así que el único caso donde `try_from` cae en el `unwrap_or` es un total
+/// o índice mayor a `isize::MAX` — nunca ocurre con listas que caben en
+/// pantalla, pero queda cubierto en vez de asumirlo.
+fn mover_indice_clamped(actual: usize, delta: isize, total: usize) -> usize {
+    if total == 0 {
+        return actual;
+    }
+    let actual_isize = isize::try_from(actual).unwrap_or(isize::MAX);
+    let total_isize = isize::try_from(total).unwrap_or(isize::MAX);
+    usize::try_from((actual_isize + delta).clamp(0, total_isize - 1)).unwrap_or(0)
+}
+
 fn mover_seleccion_paleta(app: &mut AppState, delta: isize) {
     let Some(total) = app.paleta_comandos().map(|c| c.len()) else {
         return;
     };
-    if total == 0 {
-        return;
-    }
-    let actual = app.seleccion_paleta as isize;
-    app.seleccion_paleta = (actual + delta).clamp(0, total as isize - 1) as usize;
+    app.seleccion_paleta = mover_indice_clamped(app.seleccion_paleta, delta, total);
 }
 
 /// Completa el input con `/<nombre> ` de la fila resaltada de la paleta —
@@ -185,11 +197,7 @@ fn completar_desde_paleta(core: &AppCore, app: &mut AppState) -> bool {
 
 fn mover_seleccion(app: &mut AppState, delta: isize) {
     let ajustar = |seleccion: &mut usize, total: usize| {
-        if total == 0 {
-            return;
-        }
-        let actual = *seleccion as isize;
-        *seleccion = (actual + delta).clamp(0, total as isize - 1) as usize;
+        *seleccion = mover_indice_clamped(*seleccion, delta, total);
     };
     // Los `items` de cada variante son `Vec<T>` con `T` distinto por
     // dominio (`ContratistaResumen`, `EmpresaResumen`, `IngresoActivoResumen`,
@@ -325,11 +333,7 @@ fn mover_seleccion_columnas(app: &mut AppState, delta: isize) {
         ObjetivoColumnas::Activos => ColumnaActivos::TODAS.len(),
         ObjetivoColumnas::Historial => ColumnaHistorial::TODAS.len(),
     };
-    if total == 0 {
-        return;
-    }
-    let actual = edicion.seleccion as isize;
-    edicion.seleccion = (actual + delta).clamp(0, total as isize - 1) as usize;
+    edicion.seleccion = mover_indice_clamped(edicion.seleccion, delta, total);
 }
 
 fn alternar_columna(app: &mut AppState) {

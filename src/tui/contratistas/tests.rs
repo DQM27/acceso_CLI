@@ -283,7 +283,10 @@ fn buscador_separa_etiqueta_e_input_y_posiciona_el_cursor_al_final() {
     let cursor = terminal.backend().cursor_position();
     assert_eq!(
         (cursor.x, cursor.y),
-        (inicio_campo as u16, (fila_etiqueta + 1) as u16)
+        (
+            u16::try_from(inicio_campo).unwrap_or(u16::MAX),
+            u16::try_from(fila_etiqueta + 1).unwrap_or(u16::MAX)
+        )
     );
 
     escribir(&mut state, "hfjj");
@@ -306,8 +309,12 @@ fn buscador_separa_etiqueta_e_input_y_posiciona_el_cursor_al_final() {
     let cursor = terminal.backend().cursor_position();
 
     assert!(lineas[fila_input + 1].contains('─'));
-    assert_eq!(cursor.y, fila_input as u16);
-    assert_eq!(cursor.x, inicio_input as u16 + "hfjj".len() as u16);
+    assert_eq!(cursor.y, u16::try_from(fila_input).unwrap_or(u16::MAX));
+    assert_eq!(
+        cursor.x,
+        u16::try_from(inicio_input).unwrap_or(u16::MAX)
+            + u16::try_from("hfjj".len()).unwrap_or(u16::MAX)
+    );
 }
 
 #[test]

@@ -444,7 +444,8 @@ fn proxima_espera(
     }
     if matches!(app.fase, Fase::Operando { .. }) {
         let periodo = estado::PERIODO_BLINK_MS;
-        let transcurrido_ms = app.instante_inicio.elapsed().as_millis() as u64;
+        let transcurrido_ms =
+            u64::try_from(app.instante_inicio.elapsed().as_millis()).unwrap_or(u64::MAX);
         let resto = periodo - (transcurrido_ms % periodo);
         return Duration::from_millis(resto.max(1));
     }

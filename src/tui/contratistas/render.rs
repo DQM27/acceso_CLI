@@ -183,13 +183,17 @@ fn altura_panel(state: &ContratistasState) -> u16 {
                 .sum();
             if let Some((tipo, _)) = f.desplegable {
                 total += match tipo {
-                    Desplegable::Empresa => state.empresas.len().max(1) as u16,
-                    Desplegable::Tipo => tipos().len() as u16,
+                    Desplegable::Empresa => {
+                        u16::try_from(state.empresas.len().max(1)).unwrap_or(u16::MAX)
+                    }
+                    Desplegable::Tipo => u16::try_from(tipos().len()).unwrap_or(u16::MAX),
                 };
             }
             total + 1
         }
-        ModoContratistas::Columnas { .. } => state.columnas.len() as u16 + 1,
+        ModoContratistas::Columnas { .. } => {
+            u16::try_from(state.columnas.len()).unwrap_or(u16::MAX) + 1
+        }
         _ => 9,
     }
 }
@@ -214,7 +218,7 @@ fn render_campo(
         theme,
         ChoiceFieldOptions::plain(ANCHO_ETIQUETA_FORMULARIO),
     );
-    let desplazamiento = ANCHO_ETIQUETA_FORMULARIO as u16 + 3;
+    let desplazamiento = u16::try_from(ANCHO_ETIQUETA_FORMULARIO).unwrap_or(u16::MAX) + 3;
     Rect::new(
         area.x.saturating_add(desplazamiento),
         area.y,
@@ -419,8 +423,8 @@ fn render_formulario(
         };
         let indice = campos.iter().position(|c| *c == objetivo).unwrap_or(0);
         let alto = match tipo_desplegable {
-            Desplegable::Empresa => state.empresas.len().max(1) as u16,
-            Desplegable::Tipo => tipos().len() as u16,
+            Desplegable::Empresa => u16::try_from(state.empresas.len().max(1)).unwrap_or(u16::MAX),
+            Desplegable::Tipo => u16::try_from(tipos().len()).unwrap_or(u16::MAX),
         };
         restricciones.insert(indice + 1, Constraint::Length(alto));
     }

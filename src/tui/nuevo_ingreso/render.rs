@@ -338,13 +338,13 @@ fn render_formulario(
 
     let filas = Layout::vertical(if requiere_gafete {
         vec![
-            Constraint::Length(lineas.len() as u16),
+            Constraint::Length(u16::try_from(lineas.len()).unwrap_or(u16::MAX)),
             Constraint::Length(1),
             Constraint::Length(3),
         ]
     } else {
         vec![
-            Constraint::Length(lineas.len() as u16),
+            Constraint::Length(u16::try_from(lineas.len()).unwrap_or(u16::MAX)),
             Constraint::Length(1),
         ]
     })

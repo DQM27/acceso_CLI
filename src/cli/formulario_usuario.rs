@@ -147,12 +147,15 @@ impl FormularioUsuario {
     }
 
     pub fn mover_campo(&mut self, delta: isize) -> bool {
-        let total = CampoUsuario::ORDEN.len() as isize;
-        let actual = CampoUsuario::ORDEN
-            .iter()
-            .position(|c| *c == self.campo)
-            .unwrap_or(0) as isize;
-        let nuevo = (actual + delta).clamp(0, total - 1) as usize;
+        let total = isize::try_from(CampoUsuario::ORDEN.len()).unwrap_or(isize::MAX);
+        let actual = isize::try_from(
+            CampoUsuario::ORDEN
+                .iter()
+                .position(|c| *c == self.campo)
+                .unwrap_or(0),
+        )
+        .unwrap_or(isize::MAX);
+        let nuevo = usize::try_from((actual + delta).clamp(0, total - 1)).unwrap_or(0);
         let cambio = CampoUsuario::ORDEN[nuevo] != self.campo;
         self.campo = CampoUsuario::ORDEN[nuevo];
         cambio

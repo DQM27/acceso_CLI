@@ -31,7 +31,7 @@ pub(super) fn anchos_columnas<C: Columna>(
     let fijo_total: u16 = visibles
         .iter()
         .filter_map(|c| ancho_fijo(*c))
-        .map(|a| a as u16)
+        .map(|a| u16::try_from(a).unwrap_or(u16::MAX))
         .sum();
     let mut resultado: Vec<(C, usize)> = visibles
         .iter()
@@ -46,9 +46,10 @@ pub(super) fn anchos_columnas<C: Columna>(
     if pendientes.is_empty() {
         return resultado;
     }
+    let pendientes_u16 = u16::try_from(pendientes.len()).unwrap_or(u16::MAX);
     let mut restante = ancho_total
         .saturating_sub(fijo_total + 2)
-        .max(12 * pendientes.len() as u16) as usize;
+        .max(12 * pendientes_u16) as usize;
     loop {
         if pendientes.is_empty() {
             break;

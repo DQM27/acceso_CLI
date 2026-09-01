@@ -219,7 +219,9 @@ impl FormularioContratista {
         let Some(indice) = navegables.iter().position(|campo| *campo == self.campo) else {
             return false;
         };
-        let nuevo = (indice as isize + delta).clamp(0, navegables.len() as isize - 1) as usize;
+        let indice_isize = isize::try_from(indice).unwrap_or(isize::MAX);
+        let total_isize = isize::try_from(navegables.len()).unwrap_or(isize::MAX);
+        let nuevo = usize::try_from((indice_isize + delta).clamp(0, total_isize - 1)).unwrap_or(0);
         let cambio = navegables[nuevo] != self.campo;
         self.campo = navegables[nuevo];
         cambio

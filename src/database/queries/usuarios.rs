@@ -64,7 +64,7 @@ impl UsuariosQuery for SqliteUsuariosQuery<'_> {
         actor: RolUsuario,
     ) -> Result<Vec<UsuarioResumen>, DatabaseError> {
         let busqueda = BusquedaTexto::preparar(filtro.texto.as_deref());
-        let limite = filtro.limite.clamp(1, LIMITE_MAXIMO) as i64;
+        let limite = i64::try_from(filtro.limite.clamp(1, LIMITE_MAXIMO)).unwrap_or(i64::MAX);
         let offset = i64::try_from(filtro.offset).unwrap_or(i64::MAX);
         // Root es invisible para cualquier actor que no sea Root — se omite
         // la condición del todo (no un flag `?1 = 1 OR ...` evaluado en cada
