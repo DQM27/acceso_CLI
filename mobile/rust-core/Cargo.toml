@@ -25,6 +25,7 @@ required-features = ["bindgen"]
 control_acceso = { path = "../..", default-features = false }
 uniffi = "0.32.0"
 thiserror = "2"
+chrono = "0.4.45"
 
 [dev-dependencies]
 tempfile = "3"

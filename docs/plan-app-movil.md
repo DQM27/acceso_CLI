@@ -23,11 +23,13 @@ Este documento es sólo sobre el punto 2.
 - Registrar su entrada.
 - Registrar su salida.
 - Registrar contratistas nuevos (decisión ampliada 2026-09-01 — el alcance original no lo traía; se porta el mismo formulario de `desktop/src/pantallas/FormularioContratista.tsx`, alta solamente).
+- Registrar empresas nuevas (misma ampliación 2026-09-01, alta solamente — sin edición ni desactivación).
+- Ver Historial de movimientos (misma ampliación 2026-09-01 — revierte la exclusión original; últimos 6 meses por defecto, sólo lectura, sin exportar).
+- Registrar usuarios nuevos (misma ampliación 2026-09-01 — revierte la exclusión original; alta solamente, sin edición/desactivación/reseteo de contraseña). Gateado por rol igual que el núcleo: sólo Root/Administrador ven la opción y sólo ellos pueden ejecutarla (`Operacion::GestionarUsuarios`, `domain/autorizacion.rs`) — un Operador ni ve el botón en el menú "+".
 
 **Qué NO hace (a propósito, para mantenerla mínima):**
-- Sin pantalla de Historial.
-- Sin gestión/edición de usuarios.
-- Sin las demás pantallas de la TUI/GUI (Empresas, Auditoría, Respaldos, Gafetes como catálogo administrable, etc.).
+- Sin edición de contratistas/empresas/usuarios ya creados (sólo alta).
+- Sin Auditoría, Respaldos, ni Gafetes como catálogo administrable.
 
 Si el alcance crece más adelante, es una decisión de producto nueva — no asumir que "ya que estamos" se agregan pantallas.
 

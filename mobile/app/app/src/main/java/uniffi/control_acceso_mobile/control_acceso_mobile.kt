@@ -677,15 +677,21 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_historial(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_empresa(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_usuarios(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso(
     ): Int
@@ -723,15 +729,21 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_contratistas(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_historial(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_contratista(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_empresa(`ptr`: Long,`nombre`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_usuario(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_empresas(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_activos(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_usuarios(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso(`ptr`: Long,`contratistaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -864,6 +876,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas() != 3985) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_historial() != 29388) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion() != 60001) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -873,10 +888,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_empresa() != 5879) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario() != 28771) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas() != 65509) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos() != 16183) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_usuarios() != 1455) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso() != 60754) {
@@ -1271,6 +1292,15 @@ public interface NucleoInterface {
     fun `buscarContratistas`(`texto`: kotlin.String): List<ContratistaResumen>
     
     /**
+     * Últimos 6 meses por defecto — mismo default que
+     * `desktop/src/pantallas/Historial.tsx` (`fechaHaceMeses(6)`).
+     * `registro_ingresos` es append-only y crece sin límite, así que a
+     * diferencia de los demás buscadores Historial siempre acota por
+     * fecha, nunca trae "todo".
+     */
+    fun `buscarHistorial`(`texto`: kotlin.String): List<MovimientoHistorial>
+    
+    /**
      * Sólo olvida el actor en memoria — el `AppCore`/la conexión `SQLite`
      * se quedan abiertos (son del teléfono, no de la sesión) para que
      * `Nucleo::autenticar` pueda loguear al siguiente usuario sin
@@ -1289,6 +1319,15 @@ public interface NucleoInterface {
     
     fun `crearEmpresa`(`nombre`: kotlin.String): kotlin.Long
     
+    /**
+     * Sólo Root/Administrador — Rust ya rechaza a un actor sin
+     * `Operacion::GestionarUsuarios` con `OperacionNoAutorizada`
+     * (`verificar_creacion_usuario`), y sólo Root puede crear otro Root
+     * (`puede_gestionar_usuario`). Kotlin oculta el menú para Operador
+     * como atajo de UX, no como el control real.
+     */
+    fun `crearUsuario`(`datos`: DatosUsuario): kotlin.Long
+    
     fun `listarEmpresas`(): List<Empresa>
     
     /**
@@ -1296,6 +1335,11 @@ public interface NucleoInterface {
      * el listado completo que carga AG Grid en desktop.
      */
     fun `listarIngresosActivos`(`texto`: kotlin.String): List<IngresoActivoResumen>
+    
+    /**
+     * Sólo Root/Administrador — ver el doc-comment de `UsuarioResumen`.
+     */
+    fun `listarUsuarios`(`texto`: kotlin.String): List<UsuarioResumen>
     
     /**
      * Vista previa antes de confirmar — misma decisión que ya toma la GUI
@@ -1463,6 +1507,28 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Últimos 6 meses por defecto — mismo default que
+     * `desktop/src/pantallas/Historial.tsx` (`fechaHaceMeses(6)`).
+     * `registro_ingresos` es append-only y crece sin límite, así que a
+     * diferencia de los demás buscadores Historial siempre acota por
+     * fecha, nunca trae "todo".
+     */
+    @Throws(NucleoException::class)override fun `buscarHistorial`(`texto`: kotlin.String): List<MovimientoHistorial> {
+            return FfiConverterSequenceTypeMovimientoHistorial.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_buscar_historial(
+        it,
+        
+        FfiConverterString.lower(`texto`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Sólo olvida el actor en memoria — el `AppCore`/la conexión `SQLite`
      * se quedan abiertos (son del teléfono, no de la sesión) para que
      * `Nucleo::autenticar` pueda loguear al siguiente usuario sin
@@ -1517,6 +1583,28 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     
 
     
+    /**
+     * Sólo Root/Administrador — Rust ya rechaza a un actor sin
+     * `Operacion::GestionarUsuarios` con `OperacionNoAutorizada`
+     * (`verificar_creacion_usuario`), y sólo Root puede crear otro Root
+     * (`puede_gestionar_usuario`). Kotlin oculta el menú para Operador
+     * como atajo de UX, no como el control real.
+     */
+    @Throws(NucleoException::class)override fun `crearUsuario`(`datos`: DatosUsuario): kotlin.Long {
+            return FfiConverterLong.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_crear_usuario(
+        it,
+        
+        FfiConverterTypeDatosUsuario.lower(`datos`),_status)
+}
+    }
+    )
+    }
+    
+
+    
     @Throws(NucleoException::class)override fun `listarEmpresas`(): List<Empresa> {
             return FfiConverterSequenceTypeEmpresa.lift(
     callWithHandle {
@@ -1540,6 +1628,24 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_activos(
+        it,
+        
+        FfiConverterString.lower(`texto`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Sólo Root/Administrador — ver el doc-comment de `UsuarioResumen`.
+     */
+    @Throws(NucleoException::class)override fun `listarUsuarios`(`texto`: kotlin.String): List<UsuarioResumen> {
+            return FfiConverterSequenceTypeUsuarioResumen.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_usuarios(
         it,
         
         FfiConverterString.lower(`texto`),_status)
@@ -1795,6 +1901,59 @@ public object FfiConverterTypeDatosContratista: FfiConverterRustBuffer<DatosCont
 
 
 
+data class DatosUsuario (
+    var `cedula`: kotlin.String
+    , 
+    var `nombre`: kotlin.String
+    , 
+    var `password`: kotlin.String
+    , 
+    var `rol`: RolUsuario
+    , 
+    var `activo`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeDatosUsuario: FfiConverterRustBuffer<DatosUsuario> {
+    override fun read(buf: ByteBuffer): DatosUsuario {
+        return DatosUsuario(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterTypeRolUsuario.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: DatosUsuario) = (
+            FfiConverterString.allocationSize(value.`cedula`) +
+            FfiConverterString.allocationSize(value.`nombre`) +
+            FfiConverterString.allocationSize(value.`password`) +
+            FfiConverterTypeRolUsuario.allocationSize(value.`rol`) +
+            FfiConverterBoolean.allocationSize(value.`activo`)
+    )
+
+    override fun write(value: DatosUsuario, buf: ByteBuffer) {
+            FfiConverterString.write(value.`cedula`, buf)
+            FfiConverterString.write(value.`nombre`, buf)
+            FfiConverterString.write(value.`password`, buf)
+            FfiConverterTypeRolUsuario.write(value.`rol`, buf)
+            FfiConverterBoolean.write(value.`activo`, buf)
+    }
+}
+
+
+
 data class Empresa (
     var `id`: kotlin.Long
     , 
@@ -1927,6 +2086,98 @@ public object FfiConverterTypeIngresoActivoResumen: FfiConverterRustBuffer<Ingre
 
 
 /**
+ * Espejo de `MovimientoIngresoResumen` — un renglón de Historial (entrada
+ * + salida, si ya la tiene).
+ */
+data class MovimientoHistorial (
+    var `registroId`: kotlin.Long
+    , 
+    var `cedula`: kotlin.String
+    , 
+    var `contratistaNombre`: kotlin.String
+    , 
+    var `empresaNombre`: kotlin.String
+    , 
+    var `tipoIngreso`: TipoIngreso
+    , 
+    var `medioIngreso`: MedioIngreso
+    , 
+    var `fechaHoraIngreso`: kotlin.String
+    , 
+    var `fechaHoraSalida`: kotlin.String?
+    , 
+    var `gafeteNumero`: kotlin.Long?
+    , 
+    var `usuarioIngresoNombre`: kotlin.String
+    , 
+    var `usuarioSalidaNombre`: kotlin.String?
+    , 
+    var `resultadoAcceso`: ResultadoIngresoRegistrado
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMovimientoHistorial: FfiConverterRustBuffer<MovimientoHistorial> {
+    override fun read(buf: ByteBuffer): MovimientoHistorial {
+        return MovimientoHistorial(
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterTypeTipoIngreso.read(buf),
+            FfiConverterTypeMedioIngreso.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterTypeResultadoIngresoRegistrado.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: MovimientoHistorial) = (
+            FfiConverterLong.allocationSize(value.`registroId`) +
+            FfiConverterString.allocationSize(value.`cedula`) +
+            FfiConverterString.allocationSize(value.`contratistaNombre`) +
+            FfiConverterString.allocationSize(value.`empresaNombre`) +
+            FfiConverterTypeTipoIngreso.allocationSize(value.`tipoIngreso`) +
+            FfiConverterTypeMedioIngreso.allocationSize(value.`medioIngreso`) +
+            FfiConverterString.allocationSize(value.`fechaHoraIngreso`) +
+            FfiConverterOptionalString.allocationSize(value.`fechaHoraSalida`) +
+            FfiConverterOptionalLong.allocationSize(value.`gafeteNumero`) +
+            FfiConverterString.allocationSize(value.`usuarioIngresoNombre`) +
+            FfiConverterOptionalString.allocationSize(value.`usuarioSalidaNombre`) +
+            FfiConverterTypeResultadoIngresoRegistrado.allocationSize(value.`resultadoAcceso`)
+    )
+
+    override fun write(value: MovimientoHistorial, buf: ByteBuffer) {
+            FfiConverterLong.write(value.`registroId`, buf)
+            FfiConverterString.write(value.`cedula`, buf)
+            FfiConverterString.write(value.`contratistaNombre`, buf)
+            FfiConverterString.write(value.`empresaNombre`, buf)
+            FfiConverterTypeTipoIngreso.write(value.`tipoIngreso`, buf)
+            FfiConverterTypeMedioIngreso.write(value.`medioIngreso`, buf)
+            FfiConverterString.write(value.`fechaHoraIngreso`, buf)
+            FfiConverterOptionalString.write(value.`fechaHoraSalida`, buf)
+            FfiConverterOptionalLong.write(value.`gafeteNumero`, buf)
+            FfiConverterString.write(value.`usuarioIngresoNombre`, buf)
+            FfiConverterOptionalString.write(value.`usuarioSalidaNombre`, buf)
+            FfiConverterTypeResultadoIngresoRegistrado.write(value.`resultadoAcceso`, buf)
+    }
+}
+
+
+
+/**
  * Espejo de `PreparacionIngreso` — vista previa antes de confirmar; no es
  * una autorización cacheada, `registrar_ingreso` vuelve a validar todo.
  */
@@ -2036,6 +2287,65 @@ public object FfiConverterTypeResultadoRegistroEntrada: FfiConverterRustBuffer<R
     override fun write(value: ResultadoRegistroEntrada, buf: ByteBuffer) {
             FfiConverterLong.write(value.`registroId`, buf)
             FfiConverterTypeResultadoAcceso.write(value.`resultadoAcceso`, buf)
+    }
+}
+
+
+
+/**
+ * Espejo de `UsuarioResumen` — sólo se expone a Root/Administrador
+ * (`Operacion::GestionarUsuarios`, `domain/autorizacion.rs`); Rust ya
+ * rechaza a un Operador con `OperacionNoAutorizada` aunque Kotlin
+ * oculte el menú, así que no hay doble mantenimiento de la regla real.
+ */
+data class UsuarioResumen (
+    var `id`: kotlin.Long
+    , 
+    var `cedula`: kotlin.String
+    , 
+    var `nombre`: kotlin.String
+    , 
+    var `rol`: RolUsuario
+    , 
+    var `activo`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeUsuarioResumen: FfiConverterRustBuffer<UsuarioResumen> {
+    override fun read(buf: ByteBuffer): UsuarioResumen {
+        return UsuarioResumen(
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterTypeRolUsuario.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: UsuarioResumen) = (
+            FfiConverterLong.allocationSize(value.`id`) +
+            FfiConverterString.allocationSize(value.`cedula`) +
+            FfiConverterString.allocationSize(value.`nombre`) +
+            FfiConverterTypeRolUsuario.allocationSize(value.`rol`) +
+            FfiConverterBoolean.allocationSize(value.`activo`)
+    )
+
+    override fun write(value: UsuarioResumen, buf: ByteBuffer) {
+            FfiConverterLong.write(value.`id`, buf)
+            FfiConverterString.write(value.`cedula`, buf)
+            FfiConverterString.write(value.`nombre`, buf)
+            FfiConverterTypeRolUsuario.write(value.`rol`, buf)
+            FfiConverterBoolean.write(value.`activo`, buf)
     }
 }
 
@@ -2151,6 +2461,40 @@ public object FfiConverterTypeMotivoDenegacion: FfiConverterRustBuffer<MotivoDen
     override fun allocationSize(value: MotivoDenegacion) = 4UL
 
     override fun write(value: MotivoDenegacion, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+
+enum class MotivoResultadoIngreso {
+    
+    PRAIND_PROXIMO_VENCER,
+    DATOS_RECONSTRUIDOS;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMotivoResultadoIngreso: FfiConverterRustBuffer<MotivoResultadoIngreso> {
+    override fun read(buf: ByteBuffer) = try {
+        MotivoResultadoIngreso.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: MotivoResultadoIngreso) = 4UL
+
+    override fun write(value: MotivoResultadoIngreso, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
     }
 }
@@ -2318,6 +2662,93 @@ public object FfiConverterTypeResultadoAcceso : FfiConverterRustBuffer<Resultado
             is ResultadoAcceso.Denegado -> {
                 buf.putInt(3)
                 FfiConverterTypeMotivoDenegacion.write(value.`motivo`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+
+
+
+
+sealed class ResultadoIngresoRegistrado {
+    
+    object Permitido : ResultadoIngresoRegistrado()
+    
+    
+    data class PermitidoConAdvertencia(
+        val `motivo`: uniffi.control_acceso_mobile.MotivoResultadoIngreso) : ResultadoIngresoRegistrado()
+        
+    {
+        
+
+        companion object
+    }
+    
+    object Migrado : ResultadoIngresoRegistrado()
+    
+    
+
+    
+
+    
+    
+
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeResultadoIngresoRegistrado : FfiConverterRustBuffer<ResultadoIngresoRegistrado>{
+    override fun read(buf: ByteBuffer): ResultadoIngresoRegistrado {
+        return when(buf.getInt()) {
+            1 -> ResultadoIngresoRegistrado.Permitido
+            2 -> ResultadoIngresoRegistrado.PermitidoConAdvertencia(
+                FfiConverterTypeMotivoResultadoIngreso.read(buf),
+                )
+            3 -> ResultadoIngresoRegistrado.Migrado
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
+        }
+    }
+
+    override fun allocationSize(value: ResultadoIngresoRegistrado): ULong = when(value) {
+        is ResultadoIngresoRegistrado.Permitido -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is ResultadoIngresoRegistrado.PermitidoConAdvertencia -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterTypeMotivoResultadoIngreso.allocationSize(value.`motivo`)
+            )
+        }
+        is ResultadoIngresoRegistrado.Migrado -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+    }
+
+    override fun write(value: ResultadoIngresoRegistrado, buf: ByteBuffer) {
+        when(value) {
+            is ResultadoIngresoRegistrado.Permitido -> {
+                buf.putInt(1)
+                Unit
+            }
+            is ResultadoIngresoRegistrado.PermitidoConAdvertencia -> {
+                buf.putInt(2)
+                FfiConverterTypeMotivoResultadoIngreso.write(value.`motivo`, buf)
+                Unit
+            }
+            is ResultadoIngresoRegistrado.Migrado -> {
+                buf.putInt(3)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -2569,6 +3000,62 @@ public object FfiConverterSequenceTypeIngresoActivoResumen: FfiConverterRustBuff
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeIngresoActivoResumen.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeMovimientoHistorial: FfiConverterRustBuffer<List<MovimientoHistorial>> {
+    override fun read(buf: ByteBuffer): List<MovimientoHistorial> {
+        val len = buf.getInt()
+        return List<MovimientoHistorial>(len) {
+            FfiConverterTypeMovimientoHistorial.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<MovimientoHistorial>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeMovimientoHistorial.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<MovimientoHistorial>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeMovimientoHistorial.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeUsuarioResumen: FfiConverterRustBuffer<List<UsuarioResumen>> {
+    override fun read(buf: ByteBuffer): List<UsuarioResumen> {
+        val len = buf.getInt()
+        return List<UsuarioResumen>(len) {
+            FfiConverterTypeUsuarioResumen.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<UsuarioResumen>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeUsuarioResumen.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<UsuarioResumen>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeUsuarioResumen.write(it, buf)
         }
     }
 }

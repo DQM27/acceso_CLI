@@ -150,17 +150,6 @@ private fun FilaActivo(activo: IngresoActivoResumen, onClick: () -> Unit) {
     }
 }
 
-/// Mismo criterio que `desktop/src/tiempo.ts` (textoHora/textoFechaDDMMYYYY):
-/// se muestra en la hora LOCAL del dispositivo, formato 24h — no UTC crudo.
-private fun textoFechaHora(iso: String): String {
-    // OffsetDateTime en vez de Instant.parse: acepta tanto "...Z" como
-    // "...+00:00" (a lo que exactamente formatee `to_rfc3339()` del lado
-    // de Rust no hace falta acoplarlo aquí).
-    val instante = java.time.OffsetDateTime.parse(iso).toInstant()
-    val local = java.time.ZonedDateTime.ofInstant(instante, java.time.ZoneId.systemDefault())
-    val formato = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
-    return local.format(formato)
-}
 
 private fun textoEstadoAcceso(resultado: ResultadoAcceso): String =
     when (resultado) {

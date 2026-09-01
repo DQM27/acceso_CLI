@@ -8,12 +8,22 @@ use control_acceso::application::AppCore;
 use control_acceso::database::queries::contratistas::{
     ContratistaResumen as ContratistaResumenNucleo, FiltroContratistas as FiltroContratistasNucleo,
 };
-use control_acceso::database::queries::ingresos::FiltroIngresosActivos as FiltroIngresosActivosNucleo;
+use control_acceso::database::queries::ingresos::{
+    FiltroHistorial as FiltroHistorialNucleo, FiltroIngresosActivos as FiltroIngresosActivosNucleo,
+    MovimientoIngresoResumen as MovimientoIngresoResumenNucleo,
+};
+use control_acceso::database::queries::usuarios::{
+    FiltroUsuarios as FiltroUsuariosNucleo, UsuarioResumen as UsuarioResumenNucleo,
+};
 use control_acceso::domain::resultado_acceso::{
     MotivoDenegacion as MotivoDenegacionNucleo, ResultadoAcceso as ResultadoAccesoNucleo,
 };
 use control_acceso::models::empresa::Empresa as EmpresaNucleo;
 use control_acceso::models::medio_ingreso::MedioIngreso as MedioIngresoNucleo;
+use control_acceso::models::registro_ingreso::{
+    MotivoResultadoIngreso as MotivoResultadoIngresoNucleo,
+    ResultadoIngresoRegistrado as ResultadoIngresoRegistradoNucleo,
+};
 use control_acceso::models::tipo_ingreso::TipoIngreso as TipoIngresoNucleo;
 use control_acceso::models::usuario::RolUsuario as RolUsuarioNucleo;
 use control_acceso::services::autenticacion_service::UsuarioSesion as UsuarioSesionNucleo;
@@ -22,15 +32,17 @@ use control_acceso::services::error::AutenticacionError as AutenticacionErrorNuc
 use control_acceso::services::error::ContratistaServiceError as ContratistaServiceErrorNucleo;
 use control_acceso::services::error::EmpresaServiceError as EmpresaServiceErrorNucleo;
 use control_acceso::services::error::RegistroIngresoServiceError as RegistroIngresoServiceErrorNucleo;
+use control_acceso::services::error::UsuarioServiceError as UsuarioServiceErrorNucleo;
 use control_acceso::services::registro_ingreso_service::{
     IngresoActivoResumen as IngresoActivoResumenNucleo,
     PreparacionIngreso as PreparacionIngresoNucleo,
     ResultadoRegistroEntrada as ResultadoRegistroEntradaNucleo,
 };
+use control_acceso::services::usuario_service::CrearUsuarioInput as CrearUsuarioInputNucleo;
 
 uniffi::setup_scaffolding!();
 
-#[derive(Debug, Clone, Copy, uniffi::Enum)]
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Enum)]
 pub enum RolUsuario {
     Root,
     Administrador,
@@ -43,6 +55,16 @@ impl From<RolUsuarioNucleo> for RolUsuario {
             RolUsuarioNucleo::Root => Self::Root,
             RolUsuarioNucleo::Administrador => Self::Administrador,
             RolUsuarioNucleo::Operador => Self::Operador,
+        }
+    }
+}
+
+impl From<RolUsuario> for RolUsuarioNucleo {
+    fn from(rol: RolUsuario) -> Self {
+        match rol {
+            RolUsuario::Root => Self::Root,
+            RolUsuario::Administrador => Self::Administrador,
+            RolUsuario::Operador => Self::Operador,
         }
     }
 }
@@ -306,6 +328,113 @@ pub struct DatosContratista {
     pub tiene_acceso: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Enum)]
+pub enum MotivoResultadoIngreso {
+    PraindProximoVencer,
+    DatosReconstruidos,
+}
+
+impl From<MotivoResultadoIngresoNucleo> for MotivoResultadoIngreso {
+    fn from(motivo: MotivoResultadoIngresoNucleo) -> Self {
+        match motivo {
+            MotivoResultadoIngresoNucleo::PraindProximoVencer => Self::PraindProximoVencer,
+            MotivoResultadoIngresoNucleo::DatosReconstruidos => Self::DatosReconstruidos,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Enum)]
+pub enum ResultadoIngresoRegistrado {
+    Permitido,
+    PermitidoConAdvertencia { motivo: MotivoResultadoIngreso },
+    Migrado,
+}
+
+impl From<ResultadoIngresoRegistradoNucleo> for ResultadoIngresoRegistrado {
+    fn from(resultado: ResultadoIngresoRegistradoNucleo) -> Self {
+        match resultado {
+            ResultadoIngresoRegistradoNucleo::Permitido => Self::Permitido,
+            ResultadoIngresoRegistradoNucleo::PermitidoConAdvertencia(motivo) => {
+                Self::PermitidoConAdvertencia {
+                    motivo: motivo.into(),
+                }
+            }
+            ResultadoIngresoRegistradoNucleo::Migrado => Self::Migrado,
+        }
+    }
+}
+
+/// Espejo de `MovimientoIngresoResumen` — un renglón de Historial (entrada
+/// + salida, si ya la tiene).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct MovimientoHistorial {
+    pub registro_id: i64,
+    pub cedula: String,
+    pub contratista_nombre: String,
+    pub empresa_nombre: String,
+    pub tipo_ingreso: TipoIngreso,
+    pub medio_ingreso: MedioIngreso,
+    pub fecha_hora_ingreso: String,
+    pub fecha_hora_salida: Option<String>,
+    pub gafete_numero: Option<i64>,
+    pub usuario_ingreso_nombre: String,
+    pub usuario_salida_nombre: Option<String>,
+    pub resultado_acceso: ResultadoIngresoRegistrado,
+}
+
+impl From<MovimientoIngresoResumenNucleo> for MovimientoHistorial {
+    fn from(movimiento: MovimientoIngresoResumenNucleo) -> Self {
+        Self {
+            registro_id: movimiento.registro_id,
+            cedula: movimiento.cedula,
+            contratista_nombre: movimiento.contratista_nombre,
+            empresa_nombre: movimiento.empresa_nombre,
+            tipo_ingreso: movimiento.tipo_ingreso.into(),
+            medio_ingreso: movimiento.medio_ingreso.into(),
+            fecha_hora_ingreso: movimiento.fecha_hora_ingreso.to_rfc3339(),
+            fecha_hora_salida: movimiento.fecha_hora_salida.map(|f| f.to_rfc3339()),
+            gafete_numero: movimiento.gafete_numero,
+            usuario_ingreso_nombre: movimiento.usuario_ingreso_nombre,
+            usuario_salida_nombre: movimiento.usuario_salida_nombre,
+            resultado_acceso: movimiento.resultado_acceso.into(),
+        }
+    }
+}
+
+/// Espejo de `UsuarioResumen` — sólo se expone a Root/Administrador
+/// (`Operacion::GestionarUsuarios`, `domain/autorizacion.rs`); Rust ya
+/// rechaza a un Operador con `OperacionNoAutorizada` aunque Kotlin
+/// oculte el menú, así que no hay doble mantenimiento de la regla real.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct UsuarioResumen {
+    pub id: i64,
+    pub cedula: String,
+    pub nombre: String,
+    pub rol: RolUsuario,
+    pub activo: bool,
+}
+
+impl From<UsuarioResumenNucleo> for UsuarioResumen {
+    fn from(usuario: UsuarioResumenNucleo) -> Self {
+        Self {
+            id: usuario.id,
+            cedula: usuario.cedula,
+            nombre: usuario.nombre,
+            rol: usuario.rol.into(),
+            activo: usuario.activo,
+        }
+    }
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct DatosUsuario {
+    pub cedula: String,
+    pub nombre: String,
+    pub password: String,
+    pub rol: RolUsuario,
+    pub activo: bool,
+}
+
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 #[uniffi(flat_error)]
 pub enum NucleoError {
@@ -353,6 +482,14 @@ impl From<ContratistaServiceErrorNucleo> for NucleoError {
 
 impl From<EmpresaServiceErrorNucleo> for NucleoError {
     fn from(error: EmpresaServiceErrorNucleo) -> Self {
+        Self::Interno {
+            mensaje: error.to_string(),
+        }
+    }
+}
+
+impl From<UsuarioServiceErrorNucleo> for NucleoError {
+    fn from(error: UsuarioServiceErrorNucleo) -> Self {
         Self::Interno {
             mensaje: error.to_string(),
         }
@@ -549,6 +686,80 @@ impl Nucleo {
     /// reabrir la base.
     pub fn cerrar_sesion(&self) {
         *self.sesion.lock().expect("mutex de sesión envenenado") = None;
+    }
+
+    /// Últimos 6 meses por defecto — mismo default que
+    /// `desktop/src/pantallas/Historial.tsx` (`fechaHaceMeses(6)`).
+    /// `registro_ingresos` es append-only y crece sin límite, así que a
+    /// diferencia de los demás buscadores Historial siempre acota por
+    /// fecha, nunca trae "todo".
+    pub fn buscar_historial(&self, texto: String) -> Result<Vec<MovimientoHistorial>, NucleoError> {
+        const LIMITE_MOVIL: usize = 30;
+
+        let core = self.core.lock().expect("mutex de AppCore envenenado");
+        let ahora = chrono::Utc::now();
+        let desde = ahora - chrono::Duration::days(30 * 6);
+        // `hasta` es un límite exclusivo — dejarlo exactamente en "ahora"
+        // puede excluir un movimiento creado en el mismo instante (choca
+        // con la resolución del reloj). Mismo margen que ya usa
+        // `Historial.tsx` cuando `hasta` queda abierto ("hoy + 1 día").
+        let hasta = ahora + chrono::Duration::days(1);
+        let texto_normalizado = texto.trim();
+        let filtro = FiltroHistorialNucleo {
+            texto_persona: (!texto_normalizado.is_empty()).then(|| texto_normalizado.to_string()),
+            limite: LIMITE_MOVIL,
+            ..FiltroHistorialNucleo::nuevo(desde, hasta)
+        };
+        let pagina = core.buscar_historial(&filtro).map_err(|origen| NucleoError::Interno {
+            mensaje: origen.to_string(),
+        })?;
+        Ok(pagina.items.into_iter().map(Into::into).collect())
+    }
+
+    /// Sólo Root/Administrador — ver el doc-comment de `UsuarioResumen`.
+    pub fn listar_usuarios(&self, texto: String) -> Result<Vec<UsuarioResumen>, NucleoError> {
+        let actor = self
+            .sesion
+            .lock()
+            .expect("mutex de sesión envenenado")
+            .clone()
+            .ok_or(NucleoError::NoAutenticado)?;
+        let core = self.core.lock().expect("mutex de AppCore envenenado");
+        let texto_normalizado = texto.trim();
+        let filtro = FiltroUsuariosNucleo {
+            texto: (!texto_normalizado.is_empty()).then(|| texto_normalizado.to_string()),
+            ..Default::default()
+        };
+        Ok(core
+            .buscar_usuarios(&actor, &filtro)?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
+    /// Sólo Root/Administrador — Rust ya rechaza a un actor sin
+    /// `Operacion::GestionarUsuarios` con `OperacionNoAutorizada`
+    /// (`verificar_creacion_usuario`), y sólo Root puede crear otro Root
+    /// (`puede_gestionar_usuario`). Kotlin oculta el menú para Operador
+    /// como atajo de UX, no como el control real.
+    pub fn crear_usuario(&self, datos: DatosUsuario) -> Result<i64, NucleoError> {
+        let actor = self
+            .sesion
+            .lock()
+            .expect("mutex de sesión envenenado")
+            .clone()
+            .ok_or(NucleoError::NoAutenticado)?;
+        let core = self.core.lock().expect("mutex de AppCore envenenado");
+        Ok(core.crear_usuario(
+            &actor,
+            CrearUsuarioInputNucleo {
+                cedula: datos.cedula,
+                nombre: datos.nombre,
+                password: datos.password,
+                rol: datos.rol.into(),
+                activo: datos.activo,
+            },
+        )?)
     }
 }
 
@@ -776,6 +987,98 @@ mod tests {
 
         let resultado = nucleo.crear_empresa("Otra Empresa".to_string());
         assert!(matches!(resultado, Err(NucleoError::NoAutenticado)));
+    }
+
+    #[test]
+    fn buscar_historial_encuentra_movimiento_reciente() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+                 INSERT INTO contratistas (
+                     cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+                 ) VALUES ('111111111', 'Contratista Test', 1, 'SWAT', 0, 1);
+                 INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$FZShq0MtV2bGh9nFBgvrGA$dYNDyh7up/wmAY+t/Vf6V5LTCS9sNkQgaH81G650xfM',
+                     'ROOT', 1
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar("999999999".to_string(), "daniel27".to_string())
+            .unwrap();
+        nucleo
+            .registrar_ingreso(1, MedioIngreso::Caminando, None)
+            .unwrap();
+
+        let movimientos = nucleo.buscar_historial(String::new()).unwrap();
+        assert_eq!(movimientos.len(), 1);
+        assert_eq!(movimientos[0].contratista_nombre, "Contratista Test");
+        assert!(movimientos[0].fecha_hora_salida.is_none());
+    }
+
+    #[test]
+    fn listar_usuarios_y_crear_usuario_solo_root_o_administrador() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Root Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$FZShq0MtV2bGh9nFBgvrGA$dYNDyh7up/wmAY+t/Vf6V5LTCS9sNkQgaH81G650xfM',
+                     'ROOT', 1
+                 );
+                 INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '888888888', 'Operador Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$FZShq0MtV2bGh9nFBgvrGA$dYNDyh7up/wmAY+t/Vf6V5LTCS9sNkQgaH81G650xfM',
+                     'OPERADOR', 1
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar("999999999".to_string(), "daniel27".to_string())
+            .unwrap();
+
+        let id = nucleo
+            .crear_usuario(DatosUsuario {
+                cedula: "777777777".to_string(),
+                nombre: "Nuevo Usuario".to_string(),
+                password: "unaPassword123".to_string(),
+                rol: RolUsuario::Operador,
+                activo: true,
+            })
+            .unwrap();
+        assert!(id > 0);
+
+        let usuarios = nucleo.listar_usuarios(String::new()).unwrap();
+        assert!(usuarios.iter().any(|u| u.cedula == "777777777"));
+
+        nucleo.cerrar_sesion();
+        nucleo
+            .autenticar("888888888".to_string(), "daniel27".to_string())
+            .unwrap();
+
+        let resultado = nucleo.listar_usuarios(String::new());
+        assert!(matches!(resultado, Err(NucleoError::Interno { .. })));
+
+        let resultado_crear = nucleo.crear_usuario(DatosUsuario {
+            cedula: "666666666".to_string(),
+            nombre: "Otro Usuario".to_string(),
+            password: "unaPassword123".to_string(),
+            rol: RolUsuario::Operador,
+            activo: true,
+        });
+        assert!(matches!(resultado_crear, Err(NucleoError::Interno { .. })));
     }
 
     #[test]

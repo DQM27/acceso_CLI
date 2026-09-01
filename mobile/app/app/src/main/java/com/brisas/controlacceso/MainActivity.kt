@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import java.io.File
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
+import uniffi.control_acceso_mobile.RolUsuario
 import uniffi.control_acceso_mobile.UsuarioSesion
 
 // El Nucleo abre la única conexión SQLite del teléfono una sola vez al
@@ -173,9 +174,13 @@ private sealed class Pantalla {
 
     data object Activos : Pantalla()
 
+    data object Historial : Pantalla()
+
     data object NuevoContratista : Pantalla()
 
     data object NuevaEmpresa : Pantalla()
+
+    data object NuevoUsuario : Pantalla()
 }
 
 @Composable
@@ -214,6 +219,20 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, onCerrarSesion: () 
                                 pantalla = Pantalla.NuevaEmpresa
                             },
                         )
+                        // Sólo Root/Administrador — espejo de
+                        // Operacion::GestionarUsuarios (domain/autorizacion.rs).
+                        // Rust vuelve a exigirlo del lado real; esto es sólo
+                        // para no ofrecerle a un Operador un botón que va a
+                        // fallar.
+                        if (sesion.rol != RolUsuario.OPERADOR) {
+                            DropdownMenuItem(
+                                text = { Text("Nuevo usuario") },
+                                onClick = {
+                                    menuCreacionAbierto = false
+                                    pantalla = Pantalla.NuevoUsuario
+                                },
+                            )
+                        }
                     }
                 }
                 TextButton(onClick = onCerrarSesion) {
@@ -223,14 +242,14 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, onCerrarSesion: () 
         }
 
         when (val actual = pantalla) {
-            is Pantalla.NuevoContratista, is Pantalla.NuevaEmpresa -> {
+            is Pantalla.NuevoContratista, is Pantalla.NuevaEmpresa, is Pantalla.NuevoUsuario -> {
                 TextButton(onClick = { pantalla = Pantalla.Buscar }, modifier = Modifier.padding(start = 8.dp)) {
                     Text("← Volver")
                 }
-                if (actual is Pantalla.NuevoContratista) {
-                    PantallaNuevoContratista(nucleo)
-                } else {
-                    PantallaNuevaEmpresa(nucleo)
+                when (actual) {
+                    is Pantalla.NuevoContratista -> PantallaNuevoContratista(nucleo)
+                    is Pantalla.NuevaEmpresa -> PantallaNuevaEmpresa(nucleo)
+                    else -> PantallaNuevoUsuario(nucleo)
                 }
             }
             else -> {
@@ -238,11 +257,12 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, onCerrarSesion: () 
                 PrimaryTabRow(selectedTabIndex = pestana) {
                     Tab(selected = pestana == 0, onClick = { pestana = 0 }, text = { Text("Buscar") })
                     Tab(selected = pestana == 1, onClick = { pestana = 1 }, text = { Text("Activos") })
+                    Tab(selected = pestana == 2, onClick = { pestana = 2 }, text = { Text("Historial") })
                 }
-                if (pestana == 0) {
-                    PantallaContratistas(nucleo)
-                } else {
-                    PantallaActivos(nucleo)
+                when (pestana) {
+                    0 -> PantallaContratistas(nucleo)
+                    1 -> PantallaActivos(nucleo)
+                    else -> PantallaHistorial(nucleo)
                 }
             }
         }
