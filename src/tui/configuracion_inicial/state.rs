@@ -80,6 +80,10 @@ impl std::fmt::Debug for ConfiguracionInicialState {
             .field("confirmar_password", &"[OCULTA]")
             .field("campo_activo", &self.campo_activo)
             .field("estado", &self.estado)
+            .field("solicitud", &self.solicitud)
+            .field("cursor_iniciado", &self.cursor_iniciado)
+            .field("cursor_visible", &self.cursor_visible)
+            .field("ayuda_expandida", &self.ayuda_expandida)
             .finish()
     }
 }

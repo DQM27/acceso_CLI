@@ -117,9 +117,36 @@ complexity/perf) se sigue verificando igual que siempre con
   `single_match_else`, `single_match`, `manual_let_else`, `needless_collect` ya en
   `"deny"`. `cargo fmt`, la suite completa (502 tests) y la vara histórica en verde — de
   931 warnings quedan 865.
-- [ ] **Capa 4 — mantenibilidad.** Imports wildcard (15), funciones que superan 100 líneas
-  (12, hasta 198), un `struct` con más de 3 booleanos, un `impl Debug` manual que no incluye
-  todos los campos (revisar si es a propósito).
+- [x] **Capa 4 (2026-09-01) — mantenibilidad.** El inventario actualizado con Rust 1.97
+  resultó en 15 imports wildcard (10 de módulo + 5 de variantes de enum), 14 funciones de
+  más de 100 líneas (8 de producción + 6 pruebas), 2 `struct` con más de 3 booleanos y un
+  `impl Debug` manual incompleto. Los imports ahora nombran cada símbolo y
+  `wildcard_imports`/`enum_glob_use` quedaron en `"deny"`.
+
+  Las funciones largas se revisaron una por una. Había tres separaciones con fronteras
+  reales: `historial/exportacion.rs` ahora determina una `CeldaMovimiento` aparte de
+  escribirla en Excel; `cli/render/historial.rs` separó los estados de exportación y edición
+  del armado de resultados; `tui/app.rs` separó render, sondeo de trabajos y tareas periódicas
+  del loop de eventos. Los otros cinco casos de producción son despachadores exhaustivos o
+  máquinas de estado (`cli/operando.rs`, `cli/render/prompt.rs`, acciones de gafetes y
+  formulario de contratistas): partirlos dispersaría el mapa estado→efecto o transferiría
+  estado mutable entre helpers sin aislar una responsabilidad. Quedaron con `#[allow]`
+  puntual y la razón en el sitio. Mismo criterio para las seis pruebas largas: son escenarios
+  integrados o matrices que necesitan compartir preparación y estado, no varias pruebas
+  pegadas accidentalmente.
+
+  Los booleanos también son independientes, no un estado combinable: datos + permisos del
+  formulario CLI y negaciones por término del filtro de Historial. Se conservaron explícitos
+  con `#[allow(clippy::struct_excessive_bools)]` documentado en cada tipo. El `Debug` de
+  configuración inicial sí estaba incompleto por descuido: ahora incluye solicitud, cursor y
+  ayuda, mientras `SolicitudRoot` sigue redactando la contraseña. `too_many_lines`,
+  `struct_excessive_bools` y `missing_fields_in_debug` quedaron en `"deny"`.
+
+  Al validar apareció además un remanente de Capa 3 que el toolchain nuevo ya detecta:
+  `map(...).unwrap_or(0)` en `lenguaje_comandos/resolver.rs`; corregido a `map_or`. `cargo
+  fmt --check`, la vara histórica de Clippy, Clippy pedantic/nursery completo y la suite raíz
+  (502 tests) en verde; también los 17 tests Rust de `desktop/src-tauri`. Quedan 843 warnings
+  pedantic/nursery, todos fuera de las categorías cerradas y reservados para decidir la Capa 5.
 - [ ] **Capa 5 (cosmética, a decidir si vale la pena aplicarla entera) — documentación y
   ergonomía de API.** `# Errors` en docs de funciones que devuelven `Result` (197),
   backticks en comentarios (56), primer párrafo de doc muy largo (55), `this could be a

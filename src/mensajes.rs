@@ -38,7 +38,10 @@ pub fn mensaje_empresa(error: EmpresaServiceError) -> String {
 }
 
 pub fn mensaje_contratista(error: ContratistaServiceError) -> String {
-    use ContratistaServiceError::*;
+    use ContratistaServiceError::{
+        CedulaDuplicada, CedulaVacia, ContratistaNoEncontrado, Database, EmpresaNoEncontrada,
+        NombreVacio, OperacionNoAutorizada, PraindRequerido,
+    };
 
     match error {
         ContratistaNoEncontrado => "El contratista ya no existe".into(),
@@ -98,7 +101,7 @@ pub fn mensaje_gafete(error: GafeteServiceError) -> String {
 }
 
 pub fn mensaje_salida(error: RegistroIngresoServiceError) -> String {
-    use RegistroIngresoServiceError::*;
+    use RegistroIngresoServiceError::{RegistroNoActivo, RelojRetrocedido, SalidaAnteriorAIngreso};
 
     match error {
         RegistroNoActivo => "El ingreso ya no está activo".into(),
@@ -109,7 +112,10 @@ pub fn mensaje_salida(error: RegistroIngresoServiceError) -> String {
 }
 
 pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
-    use RegistroIngresoServiceError::*;
+    use RegistroIngresoServiceError::{
+        AccesoDenegado, ContratistaNoEncontrado, GafeteNoDisponible, GafeteNoRegistrado,
+        GafeteOcupado, GafeteRequerido, IngresoActivo, RelojRetrocedido,
+    };
 
     match error {
         ContratistaNoEncontrado => "El contratista ya no existe".into(),

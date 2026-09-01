@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    ColumnaHistorial, HistorialState, ModoHistorial, PropositoColumnas, TextInput, ViewMode,
+    resumen_consulta, tipo_texto,
+};
 use crate::tui::menu_principal::OpcionMenu;
 use crate::{
     database::queries::ingresos::MovimientoIngresoResumen,

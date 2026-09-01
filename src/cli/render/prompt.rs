@@ -377,6 +377,10 @@ fn spans_valor(
 // un `if let` dentro del closure por defecto de `map_or_else`, más difícil
 // de seguir que la cascada plana actual.
 #[allow(clippy::option_if_let_else)]
+// La cascada expresa la prioridad exclusiva entre las superficies que pueden
+// gobernar el prompt. Separarla obligaría a repartir esa precedencia y el
+// cálculo coordinado de etiqueta, valor, edición, cursor y resaltado.
+#[allow(clippy::too_many_lines)]
 fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
     // `editable` sólo decide DE DÓNDE sale la posición del cursor (del
     // `Input` real mientras se escribe, o del final del texto congelado

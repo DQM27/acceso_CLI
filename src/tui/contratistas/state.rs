@@ -497,6 +497,10 @@ impl ContratistasState {
             AccionContratistas::Ninguna
         }
     }
+    // Máquina de estados del teclado del formulario. Los brazos comparten la
+    // propiedad de `f` y terminan reinstalándola en `self.modo`; dividirlos
+    // añadiría transferencias artificiales de estado sin aislar lógica real.
+    #[allow(clippy::too_many_lines)]
     fn formulario(
         &mut self,
         key: KeyEvent,

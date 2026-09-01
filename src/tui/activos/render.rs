@@ -1,4 +1,4 @@
-use super::*;
+use super::{ActivosState, Columna, ModoActivos};
 use crate::tui::menu_principal::OpcionMenu;
 use crate::{
     services::{

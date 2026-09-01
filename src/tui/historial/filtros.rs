@@ -10,6 +10,10 @@ use crate::{
     },
 };
 use chrono::{Datelike, Duration, NaiveDate};
+/// Cada booleano conserva la negación de un término distinto del lenguaje de
+/// búsqueda. No son un estado único ni mutuamente excluyente, y representarlos
+/// como bits o una colección haría menos directa la construcción del filtro SQL.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FiltrosHistorial {
     pub desde: String,

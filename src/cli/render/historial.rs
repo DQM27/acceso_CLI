@@ -154,6 +154,78 @@ pub(super) struct OpacidadesHistorial {
     pub(super) exportar: f32,
 }
 
+fn lineas_exportacion(
+    historial: &HistorialState,
+    opacidad: f32,
+) -> Option<(Vec<Line<'static>>, Option<usize>)> {
+    let titulo = || {
+        Line::from(Span::styled(
+            "EXPORTAR HISTORIAL",
+            estilo_fundido(FADE_MUTED, opacidad, Modifier::empty()),
+        ))
+    };
+    if historial.exportando {
+        return Some((
+            vec![
+                titulo(),
+                Line::from(""),
+                Line::from(Span::styled(
+                    "⠋ Exportando…",
+                    estilo_fundido(FADE_ACENTO, opacidad, Modifier::empty()),
+                )),
+            ],
+            None,
+        ));
+    }
+    historial.exportacion_destino.as_ref()?;
+    let total = historial.resultado.as_ref().map_or(0, |r| r.total);
+    Some((
+        vec![
+            titulo(),
+            Line::from(""),
+            Line::from(format!(
+                "Se exportarán los {total} movimientos del filtro vigente a un archivo XLSX."
+            )),
+            Line::from(""),
+            Line::from(Span::styled(
+                "Enter para exportar · Esc para cancelar",
+                estilo_fundido(FADE_ACENTO, opacidad, Modifier::empty()),
+            )),
+        ],
+        None,
+    ))
+}
+
+fn lineas_editor(historial: &HistorialState, texto_input: &str) -> Vec<Line<'static>> {
+    let rango = format!(
+        "Rango actual: {} – {}",
+        a_costa_rica(historial.filtro.desde).format("%d/%m/%Y"),
+        fecha_hasta_visual(historial.filtro.hasta)
+    );
+    vec![
+        Line::from(Span::styled("HISTORIAL", muted())),
+        Line::from(""),
+        Line::from(Span::styled(rango, muted())),
+        Line::from(Span::styled(
+            "empresa: · tipo: · estado: · gafete: · ingreso: · salida: · desde: · hasta:",
+            muted(),
+        )),
+        Line::from(Span::styled(
+            "Ejemplo: empresa:brisas tipo:praind,swat desde:01/08/2026 -salida:ana",
+            muted(),
+        )),
+        Line::from(""),
+        Line::from(if texto_input.is_empty() {
+            Span::styled(
+                "Enter aplica el rango del mes actual sin más filtro",
+                muted(),
+            )
+        } else {
+            Span::raw(texto_input.to_string())
+        }),
+    ]
+}
+
 pub(super) fn lineas_historial(
     historial: &HistorialState,
     texto_input: &str,
@@ -161,76 +233,13 @@ pub(super) fn lineas_historial(
     columnas: &SelectorColumnas<ColumnaHistorial>,
     opacidades: &OpacidadesHistorial,
 ) -> (Vec<Line<'static>>, Option<usize>) {
-    if historial.exportando {
-        return (
-            vec![
-                Line::from(Span::styled(
-                    "EXPORTAR HISTORIAL",
-                    estilo_fundido(FADE_MUTED, opacidades.exportar, Modifier::empty()),
-                )),
-                Line::from(""),
-                Line::from(Span::styled(
-                    "⠋ Exportando…",
-                    estilo_fundido(FADE_ACENTO, opacidades.exportar, Modifier::empty()),
-                )),
-            ],
-            None,
-        );
-    }
-    if historial.exportacion_destino.is_some() {
-        let total = historial.resultado.as_ref().map_or(0, |r| r.total);
-        return (
-            vec![
-                Line::from(Span::styled(
-                    "EXPORTAR HISTORIAL",
-                    estilo_fundido(FADE_MUTED, opacidades.exportar, Modifier::empty()),
-                )),
-                Line::from(""),
-                Line::from(format!(
-                    "Se exportarán los {total} movimientos del filtro vigente a un archivo XLSX."
-                )),
-                Line::from(""),
-                Line::from(Span::styled(
-                    "Enter para exportar · Esc para cancelar",
-                    estilo_fundido(FADE_ACENTO, opacidades.exportar, Modifier::empty()),
-                )),
-            ],
-            None,
-        );
+    if let Some(lineas) = lineas_exportacion(historial, opacidades.exportar) {
+        return lineas;
     }
     let Some(resultado) = &historial.resultado else {
         // Editando: todavía no se aplicó ninguna consulta (o se volvió a
         // editar con Esc) — sin filtrado en vivo, DEC-024.
-        let rango = format!(
-            "Rango actual: {} – {}",
-            a_costa_rica(historial.filtro.desde).format("%d/%m/%Y"),
-            fecha_hasta_visual(historial.filtro.hasta)
-        );
-        return (
-            vec![
-                Line::from(Span::styled("HISTORIAL", muted())),
-                Line::from(""),
-                Line::from(Span::styled(rango, muted())),
-                Line::from(Span::styled(
-                    "empresa: · tipo: · estado: · gafete: · ingreso: · salida: · desde: · hasta:",
-                    muted(),
-                )),
-                Line::from(Span::styled(
-                    "Ejemplo: empresa:brisas tipo:praind,swat desde:01/08/2026 -salida:ana",
-                    muted(),
-                )),
-                Line::from(""),
-                Line::from(if texto_input.is_empty() {
-                    Span::styled(
-                        "Enter aplica el rango del mes actual sin más filtro",
-                        muted(),
-                    )
-                } else {
-                    Span::raw(texto_input.to_string())
-                }),
-            ],
-            None,
-        );
+        return (lineas_editor(historial, texto_input), None);
     };
 
     let mut lineas = vec![Line::from(Span::styled(

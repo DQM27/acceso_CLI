@@ -9,6 +9,10 @@ use crate::tui::app::{App, Vista};
 use crate::tui::gafetes::AccionGafetes;
 
 impl App {
+    // Despachador exhaustivo de `AccionGafetes`: cada brazo ejecuta la llamada
+    // de dominio y entrega su resultado al mismo estado. Mantener el mapa
+    // acción→efecto unido evita esconder recargas recursivas entre helpers.
+    #[allow(clippy::too_many_lines)]
     pub(in crate::tui::app) fn procesar_accion_gafetes(
         &mut self,
         accion: AccionGafetes,

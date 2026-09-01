@@ -417,6 +417,9 @@ fn atajos_provisionales_ya_no_navegan() {
 }
 
 #[test]
+// Matriz de navegación que garantiza el mismo contrato de Escape en todas las
+// vistas; dividirla duplicaría la preparación y debilitaría la comparación.
+#[allow(clippy::too_many_lines)]
 fn escape_raiz_regresa_al_menu_y_estados_internos_se_cierran_primero() {
     for vista in [
         Vista::IngresosActivos,
@@ -708,6 +711,9 @@ fn empresas_tui_busca_cancela_y_presenta_duplicado_real() {
 }
 
 #[test]
+// Escenario de integración TUI/AppCore: crear, editar y buscar deben ocurrir
+// sobre la misma conexión y el mismo estado de pantalla.
+#[allow(clippy::too_many_lines)]
 fn contratistas_tui_carga_empresas_crea_edita_y_busca_con_appcore_real() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
@@ -1195,6 +1201,9 @@ fn registrar_no_vacia_la_lista_ni_manda_al_menu_con_mas_por_procesar() {
 /// `tiene_ingreso_activo` en la fila ya visible, no dejarla mostrando
 /// "DENTRO" después de que la persona ya salió.
 #[test]
+// Regresión integrada: la salida y el refresco de la búsqueda visible son dos
+// mitades del mismo comportamiento y necesitan compartir el estado real.
+#[allow(clippy::too_many_lines)]
 fn f2_registra_salida_refresca_nuevo_ingreso_sin_navegar() {
     use crate::tui::ui_kit::ThemePreset;
     use ratatui::{Terminal, backend::TestBackend};

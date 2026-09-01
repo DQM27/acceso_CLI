@@ -1,3 +1,4 @@
+use chrono::{NaiveDate, NaiveTime};
 use rust_xlsxwriter::{Format, FormatAlign, FormatBorder, Worksheet, XlsxError};
 
 use crate::{
@@ -57,6 +58,59 @@ pub(crate) struct FormatosHistorial {
     /// escribían sin ningún `Format`, lo cual ya no alcanza para que les
     /// llegue la fuente base o la cebra.
     texto: [Format; 2],
+}
+
+/// Valor ya preparado para Excel junto con la familia de formato que le
+/// corresponde. Separar esta decisión del bucle de escritura evita repetir
+/// la misma llamada de `Worksheet` en cada columna.
+enum CeldaMovimiento {
+    Fecha(NaiveDate),
+    Hora(NaiveTime),
+    Centrada(String),
+    Texto(String),
+}
+
+fn celda_movimiento(
+    movimiento: &MovimientoIngresoResumen,
+    columna: ColumnaHistorial,
+) -> CeldaMovimiento {
+    let ingreso_local = a_costa_rica(movimiento.fecha_hora_ingreso);
+    match columna {
+        ColumnaHistorial::FechaIngreso => CeldaMovimiento::Fecha(ingreso_local.date_naive()),
+        ColumnaHistorial::FechaSalida => movimiento.fecha_hora_salida.map_or_else(
+            || CeldaMovimiento::Centrada("Activo".to_owned()),
+            |salida| CeldaMovimiento::Fecha(a_costa_rica(salida).date_naive()),
+        ),
+        ColumnaHistorial::Nombre => CeldaMovimiento::Texto(movimiento.contratista_nombre.clone()),
+        // Cédula siempre es texto: Excel no debe eliminar ceros iniciales.
+        ColumnaHistorial::Cedula => CeldaMovimiento::Texto(movimiento.cedula.clone()),
+        ColumnaHistorial::Empresa => CeldaMovimiento::Centrada(movimiento.empresa_nombre.clone()),
+        ColumnaHistorial::Tipo => {
+            CeldaMovimiento::Centrada(tipo_texto(movimiento.tipo_ingreso).to_owned())
+        }
+        ColumnaHistorial::Entrada => CeldaMovimiento::Hora(ingreso_local.time()),
+        ColumnaHistorial::Salida => movimiento.fecha_hora_salida.map_or_else(
+            || CeldaMovimiento::Centrada("Activo".to_owned()),
+            |salida| CeldaMovimiento::Hora(a_costa_rica(salida).time()),
+        ),
+        ColumnaHistorial::Gafete => CeldaMovimiento::Centrada(
+            movimiento
+                .gafete_numero
+                .map_or_else(|| "S/G".to_owned(), |numero| numero.to_string()),
+        ),
+        ColumnaHistorial::Medio => {
+            CeldaMovimiento::Centrada(medio_texto(movimiento.medio_ingreso).to_owned())
+        }
+        ColumnaHistorial::Ingreso => {
+            CeldaMovimiento::Centrada(movimiento.usuario_ingreso_nombre.clone())
+        }
+        ColumnaHistorial::Egreso => CeldaMovimiento::Centrada(
+            movimiento
+                .usuario_salida_nombre
+                .clone()
+                .unwrap_or_else(|| "—".to_owned()),
+        ),
+    }
 }
 
 impl Default for FormatosHistorial {
@@ -185,7 +239,6 @@ pub(crate) fn escribir_movimiento(
     movimiento: &MovimientoIngresoResumen,
     formatos: &FormatosHistorial,
 ) -> Result<(), XlsxError> {
-    let ingreso_local = a_costa_rica(movimiento.fecha_hora_ingreso);
     // Alterna cebra según la fila real de Excel (1 = primera fila de datos,
     // ver `application/historial.rs`) — no un contador propio, para que dos
     // llamadas consecutivas con la misma `fila` (no debería pasar, pero si
@@ -194,121 +247,18 @@ pub(crate) fn escribir_movimiento(
 
     for (indice, columna) in columnas.iter().copied().enumerate() {
         let indice = u16::try_from(indice).unwrap_or(u16::MAX);
-        match columna {
-            ColumnaHistorial::FechaIngreso => {
-                hoja.write_with_format(
-                    fila,
-                    indice,
-                    &ingreso_local.date_naive(),
-                    &formatos.fecha[variante],
-                )?;
+        match celda_movimiento(movimiento, columna) {
+            CeldaMovimiento::Fecha(valor) => {
+                hoja.write_with_format(fila, indice, &valor, &formatos.fecha[variante])?;
             }
-            ColumnaHistorial::FechaSalida => match movimiento.fecha_hora_salida {
-                Some(salida) => {
-                    hoja.write_with_format(
-                        fila,
-                        indice,
-                        &a_costa_rica(salida).date_naive(),
-                        &formatos.fecha[variante],
-                    )?;
-                }
-                None => {
-                    hoja.write_string_with_format(
-                        fila,
-                        indice,
-                        "Activo",
-                        &formatos.centrado[variante],
-                    )?;
-                }
-            },
-            ColumnaHistorial::Nombre => {
-                hoja.write_string_with_format(
-                    fila,
-                    indice,
-                    &movimiento.contratista_nombre,
-                    &formatos.texto[variante],
-                )?;
+            CeldaMovimiento::Hora(valor) => {
+                hoja.write_with_format(fila, indice, &valor, &formatos.hora[variante])?;
             }
-            ColumnaHistorial::Cedula => {
-                // Cédula siempre es texto: Excel no debe eliminar ceros iniciales.
-                hoja.write_string_with_format(
-                    fila,
-                    indice,
-                    &movimiento.cedula,
-                    &formatos.texto[variante],
-                )?;
-            }
-            ColumnaHistorial::Empresa => {
-                hoja.write_string_with_format(
-                    fila,
-                    indice,
-                    &movimiento.empresa_nombre,
-                    &formatos.centrado[variante],
-                )?;
-            }
-            ColumnaHistorial::Tipo => {
-                hoja.write_string_with_format(
-                    fila,
-                    indice,
-                    tipo_texto(movimiento.tipo_ingreso),
-                    &formatos.centrado[variante],
-                )?;
-            }
-            ColumnaHistorial::Entrada => {
-                hoja.write_with_format(
-                    fila,
-                    indice,
-                    &ingreso_local.time(),
-                    &formatos.hora[variante],
-                )?;
-            }
-            ColumnaHistorial::Salida => match movimiento.fecha_hora_salida {
-                Some(salida) => {
-                    hoja.write_with_format(
-                        fila,
-                        indice,
-                        &a_costa_rica(salida).time(),
-                        &formatos.hora[variante],
-                    )?;
-                }
-                None => {
-                    hoja.write_string_with_format(
-                        fila,
-                        indice,
-                        "Activo",
-                        &formatos.centrado[variante],
-                    )?;
-                }
-            },
-            ColumnaHistorial::Gafete => {
-                let valor = movimiento
-                    .gafete_numero
-                    .map_or_else(|| "S/G".to_owned(), |numero| numero.to_string());
+            CeldaMovimiento::Centrada(valor) => {
                 hoja.write_string_with_format(fila, indice, &valor, &formatos.centrado[variante])?;
             }
-            ColumnaHistorial::Medio => {
-                hoja.write_string_with_format(
-                    fila,
-                    indice,
-                    medio_texto(movimiento.medio_ingreso),
-                    &formatos.centrado[variante],
-                )?;
-            }
-            ColumnaHistorial::Ingreso => {
-                hoja.write_string_with_format(
-                    fila,
-                    indice,
-                    &movimiento.usuario_ingreso_nombre,
-                    &formatos.centrado[variante],
-                )?;
-            }
-            ColumnaHistorial::Egreso => {
-                hoja.write_string_with_format(
-                    fila,
-                    indice,
-                    movimiento.usuario_salida_nombre.as_deref().unwrap_or("—"),
-                    &formatos.centrado[variante],
-                )?;
+            CeldaMovimiento::Texto(valor) => {
+                hoja.write_string_with_format(fila, indice, &valor, &formatos.texto[variante])?;
             }
         }
     }

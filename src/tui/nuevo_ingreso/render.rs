@@ -1,4 +1,6 @@
-use super::*;
+use super::{
+    EtapaNuevoIngreso, ModoBuscarIngreso, NuevoIngresoState, ResultadoAcceso, texto_medio,
+};
 use crate::tui::menu_principal::OpcionMenu;
 use crate::{
     database::queries::contratistas::ContratistaResumen,

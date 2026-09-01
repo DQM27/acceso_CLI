@@ -353,6 +353,10 @@ fn alternar_columna(app: &mut AppState) {
 /// Enter: selecciona la coincidencia marcada o confirma la tarjeta vigente.
 /// Las escrituras reales (`registrar_ingreso`/`registrar_salida`) sólo ocurren
 /// aquí — nada de lo que se muestra mientras se teclea persiste nada.
+// Despachador exhaustivo del estado visible: mantener los brazos juntos hace
+// auditable qué hace Enter en cada `ContextState`. Extraerlos dispersaría las
+// mutaciones coordinadas de `input`, `contexto`, `fase` y `feedback`.
+#[allow(clippy::too_many_lines)]
 fn confirmar(core: &AppCore, app: &mut AppState) {
     let entrada = super::parser::parsear(app.input.value());
     match app.contexto.clone() {
@@ -534,7 +538,10 @@ fn parametros_ingreso(entrada: &Entrada) -> (Option<i64>, MedioIngreso) {
 /// semánticos conservan su texto accionable y los de base de datos no exponen
 /// detalles internos.
 fn mensaje_error_ingreso(error: &RegistroIngresoServiceError) -> String {
-    use RegistroIngresoServiceError::*;
+    use RegistroIngresoServiceError::{
+        AccesoDenegado, ContratistaNoEncontrado, GafeteOcupado, GafeteRequerido, IngresoActivo,
+        RelojRetrocedido,
+    };
     match error {
         ContratistaNoEncontrado => "El contratista ya no existe".into(),
         IngresoActivo => "El contratista ya tiene un ingreso activo".into(),
@@ -566,7 +573,7 @@ fn motivo_texto(error: &RegistroIngresoServiceError) -> String {
 }
 
 pub(super) fn mensaje_error_salida(error: &RegistroIngresoServiceError) -> String {
-    use RegistroIngresoServiceError::*;
+    use RegistroIngresoServiceError::{RegistroNoActivo, RelojRetrocedido, SalidaAnteriorAIngreso};
     match error {
         RegistroNoActivo => "El ingreso ya no está activo".into(),
         SalidaAnteriorAIngreso => "La salida no puede ser anterior al ingreso".into(),

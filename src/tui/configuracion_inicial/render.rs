@@ -4,7 +4,7 @@ use ratatui::{
     widgets::Paragraph,
 };
 
-use super::*;
+use super::{CampoConfiguracion, ConfiguracionInicialState, EstadoConfiguracion};
 use crate::tiempo::hora_actual_texto;
 use crate::tui::ui_kit::{
     CommandHint, MIN_TERMINAL_WIDTH, ScreenShell, StatusKind, Theme, posicionar_cursor,

@@ -347,6 +347,9 @@ fn limite_funciona_y_se_acota_a_un_minimo_seguro() {
 }
 
 #[test]
+// Matriz de filtros sobre el mismo conjunto de datos. Compartir la preparación
+// es parte de la prueba: cada consulta debe combinarse contra idéntica base.
+#[allow(clippy::too_many_lines)]
 fn filtra_por_empresa_tipo_praind_ruta_y_acceso() {
     use control_acceso::database::queries::contratistas::FiltroPraind;
 

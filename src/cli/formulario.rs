@@ -102,6 +102,11 @@ pub enum Subfase {
     Resumen,
 }
 
+/// Los cuatro booleanos no forman un único estado combinable: dos son datos
+/// independientes del contratista y dos son permisos independientes del actor.
+/// Agruparlos en una máscara o en estructuras auxiliares sólo ocultaría esos
+/// significados y complicaría el acceso desde el controlador y el render.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone)]
 pub struct FormularioContratista {
     pub modo: ModoFormulario,

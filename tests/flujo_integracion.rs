@@ -94,6 +94,9 @@ fn crear_contratista(
 }
 
 #[test]
+// Un único escenario de extremo a extremo; partirlo perdería la comprobación
+// de que el mismo gafete se libera y reutiliza sobre el estado persistido.
+#[allow(clippy::too_many_lines)]
 fn flujo_completo_praind_libera_y_reutiliza_gafete() {
     let (connection, usuario_id) = preparar_base();
     let empresa_id = crear_empresa(&connection);

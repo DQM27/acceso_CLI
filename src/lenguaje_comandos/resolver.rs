@@ -498,8 +498,7 @@ fn resolver_activos(core: &AppCore, consulta: &str) -> ContextState {
 
 fn contar_activos(core: &AppCore) -> usize {
     core.listar_ingresos_activos(&FiltroIngresosActivos::default())
-        .map(|lista| lista.total)
-        .unwrap_or(0)
+        .map_or(0, |lista| lista.total)
 }
 
 fn buscar_activo_por_gafete(core: &AppCore, numero: i64) -> Option<IngresoActivoResumen> {

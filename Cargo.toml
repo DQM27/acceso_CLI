@@ -113,6 +113,17 @@ single_match = "deny"
 manual_let_else = "deny"
 needless_collect = "deny"
 
+# --- Capa 4: mantenibilidad. Imports explícitos; funciones largas separadas
+#     cuando había responsabilidades reales distintas; excepciones locales y
+#     justificadas para despachadores exhaustivos, máquinas de estado y pruebas
+#     integradas; booleanos independientes del dominio/filtro documentados;
+#     `Debug` manual completo sin exponer secretos. ---
+wildcard_imports = "deny"
+enum_glob_use = "deny"
+too_many_lines = "deny"
+struct_excessive_bools = "deny"
+missing_fields_in_debug = "deny"
+
 # Perfil de producción: prioriza latencia y tamaño del binario sobre tiempo de
 # compilación. Cargo ya ejecuta la compilación en paralelo; codegen-units=1 reduce
 # el paralelismo de generación de código a cambio de darle más contexto a LLVM.

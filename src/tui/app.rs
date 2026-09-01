@@ -4,7 +4,7 @@ use std::{
 };
 
 use crossterm::event::{self, Event, KeyEventKind};
-use ratatui::{Terminal, backend::Backend};
+use ratatui::{Frame, Terminal, backend::Backend};
 
 mod actions;
 mod auth_jobs;
@@ -252,6 +252,127 @@ impl App {
         }
     }
 
+    fn renderizar_frame(&self, frame: &mut Frame) {
+        let theme = self.tema.theme();
+        match self.vista {
+            Vista::ConfiguracionInicial => configuracion_inicial::render(
+                frame,
+                frame.area(),
+                &self.configuracion_inicial,
+                theme,
+            ),
+            Vista::Login => login::render(frame, frame.area(), &self.login, theme),
+            _ => {
+                if let Some(sesion) = &self.sesion {
+                    self.renderizar_vista_autenticada(frame, sesion, theme);
+                }
+            }
+        }
+        salida_rapida::render(frame, frame.area(), &self.salida_rapida, theme);
+    }
+
+    fn renderizar_vista_autenticada(
+        &self,
+        frame: &mut Frame,
+        sesion: &UsuarioSesion,
+        theme: crate::tui::ui_kit::Theme,
+    ) {
+        let area = frame.area();
+        match self.vista {
+            Vista::MenuPrincipal => menu_principal::render(frame, area, &self.menu, sesion, theme),
+            Vista::IngresosActivos => activos::render(frame, area, &self.activos, sesion, theme),
+            Vista::Historial => historial::render(frame, area, &self.historial, sesion, theme),
+            Vista::Contratistas => {
+                contratistas::render(frame, area, &self.contratistas, sesion, theme);
+            }
+            Vista::Empresas => empresas::render(frame, area, &self.empresas, sesion, theme),
+            Vista::Usuarios => usuarios::render(frame, area, &self.usuarios, sesion, theme),
+            Vista::CambiarPassword => {
+                cambio_password::render(frame, area, &self.cambio_password, sesion, theme);
+            }
+            Vista::Auditoria => auditoria::render(frame, area, &self.auditoria, sesion, theme),
+            Vista::Respaldos => {
+                configuracion::render(frame, area, &self.configuracion, sesion, theme);
+            }
+            Vista::NuevoIngreso => {
+                nuevo_ingreso::render(frame, area, &self.nuevo_ingreso, sesion, theme);
+            }
+            Vista::GestionGafetes => gafetes::render(frame, area, &self.gafetes, sesion, theme),
+            Vista::ConfiguracionInicial | Vista::Login => {}
+        }
+    }
+
+    fn trabajos_argon_pendientes(&self) -> (bool, bool, bool, bool) {
+        (
+            self.autenticacion_pendiente.is_some(),
+            self.hilo_usuario_pendiente.is_some(),
+            self.cambio_password_pendiente.is_some(),
+            self.root_inicial_pendiente.is_some(),
+        )
+    }
+
+    fn actualizar_tareas(
+        &mut self,
+        ahora: Instant,
+        core: Option<&AppCore>,
+        ultima_revision_respaldo: &mut Instant,
+    ) -> bool {
+        self.configuracion_inicial.tick(ahora);
+        self.login.tick(ahora);
+        let trabajos_antes = self.trabajos_argon_pendientes();
+
+        self.recibir_autenticacion_si_lista(core);
+        let mut cambio_visible = false;
+        if let Some(core) = core {
+            self.procesar_configuracion_pendiente(core);
+            self.recibir_root_inicial_si_lista(core);
+            if ahora.saturating_duration_since(*ultima_revision_respaldo)
+                >= REVISION_RESPALDO_AUTOMATICO
+            {
+                *ultima_revision_respaldo = ahora;
+                self.revisar_respaldo_automatico(core);
+            }
+            cambio_visible = self.recibir_respaldo_automatico_si_listo(core);
+        } else {
+            self.abortar_configuracion_inicial_sin_core();
+        }
+        self.recibir_hilo_usuario_si_lista(core);
+        self.recibir_cambio_password_propio(core);
+        cambio_visible |= self.recibir_respaldo_manual_si_listo();
+        cambio_visible |= self.recibir_exportacion_historial_si_lista();
+        cambio_visible |= trabajos_antes != self.trabajos_argon_pendientes();
+
+        let accion = self.historial.tick(ahora);
+        cambio_visible |= !matches!(&accion, AccionHistorial::Ninguna);
+        self.procesar_accion_historial(accion, core);
+        let accion = self.contratistas.tick(ahora);
+        cambio_visible |= !matches!(&accion, AccionContratistas::Ninguna);
+        self.procesar_accion_contratistas(accion, core);
+        let accion = self.activos.tick(ahora);
+        cambio_visible |= !matches!(&accion, AccionActivos::Ninguna);
+        self.procesar_accion_activos(accion, core);
+        let accion = self.empresas.tick(ahora);
+        cambio_visible |= !matches!(&accion, AccionEmpresas::Ninguna);
+        self.procesar_accion_empresas(accion, core);
+        let accion = self.usuarios.tick(ahora);
+        cambio_visible |= !matches!(&accion, AccionUsuarios::Ninguna);
+        self.procesar_accion_usuarios(accion, core);
+        let accion = self.nuevo_ingreso.tick(ahora);
+        cambio_visible |= !matches!(&accion, AccionNuevoIngreso::Ninguna);
+        self.procesar_accion_nuevo_ingreso(accion, core);
+        let accion = self.salida_rapida.tick(ahora);
+        cambio_visible |= !matches!(&accion, AccionSalidaRapida::Ninguna);
+        self.procesar_accion_salida_rapida(accion, core);
+        let accion = self.gafetes.tick(ahora);
+        cambio_visible |= !matches!(&accion, AccionGafetes::Ninguna);
+        self.procesar_accion_gafetes(accion, core);
+        let accion = self.gafetes.tick_deudor(ahora);
+        cambio_visible |= !matches!(&accion, AccionGafetes::Ninguna);
+        self.procesar_accion_gafetes(accion, core);
+
+        cambio_visible
+    }
+
     pub fn run<B: Backend<Error = io::Error>>(
         &mut self,
         terminal: &mut Terminal<B>,
@@ -286,116 +407,7 @@ impl App {
             .unwrap_or_else(Instant::now);
         while !self.salir {
             if redibujar {
-                let theme = self.tema.theme();
-                terminal.draw(|frame| {
-                    match self.vista {
-                        Vista::ConfiguracionInicial => configuracion_inicial::render(
-                            frame,
-                            frame.area(),
-                            &self.configuracion_inicial,
-                            theme,
-                        ),
-                        Vista::Login => login::render(frame, frame.area(), &self.login, theme),
-                        Vista::MenuPrincipal => {
-                            if let Some(sesion) = &self.sesion {
-                                menu_principal::render(
-                                    frame,
-                                    frame.area(),
-                                    &self.menu,
-                                    sesion,
-                                    theme,
-                                )
-                            }
-                        }
-                        Vista::IngresosActivos => {
-                            if let Some(sesion) = &self.sesion {
-                                activos::render(frame, frame.area(), &self.activos, sesion, theme)
-                            }
-                        }
-                        Vista::Historial => {
-                            if let Some(sesion) = &self.sesion {
-                                historial::render(
-                                    frame,
-                                    frame.area(),
-                                    &self.historial,
-                                    sesion,
-                                    theme,
-                                )
-                            }
-                        }
-                        Vista::Contratistas => {
-                            if let Some(sesion) = &self.sesion {
-                                contratistas::render(
-                                    frame,
-                                    frame.area(),
-                                    &self.contratistas,
-                                    sesion,
-                                    theme,
-                                )
-                            }
-                        }
-                        Vista::Empresas => {
-                            if let Some(sesion) = &self.sesion {
-                                empresas::render(frame, frame.area(), &self.empresas, sesion, theme)
-                            }
-                        }
-                        Vista::Usuarios => {
-                            if let Some(sesion) = &self.sesion {
-                                usuarios::render(frame, frame.area(), &self.usuarios, sesion, theme)
-                            }
-                        }
-                        Vista::CambiarPassword => {
-                            if let Some(sesion) = &self.sesion {
-                                cambio_password::render(
-                                    frame,
-                                    frame.area(),
-                                    &self.cambio_password,
-                                    sesion,
-                                    theme,
-                                )
-                            }
-                        }
-                        Vista::Auditoria => {
-                            if let Some(sesion) = &self.sesion {
-                                auditoria::render(
-                                    frame,
-                                    frame.area(),
-                                    &self.auditoria,
-                                    sesion,
-                                    theme,
-                                )
-                            }
-                        }
-                        Vista::Respaldos => {
-                            if let Some(sesion) = &self.sesion {
-                                configuracion::render(
-                                    frame,
-                                    frame.area(),
-                                    &self.configuracion,
-                                    sesion,
-                                    theme,
-                                )
-                            }
-                        }
-                        Vista::NuevoIngreso => {
-                            if let Some(sesion) = &self.sesion {
-                                nuevo_ingreso::render(
-                                    frame,
-                                    frame.area(),
-                                    &self.nuevo_ingreso,
-                                    sesion,
-                                    theme,
-                                )
-                            }
-                        }
-                        Vista::GestionGafetes => {
-                            if let Some(sesion) = &self.sesion {
-                                gafetes::render(frame, frame.area(), &self.gafetes, sesion, theme)
-                            }
-                        }
-                    }
-                    salida_rapida::render(frame, frame.area(), &self.salida_rapida, theme);
-                })?;
+                terminal.draw(|frame| self.renderizar_frame(frame))?;
                 redibujar = false;
             }
 
@@ -414,74 +426,7 @@ impl App {
             }
 
             let ahora = Instant::now();
-            self.configuracion_inicial.tick(ahora);
-            self.login.tick(ahora);
-            let trabajos_antes = (
-                self.autenticacion_pendiente.is_some(),
-                self.hilo_usuario_pendiente.is_some(),
-                self.cambio_password_pendiente.is_some(),
-                self.root_inicial_pendiente.is_some(),
-            );
-            // Sondeo de los 4 hilos de Argon2 en vuelo, siempre en el mismo lugar
-            // del bucle (después de leer teclas): login, ROOT inicial, crear
-            // usuario/cambiar contraseña.
-            self.recibir_autenticacion_si_lista(core);
-            match core {
-                Some(core) => {
-                    self.procesar_configuracion_pendiente(core);
-                    self.recibir_root_inicial_si_lista(core);
-                    if ahora.saturating_duration_since(ultima_revision_respaldo)
-                        >= REVISION_RESPALDO_AUTOMATICO
-                    {
-                        ultima_revision_respaldo = ahora;
-                        self.revisar_respaldo_automatico(core);
-                    }
-                    cambio_visible |= self.recibir_respaldo_automatico_si_listo(core);
-                }
-                None => self.abortar_configuracion_inicial_sin_core(),
-            }
-            self.recibir_hilo_usuario_si_lista(core);
-            self.recibir_cambio_password_propio(core);
-            cambio_visible |= self.recibir_respaldo_manual_si_listo();
-            cambio_visible |= self.recibir_exportacion_historial_si_lista();
-            let trabajos_despues = (
-                self.autenticacion_pendiente.is_some(),
-                self.hilo_usuario_pendiente.is_some(),
-                self.cambio_password_pendiente.is_some(),
-                self.root_inicial_pendiente.is_some(),
-            );
-            cambio_visible |= trabajos_antes != trabajos_despues;
-
-            // Búsquedas con debounce: cada pantalla decide si ya pasó el
-            // tiempo sin tecla nueva; si no, `tick` devuelve `Ninguna` y el
-            // despacho de siempre es un no-op.
-            let accion = self.historial.tick(ahora);
-            cambio_visible |= !matches!(&accion, AccionHistorial::Ninguna);
-            self.procesar_accion_historial(accion, core);
-            let accion = self.contratistas.tick(ahora);
-            cambio_visible |= !matches!(&accion, AccionContratistas::Ninguna);
-            self.procesar_accion_contratistas(accion, core);
-            let accion = self.activos.tick(ahora);
-            cambio_visible |= !matches!(&accion, AccionActivos::Ninguna);
-            self.procesar_accion_activos(accion, core);
-            let accion = self.empresas.tick(ahora);
-            cambio_visible |= !matches!(&accion, AccionEmpresas::Ninguna);
-            self.procesar_accion_empresas(accion, core);
-            let accion = self.usuarios.tick(ahora);
-            cambio_visible |= !matches!(&accion, AccionUsuarios::Ninguna);
-            self.procesar_accion_usuarios(accion, core);
-            let accion = self.nuevo_ingreso.tick(ahora);
-            cambio_visible |= !matches!(&accion, AccionNuevoIngreso::Ninguna);
-            self.procesar_accion_nuevo_ingreso(accion, core);
-            let accion = self.salida_rapida.tick(ahora);
-            cambio_visible |= !matches!(&accion, AccionSalidaRapida::Ninguna);
-            self.procesar_accion_salida_rapida(accion, core);
-            let accion = self.gafetes.tick(ahora);
-            cambio_visible |= !matches!(&accion, AccionGafetes::Ninguna);
-            self.procesar_accion_gafetes(accion, core);
-            let accion = self.gafetes.tick_deudor(ahora);
-            cambio_visible |= !matches!(&accion, AccionGafetes::Ninguna);
-            self.procesar_accion_gafetes(accion, core);
+            cambio_visible |= self.actualizar_tareas(ahora, core, &mut ultima_revision_respaldo);
 
             // Login y configuración inicial sí tienen animación (spinner/cursor).
             // El resto sólo se invalida por una entrada, un resultado, un resize o

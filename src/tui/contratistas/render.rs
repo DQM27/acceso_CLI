@@ -9,7 +9,10 @@ use ratatui::{
 };
 
 use super::form::{texto_tipo, tipos};
-use super::*;
+use super::{
+    CampoFormulario, Columna, ContratistasState, Desplegable, FormularioContratista,
+    ModoContratistas,
+};
 use crate::{
     database::queries::contratistas::ContratistaResumen,
     services::autenticacion_service::UsuarioSesion,
@@ -402,6 +405,10 @@ fn render_detalle(frame: &mut Frame, area: Rect, c: &ContratistaResumen, theme: 
     frame.render_widget(Paragraph::new(lineas), area);
 }
 
+// El orden del `match` es el orden visual de `CampoFormulario::TODOS` y el
+// índice `fila` también incorpora desplegables intercalados. Separar cada
+// brazo haría más difícil verificar esa correspondencia que mantenerla aquí.
+#[allow(clippy::too_many_lines)]
 fn render_formulario(
     frame: &mut Frame,
     area: Rect,
@@ -611,6 +618,7 @@ fn render_columnas(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::tipo_ingreso::TipoIngreso;
 
     fn contratista(fecha_vencimiento_praind: Option<NaiveDate>) -> ContratistaResumen {
         ContratistaResumen {

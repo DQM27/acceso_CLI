@@ -168,6 +168,9 @@ impl Screen {
 }
 
 #[test]
+// La matriz completa debe vivir en una sola prueba para que cualquier pantalla,
+// tamaño o tema ausente sea visible como un hueco del mismo producto cartesiano.
+#[allow(clippy::too_many_lines)]
 fn todas_las_pantallas_renderizan_la_matriz_de_tamanos_y_temas() {
     let sizes = [(60, 22), (80, 24), (99, 30), (100, 30), (140, 40)];
     let themes = [

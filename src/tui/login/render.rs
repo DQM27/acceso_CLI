@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 
-use super::*;
+use super::{CampoLogin, EstadoLogin, LoginState};
 use crate::tui::ui_kit::{
     MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH, TextInputFocus, Theme, render_terminal_too_small,
 };

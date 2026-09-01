@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{Cell, Paragraph, Row, Table},
 };
 
-use super::*;
+use super::{EmpresasState, FormularioEmpresa, ModoEmpresas, ModoFormularioEmpresa};
 use crate::{
     database::queries::empresas::EmpresaResumen,
     services::autenticacion_service::UsuarioSesion,

@@ -5,7 +5,10 @@ use ratatui::{
     widgets::{Cell, Paragraph, Row, Table},
 };
 
-use super::*;
+use super::{
+    BuscarDeudor, CampoAlta, FormularioAlta, GafetesState, ModoFormularioAlta, ModoGafetes,
+    TextInput,
+};
 use crate::{
     database::queries::{gafetes::GafeteResumen, gafetes_incidentes::IncidenteGafete},
     models::gafete::{EstadoGafete, MotivoResolucionGafete, TipoIncidenteGafete},
