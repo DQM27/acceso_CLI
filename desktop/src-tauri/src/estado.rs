@@ -39,7 +39,7 @@ impl GuiState {
     pub fn core(&self) -> MutexGuard<'_, AppCore> {
         self.core
             .lock()
-            .unwrap_or_else(|envenenado| envenenado.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// Conexión propia al mismo archivo, independiente de la que vive
@@ -88,7 +88,7 @@ impl GuiState {
         let mut guard = self
             .core
             .lock()
-            .unwrap_or_else(|envenenado| envenenado.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         guard.crear_respaldo(actor, TipoRespaldo::PreRestauracion)?;
         let ruta_activa = guard.ruta_base_datos().to_path_buf();
 
@@ -134,6 +134,6 @@ impl GuiState {
     fn lock_sesion(&self) -> MutexGuard<'_, Option<UsuarioSesion>> {
         self.sesion
             .lock()
-            .unwrap_or_else(|envenenado| envenenado.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 }

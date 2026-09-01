@@ -79,30 +79,32 @@ que sí filtran correctamente. Encontradas en una revisión completa del modelo 
   cada una tenga que acordarse de repetir el chequeo. `cargo fmt`, Clippy estricto
   (`-D warnings`) y la suite completa (467 tests) en verde.
 
+## Mantenimiento Rust / Clippy (2026-09-01)
+
+- [x] **El adaptador Tauri quedó bajo la misma vara pedantic/nursery que el crate raíz.**
+  El inventario inicial tenía 74 advertencias. Se corrigieron las categorías mecánicas y
+  de mantenibilidad: documentación Markdown, `Option`, closures redundantes, uso de `Self`,
+  raw strings, patrones unitarios, brazos duplicados, escritura eficiente de HTML y
+  documentación de pánicos. También se corrigió un hallazgo con efecto potencial: el
+  callback de generación PDF ahora libera el `MutexGuard` antes de enviar por el canal, en
+  vez de prolongar la vida del candado hasta el final del `if let`.
+
+  `desktop/src-tauri/Cargo.toml` activa `pedantic` y `nursery` y deja en `"deny"` las mismas
+  categorías cerradas en el núcleo, más cuatro propias encontradas aquí. Las 46 advertencias
+  `needless_pass_by_value` se permiten explícitamente: los comandos Tauri reciben valores
+  poseídos porque son la frontera de deserialización IPC. Se conservaron también las mismas
+  decisiones de API interna del núcleo para documentación exhaustiva, `#[must_use]` y
+  `const fn`. Resultado: `cargo fmt --check`, Clippy completo con `-D warnings` y los 17 tests
+  Rust del crate en verde.
+
 ## Entorno de desarrollo
 
-- [ ] **`cargo test` en `desktop/src-tauri` crashea en esta PC — toolchain GNU sin Visual
-  Studio Build Tools (2026-08-30).** El toolchain de Rust por defecto en esta máquina es
-  `stable-x86_64-pc-windows-gnu` (MinGW), no MSVC. El binario de tests de este crate
-  (`control_acceso_desktop_lib-*.exe`) crashea al cargar, ANTES de correr un solo test, con
-  `STATUS_ENTRYPOINT_NOT_FOUND` (0xC0000139) — pasa igual con el código sin tocar (confirmado
-  con `git stash`), así que no es un bug del código. Causa más probable: `webview2-com`
-  (interop COM de WebView2, usado en `pdf/generador.rs` para `PrintToPdfCompletedHandler`) es
-  una categoría de crate frágil bajo el ABI de GNU en Windows — Microsoft/`windows-rs`
-  recomiendan MSVC para este tipo de interop.
-  **Confirmado que la app en sí NO está afectada:** el `.exe` real
-  (`target/debug/control-acceso-desktop.exe`), compilado con el mismo toolchain GNU, abre y
-  corre normal — el crash es específico del binario de test de este crate, no de la app.
-  **Por qué no se arregló ahora:** forzar `cargo +stable-x86_64-pc-windows-msvc test` falla
-  al enlazar (hasta crates sin relación con WebView2, como `quote`/`proc-macro2`) porque esta
-  PC no tiene Visual Studio Build Tools ni Windows SDK instalados — sólo hay un `link.exe` de
-  Git for Windows (no sirve como linker de MSVC). Instalar Visual Studio Build Tools requiere
-  permisos de administrador que no están disponibles en esta PC (no es sólo cuestión de
-  tiempo/espacio). El usuario va a probar con MSVC en otra máquina (su casa) más adelante.
-  **Mientras tanto:** este crate se sigue validando con `cargo build`/`cargo clippy` (sí
-  funcionan bajo GNU) — sólo la ejecución de los tests unitarios queda bloqueada acá. Los
-  tests del crate raíz (`cargo test` desde la raíz del repo) y los del frontend (`npm run
-  test` en `desktop/`) no están afectados y corren normal.
+- [x] **Resuelto el bloqueo histórico de tests del toolchain GNU (2026-08-30 → comprobado
+  2026-09-01).** El fallo `STATUS_ENTRYPOINT_NOT_FOUND` pertenecía al entorno GNU/MinGW sin
+  Visual Studio Build Tools, no al código. En esta máquina el entorno MSVC ya enlaza y ejecuta
+  correctamente el binario que usa `webview2-com`: `cargo test` corre los 17 tests del crate
+  y todos pasan. La nota anterior se conserva resumida para distinguir un eventual problema
+  de configuración GNU de una regresión real de Tauri.
 
 ## Empaquetado y actualizaciones
 

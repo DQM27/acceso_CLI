@@ -9,7 +9,7 @@ use crate::estado::GuiState;
 
 /// Sin filtro de entrada a propósito: la grilla de Activos filtra en el
 /// cliente (columnas de AG Grid) sobre esta misma lista, no repite la
-/// consulta contra SQLite por cada tecla — a diferencia de Contratistas,
+/// consulta contra `SQLite` por cada tecla — a diferencia de Contratistas,
 /// que sí filtra en el servidor porque su universo no cabe entero en
 /// memoria del lado del webview.
 #[tauri::command]

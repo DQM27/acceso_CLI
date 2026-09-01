@@ -30,7 +30,7 @@ pub struct CrearUsuarioEntrada {
 
 impl From<CrearUsuarioEntrada> for CrearUsuarioInput {
     fn from(entrada: CrearUsuarioEntrada) -> Self {
-        CrearUsuarioInput {
+        Self {
             cedula: entrada.cedula,
             nombre: entrada.nombre,
             password: entrada.password,

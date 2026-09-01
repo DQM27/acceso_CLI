@@ -32,6 +32,11 @@ fn mostrar_error_fatal_y_salir(mensaje: &str) -> ! {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// Inicia la aplicación de escritorio y registra todos los comandos Tauri.
+///
+/// # Panics
+///
+/// Tauri finaliza el arranque si no puede construir o ejecutar su runtime.
 pub fn run() {
     let ruta_base_datos = ruta_base_datos().unwrap_or_else(|error| {
         mostrar_error_fatal_y_salir(&format!(

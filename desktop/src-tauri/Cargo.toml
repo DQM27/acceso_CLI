@@ -47,6 +47,69 @@ tauri-plugin-process = "2"
 url = "=2.5.8"
 tokio = { version = "=1.53.1", features = ["sync"] }
 
+# Misma vara que el crate raíz: pedantic/nursery visibles y cada categoría
+# revisada queda bloqueante. Las excepciones corresponden a decisiones de API
+# de una aplicación interna y, en particular, a la frontera `#[tauri::command]`,
+# que necesita recibir valores poseídos para deserializarlos desde IPC.
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+
+match_same_arms = "deny"
+float_cmp = "deny"
+cast_possible_truncation = "deny"
+cast_possible_wrap = "deny"
+cast_sign_loss = "deny"
+cast_precision_loss = "deny"
+unchecked_time_subtraction = "deny"
+similar_names = "deny"
+map_unwrap_or = "deny"
+option_if_let_else = "deny"
+redundant_closure_for_method_calls = "deny"
+single_match_else = "deny"
+single_match = "deny"
+manual_let_else = "deny"
+needless_collect = "deny"
+wildcard_imports = "deny"
+enum_glob_use = "deny"
+too_many_lines = "deny"
+struct_excessive_bools = "deny"
+missing_fields_in_debug = "deny"
+
+missing_errors_doc = "allow"
+must_use_candidate = "allow"
+return_self_not_must_use = "allow"
+missing_const_for_fn = "allow"
+too_long_first_doc_paragraph = "allow"
+needless_pass_by_value = "allow"
+suboptimal_flops = "allow"
+
+doc_markdown = "deny"
+semicolon_if_nothing_returned = "deny"
+assigning_clones = "deny"
+cast_lossless = "deny"
+needless_raw_string_hashes = "deny"
+use_self = "deny"
+elidable_lifetime_names = "deny"
+items_after_statements = "deny"
+equatable_if_let = "deny"
+redundant_pub_crate = "deny"
+ignored_unit_patterns = "deny"
+format_push_string = "deny"
+if_not_else = "deny"
+tuple_array_conversions = "deny"
+unnecessary_semicolon = "deny"
+unreadable_literal = "deny"
+unused_self = "deny"
+useless_let_if_seq = "deny"
+struct_field_names = "deny"
+
+# Hallazgos adicionales propios del adaptador de escritorio.
+significant_drop_in_scrutinee = "deny"
+format_collect = "deny"
+single_char_pattern = "deny"
+missing_panics_doc = "deny"
+
 [target.'cfg(windows)'.dependencies]
 # Exportar Historial a PDF: WebView2 (ya viene con Tauri en Windows) sabe
 # imprimir a PDF nativamente (`ICoreWebView2_7::PrintToPdf`), evita meter un

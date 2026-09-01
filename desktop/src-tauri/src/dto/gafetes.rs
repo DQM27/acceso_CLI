@@ -17,9 +17,9 @@ pub enum EstadoGafeteEntrada {
 impl From<EstadoGafeteEntrada> for EstadoGafete {
     fn from(estado: EstadoGafeteEntrada) -> Self {
         match estado {
-            EstadoGafeteEntrada::Disponible => EstadoGafete::Disponible,
-            EstadoGafeteEntrada::Perdido => EstadoGafete::Perdido,
-            EstadoGafeteEntrada::DeBaja => EstadoGafete::DeBaja,
+            EstadoGafeteEntrada::Disponible => Self::Disponible,
+            EstadoGafeteEntrada::Perdido => Self::Perdido,
+            EstadoGafeteEntrada::DeBaja => Self::DeBaja,
         }
     }
 }

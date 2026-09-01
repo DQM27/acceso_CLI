@@ -3,6 +3,8 @@
 //! `historial/exportacion.rs` en el núcleo, que es el mismo tipo de dato
 //! con el mismo criterio de columnas/orden.
 
+use std::fmt::Write as _;
+
 use chrono::Utc;
 use control_acceso::database::queries::ingresos::MovimientoIngresoResumen;
 use control_acceso::historial::exportacion::{ColumnaHistorial, medio_texto, tipo_texto};
@@ -11,7 +13,7 @@ use control_acceso::tiempo::a_costa_rica;
 /// Paleta CLARA de `desktop/src/index.css` (light) a propósito, aunque la
 /// app esté en modo oscuro — un PDF siempre se lee/imprime en claro. Mismos
 /// valores que el prototipo ya aprobado por el usuario.
-const ESTILO: &str = r#"
+const ESTILO: &str = r"
   :root {
     --acento: #087f91;
     --texto: #172026;
@@ -52,7 +54,7 @@ const ESTILO: &str = r#"
   th { background: var(--panel-suave); font-weight: bold; font-size: 7.5pt; }
   td.izquierda, th.izquierda { text-align: left; }
   tbody tr:nth-child(even) { background: var(--zebra); }
-"#;
+";
 
 /// Columnas que van alineadas a la izquierda (texto libre) — el resto
 /// (fechas/horas/números/enums cortos) centrado, mismo criterio visual que
@@ -75,19 +77,19 @@ fn valor_columna(columna: ColumnaHistorial, movimiento: &MovimientoIngresoResume
     let ingreso_local = a_costa_rica(movimiento.fecha_hora_ingreso);
     match columna {
         ColumnaHistorial::FechaIngreso => ingreso_local.format("%d/%m/%Y").to_string(),
-        ColumnaHistorial::FechaSalida => movimiento
-            .fecha_hora_salida
-            .map(|s| a_costa_rica(s).format("%d/%m/%Y").to_string())
-            .unwrap_or_else(|| "Activo".to_string()),
+        ColumnaHistorial::FechaSalida => movimiento.fecha_hora_salida.map_or_else(
+            || "Activo".to_string(),
+            |s| a_costa_rica(s).format("%d/%m/%Y").to_string(),
+        ),
         ColumnaHistorial::Nombre => movimiento.contratista_nombre.clone(),
         ColumnaHistorial::Cedula => movimiento.cedula.clone(),
         ColumnaHistorial::Empresa => movimiento.empresa_nombre.clone(),
         ColumnaHistorial::Tipo => tipo_texto(movimiento.tipo_ingreso).to_string(),
         ColumnaHistorial::Entrada => ingreso_local.format("%H:%M").to_string(),
-        ColumnaHistorial::Salida => movimiento
-            .fecha_hora_salida
-            .map(|s| a_costa_rica(s).format("%H:%M").to_string())
-            .unwrap_or_else(|| "Activo".to_string()),
+        ColumnaHistorial::Salida => movimiento.fecha_hora_salida.map_or_else(
+            || "Activo".to_string(),
+            |s| a_costa_rica(s).format("%H:%M").to_string(),
+        ),
         ColumnaHistorial::Gafete => movimiento
             .gafete_numero
             .map_or_else(|| "S/G".to_string(), |numero| numero.to_string()),
@@ -126,27 +128,31 @@ pub fn generar_html(
         }
     };
 
-    let encabezados: String = columnas
-        .iter()
-        .map(|&columna| format!("<th{}>{}</th>", clase(columna), escapar(columna.label())))
-        .collect();
+    let mut encabezados = String::new();
+    for &columna in columnas {
+        write!(
+            encabezados,
+            "<th{}>{}</th>",
+            clase(columna),
+            escapar(columna.label())
+        )
+        .expect("escribir en String no falla");
+    }
 
-    let filas: String = movimientos
-        .iter()
-        .map(|movimiento| {
-            let celdas: String = columnas
-                .iter()
-                .map(|&columna| {
-                    format!(
-                        "<td{}>{}</td>",
-                        clase(columna),
-                        escapar(&valor_columna(columna, movimiento))
-                    )
-                })
-                .collect();
-            format!("<tr>{celdas}</tr>")
-        })
-        .collect();
+    let mut filas = String::new();
+    for movimiento in movimientos {
+        filas.push_str("<tr>");
+        for &columna in columnas {
+            write!(
+                filas,
+                "<td{}>{}</td>",
+                clase(columna),
+                escapar(&valor_columna(columna, movimiento))
+            )
+            .expect("escribir en String no falla");
+        }
+        filas.push_str("</tr>");
+    }
 
     let generado_en = a_costa_rica(Utc::now())
         .format("%d/%m/%Y %H:%M")
@@ -234,7 +240,7 @@ mod tests {
         assert!(html.contains("Todo el historial"));
         assert!(html.contains("NOMBRE"));
         assert!(html.contains("GAFETE"));
-        assert!(html.contains("7"));
+        assert!(html.contains('7'));
     }
 
     #[test]

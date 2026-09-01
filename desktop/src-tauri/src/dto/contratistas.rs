@@ -52,7 +52,7 @@ pub struct DatosContratistaEntrada {
 
 impl From<DatosContratistaEntrada> for DatosContratista {
     fn from(entrada: DatosContratistaEntrada) -> Self {
-        DatosContratista {
+        Self {
             cedula: entrada.cedula,
             nombre: entrada.nombre,
             empresa_id: entrada.empresa_id,
@@ -66,7 +66,7 @@ impl From<DatosContratistaEntrada> for DatosContratista {
 
 impl From<DatosContratistaEntrada> for DatosActualizacionContratista {
     fn from(entrada: DatosContratistaEntrada) -> Self {
-        DatosActualizacionContratista {
+        Self {
             cedula: entrada.cedula,
             nombre: entrada.nombre,
             empresa_id: entrada.empresa_id,

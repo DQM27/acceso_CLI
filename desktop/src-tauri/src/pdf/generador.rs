@@ -1,4 +1,4 @@
-//! Puente hacia WebView2 (`PrintToPdf`) — crea una ventana oculta, carga el
+//! Puente hacia `WebView2` (`PrintToPdf`) — crea una ventana oculta, carga el
 //! HTML que arma `html.rs`, y pide el PDF.
 //!
 //! **El completion handler de `PrintToPdf` no es confiable en este embedding**
@@ -57,7 +57,7 @@ async fn generar_pdf_desde_archivo(
     destino: &Path,
 ) -> Result<(), String> {
     let url = url::Url::from_file_path(html_path)
-        .map_err(|_| "no se pudo convertir la ruta del HTML a file:// URL".to_string())?;
+        .map_err(|()| "no se pudo convertir la ruta del HTML a file:// URL".to_string())?;
 
     let (tx, rx) = tokio::sync::oneshot::channel::<Result<(), String>>();
     let tx = std::sync::Mutex::new(Some(tx));
@@ -75,7 +75,8 @@ async fn generar_pdf_desde_archivo(
             // terminó?" — eso se confirma después, afuera de este
             // callback, sondeando el archivo.
             let resultado = lanzar_print_to_pdf(&webview, &destino_evento);
-            if let Some(tx) = tx.lock().unwrap().take() {
+            let transmisor = tx.lock().unwrap().take();
+            if let Some(tx) = transmisor {
                 let _ = tx.send(resultado);
             }
         })
@@ -87,8 +88,7 @@ async fn generar_pdf_desde_archivo(
         .map_err(|_| "el canal se cerró sin resultado".to_string());
     let resultado = match lanzado {
         Ok(Ok(())) => esperar_archivo_listo(destino).await,
-        Ok(Err(error)) => Err(error),
-        Err(error) => Err(error),
+        Ok(Err(error)) | Err(error) => Err(error),
     };
     let _ = ventana.close();
     resultado
@@ -98,7 +98,7 @@ async fn generar_pdf_desde_archivo(
 /// [`SONDEOS_ESTABLE`] chequeos seguidos Y termine en el marcador `%%EOF` de
 /// un PDF válido, o hasta [`TIMEOUT_ESCRITURA`]. El chequeo de `%%EOF` es
 /// necesario además de la estabilidad de tamaño: un tamaño que se estabiliza
-/// por un instante a mitad de escritura (ej. WebView2 hace una pausa entre
+/// por un instante a mitad de escritura (ej. `WebView2` hace una pausa entre
 /// dos bloques) igual pasaría [`SONDEOS_ESTABLE`] sondeos seguidos y se
 /// daría por terminado con un PDF en realidad truncado. No bloquea ningún
 /// hilo del runtime más allá de la misma lectura sincrónica y chica

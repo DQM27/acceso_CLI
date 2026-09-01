@@ -167,7 +167,7 @@ impl Drop for RespaldoDestino {
 
 /// Exporta a PDF los mismos `ids`/`columnas` que ya resuelve
 /// `exportar_historial` para Excel — mismo criterio de "lo que la grilla
-/// tiene visible ahora", pero HTML/CSS renderizado por WebView2
+/// tiene visible ahora", pero HTML/CSS renderizado por `WebView2`
 /// (`pdf::generador`) en vez de `rust_xlsxwriter`. `filtro_descripcion` es
 /// el texto ya formateado que arma la pantalla (ej. "Filtro: rango de
 /// fechas 30/07/2026 – 29/08/2026") — no se recalcula acá para no duplicar
@@ -212,12 +212,13 @@ pub async fn exportar_historial_pdf(
         let state = app_para_consulta.state::<GuiState>();
         let core = state.core();
         let filtro = FiltroHistorial::nuevo(desde_utc, hasta_utc);
-        match ids {
-            Some(ids) => core.movimientos_en_orden(&filtro, &ids),
-            None => core
-                .buscar_historial_completo(&filtro)
-                .map(|carga| carga.items),
-        }
+        ids.map_or_else(
+            || {
+                core.buscar_historial_completo(&filtro)
+                    .map(|carga| carga.items)
+            },
+            |ids| core.movimientos_en_orden(&filtro, &ids),
+        )
     })
     .await
     .map_err(|error| error.to_string())?
