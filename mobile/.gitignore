@@ -1,0 +1,14 @@
+# Rust
+rust-core/target/
+rust-core/bindings/
+
+# Gradle / Android
+app/.gradle/
+app/.kotlin/
+app/build/
+app/app/build/
+app/local.properties
+
+# El .so es un artefacto de build (~40MB, no optimizado) — se regenera con
+# `cargo ndk -t aarch64-linux-android build`, ver mobile/README.md.
+app/app/src/main/jniLibs/

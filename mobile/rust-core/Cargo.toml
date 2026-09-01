@@ -1,0 +1,30 @@
+[package]
+name = "control_acceso_mobile"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "MIT"
+
+[lib]
+name = "control_acceso_mobile"
+# "cdylib" es lo que Android carga como .so vía JNI; "lib" se deja además
+# para poder correr los tests de este crate en el host sin pasar por el NDK.
+crate-type = ["cdylib", "lib"]
+
+[features]
+# Sólo para generar los bindings Kotlin desde el host — no se activa al
+# compilar para Android, evita arrastrar `clap` (vía `uniffi/cli`) al `.so`.
+bindgen = ["uniffi/cli"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"
+required-features = ["bindgen"]
+
+[dependencies]
+control_acceso = { path = "../..", default-features = false }
+uniffi = "0.32.0"
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"
