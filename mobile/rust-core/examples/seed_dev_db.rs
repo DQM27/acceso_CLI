@@ -1,8 +1,9 @@
 //! Herramienta de desarrollo: crea una base SQLite con el esquema real
 //! (mismas migraciones que TUI/GUI/móvil) y la llena con datos de prueba —
-//! los contratistas reales de `importar_contratistas_db_browser.sql` más un
-//! usuario ROOT de acceso rápido para no pasar por alta de usuario durante
-//! el piloto. No se usa desde la app, solo desde la terminal.
+//! los contratistas reales de `importar_contratistas_db_browser.sql`, un
+//! usuario ROOT de acceso rápido, y un catálogo de 25 gafetes (el SQL de
+//! contratistas es anterior al catálogo de gafetes, no trae ninguno). No se
+//! usa desde la app, solo desde la terminal.
 
 fn main() {
     let ruta = std::env::args()
@@ -20,6 +21,10 @@ fn main() {
     conexion
         .execute_batch(include_str!("../../../importar_contratistas_db_browser.sql"))
         .expect("fallo insertando contratistas");
+
+    conexion
+        .execute_batch(include_str!("seed_gafetes.sql"))
+        .expect("fallo insertando gafetes");
 
     println!("Semilla de desarrollo cargada en {ruta}");
 }

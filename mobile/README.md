@@ -46,7 +46,10 @@ así que la ruta del SDK debe ir con `/` (o `\\` si se insiste en backslash).
 (las mismas migraciones que usa `AppCore::abrir`) y la llena con:
 - los contratistas reales de `importar_contratistas_db_browser.sql` (raíz del repo),
 - un usuario ROOT de acceso rápido: cédula `123456789`, contraseña `daniel27`
-  (hash Argon2 real en `rust-core/examples/seed_usuario_root.sql`, no texto plano).
+  (hash Argon2 real en `rust-core/examples/seed_usuario_root.sql`, no texto plano),
+- 25 gafetes (`rust-core/examples/seed_gafetes.sql`, numerados 1-25, todos
+  `DISPONIBLE`) — el SQL de contratistas es anterior al catálogo de gafetes
+  y no trae ninguno.
 
 ```sh
 cd rust-core

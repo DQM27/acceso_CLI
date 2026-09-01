@@ -8,10 +8,19 @@ use control_acceso::application::AppCore;
 use control_acceso::database::queries::contratistas::{
     ContratistaResumen as ContratistaResumenNucleo, FiltroContratistas as FiltroContratistasNucleo,
 };
+use control_acceso::domain::resultado_acceso::{
+    MotivoDenegacion as MotivoDenegacionNucleo, ResultadoAcceso as ResultadoAccesoNucleo,
+};
+use control_acceso::models::medio_ingreso::MedioIngreso as MedioIngresoNucleo;
 use control_acceso::models::tipo_ingreso::TipoIngreso as TipoIngresoNucleo;
 use control_acceso::models::usuario::RolUsuario as RolUsuarioNucleo;
 use control_acceso::services::autenticacion_service::UsuarioSesion as UsuarioSesionNucleo;
 use control_acceso::services::error::AutenticacionError as AutenticacionErrorNucleo;
+use control_acceso::services::error::RegistroIngresoServiceError as RegistroIngresoServiceErrorNucleo;
+use control_acceso::services::registro_ingreso_service::{
+    PreparacionIngreso as PreparacionIngresoNucleo,
+    ResultadoRegistroEntrada as ResultadoRegistroEntradaNucleo,
+};
 
 uniffi::setup_scaffolding!();
 
@@ -101,7 +110,110 @@ impl From<ContratistaResumenNucleo> for ContratistaResumen {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Enum)]
+pub enum MedioIngreso {
+    Caminando,
+    Vehiculo,
+}
+
+impl From<MedioIngreso> for MedioIngresoNucleo {
+    fn from(medio: MedioIngreso) -> Self {
+        match medio {
+            MedioIngreso::Caminando => Self::Caminando,
+            MedioIngreso::Vehiculo => Self::Vehiculo,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Enum)]
+pub enum MotivoDenegacion {
+    SinAcceso,
+    PraindVencido,
+    PraindNoRegistrado,
+    EmpresaInactiva,
+}
+
+impl From<MotivoDenegacionNucleo> for MotivoDenegacion {
+    fn from(motivo: MotivoDenegacionNucleo) -> Self {
+        match motivo {
+            MotivoDenegacionNucleo::SinAcceso => Self::SinAcceso,
+            MotivoDenegacionNucleo::PraindVencido => Self::PraindVencido,
+            MotivoDenegacionNucleo::PraindNoRegistrado => Self::PraindNoRegistrado,
+            MotivoDenegacionNucleo::EmpresaInactiva => Self::EmpresaInactiva,
+        }
+    }
+}
+
+/// Espejo de `ResultadoAcceso` — la decisión (PRAIND vencido, empresa
+/// inactiva, etc.) ya viene tomada por `domain::acceso::verificar_acceso`;
+/// Kotlin sólo la muestra, nunca la recalcula.
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Enum)]
+pub enum ResultadoAcceso {
+    Permitido,
+    PermitidoConAdvertencia,
+    Denegado { motivo: MotivoDenegacion },
+}
+
+impl From<ResultadoAccesoNucleo> for ResultadoAcceso {
+    fn from(resultado: ResultadoAccesoNucleo) -> Self {
+        match resultado {
+            ResultadoAccesoNucleo::Permitido => Self::Permitido,
+            ResultadoAccesoNucleo::PermitidoConAdvertencia => Self::PermitidoConAdvertencia,
+            ResultadoAccesoNucleo::Denegado(motivo) => Self::Denegado {
+                motivo: motivo.into(),
+            },
+        }
+    }
+}
+
+/// Espejo de `PreparacionIngreso` — vista previa antes de confirmar; no es
+/// una autorización cacheada, `registrar_ingreso` vuelve a validar todo.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct PreparacionIngreso {
+    pub contratista_id: i64,
+    pub cedula: String,
+    pub nombre: String,
+    pub empresa_nombre: String,
+    pub tipo_ingreso: TipoIngreso,
+    pub resultado_acceso: ResultadoAcceso,
+    pub requiere_gafete: bool,
+    pub tiene_ingreso_activo: bool,
+    pub gafetes_deuda: Vec<i64>,
+}
+
+impl From<PreparacionIngresoNucleo> for PreparacionIngreso {
+    fn from(preparacion: PreparacionIngresoNucleo) -> Self {
+        Self {
+            contratista_id: preparacion.contratista_id,
+            cedula: preparacion.cedula,
+            nombre: preparacion.nombre,
+            empresa_nombre: preparacion.empresa_nombre,
+            tipo_ingreso: preparacion.tipo_ingreso.into(),
+            resultado_acceso: preparacion.resultado_acceso.into(),
+            requiere_gafete: preparacion.requiere_gafete,
+            tiene_ingreso_activo: preparacion.tiene_ingreso_activo,
+            gafetes_deuda: preparacion.gafetes_deuda,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
+pub struct ResultadoRegistroEntrada {
+    pub registro_id: i64,
+    pub resultado_acceso: ResultadoAcceso,
+}
+
+impl From<ResultadoRegistroEntradaNucleo> for ResultadoRegistroEntrada {
+    fn from(resultado: ResultadoRegistroEntradaNucleo) -> Self {
+        Self {
+            registro_id: resultado.registro_id,
+            resultado_acceso: resultado.resultado_acceso.into(),
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error, uniffi::Error)]
+#[uniffi(flat_error)]
 pub enum NucleoError {
     #[error("no se pudo abrir la base de datos: {mensaje}")]
     Apertura { mensaje: String },
@@ -109,6 +221,8 @@ pub enum NucleoError {
     CredencialesInvalidas,
     #[error("usuario inactivo")]
     UsuarioInactivo,
+    #[error("no hay una sesión iniciada")]
+    NoAutenticado,
     #[error("error interno: {mensaje}")]
     Interno { mensaje: String },
 }
@@ -125,6 +239,14 @@ impl From<AutenticacionErrorNucleo> for NucleoError {
     }
 }
 
+impl From<RegistroIngresoServiceErrorNucleo> for NucleoError {
+    fn from(error: RegistroIngresoServiceErrorNucleo) -> Self {
+        Self::Interno {
+            mensaje: error.to_string(),
+        }
+    }
+}
+
 /// Sesión del núcleo: dueña de la única conexión `SQLite` del teléfono. Se
 /// abre una vez al arrancar la app y se reusa en todas las pantallas (login,
 /// buscar contratista, registrar entrada/salida) — nunca se reabre por
@@ -132,6 +254,11 @@ impl From<AutenticacionErrorNucleo> for NucleoError {
 #[derive(uniffi::Object)]
 pub struct Nucleo {
     core: Mutex<AppCore>,
+    /// Actor autenticado — lo necesitan `registrar_ingreso`/`registrar_salida`
+    /// como `usuario_ingreso_id`/`usuario_salida_id`. Se llena en
+    /// `autenticar` y vive mientras dure el proceso (no hay "cerrar sesión"
+    /// todavía en el piloto).
+    sesion: Mutex<Option<UsuarioSesionNucleo>>,
 }
 
 #[uniffi::export]
@@ -143,6 +270,7 @@ impl Nucleo {
         })?;
         Ok(Self {
             core: Mutex::new(core),
+            sesion: Mutex::new(None),
         })
     }
 
@@ -153,7 +281,35 @@ impl Nucleo {
     ) -> Result<UsuarioSesion, NucleoError> {
         let core = self.core.lock().expect("mutex de AppCore envenenado");
         let sesion = core.autenticar(&cedula, &password)?;
+        *self.sesion.lock().expect("mutex de sesión envenenado") = Some(sesion.clone());
         Ok(sesion.into())
+    }
+
+    /// Vista previa antes de confirmar — misma decisión que ya toma la GUI
+    /// de escritorio (`desktop/src/pantallas/NuevoIngresoModal.tsx`): no
+    /// rechaza PRAIND vencido/ingreso activo aquí, sólo informa; quien llama
+    /// (Kotlin) decide si deja continuar mirando los campos ya calculados.
+    pub fn preparar_ingreso(&self, contratista_id: i64) -> Result<PreparacionIngreso, NucleoError> {
+        let core = self.core.lock().expect("mutex de AppCore envenenado");
+        Ok(core.preparar_ingreso(contratista_id)?.into())
+    }
+
+    pub fn registrar_ingreso(
+        &self,
+        contratista_id: i64,
+        medio: MedioIngreso,
+        gafete: Option<i64>,
+    ) -> Result<ResultadoRegistroEntrada, NucleoError> {
+        let actor = self
+            .sesion
+            .lock()
+            .expect("mutex de sesión envenenado")
+            .clone()
+            .ok_or(NucleoError::NoAutenticado)?;
+        let core = self.core.lock().expect("mutex de AppCore envenenado");
+        Ok(core
+            .registrar_ingreso(&actor, contratista_id, medio.into(), gafete)?
+            .into())
     }
 
     /// Búsqueda en vivo (la vía primaria del guardia — ver
@@ -219,5 +375,55 @@ mod tests {
         let resultado = nucleo.buscar_contratistas(String::new());
 
         assert_eq!(resultado.unwrap(), Vec::new());
+    }
+
+    #[test]
+    fn preparar_y_registrar_ingreso_sin_gafete() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        // Aplica el esquema real y siembra lo mínimo: SWAT no requiere ni
+        // PRAIND ni gafete (domain::contratista), así que es el caso feliz
+        // más simple para probar el camino completo.
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+                 INSERT INTO contratistas (
+                     cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+                 ) VALUES ('111111111', 'Contratista Test', 1, 'SWAT', 0, 1);
+                 INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$FZShq0MtV2bGh9nFBgvrGA$dYNDyh7up/wmAY+t/Vf6V5LTCS9sNkQgaH81G650xfM',
+                     'ROOT', 1
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar("999999999".to_string(), "daniel27".to_string())
+            .unwrap();
+
+        let preparacion = nucleo.preparar_ingreso(1).unwrap();
+        assert!(!preparacion.requiere_gafete);
+        assert_eq!(preparacion.resultado_acceso, ResultadoAcceso::Permitido);
+
+        let resultado = nucleo
+            .registrar_ingreso(1, MedioIngreso::Caminando, None)
+            .unwrap();
+        assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);
+    }
+
+    #[test]
+    fn registrar_ingreso_sin_sesion_falla() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+
+        let resultado = nucleo.registrar_ingreso(1, MedioIngreso::Caminando, None);
+
+        assert!(matches!(resultado, Err(NucleoError::NoAutenticado)));
     }
 }

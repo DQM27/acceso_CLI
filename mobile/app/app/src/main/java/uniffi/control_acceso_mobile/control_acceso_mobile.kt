@@ -677,6 +677,10 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir(
     ): Int
     external fun ffi_control_acceso_mobile_uniffi_contract_version(
@@ -706,6 +710,10 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_contratistas(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso(`ptr`: Long,`contratistaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso(`ptr`: Long,`contratistaId`: Long,`medio`: RustBuffer.ByValue,`gafete`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun ffi_control_acceso_mobile_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -829,7 +837,13 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() != 22780) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas() != 37942) {
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas() != 3985) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso() != 60754) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso() != 64645) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir() != 57593) {
@@ -1205,8 +1219,24 @@ public interface NucleoInterface {
      * Búsqueda en vivo (la vía primaria del guardia — ver
      * docs/plan-app-movil.md, "Prioridad de esfuerzo: el buscador"). Un
      * `texto` vacío trae la primera página completa, no una lista vacía.
+     *
+     * A diferencia del desktop (Tauri/AG Grid), que carga el universo
+     * completo de contratistas al cliente y filtra ahí, el teléfono no
+     * tiene esos recursos de sobra — se pide una página acotada
+     * (`LIMITE_MOVIL`, más chica que la paginación normal de 100 que usa
+     * TUI/CLI) filtrada ya en SQL, nunca la lista entera.
      */
     fun `buscarContratistas`(`texto`: kotlin.String): List<ContratistaResumen>
+    
+    /**
+     * Vista previa antes de confirmar — misma decisión que ya toma la GUI
+     * de escritorio (`desktop/src/pantallas/NuevoIngresoModal.tsx`): no
+     * rechaza PRAIND vencido/ingreso activo aquí, sólo informa; quien llama
+     * (Kotlin) decide si deja continuar mirando los campos ya calculados.
+     */
+    fun `prepararIngreso`(`contratistaId`: kotlin.Long): PreparacionIngreso
+    
+    fun `registrarIngreso`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?): ResultadoRegistroEntrada
     
     companion object
 }
@@ -1339,6 +1369,12 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
      * Búsqueda en vivo (la vía primaria del guardia — ver
      * docs/plan-app-movil.md, "Prioridad de esfuerzo: el buscador"). Un
      * `texto` vacío trae la primera página completa, no una lista vacía.
+     *
+     * A diferencia del desktop (Tauri/AG Grid), que carga el universo
+     * completo de contratistas al cliente y filtra ahí, el teléfono no
+     * tiene esos recursos de sobra — se pide una página acotada
+     * (`LIMITE_MOVIL`, más chica que la paginación normal de 100 que usa
+     * TUI/CLI) filtrada ya en SQL, nunca la lista entera.
      */
     @Throws(NucleoException::class)override fun `buscarContratistas`(`texto`: kotlin.String): List<ContratistaResumen> {
             return FfiConverterSequenceTypeContratistaResumen.lift(
@@ -1348,6 +1384,44 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         it,
         
         FfiConverterString.lower(`texto`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Vista previa antes de confirmar — misma decisión que ya toma la GUI
+     * de escritorio (`desktop/src/pantallas/NuevoIngresoModal.tsx`): no
+     * rechaza PRAIND vencido/ingreso activo aquí, sólo informa; quien llama
+     * (Kotlin) decide si deja continuar mirando los campos ya calculados.
+     */
+    @Throws(NucleoException::class)override fun `prepararIngreso`(`contratistaId`: kotlin.Long): PreparacionIngreso {
+            return FfiConverterTypePreparacionIngreso.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso(
+        it,
+        
+        FfiConverterLong.lower(`contratistaId`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    @Throws(NucleoException::class)override fun `registrarIngreso`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?): ResultadoRegistroEntrada {
+            return FfiConverterTypeResultadoRegistroEntrada.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso(
+        it,
+        
+        FfiConverterLong.lower(`contratistaId`),
+        FfiConverterTypeMedioIngreso.lower(`medio`),
+        FfiConverterOptionalLong.lower(`gafete`),_status)
 }
     }
     )
@@ -1479,6 +1553,121 @@ public object FfiConverterTypeContratistaResumen: FfiConverterRustBuffer<Contrat
 
 
 
+/**
+ * Espejo de `PreparacionIngreso` — vista previa antes de confirmar; no es
+ * una autorización cacheada, `registrar_ingreso` vuelve a validar todo.
+ */
+data class PreparacionIngreso (
+    var `contratistaId`: kotlin.Long
+    , 
+    var `cedula`: kotlin.String
+    , 
+    var `nombre`: kotlin.String
+    , 
+    var `empresaNombre`: kotlin.String
+    , 
+    var `tipoIngreso`: TipoIngreso
+    , 
+    var `resultadoAcceso`: ResultadoAcceso
+    , 
+    var `requiereGafete`: kotlin.Boolean
+    , 
+    var `tieneIngresoActivo`: kotlin.Boolean
+    , 
+    var `gafetesDeuda`: List<kotlin.Long>
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePreparacionIngreso: FfiConverterRustBuffer<PreparacionIngreso> {
+    override fun read(buf: ByteBuffer): PreparacionIngreso {
+        return PreparacionIngreso(
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterTypeTipoIngreso.read(buf),
+            FfiConverterTypeResultadoAcceso.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterSequenceLong.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PreparacionIngreso) = (
+            FfiConverterLong.allocationSize(value.`contratistaId`) +
+            FfiConverterString.allocationSize(value.`cedula`) +
+            FfiConverterString.allocationSize(value.`nombre`) +
+            FfiConverterString.allocationSize(value.`empresaNombre`) +
+            FfiConverterTypeTipoIngreso.allocationSize(value.`tipoIngreso`) +
+            FfiConverterTypeResultadoAcceso.allocationSize(value.`resultadoAcceso`) +
+            FfiConverterBoolean.allocationSize(value.`requiereGafete`) +
+            FfiConverterBoolean.allocationSize(value.`tieneIngresoActivo`) +
+            FfiConverterSequenceLong.allocationSize(value.`gafetesDeuda`)
+    )
+
+    override fun write(value: PreparacionIngreso, buf: ByteBuffer) {
+            FfiConverterLong.write(value.`contratistaId`, buf)
+            FfiConverterString.write(value.`cedula`, buf)
+            FfiConverterString.write(value.`nombre`, buf)
+            FfiConverterString.write(value.`empresaNombre`, buf)
+            FfiConverterTypeTipoIngreso.write(value.`tipoIngreso`, buf)
+            FfiConverterTypeResultadoAcceso.write(value.`resultadoAcceso`, buf)
+            FfiConverterBoolean.write(value.`requiereGafete`, buf)
+            FfiConverterBoolean.write(value.`tieneIngresoActivo`, buf)
+            FfiConverterSequenceLong.write(value.`gafetesDeuda`, buf)
+    }
+}
+
+
+
+data class ResultadoRegistroEntrada (
+    var `registroId`: kotlin.Long
+    , 
+    var `resultadoAcceso`: ResultadoAcceso
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeResultadoRegistroEntrada: FfiConverterRustBuffer<ResultadoRegistroEntrada> {
+    override fun read(buf: ByteBuffer): ResultadoRegistroEntrada {
+        return ResultadoRegistroEntrada(
+            FfiConverterLong.read(buf),
+            FfiConverterTypeResultadoAcceso.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ResultadoRegistroEntrada) = (
+            FfiConverterLong.allocationSize(value.`registroId`) +
+            FfiConverterTypeResultadoAcceso.allocationSize(value.`resultadoAcceso`)
+    )
+
+    override fun write(value: ResultadoRegistroEntrada, buf: ByteBuffer) {
+            FfiConverterLong.write(value.`registroId`, buf)
+            FfiConverterTypeResultadoAcceso.write(value.`resultadoAcceso`, buf)
+    }
+}
+
+
+
 data class UsuarioSesion (
     var `id`: kotlin.Long
     , 
@@ -1528,46 +1717,93 @@ public object FfiConverterTypeUsuarioSesion: FfiConverterRustBuffer<UsuarioSesio
 
 
 
-
-sealed class NucleoException: kotlin.Exception() {
+enum class MedioIngreso {
     
-    class Apertura(
+    CAMINANDO,
+    VEHICULO;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMedioIngreso: FfiConverterRustBuffer<MedioIngreso> {
+    override fun read(buf: ByteBuffer) = try {
+        MedioIngreso.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: MedioIngreso) = 4UL
+
+    override fun write(value: MedioIngreso, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+
+enum class MotivoDenegacion {
+    
+    SIN_ACCESO,
+    PRAIND_VENCIDO,
+    PRAIND_NO_REGISTRADO,
+    EMPRESA_INACTIVA;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMotivoDenegacion: FfiConverterRustBuffer<MotivoDenegacion> {
+    override fun read(buf: ByteBuffer) = try {
+        MotivoDenegacion.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: MotivoDenegacion) = 4UL
+
+    override fun write(value: MotivoDenegacion, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+
+
+sealed class NucleoException(message: String): kotlin.Exception(message) {
         
-        val `mensaje`: kotlin.String
-        ) : NucleoException() {
-        override val message
-            get() = "mensaje=${ `mensaje` }"
-    }
-    
-    class CredencialesInvalidas(
-        ) : NucleoException() {
-        override val message
-            get() = ""
-    }
-    
-    class UsuarioInactivo(
-        ) : NucleoException() {
-        override val message
-            get() = ""
-    }
-    
-    class Interno(
+        class Apertura(message: String) : NucleoException(message)
         
-        val `mensaje`: kotlin.String
-        ) : NucleoException() {
-        override val message
-            get() = "mensaje=${ `mensaje` }"
-    }
-    
-
-    
-
+        class CredencialesInvalidas(message: String) : NucleoException(message)
+        
+        class UsuarioInactivo(message: String) : NucleoException(message)
+        
+        class NoAutenticado(message: String) : NucleoException(message)
+        
+        class Interno(message: String) : NucleoException(message)
+        
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<NucleoException> {
         override fun lift(error_buf: RustBuffer.ByValue): NucleoException = FfiConverterTypeNucleoError.lift(error_buf)
     }
-
-    
 }
 
 /**
@@ -1576,48 +1812,25 @@ sealed class NucleoException: kotlin.Exception() {
 public object FfiConverterTypeNucleoError : FfiConverterRustBuffer<NucleoException> {
     override fun read(buf: ByteBuffer): NucleoException {
         
-
-        return when(buf.getInt()) {
-            1 -> NucleoException.Apertura(
-                FfiConverterString.read(buf),
-                )
-            2 -> NucleoException.CredencialesInvalidas()
-            3 -> NucleoException.UsuarioInactivo()
-            4 -> NucleoException.Interno(
-                FfiConverterString.read(buf),
-                )
+            return when(buf.getInt()) {
+            1 -> NucleoException.Apertura(FfiConverterString.read(buf))
+            2 -> NucleoException.CredencialesInvalidas(FfiConverterString.read(buf))
+            3 -> NucleoException.UsuarioInactivo(FfiConverterString.read(buf))
+            4 -> NucleoException.NoAutenticado(FfiConverterString.read(buf))
+            5 -> NucleoException.Interno(FfiConverterString.read(buf))
             else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
         }
+        
     }
 
     override fun allocationSize(value: NucleoException): ULong {
-        return when(value) {
-            is NucleoException.Apertura -> (
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-                + FfiConverterString.allocationSize(value.`mensaje`)
-            )
-            is NucleoException.CredencialesInvalidas -> (
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-            )
-            is NucleoException.UsuarioInactivo -> (
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-            )
-            is NucleoException.Interno -> (
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-                + FfiConverterString.allocationSize(value.`mensaje`)
-            )
-        }
+        return 4UL
     }
 
     override fun write(value: NucleoException, buf: ByteBuffer) {
         when(value) {
             is NucleoException.Apertura -> {
                 buf.putInt(1)
-                FfiConverterString.write(value.`mensaje`, buf)
                 Unit
             }
             is NucleoException.CredencialesInvalidas -> {
@@ -1628,15 +1841,110 @@ public object FfiConverterTypeNucleoError : FfiConverterRustBuffer<NucleoExcepti
                 buf.putInt(3)
                 Unit
             }
-            is NucleoException.Interno -> {
+            is NucleoException.NoAutenticado -> {
                 buf.putInt(4)
-                FfiConverterString.write(value.`mensaje`, buf)
+                Unit
+            }
+            is NucleoException.Interno -> {
+                buf.putInt(5)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
     }
 
 }
+
+
+
+/**
+ * Espejo de `ResultadoAcceso` — la decisión (PRAIND vencido, empresa
+ * inactiva, etc.) ya viene tomada por `domain::acceso::verificar_acceso`;
+ * Kotlin sólo la muestra, nunca la recalcula.
+ */
+sealed class ResultadoAcceso {
+    
+    object Permitido : ResultadoAcceso()
+    
+    
+    object PermitidoConAdvertencia : ResultadoAcceso()
+    
+    
+    data class Denegado(
+        val `motivo`: uniffi.control_acceso_mobile.MotivoDenegacion) : ResultadoAcceso()
+        
+    {
+        
+
+        companion object
+    }
+    
+
+    
+
+    
+    
+
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeResultadoAcceso : FfiConverterRustBuffer<ResultadoAcceso>{
+    override fun read(buf: ByteBuffer): ResultadoAcceso {
+        return when(buf.getInt()) {
+            1 -> ResultadoAcceso.Permitido
+            2 -> ResultadoAcceso.PermitidoConAdvertencia
+            3 -> ResultadoAcceso.Denegado(
+                FfiConverterTypeMotivoDenegacion.read(buf),
+                )
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
+        }
+    }
+
+    override fun allocationSize(value: ResultadoAcceso): ULong = when(value) {
+        is ResultadoAcceso.Permitido -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is ResultadoAcceso.PermitidoConAdvertencia -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is ResultadoAcceso.Denegado -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterTypeMotivoDenegacion.allocationSize(value.`motivo`)
+            )
+        }
+    }
+
+    override fun write(value: ResultadoAcceso, buf: ByteBuffer) {
+        when(value) {
+            is ResultadoAcceso.Permitido -> {
+                buf.putInt(1)
+                Unit
+            }
+            is ResultadoAcceso.PermitidoConAdvertencia -> {
+                buf.putInt(2)
+                Unit
+            }
+            is ResultadoAcceso.Denegado -> {
+                buf.putInt(3)
+                FfiConverterTypeMotivoDenegacion.write(value.`motivo`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+
 
 
 
@@ -1715,6 +2023,38 @@ public object FfiConverterTypeTipoIngreso: FfiConverterRustBuffer<TipoIngreso> {
 /**
  * @suppress
  */
+public object FfiConverterOptionalLong: FfiConverterRustBuffer<kotlin.Long?> {
+    override fun read(buf: ByteBuffer): kotlin.Long? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterLong.read(buf)
+    }
+
+    override fun allocationSize(value: kotlin.Long?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterLong.allocationSize(value)
+        }
+    }
+
+    override fun write(value: kotlin.Long?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterLong.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalString: FfiConverterRustBuffer<kotlin.String?> {
     override fun read(buf: ByteBuffer): kotlin.String? {
         if (buf.get().toInt() == 0) {
@@ -1737,6 +2077,34 @@ public object FfiConverterOptionalString: FfiConverterRustBuffer<kotlin.String?>
         } else {
             buf.put(1)
             FfiConverterString.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceLong: FfiConverterRustBuffer<List<kotlin.Long>> {
+    override fun read(buf: ByteBuffer): List<kotlin.Long> {
+        val len = buf.getInt()
+        return List<kotlin.Long>(len) {
+            FfiConverterLong.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<kotlin.Long>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterLong.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<kotlin.Long>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterLong.write(it, buf)
         }
     }
 }

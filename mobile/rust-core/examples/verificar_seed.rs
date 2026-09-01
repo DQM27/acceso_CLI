@@ -15,4 +15,9 @@ fn main() {
         .query_row("SELECT COUNT(*) FROM contratistas", [], |r| r.get(0))
         .expect("no se pudo contar contratistas");
     println!("contratistas: {total}");
+
+    let total_gafetes: i64 = conexion
+        .query_row("SELECT COUNT(*) FROM gafetes", [], |r| r.get(0))
+        .expect("no se pudo contar gafetes");
+    println!("gafetes: {total_gafetes}");
 }
