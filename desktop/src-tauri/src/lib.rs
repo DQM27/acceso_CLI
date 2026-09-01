@@ -102,6 +102,11 @@ pub fn run() {
             comandos::gafetes::dar_de_baja_gafete,
             comandos::gafetes::marcar_gafete_perdido,
             comandos::gafetes::resolver_gafete,
+            comandos::respaldos::crear_respaldo,
+            comandos::respaldos::listar_respaldos,
+            comandos::respaldos::validar_respaldo,
+            comandos::respaldos::exportar_respaldo,
+            comandos::respaldos::restaurar_respaldo,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

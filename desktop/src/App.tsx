@@ -25,7 +25,16 @@
 import { useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Toaster, toast } from "sonner";
-import { Building2, ClipboardList, History, IdCard, UserCheck, UserCog, Users } from "lucide-react";
+import {
+  Archive,
+  Building2,
+  ClipboardList,
+  History,
+  IdCard,
+  UserCheck,
+  UserCog,
+  Users,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import ErrorBoundary from "./componentes/ErrorBoundary";
@@ -37,6 +46,7 @@ import Usuarios from "./pantallas/Usuarios";
 import Historial from "./pantallas/Historial";
 import Auditoria from "./pantallas/Auditoria";
 import Gafetes from "./pantallas/Gafetes";
+import Respaldos from "./pantallas/Respaldos";
 import NuevoIngresoModal from "./pantallas/NuevoIngresoModal";
 import SalidaModal from "./pantallas/SalidaModal";
 import { buscarActualizacion, cerrarSesion, instalarActualizacion, requiereConfiguracionInicial } from "./api";
@@ -111,6 +121,7 @@ export default function App() {
       onCerrarSesion={() => {
         cerrarSesion().finally(() => setPantalla({ tipo: "login" }));
       }}
+      onVolverALogin={() => setPantalla({ tipo: "login" })}
     />
   );
 }
@@ -122,7 +133,8 @@ export type Seccion =
   | "auditoria"
   | "empresas"
   | "usuarios"
-  | "gafetes";
+  | "gafetes"
+  | "respaldos";
 
 /** `rolesPermitidos` ausente = visible para cualquier rol logueado.
  * Auditoría lo restringe — espejo de `RolUsuario::puede(VerAuditoria)` en
@@ -159,6 +171,14 @@ const SECCIONES: {
     rolesPermitidos: ["Root", "Administrador"],
   },
   { id: "gafetes", etiqueta: "Gafetes", Icono: IdCard },
+  {
+    id: "respaldos",
+    etiqueta: "Respaldos",
+    Icono: Archive,
+    // Espejo de `Operacion::GestionarRespaldos` (`src/domain/autorizacion.rs`):
+    // sólo Root puede gestionar respaldos, ni siquiera Administrador.
+    rolesPermitidos: ["Root"],
+  },
 ];
 
 /**
@@ -169,9 +189,11 @@ const SECCIONES: {
 function Shell({
   sesion,
   onCerrarSesion,
+  onVolverALogin,
 }: {
   sesion: UsuarioSesion;
   onCerrarSesion: () => void;
+  onVolverALogin: () => void;
 }) {
   const [seccion, setSeccion] = useState<Seccion>("activos");
   const [colapsado, setColapsado] = useState(leerSidebarColapsado);
@@ -271,6 +293,7 @@ function Shell({
           {seccion === "empresas" && <Empresas />}
           {seccion === "usuarios" && <Usuarios actorRol={sesion.rol} />}
           {seccion === "gafetes" && <Gafetes />}
+          {seccion === "respaldos" && <Respaldos onRestaurado={onVolverALogin} />}
         </ErrorBoundary>
       </main>
 

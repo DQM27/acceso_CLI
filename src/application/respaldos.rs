@@ -78,6 +78,20 @@ impl AppCore {
         &self.ruta_base_datos
     }
 
+    /// Cierra la conexión activa devolviendo la ruta del archivo — para
+    /// restaurar un respaldo hace falta que la conexión a la base activa
+    /// esté cerrada antes de reemplazar el archivo
+    /// (`database::backup::restaurar_respaldo` lo exige explícitamente, ver
+    /// su documentación). Consume `self` porque cerrar la conexión es, en
+    /// la práctica, destruir este `AppCore` — quien llama debe abrir uno
+    /// nuevo con [`AppCore::abrir`] una vez que el archivo ya fue
+    /// reemplazado (ver `desktop/src-tauri/src/estado.rs::restaurar_respaldo`,
+    /// la GUI de escritorio, que sí necesita hacer este intercambio en el
+    /// mismo proceso en vez de reiniciarlo como hace la TUI en `main.rs`).
+    pub fn cerrar(self) -> PathBuf {
+        self.ruta_base_datos.clone()
+    }
+
     /// Decide si hace falta un respaldo automático hoy, sin crearlo —
     /// separado de `respaldo_automatico_diario_si_hace_falta` para que la
     /// creación real corra en un hilo aparte. Ese método síncrono se

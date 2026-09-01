@@ -30,6 +30,7 @@ pub const RETENCION_AUTOMATICOS: usize = 7;
 pub const RETENCION_PRE_MIGRACION: usize = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum TipoRespaldo {
     Manual,
     Automatico,
@@ -57,6 +58,7 @@ impl TipoRespaldo {
 /// y del nombre del archivo — no requiere abrir SQLite. Barato de calcular
 /// para listar; la validación real es una operación aparte y más costosa.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct RespaldoResumen {
     pub ruta: PathBuf,
     pub creado_en: DateTime<Utc>,
@@ -66,6 +68,7 @@ pub struct RespaldoResumen {
 
 /// Resultado de abrir un respaldo aparte y verificarlo de verdad.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum ResultadoValidacion {
     Valido {
         version_esquema: i64,

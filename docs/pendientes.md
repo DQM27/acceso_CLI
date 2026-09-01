@@ -387,29 +387,58 @@ proyectos (raíz: 491 tests; `desktop/src-tauri`: 20 tests; `desktop/`: `npx tsc
 - [ ] Eliminar un respaldo no utilizado, con confirmación (mismo patrón que Exportar). No
   se acordó para la pasada de Fases 1-4 de respaldos; sigue disponible si se quiere.
 
-## Respaldos en la GUI (Tauri) — no existe todavía
+## Respaldos en la GUI (Tauri)
 
-- [ ] **Pantalla de Respaldos en `desktop/`.** Hoy la GUI no tiene ni comando Tauri ni
-  pantalla para Respaldos (no hay `comandos/respaldos.rs` ni `pantallas/Respaldos.tsx`) —
-  sería construirla de cero, no portar algo existente. Paridad pendiente con la TUI, que
-  sí la tiene completa (crear/listar/validar/exportar/restaurar).
-  - **La creación del respaldo en Tauri es más simple que en la TUI**, no igual de
-    complicada: un comando `#[tauri::command]` que NO es `async fn` ya corre solo en el
-    pool de hilos bloqueantes de Tauri — nunca toca el hilo de la interfaz, sin necesitar
-    `std::thread::spawn` manual como en `tui/app/backup_jobs.rs`. Si hiciera falta que
-    fuera `async` (para encadenar con otra llamada async), ya hay precedente en el
-    propio repo: `exportar_historial_pdf` (`desktop/src-tauri/src/comandos/historial.rs`)
-    usa `tauri::async_runtime::spawn_blocking` exactamente para esto.
-  - **Trampa real a no repetir:** `GuiState.core` es un `Mutex<AppCore>` compartido por
-    *todos* los comandos (`desktop/src-tauri/src/estado.rs`). Si el comando de respaldo
-    mantiene ese lock durante los ~200ms–2s que tarda copiar+validar (medido,
-    ver más abajo "Respaldo automático"), **cualquier otro comando de la GUI** (buscar
-    contratistas, registrar ingreso, lo que sea) se queda esperando el mismo lock — la
-    ventana no se congela visualmente, pero la app entera deja de responder igual que
-    antes se congelaba la TUI. La solución es la misma idea que ya se usó en
-    `tui/app/backup_jobs.rs`: abrir una conexión de lectura aparte al mismo archivo
-    (`Connection::open(core.ruta_base_datos())` + `busy_timeout`) y soltar el lock de
-    `GuiState` apenas se lee la ruta y se autoriza, antes de copiar/validar.
+- [x] **Hecho (2026-09-01): pantalla de Respaldos en `desktop/`.** Paridad completa con la
+  TUI (crear/listar/validar/exportar/restaurar) — `comandos/respaldos.rs` (5 comandos) +
+  `pantallas/Respaldos.tsx`, sección visible sólo para Root (`rolesPermitidos: ["Root"]`,
+  espejo de `Operacion::GestionarRespaldos`). Tabla simple sin AG Grid (mismo criterio que
+  `HistorialGafeteModal.tsx`: la lista de respaldos es chica, no hace falta virtualización).
+
+  Cada comando evita la trampa descrita más abajo (retener `GuiState.core` durante trabajo
+  largo) sin necesitar un hilo manual — a diferencia de TUI/CLI, un comando Tauri no-async
+  ya corre en el pool de hilos bloqueantes propio de Tauri, así que "no bloquear la UI" y
+  "no retener el mutex compartido" son dos problemas distintos y sólo el segundo aplicaba
+  acá: `crear_respaldo` autoriza con el núcleo, suelta el candado y usa
+  `GuiState::conexion_secundaria()` (ya existente, de los fixes de Historial/Auditoría) para
+  copiar+validar sin bloquear otros comandos; `validar_respaldo`/`exportar_respaldo`
+  autorizan y sueltan el candado antes de tocar el archivo (ninguno de los dos pasa por
+  `self.connection` en absoluto del lado del núcleo).
+
+  `restaurar_respaldo` es la excepción deliberada: retiene el candado de principio a fin,
+  porque acá SÍ es correcto bloquear todo — nada más debería tocar la base mientras se
+  reemplaza el archivo. El intercambio (mismo flujo que la TUI en
+  `tui/app/actions/admin.rs`/`main.rs`, adaptado a que acá `AppCore` vive en un `Mutex` para
+  toda la vida del proceso, sin poder reiniciarlo): 1) crea un respaldo `PreRestauracion`
+  con la conexión todavía viva; 2) la cierra (`AppCore::cerrar`, nuevo — consume `self` y
+  devuelve la ruta) reemplazándola por un `AppCore` en memoria mientras dura el intercambio
+  de archivos, exigido por el contrato de `database::backup::restaurar_respaldo`; 3)
+  reemplaza el archivo; 4) abre un `AppCore` nuevo. Cierra la sesión al terminar (éxito o
+  error) — la base cambió de identidad, igual que la TUI fuerza login nuevo.
+
+  `TipoRespaldo`/`RespaldoResumen`/`ResultadoValidacion` (`database/backup.rs`) ganaron
+  `#[cfg_attr(feature = "serde", derive(Serialize))]` para cruzar el IPC — mismo criterio ya
+  usado en el resto del núcleo (`CargaCompleta`, `CambioAuditado`), sin afectar TUI/CLI (el
+  feature no está activo ahí). `desktop/src-tauri` ya tenía `rusqlite` como dependencia
+  directa desde los fixes de Historial/Auditoría.
+
+  Verificado del lado del frontend con el toolchain completo disponible esta vez
+  (`npm install` sí funcionó en este entorno): `tsc --noEmit`, `vitest run` (140 tests) y
+  `vite build` los tres limpios. Del lado de Rust, `cargo fmt`/Clippy estricto/502 tests
+  del crate raíz en verde con y sin el feature `serde`; `desktop/src-tauri` en sí sigue sin
+  poder compilarse en este entorno (faltan las libs de GTK, mismo límite de siempre) —
+  revisado a mano con el máximo cuidado posible, pendiente de un `cargo check` real.
+
+- **Trampa real a no repetir** (documentada antes de resolver lo de arriba, se deja como
+  referencia): `GuiState.core` es un `Mutex<AppCore>` compartido por *todos* los comandos
+  (`desktop/src-tauri/src/estado.rs`). Si el comando de respaldo mantiene ese lock durante
+  los ~200ms–2s que tarda copiar+validar (medido, ver más abajo "Respaldo automático"),
+  **cualquier otro comando de la GUI** (buscar contratistas, registrar ingreso, lo que sea)
+  se queda esperando el mismo lock — la ventana no se congela visualmente, pero la app
+  entera deja de responder igual que antes se congelaba la TUI. La solución es la misma
+  idea que ya se usó en `tui/app/backup_jobs.rs`: abrir una conexión de lectura aparte al
+  mismo archivo (`Connection::open(core.ruta_base_datos())` + `busy_timeout`) y soltar el
+  lock de `GuiState` apenas se lee la ruta y se autoriza, antes de copiar/validar.
 
 ## Módulo futuro de actualizaciones (no iniciado, condicionado)
 
