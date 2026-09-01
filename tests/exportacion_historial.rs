@@ -61,6 +61,22 @@ fn core_con_movimientos(cantidad: usize) -> AppCore {
     AppCore::new(connection)
 }
 
+/// La GUI (`buscar_historial_completo`) trae todo el conjunto de una vez
+/// para que AG Grid virtualice del lado del cliente — tiene que funcionar
+/// aunque el total cruce el límite de una página SQL (200), mismo criterio
+/// que `buscar_auditoria_completo_trae_todo_aunque_supere_una_pagina_sql`
+/// (`tests/auditoria_contratistas.rs`).
+#[test]
+fn buscar_historial_completo_trae_todo_aunque_supere_una_pagina_sql() {
+    let core = core_con_movimientos(205);
+    let filtro = FiltroHistorial::nuevo(instante(1, 0), instante(31, 23));
+
+    let todos = core.buscar_historial_completo(&filtro).unwrap();
+
+    assert_eq!(todos.items.len(), 205);
+    assert!(!todos.truncado);
+}
+
 #[test]
 fn exporta_todos_los_resultados_aunque_superen_una_pagina_sql() {
     let core = core_con_movimientos(205);
