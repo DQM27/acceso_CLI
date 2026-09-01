@@ -72,8 +72,7 @@ impl Secreto {
         self.valor
             .char_indices()
             .nth(indice_char)
-            .map(|(i, _)| i)
-            .unwrap_or(self.valor.len())
+            .map_or(self.valor.len(), |(i, _)| i)
     }
     /// Devuelve `true` sólo si el contenido cambió (inserción o borrado) —
     /// el movimiento de cursor solo no cuenta, así el llamador sabe cuándo
@@ -376,7 +375,7 @@ impl UsuariosState {
                 }
                 self.seleccion = seleccionar_id
                     .and_then(|id| self.usuarios.iter().position(|u| u.id == id))
-                    .or((!self.usuarios.is_empty()).then_some(0));
+                    .or_else(|| (!self.usuarios.is_empty()).then_some(0));
             }
             Err(e) => {
                 self.usuarios.clear();

@@ -286,15 +286,17 @@ pub(super) fn recibir_exportacion_si_lista(
 /// nombre (relativo al directorio de trabajo).
 fn ruta_exportacion_predeterminada() -> String {
     let nombre = super::historial::nombre_exportacion_predeterminado();
-    std::env::var_os("USERPROFILE")
+    // `map_or_else` exigiría clonar `nombre` (una rama lo mueve, la otra lo
+    // toma prestado) sólo para complacer al lint — sin beneficio real.
+    #[allow(clippy::map_unwrap_or)]
+    let resultado = std::env::var_os("USERPROFILE")
         .map(PathBuf::from)
         .filter(|ruta| ruta.is_absolute())
         .map(|ruta| ruta.join("Documents"))
         .filter(|ruta| ruta.is_dir())
         .map(|ruta| ruta.join(&nombre))
-        .unwrap_or_else(|| PathBuf::from(nombre))
-        .display()
-        .to_string()
+        .unwrap_or_else(|| PathBuf::from(nombre));
+    resultado.display().to_string()
 }
 
 fn normalizar_destino(valor: &str) -> Result<PathBuf, String> {

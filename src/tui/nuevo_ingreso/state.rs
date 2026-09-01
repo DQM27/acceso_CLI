@@ -340,20 +340,18 @@ impl NuevoIngresoState {
                     return AccionNuevoIngreso::Ninguna;
                 };
                 let gafete = if requiere_gafete {
-                    match self.gafete_texto.trim().parse::<i64>() {
-                        Ok(numero) => Some(numero),
-                        Err(_) => {
-                            self.error = Some(
-                                if self.gafete_texto.trim().is_empty() {
-                                    "El gafete es requerido"
-                                } else {
-                                    "Ingrese un número de gafete válido"
-                                }
-                                .into(),
-                            );
-                            return AccionNuevoIngreso::Ninguna;
-                        }
-                    }
+                    let Ok(numero) = self.gafete_texto.trim().parse::<i64>() else {
+                        self.error = Some(
+                            if self.gafete_texto.trim().is_empty() {
+                                "El gafete es requerido"
+                            } else {
+                                "Ingrese un número de gafete válido"
+                            }
+                            .into(),
+                        );
+                        return AccionNuevoIngreso::Ninguna;
+                    };
+                    Some(numero)
                 } else {
                     None
                 };
@@ -424,8 +422,7 @@ fn texto_filtro(s: &str) -> Option<String> {
 fn byte_index(s: &str, indice_char: usize) -> usize {
     s.char_indices()
         .nth(indice_char)
-        .map(|(i, _)| i)
-        .unwrap_or(s.len())
+        .map_or(s.len(), |(i, _)| i)
 }
 fn puede_continuar(p: &PreparacionIngreso) -> bool {
     !p.tiene_ingreso_activo && !matches!(p.resultado_acceso, ResultadoAcceso::Denegado(_))

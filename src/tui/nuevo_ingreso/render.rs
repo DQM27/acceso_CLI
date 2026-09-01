@@ -124,16 +124,20 @@ fn render_cuerpo(frame: &mut Frame, area: Rect, state: &NuevoIngresoState, theme
         ModoBuscarIngreso::Busqueda { texto } => texto.value(),
         ModoBuscarIngreso::Normal => state.filtro.as_str(),
     };
-    let etiqueta_busqueda = match state.resultados_ocultos() {
-        Some(total) => format!(
-            "BUSCAR CONTRATISTA · {} DE {total} RESULTADOS · afine la búsqueda para ver el resto",
-            state.contratistas.len()
-        ),
-        None => format!(
-            "BUSCAR CONTRATISTA · {} RESULTADOS",
-            state.contratistas.len()
-        ),
-    };
+    let etiqueta_busqueda = state.resultados_ocultos().map_or_else(
+        || {
+            format!(
+                "BUSCAR CONTRATISTA · {} RESULTADOS",
+                state.contratistas.len()
+            )
+        },
+        |total| {
+            format!(
+                "BUSCAR CONTRATISTA · {} DE {total} RESULTADOS · afine la búsqueda para ver el resto",
+                state.contratistas.len()
+            )
+        },
+    );
     let area_busqueda = render_form_field(
         frame,
         filas[0],
@@ -259,47 +263,48 @@ fn render_panel(
             let contenido = state
                 .seleccion
                 .and_then(|indice| state.contratistas.get(indice))
-                .map(|contratista| {
-                    let mut lineas = render_contexto(contratista);
-                    lineas.push(Line::from("ESTADO ACTUAL").style(theme.muted()));
-                    if contratista.tiene_ingreso_activo {
-                        lineas.push(
-                            Line::from("● DENTRO · tiene un ingreso activo").style(theme.danger()),
-                        );
-                    } else {
-                        lineas.push(
-                            Line::from("● FUERA · sin ingreso activo").style(theme.success()),
-                        );
-                    }
-                    lineas.push(Line::from(""));
-                    lineas.push(Line::from("PERMISO DE ACCESO").style(theme.muted()));
-                    if contratista.tiene_acceso {
-                        lineas.push(Line::from("● HABILITADO").style(theme.success()));
-                    } else {
-                        lineas.push(
-                            Line::from("● DENEGADO · no tiene acceso autorizado")
-                                .style(theme.danger()),
-                        );
-                    }
-                    if contratista.tiene_ingreso_activo {
-                        lineas.push(
-                            Line::from("No puede registrar otro ingreso.").style(theme.muted()),
-                        );
-                    } else if !contratista.tiene_acceso {
-                        lineas.push(
-                            Line::from("No puede registrar un ingreso.").style(theme.muted()),
-                        );
-                    } else {
-                        lineas.push(
-                            Line::from("ENTER para validar y preparar el ingreso.")
-                                .style(theme.muted()),
-                        );
-                    }
-                    lineas
-                })
-                .unwrap_or_else(|| {
-                    vec![Line::from("Seleccione un contratista.").style(theme.muted())]
-                });
+                .map_or_else(
+                    || vec![Line::from("Seleccione un contratista.").style(theme.muted())],
+                    |contratista| {
+                        let mut lineas = render_contexto(contratista);
+                        lineas.push(Line::from("ESTADO ACTUAL").style(theme.muted()));
+                        if contratista.tiene_ingreso_activo {
+                            lineas.push(
+                                Line::from("● DENTRO · tiene un ingreso activo")
+                                    .style(theme.danger()),
+                            );
+                        } else {
+                            lineas.push(
+                                Line::from("● FUERA · sin ingreso activo").style(theme.success()),
+                            );
+                        }
+                        lineas.push(Line::from(""));
+                        lineas.push(Line::from("PERMISO DE ACCESO").style(theme.muted()));
+                        if contratista.tiene_acceso {
+                            lineas.push(Line::from("● HABILITADO").style(theme.success()));
+                        } else {
+                            lineas.push(
+                                Line::from("● DENEGADO · no tiene acceso autorizado")
+                                    .style(theme.danger()),
+                            );
+                        }
+                        if contratista.tiene_ingreso_activo {
+                            lineas.push(
+                                Line::from("No puede registrar otro ingreso.").style(theme.muted()),
+                            );
+                        } else if !contratista.tiene_acceso {
+                            lineas.push(
+                                Line::from("No puede registrar un ingreso.").style(theme.muted()),
+                            );
+                        } else {
+                            lineas.push(
+                                Line::from("ENTER para validar y preparar el ingreso.")
+                                    .style(theme.muted()),
+                            );
+                        }
+                        lineas
+                    },
+                );
             frame.render_widget(Paragraph::new(contenido), area);
             None
         }

@@ -169,41 +169,38 @@ pub fn exportar_historial_seleccion_con_conexion(
         preparar_hoja(hoja, columnas)?;
         let formatos = FormatosHistorial::default();
 
-        match &ordenados {
-            Some(movimientos) => {
-                for movimiento in movimientos {
+        if let Some(movimientos) = &ordenados {
+            for movimiento in movimientos {
+                let fila = u32::try_from(exportados + 1).unwrap_or(u32::MAX);
+                escribir_movimiento(hoja, fila, columnas, movimiento, &formatos)?;
+                exportados += 1;
+            }
+        } else {
+            let mut consulta = filtro.clone();
+            consulta.offset = 0;
+            // La consulta limita internamente cada página a 200
+            // filas. El exportador las consume por lotes para no
+            // retener todo en RAM.
+            consulta.limite = usize::MAX;
+            loop {
+                let pagina = buscar_historial_con_conexion(connection, &consulta)?;
+                if pagina.total > MAX_FILAS_DATOS_XLSX {
+                    return Err(ExportarHistorialError::DemasiadasFilas(pagina.total));
+                }
+                consulta.corte_id = Some(pagina.corte_id);
+                let hay_mas = !pagina.items.is_empty();
+                let total_pagina = pagina.total;
+                for movimiento in &pagina.items {
                     let fila = u32::try_from(exportados + 1).unwrap_or(u32::MAX);
                     escribir_movimiento(hoja, fila, columnas, movimiento, &formatos)?;
                     exportados += 1;
                 }
-            }
-            None => {
-                let mut consulta = filtro.clone();
-                consulta.offset = 0;
-                // La consulta limita internamente cada página a 200
-                // filas. El exportador las consume por lotes para no
-                // retener todo en RAM.
-                consulta.limite = usize::MAX;
-                loop {
-                    let pagina = buscar_historial_con_conexion(connection, &consulta)?;
-                    if pagina.total > MAX_FILAS_DATOS_XLSX {
-                        return Err(ExportarHistorialError::DemasiadasFilas(pagina.total));
-                    }
-                    consulta.corte_id = Some(pagina.corte_id);
-                    let hay_mas = !pagina.items.is_empty();
-                    let total_pagina = pagina.total;
-                    for movimiento in &pagina.items {
-                        let fila = u32::try_from(exportados + 1).unwrap_or(u32::MAX);
-                        escribir_movimiento(hoja, fila, columnas, movimiento, &formatos)?;
-                        exportados += 1;
-                    }
-                    if !hay_mas {
-                        break;
-                    }
-                    consulta.offset += pagina.items.len();
-                    if consulta.offset >= total_pagina {
-                        break;
-                    }
+                if !hay_mas {
+                    break;
+                }
+                consulta.offset += pagina.items.len();
+                if consulta.offset >= total_pagina {
+                    break;
                 }
             }
         }

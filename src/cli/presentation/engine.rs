@@ -54,10 +54,7 @@ impl Engine {
     /// se considera ya resuelto en 1.0 — evita destellos en el primer frame,
     /// antes de que nada haya "aparecido" todavía.
     pub fn opacidad(&self, id: &'static str) -> f32 {
-        self.animaciones
-            .get(id)
-            .map(Animacion::valor)
-            .unwrap_or(1.0)
+        self.animaciones.get(id).map_or(1.0, Animacion::valor)
     }
 
     /// ¿Sigue habiendo alguna animación en curso? El loop lo usa para saber

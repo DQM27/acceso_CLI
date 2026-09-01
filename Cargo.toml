@@ -87,6 +87,32 @@ cast_precision_loss = "deny"
 unchecked_time_subtraction = "deny"
 similar_names = "deny"
 
+# --- Capa 3: simplificaciones de `Option`/`Result` y legibilidad menor
+#     (map/unwrap_or(_else) → map_or(_else)/is_some_and/is_none_or, closures
+#     redundantes, `match` de un solo patrón → `if let`, `let...else`,
+#     `collect()` de más, `Default::default()` ambiguo). Dos `#[allow]`
+#     puntuales documentados donde la reescritura mecánica habría sido
+#     peor: `map_unwrap_or` en dos sitios que arman una ruta por defecto a
+#     partir del mismo `String` que otra rama toma prestado (forzar
+#     `map_or_else` ahí exigía clonar sólo para complacer al lint);
+#     `option_if_let_else` en los dos despachadores de render que encadenan
+#     `if let`/`else if let` sobre campos `Option` DISTINTOS (la
+#     reescritura sugerida anida el resto de la cascada dentro del closure
+#     por defecto, invirtiendo el orden de prioridad); `single_match_else`
+#     en las tres funciones de login (nombrar Ok/Err explícito es más claro
+#     que un `if let/else` en código de autenticación, y no valía el riesgo
+#     de transcribirlo a mano); `needless_collect` en dos tests que lanzan
+#     hilos contra un `Barrier` (el `collect()` fuerza a lanzarlos todos
+#     antes de unir ninguno — sin él la carrera que el test verifica no
+#     ocurriría). ---
+map_unwrap_or = "deny"
+option_if_let_else = "deny"
+redundant_closure_for_method_calls = "deny"
+single_match_else = "deny"
+single_match = "deny"
+manual_let_else = "deny"
+needless_collect = "deny"
+
 # Perfil de producción: prioriza latencia y tamaño del binario sobre tiempo de
 # compilación. Cargo ya ejecuta la compilación en paralelo; codegen-units=1 reduce
 # el paralelismo de generación de código a cambio de darle más contexto a LLVM.

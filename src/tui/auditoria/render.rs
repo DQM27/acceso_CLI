@@ -146,8 +146,10 @@ fn valor_presentable(campo: &str, valor: Option<&str>) -> String {
         ("tipo_ingreso", "IN_HOUSE") => "IN HOUSE".to_owned(),
         ("tipo_ingreso", "POR_CORREO") => "POR CORREO".to_owned(),
         ("fecha_vencimiento_praind", valor) => chrono::NaiveDate::parse_from_str(valor, "%Y-%m-%d")
-            .map(|fecha| fecha.format("%d/%m/%Y").to_string())
-            .unwrap_or_else(|_| valor.to_owned()),
+            .map_or_else(
+                |_| valor.to_owned(),
+                |fecha| fecha.format("%d/%m/%Y").to_string(),
+            ),
         ("tiene_acceso", "HABILITADO") => "Habilitado".to_owned(),
         ("tiene_acceso", "DESHABILITADO") => "Deshabilitado".to_owned(),
         ("es_personal_ruta" | "activo", "SI") => "Sí".to_owned(),

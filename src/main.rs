@@ -242,13 +242,16 @@ fn ejecutar_reset_root() -> Result<(), StartupError> {
                 println!("  {} - {}", usuario.cedula, usuario.nombre);
             }
             let cedula = leer_linea("Cédula: ")?;
-            match varios.iter().find(|usuario| usuario.cedula == cedula) {
-                Some(usuario) => usuario.clone(),
-                None => {
-                    eprintln!("Esa cédula no corresponde a ningún ROOT activo.");
-                    std::process::exit(1);
-                }
-            }
+            varios
+                .iter()
+                .find(|usuario| usuario.cedula == cedula)
+                .map_or_else(
+                    || {
+                        eprintln!("Esa cédula no corresponde a ningún ROOT activo.");
+                        std::process::exit(1);
+                    },
+                    Clone::clone,
+                )
         }
     };
 

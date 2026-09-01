@@ -35,7 +35,7 @@ fn muestra_si_el_contratista_seleccionado_esta_dentro_o_fuera() {
             .buffer()
             .content
             .iter()
-            .map(|celda| celda.symbol())
+            .map(ratatui::buffer::Cell::symbol)
             .collect()
     }
 

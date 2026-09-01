@@ -52,6 +52,14 @@ use login::render_login;
 const ANCHO_MINIMO: u16 = 40;
 const ALTO_MINIMO: u16 = 10;
 
+// Encadena `if let`/`else if let` sobre campos `Option` DISTINTOS
+// (formulario, formulario_empresa, formulario_usuario, formulario_password,
+// edicion_columnas, historial, salida_gafete) para elegir qué Surface
+// dibujar — no "mapear un solo Option". La reescritura que sugiere el lint
+// anida el resto de la cascada dentro del closure por defecto de
+// `map_or_else`, invirtiendo el orden de prioridad y quedando más difícil
+// de seguir que la cascada plana actual.
+#[allow(clippy::option_if_let_else)]
 pub fn render(frame: &mut Frame, app: &AppState) {
     let area = frame.area();
     if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {

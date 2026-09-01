@@ -120,7 +120,7 @@ fn solo_registra_cambios_reales_con_actor_y_valores_correctos() {
     core.actualizar_contratista(&actor, 1, datos(TipoIngreso::Swat, None))
         .unwrap();
     assert_eq!(
-        core.buscar_auditoria(&actor, &Default::default())
+        core.buscar_auditoria(&actor, &FiltroAuditoria::default())
             .unwrap()
             .total,
         0

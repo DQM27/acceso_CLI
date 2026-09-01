@@ -1205,7 +1205,7 @@ fn f2_registra_salida_refresca_nuevo_ingreso_sin_navegar() {
             .buffer()
             .content
             .iter()
-            .map(|celda| celda.symbol())
+            .map(ratatui::buffer::Cell::symbol)
             .collect()
     }
 
@@ -1432,7 +1432,12 @@ fn crear_usuario_en_hilo_aparte_termina_creado_en_sqlite_con_el_hash_correcto() 
     }
 
     assert!(!app.usuarios.guardando());
-    let creado = core.buscar_usuarios(&actor, &Default::default()).unwrap();
+    let creado = core
+        .buscar_usuarios(
+            &actor,
+            &crate::database::queries::usuarios::FiltroUsuarios::default(),
+        )
+        .unwrap();
     let persona = creado
         .iter()
         .find(|u| u.cedula == "2001")

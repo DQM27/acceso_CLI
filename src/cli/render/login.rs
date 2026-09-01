@@ -258,8 +258,9 @@ fn color_nivel_login(nivel: NivelFeedback) -> (u8, u8, u8) {
 }
 
 fn linea_aviso_login(app: &AppState, opacidad: f32) -> Line<'static> {
-    match app.feedback_vigente() {
-        Some(feedback) => {
+    app.feedback_vigente().map_or_else(
+        || Line::from(""),
+        |feedback| {
             let (simbolo, _) = glifo_feedback(feedback.nivel);
             let estilo = estilo_fundido(
                 color_nivel_login(feedback.nivel),
@@ -270,9 +271,8 @@ fn linea_aviso_login(app: &AppState, opacidad: f32) -> Line<'static> {
                 Span::styled(format!("{simbolo} "), estilo),
                 Span::styled(feedback.texto.clone(), estilo),
             ])
-        }
-        None => Line::from(""),
-    }
+        },
+    )
 }
 
 #[cfg(test)]

@@ -76,10 +76,10 @@ fn sincronizar_input(app: &mut AppState) {
 
 fn mover_campo_formulario(core: &AppCore, app: &mut AppState, delta: isize) {
     let campo_anterior = app.formulario.as_ref().map(|form| form.campo);
-    let cambio = match &mut app.formulario {
-        Some(form) => form.mover_campo(delta),
-        None => false,
-    };
+    let cambio = app
+        .formulario
+        .as_mut()
+        .is_some_and(|form| form.mover_campo(delta));
     if cambio {
         // Al dejar Cédula (no en cada tecla, sólo al alejarse) se verifica
         // proactivamente si ya existe un contratista con esa cédula, en vez
@@ -224,15 +224,11 @@ fn manejar_selector_empresa(core: &AppCore, app: &mut AppState, key: KeyEvent) {
         }
         KeyCode::Up | KeyCode::Down => {
             let delta: isize = if key.code == KeyCode::Up { -1 } else { 1 };
-            let total = app
-                .formulario
-                .as_ref()
-                .map(|form| {
-                    form.empresas_filtradas(app.input.value())
-                        .len()
-                        .min(MAX_VISIBLES_EMPRESAS)
-                })
-                .unwrap_or(0);
+            let total = app.formulario.as_ref().map_or(0, |form| {
+                form.empresas_filtradas(app.input.value())
+                    .len()
+                    .min(MAX_VISIBLES_EMPRESAS)
+            });
             if let Some(form) = &mut app.formulario
                 && let Subfase::EligiendoEmpresa { seleccion } = &mut form.subfase
                 && total > 0
@@ -296,22 +292,22 @@ fn guardar_formulario(core: &AppCore, app: &mut AppState) {
     let modo = form.modo;
     let nombre = form.nombre.trim().to_string();
     let resultado = match modo {
-        ModoFormulario::Nuevo => match form.validar() {
-            Ok(datos) => core.crear_contratista(sesion, datos).map(|_| ()),
+        ModoFormulario::Nuevo => {
             // No debería pasar (el resumen sólo se abre tras validar), pero si
             // pasa se vuelve a editar con los errores marcados.
-            Err(_) => {
+            let Ok(datos) = form.validar() else {
                 form.subfase = Subfase::Editando;
                 return;
-            }
-        },
-        ModoFormulario::Editar { id } => match form.datos_actualizacion() {
-            Ok(datos) => core.actualizar_contratista(sesion, id, datos),
-            Err(_) => {
+            };
+            core.crear_contratista(sesion, datos).map(|_| ())
+        }
+        ModoFormulario::Editar { id } => {
+            let Ok(datos) = form.datos_actualizacion() else {
                 form.subfase = Subfase::Editando;
                 return;
-            }
-        },
+            };
+            core.actualizar_contratista(sesion, id, datos)
+        }
     };
     match resultado {
         Ok(()) => {

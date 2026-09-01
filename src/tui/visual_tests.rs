@@ -278,7 +278,11 @@ fn todas_las_pantallas_renderizan_la_matriz_de_tamanos_y_temas() {
                     });
 
                 let buffer = terminal.backend().buffer();
-                let text: String = buffer.content.iter().map(|cell| cell.symbol()).collect();
+                let text: String = buffer
+                    .content
+                    .iter()
+                    .map(ratatui::buffer::Cell::symbol)
+                    .collect();
                 assert!(!text.trim().is_empty(), "buffer vacío para {screen:?}");
                 assert!(!text.contains('�'), "glifo inválido para {screen:?}");
                 if width < screen.min_width() || height < screen.min_height() {

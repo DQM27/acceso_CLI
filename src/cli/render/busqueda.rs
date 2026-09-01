@@ -45,10 +45,10 @@ fn valor_busqueda(
         ColumnaBusqueda::Nombre => item.nombre.clone(),
         ColumnaBusqueda::Empresa => item.empresa_nombre.clone(),
         ColumnaBusqueda::Tipo => tipo_texto(item.tipo_ingreso).to_string(),
-        ColumnaBusqueda::Praind => item
-            .fecha_vencimiento_praind
-            .map(|fecha| fecha.format("%d/%m/%Y").to_string())
-            .unwrap_or_else(|| "—".to_string()),
+        ColumnaBusqueda::Praind => item.fecha_vencimiento_praind.map_or_else(
+            || "—".to_string(),
+            |fecha| fecha.format("%d/%m/%Y").to_string(),
+        ),
         ColumnaBusqueda::Ruta => si_no(item.es_personal_ruta).to_string(),
         ColumnaBusqueda::Acceso => si_no(item.tiene_acceso).to_string(),
         ColumnaBusqueda::Estado => {
@@ -286,8 +286,7 @@ pub(super) fn lineas_coincidencias(
         let corte_bytes = texto_completo
             .char_indices()
             .nth(corte_caracteres)
-            .map(|(indice_byte, _)| indice_byte)
-            .unwrap_or(texto_completo.len());
+            .map_or(texto_completo.len(), |(indice_byte, _)| indice_byte);
         let (resto, estado) = texto_completo.split_at(corte_bytes);
         let estilo_resto = if seleccionado {
             estilo_seleccion()

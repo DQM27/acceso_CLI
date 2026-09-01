@@ -72,12 +72,10 @@ fn valor_historial(
         ColumnaHistorial::Tipo => tipo_texto(m.tipo_ingreso).to_string(),
         ColumnaHistorial::Gafete => m
             .gafete_numero
-            .map(|numero| numero.to_string())
-            .unwrap_or_else(|| "S/G".to_string()),
+            .map_or_else(|| "S/G".to_string(), |numero| numero.to_string()),
         ColumnaHistorial::Salida => m
             .fecha_hora_salida
-            .map(fecha_hora_corta)
-            .unwrap_or_else(|| "— activo".to_string()),
+            .map_or_else(|| "— activo".to_string(), fecha_hora_corta),
         ColumnaHistorial::Usuario => m.usuario_ingreso_nombre.clone(),
     }
 }

@@ -100,25 +100,20 @@ pub fn render(
 }
 
 fn estado_shell(state: &ActivosState) -> (String, StatusKind) {
-    match &state.modo {
-        ModoActivos::ConfirmarSalida { id } => {
-            let nombre = state
-                .registro(*id)
-                .map(|r| r.contratista_nombre.as_str())
-                .unwrap_or_default();
-            (
-                format!(
-                    "CONFIRMAR SALIDA · {nombre} · cerrará el ingreso activo y liberará el gafete"
-                ),
-                StatusKind::Warning,
-            )
+    if let ModoActivos::ConfirmarSalida { id } = &state.modo {
+        let nombre = state
+            .registro(*id)
+            .map(|r| r.contratista_nombre.as_str())
+            .unwrap_or_default();
+        (
+            format!("CONFIRMAR SALIDA · {nombre} · cerrará el ingreso activo y liberará el gafete"),
+            StatusKind::Warning,
+        )
+    } else {
+        if let Some(mensaje) = &state.mensaje {
+            return (mensaje.clone(), clasificar_mensaje(mensaje));
         }
-        _ => {
-            if let Some(mensaje) = &state.mensaje {
-                return (mensaje.clone(), clasificar_mensaje(mensaje));
-            }
-            (String::new(), StatusKind::Normal)
-        }
+        (String::new(), StatusKind::Normal)
     }
 }
 

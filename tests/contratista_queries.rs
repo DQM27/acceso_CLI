@@ -541,7 +541,7 @@ fn el_total_se_mantiene_igual_al_avanzar_de_pagina() {
         .map(|c| c.nombre.clone())
         .collect();
     assert_eq!(nombres.len(), 5);
-    let mut unicos = nombres.clone();
+    let mut unicos = nombres;
     unicos.sort();
     unicos.dedup();
     assert_eq!(unicos.len(), 5);

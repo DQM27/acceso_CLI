@@ -458,15 +458,17 @@ fn ruta_exportacion_predeterminada() -> String {
         "historial_{}.xlsx",
         crate::tiempo::ahora_costa_rica().format("%Y-%m-%d_%H%M")
     );
-    std::env::var_os("USERPROFILE")
+    // `map_or_else` exigiría clonar `nombre` (una rama lo mueve, la otra lo
+    // toma prestado) sólo para complacer al lint — sin beneficio real.
+    #[allow(clippy::map_unwrap_or)]
+    let ruta = std::env::var_os("USERPROFILE")
         .map(PathBuf::from)
         .filter(|ruta| ruta.is_absolute())
         .map(|ruta| ruta.join("Documents"))
         .filter(|ruta| ruta.is_dir())
         .map(|ruta| ruta.join(&nombre))
-        .unwrap_or_else(|| PathBuf::from(nombre))
-        .display()
-        .to_string()
+        .unwrap_or_else(|| PathBuf::from(nombre));
+    ruta.display().to_string()
 }
 
 fn normalizar_destino(valor: &str) -> Result<PathBuf, String> {

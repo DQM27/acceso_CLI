@@ -286,12 +286,9 @@ fn render_tabla(frame: &mut Frame, area: Rect, state: &ContratistasState, theme:
         .style(theme.muted())
         .bottom_margin(1);
     frame.render_widget(
-        Table::new(
-            filas,
-            columnas.iter().map(|c| c.constraint()).collect::<Vec<_>>(),
-        )
-        .header(encabezado)
-        .column_spacing(1),
+        Table::new(filas, columnas.iter().map(|c| c.constraint()))
+            .header(encabezado)
+            .column_spacing(1),
         area,
     );
     if state.registros.is_empty() {
@@ -385,9 +382,10 @@ fn render_detalle(frame: &mut Frame, area: Rect, c: &ContratistaResumen, theme: 
         detail_line("Tipo", texto_tipo(c.tipo_ingreso), theme),
         detail_line(
             "PRAIND",
-            c.fecha_vencimiento_praind
-                .map(|f| f.format("%d/%m/%Y").to_string())
-                .unwrap_or_else(|| "No requerida".into()),
+            c.fecha_vencimiento_praind.map_or_else(
+                || "No requerida".into(),
+                |f| f.format("%d/%m/%Y").to_string(),
+            ),
             theme,
         ),
         detail_line("Personal de ruta", si_no(c.es_personal_ruta), theme),

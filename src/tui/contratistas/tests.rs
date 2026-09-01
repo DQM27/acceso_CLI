@@ -636,9 +636,8 @@ fn praind_dinamico_usa_regla_de_dominio_y_none_si_no_requerido() {
     assert!(f.requiere_praind());
     f.personal_ruta = false;
     f.fecha_praind = TextInput::new("31/12/2026").with_max_chars(10);
-    let d = match construir(&f, Some(5)) {
-        Err(e) => e,
-        Ok(_) => panic!(),
+    let Err(d) = construir(&f, Some(5)) else {
+        panic!()
     };
     assert_eq!(d, "La cédula es obligatoria");
     f.cedula = TextInput::new("1");

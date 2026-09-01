@@ -57,8 +57,7 @@ fn valor_activos(item: &IngresoActivoResumen, columna: ColumnaActivos) -> String
         ColumnaActivos::Hora => hora_cr(item.fecha_hora_ingreso),
         ColumnaActivos::Gafete => item
             .gafete_numero
-            .map(|numero| numero.to_string())
-            .unwrap_or_else(|| "S/G".to_string()),
+            .map_or_else(|| "S/G".to_string(), |numero| numero.to_string()),
         ColumnaActivos::Medio => medio_texto(item.medio_ingreso).to_string(),
         ColumnaActivos::Usuario => item.usuario_ingreso_nombre.clone(),
     }
@@ -240,20 +239,24 @@ pub(super) fn lineas_salida_gafete(estado: &SalidaGafeteState) -> Vec<Line<'stat
         return lineas;
     }
     for (numero, item) in &estado.coincidencias {
-        let linea = match item {
-            Some(item) => Line::from(vec![
-                Span::styled(format!("  {numero:<5}"), acento()),
-                Span::styled(
-                    item.contratista_nombre.clone(),
-                    Style::default().add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(format!(" — {}", item.empresa_nombre), muted()),
-            ]),
-            None => Line::from(vec![
-                Span::styled(format!("  {numero:<5}"), estilo_error()),
-                Span::styled("sin ingreso activo con ese gafete", estilo_error()),
-            ]),
-        };
+        let linea = item.as_ref().map_or_else(
+            || {
+                Line::from(vec![
+                    Span::styled(format!("  {numero:<5}"), estilo_error()),
+                    Span::styled("sin ingreso activo con ese gafete", estilo_error()),
+                ])
+            },
+            |item| {
+                Line::from(vec![
+                    Span::styled(format!("  {numero:<5}"), acento()),
+                    Span::styled(
+                        item.contratista_nombre.clone(),
+                        Style::default().add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(format!(" — {}", item.empresa_nombre), muted()),
+                ])
+            },
+        );
         lineas.push(linea);
     }
     lineas
@@ -262,8 +265,7 @@ pub(super) fn lineas_salida_gafete(estado: &SalidaGafeteState) -> Vec<Line<'stat
 pub(super) fn lineas_resumen_salida(activo: &IngresoActivoResumen) -> Vec<Line<'static>> {
     let gafete = activo
         .gafete_numero
-        .map(|numero| numero.to_string())
-        .unwrap_or_else(|| "S/G".to_string());
+        .map_or_else(|| "S/G".to_string(), |numero| numero.to_string());
     vec![
         Line::from(Span::styled("SALIDA", muted())),
         Line::from(vec![
@@ -356,10 +358,10 @@ pub(super) fn lineas_tabla_activos(
 pub(super) fn lineas_ficha(
     resumen: &crate::database::queries::contratistas::ContratistaResumen,
 ) -> Vec<Line<'static>> {
-    let praind = resumen
-        .fecha_vencimiento_praind
-        .map(|fecha| format!("vence {}", fecha.format("%d/%m/%Y")))
-        .unwrap_or_else(|| "sin fecha registrada".to_string());
+    let praind = resumen.fecha_vencimiento_praind.map_or_else(
+        || "sin fecha registrada".to_string(),
+        |fecha| format!("vence {}", fecha.format("%d/%m/%Y")),
+    );
     let acceso = if resumen.tiene_acceso {
         chequeo("✓", exito(), "Acceso autorizado".into())
     } else {

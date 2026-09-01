@@ -247,10 +247,9 @@ fn segmentar_comando(texto: &str) -> Vec<(String, bool)> {
 /// `claves` (sin distinguir mayúsculas), el largo de esa porción inicial
 /// (negación + clave + `:`) — el resto (el valor) no se toca.
 fn clave_de_token(token: &str, claves: &[&str]) -> Option<usize> {
-    let (largo_negacion, cuerpo) = match token.strip_prefix('-') {
-        Some(resto) => (1, resto),
-        None => (0, token),
-    };
+    let (largo_negacion, cuerpo) = token
+        .strip_prefix('-')
+        .map_or((0, token), |resto| (1, resto));
     let (clave, _) = cuerpo.split_once(':')?;
     if clave.is_empty() {
         return None;
@@ -371,6 +370,13 @@ fn spans_valor(
 /// el marco lo pone `render_prompt`, que reutiliza esto tanto con paleta
 /// como sin ella. Sólo se llama en fase `Operando`: el login tiene su propia
 /// composición sin caja (`render_login`), nunca pasa por acá.
+// Encadena varios `if`/`else if` sobre campos `Option` DISTINTOS
+// (historial, formulario_password, salida_gafete, formulario) para decidir
+// cuál Surface manda el prompt — no es "mapear un solo Option", que es el
+// caso que este lint intenta simplificar. La reescritura que sugiere anida
+// un `if let` dentro del closure por defecto de `map_or_else`, más difícil
+// de seguir que la cascada plana actual.
+#[allow(clippy::option_if_let_else)]
 fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
     // `editable` sólo decide DE DÓNDE sale la posición del cursor (del
     // `Input` real mientras se escribe, o del final del texto congelado

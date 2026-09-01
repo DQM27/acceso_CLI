@@ -47,10 +47,12 @@ fn registrar_ingreso_rechaza_un_usuario_desactivado() {
         Err(RegistroIngresoServiceError::OperadorNoAutorizado)
     ));
     assert!(
-        core.listar_ingresos_activos(&Default::default())
-            .unwrap()
-            .items
-            .is_empty(),
+        core.listar_ingresos_activos(
+            &control_acceso::database::queries::ingresos::FiltroIngresosActivos::default()
+        )
+        .unwrap()
+        .items
+        .is_empty(),
         "un operador desactivado no debe poder crear el movimiento"
     );
 }
@@ -78,10 +80,12 @@ fn registrar_salida_rechaza_un_usuario_desactivado_aunque_el_ingreso_sea_valido(
         Err(RegistroIngresoServiceError::OperadorNoAutorizado)
     ));
     assert_eq!(
-        core.listar_ingresos_activos(&Default::default())
-            .unwrap()
-            .items
-            .len(),
+        core.listar_ingresos_activos(
+            &control_acceso::database::queries::ingresos::FiltroIngresosActivos::default()
+        )
+        .unwrap()
+        .items
+        .len(),
         1,
         "el ingreso debe seguir activo — la salida no se registró"
     );

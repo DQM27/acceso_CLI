@@ -722,10 +722,9 @@ fn interpretar_filtro(texto: &str) -> FiltroGafetes {
             estado: None,
         };
     }
-    let (negado, resto) = match texto.strip_prefix('-') {
-        Some(resto) => (true, resto),
-        None => (false, texto),
-    };
+    let (negado, resto) = texto
+        .strip_prefix('-')
+        .map_or((false, texto), |resto| (true, resto));
     if let Some(valor) = resto.strip_prefix("estado:") {
         let estado = EstadoGafete::from_str_filtro(valor);
         return FiltroGafetes {

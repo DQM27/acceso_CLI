@@ -214,12 +214,12 @@ impl App {
     /// contraseña ya terminó — a lo sumo uno de los dos puede estar en vuelo a la
     /// vez, ver el comentario de `hilo_usuario_pendiente`.
     pub(super) fn recibir_hilo_usuario_si_lista(&mut self, core: Option<&AppCore>) {
-        let receptor = match &self.hilo_usuario_pendiente {
-            Some(
-                HiloUsuarioPendiente::Creacion(receptor, ..)
-                | HiloUsuarioPendiente::CambioPassword(receptor, ..),
-            ) => receptor,
-            None => return,
+        let Some(
+            HiloUsuarioPendiente::Creacion(receptor, ..)
+            | HiloUsuarioPendiente::CambioPassword(receptor, ..),
+        ) = &self.hilo_usuario_pendiente
+        else {
+            return;
         };
         let Ok(resultado_hash) = receptor.try_recv() else {
             return;

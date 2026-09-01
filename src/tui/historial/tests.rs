@@ -575,7 +575,7 @@ fn la_linea_de_tiempo_agrupa_por_dia_y_muestra_el_glifo_de_actividad() {
         .buffer()
         .content
         .iter()
-        .map(|celda| celda.symbol())
+        .map(ratatui::buffer::Cell::symbol)
         .collect();
 
     assert!(texto.contains("movimientos"));
@@ -619,7 +619,7 @@ fn la_vista_clasica_muestra_tabla_completa_y_el_editor_de_columnas_oculta_una() 
         .buffer()
         .content
         .iter()
-        .map(|celda| celda.symbol())
+        .map(ratatui::buffer::Cell::symbol)
         .collect();
     assert!(texto.contains("Ana Solano"));
     assert!(texto.contains("CÉDULA"));
@@ -644,7 +644,7 @@ fn la_vista_clasica_muestra_tabla_completa_y_el_editor_de_columnas_oculta_una() 
         .buffer()
         .content
         .iter()
-        .map(|celda| celda.symbol())
+        .map(ratatui::buffer::Cell::symbol)
         .collect();
     assert!(texto.contains("COLUMNAS VISIBLES"));
 }

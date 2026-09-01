@@ -280,7 +280,7 @@ fn renderiza_resultados_y_luego_el_mensaje_de_confirmacion() {
             .buffer()
             .content
             .iter()
-            .map(|celda| celda.symbol())
+            .map(ratatui::buffer::Cell::symbol)
             .collect()
     }
 

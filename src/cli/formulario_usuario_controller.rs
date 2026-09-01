@@ -79,10 +79,10 @@ fn sincronizar_input(app: &mut AppState) {
 }
 
 fn mover_campo(app: &mut AppState, delta: isize) {
-    let cambio = match &mut app.formulario_usuario {
-        Some(f) => f.mover_campo(delta),
-        None => false,
-    };
+    let cambio = app
+        .formulario_usuario
+        .as_mut()
+        .is_some_and(|f| f.mover_campo(delta));
     if cambio {
         sincronizar_input(app);
     }
@@ -160,14 +160,11 @@ fn guardar_formulario_usuario(core: &AppCore, app: &mut AppState) {
         return;
     };
     let nombre = form.nombre.trim().to_string();
-    let datos = match form.validar() {
-        Ok(datos) => datos,
-        // No debería pasar (el resumen sólo se abre tras validar), pero si
-        // pasa se vuelve a editar con los errores marcados.
-        Err(_) => {
-            form.subfase = SubfaseUsuario::Editando;
-            return;
-        }
+    // No debería pasar (el resumen sólo se abre tras validar), pero si
+    // pasa se vuelve a editar con los errores marcados.
+    let Ok(datos) = form.validar() else {
+        form.subfase = SubfaseUsuario::Editando;
+        return;
     };
     match datos {
         DatosUsuario::Crear(input) => match core.crear_usuario(sesion, input) {

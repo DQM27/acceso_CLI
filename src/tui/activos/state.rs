@@ -343,7 +343,7 @@ impl ActivosState {
                 }
                 self.seleccion = id
                     .and_then(|x| self.registros.iter().position(|r| r.registro_id == x))
-                    .or((!self.registros.is_empty()).then_some(0))
+                    .or_else(|| (!self.registros.is_empty()).then_some(0))
             }
             Err(e) => {
                 self.registros.clear();

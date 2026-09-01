@@ -121,10 +121,7 @@ impl LoginState {
 
     pub fn completar_validacion(&mut self, error: Option<String>) {
         self.password.clear();
-        self.estado = match error {
-            Some(error) => EstadoLogin::Error(error),
-            None => EstadoLogin::Exito,
-        };
+        self.estado = error.map_or(EstadoLogin::Exito, EstadoLogin::Error);
     }
 
     /// Muestra un mensaje de error ya en la pantalla de Login, sin haber

@@ -32,8 +32,7 @@ impl<C: Columna> SelectorColumnas<C> {
         self.columnas
             .iter()
             .find(|(c, _)| *c == columna)
-            .map(|(_, visible)| *visible)
-            .unwrap_or(true)
+            .is_none_or(|(_, visible)| *visible)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (C, bool)> + '_ {

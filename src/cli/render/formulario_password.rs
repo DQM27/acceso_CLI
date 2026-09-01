@@ -71,7 +71,7 @@ fn linea_campo(form: &FormularioPassword, campo: CampoPassword) -> Line<'static>
     Line::from(vec![
         Span::styled(glifo, estilo_glifo),
         Span::styled(
-            format!("{:<16}", etiqueta),
+            format!("{etiqueta:<16}"),
             if activo { acento() } else { Style::default() },
         ),
         Span::raw("•".repeat(valor.chars().count())),

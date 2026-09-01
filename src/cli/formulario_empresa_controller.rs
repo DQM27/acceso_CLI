@@ -63,9 +63,8 @@ fn guardar_formulario_empresa(core: &AppCore, app: &mut AppState) {
     let Some(form) = &mut app.formulario_empresa else {
         return;
     };
-    let nombre = match form.validar() {
-        Ok(nombre) => nombre,
-        Err(_) => return,
+    let Ok(nombre) = form.validar() else {
+        return;
     };
     let modo = form.modo;
     let resultado = match modo {

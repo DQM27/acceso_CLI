@@ -547,7 +547,7 @@ pub fn calcular_sugerencias(core: &AppCore, texto: &str, entrada: &Entrada) -> V
                 .iter()
                 .filter(|numero| numero.to_string().starts_with(digitos))
                 .take(8)
-                .map(|numero| numero.to_string())
+                .map(ToString::to_string)
                 .collect();
             if sugeridos.is_empty() {
                 return vec!["sin gafetes libres con ese prefijo (1-50)".to_string()];
@@ -639,7 +639,7 @@ pub fn autocompletar(core: &AppCore, texto: &str) -> Option<String> {
         let prefijo = texto[1..].to_lowercase();
         let nombre = Comando::TODOS
             .into_iter()
-            .map(|comando| comando.nombre())
+            .map(Comando::nombre)
             .find(|nombre| nombre.starts_with(&prefijo) && *nombre != prefijo)?;
         return Some(format!("/{nombre} "));
     }
@@ -689,10 +689,10 @@ pub fn autocompletar(core: &AppCore, texto: &str) -> Option<String> {
 /// espacio que lo separaba).
 fn reemplazar_ultimo_token(texto: &str, nuevo: &str) -> String {
     let recortado = texto.trim_end();
-    match recortado.rfind(char::is_whitespace) {
-        Some(posicion) => format!("{} {nuevo}", &recortado[..posicion]),
-        None => nuevo.to_string(),
-    }
+    recortado.rfind(char::is_whitespace).map_or_else(
+        || nuevo.to_string(),
+        |posicion| format!("{} {nuevo}", &recortado[..posicion]),
+    )
 }
 
 #[cfg(test)]

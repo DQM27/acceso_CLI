@@ -290,6 +290,12 @@ fn dos_conexiones_solo_pueden_crear_un_root_inicial() {
     drop(inicial);
     let barrera = Arc::new(Barrier::new(2));
 
+    // El `collect()` es necesario, no "innecesario" (falso positivo del
+    // lint): fuerza a lanzar los DOS hilos antes de unir ninguno — sin él,
+    // un iterador perezoso encadenando spawn+join lanzaría el primer hilo y
+    // lo esperaría antes de lanzar el segundo, y la carrera contra el
+    // `Barrier` (el punto entero de este test) nunca ocurriría.
+    #[allow(clippy::needless_collect)]
     let handles: Vec<_> = ["ROOT-A", "ROOT-B"]
         .into_iter()
         .map(|cedula| {
@@ -338,6 +344,10 @@ fn dos_conexiones_no_pueden_desactivar_ambos_roots() {
     };
     let barrera = Arc::new(Barrier::new(2));
 
+    // Mismo motivo que en el test anterior: el `collect()` fuerza a lanzar
+    // los dos hilos antes de unir ninguno, necesario para la carrera contra
+    // el `Barrier`.
+    #[allow(clippy::needless_collect)]
     let handles: Vec<_> = [primero, segundo]
         .into_iter()
         .map(|id| {

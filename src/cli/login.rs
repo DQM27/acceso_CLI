@@ -27,6 +27,12 @@ use crate::application::AppCore;
 
 use super::{AppState, AutenticacionPendiente, Fase, NivelFeedback};
 
+// `match Ok/Err` explícito en vez de `if let/else` (lo que pide este lint)
+// se deja a propósito en las tres funciones de este archivo: nombrar los dos
+// casos de un `Result` de autenticación es más claro que una condición con
+// negativo implícito, y no vale el riesgo de una transcripción manual en
+// código de login.
+#[allow(clippy::single_match_else)]
 pub(super) fn manejar_login_cedula(core: &AppCore, app: &mut AppState, key: KeyEvent) {
     match key.code {
         KeyCode::Enter => {
@@ -61,6 +67,7 @@ pub(super) fn manejar_login_cedula(core: &AppCore, app: &mut AppState, key: KeyE
     }
 }
 
+#[allow(clippy::single_match_else)]
 pub(super) fn manejar_login_password(
     core: &AppCore,
     app: &mut AppState,
@@ -119,6 +126,7 @@ pub(super) fn manejar_login_password(
 /// SQLite (rápido, sin Argon2) antes de aceptarla. Devuelve `true` si había un
 /// resultado y se procesó (el llamador lo usa para saber si hace falta
 /// redibujar).
+#[allow(clippy::single_match_else)]
 pub(super) fn recibir_autenticacion(
     core: &AppCore,
     app: &mut AppState,

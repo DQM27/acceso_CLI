@@ -438,10 +438,7 @@ fn texto_tipo_incidente(tipo: TipoIncidenteGafete) -> &'static str {
 }
 
 fn texto_motivo_opcional(motivo: Option<MotivoResolucionGafete>) -> &'static str {
-    match motivo {
-        Some(motivo) => texto_motivo(motivo),
-        None => "—",
-    }
+    motivo.map_or("—", texto_motivo)
 }
 
 fn texto_estado(estado: EstadoGafete) -> &'static str {

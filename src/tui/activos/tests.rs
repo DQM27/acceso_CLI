@@ -274,7 +274,7 @@ fn detalle_muestra_solo_datos_operativos_en_orden() {
         .buffer()
         .content
         .iter()
-        .map(|cell| cell.symbol())
+        .map(ratatui::buffer::Cell::symbol)
         .collect();
 
     assert!(texto.contains("Cédula: C-7"));

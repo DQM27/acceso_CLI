@@ -80,12 +80,43 @@ complexity/perf) se sigue verificando igual que siempre con
   `cast_possible_wrap`/`cast_sign_loss`/`cast_precision_loss`/`unchecked_time_subtraction`/
   `similar_names`/`float_cmp` ya en `"deny"`. `cargo fmt`, la suite completa y la vara de
   siempre en verde — de 1076 warnings iniciales quedan 931.
-- [ ] **Capa 3 — simplificaciones de `Option`/`Result` y legibilidad menor.**
+- [x] **Capa 3 (2026-09-01) — simplificaciones de `Option`/`Result` y legibilidad menor.**
   `map(f).unwrap_or_else(g)` → `map_or_else`, `map(f).unwrap_or(a)` → `map_or`, closures
-  redundantes, `if let`/`match` de un solo patrón → `if let`/`let-else`. Bajo riesgo de bug,
-  pero vale revisar cada uno igual por si alguno sí cambia de comportamiento sutilmente
-  (`unwrap_or` evalúa siempre su argumento, `unwrap_or_else` no — un `map_or` mecánico sin
-  mirar el argumento podría introducir trabajo innecesario donde antes no lo había).
+  redundantes (`.map(|x| x.metodo())` → `.map(Tipo::metodo)`), `match`/`if let` de un solo
+  patrón → `if let`/`let...else`, `collect()` de más, `Default::default()` ambiguo →
+  `Tipo::default()` explícito. Cada conversión se revisó a mano por el motivo que ya
+  anotaba esta nota (`unwrap_or` evalúa siempre su argumento, `unwrap_or_else` no) — en la
+  práctica, todos los casos con default no trivial (una llamada, no un literal) ya usaban
+  `unwrap_or_else`/`_else` y se tradujeron a la variante lazy correcta (`map_or_else`),
+  nunca a la eager (`map_or`) sobre un cómputo real.
+
+  Un lote de `#[allow]` puntuales documentados donde la reescritura mecánica habría sido
+  peor, no simplemente evitada por pereza: dos sitios (`cli/historial_controller.rs`,
+  `tui/historial/state.rs`) arman una ruta por defecto a partir del mismo `String` que la
+  otra rama toma prestado — forzar `map_or_else` ahí exige clonar sólo para complacer al
+  lint, sin beneficio real. Dos despachadores de render (`cli/render/prompt.rs`,
+  `cli/render/mod.rs`) encadenan `if let`/`else if let` sobre campos `Option` DISTINTOS
+  (historial, formulario, formulario_password, salida_gafete...) — no es "mapear un solo
+  Option", y la reescritura sugerida anida el resto de la cascada dentro del closure por
+  defecto, invirtiendo el orden de prioridad. Las tres funciones de login
+  (`cli/login.rs`) se dejaron con su `match Ok/Err` explícito — más claro que un
+  `if let/else` con negación implícita en código de autenticación, y no valía el riesgo de
+  transcribir a mano un flujo de credenciales. Dos tests de `root_inicial.rs` que lanzan
+  hilos contra un `Barrier`: el `collect()` que el lint marcaba "innecesario" es en
+  realidad necesario — fuerza a lanzar los dos hilos antes de unir ninguno, sin eso la
+  carrera que el test verifica no ocurriría.
+
+  **Regresión real encontrada y corregida antes de cerrar la capa:** tres de las
+  conversiones a `map_or(bool_literal, |x| x.metodo())` introdujeron una violación de
+  `unnecessary_map_or` (grupo por defecto de Clippy, no pedantic/nursery) — la vara
+  histórica del proyecto (`-A clippy::pedantic -A clippy::nursery -D warnings`) la agarró
+  antes de cerrar, como debía. Corregidas a `is_some_and`/`is_none_or`
+  (`cli/columnas.rs`, `cli/formulario_controller.rs`, `cli/formulario_usuario_controller.rs`).
+
+  `map_unwrap_or`, `option_if_let_else`, `redundant_closure_for_method_calls`,
+  `single_match_else`, `single_match`, `manual_let_else`, `needless_collect` ya en
+  `"deny"`. `cargo fmt`, la suite completa (502 tests) y la vara histórica en verde — de
+  931 warnings quedan 865.
 - [ ] **Capa 4 — mantenibilidad.** Imports wildcard (15), funciones que superan 100 líneas
   (12, hasta 198), un `struct` con más de 3 booleanos, un `impl Debug` manual que no incluye
   todos los campos (revisar si es a propósito).

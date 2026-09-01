@@ -175,8 +175,7 @@ where
                     .buscar_por_id(empresa_id)
                     .ok()
                     .flatten()
-                    .map(|empresa| empresa.nombre)
-                    .unwrap_or_else(|| empresa_id.to_string())
+                    .map_or_else(|| empresa_id.to_string(), |empresa| empresa.nombre)
             };
             registrar(
                 "empresa_id",

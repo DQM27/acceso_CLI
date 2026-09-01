@@ -369,13 +369,13 @@ impl FormularioContratista {
         if nombre.is_empty() {
             errores.push((Campo::Nombre, "Escriba el nombre".to_string()));
         }
-        let empresa_id = match &self.empresa {
-            Some((id, _)) => Some(*id),
-            None => {
+        let empresa_id = self.empresa.as_ref().map_or_else(
+            || {
                 errores.push((Campo::Empresa, "Elija una empresa".to_string()));
                 None
-            }
-        };
+            },
+            |(id, _)| Some(*id),
+        );
 
         let fecha = if self.requiere_praind() {
             let texto = self.fecha_praind.trim();
@@ -383,16 +383,16 @@ impl FormularioContratista {
                 errores.push((Campo::FechaPraind, "Fecha PRAIND requerida".to_string()));
                 None
             } else {
-                match NaiveDate::parse_from_str(texto, "%d/%m/%Y") {
-                    Ok(fecha) => Some(fecha),
-                    Err(_) => {
+                NaiveDate::parse_from_str(texto, "%d/%m/%Y").map_or_else(
+                    |_| {
                         errores.push((
                             Campo::FechaPraind,
                             "Fecha inválida. Use DD/MM/YYYY".to_string(),
                         ));
                         None
-                    }
-                }
+                    },
+                    Some,
+                )
             }
         } else {
             None
@@ -419,7 +419,7 @@ impl FormularioContratista {
 fn formatear_fecha(texto: &str) -> String {
     let digitos: String = texto
         .chars()
-        .filter(|c| c.is_ascii_digit())
+        .filter(char::is_ascii_digit)
         .take(MAX_DIGITOS_FECHA)
         .collect();
     let mut fecha = String::new();
