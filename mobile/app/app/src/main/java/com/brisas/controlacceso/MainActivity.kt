@@ -3,13 +3,19 @@ package com.brisas.controlacceso
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,7 +23,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import java.io.File
@@ -34,8 +44,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             val rutaBaseDatos = File(filesDir, "control_acceso.db").absolutePath
             val nucleo = remember { Nucleo.abrir(rutaBaseDatos) }
-            MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
+            TemaBrisas {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background,
+                ) {
                     PantallaLogin(nucleo)
                 }
             }
@@ -52,31 +65,66 @@ fun PantallaLogin(nucleo: Nucleo) {
 
     val sesionActual = sesion
     if (sesionActual != null) {
-        Column(modifier = Modifier.padding(24.dp)) {
-            Text("Brisas Control de Acceso", style = MaterialTheme.typography.titleLarge)
+        Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text("Sesión iniciada", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Sesión iniciada: ${sesionActual.nombre} (${sesionActual.rol})",
-                modifier = Modifier.padding(top = 16.dp),
+                "${sesionActual.nombre} (${sesionActual.rol})",
+                modifier = Modifier.padding(top = 8.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         return
     }
 
-    Column(modifier = Modifier.padding(24.dp)) {
-        Text("Brisas Control de Acceso", style = MaterialTheme.typography.titleLarge)
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.marca),
+            contentDescription = null,
+            modifier = Modifier.size(96.dp).clip(RoundedCornerShape(20.dp)),
+        )
+
+        Text(
+            "Control de acceso",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(top = 16.dp),
+        )
+        Text(
+            "Brisas",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
         OutlinedTextField(
             value = cedula,
             onValueChange = { cedula = it },
             label = { Text("Cédula") },
-            modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                focusedLabelColor = MaterialTheme.colorScheme.primary,
+            ),
+            modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
         )
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
             label = { Text("Contraseña") },
+            singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                focusedLabelColor = MaterialTheme.colorScheme.primary,
+            ),
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
         )
         Button(
             onClick = {
@@ -87,14 +135,22 @@ fun PantallaLogin(nucleo: Nucleo) {
                     error = excepcion.message
                 }
             },
-            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ),
+            modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
         ) {
             Text("Ingresar")
         }
 
         val mensajeError = error
         if (mensajeError != null) {
-            Text(mensajeError, modifier = Modifier.padding(top = 16.dp))
+            Text(
+                mensajeError,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 16.dp),
+            )
         }
     }
 }
