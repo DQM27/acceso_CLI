@@ -144,7 +144,7 @@ impl NuevoIngresoState {
                 self.contratistas.clear();
                 self.total = 0;
                 self.seleccion = None;
-                self.error = Some(e)
+                self.error = Some(e);
             }
         }
     }
@@ -169,7 +169,7 @@ impl NuevoIngresoState {
                 self.gafete_texto.clear();
                 self.gafete_cursor = 0;
                 self.error = None;
-                self.etapa = EtapaNuevoIngreso::Formulario
+                self.etapa = EtapaNuevoIngreso::Formulario;
             }
             Err(e) => self.error = Some(e),
         }
@@ -408,7 +408,7 @@ impl NuevoIngresoState {
         self.medio_opcion = 0;
         self.gafete_texto.clear();
         self.gafete_cursor = 0;
-        self.error = None
+        self.error = None;
     }
     pub(super) fn inicio_visible(&self, cap: usize) -> usize {
         self.seleccion

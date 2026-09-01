@@ -1,7 +1,7 @@
 //! Controlador de las fases de login (`LoginCedula` → `LoginPassword` →
 //! `Verificando`) de la interfaz de comandos.
 //!
-//! La cédula se resuelve contra SQLite al confirmar con Enter (lectura
+//! La cédula se resuelve contra `SQLite` al confirmar con Enter (lectura
 //! rápida): eso ya deja saber si el usuario existe y, sobre todo, su
 //! nombre — con eso el título muta de "Brisas CLI" a la identidad del
 //! operador antes incluso de pedir la contraseña. La contraseña se verifica
@@ -123,7 +123,7 @@ pub(super) fn manejar_login_password(
 
 /// Recoge el resultado del hilo de Argon2 cuando llega. La sesión que viaja
 /// por el canal es un snapshot de antes de la verificación: se revalida contra
-/// SQLite (rápido, sin Argon2) antes de aceptarla. Devuelve `true` si había un
+/// `SQLite` (rápido, sin Argon2) antes de aceptarla. Devuelve `true` si había un
 /// resultado y se procesó (el llamador lo usa para saber si hace falta
 /// redibujar).
 #[allow(clippy::single_match_else)]

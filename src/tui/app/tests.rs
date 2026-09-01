@@ -729,17 +729,17 @@ fn contratistas_tui_carga_empresas_crea_edita_y_busca_con_appcore_real() {
     assert_eq!(app.vista, Vista::Contratistas);
     app.procesar_tecla_vista_con_core(tecla(KeyCode::Char('N')), Some(&core));
     for c in "001-ABC".chars() {
-        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core))
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core));
     }
     app.procesar_tecla_vista_con_core(tecla(KeyCode::Tab), Some(&core));
     for c in "José Hernández".chars() {
-        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core))
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core));
     }
     for _ in 0..3 {
-        app.procesar_tecla_vista_con_core(tecla(KeyCode::Tab), Some(&core))
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Tab), Some(&core));
     }
     for c in "31122026".chars() {
-        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core))
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core));
     }
     app.procesar_tecla_vista_con_core(tecla(KeyCode::Tab), Some(&core));
     app.procesar_tecla_vista_con_core(tecla(KeyCode::Enter), Some(&core));
@@ -755,20 +755,20 @@ fn contratistas_tui_carga_empresas_crea_edita_y_busca_con_appcore_real() {
     assert_eq!(items.items[0].empresa_id, empresa_id);
     app.procesar_tecla_vista_con_core(tecla(KeyCode::Enter), Some(&core));
     for _ in 0.."001-ABC".chars().count() {
-        app.procesar_tecla_vista_con_core(tecla(KeyCode::Backspace), Some(&core))
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Backspace), Some(&core));
     }
     for c in "009-XYZ".chars() {
-        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core))
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core));
     }
     app.procesar_tecla_vista_con_core(tecla(KeyCode::Tab), Some(&core));
     for _ in 0.."José Hernández".chars().count() {
-        app.procesar_tecla_vista_con_core(tecla(KeyCode::Backspace), Some(&core))
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Backspace), Some(&core));
     }
     for c in "José Álvarez".chars() {
-        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core))
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Char(c)), Some(&core));
     }
     for _ in 0..5 {
-        app.procesar_tecla_vista_con_core(tecla(KeyCode::Tab), Some(&core))
+        app.procesar_tecla_vista_con_core(tecla(KeyCode::Tab), Some(&core));
     }
     app.procesar_tecla_vista_con_core(tecla(KeyCode::Enter), Some(&core));
     assert!(
@@ -1051,7 +1051,7 @@ fn f2_registra_salida_refresca_historial_sin_navegar() {
 /// Ingresos Activos": antes cada registro exitoso cambiaba
 /// `self.vista` a `Vista::IngresosActivos`, obligando a volver a
 /// navegar para registrar al siguiente contratista. Ahora se queda en
-/// Nuevo Ingreso — el ingreso sí quedó real en SQLite.
+/// Nuevo Ingreso — el ingreso sí quedó real en `SQLite`.
 #[test]
 fn registrar_ingreso_se_queda_en_nuevo_ingreso_en_vez_de_saltar_a_activos() {
     let connection = Connection::open_in_memory().unwrap();
@@ -1283,7 +1283,7 @@ fn f2_registra_salida_refresca_nuevo_ingreso_sin_navegar() {
     let mut terminal = Terminal::new(TestBackend::new(140, 30)).unwrap();
     terminal
         .draw(|frame| {
-            nuevo_ingreso::render(frame, frame.area(), &app.nuevo_ingreso, &sesion, theme)
+            nuevo_ingreso::render(frame, frame.area(), &app.nuevo_ingreso, &sesion, theme);
         })
         .unwrap();
     assert!(
@@ -1307,7 +1307,7 @@ fn f2_registra_salida_refresca_nuevo_ingreso_sin_navegar() {
     );
     terminal
         .draw(|frame| {
-            nuevo_ingreso::render(frame, frame.area(), &app.nuevo_ingreso, &sesion, theme)
+            nuevo_ingreso::render(frame, frame.area(), &app.nuevo_ingreso, &sesion, theme);
         })
         .unwrap();
     let despues = texto(&terminal);

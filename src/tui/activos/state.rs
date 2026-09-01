@@ -253,7 +253,7 @@ impl ActivosState {
 
     pub fn completar_empresas(&mut self, r: Result<Vec<Empresa>, String>) {
         if let Ok(e) = r {
-            self.empresas = e
+            self.empresas = e;
         }
     }
     pub fn solicitud_carga(&self) -> AccionActivos {
@@ -343,13 +343,13 @@ impl ActivosState {
                 }
                 self.seleccion = id
                     .and_then(|x| self.registros.iter().position(|r| r.registro_id == x))
-                    .or_else(|| (!self.registros.is_empty()).then_some(0))
+                    .or_else(|| (!self.registros.is_empty()).then_some(0));
             }
             Err(e) => {
                 self.registros.clear();
                 self.total_activos = 0;
                 self.seleccion = None;
-                self.mensaje = Some(e)
+                self.mensaje = Some(e);
             }
         }
     }
@@ -494,9 +494,9 @@ impl ActivosState {
             KeyCode::Char(' ') => {
                 let n = self.columnas.iter().filter(|x| x.1).count();
                 if self.columnas[s].1 && n == 1 {
-                    self.mensaje = Some("Debe conservar al menos una columna".into())
+                    self.mensaje = Some("Debe conservar al menos una columna".into());
                 } else {
-                    self.columnas[s].1 = !self.columnas[s].1
+                    self.columnas[s].1 = !self.columnas[s].1;
                 }
             }
             KeyCode::Esc => self.modo = ModoActivos::Normal,
@@ -505,14 +505,14 @@ impl ActivosState {
     }
     fn mover(&mut self, d: isize) {
         if self.registros.is_empty() {
-            self.seleccion = None
+            self.seleccion = None;
         } else {
             let i = self.seleccion.unwrap_or(0);
             self.seleccion = Some(if d < 0 {
                 i.saturating_sub(1)
             } else {
                 (i + 1).min(self.registros.len() - 1)
-            })
+            });
         }
     }
     fn id_seleccionado(&self) -> Option<i64> {

@@ -9,6 +9,9 @@ use std::{fs, io, path::PathBuf};
 
 const FILE_NAME: &str = "cli-preferencias.conf";
 
+// El prefijo es parte del formato persistido (`columnas_*`) y distingue estas
+// preferencias de cualquier futura opción no relacionada con tablas.
+#[allow(clippy::struct_field_names)]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Preferencias {
     pub columnas_busqueda: String,
@@ -24,9 +27,11 @@ impl Preferencias {
                 continue;
             };
             match clave.trim() {
-                "columnas_busqueda" => preferencias.columnas_busqueda = valor.trim().to_owned(),
-                "columnas_activos" => preferencias.columnas_activos = valor.trim().to_owned(),
-                "columnas_historial" => preferencias.columnas_historial = valor.trim().to_owned(),
+                "columnas_busqueda" => valor.trim().clone_into(&mut preferencias.columnas_busqueda),
+                "columnas_activos" => valor.trim().clone_into(&mut preferencias.columnas_activos),
+                "columnas_historial" => valor
+                    .trim()
+                    .clone_into(&mut preferencias.columnas_historial),
                 _ => {}
             }
         }

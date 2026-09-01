@@ -111,7 +111,7 @@ pub fn render(
 
     match &state.modo {
         ModoGafetes::Historial { incidentes, .. } => {
-            render_historial(frame, areas.body, incidentes, theme)
+            render_historial(frame, areas.body, incidentes, theme);
         }
         _ => render_cuerpo(frame, areas.body, state, theme),
     }

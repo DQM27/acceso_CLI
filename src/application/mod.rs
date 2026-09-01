@@ -58,7 +58,7 @@ pub enum BootstrapError {
     Database(#[from] SchemaError),
 }
 
-/// Fachada de aplicación y propietario único de la conexión SQLite.
+/// Fachada de aplicación y propietario único de la conexión `SQLite`.
 pub struct AppCore {
     connection: Connection,
     reloj: Arc<dyn Reloj>,
@@ -68,7 +68,7 @@ pub struct AppCore {
 }
 
 impl AppCore {
-    /// Construye un `AppCore` sin ruta de archivo asociada (pensado para SQLite en
+    /// Construye un `AppCore` sin ruta de archivo asociada (pensado para `SQLite` en
     /// memoria y tests). **Los respaldos usan `directorio_respaldos()`, que sin una
     /// ruta real cae en `./backups` relativo al directorio de trabajo del proceso**
     /// — para producción, usar [`AppCore::abrir`], que sí registra la ruta real.
@@ -111,7 +111,7 @@ impl Drop for AppCore {
 
 /// Comprobación de sanidad del actor compartida por todos los dominios: "¿quién dice
 /// que está haciendo esto sigue siendo un usuario real y activo?". Autoriza contra el
-/// rol y estado que existen ahora en SQLite — el rol del snapshot de sesión nunca
+/// rol y estado que existen ahora en `SQLite` — el rol del snapshot de sesión nunca
 /// decide permisos, una degradación surte efecto en la siguiente operación sin
 /// necesidad de reiniciar la TUI.
 fn verificar_actor_activo(

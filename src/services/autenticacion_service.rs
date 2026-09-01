@@ -15,7 +15,7 @@ pub struct UsuarioSesion {
 }
 
 /// Resultado de resolver la cédula (existe, está activo) sin haber verificado todavía la
-/// contraseña — permite separar la parte que toca SQLite (rápida) de la verificación de
+/// contraseña — permite separar la parte que toca `SQLite` (rápida) de la verificación de
 /// Argon2 (lenta), para que esta última pueda correr fuera del hilo de eventos.
 #[derive(Clone, PartialEq, Eq)]
 pub struct CandidatoAutenticacion {

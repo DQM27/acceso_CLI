@@ -348,6 +348,9 @@ fn dos_conexiones_no_pueden_desactivar_ambos_roots() {
     // los dos hilos antes de unir ninguno, necesario para la carrera contra
     // el `Barrier`.
     #[allow(clippy::needless_collect)]
+    // La conversión tuple→array sugerida es menos directa que enumerar los
+    // dos IDs que deben participar en la carrera.
+    #[allow(clippy::tuple_array_conversions)]
     let handles: Vec<_> = [primero, segundo]
         .into_iter()
         .map(|id| {

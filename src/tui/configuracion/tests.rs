@@ -230,7 +230,7 @@ fn la_pantalla_respaldos_muestra_el_motivo_del_fallo_automatico() {
                 &estado,
                 &sesion_prueba(),
                 crate::tui::ui_kit::ThemePreset::Brisas.theme(),
-            )
+            );
         })
         .unwrap();
 

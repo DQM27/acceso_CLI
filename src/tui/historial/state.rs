@@ -207,14 +207,14 @@ impl HistorialState {
                 self.corte_id = Some(p.corte_id);
                 self.registros = p.items;
                 self.total = p.total;
-                self.seleccion = (!self.registros.is_empty()).then_some(0)
+                self.seleccion = (!self.registros.is_empty()).then_some(0);
             }
             Err(e) => {
                 self.registros.clear();
                 self.total = 0;
                 self.seleccion = None;
                 self.corte_id = None;
-                self.mensaje = Some(e)
+                self.mensaje = Some(e);
             }
         }
     }
@@ -266,11 +266,11 @@ impl HistorialState {
             ModoHistorial::Normal => {}
         }
 
-        if let KeyCode::F(3) = k.code {
+        if k.code == KeyCode::F(3) {
             self.vista = self.vista.next();
             return AccionHistorial::Ninguna;
         }
-        if let KeyCode::F(4) = k.code
+        if k.code == KeyCode::F(4)
             && self.vista == ViewMode::Classic
             && self.modo == ModoHistorial::Normal
         {
@@ -280,7 +280,7 @@ impl HistorialState {
             };
             return AccionHistorial::Ninguna;
         }
-        if let KeyCode::F(5) = k.code {
+        if k.code == KeyCode::F(5) {
             if self.exportando {
                 // No hace nada — ya hay una exportación en vuelo, no se
                 // encola una segunda.
@@ -362,7 +362,7 @@ impl HistorialState {
                     // pantalla no hacía nada, sin explicar la restricción.
                     self.mensaje = Some("Debe conservar al menos una columna".into());
                 } else {
-                    self.columnas_clasica[s].1 = !self.columnas_clasica[s].1
+                    self.columnas_clasica[s].1 = !self.columnas_clasica[s].1;
                 }
             }
             KeyCode::Enter if proposito == PropositoColumnas::Exportacion => {
@@ -426,14 +426,14 @@ impl HistorialState {
     }
     fn mover(&mut self, d: isize) {
         if self.registros.is_empty() {
-            self.seleccion = None
+            self.seleccion = None;
         } else {
             let i = self.seleccion.unwrap_or(0);
             self.seleccion = Some(if d < 0 {
                 i.saturating_sub(1)
             } else {
                 (i + 1).min(self.registros.len() - 1)
-            })
+            });
         }
     }
     fn seleccionado(&self) -> Option<&MovimientoIngresoResumen> {

@@ -127,7 +127,7 @@ type ParametrosSql = Vec<(String, Box<dyn rusqlite::ToSql>)>;
 
 /// Igual que `contratistas::construir_where`: arma el `WHERE` sólo con las
 /// condiciones realmente activas, sin flags `:x IS NULL OR col = :x`
-/// evaluados en cada fila — eso es lo que le impedía a SQLite usar
+/// evaluados en cada fila — eso es lo que le impedía a `SQLite` usar
 /// `idx_registro_ingresos_empresa` aunque existiera (confirmado con
 /// `EXPLAIN QUERY PLAN`).
 fn construir_where_activos(

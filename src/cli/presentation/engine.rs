@@ -1,6 +1,6 @@
 //! Motor de presentación mínimo: sabe qué animaciones están vivas, calcula
 //! su valor actual y le dice al loop si hace falta seguir despertando para
-//! pintar el próximo frame. No sabe nada de reglas de negocio, SQLite ni
+//! pintar el próximo frame. No sabe nada de reglas de negocio, `SQLite` ni
 //! permisos — sólo tiempo, valores e identificadores de elemento.
 
 use std::collections::HashMap;

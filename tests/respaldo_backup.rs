@@ -170,7 +170,7 @@ fn validar_respaldo_rechaza_un_esquema_de_una_version_futura() {
     assert_eq!(
         validar_respaldo(&ruta).unwrap(),
         ResultadoValidacion::EsquemaIncompatible {
-            version_encontrada: 999999
+            version_encontrada: 999_999
         }
     );
 

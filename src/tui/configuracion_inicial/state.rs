@@ -119,11 +119,11 @@ impl ConfiguracionInicialState {
             KeyCode::Tab | KeyCode::Down => self.siguiente_campo(),
             KeyCode::BackTab | KeyCode::Up => self.campo_anterior(),
             KeyCode::Enter if self.campo_activo != CampoConfiguracion::ConfirmarPassword => {
-                self.siguiente_campo()
+                self.siguiente_campo();
             }
             KeyCode::Enter => self.intentar_crear(),
             KeyCode::Char('g' | 'G') if key.modifiers.contains(KeyModifiers::SHIFT) => {
-                self.intentar_crear()
+                self.intentar_crear();
             }
             KeyCode::Backspace
             | KeyCode::Delete
@@ -136,7 +136,7 @@ impl ConfiguracionInicialState {
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                self.editar(key)
+                self.editar(key);
             }
             _ => {}
         }

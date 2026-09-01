@@ -1,3 +1,5 @@
+use std::fmt::Write as _;
+
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
@@ -75,10 +77,11 @@ fn render_busqueda(frame: &mut Frame, area: Rect, state: &SalidaRapidaState, the
     const ETIQUETA: &str = "Buscar gafete o nombre/cédula: ";
     let mut texto = format!("{ETIQUETA}{}", state.busqueda.value());
     if let Some(total) = state.resultados_ocultos() {
-        texto.push_str(&format!(
+        let _ = write!(
+            texto,
             "  ({} de {total} — afine la búsqueda)",
             state.registros.len()
-        ));
+        );
     }
     frame.render_widget(Paragraph::new(texto).style(theme.accent()), area);
     let antes_del_cursor: String = state

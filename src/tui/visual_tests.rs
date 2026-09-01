@@ -1,3 +1,5 @@
+use std::fmt::Write as _;
+
 use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
 
 use super::*;
@@ -41,9 +43,7 @@ fn volcar_buffer(buffer: &Buffer) -> String {
             let relleno_sin_estilo =
                 tramo.trim().is_empty() && fg == ratatui::style::Color::Reset && bg == fg;
             if !relleno_sin_estilo {
-                estilos.push_str(&format!(
-                    "{tramo:?} fg={fg:?} bg={bg:?} mod={modificador:?}\n"
-                ));
+                let _ = writeln!(estilos, "{tramo:?} fg={fg:?} bg={bg:?} mod={modificador:?}");
             }
             x = fin;
         }
@@ -202,7 +202,7 @@ fn todas_las_pantallas_renderizan_la_matriz_de_tamanos_y_temas() {
                                 theme,
                             ),
                             Screen::Login => {
-                                login::render(frame, area, &login::LoginState::default(), theme)
+                                login::render(frame, area, &login::LoginState::default(), theme);
                             }
                             Screen::Menu => menu_principal::render(
                                 frame,

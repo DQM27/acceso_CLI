@@ -157,7 +157,7 @@ impl App {
                             .as_ref()
                             .ok_or_else(|| "No hay una sesión activa".to_owned())?;
                         core.actualizar_contratista(actor, id, datos)
-                            .map(|_| None)
+                            .map(|()| None)
                             .map_err(mensaje_contratista)
                     });
                 let recarga = self

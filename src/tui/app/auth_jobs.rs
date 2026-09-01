@@ -33,7 +33,7 @@ pub(super) struct DatosUsuarioPendiente {
 }
 
 /// Receptor del hilo aparte que sólo calcula un hash de Argon2 — nunca del resultado
-/// final de escribir en SQLite, que ocurre después, en el hilo principal.
+/// final de escribir en `SQLite`, que ocurre después, en el hilo principal.
 pub(super) type ReceptorHash = mpsc::Receiver<Result<String, PasswordError>>;
 pub(super) type ReceptorCambioPropio = mpsc::Receiver<Result<(String, String), String>>;
 pub(super) type ReceptorAutenticacion = mpsc::Receiver<Result<UsuarioSesion, AutenticacionError>>;
@@ -46,7 +46,7 @@ impl App {
     /// atrás, ver `iniciar_autenticacion`) — si la cuenta fue desactivada,
     /// degradada o editada mientras tanto, ese snapshot ya está vencido.
     /// Antes de aceptar la sesión se vuelve a resolver el candidato contra
-    /// SQLite (rápido, sin Argon2) y se usa ese estado fresco, no el que
+    /// `SQLite` (rápido, sin Argon2) y se usa ese estado fresco, no el que
     /// llegó por el canal — `buscar_candidato` ya rechaza cuentas inactivas
     /// (`docs/auditoria-dominio-2026-08-20.md`, hallazgo #5).
     pub(super) fn recibir_autenticacion_si_lista(&mut self, core: Option<&AppCore>) {
@@ -68,7 +68,7 @@ impl App {
         }
     }
 
-    /// Resuelve la cédula de inmediato (rápido, sólo SQLite) y, si existe y está activo,
+    /// Resuelve la cédula de inmediato (rápido, sólo `SQLite`) y, si existe y está activo,
     /// verifica la contraseña en un hilo aparte para no congelar la UI mientras Argon2 calcula.
     pub(super) fn iniciar_autenticacion(
         &mut self,
@@ -106,7 +106,7 @@ impl App {
         }
     }
 
-    /// Vuelve a resolver el candidato contra SQLite justo antes de aceptar la
+    /// Vuelve a resolver el candidato contra `SQLite` justo antes de aceptar la
     /// sesión, descartando el snapshot que viajó por el canal — ver el
     /// comentario de `recibir_autenticacion_si_lista`. Sin `core` (modo de
     /// desarrollo sin base) no hay nada que revalidar: esa rama de
@@ -134,7 +134,7 @@ impl App {
         receptor
     }
 
-    /// Valida rápido (sólo SQLite) y, si pasa, calcula el hash de Argon2 en un hilo
+    /// Valida rápido (sólo `SQLite`) y, si pasa, calcula el hash de Argon2 en un hilo
     /// aparte — la escritura real ocurre después, en el hilo principal, cuando llega.
     pub(super) fn iniciar_creacion_usuario(
         &mut self,

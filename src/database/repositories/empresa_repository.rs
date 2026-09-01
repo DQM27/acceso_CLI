@@ -35,7 +35,7 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<Empresa> {
     })
 }
 
-impl<'a> EmpresaRepository for SqliteEmpresaRepository<'a> {
+impl EmpresaRepository for SqliteEmpresaRepository<'_> {
     fn crear(&self, empresa: &Empresa) -> Result<i64, DatabaseError> {
         self.connection.execute(
             "
@@ -108,7 +108,7 @@ impl<'a> EmpresaRepository for SqliteEmpresaRepository<'a> {
     fn establecer_activo(&self, id: i64, activo: bool) -> Result<(), DatabaseError> {
         self.connection.execute(
             "UPDATE empresas SET activo = ?1 WHERE id = ?2",
-            params![activo as i64, id],
+            params![i64::from(activo), id],
         )?;
         Ok(())
     }

@@ -14,7 +14,7 @@ fn base() -> Connection {
 }
 
 fn insertar(connection: &Connection, cedula: &str, nombre: &str, rol: &str, activo: bool) -> i64 {
-    connection.execute("INSERT INTO usuarios(cedula,nombre,password_hash,rol,activo) VALUES (?1,?2,'hash-secreto',?3,?4)", rusqlite::params![cedula, nombre, rol, activo as i64]).unwrap();
+    connection.execute("INSERT INTO usuarios(cedula,nombre,password_hash,rol,activo) VALUES (?1,?2,'hash-secreto',?3,?4)", rusqlite::params![cedula, nombre, rol, i64::from(activo)]).unwrap();
     connection.last_insert_rowid()
 }
 

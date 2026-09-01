@@ -88,7 +88,7 @@ impl HistorialState {
     /// `self.filtro.clone()` completo, así que una clave que ya se había
     /// aplicado (`empresa:x`, `tipo:...`) seguía filtrando aunque se borrara
     /// del texto — reportado en runtime real ("aplico un filtro, lo borro y
-    /// se queda cargado"). No consulta SQLite — sólo deja el
+    /// se queda cargado"). No consulta `SQLite` — sólo deja el
     /// `FiltroHistorial` listo; `historial_controller.rs` hace la consulta
     /// con el resultado. Devuelve también las claves que no se
     /// reconocieron, para mostrarlas como aviso sin bloquear el resto.

@@ -1,7 +1,7 @@
 //! Motor de creación y validación de respaldos (ver `docs/pendientes.md`).
 //!
 //! Usa la [Online Backup API de SQLite](https://www.sqlite.org/backup.html) vía
-//! `rusqlite::backup` — nunca una copia directa del archivo mientras SQLite está
+//! `rusqlite::backup` — nunca una copia directa del archivo mientras `SQLite` está
 //! abierto. Este módulo no sabe nada de la TUI ni de `AppCore`: recibe una
 //! `&Connection` ya abierta y un directorio destino, y devuelve tipos neutrales.
 //!
@@ -55,7 +55,7 @@ impl TipoRespaldo {
 }
 
 /// Metadatos de un respaldo ya existente, obtenidos del sistema de archivos
-/// y del nombre del archivo — no requiere abrir SQLite. Barato de calcular
+/// y del nombre del archivo — no requiere abrir `SQLite`. Barato de calcular
 /// para listar; la validación real es una operación aparte y más costosa.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
@@ -136,7 +136,7 @@ pub enum RespaldoError {
     )]
     RollbackFallido {
         #[source]
-        error_original: Box<RespaldoError>,
+        error_original: Box<Self>,
         ruta_activa: PathBuf,
         ruta_previa: Option<PathBuf>,
     },
@@ -149,7 +149,7 @@ pub enum RespaldoError {
     )]
     LimpiezaFallida {
         #[source]
-        error_original: Box<RespaldoError>,
+        error_original: Box<Self>,
         ruta: PathBuf,
     },
 }
@@ -247,7 +247,7 @@ pub fn crear_respaldo(
 
 /// Reemplaza `ruta_activa` por `ruta_candidata` (ver `docs/pendientes.md`).
 ///
-/// **Debe llamarse con la conexión de `ruta_activa` ya cerrada.** SQLite
+/// **Debe llamarse con la conexión de `ruta_activa` ya cerrada.** `SQLite`
 /// documenta los riesgos de mover o reemplazar un archivo con una
 /// transacción o conexión activa sobre él
 /// ([How To Corrupt An SQLite Database File](https://sqlite.org/howtocorrupt.html));
@@ -340,7 +340,7 @@ fn abrir_y_verificar(ruta: &Path) -> Result<(), RespaldoError> {
 }
 
 /// Abre `ruta` en modo sólo lectura (nunca crea ni modifica el archivo) y
-/// corre las dos verificaciones que recomienda la documentación de SQLite:
+/// corre las dos verificaciones que recomienda la documentación de `SQLite`:
 /// `integrity_check` (estructura de páginas) y `foreign_key_check`
 /// (relaciones entre tablas, que `integrity_check` no cubre).
 pub fn validar_respaldo(ruta: &Path) -> Result<ResultadoValidacion, RespaldoError> {
@@ -372,7 +372,7 @@ pub fn validar_respaldo(ruta: &Path) -> Result<ResultadoValidacion, RespaldoErro
 
 /// Lista los respaldos ya publicados en `directorio_respaldos` (nunca los
 /// `.partial`, que son un estado intermedio, no un respaldo real). No abre
-/// SQLite — sólo lee el sistema de archivos y el nombre de cada archivo;
+/// `SQLite` — sólo lee el sistema de archivos y el nombre de cada archivo;
 /// para saber si un respaldo sigue siendo válido hay que llamar
 /// `validar_respaldo` aparte.
 pub fn listar_respaldos(

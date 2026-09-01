@@ -165,14 +165,15 @@ impl FormularioUsuario {
     /// asignar (`puede_gestionar_usuario`) — un Administrador nunca ve Root
     /// como opción, ni por accidente.
     pub fn alternar(&mut self) {
-        if self.campo != CampoUsuario::Rol {
-            return;
-        }
         const ROLES: [RolUsuario; 3] = [
             RolUsuario::Operador,
             RolUsuario::Administrador,
             RolUsuario::Root,
         ];
+
+        if self.campo != CampoUsuario::Rol {
+            return;
+        }
         let permitidos: Vec<RolUsuario> = ROLES
             .into_iter()
             .filter(|r| puede_gestionar_usuario(self.rol_actor, *r))
@@ -259,7 +260,7 @@ impl FormularioUsuario {
         }
 
         if !errores.is_empty() {
-            self.errores = errores.clone();
+            self.errores.clone_from(&errores);
             return Err(errores);
         }
         self.errores.clear();

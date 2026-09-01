@@ -9,7 +9,7 @@
 //! Mismo patrón que `auth_jobs.rs` (hilo + `mpsc::Receiver` sondeado en cada
 //! vuelta del bucle), pero el hilo abre su PROPIA conexión de sólo lectura
 //! al mismo archivo en vez de compartir la conexión viva de `AppCore`:
-//! SQLite permite varias conexiones concurrentes al mismo archivo desde
+//! `SQLite` permite varias conexiones concurrentes al mismo archivo desde
 //! hilos distintos, y la Online Backup API ya reintenta sola ante un
 //! bloqueo transitorio (`Backup::run_to_completion`, ver
 //! `database::backup::crear_respaldo`) — no hace falta ninguna otra
@@ -139,7 +139,7 @@ impl App {
     }
 
     fn reportar_fallo_respaldo_automatico(&mut self, fallo: Option<String>) {
-        self.menu.fallo_respaldo_automatico = fallo.clone();
+        self.menu.fallo_respaldo_automatico.clone_from(&fallo);
         self.configuracion
             .actualizar_fallo_respaldo_automatico(fallo);
     }

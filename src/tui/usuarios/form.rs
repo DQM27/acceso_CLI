@@ -20,7 +20,7 @@ pub(super) fn validar_formulario(f: &FormularioUsuario) -> Result<(), String> {
         return Err("El nombre es obligatorio".into());
     }
     if matches!(f.modo, ModoFormularioUsuario::Crear) {
-        validar_password(f.password.valor(), f.confirmar_password.valor())?
+        validar_password(f.password.valor(), f.confirmar_password.valor())?;
     }
     Ok(())
 }

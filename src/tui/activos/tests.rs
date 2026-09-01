@@ -39,7 +39,7 @@ fn cargar(s: &mut ActivosState) {
             total: 2,
         }),
         None,
-    )
+    );
 }
 #[test]
 fn inicia_vacio_y_carga_real() {
@@ -48,7 +48,7 @@ fn inicia_vacio_y_carga_real() {
     cargar(&mut s);
     assert_eq!(s.cantidad(), 2);
     assert_eq!(s.total_activos(), 2);
-    assert_eq!(s.seleccion, Some(0))
+    assert_eq!(s.seleccion, Some(0));
 }
 #[test]
 fn busqueda_emite_consulta_real_tras_el_debounce() {
@@ -58,7 +58,7 @@ fn busqueda_emite_consulta_real_tras_el_debounce() {
     assert_eq!(s.handle_key(k(KeyCode::Char('j'))), AccionActivos::Ninguna);
     let accion = s.tick(Instant::now() + DURACION_DEBOUNCE + Duration::from_millis(1));
     assert!(matches!(accion, AccionActivos::Buscar{texto:Some(t),..} if t=="j"));
-    assert_eq!(s.cantidad(), 2)
+    assert_eq!(s.cantidad(), 2);
 }
 #[test]
 fn busqueda_admite_clave_valor_de_empresa_tipo_gafete_medio_y_deja_texto_libre() {
@@ -196,7 +196,7 @@ fn cancelar_salida_no_emite_accion() {
         s.handle_key(k(KeyCode::Esc)),
         AccionActivos::Ninguna
     ));
-    assert_eq!(s.cantidad(), 2)
+    assert_eq!(s.cantidad(), 2);
 }
 #[test]
 fn callback_salida_recarga_sin_remover_localmente() {
@@ -212,7 +212,7 @@ fn callback_salida_recarga_sin_remover_localmente() {
         }),
         None,
     );
-    assert_eq!(s.cantidad(), 1)
+    assert_eq!(s.cantidad(), 1);
 }
 #[test]
 fn columnas_y_movimiento_conservan_ux() {
@@ -223,7 +223,7 @@ fn columnas_y_movimiento_conservan_ux() {
     assert_eq!(
         NaiveDate::from_ymd_opt(2026, 8, 12).unwrap().to_string(),
         "2026-08-12"
-    )
+    );
 }
 
 #[test]
@@ -266,7 +266,7 @@ fn detalle_muestra_solo_datos_operativos_en_orden() {
                 &s,
                 &sesion,
                 crate::tui::ui_kit::ThemePreset::Brisas.theme(),
-            )
+            );
         })
         .unwrap();
     let texto: String = terminal

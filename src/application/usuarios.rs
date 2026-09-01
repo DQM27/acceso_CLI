@@ -362,7 +362,7 @@ fn verificar_creacion_usuario(
     Ok(actor_actual)
 }
 
-/// Autoriza contra el rol y estado que existen ahora en SQLite. El rol del
+/// Autoriza contra el rol y estado que existen ahora en `SQLite`. El rol del
 /// snapshot de sesión nunca decide permisos: una degradación surte efecto en
 /// la siguiente operación sin necesidad de reiniciar la TUI.
 fn verificar_gestion_usuario(

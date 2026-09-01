@@ -102,7 +102,7 @@ impl FormularioPassword {
         self.error = Some(mensaje);
     }
 
-    /// Valida longitud/coincidencia de la contraseña nueva — no toca SQLite
+    /// Valida longitud/coincidencia de la contraseña nueva — no toca `SQLite`
     /// (eso lo hace `AppCore::cambiar_mi_password`, que además revuelve a
     /// verificar la actual antes de escribir nada).
     pub fn validar_nueva(&mut self) -> Result<(), String> {

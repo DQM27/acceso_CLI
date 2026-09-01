@@ -10,8 +10,8 @@ pub enum DatabaseError {
     UsuarioNoEncontrado,
     #[error("No se puede desactivar o degradar al último ROOT activo")]
     UltimoRootActivo,
-    /// Una fecha almacenada no se pudo parsear. No es un error de SQLite —
-    /// SQLite ya devolvió el texto sin problema; el fallo es al interpretarlo
+    /// Una fecha almacenada no se pudo parsear. No es un error de `SQLite` —
+    /// `SQLite` ya devolvió el texto sin problema; el fallo es al interpretarlo
     /// como fecha/hora.
     #[error("Fecha almacenada inválida: {0}")]
     FechaCorrupta(String),
@@ -24,7 +24,7 @@ impl DatabaseError {
     pub fn es_constraint_unique(&self) -> bool {
         matches!(
             self,
-            DatabaseError::Sqlite(rusqlite::Error::SqliteFailure(codigo, _))
+            Self::Sqlite(rusqlite::Error::SqliteFailure(codigo, _))
                 if codigo.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
         )
     }

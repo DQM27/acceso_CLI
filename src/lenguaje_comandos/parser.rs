@@ -1,6 +1,6 @@
 //! Parseo puro de la línea de comandos de la interfaz `--cli`.
 //!
-//! Sin IO, sin ratatui, sin SQLite: toma el texto crudo del input y devuelve
+//! Sin IO, sin ratatui, sin `SQLite`: toma el texto crudo del input y devuelve
 //! una [`Entrada`] estructurada. Todo lo inválido (comando desconocido, gafete
 //! no numérico, medio no reconocido) se representa en el valor devuelto — el
 //! parser nunca entra en pánico ni descarta información sin avisar.

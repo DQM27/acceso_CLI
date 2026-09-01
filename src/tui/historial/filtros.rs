@@ -241,7 +241,7 @@ fn aplicar_clave(f: &mut FiltrosHistorial, term: &Term, empresas: &[Empresa]) ->
         // "Ingrese un número de gafete válido" — ese mensaje queda para
         // cuando el operador lo escribe directo en el campo del panel.
         "gafete" if valores.len() == 1 && valores[0].trim().parse::<i64>().is_ok() => {
-            f.gafete = valores[0].clone();
+            f.gafete.clone_from(&valores[0]);
             f.gafete_negado = term.negated;
             true
         }
@@ -249,20 +249,20 @@ fn aplicar_clave(f: &mut FiltrosHistorial, term: &Term, empresas: &[Empresa]) ->
         // tiene un significado obvio para el límite de un rango de fechas
         // (decisión documentada en `docs/hallazgos-clave-valor.md`).
         "desde" if !term.negated && valores.len() == 1 => {
-            f.desde = valores[0].clone();
+            f.desde.clone_from(&valores[0]);
             true
         }
         "hasta" if !term.negated && valores.len() == 1 => {
-            f.hasta = valores[0].clone();
+            f.hasta.clone_from(&valores[0]);
             true
         }
         "ingreso" if valores.len() == 1 => {
-            f.usuario_ingreso = valores[0].clone();
+            f.usuario_ingreso.clone_from(&valores[0]);
             f.usuario_ingreso_negado = term.negated;
             true
         }
         "salida" if valores.len() == 1 => {
-            f.usuario_salida = valores[0].clone();
+            f.usuario_salida.clone_from(&valores[0]);
             f.usuario_salida_negado = term.negated;
             true
         }

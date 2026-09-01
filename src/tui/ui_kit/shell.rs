@@ -174,7 +174,7 @@ impl ScreenShell<'_> {
         }
         if tiene_pestanas && let Some(tabs) = self.tabs {
             let linea_pestanas = Rect::new(rows[0].x, rows[0].y + 2, rows[0].width, 1);
-            self.render_tabs(frame, linea_pestanas, tabs, theme);
+            Self::render_tabs(frame, linea_pestanas, tabs, theme);
         }
         frame.render_widget(
             Paragraph::new("─".repeat(viewport.width as usize)).style(if tiene_pestanas {
@@ -194,7 +194,7 @@ impl ScreenShell<'_> {
         }
     }
 
-    fn render_tabs(&self, frame: &mut Frame, area: Rect, tabs: &TabBar, theme: Theme) {
+    fn render_tabs(frame: &mut Frame, area: Rect, tabs: &TabBar, theme: Theme) {
         if tabs.items.is_empty() || area.is_empty() {
             return;
         }

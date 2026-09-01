@@ -230,13 +230,13 @@ fn valor_columna(registro: &IngresoActivoResumen, columna: Columna) -> String {
         Columna::Tipo => format!(
             "{}{}",
             texto_tipo(registro.tipo_ingreso),
-            if !matches!(
+            if matches!(
                 registro.resultado_acceso,
                 crate::domain::resultado_acceso::ResultadoAcceso::Permitido
             ) {
-                " !"
-            } else {
                 ""
+            } else {
+                " !"
             }
         ),
         Columna::Hora => a_costa_rica(registro.fecha_hora_ingreso)

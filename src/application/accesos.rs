@@ -36,7 +36,7 @@ impl AppCore {
 
     /// Abre una transacción `Immediate` (el bloqueo se adquiere antes de la
     /// primera lectura definitiva, así los repositorios creados sobre ella
-    /// validan e insertan contra el mismo estado de SQLite), valida que el
+    /// validan e insertan contra el mismo estado de `SQLite`), valida que el
     /// reloj no haya retrocedido, confirma que `usuario_id` sigue siendo un
     /// operador activo, corre `operar` y confirma. Compartido por
     /// `registrar_ingreso` y `registrar_salida` — antes cada uno repetía este
@@ -55,7 +55,7 @@ impl AppCore {
     /// La verificación de operador activo vive aquí por el mismo motivo:
     /// `registrar_entrada`/`registrar_salida` recibían el `usuario_id` como
     /// un entero crudo, sin comprobar que existiera ni que siguiera activo —
-    /// la FK de SQLite sólo exige que exista, no que esté activo. Una
+    /// la FK de `SQLite` sólo exige que exista, no que esté activo. Una
     /// sesión de TUI ya iniciada podía seguir registrando movimientos
     /// después de que un administrador desactivara esa cuenta
     /// (`docs/auditoria-dominio-2026-08-20.md`, hallazgo #2). Se revisa
@@ -147,7 +147,7 @@ fn validar_reloj(
 /// Comprobación de sanidad del actor, mismo criterio que `validar_reloj`: no
 /// es una regla de negocio de una entrada/salida puntual, es "¿quién dice
 /// que está registrando esto sigue siendo un operador real?". La FK de
-/// `usuario_ingreso_id`/`usuario_salida_id` en SQLite sólo exige que el ID
+/// `usuario_ingreso_id`/`usuario_salida_id` en `SQLite` sólo exige que el ID
 /// exista — nunca que la cuenta siga activa.
 fn verificar_operador_activo(
     connection: &Connection,

@@ -83,7 +83,7 @@ fn insertar_usuario(connection: &Connection, usuario: &Usuario) -> Result<i64, D
             usuario.nombre,
             usuario.password_hash,
             rol_a_texto(usuario.rol),
-            usuario.activo as i64,
+            i64::from(usuario.activo),
         ],
     )?;
     Ok(connection.last_insert_rowid())
@@ -135,7 +135,7 @@ fn persistir_usuario(transaction: &Connection, usuario: &Usuario) -> Result<(), 
             usuario.cedula,
             usuario.nombre,
             rol_a_texto(usuario.rol),
-            usuario.activo as i64,
+            i64::from(usuario.activo),
             usuario.id,
         ],
     )?;
@@ -169,7 +169,7 @@ fn validar_y_persistir(
     persistir_usuario(transaction, nuevo)
 }
 
-impl<'a> UsuarioRepository for SqliteUsuarioRepository<'a> {
+impl UsuarioRepository for SqliteUsuarioRepository<'_> {
     fn crear(&self, usuario: &Usuario) -> Result<i64, DatabaseError> {
         insertar_usuario(self.connection, usuario)
     }

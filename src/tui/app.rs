@@ -91,7 +91,7 @@ impl Vista {
 }
 
 /// Cómo terminó el bucle principal: cierre normal, o una restauración de
-/// respaldo confirmada que exige que `main.rs` cierre la conexión SQLite,
+/// respaldo confirmada que exige que `main.rs` cierre la conexión `SQLite`,
 /// aplique el reemplazo de archivo y vuelva a arrancar la TUI desde cero.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SalidaApp {
@@ -322,8 +322,7 @@ impl App {
         let trabajos_antes = self.trabajos_argon_pendientes();
 
         self.recibir_autenticacion_si_lista(core);
-        let mut cambio_visible = false;
-        if let Some(core) = core {
+        let mut cambio_visible = if let Some(core) = core {
             self.procesar_configuracion_pendiente(core);
             self.recibir_root_inicial_si_lista(core);
             if ahora.saturating_duration_since(*ultima_revision_respaldo)
@@ -332,10 +331,11 @@ impl App {
                 *ultima_revision_respaldo = ahora;
                 self.revisar_respaldo_automatico(core);
             }
-            cambio_visible = self.recibir_respaldo_automatico_si_listo(core);
+            self.recibir_respaldo_automatico_si_listo(core)
         } else {
             self.abortar_configuracion_inicial_sin_core();
-        }
+            false
+        };
         self.recibir_hilo_usuario_si_lista(core);
         self.recibir_cambio_password_propio(core);
         cambio_visible |= self.recibir_respaldo_manual_si_listo();
@@ -566,7 +566,7 @@ impl App {
             Vista::Login => match self.login.handle_key(key) {
                 AccionLogin::Salir => self.salir = true,
                 AccionLogin::Autenticar { cedula, password } => {
-                    self.iniciar_autenticacion(cedula, password, core)
+                    self.iniciar_autenticacion(cedula, password, core);
                 }
                 AccionLogin::Ninguna => {}
             },

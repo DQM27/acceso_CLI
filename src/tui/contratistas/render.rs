@@ -365,7 +365,7 @@ fn render_panel(frame: &mut Frame, area: Rect, state: &ContratistasState, theme:
     match &state.modo {
         ModoContratistas::Formulario(f) => render_formulario(frame, area, state, f, theme),
         ModoContratistas::Columnas { seleccion } => {
-            render_columnas(frame, area, state, *seleccion, theme)
+            render_columnas(frame, area, state, *seleccion, theme);
         }
         ModoContratistas::Normal | ModoContratistas::Busqueda { .. } => {
             match state.seleccionado() {

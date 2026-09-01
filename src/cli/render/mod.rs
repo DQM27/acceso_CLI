@@ -275,5 +275,5 @@ fn render_pista(frame: &mut Frame, area: Rect, app: &AppState) {
 /// (ver `PERIODO_BLINK_MS`), nunca se reinicia al cambiar de Surface o al
 /// tipear.
 pub(super) fn blink_on(app: &AppState) -> bool {
-    (app.instante_inicio.elapsed().as_millis() / PERIODO_BLINK_MS as u128).is_multiple_of(2)
+    (app.instante_inicio.elapsed().as_millis() / u128::from(PERIODO_BLINK_MS)).is_multiple_of(2)
 }

@@ -18,7 +18,7 @@ pub const LIMITE_AUDITORIA_PREDETERMINADO: usize = 50;
 pub const LIMITE_AUDITORIA_MAXIMO: usize = 200;
 
 /// Espejo de `TipoIngreso` (`src/models/tipo_ingreso.rs`): codificación
-/// canónica en minúsculas para SQLite (`as_str_sql`/`from_str_sql`), único
+/// canónica en minúsculas para `SQLite` (`as_str_sql`/`from_str_sql`), único
 /// lugar donde vive ese mapeo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]

@@ -491,20 +491,20 @@ impl UsuariosState {
             KeyCode::Down => self.mover(1),
             KeyCode::Enter => {
                 if let Some(id) = self.id_seleccionado() {
-                    self.abrir_edicion(id)
+                    self.abrir_edicion(id);
                 }
             }
             KeyCode::Char('n' | 'N') => {
-                self.modo = ModoUsuarios::Formulario(FormularioUsuario::nuevo())
+                self.modo = ModoUsuarios::Formulario(FormularioUsuario::nuevo());
             }
             KeyCode::Char('p' | 'P') => {
                 if let Some(id) = self.id_seleccionado() {
-                    self.abrir_password(id)
+                    self.abrir_password(id);
                 }
             }
             KeyCode::Char('a' | 'A') => {
                 if let Some(id) = self.id_seleccionado() {
-                    self.solicitar_estado(id)
+                    self.solicitar_estado(id);
                 }
             }
             KeyCode::Char('/') => {
@@ -579,7 +579,7 @@ impl UsuariosState {
                 KeyCode::Down => f.selector_rol = Some((i + 1).min(ROLES.len() - 1)),
                 KeyCode::Enter => {
                     f.rol = ROLES[i];
-                    f.selector_rol = None
+                    f.selector_rol = None;
                 }
                 KeyCode::Esc => f.selector_rol = None,
                 _ => {}
@@ -776,7 +776,7 @@ impl UsuariosState {
     }
     fn abrir_edicion(&mut self, id: i64) {
         if let Some(u) = self.usuario(id) {
-            self.modo = ModoUsuarios::Formulario(FormularioUsuario::editar(u))
+            self.modo = ModoUsuarios::Formulario(FormularioUsuario::editar(u));
         }
     }
     fn abrir_password(&mut self, id: i64) {
@@ -788,7 +788,7 @@ impl UsuariosState {
                 confirmar: Secreto::default(),
                 campo: 0,
                 error: None,
-            })
+            });
         }
     }
     fn solicitar_estado(&mut self, id: i64) {
@@ -796,19 +796,19 @@ impl UsuariosState {
             self.modo = ModoUsuarios::ConfirmacionEstado(ConfirmacionEstado {
                 id,
                 activar: !u.activo,
-            })
+            });
         }
     }
     fn mover(&mut self, d: isize) {
         if self.usuarios.is_empty() {
-            self.seleccion = None
+            self.seleccion = None;
         } else {
             let i = self.seleccion.unwrap_or(0);
             self.seleccion = Some(if d < 0 {
                 i.saturating_sub(1)
             } else {
                 (i + 1).min(self.usuarios.len() - 1)
-            })
+            });
         }
     }
     fn id_seleccionado(&self) -> Option<i64> {

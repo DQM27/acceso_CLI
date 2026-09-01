@@ -6,10 +6,10 @@
 //! pantallas, menús ni formularios — el mismo espacio muta alrededor del
 //! comando. Convive con la TUI clásica, alcanzable con `--tui-clasica`.
 //!
-//! Login: la cédula se resuelve contra SQLite de inmediato (rápido) y la
+//! Login: la cédula se resuelve contra `SQLite` de inmediato (rápido) y la
 //! verificación Argon2 corre en un hilo aparte con canal, el mismo patrón de
 //! `tui::app::auth_jobs` — la interfaz nunca se congela calculando el hash.
-//! Antes de aceptar la sesión se vuelve a resolver el candidato contra SQLite,
+//! Antes de aceptar la sesión se vuelve a resolver el candidato contra `SQLite`,
 //! por si la cuenta fue desactivada mientras corría Argon2.
 //!
 //! Este archivo sólo orquesta el loop y despacha teclas por fase. Cada
@@ -488,13 +488,13 @@ fn manejar_tecla(
     match app.fase.clone() {
         Fase::LoginCedula => login::manejar_login_cedula(core, app, key),
         Fase::LoginPassword { cedula, nombre } => {
-            login::manejar_login_password(core, app, key, cedula, nombre, autenticacion)
+            login::manejar_login_password(core, app, key, cedula, nombre, autenticacion);
         }
         Fase::Verificando { .. } | Fase::RootCreando { .. } => {}
         Fase::RootCedula => root::manejar_root_cedula(app, key),
         Fase::RootNombre { cedula } => root::manejar_root_nombre(app, key, cedula),
         Fase::RootPassword { cedula, nombre } => {
-            root::manejar_root_password(app, key, cedula, nombre)
+            root::manejar_root_password(app, key, cedula, nombre);
         }
         Fase::RootConfirmarPassword {
             cedula,
@@ -510,7 +510,7 @@ fn manejar_tecla(
             root_pendiente,
         ),
         Fase::Operando { .. } => {
-            operando::manejar_operando(core, app, key, historial_exportacion_pendiente)
+            operando::manejar_operando(core, app, key, historial_exportacion_pendiente);
         }
     }
 }

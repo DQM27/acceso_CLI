@@ -1,6 +1,6 @@
 //! Formulario de alta y edición de contratistas para la interfaz `--cli`.
 //!
-//! Lógica pura: sin terminal, sin `AppCore`, sin SQLite. El estado vive entero
+//! Lógica pura: sin terminal, sin `AppCore`, sin `SQLite`. El estado vive entero
 //! en [`FormularioContratista`] y cada tecla se traduce a un método; el render
 //! y `mod.rs` sólo lo leen. Así toda la navegación, la fecha con `/`
 //! automáticos y la validación se prueban sin levantar una terminal.
@@ -293,7 +293,7 @@ impl FormularioContratista {
     }
 
     /// Misma regla de negocio que `Contratista::requiere_praind`: ruta o
-    /// (Praind ∨ InHouse).
+    /// (Praind ∨ `InHouse`).
     pub fn requiere_praind(&self) -> bool {
         self.es_personal_ruta || matches!(self.tipo, TipoIngreso::Praind | TipoIngreso::InHouse)
     }
@@ -337,7 +337,7 @@ impl FormularioContratista {
                 })
             }
             Err(errores) => {
-                self.errores = errores.clone();
+                self.errores.clone_from(&errores);
                 Err(errores)
             }
         }

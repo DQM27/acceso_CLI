@@ -130,7 +130,7 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<RegistroIngreso> {
     })
 }
 
-impl<'a> RegistroIngresoRepository for SqliteRegistroIngresoRepository<'a> {
+impl RegistroIngresoRepository for SqliteRegistroIngresoRepository<'_> {
     fn crear(&self, registro: &NuevoRegistroIngreso) -> Result<i64, DatabaseError> {
         let fecha_hora_ingreso = serializar_utc(registro.fecha_hora_ingreso);
 
@@ -199,12 +199,12 @@ impl<'a> RegistroIngresoRepository for SqliteRegistroIngresoRepository<'a> {
                 ":contratista_cedula": registro.datos_historicos.contratista_cedula,
                 ":contratista_nombre": registro.datos_historicos.contratista_nombre,
                 ":fecha_vencimiento_praind": fecha_vencimiento_praind,
-                ":es_personal_ruta": registro.datos_historicos.es_personal_ruta as i64,
-                ":tiene_acceso": registro.datos_historicos.tiene_acceso as i64,
+                ":es_personal_ruta": i64::from(registro.datos_historicos.es_personal_ruta),
+                ":tiene_acceso": i64::from(registro.datos_historicos.tiene_acceso),
                 ":resultado_acceso": resultado_acceso,
                 ":motivo_resultado": motivo_resultado,
                 ":reglas_version": registro.datos_historicos.reglas_version,
-                ":empresa_activa_snapshot": registro.datos_historicos.empresa_activa as i64,
+                ":empresa_activa_snapshot": i64::from(registro.datos_historicos.empresa_activa),
             },
         )?;
 

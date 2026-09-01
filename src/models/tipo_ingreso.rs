@@ -10,7 +10,7 @@ pub enum TipoIngreso {
 impl TipoIngreso {
     pub const ALL: [Self; 4] = [Self::Praind, Self::InHouse, Self::PorCorreo, Self::Swat];
 
-    /// Codificación canónica usada para persistir/filtrar en SQLite (columna
+    /// Codificación canónica usada para persistir/filtrar en `SQLite` (columna
     /// `tipo_ingreso`). Única fuente de verdad para este mapeo — antes estaba
     /// copiado a mano en 4 archivos de `database/`, dos veces en uno de ellos.
     pub fn as_str_sql(self) -> &'static str {

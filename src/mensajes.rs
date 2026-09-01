@@ -10,9 +10,9 @@ use crate::services::error::{
 };
 
 /// `HashInvalido` va junto con `Database` a propósito: ambos son fallos de
-/// infraestructura (hash corrupto en la fila, SQLite bloqueada/dañada), no
+/// infraestructura (hash corrupto en la fila, `SQLite` bloqueada/dañada), no
 /// algo que el usuario hizo mal — no tiene sentido distinguirlos en pantalla,
-/// y mucho menos dejar pasar el mensaje crudo de SQLite (`Database` es
+/// y mucho menos dejar pasar el mensaje crudo de `SQLite` (`Database` es
 /// `#[error(transparent)]` sobre `DatabaseError`, que sí interpola detalles
 /// internos en su propio `Display`).
 pub fn mensaje_autenticacion(error: AutenticacionError) -> String {

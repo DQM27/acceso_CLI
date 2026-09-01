@@ -10,7 +10,7 @@ pub enum DevAuthError {
 
 /// Construye una identidad únicamente en memoria para la futura CLI de desarrollo.
 ///
-/// Su ID no existe en SQLite y por ello no puede utilizarse como `usuario_ingreso_id`
+/// Su ID no existe en `SQLite` y por ello no puede utilizarse como `usuario_ingreso_id`
 /// ni `usuario_salida_id`: las claves foráneas rechazarían esos movimientos.
 pub fn usuario_desarrollo() -> UsuarioSesion {
     UsuarioSesion {

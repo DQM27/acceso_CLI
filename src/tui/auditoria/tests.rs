@@ -79,7 +79,7 @@ fn render_usa_hora_de_costa_rica_y_el_orden_operativo_de_columnas() {
                 &state,
                 &sesion,
                 crate::tui::ui_kit::ThemePreset::Brisas.theme(),
-            )
+            );
         })
         .unwrap();
     let buffer = terminal.backend().buffer();

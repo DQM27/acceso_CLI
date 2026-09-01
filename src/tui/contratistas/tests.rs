@@ -33,7 +33,7 @@ fn cargar(s: &mut ContratistasState) {
             total: 1,
         }),
         None,
-    )
+    );
 }
 fn escribir(s: &mut ContratistasState, t: &str) {
     for c in t.chars() {
@@ -201,7 +201,7 @@ fn formulario_alinea_nombre_y_fecha_a_la_derecha_de_sus_etiquetas() {
                 &state,
                 &sesion,
                 crate::tui::ui_kit::ThemePreset::Brisas.theme(),
-            )
+            );
         })
         .unwrap();
     let buffer = terminal.backend().buffer();
@@ -256,7 +256,7 @@ fn buscador_separa_etiqueta_e_input_y_posiciona_el_cursor_al_final() {
                     state,
                     &sesion,
                     crate::tui::ui_kit::ThemePreset::Brisas.theme(),
-                )
+                );
             })
             .unwrap();
     };

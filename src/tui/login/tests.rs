@@ -30,7 +30,7 @@ fn presenta_contexto_y_dos_campos_desde_el_inicio() {
                 frame.area(),
                 &LoginState::default(),
                 crate::tui::ui_kit::ThemePreset::Classic.theme(),
-            )
+            );
         })
         .unwrap();
 

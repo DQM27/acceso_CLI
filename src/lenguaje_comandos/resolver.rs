@@ -1,6 +1,6 @@
 //! Cruza la entrada parseada con `AppCore` y deriva el [`ContextState`].
 //!
-//! Todo es síncrono a propósito: SQLite local responde en microsegundos y el
+//! Todo es síncrono a propósito: `SQLite` local responde en microsegundos y el
 //! patrón vigente del proyecto ya usa `AppCore` desde el hilo del event loop
 //! (no es `Clone` ni `Sync`). Meter async o hilos aquí sólo añadiría canales y
 //! estados intermedios sin ganancia medible.
@@ -381,7 +381,7 @@ fn resolver_busqueda_contratistas(core: &AppCore, consulta: &str) -> ContextStat
 /// `/auditoria` — sólo lectura, sin filtro (a diferencia de Historial): el
 /// gate de rol se repite acá (mismo criterio de defensa en profundidad que
 /// `pagina_usuarios`) aunque `AppCore::buscar_auditoria` ya lo verifica de
-/// nuevo contra SQLite antes de consultar.
+/// nuevo contra `SQLite` antes de consultar.
 pub fn pagina_auditoria(core: &AppCore, offset: usize, sesion: &UsuarioSesion) -> ContextState {
     if !sesion.rol.puede(Operacion::VerAuditoria) {
         return ContextState::MensajeError {

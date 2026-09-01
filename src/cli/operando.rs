@@ -1,5 +1,5 @@
 //! Controlador de la fase `Operando`: interpreta comandos y confirmaciones
-//! sobre el contexto vigente. Las únicas escrituras a SQLite de este archivo
+//! sobre el contexto vigente. Las únicas escrituras a `SQLite` de este archivo
 //! son `registrar_ingreso`/`registrar_salida` — nada de lo que se muestra
 //! mientras se teclea persiste nada; ver la sección 7 de
 //! `docs/radiografia-dominio-cli.md`.
@@ -443,14 +443,14 @@ fn confirmar(core: &AppCore, app: &mut AppState) {
         }
         ContextState::NuevoContratista => abrir_formulario_nuevo(core, app),
         ContextState::NuevoEmpresa => {
-            super::formulario_empresa_controller::abrir_formulario_nuevo_empresa(app)
+            super::formulario_empresa_controller::abrir_formulario_nuevo_empresa(app);
         }
         ContextState::NuevoUsuario => {
-            super::formulario_usuario_controller::abrir_formulario_nuevo_usuario(app)
+            super::formulario_usuario_controller::abrir_formulario_nuevo_usuario(app);
         }
         ContextState::AbrirHistorial => super::historial_controller::abrir_historial(core, app),
         ContextState::ConfirmarCambioPassword => {
-            super::formulario_password_controller::abrir_formulario_cambio_password(app)
+            super::formulario_password_controller::abrir_formulario_cambio_password(app);
         }
         ContextState::ConfirmarModoClasico => {
             crate::interfaz_preferida::guardar(crate::interfaz_preferida::Interfaz::Clasica);
@@ -458,7 +458,7 @@ fn confirmar(core: &AppCore, app: &mut AppState) {
             app.salir = true;
         }
         ContextState::AbrirSalidaGafete { texto } => {
-            super::salida_gafete_controller::abrir_salida_gafete(core, app, &texto)
+            super::salida_gafete_controller::abrir_salida_gafete(core, app, &texto);
         }
         ContextState::ConfirmarCerrarSesion => {
             app.input.reset();

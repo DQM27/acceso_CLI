@@ -7,7 +7,7 @@ pub enum EstadoGafete {
 }
 
 impl EstadoGafete {
-    /// Codificación canónica usada para persistir/filtrar en SQLite (columna
+    /// Codificación canónica usada para persistir/filtrar en `SQLite` (columna
     /// `gafetes.estado`).
     pub fn as_str_sql(self) -> &'static str {
         match self {
@@ -104,6 +104,6 @@ pub struct Gafete {
     pub numero: i64,
     pub estado: EstadoGafete,
     /// `Some` únicamente cuando `estado == Perdido` — el `CHECK` del esquema
-    /// impone la misma regla del lado de SQLite, esto sólo la refleja en Rust.
+    /// impone la misma regla del lado de `SQLite`, esto sólo la refleja en Rust.
     pub contratista_deudor_id: Option<i64>,
 }

@@ -39,7 +39,7 @@ impl App {
                 self.usuarios.completar_busqueda(resultado, seleccionar_id);
             }
             AccionUsuarios::Crear { input, nombre } => {
-                self.iniciar_creacion_usuario(input, nombre, core)
+                self.iniciar_creacion_usuario(input, nombre, core);
             }
             AccionUsuarios::Actualizar {
                 id,
@@ -56,7 +56,7 @@ impl App {
                         core.actualizar_usuario(actor, id, input, activo)
                             .map_err(mensaje_usuario)
                     })
-                    .map(|_| None);
+                    .map(|()| None);
                 let recarga = self
                     .usuarios
                     .completar_guardado(resultado, Some(id), &nombre);
@@ -112,8 +112,8 @@ impl App {
             return;
         }
         if let Some(usuario) = self.usuarios.resumen_por_id(id) {
-            sesion.cedula = usuario.cedula.clone();
-            sesion.nombre = usuario.nombre.clone();
+            sesion.cedula.clone_from(&usuario.cedula);
+            sesion.nombre.clone_from(&usuario.nombre);
             sesion.rol = usuario.rol;
         }
     }

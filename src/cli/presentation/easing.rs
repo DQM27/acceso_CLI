@@ -23,10 +23,10 @@ impl Easing {
     pub fn aplicar(self, t: f32) -> f32 {
         let t = t.clamp(0.0, 1.0);
         match self {
-            Easing::Linear => t,
-            Easing::EaseIn => t * t,
-            Easing::EaseOut => 1.0 - (1.0 - t) * (1.0 - t),
-            Easing::EaseInOut => {
+            Self::Linear => t,
+            Self::EaseIn => t * t,
+            Self::EaseOut => 1.0 - (1.0 - t) * (1.0 - t),
+            Self::EaseInOut => {
                 if t < 0.5 {
                     2.0 * t * t
                 } else {

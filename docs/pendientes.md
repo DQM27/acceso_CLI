@@ -147,17 +147,29 @@ complexity/perf) se sigue verificando igual que siempre con
   fmt --check`, la vara histórica de Clippy, Clippy pedantic/nursery completo y la suite raíz
   (502 tests) en verde; también los 17 tests Rust de `desktop/src-tauri`. Quedan 843 warnings
   pedantic/nursery, todos fuera de las categorías cerradas y reservados para decidir la Capa 5.
-- [ ] **Capa 5 (cosmética, a decidir si vale la pena aplicarla entera) — documentación y
-  ergonomía de API.** `# Errors` en docs de funciones que devuelven `Result` (197),
-  backticks en comentarios (56), primer párrafo de doc muy largo (55), `this could be a
-  const fn` (171), candidatos a `#[must_use]` (137+42), nombre de struct repetido (11),
-  argumento por valor sin consumir (16), punto y coma final por consistencia (102). Ninguno
-  es un bug. Vale la pena notar que **el propio Brisas no exige varias de éstas** — su
-  `Cargo.toml` tiene `missing_errors_doc = "allow"` y `must_use_candidate = "allow"`
-  explícitos — así que activarlas acá sería ir más estricto que la referencia que motivó
-  esto, no sólo alcanzarla. Decidir con el usuario cuáles de estas categorías realmente
-  suman valor para una app interna (no una librería pública) antes de invertir tiempo
-  escribiendo cientos de secciones `# Errors`.
+- [x] **Capa 5 (2026-09-01) — cosmética y ergonomía de API.** Se actualizó el inventario
+  con Rust 1.97 y se aplicaron las correcciones mecánicas de bajo riesgo: Markdown en docs,
+  punto y coma consistente, clones sobre destinos existentes, casts sin pérdida, raw strings,
+  `Self`, lifetimes elidibles, constantes antes de sentencias, equivalencias de `if let`,
+  visibilidad redundante, patrones unitarios, escritura sobre `String`, inversión de `if`,
+  literales legibles y métodos sin uso de `self`. Las 19 reglas correspondientes quedaron en
+  `"deny"` para impedir regresiones.
+
+  Dos decisiones semánticas se conservaron mediante excepciones locales y explicadas: los
+  nombres `columnas_*` de preferencias reflejan claves persistidas y son más claros que
+  abreviarlos; en la prueba concurrente de ROOT, el arreglo explícito representa mejor el
+  conjunto fijo de participantes que convertir una tupla.
+
+  No se adoptaron siete categorías cuyo costo o cambio contractual no aporta valor a esta
+  aplicación interna: 197 `missing_errors_doc`, 179 `must_use_candidate` más 2
+  `return_self_not_must_use`, 171 `missing_const_for_fn`, 57 párrafos iniciales largos, 16
+  argumentos por valor y 4 sugerencias de `mul_add`. Documentar cada `Result`, comprometer
+  API con `#[must_use]`/`const`, cambiar ownership de DTO/errores o alterar mínimamente el
+  redondeo visual sería ruido o riesgo sin corregir defectos. Estas reglas quedaron en
+  `"allow"` explícito, siguiendo además el criterio del proyecto de referencia para
+  documentación y `must_use`. Resultado final: Clippy pedantic/nursery completo sin
+  advertencias; `cargo fmt --check`, la vara histórica, la suite raíz (502 tests) y los 17
+  tests Rust de Tauri en verde.
 
 ## Refactor en curso — `refactor/app-y-errores`
 

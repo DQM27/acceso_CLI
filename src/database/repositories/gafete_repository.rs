@@ -59,7 +59,7 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<Gafete> {
 
 const SELECT_GAFETE: &str = "SELECT id, numero, estado, contratista_deudor_id FROM gafetes";
 
-impl<'a> GafeteRepository for SqliteGafeteRepository<'a> {
+impl GafeteRepository for SqliteGafeteRepository<'_> {
     fn crear(&self, numero: i64) -> Result<i64, DatabaseError> {
         self.connection.execute(
             "INSERT INTO gafetes (numero, estado) VALUES (?1, 'DISPONIBLE')",

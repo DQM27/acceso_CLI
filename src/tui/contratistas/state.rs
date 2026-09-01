@@ -293,7 +293,7 @@ impl ContratistasState {
     }
 
     pub fn set_hoy(&mut self, hoy: NaiveDate) {
-        self.hoy = hoy
+        self.hoy = hoy;
     }
     pub fn completar_empresas(&mut self, r: Result<Vec<Empresa>, String>) {
         match r {
@@ -311,13 +311,13 @@ impl ContratistasState {
                 }
                 self.seleccion = id
                     .and_then(|id| self.registros.iter().position(|c| c.id == id))
-                    .or_else(|| (!self.registros.is_empty()).then_some(0))
+                    .or_else(|| (!self.registros.is_empty()).then_some(0));
             }
             Err(e) => {
                 self.registros.clear();
                 self.total = 0;
                 self.seleccion = None;
-                self.mensaje = Some(e)
+                self.mensaje = Some(e);
             }
         }
     }
@@ -421,17 +421,17 @@ impl ContratistasState {
             }
             KeyCode::Enter => {
                 if let Some(id) = self.id() {
-                    self.editar(id, rol.puede(Operacion::EditarCedulaContratista))
+                    self.editar(id, rol.puede(Operacion::EditarCedulaContratista));
                 }
             }
             KeyCode::Char('n' | 'N') => {
                 if self.empresas.is_empty() {
                     self.mensaje = Some(
                         "Debe registrar al menos una empresa antes de crear contratistas".into(),
-                    )
+                    );
                 } else {
                     self.modo =
-                        ModoContratistas::Formulario(Box::new(FormularioContratista::nuevo()))
+                        ModoContratistas::Formulario(Box::new(FormularioContratista::nuevo()));
                 }
             }
             KeyCode::Char('/') => {
@@ -447,7 +447,7 @@ impl ContratistasState {
             }
             KeyCode::Esc => return AccionContratistas::Volver,
             _ => {}
-        };
+        }
         AccionContratistas::Ninguna
     }
     fn busqueda(&mut self, key: KeyEvent) -> AccionContratistas {
@@ -519,7 +519,7 @@ impl ContratistasState {
                         Desplegable::Empresa => f.empresa = o,
                         Desplegable::Tipo => f.tipo = tipos()[o],
                     }
-                    f.desplegable = None
+                    f.desplegable = None;
                 }
                 KeyCode::Esc => f.desplegable = None,
                 _ => {}
@@ -545,13 +545,13 @@ impl ContratistasState {
             {
                 match CampoFormulario::TODOS[f.campo] {
                     CampoFormulario::Empresa => {
-                        f.desplegable = Some((Desplegable::Empresa, f.empresa))
+                        f.desplegable = Some((Desplegable::Empresa, f.empresa));
                     }
                     CampoFormulario::Tipo => {
                         f.desplegable = Some((
                             Desplegable::Tipo,
                             tipos().iter().position(|t| *t == f.tipo).unwrap_or(0),
-                        ))
+                        ));
                     }
                     CampoFormulario::Ruta => f.personal_ruta = !f.personal_ruta,
                     CampoFormulario::Acceso => f.tiene_acceso = !f.tiene_acceso,
@@ -617,7 +617,7 @@ impl ContratistasState {
                         f.nombre.handle_key(key);
                     }
                     CampoFormulario::FechaPraind if f.requiere_praind() => {
-                        agregar_fecha(&mut f.fecha_praind, key, c)
+                        agregar_fecha(&mut f.fecha_praind, key, c);
                     }
                     _ => {}
                 }
@@ -654,7 +654,7 @@ impl ContratistasState {
             }
             Err(e) => {
                 if let ModoContratistas::Formulario(f) = &mut self.modo {
-                    f.error = Some(e)
+                    f.error = Some(e);
                 }
                 AccionContratistas::Ninguna
             }
@@ -666,7 +666,7 @@ impl ContratistasState {
                 c,
                 &self.empresas,
                 cedula_editable,
-            )))
+            )));
         }
     }
     fn buscar(&self, id: Option<i64>) -> AccionContratistas {
@@ -737,9 +737,9 @@ impl ContratistasState {
             KeyCode::Char(' ') => {
                 let v = self.columnas.iter().filter(|(_, v)| *v).count();
                 if !self.columnas[s].1 || v > 1 {
-                    self.columnas[s].1 = !self.columnas[s].1
+                    self.columnas[s].1 = !self.columnas[s].1;
                 } else {
-                    self.mensaje = Some("Debe conservar al menos una columna".into())
+                    self.mensaje = Some("Debe conservar al menos una columna".into());
                 }
             }
             KeyCode::Esc => self.modo = ModoContratistas::Normal,

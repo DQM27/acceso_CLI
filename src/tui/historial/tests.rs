@@ -567,7 +567,7 @@ fn la_linea_de_tiempo_agrupa_por_dia_y_muestra_el_glifo_de_actividad() {
                 &state,
                 &sesion_prueba(),
                 crate::tui::ui_kit::ThemePreset::Brisas.theme(),
-            )
+            );
         })
         .expect("debe renderizar");
     let texto: String = terminal
@@ -611,7 +611,7 @@ fn la_vista_clasica_muestra_tabla_completa_y_el_editor_de_columnas_oculta_una() 
                 &state,
                 &sesion_prueba(),
                 crate::tui::ui_kit::ThemePreset::Brisas.theme(),
-            )
+            );
         })
         .expect("debe renderizar");
     let texto: String = terminal
@@ -636,7 +636,7 @@ fn la_vista_clasica_muestra_tabla_completa_y_el_editor_de_columnas_oculta_una() 
                 &state,
                 &sesion_prueba(),
                 crate::tui::ui_kit::ThemePreset::Brisas.theme(),
-            )
+            );
         })
         .expect("debe renderizar");
     let texto: String = terminal

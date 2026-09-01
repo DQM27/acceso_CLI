@@ -20,7 +20,7 @@ use super::formulario::{Campo, FormularioContratista, Subfase};
 /// emuladores, así que el nuestro se siente igual de "normal" sin depender
 /// del cursor real del terminal. Compartida con `mod.rs` (que la usa para
 /// saber cuánto puede esperar el próximo `poll` sin perderse un toggle).
-pub(crate) const PERIODO_BLINK_MS: u64 = 530;
+pub const PERIODO_BLINK_MS: u64 = 530;
 use super::formulario_empresa::FormularioEmpresa;
 use super::formulario_password::FormularioPassword;
 use super::formulario_usuario::FormularioUsuario;
@@ -104,7 +104,7 @@ pub struct Feedback {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Fase {
     LoginCedula,
-    /// `nombre` ya se resolvió contra SQLite al confirmar la cédula (lectura
+    /// `nombre` ya se resolvió contra `SQLite` al confirmar la cédula (lectura
     /// rápida, sin Argon2) — es lo que muta el título "Brisas CLI" en la
     /// identidad del operador durante el resto del login.
     LoginPassword {
@@ -204,7 +204,9 @@ impl ContextState {
     /// chequeo está en ✗: acceso no denegado, sin ingreso activo previo y
     /// gafete presente y libre cuando el contratista lo requiere.
     pub fn ingreso_confirmable(&self) -> bool {
-        let ContextState::ResumenIngreso {
+        use crate::domain::resultado_acceso::ResultadoAcceso;
+
+        let Self::ResumenIngreso {
             preparacion,
             gafete,
             gafete_ocupante,
@@ -213,7 +215,6 @@ impl ContextState {
         else {
             return false;
         };
-        use crate::domain::resultado_acceso::ResultadoAcceso;
         if matches!(preparacion.resultado_acceso, ResultadoAcceso::Denegado(_))
             || preparacion.tiene_ingreso_activo
         {

@@ -30,12 +30,12 @@ pub enum Igualdad<T> {
 impl<T> Igualdad<T> {
     pub fn valor(&self) -> &T {
         match self {
-            Igualdad::Incluye(v) | Igualdad::Excluye(v) => v,
+            Self::Incluye(v) | Self::Excluye(v) => v,
         }
     }
 
     pub fn negado(&self) -> bool {
-        matches!(self, Igualdad::Excluye(_))
+        matches!(self, Self::Excluye(_))
     }
 
     pub fn operador_sql(&self) -> &'static str {

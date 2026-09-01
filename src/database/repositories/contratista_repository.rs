@@ -65,7 +65,7 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<Contratista> {
     ))
 }
 
-impl<'a> ContratistaRepository for SqliteContratistaRepository<'a> {
+impl ContratistaRepository for SqliteContratistaRepository<'_> {
     fn crear(&self, contratista: &Contratista) -> Result<i64, DatabaseError> {
         let fecha_vencimiento = contratista
             .fecha_vencimiento_praind
@@ -92,8 +92,8 @@ impl<'a> ContratistaRepository for SqliteContratistaRepository<'a> {
                 contratista.empresa_id,
                 tipo_ingreso,
                 fecha_vencimiento,
-                contratista.es_personal_ruta as i64,
-                contratista.tiene_acceso as i64,
+                i64::from(contratista.es_personal_ruta),
+                i64::from(contratista.tiene_acceso),
             ],
         )?;
 
@@ -182,8 +182,8 @@ impl<'a> ContratistaRepository for SqliteContratistaRepository<'a> {
                 contratista.empresa_id,
                 tipo_ingreso,
                 fecha_vencimiento,
-                contratista.es_personal_ruta as i64,
-                contratista.tiene_acceso as i64,
+                i64::from(contratista.es_personal_ruta),
+                i64::from(contratista.tiene_acceso),
                 contratista.id,
             ],
         )?;

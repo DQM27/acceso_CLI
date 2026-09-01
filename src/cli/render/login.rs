@@ -19,11 +19,12 @@ use super::estilos::{
 };
 
 pub(super) fn render_login(frame: &mut Frame, area: Rect, app: &AppState) {
+    const AIRE: u16 = 1;
+
     let opacidad_titulo = app.presentacion.opacidad("titulo");
     let opacidad_prompt = app.presentacion.opacidad("prompt");
     let opacidad_aviso = app.presentacion.opacidad("feedback");
 
-    const AIRE: u16 = 1;
     let y_titulo = area.y;
     let y_estado = y_titulo + 1;
     let y_prompt = y_estado + 1 + AIRE;

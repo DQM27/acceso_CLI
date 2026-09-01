@@ -34,7 +34,7 @@ fn la_lista_queda_centrada_en_vez_de_pegada_a_la_izquierda() {
                 &state,
                 &sesion,
                 crate::tui::ui_kit::ThemePreset::Brisas.theme(),
-            )
+            );
         })
         .expect("debe renderizar");
 
@@ -253,7 +253,7 @@ fn el_menu_root_muestra_todas_las_opciones_en_orden_sin_recortarlas() {
                 &state,
                 &sesion,
                 crate::tui::ui_kit::ThemePreset::Brisas.theme(),
-            )
+            );
         })
         .unwrap();
 
@@ -332,7 +332,7 @@ fn el_menu_avisa_si_el_respaldo_automatico_fallo_sin_importar_el_rol() {
                 &state,
                 &sesion,
                 crate::tui::ui_kit::ThemePreset::Brisas.theme(),
-            )
+            );
         })
         .unwrap();
 

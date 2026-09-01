@@ -117,7 +117,7 @@ fn confirmar_salida_gafete(core: &AppCore, app: &mut AppState) {
             Some(item) => match core.registrar_salida(sesion, item.registro_id) {
                 Ok(()) => registrados.push(item.contratista_nombre.clone()),
                 Err(error) => {
-                    fallidos.push(format!("gafete {numero}: {}", mensaje_error_salida(&error)))
+                    fallidos.push(format!("gafete {numero}: {}", mensaje_error_salida(&error)));
                 }
             },
         }

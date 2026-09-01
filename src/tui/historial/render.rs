@@ -74,7 +74,7 @@ pub fn render(
             proposito,
         } => render_columnas_editor(frame, area, state, *seleccion, *proposito, theme),
         ModoHistorial::RutaExportacion { destino } => {
-            render_ruta_exportacion(frame, area, destino, theme)
+            render_ruta_exportacion(frame, area, destino, theme);
         }
         ModoHistorial::Normal => {}
     }

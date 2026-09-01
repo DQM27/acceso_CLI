@@ -38,14 +38,16 @@ impl UiPreferences {
                         preferences.theme = theme;
                     }
                 }
-                "activos_columns" => preferences.activos_columns = value.trim().to_owned(),
+                "activos_columns" => value.trim().clone_into(&mut preferences.activos_columns),
                 "contratistas_columns" => {
-                    preferences.contratistas_columns = value.trim().to_owned()
+                    value
+                        .trim()
+                        .clone_into(&mut preferences.contratistas_columns);
                 }
                 "historial_view" if matches!(value.trim(), "timeline" | "classic") => {
-                    preferences.historial_view = value.trim().to_owned()
+                    value.trim().clone_into(&mut preferences.historial_view);
                 }
-                "historial_columns" => preferences.historial_columns = value.trim().to_owned(),
+                "historial_columns" => value.trim().clone_into(&mut preferences.historial_columns),
                 _ => {}
             }
         }

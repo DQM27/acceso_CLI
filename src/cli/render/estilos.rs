@@ -74,7 +74,7 @@ pub(super) fn interpolar_color(desde: (u8, u8, u8), hasta: (u8, u8, u8), t: f32)
     // aunque ya no lo sea.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let mezclar = |a: u8, b: u8| {
-        (a as f32 + (b as f32 - a as f32) * t)
+        (f32::from(a) + (f32::from(b) - f32::from(a)) * t)
             .round()
             .clamp(0.0, 255.0) as u8
     };

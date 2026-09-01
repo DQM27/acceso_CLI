@@ -7,7 +7,7 @@ use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
 pub const SCHEMA_VERSION: i64 = 15;
 
-/// Identifica un archivo SQLite como propio de Control Acceso (bytes de
+/// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
 /// cualquier base nueva o creada antes de este cambio; sólo se rechaza un
 /// `application_id` que sea de un tercero (ni `0` ni el nuestro).
@@ -17,7 +17,7 @@ pub const APPLICATION_ID: i32 = 0x4252_4953;
 pub enum SchemaError {
     #[error("Error de SQLite: {0}")]
     Sqlite(#[from] rusqlite::Error),
-    /// El archivo abierto es un SQLite válido pero no es una base de
+    /// El archivo abierto es un `SQLite` válido pero no es una base de
     /// Control Acceso (`application_id` pertenece a otra aplicación).
     #[error("El archivo no es una base de datos de Control Acceso")]
     BaseAjena,
@@ -30,7 +30,7 @@ pub enum SchemaError {
     #[error("No se pudo crear el respaldo obligatorio antes de migrar el esquema: {0}")]
     RespaldoPreMigracionFallido(String),
     /// Invariante interno: tras aplicar todas las migraciones conocidas, la
-    /// versión resultante no es `SCHEMA_VERSION`. No es un error de SQLite —
+    /// versión resultante no es `SCHEMA_VERSION`. No es un error de `SQLite` —
     /// sólo puede pasar si la cadena de migraciones de este archivo tiene un
     /// hueco (una versión sin `if version == N` que la maneje).
     #[error(
@@ -195,7 +195,7 @@ pub(crate) fn verificar_archivo_propio(connection: &Connection) -> Result<(), Sc
     verificar_integridad_rapida(connection)
 }
 
-/// Rechaza un archivo SQLite ajeno (`application_id` de otra app). No
+/// Rechaza un archivo `SQLite` ajeno (`application_id` de otra app). No
 /// escribe nada — sólo lee, a propósito: adoptar el sello (`PRAGMA
 /// application_id = ...`) es responsabilidad de [`adoptar_application_id`],
 /// que debe correr después de `quick_check`, no antes.
@@ -224,15 +224,15 @@ fn adoptar_application_id(connection: &Connection) -> Result<(), SchemaError> {
 /// (`crate::texto::plegar_para_busqueda`), usada por las búsquedas cortas
 /// (`< 3` caracteres) en vez de `LIKE ... COLLATE NOCASE`. `COLLATE NOCASE`
 /// sólo pliega ASCII A-Z — no encuentra "Óscar" buscando "os" — y a
-/// diferencia de una `COLLATE` personalizada (que SQLite no aplica al
+/// diferencia de una `COLLATE` personalizada (que `SQLite` no aplica al
 /// operador `LIKE`, sólo a comparaciones de igualdad; verificado antes de
 /// implementar esto), una función SQL sí participa en `LIKE` porque el
 /// plegado ocurre antes de comparar, no durante. Se registra en cada
 /// apertura (no sobrevive a un `ATTACH`/reconexión) — determinista y sin
-/// acceso a memoria compartida entre threads, así que es segura para SQLite.
+/// acceso a memoria compartida entre threads, así que es segura para `SQLite`.
 ///
 /// `NULL` de entrada produce `NULL` de salida (semántica SQL estándar, igual
-/// que cualquier función de SQLite) en vez de fallar — necesario para
+/// que cualquier función de `SQLite`) en vez de fallar — necesario para
 /// columnas opcionales como `usuario_salida_nombre`, donde antes
 /// `LIKE ... COLLATE NOCASE` excluía la fila sin error al comparar contra
 /// `NULL` y `PLEGAR(NULL)` sin este manejo rompía la consulta entera.
@@ -328,7 +328,7 @@ fn normalizar_fecha_utc_legacy(valor: &str) -> rusqlite::Result<String> {
         .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))
 }
 
-const MIGRACION_1: &str = r#"
+const MIGRACION_1: &str = r"
 CREATE TABLE IF NOT EXISTS empresas (
     id INTEGER PRIMARY KEY,
     nombre TEXT NOT NULL UNIQUE
@@ -392,9 +392,9 @@ ON registro_ingresos(gafete_numero);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_registro_ingresos_gafete_activo
 ON registro_ingresos(gafete_numero)
 WHERE gafete_numero IS NOT NULL AND fecha_hora_salida IS NULL;
-"#;
+";
 
-const MIGRACION_2: &str = r#"
+const MIGRACION_2: &str = r"
 CREATE TABLE registro_ingresos_nueva (
     id INTEGER PRIMARY KEY,
     contratista_id INTEGER NOT NULL,
@@ -446,9 +446,9 @@ ON registro_ingresos(gafete_numero);
 CREATE UNIQUE INDEX idx_registro_ingresos_gafete_activo
 ON registro_ingresos(gafete_numero)
 WHERE gafete_numero IS NOT NULL AND fecha_hora_salida IS NULL;
-"#;
+";
 
-const MIGRACION_3: &str = r#"
+const MIGRACION_3: &str = r"
 CREATE VIRTUAL TABLE contratistas_fts USING fts5(
     cedula, nombre,
     content='contratistas', content_rowid='id',
@@ -511,18 +511,18 @@ END;
 INSERT INTO contratistas_fts(contratistas_fts) VALUES ('rebuild');
 INSERT INTO empresas_fts(empresas_fts) VALUES ('rebuild');
 INSERT INTO usuarios_fts(usuarios_fts) VALUES ('rebuild');
-"#;
+";
 
-const MIGRACION_4: &str = r#"
+const MIGRACION_4: &str = r"
 CREATE TRIGGER contratistas_cedula_inmutable
 BEFORE UPDATE OF cedula ON contratistas
 WHEN NEW.cedula <> OLD.cedula
 BEGIN
     SELECT RAISE(ABORT, 'La cedula del contratista es inmutable');
 END;
-"#;
+";
 
-const MIGRACION_5: &str = r#"
+const MIGRACION_5: &str = r"
 CREATE TABLE registro_ingresos_nueva (
     id INTEGER PRIMARY KEY,
     contratista_id INTEGER NOT NULL,
@@ -686,16 +686,16 @@ BEFORE DELETE ON registro_ingresos
 BEGIN
     SELECT RAISE(ABORT, 'Los movimientos de acceso no se pueden eliminar');
 END;
-"#;
+";
 
 // Hasta la versión 5 las fechas se persistían sin zona y correspondían a la hora local
 // de Costa Rica. Desde la versión 6 todos los instantes se guardan en UTC canónico.
-const MIGRACION_6_INICIO: &str = r#"
+const MIGRACION_6_INICIO: &str = r"
 DROP TRIGGER registro_ingresos_entrada_inmutable;
 DROP TRIGGER registro_ingresos_salida_unica;
-"#;
+";
 
-const MIGRACION_6_FINAL: &str = r#"
+const MIGRACION_6_FINAL: &str = r"
 CREATE TRIGGER registro_ingresos_fecha_utc_insert
 BEFORE INSERT ON registro_ingresos
 WHEN
@@ -758,15 +758,15 @@ WHEN
 BEGIN
     SELECT RAISE(ABORT, 'La salida solo puede registrarse una vez');
 END;
-"#;
+";
 
 // Da de baja una empresa sin tocar el acceso individual de sus contratistas:
 // `domain::acceso::verificar_acceso` deniega a todos los suyos mientras esté
 // inactiva. Las empresas existentes quedan activas (DEFAULT 1) — nadie pierde
 // acceso por el simple hecho de migrar.
-const MIGRACION_7: &str = r#"
+const MIGRACION_7: &str = r"
 ALTER TABLE empresas ADD COLUMN activo INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1));
-"#;
+";
 
 // Guarda si la empresa estaba activa al momento del ingreso, junto al resto
 // de la fotografía histórica (`docs/auditoria-dominio-2026-08-20.md`,
@@ -779,7 +779,7 @@ ALTER TABLE empresas ADD COLUMN activo INTEGER NOT NULL DEFAULT 1 CHECK (activo 
 // anteriores a la migración 7 son de una época en la que no existía el
 // concepto de empresa inactiva (toda empresa era, por definición, activa), y
 // las posteriores sólo pudieron persistirse si pasaron la Regla 0 primero.
-const MIGRACION_8: &str = r#"
+const MIGRACION_8: &str = r"
 ALTER TABLE registro_ingresos
 ADD COLUMN empresa_activa_snapshot INTEGER NOT NULL DEFAULT 1
 CHECK (empresa_activa_snapshot IN (0, 1));
@@ -815,12 +815,12 @@ WHEN
 BEGIN
     SELECT RAISE(ABORT, 'Los datos historicos del ingreso son inmutables');
 END;
-"#;
+";
 
 // Registro acotado a los dos campos de contratistas cuya trazabilidad es
 // operativamente crítica. Los valores son texto nullable para representar
 // correctamente una fecha PRAIND ausente, sin inventar sentinelas.
-const MIGRACION_9: &str = r#"
+const MIGRACION_9: &str = r"
 CREATE TABLE auditoria_contratistas (
     id INTEGER PRIMARY KEY,
     fecha_hora TEXT NOT NULL,
@@ -837,12 +837,12 @@ ON auditoria_contratistas(fecha_hora DESC, id DESC);
 
 CREATE INDEX idx_auditoria_contratistas_contratista
 ON auditoria_contratistas(contratista_id, id DESC);
-"#;
+";
 
 // Amplía la trazabilidad operativa para incluir la habilitación o
 // deshabilitación de acceso. SQLite no permite modificar un CHECK existente,
 // por eso se reconstruye la tabla conservando todas las filas anteriores.
-const MIGRACION_10: &str = r#"
+const MIGRACION_10: &str = r"
 CREATE TABLE auditoria_contratistas_nueva (
     id INTEGER PRIMARY KEY,
     fecha_hora TEXT NOT NULL,
@@ -870,21 +870,21 @@ ON auditoria_contratistas(fecha_hora DESC, id DESC);
 
 CREATE INDEX idx_auditoria_contratistas_contratista
 ON auditoria_contratistas(contratista_id, id DESC);
-"#;
+";
 
 // Acelera la búsqueda de la salida más reciente sin indexar las filas todavía
 // activas. La propia clave del índice cubre por completo `MAX(fecha_hora_salida)`.
-const MIGRACION_11: &str = r#"
+const MIGRACION_11: &str = r"
 CREATE INDEX idx_registro_ingresos_fecha_salida
 ON registro_ingresos(fecha_hora_salida)
 WHERE fecha_hora_salida IS NOT NULL;
-"#;
+";
 
 // La identidad del contratista puede corregirse desde la aplicación con una
 // sesión administrativa. Se retira la prohibición absoluta de SQLite y se
 // incorpora la cédula a la auditoría para conservar quién hizo la corrección
 // y sus valores anterior y nuevo.
-const MIGRACION_12: &str = r#"
+const MIGRACION_12: &str = r"
 DROP TRIGGER IF EXISTS contratistas_cedula_inmutable;
 
 CREATE TABLE auditoria_contratistas_nueva (
@@ -914,7 +914,7 @@ ON auditoria_contratistas(fecha_hora DESC, id DESC);
 
 CREATE INDEX idx_auditoria_contratistas_contratista
 ON auditoria_contratistas(contratista_id, id DESC);
-"#;
+";
 
 // Generaliza la auditoría de "sólo contratistas" a las tres entidades de
 // catálogo (contratistas, empresas, usuarios) en una tabla única en vez de
@@ -966,7 +966,7 @@ ON auditoria_cambios(entidad, entidad_id, id DESC);
 // un incidente. `registro_ingresos.gafete_numero` NO se vuelve FK a
 // `gafetes.numero` a propósito: hay filas históricas con números que el
 // catálogo (creado vacío) no tiene por qué conocer.
-const MIGRACION_14: &str = r#"
+const MIGRACION_14: &str = r"
 CREATE TABLE gafetes (
     id INTEGER PRIMARY KEY,
     numero INTEGER NOT NULL UNIQUE,
@@ -998,7 +998,7 @@ CREATE TABLE gafetes_incidentes (
 );
 CREATE INDEX idx_gafetes_incidentes_gafete ON gafetes_incidentes(gafete_id, id DESC);
 CREATE INDEX idx_gafetes_incidentes_fecha ON gafetes_incidentes(fecha_hora DESC, id DESC);
-"#;
+";
 
 // Tablas `STRICT` (`docs/pendientes.md`, "Evaluar tablas STRICT"): SQLite no
 // permite `ALTER TABLE ... STRICT`, así que cada tabla se recrea con el
@@ -1017,7 +1017,7 @@ CREATE INDEX idx_gafetes_incidentes_fecha ON gafetes_incidentes(fecha_hora DESC,
 // `STRICT` (exento del chequeo de tipo estricto, es la única excepción
 // documentada por SQLite) — no cambia el comportamiento de autoasignación
 // que ya usan los repositorios.
-const MIGRACION_15: &str = r#"
+const MIGRACION_15: &str = r"
 CREATE TABLE empresas_nueva (
     id INTEGER PRIMARY KEY,
     nombre TEXT NOT NULL UNIQUE,
@@ -1308,4 +1308,4 @@ ALTER TABLE auditoria_cambios_nueva RENAME TO auditoria_cambios;
 CREATE INDEX idx_auditoria_cambios_fecha ON auditoria_cambios(fecha_hora DESC, id DESC);
 CREATE INDEX idx_auditoria_cambios_entidad
 ON auditoria_cambios(entidad, entidad_id, id DESC);
-"#;
+";

@@ -49,7 +49,7 @@ impl AppCore {
         AutenticacionService::new(&repository).autenticar(cedula, password)
     }
 
-    /// Resuelve la cédula sin verificar todavía la contraseña — rápido, sólo SQLite. Permite
+    /// Resuelve la cédula sin verificar todavía la contraseña — rápido, sólo `SQLite`. Permite
     /// correr la verificación de Argon2 (lenta) en un hilo aparte sin compartir la conexión.
     pub fn buscar_candidato_autenticacion(
         &self,

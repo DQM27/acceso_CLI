@@ -10,7 +10,7 @@ use control_acceso::services::error::RegistroIngresoServiceError;
 /// Regresión del hallazgo #2 de `docs/auditoria-dominio-2026-08-20.md`:
 /// "Una sesión revocada puede continuar registrando movimientos". Antes,
 /// `registrar_ingreso`/`registrar_salida` sólo exigían que `usuario_id`
-/// existiera (por la FK de SQLite) — nunca que la cuenta siguiera activa.
+/// existiera (por la FK de `SQLite`) — nunca que la cuenta siguiera activa.
 fn base() -> Connection {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();

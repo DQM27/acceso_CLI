@@ -1,5 +1,5 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct BusquedaTexto {
+pub struct BusquedaTexto {
     pub modo: i64,
     pub patron_like: Option<String>,
     pub consulta_fts: Option<String>,

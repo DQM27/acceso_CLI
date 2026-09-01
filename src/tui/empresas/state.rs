@@ -236,7 +236,7 @@ impl EmpresasState {
                     modo: ModoFormularioEmpresa::Crear,
                     nombre: TextInput::default().with_max_chars(80),
                     error: None,
-                })
+                });
             }
             KeyCode::Char('a' | 'A') => {
                 if let Some(id) = self.id_seleccionado() {
@@ -367,7 +367,7 @@ impl EmpresasState {
             self.modo = ModoEmpresas::ConfirmacionEstado(ConfirmacionEstado {
                 id,
                 activar: !e.activo,
-            })
+            });
         }
     }
 

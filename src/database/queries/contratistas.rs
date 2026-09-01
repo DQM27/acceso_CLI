@@ -120,7 +120,7 @@ type ParametrosSql = Vec<(String, Box<dyn rusqlite::ToSql>)>;
 /// Arma el `WHERE` sólo con las condiciones realmente activas (en vez de un
 /// bloque fijo con flags `:x IS NULL OR col = :x` evaluados en cada fila) y
 /// los parámetros que le corresponden a cada una. Con flags dinámicos,
-/// SQLite no puede decidir en `prepare` qué rama aplica (depende del valor
+/// `SQLite` no puede decidir en `prepare` qué rama aplica (depende del valor
 /// del parámetro en runtime) y termina escaneando todas las filas sin usar
 /// `idx_contratistas_empresa` aunque exista — confirmado con
 /// `EXPLAIN QUERY PLAN` (`docs/hallazgos-buscador.md`). Omitir del todo la

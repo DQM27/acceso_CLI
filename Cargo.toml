@@ -124,6 +124,46 @@ too_many_lines = "deny"
 struct_excessive_bools = "deny"
 missing_fields_in_debug = "deny"
 
+# --- Capa 5: categorías cosméticas que no se adoptan. Esta es una aplicación
+#     interna, no una librería pública: documentar 197 secciones `# Errors`,
+#     marcar 181 retornos con `#[must_use]` o convertir 171 funciones en
+#     `const fn` agrega superficie y compromiso de API sin mejorar el flujo.
+#     Se sigue el criterio del proyecto de referencia para documentación y
+#     `must_use`. Los argumentos por valor expresan consumo de DTO/errores; y
+#     `mul_add` alteraría mínimamente el redondeo visual ya validado. ---
+missing_errors_doc = "allow"
+must_use_candidate = "allow"
+return_self_not_must_use = "allow"
+missing_const_for_fn = "allow"
+too_long_first_doc_paragraph = "allow"
+needless_pass_by_value = "allow"
+suboptimal_flops = "allow"
+
+# --- Capa 5: cosmética de bajo riesgo adoptada. Se corrigieron todos los
+#     hallazgos actuales y estas reglas evitan que reaparezcan. Las dos
+#     excepciones semánticas (`struct_field_names` y `tuple_array_conversions`)
+#     están justificadas localmente donde conservan nombres persistidos o una
+#     prueba de concurrencia más legible. ---
+doc_markdown = "deny"
+semicolon_if_nothing_returned = "deny"
+assigning_clones = "deny"
+cast_lossless = "deny"
+needless_raw_string_hashes = "deny"
+use_self = "deny"
+elidable_lifetime_names = "deny"
+items_after_statements = "deny"
+equatable_if_let = "deny"
+redundant_pub_crate = "deny"
+ignored_unit_patterns = "deny"
+format_push_string = "deny"
+if_not_else = "deny"
+tuple_array_conversions = "deny"
+unnecessary_semicolon = "deny"
+unreadable_literal = "deny"
+unused_self = "deny"
+useless_let_if_seq = "deny"
+struct_field_names = "deny"
+
 # Perfil de producción: prioriza latencia y tamaño del binario sobre tiempo de
 # compilación. Cargo ya ejecuta la compilación en paralelo; codegen-units=1 reduce
 # el paralelismo de generación de código a cambio de darle más contexto a LLVM.
