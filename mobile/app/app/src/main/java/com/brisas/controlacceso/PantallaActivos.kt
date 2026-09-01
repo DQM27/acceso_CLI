@@ -8,14 +8,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,12 +33,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.ContratistaResumen
 import uniffi.control_acceso_mobile.IngresoActivoResumen
+import uniffi.control_acceso_mobile.ModoBusquedaActivos
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.PreparacionIngreso
 import uniffi.control_acceso_mobile.ResultadoAcceso
@@ -53,27 +60,48 @@ private sealed class SeleccionIngreso {
     data class Formulario(val preparacion: PreparacionIngreso) : SeleccionIngreso()
 }
 
+/// Con pocos activos alcanza con recorrer la lista a ojo, pero con muchos
+/// (imaginemos 100) hace falta poder acotarla — el mismo campo de texto no
+/// puede a la vez buscar en el catálogo completo (para entrada) Y filtrar
+/// los activos (para salida), así que un selector de tres decide cuál de
+/// las dos cosas está haciendo el campo. `SALIDA_NOMBRE`/`SALIDA_GAFETE` van
+/// separados (y no uno solo "salida") porque la búsqueda de texto libre de
+/// Rust ya mezcla nombre/cédula con gafete en el mismo OR — buscar "7" como
+/// gafete también traería cualquier cédula que lo contenga, ruidoso con
+/// muchos activos. `Nucleo.listarIngresosActivos` recibe `ModoBusquedaActivos`
+/// para pedirle a Rust el filtro exacto en vez de resolverlo del lado del
+/// teléfono.
+private enum class ModoBusqueda { ENTRADA, SALIDA_NOMBRE, SALIDA_GAFETE }
+
 /// Una sola vista para el ciclo completo — entrada, permanencia y salida —,
 /// igual que `Activos.tsx` en desktop (ahí "+Nuevo"/"Salida" abren modales
 /// sobre la misma grilla de activos; ver docs/plan-app-movil.md, addendum
 /// 2026-09-01). Acá no hay una pestaña "Buscar" aparte: el mismo campo de
-/// texto cambia de sentido según esté vacío o no — mismo truco que
-/// `SalidaModal.tsx` (ahí un checkbox "Por gafete" hace lo mismo con un solo
-/// campo en vez de duplicar pantallas casi idénticas):
+/// texto cambia de sentido según el modo elegido en el selector de arriba
+/// — mismo espíritu que el checkbox "Por gafete" de `SalidaModal.tsx` (un
+/// solo campo, la interpretación cambia), llevado a un selector de tres
+/// porque acá hace falta distinguir tres búsquedas, no dos:
 ///
-/// - Vacío: lista quién está adentro (antes vivía en esta misma pantalla) —
-///   tocar un nombre confirma su salida.
-/// - Con texto: busca en el catálogo completo de contratistas (antes
-///   pestaña "Buscar" aparte) — tocar un resultado arranca el flujo de
+/// - **Entrada** (por defecto): vacío lista quién está adentro (tocar un
+///   nombre confirma su salida); con texto busca en el catálogo completo de
+///   contratistas (antes pestaña "Buscar" aparte) para arrancar el flujo de
 ///   confirmar entrada.
+/// - **Salida: nombre/Salida: gafete**: filtran la MISMA lista de activos
+///   por cédula/nombre o por número de gafete exacto — para encontrar a
+///   alguien puntual cuando hay muchos adentro a la vez, sin tener que
+///   recorrer la lista a ojo.
 ///
-/// A diferencia de desktop (SalidaModal.tsx), que agrega un modo "por
-/// gafete" con texto separado por comas para aprovechar el teclado del
-/// guardia en la PC, aquí no hay atajos de teclado que aprovechar — todo es
-/// táctil.
+/// A diferencia de desktop (SalidaModal.tsx), que en modo gafete acepta
+/// varios números separados por coma y confirma todos de una sin diálogo
+/// (pensado para el teclado físico de la PC), acá cada coincidencia se
+/// confirma tocándola — mismo diálogo de siempre — porque todo es táctil y
+/// confirmar una salida de más por un tropiezo en el teclado numérico sale
+/// más caro que el ahorro de tiempo.
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaActivos(nucleo: Nucleo) {
     var texto by remember { mutableStateOf("") }
+    var modo by remember { mutableStateOf(ModoBusqueda.ENTRADA) }
     var activos by remember { mutableStateOf<List<IngresoActivoResumen>>(emptyList()) }
     var resultadosBusqueda by remember { mutableStateOf<List<ContratistaResumen>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -82,12 +110,36 @@ fun PantallaActivos(nucleo: Nucleo) {
     var recargas by remember { mutableIntStateOf(0) }
     val alcance = rememberCoroutineScope()
 
-    LaunchedEffect(texto, recargas) {
+    fun cambiarModo(nuevo: ModoBusqueda) {
+        modo = nuevo
+        // Al cambiar de modo el texto que había queda escrito con otro
+        // sentido (un nombre no significa nada en modo Gafete) — se limpia
+        // para no arrastrar una búsqueda que ya no aplica.
+        texto = ""
+    }
+
+    LaunchedEffect(texto, recargas, modo) {
         try {
-            if (texto.isBlank()) {
-                activos = withContext(Dispatchers.Default) { nucleo.listarIngresosActivos("") }
-            } else {
-                resultadosBusqueda = withContext(Dispatchers.Default) { nucleo.buscarContratistas(texto) }
+            when (modo) {
+                ModoBusqueda.ENTRADA -> {
+                    if (texto.isBlank()) {
+                        activos = withContext(Dispatchers.Default) {
+                            nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA)
+                        }
+                    } else {
+                        resultadosBusqueda = withContext(Dispatchers.Default) { nucleo.buscarContratistas(texto) }
+                    }
+                }
+                ModoBusqueda.SALIDA_NOMBRE -> {
+                    activos = withContext(Dispatchers.Default) {
+                        nucleo.listarIngresosActivos(texto, ModoBusquedaActivos.NOMBRE_CEDULA)
+                    }
+                }
+                ModoBusqueda.SALIDA_GAFETE -> {
+                    activos = withContext(Dispatchers.Default) {
+                        nucleo.listarIngresosActivos(texto, ModoBusquedaActivos.GAFETE)
+                    }
+                }
             }
             error = null
         } catch (excepcion: Exception) {
@@ -135,26 +187,69 @@ fun PantallaActivos(nucleo: Nucleo) {
         else -> Unit
     }
 
+    // Color propio para "estoy buscando a quién SACAR" — evita confundir el
+    // modo entrada (color normal de la app) con el de salida, que es la
+    // acción de mayor consecuencia.
+    val colorModo = if (modo == ModoBusqueda.ENTRADA) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.secondary
+    }
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            SegmentedButton(
+                selected = modo == ModoBusqueda.ENTRADA,
+                onClick = { cambiarModo(ModoBusqueda.ENTRADA) },
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
+            ) {
+                Text("Entrada")
+            }
+            SegmentedButton(
+                selected = modo == ModoBusqueda.SALIDA_NOMBRE,
+                onClick = { cambiarModo(ModoBusqueda.SALIDA_NOMBRE) },
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
+            ) {
+                Text("Salida: nombre")
+            }
+            SegmentedButton(
+                selected = modo == ModoBusqueda.SALIDA_GAFETE,
+                onClick = { cambiarModo(ModoBusqueda.SALIDA_GAFETE) },
+                shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
+            ) {
+                Text("Salida: gafete")
+            }
+        }
+
         OutlinedTextField(
             value = texto,
-            onValueChange = { texto = it },
-            label = { Text("Cédula o nombre") },
+            onValueChange = { nuevo ->
+                texto = if (modo == ModoBusqueda.SALIDA_GAFETE) nuevo.filter(Char::isDigit) else nuevo
+            },
+            label = { Text(if (modo == ModoBusqueda.SALIDA_GAFETE) "Número de gafete" else "Cédula o nombre") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,
+            keyboardOptions = if (modo == ModoBusqueda.SALIDA_GAFETE) {
+                KeyboardOptions(keyboardType = KeyboardType.Number)
+            } else {
+                KeyboardOptions.Default
+            },
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                focusedLabelColor = MaterialTheme.colorScheme.primary,
+                focusedBorderColor = colorModo,
+                focusedLabelColor = colorModo,
             ),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
         )
 
-        Text(
-            if (texto.isBlank()) {
+        val leyenda = when {
+            texto.isBlank() ->
                 if (activos.isEmpty()) "Nadie adentro" else "${activos.size} adentro · toque un nombre para registrar salida"
-            } else {
-                "Buscando contratistas · toque un resultado para registrar entrada"
-            },
+            modo == ModoBusqueda.ENTRADA -> "Buscando contratistas · toque un resultado para registrar entrada"
+            activos.isEmpty() -> "Sin coincidencias entre los activos"
+            else -> "Buscando entre los activos · toque un nombre para registrar salida"
+        }
+        Text(
+            leyenda,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 8.dp),
@@ -172,7 +267,7 @@ fun PantallaActivos(nucleo: Nucleo) {
             )
         }
 
-        if (texto.isBlank()) {
+        if (modo != ModoBusqueda.ENTRADA || texto.isBlank()) {
             LazyColumn(modifier = Modifier.padding(top = 8.dp)) {
                 items(activos, key = { it.registroId }) { activo ->
                     FilaActivo(activo, onClick = { seleccionSalida = activo })

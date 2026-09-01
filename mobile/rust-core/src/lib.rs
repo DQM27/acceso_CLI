@@ -15,6 +15,7 @@ use control_acceso::database::queries::ingresos::{
 use control_acceso::database::queries::usuarios::{
     FiltroUsuarios as FiltroUsuariosNucleo, UsuarioResumen as UsuarioResumenNucleo,
 };
+use control_acceso::database::queries::Igualdad;
 use control_acceso::domain::resultado_acceso::{
     MotivoDenegacion as MotivoDenegacionNucleo, ResultadoAcceso as ResultadoAccesoNucleo,
 };
@@ -67,6 +68,15 @@ impl From<RolUsuario> for RolUsuarioNucleo {
             RolUsuario::Operador => Self::Operador,
         }
     }
+}
+
+/// Sin espejo en `control_acceso` — es puramente de la UI móvil: decide
+/// cómo `Nucleo::listar_ingresos_activos` interpreta el campo de texto
+/// cuando se está buscando a quién dar salida entre muchos activos.
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Enum)]
+pub enum ModoBusquedaActivos {
+    NombreCedula,
+    Gafete,
 }
 
 #[derive(Debug, Clone, uniffi::Record)]
@@ -591,19 +601,39 @@ impl Nucleo {
 
     /// Mismo criterio tacaño que `buscar_contratistas`: página acotada, no
     /// el listado completo que carga AG Grid en desktop.
+    ///
+    /// `modo` decide cómo se interpreta `texto` — separado a propósito de
+    /// `NombreCedula`: la búsqueda de texto libre de Rust ya hace `OR` entre
+    /// cédula/nombre (`LIKE`) y gafete exacto en la misma consulta, así que
+    /// buscar "7" como gafete también trae cualquier cédula que *contenga*
+    /// un 7 — ruidoso con muchos activos a la vez. En modo `Gafete` se
+    /// filtra sólo por `gafete_numero` exacto, sin ese ruido.
     pub fn listar_ingresos_activos(
         &self,
         texto: String,
+        modo: ModoBusquedaActivos,
     ) -> Result<Vec<IngresoActivoResumen>, NucleoError> {
         const LIMITE_MOVIL: usize = 30;
 
         let core = self.core.lock().expect("mutex de AppCore envenenado");
         let texto_normalizado = texto.trim();
-        let filtro = FiltroIngresosActivosNucleo {
-            texto: (!texto_normalizado.is_empty()).then(|| texto_normalizado.to_string()),
+        let mut filtro = FiltroIngresosActivosNucleo {
             limite: LIMITE_MOVIL,
             ..Default::default()
         };
+        match modo {
+            ModoBusquedaActivos::NombreCedula => {
+                filtro.texto =
+                    (!texto_normalizado.is_empty()).then(|| texto_normalizado.to_string());
+            }
+            ModoBusquedaActivos::Gafete => match texto_normalizado.parse::<i64>() {
+                Ok(numero) => filtro.gafete_numero = Some(Igualdad::Incluye(numero)),
+                Err(_) if texto_normalizado.is_empty() => {}
+                // Texto no numérico en modo gafete: no hay coincidencia
+                // posible, no es un error del usuario.
+                Err(_) => return Ok(Vec::new()),
+            },
+        }
         let lista = core
             .listar_ingresos_activos(&filtro)
             .map_err(|origen| NucleoError::Interno {
@@ -867,15 +897,71 @@ mod tests {
             .registrar_ingreso(1, MedioIngreso::Caminando, None)
             .unwrap();
 
-        let activos = nucleo.listar_ingresos_activos(String::new()).unwrap();
+        let activos = nucleo
+            .listar_ingresos_activos(String::new(), ModoBusquedaActivos::NombreCedula)
+            .unwrap();
         assert_eq!(activos.len(), 1);
         assert_eq!(activos[0].registro_id, registro.registro_id);
         assert_eq!(activos[0].contratista_nombre, "Contratista Test");
 
         nucleo.registrar_salida(registro.registro_id).unwrap();
 
-        let activos_tras_salida = nucleo.listar_ingresos_activos(String::new()).unwrap();
+        let activos_tras_salida = nucleo
+            .listar_ingresos_activos(String::new(), ModoBusquedaActivos::NombreCedula)
+            .unwrap();
         assert_eq!(activos_tras_salida, Vec::new());
+    }
+
+    /// Regresión directa del motivo por el que `Gafete` es un modo aparte:
+    /// una cédula que "contiene" el número de gafete no debe aparecer.
+    #[test]
+    fn listar_activos_por_gafete_es_exacto_sin_ruido_de_cedula() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+                 INSERT INTO contratistas (
+                     cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso,
+                     fecha_vencimiento_praind
+                 ) VALUES
+                     ('111111117', 'Con Gafete Siete', 1, 'PRAIND', 0, 1, '2099-12-31'),
+                     ('222222222', 'Sin Gafete', 1, 'SWAT', 0, 1, NULL);
+                 INSERT INTO gafetes (numero, estado) VALUES (7, 'DISPONIBLE');
+                 INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$FZShq0MtV2bGh9nFBgvrGA$dYNDyh7up/wmAY+t/Vf6V5LTCS9sNkQgaH81G650xfM',
+                     'ROOT', 1
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar("999999999".to_string(), "daniel27".to_string())
+            .unwrap();
+        nucleo
+            .registrar_ingreso(1, MedioIngreso::Caminando, Some(7))
+            .unwrap();
+        // Cédula "222222222" no contiene un 7, así que si el modo Gafete
+        // filtrara mal (o cayera al modo texto) esto no debería confundirse
+        // con el otro contratista de todas formas — el segundo ingreso
+        // (sin gafete) es el control negativo de esta prueba.
+        nucleo.registrar_ingreso(2, MedioIngreso::Caminando, None).unwrap();
+
+        let por_gafete = nucleo
+            .listar_ingresos_activos("7".to_string(), ModoBusquedaActivos::Gafete)
+            .unwrap();
+        assert_eq!(por_gafete.len(), 1);
+        assert_eq!(por_gafete[0].contratista_nombre, "Con Gafete Siete");
+
+        let texto_no_numerico = nucleo
+            .listar_ingresos_activos("abc".to_string(), ModoBusquedaActivos::Gafete)
+            .unwrap();
+        assert_eq!(texto_no_numerico, Vec::new());
     }
 
     #[test]

@@ -741,7 +741,7 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_empresas(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_activos(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_activos(`ptr`: Long,`texto`: RustBuffer.ByValue,`modo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_usuarios(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -894,7 +894,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas() != 65509) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos() != 16183) {
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos() != 52849) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_usuarios() != 1455) {
@@ -1333,8 +1333,15 @@ public interface NucleoInterface {
     /**
      * Mismo criterio tacaño que `buscar_contratistas`: página acotada, no
      * el listado completo que carga AG Grid en desktop.
+     *
+     * `modo` decide cómo se interpreta `texto` — separado a propósito de
+     * `NombreCedula`: la búsqueda de texto libre de Rust ya hace `OR` entre
+     * cédula/nombre (`LIKE`) y gafete exacto en la misma consulta, así que
+     * buscar "7" como gafete también trae cualquier cédula que *contenga*
+     * un 7 — ruidoso con muchos activos a la vez. En modo `Gafete` se
+     * filtra sólo por `gafete_numero` exacto, sin ese ruido.
      */
-    fun `listarIngresosActivos`(`texto`: kotlin.String): List<IngresoActivoResumen>
+    fun `listarIngresosActivos`(`texto`: kotlin.String, `modo`: ModoBusquedaActivos): List<IngresoActivoResumen>
     
     /**
      * Sólo Root/Administrador — ver el doc-comment de `UsuarioResumen`.
@@ -1622,15 +1629,23 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     /**
      * Mismo criterio tacaño que `buscar_contratistas`: página acotada, no
      * el listado completo que carga AG Grid en desktop.
+     *
+     * `modo` decide cómo se interpreta `texto` — separado a propósito de
+     * `NombreCedula`: la búsqueda de texto libre de Rust ya hace `OR` entre
+     * cédula/nombre (`LIKE`) y gafete exacto en la misma consulta, así que
+     * buscar "7" como gafete también trae cualquier cédula que *contenga*
+     * un 7 — ruidoso con muchos activos a la vez. En modo `Gafete` se
+     * filtra sólo por `gafete_numero` exacto, sin ese ruido.
      */
-    @Throws(NucleoException::class)override fun `listarIngresosActivos`(`texto`: kotlin.String): List<IngresoActivoResumen> {
+    @Throws(NucleoException::class)override fun `listarIngresosActivos`(`texto`: kotlin.String, `modo`: ModoBusquedaActivos): List<IngresoActivoResumen> {
             return FfiConverterSequenceTypeIngresoActivoResumen.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_activos(
         it,
         
-        FfiConverterString.lower(`texto`),_status)
+        FfiConverterString.lower(`texto`),
+        FfiConverterTypeModoBusquedaActivos.lower(`modo`),_status)
 }
     }
     )
@@ -2425,6 +2440,45 @@ public object FfiConverterTypeMedioIngreso: FfiConverterRustBuffer<MedioIngreso>
     override fun allocationSize(value: MedioIngreso) = 4UL
 
     override fun write(value: MedioIngreso, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+/**
+ * Sin espejo en `control_acceso` — es puramente de la UI móvil: decide
+ * cómo `Nucleo::listar_ingresos_activos` interpreta el campo de texto
+ * cuando se está buscando a quién dar salida entre muchos activos.
+ */
+
+enum class ModoBusquedaActivos {
+    
+    NOMBRE_CEDULA,
+    GAFETE;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeModoBusquedaActivos: FfiConverterRustBuffer<ModoBusquedaActivos> {
+    override fun read(buf: ByteBuffer) = try {
+        ModoBusquedaActivos.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: ModoBusquedaActivos) = 4UL
+
+    override fun write(value: ModoBusquedaActivos, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
     }
 }
