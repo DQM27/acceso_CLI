@@ -17,9 +17,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -65,7 +68,7 @@ fun PantallaLogin(nucleo: Nucleo) {
 
     val sesionActual = sesion
     if (sesionActual != null) {
-        PantallaContratistas(nucleo, sesionActual)
+        PantallaPrincipal(nucleo, sesionActual)
         return
     }
 
@@ -140,6 +143,23 @@ fun PantallaLogin(nucleo: Nucleo) {
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(top = 16.dp),
             )
+        }
+    }
+}
+
+@Composable
+fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion) {
+    var pestana by remember { mutableIntStateOf(0) }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        PrimaryTabRow(selectedTabIndex = pestana) {
+            Tab(selected = pestana == 0, onClick = { pestana = 0 }, text = { Text("Buscar") })
+            Tab(selected = pestana == 1, onClick = { pestana = 1 }, text = { Text("Activos") })
+        }
+        if (pestana == 0) {
+            PantallaContratistas(nucleo, sesion)
+        } else {
+            PantallaActivos(nucleo)
         }
     }
 }

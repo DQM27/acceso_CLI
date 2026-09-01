@@ -48,16 +48,19 @@ fun mensajeBloqueo(preparacion: PreparacionIngreso): String {
     }
     val resultado = preparacion.resultadoAcceso
     if (resultado is ResultadoAcceso.Denegado) {
-        return when (resultado.motivo) {
-            uniffi.control_acceso_mobile.MotivoDenegacion.SIN_ACCESO -> "Acceso denegado · no tiene acceso autorizado"
-            uniffi.control_acceso_mobile.MotivoDenegacion.PRAIND_VENCIDO -> "Acceso denegado · PRAIND vencido"
-            uniffi.control_acceso_mobile.MotivoDenegacion.PRAIND_NO_REGISTRADO ->
-                "Acceso denegado · PRAIND sin fecha registrada"
-            uniffi.control_acceso_mobile.MotivoDenegacion.EMPRESA_INACTIVA -> "Acceso denegado · la empresa está inactiva"
-        }
+        return mensajeMotivoDenegacion(resultado.motivo)
     }
     return "No se puede continuar con este contratista."
 }
+
+fun mensajeMotivoDenegacion(motivo: uniffi.control_acceso_mobile.MotivoDenegacion): String =
+    when (motivo) {
+        uniffi.control_acceso_mobile.MotivoDenegacion.SIN_ACCESO -> "Acceso denegado · no tiene acceso autorizado"
+        uniffi.control_acceso_mobile.MotivoDenegacion.PRAIND_VENCIDO -> "Acceso denegado · PRAIND vencido"
+        uniffi.control_acceso_mobile.MotivoDenegacion.PRAIND_NO_REGISTRADO ->
+            "Acceso denegado · PRAIND sin fecha registrada"
+        uniffi.control_acceso_mobile.MotivoDenegacion.EMPRESA_INACTIVA -> "Acceso denegado · la empresa está inactiva"
+    }
 
 @Composable
 fun PantallaConfirmarIngreso(

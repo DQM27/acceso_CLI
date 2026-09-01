@@ -677,9 +677,13 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir(
     ): Int
@@ -711,10 +715,14 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_contratistas(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_activos(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso(`ptr`: Long,`contratistaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso(`ptr`: Long,`contratistaId`: Long,`medio`: RustBuffer.ByValue,`gafete`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida(`ptr`: Long,`registroId`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     external fun ffi_control_acceso_mobile_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun ffi_control_acceso_mobile_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -840,10 +848,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas() != 3985) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos() != 16183) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso() != 60754) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso() != 64645) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida() != 34276) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir() != 57593) {
@@ -1229,6 +1243,12 @@ public interface NucleoInterface {
     fun `buscarContratistas`(`texto`: kotlin.String): List<ContratistaResumen>
     
     /**
+     * Mismo criterio tacaño que `buscar_contratistas`: página acotada, no
+     * el listado completo que carga AG Grid en desktop.
+     */
+    fun `listarIngresosActivos`(`texto`: kotlin.String): List<IngresoActivoResumen>
+    
+    /**
      * Vista previa antes de confirmar — misma decisión que ya toma la GUI
      * de escritorio (`desktop/src/pantallas/NuevoIngresoModal.tsx`): no
      * rechaza PRAIND vencido/ingreso activo aquí, sólo informa; quien llama
@@ -1237,6 +1257,8 @@ public interface NucleoInterface {
     fun `prepararIngreso`(`contratistaId`: kotlin.Long): PreparacionIngreso
     
     fun `registrarIngreso`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?): ResultadoRegistroEntrada
+    
+    fun `registrarSalida`(`registroId`: kotlin.Long)
     
     companion object
 }
@@ -1392,6 +1414,25 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Mismo criterio tacaño que `buscar_contratistas`: página acotada, no
+     * el listado completo que carga AG Grid en desktop.
+     */
+    @Throws(NucleoException::class)override fun `listarIngresosActivos`(`texto`: kotlin.String): List<IngresoActivoResumen> {
+            return FfiConverterSequenceTypeIngresoActivoResumen.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_activos(
+        it,
+        
+        FfiConverterString.lower(`texto`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Vista previa antes de confirmar — misma decisión que ya toma la GUI
      * de escritorio (`desktop/src/pantallas/NuevoIngresoModal.tsx`): no
      * rechaza PRAIND vencido/ingreso activo aquí, sólo informa; quien llama
@@ -1426,6 +1467,20 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     }
     )
     }
+    
+
+    
+    @Throws(NucleoException::class)override fun `registrarSalida`(`registroId`: kotlin.Long)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida(
+        it,
+        
+        FfiConverterLong.lower(`registroId`),_status)
+}
+    }
+    
     
 
     
@@ -1548,6 +1603,94 @@ public object FfiConverterTypeContratistaResumen: FfiConverterRustBuffer<Contrat
             FfiConverterOptionalString.write(value.`fechaVencimientoPraind`, buf)
             FfiConverterBoolean.write(value.`tieneAcceso`, buf)
             FfiConverterBoolean.write(value.`tieneIngresoActivo`, buf)
+    }
+}
+
+
+
+/**
+ * Espejo de `IngresoActivoResumen` — `resultado_acceso` se re-evalúa con la
+ * fecha de hoy (no es la decisión congelada del momento del ingreso), igual
+ * que en `desktop/src/pantallas/Activos.tsx`.
+ */
+data class IngresoActivoResumen (
+    var `registroId`: kotlin.Long
+    , 
+    var `contratistaId`: kotlin.Long
+    , 
+    var `cedula`: kotlin.String
+    , 
+    var `contratistaNombre`: kotlin.String
+    , 
+    var `empresaNombre`: kotlin.String
+    , 
+    var `tipoIngreso`: TipoIngreso
+    , 
+    var `medioIngreso`: MedioIngreso
+    , 
+    var `fechaHoraIngreso`: kotlin.String
+    , 
+    var `gafeteNumero`: kotlin.Long?
+    , 
+    var `usuarioIngresoNombre`: kotlin.String
+    , 
+    var `resultadoAcceso`: ResultadoAcceso
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeIngresoActivoResumen: FfiConverterRustBuffer<IngresoActivoResumen> {
+    override fun read(buf: ByteBuffer): IngresoActivoResumen {
+        return IngresoActivoResumen(
+            FfiConverterLong.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterTypeTipoIngreso.read(buf),
+            FfiConverterTypeMedioIngreso.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterTypeResultadoAcceso.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: IngresoActivoResumen) = (
+            FfiConverterLong.allocationSize(value.`registroId`) +
+            FfiConverterLong.allocationSize(value.`contratistaId`) +
+            FfiConverterString.allocationSize(value.`cedula`) +
+            FfiConverterString.allocationSize(value.`contratistaNombre`) +
+            FfiConverterString.allocationSize(value.`empresaNombre`) +
+            FfiConverterTypeTipoIngreso.allocationSize(value.`tipoIngreso`) +
+            FfiConverterTypeMedioIngreso.allocationSize(value.`medioIngreso`) +
+            FfiConverterString.allocationSize(value.`fechaHoraIngreso`) +
+            FfiConverterOptionalLong.allocationSize(value.`gafeteNumero`) +
+            FfiConverterString.allocationSize(value.`usuarioIngresoNombre`) +
+            FfiConverterTypeResultadoAcceso.allocationSize(value.`resultadoAcceso`)
+    )
+
+    override fun write(value: IngresoActivoResumen, buf: ByteBuffer) {
+            FfiConverterLong.write(value.`registroId`, buf)
+            FfiConverterLong.write(value.`contratistaId`, buf)
+            FfiConverterString.write(value.`cedula`, buf)
+            FfiConverterString.write(value.`contratistaNombre`, buf)
+            FfiConverterString.write(value.`empresaNombre`, buf)
+            FfiConverterTypeTipoIngreso.write(value.`tipoIngreso`, buf)
+            FfiConverterTypeMedioIngreso.write(value.`medioIngreso`, buf)
+            FfiConverterString.write(value.`fechaHoraIngreso`, buf)
+            FfiConverterOptionalLong.write(value.`gafeteNumero`, buf)
+            FfiConverterString.write(value.`usuarioIngresoNombre`, buf)
+            FfiConverterTypeResultadoAcceso.write(value.`resultadoAcceso`, buf)
     }
 }
 
@@ -2133,6 +2276,34 @@ public object FfiConverterSequenceTypeContratistaResumen: FfiConverterRustBuffer
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeContratistaResumen.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeIngresoActivoResumen: FfiConverterRustBuffer<List<IngresoActivoResumen>> {
+    override fun read(buf: ByteBuffer): List<IngresoActivoResumen> {
+        val len = buf.getInt()
+        return List<IngresoActivoResumen>(len) {
+            FfiConverterTypeIngresoActivoResumen.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<IngresoActivoResumen>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeIngresoActivoResumen.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<IngresoActivoResumen>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeIngresoActivoResumen.write(it, buf)
         }
     }
 }

@@ -8,6 +8,7 @@ use control_acceso::application::AppCore;
 use control_acceso::database::queries::contratistas::{
     ContratistaResumen as ContratistaResumenNucleo, FiltroContratistas as FiltroContratistasNucleo,
 };
+use control_acceso::database::queries::ingresos::FiltroIngresosActivos as FiltroIngresosActivosNucleo;
 use control_acceso::domain::resultado_acceso::{
     MotivoDenegacion as MotivoDenegacionNucleo, ResultadoAcceso as ResultadoAccesoNucleo,
 };
@@ -18,6 +19,7 @@ use control_acceso::services::autenticacion_service::UsuarioSesion as UsuarioSes
 use control_acceso::services::error::AutenticacionError as AutenticacionErrorNucleo;
 use control_acceso::services::error::RegistroIngresoServiceError as RegistroIngresoServiceErrorNucleo;
 use control_acceso::services::registro_ingreso_service::{
+    IngresoActivoResumen as IngresoActivoResumenNucleo,
     PreparacionIngreso as PreparacionIngresoNucleo,
     ResultadoRegistroEntrada as ResultadoRegistroEntradaNucleo,
 };
@@ -125,6 +127,15 @@ impl From<MedioIngreso> for MedioIngresoNucleo {
     }
 }
 
+impl From<MedioIngresoNucleo> for MedioIngreso {
+    fn from(medio: MedioIngresoNucleo) -> Self {
+        match medio {
+            MedioIngresoNucleo::Caminando => Self::Caminando,
+            MedioIngresoNucleo::Vehiculo => Self::Vehiculo,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, uniffi::Enum)]
 pub enum MotivoDenegacion {
     SinAcceso,
@@ -208,6 +219,42 @@ impl From<ResultadoRegistroEntradaNucleo> for ResultadoRegistroEntrada {
         Self {
             registro_id: resultado.registro_id,
             resultado_acceso: resultado.resultado_acceso.into(),
+        }
+    }
+}
+
+/// Espejo de `IngresoActivoResumen` — `resultado_acceso` se re-evalúa con la
+/// fecha de hoy (no es la decisión congelada del momento del ingreso), igual
+/// que en `desktop/src/pantallas/Activos.tsx`.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct IngresoActivoResumen {
+    pub registro_id: i64,
+    pub contratista_id: i64,
+    pub cedula: String,
+    pub contratista_nombre: String,
+    pub empresa_nombre: String,
+    pub tipo_ingreso: TipoIngreso,
+    pub medio_ingreso: MedioIngreso,
+    pub fecha_hora_ingreso: String,
+    pub gafete_numero: Option<i64>,
+    pub usuario_ingreso_nombre: String,
+    pub resultado_acceso: ResultadoAcceso,
+}
+
+impl From<IngresoActivoResumenNucleo> for IngresoActivoResumen {
+    fn from(activo: IngresoActivoResumenNucleo) -> Self {
+        Self {
+            registro_id: activo.registro_id,
+            contratista_id: activo.contratista_id,
+            cedula: activo.cedula,
+            contratista_nombre: activo.contratista_nombre,
+            empresa_nombre: activo.empresa_nombre,
+            tipo_ingreso: activo.tipo_ingreso.into(),
+            medio_ingreso: activo.medio_ingreso.into(),
+            fecha_hora_ingreso: activo.fecha_hora_ingreso.to_rfc3339(),
+            gafete_numero: activo.gafete_numero,
+            usuario_ingreso_nombre: activo.usuario_ingreso_nombre,
+            resultado_acceso: activo.resultado_acceso.into(),
         }
     }
 }
@@ -339,6 +386,40 @@ impl Nucleo {
         })?;
         Ok(pagina.items.into_iter().map(Into::into).collect())
     }
+
+    /// Mismo criterio tacaño que `buscar_contratistas`: página acotada, no
+    /// el listado completo que carga AG Grid en desktop.
+    pub fn listar_ingresos_activos(
+        &self,
+        texto: String,
+    ) -> Result<Vec<IngresoActivoResumen>, NucleoError> {
+        const LIMITE_MOVIL: usize = 30;
+
+        let core = self.core.lock().expect("mutex de AppCore envenenado");
+        let texto_normalizado = texto.trim();
+        let filtro = FiltroIngresosActivosNucleo {
+            texto: (!texto_normalizado.is_empty()).then(|| texto_normalizado.to_string()),
+            limite: LIMITE_MOVIL,
+            ..Default::default()
+        };
+        let lista = core
+            .listar_ingresos_activos(&filtro)
+            .map_err(|origen| NucleoError::Interno {
+                mensaje: origen.to_string(),
+            })?;
+        Ok(lista.items.into_iter().map(Into::into).collect())
+    }
+
+    pub fn registrar_salida(&self, registro_id: i64) -> Result<(), NucleoError> {
+        let actor = self
+            .sesion
+            .lock()
+            .expect("mutex de sesión envenenado")
+            .clone()
+            .ok_or(NucleoError::NoAutenticado)?;
+        let core = self.core.lock().expect("mutex de AppCore envenenado");
+        Ok(core.registrar_salida(&actor, registro_id)?)
+    }
 }
 
 #[cfg(test)]
@@ -414,6 +495,46 @@ mod tests {
             .registrar_ingreso(1, MedioIngreso::Caminando, None)
             .unwrap();
         assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);
+    }
+
+    #[test]
+    fn listar_activos_y_registrar_salida() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+                 INSERT INTO contratistas (
+                     cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+                 ) VALUES ('111111111', 'Contratista Test', 1, 'SWAT', 0, 1);
+                 INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$FZShq0MtV2bGh9nFBgvrGA$dYNDyh7up/wmAY+t/Vf6V5LTCS9sNkQgaH81G650xfM',
+                     'ROOT', 1
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar("999999999".to_string(), "daniel27".to_string())
+            .unwrap();
+        let registro = nucleo
+            .registrar_ingreso(1, MedioIngreso::Caminando, None)
+            .unwrap();
+
+        let activos = nucleo.listar_ingresos_activos(String::new()).unwrap();
+        assert_eq!(activos.len(), 1);
+        assert_eq!(activos[0].registro_id, registro.registro_id);
+        assert_eq!(activos[0].contratista_nombre, "Contratista Test");
+
+        nucleo.registrar_salida(registro.registro_id).unwrap();
+
+        let activos_tras_salida = nucleo.listar_ingresos_activos(String::new()).unwrap();
+        assert_eq!(activos_tras_salida, Vec::new());
     }
 
     #[test]
