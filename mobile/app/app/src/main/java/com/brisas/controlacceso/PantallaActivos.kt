@@ -12,6 +12,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -73,6 +75,30 @@ private sealed class SeleccionIngreso {
 /// teléfono.
 private enum class ModoBusqueda { ENTRADA, SALIDA_NOMBRE, SALIDA_GAFETE }
 
+/// Un número de gafete escrito y, si ya se buscó, el activo encontrado (o
+/// `null` si nadie adentro tiene ese gafete puesto) — la fila de
+/// `CoincidenciaGafete` es lo que se pinta en el modo Salida: gafete antes
+/// de confirmar, mismo rol que la tabla de vista previa de
+/// `SalidaModal.tsx` en desktop.
+private data class CoincidenciaGafete(val numero: Int, val activo: IngresoActivoResumen?)
+
+private const val MAX_LARGO_GAFETES = 60
+
+/// Espejo de `sanearGafetes` (desktop/src/api/ingresos.ts): sólo dígitos,
+/// comas y espacios — todo lo demás que el usuario pegue o teclee se
+/// descarta en silencio en vez de rechazarlo con un error.
+private fun sanearGafetesTexto(texto: String): String =
+    texto.filter { it.isDigit() || it == ',' || it.isWhitespace() }.take(MAX_LARGO_GAFETES)
+
+/// Espejo de `gafetesDe` (desktop/src/api/ingresos.ts): "2, 25, 85" -> [2,
+/// 25, 85]; tokens vacíos o no numéricos se ignoran en vez de fallar toda
+/// la búsqueda por un error de tipeo en un solo número.
+private fun gafetesDeTexto(texto: String): List<Int> =
+    texto.split(",")
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .mapNotNull { it.toIntOrNull() }
+
 /// Una sola vista para el ciclo completo — entrada, permanencia y salida —,
 /// igual que `Activos.tsx` en desktop (ahí "+Nuevo"/"Salida" abren modales
 /// sobre la misma grilla de activos; ver docs/plan-app-movil.md, addendum
@@ -86,17 +112,17 @@ private enum class ModoBusqueda { ENTRADA, SALIDA_NOMBRE, SALIDA_GAFETE }
 ///   nombre confirma su salida); con texto busca en el catálogo completo de
 ///   contratistas (antes pestaña "Buscar" aparte) para arrancar el flujo de
 ///   confirmar entrada.
-/// - **Salida: nombre/Salida: gafete**: filtran la MISMA lista de activos
-///   por cédula/nombre o por número de gafete exacto — para encontrar a
-///   alguien puntual cuando hay muchos adentro a la vez, sin tener que
-///   recorrer la lista a ojo.
-///
-/// A diferencia de desktop (SalidaModal.tsx), que en modo gafete acepta
-/// varios números separados por coma y confirma todos de una sin diálogo
-/// (pensado para el teclado físico de la PC), acá cada coincidencia se
-/// confirma tocándola — mismo diálogo de siempre — porque todo es táctil y
-/// confirmar una salida de más por un tropiezo en el teclado numérico sale
-/// más caro que el ahorro de tiempo.
+/// - **Salida: nombre**: filtra la lista de activos por cédula/nombre —
+///   tocar un resultado abre el mismo diálogo de confirmar salida de
+///   siempre. Vacío no trae nada (es un buscador, no una lista para
+///   recorrer — para eso ya está la pestaña Entrada).
+/// - **Salida: gafete**: acepta varios números de gafete separados por
+///   coma ("2, 25, 85") — igual que el modo gafete de `SalidaModal.tsx` —
+///   y muestra a quién le corresponde cada uno antes de confirmar. Un solo
+///   botón registra la salida de todos los que sí tienen ingreso activo de
+///   una vez, sin diálogo por persona: es la misma decisión de desktop
+///   (pensada para cargar varios gafetes de un tirón), la vista previa con
+///   nombres hace las veces de confirmación.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaActivos(nucleo: Nucleo) {
@@ -104,7 +130,15 @@ fun PantallaActivos(nucleo: Nucleo) {
     var modo by remember { mutableStateOf(ModoBusqueda.ENTRADA) }
     var activos by remember { mutableStateOf<List<IngresoActivoResumen>>(emptyList()) }
     var resultadosBusqueda by remember { mutableStateOf<List<ContratistaResumen>>(emptyList()) }
+    var coincidenciasGafete by remember { mutableStateOf<List<CoincidenciaGafete>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Aparte de `error` (fallas de consulta) — lo pone únicamente la
+    // confirmación masiva de gafetes, así que no hay riesgo de que la
+    // recarga de la lista tras confirmar (dispara este mismo efecto) lo
+    // borre antes de que el guardia llegue a verlo.
+    var mensaje by remember { mutableStateOf<String?>(null) }
+    var mensajeEsError by remember { mutableStateOf(false) }
+    var enviandoGafetes by remember { mutableStateOf(false) }
     var seleccionSalida by remember { mutableStateOf<IngresoActivoResumen?>(null) }
     var seleccionIngreso by remember { mutableStateOf<SeleccionIngreso>(SeleccionIngreso.Ninguna) }
     var recargas by remember { mutableIntStateOf(0) }
@@ -116,6 +150,7 @@ fun PantallaActivos(nucleo: Nucleo) {
         // sentido (un nombre no significa nada en modo Gafete) — se limpia
         // para no arrastrar una búsqueda que ya no aplica.
         texto = ""
+        mensaje = null
     }
 
     LaunchedEffect(texto, recargas, modo) {
@@ -131,13 +166,30 @@ fun PantallaActivos(nucleo: Nucleo) {
                     }
                 }
                 ModoBusqueda.SALIDA_NOMBRE -> {
-                    activos = withContext(Dispatchers.Default) {
-                        nucleo.listarIngresosActivos(texto, ModoBusquedaActivos.NOMBRE_CEDULA)
+                    // A diferencia de Entrada, acá un campo vacío no debe
+                    // traer a todo el mundo — es un buscador para acotar
+                    // entre muchos activos, no una lista para recorrer (esa
+                    // ya existe en la pestaña Entrada).
+                    activos = if (texto.isBlank()) {
+                        emptyList()
+                    } else {
+                        withContext(Dispatchers.Default) {
+                            nucleo.listarIngresosActivos(texto, ModoBusquedaActivos.NOMBRE_CEDULA)
+                        }
                     }
                 }
                 ModoBusqueda.SALIDA_GAFETE -> {
-                    activos = withContext(Dispatchers.Default) {
-                        nucleo.listarIngresosActivos(texto, ModoBusquedaActivos.GAFETE)
+                    val numeros = gafetesDeTexto(texto)
+                    coincidenciasGafete = if (numeros.isEmpty()) {
+                        emptyList()
+                    } else {
+                        withContext(Dispatchers.Default) {
+                            numeros.map { numero ->
+                                val resultado =
+                                    nucleo.listarIngresosActivos(numero.toString(), ModoBusquedaActivos.GAFETE)
+                                CoincidenciaGafete(numero, resultado.firstOrNull())
+                            }
+                        }
                     }
                 }
             }
@@ -224,9 +276,14 @@ fun PantallaActivos(nucleo: Nucleo) {
         OutlinedTextField(
             value = texto,
             onValueChange = { nuevo ->
-                texto = if (modo == ModoBusqueda.SALIDA_GAFETE) nuevo.filter(Char::isDigit) else nuevo
+                texto = if (modo == ModoBusqueda.SALIDA_GAFETE) sanearGafetesTexto(nuevo) else nuevo
+                // Mismo criterio que `cambiarTexto` en SalidaModal.tsx: escribir
+                // de nuevo abandona el mensaje de la confirmación anterior.
+                mensaje = null
             },
-            label = { Text(if (modo == ModoBusqueda.SALIDA_GAFETE) "Número de gafete" else "Cédula o nombre") },
+            label = {
+                Text(if (modo == ModoBusqueda.SALIDA_GAFETE) "Números de gafete, separados por coma" else "Cédula o nombre")
+            },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,
             keyboardOptions = if (modo == ModoBusqueda.SALIDA_GAFETE) {
@@ -241,23 +298,34 @@ fun PantallaActivos(nucleo: Nucleo) {
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
         )
 
-        val leyenda = when {
-            texto.isBlank() ->
-                if (activos.isEmpty()) "Nadie adentro" else "${activos.size} adentro · toque un nombre para registrar salida"
-            modo == ModoBusqueda.ENTRADA -> "Buscando contratistas · toque un resultado para registrar entrada"
-            activos.isEmpty() -> "Sin coincidencias entre los activos"
-            else -> "Buscando entre los activos · toque un nombre para registrar salida"
+        if (modo != ModoBusqueda.SALIDA_GAFETE) {
+            val leyenda = when {
+                texto.isBlank() && modo == ModoBusqueda.ENTRADA ->
+                    if (activos.isEmpty()) "Nadie adentro" else "${activos.size} adentro · toque un nombre para registrar salida"
+                texto.isBlank() -> "Escriba para buscar entre los activos"
+                modo == ModoBusqueda.ENTRADA -> "Buscando contratistas · toque un resultado para registrar entrada"
+                activos.isEmpty() -> "Sin coincidencias entre los activos"
+                else -> "Buscando entre los activos · toque un nombre para registrar salida"
+            }
+            Text(
+                leyenda,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
         }
-        Text(
-            leyenda,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp),
-        )
 
         val mensajeError = error
         if (mensajeError != null) {
             Text(mensajeError, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp))
+        }
+        val mensajeActual = mensaje
+        if (mensajeActual != null) {
+            Text(
+                mensajeActual,
+                color = if (mensajeEsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 12.dp),
+            )
         }
         if (seleccionIngreso is SeleccionIngreso.Cargando) {
             Text(
@@ -267,7 +335,84 @@ fun PantallaActivos(nucleo: Nucleo) {
             )
         }
 
-        if (modo != ModoBusqueda.ENTRADA || texto.isBlank()) {
+        if (modo == ModoBusqueda.SALIDA_GAFETE) {
+            if (texto.isBlank()) {
+                Text(
+                    "Escriba uno o más números de gafete, separados por coma",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            } else {
+                Column(modifier = Modifier.padding(top = 8.dp)) {
+                    coincidenciasGafete.forEach { coincidencia ->
+                        val activoCoincidente = coincidencia.activo
+                        Text(
+                            "Gafete ${coincidencia.numero} · " +
+                                (
+                                    activoCoincidente?.let { "${it.contratistaNombre} · ${it.empresaNombre}" }
+                                        ?: "Sin ingreso activo"
+                                ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (activoCoincidente != null) {
+                                MaterialTheme.colorScheme.onSurface
+                            } else {
+                                MaterialTheme.colorScheme.error
+                            },
+                            modifier = Modifier.padding(vertical = 4.dp),
+                        )
+                    }
+
+                    val encontrados = coincidenciasGafete.filter { it.activo != null }
+                    if (encontrados.isNotEmpty()) {
+                        Button(
+                            onClick = {
+                                alcance.launch {
+                                    enviandoGafetes = true
+                                    val registrados = mutableListOf<String>()
+                                    val fallidos = mutableListOf<String>()
+                                    for (coincidencia in coincidenciasGafete) {
+                                        val activoCoincidente = coincidencia.activo
+                                        if (activoCoincidente == null) {
+                                            fallidos.add("gafete ${coincidencia.numero}: sin ingreso activo")
+                                            continue
+                                        }
+                                        try {
+                                            withContext(Dispatchers.Default) {
+                                                nucleo.registrarSalida(activoCoincidente.registroId)
+                                            }
+                                            registrados.add(activoCoincidente.contratistaNombre)
+                                        } catch (excepcion: Exception) {
+                                            fallidos.add("gafete ${coincidencia.numero}: ${excepcion.message}")
+                                        }
+                                    }
+                                    val partes = mutableListOf<String>()
+                                    if (registrados.isNotEmpty()) {
+                                        partes.add("Salida registrada: ${registrados.joinToString(", ")}")
+                                    }
+                                    if (fallidos.isNotEmpty()) {
+                                        partes.add(fallidos.joinToString(" · "))
+                                    }
+                                    mensaje = partes.joinToString(" · ").ifEmpty { null }
+                                    mensajeEsError = registrados.isEmpty() && fallidos.isNotEmpty()
+                                    texto = ""
+                                    enviandoGafetes = false
+                                    recargas++
+                                }
+                            },
+                            enabled = !enviandoGafetes,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondary,
+                                contentColor = MaterialTheme.colorScheme.onSecondary,
+                            ),
+                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                        ) {
+                            Text(if (enviandoGafetes) "Registrando…" else "Registrar salida (${encontrados.size})")
+                        }
+                    }
+                }
+            }
+        } else if (modo != ModoBusqueda.ENTRADA || texto.isBlank()) {
             LazyColumn(modifier = Modifier.padding(top = 8.dp)) {
                 items(activos, key = { it.registroId }) { activo ->
                     FilaActivo(activo, onClick = { seleccionSalida = activo })
