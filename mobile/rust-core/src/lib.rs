@@ -12,11 +12,15 @@ use control_acceso::database::queries::ingresos::FiltroIngresosActivos as Filtro
 use control_acceso::domain::resultado_acceso::{
     MotivoDenegacion as MotivoDenegacionNucleo, ResultadoAcceso as ResultadoAccesoNucleo,
 };
+use control_acceso::models::empresa::Empresa as EmpresaNucleo;
 use control_acceso::models::medio_ingreso::MedioIngreso as MedioIngresoNucleo;
 use control_acceso::models::tipo_ingreso::TipoIngreso as TipoIngresoNucleo;
 use control_acceso::models::usuario::RolUsuario as RolUsuarioNucleo;
 use control_acceso::services::autenticacion_service::UsuarioSesion as UsuarioSesionNucleo;
+use control_acceso::services::contratista_service::DatosContratista as DatosContratistaNucleo;
 use control_acceso::services::error::AutenticacionError as AutenticacionErrorNucleo;
+use control_acceso::services::error::ContratistaServiceError as ContratistaServiceErrorNucleo;
+use control_acceso::services::error::EmpresaServiceError as EmpresaServiceErrorNucleo;
 use control_acceso::services::error::RegistroIngresoServiceError as RegistroIngresoServiceErrorNucleo;
 use control_acceso::services::registro_ingreso_service::{
     IngresoActivoResumen as IngresoActivoResumenNucleo,
@@ -77,6 +81,17 @@ impl From<TipoIngresoNucleo> for TipoIngreso {
             TipoIngresoNucleo::InHouse => Self::InHouse,
             TipoIngresoNucleo::PorCorreo => Self::PorCorreo,
             TipoIngresoNucleo::Swat => Self::Swat,
+        }
+    }
+}
+
+impl From<TipoIngreso> for TipoIngresoNucleo {
+    fn from(tipo: TipoIngreso) -> Self {
+        match tipo {
+            TipoIngreso::Praind => Self::Praind,
+            TipoIngreso::InHouse => Self::InHouse,
+            TipoIngreso::PorCorreo => Self::PorCorreo,
+            TipoIngreso::Swat => Self::Swat,
         }
     }
 }
@@ -259,6 +274,38 @@ impl From<IngresoActivoResumenNucleo> for IngresoActivoResumen {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct Empresa {
+    pub id: i64,
+    pub nombre: String,
+    pub activo: bool,
+}
+
+impl From<EmpresaNucleo> for Empresa {
+    fn from(empresa: EmpresaNucleo) -> Self {
+        Self {
+            id: empresa.id,
+            nombre: empresa.nombre,
+            activo: empresa.activo,
+        }
+    }
+}
+
+/// Espejo de `DatosContratista` — sólo alta, no edición (ver
+/// docs/plan-app-movil.md). `fecha_vencimiento_praind` viaja como texto
+/// ISO (`AAAA-MM-DD`); si no parsea se rechaza como `DatosInvalidos` antes
+/// de tocar Rust, sin ida y vuelta.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct DatosContratista {
+    pub cedula: String,
+    pub nombre: String,
+    pub empresa_id: i64,
+    pub tipo_ingreso: TipoIngreso,
+    pub fecha_vencimiento_praind: Option<String>,
+    pub es_personal_ruta: bool,
+    pub tiene_acceso: bool,
+}
+
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 #[uniffi(flat_error)]
 pub enum NucleoError {
@@ -270,6 +317,8 @@ pub enum NucleoError {
     UsuarioInactivo,
     #[error("no hay una sesión iniciada")]
     NoAutenticado,
+    #[error("fecha de PRAIND inválida: {mensaje}")]
+    FechaInvalida { mensaje: String },
     #[error("error interno: {mensaje}")]
     Interno { mensaje: String },
 }
@@ -288,6 +337,22 @@ impl From<AutenticacionErrorNucleo> for NucleoError {
 
 impl From<RegistroIngresoServiceErrorNucleo> for NucleoError {
     fn from(error: RegistroIngresoServiceErrorNucleo) -> Self {
+        Self::Interno {
+            mensaje: error.to_string(),
+        }
+    }
+}
+
+impl From<ContratistaServiceErrorNucleo> for NucleoError {
+    fn from(error: ContratistaServiceErrorNucleo) -> Self {
+        Self::Interno {
+            mensaje: error.to_string(),
+        }
+    }
+}
+
+impl From<EmpresaServiceErrorNucleo> for NucleoError {
+    fn from(error: EmpresaServiceErrorNucleo) -> Self {
         Self::Interno {
             mensaje: error.to_string(),
         }
@@ -420,6 +485,52 @@ impl Nucleo {
         let core = self.core.lock().expect("mutex de AppCore envenenado");
         Ok(core.registrar_salida(&actor, registro_id)?)
     }
+
+    pub fn listar_empresas(&self) -> Result<Vec<Empresa>, NucleoError> {
+        let core = self.core.lock().expect("mutex de AppCore envenenado");
+        Ok(core
+            .listar_empresas()?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
+    /// Alta de contratista — mismo formulario que
+    /// `desktop/src/pantallas/FormularioContratista.tsx`, sólo creación
+    /// (ver docs/plan-app-movil.md). La validación real y definitiva vuelve
+    /// a correr en Rust (`ContratistaService::crear`); esto no duplica esa
+    /// lógica, sólo convierte tipos en la frontera uniffi.
+    pub fn crear_contratista(&self, datos: DatosContratista) -> Result<i64, NucleoError> {
+        let actor = self
+            .sesion
+            .lock()
+            .expect("mutex de sesión envenenado")
+            .clone()
+            .ok_or(NucleoError::NoAutenticado)?;
+
+        let fecha_vencimiento_praind = datos
+            .fecha_vencimiento_praind
+            .map(|texto| {
+                texto
+                    .parse()
+                    .map_err(|_| NucleoError::FechaInvalida { mensaje: texto })
+            })
+            .transpose()?;
+
+        let core = self.core.lock().expect("mutex de AppCore envenenado");
+        Ok(core.crear_contratista(
+            &actor,
+            DatosContratistaNucleo {
+                cedula: datos.cedula,
+                nombre: datos.nombre,
+                empresa_id: datos.empresa_id,
+                tipo_ingreso: datos.tipo_ingreso.into(),
+                fecha_vencimiento_praind,
+                es_personal_ruta: datos.es_personal_ruta,
+                tiene_acceso: datos.tiene_acceso,
+            },
+        )?)
+    }
 }
 
 #[cfg(test)]
@@ -535,6 +646,87 @@ mod tests {
 
         let activos_tras_salida = nucleo.listar_ingresos_activos(String::new()).unwrap();
         assert_eq!(activos_tras_salida, Vec::new());
+    }
+
+    #[test]
+    fn listar_empresas_y_crear_contratista() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+                 INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$FZShq0MtV2bGh9nFBgvrGA$dYNDyh7up/wmAY+t/Vf6V5LTCS9sNkQgaH81G650xfM',
+                     'ROOT', 1
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar("999999999".to_string(), "daniel27".to_string())
+            .unwrap();
+
+        let empresas = nucleo.listar_empresas().unwrap();
+        assert_eq!(empresas.len(), 1);
+        assert_eq!(empresas[0].nombre, "Empresa Test");
+
+        let id = nucleo
+            .crear_contratista(DatosContratista {
+                cedula: "222222222".to_string(),
+                nombre: "Nuevo Contratista".to_string(),
+                empresa_id: empresas[0].id,
+                tipo_ingreso: TipoIngreso::Swat,
+                fecha_vencimiento_praind: None,
+                es_personal_ruta: false,
+                tiene_acceso: true,
+            })
+            .unwrap();
+        assert!(id > 0);
+
+        let resultados = nucleo.buscar_contratistas("Nuevo".to_string()).unwrap();
+        assert_eq!(resultados.len(), 1);
+        assert_eq!(resultados[0].nombre, "Nuevo Contratista");
+    }
+
+    #[test]
+    fn crear_contratista_con_fecha_praind_invalida_falla() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+                 INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$FZShq0MtV2bGh9nFBgvrGA$dYNDyh7up/wmAY+t/Vf6V5LTCS9sNkQgaH81G650xfM',
+                     'ROOT', 1
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar("999999999".to_string(), "daniel27".to_string())
+            .unwrap();
+
+        let resultado = nucleo.crear_contratista(DatosContratista {
+            cedula: "333333333".to_string(),
+            nombre: "Otro Contratista".to_string(),
+            empresa_id: 1,
+            tipo_ingreso: TipoIngreso::Praind,
+            fecha_vencimiento_praind: Some("no-es-una-fecha".to_string()),
+            es_personal_ruta: false,
+            tiene_acceso: true,
+        });
+
+        assert!(matches!(resultado, Err(NucleoError::FechaInvalida { .. })));
     }
 
     #[test]

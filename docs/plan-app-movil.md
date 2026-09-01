@@ -22,6 +22,7 @@ Este documento es sólo sobre el punto 2.
 - Buscar/seleccionar un contratista.
 - Registrar su entrada.
 - Registrar su salida.
+- Registrar contratistas nuevos (decisión ampliada 2026-09-01 — el alcance original no lo traía; se porta el mismo formulario de `desktop/src/pantallas/FormularioContratista.tsx`, alta solamente).
 
 **Qué NO hace (a propósito, para mantenerla mínima):**
 - Sin pantalla de Historial.

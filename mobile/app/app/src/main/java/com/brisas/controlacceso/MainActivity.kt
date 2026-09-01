@@ -155,11 +155,12 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion) {
         PrimaryTabRow(selectedTabIndex = pestana) {
             Tab(selected = pestana == 0, onClick = { pestana = 0 }, text = { Text("Buscar") })
             Tab(selected = pestana == 1, onClick = { pestana = 1 }, text = { Text("Activos") })
+            Tab(selected = pestana == 2, onClick = { pestana = 2 }, text = { Text("Nuevo") })
         }
-        if (pestana == 0) {
-            PantallaContratistas(nucleo, sesion)
-        } else {
-            PantallaActivos(nucleo)
+        when (pestana) {
+            0 -> PantallaContratistas(nucleo, sesion)
+            1 -> PantallaActivos(nucleo)
+            else -> PantallaNuevoContratista(nucleo)
         }
     }
 }

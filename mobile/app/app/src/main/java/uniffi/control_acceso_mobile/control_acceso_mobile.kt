@@ -677,6 +677,10 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso(
@@ -714,6 +718,10 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_contratistas(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_contratista(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_empresas(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_activos(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -846,6 +854,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas() != 3985) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista() != 57741) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas() != 65509) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos() != 16183) {
@@ -1243,6 +1257,17 @@ public interface NucleoInterface {
     fun `buscarContratistas`(`texto`: kotlin.String): List<ContratistaResumen>
     
     /**
+     * Alta de contratista — mismo formulario que
+     * `desktop/src/pantallas/FormularioContratista.tsx`, sólo creación
+     * (ver docs/plan-app-movil.md). La validación real y definitiva vuelve
+     * a correr en Rust (`ContratistaService::crear`); esto no duplica esa
+     * lógica, sólo convierte tipos en la frontera uniffi.
+     */
+    fun `crearContratista`(`datos`: DatosContratista): kotlin.Long
+    
+    fun `listarEmpresas`(): List<Empresa>
+    
+    /**
      * Mismo criterio tacaño que `buscar_contratistas`: página acotada, no
      * el listado completo que carga AG Grid en desktop.
      */
@@ -1406,6 +1431,42 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         it,
         
         FfiConverterString.lower(`texto`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Alta de contratista — mismo formulario que
+     * `desktop/src/pantallas/FormularioContratista.tsx`, sólo creación
+     * (ver docs/plan-app-movil.md). La validación real y definitiva vuelve
+     * a correr en Rust (`ContratistaService::crear`); esto no duplica esa
+     * lógica, sólo convierte tipos en la frontera uniffi.
+     */
+    @Throws(NucleoException::class)override fun `crearContratista`(`datos`: DatosContratista): kotlin.Long {
+            return FfiConverterLong.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_crear_contratista(
+        it,
+        
+        FfiConverterTypeDatosContratista.lower(`datos`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    @Throws(NucleoException::class)override fun `listarEmpresas`(): List<Empresa> {
+            return FfiConverterSequenceTypeEmpresa.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_empresas(
+        it,
+        _status)
 }
     }
     )
@@ -1603,6 +1664,118 @@ public object FfiConverterTypeContratistaResumen: FfiConverterRustBuffer<Contrat
             FfiConverterOptionalString.write(value.`fechaVencimientoPraind`, buf)
             FfiConverterBoolean.write(value.`tieneAcceso`, buf)
             FfiConverterBoolean.write(value.`tieneIngresoActivo`, buf)
+    }
+}
+
+
+
+/**
+ * Espejo de `DatosContratista` — sólo alta, no edición (ver
+ * docs/plan-app-movil.md). `fecha_vencimiento_praind` viaja como texto
+ * ISO (`AAAA-MM-DD`); si no parsea se rechaza como `DatosInvalidos` antes
+ * de tocar Rust, sin ida y vuelta.
+ */
+data class DatosContratista (
+    var `cedula`: kotlin.String
+    , 
+    var `nombre`: kotlin.String
+    , 
+    var `empresaId`: kotlin.Long
+    , 
+    var `tipoIngreso`: TipoIngreso
+    , 
+    var `fechaVencimientoPraind`: kotlin.String?
+    , 
+    var `esPersonalRuta`: kotlin.Boolean
+    , 
+    var `tieneAcceso`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeDatosContratista: FfiConverterRustBuffer<DatosContratista> {
+    override fun read(buf: ByteBuffer): DatosContratista {
+        return DatosContratista(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterTypeTipoIngreso.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: DatosContratista) = (
+            FfiConverterString.allocationSize(value.`cedula`) +
+            FfiConverterString.allocationSize(value.`nombre`) +
+            FfiConverterLong.allocationSize(value.`empresaId`) +
+            FfiConverterTypeTipoIngreso.allocationSize(value.`tipoIngreso`) +
+            FfiConverterOptionalString.allocationSize(value.`fechaVencimientoPraind`) +
+            FfiConverterBoolean.allocationSize(value.`esPersonalRuta`) +
+            FfiConverterBoolean.allocationSize(value.`tieneAcceso`)
+    )
+
+    override fun write(value: DatosContratista, buf: ByteBuffer) {
+            FfiConverterString.write(value.`cedula`, buf)
+            FfiConverterString.write(value.`nombre`, buf)
+            FfiConverterLong.write(value.`empresaId`, buf)
+            FfiConverterTypeTipoIngreso.write(value.`tipoIngreso`, buf)
+            FfiConverterOptionalString.write(value.`fechaVencimientoPraind`, buf)
+            FfiConverterBoolean.write(value.`esPersonalRuta`, buf)
+            FfiConverterBoolean.write(value.`tieneAcceso`, buf)
+    }
+}
+
+
+
+data class Empresa (
+    var `id`: kotlin.Long
+    , 
+    var `nombre`: kotlin.String
+    , 
+    var `activo`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeEmpresa: FfiConverterRustBuffer<Empresa> {
+    override fun read(buf: ByteBuffer): Empresa {
+        return Empresa(
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: Empresa) = (
+            FfiConverterLong.allocationSize(value.`id`) +
+            FfiConverterString.allocationSize(value.`nombre`) +
+            FfiConverterBoolean.allocationSize(value.`activo`)
+    )
+
+    override fun write(value: Empresa, buf: ByteBuffer) {
+            FfiConverterLong.write(value.`id`, buf)
+            FfiConverterString.write(value.`nombre`, buf)
+            FfiConverterBoolean.write(value.`activo`, buf)
     }
 }
 
@@ -1941,6 +2114,8 @@ sealed class NucleoException(message: String): kotlin.Exception(message) {
         
         class NoAutenticado(message: String) : NucleoException(message)
         
+        class FechaInvalida(message: String) : NucleoException(message)
+        
         class Interno(message: String) : NucleoException(message)
         
 
@@ -1960,7 +2135,8 @@ public object FfiConverterTypeNucleoError : FfiConverterRustBuffer<NucleoExcepti
             2 -> NucleoException.CredencialesInvalidas(FfiConverterString.read(buf))
             3 -> NucleoException.UsuarioInactivo(FfiConverterString.read(buf))
             4 -> NucleoException.NoAutenticado(FfiConverterString.read(buf))
-            5 -> NucleoException.Interno(FfiConverterString.read(buf))
+            5 -> NucleoException.FechaInvalida(FfiConverterString.read(buf))
+            6 -> NucleoException.Interno(FfiConverterString.read(buf))
             else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
         }
         
@@ -1988,8 +2164,12 @@ public object FfiConverterTypeNucleoError : FfiConverterRustBuffer<NucleoExcepti
                 buf.putInt(4)
                 Unit
             }
-            is NucleoException.Interno -> {
+            is NucleoException.FechaInvalida -> {
                 buf.putInt(5)
+                Unit
+            }
+            is NucleoException.Interno -> {
+                buf.putInt(6)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -2276,6 +2456,34 @@ public object FfiConverterSequenceTypeContratistaResumen: FfiConverterRustBuffer
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeContratistaResumen.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeEmpresa: FfiConverterRustBuffer<List<Empresa>> {
+    override fun read(buf: ByteBuffer): List<Empresa> {
+        val len = buf.getInt()
+        return List<Empresa>(len) {
+            FfiConverterTypeEmpresa.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<Empresa>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeEmpresa.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<Empresa>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeEmpresa.write(it, buf)
         }
     }
 }
