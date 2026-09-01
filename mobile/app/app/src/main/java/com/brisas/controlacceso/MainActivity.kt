@@ -65,18 +65,7 @@ fun PantallaLogin(nucleo: Nucleo) {
 
     val sesionActual = sesion
     if (sesionActual != null) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text("Sesión iniciada", style = MaterialTheme.typography.titleLarge)
-            Text(
-                "${sesionActual.nombre} (${sesionActual.rol})",
-                modifier = Modifier.padding(top = 8.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        PantallaContratistas(nucleo, sesionActual)
         return
     }
 

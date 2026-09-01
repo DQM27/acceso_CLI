@@ -39,7 +39,9 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2026.01.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     // Requerido por el código Kotlin que genera uniffi para llamar al .so vía FFI.
     implementation("net.java.dev.jna:jna:5.15.0@aar")
 }
