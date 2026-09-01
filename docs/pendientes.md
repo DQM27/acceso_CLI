@@ -18,6 +18,74 @@ que quede el rastro de la decisión).
 
 ---
 
+## Clippy pedantic/nursery — en curso, subiendo el nivel por capas (2026-09-01)
+
+Contexto: al comparar este repo con otro proyecto del usuario que hace lo mismo
+("Brisas app"), salió que ese otro activa `clippy::pedantic`+`clippy::nursery` en su
+`Cargo.toml` y este no — nunca se habían activado acá. Decisión: activarlos también,
+pero **de a poco, de lo más crítico (riesgo real de bug) a lo más cosmético**, en vez de
+tragarse los ~1076 warnings de golpe. `Cargo.toml` tiene ambos grupos en `"warn"` (no
+bloquean el build); cada lint puntual que se termina de revisar en todo el crate pasa a
+`"deny"` ahí mismo, capa por capa, para que no pueda volver a colarse.
+
+**Importante para cualquiera que retome esto:** mientras el barrido siga en curso, verificar
+con `cargo clippy --all-targets --all-features` a secas — sin `-D warnings` en la terminal,
+que convertiría de golpe cada warning todavía sin revisar en error de compilación. La vara
+histórica del proyecto (grupos por defecto de Clippy: correctness/suspicious/style/
+complexity/perf) se sigue verificando igual que siempre con
+`cargo clippy --all-targets --all-features -- -D warnings` y sigue en verde.
+
+- [x] **Capa 1 — `match_same_arms` + `float_cmp` (2026-09-01).** Las 13 duplicaciones de
+  brazos de `match` se revisaron una por una: **ninguna escondía un bug real** — en todos
+  los casos, variantes distintas del dominio comparten a propósito el mismo resultado (ej.
+  `RolUsuario::Auditoria`/`Usuarios` con la misma regla de visibilidad porque
+  `Operacion::VerAuditoria` y `GestionarUsuarios` dan el mismo resultado por rol;
+  confirmado cruzando contra `src/domain/autorizacion.rs`). Se fusionaron con `|` los casos
+  donde era seguro (mismo tipo en los campos ligados, o `{ .. }` que no liga nada):
+  `lenguaje_comandos/parser.rs`, `cli/render/{auditoria,busqueda,login}.rs`, `cli/mod.rs`,
+  `tui/configuracion/state.rs`, `tui/menu_principal/state.rs`, `tui/app/auth_jobs.rs`,
+  y una fusión real en `cli/operando.rs` (`CoincidenciasActivos`/`TablaActivos`, mismo
+  `Vec<IngresoActivoResumen>`). Donde fusionar con `|` no compila (ej. `ContextState` en
+  `cli/operando.rs::mover_seleccion`, cada variante con un `Vec<T>` de dominio distinto —
+  `ContratistaResumen`, `EmpresaResumen`, `IngresoActivoResumen`...) o perdía un comentario
+  explicando por qué esa variante puntual cae ahí (`database/backup.rs`,
+  `From<SchemaError>`), se dejó un `#[allow(clippy::match_same_arms)]` puntual con una nota
+  en el sitio en vez de forzar la fusión. Las 5 comparaciones estrictas de floats eran todas
+  de tests contra extremos exactos garantizados (un clamp, o el valor inicial de una
+  animación con `VisualQuality::Off`) — sin error de punto flotante acumulado que una
+  comparación aproximada tuviera sentido de esconder; se dejó `#[allow(clippy::float_cmp)]`
+  a nivel de módulo de test en `cli/presentation/{easing,engine}.rs`, con la razón anotada.
+  `cargo fmt`, la suite completa y `cargo clippy --all-targets --all-features -- -A
+  clippy::pedantic -A clippy::nursery -D warnings` (la vara de siempre) en verde.
+- [ ] **Capa 2 (próxima, alto valor real) — casts que truncan/wrappean/pierden signo
+  (~69 casos) + 1 resta de `Duration` sin checar (puede entrar en pánico si el resultado
+  sería negativo) + 1 nombre de variable "demasiado parecido a otro" (revisar si es un
+  typo).** La mayoría de los casts `usize→u16` son coordenadas de layout de Ratatui
+  (anchos/altos de terminal, acotados en la práctica pero no probados al compilador) — ya
+  hay un patrón establecido en el propio repo para esto
+  (`u32::try_from(x).unwrap_or(u32::MAX)`, ver `application/historial.rs`), aplicar el mismo
+  criterio en vez de inventar uno nuevo.
+- [ ] **Capa 3 — simplificaciones de `Option`/`Result` y legibilidad menor.**
+  `map(f).unwrap_or_else(g)` → `map_or_else`, `map(f).unwrap_or(a)` → `map_or`, closures
+  redundantes, `if let`/`match` de un solo patrón → `if let`/`let-else`. Bajo riesgo de bug,
+  pero vale revisar cada uno igual por si alguno sí cambia de comportamiento sutilmente
+  (`unwrap_or` evalúa siempre su argumento, `unwrap_or_else` no — un `map_or` mecánico sin
+  mirar el argumento podría introducir trabajo innecesario donde antes no lo había).
+- [ ] **Capa 4 — mantenibilidad.** Imports wildcard (15), funciones que superan 100 líneas
+  (12, hasta 198), un `struct` con más de 3 booleanos, un `impl Debug` manual que no incluye
+  todos los campos (revisar si es a propósito).
+- [ ] **Capa 5 (cosmética, a decidir si vale la pena aplicarla entera) — documentación y
+  ergonomía de API.** `# Errors` en docs de funciones que devuelven `Result` (197),
+  backticks en comentarios (56), primer párrafo de doc muy largo (55), `this could be a
+  const fn` (171), candidatos a `#[must_use]` (137+42), nombre de struct repetido (11),
+  argumento por valor sin consumir (16), punto y coma final por consistencia (102). Ninguno
+  es un bug. Vale la pena notar que **el propio Brisas no exige varias de éstas** — su
+  `Cargo.toml` tiene `missing_errors_doc = "allow"` y `must_use_candidate = "allow"`
+  explícitos — así que activarlas acá sería ir más estricto que la referencia que motivó
+  esto, no sólo alcanzarla. Decidir con el usuario cuáles de estas categorías realmente
+  suman valor para una app interna (no una librería pública) antes de invertir tiempo
+  escribiendo cientos de secciones `# Errors`.
+
 ## Refactor en curso — `refactor/app-y-errores`
 
 Contexto: `src/tui/app.rs` era el archivo más grande del repo (2.971 líneas). Fases 1 y 2

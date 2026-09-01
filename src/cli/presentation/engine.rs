@@ -71,6 +71,11 @@ impl Engine {
 }
 
 #[cfg(test)]
+// `assert_eq!` contra 1.0 exacto abajo: un elemento nunca registrado o con
+// `VisualQuality::Off` resuelve la opacidad al instante (valor inicial
+// garantizado, sin interpolación de por medio) — no hay error de punto
+// flotante acumulado que una comparación exacta pueda esconder acá.
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
 

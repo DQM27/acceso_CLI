@@ -215,8 +215,10 @@ impl App {
     /// vez, ver el comentario de `hilo_usuario_pendiente`.
     pub(super) fn recibir_hilo_usuario_si_lista(&mut self, core: Option<&AppCore>) {
         let receptor = match &self.hilo_usuario_pendiente {
-            Some(HiloUsuarioPendiente::Creacion(receptor, ..)) => receptor,
-            Some(HiloUsuarioPendiente::CambioPassword(receptor, ..)) => receptor,
+            Some(
+                HiloUsuarioPendiente::Creacion(receptor, ..)
+                | HiloUsuarioPendiente::CambioPassword(receptor, ..),
+            ) => receptor,
             None => return,
         };
         let Ok(resultado_hash) = receptor.try_recv() else {

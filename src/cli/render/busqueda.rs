@@ -15,11 +15,9 @@ use super::util::{rol_texto, si_no, tipo_texto};
 fn ancho_fijo_busqueda(columna: ColumnaBusqueda) -> Option<usize> {
     match columna {
         ColumnaBusqueda::Cedula => Some(14),
-        ColumnaBusqueda::Tipo => Some(12),
-        ColumnaBusqueda::Praind => Some(12),
+        ColumnaBusqueda::Tipo | ColumnaBusqueda::Praind => Some(12),
         ColumnaBusqueda::Ruta => Some(6),
-        ColumnaBusqueda::Acceso => Some(8),
-        ColumnaBusqueda::Estado => Some(8),
+        ColumnaBusqueda::Acceso | ColumnaBusqueda::Estado => Some(8),
         ColumnaBusqueda::Nombre | ColumnaBusqueda::Empresa => None,
     }
 }

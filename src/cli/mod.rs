@@ -489,7 +489,7 @@ fn manejar_tecla(
         Fase::LoginPassword { cedula, nombre } => {
             login::manejar_login_password(core, app, key, cedula, nombre, autenticacion)
         }
-        Fase::Verificando { .. } => {}
+        Fase::Verificando { .. } | Fase::RootCreando { .. } => {}
         Fase::RootCedula => root::manejar_root_cedula(app, key),
         Fase::RootNombre { cedula } => root::manejar_root_nombre(app, key, cedula),
         Fase::RootPassword { cedula, nombre } => {
@@ -508,7 +508,6 @@ fn manejar_tecla(
             password,
             root_pendiente,
         ),
-        Fase::RootCreando { .. } => {}
         Fase::Operando { .. } => {
             operando::manejar_operando(core, app, key, historial_exportacion_pendiente)
         }

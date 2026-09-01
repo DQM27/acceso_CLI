@@ -155,6 +155,12 @@ pub enum RespaldoError {
 }
 
 impl From<SchemaError> for RespaldoError {
+    // `IntegridadInvalida` y `RespaldoPreMigracionFallido` producen el mismo
+    // `ValidacionFallida(Invalido(detalle))` a propósito (mismo tipo de
+    // problema desde el punto de vista de quien llama) — se dejan
+    // explícitas en vez de fusionarlas con `|` porque cada una tiene su
+    // propio comentario documentando cuándo se produce (o por qué no).
+    #[allow(clippy::match_same_arms)]
     fn from(error: SchemaError) -> Self {
         match error {
             SchemaError::Sqlite(error) => Self::Sqlite(error),

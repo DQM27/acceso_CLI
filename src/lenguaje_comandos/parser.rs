@@ -270,8 +270,7 @@ fn clasificar_token(token: &str) -> Clasificacion {
         return Clasificacion::Texto;
     }
     match clave.to_lowercase().as_str() {
-        "g" if valor.is_empty() => Clasificacion::Ignorado,
-        "m" if valor.is_empty() => Clasificacion::Ignorado,
+        "g" | "m" if valor.is_empty() => Clasificacion::Ignorado,
         "g" => Clasificacion::Gafete(parsear_gafete(valor)),
         "m" => Clasificacion::Medio(parsear_medio(valor)),
         _ => Clasificacion::Texto,

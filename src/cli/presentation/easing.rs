@@ -38,6 +38,11 @@ impl Easing {
 }
 
 #[cfg(test)]
+// `assert_eq!` contra 0.0/1.0 exactos abajo: son los extremos de un clamp
+// (`Linear.aplicar(-1.0/2.0)`) o del inicio/fin garantizado de una curva, no
+// el resultado de una interpolación acumulando error de punto flotante — la
+// comparación exacta es la aserción correcta acá, no una aproximación floja.
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
 

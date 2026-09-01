@@ -191,6 +191,11 @@ fn mover_seleccion(app: &mut AppState, delta: isize) {
         let actual = *seleccion as isize;
         *seleccion = (actual + delta).clamp(0, total as isize - 1) as usize;
     };
+    // Los `items` de cada variante son `Vec<T>` con `T` distinto por
+    // dominio (`ContratistaResumen`, `EmpresaResumen`, `IngresoActivoResumen`,
+    // `CambioAuditado`...) — un patrón `|` que ligue `items` no compila
+    // aunque el cuerpo de cada brazo se vea idéntico.
+    #[allow(clippy::match_same_arms)]
     match &mut app.contexto {
         ContextState::Coincidencias {
             items, seleccion, ..
@@ -370,14 +375,8 @@ fn confirmar(core: &AppCore, app: &mut AppState) {
         }
         ContextState::CoincidenciasActivos {
             items, seleccion, ..
-        } => {
-            if let Some(item) = items.get(seleccion) {
-                app.contexto = ContextState::ResumenSalida {
-                    activo: item.clone(),
-                };
-            }
         }
-        ContextState::TablaActivos {
+        | ContextState::TablaActivos {
             items, seleccion, ..
         } => {
             if let Some(item) = items.get(seleccion) {

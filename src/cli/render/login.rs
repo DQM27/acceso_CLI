@@ -162,10 +162,9 @@ fn linea_verificando(fase: &Fase, opacidad: f32) -> Line<'static> {
 fn etiqueta_prompt(fase: &Fase) -> Option<&'static str> {
     match fase {
         Fase::LoginCedula => Some("Identificación"),
-        Fase::LoginPassword { .. } => Some("Contraseña"),
+        Fase::LoginPassword { .. } | Fase::RootPassword { .. } => Some("Contraseña"),
         Fase::RootCedula => Some("Cédula"),
         Fase::RootNombre { .. } => Some("Nombre"),
-        Fase::RootPassword { .. } => Some("Contraseña"),
         Fase::RootConfirmarPassword { .. } => Some("Confirmar contraseña"),
         Fase::Verificando { .. } | Fase::RootCreando { .. } | Fase::Operando { .. } => None,
     }
@@ -232,14 +231,13 @@ fn linea_ayuda_login(fase: &Fase, opacidad: f32) -> Line<'static> {
     let texto = match fase {
         Fase::LoginCedula => "Enter continúa · Esc limpia · Ctrl+C sale",
         Fase::LoginPassword { .. } => "Enter inicia sesión · Esc cambia usuario · Ctrl+C sale",
-        Fase::Verificando { .. } => "Espere un momento · Ctrl+C sale",
+        Fase::Verificando { .. } | Fase::RootCreando { .. } => "Espere un momento · Ctrl+C sale",
         Fase::RootCedula | Fase::RootNombre { .. } | Fase::RootPassword { .. } => {
             "Enter continúa · Esc vuelve al campo anterior · Ctrl+C sale"
         }
         Fase::RootConfirmarPassword { .. } => {
             "Enter crea el usuario · Esc vuelve al campo anterior · Ctrl+C sale"
         }
-        Fase::RootCreando { .. } => "Espere un momento · Ctrl+C sale",
         Fase::Operando { .. } => "",
     };
     Line::from(Span::styled(

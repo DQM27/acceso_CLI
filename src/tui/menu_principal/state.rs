@@ -86,8 +86,7 @@ impl OpcionMenu {
     /// Operador con acceso a Usuarios podría autopromoverse a Administrador o Root.
     fn visible_para(self, rol: RolUsuario) -> bool {
         match self {
-            Self::Usuarios => rol != RolUsuario::Operador,
-            Self::Auditoria => rol != RolUsuario::Operador,
+            Self::Usuarios | Self::Auditoria => rol != RolUsuario::Operador,
             Self::Respaldos => rol == RolUsuario::Root,
             _ => true,
         }

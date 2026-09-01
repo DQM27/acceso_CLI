@@ -379,12 +379,11 @@ fn etiqueta_validacion(validacion: Option<&ResultadoValidacion>) -> &'static str
 
 fn etiqueta_esquema(validacion: Option<&ResultadoValidacion>) -> String {
     match validacion {
-        None => "—".to_owned(),
+        None | Some(ResultadoValidacion::Invalido(_)) => "—".to_owned(),
         Some(ResultadoValidacion::Valido { version_esquema }) => version_esquema.to_string(),
         Some(ResultadoValidacion::EsquemaIncompatible { version_encontrada }) => {
             version_encontrada.to_string()
         }
-        Some(ResultadoValidacion::Invalido(_)) => "—".to_owned(),
     }
 }
 

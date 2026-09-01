@@ -53,8 +53,7 @@ fn ancho_fijo(columna: ColumnaAuditoria) -> Option<usize> {
 
 fn ancho_maximo(columna: ColumnaAuditoria) -> usize {
     match columna {
-        ColumnaAuditoria::Entidad => 26,
-        ColumnaAuditoria::Usuario => 26,
+        ColumnaAuditoria::Entidad | ColumnaAuditoria::Usuario => 26,
         ColumnaAuditoria::Cambio => 60,
         ColumnaAuditoria::Fecha => 18,
     }

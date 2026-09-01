@@ -40,6 +40,36 @@ winresource = "0.1"
 [dev-dependencies]
 insta = "1.48.0"
 
+# Clippy estricto, activado de a poco (ver docs/pendientes.md, sección
+# "Clippy pedantic/nursery"). `pedantic`/`nursery` quedan en "warn" — visibles
+# pero no bloqueantes — mientras se revisan por capas, de lo más crítico
+# (posibles bugs reales: casts que truncan/wrappean, comparaciones de punto
+# flotante, `match` con brazos duplicados) a lo más cosmético (documentación,
+# `const fn`, `#[must_use]`). A medida que una categoría queda resuelta en
+# todo el crate, su lint puntual pasa a "deny" acá abajo para que no pueda
+# volver a colarse sin querer.
+#
+# IMPORTANTE: mientras el barrido siga en curso, verificar con
+# `cargo clippy --all-targets --all-features` a secas — SIN `-D warnings` —
+# porque ese flag convertiría de golpe cada warning todavía sin revisar
+# (pedantic/nursery en "warn") en un error de compilación. `-D warnings`
+# sigue siendo válido y necesario para los grupos por defecto de Clippy
+# (correctness/suspicious/style/complexity/perf), que ya están en verde.
+[lints.clippy]
+# `priority = -1` en los grupos: le da a los lints puntuales de abajo
+# (`match_same_arms`, `float_cmp`) prioridad más alta para pisar el nivel
+# del grupo — sin esto Cargo no sabe cuál de los dos gana y no compila.
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+
+# --- Resueltas y ya bloqueantes (revisadas, cero bugs reales encontrados;
+#     donde fusionar un `match` con `|` no era seguro por tipos de payload
+#     distintos entre variantes, o perdía un comentario explicativo por
+#     brazo, se dejó un `#[allow(clippy::match_same_arms)]` puntual en el
+#     sitio en vez de forzarlo) ---
+match_same_arms = "deny"
+float_cmp = "deny"
+
 # Perfil de producción: prioriza latencia y tamaño del binario sobre tiempo de
 # compilación. Cargo ya ejecuta la compilación en paralelo; codegen-units=1 reduce
 # el paralelismo de generación de código a cambio de darle más contexto a LLVM.
