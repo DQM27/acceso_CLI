@@ -70,6 +70,7 @@ pub fn drenar_cola(
 
     for fila in pendientes(connection, limite)? {
         let resultado = match (fila.entidad.as_str(), fila.operacion.as_str()) {
+            ("empresa", _) => enviar_empresa(&cliente, connection, contexto, &fila.entidad_uuid),
             ("contratista", _) => {
                 enviar_contratista(&cliente, connection, contexto, &fila.entidad_uuid)
             }
@@ -182,28 +183,43 @@ fn exigir_2xx(respuesta: reqwest::blocking::Response) -> Result<(), Sincronizaci
 /// versión más nueva siempre termina ganando, así que no hace falta
 /// distinguir la operación.
 ///
-/// `empresa_id` (la referencia real a la tabla `empresas` de la nube) queda
-/// sin mandar a propósito -- esa tabla espejo todavía no tiene su propio
-/// UUID sincronizado (ver nota en `docs/plan-persistencia-nube.md`). Alcanza
-/// con el nombre de la empresa como texto, que es lo único que necesita hoy
-/// el panel de auditoría.
+/// `empresa_id` manda el UUID real de la empresa en la nube (join contra
+/// `empresas.uuid` local) -- puede venir `NULL` si la fila de esa empresa
+/// todavía no se drenó (llegó primero el contratista en la cola, algo que
+/// no debería pasar en el orden normal de creación, pero no es un error si
+/// pasa: el contratista igual se manda, sólo sin el vínculo relacional
+/// hasta que la empresa también llegue). `empresa_nombre` se sigue mandando
+/// siempre, como snapshot legible sin depender del join.
 fn enviar_contratista(
     cliente: &reqwest::blocking::Client,
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
     uuid: &str,
 ) -> Result<(), SincronizacionError> {
-    let (cedula, nombre, tiene_acceso, empresa_nombre): (String, String, i64, String) = connection
-        .query_row(
-            "
-            SELECT c.cedula, c.nombre, c.tiene_acceso, e.nombre
-            FROM contratistas c
-            JOIN empresas e ON e.id = c.empresa_id
-            WHERE c.uuid = ?1
-            ",
-            params![uuid],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
-        )?;
+    let (cedula, nombre, tiene_acceso, empresa_nombre, empresa_uuid): (
+        String,
+        String,
+        i64,
+        String,
+        Option<String>,
+    ) = connection.query_row(
+        "
+        SELECT c.cedula, c.nombre, c.tiene_acceso, e.nombre, e.uuid
+        FROM contratistas c
+        JOIN empresas e ON e.id = c.empresa_id
+        WHERE c.uuid = ?1
+        ",
+        params![uuid],
+        |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+            ))
+        },
+    )?;
 
     let cuerpo = json!({
         "id": uuid,
@@ -211,12 +227,51 @@ fn enviar_contratista(
         "dispositivo_origen_id": contexto.dispositivo_id,
         "nombre": nombre,
         "identificacion": cedula,
+        "empresa_id": empresa_uuid,
         "empresa_nombre": empresa_nombre,
         "activo": tiene_acceso != 0,
     });
 
     let respuesta = cliente
         .post(format!("{}/rest/v1/contratistas", contexto.base_url))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Empresas (espejo): mismo criterio de `upsert` que contratistas -- crear
+/// y actualizar se resuelven igual, reintentar no duplica nada. Si un
+/// contratista de esta empresa se drena antes de que la empresa exista en
+/// la nube, esa fila falla por la FK real (`contratistas.empresa_id
+/// references empresas`) y el backoff la reintenta sola -- no hace falta
+/// forzar el orden acá.
+fn enviar_empresa(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let (nombre, activo): (String, i64) = connection.query_row(
+        "SELECT nombre, activo FROM empresas WHERE uuid = ?1",
+        params![uuid],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    let cuerpo = json!({
+        "id": uuid,
+        "sitio_id": contexto.sitio_id,
+        "dispositivo_origen_id": contexto.dispositivo_id,
+        "nombre": nombre,
+        "activa": activo != 0,
+    });
+
+    let respuesta = cliente
+        .post(format!("{}/rest/v1/empresas", contexto.base_url))
         .header("apikey", contexto.apikey)
         .header("Authorization", format!("Bearer {}", contexto.token))
         .header("Prefer", "resolution=merge-duplicates,return=minimal")
@@ -512,6 +567,38 @@ mod tests {
             dispositivo_id: "dispositivo-1",
             sitio_id: "sitio-1",
         }
+    }
+
+    #[test]
+    fn envia_una_empresa_pendiente_y_la_marca_enviada() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO empresas (nombre, activo, uuid)
+                 VALUES ('Brisas', 1, 'uuid-empresa')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, creado_en, actualizado_en
+                ) VALUES ('empresa', 'uuid-empresa', 'crear', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(resumen, ResumenDrenado { enviados: 1, fallidos: 0 });
+        let estado: String = connection
+            .query_row("SELECT estado FROM cola_salida", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(estado, "enviado");
     }
 
     #[test]

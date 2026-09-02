@@ -10,6 +10,9 @@ use control_acceso::database::connection::{open_database, ruta_base_datos};
 use control_acceso::database::repositories::contratista_repository::{
     ContratistaRepository, SqliteContratistaRepository,
 };
+use control_acceso::database::repositories::empresa_repository::{
+    EmpresaRepository, SqliteEmpresaRepository,
+};
 use control_acceso::instancia::InstanciaGuard;
 use control_acceso::nube;
 
@@ -23,7 +26,11 @@ fn main() {
 
     // Toca un contratista real (sin cambiar sus datos) para que quede
     // encolado un 'actualizar' -- mismo camino que tocaría un cambio real
-    // hecho desde la GUI.
+    // hecho desde la GUI. Toca también su empresa: si es una fila vieja
+    // (previa al espejo de empresas), nunca tuvo su propio 'crear'
+    // encolado, y el contratista fallaría por la FK real del lado de la
+    // nube (`contratistas.empresa_id references empresas`) hasta que
+    // alguien la toque una vez.
     let repo = SqliteContratistaRepository::new(&connection);
     let contratista = repo
         .listar()
@@ -35,6 +42,15 @@ fn main() {
         "Tocando contratista #{}: {}",
         contratista.id, contratista.nombre
     );
+
+    let empresas = SqliteEmpresaRepository::new(&connection);
+    let empresa = empresas
+        .buscar_por_id(contratista.empresa_id)
+        .expect("buscar empresa")
+        .expect("la empresa del contratista debe existir");
+    println!("Tocando empresa #{}: {}", empresa.id, empresa.nombre);
+    empresas.actualizar(&empresa).expect("actualizar empresa");
+
     repo.actualizar(&contratista).expect("actualizar contratista");
 
     let pendientes: i64 = connection
@@ -67,4 +83,23 @@ fn main() {
         "Resultado: {} enviados, {} fallidos",
         resumen.enviados, resumen.fallidos
     );
+
+    if resumen.fallidos > 0 {
+        let mut statement = connection
+            .prepare("SELECT entidad, entidad_uuid, ultimo_error FROM cola_salida WHERE estado != 'enviado' ORDER BY id DESC LIMIT 5")
+            .unwrap();
+        let filas = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                ))
+            })
+            .unwrap();
+        for fila in filas {
+            let (entidad, uuid, error) = fila.unwrap();
+            println!("  fallo: {entidad} {uuid} -> {error:?}");
+        }
+    }
 }

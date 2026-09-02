@@ -1,6 +1,8 @@
 use rusqlite::{Connection, Row, params};
 
+use crate::database::cola_salida;
 use crate::database::error::DatabaseError;
+use crate::database::identificador::generar_uuid_v4;
 use crate::models::empresa::Empresa;
 
 pub trait EmpresaRepository {
@@ -25,6 +27,18 @@ impl<'a> SqliteEmpresaRepository<'a> {
     pub fn new(connection: &'a Connection) -> Self {
         Self { connection }
     }
+
+    fn encolar_actualizacion(&self, id: i64) -> Result<(), DatabaseError> {
+        let uuid: Option<String> = self.connection.query_row(
+            "SELECT uuid FROM empresas WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        )?;
+        if let Some(uuid) = uuid {
+            cola_salida::encolar(self.connection, "empresa", &uuid, "actualizar")?;
+        }
+        Ok(())
+    }
 }
 
 fn convertir_fila(row: &Row) -> rusqlite::Result<Empresa> {
@@ -37,17 +51,24 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<Empresa> {
 
 impl EmpresaRepository for SqliteEmpresaRepository<'_> {
     fn crear(&self, empresa: &Empresa) -> Result<i64, DatabaseError> {
+        let uuid = generar_uuid_v4();
+
         self.connection.execute(
             "
             INSERT INTO empresas (
-                nombre
+                nombre, uuid
             )
-            VALUES (?1)
+            VALUES (?1, ?2)
             ",
-            params![empresa.nombre],
+            params![empresa.nombre, uuid],
         )?;
 
-        Ok(self.connection.last_insert_rowid())
+        // Capturado antes de encolar: `last_insert_rowid()` refleja el
+        // último INSERT de la conexión, y encolar hace el suyo propio.
+        let id = self.connection.last_insert_rowid();
+        cola_salida::encolar(self.connection, "empresa", &uuid, "crear")?;
+
+        Ok(id)
     }
 
     fn buscar_por_id(&self, id: i64) -> Result<Option<Empresa>, DatabaseError> {
@@ -102,7 +123,7 @@ impl EmpresaRepository for SqliteEmpresaRepository<'_> {
             params![empresa.nombre, empresa.id],
         )?;
 
-        Ok(())
+        self.encolar_actualizacion(empresa.id)
     }
 
     fn establecer_activo(&self, id: i64, activo: bool) -> Result<(), DatabaseError> {
@@ -110,7 +131,7 @@ impl EmpresaRepository for SqliteEmpresaRepository<'_> {
             "UPDATE empresas SET activo = ?1 WHERE id = ?2",
             params![i64::from(activo), id],
         )?;
-        Ok(())
+        self.encolar_actualizacion(id)
     }
 
     fn listar(&self) -> Result<Vec<Empresa>, DatabaseError> {

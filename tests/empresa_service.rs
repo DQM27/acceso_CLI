@@ -264,3 +264,55 @@ fn nombre_duplicado_produce_error_semantico_y_conserva_integridad() {
         "Empresa Dos"
     );
 }
+
+// Bandeja de salida hacia la nube (`docs/plan-persistencia-nube.md`): crear
+// o actualizar una empresa debe dejar siempre su aviso correspondiente en
+// `cola_salida`.
+
+fn uuid_de_empresa(connection: &Connection, id: i64) -> String {
+    connection
+        .query_row("SELECT uuid FROM empresas WHERE id = ?1", [id], |row| {
+            row.get(0)
+        })
+        .unwrap()
+}
+
+fn contar_cola_salida_empresa(connection: &Connection, entidad_uuid: &str, operacion: &str) -> i64 {
+    connection
+        .query_row(
+            "SELECT COUNT(*) FROM cola_salida
+             WHERE entidad = 'empresa' AND entidad_uuid = ?1 AND operacion = ?2
+               AND estado = 'pendiente'",
+            [entidad_uuid, operacion],
+            |row| row.get(0),
+        )
+        .unwrap()
+}
+
+#[test]
+fn debe_encolar_hacia_la_nube_al_crear() {
+    let connection = preparar_base();
+    let repository = SqliteEmpresaRepository::new(&connection);
+    let servicio = EmpresaService::new(&repository);
+
+    let id = servicio.crear("Empresa Uno").unwrap();
+    let uuid = uuid_de_empresa(&connection, id);
+
+    assert_eq!(contar_cola_salida_empresa(&connection, &uuid, "crear"), 1);
+}
+
+#[test]
+fn debe_encolar_hacia_la_nube_al_actualizar() {
+    let connection = preparar_base();
+    let repository = SqliteEmpresaRepository::new(&connection);
+    let servicio = EmpresaService::new(&repository);
+    let id = servicio.crear("Empresa Uno").unwrap();
+    let uuid = uuid_de_empresa(&connection, id);
+
+    servicio.actualizar(id, "Empresa Renombrada").unwrap();
+
+    assert_eq!(
+        contar_cola_salida_empresa(&connection, &uuid, "actualizar"),
+        1
+    );
+}

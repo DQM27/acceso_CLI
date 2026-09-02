@@ -14,12 +14,16 @@ reintentos (`INTENTOS_ANTES_DE_FALLO_PERMANENTE`, `src/nube/sincronizacion.rs`),
 recibir (ingresos abiertos del otro dispositivo del sitio) + cerrar
 (probado con la carrera de dos cierres a la vez), pantalla "Nube" en
 escritorio (exclusiva Root), disparador automático de escritorio (cada 5
-min + al abrir), e integridad del historial en la nube (triggers en
-Postgres que espejan `registro_ingresos_entrada_inmutable`/
+min + al abrir), integridad del historial en la nube (triggers en Postgres
+que espejan `registro_ingresos_entrada_inmutable`/
 `registro_ingresos_salida_unica` de la base local — antes esas reglas sólo
 las respetaba nuestro código, ahora las hace cumplir la base misma;
 probado a mano: doble cierre y edición de la entrada rechazados, cierre
-legítimo sigue funcionando).
+legítimo sigue funcionando), y **empresas con espejo completo** (`uuid`
+propio, FK real en `contratistas.empresa_id` en vez del nombre suelto como
+texto — probado de punta a punta: una empresa vieja sin sincronizar bloquea
+al contratista que la referencia por la FK real, y se auto-recupera sola
+en cuanto la empresa también se manda, gracias al backoff).
 
 **Diseñado y compilando, sin prueba real**: el puente Rust↔Kotlin (uniffi)
 en `mobile/rust-core` expone los mismos métodos que escritorio, pasa
@@ -36,8 +40,7 @@ general).
 decidió seguir):
 1. ~~Backoff en la cola de salida~~ — cerrado.
 2. ~~Integridad del historial de `ingresos` en la nube~~ — cerrado.
-3. **Empresas con espejo completo** (uuid propio + FK real en `contratistas.empresa_id`,
-   en vez del nombre como texto suelto).
+3. ~~Empresas con espejo completo~~ — cerrado.
 4. **Fusionar `ingresos_remotos` con la pantalla Activos** — hoy son dos
    listas que no se hablan; un ingreso remoto sólo se ve entrando puntual
    a la pantalla Nube, no donde un operador normalmente miraría "quién

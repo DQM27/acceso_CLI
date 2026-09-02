@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 18;
+pub const SCHEMA_VERSION: i64 = 19;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -172,6 +172,11 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
         version = 18;
     }
 
+    if version == 18 {
+        aplicar_migracion_19(connection)?;
+        version = 19;
+    }
+
     if version != SCHEMA_VERSION {
         return Err(SchemaError::VersionInesperadaTrasMigrar {
             encontrada: version,
@@ -201,6 +206,14 @@ fn aplicar_migracion_18(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_18)?;
     transaction.execute_batch("PRAGMA user_version = 18")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_19(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_19)?;
+    transaction.execute_batch("PRAGMA user_version = 19")?;
     transaction.commit()?;
     Ok(())
 }
@@ -1436,4 +1449,42 @@ CREATE TABLE ingresos_remotos (
     dispositivo_entrada_id TEXT NOT NULL,
     actualizado_en TEXT NOT NULL
 ) STRICT;
+";
+
+// Empresas se suma al espejo de la nube (antes sólo viajaba su nombre como
+// texto suelto dentro de cada contratista) -- mismo criterio de identidad
+// que ya tienen contratistas/registro_ingresos: `uuid` nuevo, nullable,
+// backfill para lo existente, las filas nuevas lo reciben del código Rust
+// al crearlas (ver comentario de MIGRACION_16 sobre por qué SQL no puede
+// generar el UUID por sí solo). `cola_salida` se recrea porque SQLite no
+// permite modificar un CHECK existente -- mismo patrón que MIGRACION_10/12
+// en su momento con `auditoria_contratistas`.
+const MIGRACION_19: &str = r"
+ALTER TABLE empresas ADD COLUMN uuid TEXT;
+UPDATE empresas SET uuid = (
+    lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4'
+    || substr(lower(hex(randomblob(2))), 2) || '-'
+    || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))), 2)
+    || '-' || lower(hex(randomblob(6)))
+) WHERE uuid IS NULL;
+CREATE UNIQUE INDEX idx_empresas_uuid ON empresas(uuid);
+
+CREATE TABLE cola_salida_nueva (
+    id INTEGER PRIMARY KEY,
+    entidad TEXT NOT NULL CHECK (entidad IN ('contratista', 'ingreso', 'empresa')),
+    entidad_uuid TEXT NOT NULL,
+    operacion TEXT NOT NULL CHECK (operacion IN ('crear', 'actualizar', 'cerrar')),
+    estado TEXT NOT NULL DEFAULT 'pendiente'
+        CHECK (estado IN ('pendiente', 'enviado', 'fallido')),
+    intentos INTEGER NOT NULL DEFAULT 0 CHECK (intentos >= 0),
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    ultimo_error TEXT
+) STRICT;
+INSERT INTO cola_salida_nueva SELECT * FROM cola_salida;
+DROP TABLE cola_salida;
+ALTER TABLE cola_salida_nueva RENAME TO cola_salida;
+CREATE INDEX idx_cola_salida_pendientes
+ON cola_salida(creado_en)
+WHERE estado = 'pendiente';
 ";
