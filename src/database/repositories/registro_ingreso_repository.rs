@@ -1,7 +1,9 @@
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, Row, named_params, params};
 
+use crate::database::cola_salida;
 use crate::database::error::DatabaseError;
+use crate::database::identificador::generar_uuid_v4;
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::models::registro_ingreso::{
     MotivoResultadoIngreso, NuevoRegistroIngreso, RegistroIngreso, ResultadoIngresoRegistrado,
@@ -154,6 +156,8 @@ impl RegistroIngresoRepository for SqliteRegistroIngresoRepository<'_> {
             ResultadoIngresoRegistrado::Migrado => ("MIGRADO", Some("DATOS_RECONSTRUIDOS")),
         };
 
+        let uuid = generar_uuid_v4();
+
         let filas = self.connection.execute(
             "
             INSERT INTO registro_ingresos (
@@ -174,7 +178,8 @@ impl RegistroIngresoRepository for SqliteRegistroIngresoRepository<'_> {
                 resultado_acceso,
                 motivo_resultado,
                 reglas_version,
-                empresa_activa_snapshot
+                empresa_activa_snapshot,
+                uuid
             )
             SELECT
                 :contratista_id, :empresa_id, :fecha_hora_ingreso,
@@ -183,7 +188,7 @@ impl RegistroIngresoRepository for SqliteRegistroIngresoRepository<'_> {
                 :contratista_nombre, e.nombre, u.nombre,
                 :fecha_vencimiento_praind, :es_personal_ruta,
                 :tiene_acceso, :resultado_acceso, :motivo_resultado,
-                :reglas_version, :empresa_activa_snapshot
+                :reglas_version, :empresa_activa_snapshot, :uuid
             FROM empresas AS e
             CROSS JOIN usuarios AS u
             WHERE e.id = :empresa_id AND u.id = :usuario_ingreso_id
@@ -205,6 +210,7 @@ impl RegistroIngresoRepository for SqliteRegistroIngresoRepository<'_> {
                 ":motivo_resultado": motivo_resultado,
                 ":reglas_version": registro.datos_historicos.reglas_version,
                 ":empresa_activa_snapshot": i64::from(registro.datos_historicos.empresa_activa),
+                ":uuid": uuid,
             },
         )?;
 
@@ -212,7 +218,12 @@ impl RegistroIngresoRepository for SqliteRegistroIngresoRepository<'_> {
             return Err(DatabaseError::Sqlite(rusqlite::Error::QueryReturnedNoRows));
         }
 
-        Ok(self.connection.last_insert_rowid())
+        // Capturado antes de encolar: `last_insert_rowid()` refleja el
+        // último INSERT de la conexión, y encolar hace el suyo propio.
+        let id = self.connection.last_insert_rowid();
+        cola_salida::encolar(self.connection, "ingreso", &uuid, "crear")?;
+
+        Ok(id)
     }
 
     fn buscar_por_id(&self, id: i64) -> Result<Option<RegistroIngreso>, DatabaseError> {
@@ -335,6 +346,13 @@ impl RegistroIngresoRepository for SqliteRegistroIngresoRepository<'_> {
         if rows_affected == 0 {
             return Err(DatabaseError::RegistroNoActivo);
         }
+
+        let uuid: String = self.connection.query_row(
+            "SELECT uuid FROM registro_ingresos WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        )?;
+        cola_salida::encolar(self.connection, "ingreso", &uuid, "cerrar")?;
 
         Ok(())
     }

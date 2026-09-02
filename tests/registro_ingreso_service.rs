@@ -725,3 +725,94 @@ fn contratista_inexistente_es_rechazado() {
         Err(RegistroIngresoServiceError::ContratistaNoEncontrado)
     ));
 }
+
+// Bandeja de salida hacia la nube (`docs/plan-persistencia-nube.md`):
+// registrar una entrada o su salida debe dejar siempre el aviso
+// correspondiente en `cola_salida`.
+
+fn contar_cola_salida_ingreso(connection: &Connection, entidad_uuid: &str, operacion: &str) -> i64 {
+    connection
+        .query_row(
+            "SELECT COUNT(*) FROM cola_salida
+             WHERE entidad = 'ingreso' AND entidad_uuid = ?1 AND operacion = ?2
+               AND estado = 'pendiente'",
+            [entidad_uuid, operacion],
+            |row| row.get(0),
+        )
+        .unwrap()
+}
+
+fn uuid_de_ingreso(connection: &Connection, id: i64) -> String {
+    connection
+        .query_row(
+            "SELECT uuid FROM registro_ingresos WHERE id = ?1",
+            [id],
+            |row| row.get(0),
+        )
+        .unwrap()
+}
+
+#[test]
+fn debe_encolar_hacia_la_nube_al_registrar_entrada() {
+    let (connection, empresa_id, usuario_id) = preparar_base();
+    let id = guardar_contratista(
+        &connection,
+        &contratista(
+            "2001",
+            empresa_id,
+            TipoIngreso::Praind,
+            Some(praind_vigente()),
+        ),
+    );
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let registros = SqliteRegistroIngresoRepository::new(&connection);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
+
+    let entrada = servicio
+        .registrar_entrada(
+            id,
+            MedioIngreso::Caminando,
+            Some(10),
+            usuario_id,
+            fecha_ingreso(),
+        )
+        .unwrap();
+    let uuid = uuid_de_ingreso(&connection, entrada.registro_id);
+
+    assert_eq!(contar_cola_salida_ingreso(&connection, &uuid, "crear"), 1);
+}
+
+#[test]
+fn debe_encolar_hacia_la_nube_al_registrar_salida() {
+    let (connection, empresa_id, usuario_id) = preparar_base();
+    let id = guardar_contratista(
+        &connection,
+        &contratista(
+            "2001",
+            empresa_id,
+            TipoIngreso::Praind,
+            Some(praind_vigente()),
+        ),
+    );
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let registros = SqliteRegistroIngresoRepository::new(&connection);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
+    let entrada = servicio
+        .registrar_entrada(
+            id,
+            MedioIngreso::Caminando,
+            Some(10),
+            usuario_id,
+            fecha_ingreso(),
+        )
+        .unwrap();
+    let uuid = uuid_de_ingreso(&connection, entrada.registro_id);
+
+    servicio
+        .registrar_salida(entrada.registro_id, fecha_salida(), usuario_id)
+        .unwrap();
+
+    assert_eq!(contar_cola_salida_ingreso(&connection, &uuid, "cerrar"), 1);
+}

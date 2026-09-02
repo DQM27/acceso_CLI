@@ -1,7 +1,9 @@
 use chrono::NaiveDate;
 use rusqlite::{Connection, Row, params};
 
+use crate::database::cola_salida;
 use crate::database::error::DatabaseError;
+use crate::database::identificador::generar_uuid_v4;
 use crate::models::contratista::Contratista;
 use crate::models::tipo_ingreso::TipoIngreso;
 
@@ -72,6 +74,7 @@ impl ContratistaRepository for SqliteContratistaRepository<'_> {
             .map(|fecha| fecha.format("%Y-%m-%d").to_string());
 
         let tipo_ingreso = contratista.tipo_ingreso.as_str_sql();
+        let uuid = generar_uuid_v4();
 
         self.connection.execute(
             "
@@ -82,9 +85,10 @@ impl ContratistaRepository for SqliteContratistaRepository<'_> {
                 tipo_ingreso,
                 fecha_vencimiento_praind,
                 es_personal_ruta,
-                tiene_acceso
+                tiene_acceso,
+                uuid
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
             ",
             params![
                 contratista.cedula,
@@ -94,10 +98,16 @@ impl ContratistaRepository for SqliteContratistaRepository<'_> {
                 fecha_vencimiento,
                 i64::from(contratista.es_personal_ruta),
                 i64::from(contratista.tiene_acceso),
+                uuid,
             ],
         )?;
 
-        Ok(self.connection.last_insert_rowid())
+        // Capturado antes de encolar: `last_insert_rowid()` refleja el
+        // último INSERT de la conexión, y encolar hace el suyo propio.
+        let id = self.connection.last_insert_rowid();
+        cola_salida::encolar(self.connection, "contratista", &uuid, "crear")?;
+
+        Ok(id)
     }
 
     fn buscar_por_cedula(&self, cedula: &str) -> Result<Option<Contratista>, DatabaseError> {
@@ -187,6 +197,15 @@ impl ContratistaRepository for SqliteContratistaRepository<'_> {
                 contratista.id,
             ],
         )?;
+
+        let uuid: Option<String> = self.connection.query_row(
+            "SELECT uuid FROM contratistas WHERE id = ?1",
+            params![contratista.id],
+            |row| row.get(0),
+        )?;
+        if let Some(uuid) = uuid {
+            cola_salida::encolar(self.connection, "contratista", &uuid, "actualizar")?;
+        }
 
         Ok(())
     }

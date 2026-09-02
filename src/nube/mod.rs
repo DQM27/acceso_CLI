@@ -7,5 +7,7 @@
 
 pub mod cliente;
 pub mod credenciales;
+pub mod sincronizacion;
 
 pub use cliente::{NubeError, TokenDispositivo, autenticar_dispositivo};
+pub use sincronizacion::{ContextoSincronizacion, ResumenDrenado, SincronizacionError, drenar_cola};

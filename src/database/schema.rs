@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 15;
+pub const SCHEMA_VERSION: i64 = 17;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -153,12 +153,42 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
         version = 15;
     }
 
+    // No comparte transacción con las de arriba por prolijidad únicamente
+    // (a diferencia de MIGRACION_15, no necesita `foreign_keys = OFF`) —
+    // sólo agrega una columna nullable y la rellena, ninguna tabla se
+    // recrea.
+    if version == 15 {
+        aplicar_migracion_16(connection)?;
+        version = 16;
+    }
+
+    if version == 16 {
+        aplicar_migracion_17(connection)?;
+        version = 17;
+    }
+
     if version != SCHEMA_VERSION {
         return Err(SchemaError::VersionInesperadaTrasMigrar {
             encontrada: version,
         });
     }
 
+    Ok(())
+}
+
+fn aplicar_migracion_16(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_16)?;
+    transaction.execute_batch("PRAGMA user_version = 16")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_17(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_17)?;
+    transaction.execute_batch("PRAGMA user_version = 17")?;
+    transaction.commit()?;
     Ok(())
 }
 
@@ -1308,4 +1338,67 @@ ALTER TABLE auditoria_cambios_nueva RENAME TO auditoria_cambios;
 CREATE INDEX idx_auditoria_cambios_fecha ON auditoria_cambios(fecha_hora DESC, id DESC);
 CREATE INDEX idx_auditoria_cambios_entidad
 ON auditoria_cambios(entidad, entidad_id, id DESC);
+";
+
+// Identidad estable para la persistencia en la nube
+// (`docs/plan-persistencia-nube.md`): el `id` local es autoincremental por
+// dispositivo, así que el mismo número existe sin relación en cada sitio —
+// no sirve para identificar una fila una vez que conviven datos de varios
+// dispositivos en el receptor. `uuid` es esa segunda identidad, generada al
+// azar, sin relación con el `id` local (que sigue existiendo igual, sin
+// tocarse).
+//
+// Nullable a propósito: `ALTER TABLE ... ADD COLUMN` de `SQLite` rechaza un
+// `DEFAULT` no constante ("Cannot add a column with non-constant default",
+// verificado antes de escribir esto) y un trigger no puede modificar la fila
+// que se está insertando — no hay forma de que el propio esquema rellene un
+// UUID nuevo por sí solo sin recrear la tabla entera. Se resuelve distinto
+// según el caso: las filas ya existentes se rellenan acá mismo, una vez, con
+// el `UPDATE`; las filas nuevas lo reciben del código Rust que arma la
+// bandeja de salida (todavía sin escribir) al crearlas — no de SQL.
+const MIGRACION_16: &str = r"
+ALTER TABLE contratistas ADD COLUMN uuid TEXT;
+UPDATE contratistas SET uuid = (
+    lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4'
+    || substr(lower(hex(randomblob(2))), 2) || '-'
+    || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))), 2)
+    || '-' || lower(hex(randomblob(6)))
+) WHERE uuid IS NULL;
+CREATE UNIQUE INDEX idx_contratistas_uuid ON contratistas(uuid);
+
+ALTER TABLE registro_ingresos ADD COLUMN uuid TEXT;
+UPDATE registro_ingresos SET uuid = (
+    lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4'
+    || substr(lower(hex(randomblob(2))), 2) || '-'
+    || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))), 2)
+    || '-' || lower(hex(randomblob(6)))
+) WHERE uuid IS NULL;
+CREATE UNIQUE INDEX idx_registro_ingresos_uuid ON registro_ingresos(uuid);
+";
+
+// Bandeja de salida hacia el receptor en la nube
+// (`docs/plan-persistencia-nube.md`): cada fila es "esto hay que mandarlo,
+// todavía no se mandó". La llena el código Rust de los servicios (no un
+// trigger de SQL -- ver el comentario de MIGRACION_16 sobre por qué SQL no
+// puede generar el UUID de la fila nueva por sí solo), en la misma
+// transacción que crea/actualiza la fila real, así que nunca puede quedar
+// un cambio real sin su fila de cola correspondiente.
+const MIGRACION_17: &str = r"
+CREATE TABLE cola_salida (
+    id INTEGER PRIMARY KEY,
+    entidad TEXT NOT NULL CHECK (entidad IN ('contratista', 'ingreso')),
+    entidad_uuid TEXT NOT NULL,
+    operacion TEXT NOT NULL CHECK (operacion IN ('crear', 'actualizar', 'cerrar')),
+    estado TEXT NOT NULL DEFAULT 'pendiente'
+        CHECK (estado IN ('pendiente', 'enviado', 'fallido')),
+    intentos INTEGER NOT NULL DEFAULT 0 CHECK (intentos >= 0),
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    ultimo_error TEXT
+) STRICT;
+
+-- Vaciar la cola recorre lo pendiente en orden de creación.
+CREATE INDEX idx_cola_salida_pendientes
+ON cola_salida(creado_en)
+WHERE estado = 'pendiente';
 ";

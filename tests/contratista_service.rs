@@ -493,3 +493,59 @@ fn actualizar_con_cedula_duplicada_devuelve_error_semantico_y_conserva_registro(
     assert_eq!(conservado.cedula, "2002");
     assert_eq!(conservado.nombre, "Persona Dos");
 }
+
+// Bandeja de salida hacia la nube (`docs/plan-persistencia-nube.md`): crear
+// o actualizar un contratista debe dejar siempre su aviso correspondiente
+// en `cola_salida`, listo para sincronizar más adelante.
+
+fn contar_cola_salida(connection: &Connection, entidad_uuid: &str, operacion: &str) -> i64 {
+    connection
+        .query_row(
+            "SELECT COUNT(*) FROM cola_salida
+             WHERE entidad = 'contratista' AND entidad_uuid = ?1 AND operacion = ?2
+               AND estado = 'pendiente'",
+            [entidad_uuid, operacion],
+            |row| row.get(0),
+        )
+        .unwrap()
+}
+
+fn uuid_de_contratista(connection: &Connection, id: i64) -> String {
+    connection
+        .query_row(
+            "SELECT uuid FROM contratistas WHERE id = ?1",
+            [id],
+            |row| row.get(0),
+        )
+        .unwrap()
+}
+
+#[test]
+fn debe_encolar_hacia_la_nube_al_crear() {
+    let (connection, empresa_id) = preparar_base();
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let empresas = SqliteEmpresaRepository::new(&connection);
+    let servicio = ContratistaService::new(&contratistas, &empresas);
+
+    let id = servicio
+        .crear(datos(empresa_id, TipoIngreso::Swat))
+        .unwrap();
+    let uuid = uuid_de_contratista(&connection, id);
+
+    assert_eq!(contar_cola_salida(&connection, &uuid, "crear"), 1);
+}
+
+#[test]
+fn debe_encolar_hacia_la_nube_al_actualizar() {
+    let (connection, empresa_id, id) = preparar_actualizacion();
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let empresas = SqliteEmpresaRepository::new(&connection);
+    let servicio = ContratistaService::new(&contratistas, &empresas);
+    let uuid = uuid_de_contratista(&connection, id);
+
+    servicio
+        .actualizar(id, actualizacion(empresa_id, TipoIngreso::PorCorreo))
+        .unwrap();
+
+    assert_eq!(contar_cola_salida(&connection, &uuid, "actualizar"), 1);
+}
