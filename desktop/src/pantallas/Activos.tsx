@@ -4,8 +4,15 @@ import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
-import { listarIngresosActivos, mensajeMotivoDenegacion, registrarSalida, textoMedio } from "../api";
-import type { IngresoActivoResumen } from "../api";
+import {
+  cerrarIngresoRemoto,
+  listarIngresosActivos,
+  listarIngresosRemotos,
+  mensajeMotivoDenegacion,
+  registrarSalida,
+  textoMedio,
+} from "../api";
+import type { IngresoActivoResumen, IngresoRemoto } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
 /** Texto plano del estado — separado del componente visual `EstadoAcceso`
@@ -26,15 +33,76 @@ export function colorEstado(fila: IngresoActivoResumen): string {
   return "var(--error)";
 }
 
-function EstadoAcceso({ fila }: { fila: IngresoActivoResumen }) {
+/** Fila local (este dispositivo) o remota (abierta por el otro dispositivo
+ * del mismo sitio, ver `docs/plan-persistencia-nube.md` — nunca vive en el
+ * historial local, sólo en la caché `ingresos_remotos`). Mismos nombres de
+ * campo en los dos casos (los que una remota no tiene van en `null`) para
+ * que las columnas de AG Grid no necesiten saber cuál es cuál salvo donde
+ * de verdad importa (estado, acción). */
+interface FilaLocal extends IngresoActivoResumen {
+  origen: "local";
+  estado_texto: string;
+}
+
+interface FilaRemota {
+  origen: "remoto";
+  uuid_remoto: string;
+  registro_id: null;
+  contratista_id: null;
+  cedula: null;
+  contratista_nombre: string;
+  empresa_nombre: null;
+  tipo_ingreso: null;
+  medio_ingreso: null;
+  fecha_hora_ingreso: string;
+  gafete_numero: null;
+  usuario_ingreso_nombre: string;
+  resultado_registrado: null;
+  resultado_acceso: null;
+  estado_texto: string;
+}
+
+type FilaActiva = FilaLocal | FilaRemota;
+
+export function filaDesdeLocal(item: IngresoActivoResumen): FilaActiva {
+  return { ...item, origen: "local", estado_texto: textoEstado(item) };
+}
+
+export function filaDesdeRemoto(remoto: IngresoRemoto): FilaActiva {
+  return {
+    origen: "remoto",
+    uuid_remoto: remoto.uuid,
+    registro_id: null,
+    contratista_id: null,
+    cedula: null,
+    contratista_nombre: remoto.contratista_nombre,
+    empresa_nombre: null,
+    tipo_ingreso: null,
+    medio_ingreso: null,
+    fecha_hora_ingreso: remoto.hora_entrada,
+    gafete_numero: null,
+    usuario_ingreso_nombre: remoto.usuario_entrada_nombre ?? "—",
+    resultado_registrado: null,
+    resultado_acceso: null,
+    estado_texto: "Otro dispositivo",
+  };
+}
+
+function textoEstadoFila(fila: FilaActiva): string {
+  return fila.origen === "remoto" ? fila.estado_texto : textoEstado(fila);
+}
+
+function colorEstadoFila(fila: FilaActiva): string {
+  return fila.origen === "remoto" ? "var(--acento)" : colorEstado(fila);
+}
+
+function EstadoAcceso({ fila }: { fila: FilaActiva }) {
   return (
-    <span className="chip" style={{ ["--chip-color" as string]: colorEstado(fila) }}>
-      {textoEstado(fila)}
+    <span className="chip" style={{ ["--chip-color" as string]: colorEstadoFila(fila) }}>
+      {textoEstadoFila(fila)}
     </span>
   );
 }
-
-type FilaActiva = IngresoActivoResumen & { estado_texto: string };
 
 export default function Activos({
   refrescarSenal,
@@ -59,10 +127,14 @@ export default function Activos({
 
   const recargar = useCallback(() => {
     setCargando(true);
-    return listarIngresosActivos()
-      .then((pagina) => {
-        setFilas(pagina.items.map((item) => ({ ...item, estado_texto: textoEstado(item) })));
-        setTotal(pagina.total);
+    // `listarIngresosRemotos` no hace red -- lee la caché local que ya
+    // llenó la última sincronización (manual o automática); si la nube
+    // nunca se configuró en este dispositivo, simplemente devuelve una
+    // lista vacía, no falla.
+    return Promise.all([listarIngresosActivos(), listarIngresosRemotos()])
+      .then(([pagina, remotos]) => {
+        setFilas([...pagina.items.map(filaDesdeLocal), ...remotos.map(filaDesdeRemoto)]);
+        setTotal(pagina.total + remotos.length);
         setSeleccionadas([]);
       })
       .finally(() => setCargando(false));
@@ -76,15 +148,26 @@ export default function Activos({
     };
   }, [recargar, refrescarSenal]);
 
+  /** Local: cierra en `registro_ingresos` (este dispositivo). Remota: cierra
+   * directo contra la nube (`nube::cerrar_ingreso_remoto`) -- nunca toca el
+   * historial local, esa fila no es -- ni fue -- de este dispositivo. */
+  async function cerrarFila(fila: FilaActiva) {
+    if (fila.origen === "local") {
+      await registrarSalida(fila.registro_id);
+    } else {
+      await cerrarIngresoRemoto(fila.uuid_remoto);
+    }
+  }
+
   // useCallback a propósito: esta función se cierra dentro de una celda de
   // `columnas` — sin identidad estable, `columnas` (memoizado más abajo)
   // se recrearía en cada render igual, y con eso AG Grid reasignaría el
   // orden/ancho originales del código encima de lo que el usuario acomodó
   // (ver el comentario junto a `columnas`).
   const salidaIndividual = useCallback(
-    async (id: number) => {
+    async (fila: FilaActiva) => {
       try {
-        await registrarSalida(id);
+        await cerrarFila(fila);
         recargar();
       } catch (error) {
         toast.error(String(error));
@@ -97,7 +180,7 @@ export default function Activos({
     setProcesando(true);
     try {
       for (const fila of seleccionadas) {
-        await registrarSalida(fila.registro_id);
+        await cerrarFila(fila);
       }
       setConfirmarSalidaMasiva(false);
       await recargar();
@@ -129,13 +212,14 @@ export default function Activos({
         field: "medio_ingreso",
         headerName: "Medio",
         width: 100,
-        valueFormatter: (p) => textoMedio(p.value),
+        valueFormatter: (p) => (p.value == null ? "—" : textoMedio(p.value)),
       },
       {
         field: "gafete_numero",
         headerName: "Gafete",
         width: 90,
-        valueFormatter: (p) => (p.value == null ? "S/G" : String(p.value)),
+        valueFormatter: (p) =>
+          p.data?.origen === "remoto" ? "—" : p.value == null ? "S/G" : String(p.value),
       },
       {
         colId: "fecha_ingreso",
@@ -187,7 +271,7 @@ export default function Activos({
               type="button"
               className="boton"
               style={{ padding: "0.15rem 0.55rem", fontSize: "0.78rem" }}
-              onClick={() => salidaIndividual(p.data!.registro_id)}
+              onClick={() => salidaIndividual(p.data!)}
             >
               Salida
             </button>
@@ -268,7 +352,9 @@ export default function Activos({
           </p>
           <ul style={{ margin: "0 0 1rem", paddingLeft: "1.2rem", color: "var(--muted)" }}>
             {seleccionadas.map((fila) => (
-              <li key={fila.registro_id}>{fila.contratista_nombre}</li>
+              <li key={fila.origen === "local" ? `local-${fila.registro_id}` : `remoto-${fila.uuid_remoto}`}>
+                {fila.contratista_nombre}
+              </li>
             ))}
           </ul>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
