@@ -1,0 +1,627 @@
+<title>Alta de Dispositivos</title>
+<meta name="description" content="Panel de administración para dar de alta, listar y revocar dispositivos por sitio en el receptor de control de acceso.">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #f4f6f5;
+    --surface: #ffffff;
+    --surface-2: #eef1f0;
+    --border: #d7dfdc;
+    --text: #16211e;
+    --text-muted: #5b6b66;
+    --accent: #1f8f7d;
+    --accent-ink: #ffffff;
+    --accent-soft: #e1f3ef;
+    --warning: #b6791a;
+    --warning-soft: #fbeed9;
+    --danger: #b8493b;
+    --danger-soft: #f9e4e0;
+    --radius: 10px;
+    --shadow: 0 1px 2px rgba(20, 30, 27, 0.06), 0 8px 24px rgba(20, 30, 27, 0.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10161a;
+      --surface: #171f24;
+      --surface-2: #1d262b;
+      --border: #2b363c;
+      --text: #e7ede9;
+      --text-muted: #8ea39c;
+      --accent: #45c2ac;
+      --accent-ink: #05201b;
+      --accent-soft: #16332d;
+      --warning: #e2ab52;
+      --warning-soft: #362a12;
+      --danger: #e2796a;
+      --danger-soft: #38201c;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 28px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #10161a;
+    --surface: #171f24;
+    --surface-2: #1d262b;
+    --border: #2b363c;
+    --text: #e7ede9;
+    --text-muted: #8ea39c;
+    --accent: #45c2ac;
+    --accent-ink: #05201b;
+    --accent-soft: #16332d;
+    --warning: #e2ab52;
+    --warning-soft: #362a12;
+    --danger: #e2796a;
+    --danger-soft: #38201c;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 28px rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .mono {
+    font-family: "IBM Plex Mono", ui-monospace, "Cascadia Code", monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .shell {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 28px 24px 64px;
+  }
+
+  header.top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  header.top .id {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  header.top h1 {
+    font-size: 19px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  header.top .subtitle {
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .project-tag {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 8px;
+  }
+
+  /* --- gate --- */
+  #gate {
+    max-width: 380px;
+    margin: 18vh auto 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 28px;
+    text-align: center;
+  }
+  #gate h1 { font-size: 17px; margin: 0 0 4px; }
+  #gate p { color: var(--text-muted); font-size: 13px; margin: 0 0 18px; }
+  #gate input {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  #gate .error {
+    color: var(--danger);
+    font-size: 12.5px;
+    min-height: 16px;
+    margin-bottom: 6px;
+  }
+
+  /* --- form controls --- */
+  label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  input[type="text"], select {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 7px;
+    padding: 9px 11px;
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.12s ease;
+  }
+  input[type="text"]:focus, select:focus {
+    border-color: var(--accent);
+  }
+
+  button {
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    border-radius: 7px;
+    border: 1px solid transparent;
+    padding: 9px 16px;
+    cursor: pointer;
+    transition: filter 0.12s ease, background 0.12s ease;
+  }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button:disabled { opacity: 0.55; cursor: default; }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  .btn-primary:hover:not(:disabled) { filter: brightness(1.06); }
+
+  .btn-ghost {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text);
+  }
+  .btn-ghost:hover:not(:disabled) { background: var(--surface-2); }
+
+  .btn-danger-ghost {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--danger);
+    font-size: 12px;
+    padding: 5px 10px;
+  }
+  .btn-danger-ghost:hover:not(:disabled) { background: var(--danger-soft); border-color: var(--danger); }
+
+  /* --- layout --- */
+  .grid {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 760px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+
+  .panel-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .panel-header h2 {
+    font-size: 13.5px;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  form.provision {
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .field-error {
+    color: var(--danger);
+    font-size: 12.5px;
+    min-height: 16px;
+    margin-top: -8px;
+  }
+
+  /* --- sites list --- */
+  .sites {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .site-block {
+    border-bottom: 1px solid var(--border);
+  }
+  .site-block:last-child { border-bottom: none; }
+
+  .site-head {
+    padding: 12px 18px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    background: var(--surface-2);
+  }
+  .site-head .name { font-weight: 600; font-size: 14px; }
+  .site-head .addr { color: var(--text-muted); font-size: 12.5px; }
+  .site-head .count {
+    margin-left: auto;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  .device-row {
+    display: grid;
+    grid-template-columns: 26px 1fr auto auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 18px;
+    border-top: 1px solid var(--border);
+  }
+
+  .device-icon {
+    width: 22px; height: 22px;
+    border-radius: 5px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted);
+  }
+  .device-icon svg { width: 13px; height: 13px; }
+
+  .device-label { font-weight: 500; font-size: 13.5px; }
+  .device-meta { color: var(--text-muted); font-size: 11.5px; margin-top: 1px; }
+
+  .pill {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .pill-active { background: var(--accent-soft); color: var(--accent); }
+  .pill-revoked { background: var(--danger-soft); color: var(--danger); }
+
+  .empty-state {
+    padding: 40px 18px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  /* --- secret reveal --- */
+  .secret-card {
+    margin: 14px 18px 18px;
+    border: 1px solid var(--warning);
+    background: var(--warning-soft);
+    border-radius: 9px;
+    padding: 14px 16px;
+    animation: reveal-in 0.22s ease;
+  }
+  @keyframes reveal-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .secret-card { animation: none; }
+  }
+  .secret-card .warn-label {
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--warning);
+    margin-bottom: 8px;
+  }
+  .secret-value-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .secret-value {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 12.5px;
+    word-break: break-all;
+  }
+  .secret-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 8px;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(0);
+    background: var(--text);
+    color: var(--bg);
+    font-size: 12.5px;
+    font-weight: 500;
+    padding: 8px 14px;
+    border-radius: 999px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-6px);
+  }
+
+  [hidden] { display: none !important; }
+</style>
+
+<div id="gate">
+  <h1>Panel de dispositivos</h1>
+  <p>Ingresá el código de administrador para continuar.</p>
+  <div class="error" id="gate-error"></div>
+  <input type="text" id="gate-input" placeholder="Código de administrador" autocomplete="off">
+  <button class="btn-primary" id="gate-submit" style="width:100%">Entrar</button>
+</div>
+
+<div class="shell" id="app" hidden>
+  <header class="top">
+    <div class="id">
+      <h1>Panel de dispositivos</h1>
+      <span class="subtitle">control-acceso-nube</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span class="project-tag">xidaepyaljzkpbsxrqsm</span>
+      <button class="btn-ghost" id="btn-logout" style="font-size:12px; padding:5px 10px;">Salir</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="panel-header"><h2>Dar de alta un dispositivo</h2></div>
+      <form class="provision" id="form-provision">
+        <div>
+          <label for="f-sitio">Sitio</label>
+          <input type="text" id="f-sitio" placeholder="ej. Brisas" required>
+        </div>
+        <div>
+          <label for="f-direccion">Dirección</label>
+          <input type="text" id="f-direccion" placeholder="ej. San Rafael">
+        </div>
+        <div>
+          <label for="f-tipo">Tipo de dispositivo</label>
+          <select id="f-tipo">
+            <option value="pc">PC</option>
+            <option value="mobile">Celular</option>
+          </select>
+        </div>
+        <div>
+          <label for="f-etiqueta">Etiqueta</label>
+          <input type="text" id="f-etiqueta" placeholder="ej. Brisas - PC recepción" required>
+        </div>
+        <div class="field-error" id="form-error"></div>
+        <button type="submit" class="btn-primary" id="btn-provision">Generar credencial</button>
+      </form>
+      <div id="secret-slot"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Sitios y dispositivos</h2>
+        <button class="btn-ghost" id="btn-refresh" style="font-size:12px; padding:5px 10px;">Actualizar</button>
+      </div>
+      <div class="sites" id="sites-list">
+        <div class="empty-state">Cargando…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const FN_BASE = "https://xidaepyaljzkpbsxrqsm.supabase.co/functions/v1";
+  const STORAGE_KEY = "control-acceso-admin-key";
+
+  const $ = (sel) => document.querySelector(sel);
+
+  const iconPc = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg>';
+  const iconMobile = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg>';
+
+  function showToast(msg) {
+    const t = $("#toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    setTimeout(() => t.classList.remove("show"), 1800);
+  }
+
+  function adminKey() {
+    try { return localStorage.getItem(STORAGE_KEY) || ""; } catch { return ""; }
+  }
+
+  async function callFn(name, opts = {}) {
+    const res = await fetch(`${FN_BASE}/${name}`, {
+      method: opts.method || "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-key": adminKey(),
+      },
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `error_${res.status}`);
+    return data;
+  }
+
+  function fmtDate(iso) {
+    const d = new Date(iso);
+    return d.toLocaleDateString("es-CR", { day: "2-digit", month: "short" }) + " " +
+      d.toLocaleTimeString("es-CR", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  async function loadList() {
+    const listEl = $("#sites-list");
+    try {
+      const { sitios, dispositivos } = await callFn("admin-list-devices");
+      if (!sitios.length) {
+        listEl.innerHTML = '<div class="empty-state">Todavía no hay sitios dados de alta.<br>Creá el primer dispositivo desde el formulario.</div>';
+        return;
+      }
+      listEl.innerHTML = sitios.map((sitio) => {
+        const devs = dispositivos.filter((d) => d.sitio_id === sitio.id);
+        const rows = devs.length
+          ? devs.map((d) => `
+            <div class="device-row">
+              <div class="device-icon">${d.tipo === "pc" ? iconPc : iconMobile}</div>
+              <div>
+                <div class="device-label">${escapeHtml(d.etiqueta)}</div>
+                <div class="device-meta mono">${fmtDate(d.created_at)}</div>
+              </div>
+              <span class="pill ${d.revoked_at ? "pill-revoked" : "pill-active"}">${d.revoked_at ? "Revocado" : "Activo"}</span>
+              <span></span>
+              ${d.revoked_at ? "" : `<button class="btn-danger-ghost" data-revoke="${d.id}">Revocar</button>`}
+            </div>`).join("")
+          : '<div class="empty-state" style="padding:16px 18px;">Sin dispositivos todavía.</div>';
+        return `
+          <div class="site-block">
+            <div class="site-head">
+              <span class="name">${escapeHtml(sitio.nombre)}</span>
+              ${sitio.direccion ? `<span class="addr">${escapeHtml(sitio.direccion)}</span>` : ""}
+              <span class="count">${devs.length} dispositivo${devs.length === 1 ? "" : "s"}</span>
+            </div>
+            ${rows}
+          </div>`;
+      }).join("");
+
+      listEl.querySelectorAll("[data-revoke]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          btn.disabled = true;
+          try {
+            await callFn("admin-revoke-device", { method: "POST", body: { dispositivo_id: btn.dataset.revoke } });
+            showToast("Dispositivo revocado");
+            loadList();
+          } catch (e) {
+            showToast("No se pudo revocar: " + e.message);
+            btn.disabled = false;
+          }
+        });
+      });
+    } catch (e) {
+      listEl.innerHTML = `<div class="empty-state">No se pudo cargar la lista (${escapeHtml(e.message)}).</div>`;
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  $("#form-provision").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("#btn-provision");
+    const errEl = $("#form-error");
+    errEl.textContent = "";
+    const sitio_nombre = $("#f-sitio").value.trim();
+    const etiqueta = $("#f-etiqueta").value.trim();
+    if (!sitio_nombre || !etiqueta) {
+      errEl.textContent = "Completá sitio y etiqueta.";
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = "Generando…";
+    try {
+      const data = await callFn("admin-provision-device", {
+        method: "POST",
+        body: {
+          sitio_nombre,
+          sitio_direccion: $("#f-direccion").value.trim(),
+          tipo: $("#f-tipo").value,
+          etiqueta,
+        },
+      });
+      $("#secret-slot").innerHTML = `
+        <div class="secret-card">
+          <div class="warn-label">Se muestra una sola vez — copiala ahora</div>
+          <div class="secret-value-row">
+            <div class="secret-value mono" id="secret-text">${escapeHtml(data.secret)}</div>
+            <button class="btn-ghost" id="btn-copy-secret" style="white-space:nowrap;">Copiar</button>
+          </div>
+          <div class="secret-hint">Pegala en la app del dispositivo "${escapeHtml($("#f-etiqueta").value.trim())}". No vas a poder volver a verla acá.</div>
+        </div>`;
+      $("#btn-copy-secret").addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(data.secret);
+          showToast("Copiado");
+        } catch {
+          showToast("No se pudo copiar automáticamente");
+        }
+      });
+      $("#form-provision").reset();
+      $("#f-tipo").value = "pc";
+      loadList();
+    } catch (err) {
+      errEl.textContent = "No se pudo crear: " + err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Generar credencial";
+    }
+  });
+
+  $("#btn-refresh").addEventListener("click", loadList);
+
+  $("#btn-logout").addEventListener("click", () => {
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    location.reload();
+  });
+
+  async function tryEnter(key) {
+    const errEl = $("#gate-error");
+    errEl.textContent = "";
+    try {
+      localStorage.setItem(STORAGE_KEY, key);
+    } catch {}
+    try {
+      await callFn("admin-list-devices");
+      $("#gate").hidden = true;
+      $("#app").hidden = false;
+      loadList();
+    } catch (e) {
+      errEl.textContent = e.message === "unauthorized" ? "Código incorrecto." : "No se pudo conectar (" + e.message + ").";
+      try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    }
+  }
+
+  $("#gate-submit").addEventListener("click", () => {
+    const v = $("#gate-input").value.trim();
+    if (v) tryEnter(v);
+  });
+  $("#gate-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $("#gate-submit").click();
+  });
+
+  (function init() {
+    const saved = adminKey();
+    if (saved) tryEnter(saved);
+  })();
+</script>
