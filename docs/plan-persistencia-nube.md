@@ -3,7 +3,59 @@
 > Documento de continuidad para retomar esta conversación en otra sesión
 > (VS Code). Recoge lo que ya se discutió y, sobre todo, la pregunta de
 > arquitectura que quedó sin resolver antes de escribir una sola línea de
-> código. Nada de lo de acá está implementado.
+> código.
+
+## Estado actual (sesión 2026-09-02, segunda parte): ya hay receptor real
+
+Dejó de ser "sin código todavía". Ya existe un proyecto Supabase real
+funcionando de punta a punta para el caso de un sitio (Brisas):
+
+- **Proyecto**: `control-acceso-nube` (`project_ref: xidaepyaljzkpbsxrqsm`),
+  plan gratis, región `us-east-1`. Administrado vía MCP de Supabase
+  configurado en `.mcp.json` / `.vscode/mcp.json` (ambos gitignored),
+  restringido a este proyecto con `?project_ref=...`.
+- **Esquema aplicado**: tablas `sitios`, `dispositivos`, `contratistas`
+  (espejo), `ingresos` (cola, con columna `version` para el control de
+  concurrencia optimista "primero en llegar gana"). RLS activado en las
+  cuatro, con políticas que limitan cada dispositivo autenticado a los
+  datos de su propio `sitio_id` (probado: un dispositivo de Brisas no
+  puede leer datos de otro sitio — devuelve vacío, no error). `ingresos`
+  y `contratistas` agregadas a la publicación de Realtime.
+- **Autenticación de dispositivo**: en vez del JWT Secret legado (HS256,
+  ya no recomendado), se usa el sistema nuevo de **JWT Signing Keys**
+  asimétricas (ES256) de Supabase — la clave privada se generó localmente
+  (nunca la tuvo Supabase ni viajó por red hasta importarla a mano desde
+  el dashboard) y quedó activa como clave de firma del proyecto. Se
+  guardó también como secreto de Edge Function (`DEVICE_SIGNING_KEY`).
+- **Edge Function `device-auth`** (desplegada, `verify_jwt: false` porque
+  es la puerta de entrada antes de tener token): recibe `{ secret }`,
+  calcula su hash SHA-256, busca el dispositivo por `secret_hash` (sin
+  RLS, con `service_role`), y si existe y no está revocado firma un JWT
+  ES256 con `role: authenticated`, `sub: dispositivo_id`, y el claim
+  custom `sitio_id` — probado de punta a punta con curl.
+- Cada dispositivo tiene su propio secreto aleatorio de alta entropía
+  (no derivado de datos públicos), hasheado en la base — nunca en texto
+  plano.
+
+## Pendiente para la próxima sesión
+
+1. **Panel de alta de dispositivos**: hoy la creación de un dispositivo
+   (generar secreto + insertarlo hasheado) se hizo a mano por SQL vía
+   MCP para la prueba. Falta el formulario real (la "mini web" para
+   administradores) — o, como paso intermedio más simple, una Edge
+   Function de alta que haga lo mismo sin exponer acceso directo a SQL.
+2. **Regla de conflicto "primero en llegar gana"** para cerrar un
+   ingreso: la columna `version` ya existe, pero falta escribir el
+   `UPDATE ... WHERE id = ... AND version = ... AND hora_salida IS NULL`
+   como parte del flujo real (probablemente dentro de una Edge Function
+   `cerrar-ingreso`, no un UPDATE directo del cliente) y probarlo con dos
+   "dispositivos" a la vez.
+3. **Bandeja de salida (outbox) en SQLite local**: todavía no existe en
+   el núcleo Rust — es la pieza que le falta al lado del dispositivo para
+   poder hablar con todo esto.
+4. Conectar el core Rust (`control_acceso`) con este receptor: cliente
+   HTTP compartido, primero para el flujo de auth (`device-auth`) y
+   después para subir/bajar la cola real.
 
 ## Por qué existe este documento
 
