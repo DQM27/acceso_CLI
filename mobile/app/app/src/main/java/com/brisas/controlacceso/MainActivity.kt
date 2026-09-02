@@ -1,62 +1,24 @@
 package com.brisas.controlacceso
 
-// NOTA DE ARQUITECTURA — leer mobile/app/ARQUITECTURA.md antes de tocar
-// este archivo. `PantallaLogin` guarda sesión/error con `remember` y llama
-// a `Nucleo.autenticar` directo desde el Composable: es el patrón MVP que
-// ese documento pide dejar de repetir. Al tocar login por cualquier otro
-// motivo, extraer un `LoginViewModel` (estado + `autenticar()`) en vez de
-// agregar más lógica aquí.
-
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.unit.dp
 import java.io.File
 import uniffi.control_acceso_mobile.Nucleo
-import uniffi.control_acceso_mobile.NucleoException
-import uniffi.control_acceso_mobile.RolUsuario
-import uniffi.control_acceso_mobile.UsuarioSesion
 
-// El Nucleo abre la única conexión SQLite del teléfono una sola vez al
-// arrancar la app y se reusa en todas las pantallas — ver
-// docs/plan-app-movil.md ("Toda la lógica de negocio corre en el teléfono").
+/// Punto de entrada de la app. Abre la única conexión SQLite del teléfono
+/// una sola vez al arrancar — ver docs/plan-app-movil.md ("Toda la lógica
+/// de negocio corre en el teléfono") — y la reusa en todas las pantallas
+/// vía [PantallaLogin], que nunca la reabre.
+///
+/// El login (`PantallaLogin.kt`) y la navegación principal
+/// (`PantallaPrincipal.kt`) viven en sus propios archivos — este sólo
+/// arranca la Activity.
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,202 +31,6 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background,
                 ) {
                     PantallaLogin(nucleo)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun PantallaLogin(nucleo: Nucleo) {
-    var cedula by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
-    var sesion by remember { mutableStateOf<UsuarioSesion?>(null) }
-
-    val sesionActual = sesion
-    if (sesionActual != null) {
-        PantallaPrincipal(
-            nucleo = nucleo,
-            sesion = sesionActual,
-            onCerrarSesion = {
-                nucleo.cerrarSesion()
-                sesion = null
-                cedula = ""
-                password = ""
-            },
-        )
-        return
-    }
-
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Image(
-            painter = painterResource(id = R.drawable.marca),
-            contentDescription = null,
-            modifier = Modifier.size(96.dp).clip(RoundedCornerShape(20.dp)),
-        )
-
-        Text(
-            "Control de acceso",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 16.dp),
-        )
-        Text(
-            "Brisas",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        OutlinedTextField(
-            value = cedula,
-            onValueChange = { cedula = it },
-            label = { Text("Cédula") },
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                focusedLabelColor = MaterialTheme.colorScheme.primary,
-            ),
-            modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
-        )
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Contraseña") },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                focusedLabelColor = MaterialTheme.colorScheme.primary,
-            ),
-            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-        )
-        Button(
-            onClick = {
-                error = null
-                try {
-                    sesion = nucleo.autenticar(cedula, password)
-                } catch (excepcion: NucleoException) {
-                    error = excepcion.message
-                }
-            },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ),
-            modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-        ) {
-            Text("Ingresar")
-        }
-
-        val mensajeError = error
-        if (mensajeError != null) {
-            Text(
-                mensajeError,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 16.dp),
-            )
-        }
-    }
-}
-
-/// Sólo las pantallas de uso frecuente son pestañas (Activos, Historial) —
-/// las de creación (uso esporádico: dar de alta un contratista, empresa o
-/// usuario nuevos) viven detrás del botón "+", no compitiendo por espacio en
-/// la barra de pestañas. `Principal` es la única bandera "no es pantalla de
-/// creación" — qué pestaña se ve la decide el `pestana` local más abajo.
-private sealed class Pantalla {
-    data object Principal : Pantalla()
-
-    data object NuevoContratista : Pantalla()
-
-    data object NuevaEmpresa : Pantalla()
-
-    data object NuevoUsuario : Pantalla()
-}
-
-@Composable
-fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, onCerrarSesion: () -> Unit) {
-    var pantalla by remember { mutableStateOf<Pantalla>(Pantalla.Principal) }
-    var menuCreacionAbierto by remember { mutableStateOf(false) }
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                sesion.nombre,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            Row {
-                androidx.compose.foundation.layout.Box {
-                    IconButton(onClick = { menuCreacionAbierto = true }) {
-                        Icon(Icons.Default.Add, contentDescription = "Crear")
-                    }
-                    DropdownMenu(expanded = menuCreacionAbierto, onDismissRequest = { menuCreacionAbierto = false }) {
-                        DropdownMenuItem(
-                            text = { Text("Nuevo contratista") },
-                            onClick = {
-                                menuCreacionAbierto = false
-                                pantalla = Pantalla.NuevoContratista
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Nueva empresa") },
-                            onClick = {
-                                menuCreacionAbierto = false
-                                pantalla = Pantalla.NuevaEmpresa
-                            },
-                        )
-                        // Sólo Root/Administrador — espejo de
-                        // Operacion::GestionarUsuarios (domain/autorizacion.rs).
-                        // Rust vuelve a exigirlo del lado real; esto es sólo
-                        // para no ofrecerle a un Operador un botón que va a
-                        // fallar.
-                        if (sesion.rol != RolUsuario.OPERADOR) {
-                            DropdownMenuItem(
-                                text = { Text("Nuevo usuario") },
-                                onClick = {
-                                    menuCreacionAbierto = false
-                                    pantalla = Pantalla.NuevoUsuario
-                                },
-                            )
-                        }
-                    }
-                }
-                TextButton(onClick = onCerrarSesion) {
-                    Text("Salir")
-                }
-            }
-        }
-
-        when (val actual = pantalla) {
-            is Pantalla.NuevoContratista, is Pantalla.NuevaEmpresa, is Pantalla.NuevoUsuario -> {
-                TextButton(onClick = { pantalla = Pantalla.Principal }, modifier = Modifier.padding(start = 8.dp)) {
-                    Text("← Volver")
-                }
-                when (actual) {
-                    is Pantalla.NuevoContratista -> PantallaNuevoContratista(nucleo)
-                    is Pantalla.NuevaEmpresa -> PantallaNuevaEmpresa(nucleo)
-                    else -> PantallaNuevoUsuario(nucleo)
-                }
-            }
-            else -> {
-                var pestana by remember { mutableIntStateOf(0) }
-                PrimaryTabRow(selectedTabIndex = pestana) {
-                    Tab(selected = pestana == 0, onClick = { pestana = 0 }, text = { Text("Activos") })
-                    Tab(selected = pestana == 1, onClick = { pestana = 1 }, text = { Text("Historial") })
-                }
-                when (pestana) {
-                    0 -> PantallaActivos(nucleo)
-                    else -> PantallaHistorial(nucleo)
                 }
             }
         }
