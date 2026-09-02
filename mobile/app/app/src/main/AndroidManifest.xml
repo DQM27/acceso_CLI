@@ -1,7 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- La base de datos local trae cédulas, hashes de contraseña e
+         historial de accesos. Con allowBackup=true (el default), Android
+         la incluye sin avisar en el backup automático a la cuenta de
+         Google y en la transferencia de datos a un teléfono nuevo — para
+         una app atada a un dispositivo específico eso es una fuga de PII
+         real, no un beneficio. Si algún día hace falta backup parcial
+         (ej. preferencias, no la base), usar dataExtractionRules en vez
+         de reactivar esto entero. -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="Brisas Control de Acceso"
