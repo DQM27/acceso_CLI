@@ -50,7 +50,7 @@ pub fn guardar_secreto_dispositivo(
     let actor = state.sesion_activa()?;
     state
         .core()
-        .guardar_secreto_dispositivo(&actor, &secreto)
+        .guardar_secreto_dispositivo(&actor, None, &secreto)
         .map_err(|error| error.to_string())
 }
 
@@ -61,7 +61,7 @@ pub fn secreto_dispositivo_guardado(state: tauri::State<GuiState>) -> Result<boo
     let actor = state.sesion_activa()?;
     state
         .core()
-        .secreto_dispositivo_guardado(&actor)
+        .secreto_dispositivo_guardado(&actor, None)
         .map_err(|error| error.to_string())
 }
 

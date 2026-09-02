@@ -22,7 +22,7 @@ path = "uniffi-bindgen.rs"
 required-features = ["bindgen"]
 
 [dependencies]
-control_acceso = { path = "../..", default-features = false }
+control_acceso = { path = "../..", default-features = false, features = ["nube"] }
 uniffi = "0.32.0"
 thiserror = "2"
 chrono = "0.4.45"

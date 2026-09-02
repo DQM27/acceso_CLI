@@ -1,4 +1,4 @@
-//! Herramienta de desarrollo: crea una base SQLite con el esquema real
+//! Herramienta de desarrollo: crea una base `SQLite` con el esquema real
 //! (mismas migraciones que TUI/GUI/móvil) y la llena con datos de prueba —
 //! los contratistas reales de `importar_contratistas_db_browser.sql`, un
 //! usuario ROOT de acceso rápido, y un catálogo de 25 gafetes (el SQL de

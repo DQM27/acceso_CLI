@@ -5,6 +5,8 @@
 use std::sync::Mutex;
 
 use control_acceso::application::AppCore;
+use control_acceso::application::GestionNubeError as GestionNubeErrorNucleo;
+use control_acceso::application::ResumenSincronizacion as ResumenSincronizacionNucleo;
 use control_acceso::database::queries::contratistas::{
     ContratistaResumen as ContratistaResumenNucleo, FiltroContratistas as FiltroContratistasNucleo,
 };
@@ -20,6 +22,7 @@ use control_acceso::domain::resultado_acceso::{
     MotivoDenegacion as MotivoDenegacionNucleo, ResultadoAcceso as ResultadoAccesoNucleo,
 };
 use control_acceso::models::empresa::Empresa as EmpresaNucleo;
+use control_acceso::nube::IngresoRemoto as IngresoRemotoNucleo;
 use control_acceso::models::medio_ingreso::MedioIngreso as MedioIngresoNucleo;
 use control_acceso::models::registro_ingreso::{
     MotivoResultadoIngreso as MotivoResultadoIngresoNucleo,
@@ -445,6 +448,51 @@ pub struct DatosUsuario {
     pub activo: bool,
 }
 
+/// Ver `docs/plan-persistencia-nube.md` y `ResumenSincronizacionNucleo`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ResumenSincronizacion {
+    pub enviados: u32,
+    pub fallidos: u32,
+    pub remotos_abiertos: u32,
+    pub sitio_id: String,
+    pub dispositivo_id: String,
+    pub tipo: String,
+}
+
+impl From<ResumenSincronizacionNucleo> for ResumenSincronizacion {
+    fn from(resumen: ResumenSincronizacionNucleo) -> Self {
+        Self {
+            enviados: resumen.enviados,
+            fallidos: resumen.fallidos,
+            remotos_abiertos: resumen.remotos_abiertos,
+            sitio_id: resumen.sitio_id,
+            dispositivo_id: resumen.dispositivo_id,
+            tipo: resumen.tipo,
+        }
+    }
+}
+
+/// Un ingreso abierto por el otro dispositivo del mismo sitio -- no vive
+/// en el historial de este teléfono, ver `IngresoRemotoNucleo`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct IngresoRemoto {
+    pub uuid: String,
+    pub contratista_nombre: String,
+    pub hora_entrada: String,
+    pub usuario_entrada_nombre: Option<String>,
+}
+
+impl From<IngresoRemotoNucleo> for IngresoRemoto {
+    fn from(remoto: IngresoRemotoNucleo) -> Self {
+        Self {
+            uuid: remoto.uuid,
+            contratista_nombre: remoto.contratista_nombre,
+            hora_entrada: remoto.hora_entrada,
+            usuario_entrada_nombre: remoto.usuario_entrada_nombre,
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 #[uniffi(flat_error)]
 pub enum NucleoError {
@@ -500,6 +548,14 @@ impl From<EmpresaServiceErrorNucleo> for NucleoError {
 
 impl From<UsuarioServiceErrorNucleo> for NucleoError {
     fn from(error: UsuarioServiceErrorNucleo) -> Self {
+        Self::Interno {
+            mensaje: error.to_string(),
+        }
+    }
+}
+
+impl From<GestionNubeErrorNucleo> for NucleoError {
+    fn from(error: GestionNubeErrorNucleo) -> Self {
         Self::Interno {
             mensaje: error.to_string(),
         }
@@ -754,6 +810,69 @@ impl Nucleo {
                 rol: datos.rol.into(),
                 activo: datos.activo,
             },
+        )?)
+    }
+
+    /// Guarda el secreto de este dispositivo, pegado desde el panel de
+    /// administración (mismo mecanismo que la GUI de escritorio, ver
+    /// `docs/plan-persistencia-nube.md`). `directorio` es el mismo que
+    /// Kotlin ya usa para ubicar la base `SQLite` -- Android no tiene
+    /// `%LOCALAPPDATA%`, así que acá no hay resolución automática de ruta.
+    pub fn guardar_secreto_dispositivo(
+        &self,
+        directorio: String,
+        secreto: String,
+    ) -> Result<(), NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self.core_lock().guardar_secreto_dispositivo(
+            &actor,
+            Some(std::path::Path::new(&directorio)),
+            &secreto,
+        )?)
+    }
+
+    /// No revela el secreto -- sólo si ya hay uno guardado.
+    pub fn secreto_dispositivo_guardado(&self, directorio: String) -> Result<bool, NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self
+            .core_lock()
+            .secreto_dispositivo_guardado(&actor, Some(std::path::Path::new(&directorio)))?)
+    }
+
+    /// Autentica este dispositivo, drena la bandeja de salida pendiente y
+    /// refresca la caché de lo que el otro dispositivo del mismo sitio
+    /// tiene abierto ahora mismo.
+    pub fn sincronizar_con_nube(
+        &self,
+        directorio: String,
+    ) -> Result<ResumenSincronizacion, NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self
+            .core_lock()
+            .sincronizar_con_nube(&actor, Some(std::path::Path::new(&directorio)))?
+            .into())
+    }
+
+    /// Lectura pura de la caché local `ingresos_remotos` -- no hace falta
+    /// red para mostrarla, ya la llenó la última `sincronizar_con_nube`.
+    pub fn listar_ingresos_remotos(&self) -> Result<Vec<IngresoRemoto>, NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self
+            .core_lock()
+            .listar_ingresos_remotos(&actor)?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
+    /// Cierra, contra la nube, un ingreso abierto por el otro dispositivo
+    /// del mismo sitio -- nunca toca el historial local de este teléfono.
+    pub fn cerrar_ingreso_remoto(&self, directorio: String, uuid: String) -> Result<(), NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self.core_lock().cerrar_ingreso_remoto(
+            &actor,
+            Some(std::path::Path::new(&directorio)),
+            &uuid,
         )?)
     }
 }

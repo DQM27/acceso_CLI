@@ -31,7 +31,7 @@ pub use historial::{
     exportar_historial_seleccion_con_conexion,
 };
 #[cfg(feature = "nube")]
-pub use nube::GestionNubeError;
+pub use nube::{GestionNubeError, ResumenSincronizacion};
 pub use respaldos::EstadoRespaldoAutomatico;
 
 /// Tope de seguridad para las cargas "todo en un `Vec`" que alimentan AG
