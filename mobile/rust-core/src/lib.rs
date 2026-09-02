@@ -159,7 +159,7 @@ impl From<ContratistaResumenNucleo> for ContratistaResumen {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, uniffi::Enum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum MedioIngreso {
     Caminando,
     Vehiculo,
@@ -183,7 +183,7 @@ impl From<MedioIngresoNucleo> for MedioIngreso {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, uniffi::Enum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum MotivoDenegacion {
     SinAcceso,
     PraindVencido,
@@ -306,7 +306,7 @@ impl From<IngresoActivoResumenNucleo> for IngresoActivoResumen {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct Empresa {
     pub id: i64,
     pub nombre: String,
@@ -338,7 +338,7 @@ pub struct DatosContratista {
     pub tiene_acceso: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, uniffi::Enum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum MotivoResultadoIngreso {
     PraindProximoVencer,
     DatosReconstruidos,
@@ -538,9 +538,9 @@ impl Nucleo {
         cedula: String,
         password: String,
     ) -> Result<UsuarioSesion, NucleoError> {
-        let core = self.core.lock().expect("mutex de AppCore envenenado");
+        let core = self.core_lock();
         let sesion = core.autenticar(&cedula, &password)?;
-        *self.sesion.lock().expect("mutex de sesión envenenado") = Some(sesion.clone());
+        *self.sesion_lock() = Some(sesion.clone());
         Ok(sesion.into())
     }
 
@@ -549,8 +549,7 @@ impl Nucleo {
     /// rechaza PRAIND vencido/ingreso activo aquí, sólo informa; quien llama
     /// (Kotlin) decide si deja continuar mirando los campos ya calculados.
     pub fn preparar_ingreso(&self, contratista_id: i64) -> Result<PreparacionIngreso, NucleoError> {
-        let core = self.core.lock().expect("mutex de AppCore envenenado");
-        Ok(core.preparar_ingreso(contratista_id)?.into())
+        Ok(self.core_lock().preparar_ingreso(contratista_id)?.into())
     }
 
     pub fn registrar_ingreso(
@@ -559,14 +558,9 @@ impl Nucleo {
         medio: MedioIngreso,
         gafete: Option<i64>,
     ) -> Result<ResultadoRegistroEntrada, NucleoError> {
-        let actor = self
-            .sesion
-            .lock()
-            .expect("mutex de sesión envenenado")
-            .clone()
-            .ok_or(NucleoError::NoAutenticado)?;
-        let core = self.core.lock().expect("mutex de AppCore envenenado");
-        Ok(core
+        let actor = self.actor_autenticado()?;
+        Ok(self
+            .core_lock()
             .registrar_ingreso(&actor, contratista_id, medio.into(), gafete)?
             .into())
     }
@@ -586,7 +580,7 @@ impl Nucleo {
     ) -> Result<Vec<ContratistaResumen>, NucleoError> {
         const LIMITE_MOVIL: usize = 30;
 
-        let core = self.core.lock().expect("mutex de AppCore envenenado");
+        let core = self.core_lock();
         let texto_normalizado = texto.trim();
         let filtro = FiltroContratistasNucleo {
             texto: (!texto_normalizado.is_empty()).then(|| texto_normalizado.to_string()),
@@ -615,7 +609,7 @@ impl Nucleo {
     ) -> Result<Vec<IngresoActivoResumen>, NucleoError> {
         const LIMITE_MOVIL: usize = 30;
 
-        let core = self.core.lock().expect("mutex de AppCore envenenado");
+        let core = self.core_lock();
         let texto_normalizado = texto.trim();
         let mut filtro = FiltroIngresosActivosNucleo {
             limite: LIMITE_MOVIL,
@@ -643,19 +637,13 @@ impl Nucleo {
     }
 
     pub fn registrar_salida(&self, registro_id: i64) -> Result<(), NucleoError> {
-        let actor = self
-            .sesion
-            .lock()
-            .expect("mutex de sesión envenenado")
-            .clone()
-            .ok_or(NucleoError::NoAutenticado)?;
-        let core = self.core.lock().expect("mutex de AppCore envenenado");
-        Ok(core.registrar_salida(&actor, registro_id)?)
+        let actor = self.actor_autenticado()?;
+        Ok(self.core_lock().registrar_salida(&actor, registro_id)?)
     }
 
     pub fn listar_empresas(&self) -> Result<Vec<Empresa>, NucleoError> {
-        let core = self.core.lock().expect("mutex de AppCore envenenado");
-        Ok(core
+        Ok(self
+            .core_lock()
             .listar_empresas()?
             .into_iter()
             .map(Into::into)
@@ -668,12 +656,7 @@ impl Nucleo {
     /// a correr en Rust (`ContratistaService::crear`); esto no duplica esa
     /// lógica, sólo convierte tipos en la frontera uniffi.
     pub fn crear_contratista(&self, datos: DatosContratista) -> Result<i64, NucleoError> {
-        let actor = self
-            .sesion
-            .lock()
-            .expect("mutex de sesión envenenado")
-            .clone()
-            .ok_or(NucleoError::NoAutenticado)?;
+        let actor = self.actor_autenticado()?;
 
         let fecha_vencimiento_praind = datos
             .fecha_vencimiento_praind
@@ -684,8 +667,7 @@ impl Nucleo {
             })
             .transpose()?;
 
-        let core = self.core.lock().expect("mutex de AppCore envenenado");
-        Ok(core.crear_contratista(
+        Ok(self.core_lock().crear_contratista(
             &actor,
             DatosContratistaNucleo {
                 cedula: datos.cedula,
@@ -700,14 +682,8 @@ impl Nucleo {
     }
 
     pub fn crear_empresa(&self, nombre: String) -> Result<i64, NucleoError> {
-        let actor = self
-            .sesion
-            .lock()
-            .expect("mutex de sesión envenenado")
-            .clone()
-            .ok_or(NucleoError::NoAutenticado)?;
-        let core = self.core.lock().expect("mutex de AppCore envenenado");
-        Ok(core.crear_empresa(&actor, &nombre)?)
+        let actor = self.actor_autenticado()?;
+        Ok(self.core_lock().crear_empresa(&actor, &nombre)?)
     }
 
     /// Sólo olvida el actor en memoria — el `AppCore`/la conexión `SQLite`
@@ -715,7 +691,7 @@ impl Nucleo {
     /// `Nucleo::autenticar` pueda loguear al siguiente usuario sin
     /// reabrir la base.
     pub fn cerrar_sesion(&self) {
-        *self.sesion.lock().expect("mutex de sesión envenenado") = None;
+        *self.sesion_lock() = None;
     }
 
     /// Últimos 6 meses por defecto — mismo default que
@@ -726,7 +702,7 @@ impl Nucleo {
     pub fn buscar_historial(&self, texto: String) -> Result<Vec<MovimientoHistorial>, NucleoError> {
         const LIMITE_MOVIL: usize = 30;
 
-        let core = self.core.lock().expect("mutex de AppCore envenenado");
+        let core = self.core_lock();
         let ahora = chrono::Utc::now();
         let desde = ahora - chrono::Duration::days(30 * 6);
         // `hasta` es un límite exclusivo — dejarlo exactamente en "ahora"
@@ -748,13 +724,8 @@ impl Nucleo {
 
     /// Sólo Root/Administrador — ver el doc-comment de `UsuarioResumen`.
     pub fn listar_usuarios(&self, texto: String) -> Result<Vec<UsuarioResumen>, NucleoError> {
-        let actor = self
-            .sesion
-            .lock()
-            .expect("mutex de sesión envenenado")
-            .clone()
-            .ok_or(NucleoError::NoAutenticado)?;
-        let core = self.core.lock().expect("mutex de AppCore envenenado");
+        let actor = self.actor_autenticado()?;
+        let core = self.core_lock();
         let texto_normalizado = texto.trim();
         let filtro = FiltroUsuariosNucleo {
             texto: (!texto_normalizado.is_empty()).then(|| texto_normalizado.to_string()),
@@ -773,14 +744,8 @@ impl Nucleo {
     /// (`puede_gestionar_usuario`). Kotlin oculta el menú para Operador
     /// como atajo de UX, no como el control real.
     pub fn crear_usuario(&self, datos: DatosUsuario) -> Result<i64, NucleoError> {
-        let actor = self
-            .sesion
-            .lock()
-            .expect("mutex de sesión envenenado")
-            .clone()
-            .ok_or(NucleoError::NoAutenticado)?;
-        let core = self.core.lock().expect("mutex de AppCore envenenado");
-        Ok(core.crear_usuario(
+        let actor = self.actor_autenticado()?;
+        Ok(self.core_lock().crear_usuario(
             &actor,
             CrearUsuarioInputNucleo {
                 cedula: datos.cedula,
@@ -790,6 +755,28 @@ impl Nucleo {
                 activo: datos.activo,
             },
         )?)
+    }
+}
+
+impl Nucleo {
+    /// Recupera el guard aunque el mutex haya quedado "envenenado" (un
+    /// panic anterior mientras alguien lo sostenía) en vez de propagar ese
+    /// panic a cada llamada futura — con `uniffi` cada método público es una
+    /// frontera FFI: un solo bug de una llamada no debe dejar inservibles
+    /// todas las demás pantallas hasta reiniciar la app. `AppCore` no deja
+    /// datos a medio escribir visibles tras un panic a mitad de operación
+    /// (`SQLite` ya maneja sus propias transacciones), así que el estado
+    /// recuperado sigue siendo válido para seguir operando.
+    fn core_lock(&self) -> std::sync::MutexGuard<'_, AppCore> {
+        self.core.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn sesion_lock(&self) -> std::sync::MutexGuard<'_, Option<UsuarioSesionNucleo>> {
+        self.sesion.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn actor_autenticado(&self) -> Result<UsuarioSesionNucleo, NucleoError> {
+        self.sesion_lock().clone().ok_or(NucleoError::NoAutenticado)
     }
 }
 
@@ -846,7 +833,7 @@ mod tests {
                  ) VALUES ('111111111', 'Contratista Test', 1, 'SWAT', 0, 1);
                  INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
                      '999999999', 'Actor Test',
-                     '$argon2id$v=19$m=19456,t=2,p=1$FZShq0MtV2bGh9nFBgvrGA$dYNDyh7up/wmAY+t/Vf6V5LTCS9sNkQgaH81G650xfM',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
                      'ROOT', 1
                  );",
             )
@@ -855,7 +842,7 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "daniel27".to_string())
+            .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
             .unwrap();
 
         let preparacion = nucleo.preparar_ingreso(1).unwrap();
@@ -882,7 +869,7 @@ mod tests {
                  ) VALUES ('111111111', 'Contratista Test', 1, 'SWAT', 0, 1);
                  INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
                      '999999999', 'Actor Test',
-                     '$argon2id$v=19$m=19456,t=2,p=1$FZShq0MtV2bGh9nFBgvrGA$dYNDyh7up/wmAY+t/Vf6V5LTCS9sNkQgaH81G650xfM',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
                      'ROOT', 1
                  );",
             )
@@ -891,7 +878,7 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "daniel27".to_string())
+            .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
             .unwrap();
         let registro = nucleo
             .registrar_ingreso(1, MedioIngreso::Caminando, None)
@@ -932,7 +919,7 @@ mod tests {
                  INSERT INTO gafetes (numero, estado) VALUES (7, 'DISPONIBLE');
                  INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
                      '999999999', 'Actor Test',
-                     '$argon2id$v=19$m=19456,t=2,p=1$FZShq0MtV2bGh9nFBgvrGA$dYNDyh7up/wmAY+t/Vf6V5LTCS9sNkQgaH81G650xfM',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
                      'ROOT', 1
                  );",
             )
@@ -941,7 +928,7 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "daniel27".to_string())
+            .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
             .unwrap();
         nucleo
             .registrar_ingreso(1, MedioIngreso::Caminando, Some(7))
@@ -975,7 +962,7 @@ mod tests {
                 "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
                  INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
                      '999999999', 'Actor Test',
-                     '$argon2id$v=19$m=19456,t=2,p=1$FZShq0MtV2bGh9nFBgvrGA$dYNDyh7up/wmAY+t/Vf6V5LTCS9sNkQgaH81G650xfM',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
                      'ROOT', 1
                  );",
             )
@@ -984,7 +971,7 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "daniel27".to_string())
+            .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
             .unwrap();
 
         let empresas = nucleo.listar_empresas().unwrap();
@@ -1020,7 +1007,7 @@ mod tests {
                 "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
                  INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
                      '999999999', 'Actor Test',
-                     '$argon2id$v=19$m=19456,t=2,p=1$FZShq0MtV2bGh9nFBgvrGA$dYNDyh7up/wmAY+t/Vf6V5LTCS9sNkQgaH81G650xfM',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
                      'ROOT', 1
                  );",
             )
@@ -1029,7 +1016,7 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "daniel27".to_string())
+            .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
             .unwrap();
 
         let resultado = nucleo.crear_contratista(DatosContratista {
@@ -1054,7 +1041,7 @@ mod tests {
             .execute_batch(
                 "INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
                      '999999999', 'Actor Test',
-                     '$argon2id$v=19$m=19456,t=2,p=1$FZShq0MtV2bGh9nFBgvrGA$dYNDyh7up/wmAY+t/Vf6V5LTCS9sNkQgaH81G650xfM',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
                      'ROOT', 1
                  );",
             )
@@ -1063,7 +1050,7 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "daniel27".to_string())
+            .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
             .unwrap();
 
         let id = nucleo.crear_empresa("Empresa Nueva".to_string()).unwrap();
@@ -1088,7 +1075,7 @@ mod tests {
                  ) VALUES ('111111111', 'Contratista Test', 1, 'SWAT', 0, 1);
                  INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
                      '999999999', 'Actor Test',
-                     '$argon2id$v=19$m=19456,t=2,p=1$FZShq0MtV2bGh9nFBgvrGA$dYNDyh7up/wmAY+t/Vf6V5LTCS9sNkQgaH81G650xfM',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
                      'ROOT', 1
                  );",
             )
@@ -1097,7 +1084,7 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "daniel27".to_string())
+            .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
             .unwrap();
         nucleo
             .registrar_ingreso(1, MedioIngreso::Caminando, None)
@@ -1118,12 +1105,12 @@ mod tests {
             .execute_batch(
                 "INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
                      '999999999', 'Root Test',
-                     '$argon2id$v=19$m=19456,t=2,p=1$FZShq0MtV2bGh9nFBgvrGA$dYNDyh7up/wmAY+t/Vf6V5LTCS9sNkQgaH81G650xfM',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
                      'ROOT', 1
                  );
                  INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
                      '888888888', 'Operador Test',
-                     '$argon2id$v=19$m=19456,t=2,p=1$FZShq0MtV2bGh9nFBgvrGA$dYNDyh7up/wmAY+t/Vf6V5LTCS9sNkQgaH81G650xfM',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
                      'OPERADOR', 1
                  );",
             )
@@ -1132,7 +1119,7 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "daniel27".to_string())
+            .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
             .unwrap();
 
         let id = nucleo
@@ -1151,7 +1138,7 @@ mod tests {
 
         nucleo.cerrar_sesion();
         nucleo
-            .autenticar("888888888".to_string(), "daniel27".to_string())
+            .autenticar("888888888".to_string(), "clave_prueba_123".to_string())
             .unwrap();
 
         let resultado = nucleo.listar_usuarios(String::new());
