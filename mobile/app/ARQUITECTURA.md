@@ -163,3 +163,20 @@ ViewModel**: `PantallaPrincipal` (qué pestaña se ve, si el menú "+" está
 abierto) se quedó en `remember` a propósito — es navegación pura, sin
 llamada a `Nucleo` ni regla de negocio detrás, así que un ViewModel ahí no
 protegería nada real.
+
+`PantallaConfirmarIngreso.kt` (2026-09-02) es el tercer ejemplo — y el
+importante para no aplicar la regla en automático: **esta sí llama a
+`Nucleo` y sí tiene validación real, y aun así se queda sin ViewModel**.
+La razón es específica de esta app: como no usa Navigation-Compose, todos
+los `viewModel()` de cualquier pantalla comparten el mismo dueño (la
+Activity) — un `ViewModel` sobrevive aunque el Composable se desmonte. Acá
+eso es un problema, no una ventaja: `ActivosViewModel` desmonta esta
+pantalla por completo al cancelar o confirmar (vuelve a
+`SeleccionIngreso.Ninguna`), así que cada vez que se entra es un intento
+nuevo — un `ViewModel` sin key por intento arrastraría el error/gafete de
+un contratista fallido al formulario del siguiente. `remember`/
+`rememberSaveable` ya dan ese estado "fresco por entrada" gratis, que es
+justo lo que hace falta acá. La regla real no es "ViewModel siempre" — es
+"ViewModel cuando el estado debe sobrevivir más que el Composable actual
+y no hay otro ya dueño de esa decisión (rotación, cambio de pestaña); acá
+`ActivosViewModel` ya es quien decide cuándo esta pantalla vive o muere".
