@@ -1,12 +1,5 @@
 package com.brisas.controlacceso
 
-// NOTA DE ARQUITECTURA — leer mobile/app/ARQUITECTURA.md antes de tocar
-// este archivo. Es la pantalla más chica y la más simple (solo lectura),
-// pero igual llama a `Nucleo.buscarHistorial` y guarda su resultado con
-// `remember` en vez de un ViewModel. Al agregarle algo (paginación, filtro
-// por fecha, exportar), extraer el `HistorialViewModel` en ese momento en
-// vez de seguir creciendo el Composable.
-
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,43 +13,29 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import uniffi.control_acceso_mobile.MovimientoHistorial
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.ResultadoIngresoRegistrado
 
-// Sólo lectura, sin acción — a diferencia de Buscar/Activos no hay nada que
-// confirmar acá. Últimos 6 meses por defecto (mismo criterio que
-// desktop/src/pantallas/Historial.tsx): registro_ingresos crece sin límite,
-// nunca se trae "todo".
+/// Sólo lectura, sin acción — a diferencia de Activos no hay nada que
+/// confirmar acá. Últimos 6 meses por defecto (mismo criterio que
+/// desktop/src/pantallas/Historial.tsx): registro_ingresos crece sin
+/// límite, nunca se trae "todo" (el límite de fecha vive del lado de
+/// `Nucleo.buscarHistorial`, no acá). Todo el estado y la llamada a
+/// [Nucleo] viven en [HistorialViewModel] (ver
+/// mobile/app/ARQUITECTURA.md) — este Composable sólo dibuja.
 @Composable
 fun PantallaHistorial(nucleo: Nucleo) {
-    var texto by remember { mutableStateOf("") }
-    var movimientos by remember { mutableStateOf<List<MovimientoHistorial>>(emptyList()) }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(texto) {
-        try {
-            movimientos = withContext(Dispatchers.Default) { nucleo.buscarHistorial(texto) }
-            error = null
-        } catch (excepcion: Exception) {
-            error = excepcion.message
-        }
-    }
+    val viewModel: HistorialViewModel = viewModel(factory = HistorialViewModel.factory(nucleo))
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         OutlinedTextField(
-            value = texto,
-            onValueChange = { texto = it },
+            value = viewModel.texto,
+            onValueChange = { viewModel.cambiarTexto(it) },
             label = { Text("Cédula o nombre") },
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
@@ -66,7 +45,7 @@ fun PantallaHistorial(nucleo: Nucleo) {
             modifier = Modifier.fillMaxWidth(),
         )
 
-        val mensajeError = error
+        val mensajeError = viewModel.error
         if (mensajeError != null) {
             Text(
                 mensajeError,
@@ -76,7 +55,7 @@ fun PantallaHistorial(nucleo: Nucleo) {
         }
 
         LazyColumn(modifier = Modifier.padding(top = 12.dp)) {
-            items(movimientos, key = { it.registroId }) { movimiento ->
+            items(viewModel.movimientos, key = { it.registroId }) { movimiento ->
                 FilaMovimiento(movimiento)
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline)
             }
