@@ -1,18 +1,12 @@
 package com.brisas.controlacceso
 
-// NOTA DE ARQUITECTURA — leer mobile/app/ARQUITECTURA.md antes de tocar
-// este archivo. Mismo patrón MVP a corregir: estado de formulario y
-// llamada a `Nucleo.registrarIngreso` viven en el Composable. Al tocarlo,
-// mover ese estado a un ViewModel propio (o compartirlo con el de
-// `PantallaActivos.kt`, que es quien lo invoca) en vez de agregarle más
-// campos o validaciones acá directamente.
-
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -39,7 +34,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.MedioIngreso
+import uniffi.control_acceso_mobile.MotivoDenegacion
 import uniffi.control_acceso_mobile.Nucleo
+import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.PreparacionIngreso
 import uniffi.control_acceso_mobile.ResultadoAcceso
 
@@ -60,15 +57,37 @@ fun mensajeBloqueo(preparacion: PreparacionIngreso): String {
     return "No se puede continuar con este contratista."
 }
 
-fun mensajeMotivoDenegacion(motivo: uniffi.control_acceso_mobile.MotivoDenegacion): String =
+fun mensajeMotivoDenegacion(motivo: MotivoDenegacion): String =
     when (motivo) {
-        uniffi.control_acceso_mobile.MotivoDenegacion.SIN_ACCESO -> "Acceso denegado · no tiene acceso autorizado"
-        uniffi.control_acceso_mobile.MotivoDenegacion.PRAIND_VENCIDO -> "Acceso denegado · PRAIND vencido"
-        uniffi.control_acceso_mobile.MotivoDenegacion.PRAIND_NO_REGISTRADO ->
-            "Acceso denegado · PRAIND sin fecha registrada"
-        uniffi.control_acceso_mobile.MotivoDenegacion.EMPRESA_INACTIVA -> "Acceso denegado · la empresa está inactiva"
+        MotivoDenegacion.SIN_ACCESO -> "Acceso denegado · no tiene acceso autorizado"
+        MotivoDenegacion.PRAIND_VENCIDO -> "Acceso denegado · PRAIND vencido"
+        MotivoDenegacion.PRAIND_NO_REGISTRADO -> "Acceso denegado · PRAIND sin fecha registrada"
+        MotivoDenegacion.EMPRESA_INACTIVA -> "Acceso denegado · la empresa está inactiva"
     }
 
+/// A diferencia de `PantallaActivos`/`PantallaLogin`, esta pantalla se
+/// queda con `remember`/`rememberSaveable` en vez de un `ViewModel` — a
+/// propósito, ver mobile/app/ARQUITECTURA.md sobre cuándo uno hace falta y
+/// cuándo no:
+///
+/// El árbol de estados `SeleccionIngreso` en `ActivosViewModel` desmonta
+/// por completo esta pantalla al cancelar o al confirmar (vuelve a
+/// `Ninguna`), así que cada vez que se entra acá es una tentativa nueva —
+/// exactamente el estado "fresco" que ya da gratis `remember` al perderse
+/// junto con la composición. Un `ViewModel`, en cambio, sobrevive aunque el
+/// Composable se desmonte — con el alcance por defecto de esta app (sin
+/// Navigation-Compose, todos los `viewModel()` comparten el mismo dueño:
+/// la Activity) eso arrastraría el `error`/`gafeteTexto` de un intento
+/// fallido con el contratista A a la pantalla del contratista B, salvo que
+/// se le pase una key que distinga cada intento — complejidad real que acá
+/// no compra nada, porque no hay ninguna razón de negocio para que este
+/// formulario sobreviva más que la propia pantalla.
+///
+/// Lo que sí se corrige: `medio`/`gafeteTexto` pasan a `rememberSaveable`
+/// (sobreviven una rotación de pantalla a medio llenar, algo que
+/// `remember` no da) y el `catch` pasa de `Exception` genérico a
+/// [NucleoException] específico — mismo criterio que en los ViewModel de
+/// las otras pantallas.
 @Composable
 fun PantallaConfirmarIngreso(
     nucleo: Nucleo,
@@ -76,8 +95,8 @@ fun PantallaConfirmarIngreso(
     onRegistrado: () -> Unit,
     onCambiar: () -> Unit,
 ) {
-    var medio by remember { mutableStateOf(MedioIngreso.CAMINANDO) }
-    var gafeteTexto by remember { mutableStateOf("") }
+    var medio by rememberSaveable { mutableStateOf(MedioIngreso.CAMINANDO) }
+    var gafeteTexto by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var enviando by remember { mutableStateOf(false) }
     val alcance = rememberCoroutineScope()
@@ -141,7 +160,7 @@ fun PantallaConfirmarIngreso(
                 onValueChange = { gafeteTexto = it.filter(Char::isDigit) },
                 label = { Text("Número de gafete") },
                 singleLine = true,
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                     focusedLabelColor = MaterialTheme.colorScheme.primary,
@@ -175,7 +194,7 @@ fun PantallaConfirmarIngreso(
                             nucleo.registrarIngreso(preparacion.contratistaId, medio, gafete)
                         }
                         onRegistrado()
-                    } catch (excepcion: Exception) {
+                    } catch (excepcion: NucleoException) {
                         error = excepcion.message
                     } finally {
                         enviando = false
