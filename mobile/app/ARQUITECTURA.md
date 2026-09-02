@@ -1,0 +1,128 @@
+# Arquitectura de la app móvil — criterio para mantener en el tiempo
+
+> Diagnóstico honesto (2026-09-02): la app se armó como MVP/piloto, rápido y
+> funcional, sin capa de presentación separada de la lógica de negocio. Sí
+> hizo bien lo importante — reusar el núcleo de Rust sin duplicar reglas,
+> mantener las pantallas simples — pero mezcló responsabilidades dentro de
+> cada `@Composable` de una forma que no escala si el equipo crece o si el
+> alcance crece más allá del piloto actual. Este documento fija el criterio
+> a seguir de ahora en adelante — no es una reescritura inmediata, es la
+> regla contra la que se mide código nuevo y contra la que se refactoriza
+> código viejo la próxima vez que se toque.
+
+## El problema concreto de hoy
+
+Cada pantalla (`Pantalla*.kt`, `MainActivity.kt`) hace **las tres cosas a la
+vez**:
+
+1. Dibuja UI (lo único que un `@Composable` debería hacer).
+2. Guarda y muta estado de negocio (`remember { mutableStateOf(...) }`
+   sosteniendo resultados de búsqueda, sesión, errores).
+3. Llama directo a `Nucleo` (la capa de datos) y decide qué hacer con el
+   resultado o la excepción.
+
+Consecuencias reales, no hipotéticas:
+
+- **`PantallaActivos.kt` pasa de 550 líneas** porque mete 3 modos de
+  búsqueda + llamadas async + manejo de error + UI en una sola función.
+  Un archivo así dejó de ser "una pantalla", es varias responsabilidades
+  disfrazadas de una.
+- **Ningún estado sobrevive rotación de pantalla ni que el sistema mate la
+  Activity en background** (`remember` sin `rememberSaveable`, ver más
+  abajo) — un formulario a medio llenar se pierde solo.
+- **Nada de esto es testeable sin un emulador/dispositivo**, porque la
+  lógica vive pegada a Compose en vez de en una clase de Kotlin normal.
+- **`catch (excepcion: Exception)` genérico** en casi todos lados — un bug
+  real (`NullPointerException`, por ejemplo) se confunde con un error de
+  negocio esperado y se le muestra al guardia como si fuera lo mismo.
+
+Ninguno de estos puntos es un problema del núcleo de Rust (`rust-core/`,
+ya con lints estrictos y tests) — es específicamente cómo Kotlin organiza
+su propio código alrededor de ese núcleo.
+
+## La regla: tres capas, una responsabilidad cada una
+
+```
+Pantalla (@Composable)  →  ViewModel  →  Nucleo (Rust vía uniffi)
+     UI pura              dueño del estado      lógica de negocio real
+   sin lógica            y de las llamadas         (no tocar aquí)
+```
+
+### 1. `Pantalla*.kt` — sólo UI
+
+- Recibe el estado ya resuelto (un `data class`/`sealed class` inmutable) y
+  funciones lambda para reportar eventos (`onBuscar: (String) -> Unit`,
+  `onConfirmar: () -> Unit`). No conoce `Nucleo`, no tiene `try/catch`, no
+  decide qué es un error vs. qué es un dato válido.
+- Si una pantalla necesita más de ~150-200 líneas o mezcla más de un modo
+  de interacción (como los 3 modos de `PantallaActivos.kt`), es la señal
+  de partirla en sub-`@Composable`s más chicos — cada uno con un solo
+  trabajo (la fila de un resultado, el selector de modo, el diálogo de
+  confirmación), no una función gigante con `when`/`if` anidados.
+
+### 2. `*ViewModel.kt` — dueño del estado y de las llamadas a `Nucleo`
+
+- Una clase Kotlin normal (`androidx.lifecycle.ViewModel` — falta agregar
+  la dependencia `androidx.lifecycle:lifecycle-viewmodel-compose` a
+  `app/build.gradle.kts` cuando se haga el primer ViewModel real) por
+  pantalla, o compartido entre pantallas que de verdad comparten estado
+  (ej. la sesión activa).
+- Expone el estado como `StateFlow`/`State` de solo lectura; sólo el
+  ViewModel lo muta. Las llamadas a `Nucleo` corren en `viewModelScope`,
+  no en un `rememberCoroutineScope()` atado al ciclo de vida del
+  Composable — así sobreviven una recomposición o una rotación de
+  pantalla en vez de cancelarse a medio camino.
+- Aquí sí va el `try/catch`, pero **nunca sobre `Exception` genérico** —
+  capturar específicamente `NucleoException` (la única excepción que
+  `Nucleo` puede lanzar legítimamente por una regla de negocio) y mapearla
+  a un estado de error tipado y en español para la UI. Cualquier otra
+  excepción (`NullPointerException`, `IllegalStateException`, etc.) es un
+  bug real y debe propagarse, no esconderse detrás de un mensaje de
+  "error" genérico — así se nota en desarrollo en vez de aparecer como un
+  mensaje confuso en producción.
+- Testeable sin Android: un `ViewModelTest` normal de JUnit puede
+  instanciar el ViewModel con un `Nucleo` de prueba (base SQLite temporal,
+  mismo patrón que ya usan los tests de `rust-core/src/lib.rs`) y verificar
+  el estado que produce, sin inflar UI ni tocar un emulador.
+
+### 3. `Nucleo` (Rust vía uniffi) — la única fuente de verdad de negocio
+
+- No se toca desde Kotlin más que para llamarlo. Ninguna regla de PRAIND,
+  exclusividad de gafetes, ni fechas se reimplementa acá — eso ya está
+  decidido y probado en `rust-core`/`control_acceso`, y así debe seguir
+  (ver `mobile/README.md` y `docs/plan-app-movil.md`).
+
+## Otras reglas concretas, no sólo la separación en capas
+
+- **`rememberSaveable` en vez de `remember`** para cualquier campo de
+  formulario o búsqueda en curso que el usuario esperaría no perder si el
+  teléfono rota o la Activity se recrea. Una vez que el estado vive en un
+  ViewModel (que ya sobrevive rotación por diseño), esto deja de ser
+  necesario ahí — pero sigue aplicando a cualquier estado puramente visual
+  que se quede en el Composable (ej. si un diálogo está abierto).
+- **Nunca loguear ni mostrar el mensaje crudo de una excepción interna al
+  usuario final.** El ViewModel traduce a un mensaje pensado para el
+  guardia, no reenvía `excepcion.message` tal cual.
+- **Un archivo, una responsabilidad.** Si al agregar algo un archivo ya
+  hace dos cosas que no comparten una sola razón para cambiar, es momento
+  de partirlo — no de agregar un parámetro más a una función que ya hace
+  demasiado.
+- **Comentarios sólo para el porqué, nunca para el qué.** Un nombre bien
+  elegido ya dice qué hace algo; un comentario vale cuando explica una
+  decisión no obvia (por qué se descartó una alternativa, una restricción
+  real del dominio) — mismo criterio que ya se sigue en `rust-core` y en
+  `docs/plan-app-movil.md`.
+
+## Cómo aplicar esto sin parar el piloto
+
+No hace falta reescribir las 7 pantallas de una sentada. La regla práctica:
+**la próxima vez que se toque un archivo por cualquier motivo (un bug, una
+pantalla nueva, un pedido del cliente), se extrae su ViewModel como parte
+de ese mismo cambio** — no se agrega código nuevo sobre el patrón viejo.
+Cada archivo de pantalla existente tiene una nota al inicio marcando esto
+explícitamente (ver los propios `.kt`).
+
+Orden sugerido si se decide hacer el refactor de una vez en vez de
+incremental: `PantallaActivos.kt` primero (el más grande y el que más se
+beneficia), después el resto en cualquier orden — no hay dependencias
+reales entre los ViewModels de cada pantalla.

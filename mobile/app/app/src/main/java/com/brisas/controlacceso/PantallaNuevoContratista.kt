@@ -1,5 +1,12 @@
 package com.brisas.controlacceso
 
+// NOTA DE ARQUITECTURA — leer mobile/app/ARQUITECTURA.md antes de tocar
+// este archivo. Formulario con varios campos y validaciones (PRAIND,
+// fecha) resueltas dentro del Composable junto con la llamada a
+// `Nucleo.crearContratista`. Al tocarlo, extraer un
+// `NuevoContratistaViewModel` que sea el dueño real de ese estado y de la
+// validación de fecha — no seguir sumando campos directo acá.
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize

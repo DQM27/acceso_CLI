@@ -1,5 +1,15 @@
 package com.brisas.controlacceso
 
+// NOTA DE ARQUITECTURA — leer mobile/app/ARQUITECTURA.md antes de tocar
+// este archivo. Es el ejemplo principal del problema que ese documento
+// describe: 550+ líneas, 3 modos de búsqueda, llamadas a `Nucleo` y manejo
+// de error mezclados con la UI en un solo Composable. Es el primer
+// candidato sugerido ahí para extraer un `ActivosViewModel` (dueño de
+// `texto`, `modo`, `activos`, `coincidenciasGafete`, `seleccionIngreso` y
+// de las llamadas a `Nucleo`) y partir esta función en sub-Composables por
+// modo. No seguir agregando estado o modos nuevos aquí sin hacer esa
+// extracción primero.
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

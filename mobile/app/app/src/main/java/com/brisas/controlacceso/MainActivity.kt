@@ -1,5 +1,12 @@
 package com.brisas.controlacceso
 
+// NOTA DE ARQUITECTURA — leer mobile/app/ARQUITECTURA.md antes de tocar
+// este archivo. `PantallaLogin` guarda sesión/error con `remember` y llama
+// a `Nucleo.autenticar` directo desde el Composable: es el patrón MVP que
+// ese documento pide dejar de repetir. Al tocar login por cualquier otro
+// motivo, extraer un `LoginViewModel` (estado + `autenticar()`) en vez de
+// agregar más lógica aquí.
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent

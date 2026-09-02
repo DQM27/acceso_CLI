@@ -1,5 +1,12 @@
 package com.brisas.controlacceso
 
+// NOTA DE ARQUITECTURA — leer mobile/app/ARQUITECTURA.md antes de tocar
+// este archivo. Mismo patrón MVP a corregir: estado de formulario y
+// llamada a `Nucleo.registrarIngreso` viven en el Composable. Al tocarlo,
+// mover ese estado a un ViewModel propio (o compartirlo con el de
+// `PantallaActivos.kt`, que es quien lo invoca) en vez de agregarle más
+// campos o validaciones acá directamente.
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize

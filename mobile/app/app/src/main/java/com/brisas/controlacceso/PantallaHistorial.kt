@@ -1,5 +1,12 @@
 package com.brisas.controlacceso
 
+// NOTA DE ARQUITECTURA — leer mobile/app/ARQUITECTURA.md antes de tocar
+// este archivo. Es la pantalla más chica y la más simple (solo lectura),
+// pero igual llama a `Nucleo.buscarHistorial` y guarda su resultado con
+// `remember` en vez de un ViewModel. Al agregarle algo (paginación, filtro
+// por fecha, exportar), extraer el `HistorialViewModel` en ese momento en
+// vez de seguir creciendo el Composable.
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize

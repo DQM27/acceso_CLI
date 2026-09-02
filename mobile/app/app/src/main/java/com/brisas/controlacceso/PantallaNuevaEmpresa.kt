@@ -1,5 +1,10 @@
 package com.brisas.controlacceso
 
+// NOTA DE ARQUITECTURA — leer mobile/app/ARQUITECTURA.md antes de tocar
+// este archivo. Formulario simple, pero mismo patrón a corregir: estado y
+// llamada a `Nucleo.crearEmpresa` en el Composable. Al agregarle campos o
+// validaciones, extraer un `NuevaEmpresaViewModel` en vez de crecer acá.
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth

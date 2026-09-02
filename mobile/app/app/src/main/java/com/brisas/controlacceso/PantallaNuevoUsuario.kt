@@ -1,5 +1,13 @@
 package com.brisas.controlacceso
 
+// NOTA DE ARQUITECTURA — leer mobile/app/ARQUITECTURA.md antes de tocar
+// este archivo. Mismo patrón a corregir: estado del formulario y llamada
+// a `Nucleo.crearUsuario` en el Composable, con el gateo por rol
+// (Root/Administrador) resuelto ahí mismo como atajo de UX — la regla
+// real ya vive en Rust (ver el comentario de `crear_usuario` en
+// mobile/rust-core/src/lib.rs), esto solo oculta el menú. Al tocarlo,
+// extraer un `NuevoUsuarioViewModel`.
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
