@@ -179,6 +179,30 @@ fn exigir_2xx(respuesta: reqwest::blocking::Response) -> Result<(), Sincronizaci
     Err(SincronizacionError::RespuestaInesperada { status, cuerpo })
 }
 
+/// `GET` autenticado + deserializar la lista de filas -- compartido por
+/// todo lo que trae datos de la nube hacia acá (`recibir_ingresos_abiertos`,
+/// `recibir_catalogo_del_sitio`).
+fn obtener_json<T: serde::de::DeserializeOwned>(
+    cliente: &reqwest::blocking::Client,
+    contexto: &ContextoSincronizacion<'_>,
+    url: &str,
+) -> Result<Vec<T>, SincronizacionError> {
+    let respuesta = cliente
+        .get(url)
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .send()
+        .map_err(NubeError::Red)?;
+
+    if !respuesta.status().is_success() {
+        let status = respuesta.status().as_u16();
+        let cuerpo = respuesta.text().unwrap_or_default();
+        return Err(SincronizacionError::RespuestaInesperada { status, cuerpo });
+    }
+    let filas = respuesta.json().map_err(NubeError::Red)?;
+    Ok(filas)
+}
+
 /// Contratistas (espejo): crear y actualizar se resuelven igual -- un
 /// `upsert` (`Prefer: resolution=merge-duplicates`) es idempotente y la
 /// versión más nueva siempre termina ganando, así que no hace falta
@@ -191,21 +215,40 @@ fn exigir_2xx(respuesta: reqwest::blocking::Response) -> Result<(), Sincronizaci
 /// pasa: el contratista igual se manda, sólo sin el vínculo relacional
 /// hasta que la empresa también llegue). `empresa_nombre` se sigue mandando
 /// siempre, como snapshot legible sin depender del join.
+///
+/// `tipo_ingreso`/`fecha_vencimiento_praind`/`es_personal_ruta` viajan
+/// también -- sin esto el espejo sólo alcanzaba para mostrar el nombre
+/// (pantalla Activos), pero no para que el otro dispositivo del mismo
+/// sitio pudiera registrar un ingreso nuevo de este contratista con las
+/// reglas de acceso correctas (ver `recibir_catalogo_del_sitio`).
 fn enviar_contratista(
     cliente: &reqwest::blocking::Client,
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
     uuid: &str,
 ) -> Result<(), SincronizacionError> {
-    let (cedula, nombre, tiene_acceso, empresa_nombre, empresa_uuid): (
+    let (
+        cedula,
+        nombre,
+        tiene_acceso,
+        empresa_nombre,
+        empresa_uuid,
+        tipo_ingreso,
+        fecha_vencimiento_praind,
+        es_personal_ruta,
+    ): (
         String,
         String,
         i64,
         String,
         Option<String>,
+        String,
+        Option<String>,
+        i64,
     ) = connection.query_row(
         "
-        SELECT c.cedula, c.nombre, c.tiene_acceso, e.nombre, e.uuid
+        SELECT c.cedula, c.nombre, c.tiene_acceso, e.nombre, e.uuid,
+               c.tipo_ingreso, c.fecha_vencimiento_praind, c.es_personal_ruta
         FROM contratistas c
         JOIN empresas e ON e.id = c.empresa_id
         WHERE c.uuid = ?1
@@ -218,6 +261,9 @@ fn enviar_contratista(
                 row.get(2)?,
                 row.get(3)?,
                 row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+                row.get(7)?,
             ))
         },
     )?;
@@ -231,6 +277,9 @@ fn enviar_contratista(
         "empresa_id": empresa_uuid,
         "empresa_nombre": empresa_nombre,
         "activo": tiene_acceso != 0,
+        "tipo_ingreso": tipo_ingreso,
+        "fecha_vencimiento_praind": fecha_vencimiento_praind,
+        "es_personal_ruta": es_personal_ruta != 0,
     });
 
     let respuesta = cliente
@@ -462,19 +511,7 @@ pub fn recibir_ingresos_abiertos(
          &select=id,contratista_nombre,hora_entrada,usuario_entrada_nombre,dispositivo_entrada_id",
         contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
     );
-    let respuesta = cliente
-        .get(url)
-        .header("apikey", contexto.apikey)
-        .header("Authorization", format!("Bearer {}", contexto.token))
-        .send()
-        .map_err(NubeError::Red)?;
-
-    if !respuesta.status().is_success() {
-        let status = respuesta.status().as_u16();
-        let cuerpo = respuesta.text().unwrap_or_default();
-        return Err(SincronizacionError::RespuestaInesperada { status, cuerpo });
-    }
-    let filas: Vec<FilaIngresoRemoto> = respuesta.json().map_err(NubeError::Red)?;
+    let filas: Vec<FilaIngresoRemoto> = obtener_json(&cliente, contexto, &url)?;
 
     let transaction = connection.unchecked_transaction()?;
     transaction.execute(
@@ -510,6 +547,173 @@ pub fn recibir_ingresos_abiertos(
             usuario_entrada_nombre: fila.usuario_entrada_nombre,
         })
         .collect())
+}
+
+/// Cuántas filas se aplicaron localmente al traer el catálogo del sitio --
+/// para que la pantalla pueda avisar "3 contratistas nuevos" sin devolver
+/// las filas enteras.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct ResumenCatalogo {
+    pub empresas_recibidas: u32,
+    pub contratistas_recibidos: u32,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaEmpresaRemota {
+    id: String,
+    nombre: String,
+    activa: bool,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaContratistaRemota {
+    id: String,
+    nombre: String,
+    identificacion: Option<String>,
+    empresa_id: Option<String>,
+    empresa_nombre: Option<String>,
+    activo: bool,
+    tipo_ingreso: Option<String>,
+    fecha_vencimiento_praind: Option<String>,
+    es_personal_ruta: Option<bool>,
+}
+
+/// Trae de la nube las empresas y contratistas de *este mismo sitio* que
+/// este dispositivo todavía no tiene localmente -- el "pull" que le
+/// faltaba al espejo (hasta ahora sólo empujaba: local → nube, nunca al
+/// revés). Usa la misma política RLS que ya existe, sin tocarla, así que
+/// sólo trae lo del propio sitio -- esto no es el seed global entre
+/// sitios (`docs/plan-persistencia-nube.md`, diferido), sólo lo que el
+/// otro dispositivo de este sitio ya empujó.
+///
+/// Mismo patrón `ON CONFLICT` que usa el archivo de seed
+/// (`contratistas_base_final_limpia_v15.sql`): si ya existe localmente una
+/// fila con el mismo nombre/cédula (la creó este dispositivo, o un import
+/// anterior), la actualiza y le completa el `uuid` en vez de duplicarla --
+/// `COALESCE(tabla.uuid, excluded.uuid)` nunca pisa un `uuid` que ya tenía.
+///
+/// Una fila remota sin `identificacion`/`tipo_ingreso` (contratista creado
+/// antes de que el espejo mandara estos campos) se salta -- ambos son
+/// `NOT NULL` en la tabla local, y en una app de control de acceso no se
+/// inventan datos de clasificación para completar el hueco.
+pub fn recibir_catalogo_del_sitio(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<ResumenCatalogo, SincronizacionError> {
+    let cliente = reqwest::blocking::Client::new();
+    let empresas: Vec<FilaEmpresaRemota> = obtener_json(
+        &cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/empresas?sitio_id=eq.{}&select=id,nombre,activa",
+            contexto.base_url, contexto.sitio_id
+        ),
+    )?;
+    let contratistas: Vec<FilaContratistaRemota> = obtener_json(
+        &cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/contratistas?sitio_id=eq.{}\
+             &select=id,nombre,identificacion,empresa_id,empresa_nombre,activo,\
+             tipo_ingreso,fecha_vencimiento_praind,es_personal_ruta",
+            contexto.base_url, contexto.sitio_id
+        ),
+    )?;
+
+    let transaction = connection.unchecked_transaction()?;
+    let mut resumen = ResumenCatalogo::default();
+
+    for empresa in &empresas {
+        transaction.execute(
+            "
+            INSERT INTO empresas (nombre, activo, uuid) VALUES (?1, ?2, ?3)
+            ON CONFLICT(nombre) DO UPDATE SET
+                activo = excluded.activo,
+                uuid = COALESCE(empresas.uuid, excluded.uuid)
+            ",
+            params![empresa.nombre, empresa.activa, empresa.id],
+        )?;
+        resumen.empresas_recibidas += 1;
+    }
+
+    for contratista in &contratistas {
+        let (Some(cedula), Some(tipo_ingreso), Some(es_personal_ruta)) = (
+            contratista.identificacion.as_deref(),
+            contratista.tipo_ingreso.as_deref(),
+            contratista.es_personal_ruta,
+        ) else {
+            continue;
+        };
+        let empresa_id_local = resolver_empresa_local(
+            &transaction,
+            contratista.empresa_id.as_deref(),
+            contratista.empresa_nombre.as_deref(),
+        );
+        let Some(empresa_id_local) = empresa_id_local else {
+            continue;
+        };
+
+        transaction.execute(
+            "
+            INSERT INTO contratistas (
+                cedula, nombre, empresa_id, tipo_ingreso, fecha_vencimiento_praind,
+                es_personal_ruta, tiene_acceso, uuid
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            ON CONFLICT(cedula) DO UPDATE SET
+                nombre = excluded.nombre,
+                empresa_id = excluded.empresa_id,
+                tipo_ingreso = excluded.tipo_ingreso,
+                fecha_vencimiento_praind = excluded.fecha_vencimiento_praind,
+                es_personal_ruta = excluded.es_personal_ruta,
+                tiene_acceso = excluded.tiene_acceso,
+                uuid = COALESCE(contratistas.uuid, excluded.uuid)
+            ",
+            params![
+                cedula,
+                contratista.nombre,
+                empresa_id_local,
+                tipo_ingreso,
+                contratista.fecha_vencimiento_praind,
+                es_personal_ruta,
+                contratista.activo,
+                contratista.id,
+            ],
+        )?;
+        resumen.contratistas_recibidos += 1;
+    }
+
+    transaction.commit()?;
+    Ok(resumen)
+}
+
+/// Resuelve el `id` local de la empresa de un contratista remoto: primero
+/// por `uuid` (el vínculo real), y si esa empresa todavía no llegó acá por
+/// ese camino, por nombre (mismo respaldo que ya usa el lado de envío,
+/// `enviar_contratista`).
+fn resolver_empresa_local(
+    transaction: &rusqlite::Transaction<'_>,
+    empresa_uuid: Option<&str>,
+    empresa_nombre: Option<&str>,
+) -> Option<i64> {
+    empresa_uuid
+        .and_then(|uuid| {
+            transaction
+                .query_row("SELECT id FROM empresas WHERE uuid = ?1", params![uuid], |row| {
+                    row.get(0)
+                })
+                .ok()
+        })
+        .or_else(|| {
+            empresa_nombre.and_then(|nombre| {
+                transaction
+                    .query_row(
+                        "SELECT id FROM empresas WHERE nombre = ?1",
+                        params![nombre],
+                        |row| row.get(0),
+                    )
+                    .ok()
+            })
+        })
 }
 
 /// Cierra, directo contra la nube, un ingreso que abrió el otro
@@ -581,6 +785,36 @@ mod tests {
             }
             let _ = conexion.write_all(respuesta.as_bytes());
             let _ = conexion.flush();
+        });
+        format!("http://{direccion}")
+    }
+
+    /// Como `servidor_de_una_respuesta`, pero para pruebas que disparan más
+    /// de un `GET` (`recibir_catalogo_del_sitio` pide primero empresas y
+    /// luego contratistas) -- una respuesta por conexión aceptada, en
+    /// orden. Cada respuesta debe traer `Connection: close` para que el
+    /// cliente abra una conexión nueva en el siguiente pedido.
+    fn servidor_de_respuestas(respuestas: Vec<&'static str>) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind en localhost");
+        let direccion = listener.local_addr().expect("dirección local");
+        thread::spawn(move || {
+            for respuesta in respuestas {
+                let Ok((mut conexion, _)) = listener.accept() else {
+                    return;
+                };
+                conexion
+                    .set_read_timeout(Some(Duration::from_millis(200)))
+                    .expect("set_read_timeout");
+                let mut buffer = [0_u8; 4096];
+                loop {
+                    match conexion.read(&mut buffer) {
+                        Ok(0) | Err(_) => break,
+                        Ok(_leidos) => {}
+                    }
+                }
+                let _ = conexion.write_all(respuesta.as_bytes());
+                let _ = conexion.flush();
+            }
         });
         format!("http://{direccion}")
     }
@@ -903,5 +1137,110 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM ingresos_remotos", [], |row| row.get(0))
             .unwrap();
         assert_eq!(cacheados, 0);
+    }
+
+    #[test]
+    fn recibe_catalogo_del_sitio_y_lo_guarda_local() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_respuestas(vec![
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-empresa-remota\",\"nombre\":\"Empresa Remota\",\"activa\":true}]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-contratista-remoto\",\"nombre\":\"Persona Remota\",\
+             \"identificacion\":\"1-1111\",\"empresa_id\":\"uuid-empresa-remota\",\
+             \"empresa_nombre\":\"Empresa Remota\",\"activo\":true,\"tipo_ingreso\":\"SWAT\",\
+             \"fecha_vencimiento_praind\":null,\"es_personal_ruta\":false}]",
+        ]);
+
+        let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenCatalogo { empresas_recibidas: 1, contratistas_recibidos: 1 }
+        );
+        let (nombre_empresa, uuid_empresa): (String, Option<String>) = connection
+            .query_row("SELECT nombre, uuid FROM empresas", [], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(nombre_empresa, "Empresa Remota");
+        assert_eq!(uuid_empresa.as_deref(), Some("uuid-empresa-remota"));
+
+        let (cedula, tipo_ingreso, uuid_contratista): (String, String, Option<String>) =
+            connection
+                .query_row(
+                    "SELECT cedula, tipo_ingreso, uuid FROM contratistas",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                )
+                .unwrap();
+        assert_eq!(cedula, "1-1111");
+        assert_eq!(tipo_ingreso, "SWAT");
+        assert_eq!(uuid_contratista.as_deref(), Some("uuid-contratista-remoto"));
+    }
+
+    #[test]
+    fn recibir_catalogo_fusiona_con_una_fila_local_existente_sin_duplicarla() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute("INSERT INTO empresas (nombre) VALUES ('Empresa Remota')", [])
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO contratistas (
+                    cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+                ) VALUES ('1-1111', 'Persona Local', 1, 'SWAT', 0, 1)",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_respuestas(vec![
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-empresa-remota\",\"nombre\":\"Empresa Remota\",\"activa\":true}]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-contratista-remoto\",\"nombre\":\"Persona Remota\",\
+             \"identificacion\":\"1-1111\",\"empresa_id\":\"uuid-empresa-remota\",\
+             \"empresa_nombre\":\"Empresa Remota\",\"activo\":true,\"tipo_ingreso\":\"SWAT\",\
+             \"fecha_vencimiento_praind\":null,\"es_personal_ruta\":false}]",
+        ]);
+
+        recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        let total_empresas: i64 =
+            connection.query_row("SELECT COUNT(*) FROM empresas", [], |row| row.get(0)).unwrap();
+        let total_contratistas: i64 = connection
+            .query_row("SELECT COUNT(*) FROM contratistas", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(total_empresas, 1, "no duplica la empresa que ya tenía por nombre");
+        assert_eq!(total_contratistas, 1, "no duplica el contratista que ya tenía por cédula");
+        let (nombre_final, uuid_final): (String, Option<String>) = connection
+            .query_row("SELECT nombre, uuid FROM contratistas", [], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(nombre_final, "Persona Remota", "la fila local se actualiza con lo remoto");
+        assert_eq!(uuid_final.as_deref(), Some("uuid-contratista-remoto"), "le completa el uuid");
+    }
+
+    #[test]
+    fn recibir_catalogo_salta_un_contratista_remoto_sin_identificacion_o_tipo_ingreso() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_respuestas(vec![
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-incompleto\",\"nombre\":\"Persona Incompleta\",\
+             \"identificacion\":null,\"empresa_id\":null,\"empresa_nombre\":null,\
+             \"activo\":true,\"tipo_ingreso\":null,\"fecha_vencimiento_praind\":null,\
+             \"es_personal_ruta\":null}]",
+        ]);
+
+        let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(resumen.contratistas_recibidos, 0);
+        let total: i64 =
+            connection.query_row("SELECT COUNT(*) FROM contratistas", [], |row| row.get(0)).unwrap();
+        assert_eq!(total, 0, "una fila sin datos suficientes para las reglas de acceso no se inventa");
     }
 }

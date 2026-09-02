@@ -12,8 +12,9 @@ pub mod sincronizacion;
 
 pub use cliente::{NubeError, TokenDispositivo, autenticar_dispositivo};
 pub use sincronizacion::{
-    ContextoSincronizacion, IngresoRemoto, ResumenDrenado, SincronizacionError,
-    cerrar_ingreso_remoto, contar_fallos_permanentes, drenar_cola, recibir_ingresos_abiertos,
+    ContextoSincronizacion, IngresoRemoto, ResumenCatalogo, ResumenDrenado, SincronizacionError,
+    cerrar_ingreso_remoto, contar_fallos_permanentes, drenar_cola, recibir_catalogo_del_sitio,
+    recibir_ingresos_abiertos,
 };
 
 /// URL del proyecto Supabase (`control-acceso-nube`) -- pública, no un

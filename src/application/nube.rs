@@ -44,6 +44,8 @@ pub struct ResumenSincronizacion {
     pub enviados: u32,
     pub fallidos: u32,
     pub remotos_abiertos: u32,
+    pub empresas_recibidas: u32,
+    pub contratistas_recibidos: u32,
     pub sitio_id: String,
     pub dispositivo_id: String,
     pub tipo: String,
@@ -111,11 +113,14 @@ impl AppCore {
         };
         let resumen = crate::nube::drenar_cola(&self.connection, &contexto, 200)?;
         let remotos = crate::nube::recibir_ingresos_abiertos(&self.connection, &contexto)?;
+        let catalogo = crate::nube::recibir_catalogo_del_sitio(&self.connection, &contexto)?;
 
         Ok(ResumenSincronizacion {
             enviados: resumen.enviados,
             fallidos: resumen.fallidos,
             remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
+            empresas_recibidas: catalogo.empresas_recibidas,
+            contratistas_recibidos: catalogo.contratistas_recibidos,
             sitio_id: token.sitio_id,
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,

@@ -10,6 +10,8 @@ pub struct ResumenSincronizacion {
     pub enviados: u32,
     pub fallidos: u32,
     pub remotos_abiertos: u32,
+    pub empresas_recibidas: u32,
+    pub contratistas_recibidos: u32,
     pub sitio_id: String,
     pub dispositivo_id: String,
     pub tipo: String,
@@ -65,11 +67,15 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
     let resumen = nube::drenar_cola(&conexion, &contexto, 200).map_err(mensaje_sincronizacion)?;
     let remotos = nube::recibir_ingresos_abiertos(&conexion, &contexto)
         .map_err(mensaje_sincronizacion)?;
+    let catalogo = nube::recibir_catalogo_del_sitio(&conexion, &contexto)
+        .map_err(mensaje_sincronizacion)?;
 
     Ok(ResumenSincronizacion {
         enviados: resumen.enviados,
         fallidos: resumen.fallidos,
         remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
+        empresas_recibidas: catalogo.empresas_recibidas,
+        contratistas_recibidos: catalogo.contratistas_recibidos,
         sitio_id: token.sitio_id,
         dispositivo_id: token.dispositivo_id,
         tipo: token.tipo,
