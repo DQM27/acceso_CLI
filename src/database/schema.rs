@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 17;
+pub const SCHEMA_VERSION: i64 = 18;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -167,6 +167,11 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
         version = 17;
     }
 
+    if version == 17 {
+        aplicar_migracion_18(connection)?;
+        version = 18;
+    }
+
     if version != SCHEMA_VERSION {
         return Err(SchemaError::VersionInesperadaTrasMigrar {
             encontrada: version,
@@ -188,6 +193,14 @@ fn aplicar_migracion_17(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_17)?;
     transaction.execute_batch("PRAGMA user_version = 17")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_18(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_18)?;
+    transaction.execute_batch("PRAGMA user_version = 18")?;
     transaction.commit()?;
     Ok(())
 }
@@ -1401,4 +1414,26 @@ CREATE TABLE cola_salida (
 CREATE INDEX idx_cola_salida_pendientes
 ON cola_salida(creado_en)
 WHERE estado = 'pendiente';
+";
+
+// Espejo de sólo lectura de "lo que está abierto en mi sitio, creado por
+// el otro dispositivo" (`docs/plan-persistencia-nube.md`). A propósito NO
+// es una fila de `registro_ingresos`: esa tabla tiene triggers de
+// inmutabilidad y llaves foráneas atadas a `usuarios`/`contratistas` *de
+// este mismo dispositivo* -- un ingreso creado en la PC referencia un
+// `usuario_ingreso_id` que, en el celular, puede no existir o ser otra
+// persona. Forzarlo ahí rompería exactamente las garantías que protegen el
+// historial real. Este espejo sólo cachea lo necesario para mostrarlo y
+// cerrarlo (contra la nube directamente, ver `nube::sincronizacion`) --
+// nunca es la fuente de verdad de nada.
+const MIGRACION_18: &str = r"
+CREATE TABLE ingresos_remotos (
+    uuid TEXT PRIMARY KEY,
+    sitio_id TEXT NOT NULL,
+    contratista_nombre TEXT NOT NULL,
+    hora_entrada TEXT NOT NULL,
+    usuario_entrada_nombre TEXT,
+    dispositivo_entrada_id TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL
+) STRICT;
 ";

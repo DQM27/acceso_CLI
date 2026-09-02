@@ -277,6 +277,129 @@ fn enviar_cierre_ingreso(
     exigir_2xx(respuesta)
 }
 
+/// Fila cacheada localmente de un ingreso todavía abierto, creado por el
+/// otro dispositivo de este mismo sitio -- ver `ingresos_remotos` en
+/// `database::schema` sobre por qué esto no es una fila de
+/// `registro_ingresos`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IngresoRemoto {
+    pub uuid: String,
+    pub contratista_nombre: String,
+    pub hora_entrada: String,
+    pub usuario_entrada_nombre: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaIngresoRemoto {
+    id: String,
+    contratista_nombre: String,
+    hora_entrada: String,
+    usuario_entrada_nombre: Option<String>,
+    dispositivo_entrada_id: String,
+}
+
+/// Refresca la caché local `ingresos_remotos` con lo que hay abierto ahora
+/// mismo en la nube para este sitio, creado por *otro* dispositivo
+/// (`dispositivo_entrada_id=neq.<el mío>`). Reemplaza el contenido entero
+/// de la tabla en una sola transacción -- más simple que llevar la cuenta
+/// de qué cambió, y la tabla es chica (sólo lo que está abierto ahora).
+pub fn recibir_ingresos_abiertos(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<Vec<IngresoRemoto>, SincronizacionError> {
+    let cliente = reqwest::blocking::Client::new();
+    let url = format!(
+        "{}/rest/v1/ingresos?sitio_id=eq.{}&dispositivo_entrada_id=neq.{}&hora_salida=is.null\
+         &select=id,contratista_nombre,hora_entrada,usuario_entrada_nombre,dispositivo_entrada_id",
+        contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
+    );
+    let respuesta = cliente
+        .get(url)
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .send()
+        .map_err(NubeError::Red)?;
+
+    if !respuesta.status().is_success() {
+        let status = respuesta.status().as_u16();
+        let cuerpo = respuesta.text().unwrap_or_default();
+        return Err(SincronizacionError::RespuestaInesperada { status, cuerpo });
+    }
+    let filas: Vec<FilaIngresoRemoto> = respuesta.json().map_err(NubeError::Red)?;
+
+    let transaction = connection.unchecked_transaction()?;
+    transaction.execute(
+        "DELETE FROM ingresos_remotos WHERE sitio_id = ?1",
+        params![contexto.sitio_id],
+    )?;
+    for fila in &filas {
+        transaction.execute(
+            "
+            INSERT INTO ingresos_remotos (
+                uuid, sitio_id, contratista_nombre, hora_entrada,
+                usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            ",
+            params![
+                fila.id,
+                contexto.sitio_id,
+                fila.contratista_nombre,
+                fila.hora_entrada,
+                fila.usuario_entrada_nombre,
+                fila.dispositivo_entrada_id,
+            ],
+        )?;
+    }
+    transaction.commit()?;
+
+    Ok(filas
+        .into_iter()
+        .map(|fila| IngresoRemoto {
+            uuid: fila.id,
+            contratista_nombre: fila.contratista_nombre,
+            hora_entrada: fila.hora_entrada,
+            usuario_entrada_nombre: fila.usuario_entrada_nombre,
+        })
+        .collect())
+}
+
+/// Cierra, directo contra la nube, un ingreso que abrió el otro
+/// dispositivo del mismo sitio (mismo `PATCH` condicional que
+/// `enviar_cierre_ingreso` -- "primero en llegar gana"). Nunca toca
+/// `registro_ingresos` local, sólo la caché `ingresos_remotos`: este
+/// ingreso no es -- y nunca fue -- del historial de este dispositivo.
+pub fn cerrar_ingreso_remoto(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+    usuario_salida_nombre: &str,
+) -> Result<(), SincronizacionError> {
+    let cliente = reqwest::blocking::Client::new();
+    let cuerpo = json!({
+        "hora_salida": crate::tiempo::serializar_utc(chrono::Utc::now()),
+        "dispositivo_salida_id": contexto.dispositivo_id,
+        "usuario_salida_nombre": usuario_salida_nombre,
+    });
+
+    let url = format!(
+        "{}/rest/v1/ingresos?id=eq.{uuid}&hora_salida=is.null",
+        contexto.base_url
+    );
+    let respuesta = cliente
+        .patch(url)
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)?;
+
+    connection.execute("DELETE FROM ingresos_remotos WHERE uuid = ?1", params![uuid])?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -431,5 +554,84 @@ mod tests {
         let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
 
         assert_eq!(resumen, ResumenDrenado { enviados: 1, fallidos: 0 });
+    }
+
+    #[test]
+    fn recibe_ingresos_abiertos_del_otro_dispositivo_y_los_cachea() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-remoto\",\"contratista_nombre\":\"Persona Remota\",\
+             \"hora_entrada\":\"2026-01-01T08:00:00Z\",\"usuario_entrada_nombre\":\"Op PC\",\
+             \"dispositivo_entrada_id\":\"otro-dispositivo\"}]",
+        );
+
+        let recibidos = recibir_ingresos_abiertos(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(recibidos.len(), 1);
+        assert_eq!(recibidos[0].uuid, "uuid-remoto");
+        assert_eq!(recibidos[0].contratista_nombre, "Persona Remota");
+        let cacheados: i64 = connection
+            .query_row("SELECT COUNT(*) FROM ingresos_remotos", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(cacheados, 1);
+    }
+
+    #[test]
+    fn recibir_reemplaza_la_cache_del_sitio_por_completo() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO ingresos_remotos (
+                    uuid, sitio_id, contratista_nombre, hora_entrada,
+                    usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en
+                ) VALUES (
+                    'ya-cerrado', 'sitio-1', 'Otra Persona', '2026-01-01T07:00:00Z',
+                    NULL, 'otro-dispositivo', '2026-01-01T07:00:00Z'
+                )",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        recibir_ingresos_abiertos(&connection, &contexto(&base_url)).unwrap();
+
+        let cacheados: i64 = connection
+            .query_row("SELECT COUNT(*) FROM ingresos_remotos", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(cacheados, 0, "lo que ya no viene en la respuesta se borra de la caché");
+    }
+
+    #[test]
+    fn cierra_un_ingreso_remoto_y_lo_saca_de_la_cache() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO ingresos_remotos (
+                    uuid, sitio_id, contratista_nombre, hora_entrada,
+                    usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en
+                ) VALUES (
+                    'uuid-remoto', 'sitio-1', 'Persona Remota', '2026-01-01T08:00:00Z',
+                    'Op PC', 'otro-dispositivo', '2026-01-01T08:00:00Z'
+                )",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        cerrar_ingreso_remoto(&connection, &contexto(&base_url), "uuid-remoto", "Op Celular")
+            .unwrap();
+
+        let cacheados: i64 = connection
+            .query_row("SELECT COUNT(*) FROM ingresos_remotos", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(cacheados, 0);
     }
 }

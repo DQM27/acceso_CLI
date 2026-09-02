@@ -1,16 +1,20 @@
 //! Integración con el receptor en la nube — solo compilado con la feature
 //! `nube`. Ver `docs/plan-persistencia-nube.md` para el diseño completo.
 //!
-//! Por ahora sólo cubre la autenticación de dispositivo (secreto → token).
-//! La bandeja de salida (outbox) que sube/baja datos reales todavía no
-//! existe — es el siguiente paso, pendiente de diseño de esquema.
+//! Cubre: autenticación de dispositivo (secreto → token), el envío
+//! (`drenar_cola`) de la bandeja de salida local hacia el receptor, y la
+//! recepción (`recibir_ingresos_abiertos`/`cerrar_ingreso_remoto`) de lo
+//! que el otro dispositivo del mismo sitio tiene abierto ahora mismo.
 
 pub mod cliente;
 pub mod credenciales;
 pub mod sincronizacion;
 
 pub use cliente::{NubeError, TokenDispositivo, autenticar_dispositivo};
-pub use sincronizacion::{ContextoSincronizacion, ResumenDrenado, SincronizacionError, drenar_cola};
+pub use sincronizacion::{
+    ContextoSincronizacion, IngresoRemoto, ResumenDrenado, SincronizacionError,
+    cerrar_ingreso_remoto, drenar_cola, recibir_ingresos_abiertos,
+};
 
 /// URL del proyecto Supabase (`control-acceso-nube`) -- pública, no un
 /// secreto (es la dirección del servidor, no una credencial).

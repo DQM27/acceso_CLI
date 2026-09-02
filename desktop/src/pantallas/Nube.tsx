@@ -2,11 +2,14 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
 import {
+  cerrarIngresoRemoto,
   guardarSecretoDispositivo,
+  listarIngresosRemotos,
   secretoDispositivoGuardado,
   sincronizarConNube,
 } from "../api";
-import type { ResumenSincronizacion } from "../api";
+import type { IngresoRemoto, ResumenSincronizacion } from "../api";
+import { textoHora } from "../tiempo";
 
 /**
  * Pantalla exclusiva de Root (`Operacion::GestionarNube`, ver `App.tsx`) --
@@ -20,6 +23,8 @@ export default function Nube() {
   const [guardando, setGuardando] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
   const [ultimoResumen, setUltimoResumen] = useState<ResumenSincronizacion | null>(null);
+  const [remotos, setRemotos] = useState<IngresoRemoto[]>([]);
+  const [cerrandoUuid, setCerrandoUuid] = useState<string | null>(null);
 
   function cargarEstado() {
     secretoDispositivoGuardado()
@@ -27,7 +32,14 @@ export default function Nube() {
       .catch((error) => toast.error(String(error)));
   }
 
+  function cargarRemotos() {
+    listarIngresosRemotos()
+      .then(setRemotos)
+      .catch((error) => toast.error(String(error)));
+  }
+
   useEffect(cargarEstado, []);
+  useEffect(cargarRemotos, []);
 
   async function guardar() {
     const valor = secreto.trim();
@@ -55,10 +67,24 @@ export default function Nube() {
       } else {
         toast.warning(`${resumen.enviados} enviados, ${resumen.fallidos} fallidos — reintenta más tarde.`);
       }
+      cargarRemotos();
     } catch (error) {
       toast.error(String(error));
     } finally {
       setSincronizando(false);
+    }
+  }
+
+  async function cerrar(uuid: string) {
+    setCerrandoUuid(uuid);
+    try {
+      await cerrarIngresoRemoto(uuid);
+      toast.success("Ingreso cerrado.");
+      setRemotos((actuales) => actuales.filter((remoto) => remoto.uuid !== uuid));
+    } catch (error) {
+      toast.error(String(error));
+    } finally {
+      setCerrandoUuid(null);
     }
   }
 
@@ -68,7 +94,7 @@ export default function Nube() {
 
       <div
         className="pantalla-cuerpo"
-        style={{ minHeight: 0, flex: 1, display: "flex", flexDirection: "column", gap: "1.25rem", maxWidth: 480 }}
+        style={{ minHeight: 0, flex: 1, display: "flex", flexDirection: "column", gap: "1.25rem", maxWidth: 560 }}
       >
         <section style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           <h3 style={{ margin: 0 }}>Identidad del dispositivo</h3>
@@ -127,6 +153,49 @@ export default function Nube() {
               {ultimoResumen.tipo}) — {ultimoResumen.enviados} enviados, {ultimoResumen.fallidos}{" "}
               fallidos.
             </p>
+          )}
+        </section>
+
+        <section style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          <h3 style={{ margin: 0 }}>Abiertos en el otro dispositivo del sitio</h3>
+          <p style={{ color: "var(--muted)", marginTop: 0, fontSize: "0.85rem" }}>
+            Se actualiza al sincronizar — no es en vivo.
+          </p>
+
+          {remotos.length === 0 && (
+            <p style={{ color: "var(--muted)" }}>Nada abierto del otro lado por ahora.</p>
+          )}
+
+          {remotos.length > 0 && (
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left", padding: "0.3rem 0.5rem" }}>Contratista</th>
+                  <th style={{ textAlign: "left", padding: "0.3rem 0.5rem" }}>Entrada</th>
+                  <th style={{ textAlign: "left", padding: "0.3rem 0.5rem" }}>Registrado por</th>
+                  <th style={{ padding: "0.3rem 0.5rem" }} />
+                </tr>
+              </thead>
+              <tbody>
+                {remotos.map((remoto) => (
+                  <tr key={remoto.uuid}>
+                    <td style={{ padding: "0.3rem 0.5rem" }}>{remoto.contratista_nombre}</td>
+                    <td style={{ padding: "0.3rem 0.5rem" }}>{textoHora(remoto.hora_entrada)}</td>
+                    <td style={{ padding: "0.3rem 0.5rem" }}>{remoto.usuario_entrada_nombre ?? "—"}</td>
+                    <td style={{ padding: "0.3rem 0.5rem" }}>
+                      <button
+                        type="button"
+                        className="boton"
+                        onClick={() => cerrar(remoto.uuid)}
+                        disabled={cerrandoUuid === remoto.uuid}
+                      >
+                        {cerrandoUuid === remoto.uuid ? "Cerrando…" : "Registrar salida"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </section>
       </div>

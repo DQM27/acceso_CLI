@@ -115,6 +115,8 @@ pub fn run() {
             comandos::nube::guardar_secreto_dispositivo,
             comandos::nube::secreto_dispositivo_guardado,
             comandos::nube::sincronizar_con_nube,
+            comandos::nube::listar_ingresos_remotos,
+            comandos::nube::cerrar_ingreso_remoto,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
