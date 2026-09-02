@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.remember
@@ -26,8 +27,17 @@ class MainActivity : ComponentActivity() {
             val rutaBaseDatos = File(filesDir, "control_acceso.db").absolutePath
             val nucleo = remember { Nucleo.abrir(rutaBaseDatos) }
             TemaBrisas {
+                // `targetSdk` 36 (Android 15+) obliga a la app a dibujar
+                // "borde a borde": sin este padding, el contenido queda
+                // debajo de la barra de estado, el recorte de la cámara
+                // frontal (en horizontal queda al costado, no arriba) y la
+                // barra de navegación — se vio en un Honor 7 Pro real
+                // tapando el nombre de sesión y "Salir". `safeDrawingPadding`
+                // reserva ese espacio en cualquier orientación y en
+                // cualquier versión de Android (no hace nada si el
+                // dispositivo no tiene de qué protegerse).
                 Surface(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().safeDrawingPadding(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
                     PantallaLogin(nucleo)
