@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import uniffi.control_acceso_mobile.ContratistaResumen
@@ -156,23 +157,34 @@ private fun SelectorModoBusqueda(modo: ModoBusqueda, onCambiar: (ModoBusqueda) -
             onClick = { onCambiar(ModoBusqueda.ENTRADA) },
             shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
         ) {
-            Text("Entrada")
+            EtiquetaSegmento("Entrada")
         }
         SegmentedButton(
             selected = modo == ModoBusqueda.SALIDA_NOMBRE,
             onClick = { onCambiar(ModoBusqueda.SALIDA_NOMBRE) },
             shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
         ) {
-            Text("Salida: nombre")
+            EtiquetaSegmento("Salida: nombre")
         }
         SegmentedButton(
             selected = modo == ModoBusqueda.SALIDA_GAFETE,
             onClick = { onCambiar(ModoBusqueda.SALIDA_GAFETE) },
             shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
         ) {
-            Text("Salida: gafete")
+            EtiquetaSegmento("Salida: gafete")
         }
     }
+}
+
+/// Sin esto, "Salida: nombre"/"Salida: gafete" (casi el doble de largo que
+/// "Entrada") se parten en dos líneas dentro de su tercio del selector,
+/// mientras "Entrada" queda en una — el selector completo termina con
+/// altura despareja (reportado con foto real: dos botones "enormes" al
+/// lado de uno chico). Una sola línea, sin importar cuánto texto entre,
+/// deja los tres segmentos siempre a la misma altura.
+@Composable
+private fun EtiquetaSegmento(texto: String) {
+    Text(texto, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
 @Composable

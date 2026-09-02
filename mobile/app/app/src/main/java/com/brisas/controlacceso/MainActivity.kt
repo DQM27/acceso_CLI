@@ -3,14 +3,27 @@ package com.brisas.controlacceso
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import java.io.File
 import uniffi.control_acceso_mobile.Nucleo
+
+/// Tope de ancho para todo el contenido de la app — sin esto, en horizontal
+/// (o en una tablet) cualquier pantalla se estira de punta a punta porque
+/// ninguna usa `fillMaxWidth()` con límite (reportado con foto real: el
+/// buscador de Activos quedaba enorme en horizontal). En un teléfono en
+/// vertical no hace nada (la pantalla ya es más angosta que esto); sólo
+/// entra en juego cuando sobra ancho.
+private val ANCHO_MAXIMO_CONTENIDO = 480.dp
 
 /// Punto de entrada de la app. Abre la única conexión SQLite del teléfono
 /// una sola vez al arrancar — ver docs/plan-app-movil.md ("Toda la lógica
@@ -40,7 +53,11 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize().safeDrawingPadding(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    PantallaLogin(nucleo)
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                        Box(modifier = Modifier.widthIn(max = ANCHO_MAXIMO_CONTENIDO).fillMaxHeight()) {
+                            PantallaLogin(nucleo)
+                        }
+                    }
                 }
             }
         }
