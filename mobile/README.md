@@ -48,6 +48,22 @@ paso 1 con `cargo ndk -t x86_64-linux-android build --release` y copiarlo a
 A25 5G, arm64) sólo necesita `arm64-v8a`, pero no está de más incluir ambos
 si también se va a probar en el emulador antes de repartirlo.
 
+## Tests unitarios de los ViewModel
+
+```sh
+cd app
+./gradlew test
+```
+
+Corren en el JVM del host, sin emulador ni dispositivo — el propio
+`app/build.gradle.kts` compila `rust-core` para el host (no para Android,
+`cargo build --release` normal, sin NDK) antes de correr los tests, así
+que `./gradlew test` alcanza solo. Cada test abre un `Nucleo` real sobre
+un archivo `SQLite` temporal, con la misma lógica de negocio que corre en
+el teléfono — ver `app/src/test/.../NucleoDePrueba.kt` para cómo se
+siembran los fixtures (con SQL crudo vía JDBC, porque `Nucleo` no expone
+ningún método para insertar datos sin autenticarse primero).
+
 ## Compilar un APK de distribución (release firmado)
 
 Android no deja instalar un `release` sin firmar. La keystore vive en

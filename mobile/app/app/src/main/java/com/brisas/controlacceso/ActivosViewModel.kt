@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -82,7 +83,15 @@ private fun gafetesDeTexto(texto: String): List<Int> =
 /// `CancellationException`, que antes se colaba por capturar `Exception`
 /// genérico y podía interferir con la cancelación de `viewModelScope`) se
 /// propaga sin envolver — es un bug, no un caso de negocio esperado.
-class ActivosViewModel(private val nucleo: Nucleo) : ViewModel() {
+class ActivosViewModel(
+    private val nucleo: Nucleo,
+    // Inyectable para poder correr los tests con un dispatcher de tiempo
+    // controlado (StandardTestDispatcher) en vez de hilos reales — sin
+    // esto los tests dependerían de una carrera real entre corrutinas,
+    // exactamente el tipo de cosa que no queremos dejar al azar. El valor
+    // por defecto es el real que usa la app.
+    private val dispatcherIO: CoroutineDispatcher = Dispatchers.Default,
+) : ViewModel() {
     var texto by mutableStateOf("")
         private set
     var modo by mutableStateOf(ModoBusqueda.ENTRADA)
@@ -147,12 +156,12 @@ class ActivosViewModel(private val nucleo: Nucleo) : ViewModel() {
                 when (modo) {
                     ModoBusqueda.ENTRADA -> {
                         if (texto.isBlank()) {
-                            activos = withContext(Dispatchers.Default) {
+                            activos = withContext(dispatcherIO) {
                                 nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA)
                             }
                         } else {
                             resultadosBusqueda =
-                                withContext(Dispatchers.Default) { nucleo.buscarContratistas(texto) }
+                                withContext(dispatcherIO) { nucleo.buscarContratistas(texto) }
                         }
                     }
                     ModoBusqueda.SALIDA_NOMBRE -> {
@@ -163,7 +172,7 @@ class ActivosViewModel(private val nucleo: Nucleo) : ViewModel() {
                         activos = if (texto.isBlank()) {
                             emptyList()
                         } else {
-                            withContext(Dispatchers.Default) {
+                            withContext(dispatcherIO) {
                                 nucleo.listarIngresosActivos(texto, ModoBusquedaActivos.NOMBRE_CEDULA)
                             }
                         }
@@ -173,7 +182,7 @@ class ActivosViewModel(private val nucleo: Nucleo) : ViewModel() {
                         coincidenciasGafete = if (numeros.isEmpty()) {
                             emptyList()
                         } else {
-                            withContext(Dispatchers.Default) {
+                            withContext(dispatcherIO) {
                                 numeros.map { numero ->
                                     val resultado =
                                         nucleo.listarIngresosActivos(numero.toString(), ModoBusquedaActivos.GAFETE)
@@ -194,7 +203,7 @@ class ActivosViewModel(private val nucleo: Nucleo) : ViewModel() {
         viewModelScope.launch {
             seleccionIngreso = SeleccionIngreso.Cargando(contratista)
             try {
-                val preparacion = withContext(Dispatchers.Default) { nucleo.prepararIngreso(contratista.id) }
+                val preparacion = withContext(dispatcherIO) { nucleo.prepararIngreso(contratista.id) }
                 seleccionIngreso = if (puedeContinuar(preparacion)) {
                     SeleccionIngreso.Formulario(preparacion)
                 } else {
@@ -225,7 +234,7 @@ class ActivosViewModel(private val nucleo: Nucleo) : ViewModel() {
         seleccionSalida = null
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.Default) { nucleo.registrarSalida(activo.registroId) }
+                withContext(dispatcherIO) { nucleo.registrarSalida(activo.registroId) }
                 buscar()
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
@@ -245,7 +254,7 @@ class ActivosViewModel(private val nucleo: Nucleo) : ViewModel() {
                     continue
                 }
                 try {
-                    withContext(Dispatchers.Default) { nucleo.registrarSalida(activoCoincidente.registroId) }
+                    withContext(dispatcherIO) { nucleo.registrarSalida(activoCoincidente.registroId) }
                     registrados.add(activoCoincidente.contratistaNombre)
                 } catch (excepcion: NucleoException) {
                     fallidos.add("gafete ${coincidencia.numero}: ${excepcion.message}")

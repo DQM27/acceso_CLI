@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -22,7 +23,12 @@ import uniffi.control_acceso_mobile.NucleoException
 /// Historial es una pestaña que persiste mientras el usuario navega
 /// (mismo rol que `ActivosViewModel` para su pestaña), así que sí aplica
 /// el patrón completo acá.
-class HistorialViewModel(private val nucleo: Nucleo) : ViewModel() {
+class HistorialViewModel(
+    private val nucleo: Nucleo,
+    // Ver el mismo parámetro en ActivosViewModel — permite tests con
+    // tiempo controlado en vez de hilos reales.
+    private val dispatcherIO: CoroutineDispatcher = Dispatchers.Default,
+) : ViewModel() {
     var texto by mutableStateOf("")
         private set
     var movimientos by mutableStateOf<List<MovimientoHistorial>>(emptyList())
@@ -47,7 +53,7 @@ class HistorialViewModel(private val nucleo: Nucleo) : ViewModel() {
         trabajoBusqueda?.cancel()
         trabajoBusqueda = viewModelScope.launch {
             try {
-                movimientos = withContext(Dispatchers.Default) { nucleo.buscarHistorial(texto) }
+                movimientos = withContext(dispatcherIO) { nucleo.buscarHistorial(texto) }
                 error = null
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
