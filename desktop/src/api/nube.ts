@@ -42,3 +42,9 @@ export function listarIngresosRemotos(): Promise<IngresoRemoto[]> {
 export function cerrarIngresoRemoto(uuid: string): Promise<void> {
   return invoke("cerrar_ingreso_remoto", { uuid });
 }
+
+/** Filas de la cola que ya agotaron los reintentos automáticos y quedaron
+ * `fallido` de forma permanente -- necesitan que alguien las mire. */
+export function fallosPermanentesNube(): Promise<number> {
+  return invoke("fallos_permanentes_nube");
+}

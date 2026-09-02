@@ -138,6 +138,53 @@ pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
     }
 }
 
+/// `RespuestaInesperada` trae el cuerpo crudo de la respuesta del receptor
+/// (puede incluir detalles internos de Postgres/PostgREST) -- nunca pasa a
+/// pantalla, mismo criterio que el resto de este módulo con los errores de
+/// `SQLite`.
+#[cfg(feature = "nube")]
+pub fn mensaje_nube(error: crate::nube::NubeError) -> String {
+    use crate::nube::NubeError;
+
+    match error {
+        NubeError::CredencialesInvalidas => {
+            "El secreto de este dispositivo fue rechazado o revocado".into()
+        }
+        NubeError::Red(_) => "No se pudo conectar con la nube, intentá de nuevo".into(),
+    }
+}
+
+#[cfg(feature = "nube")]
+pub fn mensaje_sincronizacion(error: crate::nube::SincronizacionError) -> String {
+    use crate::nube::SincronizacionError;
+
+    match error {
+        SincronizacionError::BaseLocal(_) => "No se pudo leer la base de datos local".into(),
+        SincronizacionError::Red(error) => mensaje_nube(error),
+        SincronizacionError::RespuestaInesperada { .. } => {
+            "El receptor rechazó el pedido, intentá de nuevo más tarde".into()
+        }
+    }
+}
+
+#[cfg(feature = "nube")]
+pub fn mensaje_gestion_nube(error: crate::application::GestionNubeError) -> String {
+    use crate::application::GestionNubeError;
+
+    match error {
+        GestionNubeError::OperacionNoAutorizada => {
+            "Sólo una sesión ROOT activa puede gestionar la nube".into()
+        }
+        GestionNubeError::Sqlite(_) => "No se pudo leer la base de datos local".into(),
+        GestionNubeError::SinSecreto => {
+            "Todavía no se guardó el secreto de este dispositivo".into()
+        }
+        GestionNubeError::Io(_) => "No se pudo guardar el secreto localmente".into(),
+        GestionNubeError::Autenticacion(error) => mensaje_nube(error),
+        GestionNubeError::Sincronizacion(error) => mensaje_sincronizacion(error),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,6 +253,19 @@ mod tests {
                 MotivoDenegacion::PraindNoRegistrado,
             )),
             "PRAIND sin fecha registrada"
+        );
+    }
+
+    #[cfg(feature = "nube")]
+    #[test]
+    fn el_cuerpo_crudo_de_una_respuesta_inesperada_no_llega_a_pantalla() {
+        let error = crate::nube::SincronizacionError::RespuestaInesperada {
+            status: 500,
+            cuerpo: "detalle interno de postgrest".into(),
+        };
+        assert_eq!(
+            mensaje_sincronizacion(error),
+            "El receptor rechazó el pedido, intentá de nuevo más tarde"
         );
     }
 }

@@ -42,12 +42,24 @@ struct FilaCola {
     entidad: String,
     entidad_uuid: String,
     operacion: String,
+    intentos: i64,
 }
 
-/// Envía hasta `limite` filas pendientes, en orden de creación. Nunca
-/// devuelve error por una fila individual fallida -- eso queda registrado
-/// en la propia fila (`estado = 'fallido'`, `ultimo_error`); sólo devuelve
-/// error si no se pudo ni siquiera leer/actualizar la cola local.
+/// Después de esta cantidad de intentos fallidos seguidos, una fila deja de
+/// reintentarse sola y pasa a `estado = 'fallido'` (terminal) -- sin este
+/// tope, un dato irremediablemente roto (nunca va a poder mandarse, sea
+/// cual sea la razón) se reintentaría cada 5 minutos para siempre, sin que
+/// nadie se entere. Con el backoff de abajo, llegar acá lleva más de un día
+/// real de reintentos -- no es un umbral que se cruce por una mala racha de
+/// conexión.
+const INTENTOS_ANTES_DE_FALLO_PERMANENTE: i64 = 20;
+
+/// Envía hasta `limite` filas pendientes, en orden de creación (respetando
+/// el backoff de `pendientes`). Nunca devuelve error por una fila
+/// individual fallida -- eso queda registrado en la propia fila
+/// (`ultimo_error`, y `estado = 'fallido'` sólo tras
+/// [`INTENTOS_ANTES_DE_FALLO_PERMANENTE`] intentos); sólo devuelve error si
+/// no se pudo ni siquiera leer/actualizar la cola local.
 pub fn drenar_cola(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
@@ -74,7 +86,15 @@ pub fn drenar_cola(
                 resumen.enviados += 1;
             }
             Err(error) => {
-                marcar(connection, fila.id, "fallido", Some(&error.to_string()))?;
+                // "pendiente" de nuevo -- no "fallido" -- para que
+                // `pendientes()` la vuelva a considerar más adelante, sujeta
+                // al backoff según cuántas veces ya falló.
+                let estado = if fila.intentos + 1 >= INTENTOS_ANTES_DE_FALLO_PERMANENTE {
+                    "fallido"
+                } else {
+                    "pendiente"
+                };
+                marcar(connection, fila.id, estado, Some(&error.to_string()))?;
                 resumen.fallidos += 1;
             }
         }
@@ -83,11 +103,21 @@ pub fn drenar_cola(
     Ok(resumen)
 }
 
+/// Filas listas para reintentarse ahora: nunca tocadas (`intentos = 0`), o
+/// que ya esperaron lo suficiente desde el último intento. La espera crece
+/// con cada fallo (15 min, 30 min, 45 min...), tope de un día -- para no
+/// mendigar el mismo pedido roto cada 5 minutos para siempre, pero tampoco
+/// dejarlo esperando una semana entera.
 fn pendientes(connection: &Connection, limite: u32) -> Result<Vec<FilaCola>, SincronizacionError> {
     let mut statement = connection.prepare(
         "
-        SELECT id, entidad, entidad_uuid, operacion FROM cola_salida
+        SELECT id, entidad, entidad_uuid, operacion, intentos FROM cola_salida
         WHERE estado = 'pendiente'
+          AND (
+            intentos = 0
+            OR datetime(actualizado_en, '+' || MIN(intentos * 15, 1440) || ' minutes')
+               <= datetime('now')
+          )
         ORDER BY creado_en
         LIMIT ?1
         ",
@@ -99,10 +129,22 @@ fn pendientes(connection: &Connection, limite: u32) -> Result<Vec<FilaCola>, Sin
                 entidad: row.get(1)?,
                 entidad_uuid: row.get(2)?,
                 operacion: row.get(3)?,
+                intentos: row.get(4)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(filas)
+}
+
+/// Cuántas filas ya agotaron los reintentos automáticos
+/// (`estado = 'fallido'`) -- para que la pantalla avise que algo necesita
+/// que alguien lo mire, en vez de fallar en silencio para siempre.
+pub fn contar_fallos_permanentes(connection: &Connection) -> Result<i64, SincronizacionError> {
+    Ok(connection.query_row(
+        "SELECT COUNT(*) FROM cola_salida WHERE estado = 'fallido'",
+        [],
+        |row| row.get(0),
+    )?)
 }
 
 fn marcar(
@@ -489,7 +531,7 @@ mod tests {
     }
 
     #[test]
-    fn error_del_receptor_marca_la_fila_fallida_con_el_motivo() {
+    fn error_del_receptor_deja_la_fila_pendiente_para_reintentar_con_el_motivo_guardado() {
         let (connection, _uuid) = conexion_con_contratista();
         let base_url = servidor_de_una_respuesta(
             "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\n\
@@ -506,9 +548,66 @@ mod tests {
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
             .unwrap();
-        assert_eq!(estado, "fallido");
+        // "pendiente", no "fallido" -- un solo fallo todavía se reintenta
+        // solo (con backoff), no es un fallo permanente.
+        assert_eq!(estado, "pendiente");
         assert_eq!(intentos, 1);
         assert!(ultimo_error.unwrap().contains("500"));
+    }
+
+    #[test]
+    fn una_fila_recien_fallida_no_se_reintenta_de_inmediato_por_el_backoff() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, estado, intentos,
+                    creado_en, actualizado_en
+                ) VALUES (
+                    'contratista', 'uuid-x', 'crear', 'pendiente', 1,
+                    '2026-01-01T00:00:00Z', strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+                )",
+                [],
+            )
+            .unwrap();
+        // Nunca levanta un servidor: si `pendientes()` la trajera igual, la
+        // conexión fallaría y el test lo detectaría por el resumen.
+        let resumen =
+            drenar_cola(&connection, &contexto("http://127.0.0.1:1"), 10).unwrap();
+
+        assert_eq!(resumen, ResumenDrenado { enviados: 0, fallidos: 0 });
+    }
+
+    #[test]
+    fn tras_agotar_los_reintentos_la_fila_queda_fallida_de_forma_permanente() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, estado, intentos,
+                    creado_en, actualizado_en
+                ) VALUES (
+                    'contratista', 'uuid-x', 'crear', 'pendiente',
+                    ?1, '2026-01-01T00:00:00Z', '2020-01-01T00:00:00Z'
+                )",
+                params![INTENTOS_ANTES_DE_FALLO_PERMANENTE - 1],
+            )
+            .unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\n\
+             Connection: close\r\n\r\n{\"error\":\"boom\"}",
+        );
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(resumen, ResumenDrenado { enviados: 0, fallidos: 1 });
+        let estado: String = connection
+            .query_row("SELECT estado FROM cola_salida", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(estado, "fallido");
+        assert_eq!(contar_fallos_permanentes(&connection).unwrap(), 1);
     }
 
     #[test]

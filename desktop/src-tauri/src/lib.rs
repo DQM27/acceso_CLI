@@ -158,6 +158,7 @@ pub fn run() {
             comandos::nube::sincronizar_con_nube,
             comandos::nube::listar_ingresos_remotos,
             comandos::nube::cerrar_ingreso_remoto,
+            comandos::nube::fallos_permanentes_nube,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

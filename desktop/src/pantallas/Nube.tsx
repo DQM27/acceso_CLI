@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
 import {
   cerrarIngresoRemoto,
+  fallosPermanentesNube,
   guardarSecretoDispositivo,
   listarIngresosRemotos,
   secretoDispositivoGuardado,
@@ -26,6 +27,7 @@ export default function Nube() {
   const [ultimoResumen, setUltimoResumen] = useState<ResumenSincronizacion | null>(null);
   const [remotos, setRemotos] = useState<IngresoRemoto[]>([]);
   const [cerrandoUuid, setCerrandoUuid] = useState<string | null>(null);
+  const [fallosPermanentes, setFallosPermanentes] = useState(0);
 
   function cargarEstado() {
     secretoDispositivoGuardado()
@@ -39,8 +41,15 @@ export default function Nube() {
       .catch((error) => toast.error(String(error)));
   }
 
+  function cargarFallosPermanentes() {
+    fallosPermanentesNube()
+      .then(setFallosPermanentes)
+      .catch((error) => toast.error(String(error)));
+  }
+
   useEffect(cargarEstado, []);
   useEffect(cargarRemotos, []);
+  useEffect(cargarFallosPermanentes, []);
 
   // El disparador automático (`crate::iniciar_sincronizacion_automatica`,
   // cada 5 minutos mientras la app está abierta) corre en segundo plano sin
@@ -50,6 +59,7 @@ export default function Nube() {
     const cancelar = listen<ResumenSincronizacion>("nube://sincronizado", (evento) => {
       setUltimoResumen(evento.payload);
       cargarRemotos();
+      cargarFallosPermanentes();
     });
     return () => {
       cancelar.then((f) => f());
@@ -83,6 +93,7 @@ export default function Nube() {
         toast.warning(`${resumen.enviados} enviados, ${resumen.fallidos} fallidos — reintenta más tarde.`);
       }
       cargarRemotos();
+      cargarFallosPermanentes();
     } catch (error) {
       toast.error(String(error));
     } finally {
@@ -167,6 +178,13 @@ export default function Nube() {
               Sitio {ultimoResumen.sitio_id} · dispositivo {ultimoResumen.dispositivo_id} (
               {ultimoResumen.tipo}) — {ultimoResumen.enviados} enviados, {ultimoResumen.fallidos}{" "}
               fallidos.
+            </p>
+          )}
+
+          {fallosPermanentes > 0 && (
+            <p style={{ color: "var(--error)", fontSize: "0.85rem" }}>
+              {fallosPermanentes} {fallosPermanentes === 1 ? "elemento" : "elementos"} dejaron de
+              reintentarse solos tras agotar los intentos automáticos — necesita revisión manual.
             </p>
           )}
         </section>

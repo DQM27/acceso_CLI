@@ -1,3 +1,4 @@
+use control_acceso::mensajes::{mensaje_gestion_nube, mensaje_nube, mensaje_sincronizacion};
 use control_acceso::nube;
 
 use crate::estado::GuiState;
@@ -32,11 +33,11 @@ fn autenticar(state: &GuiState) -> Result<nube::TokenDispositivo, String> {
     state
         .core()
         .autorizar_gestion_nube(&actor)
-        .map_err(|error| error.to_string())?;
+        .map_err(mensaje_gestion_nube)?;
 
     let secreto = nube::credenciales::cargar_secreto()
         .ok_or_else(|| "Todavía no se guardó el secreto de este dispositivo".to_string())?;
-    nube::autenticar_dispositivo(nube::BASE_URL, &secreto).map_err(|error| error.to_string())
+    nube::autenticar_dispositivo(nube::BASE_URL, &secreto).map_err(mensaje_nube)
 }
 
 /// Autentica, drena la bandeja de salida pendiente y refresca la caché de
@@ -57,9 +58,9 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
     };
 
     let conexion = state.conexion_secundaria()?;
-    let resumen = nube::drenar_cola(&conexion, &contexto, 200).map_err(|error| error.to_string())?;
+    let resumen = nube::drenar_cola(&conexion, &contexto, 200).map_err(mensaje_sincronizacion)?;
     let remotos = nube::recibir_ingresos_abiertos(&conexion, &contexto)
-        .map_err(|error| error.to_string())?;
+        .map_err(mensaje_sincronizacion)?;
 
     Ok(ResumenSincronizacion {
         enviados: resumen.enviados,
@@ -84,7 +85,7 @@ pub fn guardar_secreto_dispositivo(
     state
         .core()
         .guardar_secreto_dispositivo(&actor, None, &secreto)
-        .map_err(|error| error.to_string())
+        .map_err(mensaje_gestion_nube)
 }
 
 /// No revela el secreto -- sólo si ya hay uno guardado, para que la
@@ -95,7 +96,7 @@ pub fn secreto_dispositivo_guardado(state: tauri::State<GuiState>) -> Result<boo
     state
         .core()
         .secreto_dispositivo_guardado(&actor, None)
-        .map_err(|error| error.to_string())
+        .map_err(mensaje_gestion_nube)
 }
 
 #[tauri::command]
@@ -103,9 +104,22 @@ pub fn sincronizar_con_nube(state: tauri::State<GuiState>) -> Result<ResumenSinc
     ejecutar_sincronizacion(&state)
 }
 
+/// Cuántas filas de `cola_salida` ya agotaron los reintentos automáticos
+/// (ver `INTENTOS_ANTES_DE_FALLO_PERMANENTE`) -- para avisar que algo
+/// necesita que alguien lo mire, en vez de fallar en silencio para siempre.
+#[tauri::command]
+pub fn fallos_permanentes_nube(state: tauri::State<GuiState>) -> Result<i64, String> {
+    state.sesion_activa()?;
+    let conexion = state.conexion_secundaria()?;
+    nube::contar_fallos_permanentes(&conexion).map_err(mensaje_sincronizacion)
+}
+
 /// Lectura pura de la caché local `ingresos_remotos` -- ya la llenó la
 /// última sincronización (manual o automática), no hace falta red para
-/// mostrarla.
+/// mostrarla. Errores de `SQLite` crudos acá abajo: no hay un `mensaje_*`
+/// para `rusqlite::Error` suelto (siempre viene envuelto en un tipo propio
+/// en el resto del núcleo), y este `SELECT` no debería fallar en la
+/// práctica.
 #[tauri::command]
 pub fn listar_ingresos_remotos(state: tauri::State<GuiState>) -> Result<Vec<IngresoRemoto>, String> {
     state.sesion_activa()?;
@@ -147,5 +161,5 @@ pub fn cerrar_ingreso_remoto(uuid: String, state: tauri::State<GuiState>) -> Res
     };
     let conexion = state.conexion_secundaria()?;
     nube::cerrar_ingreso_remoto(&conexion, &contexto, &uuid, &actor.nombre)
-        .map_err(|error| error.to_string())
+        .map_err(mensaje_sincronizacion)
 }

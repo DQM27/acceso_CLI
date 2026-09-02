@@ -5,6 +5,46 @@
 > arquitectura que quedó sin resolver antes de escribir una sola línea de
 > código.
 
+## Estado actual (sesión 2026-09-02, tercera parte): checklist honesto
+
+**Terminado y probado contra Supabase real** (no sólo tests simulados):
+esquema + RLS por sitio, alta/revocación de dispositivos, autenticación de
+dispositivo, enviar (outbox → nube) con backoff creciente y tope de
+reintentos (`INTENTOS_ANTES_DE_FALLO_PERMANENTE`, `src/nube/sincronizacion.rs`),
+recibir (ingresos abiertos del otro dispositivo del sitio) + cerrar
+(probado con la carrera de dos cierres a la vez), pantalla "Nube" en
+escritorio (exclusiva Root), disparador automático de escritorio (cada 5
+min + al abrir), e integridad del historial en la nube (triggers en
+Postgres que espejan `registro_ingresos_entrada_inmutable`/
+`registro_ingresos_salida_unica` de la base local — antes esas reglas sólo
+las respetaba nuestro código, ahora las hace cumplir la base misma;
+probado a mano: doble cierre y edición de la entrada rechazados, cierre
+legítimo sigue funcionando).
+
+**Diseñado y compilando, sin prueba real**: el puente Rust↔Kotlin (uniffi)
+en `mobile/rust-core` expone los mismos métodos que escritorio, pasa
+clippy estricto, pero ninguna pantalla Android lo llama todavía y nunca
+corrió en un teléfono físico.
+
+**Afuera, por decisión explícita**: Kotlin/UI del celular (el usuario lo
+hace con el SDK propio de Supabase, no con este puente), Realtime/websocket
+(nos quedamos con polling — recomendado dejarlo así por ahora), cifrado del
+secreto en disco (ligado a la decisión pendiente de cifrado en reposo
+general).
+
+**Pendiente, en la lista, sin resolver todavía** (en el orden que se
+decidió seguir):
+1. ~~Backoff en la cola de salida~~ — cerrado.
+2. ~~Integridad del historial de `ingresos` en la nube~~ — cerrado.
+3. **Empresas con espejo completo** (uuid propio + FK real en `contratistas.empresa_id`,
+   en vez del nombre como texto suelto).
+4. **Fusionar `ingresos_remotos` con la pantalla Activos** — hoy son dos
+   listas que no se hablan; un ingreso remoto sólo se ve entrando puntual
+   a la pantalla Nube, no donde un operador normalmente miraría "quién
+   está adentro".
+5. **Gafetes**: no se sincronizan en absoluto (ni tabla en la nube, ni
+   UUID local, ni entrada en `cola_salida`) — sin resolver si hace falta.
+
 ## Estado actual (sesión 2026-09-02, segunda parte): ya hay receptor real
 
 Dejó de ser "sin código todavía". Ya existe un proyecto Supabase real
