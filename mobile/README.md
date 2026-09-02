@@ -1,4 +1,4 @@
-# App móvil — piloto
+# App móvil
 
 Ver `docs/plan-app-movil.md` en la raíz del repo para el plan completo y las
 decisiones de diseño.
@@ -7,7 +7,9 @@ decisiones de diseño.
   modificar). No se commitea `target/` ni `bindings/` (generado).
 - `app/` — proyecto Android (Kotlin + Jetpack Compose). No se commitea
   `build/`, `.gradle/`, `.kotlin/`, `local.properties` (ruta del SDK,
-  depende de la máquina), ni `jniLibs/` (el `.so` compilado).
+  depende de la máquina), `jniLibs/` (el `.so` compilado), ni la keystore de
+  release (`app/keystore/`, `app/keystore.properties`).
+- `dist/` — APKs de distribución ya compilados (tampoco se commitea).
 
 ## Cómo reconstruir desde cero
 
@@ -39,6 +41,32 @@ echo "sdk.dir=<ruta al SDK, con / no \\>" > local.properties
 
 `local.properties` usa formato Java Properties — `\` es carácter de escape,
 así que la ruta del SDK debe ir con `/` (o `\\` si se insiste en backslash).
+
+Para el emulador (x86_64) además hace falta el `.so` de ese ABI — repetir el
+paso 1 con `cargo ndk -t x86_64-linux-android build --release` y copiarlo a
+`jniLibs/x86_64/`. El APK de distribución para el dispositivo real (Samsung
+A25 5G, arm64) sólo necesita `arm64-v8a`, pero no está de más incluir ambos
+si también se va a probar en el emulador antes de repartirlo.
+
+## Compilar un APK de distribución (release firmado)
+
+Android no deja instalar un `release` sin firmar. La keystore vive en
+`app/keystore/release.keystore.jks` — **no está en git, hay que resguardarla
+aparte** (ej. gestor de contraseñas + copia de la carpeta) junto con
+`app/keystore.properties` (contraseñas + alias). Sin ese archivo,
+`assembleRelease` genera un APK sin firmar (inservible) — el build sigue
+funcionando igual para `assembleDebug`, que no lo necesita. Si se pierde la
+keystore no hay forma de firmar una actualización compatible con una versión
+ya instalada: hay que resguardarla como si fuera una contraseña maestra.
+
+```sh
+cd app
+./gradlew assembleRelease
+```
+
+El APK firmado queda en `app/app/build/outputs/apk/release/app-release.apk`.
+`versionCode`/`versionName` (en `app/app/build.gradle.kts`) hay que subirlos
+a mano en cada release para que Android reconozca que es una actualización.
 
 ## Base de datos de desarrollo (emulador/dispositivo de prueba)
 

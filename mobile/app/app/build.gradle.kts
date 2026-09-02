@@ -1,6 +1,18 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+// Firma de release — nunca al repo (ver mobile/.gitignore). Sin
+// keystore.properties el build de debug sigue funcionando igual; sólo
+// assembleRelease necesita esto.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
 }
 
 android {
@@ -9,17 +21,32 @@ android {
 
     defaultConfig {
         applicationId = "com.brisas.controlacceso"
-        // El piloto es un solo teléfono conocido (Samsung A25 5G, arm64) —
-        // ver docs/plan-app-movil.md. jniLibs sólo trae arm64-v8a a propósito.
+        // Dispositivo real conocido: Samsung A25 5G (arm64) — ver
+        // docs/plan-app-movil.md. jniLibs trae arm64-v8a (dispositivo real)
+        // y x86_64 (emulador de desarrollo).
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1-piloto"
+        versionName = "1.0"
+    }
+
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

@@ -12,3 +12,15 @@ app/local.properties
 # El .so es un artefacto de build (~40MB, no optimizado) — se regenera con
 # `cargo ndk -t aarch64-linux-android build`, ver mobile/README.md.
 app/app/src/main/jniLibs/
+
+# Keystore de firma de release y sus contraseñas — nunca al repo. Sin este
+# archivo no se puede generar un APK de release nuevo que los usuarios
+# puedan instalar encima de uno anterior; hay que resguardarlo aparte
+# (ver mobile/README.md).
+app/keystore/
+app/keystore.properties
+
+# APKs de distribución generados — pesan ~20MB y algunos incluyen datos
+# reales de contratistas (build puntual con la base embebida); nunca al
+# repo, se comparten aparte.
+dist/
