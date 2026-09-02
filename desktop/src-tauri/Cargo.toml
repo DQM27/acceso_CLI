@@ -45,7 +45,7 @@ tauri-plugin-dialog = "2.7.2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 url = "=2.5.8"
-tokio = { version = "=1.53.1", features = ["sync"] }
+tokio = { version = "=1.53.1", features = ["sync", "time"] }
 
 # Misma vara que el crate raíz: pedantic/nursery visibles y cada categoría
 # revisada queda bloqueante. Las excepciones corresponden a decisiones de API

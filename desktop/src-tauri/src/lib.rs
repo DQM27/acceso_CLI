@@ -1,6 +1,9 @@
+use std::time::Duration;
+
 use control_acceso::application::AppCore;
 use control_acceso::database::connection::ruta_base_datos;
 use control_acceso::instancia::InstanciaGuard;
+use tauri::{Emitter, Manager};
 
 mod comandos;
 mod dto;
@@ -8,6 +11,42 @@ mod estado;
 mod pdf;
 
 use estado::GuiState;
+
+/// Cada cuánto reintenta la sincronización automática mientras la app sigue
+/// abierta -- unos minutos de atraso no le hacen daño a nadie (ver
+/// `docs/plan-persistencia-nube.md`: se decidió a propósito no en vivo).
+const INTERVALO_SINCRONIZACION_AUTOMATICA: Duration = Duration::from_secs(5 * 60);
+/// Antes del primer intento, para no competir con el arranque de la ventana.
+const ESPERA_INICIAL_SINCRONIZACION: Duration = Duration::from_secs(10);
+
+/// Sincronización con la nube en segundo plano, sin que nadie tenga que
+/// apretar "Sincronizar ahora". Silencioso en todo lo que no sea un envío
+/// exitoso: sin sesión activa, sesión sin permiso (`Operacion::GestionarNube`
+/// es exclusivo de Root), o sin secreto de dispositivo todavía configurado
+/// no son errores acá, son estados normales antes/entre sesiones -- no hay
+/// consola donde mostrar nada, y no tiene sentido interrumpir a un
+/// Administrador u Operador con un fallo de una función que ni les
+/// corresponde. Un error de red real tampoco se anuncia: se reintenta solo
+/// en la próxima vuelta.
+fn iniciar_sincronizacion_automatica(app: tauri::AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(ESPERA_INICIAL_SINCRONIZACION).await;
+        loop {
+            let manejador = app.clone();
+            let resultado = tauri::async_runtime::spawn_blocking(move || {
+                let estado = manejador.state::<GuiState>();
+                comandos::nube::ejecutar_sincronizacion(&estado)
+            })
+            .await;
+
+            if let Ok(Ok(resumen)) = resultado {
+                let _ = app.emit("nube://sincronizado", resumen);
+            }
+
+            tokio::time::sleep(INTERVALO_SINCRONIZACION_AUTOMATICA).await;
+        }
+    });
+}
 
 /// Muestra un diálogo nativo con el error y termina el proceso — para los
 /// fallos de arranque previos a `tauri::Builder` (base dañada/bloqueada,
@@ -72,6 +111,8 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            iniciar_sincronizacion_automatica(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

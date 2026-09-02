@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { listen } from "@tauri-apps/api/event";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
 import {
   cerrarIngresoRemoto,
@@ -40,6 +41,20 @@ export default function Nube() {
 
   useEffect(cargarEstado, []);
   useEffect(cargarRemotos, []);
+
+  // El disparador automático (`crate::iniciar_sincronizacion_automatica`,
+  // cada 5 minutos mientras la app está abierta) corre en segundo plano sin
+  // que nadie apriete el botón -- este listener es sólo para que, si esta
+  // pantalla está abierta cuando eso pasa, se vea el resultado sin recargar.
+  useEffect(() => {
+    const cancelar = listen<ResumenSincronizacion>("nube://sincronizado", (evento) => {
+      setUltimoResumen(evento.payload);
+      cargarRemotos();
+    });
+    return () => {
+      cancelar.then((f) => f());
+    };
+  }, []);
 
   async function guardar() {
     const valor = secreto.trim();

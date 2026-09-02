@@ -2,8 +2,9 @@ use control_acceso::nube;
 
 use crate::estado::GuiState;
 
-/// Resultado de una sincronización manual, para la pantalla.
-#[derive(serde::Serialize)]
+/// Resultado de una sincronización, para la pantalla y para el evento que
+/// emite la sincronización automática en segundo plano (ver `crate::run`).
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct ResumenSincronizacion {
     pub enviados: u32,
     pub fallidos: u32,
@@ -25,8 +26,8 @@ pub struct IngresoRemoto {
 }
 
 /// Autentica este dispositivo contra el receptor -- un solo lugar para no
-/// repetir "cargar secreto + pedir token" en cada comando de este archivo.
-fn autenticar(state: &tauri::State<GuiState>) -> Result<nube::TokenDispositivo, String> {
+/// repetir "cargar secreto + pedir token" en cada función de este archivo.
+fn autenticar(state: &GuiState) -> Result<nube::TokenDispositivo, String> {
     let actor = state.sesion_activa()?;
     state
         .core()
@@ -36,6 +37,38 @@ fn autenticar(state: &tauri::State<GuiState>) -> Result<nube::TokenDispositivo, 
     let secreto = nube::credenciales::cargar_secreto()
         .ok_or_else(|| "Todavía no se guardó el secreto de este dispositivo".to_string())?;
     nube::autenticar_dispositivo(nube::BASE_URL, &secreto).map_err(|error| error.to_string())
+}
+
+/// Autentica, drena la bandeja de salida pendiente y refresca la caché de
+/// lo que el otro dispositivo del mismo sitio tiene abierto ahora mismo.
+/// Compartida por el comando manual (`sincronizar_con_nube`) y el
+/// disparador automático (`crate::run`) -- misma lógica, dos formas de
+/// dispararla. Igual que `crear_respaldo`: autoriza rápido con el candado
+/// compartido (dentro de `autenticar`), lo suelta, y hace la parte lenta
+/// (red) sobre una conexión propia -- ver `GuiState::conexion_secundaria`.
+pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, String> {
+    let token = autenticar(state)?;
+    let contexto = nube::ContextoSincronizacion {
+        base_url: nube::BASE_URL,
+        apikey: nube::APIKEY,
+        token: &token.access_token,
+        dispositivo_id: &token.dispositivo_id,
+        sitio_id: &token.sitio_id,
+    };
+
+    let conexion = state.conexion_secundaria()?;
+    let resumen = nube::drenar_cola(&conexion, &contexto, 200).map_err(|error| error.to_string())?;
+    let remotos = nube::recibir_ingresos_abiertos(&conexion, &contexto)
+        .map_err(|error| error.to_string())?;
+
+    Ok(ResumenSincronizacion {
+        enviados: resumen.enviados,
+        fallidos: resumen.fallidos,
+        remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
+        sitio_id: token.sitio_id,
+        dispositivo_id: token.dispositivo_id,
+        tipo: token.tipo,
+    })
 }
 
 /// Guarda el secreto de este dispositivo (pegado una sola vez desde el
@@ -65,39 +98,14 @@ pub fn secreto_dispositivo_guardado(state: tauri::State<GuiState>) -> Result<boo
         .map_err(|error| error.to_string())
 }
 
-/// Autentica este dispositivo, drena la bandeja de salida pendiente y
-/// refresca la caché de lo que el otro dispositivo del mismo sitio tiene
-/// abierto ahora mismo. Igual que `crear_respaldo`: autoriza rápido con el
-/// candado compartido, lo suelta, y hace la parte lenta (red) sobre una
-/// conexión propia -- ver `GuiState::conexion_secundaria`.
 #[tauri::command]
 pub fn sincronizar_con_nube(state: tauri::State<GuiState>) -> Result<ResumenSincronizacion, String> {
-    let token = autenticar(&state)?;
-    let contexto = nube::ContextoSincronizacion {
-        base_url: nube::BASE_URL,
-        apikey: nube::APIKEY,
-        token: &token.access_token,
-        dispositivo_id: &token.dispositivo_id,
-        sitio_id: &token.sitio_id,
-    };
-
-    let conexion = state.conexion_secundaria()?;
-    let resumen = nube::drenar_cola(&conexion, &contexto, 200).map_err(|error| error.to_string())?;
-    let remotos = nube::recibir_ingresos_abiertos(&conexion, &contexto)
-        .map_err(|error| error.to_string())?;
-
-    Ok(ResumenSincronizacion {
-        enviados: resumen.enviados,
-        fallidos: resumen.fallidos,
-        remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
-        sitio_id: token.sitio_id,
-        dispositivo_id: token.dispositivo_id,
-        tipo: token.tipo,
-    })
+    ejecutar_sincronizacion(&state)
 }
 
 /// Lectura pura de la caché local `ingresos_remotos` -- ya la llenó la
-/// última `sincronizar_con_nube`, no hace falta red para mostrarla.
+/// última sincronización (manual o automática), no hace falta red para
+/// mostrarla.
 #[tauri::command]
 pub fn listar_ingresos_remotos(state: tauri::State<GuiState>) -> Result<Vec<IngresoRemoto>, String> {
     state.sesion_activa()?;
