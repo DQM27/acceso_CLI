@@ -74,6 +74,7 @@ pub fn drenar_cola(
             ("contratista", _) => {
                 enviar_contratista(&cliente, connection, contexto, &fila.entidad_uuid)
             }
+            ("gafete", _) => enviar_gafete(&cliente, connection, contexto, &fila.entidad_uuid),
             ("ingreso", "cerrar") => {
                 enviar_cierre_ingreso(&cliente, connection, contexto, &fila.entidad_uuid)
             }
@@ -272,6 +273,57 @@ fn enviar_empresa(
 
     let respuesta = cliente
         .post(format!("{}/rest/v1/empresas", contexto.base_url))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Gafetes (espejo): mismo criterio de `upsert` que contratistas/empresas.
+/// Sólo el estado actual (número, estado, a quién se lo debe) -- el
+/// historial de incidentes (`gafetes_incidentes`) sigue siendo puramente
+/// local, no viaja a la nube. `contratista_deudor_id` manda el UUID real
+/// del contratista deudor (`NULL` si el gafete no está `PERDIDO`, o si esa
+/// fila del contratista todavía no se drenó -- mismo caso que
+/// `empresa_id` en `enviar_contratista`).
+fn enviar_gafete(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let (numero, estado, deudor_uuid, deudor_nombre): (
+        i64,
+        String,
+        Option<String>,
+        Option<String>,
+    ) = connection.query_row(
+        "
+        SELECT g.numero, g.estado, c.uuid, c.nombre
+        FROM gafetes g
+        LEFT JOIN contratistas c ON c.id = g.contratista_deudor_id
+        WHERE g.uuid = ?1
+        ",
+        params![uuid],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+    )?;
+
+    let cuerpo = json!({
+        "id": uuid,
+        "sitio_id": contexto.sitio_id,
+        "dispositivo_origen_id": contexto.dispositivo_id,
+        "numero": numero,
+        "estado": estado,
+        "contratista_deudor_id": deudor_uuid,
+        "contratista_deudor_nombre": deudor_nombre,
+    });
+
+    let respuesta = cliente
+        .post(format!("{}/rest/v1/gafetes", contexto.base_url))
         .header("apikey", contexto.apikey)
         .header("Authorization", format!("Bearer {}", contexto.token))
         .header("Prefer", "resolution=merge-duplicates,return=minimal")
@@ -585,6 +637,38 @@ mod tests {
                 "INSERT INTO cola_salida (
                     entidad, entidad_uuid, operacion, creado_en, actualizado_en
                 ) VALUES ('empresa', 'uuid-empresa', 'crear', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(resumen, ResumenDrenado { enviados: 1, fallidos: 0 });
+        let estado: String = connection
+            .query_row("SELECT estado FROM cola_salida", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(estado, "enviado");
+    }
+
+    #[test]
+    fn envia_un_gafete_pendiente_y_lo_marca_enviado() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO gafetes (numero, estado, uuid)
+                 VALUES (5, 'DISPONIBLE', 'uuid-gafete')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, creado_en, actualizado_en
+                ) VALUES ('gafete', 'uuid-gafete', 'crear', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
                 [],
             )
             .unwrap();

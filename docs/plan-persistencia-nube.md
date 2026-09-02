@@ -19,11 +19,26 @@ que espejan `registro_ingresos_entrada_inmutable`/
 `registro_ingresos_salida_unica` de la base local — antes esas reglas sólo
 las respetaba nuestro código, ahora las hace cumplir la base misma;
 probado a mano: doble cierre y edición de la entrada rechazados, cierre
-legítimo sigue funcionando), y **empresas con espejo completo** (`uuid`
+legítimo sigue funcionando), **empresas con espejo completo** (`uuid`
 propio, FK real en `contratistas.empresa_id` en vez del nombre suelto como
 texto — probado de punta a punta: una empresa vieja sin sincronizar bloquea
 al contratista que la referencia por la FK real, y se auto-recupera sola
-en cuanto la empresa también se manda, gracias al backoff).
+en cuanto la empresa también se manda, gracias al backoff), y **la fusión
+de `ingresos_remotos` con la pantalla Activos** (una sola grilla con filas
+`FilaLocal`/`FilaRemota`, cada una se cierra por el camino que le
+corresponde — probado con tests de las funciones puras de extracción).
+
+**Gafetes: terminado y probado contra Supabase real** (2026-09-02) — mismo
+patrón que empresas: tabla `gafetes` en la nube con RLS por sitio, `uuid`
+local nuevo (`MIGRACION_20`), `cola_salida` extendida
+(`CHECK (entidad IN (..., 'gafete'))`), `crear`/`dar_de_baja`/
+`marcar_perdido`/`resolver` en `SqliteGafeteRepository` encolan hacia la
+nube, `enviar_gafete()` en `src/nube/sincronizacion.rs`. Sólo se manda el
+estado actual (número, estado, a quién se lo debe) — el historial de
+incidentes (`gafetes_incidentes`) sigue siendo puramente local. Probado de
+punta a punta contra el proyecto real: crear/dar de baja/resolver un
+gafete se refleja en la tabla `gafetes` de Supabase, con
+`contratista_deudor_id`/`_nombre` cuando corresponde.
 
 **Diseñado y compilando, sin prueba real**: el puente Rust↔Kotlin (uniffi)
 en `mobile/rust-core` expone los mismos métodos que escritorio, pasa
@@ -41,12 +56,15 @@ decidió seguir):
 1. ~~Backoff en la cola de salida~~ — cerrado.
 2. ~~Integridad del historial de `ingresos` en la nube~~ — cerrado.
 3. ~~Empresas con espejo completo~~ — cerrado.
-4. **Fusionar `ingresos_remotos` con la pantalla Activos** — hoy son dos
-   listas que no se hablan; un ingreso remoto sólo se ve entrando puntual
-   a la pantalla Nube, no donde un operador normalmente miraría "quién
-   está adentro".
-5. **Gafetes**: no se sincronizan en absoluto (ni tabla en la nube, ni
-   UUID local, ni entrada en `cola_salida`) — sin resolver si hace falta.
+4. ~~Fusionar `ingresos_remotos` con la pantalla Activos~~ — cerrado.
+5. ~~Gafetes~~ — cerrado.
+
+**Diferido, explícitamente pospuesto, no en la lista de arriba**: "seed
+inicial" — que un dispositivo nuevo, al configurarse por primera vez, baje
+el catálogo existente de la nube a su base local vacía (hoy es al revés:
+sólo empuja lo local hacia la nube). Motivación del usuario: que la nube
+sea la fuente de verdad inicial para abrir un sitio nuevo con datos ya
+existentes. Sin diseñar todavía.
 
 ## Estado actual (sesión 2026-09-02, segunda parte): ya hay receptor real
 

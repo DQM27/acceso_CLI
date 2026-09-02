@@ -13,6 +13,9 @@ use control_acceso::database::repositories::contratista_repository::{
 use control_acceso::database::repositories::empresa_repository::{
     EmpresaRepository, SqliteEmpresaRepository,
 };
+use control_acceso::database::repositories::gafete_repository::{
+    GafeteRepository, SqliteGafeteRepository,
+};
 use control_acceso::instancia::InstanciaGuard;
 use control_acceso::nube;
 
@@ -52,6 +55,29 @@ fn main() {
     empresas.actualizar(&empresa).expect("actualizar empresa");
 
     repo.actualizar(&contratista).expect("actualizar contratista");
+
+    // Toca (o crea, si no hay ninguno) un gafete para probar el espejo
+    // nuevo -- mismo camino que tocaría un cambio real hecho desde la GUI.
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let gafete_numero: Option<i64> = connection
+        .query_row("SELECT numero FROM gafetes LIMIT 1", [], |row| row.get(0))
+        .ok();
+    let gafete_id = match gafete_numero {
+        Some(numero) => {
+            println!("Tocando gafete #{numero}");
+            gafetes
+                .buscar_por_numero(numero)
+                .expect("buscar gafete")
+                .expect("el gafete debe existir")
+                .id
+        }
+        None => {
+            println!("No hay gafetes locales, creando uno de prueba (#999999)");
+            gafetes.crear(999_999).expect("crear gafete de prueba")
+        }
+    };
+    gafetes.dar_de_baja(gafete_id).expect("tocar gafete (dar de baja)");
+    gafetes.resolver(gafete_id).expect("tocar gafete (resolver)");
 
     let pendientes: i64 = connection
         .query_row(

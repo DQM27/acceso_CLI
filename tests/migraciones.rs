@@ -95,17 +95,20 @@ fn crear_esquema_version_1(connection: &Connection) {
 }
 
 /// Usada tanto contra el esquema crudo de la versión 1 (`crear_esquema_version_1`,
-/// sin `empresas.activo`) como contra el esquema actual ya migrado — de ahí que
-/// `empresas` liste sus columnas explícitamente en vez de depender del orden
-/// posicional: así la columna `activo` (con `DEFAULT`) no rompe el INSERT en
-/// ninguno de los dos casos.
+/// sin `empresas.activo` ni `contratistas.uuid`) como contra el esquema actual ya
+/// migrado — de ahí que `empresas` y `contratistas` listen sus columnas
+/// explícitamente en vez de depender del orden posicional: así las columnas que
+/// sólo existen en uno de los dos esquemas (`activo`, `uuid`, ambas con
+/// `DEFAULT`/nullable) no rompen el INSERT en ninguno de los dos casos.
 fn insertar_referencias(connection: &Connection) {
     connection
         .execute_batch(
             "
             INSERT INTO empresas (id, nombre) VALUES (1, 'Empresa');
             INSERT INTO usuarios VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1);
-            INSERT INTO contratistas VALUES (1, '2001', 'Persona', 1, 'PRAIND', '2030-01-01', 0, 1);
+            INSERT INTO contratistas
+                (id, cedula, nombre, empresa_id, tipo_ingreso, fecha_vencimiento_praind, es_personal_ruta, tiene_acceso)
+                VALUES (1, '2001', 'Persona', 1, 'PRAIND', '2030-01-01', 0, 1);
             ",
         )
         .unwrap();
@@ -190,6 +193,23 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
              -- arriba ya las creó, hay que soltarlas antes de simular v9.
              DROP TABLE gafetes_incidentes;
              DROP TABLE gafetes;
+             -- Mismo motivo con MIGRACION_17/18, que crean `cola_salida` e
+             -- `ingresos_remotos` desde cero -- ya existen por el
+             -- `initialize_database` de arriba.
+             DROP TABLE cola_salida;
+             DROP TABLE ingresos_remotos;
+             -- MIGRACION_16/19 (que corren después de ésta al rebobinar) le
+             -- agregan `uuid` a contratistas/registro_ingresos/empresas -- el
+             -- `initialize_database` de arriba ya las dejó con esas columnas,
+             -- hay que soltarlas antes de simular v9 para que el `SELECT *`
+             -- de MIGRACION_15 (contra la forma que tenía la tabla en v9)
+             -- tenga la misma cantidad de columnas de un lado y del otro.
+             DROP INDEX idx_empresas_uuid;
+             ALTER TABLE empresas DROP COLUMN uuid;
+             DROP INDEX idx_contratistas_uuid;
+             ALTER TABLE contratistas DROP COLUMN uuid;
+             DROP INDEX idx_registro_ingresos_uuid;
+             ALTER TABLE registro_ingresos DROP COLUMN uuid;
              PRAGMA user_version = 9;",
         )
         .unwrap();
@@ -252,6 +272,18 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
              -- MIGRACION_14 ya creó antes de simular v10.
              DROP TABLE gafetes_incidentes;
              DROP TABLE gafetes;
+             -- Mismo motivo que en `migracion_10_...`: soltar lo que
+             -- MIGRACION_17/18 ya crearon antes de simular v10.
+             DROP TABLE cola_salida;
+             DROP TABLE ingresos_remotos;
+             -- Mismo motivo que en `migracion_10_...`: soltar `uuid` de
+             -- contratistas/registro_ingresos/empresas antes de simular v10.
+             DROP INDEX idx_empresas_uuid;
+             ALTER TABLE empresas DROP COLUMN uuid;
+             DROP INDEX idx_contratistas_uuid;
+             ALTER TABLE contratistas DROP COLUMN uuid;
+             DROP INDEX idx_registro_ingresos_uuid;
+             ALTER TABLE registro_ingresos DROP COLUMN uuid;
              PRAGMA user_version = 10;",
         )
         .unwrap();
@@ -327,6 +359,18 @@ fn migracion_12_habilita_cambio_de_cedula() {
              -- MIGRACION_14 ya creó antes de simular v11.
              DROP TABLE gafetes_incidentes;
              DROP TABLE gafetes;
+             -- Mismo motivo que en `migracion_10_...`: soltar lo que
+             -- MIGRACION_17/18 ya crearon antes de simular v11.
+             DROP TABLE cola_salida;
+             DROP TABLE ingresos_remotos;
+             -- Mismo motivo que en `migracion_10_...`: soltar `uuid` de
+             -- contratistas/registro_ingresos/empresas antes de simular v11.
+             DROP INDEX idx_empresas_uuid;
+             ALTER TABLE empresas DROP COLUMN uuid;
+             DROP INDEX idx_contratistas_uuid;
+             ALTER TABLE contratistas DROP COLUMN uuid;
+             DROP INDEX idx_registro_ingresos_uuid;
+             ALTER TABLE registro_ingresos DROP COLUMN uuid;
              PRAGMA user_version = 11;",
         )
         .unwrap();

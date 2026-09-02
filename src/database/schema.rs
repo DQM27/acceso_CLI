@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 19;
+pub const SCHEMA_VERSION: i64 = 20;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -153,34 +153,50 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
         version = 15;
     }
 
-    // No comparte transacción con las de arriba por prolijidad únicamente
-    // (a diferencia de MIGRACION_15, no necesita `foreign_keys = OFF`) —
-    // sólo agrega una columna nullable y la rellena, ninguna tabla se
-    // recrea.
-    if version == 15 {
-        aplicar_migracion_16(connection)?;
-        version = 16;
-    }
-
-    if version == 16 {
-        aplicar_migracion_17(connection)?;
-        version = 17;
-    }
-
-    if version == 17 {
-        aplicar_migracion_18(connection)?;
-        version = 18;
-    }
-
-    if version == 18 {
-        aplicar_migracion_19(connection)?;
-        version = 19;
-    }
+    aplicar_migraciones_posteriores_a_15(connection, &mut version)?;
 
     if version != SCHEMA_VERSION {
         return Err(SchemaError::VersionInesperadaTrasMigrar {
             encontrada: version,
         });
+    }
+
+    Ok(())
+}
+
+/// `MIGRACION_16` en adelante: ninguna comparte transacción con las de arriba
+/// por prolijidad únicamente (a diferencia de `MIGRACION_15`, ninguna necesita
+/// `foreign_keys = OFF`) — sólo agregan una columna nullable y la rellenan,
+/// o crean una tabla nueva; ninguna recrea una tabla existente. Separado de
+/// `initialize_database` sólo para no pasar el límite de líneas de esa
+/// función.
+fn aplicar_migraciones_posteriores_a_15(
+    connection: &Connection,
+    version: &mut i64,
+) -> Result<(), SchemaError> {
+    if *version == 15 {
+        aplicar_migracion_16(connection)?;
+        *version = 16;
+    }
+
+    if *version == 16 {
+        aplicar_migracion_17(connection)?;
+        *version = 17;
+    }
+
+    if *version == 17 {
+        aplicar_migracion_18(connection)?;
+        *version = 18;
+    }
+
+    if *version == 18 {
+        aplicar_migracion_19(connection)?;
+        *version = 19;
+    }
+
+    if *version == 19 {
+        aplicar_migracion_20(connection)?;
+        *version = 20;
     }
 
     Ok(())
@@ -214,6 +230,14 @@ fn aplicar_migracion_19(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_19)?;
     transaction.execute_batch("PRAGMA user_version = 19")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_20(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_20)?;
+    transaction.execute_batch("PRAGMA user_version = 20")?;
     transaction.commit()?;
     Ok(())
 }
@@ -1472,6 +1496,41 @@ CREATE UNIQUE INDEX idx_empresas_uuid ON empresas(uuid);
 CREATE TABLE cola_salida_nueva (
     id INTEGER PRIMARY KEY,
     entidad TEXT NOT NULL CHECK (entidad IN ('contratista', 'ingreso', 'empresa')),
+    entidad_uuid TEXT NOT NULL,
+    operacion TEXT NOT NULL CHECK (operacion IN ('crear', 'actualizar', 'cerrar')),
+    estado TEXT NOT NULL DEFAULT 'pendiente'
+        CHECK (estado IN ('pendiente', 'enviado', 'fallido')),
+    intentos INTEGER NOT NULL DEFAULT 0 CHECK (intentos >= 0),
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    ultimo_error TEXT
+) STRICT;
+INSERT INTO cola_salida_nueva SELECT * FROM cola_salida;
+DROP TABLE cola_salida;
+ALTER TABLE cola_salida_nueva RENAME TO cola_salida;
+CREATE INDEX idx_cola_salida_pendientes
+ON cola_salida(creado_en)
+WHERE estado = 'pendiente';
+";
+
+// Gafetes se suma al espejo de la nube -- mismo criterio que empresas en
+// MIGRACION_19: sólo el estado actual del gafete (número, estado, a quién
+// se lo debe), no el historial de incidentes (`gafetes_incidentes` sigue
+// siendo puramente local). `cola_salida` se recrea de nuevo porque SQLite
+// no permite modificar un CHECK existente.
+const MIGRACION_20: &str = r"
+ALTER TABLE gafetes ADD COLUMN uuid TEXT;
+UPDATE gafetes SET uuid = (
+    lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4'
+    || substr(lower(hex(randomblob(2))), 2) || '-'
+    || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))), 2)
+    || '-' || lower(hex(randomblob(6)))
+) WHERE uuid IS NULL;
+CREATE UNIQUE INDEX idx_gafetes_uuid ON gafetes(uuid);
+
+CREATE TABLE cola_salida_nueva (
+    id INTEGER PRIMARY KEY,
+    entidad TEXT NOT NULL CHECK (entidad IN ('contratista', 'ingreso', 'empresa', 'gafete')),
     entidad_uuid TEXT NOT NULL,
     operacion TEXT NOT NULL CHECK (operacion IN ('crear', 'actualizar', 'cerrar')),
     estado TEXT NOT NULL DEFAULT 'pendiente'

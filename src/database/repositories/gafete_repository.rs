@@ -7,7 +7,9 @@
 
 use rusqlite::{Connection, Row, params};
 
+use crate::database::cola_salida;
 use crate::database::error::DatabaseError;
+use crate::database::identificador::generar_uuid_v4;
 use crate::models::gafete::{EstadoGafete, Gafete};
 
 pub trait GafeteRepository {
@@ -59,13 +61,32 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<Gafete> {
 
 const SELECT_GAFETE: &str = "SELECT id, numero, estado, contratista_deudor_id FROM gafetes";
 
+fn encolar_actualizacion(connection: &Connection, id: i64) -> Result<(), DatabaseError> {
+    let uuid: Option<String> = connection.query_row(
+        "SELECT uuid FROM gafetes WHERE id = ?1",
+        params![id],
+        |row| row.get(0),
+    )?;
+    if let Some(uuid) = uuid {
+        cola_salida::encolar(connection, "gafete", &uuid, "actualizar")?;
+    }
+    Ok(())
+}
+
 impl GafeteRepository for SqliteGafeteRepository<'_> {
     fn crear(&self, numero: i64) -> Result<i64, DatabaseError> {
+        let uuid = generar_uuid_v4();
         self.connection.execute(
-            "INSERT INTO gafetes (numero, estado) VALUES (?1, 'DISPONIBLE')",
-            params![numero],
+            "INSERT INTO gafetes (numero, estado, uuid) VALUES (?1, 'DISPONIBLE', ?2)",
+            params![numero, uuid],
         )?;
-        Ok(self.connection.last_insert_rowid())
+
+        // Capturado antes de encolar: `last_insert_rowid()` refleja el
+        // último INSERT de la conexión, y encolar hace el suyo propio.
+        let id = self.connection.last_insert_rowid();
+        cola_salida::encolar(self.connection, "gafete", &uuid, "crear")?;
+
+        Ok(id)
     }
 
     fn buscar_por_id(&self, id: i64) -> Result<Option<Gafete>, DatabaseError> {
@@ -95,7 +116,7 @@ impl GafeteRepository for SqliteGafeteRepository<'_> {
             "UPDATE gafetes SET estado = 'DE_BAJA' WHERE id = ?1",
             params![id],
         )?;
-        Ok(())
+        encolar_actualizacion(self.connection, id)
     }
 
     fn marcar_perdido(&self, id: i64, contratista_deudor_id: i64) -> Result<(), DatabaseError> {
@@ -103,7 +124,7 @@ impl GafeteRepository for SqliteGafeteRepository<'_> {
             "UPDATE gafetes SET estado = 'PERDIDO', contratista_deudor_id = ?1 WHERE id = ?2",
             params![contratista_deudor_id, id],
         )?;
-        Ok(())
+        encolar_actualizacion(self.connection, id)
     }
 
     fn resolver(&self, id: i64) -> Result<(), DatabaseError> {
@@ -111,7 +132,7 @@ impl GafeteRepository for SqliteGafeteRepository<'_> {
             "UPDATE gafetes SET estado = 'DISPONIBLE', contratista_deudor_id = NULL WHERE id = ?1",
             params![id],
         )?;
-        Ok(())
+        encolar_actualizacion(self.connection, id)
     }
 
     fn deuda_de_contratista(&self, contratista_id: i64) -> Result<Vec<i64>, DatabaseError> {
