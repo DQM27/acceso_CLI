@@ -63,10 +63,12 @@ import uniffi.control_acceso_mobile.TipoIngreso
 ///   nombres hace las veces de confirmación.
 ///
 /// Todo el estado y las llamadas a [Nucleo] viven en [ActivosViewModel]
-/// (ver mobile/app/ARQUITECTURA.md) — este `@Composable` sólo dibuja lo que
-/// el ViewModel expone y le reporta eventos, no toma ninguna decisión de
-/// negocio por su cuenta.
-@OptIn(ExperimentalMaterial3Api::class)
+/// (ver mobile/app/ARQUITECTURA.md) — este archivo sólo dibuja lo que el
+/// ViewModel expone y le reporta eventos. Esta función orquesta: delega el
+/// selector, el campo, los mensajes y el contenido (uno por modo, ver
+/// [ContenidoModoEntrada]/[ContenidoModoSalidaNombre]/[ContenidoModoSalidaGafete]
+/// más abajo) a funciones chicas de una sola responsabilidad cada una, en
+/// vez de tener los tres modos mezclados en un único bloque `if`/`else`.
 @Composable
 fun PantallaActivos(nucleo: Nucleo) {
     val viewModel: ActivosViewModel = viewModel(factory = ActivosViewModel.factory(nucleo))
@@ -92,195 +94,301 @@ fun PantallaActivos(nucleo: Nucleo) {
         else -> Unit
     }
 
+    val verificando = viewModel.seleccionIngreso is SeleccionIngreso.Cargando
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        SelectorModoBusqueda(modo = viewModel.modo, onCambiar = { viewModel.cambiarModo(it) })
+
+        CampoBusquedaActivos(
+            modo = viewModel.modo,
+            texto = viewModel.texto,
+            onCambiarTexto = { viewModel.cambiarTexto(it) },
+        )
+
+        // Sólo fuera del modo gafete — ese modo tiene su propio texto de
+        // ayuda dentro de ContenidoModoSalidaGafete en vez de esta leyenda.
+        if (viewModel.modo != ModoBusqueda.SALIDA_GAFETE) {
+            LeyendaBusqueda(modo = viewModel.modo, texto = viewModel.texto, activos = viewModel.activos)
+        }
+
+        MensajesEstado(
+            error = viewModel.error,
+            mensaje = viewModel.mensaje,
+            mensajeEsError = viewModel.mensajeEsError,
+            verificando = verificando,
+        )
+
+        when (viewModel.modo) {
+            ModoBusqueda.ENTRADA -> ContenidoModoEntrada(
+                texto = viewModel.texto,
+                activos = viewModel.activos,
+                resultadosBusqueda = viewModel.resultadosBusqueda,
+                verificando = verificando,
+                onElegirActivo = { viewModel.elegirSeleccionSalida(it) },
+                onElegirContratista = { viewModel.elegir(it) },
+            )
+            ModoBusqueda.SALIDA_NOMBRE -> ContenidoModoSalidaNombre(
+                activos = viewModel.activos,
+                onElegirActivo = { viewModel.elegirSeleccionSalida(it) },
+            )
+            ModoBusqueda.SALIDA_GAFETE -> ContenidoModoSalidaGafete(
+                texto = viewModel.texto,
+                coincidencias = viewModel.coincidenciasGafete,
+                enviando = viewModel.enviandoGafetes,
+                onRegistrarSalidaGafetes = { viewModel.registrarSalidaPorGafetes() },
+            )
+        }
+    }
+
+    DialogoConfirmarSalida(
+        activo = viewModel.seleccionSalida,
+        onDismiss = { viewModel.elegirSeleccionSalida(null) },
+        onConfirmar = { viewModel.confirmarSalida(it) },
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SelectorModoBusqueda(modo: ModoBusqueda, onCambiar: (ModoBusqueda) -> Unit) {
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        SegmentedButton(
+            selected = modo == ModoBusqueda.ENTRADA,
+            onClick = { onCambiar(ModoBusqueda.ENTRADA) },
+            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
+        ) {
+            Text("Entrada")
+        }
+        SegmentedButton(
+            selected = modo == ModoBusqueda.SALIDA_NOMBRE,
+            onClick = { onCambiar(ModoBusqueda.SALIDA_NOMBRE) },
+            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
+        ) {
+            Text("Salida: nombre")
+        }
+        SegmentedButton(
+            selected = modo == ModoBusqueda.SALIDA_GAFETE,
+            onClick = { onCambiar(ModoBusqueda.SALIDA_GAFETE) },
+            shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
+        ) {
+            Text("Salida: gafete")
+        }
+    }
+}
+
+@Composable
+private fun CampoBusquedaActivos(modo: ModoBusqueda, texto: String, onCambiarTexto: (String) -> Unit) {
     // Color propio para "estoy buscando a quién SACAR" — evita confundir el
     // modo entrada (color normal de la app) con el de salida, que es la
     // acción de mayor consecuencia.
-    val colorModo = if (viewModel.modo == ModoBusqueda.ENTRADA) {
+    val colorModo = if (modo == ModoBusqueda.ENTRADA) {
         MaterialTheme.colorScheme.primary
     } else {
         MaterialTheme.colorScheme.secondary
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            SegmentedButton(
-                selected = viewModel.modo == ModoBusqueda.ENTRADA,
-                onClick = { viewModel.cambiarModo(ModoBusqueda.ENTRADA) },
-                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
-            ) {
-                Text("Entrada")
-            }
-            SegmentedButton(
-                selected = viewModel.modo == ModoBusqueda.SALIDA_NOMBRE,
-                onClick = { viewModel.cambiarModo(ModoBusqueda.SALIDA_NOMBRE) },
-                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
-            ) {
-                Text("Salida: nombre")
-            }
-            SegmentedButton(
-                selected = viewModel.modo == ModoBusqueda.SALIDA_GAFETE,
-                onClick = { viewModel.cambiarModo(ModoBusqueda.SALIDA_GAFETE) },
-                shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
-            ) {
-                Text("Salida: gafete")
-            }
-        }
-
-        OutlinedTextField(
-            value = viewModel.texto,
-            onValueChange = { viewModel.cambiarTexto(it) },
-            label = {
-                Text(
-                    if (viewModel.modo == ModoBusqueda.SALIDA_GAFETE) {
-                        "Números de gafete, separados por coma"
-                    } else {
-                        "Cédula o nombre"
-                    },
-                )
-            },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            singleLine = true,
-            keyboardOptions = if (viewModel.modo == ModoBusqueda.SALIDA_GAFETE) {
-                KeyboardOptions(keyboardType = KeyboardType.Number)
-            } else {
-                KeyboardOptions.Default
-            },
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = colorModo,
-                focusedLabelColor = colorModo,
-            ),
-            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-        )
-
-        if (viewModel.modo != ModoBusqueda.SALIDA_GAFETE) {
-            val leyenda = when {
-                viewModel.texto.isBlank() && viewModel.modo == ModoBusqueda.ENTRADA ->
-                    if (viewModel.activos.isEmpty()) {
-                        "Nadie adentro"
-                    } else {
-                        "${viewModel.activos.size} adentro · toque un nombre para registrar salida"
-                    }
-                viewModel.texto.isBlank() -> "Escriba para buscar entre los activos"
-                viewModel.modo == ModoBusqueda.ENTRADA -> "Buscando contratistas · toque un resultado para registrar entrada"
-                viewModel.activos.isEmpty() -> "Sin coincidencias entre los activos"
-                else -> "Buscando entre los activos · toque un nombre para registrar salida"
-            }
+    OutlinedTextField(
+        value = texto,
+        onValueChange = onCambiarTexto,
+        label = {
             Text(
-                leyenda,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp),
+                if (modo == ModoBusqueda.SALIDA_GAFETE) {
+                    "Números de gafete, separados por coma"
+                } else {
+                    "Cédula o nombre"
+                },
             )
-        }
-
-        val mensajeError = viewModel.error
-        if (mensajeError != null) {
-            Text(mensajeError, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp))
-        }
-        val mensajeActual = viewModel.mensaje
-        if (mensajeActual != null) {
-            Text(
-                mensajeActual,
-                color = if (viewModel.mensajeEsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(top = 12.dp),
-            )
-        }
-        if (viewModel.seleccionIngreso is SeleccionIngreso.Cargando) {
-            Text(
-                "Verificando…",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 12.dp),
-            )
-        }
-
-        if (viewModel.modo == ModoBusqueda.SALIDA_GAFETE) {
-            if (viewModel.texto.isBlank()) {
-                Text(
-                    "Escriba uno o más números de gafete, separados por coma",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            } else {
-                Column(modifier = Modifier.padding(top = 8.dp)) {
-                    viewModel.coincidenciasGafete.forEach { coincidencia ->
-                        val activoCoincidente = coincidencia.activo
-                        Text(
-                            "Gafete ${coincidencia.numero} · " +
-                                (
-                                    activoCoincidente?.let { "${it.contratistaNombre} · ${it.empresaNombre}" }
-                                        ?: "Sin ingreso activo"
-                                ),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (activoCoincidente != null) {
-                                MaterialTheme.colorScheme.onSurface
-                            } else {
-                                MaterialTheme.colorScheme.error
-                            },
-                            modifier = Modifier.padding(vertical = 4.dp),
-                        )
-                    }
-
-                    val encontrados = viewModel.coincidenciasGafete.filter { it.activo != null }
-                    if (encontrados.isNotEmpty()) {
-                        Button(
-                            onClick = { viewModel.registrarSalidaPorGafetes() },
-                            enabled = !viewModel.enviandoGafetes,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.secondary,
-                                contentColor = MaterialTheme.colorScheme.onSecondary,
-                            ),
-                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                        ) {
-                            Text(if (viewModel.enviandoGafetes) "Registrando…" else "Registrar salida (${encontrados.size})")
-                        }
-                    }
-                }
-            }
-        } else if (viewModel.modo != ModoBusqueda.ENTRADA || viewModel.texto.isBlank()) {
-            LazyColumn(modifier = Modifier.padding(top = 8.dp)) {
-                items(viewModel.activos, key = { it.registroId }) { activo ->
-                    FilaActivo(activo, onClick = { viewModel.elegirSeleccionSalida(activo) })
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-                }
-            }
+        },
+        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+        singleLine = true,
+        keyboardOptions = if (modo == ModoBusqueda.SALIDA_GAFETE) {
+            KeyboardOptions(keyboardType = KeyboardType.Number)
         } else {
-            if (viewModel.resultadosBusqueda.isEmpty() && viewModel.seleccionIngreso !is SeleccionIngreso.Cargando) {
-                Text(
-                    "Sin resultados",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 12.dp),
-                )
+            KeyboardOptions.Default
+        },
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = colorModo,
+            focusedLabelColor = colorModo,
+        ),
+        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+    )
+}
+
+@Composable
+private fun LeyendaBusqueda(modo: ModoBusqueda, texto: String, activos: List<IngresoActivoResumen>) {
+    val leyenda = when {
+        texto.isBlank() && modo == ModoBusqueda.ENTRADA ->
+            if (activos.isEmpty()) {
+                "Nadie adentro"
+            } else {
+                "${activos.size} adentro · toque un nombre para registrar salida"
             }
-            LazyColumn(modifier = Modifier.padding(top = 8.dp)) {
-                items(viewModel.resultadosBusqueda, key = { it.id }) { contratista ->
-                    FilaContratista(contratista, onClick = { viewModel.elegir(contratista) })
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-                }
+        texto.isBlank() -> "Escriba para buscar entre los activos"
+        modo == ModoBusqueda.ENTRADA -> "Buscando contratistas · toque un resultado para registrar entrada"
+        activos.isEmpty() -> "Sin coincidencias entre los activos"
+        else -> "Buscando entre los activos · toque un nombre para registrar salida"
+    }
+    Text(
+        leyenda,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+}
+
+@Composable
+private fun MensajesEstado(error: String?, mensaje: String?, mensajeEsError: Boolean, verificando: Boolean) {
+    if (error != null) {
+        Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp))
+    }
+    if (mensaje != null) {
+        Text(
+            mensaje,
+            color = if (mensajeEsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 12.dp),
+        )
+    }
+    if (verificando) {
+        Text(
+            "Verificando…",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 12.dp),
+        )
+    }
+}
+
+/// Vacío: lista de quién está adentro (tocar = salida). Con texto: busca en
+/// el catálogo completo (tocar = arrancar el flujo de entrada). Ver el
+/// doc-comment de [PantallaActivos].
+@Composable
+private fun ContenidoModoEntrada(
+    texto: String,
+    activos: List<IngresoActivoResumen>,
+    resultadosBusqueda: List<ContratistaResumen>,
+    verificando: Boolean,
+    onElegirActivo: (IngresoActivoResumen) -> Unit,
+    onElegirContratista: (ContratistaResumen) -> Unit,
+) {
+    if (texto.isBlank()) {
+        ListaActivos(activos, onClick = onElegirActivo)
+        return
+    }
+    if (resultadosBusqueda.isEmpty() && !verificando) {
+        Text(
+            "Sin resultados",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 12.dp),
+        )
+    }
+    LazyColumn(modifier = Modifier.padding(top = 8.dp)) {
+        items(resultadosBusqueda, key = { it.id }) { contratista ->
+            FilaContratista(contratista, onClick = { onElegirContratista(contratista) })
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+        }
+    }
+}
+
+/// Filtra la lista de activos por cédula/nombre — vacío no trae nada, es un
+/// buscador para acotar, no una lista para recorrer (esa es el modo
+/// Entrada). Ver el doc-comment de [PantallaActivos].
+@Composable
+private fun ContenidoModoSalidaNombre(activos: List<IngresoActivoResumen>, onElegirActivo: (IngresoActivoResumen) -> Unit) {
+    ListaActivos(activos, onClick = onElegirActivo)
+}
+
+/// Uno o más números de gafete separados por coma, con vista previa de a
+/// quién le corresponde cada uno antes de un único botón que confirma
+/// todos de una vez. Ver el doc-comment de [PantallaActivos].
+@Composable
+private fun ContenidoModoSalidaGafete(
+    texto: String,
+    coincidencias: List<CoincidenciaGafete>,
+    enviando: Boolean,
+    onRegistrarSalidaGafetes: () -> Unit,
+) {
+    if (texto.isBlank()) {
+        Text(
+            "Escriba uno o más números de gafete, separados por coma",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        return
+    }
+
+    Column(modifier = Modifier.padding(top = 8.dp)) {
+        coincidencias.forEach { coincidencia ->
+            val activoCoincidente = coincidencia.activo
+            Text(
+                "Gafete ${coincidencia.numero} · " +
+                    (
+                        activoCoincidente?.let { "${it.contratistaNombre} · ${it.empresaNombre}" }
+                            ?: "Sin ingreso activo"
+                    ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (activoCoincidente != null) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.error
+                },
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
+        }
+
+        val encontrados = coincidencias.filter { it.activo != null }
+        if (encontrados.isNotEmpty()) {
+            Button(
+                onClick = onRegistrarSalidaGafetes,
+                enabled = !enviando,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondary,
+                    contentColor = MaterialTheme.colorScheme.onSecondary,
+                ),
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            ) {
+                Text(if (enviando) "Registrando…" else "Registrar salida (${encontrados.size})")
             }
         }
     }
+}
 
-    val activo = viewModel.seleccionSalida
-    if (activo != null) {
-        AlertDialog(
-            onDismissRequest = { viewModel.elegirSeleccionSalida(null) },
-            title = { Text("Registrar salida") },
-            text = {
-                Text("${activo.contratistaNombre} · ${activo.cedula} · ${activo.empresaNombre}")
-            },
-            confirmButton = {
-                TextButton(onClick = { viewModel.confirmarSalida(activo) }) {
-                    Text("Confirmar")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.elegirSeleccionSalida(null) }) {
-                    Text("Cancelar")
-                }
-            },
-        )
+/// Lista de activos compartida entre Entrada (campo vacío) y Salida:
+/// nombre — mismas filas, mismo comportamiento, sólo cambia qué hace
+/// `onClick` según quién la use.
+@Composable
+private fun ListaActivos(activos: List<IngresoActivoResumen>, onClick: (IngresoActivoResumen) -> Unit) {
+    LazyColumn(modifier = Modifier.padding(top = 8.dp)) {
+        items(activos, key = { it.registroId }) { activo ->
+            FilaActivo(activo, onClick = { onClick(activo) })
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+        }
     }
+}
+
+@Composable
+private fun DialogoConfirmarSalida(
+    activo: IngresoActivoResumen?,
+    onDismiss: () -> Unit,
+    onConfirmar: (IngresoActivoResumen) -> Unit,
+) {
+    if (activo == null) return
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Registrar salida") },
+        text = {
+            Text("${activo.contratistaNombre} · ${activo.cedula} · ${activo.empresaNombre}")
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirmar(activo) }) {
+                Text("Confirmar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        },
+    )
 }
 
 @Composable
