@@ -10,6 +10,8 @@ pub mod interfaz_preferida;
 pub mod lenguaje_comandos;
 pub mod mensajes;
 pub mod models;
+#[cfg(feature = "nube")]
+pub mod nube;
 pub mod services;
 pub mod texto;
 pub mod tiempo;

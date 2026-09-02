@@ -17,6 +17,10 @@ dev-auth = []
 # webview (ver src/mensajes.rs y los DTOs en application/*); también activa el
 # soporte serde de chrono para que NaiveDate serialice sin un wrapper propio.
 serde = ["dep:serde", "chrono/serde"]
+# Cliente del receptor en la nube (ver docs/plan-persistencia-nube.md).
+# reqwest en modo "blocking": el resto del crate es síncrono, evita meter
+# un runtime async (tokio) para esto solo.
+nube = ["dep:reqwest", "dep:serde_json", "serde"]
 
 [dependencies]
 chrono = "0.4.45"
@@ -33,6 +37,8 @@ tempfile = "3"
 thiserror = "2"
 rpassword = { version = "7", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"], optional = true }
 
 [build-dependencies]
 winresource = "0.1"
