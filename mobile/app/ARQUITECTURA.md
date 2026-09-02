@@ -153,3 +153,13 @@ reinventar la forma en cada pantalla nueva:
 - Verificado compilando de verdad (`./gradlew :app:assembleDebug`), no sólo
   a ojo — cualquier refactor de este tipo debe pasar por ese mismo comando
   antes de darse por terminado.
+
+`MainActivity.kt` (2026-09-02) es el segundo ejemplo, con un matiz nuevo:
+`LoginViewModel` **no** usa `viewModelScope.launch` — `Nucleo.autenticar`
+es una llamada síncrona a SQLite local, no hace falta corrutina para eso.
+No copiar el `viewModelScope.launch` de `ActivosViewModel` por reflejo
+donde no hace falta. También muestra que **no todo estado necesita
+ViewModel**: `PantallaPrincipal` (qué pestaña se ve, si el menú "+" está
+abierto) se quedó en `remember` a propósito — es navegación pura, sin
+llamada a `Nucleo` ni regla de negocio detrás, así que un ViewModel ahí no
+protegería nada real.
