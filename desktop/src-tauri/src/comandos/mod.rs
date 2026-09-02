@@ -29,5 +29,6 @@ pub mod empresas;
 pub mod gafetes;
 pub mod historial;
 pub mod ingresos;
+pub mod nube;
 pub mod respaldos;
 pub mod usuarios;

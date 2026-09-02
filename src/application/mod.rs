@@ -20,6 +20,8 @@ mod autenticacion;
 mod catalogos;
 mod gafetes;
 mod historial;
+#[cfg(feature = "nube")]
+mod nube;
 mod respaldos;
 mod usuarios;
 
@@ -28,6 +30,8 @@ pub use historial::{
     ExportarHistorialError, buscar_historial_completo_con_conexion,
     exportar_historial_seleccion_con_conexion,
 };
+#[cfg(feature = "nube")]
+pub use nube::GestionNubeError;
 pub use respaldos::EstadoRespaldoAutomatico;
 
 /// Tope de seguridad para las cargas "todo en un `Vec`" que alimentan AG

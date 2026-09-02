@@ -23,7 +23,7 @@ crate-type = ["staticlib", "rlib"]
 tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
-control_acceso = { path = "../..", default-features = false, features = ["serde"] }
+control_acceso = { path = "../..", default-features = false, features = ["serde", "nube"] }
 # Sólo para abrir una segunda `Connection` propia en comandos que no deben
 # retener el `Mutex<AppCore>` compartido durante consultas largas (ver
 # `comandos/historial.rs`/`comandos/auditoria.rs`) — misma versión que fija

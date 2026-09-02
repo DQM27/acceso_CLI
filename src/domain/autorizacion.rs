@@ -8,13 +8,21 @@ pub enum Operacion {
     ActivarDesactivarContratista,
     ActivarDesactivarEmpresa,
     VerAuditoria,
+    /// Persistencia en la nube (`docs/plan-persistencia-nube.md`): guardar
+    /// el secreto de este dispositivo y sincronizar. Exclusivo de ROOT, ni
+    /// siquiera Administrador -- ese secreto es la identidad del
+    /// dispositivo entero ante el receptor.
+    GestionarNube,
 }
 
 impl RolUsuario {
     pub fn puede(self, operacion: Operacion) -> bool {
         match self {
             Self::Root => true,
-            Self::Administrador => operacion != Operacion::GestionarRespaldos,
+            Self::Administrador => !matches!(
+                operacion,
+                Operacion::GestionarRespaldos | Operacion::GestionarNube
+            ),
             Self::Operador => false,
         }
     }
@@ -43,21 +51,22 @@ mod tests {
         RolUsuario::Administrador,
         RolUsuario::Operador,
     ];
-    const OPERACIONES: [Operacion; 6] = [
+    const OPERACIONES: [Operacion; 7] = [
         Operacion::GestionarRespaldos,
         Operacion::GestionarUsuarios,
         Operacion::EditarCedulaContratista,
         Operacion::ActivarDesactivarContratista,
         Operacion::ActivarDesactivarEmpresa,
         Operacion::VerAuditoria,
+        Operacion::GestionarNube,
     ];
 
     #[test]
     fn matriz_completa_de_permisos_por_operacion() {
         let esperados = [
-            [true, true, true, true, true, true],
-            [false, true, true, true, true, true],
-            [false, false, false, false, false, false],
+            [true, true, true, true, true, true, true],
+            [false, true, true, true, true, true, false],
+            [false, false, false, false, false, false, false],
         ];
 
         for (indice_rol, rol) in ROLES.into_iter().enumerate() {

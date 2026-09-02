@@ -29,6 +29,7 @@ import {
   Archive,
   Building2,
   ClipboardList,
+  Cloud,
   History,
   IdCard,
   UserCheck,
@@ -47,6 +48,7 @@ import Historial from "./pantallas/Historial";
 import Auditoria from "./pantallas/Auditoria";
 import Gafetes from "./pantallas/Gafetes";
 import Respaldos from "./pantallas/Respaldos";
+import Nube from "./pantallas/Nube";
 import NuevoIngresoModal from "./pantallas/NuevoIngresoModal";
 import SalidaModal from "./pantallas/SalidaModal";
 import { buscarActualizacion, cerrarSesion, instalarActualizacion, requiereConfiguracionInicial } from "./api";
@@ -134,7 +136,8 @@ export type Seccion =
   | "empresas"
   | "usuarios"
   | "gafetes"
-  | "respaldos";
+  | "respaldos"
+  | "nube";
 
 /** `rolesPermitidos` ausente = visible para cualquier rol logueado.
  * Auditoría lo restringe — espejo de `RolUsuario::puede(VerAuditoria)` en
@@ -177,6 +180,14 @@ const SECCIONES: {
     Icono: Archive,
     // Espejo de `Operacion::GestionarRespaldos` (`src/domain/autorizacion.rs`):
     // sólo Root puede gestionar respaldos, ni siquiera Administrador.
+    rolesPermitidos: ["Root"],
+  },
+  {
+    id: "nube",
+    etiqueta: "Nube",
+    Icono: Cloud,
+    // Espejo de `Operacion::GestionarNube` (`src/domain/autorizacion.rs`):
+    // el secreto de dispositivo es delicado, sólo Root lo administra.
     rolesPermitidos: ["Root"],
   },
 ];
@@ -294,6 +305,7 @@ function Shell({
           {seccion === "usuarios" && <Usuarios actorRol={sesion.rol} />}
           {seccion === "gafetes" && <Gafetes />}
           {seccion === "respaldos" && <Respaldos onRestaurado={onVolverALogin} />}
+          {seccion === "nube" && <Nube />}
         </ErrorBoundary>
       </main>
 
