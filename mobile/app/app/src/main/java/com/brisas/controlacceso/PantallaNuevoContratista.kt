@@ -1,18 +1,12 @@
 package com.brisas.controlacceso
 
-// NOTA DE ARQUITECTURA — leer mobile/app/ARQUITECTURA.md antes de tocar
-// este archivo. Formulario con varios campos y validaciones (PRAIND,
-// fecha) resueltas dentro del Composable junto con la llamada a
-// `Nucleo.crearContratista`. Al tocarlo, extraer un
-// `NuevoContratistaViewModel` que sea el dueño real de ese estado y de la
-// validación de fecha — no seguir sumando campos directo acá.
-
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -20,6 +14,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -42,6 +38,7 @@ import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.DatosContratista
 import uniffi.control_acceso_mobile.Empresa
 import uniffi.control_acceso_mobile.Nucleo
+import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.TipoIngreso
 
 /// Mismo formulario que desktop/src/pantallas/FormularioContratista.tsx —
@@ -59,17 +56,26 @@ private fun etiquetaTipo(tipo: TipoIngreso): String =
         TipoIngreso.SWAT -> "SWAT"
     }
 
+/// Sin ViewModel a propósito — mismo motivo que `PantallaConfirmarIngreso`
+/// (ver su doc-comment y mobile/app/ARQUITECTURA.md): `PantallaPrincipal`
+/// desmonta este formulario por completo al volver ("← Volver"), así que
+/// cada entrada ya es un intento fresco sin necesidad de un dueño de
+/// estado que sobreviva más que eso.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaNuevoContratista(nucleo: Nucleo) {
     var empresas by remember { mutableStateOf<List<Empresa>>(emptyList()) }
-    var cedula by remember { mutableStateOf("") }
-    var nombre by remember { mutableStateOf("") }
+    var cedula by rememberSaveable { mutableStateOf("") }
+    var nombre by rememberSaveable { mutableStateOf("") }
+    // `Empresa` es un `data class` generado por uniffi sin `Serializable` —
+    // `rememberSaveable` fallaría en tiempo de ejecución acá. Se pierde en
+    // una rotación (a diferencia del resto del formulario); no vale la
+    // complejidad de un `Saver` a mano sólo para este campo.
     var empresaSeleccionada by remember { mutableStateOf<Empresa?>(null) }
-    var tipoIngreso by remember { mutableStateOf(TipoIngreso.PRAIND) }
-    var personalRuta by remember { mutableStateOf(false) }
-    var tieneAcceso by remember { mutableStateOf(true) }
-    var fechaPraind by remember { mutableStateOf("") }
+    var tipoIngreso by rememberSaveable { mutableStateOf(TipoIngreso.PRAIND) }
+    var personalRuta by rememberSaveable { mutableStateOf(false) }
+    var tieneAcceso by rememberSaveable { mutableStateOf(true) }
+    var fechaPraind by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var mensaje by remember { mutableStateOf<String?>(null) }
     var enviando by remember { mutableStateOf(false) }
@@ -80,7 +86,7 @@ fun PantallaNuevoContratista(nucleo: Nucleo) {
     LaunchedEffect(Unit) {
         try {
             empresas = withContext(Dispatchers.Default) { nucleo.listarEmpresas() }
-        } catch (excepcion: Exception) {
+        } catch (excepcion: NucleoException) {
             error = excepcion.message
         }
     }
@@ -97,7 +103,7 @@ fun PantallaNuevoContratista(nucleo: Nucleo) {
             onValueChange = { cedula = it.filter(Char::isDigit) },
             label = { Text("Cédula") },
             singleLine = true,
-            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
                 focusedLabelColor = MaterialTheme.colorScheme.primary,
@@ -132,7 +138,7 @@ fun PantallaNuevoContratista(nucleo: Nucleo) {
                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                     focusedLabelColor = MaterialTheme.colorScheme.primary,
                 ),
-                modifier = Modifier.fillMaxWidth().menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
             )
             DropdownMenu(expanded = menuEmpresaAbierto, onDismissRequest = { menuEmpresaAbierto = false }) {
                 empresas.forEach { empresa ->
@@ -162,7 +168,7 @@ fun PantallaNuevoContratista(nucleo: Nucleo) {
                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                     focusedLabelColor = MaterialTheme.colorScheme.primary,
                 ),
-                modifier = Modifier.fillMaxWidth().menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
             )
             DropdownMenu(expanded = menuTipoAbierto, onDismissRequest = { menuTipoAbierto = false }) {
                 TipoIngreso.entries.forEach { tipo ->
@@ -240,7 +246,7 @@ fun PantallaNuevoContratista(nucleo: Nucleo) {
                         fechaPraind = ""
                         personalRuta = false
                         tieneAcceso = true
-                    } catch (excepcion: Exception) {
+                    } catch (excepcion: NucleoException) {
                         error = excepcion.message
                     } finally {
                         enviando = false

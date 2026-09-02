@@ -1,13 +1,5 @@
 package com.brisas.controlacceso
 
-// NOTA DE ARQUITECTURA — leer mobile/app/ARQUITECTURA.md antes de tocar
-// este archivo. Mismo patrón a corregir: estado del formulario y llamada
-// a `Nucleo.crearUsuario` en el Composable, con el gateo por rol
-// (Root/Administrador) resuelto ahí mismo como atajo de UX — la regla
-// real ya vive en Rust (ver el comentario de `crear_usuario` en
-// mobile/rust-core/src/lib.rs), esto solo oculta el menú. Al tocarlo,
-// extraer un `NuevoUsuarioViewModel`.
-
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -40,6 +33,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.DatosUsuario
 import uniffi.control_acceso_mobile.Nucleo
+import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.RolUsuario
 
 private fun etiquetaRol(rol: RolUsuario): String =
@@ -53,14 +47,18 @@ private fun etiquetaRol(rol: RolUsuario): String =
 /// menú para Operador) — Rust vuelve a exigir lo mismo del lado real
 /// (`Operacion::GestionarUsuarios`), así que no hay doble mantenimiento de
 /// la regla, esto es sólo la UX de no ofrecer un botón que va a fallar.
+///
+/// Sin ViewModel a propósito — mismo motivo que `PantallaConfirmarIngreso`
+/// (ver su doc-comment y mobile/app/ARQUITECTURA.md): `PantallaPrincipal`
+/// desmonta este formulario por completo al volver ("← Volver").
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaNuevoUsuario(nucleo: Nucleo) {
-    var cedula by remember { mutableStateOf("") }
-    var nombre by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var rol by remember { mutableStateOf(RolUsuario.OPERADOR) }
-    var activo by remember { mutableStateOf(true) }
+    var cedula by rememberSaveable { mutableStateOf("") }
+    var nombre by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var rol by rememberSaveable { mutableStateOf(RolUsuario.OPERADOR) }
+    var activo by rememberSaveable { mutableStateOf(true) }
     var menuRolAbierto by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var mensaje by remember { mutableStateOf<String?>(null) }
@@ -179,7 +177,7 @@ fun PantallaNuevoUsuario(nucleo: Nucleo) {
                         password = ""
                         rol = RolUsuario.OPERADOR
                         activo = true
-                    } catch (excepcion: Exception) {
+                    } catch (excepcion: NucleoException) {
                         error = excepcion.message
                     } finally {
                         enviando = false

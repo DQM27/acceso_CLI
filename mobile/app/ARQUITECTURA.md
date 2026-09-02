@@ -180,3 +180,18 @@ justo lo que hace falta acá. La regla real no es "ViewModel siempre" — es
 "ViewModel cuando el estado debe sobrevivir más que el Composable actual
 y no hay otro ya dueño de esa decisión (rotación, cambio de pestaña); acá
 `ActivosViewModel` ya es quien decide cuándo esta pantalla vive o muere".
+
+`PantallaNuevaEmpresa.kt`, `PantallaNuevoContratista.kt` y
+`PantallaNuevoUsuario.kt` (2026-09-02) confirman la misma regla: las tres
+son formularios de alta que `PantallaPrincipal` abre desde el menú "+" y
+desmonta por completo al volver ("← Volver") — exactamente el mismo caso
+que `PantallaConfirmarIngreso`, así que tampoco llevan ViewModel. Lo que sí
+se corrigió en las tres: `catch(Exception)` → `catch(NucleoException)`, y
+los campos de texto/selección a `rememberSaveable` — **con una excepción
+real**: `empresaSeleccionada` (`Empresa?`) en `PantallaNuevoContratista.kt`
+se quedó en `remember` porque `Empresa` es un `data class` generado por
+uniffi sin `Serializable`; `rememberSaveable` sobre un tipo no guardable
+falla en tiempo de ejecución, no en compilación — antes de aplicar
+`rememberSaveable` a cualquier tipo que no sea `String`/`Boolean`/un enum
+generado por uniffi (los enums sí son `Serializable`, heredado de
+`java.lang.Enum`), confirmar que el tipo realmente se puede guardar.
