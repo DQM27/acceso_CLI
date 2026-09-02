@@ -71,4 +71,11 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     // Requerido por el código Kotlin que genera uniffi para llamar al .so vía FFI.
     implementation("net.java.dev.jna:jna:5.15.0@aar")
+    // ViewModel + su integración con Compose (`viewModel()`, `viewModelScope`)
+    // — ver mobile/app/ARQUITECTURA.md: el estado y las llamadas a Nucleo
+    // viven acá, no en el @Composable.
+    // 2.9.4 es la última que compila contra compileSdk 36 — 2.10+ pide 37
+    // (ver AAR metadata al subir la versión; no forma parte de este cambio
+    // subir compileSdk).
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
 }

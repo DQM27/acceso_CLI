@@ -126,3 +126,30 @@ Orden sugerido si se decide hacer el refactor de una vez en vez de
 incremental: `PantallaActivos.kt` primero (el más grande y el que más se
 beneficia), después el resto en cualquier orden — no hay dependencias
 reales entre los ViewModels de cada pantalla.
+
+## Ejemplo ya aplicado — usar como plantilla
+
+`PantallaActivos.kt` + `ActivosViewModel.kt` (2026-09-02) ya siguen este
+patrón — úsense como plantilla concreta al extraer el resto en vez de
+reinventar la forma en cada pantalla nueva:
+
+- El estado vive en propiedades `by mutableStateOf(...)` con `private set`
+  dentro del `ViewModel`; el Composable las lee como `viewModel.campo`, de
+  sólo lectura desde afuera.
+- Cada evento de UI (`cambiarTexto`, `elegir`, `confirmarSalida`, …) es una
+  función pública del `ViewModel` que hace su propio `viewModelScope.launch`
+  — el Composable nunca abre un `rememberCoroutineScope()` ni encierra un
+  `try/catch` propio.
+- El `catch` es siempre sobre `NucleoException`, nunca sobre `Exception` —
+  ver el doc-comment de `ActivosViewModel` sobre por qué (evita tragarse un
+  `CancellationException` de paso, algo que sí le pasaba a la versión
+  vieja de este mismo archivo).
+- El `ViewModel` se instancia en el Composable con
+  `viewModel(factory = XyzViewModel.factory(nucleo))` — requiere la
+  dependencia `androidx.lifecycle:lifecycle-viewmodel-compose` (ya
+  agregada a `app/build.gradle.kts`; fijada en `2.9.4` porque `2.10+` pide
+  `compileSdk 37` y el proyecto sigue en `36` — subir esa versión sólo si
+  se sube `compileSdk` a la vez).
+- Verificado compilando de verdad (`./gradlew :app:assembleDebug`), no sólo
+  a ojo — cualquier refactor de este tipo debe pasar por ese mismo comando
+  antes de darse por terminado.
