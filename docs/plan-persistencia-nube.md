@@ -40,10 +40,13 @@ punta a punta contra el proyecto real: crear/dar de baja/resolver un
 gafete se refleja en la tabla `gafetes` de Supabase, con
 `contratista_deudor_id`/`_nombre` cuando corresponde.
 
-**Diseñado y compilando, sin prueba real**: el puente Rust↔Kotlin (uniffi)
-en `mobile/rust-core` expone los mismos métodos que escritorio, pasa
-clippy estricto, pero ninguna pantalla Android lo llama todavía y nunca
-corrió en un teléfono físico.
+**Compilado y probado en un teléfono físico, con DB local (2026-09-02)**:
+el puente Rust↔Kotlin (uniffi) en `mobile/rust-core` expone los mismos
+métodos que escritorio, pasa clippy estricto, y ya se compiló, instaló y
+usó en un teléfono real -- con la base local funcionando de punta a punta
+("quedó de lujo"). **Pendiente**: probar la sincronización con la nube
+desde el teléfono con conexión a internet real -- ese camino nunca se
+ejercitó en un dispositivo físico todavía (sólo contra DB local).
 
 **Afuera, por decisión explícita**: Kotlin/UI del celular (el usuario lo
 hace con el SDK propio de Supabase, no con este puente), Realtime/websocket

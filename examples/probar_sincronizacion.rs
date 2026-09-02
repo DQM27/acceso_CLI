@@ -62,20 +62,20 @@ fn main() {
     let gafete_numero: Option<i64> = connection
         .query_row("SELECT numero FROM gafetes LIMIT 1", [], |row| row.get(0))
         .ok();
-    let gafete_id = match gafete_numero {
-        Some(numero) => {
+    let gafete_id = gafete_numero.map_or_else(
+        || {
+            println!("No hay gafetes locales, creando uno de prueba (#999999)");
+            gafetes.crear(999_999).expect("crear gafete de prueba")
+        },
+        |numero| {
             println!("Tocando gafete #{numero}");
             gafetes
                 .buscar_por_numero(numero)
                 .expect("buscar gafete")
                 .expect("el gafete debe existir")
                 .id
-        }
-        None => {
-            println!("No hay gafetes locales, creando uno de prueba (#999999)");
-            gafetes.crear(999_999).expect("crear gafete de prueba")
-        }
-    };
+        },
+    );
     gafetes.dar_de_baja(gafete_id).expect("tocar gafete (dar de baja)");
     gafetes.resolver(gafete_id).expect("tocar gafete (resolver)");
 

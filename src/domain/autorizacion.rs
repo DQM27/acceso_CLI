@@ -9,10 +9,18 @@ pub enum Operacion {
     ActivarDesactivarEmpresa,
     VerAuditoria,
     /// Persistencia en la nube (`docs/plan-persistencia-nube.md`): guardar
-    /// el secreto de este dispositivo y sincronizar. Exclusivo de ROOT, ni
-    /// siquiera Administrador -- ese secreto es la identidad del
-    /// dispositivo entero ante el receptor.
+    /// el secreto de este dispositivo. Exclusivo de ROOT, ni siquiera
+    /// Administrador -- ese secreto es la identidad del dispositivo entero
+    /// ante el receptor, no una preferencia operativa.
     GestionarNube,
+    /// Persistencia en la nube: sincronizar, leer y cerrar ingresos
+    /// abiertos por el otro dispositivo del sitio. A diferencia de
+    /// `GestionarNube`, cualquier rol puede -- estas acciones ya no son
+    /// "administración", son parte del uso diario normal (la pantalla
+    /// Activos las usa para cualquiera que esté registrando ingresos), y el
+    /// disparador automático de fondo tampoco debe depender de que
+    /// justo haya una sesión ROOT abierta en ese momento.
+    UsarNube,
 }
 
 impl RolUsuario {
@@ -23,7 +31,7 @@ impl RolUsuario {
                 operacion,
                 Operacion::GestionarRespaldos | Operacion::GestionarNube
             ),
-            Self::Operador => false,
+            Self::Operador => matches!(operacion, Operacion::UsarNube),
         }
     }
 }
@@ -51,7 +59,7 @@ mod tests {
         RolUsuario::Administrador,
         RolUsuario::Operador,
     ];
-    const OPERACIONES: [Operacion; 7] = [
+    const OPERACIONES: [Operacion; 8] = [
         Operacion::GestionarRespaldos,
         Operacion::GestionarUsuarios,
         Operacion::EditarCedulaContratista,
@@ -59,14 +67,15 @@ mod tests {
         Operacion::ActivarDesactivarEmpresa,
         Operacion::VerAuditoria,
         Operacion::GestionarNube,
+        Operacion::UsarNube,
     ];
 
     #[test]
     fn matriz_completa_de_permisos_por_operacion() {
         let esperados = [
-            [true, true, true, true, true, true, true],
-            [false, true, true, true, true, true, false],
-            [false, false, false, false, false, false, false],
+            [true, true, true, true, true, true, true, true],
+            [false, true, true, true, true, true, false, true],
+            [false, false, false, false, false, false, false, true],
         ];
 
         for (indice_rol, rol) in ROLES.into_iter().enumerate() {

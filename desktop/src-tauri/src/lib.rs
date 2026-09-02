@@ -15,7 +15,9 @@ use estado::GuiState;
 /// Cada cuánto reintenta la sincronización automática mientras la app sigue
 /// abierta -- unos minutos de atraso no le hacen daño a nadie (ver
 /// `docs/plan-persistencia-nube.md`: se decidió a propósito no en vivo).
-const INTERVALO_SINCRONIZACION_AUTOMATICA: Duration = Duration::from_secs(5 * 60);
+/// 2 minutos, no menos: cada vuelta es una llamada de red real contra el
+/// receptor, y no hace falta acercarse a "en vivo" para que sea útil.
+const INTERVALO_SINCRONIZACION_AUTOMATICA: Duration = Duration::from_secs(2 * 60);
 /// Antes del primer intento, para no competir con el arranque de la ventana.
 const ESPERA_INICIAL_SINCRONIZACION: Duration = Duration::from_secs(10);
 

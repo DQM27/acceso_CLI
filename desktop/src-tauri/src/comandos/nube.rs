@@ -28,11 +28,15 @@ pub struct IngresoRemoto {
 
 /// Autentica este dispositivo contra el receptor -- un solo lugar para no
 /// repetir "cargar secreto + pedir token" en cada función de este archivo.
+/// Autoriza con `Operacion::UsarNube` (cualquier rol), no
+/// `GestionarNube` (exclusivo ROOT) -- sincronizar es uso diario normal, y
+/// el disparador automático de fondo (`crate::iniciar_sincronizacion_automatica`)
+/// no debe depender de que justo haya una sesión ROOT abierta.
 fn autenticar(state: &GuiState) -> Result<nube::TokenDispositivo, String> {
     let actor = state.sesion_activa()?;
     state
         .core()
-        .autorizar_gestion_nube(&actor)
+        .autorizar_uso_nube(&actor)
         .map_err(mensaje_gestion_nube)?;
 
     let secreto = nube::credenciales::cargar_secreto()

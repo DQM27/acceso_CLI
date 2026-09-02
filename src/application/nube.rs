@@ -1,7 +1,10 @@
 //! Gestión de la persistencia en la nube (`docs/plan-persistencia-nube.md`)
-//! desde la fachada de aplicación. Exclusivo de ROOT -- el secreto de
-//! dispositivo es la identidad de todo el equipo ante el receptor, no una
-//! preferencia que un Administrador deba poder tocar.
+//! desde la fachada de aplicación. Configurar el secreto del dispositivo
+//! (`Operacion::GestionarNube`) es exclusivo de ROOT -- esa credencial es
+//! la identidad de todo el equipo ante el receptor, no una preferencia que
+//! un Administrador deba poder tocar. Sincronizar, leer y cerrar ingresos
+//! remotos (`Operacion::UsarNube`) es de cualquier rol -- ya es uso diario
+//! normal (la pantalla Activos los usa), no administración.
 //!
 //! `directorio` es `None` en escritorio (resuelve `%LOCALAPPDATA%` solo,
 //! ver `nube::credenciales::guardar_secreto`) y `Some(...)` en el celular
@@ -89,7 +92,7 @@ impl AppCore {
         actor: &UsuarioSesion,
         directorio: Option<&Path>,
     ) -> Result<ResumenSincronizacion, GestionNubeError> {
-        self.autorizar_gestion_nube(actor)?;
+        self.autorizar_uso_nube(actor)?;
 
         let secreto = directorio
             .map_or_else(
@@ -125,7 +128,7 @@ impl AppCore {
         &self,
         actor: &UsuarioSesion,
     ) -> Result<Vec<IngresoRemoto>, GestionNubeError> {
-        self.autorizar_gestion_nube(actor)?;
+        self.autorizar_uso_nube(actor)?;
         let mut statement = self.connection.prepare(
             "SELECT uuid, contratista_nombre, hora_entrada, usuario_entrada_nombre
              FROM ingresos_remotos ORDER BY hora_entrada",
@@ -151,7 +154,7 @@ impl AppCore {
         directorio: Option<&Path>,
         uuid: &str,
     ) -> Result<(), GestionNubeError> {
-        self.autorizar_gestion_nube(actor)?;
+        self.autorizar_uso_nube(actor)?;
 
         let secreto = directorio
             .map_or_else(
@@ -187,6 +190,22 @@ impl AppCore {
             })?
             .ok_or(GestionNubeError::OperacionNoAutorizada)?;
         if !usuario.rol.puede(Operacion::GestionarNube) {
+            return Err(GestionNubeError::OperacionNoAutorizada);
+        }
+        Ok(())
+    }
+
+    /// Sólo autoriza -- mismo motivo que `autorizar_gestion_nube`, pero
+    /// para `Operacion::UsarNube` (sincronizar/leer/cerrar), que cualquier
+    /// rol puede.
+    pub fn autorizar_uso_nube(&self, actor: &UsuarioSesion) -> Result<(), GestionNubeError> {
+        let usuario = verificar_actor_activo(&self.connection, actor)
+            .map_err(|error| match error {
+                DatabaseError::Sqlite(error) => GestionNubeError::Sqlite(error),
+                _ => GestionNubeError::OperacionNoAutorizada,
+            })?
+            .ok_or(GestionNubeError::OperacionNoAutorizada)?;
+        if !usuario.rol.puede(Operacion::UsarNube) {
             return Err(GestionNubeError::OperacionNoAutorizada);
         }
         Ok(())
