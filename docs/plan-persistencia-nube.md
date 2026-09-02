@@ -114,20 +114,81 @@ Con esas dos piezas, la lectura más probable es:
 Esto es una lectura de arquitectura, no una decisión tomada — falta
 confirmarla juntos antes de escribir nada.
 
+## Decisiones tomadas (sesión 2026-09-02)
+
+- **Multi-sede: confirmado, es un hecho desde ya** — no es "más adelante".
+  Ya hay al menos un sitio (Brisas) con dos dispositivos (PC + celular);
+  se suman más sitios (Cartago, Belén, etc.) sin duda.
+- **Lectura Rust compartido vs. específico de plataforma: confirmada**,
+  verificado revisando el código de `mobile/` (no hay ni un cliente HTTP,
+  ni tabla de cola, ni `WorkManager` todavía — se parte de cero pero sin
+  ningún obstáculo arquitectónico). La lógica de red y de la cola vive en
+  Rust compartido; lo específico por plataforma es solo el disparador.
+- **Espejo y cola se unifican en un solo mecanismo**: una bandeja de
+  salida (patrón *outbox*) con un campo de prioridad, en vez de dos
+  sistemas separados. Menos código, menos cosas que romper.
+- **Identidad de dispositivo**: cada dispositivo (no cada sitio) tiene su
+  propia credencial — un secreto aleatorio de alta entropía, *no*
+  derivado de datos públicos (nombre/dirección), generado desde el panel
+  de administración, mostrado una sola vez, guardado hasheado en el
+  receptor (igual que una contraseña). La metadata descriptiva (sitio,
+  dirección, tipo de dispositivo) se guarda aparte, sin relación con el
+  secreto. Permite revocar un dispositivo puntual (ej. celular
+  perdido/robado) sin afectar a los demás.
+- **Una sola pieza de software**: el receptor (recibe datos de los
+  dispositivos) y el panel de administración/auditoría (alta de
+  dispositivos + consulta cruzada entre sitios) son la misma app, sin
+  duplicar la base de credenciales — quien audita ya tiene acceso
+  privilegiado, no hace falta separarlo.
+- **Entre sitios distintos**: sigue sin haber lectura cruzada — Cartago
+  nunca sabe que Brisas existe. Lo hace cumplir automáticamente la
+  credencial de cada dispositivo (queda atada a su sitio al generarse),
+  vía Row Level Security en la base.
+- **Dentro de un mismo sitio (PC + celular)**: sí necesitan verse entre
+  sí — ya no es "una sola vía" a ese nivel. Un ingreso creado en la PC
+  tiene que poder cerrarse (registrar salida) desde el celular del mismo
+  sitio, y viceversa. Esto ya no es "fuente de verdad central en la PC"
+  como se pensaba en `docs/plan-app-movil.md` — PC y celular son pares
+  simétricos del mismo sitio.
+- **Conflictos** (los dos dispositivos intentan cerrar el mismo ingreso
+  casi a la vez): control de concurrencia optimista, "el primero que le
+  llega a la nube gana"; el segundo recibe un rechazo con el motivo
+  ("ya se cerró desde [PC/celular] a las hh:mm") y lo refleja localmente.
+- **Receptor elegido: Supabase (plan Pro, ~US$25/mes)**, no receptor
+  100% propio en VPS ni PC con túnel — se descarta mantener
+  infraestructura propia porque no hay quien la administre 24/7. Se
+  usa solo como Postgres alojado + API REST automática (PostgREST) +
+  Row Level Security para separar sitios + Realtime (Postgres Changes,
+  ya incluido en el plan Pro, sin costo extra a esta escala) para el
+  relevo en vivo PC↔celular del mismo sitio. **Deliberadamente sin
+  usar Realtime para el panel de auditoría entre sitios** — ahí alcanza
+  con consulta bajo demanda, no hace falta instantáneo.
+  - **Nota importante, no cosmética**: esto es una excepción a la regla
+    de "todo vive en Rust, nunca se traduce" que sostiene el resto del
+    proyecto — la lógica de conflicto/outbox del lado receptor vive en
+    parte en Postgres (funciones/políticas RLS), no en Rust.
+- **Notificaciones push nativas (Firebase Cloud Messaging, aviso aunque
+  la app esté cerrada): descartadas por ahora, sin presupuesto** — queda
+  anotado para reconsiderar más adelante. Por ahora alcanza con que la
+  pantalla se actualice sola mientras la app está abierta (ya cubierto
+  por Realtime).
+
 ## Temas para la próxima sesión, en orden
 
-1. Resolver la pregunta pendiente: multi-sede ¿ahora o después?
-2. Confirmar (o corregir) la lectura preliminar de arriba: qué va en Rust
-   compartido y qué es específico de cada plataforma.
-3. Decidir el disparador de sincronización en cada plataforma (¿manual,
-   automático al recuperar conexión, periódico?).
-4. Diseñar el esquema de la cola local (tabla nueva, estados
-   pendiente/enviado/fallido, qué pasa si un envío falla a medias).
-5. Diseñar el receptor (ya elegido: propio, a medida) — dónde vive
-   (PC con túnel de Cloudflare / VPS), forma del paquete que recibe,
-   cómo identifica de qué sitio/dispositivo viene cada dato.
-6. Confirmar si la PC de escritorio también manda su propia cola al
-   mismo receptor, o sigue siendo la "fuente de verdad" central como se
-   pensó en el plan original de la app móvil (`docs/plan-app-movil.md`) —
-   esto cambia bastante el diseño y quedó sin decir explícitamente en
-   esta conversación.
+1. Diseñar el esquema concreto de la bandeja de salida (outbox) en
+   SQLite local: columnas, estados (pendiente/enviado/fallido), qué pasa
+   si un envío falla a medias.
+2. Diseñar las tablas en Supabase/Postgres y las políticas de RLS que
+   separan sitios (y permiten que PC y celular del mismo sitio se vean
+   entre sí).
+3. Definir la forma exacta del secreto de dispositivo (cómo se genera,
+   formato del hash, cómo se pega/registra en la app de cada
+   dispositivo) y el formulario de alta en el panel de administración.
+4. Implementar el rechazo por conflicto (optimistic concurrency) del
+   lado del receptor — la regla "primero en llegar gana" concreta como
+   función/policy de Postgres.
+5. Decidir el disparador de sincronización fuera del caso "mismo sitio en
+   vivo": ¿cómo y cuándo se vacía la bandeja de salida hacia Supabase en
+   general (al recuperar conexión, periódico, manual)? En Android, si
+   más adelante se quiere reintento en segundo plano real, hace falta
+   `WorkManager` (hoy inexistente) — queda diferido, no bloquea el resto.
