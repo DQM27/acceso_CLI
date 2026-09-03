@@ -539,13 +539,16 @@ input {
   transform: translateX(calc(var(--interruptor-ancho) - var(--interruptor-alto)));
 }
 
+/* VSC: el contenido arranca casi pegado al splitter del sidebar, sin
+   gutter propio — mismo criterio acá, sólo lo justo para que el
+   título/la grilla no queden literalmente pegados al borde. */
 .pantalla-encabezado {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   height: var(--alto-encabezado);
-  padding: 0 0.75rem;
+  padding: 0 0.375rem;
   border-bottom: 1px solid var(--borde);
   background: var(--panel);
 }
@@ -560,7 +563,7 @@ input {
 .pantalla-cuerpo {
   flex: 1;
   min-height: 0;
-  padding: 0.9rem 0.75rem;
+  padding: 0.9rem 0.375rem;
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
