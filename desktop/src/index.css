@@ -421,17 +421,40 @@ input {
 
 /* Barra superior de lado a lado (arriba de sidebar + contenido, no adentro
    del sidebar) — mismo lugar que el logo/marca de la app en VSC, a la
-   izquierda de su barra de menú. Doble click colapsa/expande el sidebar,
-   igual que antes tenía la marca cuando vivía adentro de él. */
+   izquierda de su barra de menú. */
 .barra-superior {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
   height: var(--alto-encabezado);
-  padding: 0 1.1rem;
   border-bottom: 1px solid var(--borde);
   background: var(--panel);
   flex-shrink: 0;
+}
+
+/* Mismo ancho (y transición) que `.shell-sidebar` — su `border-right`
+   sigue derecho desde acá hasta abajo, en vez de cortarse justo donde
+   arranca el sidebar y dejarlo "flotando" separado de la marca. Doble
+   click colapsa/expande, igual que antes cuando la marca vivía adentro
+   del sidebar. */
+.barra-superior-marca {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  height: 100%;
+  width: 15rem;
+  flex-shrink: 0;
+  /* 1.6rem para que el logo quede alineado con el ícono de cada
+     `.nav-item` de abajo (0.6rem de `.shell-nav` + 1rem del propio
+     `.nav-item`) — mismo margen izquierdo, una sola columna visual. */
+  padding: 0 1.1rem 0 1.6rem;
+  border-right: 1px solid var(--borde);
+  transition: width 0.15s ease;
+}
+
+.barra-superior-marca-colapsada {
+  width: 3.75rem;
+  padding: 0 0.5rem;
+  justify-content: center;
 }
 
 .shell-nav {

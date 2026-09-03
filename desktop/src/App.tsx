@@ -300,21 +300,25 @@ function Shell({
         {/* De lado a lado, arriba de sidebar + contenido — no adentro del
             sidebar (mismo lugar que el logo de la app en VSC, a la
             izquierda de su barra de menú, no en su barra de actividad). */}
-        <div
-          className="barra-superior"
-          title="Doble click para colapsar/expandir el menú"
-          onDoubleClick={alternarColapsado}
-        >
-          <div className="marca-sello">
-            <img src={marca} alt="" />
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: 600, color: "var(--texto)" }}>
-              Brisas
-            </p>
-            <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--muted)" }}>
-              Control de acceso
-            </p>
+        <div className="barra-superior">
+          <div
+            className={`barra-superior-marca ${colapsado ? "barra-superior-marca-colapsada" : ""}`}
+            title="Doble click para colapsar/expandir el menú"
+            onDoubleClick={alternarColapsado}
+          >
+            <div className="marca-sello">
+              <img src={marca} alt="" />
+            </div>
+            {!colapsado && (
+              <div style={{ minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: 600, color: "var(--texto)" }}>
+                  Brisas
+                </p>
+                <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--muted)" }}>
+                  Control de acceso
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
