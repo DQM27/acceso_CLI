@@ -14,7 +14,14 @@ const columnas: ColDef<UsuarioResumen>[] = [
   { field: "cedula", headerName: "Cédula", flex: 1.4, minWidth: 140, cellStyle: { textAlign: "left" } },
   { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
   { field: "rol", headerName: "Rol", flex: 1.4, minWidth: 140 },
-  { field: "activo", headerName: "Activo", flex: 1, minWidth: 100, cellRenderer: InterruptorCelda },
+  {
+    field: "activo",
+    headerName: "Activo",
+    flex: 1,
+    minWidth: 100,
+    cellRenderer: InterruptorCelda,
+    cellRendererParams: { critico: true },
+  },
 ];
 
 export default function Usuarios({ actorRol }: { actorRol: RolUsuario }) {

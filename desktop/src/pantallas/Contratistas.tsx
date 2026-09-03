@@ -50,6 +50,7 @@ const columnas: ColDef<ContratistaResumen>[] = [
     flex: 1,
     minWidth: 100,
     cellRenderer: InterruptorCelda,
+    cellRendererParams: { critico: true },
     filter: false,
   },
 ];

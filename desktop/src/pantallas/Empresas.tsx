@@ -13,7 +13,14 @@ import type { EmpresaResumen } from "../api";
 const columnas: ColDef<EmpresaResumen>[] = [
   { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
   { field: "contratistas", headerName: "Contratistas", flex: 1.3, minWidth: 130 },
-  { field: "activo", headerName: "Activa", flex: 1, minWidth: 100, cellRenderer: InterruptorCelda },
+  {
+    field: "activo",
+    headerName: "Activa",
+    flex: 1,
+    minWidth: 100,
+    cellRenderer: InterruptorCelda,
+    cellRendererParams: { critico: true },
+  },
 ];
 
 export default function Empresas() {

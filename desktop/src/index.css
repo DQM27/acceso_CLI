@@ -541,6 +541,31 @@ input {
   transform: translateX(calc(var(--interruptor-ancho) - var(--interruptor-alto)));
 }
 
+/* Variante para los interruptores que deciden si alguien/algo puede
+   entrar (Acceso, Activa, Activo) — a diferencia de uno informativo como
+   "Personal de ruta", que usa el mismo acento neutro prendido o apagado,
+   acá el estado importa a simple vista. Mismos colores de estado que ya
+   usa el resto de la app (`--error`/`--exito`, ver `EstadoAcceso` en
+   Activos.tsx) en vez del acento neutro, para que "sin acceso" no se
+   confunda con un flag cualquiera. */
+.interruptor-critico:not(.interruptor-activo) {
+  border-color: color-mix(in srgb, var(--error) 45%, var(--borde));
+  background: color-mix(in srgb, var(--error) 8%, var(--campo-fondo));
+}
+
+.interruptor-critico:not(.interruptor-activo)::after {
+  background: var(--error);
+}
+
+.interruptor-critico.interruptor-activo {
+  background: color-mix(in srgb, var(--exito) 16%, transparent);
+  border-color: var(--exito);
+}
+
+.interruptor-critico.interruptor-activo::after {
+  background: var(--exito);
+}
+
 /* VSC: el contenido arranca casi pegado al splitter del sidebar, sin
    gutter propio — mismo criterio acá, sólo lo justo para que la grilla no
    quede literalmente pegada al borde. */
