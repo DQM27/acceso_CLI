@@ -545,7 +545,7 @@ input {
   justify-content: space-between;
   gap: 1rem;
   height: var(--alto-encabezado);
-  padding: 0 1.5rem;
+  padding: 0 0.75rem;
   border-bottom: 1px solid var(--borde);
   background: var(--panel);
 }
@@ -560,7 +560,7 @@ input {
 .pantalla-cuerpo {
   flex: 1;
   min-height: 0;
-  padding: 1.25rem 1.5rem;
+  padding: 0.9rem 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
