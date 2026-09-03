@@ -23,5 +23,8 @@ fn autentica_un_dispositivo_real_y_recibe_un_token() {
 
     assert!(!token.access_token.is_empty());
     assert_eq!(token.expires_in, 3600);
-    println!("sitio_id={} dispositivo_id={} tipo={}", token.sitio_id, token.dispositivo_id, token.tipo);
+    println!(
+        "sitio_id={} dispositivo_id={} tipo={}",
+        token.sitio_id, token.dispositivo_id, token.tipo
+    );
 }

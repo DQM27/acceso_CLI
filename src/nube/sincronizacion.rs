@@ -447,10 +447,10 @@ fn enviar_cierre_ingreso(
 ) -> Result<(), SincronizacionError> {
     let (fecha_hora_salida, usuario_salida_nombre): (Option<String>, Option<String>) = connection
         .query_row(
-            "SELECT fecha_hora_salida, usuario_salida_nombre FROM registro_ingresos WHERE uuid = ?1",
-            params![uuid],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )?;
+        "SELECT fecha_hora_salida, usuario_salida_nombre FROM registro_ingresos WHERE uuid = ?1",
+        params![uuid],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
 
     let cuerpo = json!({
         "hora_salida": fecha_hora_salida,
@@ -698,9 +698,11 @@ fn resolver_empresa_local(
     empresa_uuid
         .and_then(|uuid| {
             transaction
-                .query_row("SELECT id FROM empresas WHERE uuid = ?1", params![uuid], |row| {
-                    row.get(0)
-                })
+                .query_row(
+                    "SELECT id FROM empresas WHERE uuid = ?1",
+                    params![uuid],
+                    |row| row.get(0),
+                )
                 .ok()
         })
         .or_else(|| {
@@ -749,7 +751,10 @@ pub fn cerrar_ingreso_remoto(
 
     exigir_2xx(respuesta)?;
 
-    connection.execute("DELETE FROM ingresos_remotos WHERE uuid = ?1", params![uuid])?;
+    connection.execute(
+        "DELETE FROM ingresos_remotos WHERE uuid = ?1",
+        params![uuid],
+    )?;
     Ok(())
 }
 
@@ -880,7 +885,13 @@ mod tests {
 
         let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
 
-        assert_eq!(resumen, ResumenDrenado { enviados: 1, fallidos: 0 });
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
         let estado: String = connection
             .query_row("SELECT estado FROM cola_salida", [], |row| row.get(0))
             .unwrap();
@@ -912,7 +923,13 @@ mod tests {
 
         let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
 
-        assert_eq!(resumen, ResumenDrenado { enviados: 1, fallidos: 0 });
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
         let estado: String = connection
             .query_row("SELECT estado FROM cola_salida", [], |row| row.get(0))
             .unwrap();
@@ -928,7 +945,13 @@ mod tests {
 
         let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
 
-        assert_eq!(resumen, ResumenDrenado { enviados: 1, fallidos: 0 });
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
         let estado: String = connection
             .query_row("SELECT estado FROM cola_salida", [], |row| row.get(0))
             .unwrap();
@@ -945,7 +968,13 @@ mod tests {
 
         let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
 
-        assert_eq!(resumen, ResumenDrenado { enviados: 0, fallidos: 1 });
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 0,
+                fallidos: 1
+            }
+        );
         let (estado, intentos, ultimo_error): (String, i64, Option<String>) = connection
             .query_row(
                 "SELECT estado, intentos, ultimo_error FROM cola_salida",
@@ -978,10 +1007,15 @@ mod tests {
             .unwrap();
         // Nunca levanta un servidor: si `pendientes()` la trajera igual, la
         // conexión fallaría y el test lo detectaría por el resumen.
-        let resumen =
-            drenar_cola(&connection, &contexto("http://127.0.0.1:1"), 10).unwrap();
+        let resumen = drenar_cola(&connection, &contexto("http://127.0.0.1:1"), 10).unwrap();
 
-        assert_eq!(resumen, ResumenDrenado { enviados: 0, fallidos: 0 });
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 0,
+                fallidos: 0
+            }
+        );
     }
 
     #[test]
@@ -1007,7 +1041,13 @@ mod tests {
 
         let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
 
-        assert_eq!(resumen, ResumenDrenado { enviados: 0, fallidos: 1 });
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 0,
+                fallidos: 1
+            }
+        );
         let estado: String = connection
             .query_row("SELECT estado FROM cola_salida", [], |row| row.get(0))
             .unwrap();
@@ -1018,12 +1058,7 @@ mod tests {
     #[test]
     fn envia_la_apertura_de_un_ingreso() {
         let (connection, contratista_uuid) = conexion_con_contratista();
-        connection
-            .execute(
-                "DELETE FROM cola_salida",
-                [],
-            )
-            .unwrap();
+        connection.execute("DELETE FROM cola_salida", []).unwrap();
         connection
             .execute("INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES ('1', 'Op', 'h', 'OPERADOR', 1)", [])
             .unwrap();
@@ -1057,7 +1092,13 @@ mod tests {
 
         let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
 
-        assert_eq!(resumen, ResumenDrenado { enviados: 1, fallidos: 0 });
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
     }
 
     #[test]
@@ -1077,7 +1118,9 @@ mod tests {
         assert_eq!(recibidos[0].uuid, "uuid-remoto");
         assert_eq!(recibidos[0].contratista_nombre, "Persona Remota");
         let cacheados: i64 = connection
-            .query_row("SELECT COUNT(*) FROM ingresos_remotos", [], |row| row.get(0))
+            .query_row("SELECT COUNT(*) FROM ingresos_remotos", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(cacheados, 1);
     }
@@ -1105,9 +1148,14 @@ mod tests {
         recibir_ingresos_abiertos(&connection, &contexto(&base_url)).unwrap();
 
         let cacheados: i64 = connection
-            .query_row("SELECT COUNT(*) FROM ingresos_remotos", [], |row| row.get(0))
+            .query_row("SELECT COUNT(*) FROM ingresos_remotos", [], |row| {
+                row.get(0)
+            })
             .unwrap();
-        assert_eq!(cacheados, 0, "lo que ya no viene en la respuesta se borra de la caché");
+        assert_eq!(
+            cacheados, 0,
+            "lo que ya no viene en la respuesta se borra de la caché"
+        );
     }
 
     #[test]
@@ -1130,11 +1178,18 @@ mod tests {
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         );
 
-        cerrar_ingreso_remoto(&connection, &contexto(&base_url), "uuid-remoto", "Op Celular")
-            .unwrap();
+        cerrar_ingreso_remoto(
+            &connection,
+            &contexto(&base_url),
+            "uuid-remoto",
+            "Op Celular",
+        )
+        .unwrap();
 
         let cacheados: i64 = connection
-            .query_row("SELECT COUNT(*) FROM ingresos_remotos", [], |row| row.get(0))
+            .query_row("SELECT COUNT(*) FROM ingresos_remotos", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(cacheados, 0);
     }
@@ -1157,7 +1212,10 @@ mod tests {
 
         assert_eq!(
             resumen,
-            ResumenCatalogo { empresas_recibidas: 1, contratistas_recibidos: 1 }
+            ResumenCatalogo {
+                empresas_recibidas: 1,
+                contratistas_recibidos: 1
+            }
         );
         let (nombre_empresa, uuid_empresa): (String, Option<String>) = connection
             .query_row("SELECT nombre, uuid FROM empresas", [], |row| {
@@ -1167,14 +1225,13 @@ mod tests {
         assert_eq!(nombre_empresa, "Empresa Remota");
         assert_eq!(uuid_empresa.as_deref(), Some("uuid-empresa-remota"));
 
-        let (cedula, tipo_ingreso, uuid_contratista): (String, String, Option<String>) =
-            connection
-                .query_row(
-                    "SELECT cedula, tipo_ingreso, uuid FROM contratistas",
-                    [],
-                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-                )
-                .unwrap();
+        let (cedula, tipo_ingreso, uuid_contratista): (String, String, Option<String>) = connection
+            .query_row(
+                "SELECT cedula, tipo_ingreso, uuid FROM contratistas",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
         assert_eq!(cedula, "1-1111");
         assert_eq!(tipo_ingreso, "SWAT");
         assert_eq!(uuid_contratista.as_deref(), Some("uuid-contratista-remoto"));
@@ -1185,7 +1242,10 @@ mod tests {
         let connection = Connection::open_in_memory().unwrap();
         initialize_database(&connection).unwrap();
         connection
-            .execute("INSERT INTO empresas (nombre) VALUES ('Empresa Remota')", [])
+            .execute(
+                "INSERT INTO empresas (nombre) VALUES ('Empresa Remota')",
+                [],
+            )
             .unwrap();
         connection
             .execute(
@@ -1207,20 +1267,34 @@ mod tests {
 
         recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
 
-        let total_empresas: i64 =
-            connection.query_row("SELECT COUNT(*) FROM empresas", [], |row| row.get(0)).unwrap();
+        let total_empresas: i64 = connection
+            .query_row("SELECT COUNT(*) FROM empresas", [], |row| row.get(0))
+            .unwrap();
         let total_contratistas: i64 = connection
             .query_row("SELECT COUNT(*) FROM contratistas", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(total_empresas, 1, "no duplica la empresa que ya tenía por nombre");
-        assert_eq!(total_contratistas, 1, "no duplica el contratista que ya tenía por cédula");
+        assert_eq!(
+            total_empresas, 1,
+            "no duplica la empresa que ya tenía por nombre"
+        );
+        assert_eq!(
+            total_contratistas, 1,
+            "no duplica el contratista que ya tenía por cédula"
+        );
         let (nombre_final, uuid_final): (String, Option<String>) = connection
             .query_row("SELECT nombre, uuid FROM contratistas", [], |row| {
                 Ok((row.get(0)?, row.get(1)?))
             })
             .unwrap();
-        assert_eq!(nombre_final, "Persona Remota", "la fila local se actualiza con lo remoto");
-        assert_eq!(uuid_final.as_deref(), Some("uuid-contratista-remoto"), "le completa el uuid");
+        assert_eq!(
+            nombre_final, "Persona Remota",
+            "la fila local se actualiza con lo remoto"
+        );
+        assert_eq!(
+            uuid_final.as_deref(),
+            Some("uuid-contratista-remoto"),
+            "le completa el uuid"
+        );
     }
 
     #[test]
@@ -1239,8 +1313,12 @@ mod tests {
         let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
 
         assert_eq!(resumen.contratistas_recibidos, 0);
-        let total: i64 =
-            connection.query_row("SELECT COUNT(*) FROM contratistas", [], |row| row.get(0)).unwrap();
-        assert_eq!(total, 0, "una fila sin datos suficientes para las reglas de acceso no se inventa");
+        let total: i64 = connection
+            .query_row("SELECT COUNT(*) FROM contratistas", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(
+            total, 0,
+            "una fila sin datos suficientes para las reglas de acceso no se inventa"
+        );
     }
 }

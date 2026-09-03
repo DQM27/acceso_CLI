@@ -31,8 +31,7 @@ fn main() {
     let _instancia = InstanciaGuard::adquirir(&db_path)
         .expect("no se pudo adquirir el bloqueo de instancia (¿la app está abierta?)");
 
-    let connection =
-        open_database(&db_path).expect("no se pudo abrir/migrar la base de datos");
+    let connection = open_database(&db_path).expect("no se pudo abrir/migrar la base de datos");
 
     let sql = fs::read_to_string(&sql_path).expect("no se pudo leer el archivo SQL");
 

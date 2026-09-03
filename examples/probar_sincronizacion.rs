@@ -54,7 +54,8 @@ fn main() {
     println!("Tocando empresa #{}: {}", empresa.id, empresa.nombre);
     empresas.actualizar(&empresa).expect("actualizar empresa");
 
-    repo.actualizar(&contratista).expect("actualizar contratista");
+    repo.actualizar(&contratista)
+        .expect("actualizar contratista");
 
     // Toca (o crea, si no hay ninguno) un gafete para probar el espejo
     // nuevo -- mismo camino que tocaría un cambio real hecho desde la GUI.
@@ -76,8 +77,12 @@ fn main() {
                 .id
         },
     );
-    gafetes.dar_de_baja(gafete_id).expect("tocar gafete (dar de baja)");
-    gafetes.resolver(gafete_id).expect("tocar gafete (resolver)");
+    gafetes
+        .dar_de_baja(gafete_id)
+        .expect("tocar gafete (dar de baja)");
+    gafetes
+        .resolver(gafete_id)
+        .expect("tocar gafete (resolver)");
 
     let pendientes: i64 = connection
         .query_row(

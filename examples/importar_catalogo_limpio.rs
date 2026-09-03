@@ -8,8 +8,9 @@
 //! Sin `ruta_db`, usa la misma ruta que la app.
 
 use std::{
-    env, fs,
+    env,
     ffi::OsString,
+    fs,
     path::{Path, PathBuf},
 };
 
@@ -33,13 +34,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         args.next()
             .expect("uso: importar_catalogo_limpio [--recrear] <archivo.sql> [ruta_db]"),
     );
-    let db_path = args.next().map_or_else(ruta_base_datos, |ruta| Ok(PathBuf::from(ruta)))?;
+    let db_path = args
+        .next()
+        .map_or_else(ruta_base_datos, |ruta| Ok(PathBuf::from(ruta)))?;
 
     println!("Base de datos: {}", db_path.display());
     println!("Script SQL:    {}", sql_path.display());
     println!(
         "Modo:          {}",
-        if recrear { "recrear base" } else { "actualizar catalogo" }
+        if recrear {
+            "recrear base"
+        } else {
+            "actualizar catalogo"
+        }
     );
 
     preparar_directorio(&db_path)?;
@@ -117,7 +124,11 @@ struct ResultadoImport {
     empresas_encoladas: usize,
 }
 
-fn importar(connection: &Connection, sql: &str, recrear: bool) -> rusqlite::Result<ResultadoImport> {
+fn importar(
+    connection: &Connection,
+    sql: &str,
+    recrear: bool,
+) -> rusqlite::Result<ResultadoImport> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
 
     if !recrear {
@@ -206,7 +217,10 @@ fn rellenar_uuid(transaction: &Transaction<'_>, tabla: &str) -> rusqlite::Result
 }
 
 fn reconstruir_fts(transaction: &Transaction<'_>) -> rusqlite::Result<()> {
-    transaction.execute("INSERT INTO empresas_fts(empresas_fts) VALUES ('rebuild')", [])?;
+    transaction.execute(
+        "INSERT INTO empresas_fts(empresas_fts) VALUES ('rebuild')",
+        [],
+    )?;
     transaction.execute(
         "INSERT INTO contratistas_fts(contratistas_fts) VALUES ('rebuild')",
         [],
@@ -238,7 +252,8 @@ fn encolar_estado(
 }
 
 fn verificar_integridad(connection: &Connection) -> rusqlite::Result<()> {
-    let integridad: String = connection.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
+    let integridad: String =
+        connection.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
     if integridad != "ok" {
         return Err(rusqlite::Error::InvalidQuery);
     }

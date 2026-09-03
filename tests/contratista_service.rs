@@ -512,11 +512,9 @@ fn contar_cola_salida(connection: &Connection, entidad_uuid: &str, operacion: &s
 
 fn uuid_de_contratista(connection: &Connection, id: i64) -> String {
     connection
-        .query_row(
-            "SELECT uuid FROM contratistas WHERE id = ?1",
-            [id],
-            |row| row.get(0),
-        )
+        .query_row("SELECT uuid FROM contratistas WHERE id = ?1", [id], |row| {
+            row.get(0)
+        })
         .unwrap()
 }
 
