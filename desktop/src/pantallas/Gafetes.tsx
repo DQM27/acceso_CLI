@@ -2,8 +2,8 @@ import { useCallback, useMemo, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
-import PantallaEncabezado from "../componentes/PantallaEncabezado";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
+import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import FormularioGafete from "./FormularioGafete";
 import GestionGafeteModal from "./GestionGafeteModal";
 import HistorialGafeteModal from "./HistorialGafeteModal";
@@ -30,6 +30,8 @@ export default function Gafetes() {
   const [formularioAbierto, setFormularioAbierto] = useState(false);
   const [gestionAbierta, setGestionAbierta] = useState<GafeteResumen | null>(null);
   const [detalleAbierto, setDetalleAbierto] = useState<GafeteResumen | null>(null);
+
+  useBarraEstado(cargando ? "Cargando…" : `${filas.length} resultado(s)`);
 
   const columnas: ColDef<GafeteResumen>[] = useMemo(
     () => [
@@ -108,8 +110,6 @@ export default function Gafetes() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PantallaEncabezado titulo="Gafetes" />
-
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<GafeteResumen>
@@ -122,7 +122,7 @@ export default function Gafetes() {
                 <button className="boton" title="Ctrl+N" onClick={() => setFormularioAbierto(true)}>
                   + Nuevo
                 </button>
-                <div className="campo" style={{ flex: "1 1 16rem" }}>
+                <div className="campo" style={{ flex: "0 1 16rem" }}>
                   <input
                     placeholder="Número…"
                     value={texto}
@@ -134,9 +134,6 @@ export default function Gafetes() {
             }
           />
         </div>
-        <p style={{ color: "var(--muted)", margin: 0 }}>
-          {cargando ? "Cargando…" : `${filas.length} resultado(s)`}
-        </p>
       </div>
 
       {formularioAbierto && (

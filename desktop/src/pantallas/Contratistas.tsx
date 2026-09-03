@@ -3,9 +3,9 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
-import PantallaEncabezado from "../componentes/PantallaEncabezado";
 import InterruptorCelda from "../componentes/InterruptorCelda";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
+import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import FormularioContratista from "./FormularioContratista";
 import { actualizarContratista, buscarContratistas, listarEmpresas } from "../api";
 import type { ContratistaResumen, Empresa } from "../api";
@@ -64,6 +64,13 @@ export default function Contratistas() {
     null,
   );
 
+  useBarraEstado(
+    cargando
+      ? "Cargando…"
+      : `${filas.length} resultado(s)` +
+          (seleccionadas.length > 0 ? ` · ${seleccionadas.length} seleccionado(s)` : ""),
+  );
+
   useHotkeys("ctrl+n", () => setFormularioAbierto("crear"), { preventDefault: true });
 
   useEffect(() => {
@@ -108,8 +115,6 @@ export default function Contratistas() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PantallaEncabezado titulo="Contratistas" />
-
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<ContratistaResumen>
@@ -123,7 +128,7 @@ export default function Contratistas() {
                 <button className="boton" title="Ctrl+N" onClick={() => setFormularioAbierto("crear")}>
                   + Nuevo
                 </button>
-                <div className="campo" style={{ flex: "1 1 16rem" }}>
+                <div className="campo" style={{ flex: "0 1 16rem" }}>
                   <input
                     placeholder="Cédula o nombre…"
                     value={busqueda}
@@ -138,10 +143,6 @@ export default function Contratistas() {
             onFilaDobleClic={setFormularioAbierto}
           />
         </div>
-        <p style={{ color: "var(--muted)", margin: 0 }}>
-          {cargando ? "Cargando…" : `${filas.length} resultado(s)`}
-          {!cargando && seleccionadas.length > 0 && ` · ${seleccionadas.length} seleccionado(s)`}
-        </p>
       </div>
 
       {formularioAbierto && (

@@ -33,11 +33,6 @@
   --sombra-panel: 0 22px 70px rgba(14, 29, 36, 0.12), 0 2px 10px rgba(14, 29, 36, 0.06);
   --radio: 8px;
   --radio-chico: 6px;
-  /* Altura compartida por `.barra-superior` (marca, de lado a lado) y
-     `.pantalla-encabezado` (título de cada pantalla) — así sus bordes
-     inferiores quedan a la misma altura en vez de cada uno calcular la
-     suya con su propio padding/contenido. */
-  --alto-encabezado: 4.75rem;
 
   color-scheme: light;
   font-family:
@@ -180,12 +175,12 @@ input {
 
 .campo input,
 .campo select {
-  padding: 0.6rem 0.8rem;
+  padding: 0.4rem 0.7rem;
   border-radius: var(--radio-chico);
   border: 1px solid var(--borde);
   background: var(--campo-fondo);
   color: var(--texto);
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   outline: none;
   transition:
     border-color 0.15s ease,
@@ -204,12 +199,12 @@ input {
 }
 
 .boton {
-  padding: 0.6rem 1.1rem;
+  padding: 0.4rem 0.85rem;
   border-radius: var(--radio-chico);
   border: 1px solid var(--borde);
   background: var(--panel-suave);
   color: var(--texto);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   transition:
     border-color 0.15s ease,
     background-color 0.15s ease,
@@ -269,30 +264,9 @@ input {
   gap: 0.5rem;
 }
 
+/* Ancho completo dentro del popover de `MenuUsuario` — su único control. */
 .boton-salir {
   width: 100%;
-}
-
-/* Sidebar colapsada (App.tsx, doble click sobre el logo/espacio vacío):
-   el botón de ancho completo con borde se veía como una caja apretada en
-   la columna angosta (3.75rem). Colapsado pasa a "fantasma" circular en vez
-   de verse como un control de formulario suelto; el color/borde sólo
-   aparece al pasar el mouse. `align-items: center` en `.shell-usuario` (no
-   `margin: 0 auto` acá) es lo que lo centra — mismo mecanismo que ya
-   alinea el resto de la columna, en vez de una segunda técnica de centrado
-   que terminaba un poco corrida respecto a los íconos de arriba. */
-.shell-sidebar-colapsada .boton-salir {
-  width: 2.1rem;
-  height: 2.1rem;
-  padding: 0;
-  border-radius: 999px;
-  border-color: transparent;
-  background: transparent;
-}
-
-.shell-sidebar-colapsada .boton-salir:hover {
-  border-color: color-mix(in srgb, var(--acento) 36%, var(--borde));
-  background: var(--campo-fondo);
 }
 
 .login-card {
@@ -367,15 +341,6 @@ input {
   padding: 0.65rem 0;
 }
 
-/* `align-items: center` en el eje transversal (horizontal, contenedor en
-   columna) centra `.boton-salir` — que en colapsado tiene ancho fijo
-   (2.1rem) en vez de `width: 100%` — sin afectar la fila del avatar
-   (sigue estirada a lo ancho completo por defecto; su propio
-   `justifyContent` ya la centra por dentro). */
-.shell-sidebar-colapsada .shell-usuario {
-  align-items: center;
-}
-
 .nav-item:hover:not(.nav-item-activo) {
   background: color-mix(in srgb, var(--campo-fondo) 60%, transparent);
 }
@@ -393,14 +358,20 @@ input {
 }
 
 /* Shell — sidebar y encabezado de pantalla, el mismo lenguaje sobrio del
-   Login (marca-sello, tarjeta) propagado al resto de la app. */
+   Login (marca-sello, tarjeta) propagado al resto de la app. Flota sobre
+   `--fondo` (ver `body`) como una tarjeta más, mismo margen (0.375rem) que
+   separa el contenido del borde de la ventana en `.pantalla-cuerpo` — nada
+   de margen a la derecha, ese gap ya lo da el padding de `.pantalla-cuerpo`
+   (doblarlo ahí se vería asimétrico respecto a los otros tres lados). */
 .shell-sidebar {
   display: flex;
   flex-direction: column;
   width: 15rem;
   flex-shrink: 0;
+  margin: 0.375rem 0 0.375rem 0.375rem;
   background: var(--panel);
-  border-right: 1px solid var(--borde);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
   transition: width 0.15s ease;
 }
 
@@ -419,42 +390,51 @@ input {
   width: 3.75rem;
 }
 
-/* Barra superior de lado a lado (arriba de sidebar + contenido, no adentro
-   del sidebar) — mismo lugar que el logo/marca de la app en VSC, a la
-   izquierda de su barra de menú. */
-.barra-superior {
+/* Barra de estado — de lado a lado, debajo de sidebar + contenido, mismo
+   lugar que la de VSC. A propósito SIN fondo/borde propio (a diferencia de
+   `.shell-sidebar`/la grilla, que sí son tarjetas): vive directo sobre
+   `--fondo` (ver `body`), como si sidebar y contenido flotaran encima de
+   ella en vez de que la barra fuera una caja más pegada abajo. Sin padding
+   arriba a propósito: ese espacio ya lo pone el margen/padding de
+   `.shell-sidebar`/`.pantalla-cuerpo` (0.375rem) antes de llegar acá —
+   agregarle otro tanto acá duplicaba el espacio de más. `padding-bottom:
+   0.375rem` (mismo valor) centra el texto en la franja de fondo completa
+   entre esas tarjetas y el borde inferior de la ventana. `padding-right`
+   también 0.375rem: mismo gutter que separa la grilla de la pared derecha
+   en `.pantalla-cuerpo`, así `MenuUsuario` (a la derecha, ver `Shell`)
+   queda alineado con el borde derecho del contenido. */
+.barra-estado {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  height: var(--alto-encabezado);
-  border-bottom: 1px solid var(--borde);
-  background: var(--panel);
-  flex-shrink: 0;
+  justify-content: space-between;
+  padding: 0 0.375rem 0.375rem 0.75rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1;
 }
 
-/* Mismo ancho (y transición) que `.shell-sidebar` — su `border-right`
-   sigue derecho desde acá hasta abajo, en vez de cortarse justo donde
-   arranca el sidebar y dejarlo "flotando" separado de la marca. Doble
-   click colapsa/expande, igual que antes cuando la marca vivía adentro
-   del sidebar. */
-.barra-superior-marca {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  height: 100%;
-  width: 15rem;
-  flex-shrink: 0;
-  /* 1.6rem para que el logo quede alineado con el ícono de cada
-     `.nav-item` de abajo (0.6rem de `.shell-nav` + 1rem del propio
-     `.nav-item`) — mismo margen izquierdo, una sola columna visual. */
-  padding: 0 1.1rem 0 1.6rem;
-  border-right: 1px solid var(--borde);
-  transition: width 0.15s ease;
+/* Disparador de `MenuUsuario` — mismo lenguaje que los ítems de la status
+   bar de VSC: texto plano hasta que se pasa el mouse, ahí aparece el fondo
+   de botón (no se ve como un control de formulario en reposo). */
+.barra-estado-boton {
+  padding: 0.2rem 0.5rem;
+  border: none;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
 }
 
-.barra-superior-marca-colapsada {
-  width: 3.75rem;
-  padding: 0 0.5rem;
-  justify-content: center;
+/* `--texto` en vez de `--campo-fondo` (el mix que usa `.nav-item:hover`) a
+   propósito: acá el botón vive directo sobre `--fondo` (no sobre `--panel`
+   como `.nav-item`), y `--campo-fondo` es casi idéntico a `--fondo` en los
+   dos temas — el hover quedaba invisible. Un overlay del color de texto
+   sí contrasta siempre, sea cual sea el fondo real. */
+.barra-estado-boton:hover {
+  background: color-mix(in srgb, var(--texto) 10%, transparent);
 }
 
 .shell-nav {
@@ -462,19 +442,13 @@ input {
   flex-direction: column;
   gap: 0.25rem;
   /* Espacio arriba antes del primer ícono — mismo criterio que la barra de
-     actividad de VSC, que no arranca sus íconos pegados al borde superior
-     (antes ese espacio lo daba `.shell-marca`, ahora vive en `.barra-superior`). */
-  padding: 0.75rem 0.6rem 0;
-}
-
-.shell-usuario {
-  margin: 0.5rem 0.6rem 0.6rem;
-  padding: 0.75rem 0.75rem;
-  border-top: 1px solid var(--borde);
-  padding-top: 0.9rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
+     actividad de VSC, que no arranca sus íconos pegados al borde superior.
+     El padding horizontal (mismo 0.375rem que separa los botones entre sí
+     en `Tabla.tsx`) separa el propio `.nav-item` del borde del sidebar —
+     sin esto la marca de "activo" (`box-shadow` de `.nav-item-activo`)
+     queda pegada al borde de la tarjeta. El padding de `.nav-item` (1rem)
+     es aparte: el espacio entre ese borde y el ícono/texto de adentro. */
+  padding: 0.75rem 0.375rem 0;
 }
 
 .chip {
@@ -566,30 +540,12 @@ input {
 }
 
 /* VSC: el contenido arranca casi pegado al splitter del sidebar, sin
-   gutter propio — mismo criterio acá, sólo lo justo para que el
-   título/la grilla no queden literalmente pegados al borde. */
-.pantalla-encabezado {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  height: var(--alto-encabezado);
-  padding: 0 0.375rem;
-  border-bottom: 1px solid var(--borde);
-  background: var(--panel);
-}
-
-.pantalla-encabezado h1 {
-  margin: 0;
-  font-size: 1.15rem;
-  font-weight: 600;
-  color: var(--texto);
-}
-
+   gutter propio — mismo criterio acá, sólo lo justo para que la grilla no
+   quede literalmente pegada al borde. */
 .pantalla-cuerpo {
   flex: 1;
   min-height: 0;
-  padding: 0.9rem 0.375rem;
+  padding: 0.375rem;
   display: flex;
   flex-direction: column;
   gap: 0.9rem;

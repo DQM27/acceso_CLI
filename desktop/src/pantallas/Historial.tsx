@@ -5,8 +5,8 @@ import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
-import PantallaEncabezado from "../componentes/PantallaEncabezado";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
+import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import SelectorRangoFecha, { textoRangoFecha } from "../componentes/SelectorRangoFecha";
 import { exportarHistorial, exportarHistorialPdf, listarHistorial, textoMedio } from "../api";
 import type { MovimientoIngresoResumen } from "../api";
@@ -55,6 +55,14 @@ export default function Historial() {
   const [desde, setDesde] = useState(() => fechaHaceMeses(6));
   const [hasta, setHasta] = useState("");
   const tablaRef = useRef<TablaHandle<FilaHistorial>>(null);
+
+  useBarraEstado(
+    cargando
+      ? "Cargando…"
+      : truncado
+        ? `${filas.length}+ movimiento(s) (rango truncado)`
+        : `${filas.length} movimiento(s)`,
+  );
 
   const recargar = useCallback(
     async (estaVigente: () => boolean = () => true) => {
@@ -235,8 +243,6 @@ export default function Historial() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PantallaEncabezado titulo="Historial" />
-
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         {truncado && (
           <p
@@ -307,13 +313,6 @@ export default function Historial() {
             }
           />
         </div>
-        <p style={{ color: "var(--muted)", margin: 0 }}>
-          {cargando
-            ? "Cargando…"
-            : truncado
-              ? `${filas.length}+ movimiento(s) (rango truncado)`
-              : `${filas.length} movimiento(s)`}
-        </p>
       </div>
     </div>
   );

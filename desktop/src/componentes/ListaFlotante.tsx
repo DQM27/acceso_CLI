@@ -13,6 +13,11 @@ import { createPortal } from "react-dom";
 
 export interface PosicionLista {
   top: number;
+  /** Distancia del borde superior del campo al borde inferior de la
+   * ventana — para `direccion="arriba"` en `ListaFlotante` (disparadores
+   * pegados al borde inferior, ej. `MenuUsuario` en la barra de estado, sin
+   * espacio debajo para abrir para el lado de siempre). */
+  bottom: number;
   left: number;
   /** Distancia del borde derecho del campo al borde derecho de la ventana —
    * para `alinear="derecha"` en `ListaFlotante` (ver ese componente). */
@@ -35,6 +40,7 @@ export function useListaFlotante(visible: boolean) {
       const rect = campoRef.current!.getBoundingClientRect();
       setPosicion({
         top: rect.bottom + 4,
+        bottom: window.innerHeight - rect.top + 4,
         left: rect.left,
         right: window.innerWidth - rect.right,
         width: rect.width,
@@ -90,6 +96,7 @@ export function ListaFlotante({
   posicion,
   ancho,
   alinear = "izquierda",
+  direccion = "abajo",
   children,
 }: {
   posicion: PosicionLista;
@@ -103,6 +110,12 @@ export function ListaFlotante({
    * derecho de la pantalla (ej. "Columnas ▾" en `Tabla.tsx`), donde anclar
    * por la izquierda dejaría el popover recortado fuera de la ventana. */
   alinear?: "izquierda" | "derecha";
+  /** "arriba" ancla el popover por `bottom` (crece hacia arriba desde justo
+   * encima del disparador) en vez de `top` — para disparadores pegados al
+   * borde inferior de la ventana (ej. `MenuUsuario` en la barra de estado),
+   * donde abrir "abajo" de siempre lo dejaría recortado fuera de la
+   * ventana. */
+  direccion?: "abajo" | "arriba";
   children: ReactNode;
 }) {
   return createPortal(
@@ -110,7 +123,7 @@ export function ListaFlotante({
       className="tarjeta"
       style={{
         position: "fixed",
-        top: posicion.top,
+        ...(direccion === "arriba" ? { bottom: posicion.bottom } : { top: posicion.top }),
         ...(alinear === "derecha" ? { right: posicion.right } : { left: posicion.left }),
         width: ancho ?? posicion.width,
         zIndex: 1000,

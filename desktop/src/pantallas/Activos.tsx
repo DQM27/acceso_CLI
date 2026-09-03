@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
-import PantallaEncabezado from "../componentes/PantallaEncabezado";
+import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import {
   cerrarIngresoRemoto,
   listarIngresosActivos,
@@ -124,6 +124,8 @@ export default function Activos({
   const [seleccionadas, setSeleccionadas] = useState<FilaActiva[]>([]);
   const [confirmarSalidaMasiva, setConfirmarSalidaMasiva] = useState(false);
   const [procesando, setProcesando] = useState(false);
+
+  useBarraEstado(cargando ? "Cargando…" : `${total} adentro`);
 
   const recargar = useCallback(() => {
     setCargando(true);
@@ -289,8 +291,6 @@ export default function Activos({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PantallaEncabezado titulo="Ingresos activos" />
-
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         {seleccionadas.length > 0 && (
           <div
@@ -328,9 +328,12 @@ export default function Activos({
             controles={
               <>
                 <button className="boton" title="Ctrl+Shift+N" onClick={onAbrirNuevoIngreso}>
-                  + Nuevo
+                  + Ingreso
                 </button>
-                <div className="campo" style={{ flex: "1 1 16rem" }}>
+                <button className="boton" title="Ctrl+Shift+S" onClick={onAbrirSalida}>
+                  Salida
+                </button>
+                <div className="campo" style={{ flex: "0 1 16rem" }}>
                   <input
                     placeholder="Cédula, nombre, empresa…"
                     value={busqueda}
@@ -339,16 +342,8 @@ export default function Activos({
                 </div>
               </>
             }
-            accionesDerecha={
-              <button className="boton" title="Ctrl+Shift+S" onClick={onAbrirSalida}>
-                Salida
-              </button>
-            }
           />
         </div>
-        <p style={{ color: "var(--muted)", margin: 0 }}>
-          {cargando ? "Cargando…" : `${total} adentro`}
-        </p>
       </div>
 
       {confirmarSalidaMasiva && (

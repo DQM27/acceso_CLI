@@ -3,9 +3,9 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
-import PantallaEncabezado from "../componentes/PantallaEncabezado";
 import InterruptorCelda from "../componentes/InterruptorCelda";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
+import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import FormularioEmpresa from "./FormularioEmpresa";
 import { buscarEmpresas, establecerEmpresaActiva } from "../api";
 import type { EmpresaResumen } from "../api";
@@ -23,6 +23,8 @@ export default function Empresas() {
   const [formularioAbierto, setFormularioAbierto] = useState<"crear" | EmpresaResumen | null>(
     null,
   );
+
+  useBarraEstado(cargando ? "Cargando…" : `${filas.length} resultado(s)`);
 
   useHotkeys("ctrl+n", () => setFormularioAbierto("crear"), { preventDefault: true });
 
@@ -53,8 +55,6 @@ export default function Empresas() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PantallaEncabezado titulo="Empresas" />
-
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<EmpresaResumen>
@@ -72,7 +72,7 @@ export default function Empresas() {
                 >
                   + Nuevo
                 </button>
-                <div className="campo" style={{ flex: "1 1 16rem" }}>
+                <div className="campo" style={{ flex: "0 1 16rem" }}>
                   <input
                     placeholder="Nombre…"
                     value={texto}
@@ -83,9 +83,6 @@ export default function Empresas() {
             }
           />
         </div>
-        <p style={{ color: "var(--muted)", margin: 0 }}>
-          {cargando ? "Cargando…" : `${filas.length} resultado(s)`}
-        </p>
       </div>
 
       {formularioAbierto && (

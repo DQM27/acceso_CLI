@@ -38,8 +38,8 @@ import {
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import marca from "./assets/marca.png";
 import Sidebar from "./componentes/Sidebar";
+import MenuUsuario from "./componentes/MenuUsuario";
 import ErrorBoundary from "./componentes/ErrorBoundary";
 import Login from "./pantallas/Login";
 import Activos from "./pantallas/Activos";
@@ -57,6 +57,7 @@ import { buscarActualizacion, cerrarSesion, instalarActualizacion, requiereConfi
 import type { ResumenSincronizacion, RolUsuario, UsuarioSesion } from "./api";
 import { iniciarRealtimeNube } from "./nubeRealtime";
 import { SesionProvider } from "./contexto/SesionContexto";
+import { BarraEstadoProvider } from "./contexto/BarraEstadoContexto";
 
 type Pantalla =
   | { tipo: "cargando" }
@@ -161,7 +162,7 @@ const SECCIONES: {
   Icono: LucideIcon;
   rolesPermitidos?: RolUsuario[];
 }[] = [
-  { id: "activos", etiqueta: "Ingresos activos", Icono: UserCheck },
+  { id: "activos", etiqueta: "Activos", Icono: UserCheck },
   { id: "historial", etiqueta: "Historial", Icono: History },
   { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
   {
@@ -212,10 +213,11 @@ function Shell({
 }) {
   const [seccion, setSeccion] = useState<Seccion>("activos");
   const [colapsado, setColapsado] = useState(leerSidebarColapsado);
+  // La pantalla montada publica acá su propio texto (ver `useBarraEstado`) —
+  // `null` mientras ninguna lo hizo todavía (primer render) o entre una
+  // pantalla y la siguiente.
+  const [mensajeEstado, setMensajeEstado] = useState<string | null>(null);
 
-  // Un solo lugar para el toggle — lo dispara tanto el doble click en la
-  // marca de `.barra-superior` como el de la franja libre del sidebar
-  // (ver `Sidebar.tsx`).
   function alternarColapsado() {
     setColapsado((actual) => {
       const siguiente = !actual;
@@ -296,91 +298,75 @@ function Shell({
 
   return (
     <SesionProvider value={sesion.id}>
-      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-        {/* De lado a lado, arriba de sidebar + contenido — no adentro del
-            sidebar (mismo lugar que el logo de la app en VSC, a la
-            izquierda de su barra de menú, no en su barra de actividad). */}
-        <div className="barra-superior">
-          <div
-            className={`barra-superior-marca ${colapsado ? "barra-superior-marca-colapsada" : ""}`}
-            title="Doble click para colapsar/expandir el menú"
-            onDoubleClick={alternarColapsado}
-          >
-            <div className="marca-sello">
-              <img src={marca} alt="" />
-            </div>
-            {!colapsado && (
-              <div style={{ minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: 600, color: "var(--texto)" }}>
-                  Brisas
-                </p>
-                <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--muted)" }}>
-                  Control de acceso
-                </p>
-              </div>
-            )}
+      <BarraEstadoProvider value={setMensajeEstado}>
+        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+          <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+            <Sidebar
+              secciones={seccionesVisibles}
+              seccionActual={seccion}
+              onCambiarSeccion={setSeccion}
+              colapsado={colapsado}
+              onToggleColapsado={alternarColapsado}
+            />
+
+            <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+              {/* `key={seccion}` resetea el boundary al cambiar de sección — sin
+                  esto, una vez que una pantalla rompe, el error queda "pegado" acá
+                  aunque se elija otra sección del menú, porque este `<main>` nunca
+                  se desmonta. */}
+              <ErrorBoundary
+                key={seccion}
+                mensaje="Esta sección no pudo cargar. La sesión sigue activa — elegí otra desde el menú, o reiniciá la app si el problema persiste."
+              >
+                {seccion === "activos" && (
+                  <Activos
+                    refrescarSenal={refrescarActivos}
+                    onAbrirNuevoIngreso={() => setModalNuevoIngreso(true)}
+                    onAbrirSalida={() => setModalSalida(true)}
+                  />
+                )}
+                {seccion === "historial" && <Historial />}
+                {seccion === "contratistas" && <Contratistas />}
+                {seccion === "auditoria" && <Auditoria />}
+                {seccion === "empresas" && <Empresas />}
+                {seccion === "usuarios" && <Usuarios actorRol={sesion.rol} />}
+                {seccion === "gafetes" && <Gafetes />}
+                {seccion === "respaldos" && <Respaldos onRestaurado={onVolverALogin} />}
+                {seccion === "nube" && <Nube />}
+              </ErrorBoundary>
+            </main>
           </div>
+
+          {/* De lado a lado, debajo de sidebar + contenido — mismo lugar que
+              la barra de estado de VSC. Cada pantalla publica su propio texto
+              acá (`useBarraEstado`) en vez de dibujarlo ella misma sobre la
+              grilla; a la derecha, el usuario (antes fijo en el sidebar). */}
+          <div className="barra-estado">
+            <span>{mensajeEstado}</span>
+            <MenuUsuario sesion={sesion} onCerrarSesion={onCerrarSesion} />
+          </div>
+
+          {modalNuevoIngreso && (
+            <NuevoIngresoModal
+              onRegistrado={() => setRefrescarActivos((n) => n + 1)}
+              onCerrar={() => setModalNuevoIngreso(false)}
+            />
+          )}
+
+          {modalSalida && (
+            <SalidaModal
+              onRegistrado={() => setRefrescarActivos((n) => n + 1)}
+              onCerrar={() => setModalSalida(false)}
+            />
+          )}
+
+          {/* theme="system": mismo criterio que el resto de la app (paleta
+              clara/oscura sigue `prefers-color-scheme`, sin toggle manual
+              todavía) — estilizado con las variables propias en index.css, no
+              los colores por defecto de sonner. */}
+          <Toaster theme="system" position="bottom-right" richColors={false} />
         </div>
-
-        <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-          <Sidebar
-            secciones={seccionesVisibles}
-            seccionActual={seccion}
-            onCambiarSeccion={setSeccion}
-            colapsado={colapsado}
-            onToggleColapsado={alternarColapsado}
-            sesion={sesion}
-            onCerrarSesion={onCerrarSesion}
-          />
-
-          <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-            {/* `key={seccion}` resetea el boundary al cambiar de sección — sin
-                esto, una vez que una pantalla rompe, el error queda "pegado" acá
-                aunque se elija otra sección del menú, porque este `<main>` nunca
-                se desmonta. */}
-            <ErrorBoundary
-              key={seccion}
-              mensaje="Esta sección no pudo cargar. La sesión sigue activa — elegí otra desde el menú, o reiniciá la app si el problema persiste."
-            >
-              {seccion === "activos" && (
-                <Activos
-                  refrescarSenal={refrescarActivos}
-                  onAbrirNuevoIngreso={() => setModalNuevoIngreso(true)}
-                  onAbrirSalida={() => setModalSalida(true)}
-                />
-              )}
-              {seccion === "historial" && <Historial />}
-              {seccion === "contratistas" && <Contratistas />}
-              {seccion === "auditoria" && <Auditoria />}
-              {seccion === "empresas" && <Empresas />}
-              {seccion === "usuarios" && <Usuarios actorRol={sesion.rol} />}
-              {seccion === "gafetes" && <Gafetes />}
-              {seccion === "respaldos" && <Respaldos onRestaurado={onVolverALogin} />}
-              {seccion === "nube" && <Nube />}
-            </ErrorBoundary>
-          </main>
-        </div>
-
-        {modalNuevoIngreso && (
-          <NuevoIngresoModal
-            onRegistrado={() => setRefrescarActivos((n) => n + 1)}
-            onCerrar={() => setModalNuevoIngreso(false)}
-          />
-        )}
-
-        {modalSalida && (
-          <SalidaModal
-            onRegistrado={() => setRefrescarActivos((n) => n + 1)}
-            onCerrar={() => setModalSalida(false)}
-          />
-        )}
-
-        {/* theme="system": mismo criterio que el resto de la app (paleta
-            clara/oscura sigue `prefers-color-scheme`, sin toggle manual
-            todavía) — estilizado con las variables propias en index.css, no
-            los colores por defecto de sonner. */}
-        <Toaster theme="system" position="bottom-right" richColors={false} />
-      </div>
+      </BarraEstadoProvider>
     </SesionProvider>
   );
 }

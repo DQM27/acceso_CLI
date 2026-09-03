@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { save } from "@tauri-apps/plugin-dialog";
-import PantallaEncabezado from "../componentes/PantallaEncabezado";
 import Modal from "../componentes/Modal";
 import {
   crearRespaldo,
@@ -136,8 +135,6 @@ export default function Respaldos({ onRestaurado }: { onRestaurado: () => void }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PantallaEncabezado titulo="Respaldos" />
-
       <div
         className="pantalla-cuerpo"
         style={{ minHeight: 0, flex: 1, display: "flex", flexDirection: "column", gap: "0.75rem" }}

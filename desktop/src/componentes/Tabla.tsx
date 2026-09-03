@@ -303,15 +303,15 @@ function TablaBase<T>(
           display: "flex",
           alignItems: "flex-end",
           justifyContent: "space-between",
-          gap: "0.75rem",
-          marginBottom: "0.5rem",
+          gap: "0.375rem",
+          marginBottom: "0.375rem",
         }}
       >
         <div
           style={{
             display: "flex",
             alignItems: "flex-end",
-            gap: "0.75rem",
+            gap: "0.375rem",
             flexWrap: "wrap",
             flex: 1,
           }}
@@ -319,7 +319,7 @@ function TablaBase<T>(
           {controles}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
           {accionesDerecha}
 
           <div ref={selectorRef}>

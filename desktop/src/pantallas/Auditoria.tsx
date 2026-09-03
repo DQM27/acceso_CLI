@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
-import PantallaEncabezado from "../componentes/PantallaEncabezado";
+import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import {
   etiquetaCampo,
   etiquetaEntidad,
@@ -59,6 +59,8 @@ export default function Auditoria() {
   // que de verdad se truncó.
   const [truncado, setTruncado] = useState(false);
   const [cambiosCargados, setCambiosCargados] = useState(0);
+
+  useBarraEstado(cargando ? "Cargando…" : `${filas.length} cambio(s) auditado(s)`);
 
   useEffect(() => {
     let vigente = true;
@@ -158,8 +160,6 @@ export default function Auditoria() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PantallaEncabezado titulo="Auditoría" />
-
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         {truncado && (
           <p
@@ -185,7 +185,7 @@ export default function Auditoria() {
             filas={filas}
             busqueda={busqueda}
             controles={
-              <div className="campo" style={{ flex: "1 1 16rem" }}>
+              <div className="campo" style={{ flex: "0 1 16rem" }}>
                 <input
                   placeholder="Entidad, campo, valor…"
                   value={busqueda}
@@ -195,9 +195,6 @@ export default function Auditoria() {
             }
           />
         </div>
-        <p style={{ color: "var(--muted)", margin: 0 }}>
-          {cargando ? "Cargando…" : `${filas.length} cambio(s) auditado(s)`}
-        </p>
       </div>
     </div>
   );

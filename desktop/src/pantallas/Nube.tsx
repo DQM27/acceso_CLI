@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { listen } from "@tauri-apps/api/event";
-import PantallaEncabezado from "../componentes/PantallaEncabezado";
 import { EVENTO_NUBE_ACTUALIZADA } from "../nubeRealtime";
 import type { NubeActualizadaDetalle } from "../nubeRealtime";
 import {
@@ -130,8 +129,6 @@ export default function Nube() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PantallaEncabezado titulo="Nube" />
-
       <div
         className="pantalla-cuerpo"
         style={{ minHeight: 0, flex: 1, display: "flex", flexDirection: "column", gap: "1.25rem", maxWidth: 560 }}
