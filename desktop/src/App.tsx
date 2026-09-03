@@ -38,6 +38,7 @@ import {
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import marca from "./assets/marca.png";
 import Sidebar from "./componentes/Sidebar";
 import ErrorBoundary from "./componentes/ErrorBoundary";
 import Login from "./pantallas/Login";
@@ -212,6 +213,17 @@ function Shell({
   const [seccion, setSeccion] = useState<Seccion>("activos");
   const [colapsado, setColapsado] = useState(leerSidebarColapsado);
 
+  // Un solo lugar para el toggle — lo dispara tanto el doble click en la
+  // marca de `.barra-superior` como el de la franja libre del sidebar
+  // (ver `Sidebar.tsx`).
+  function alternarColapsado() {
+    setColapsado((actual) => {
+      const siguiente = !actual;
+      guardarSidebarColapsado(siguiente);
+      return siguiente;
+    });
+  }
+
   const [modalNuevoIngreso, setModalNuevoIngreso] = useState(false);
   const [modalSalida, setModalSalida] = useState(false);
   // Sube en cada registro/salida exitosa — Activos lo usa para refrescar su
@@ -284,49 +296,66 @@ function Shell({
 
   return (
     <SesionProvider value={sesion.id}>
-      <div style={{ display: "flex", height: "100%" }}>
-        <Sidebar
-          secciones={seccionesVisibles}
-          seccionActual={seccion}
-          onCambiarSeccion={setSeccion}
-          colapsado={colapsado}
-          onToggleColapsado={() =>
-            setColapsado((actual) => {
-              const siguiente = !actual;
-              guardarSidebarColapsado(siguiente);
-              return siguiente;
-            })
-          }
-          sesion={sesion}
-          onCerrarSesion={onCerrarSesion}
-        />
+      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+        {/* De lado a lado, arriba de sidebar + contenido — no adentro del
+            sidebar (mismo lugar que el logo de la app en VSC, a la
+            izquierda de su barra de menú, no en su barra de actividad). */}
+        <div
+          className="barra-superior"
+          title="Doble click para colapsar/expandir el menú"
+          onDoubleClick={alternarColapsado}
+        >
+          <div className="marca-sello">
+            <img src={marca} alt="" />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: 600, color: "var(--texto)" }}>
+              Brisas
+            </p>
+            <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--muted)" }}>
+              Control de acceso
+            </p>
+          </div>
+        </div>
 
-        <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-          {/* `key={seccion}` resetea el boundary al cambiar de sección — sin
-              esto, una vez que una pantalla rompe, el error queda "pegado" acá
-              aunque se elija otra sección del menú, porque este `<main>` nunca
-              se desmonta. */}
-          <ErrorBoundary
-            key={seccion}
-            mensaje="Esta sección no pudo cargar. La sesión sigue activa — elegí otra desde el menú, o reiniciá la app si el problema persiste."
-          >
-            {seccion === "activos" && (
-              <Activos
-                refrescarSenal={refrescarActivos}
-                onAbrirNuevoIngreso={() => setModalNuevoIngreso(true)}
-                onAbrirSalida={() => setModalSalida(true)}
-              />
-            )}
-            {seccion === "historial" && <Historial />}
-            {seccion === "contratistas" && <Contratistas />}
-            {seccion === "auditoria" && <Auditoria />}
-            {seccion === "empresas" && <Empresas />}
-            {seccion === "usuarios" && <Usuarios actorRol={sesion.rol} />}
-            {seccion === "gafetes" && <Gafetes />}
-            {seccion === "respaldos" && <Respaldos onRestaurado={onVolverALogin} />}
-            {seccion === "nube" && <Nube />}
-          </ErrorBoundary>
-        </main>
+        <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+          <Sidebar
+            secciones={seccionesVisibles}
+            seccionActual={seccion}
+            onCambiarSeccion={setSeccion}
+            colapsado={colapsado}
+            onToggleColapsado={alternarColapsado}
+            sesion={sesion}
+            onCerrarSesion={onCerrarSesion}
+          />
+
+          <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+            {/* `key={seccion}` resetea el boundary al cambiar de sección — sin
+                esto, una vez que una pantalla rompe, el error queda "pegado" acá
+                aunque se elija otra sección del menú, porque este `<main>` nunca
+                se desmonta. */}
+            <ErrorBoundary
+              key={seccion}
+              mensaje="Esta sección no pudo cargar. La sesión sigue activa — elegí otra desde el menú, o reiniciá la app si el problema persiste."
+            >
+              {seccion === "activos" && (
+                <Activos
+                  refrescarSenal={refrescarActivos}
+                  onAbrirNuevoIngreso={() => setModalNuevoIngreso(true)}
+                  onAbrirSalida={() => setModalSalida(true)}
+                />
+              )}
+              {seccion === "historial" && <Historial />}
+              {seccion === "contratistas" && <Contratistas />}
+              {seccion === "auditoria" && <Auditoria />}
+              {seccion === "empresas" && <Empresas />}
+              {seccion === "usuarios" && <Usuarios actorRol={sesion.rol} />}
+              {seccion === "gafetes" && <Gafetes />}
+              {seccion === "respaldos" && <Respaldos onRestaurado={onVolverALogin} />}
+              {seccion === "nube" && <Nube />}
+            </ErrorBoundary>
+          </main>
+        </div>
 
         {modalNuevoIngreso && (
           <NuevoIngresoModal

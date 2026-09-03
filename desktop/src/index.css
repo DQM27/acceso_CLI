@@ -33,7 +33,7 @@
   --sombra-panel: 0 22px 70px rgba(14, 29, 36, 0.12), 0 2px 10px rgba(14, 29, 36, 0.06);
   --radio: 8px;
   --radio-chico: 6px;
-  /* Altura compartida por `.shell-marca` (logo del sidebar) y
+  /* Altura compartida por `.barra-superior` (marca, de lado a lado) y
      `.pantalla-encabezado` (título de cada pantalla) — así sus bordes
      inferiores quedan a la misma altura en vez de cada uno calcular la
      suya con su propio padding/contenido. */
@@ -419,26 +419,29 @@ input {
   width: 3.75rem;
 }
 
-.shell-sidebar-colapsada .shell-marca {
-  padding: 0 0.5rem;
-  justify-content: center;
-}
-
-.shell-marca {
+/* Barra superior de lado a lado (arriba de sidebar + contenido, no adentro
+   del sidebar) — mismo lugar que el logo/marca de la app en VSC, a la
+   izquierda de su barra de menú. Doble click colapsa/expande el sidebar,
+   igual que antes tenía la marca cuando vivía adentro de él. */
+.barra-superior {
   display: flex;
   align-items: center;
   gap: 0.65rem;
   height: var(--alto-encabezado);
   padding: 0 1.1rem;
   border-bottom: 1px solid var(--borde);
-  margin-bottom: 0.5rem;
+  background: var(--panel);
+  flex-shrink: 0;
 }
 
 .shell-nav {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
-  padding: 0 0.6rem;
+  gap: 0.25rem;
+  /* Espacio arriba antes del primer ícono — mismo criterio que la barra de
+     actividad de VSC, que no arranca sus íconos pegados al borde superior
+     (antes ese espacio lo daba `.shell-marca`, ahora vive en `.barra-superior`). */
+  padding: 0.75rem 0.6rem 0;
 }
 
 .shell-usuario {
