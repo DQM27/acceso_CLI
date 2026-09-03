@@ -7,6 +7,7 @@ use std::sync::Mutex;
 use control_acceso::application::AppCore;
 use control_acceso::application::GestionNubeError as GestionNubeErrorNucleo;
 use control_acceso::application::ResumenSincronizacion as ResumenSincronizacionNucleo;
+use control_acceso::application::SesionRealtimeNube as SesionRealtimeNubeNucleo;
 use control_acceso::database::queries::contratistas::{
     ContratistaResumen as ContratistaResumenNucleo, FiltroContratistas as FiltroContratistasNucleo,
 };
@@ -454,6 +455,7 @@ pub struct ResumenSincronizacion {
     pub enviados: u32,
     pub fallidos: u32,
     pub remotos_abiertos: u32,
+    pub cierres_recibidos: u32,
     pub empresas_recibidas: u32,
     pub contratistas_recibidos: u32,
     pub sitio_id: String,
@@ -467,11 +469,39 @@ impl From<ResumenSincronizacionNucleo> for ResumenSincronizacion {
             enviados: resumen.enviados,
             fallidos: resumen.fallidos,
             remotos_abiertos: resumen.remotos_abiertos,
+            cierres_recibidos: resumen.cierres_recibidos,
             empresas_recibidas: resumen.empresas_recibidas,
             contratistas_recibidos: resumen.contratistas_recibidos,
             sitio_id: resumen.sitio_id,
             dispositivo_id: resumen.dispositivo_id,
             tipo: resumen.tipo,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct SesionRealtimeNube {
+    pub base_url: String,
+    pub apikey: String,
+    pub access_token: String,
+    pub expires_in: u64,
+    pub sitio_id: String,
+    pub dispositivo_id: String,
+    pub tipo: String,
+    pub topic: String,
+}
+
+impl From<SesionRealtimeNubeNucleo> for SesionRealtimeNube {
+    fn from(sesion: SesionRealtimeNubeNucleo) -> Self {
+        Self {
+            base_url: sesion.base_url,
+            apikey: sesion.apikey,
+            access_token: sesion.access_token,
+            expires_in: sesion.expires_in,
+            sitio_id: sesion.sitio_id,
+            dispositivo_id: sesion.dispositivo_id,
+            tipo: sesion.tipo,
+            topic: sesion.topic,
         }
     }
 }
@@ -854,6 +884,16 @@ impl Nucleo {
         Ok(self
             .core_lock()
             .sincronizar_con_nube(&actor, Some(std::path::Path::new(&directorio)))?
+            .into())
+    }
+
+    /// Devuelve lo mínimo para que Kotlin escuche Broadcast privado por
+    /// sitio; el socket y sus reconexiones viven fuera del núcleo.
+    pub fn sesion_realtime_nube(&self, directorio: String) -> Result<SesionRealtimeNube, NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self
+            .core_lock()
+            .sesion_realtime_nube(&actor, Some(std::path::Path::new(&directorio)))?
             .into())
     }
 

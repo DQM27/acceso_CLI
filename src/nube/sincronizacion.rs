@@ -496,6 +496,56 @@ struct FilaIngresoRemoto {
     dispositivo_entrada_id: String,
 }
 
+#[derive(serde::Deserialize)]
+struct FilaCierrePropioRemoto {
+    id: String,
+    hora_salida: String,
+    usuario_salida_nombre: Option<String>,
+}
+
+/// Trae cierres que otro dispositivo registró en la nube sobre ingresos
+/// que nacieron en esta base local. No usa el repositorio normal de salida:
+/// ese camino siempre encola un cambio nuevo, y acá estamos aplicando un
+/// hecho ya confirmado por el receptor.
+pub fn recibir_cierres_de_ingresos_propios(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<u32, SincronizacionError> {
+    let cliente = reqwest::blocking::Client::new();
+    let url = format!(
+        "{}/rest/v1/ingresos?sitio_id=eq.{}&dispositivo_entrada_id=eq.{}\
+         &hora_salida=not.is.null&select=id,hora_salida,usuario_salida_nombre",
+        contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
+    );
+    let filas: Vec<FilaCierrePropioRemoto> = obtener_json(&cliente, contexto, &url)?;
+
+    let transaction = connection.unchecked_transaction()?;
+    let mut aplicados = 0_u32;
+    for fila in &filas {
+        let nombre_salida = fila
+            .usuario_salida_nombre
+            .as_deref()
+            .unwrap_or("Salida registrada en nube");
+        let filas_afectadas = transaction.execute(
+            "
+            UPDATE registro_ingresos
+            SET
+                fecha_hora_salida = ?1,
+                usuario_salida_id = NULL,
+                usuario_salida_nombre = ?2
+            WHERE uuid = ?3
+              AND fecha_hora_salida IS NULL
+            ",
+            params![fila.hora_salida, nombre_salida, fila.id],
+        )?;
+        let filas_afectadas = u32::try_from(filas_afectadas).unwrap_or(u32::MAX);
+        aplicados = aplicados.saturating_add(filas_afectadas);
+    }
+    transaction.commit()?;
+
+    Ok(aplicados)
+}
+
 /// Refresca la caché local `ingresos_remotos` con lo que hay abierto ahora
 /// mismo en la nube para este sitio, creado por *otro* dispositivo
 /// (`dispositivo_entrada_id=neq.<el mío>`). Reemplaza el contenido entero

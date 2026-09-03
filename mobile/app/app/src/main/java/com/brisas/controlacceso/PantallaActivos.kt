@@ -26,6 +26,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -71,8 +72,13 @@ import uniffi.control_acceso_mobile.TipoIngreso
 /// más abajo) a funciones chicas de una sola responsabilidad cada una, en
 /// vez de tener los tres modos mezclados en un único bloque `if`/`else`.
 @Composable
-fun PantallaActivos(nucleo: Nucleo) {
+fun PantallaActivos(nucleo: Nucleo, refrescarNube: Int = 0) {
     val viewModel: ActivosViewModel = viewModel(factory = ActivosViewModel.factory(nucleo))
+    LaunchedEffect(refrescarNube) {
+        if (refrescarNube > 0) {
+            viewModel.refrescar()
+        }
+    }
 
     when (val actual = viewModel.seleccionIngreso) {
         is SeleccionIngreso.Formulario -> {

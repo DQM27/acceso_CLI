@@ -105,6 +105,17 @@ class NubeViewModel(
         }
     }
 
+    fun refrescarCacheLocal() {
+        viewModelScope.launch {
+            try {
+                ingresosRemotos = withContext(dispatcherIO) { nucleo.listarIngresosRemotos() }
+                error = null
+            } catch (excepcion: NucleoException) {
+                error = excepcion.message
+            }
+        }
+    }
+
     /// Cualquier rol — cierra, contra la nube, un ingreso que abrió el
     /// otro dispositivo del sitio. Nunca toca el historial local de este
     /// teléfono.

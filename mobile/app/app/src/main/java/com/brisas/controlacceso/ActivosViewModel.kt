@@ -149,6 +149,10 @@ class ActivosViewModel(
         buscar()
     }
 
+    fun refrescar() {
+        buscar()
+    }
+
     private fun buscar() {
         trabajoBusqueda?.cancel()
         trabajoBusqueda = viewModelScope.launch {

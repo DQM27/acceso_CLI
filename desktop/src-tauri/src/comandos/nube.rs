@@ -10,11 +10,25 @@ pub struct ResumenSincronizacion {
     pub enviados: u32,
     pub fallidos: u32,
     pub remotos_abiertos: u32,
+    pub cierres_recibidos: u32,
     pub empresas_recibidas: u32,
     pub contratistas_recibidos: u32,
     pub sitio_id: String,
     pub dispositivo_id: String,
     pub tipo: String,
+}
+
+/// Datos temporales para que el frontend abra un canal Realtime privado.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SesionRealtimeNube {
+    pub base_url: String,
+    pub apikey: String,
+    pub access_token: String,
+    pub expires_in: u64,
+    pub sitio_id: String,
+    pub dispositivo_id: String,
+    pub tipo: String,
+    pub topic: String,
 }
 
 /// Espejo de `nube::IngresoRemoto` -- un ingreso abierto por el otro
@@ -65,6 +79,8 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
 
     let conexion = state.conexion_secundaria()?;
     let resumen = nube::drenar_cola(&conexion, &contexto, 200).map_err(mensaje_sincronizacion)?;
+    let cierres_recibidos = nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)
+        .map_err(mensaje_sincronizacion)?;
     let remotos = nube::recibir_ingresos_abiertos(&conexion, &contexto)
         .map_err(mensaje_sincronizacion)?;
     let catalogo = nube::recibir_catalogo_del_sitio(&conexion, &contexto)
@@ -74,6 +90,7 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
         enviados: resumen.enviados,
         fallidos: resumen.fallidos,
         remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
+        cierres_recibidos,
         empresas_recibidas: catalogo.empresas_recibidas,
         contratistas_recibidos: catalogo.contratistas_recibidos,
         sitio_id: token.sitio_id,
@@ -112,6 +129,28 @@ pub fn secreto_dispositivo_guardado(state: tauri::State<GuiState>) -> Result<boo
 #[tauri::command]
 pub fn sincronizar_con_nube(state: tauri::State<GuiState>) -> Result<ResumenSincronizacion, String> {
     ejecutar_sincronizacion(&state)
+}
+
+#[tauri::command]
+pub fn sesion_realtime_nube(
+    state: tauri::State<GuiState>,
+) -> Result<SesionRealtimeNube, String> {
+    let actor = state.sesion_activa()?;
+    let sesion = state
+        .core()
+        .sesion_realtime_nube(&actor, None)
+        .map_err(mensaje_gestion_nube)?;
+
+    Ok(SesionRealtimeNube {
+        base_url: sesion.base_url,
+        apikey: sesion.apikey,
+        access_token: sesion.access_token,
+        expires_in: sesion.expires_in,
+        sitio_id: sesion.sitio_id,
+        dispositivo_id: sesion.dispositivo_id,
+        tipo: sesion.tipo,
+        topic: sesion.topic,
+    })
 }
 
 /// Cuántas filas de `cola_salida` ya agotaron los reintentos automáticos

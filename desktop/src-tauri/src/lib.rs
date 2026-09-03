@@ -13,10 +13,9 @@ mod pdf;
 use estado::GuiState;
 
 /// Cada cuánto reintenta la sincronización automática mientras la app sigue
-/// abierta -- unos minutos de atraso no le hacen daño a nadie (ver
-/// `docs/plan-persistencia-nube.md`: se decidió a propósito no en vivo).
-/// 2 minutos, no menos: cada vuelta es una llamada de red real contra el
-/// receptor, y no hace falta acercarse a "en vivo" para que sea útil.
+/// abierta. Realtime dispara sincronizaciones bajo demanda, pero este pulso
+/// queda como respaldo cuando el socket no está conectado o se pierde un
+/// evento.
 const INTERVALO_SINCRONIZACION_AUTOMATICA: Duration = Duration::from_secs(2 * 60);
 /// Antes del primer intento, para no competir con el arranque de la ventana.
 const ESPERA_INICIAL_SINCRONIZACION: Duration = Duration::from_secs(10);
@@ -158,6 +157,7 @@ pub fn run() {
             comandos::nube::guardar_secreto_dispositivo,
             comandos::nube::secreto_dispositivo_guardado,
             comandos::nube::sincronizar_con_nube,
+            comandos::nube::sesion_realtime_nube,
             comandos::nube::listar_ingresos_remotos,
             comandos::nube::cerrar_ingreso_remoto,
             comandos::nube::fallos_permanentes_nube,

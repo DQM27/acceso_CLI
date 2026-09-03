@@ -20,6 +20,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -46,8 +47,13 @@ import uniffi.control_acceso_mobile.UsuarioSesion
 /// un Operador que ni ve ese botón. `sincronizar`/`cerrarIngresoRemoto` sí
 /// están disponibles para cualquier rol, sin gateo acá.
 @Composable
-fun PantallaNube(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String) {
+fun PantallaNube(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String, refrescarNube: Int = 0) {
     val viewModel: NubeViewModel = viewModel(factory = NubeViewModel.factory(nucleo, directorio))
+    LaunchedEffect(refrescarNube) {
+        if (refrescarNube > 0) {
+            viewModel.refrescarCacheLocal()
+        }
+    }
     val esRoot = sesion.rol == RolUsuario.ROOT
 
     LaunchedEffect(Unit) {

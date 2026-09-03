@@ -19,10 +19,12 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -59,6 +61,21 @@ private sealed class Pantalla {
 fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String, onCerrarSesion: () -> Unit) {
     var pantalla by remember { mutableStateOf<Pantalla>(Pantalla.Principal) }
     var menuCreacionAbierto by remember { mutableStateOf(false) }
+    var refrescarNube by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
+    val realtime = remember(nucleo, directorio, scope) {
+        NubeRealtime(
+            nucleo = nucleo,
+            directorio = directorio,
+            scope = scope,
+            onSincronizado = { refrescarNube += 1 },
+        )
+    }
+
+    DisposableEffect(realtime) {
+        realtime.iniciar()
+        onDispose { realtime.detener() }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -132,9 +149,9 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String,
                     Tab(selected = pestana == 2, onClick = { pestana = 2 }, text = { Text("Nube") })
                 }
                 when (pestana) {
-                    0 -> PantallaActivos(nucleo)
+                    0 -> PantallaActivos(nucleo, refrescarNube)
                     1 -> PantallaHistorial(nucleo)
-                    else -> PantallaNube(nucleo, sesion, directorio)
+                    else -> PantallaNube(nucleo, sesion, directorio, refrescarNube)
                 }
             }
         }

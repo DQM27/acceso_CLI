@@ -44,11 +44,26 @@ pub struct ResumenSincronizacion {
     pub enviados: u32,
     pub fallidos: u32,
     pub remotos_abiertos: u32,
+    pub cierres_recibidos: u32,
     pub empresas_recibidas: u32,
     pub contratistas_recibidos: u32,
     pub sitio_id: String,
     pub dispositivo_id: String,
     pub tipo: String,
+}
+
+/// Datos temporales para que una capa de plataforma abra un canal Realtime.
+/// El núcleo autentica y autoriza; el WebSocket queda fuera de esta capa.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SesionRealtimeNube {
+    pub base_url: String,
+    pub apikey: String,
+    pub access_token: String,
+    pub expires_in: u64,
+    pub sitio_id: String,
+    pub dispositivo_id: String,
+    pub tipo: String,
+    pub topic: String,
 }
 
 impl AppCore {
@@ -112,6 +127,8 @@ impl AppCore {
             sitio_id: &token.sitio_id,
         };
         let resumen = crate::nube::drenar_cola(&self.connection, &contexto, 200)?;
+        let cierres_recibidos =
+            crate::nube::recibir_cierres_de_ingresos_propios(&self.connection, &contexto)?;
         let remotos = crate::nube::recibir_ingresos_abiertos(&self.connection, &contexto)?;
         let catalogo = crate::nube::recibir_catalogo_del_sitio(&self.connection, &contexto)?;
 
@@ -119,11 +136,42 @@ impl AppCore {
             enviados: resumen.enviados,
             fallidos: resumen.fallidos,
             remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
+            cierres_recibidos,
             empresas_recibidas: catalogo.empresas_recibidas,
             contratistas_recibidos: catalogo.contratistas_recibidos,
             sitio_id: token.sitio_id,
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,
+        })
+    }
+
+    /// Autentica este dispositivo y devuelve lo mínimo para que la capa de
+    /// plataforma escuche Broadcast privado por sitio. No abre sockets ni
+    /// interpreta mensajes: cada aviso debe disparar `sincronizar_con_nube`.
+    pub fn sesion_realtime_nube(
+        &self,
+        actor: &UsuarioSesion,
+        directorio: Option<&Path>,
+    ) -> Result<SesionRealtimeNube, GestionNubeError> {
+        self.autorizar_uso_nube(actor)?;
+        let secreto = directorio
+            .map_or_else(
+                crate::nube::credenciales::cargar_secreto,
+                crate::nube::credenciales::cargar_secreto_en,
+            )
+            .ok_or(GestionNubeError::SinSecreto)?;
+        let token = crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, &secreto)?;
+        let topic = format!("sitio:{}", token.sitio_id);
+
+        Ok(SesionRealtimeNube {
+            base_url: crate::nube::BASE_URL.to_string(),
+            apikey: crate::nube::APIKEY.to_string(),
+            access_token: token.access_token,
+            expires_in: token.expires_in,
+            sitio_id: token.sitio_id,
+            dispositivo_id: token.dispositivo_id,
+            tipo: token.tipo,
+            topic,
         })
     }
 

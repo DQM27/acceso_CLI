@@ -1,5 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- La base de datos local trae cédulas, hashes de contraseña e
          historial de accesos. Con allowBackup=true (el default), Android
          la incluye sin avisar en el backup automático a la cuenta de

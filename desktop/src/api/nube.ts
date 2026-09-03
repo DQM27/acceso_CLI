@@ -7,9 +7,23 @@ export interface ResumenSincronizacion {
   enviados: number;
   fallidos: number;
   remotos_abiertos: number;
+  cierres_recibidos: number;
+  empresas_recibidas: number;
+  contratistas_recibidos: number;
   sitio_id: string;
   dispositivo_id: string;
   tipo: string;
+}
+
+export interface SesionRealtimeNube {
+  base_url: string;
+  apikey: string;
+  access_token: string;
+  expires_in: number;
+  sitio_id: string;
+  dispositivo_id: string;
+  tipo: string;
+  topic: string;
 }
 
 /** Ingreso abierto por el otro dispositivo del mismo sitio -- no vive en el
@@ -33,6 +47,10 @@ export function secretoDispositivoGuardado(): Promise<boolean> {
 
 export function sincronizarConNube(): Promise<ResumenSincronizacion> {
   return invoke("sincronizar_con_nube");
+}
+
+export function sesionRealtimeNube(): Promise<SesionRealtimeNube> {
+  return invoke("sesion_realtime_nube");
 }
 
 export function listarIngresosRemotos(): Promise<IngresoRemoto[]> {

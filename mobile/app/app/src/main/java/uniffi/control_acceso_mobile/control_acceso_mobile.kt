@@ -707,6 +707,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_secreto_dispositivo_guardado(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir(
@@ -769,6 +771,8 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_secreto_dispositivo_guardado(`ptr`: Long,`directorio`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_sesion_realtime_nube(`ptr`: Long,`directorio`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube(`ptr`: Long,`directorio`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun ffi_control_acceso_mobile_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -939,6 +943,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_secreto_dispositivo_guardado() != 23136) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube() != 41771) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube() != 32215) {
@@ -1124,6 +1131,29 @@ public object FfiConverterUInt: FfiConverter<UInt, Int> {
 
     override fun write(value: UInt, buf: ByteBuffer) {
         buf.putInt(value.toInt())
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterULong: FfiConverter<ULong, Long> {
+    override fun lift(value: Long): ULong {
+        return value.toULong()
+    }
+
+    override fun read(buf: ByteBuffer): ULong {
+        return lift(buf.getLong())
+    }
+
+    override fun lower(value: ULong): Long {
+        return value.toLong()
+    }
+
+    override fun allocationSize(value: ULong) = 8UL
+
+    override fun write(value: ULong, buf: ByteBuffer) {
+        buf.putLong(value.toLong())
     }
 }
 
@@ -1443,6 +1473,12 @@ public interface NucleoInterface {
      * No revela el secreto -- sólo si ya hay uno guardado.
      */
     fun `secretoDispositivoGuardado`(`directorio`: kotlin.String): kotlin.Boolean
+    
+    /**
+     * Devuelve lo mínimo para que Kotlin escuche Broadcast privado por
+     * sitio; el socket y sus reconexiones viven fuera del núcleo.
+     */
+    fun `sesionRealtimeNube`(`directorio`: kotlin.String): SesionRealtimeNube
     
     /**
      * Autentica este dispositivo, drena la bandeja de salida pendiente y
@@ -1881,6 +1917,25 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_secreto_dispositivo_guardado(
+        it,
+        
+        FfiConverterString.lower(`directorio`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Devuelve lo mínimo para que Kotlin escuche Broadcast privado por
+     * sitio; el socket y sus reconexiones viven fuera del núcleo.
+     */
+    @Throws(NucleoException::class)override fun `sesionRealtimeNube`(`directorio`: kotlin.String): SesionRealtimeNube {
+            return FfiConverterTypeSesionRealtimeNube.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_sesion_realtime_nube(
         it,
         
         FfiConverterString.lower(`directorio`),_status)
@@ -2557,6 +2612,8 @@ data class ResumenSincronizacion (
     , 
     var `remotosAbiertos`: kotlin.UInt
     , 
+    var `cierresRecibidos`: kotlin.UInt
+    , 
     var `empresasRecibidas`: kotlin.UInt
     , 
     var `contratistasRecibidos`: kotlin.UInt
@@ -2587,6 +2644,7 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
@@ -2597,6 +2655,7 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterUInt.allocationSize(value.`enviados`) +
             FfiConverterUInt.allocationSize(value.`fallidos`) +
             FfiConverterUInt.allocationSize(value.`remotosAbiertos`) +
+            FfiConverterUInt.allocationSize(value.`cierresRecibidos`) +
             FfiConverterUInt.allocationSize(value.`empresasRecibidas`) +
             FfiConverterUInt.allocationSize(value.`contratistasRecibidos`) +
             FfiConverterString.allocationSize(value.`sitioId`) +
@@ -2608,11 +2667,80 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterUInt.write(value.`enviados`, buf)
             FfiConverterUInt.write(value.`fallidos`, buf)
             FfiConverterUInt.write(value.`remotosAbiertos`, buf)
+            FfiConverterUInt.write(value.`cierresRecibidos`, buf)
             FfiConverterUInt.write(value.`empresasRecibidas`, buf)
             FfiConverterUInt.write(value.`contratistasRecibidos`, buf)
             FfiConverterString.write(value.`sitioId`, buf)
             FfiConverterString.write(value.`dispositivoId`, buf)
             FfiConverterString.write(value.`tipo`, buf)
+    }
+}
+
+
+
+data class SesionRealtimeNube (
+    var `baseUrl`: kotlin.String
+    , 
+    var `apikey`: kotlin.String
+    , 
+    var `accessToken`: kotlin.String
+    , 
+    var `expiresIn`: kotlin.ULong
+    , 
+    var `sitioId`: kotlin.String
+    , 
+    var `dispositivoId`: kotlin.String
+    , 
+    var `tipo`: kotlin.String
+    , 
+    var `topic`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSesionRealtimeNube: FfiConverterRustBuffer<SesionRealtimeNube> {
+    override fun read(buf: ByteBuffer): SesionRealtimeNube {
+        return SesionRealtimeNube(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: SesionRealtimeNube) = (
+            FfiConverterString.allocationSize(value.`baseUrl`) +
+            FfiConverterString.allocationSize(value.`apikey`) +
+            FfiConverterString.allocationSize(value.`accessToken`) +
+            FfiConverterULong.allocationSize(value.`expiresIn`) +
+            FfiConverterString.allocationSize(value.`sitioId`) +
+            FfiConverterString.allocationSize(value.`dispositivoId`) +
+            FfiConverterString.allocationSize(value.`tipo`) +
+            FfiConverterString.allocationSize(value.`topic`)
+    )
+
+    override fun write(value: SesionRealtimeNube, buf: ByteBuffer) {
+            FfiConverterString.write(value.`baseUrl`, buf)
+            FfiConverterString.write(value.`apikey`, buf)
+            FfiConverterString.write(value.`accessToken`, buf)
+            FfiConverterULong.write(value.`expiresIn`, buf)
+            FfiConverterString.write(value.`sitioId`, buf)
+            FfiConverterString.write(value.`dispositivoId`, buf)
+            FfiConverterString.write(value.`tipo`, buf)
+            FfiConverterString.write(value.`topic`, buf)
     }
 }
 

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { listen } from "@tauri-apps/api/event";
 import PantallaEncabezado from "../componentes/PantallaEncabezado";
+import { EVENTO_NUBE_ACTUALIZADA } from "../nubeRealtime";
+import type { NubeActualizadaDetalle } from "../nubeRealtime";
 import {
   cerrarIngresoRemoto,
   fallosPermanentesNube,
@@ -64,6 +66,18 @@ export default function Nube() {
     return () => {
       cancelar.then((f) => f());
     };
+  }, []);
+
+  useEffect(() => {
+    function alActualizar(evento: Event) {
+      const detalle = (evento as CustomEvent<NubeActualizadaDetalle>).detail;
+      setUltimoResumen(detalle.resumen);
+      cargarRemotos();
+      cargarFallosPermanentes();
+    }
+
+    window.addEventListener(EVENTO_NUBE_ACTUALIZADA, alActualizar);
+    return () => window.removeEventListener(EVENTO_NUBE_ACTUALIZADA, alActualizar);
   }, []);
 
   async function guardar() {
@@ -177,7 +191,7 @@ export default function Nube() {
             <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
               Sitio {ultimoResumen.sitio_id} · dispositivo {ultimoResumen.dispositivo_id} (
               {ultimoResumen.tipo}) — {ultimoResumen.enviados} enviados, {ultimoResumen.fallidos}{" "}
-              fallidos.
+              fallidos, {ultimoResumen.cierres_recibidos} cierres recibidos.
             </p>
           )}
 
@@ -192,7 +206,7 @@ export default function Nube() {
         <section style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           <h3 style={{ margin: 0 }}>Abiertos en el otro dispositivo del sitio</h3>
           <p style={{ color: "var(--muted)", marginTop: 0, fontSize: "0.85rem" }}>
-            Se actualiza al sincronizar — no es en vivo.
+            Se actualiza con la sincronización y con avisos en vivo.
           </p>
 
           {remotos.length === 0 && (
