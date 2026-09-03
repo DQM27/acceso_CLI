@@ -51,7 +51,7 @@ export default function Nube() {
   useEffect(cargarFallosPermanentes, []);
 
   // El disparador automático (`crate::iniciar_sincronizacion_automatica`,
-  // cada 5 minutos mientras la app está abierta) corre en segundo plano sin
+  // cada 2 minutos mientras la app está abierta) corre en segundo plano sin
   // que nadie apriete el botón -- este listener es sólo para que, si esta
   // pantalla está abierta cuando eso pasa, se vea el resultado sin recargar.
   useEffect(() => {

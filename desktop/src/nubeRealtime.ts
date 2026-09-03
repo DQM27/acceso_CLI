@@ -30,6 +30,16 @@ export function emitirActualizacion(
   );
 }
 
+// Tope del backoff exponencial de reconexión -- sin esto, un canal que
+// nunca logra autorizarse (ver docs/migracion-supabase-realtime-broadcast.sql,
+// bug de plataforma de Realtime con JWT Signing Keys) reintenta cada 2
+// segundos para siempre: cada vuelta abre un cliente Supabase nuevo, pide un
+// token (llamada de red bloqueante del lado Rust) y abre un websocket, todo
+// compitiendo por el mismo hilo que atiende la UI -- eso es lo que se sentía
+// como "la app se pega" (2026-09-03).
+const REINTENTO_BASE_MS = 2_000;
+const REINTENTO_TOPE_MS = 60_000;
+
 export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => void {
   let cancelado = false;
   let cliente: SupabaseClient | null = null;
@@ -38,6 +48,12 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
   let temporizadorReconectar: ReturnType<typeof window.setTimeout> | null = null;
   let temporizadorSincronizar: ReturnType<typeof window.setTimeout> | null = null;
   let sincronizando = false;
+  // Intentos fallidos seguidos desde la última vez que el canal quedó
+  // realmente suscrito -- crece el backoff (2s, 4s, 8s… hasta el tope) en
+  // vez de reintentar siempre a los 2s. Se reinicia a 0 en cuanto
+  // `subscribe` avisa "SUBSCRIBED", así una falla puntual después de mucho
+  // andar bien no arranca desde el tope.
+  let intentosSeguidos = 0;
 
   function limpiarCanal() {
     if (temporizadorRenovar) window.clearTimeout(temporizadorRenovar);
@@ -53,16 +69,15 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
     cliente = null;
   }
 
-  function reconectar(pronto = false) {
+  function reconectar() {
     if (cancelado || temporizadorReconectar) return;
-    temporizadorReconectar = window.setTimeout(
-      () => {
-        temporizadorReconectar = null;
-        limpiarCanal();
-        void conectar();
-      },
-      pronto ? 2_000 : 30_000,
-    );
+    const espera = Math.min(REINTENTO_BASE_MS * 2 ** intentosSeguidos, REINTENTO_TOPE_MS);
+    intentosSeguidos += 1;
+    temporizadorReconectar = window.setTimeout(() => {
+      temporizadorReconectar = null;
+      limpiarCanal();
+      void conectar();
+    }, espera);
   }
 
   async function sincronizarPorAviso() {
@@ -108,16 +123,18 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
         .on("broadcast", { event: "cambio_nube" }, programarSincronizacion)
         .subscribe((estado) => {
           opciones.onEstado?.(estado);
-          if (estado === "CHANNEL_ERROR" || estado === "TIMED_OUT" || estado === "CLOSED") {
-            reconectar(true);
+          if (estado === "SUBSCRIBED") {
+            intentosSeguidos = 0;
+          } else if (estado === "CHANNEL_ERROR" || estado === "TIMED_OUT" || estado === "CLOSED") {
+            reconectar();
           }
         });
 
       const renovarEnSegundos = Math.max(60, sesion.expires_in - 60);
-      temporizadorRenovar = window.setTimeout(() => reconectar(true), renovarEnSegundos * 1000);
+      temporizadorRenovar = window.setTimeout(reconectar, renovarEnSegundos * 1000);
     } catch (error) {
       console.info("Realtime de nube no quedó activo todavía:", error);
-      reconectar(false);
+      reconectar();
     }
   }
 

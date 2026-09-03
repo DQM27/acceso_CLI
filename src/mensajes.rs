@@ -164,6 +164,10 @@ pub fn mensaje_sincronizacion(error: crate::nube::SincronizacionError) -> String
         SincronizacionError::RespuestaInesperada { .. } => {
             "El receptor rechazó el pedido, intentá de nuevo más tarde".into()
         }
+        SincronizacionError::FechaInvalida(_) => {
+            "El receptor mandó una fecha que no se pudo interpretar, intentá de nuevo más tarde"
+                .into()
+        }
     }
 }
 

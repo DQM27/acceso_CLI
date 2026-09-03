@@ -66,8 +66,11 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String,
     var menuCreacionAbierto by remember { mutableStateOf(false) }
     var refrescarNube by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
-    val realtime = remember(nucleo, directorio, scope) {
-        NubeRealtime(
+    // `SincronizacionPeriodica`, no `NubeRealtime` -- ver el comentario de
+    // esa clase sobre por qué (bug de plataforma en Supabase Realtime, no
+    // arreglable desde acá).
+    val sincronizacion = remember(nucleo, directorio, scope) {
+        SincronizacionPeriodica(
             nucleo = nucleo,
             directorio = directorio,
             scope = scope,
@@ -75,27 +78,26 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String,
         )
     }
 
-    // Atado a ON_START/ON_STOP, no sólo a la composición: sin esto, el
-    // socket de Realtime (y su bucle de reconexión con backoff) seguía
-    // vivo aunque el guardia bloqueara el teléfono o cambiara de app —
-    // `PantallaPrincipal` sigue en composición mientras dure la sesión, la
-    // Activity no se destruye sólo por pasar a segundo plano. Gastaba
-    // batería (radio despierto) sin ningún beneficio: nadie ve pantalla
-    // para que un aviso en vivo importe. Vuelve a conectar solo al volver
-    // al primer plano.
+    // Atado a ON_START/ON_STOP, no sólo a la composición: sin esto, el pulso
+    // periódico seguía vivo aunque el guardia bloqueara el teléfono o
+    // cambiara de app -- `PantallaPrincipal` sigue en composición mientras
+    // dure la sesión, la Activity no se destruye sólo por pasar a segundo
+    // plano. Gastaba batería sin ningún beneficio: nadie ve pantalla para
+    // que un refresco importe. Vuelve a sincronizar solo al volver al
+    // primer plano.
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(realtime, lifecycleOwner) {
+    DisposableEffect(sincronizacion, lifecycleOwner) {
         val observador = LifecycleEventObserver { _, evento ->
             when (evento) {
-                Lifecycle.Event.ON_START -> realtime.iniciar()
-                Lifecycle.Event.ON_STOP -> realtime.detener()
+                Lifecycle.Event.ON_START -> sincronizacion.iniciar()
+                Lifecycle.Event.ON_STOP -> sincronizacion.detener()
                 else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observador)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observador)
-            realtime.detener()
+            sincronizacion.detener()
         }
     }
 

@@ -35,6 +35,8 @@ pub enum SincronizacionError {
     Red(#[from] NubeError),
     #[error("El receptor respondió {status}: {cuerpo}")]
     RespuestaInesperada { status: u16, cuerpo: String },
+    #[error("El receptor mandó una fecha inválida: {0}")]
+    FechaInvalida(String),
 }
 
 struct FilaCola {
@@ -526,6 +528,13 @@ pub fn recibir_cierres_de_ingresos_propios(
             .usuario_salida_nombre
             .as_deref()
             .unwrap_or("Salida registrada en nube");
+        // El receptor devuelve el `timestamptz` de Postgres serializado a su
+        // manera (milisegundos, offset "+00:00") -- no necesariamente el
+        // formato único y reversible que exige `registro_ingresos_salida_utc`.
+        // Se reparsea y reformatea acá antes de escribirlo local.
+        let hora_salida = crate::tiempo::parsear_utc(&fila.hora_salida)
+            .map(crate::tiempo::serializar_utc)
+            .map_err(|_| SincronizacionError::FechaInvalida(fila.hora_salida.clone()))?;
         let filas_afectadas = transaction.execute(
             "
             UPDATE registro_ingresos
@@ -536,7 +545,7 @@ pub fn recibir_cierres_de_ingresos_propios(
             WHERE uuid = ?3
               AND fecha_hora_salida IS NULL
             ",
-            params![fila.hora_salida, nombre_salida, fila.id],
+            params![hora_salida, nombre_salida, fila.id],
         )?;
         let filas_afectadas = u32::try_from(filas_afectadas).unwrap_or(u32::MAX);
         aplicados = aplicados.saturating_add(filas_afectadas);
@@ -568,7 +577,14 @@ pub fn recibir_ingresos_abiertos(
         "DELETE FROM ingresos_remotos WHERE sitio_id = ?1",
         params![contexto.sitio_id],
     )?;
-    for fila in &filas {
+    let mut remotos = Vec::with_capacity(filas.len());
+    for fila in filas {
+        // Mismo motivo que en `recibir_cierres_de_ingresos_propios`: el
+        // receptor no devuelve necesariamente el formato único que usa el
+        // resto de la app para persistir fechas.
+        let hora_entrada = crate::tiempo::parsear_utc(&fila.hora_entrada)
+            .map(crate::tiempo::serializar_utc)
+            .map_err(|_| SincronizacionError::FechaInvalida(fila.hora_entrada.clone()))?;
         transaction.execute(
             "
             INSERT INTO ingresos_remotos (
@@ -580,23 +596,21 @@ pub fn recibir_ingresos_abiertos(
                 fila.id,
                 contexto.sitio_id,
                 fila.contratista_nombre,
-                fila.hora_entrada,
+                hora_entrada,
                 fila.usuario_entrada_nombre,
                 fila.dispositivo_entrada_id,
             ],
         )?;
+        remotos.push(IngresoRemoto {
+            uuid: fila.id,
+            contratista_nombre: fila.contratista_nombre,
+            hora_entrada,
+            usuario_entrada_nombre: fila.usuario_entrada_nombre,
+        });
     }
     transaction.commit()?;
 
-    Ok(filas
-        .into_iter()
-        .map(|fila| IngresoRemoto {
-            uuid: fila.id,
-            contratista_nombre: fila.contratista_nombre,
-            hora_entrada: fila.hora_entrada,
-            usuario_entrada_nombre: fila.usuario_entrada_nombre,
-        })
-        .collect())
+    Ok(remotos)
 }
 
 /// Cuántas filas se aplicaron localmente al traer el catálogo del sitio --
@@ -1268,6 +1282,60 @@ mod tests {
             )
             .unwrap();
         assert_eq!(reencolados, 0);
+    }
+
+    #[test]
+    fn normaliza_la_fecha_de_salida_que_devuelve_postgrest_antes_de_guardarla() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute_batch(
+                "
+                INSERT INTO empresas (id, nombre, uuid) VALUES (1, 'Brisas', 'uuid-empresa');
+                INSERT INTO usuarios (id, cedula, nombre, password_hash, rol, activo)
+                VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1);
+                INSERT INTO contratistas (
+                    id, cedula, nombre, empresa_id, tipo_ingreso,
+                    es_personal_ruta, tiene_acceso, uuid
+                ) VALUES (1, '2001', 'Persona', 1, 'SWAT', 0, 1, 'uuid-contratista');
+                INSERT INTO registro_ingresos (
+                    id, contratista_id, empresa_id, fecha_hora_ingreso, medio_ingreso,
+                    tipo_ingreso, gafete_numero, usuario_ingreso_id, contratista_cedula,
+                    contratista_nombre, empresa_nombre, usuario_ingreso_nombre,
+                    fecha_vencimiento_praind, es_personal_ruta, tiene_acceso,
+                    resultado_acceso, motivo_resultado, reglas_version,
+                    empresa_activa_snapshot, uuid
+                ) VALUES (
+                    1, 1, 1, '2026-01-01T08:00:00Z', 'CAMINANDO',
+                    'SWAT', NULL, 1, '2001', 'Persona', 'Brisas', 'Operador',
+                    NULL, 0, 1, 'PERMITIDO', NULL, 1, 1, 'uuid-ingreso'
+                );
+                ",
+            )
+            .unwrap();
+        // Formato real que devuelve PostgREST para un `timestamptz`
+        // (fracción de segundo + offset "+00:00", no el "...Z" sin fracción
+        // que exige `registro_ingresos_salida_utc`) -- este caso rompía la
+        // sincronización en vivo aunque los tests con formato ya-canónico
+        // pasaran.
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-ingreso\",\"hora_salida\":\"2026-01-01T10:00:00.123456+00:00\",\
+             \"usuario_salida_nombre\":\"Operador remoto\"}]",
+        );
+
+        let aplicados =
+            recibir_cierres_de_ingresos_propios(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(aplicados, 1);
+        let salida: String = connection
+            .query_row(
+                "SELECT fecha_hora_salida FROM registro_ingresos WHERE uuid = 'uuid-ingreso'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(salida, "2026-01-01T10:00:00Z");
     }
 
     #[test]

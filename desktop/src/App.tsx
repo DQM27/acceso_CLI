@@ -52,7 +52,7 @@ import {
   sincronizarConNube,
 } from "./api";
 import type { ResumenSincronizacion, RolUsuario, UsuarioSesion } from "./api";
-import { emitirActualizacion, iniciarRealtimeNube } from "./nubeRealtime";
+import { emitirActualizacion } from "./nubeRealtime";
 import { SesionProvider } from "./contexto/SesionContexto";
 import { BarraEstadoProvider } from "./contexto/BarraEstadoContexto";
 
@@ -244,9 +244,6 @@ function Shell({
   // Sube en cada registro/salida exitosa — Activos lo usa para refrescar su
   // grilla aunque haya salido desde otra pantalla.
   const [refrescarActivos, setRefrescarActivos] = useState(0);
-  // Estado del canal Realtime (`BarraNube.tsx`) — `null` hasta el primer
-  // aviso del socket (ver el doc-comment de `BarraNube`).
-  const [estadoNube, setEstadoNube] = useState<string | null>(null);
   const [sincronizandoManual, setSincronizandoManual] = useState(false);
 
   // Ctrl+Shift+N/S (no Ctrl+N/S solos — esas convenciones quedan libres
@@ -264,18 +261,24 @@ function Shell({
   // comportan igual.
   useHotkeys("ctrl+q", onCerrarSesion, { preventDefault: true });
 
+  // `iniciarRealtimeNube` queda apagado por ahora (2026-09-03): el canal
+  // privado de Supabase Realtime no logra autorizarse -- bug de la
+  // plataforma con el sistema nuevo de JWT Signing Keys, no de este código
+  // (ver docs/migracion-supabase-realtime-broadcast.sql). Reintentar sin
+  // parar generaba tráfico de red constante que se sentía como la app
+  // entera trabada. El pulso automático de fondo cada 2 minutos
+  // (`crate::iniciar_sincronizacion_automatica`) sigue andando igual --
+  // este listener es lo que hace que Activos se refresque solo cuando eso
+  // pasa. Reactivar `iniciarRealtimeNube` en cuanto Supabase resuelva el
+  // bug (o encontremos un workaround) -- el código sigue en
+  // `nubeRealtime.ts`, sin tocar.
   useEffect(() => {
-    const detenerRealtime = iniciarRealtimeNube({
-      onSincronizado: () => setRefrescarActivos((n) => n + 1),
-      onEstado: setEstadoNube,
-    });
     const cancelarSincronizacionAutomatica = listen<ResumenSincronizacion>(
       "nube://sincronizado",
       () => setRefrescarActivos((n) => n + 1),
     );
 
     return () => {
-      detenerRealtime();
       cancelarSincronizacionAutomatica.then((cancelar) => cancelar());
     };
   }, [sesion.id]);
@@ -395,7 +398,6 @@ function Shell({
             <span>{mensajeEstado}</span>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
               <BarraNube
-                estado={estadoNube}
                 sincronizando={sincronizandoManual}
                 onSincronizar={sincronizarManualmente}
               />
