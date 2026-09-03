@@ -55,7 +55,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                         Box(modifier = Modifier.widthIn(max = ANCHO_MAXIMO_CONTENIDO).fillMaxHeight()) {
-                            PantallaLogin(nucleo)
+                            PantallaLogin(nucleo, directorio = filesDir.absolutePath)
                         }
                     }
                 }

@@ -30,11 +30,15 @@ import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.RolUsuario
 import uniffi.control_acceso_mobile.UsuarioSesion
 
-/// Sólo las pantallas de uso frecuente son pestañas (Activos, Historial) —
-/// las de creación (uso esporádico: dar de alta un contratista, empresa o
-/// usuario nuevos) viven detrás del botón "+", no compitiendo por espacio en
-/// la barra de pestañas. `Principal` es la única bandera "no es pantalla de
-/// creación" — qué pestaña se ve la decide el `pestana` local más abajo.
+/// Sólo las pantallas de uso frecuente son pestañas (Activos, Historial,
+/// Nube) — las de creación (uso esporádico: dar de alta un contratista,
+/// empresa o usuario nuevos) viven detrás del botón "+", no compitiendo por
+/// espacio en la barra de pestañas. Nube entra como pestaña y no detrás del
+/// "+" por el mismo motivo que Activos/Historial: su estado
+/// (`NubeViewModel.ingresosRemotos`, `secretoGuardado`) debe sobrevivir
+/// cambiar de pestaña y volver, no reiniciarse como si fuera un formulario
+/// de alta de un solo uso. `Principal` es la única bandera "no es pantalla
+/// de creación" — qué pestaña se ve la decide el `pestana` local más abajo.
 ///
 /// Vive como estado local del Composable (no en un ViewModel) a propósito:
 /// es puramente de navegación — qué se ve en pantalla — sin ninguna llamada
@@ -52,7 +56,7 @@ private sealed class Pantalla {
 }
 
 @Composable
-fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, onCerrarSesion: () -> Unit) {
+fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String, onCerrarSesion: () -> Unit) {
     var pantalla by remember { mutableStateOf<Pantalla>(Pantalla.Principal) }
     var menuCreacionAbierto by remember { mutableStateOf(false) }
 
@@ -125,10 +129,12 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, onCerrarSesion: () 
                 PrimaryTabRow(selectedTabIndex = pestana) {
                     Tab(selected = pestana == 0, onClick = { pestana = 0 }, text = { Text("Activos") })
                     Tab(selected = pestana == 1, onClick = { pestana = 1 }, text = { Text("Historial") })
+                    Tab(selected = pestana == 2, onClick = { pestana = 2 }, text = { Text("Nube") })
                 }
                 when (pestana) {
                     0 -> PantallaActivos(nucleo)
-                    else -> PantallaHistorial(nucleo)
+                    1 -> PantallaHistorial(nucleo)
+                    else -> PantallaNube(nucleo, sesion, directorio)
                 }
             }
         }
