@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { themeQuartz } from "ag-grid-community";
@@ -12,6 +12,7 @@ import type {
   SortChangedEvent,
 } from "ag-grid-community";
 import { useUsuarioId } from "../contexto/SesionContexto";
+import { ListaFlotante, useListaFlotante } from "./ListaFlotante";
 
 /**
  * Tema y comportamiento compartido de TODAS las tablas de la app — un solo
@@ -187,6 +188,22 @@ function TablaBase<T>(
   );
   const [selectorAbierto, setSelectorAbierto] = useState(false);
   const apiRef = useRef<GridReadyEvent<T>["api"] | null>(null);
+  const { campoRef: selectorRef, posicion: posicionSelector } = useListaFlotante(selectorAbierto);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Mismo mecanismo que `SelectorRangoFecha`: cierra al clickear afuera del
+  // botón y del popover (el popover vive en un portal a `document.body`, así
+  // que un click "afuera" del árbol de este componente no lo cierra solo).
+  useEffect(() => {
+    if (!selectorAbierto) return;
+    function alHacerClicAfuera(evento: MouseEvent) {
+      const objetivo = evento.target as Node;
+      if (selectorRef.current?.contains(objetivo) || popoverRef.current?.contains(objetivo)) return;
+      setSelectorAbierto(false);
+    }
+    document.addEventListener("mousedown", alHacerClicAfuera);
+    return () => document.removeEventListener("mousedown", alHacerClicAfuera);
+  }, [selectorAbierto, selectorRef]);
 
   useImperativeHandle(ref, () => ({
     filasFiltradas: () => {
@@ -305,68 +322,58 @@ function TablaBase<T>(
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           {accionesDerecha}
 
-          <div style={{ position: "relative" }}>
+          <div ref={selectorRef}>
             <button type="button" className="boton" onClick={() => setSelectorAbierto((a) => !a)}>
               Columnas ▾
             </button>
-
-            {selectorAbierto && (
-              <>
-                {/* Backdrop invisible: cierra el selector al hacer click afuera. */}
-                <div
-                  onClick={() => setSelectorAbierto(false)}
-                  style={{ position: "fixed", inset: 0, zIndex: 9 }}
-                />
-                <div
-                  className="tarjeta"
-                  style={{
-                    position: "absolute",
-                    top: "2.35rem",
-                    right: 0,
-                    zIndex: 10,
-                    padding: "0.75rem 1rem",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.4rem",
-                    minWidth: "13rem",
-                  }}
-                >
-                  {columnas
-                    .map((columna) => ({ columna, clave: identidad(columna as ColDef<unknown>) }))
-                    .filter(
-                      (entrada): entrada is { columna: ColDef<T>; clave: string } =>
-                        entrada.clave !== undefined,
-                    )
-                    .map(({ columna, clave }) => (
-                      <label
-                        key={clave}
-                        style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={!ocultas.has(clave)}
-                          onChange={() => alternar(clave)}
-                        />
-                        {columna.headerName ?? clave}
-                      </label>
-                    ))}
-                  {filtrosPorColumna && (
-                    <>
-                      <hr style={{ width: "100%", border: "none", borderTop: "1px solid var(--borde)", margin: "0.2rem 0" }} />
-                      <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        <input
-                          type="checkbox"
-                          checked={filtrosVisibles}
-                          onChange={alternarFiltrosVisibles}
-                        />
-                        Filtros por columna
-                      </label>
-                    </>
-                  )}
-                </div>
-              </>
-            )}
           </div>
+
+          {selectorAbierto && posicionSelector && (
+            <ListaFlotante posicion={posicionSelector} ancho={220} alinear="derecha">
+              <div
+                ref={popoverRef}
+                style={{
+                  padding: "0.75rem 1rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.4rem",
+                }}
+              >
+                {columnas
+                  .map((columna) => ({ columna, clave: identidad(columna as ColDef<unknown>) }))
+                  .filter(
+                    (entrada): entrada is { columna: ColDef<T>; clave: string } =>
+                      entrada.clave !== undefined,
+                  )
+                  .map(({ columna, clave }) => (
+                    <label
+                      key={clave}
+                      style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!ocultas.has(clave)}
+                        onChange={() => alternar(clave)}
+                      />
+                      {columna.headerName ?? clave}
+                    </label>
+                  ))}
+                {filtrosPorColumna && (
+                  <>
+                    <hr style={{ width: "100%", border: "none", borderTop: "1px solid var(--borde)", margin: "0.2rem 0" }} />
+                    <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <input
+                        type="checkbox"
+                        checked={filtrosVisibles}
+                        onChange={alternarFiltrosVisibles}
+                      />
+                      Filtros por columna
+                    </label>
+                  </>
+                )}
+              </div>
+            </ListaFlotante>
+          )}
         </div>
       </div>
 

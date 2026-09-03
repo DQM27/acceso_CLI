@@ -14,6 +14,9 @@ import { createPortal } from "react-dom";
 export interface PosicionLista {
   top: number;
   left: number;
+  /** Distancia del borde derecho del campo al borde derecho de la ventana —
+   * para `alinear="derecha"` en `ListaFlotante` (ver ese componente). */
+  right: number;
   width: number;
 }
 
@@ -30,7 +33,12 @@ export function useListaFlotante(visible: boolean) {
     }
     const actualizar = () => {
       const rect = campoRef.current!.getBoundingClientRect();
-      setPosicion({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+      setPosicion({
+        top: rect.bottom + 4,
+        left: rect.left,
+        right: window.innerWidth - rect.right,
+        width: rect.width,
+      });
     };
     actualizar();
     window.addEventListener("resize", actualizar);
@@ -81,6 +89,7 @@ export function useNavegacionFlechas<T>(
 export function ListaFlotante({
   posicion,
   ancho,
+  alinear = "izquierda",
   children,
 }: {
   posicion: PosicionLista;
@@ -89,6 +98,11 @@ export function ListaFlotante({
    * como el popover de `SelectorRangoFecha` (si no, un botón disparador con
    * texto corto deja el popover angosto y su contenido se recorta). */
   ancho?: number;
+  /** "derecha" ancla el borde derecho del popover al borde derecho del
+   * campo/botón en vez del izquierdo — para disparadores pegados al borde
+   * derecho de la pantalla (ej. "Columnas ▾" en `Tabla.tsx`), donde anclar
+   * por la izquierda dejaría el popover recortado fuera de la ventana. */
+  alinear?: "izquierda" | "derecha";
   children: ReactNode;
 }) {
   return createPortal(
@@ -97,7 +111,7 @@ export function ListaFlotante({
       style={{
         position: "fixed",
         top: posicion.top,
-        left: posicion.left,
+        ...(alinear === "derecha" ? { right: posicion.right } : { left: posicion.left }),
         width: ancho ?? posicion.width,
         zIndex: 1000,
         display: "flex",
