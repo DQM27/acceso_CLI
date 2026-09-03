@@ -48,11 +48,41 @@ usó en un teléfono real -- con la base local funcionando de punta a punta
 desde el teléfono con conexión a internet real -- ese camino nunca se
 ejercitó en un dispositivo físico todavía (sólo contra DB local).
 
-**Afuera, por decisión explícita**: Kotlin/UI del celular (el usuario lo
-hace con el SDK propio de Supabase, no con este puente), Realtime/websocket
-(nos quedamos con polling — recomendado dejarlo así por ahora), cifrado del
+**Corrección (2026-09-03): lo de abajo NO era una decisión tomada.** Esta
+sección decía que Kotlin/UI del celular quedaba afuera porque "el usuario
+lo hace con el SDK propio de Supabase, no con este puente" — eso nunca se
+decidió así, quedó escrito como si lo fuera por error. Ya se resolvió
+(ver "Decisión confirmada" más abajo): **Camino A, por el puente uniffi**,
+igual que todo lo demás en el proyecto. Los métodos ya escritos en
+`mobile/rust-core/src/lib.rs` (`sincronizarConNube`,
+`guardarSecretoDispositivo`, `listarIngresosRemotos`,
+`cerrarIngresoRemoto`) son el camino real, no código de más — sólo
+faltaba regenerar los bindings de Kotlin para poder llamarlos (ver abajo).
+
+**Sí sigue afuera, eso sí por decisión real**: Realtime/websocket (nos
+quedamos con polling — recomendado dejarlo así por ahora), cifrado del
 secreto en disco (ligado a la decisión pendiente de cifrado en reposo
 general).
+
+### Decisión confirmada (2026-09-03): Camino A, por el puente Rust (uniffi)
+
+Kotlin llama a `Nucleo` igual que para todo lo demás (login, Activos,
+Historial) — nunca habla con Supabase directo. Se descartó el camino B
+(SDK de Supabase directo en Kotlin) porque hubiera duplicado en Kotlin la
+lógica de autenticación de dispositivo, armado de cola y backoff que ya
+existe en `src/nube/sincronizacion.rs` — exactamente el tipo de
+duplicación que el plan original de la app móvil evitó a propósito desde
+el día uno ("el núcleo se reutiliza tal cual, nunca se traduce a otro
+lenguaje").
+
+Falta, en orden:
+1. Regenerar los bindings de Kotlin (`mobile/README.md` ya documenta el
+   comando) para que los métodos nuevos sean invocables desde la app.
+2. Armar la UI en Kotlin — pantalla/estado para guardar el secreto de
+   dispositivo, disparar la sincronización, mostrar `ingresos_remotos` y
+   cerrarlos. Mismo patrón que `ActivosViewModel`/`HistorialViewModel`
+   (ver `mobile/app/ARQUITECTURA.md`) — sin diseñar ni construir todavía,
+   alcance a confirmar aparte.
 
 **Pendiente, en la lista, sin resolver todavía** (en el orden que se
 decidió seguir):

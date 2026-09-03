@@ -679,6 +679,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_historial(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_remoto(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista(
@@ -687,9 +689,13 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_guardar_secreto_dispositivo(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_remotos(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_usuarios(
     ): Int
@@ -698,6 +704,10 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_secreto_dispositivo_guardado(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir(
     ): Int
@@ -731,6 +741,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_historial(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_remoto(`ptr`: Long,`directorio`: RustBuffer.ByValue,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_contratista(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -739,9 +751,13 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_usuario(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_guardar_secreto_dispositivo(`ptr`: Long,`directorio`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_empresas(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_activos(`ptr`: Long,`texto`: RustBuffer.ByValue,`modo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_remotos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_usuarios(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -751,6 +767,10 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida(`ptr`: Long,`registroId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_secreto_dispositivo_guardado(`ptr`: Long,`directorio`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube(`ptr`: Long,`directorio`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun ffi_control_acceso_mobile_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun ffi_control_acceso_mobile_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -879,6 +899,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_historial() != 29388) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_remoto() != 61493) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion() != 60001) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -891,10 +914,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario() != 28771) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_guardar_secreto_dispositivo() != 47548) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas() != 65509) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos() != 52849) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_remotos() != 40530) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_usuarios() != 1455) {
@@ -907,6 +936,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida() != 34276) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_secreto_dispositivo_guardado() != 23136) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube() != 32215) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir() != 57593) {
@@ -1067,6 +1102,29 @@ private class JavaLangRefCleanable(
     val cleanable: java.lang.ref.Cleaner.Cleanable
 ) : UniffiCleaner.Cleanable {
     override fun clean() = cleanable.clean()
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterUInt: FfiConverter<UInt, Int> {
+    override fun lift(value: Int): UInt {
+        return value.toUInt()
+    }
+
+    override fun read(buf: ByteBuffer): UInt {
+        return lift(buf.getInt())
+    }
+
+    override fun lower(value: UInt): Int {
+        return value.toInt()
+    }
+
+    override fun allocationSize(value: UInt) = 4UL
+
+    override fun write(value: UInt, buf: ByteBuffer) {
+        buf.putInt(value.toInt())
+    }
 }
 
 /**
@@ -1301,6 +1359,12 @@ public interface NucleoInterface {
     fun `buscarHistorial`(`texto`: kotlin.String): List<MovimientoHistorial>
     
     /**
+     * Cierra, contra la nube, un ingreso abierto por el otro dispositivo
+     * del mismo sitio -- nunca toca el historial local de este teléfono.
+     */
+    fun `cerrarIngresoRemoto`(`directorio`: kotlin.String, `uuid`: kotlin.String)
+    
+    /**
      * Sólo olvida el actor en memoria — el `AppCore`/la conexión `SQLite`
      * se quedan abiertos (son del teléfono, no de la sesión) para que
      * `Nucleo::autenticar` pueda loguear al siguiente usuario sin
@@ -1328,6 +1392,15 @@ public interface NucleoInterface {
      */
     fun `crearUsuario`(`datos`: DatosUsuario): kotlin.Long
     
+    /**
+     * Guarda el secreto de este dispositivo, pegado desde el panel de
+     * administración (mismo mecanismo que la GUI de escritorio, ver
+     * `docs/plan-persistencia-nube.md`). `directorio` es el mismo que
+     * Kotlin ya usa para ubicar la base `SQLite` -- Android no tiene
+     * `%LOCALAPPDATA%`, así que acá no hay resolución automática de ruta.
+     */
+    fun `guardarSecretoDispositivo`(`directorio`: kotlin.String, `secreto`: kotlin.String)
+    
     fun `listarEmpresas`(): List<Empresa>
     
     /**
@@ -1342,6 +1415,12 @@ public interface NucleoInterface {
      * filtra sólo por `gafete_numero` exacto, sin ese ruido.
      */
     fun `listarIngresosActivos`(`texto`: kotlin.String, `modo`: ModoBusquedaActivos): List<IngresoActivoResumen>
+    
+    /**
+     * Lectura pura de la caché local `ingresos_remotos` -- no hace falta
+     * red para mostrarla, ya la llenó la última `sincronizar_con_nube`.
+     */
+    fun `listarIngresosRemotos`(): List<IngresoRemoto>
     
     /**
      * Sólo Root/Administrador — ver el doc-comment de `UsuarioResumen`.
@@ -1359,6 +1438,18 @@ public interface NucleoInterface {
     fun `registrarIngreso`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?): ResultadoRegistroEntrada
     
     fun `registrarSalida`(`registroId`: kotlin.Long)
+    
+    /**
+     * No revela el secreto -- sólo si ya hay uno guardado.
+     */
+    fun `secretoDispositivoGuardado`(`directorio`: kotlin.String): kotlin.Boolean
+    
+    /**
+     * Autentica este dispositivo, drena la bandeja de salida pendiente y
+     * refresca la caché de lo que el otro dispositivo del mismo sitio
+     * tiene abierto ahora mismo.
+     */
+    fun `sincronizarConNube`(`directorio`: kotlin.String): ResumenSincronizacion
     
     companion object
 }
@@ -1536,6 +1627,25 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Cierra, contra la nube, un ingreso abierto por el otro dispositivo
+     * del mismo sitio -- nunca toca el historial local de este teléfono.
+     */
+    @Throws(NucleoException::class)override fun `cerrarIngresoRemoto`(`directorio`: kotlin.String, `uuid`: kotlin.String)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_remoto(
+        it,
+        
+        FfiConverterString.lower(`directorio`),
+        FfiConverterString.lower(`uuid`),_status)
+}
+    }
+    
+    
+
+    
+    /**
      * Sólo olvida el actor en memoria — el `AppCore`/la conexión `SQLite`
      * se quedan abiertos (son del teléfono, no de la sesión) para que
      * `Nucleo::autenticar` pueda loguear al siguiente usuario sin
@@ -1612,6 +1722,28 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     
 
     
+    /**
+     * Guarda el secreto de este dispositivo, pegado desde el panel de
+     * administración (mismo mecanismo que la GUI de escritorio, ver
+     * `docs/plan-persistencia-nube.md`). `directorio` es el mismo que
+     * Kotlin ya usa para ubicar la base `SQLite` -- Android no tiene
+     * `%LOCALAPPDATA%`, así que acá no hay resolución automática de ruta.
+     */
+    @Throws(NucleoException::class)override fun `guardarSecretoDispositivo`(`directorio`: kotlin.String, `secreto`: kotlin.String)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_guardar_secreto_dispositivo(
+        it,
+        
+        FfiConverterString.lower(`directorio`),
+        FfiConverterString.lower(`secreto`),_status)
+}
+    }
+    
+    
+
+    
     @Throws(NucleoException::class)override fun `listarEmpresas`(): List<Empresa> {
             return FfiConverterSequenceTypeEmpresa.lift(
     callWithHandle {
@@ -1646,6 +1778,24 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         
         FfiConverterString.lower(`texto`),
         FfiConverterTypeModoBusquedaActivos.lower(`modo`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Lectura pura de la caché local `ingresos_remotos` -- no hace falta
+     * red para mostrarla, ya la llenó la última `sincronizar_con_nube`.
+     */
+    @Throws(NucleoException::class)override fun `listarIngresosRemotos`(): List<IngresoRemoto> {
+            return FfiConverterSequenceTypeIngresoRemoto.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_remotos(
+        it,
+        _status)
 }
     }
     )
@@ -1720,6 +1870,44 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 }
     }
     
+    
+
+    
+    /**
+     * No revela el secreto -- sólo si ya hay uno guardado.
+     */
+    @Throws(NucleoException::class)override fun `secretoDispositivoGuardado`(`directorio`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_secreto_dispositivo_guardado(
+        it,
+        
+        FfiConverterString.lower(`directorio`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Autentica este dispositivo, drena la bandeja de salida pendiente y
+     * refresca la caché de lo que el otro dispositivo del mismo sitio
+     * tiene abierto ahora mismo.
+     */
+    @Throws(NucleoException::class)override fun `sincronizarConNube`(`directorio`: kotlin.String): ResumenSincronizacion {
+            return FfiConverterTypeResumenSincronizacion.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube(
+        it,
+        
+        FfiConverterString.lower(`directorio`),_status)
+}
+    }
+    )
+    }
     
 
     
@@ -2101,6 +2289,58 @@ public object FfiConverterTypeIngresoActivoResumen: FfiConverterRustBuffer<Ingre
 
 
 /**
+ * Un ingreso abierto por el otro dispositivo del mismo sitio -- no vive
+ * en el historial de este teléfono, ver `IngresoRemotoNucleo`.
+ */
+data class IngresoRemoto (
+    var `uuid`: kotlin.String
+    , 
+    var `contratistaNombre`: kotlin.String
+    , 
+    var `horaEntrada`: kotlin.String
+    , 
+    var `usuarioEntradaNombre`: kotlin.String?
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeIngresoRemoto: FfiConverterRustBuffer<IngresoRemoto> {
+    override fun read(buf: ByteBuffer): IngresoRemoto {
+        return IngresoRemoto(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: IngresoRemoto) = (
+            FfiConverterString.allocationSize(value.`uuid`) +
+            FfiConverterString.allocationSize(value.`contratistaNombre`) +
+            FfiConverterString.allocationSize(value.`horaEntrada`) +
+            FfiConverterOptionalString.allocationSize(value.`usuarioEntradaNombre`)
+    )
+
+    override fun write(value: IngresoRemoto, buf: ByteBuffer) {
+            FfiConverterString.write(value.`uuid`, buf)
+            FfiConverterString.write(value.`contratistaNombre`, buf)
+            FfiConverterString.write(value.`horaEntrada`, buf)
+            FfiConverterOptionalString.write(value.`usuarioEntradaNombre`, buf)
+    }
+}
+
+
+
+/**
  * Espejo de `MovimientoIngresoResumen` — un renglón de Historial (entrada
  * + salida, si ya la tiene).
  */
@@ -2302,6 +2542,77 @@ public object FfiConverterTypeResultadoRegistroEntrada: FfiConverterRustBuffer<R
     override fun write(value: ResultadoRegistroEntrada, buf: ByteBuffer) {
             FfiConverterLong.write(value.`registroId`, buf)
             FfiConverterTypeResultadoAcceso.write(value.`resultadoAcceso`, buf)
+    }
+}
+
+
+
+/**
+ * Ver `docs/plan-persistencia-nube.md` y `ResumenSincronizacionNucleo`.
+ */
+data class ResumenSincronizacion (
+    var `enviados`: kotlin.UInt
+    , 
+    var `fallidos`: kotlin.UInt
+    , 
+    var `remotosAbiertos`: kotlin.UInt
+    , 
+    var `empresasRecibidas`: kotlin.UInt
+    , 
+    var `contratistasRecibidos`: kotlin.UInt
+    , 
+    var `sitioId`: kotlin.String
+    , 
+    var `dispositivoId`: kotlin.String
+    , 
+    var `tipo`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<ResumenSincronizacion> {
+    override fun read(buf: ByteBuffer): ResumenSincronizacion {
+        return ResumenSincronizacion(
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ResumenSincronizacion) = (
+            FfiConverterUInt.allocationSize(value.`enviados`) +
+            FfiConverterUInt.allocationSize(value.`fallidos`) +
+            FfiConverterUInt.allocationSize(value.`remotosAbiertos`) +
+            FfiConverterUInt.allocationSize(value.`empresasRecibidas`) +
+            FfiConverterUInt.allocationSize(value.`contratistasRecibidos`) +
+            FfiConverterString.allocationSize(value.`sitioId`) +
+            FfiConverterString.allocationSize(value.`dispositivoId`) +
+            FfiConverterString.allocationSize(value.`tipo`)
+    )
+
+    override fun write(value: ResumenSincronizacion, buf: ByteBuffer) {
+            FfiConverterUInt.write(value.`enviados`, buf)
+            FfiConverterUInt.write(value.`fallidos`, buf)
+            FfiConverterUInt.write(value.`remotosAbiertos`, buf)
+            FfiConverterUInt.write(value.`empresasRecibidas`, buf)
+            FfiConverterUInt.write(value.`contratistasRecibidos`, buf)
+            FfiConverterString.write(value.`sitioId`, buf)
+            FfiConverterString.write(value.`dispositivoId`, buf)
+            FfiConverterString.write(value.`tipo`, buf)
     }
 }
 
@@ -3054,6 +3365,34 @@ public object FfiConverterSequenceTypeIngresoActivoResumen: FfiConverterRustBuff
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeIngresoActivoResumen.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeIngresoRemoto: FfiConverterRustBuffer<List<IngresoRemoto>> {
+    override fun read(buf: ByteBuffer): List<IngresoRemoto> {
+        val len = buf.getInt()
+        return List<IngresoRemoto>(len) {
+            FfiConverterTypeIngresoRemoto.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<IngresoRemoto>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeIngresoRemoto.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<IngresoRemoto>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeIngresoRemoto.write(it, buf)
         }
     }
 }
