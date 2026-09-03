@@ -1209,6 +1209,68 @@ mod tests {
     }
 
     #[test]
+    fn recibe_cierres_de_ingresos_propios_sin_reencolar() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute_batch(
+                "
+                INSERT INTO empresas (id, nombre, uuid) VALUES (1, 'Brisas', 'uuid-empresa');
+                INSERT INTO usuarios (id, cedula, nombre, password_hash, rol, activo)
+                VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1);
+                INSERT INTO contratistas (
+                    id, cedula, nombre, empresa_id, tipo_ingreso,
+                    es_personal_ruta, tiene_acceso, uuid
+                ) VALUES (1, '2001', 'Persona', 1, 'SWAT', 0, 1, 'uuid-contratista');
+                INSERT INTO registro_ingresos (
+                    id, contratista_id, empresa_id, fecha_hora_ingreso, medio_ingreso,
+                    tipo_ingreso, gafete_numero, usuario_ingreso_id, contratista_cedula,
+                    contratista_nombre, empresa_nombre, usuario_ingreso_nombre,
+                    fecha_vencimiento_praind, es_personal_ruta, tiene_acceso,
+                    resultado_acceso, motivo_resultado, reglas_version,
+                    empresa_activa_snapshot, uuid
+                ) VALUES (
+                    1, 1, 1, '2026-01-01T08:00:00Z', 'CAMINANDO',
+                    'SWAT', NULL, 1, '2001', 'Persona', 'Brisas', 'Operador',
+                    NULL, 0, 1, 'PERMITIDO', NULL, 1, 1, 'uuid-ingreso'
+                );
+                ",
+            )
+            .unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-ingreso\",\"hora_salida\":\"2026-01-01T10:00:00Z\",\
+             \"usuario_salida_nombre\":\"Operador remoto\"}]",
+        );
+
+        let aplicados =
+            recibir_cierres_de_ingresos_propios(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(aplicados, 1);
+        let (salida, usuario_id, usuario_nombre): (String, Option<i64>, String) = connection
+            .query_row(
+                "SELECT fecha_hora_salida, usuario_salida_id, usuario_salida_nombre
+                 FROM registro_ingresos WHERE uuid = 'uuid-ingreso'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(salida, "2026-01-01T10:00:00Z");
+        assert_eq!(usuario_id, None);
+        assert_eq!(usuario_nombre, "Operador remoto");
+        let reencolados: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM cola_salida
+                 WHERE entidad = 'ingreso' AND entidad_uuid = 'uuid-ingreso'
+                   AND operacion = 'cerrar'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(reencolados, 0);
+    }
+
+    #[test]
     fn cierra_un_ingreso_remoto_y_lo_saca_de_la_cache() {
         let connection = Connection::open_in_memory().unwrap();
         initialize_database(&connection).unwrap();

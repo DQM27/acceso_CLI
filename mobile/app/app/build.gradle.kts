@@ -72,7 +72,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation(platform("io.github.jan-tennert.supabase:bom:3.2.2"))
     implementation("io.github.jan-tennert.supabase:realtime-kt")
-    implementation("io.ktor:ktor-client-android:3.2.2")
+    implementation("io.ktor:ktor-client-okhttp:3.2.2")
+    implementation("io.ktor:ktor-client-websockets:3.2.2")
     // Requerido por el código Kotlin que genera uniffi para llamar al .so vía FFI.
     implementation("net.java.dev.jna:jna:5.15.0@aar")
     // ViewModel + su integración con Compose (`viewModel()`, `viewModelScope`)

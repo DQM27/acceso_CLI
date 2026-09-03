@@ -88,7 +88,7 @@ a mano en cada release para que Android reconozca que es una actualización.
 
 `rust-core/examples/seed_dev_db.rs` crea una base SQLite con el esquema real
 (las mismas migraciones que usa `AppCore::abrir`) y la llena con:
-- los contratistas reales de `importar_contratistas_db_browser.sql` (raíz del repo),
+- los contratistas reales de `contratistas_base_final_limpia_v15.sql` (raíz del repo),
 - un usuario ROOT de acceso rápido: cédula `123456789`, contraseña `clave_prueba_123`
   (hash Argon2 real en `rust-core/examples/seed_usuario_root.sql`, no texto plano),
 - 25 gafetes (`rust-core/examples/seed_gafetes.sql`, numerados 1-25, todos

@@ -1,5 +1,6 @@
 -- Broadcast privado por sitio para la sincronización en vivo.
--- Ejecutado contra el proyecto Supabase xidaepyaljzkpbsxrqsm.
+-- Preparado para el proyecto Supabase xidaepyaljzkpbsxrqsm.
+-- Pendiente de aplicar en remoto si el MCP sigue en modo de solo lectura.
 
 drop policy if exists "dispositivos reciben broadcast de su sitio"
 on realtime.messages;
@@ -14,11 +15,14 @@ using (
   and (select realtime.topic()) = ('sitio:' || ((select auth.jwt()) ->> 'sitio_id'))
 );
 
-create or replace function public.emitir_cambio_nube_sitio()
+create schema if not exists private;
+revoke all on schema private from public, anon, authenticated;
+
+create or replace function private.emitir_cambio_nube_sitio()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, realtime
+set search_path = ''
 as $$
 declare
   v_sitio_id uuid;
@@ -49,13 +53,13 @@ begin
   end if;
 
   perform realtime.send(
-    jsonb_build_object(
+    pg_catalog.jsonb_build_object(
       'schema', tg_table_schema,
       'table', tg_table_name,
       'operation', tg_op,
       'sitio_id', v_sitio_id,
       'dispositivo_id', v_dispositivo_id,
-      'changed_at', now()
+      'changed_at', pg_catalog.now()
     ),
     'cambio_nube',
     'sitio:' || v_sitio_id::text,
@@ -66,24 +70,24 @@ begin
 end;
 $$;
 
-revoke all on function public.emitir_cambio_nube_sitio() from public, anon, authenticated;
+revoke all on function private.emitir_cambio_nube_sitio() from public, anon, authenticated;
 
 drop trigger if exists empresas_emitir_cambio_nube on public.empresas;
 create trigger empresas_emitir_cambio_nube
 after insert or update or delete on public.empresas
-for each row execute function public.emitir_cambio_nube_sitio();
+for each row execute function private.emitir_cambio_nube_sitio();
 
 drop trigger if exists contratistas_emitir_cambio_nube on public.contratistas;
 create trigger contratistas_emitir_cambio_nube
 after insert or update or delete on public.contratistas
-for each row execute function public.emitir_cambio_nube_sitio();
+for each row execute function private.emitir_cambio_nube_sitio();
 
 drop trigger if exists gafetes_emitir_cambio_nube on public.gafetes;
 create trigger gafetes_emitir_cambio_nube
 after insert or update or delete on public.gafetes
-for each row execute function public.emitir_cambio_nube_sitio();
+for each row execute function private.emitir_cambio_nube_sitio();
 
 drop trigger if exists ingresos_emitir_cambio_nube on public.ingresos;
 create trigger ingresos_emitir_cambio_nube
 after insert or update or delete on public.ingresos
-for each row execute function public.emitir_cambio_nube_sitio();
+for each row execute function private.emitir_cambio_nube_sitio();
