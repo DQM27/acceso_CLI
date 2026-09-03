@@ -24,6 +24,7 @@
  */
 import { useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { listen } from "@tauri-apps/api/event";
 import { Toaster, toast } from "sonner";
 import {
   Archive,
@@ -52,7 +53,9 @@ import Nube from "./pantallas/Nube";
 import NuevoIngresoModal from "./pantallas/NuevoIngresoModal";
 import SalidaModal from "./pantallas/SalidaModal";
 import { buscarActualizacion, cerrarSesion, instalarActualizacion, requiereConfiguracionInicial } from "./api";
-import type { RolUsuario, UsuarioSesion } from "./api";
+import type { ResumenSincronizacion, RolUsuario, UsuarioSesion } from "./api";
+import { iniciarRealtimeNube } from "./nubeRealtime";
+import { SesionProvider } from "./contexto/SesionContexto";
 
 type Pantalla =
   | { tipo: "cargando" }
@@ -230,6 +233,21 @@ function Shell({
   // comportan igual.
   useHotkeys("ctrl+q", onCerrarSesion, { preventDefault: true });
 
+  useEffect(() => {
+    const detenerRealtime = iniciarRealtimeNube({
+      onSincronizado: () => setRefrescarActivos((n) => n + 1),
+    });
+    const cancelarSincronizacionAutomatica = listen<ResumenSincronizacion>(
+      "nube://sincronizado",
+      () => setRefrescarActivos((n) => n + 1),
+    );
+
+    return () => {
+      detenerRealtime();
+      cancelarSincronizacionAutomatica.then((cancelar) => cancelar());
+    };
+  }, [sesion.id]);
+
   // Una sola vez por sesión (no cada X minutos todavía — la app se abre y
   // cierra bastante seguido, esto ya cubre el caso normal). Falla en
   // silencio a propósito: sin conexión o GitHub caído no debe interrumpir a
@@ -265,69 +283,71 @@ function Shell({
   );
 
   return (
-    <div style={{ display: "flex", height: "100%" }}>
-      <Sidebar
-        secciones={seccionesVisibles}
-        seccionActual={seccion}
-        onCambiarSeccion={setSeccion}
-        colapsado={colapsado}
-        onToggleColapsado={() =>
-          setColapsado((actual) => {
-            const siguiente = !actual;
-            guardarSidebarColapsado(siguiente);
-            return siguiente;
-          })
-        }
-        sesion={sesion}
-        onCerrarSesion={onCerrarSesion}
-      />
-
-      <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-        {/* `key={seccion}` resetea el boundary al cambiar de sección — sin
-            esto, una vez que una pantalla rompe, el error queda "pegado" acá
-            aunque se elija otra sección del menú, porque este `<main>` nunca
-            se desmonta. */}
-        <ErrorBoundary
-          key={seccion}
-          mensaje="Esta sección no pudo cargar. La sesión sigue activa — elegí otra desde el menú, o reiniciá la app si el problema persiste."
-        >
-          {seccion === "activos" && (
-            <Activos
-              refrescarSenal={refrescarActivos}
-              onAbrirNuevoIngreso={() => setModalNuevoIngreso(true)}
-              onAbrirSalida={() => setModalSalida(true)}
-            />
-          )}
-          {seccion === "historial" && <Historial />}
-          {seccion === "contratistas" && <Contratistas />}
-          {seccion === "auditoria" && <Auditoria />}
-          {seccion === "empresas" && <Empresas />}
-          {seccion === "usuarios" && <Usuarios actorRol={sesion.rol} />}
-          {seccion === "gafetes" && <Gafetes />}
-          {seccion === "respaldos" && <Respaldos onRestaurado={onVolverALogin} />}
-          {seccion === "nube" && <Nube />}
-        </ErrorBoundary>
-      </main>
-
-      {modalNuevoIngreso && (
-        <NuevoIngresoModal
-          onRegistrado={() => setRefrescarActivos((n) => n + 1)}
-          onCerrar={() => setModalNuevoIngreso(false)}
+    <SesionProvider value={sesion.id}>
+      <div style={{ display: "flex", height: "100%" }}>
+        <Sidebar
+          secciones={seccionesVisibles}
+          seccionActual={seccion}
+          onCambiarSeccion={setSeccion}
+          colapsado={colapsado}
+          onToggleColapsado={() =>
+            setColapsado((actual) => {
+              const siguiente = !actual;
+              guardarSidebarColapsado(siguiente);
+              return siguiente;
+            })
+          }
+          sesion={sesion}
+          onCerrarSesion={onCerrarSesion}
         />
-      )}
 
-      {modalSalida && (
-        <SalidaModal
-          onRegistrado={() => setRefrescarActivos((n) => n + 1)}
-          onCerrar={() => setModalSalida(false)}
-        />
-      )}
+        <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+          {/* `key={seccion}` resetea el boundary al cambiar de sección — sin
+              esto, una vez que una pantalla rompe, el error queda "pegado" acá
+              aunque se elija otra sección del menú, porque este `<main>` nunca
+              se desmonta. */}
+          <ErrorBoundary
+            key={seccion}
+            mensaje="Esta sección no pudo cargar. La sesión sigue activa — elegí otra desde el menú, o reiniciá la app si el problema persiste."
+          >
+            {seccion === "activos" && (
+              <Activos
+                refrescarSenal={refrescarActivos}
+                onAbrirNuevoIngreso={() => setModalNuevoIngreso(true)}
+                onAbrirSalida={() => setModalSalida(true)}
+              />
+            )}
+            {seccion === "historial" && <Historial />}
+            {seccion === "contratistas" && <Contratistas />}
+            {seccion === "auditoria" && <Auditoria />}
+            {seccion === "empresas" && <Empresas />}
+            {seccion === "usuarios" && <Usuarios actorRol={sesion.rol} />}
+            {seccion === "gafetes" && <Gafetes />}
+            {seccion === "respaldos" && <Respaldos onRestaurado={onVolverALogin} />}
+            {seccion === "nube" && <Nube />}
+          </ErrorBoundary>
+        </main>
 
-      {/* theme="system": mismo criterio que el resto de la app (paleta
-          clara/oscura sigue `prefers-color-scheme`, sin toggle manual
-          todavía) — estilizado con las variables propias en index.css, no
-          los colores por defecto de sonner. */}
-      <Toaster theme="system" position="bottom-right" richColors={false} />
-    </div>
+        {modalNuevoIngreso && (
+          <NuevoIngresoModal
+            onRegistrado={() => setRefrescarActivos((n) => n + 1)}
+            onCerrar={() => setModalNuevoIngreso(false)}
+          />
+        )}
+
+        {modalSalida && (
+          <SalidaModal
+            onRegistrado={() => setRefrescarActivos((n) => n + 1)}
+            onCerrar={() => setModalSalida(false)}
+          />
+        )}
+
+        {/* theme="system": mismo criterio que el resto de la app (paleta
+            clara/oscura sigue `prefers-color-scheme`, sin toggle manual
+            todavía) — estilizado con las variables propias en index.css, no
+            los colores por defecto de sonner. */}
+        <Toaster theme="system" position="bottom-right" richColors={false} />
+      </div>
+    </SesionProvider>
   );
 }

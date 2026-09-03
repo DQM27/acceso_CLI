@@ -11,6 +11,7 @@ import type {
   GridReadyEvent,
   SortChangedEvent,
 } from "ag-grid-community";
+import { useUsuarioId } from "../contexto/SesionContexto";
 
 /**
  * Tema y comportamiento compartido de TODAS las tablas de la app — un solo
@@ -84,6 +85,15 @@ export function leerEstadoGuardado(id: string | undefined): EstadoGuardado | nul
   } catch {
     return null;
   }
+}
+
+/** Namespacea el id de grilla por usuario logueado — cada quien guarda su
+ * propio layout (orden, ancho, ocultas) bajo la misma pantalla sin pisar el
+ * de otro usuario en la misma máquina. `usuarioId` ausente (fuera de una
+ * sesión) deja el id tal cual — mismo comportamiento de siempre. */
+function idPorUsuario(id: string | undefined, usuarioId: number | null): string | undefined {
+  if (!id || usuarioId == null) return id;
+  return `u${usuarioId}:${id}`;
 }
 
 /** Identidad de una columna para visibilidad/orden — `colId` si está
@@ -167,11 +177,13 @@ function TablaBase<T>(
   }: TablaProps<T>,
   ref: React.ForwardedRef<TablaHandle<T>>,
 ) {
+  const usuarioId = useUsuarioId();
+  const idGrilla = idPorUsuario(id, usuarioId);
   const [ocultas, setOcultas] = useState<Set<string>>(
-    () => new Set(leerEstadoGuardado(id)?.ocultas ?? []),
+    () => new Set(leerEstadoGuardado(idGrilla)?.ocultas ?? []),
   );
   const [filtrosVisibles, setFiltrosVisibles] = useState(
-    () => leerEstadoGuardado(id)?.filtrosVisibles ?? true,
+    () => leerEstadoGuardado(idGrilla)?.filtrosVisibles ?? true,
   );
   const [selectorAbierto, setSelectorAbierto] = useState(false);
   const apiRef = useRef<GridReadyEvent<T>["api"] | null>(null);
@@ -220,7 +232,7 @@ function TablaBase<T>(
    * estado de AG Grid trajera su propio `hide`, ambas fuentes podrían
    * contradecirse. */
   function guardarLayout(ocultasActual: Set<string>, filtrosVisiblesActual: boolean = filtrosVisibles) {
-    if (!id || !apiRef.current) return;
+    if (!idGrilla || !apiRef.current) return;
     const columnState = apiRef.current.getColumnState().map(({ hide: _hide, ...resto }) => resto);
     const estado: EstadoGuardado = {
       ocultas: Array.from(ocultasActual),
@@ -228,7 +240,7 @@ function TablaBase<T>(
       filtrosVisibles: filtrosVisiblesActual,
     };
     try {
-      localStorage.setItem(claveAlmacenamiento(id), JSON.stringify(estado));
+      localStorage.setItem(claveAlmacenamiento(idGrilla), JSON.stringify(estado));
     } catch {
       // localStorage puede fallar (modo privado, cuota llena) — perder el
       // layout guardado no es motivo para romper la grilla.
@@ -245,7 +257,7 @@ function TablaBase<T>(
 
   function alListo(evento: GridReadyEvent<T>) {
     apiRef.current = evento.api;
-    const guardado = leerEstadoGuardado(id);
+    const guardado = leerEstadoGuardado(idGrilla);
     if (guardado?.columnas?.length) {
       evento.api.applyColumnState({ state: guardado.columnas, applyOrder: true });
     }
