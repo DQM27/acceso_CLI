@@ -36,19 +36,22 @@ export default function Gafetes() {
       {
         field: "numero",
         headerName: "Número",
-        width: 110,
+        flex: 1.1,
+        minWidth: 110,
         valueFormatter: ({ value }) => String(value).padStart(2, "0"),
       },
-      { field: "estado", headerName: "Estado", width: 130 },
+      { field: "estado", headerName: "Estado", flex: 1.3, minWidth: 130 },
       {
         field: "contratista_deudor_nombre",
         headerName: "Asignado a",
-        flex: 1,
+        flex: 1.6,
+        minWidth: 170,
         cellStyle: { textAlign: "left" },
       },
       {
         headerName: "Resolver",
-        width: 110,
+        flex: 1.1,
+        minWidth: 110,
         filter: false,
         sortable: false,
         cellRenderer: (p: ICellRendererParams<GafeteResumen>) =>
@@ -65,7 +68,8 @@ export default function Gafetes() {
       },
       {
         headerName: "Historial",
-        width: 110,
+        flex: 1.1,
+        minWidth: 110,
         filter: false,
         sortable: false,
         cellRenderer: (p: ICellRendererParams<GafeteResumen>) =>

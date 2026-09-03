@@ -163,7 +163,7 @@ export default function Historial() {
   // vía `Tabla`).
   const columnas: ColDef<FilaHistorial>[] = useMemo(
     () => [
-      { field: "cedula", headerName: "Cédula", width: 120, cellStyle: { textAlign: "left" } },
+      { field: "cedula", headerName: "Cédula", flex: 1.2, minWidth: 120, cellStyle: { textAlign: "left" } },
       {
         field: "contratista_nombre",
         headerName: "Nombre",
@@ -172,17 +172,19 @@ export default function Historial() {
         cellStyle: { textAlign: "left" },
       },
       { field: "empresa_nombre", headerName: "Empresa", flex: 1, minWidth: 130 },
-      { field: "tipo_ingreso", headerName: "Tipo", width: 100 },
+      { field: "tipo_ingreso", headerName: "Tipo", flex: 1, minWidth: 100 },
       {
         field: "medio_ingreso",
         headerName: "Medio",
-        width: 100,
+        flex: 1,
+        minWidth: 100,
         valueFormatter: (p) => textoMedio(p.value),
       },
       {
         field: "gafete_numero",
         headerName: "Gafete",
-        width: 90,
+        flex: 0.9,
+        minWidth: 90,
         valueFormatter: (p) => (p.value == null ? "S/G" : String(p.value)),
       },
       {
@@ -191,14 +193,16 @@ export default function Historial() {
         // 120 truncaba el título en mayúscula ("FECHA ING…") mientras el
         // resto de encabezados entraba completo — 140 es lo que necesita
         // "FECHA INGRESO" para no cortarse.
-        width: 140,
+        flex: 1.4,
+        minWidth: 140,
         valueGetter: (p) => (p.data ? fechaLocalYMD(p.data.fecha_hora_ingreso) : ""),
         valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
       },
       {
         colId: "hora_ingreso",
         headerName: "Hora ingreso",
-        width: 130,
+        flex: 1.3,
+        minWidth: 130,
         valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora_ingreso) : ""),
       },
       {
@@ -209,7 +213,8 @@ export default function Historial() {
         // no coincidía con lo que se veía en el archivo exportado.
         colId: "fecha_salida",
         headerName: "Fecha salida",
-        width: 140,
+        flex: 1.4,
+        minWidth: 140,
         valueGetter: (p) =>
           p.data?.fecha_hora_salida ? fechaLocalYMD(p.data.fecha_hora_salida) : "Activo",
         valueFormatter: (p) => (p.value === "Activo" ? "Activo" : textoFechaDDMMYYYY(p.value)),
@@ -217,12 +222,13 @@ export default function Historial() {
       {
         colId: "hora_salida",
         headerName: "Hora salida",
-        width: 130,
+        flex: 1.3,
+        minWidth: 130,
         valueGetter: (p) =>
           p.data?.fecha_hora_salida ? textoHora(p.data.fecha_hora_salida) : "Activo",
       },
-      { field: "usuario_ingreso_nombre", headerName: "Dio ingreso", width: 130 },
-      { field: "usuario_salida_nombre", headerName: "Dio salida", width: 130 },
+      { field: "usuario_ingreso_nombre", headerName: "Dio ingreso", flex: 1.3, minWidth: 130 },
+      { field: "usuario_salida_nombre", headerName: "Dio salida", flex: 1.3, minWidth: 130 },
     ],
     [],
   );

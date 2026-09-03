@@ -23,27 +23,32 @@ import { textoFechaDDMMYYYY } from "../tiempo";
 // no tiene un filtro booleano nativo decente, y ya se ven/tocan directo con
 // el switch.
 const columnas: ColDef<ContratistaResumen>[] = [
-  { field: "cedula", headerName: "Cédula", width: 140, cellStyle: { textAlign: "left" } },
-  { field: "nombre", headerName: "Nombre", flex: 1, cellStyle: { textAlign: "left" } },
-  { field: "empresa_nombre", headerName: "Empresa", flex: 1 },
-  { field: "tipo_ingreso", headerName: "Tipo", width: 120 },
+  { field: "cedula", headerName: "Cédula", flex: 1.4, minWidth: 140, cellStyle: { textAlign: "left" } },
+  { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
+  { field: "empresa_nombre", headerName: "Empresa", flex: 1.4, minWidth: 140 },
+  { field: "tipo_ingreso", headerName: "Tipo", flex: 1.2, minWidth: 120 },
   {
     field: "fecha_vencimiento_praind",
     headerName: "PRAIND vence",
-    width: 140,
+    flex: 1.4,
+    minWidth: 140,
     valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
   },
   {
     field: "es_personal_ruta",
     headerName: "Personal de ruta",
-    width: 140,
+    // 140 truncaba el encabezado ("PERSONAL DE …") — 170 es lo que
+    // necesita "PERSONAL DE RUTA" para no cortarse.
+    flex: 1.7,
+    minWidth: 170,
     cellRenderer: InterruptorCelda,
     filter: false,
   },
   {
     field: "tiene_acceso",
     headerName: "Acceso",
-    width: 100,
+    flex: 1,
+    minWidth: 100,
     cellRenderer: InterruptorCelda,
     filter: false,
   },

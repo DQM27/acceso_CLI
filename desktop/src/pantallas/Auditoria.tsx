@@ -113,14 +113,16 @@ export default function Auditoria() {
       {
         colId: "fecha",
         headerName: "Fecha",
-        width: 110,
+        flex: 1.1,
+        minWidth: 110,
         valueGetter: (p) => (p.data ? fechaLocalYMD(p.data.fecha_hora) : ""),
         valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
       },
       {
         colId: "hora",
         headerName: "Hora",
-        width: 90,
+        flex: 0.9,
+        minWidth: 90,
         valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora) : ""),
       },
       {
@@ -130,8 +132,8 @@ export default function Auditoria() {
         minWidth: 160,
         cellStyle: { textAlign: "left" },
       },
-      { field: "entidad_texto", headerName: "Tipo", width: 120 },
-      { field: "campo_texto", headerName: "Campo", width: 160 },
+      { field: "entidad_texto", headerName: "Tipo", flex: 1.2, minWidth: 120 },
+      { field: "campo_texto", headerName: "Campo", flex: 1.6, minWidth: 160 },
       {
         field: "anterior_texto",
         headerName: "Valor anterior",
@@ -147,7 +149,8 @@ export default function Auditoria() {
       {
         field: "usuario_nombre",
         headerName: "Modificado por",
-        width: 150,
+        flex: 1.5,
+        minWidth: 150,
       },
     ],
     [],

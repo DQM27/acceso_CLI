@@ -198,7 +198,7 @@ export default function Activos({
   // `Tabla`/localStorage quedaba pisado en el siguiente refresco.
   const columnas: ColDef<FilaActiva>[] = useMemo(
     () => [
-      { field: "cedula", headerName: "Cédula", width: 120, cellStyle: { textAlign: "left" } },
+      { field: "cedula", headerName: "Cédula", flex: 1.2, minWidth: 120, cellStyle: { textAlign: "left" } },
       {
         field: "contratista_nombre",
         headerName: "Nombre",
@@ -207,24 +207,27 @@ export default function Activos({
         cellStyle: { textAlign: "left" },
       },
       { field: "empresa_nombre", headerName: "Empresa", flex: 1.1, minWidth: 140 },
-      { field: "tipo_ingreso", headerName: "Tipo", width: 100 },
+      { field: "tipo_ingreso", headerName: "Tipo", flex: 1, minWidth: 100 },
       {
         field: "medio_ingreso",
         headerName: "Medio",
-        width: 100,
+        flex: 1,
+        minWidth: 100,
         valueFormatter: (p) => (p.value == null ? "—" : textoMedio(p.value)),
       },
       {
         field: "gafete_numero",
         headerName: "Gafete",
-        width: 90,
+        flex: 0.9,
+        minWidth: 90,
         valueFormatter: (p) =>
           p.data?.origen === "remoto" ? "—" : p.value == null ? "S/G" : String(p.value),
       },
       {
         colId: "fecha_ingreso",
         headerName: "Fecha",
-        width: 110,
+        flex: 1.1,
+        minWidth: 110,
         // `valueGetter` (no `field`) a propósito, igual que Hora: si la
         // columna lee el string ISO crudo, AG Grid la infiere como fecha y
         // el filtro flotante termina siendo el selector nativo de
@@ -239,7 +242,8 @@ export default function Activos({
       {
         colId: "hora_ingreso",
         headerName: "Hora",
-        width: 90,
+        flex: 0.9,
+        minWidth: 90,
         // `valueGetter` (no `field`+`valueFormatter`) a propósito: si lee
         // el string ISO crudo, AG Grid vuelve a inferirla como fecha (con
         // el mismo problema de la columna Fecha). Devolviendo ya el texto
@@ -247,17 +251,19 @@ export default function Activos({
         // comportamiento que el resto de columnas de texto, sin ícono raro.
         valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora_ingreso) : ""),
       },
-      { field: "usuario_ingreso_nombre", headerName: "Dio ingreso", width: 130 },
+      { field: "usuario_ingreso_nombre", headerName: "Dio ingreso", flex: 1.3, minWidth: 130 },
       {
         field: "estado_texto",
         headerName: "Estado",
-        width: 170,
+        flex: 1.7,
+        minWidth: 170,
         cellRenderer: (p: ICellRendererParams<FilaActiva>) =>
           p.data ? <EstadoAcceso fila={p.data} /> : null,
       },
       {
         headerName: "Acción",
-        width: 90,
+        flex: 0.9,
+        minWidth: 90,
         filter: false,
         sortable: false,
         // Sin pinned a propósito: una columna fijada reserva el ancho del
