@@ -1,5 +1,11 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Alta de Dispositivos</title>
 <meta name="description" content="Panel de administración para dar de alta, listar y revocar dispositivos por sitio en el receptor de control de acceso.">
+<link rel="icon" type="image/png" href="/favicon.png">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
@@ -377,6 +383,8 @@
 
   [hidden] { display: none !important; }
 </style>
+</head>
+<body>
 
 <div id="gate">
   <h1>Panel de dispositivos</h1>
@@ -393,6 +401,7 @@
       <span class="subtitle">control-acceso-nube</span>
     </div>
     <div style="display:flex; align-items:center; gap:10px;">
+      <a href="/" class="btn-ghost" style="font-size:12px; padding:5px 10px; text-decoration:none; display:inline-block;">← Historial</a>
       <span class="project-tag">xidaepyaljzkpbsxrqsm</span>
       <button class="btn-ghost" id="btn-logout" style="font-size:12px; padding:5px 10px;">Salir</button>
     </div>
@@ -415,6 +424,7 @@
           <select id="f-tipo">
             <option value="pc">PC</option>
             <option value="mobile">Celular</option>
+            <option value="visor">Visor web (solo lectura)</option>
           </select>
         </div>
         <div>
@@ -449,6 +459,8 @@
 
   const iconPc = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg>';
   const iconMobile = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg>';
+  const iconVisor = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const iconoPorTipo = (tipo) => tipo === "pc" ? iconPc : tipo === "visor" ? iconVisor : iconMobile;
 
   function showToast(msg) {
     const t = $("#toast");
@@ -494,7 +506,7 @@
         const rows = devs.length
           ? devs.map((d) => `
             <div class="device-row">
-              <div class="device-icon">${d.tipo === "pc" ? iconPc : iconMobile}</div>
+              <div class="device-icon">${iconoPorTipo(d.tipo)}</div>
               <div>
                 <div class="device-label">${escapeHtml(d.etiqueta)}</div>
                 <div class="device-meta mono">${fmtDate(d.created_at)}</div>
@@ -625,3 +637,5 @@
     if (saved) tryEnter(saved);
   })();
 </script>
+</body>
+</html>
