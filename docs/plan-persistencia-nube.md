@@ -5,6 +5,58 @@
 > arquitectura que quedó sin resolver antes de escribir una sola línea de
 > código.
 
+## Sesión 2026-09-04: cierre cruzado descartado, "seed inicial" ya resuelto, edición externa de contratistas
+
+**Cierre cruzado de ingresos vía Realtime: descartado por el usuario.** Hay
+un problema documentado del lado de Supabase que lo hace no confiable (no
+detallado acá — decisión del usuario, no una falla que haya que perseguir
+en este repo). El mecanismo en sí (`recibir_ingresos_abiertos` +
+`cerrar_ingreso_remoto` + `recibir_cierres_de_ingresos_propios`) sigue
+andando y con tests, pero la app **no debe depender de que el broadcast de
+Realtime llegue** para que esto funcione — sólo como aviso oportunista para
+sincronizar antes. La foto real la sigue dando el polling.
+
+**Corrección sobre la nota "Diferido" de más abajo (línea ~95, sesión
+2026-09-02): el "seed inicial" para empresas/contratistas YA ESTÁ
+RESUELTO, sin que se haya decidido a propósito.** `recibir_catalogo_del_sitio`
+(`src/nube/sincronizacion.rs`) no trae "lo nuevo desde la última vez": en
+cada sincronización trae el catálogo **completo** de `empresas`/
+`contratistas` del sitio y hace `UPSERT` por `uuid`/`cedula`. Un
+dispositivo nuevo, con la base local vacía, en su primer
+`sincronizar_con_nube()` ya recibe todo el catálogo existente. La nota de
+abajo que dice "Sin diseñar todavía" está desactualizada — no hace falta
+diseñar nada, ya funciona así. **Gafetes es la excepción real**: sólo
+sincroniza local→nube (`enviar_gafete`); no existe un `recibir_gafetes`
+que traiga el catálogo completo hacia el dispositivo. Sigue pendiente si
+se quiere el mismo comportamiento para gafetes.
+
+**Nueva pregunta del usuario, respondida: ¿se puede negar el acceso a un
+contratista desde una web externa y que llegue a los dispositivos como
+actualización?** Sí, y la capa de datos ya lo soporta sin cambios: el
+`UPSERT` de `recibir_catalogo_del_sitio` sobreescribe `tiene_acceso` desde
+la nube en cada sync (`ON CONFLICT(cedula) DO UPDATE SET ... tiene_acceso
+= excluded.tiene_acceso ...`) — la nube ya es la fuente de verdad para ese
+campo, editarlo directo en la tabla `contratistas` de Supabase (o desde
+cualquier cliente con las credenciales correctas) se propaga solo. **El
+hueco real está en la cadencia de sincronización, no en los datos:**
+- Escritorio ya sincroniza solo cada 2 minutos, independiente de Realtime
+  (`iniciar_sincronizacion_automatica`, `INTERVALO_SINCRONIZACION_AUTOMATICA`
+  en `desktop/src-tauri/src/lib.rs`) — un cambio llega en ≤2 min pase lo
+  que pase con Realtime.
+- **Móvil no tiene ese timer.** Hoy depende del broadcast de Realtime
+  (recién descartado como confiable, arriba) o de que alguien toque
+  "Sincronizar" a mano en `PantallaNube`. Sin timer propio, negarle el
+  acceso a alguien desde afuera no llega al teléfono hasta la próxima
+  sincronización manual — hueco real para un caso de seguridad, no
+  cosmético.
+
+**Pendiente a decidir**: agregar a móvil un timer periódico de
+sincronización en segundo plano equivalente al de escritorio, con cuidado
+de batería (`WorkManager` con restricción de red, no un loop tipo el que
+tenía `NubeRealtime` antes de acotarlo a `ON_START`/`ON_STOP` — ver commit
+"mobile: pausa Realtime de la nube en segundo plano"). Sin diseñar
+todavía; a retomar cuando el usuario lo priorice.
+
 ## Estado actual (sesión 2026-09-02, tercera parte): checklist honesto
 
 **Terminado y probado contra Supabase real** (no sólo tests simulados):
@@ -92,12 +144,15 @@ decidió seguir):
 4. ~~Fusionar `ingresos_remotos` con la pantalla Activos~~ — cerrado.
 5. ~~Gafetes~~ — cerrado.
 
-**Diferido, explícitamente pospuesto, no en la lista de arriba**: "seed
+~~**Diferido, explícitamente pospuesto, no en la lista de arriba**: "seed
 inicial" — que un dispositivo nuevo, al configurarse por primera vez, baje
 el catálogo existente de la nube a su base local vacía (hoy es al revés:
 sólo empuja lo local hacia la nube). Motivación del usuario: que la nube
 sea la fuente de verdad inicial para abrir un sitio nuevo con datos ya
-existentes. Sin diseñar todavía.
+existentes. Sin diseñar todavía.~~ **Corregido (sesión 2026-09-04, ver
+arriba): esto ya está resuelto para empresas/contratistas —
+`recibir_catalogo_del_sitio` siempre trae el catálogo completo, no un
+delta. Sólo falta el equivalente para gafetes.**
 
 ## Estado actual (sesión 2026-09-02, segunda parte): ya hay receptor real
 
