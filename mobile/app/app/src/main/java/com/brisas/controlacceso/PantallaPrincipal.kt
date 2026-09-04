@@ -28,6 +28,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.RolUsuario
 import uniffi.control_acceso_mobile.UsuarioSesion
@@ -72,9 +75,28 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String,
         )
     }
 
-    DisposableEffect(realtime) {
-        realtime.iniciar()
-        onDispose { realtime.detener() }
+    // Atado a ON_START/ON_STOP, no sólo a la composición: sin esto, el
+    // socket de Realtime (y su bucle de reconexión con backoff) seguía
+    // vivo aunque el guardia bloqueara el teléfono o cambiara de app —
+    // `PantallaPrincipal` sigue en composición mientras dure la sesión, la
+    // Activity no se destruye sólo por pasar a segundo plano. Gastaba
+    // batería (radio despierto) sin ningún beneficio: nadie ve pantalla
+    // para que un aviso en vivo importe. Vuelve a conectar solo al volver
+    // al primer plano.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(realtime, lifecycleOwner) {
+        val observador = LifecycleEventObserver { _, evento ->
+            when (evento) {
+                Lifecycle.Event.ON_START -> realtime.iniciar()
+                Lifecycle.Event.ON_STOP -> realtime.detener()
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observador)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observador)
+            realtime.detener()
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {

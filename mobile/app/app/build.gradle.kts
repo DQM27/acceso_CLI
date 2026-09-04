@@ -82,6 +82,11 @@ dependencies {
     // (ver AAR metadata al subir la versión; no forma parte de este cambio
     // subir compileSdk).
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
+    // `LocalLifecycleOwner` (PantallaPrincipal.kt): pausa la conexión
+    // Realtime de la nube cuando la app pasa a segundo plano, en vez de
+    // dejarla despierta gastando batería sin nadie mirando la pantalla.
+    // Misma versión que lifecycle-viewmodel-compose de arriba, mismo motivo.
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
 
     // Tests unitarios de los ViewModel (JVM puro, sin emulador) — ver
     // mobile/app/src/test/.../NucleoDePrueba.kt para el porqué de cada uno.
