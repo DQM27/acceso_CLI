@@ -22,7 +22,7 @@
  *    que llevó a sacar `Sidebar.tsx` de `Shell` (que sí hace enrutamiento
  *    y orquesta modales, eso es responsabilidad suya).
  */
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { listen } from "@tauri-apps/api/event";
 import { Toaster, toast } from "sonner";
@@ -43,21 +43,27 @@ import MenuUsuario from "./componentes/MenuUsuario";
 import ErrorBoundary from "./componentes/ErrorBoundary";
 import Login from "./pantallas/Login";
 import Activos from "./pantallas/Activos";
-import Contratistas from "./pantallas/Contratistas";
-import Empresas from "./pantallas/Empresas";
-import Usuarios from "./pantallas/Usuarios";
-import Historial from "./pantallas/Historial";
-import Auditoria from "./pantallas/Auditoria";
-import Gafetes from "./pantallas/Gafetes";
-import Respaldos from "./pantallas/Respaldos";
-import Nube from "./pantallas/Nube";
-import NuevoIngresoModal from "./pantallas/NuevoIngresoModal";
-import SalidaModal from "./pantallas/SalidaModal";
 import { buscarActualizacion, cerrarSesion, instalarActualizacion, requiereConfiguracionInicial } from "./api";
 import type { ResumenSincronizacion, RolUsuario, UsuarioSesion } from "./api";
 import { iniciarRealtimeNube } from "./nubeRealtime";
 import { SesionProvider } from "./contexto/SesionContexto";
 import { BarraEstadoProvider } from "./contexto/BarraEstadoContexto";
+
+// Cargadas bajo demanda (`lazy`): salvo Activos (sección por defecto) y
+// Login, ninguna pantalla ni modal hace falta en el primer render — cada
+// una se pide recién cuando el usuario navega a su sección o abre su modal,
+// en vez de sumarse al bundle inicial (ver el <Suspense> que las envuelve
+// en `Shell`).
+const Contratistas = lazy(() => import("./pantallas/Contratistas"));
+const Empresas = lazy(() => import("./pantallas/Empresas"));
+const Usuarios = lazy(() => import("./pantallas/Usuarios"));
+const Historial = lazy(() => import("./pantallas/Historial"));
+const Auditoria = lazy(() => import("./pantallas/Auditoria"));
+const Gafetes = lazy(() => import("./pantallas/Gafetes"));
+const Respaldos = lazy(() => import("./pantallas/Respaldos"));
+const Nube = lazy(() => import("./pantallas/Nube"));
+const NuevoIngresoModal = lazy(() => import("./pantallas/NuevoIngresoModal"));
+const SalidaModal = lazy(() => import("./pantallas/SalidaModal"));
 
 type Pantalla =
   | { tipo: "cargando" }
@@ -318,21 +324,27 @@ function Shell({
                 key={seccion}
                 mensaje="Esta sección no pudo cargar. La sesión sigue activa — elegí otra desde el menú, o reiniciá la app si el problema persiste."
               >
-                {seccion === "activos" && (
-                  <Activos
-                    refrescarSenal={refrescarActivos}
-                    onAbrirNuevoIngreso={() => setModalNuevoIngreso(true)}
-                    onAbrirSalida={() => setModalSalida(true)}
-                  />
-                )}
-                {seccion === "historial" && <Historial />}
-                {seccion === "contratistas" && <Contratistas />}
-                {seccion === "auditoria" && <Auditoria />}
-                {seccion === "empresas" && <Empresas />}
-                {seccion === "usuarios" && <Usuarios actorRol={sesion.rol} />}
-                {seccion === "gafetes" && <Gafetes />}
-                {seccion === "respaldos" && <Respaldos onRestaurado={onVolverALogin} />}
-                {seccion === "nube" && <Nube />}
+                {/* Fallback `null`: las pantallas lazy vienen del mismo bundle
+                    local (nada de red de por medio), el chunk carga en
+                    milisegundos — no vale la pena un spinner que sólo
+                    parpadearía. */}
+                <Suspense fallback={null}>
+                  {seccion === "activos" && (
+                    <Activos
+                      refrescarSenal={refrescarActivos}
+                      onAbrirNuevoIngreso={() => setModalNuevoIngreso(true)}
+                      onAbrirSalida={() => setModalSalida(true)}
+                    />
+                  )}
+                  {seccion === "historial" && <Historial />}
+                  {seccion === "contratistas" && <Contratistas />}
+                  {seccion === "auditoria" && <Auditoria />}
+                  {seccion === "empresas" && <Empresas />}
+                  {seccion === "usuarios" && <Usuarios actorRol={sesion.rol} />}
+                  {seccion === "gafetes" && <Gafetes />}
+                  {seccion === "respaldos" && <Respaldos onRestaurado={onVolverALogin} />}
+                  {seccion === "nube" && <Nube />}
+                </Suspense>
               </ErrorBoundary>
             </main>
           </div>
@@ -346,19 +358,21 @@ function Shell({
             <MenuUsuario sesion={sesion} onCerrarSesion={onCerrarSesion} />
           </div>
 
-          {modalNuevoIngreso && (
-            <NuevoIngresoModal
-              onRegistrado={() => setRefrescarActivos((n) => n + 1)}
-              onCerrar={() => setModalNuevoIngreso(false)}
-            />
-          )}
+          <Suspense fallback={null}>
+            {modalNuevoIngreso && (
+              <NuevoIngresoModal
+                onRegistrado={() => setRefrescarActivos((n) => n + 1)}
+                onCerrar={() => setModalNuevoIngreso(false)}
+              />
+            )}
 
-          {modalSalida && (
-            <SalidaModal
-              onRegistrado={() => setRefrescarActivos((n) => n + 1)}
-              onCerrar={() => setModalSalida(false)}
-            />
-          )}
+            {modalSalida && (
+              <SalidaModal
+                onRegistrado={() => setRefrescarActivos((n) => n + 1)}
+                onCerrar={() => setModalSalida(false)}
+              />
+            )}
+          </Suspense>
 
           {/* theme="system": mismo criterio que el resto de la app (paleta
               clara/oscura sigue `prefers-color-scheme`, sin toggle manual
