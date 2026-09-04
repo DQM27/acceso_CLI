@@ -271,4 +271,46 @@ mod tests {
             "El receptor rechazó el pedido, intentá de nuevo más tarde"
         );
     }
+
+    /// Regresión: `GestionarNube` (exclusivo ROOT) y `UsarNube` (cualquier
+    /// rol) compartían la misma variante de error con un único mensaje
+    /// redactado sólo para el caso ROOT -- confundía a quien depuraba un
+    /// fallo de `UsarNube` haciéndole creer que era una función exclusiva
+    /// de ROOT (ver `application::nube::GestionNubeError`).
+    #[cfg(feature = "nube")]
+    #[test]
+    fn la_autorizacion_de_gestion_y_de_uso_de_la_nube_no_comparten_mensaje() {
+        use crate::application::GestionNubeError;
+
+        assert_eq!(
+            mensaje_gestion_nube(GestionNubeError::OperacionNoAutorizada),
+            "Sólo una sesión ROOT activa puede gestionar la nube"
+        );
+        assert_eq!(
+            mensaje_gestion_nube(GestionNubeError::UsoNoAutorizado),
+            "Su sesión no está autorizada para usar la nube"
+        );
+    }
+
+    /// Mismo criterio que `el_cuerpo_crudo_de_una_respuesta_inesperada_no_llega_a_pantalla`,
+    /// pero a través de la fachada que usa el puente móvil
+    /// (`mobile/rust-core/src/lib.rs`, `From<GestionNubeError> for
+    /// NucleoError`) -- confirma que ese camino tampoco filtra el cuerpo
+    /// crudo de la respuesta del receptor.
+    #[cfg(feature = "nube")]
+    #[test]
+    fn mensaje_gestion_nube_tampoco_filtra_el_cuerpo_crudo_de_sincronizacion() {
+        use crate::application::GestionNubeError;
+
+        let error = GestionNubeError::Sincronizacion(
+            crate::nube::SincronizacionError::RespuestaInesperada {
+                status: 500,
+                cuerpo: "detalle interno de postgrest".into(),
+            },
+        );
+        assert_eq!(
+            mensaje_gestion_nube(error),
+            "El receptor rechazó el pedido, intentá de nuevo más tarde"
+        );
+    }
 }
