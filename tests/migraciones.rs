@@ -49,6 +49,50 @@ fn crear_trigger_cedula_inmutable(connection: &Connection) {
         .unwrap();
 }
 
+/// `registro_ingresos_entrada_inmutable` (recreado con `uuid` en su lista de
+/// columnas por `MIGRACION_21`) rechaza `ALTER TABLE ... DROP COLUMN uuid` si
+/// sigue vigente -- `SQLite` valida las referencias del trigger al momento de
+/// soltar la columna. Rebobina el trigger a la forma que tenía en
+/// `MIGRACION_15` (sin `uuid`), para simular una base congelada en una
+/// versión anterior a `MIGRACION_16`.
+fn rebobinar_trigger_entrada_inmutable_sin_uuid(connection: &Connection) {
+    connection
+        .execute_batch(
+            "DROP TRIGGER registro_ingresos_entrada_inmutable;
+             CREATE TRIGGER registro_ingresos_entrada_inmutable
+             BEFORE UPDATE OF
+                contratista_id, empresa_id, fecha_hora_ingreso, medio_ingreso, tipo_ingreso,
+                gafete_numero, usuario_ingreso_id, contratista_cedula, contratista_nombre,
+                empresa_nombre, usuario_ingreso_nombre, fecha_vencimiento_praind,
+                es_personal_ruta, tiene_acceso, resultado_acceso, motivo_resultado,
+                reglas_version, empresa_activa_snapshot
+             ON registro_ingresos
+             WHEN
+                NEW.contratista_id IS NOT OLD.contratista_id
+                OR NEW.empresa_id IS NOT OLD.empresa_id
+                OR NEW.fecha_hora_ingreso IS NOT OLD.fecha_hora_ingreso
+                OR NEW.medio_ingreso IS NOT OLD.medio_ingreso
+                OR NEW.tipo_ingreso IS NOT OLD.tipo_ingreso
+                OR NEW.gafete_numero IS NOT OLD.gafete_numero
+                OR NEW.usuario_ingreso_id IS NOT OLD.usuario_ingreso_id
+                OR NEW.contratista_cedula IS NOT OLD.contratista_cedula
+                OR NEW.contratista_nombre IS NOT OLD.contratista_nombre
+                OR NEW.empresa_nombre IS NOT OLD.empresa_nombre
+                OR NEW.usuario_ingreso_nombre IS NOT OLD.usuario_ingreso_nombre
+                OR NEW.fecha_vencimiento_praind IS NOT OLD.fecha_vencimiento_praind
+                OR NEW.es_personal_ruta IS NOT OLD.es_personal_ruta
+                OR NEW.tiene_acceso IS NOT OLD.tiene_acceso
+                OR NEW.resultado_acceso IS NOT OLD.resultado_acceso
+                OR NEW.motivo_resultado IS NOT OLD.motivo_resultado
+                OR NEW.reglas_version IS NOT OLD.reglas_version
+                OR NEW.empresa_activa_snapshot IS NOT OLD.empresa_activa_snapshot
+             BEGIN
+                SELECT RAISE(ABORT, 'Los datos historicos del ingreso son inmutables');
+             END;",
+        )
+        .unwrap();
+}
+
 fn crear_esquema_version_1(connection: &Connection) {
     connection
         .execute_batch(
@@ -208,8 +252,13 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
              ALTER TABLE empresas DROP COLUMN uuid;
              DROP INDEX idx_contratistas_uuid;
              ALTER TABLE contratistas DROP COLUMN uuid;
-             DROP INDEX idx_registro_ingresos_uuid;
-             ALTER TABLE registro_ingresos DROP COLUMN uuid;
+             DROP INDEX idx_registro_ingresos_uuid;",
+        )
+        .unwrap();
+    rebobinar_trigger_entrada_inmutable_sin_uuid(&connection);
+    connection
+        .execute_batch(
+            "ALTER TABLE registro_ingresos DROP COLUMN uuid;
              PRAGMA user_version = 9;",
         )
         .unwrap();
@@ -282,8 +331,13 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
              ALTER TABLE empresas DROP COLUMN uuid;
              DROP INDEX idx_contratistas_uuid;
              ALTER TABLE contratistas DROP COLUMN uuid;
-             DROP INDEX idx_registro_ingresos_uuid;
-             ALTER TABLE registro_ingresos DROP COLUMN uuid;
+             DROP INDEX idx_registro_ingresos_uuid;",
+        )
+        .unwrap();
+    rebobinar_trigger_entrada_inmutable_sin_uuid(&connection);
+    connection
+        .execute_batch(
+            "ALTER TABLE registro_ingresos DROP COLUMN uuid;
              PRAGMA user_version = 10;",
         )
         .unwrap();
@@ -369,8 +423,13 @@ fn migracion_12_habilita_cambio_de_cedula() {
              ALTER TABLE empresas DROP COLUMN uuid;
              DROP INDEX idx_contratistas_uuid;
              ALTER TABLE contratistas DROP COLUMN uuid;
-             DROP INDEX idx_registro_ingresos_uuid;
-             ALTER TABLE registro_ingresos DROP COLUMN uuid;
+             DROP INDEX idx_registro_ingresos_uuid;",
+        )
+        .unwrap();
+    rebobinar_trigger_entrada_inmutable_sin_uuid(&connection);
+    connection
+        .execute_batch(
+            "ALTER TABLE registro_ingresos DROP COLUMN uuid;
              PRAGMA user_version = 11;",
         )
         .unwrap();

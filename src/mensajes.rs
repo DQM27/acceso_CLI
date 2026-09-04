@@ -175,6 +175,9 @@ pub fn mensaje_gestion_nube(error: crate::application::GestionNubeError) -> Stri
         GestionNubeError::OperacionNoAutorizada => {
             "Sólo una sesión ROOT activa puede gestionar la nube".into()
         }
+        GestionNubeError::UsoNoAutorizado => {
+            "Su sesión no está autorizada para usar la nube".into()
+        }
         GestionNubeError::Sqlite(_) => "No se pudo leer la base de datos local".into(),
         GestionNubeError::SinSecreto => {
             "Todavía no se guardó el secreto de este dispositivo".into()

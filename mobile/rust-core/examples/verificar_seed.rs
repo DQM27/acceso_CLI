@@ -1,6 +1,9 @@
 fn main() {
-    let ruta = std::env::args().nth(1).expect("uso: verificar_seed <ruta_db>");
-    let conexion = control_acceso::database::connection::open_database(&ruta).expect("no se pudo abrir");
+    let ruta = std::env::args()
+        .nth(1)
+        .expect("uso: verificar_seed <ruta_db>");
+    let conexion =
+        control_acceso::database::connection::open_database(&ruta).expect("no se pudo abrir");
 
     let (cedula, nombre, rol): (String, String, String) = conexion
         .query_row(

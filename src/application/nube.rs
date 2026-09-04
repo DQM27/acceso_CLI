@@ -24,6 +24,8 @@ use super::{AppCore, verificar_actor_activo};
 pub enum GestionNubeError {
     #[error("Sólo una sesión ROOT activa puede gestionar la nube")]
     OperacionNoAutorizada,
+    #[error("Su sesión no está autorizada para usar la nube")]
+    UsoNoAutorizado,
     #[error("Error de SQLite: {0}")]
     Sqlite(#[from] rusqlite::Error),
     #[error("Todavía no se guardó el secreto de este dispositivo")]
@@ -255,11 +257,11 @@ impl AppCore {
         let usuario = verificar_actor_activo(&self.connection, actor)
             .map_err(|error| match error {
                 DatabaseError::Sqlite(error) => GestionNubeError::Sqlite(error),
-                _ => GestionNubeError::OperacionNoAutorizada,
+                _ => GestionNubeError::UsoNoAutorizado,
             })?
-            .ok_or(GestionNubeError::OperacionNoAutorizada)?;
+            .ok_or(GestionNubeError::UsoNoAutorizado)?;
         if !usuario.rol.puede(Operacion::UsarNube) {
-            return Err(GestionNubeError::OperacionNoAutorizada);
+            return Err(GestionNubeError::UsoNoAutorizado);
         }
         Ok(())
     }

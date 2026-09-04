@@ -8,6 +8,7 @@ use control_acceso::application::AppCore;
 use control_acceso::application::GestionNubeError as GestionNubeErrorNucleo;
 use control_acceso::application::ResumenSincronizacion as ResumenSincronizacionNucleo;
 use control_acceso::application::SesionRealtimeNube as SesionRealtimeNubeNucleo;
+use control_acceso::database::queries::Igualdad;
 use control_acceso::database::queries::contratistas::{
     ContratistaResumen as ContratistaResumenNucleo, FiltroContratistas as FiltroContratistasNucleo,
 };
@@ -18,12 +19,10 @@ use control_acceso::database::queries::ingresos::{
 use control_acceso::database::queries::usuarios::{
     FiltroUsuarios as FiltroUsuariosNucleo, UsuarioResumen as UsuarioResumenNucleo,
 };
-use control_acceso::database::queries::Igualdad;
 use control_acceso::domain::resultado_acceso::{
     MotivoDenegacion as MotivoDenegacionNucleo, ResultadoAcceso as ResultadoAccesoNucleo,
 };
 use control_acceso::models::empresa::Empresa as EmpresaNucleo;
-use control_acceso::nube::IngresoRemoto as IngresoRemotoNucleo;
 use control_acceso::models::medio_ingreso::MedioIngreso as MedioIngresoNucleo;
 use control_acceso::models::registro_ingreso::{
     MotivoResultadoIngreso as MotivoResultadoIngresoNucleo,
@@ -31,6 +30,7 @@ use control_acceso::models::registro_ingreso::{
 };
 use control_acceso::models::tipo_ingreso::TipoIngreso as TipoIngresoNucleo;
 use control_acceso::models::usuario::RolUsuario as RolUsuarioNucleo;
+use control_acceso::nube::IngresoRemoto as IngresoRemotoNucleo;
 use control_acceso::services::autenticacion_service::UsuarioSesion as UsuarioSesionNucleo;
 use control_acceso::services::contratista_service::DatosContratista as DatosContratistaNucleo;
 use control_acceso::services::error::AutenticacionError as AutenticacionErrorNucleo;
@@ -47,7 +47,7 @@ use control_acceso::services::usuario_service::CrearUsuarioInput as CrearUsuario
 
 uniffi::setup_scaffolding!();
 
-#[derive(Debug, Clone, Copy, PartialEq, uniffi::Enum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum RolUsuario {
     Root,
     Administrador,
@@ -77,7 +77,7 @@ impl From<RolUsuario> for RolUsuarioNucleo {
 /// Sin espejo en `control_acceso` — es puramente de la UI móvil: decide
 /// cómo `Nucleo::listar_ingresos_activos` interpreta el campo de texto
 /// cuando se está buscando a quién dar salida entre muchos activos.
-#[derive(Debug, Clone, Copy, PartialEq, uniffi::Enum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum ModoBusquedaActivos {
     NombreCedula,
     Gafete,
@@ -102,7 +102,7 @@ impl From<UsuarioSesionNucleo> for UsuarioSesion {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, uniffi::Enum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum TipoIngreso {
     Praind,
     InHouse,
@@ -136,7 +136,7 @@ impl From<TipoIngreso> for TipoIngresoNucleo {
 /// (`AAAA-MM-DD`) porque `uniffi` no tiene un tipo fecha nativo; decidir si
 /// está vencida sigue siendo trabajo de Rust (`domain::acceso`), no de
 /// Kotlin, cuando se implemente la pantalla de confirmar entrada.
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ContratistaResumen {
     pub id: i64,
     pub cedula: String,
@@ -209,7 +209,7 @@ impl From<MotivoDenegacionNucleo> for MotivoDenegacion {
 /// Espejo de `ResultadoAcceso` — la decisión (PRAIND vencido, empresa
 /// inactiva, etc.) ya viene tomada por `domain::acceso::verificar_acceso`;
 /// Kotlin sólo la muestra, nunca la recalcula.
-#[derive(Debug, Clone, Copy, PartialEq, uniffi::Enum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum ResultadoAcceso {
     Permitido,
     PermitidoConAdvertencia,
@@ -230,7 +230,7 @@ impl From<ResultadoAccesoNucleo> for ResultadoAcceso {
 
 /// Espejo de `PreparacionIngreso` — vista previa antes de confirmar; no es
 /// una autorización cacheada, `registrar_ingreso` vuelve a validar todo.
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PreparacionIngreso {
     pub contratista_id: i64,
     pub cedula: String,
@@ -259,7 +259,7 @@ impl From<PreparacionIngresoNucleo> for PreparacionIngreso {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
 pub struct ResultadoRegistroEntrada {
     pub registro_id: i64,
     pub resultado_acceso: ResultadoAcceso,
@@ -277,7 +277,7 @@ impl From<ResultadoRegistroEntradaNucleo> for ResultadoRegistroEntrada {
 /// Espejo de `IngresoActivoResumen` — `resultado_acceso` se re-evalúa con la
 /// fecha de hoy (no es la decisión congelada del momento del ingreso), igual
 /// que en `desktop/src/pantallas/Activos.tsx`.
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct IngresoActivoResumen {
     pub registro_id: i64,
     pub contratista_id: i64,
@@ -357,7 +357,7 @@ impl From<MotivoResultadoIngresoNucleo> for MotivoResultadoIngreso {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, uniffi::Enum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum ResultadoIngresoRegistrado {
     Permitido,
     PermitidoConAdvertencia { motivo: MotivoResultadoIngreso },
@@ -380,7 +380,7 @@ impl From<ResultadoIngresoRegistradoNucleo> for ResultadoIngresoRegistrado {
 
 /// Espejo de `MovimientoIngresoResumen` — un renglón de Historial (entrada
 /// + salida, si ya la tiene).
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct MovimientoHistorial {
     pub registro_id: i64,
     pub cedula: String,
@@ -419,7 +419,7 @@ impl From<MovimientoIngresoResumenNucleo> for MovimientoHistorial {
 /// (`Operacion::GestionarUsuarios`, `domain/autorizacion.rs`); Rust ya
 /// rechaza a un Operador con `OperacionNoAutorizada` aunque Kotlin
 /// oculte el menú, así que no hay doble mantenimiento de la regla real.
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct UsuarioResumen {
     pub id: i64,
     pub cedula: String,
@@ -591,7 +591,7 @@ impl From<UsuarioServiceErrorNucleo> for NucleoError {
 impl From<GestionNubeErrorNucleo> for NucleoError {
     fn from(error: GestionNubeErrorNucleo) -> Self {
         Self::Interno {
-            mensaje: error.to_string(),
+            mensaje: control_acceso::mensajes::mensaje_gestion_nube(error),
         }
     }
 }
@@ -628,8 +628,7 @@ impl Nucleo {
         cedula: String,
         password: String,
     ) -> Result<UsuarioSesion, NucleoError> {
-        let core = self.core_lock();
-        let sesion = core.autenticar(&cedula, &password)?;
+        let sesion = self.core_lock().autenticar(&cedula, &password)?;
         *self.sesion_lock() = Some(sesion.clone());
         Ok(sesion.into())
     }
@@ -670,16 +669,18 @@ impl Nucleo {
     ) -> Result<Vec<ContratistaResumen>, NucleoError> {
         const LIMITE_MOVIL: usize = 30;
 
-        let core = self.core_lock();
         let texto_normalizado = texto.trim();
         let filtro = FiltroContratistasNucleo {
             texto: (!texto_normalizado.is_empty()).then(|| texto_normalizado.to_string()),
             limite: LIMITE_MOVIL,
             ..Default::default()
         };
-        let pagina = core.buscar_contratistas(&filtro).map_err(|origen| NucleoError::Interno {
-            mensaje: origen.to_string(),
-        })?;
+        let pagina = self
+            .core_lock()
+            .buscar_contratistas(&filtro)
+            .map_err(|origen| NucleoError::Interno {
+                mensaje: origen.to_string(),
+            })?;
         Ok(pagina.items.into_iter().map(Into::into).collect())
     }
 
@@ -699,7 +700,6 @@ impl Nucleo {
     ) -> Result<Vec<IngresoActivoResumen>, NucleoError> {
         const LIMITE_MOVIL: usize = 30;
 
-        let core = self.core_lock();
         let texto_normalizado = texto.trim();
         let mut filtro = FiltroIngresosActivosNucleo {
             limite: LIMITE_MOVIL,
@@ -718,7 +718,8 @@ impl Nucleo {
                 Err(_) => return Ok(Vec::new()),
             },
         }
-        let lista = core
+        let lista = self
+            .core_lock()
             .listar_ingresos_activos(&filtro)
             .map_err(|origen| NucleoError::Interno {
                 mensaje: origen.to_string(),
@@ -792,7 +793,6 @@ impl Nucleo {
     pub fn buscar_historial(&self, texto: String) -> Result<Vec<MovimientoHistorial>, NucleoError> {
         const LIMITE_MOVIL: usize = 30;
 
-        let core = self.core_lock();
         let ahora = chrono::Utc::now();
         let desde = ahora - chrono::Duration::days(30 * 6);
         // `hasta` es un límite exclusivo — dejarlo exactamente en "ahora"
@@ -806,9 +806,12 @@ impl Nucleo {
             limite: LIMITE_MOVIL,
             ..FiltroHistorialNucleo::nuevo(desde, hasta)
         };
-        let pagina = core.buscar_historial(&filtro).map_err(|origen| NucleoError::Interno {
-            mensaje: origen.to_string(),
-        })?;
+        let pagina = self
+            .core_lock()
+            .buscar_historial(&filtro)
+            .map_err(|origen| NucleoError::Interno {
+                mensaje: origen.to_string(),
+            })?;
         Ok(pagina.items.into_iter().map(Into::into).collect())
     }
 
@@ -889,7 +892,10 @@ impl Nucleo {
 
     /// Devuelve lo mínimo para que Kotlin escuche Broadcast privado por
     /// sitio; el socket y sus reconexiones viven fuera del núcleo.
-    pub fn sesion_realtime_nube(&self, directorio: String) -> Result<SesionRealtimeNube, NucleoError> {
+    pub fn sesion_realtime_nube(
+        &self,
+        directorio: String,
+    ) -> Result<SesionRealtimeNube, NucleoError> {
         let actor = self.actor_autenticado()?;
         Ok(self
             .core_lock()
@@ -911,7 +917,11 @@ impl Nucleo {
 
     /// Cierra, contra la nube, un ingreso abierto por el otro dispositivo
     /// del mismo sitio -- nunca toca el historial local de este teléfono.
-    pub fn cerrar_ingreso_remoto(&self, directorio: String, uuid: String) -> Result<(), NucleoError> {
+    pub fn cerrar_ingreso_remoto(
+        &self,
+        directorio: String,
+        uuid: String,
+    ) -> Result<(), NucleoError> {
         let actor = self.actor_autenticado()?;
         Ok(self.core_lock().cerrar_ingreso_remoto(
             &actor,
@@ -931,11 +941,15 @@ impl Nucleo {
     /// (`SQLite` ya maneja sus propias transacciones), así que el estado
     /// recuperado sigue siendo válido para seguir operando.
     fn core_lock(&self) -> std::sync::MutexGuard<'_, AppCore> {
-        self.core.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.core
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn sesion_lock(&self) -> std::sync::MutexGuard<'_, Option<UsuarioSesionNucleo>> {
-        self.sesion.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.sesion
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn actor_autenticado(&self) -> Result<UsuarioSesionNucleo, NucleoError> {
@@ -1100,7 +1114,9 @@ mod tests {
         // filtrara mal (o cayera al modo texto) esto no debería confundirse
         // con el otro contratista de todas formas — el segundo ingreso
         // (sin gafete) es el control negativo de esta prueba.
-        nucleo.registrar_ingreso(2, MedioIngreso::Caminando, None).unwrap();
+        nucleo
+            .registrar_ingreso(2, MedioIngreso::Caminando, None)
+            .unwrap();
 
         let por_gafete = nucleo
             .listar_ingresos_activos("7".to_string(), ModoBusquedaActivos::Gafete)
