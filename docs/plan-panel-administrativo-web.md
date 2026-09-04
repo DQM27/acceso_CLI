@@ -8,6 +8,16 @@
 > decidido en firme todavía — es la base para decidir, sesión por sesión,
 > igual que `plan-persistencia-nube.md`.
 
+## Estado real de los datos hoy (2026-09-04): se puede arrancar de cero
+
+**Ningún sitio está operando en producción todavía** — cero datos reales
+en juego. El usuario confirmó explícitamente: **libre para borrar todo y
+volver a sembrar (seed) de nuevo** cuando se implemente el modelo global
+de contratistas/empresas/usuarios (ver más abajo). Esto quita de encima
+la preocupación de reconciliar filas duplicadas entre sitios que ya
+hubieran operado por separado — no hace falta diseñar una migración de
+datos existentes, se puede resolver con un reseed limpio.
+
 ## Por qué existe este documento
 
 Sesión de consulta (sin tocar código) donde se discutió: hosting
