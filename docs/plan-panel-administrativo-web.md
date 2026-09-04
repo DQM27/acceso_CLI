@@ -204,6 +204,39 @@ nueva) necesita un estado intermedio — "secreto válido, pendiente de
 verificación" — antes de emitir el JWT final, más el envío del correo
 con el código. Trabajo concreto a diseñar, no configuración.
 
+## Protección del secreto del dispositivo en reposo (decidido)
+
+Hoy se guarda en texto plano (`src/nube/credenciales.rs`,
+`fs::write(directorio.join(FILE_NAME), secreto.trim())`), tanto en
+Windows como en Android. Dos capas, cada una cubre algo que la otra no:
+
+- **Capa 1 — cifrar el archivo con un ID único de la máquina.** Se
+  deriva una clave del identificador del dispositivo y se cifra el
+  secreto antes de escribirlo a disco; si el archivo se copia a otra
+  máquina, descifra mal (falla el `match`, no da un secreto usable). Se
+  evaluó reusar el `generate_hardware_id()` de otro proyecto del usuario
+  (`rust-brisas-app`), que usa la dirección MAC — **descartado**: la MAC
+  se puede cambiar por software y es inconsistente entre interfaces de
+  red. Se usa en su lugar: **Machine GUID de Windows** (registro,
+  vía crate `machine-uid`) y **`Settings.Secure.ANDROID_ID`** en Android
+  (se pasa desde Kotlin al núcleo, mismo patrón que ya usa `directorio`
+  hoy porque Android no tiene `%LOCALAPPDATA%`).
+- **Capa 2 — el receptor también recuerda el fingerprint del dispositivo**,
+  guardado en la verificación por correo del alta (sección anterior), y
+  lo exige en cada sincronización futura además del secreto. Esta es la
+  que de verdad no depende de la máquina del atacante.
+
+**Alcance explícito de esto — qué NO promete**: ninguna de las dos capas
+protege contra alguien con acceso total/administrador a la máquina
+original (extraer el secreto ya descifrado en memoria, debuggear el
+binario) — ese es un límite aceptado, no un hueco a tapar; ningún
+esquema que viva solo en la máquina sobrevive a eso. Lo que sí cubren:
+Capa 1 evita que **copiar el archivo** (backup mal subido, pendrive,
+correo por error) sirva en otro lado; Capa 2 evita que un secreto
+extraído **incluso en el caso extremo** sirva para autenticarse desde
+una máquina distinta a la original, porque el fingerprint no calza del
+lado del servidor.
+
 ## Los dos huecos reales en el modelo de datos (a decidir antes de construir)
 
 Descubiertos al mirar qué existe hoy contra lo que el alcance pide:
@@ -241,13 +274,23 @@ sitio nuevo que no es el suyo**. Hace falta:
 - Un `recibir_usuarios` (mismo patrón que `recibir_catalogo_del_sitio`
   en `src/nube/sincronizacion.rs`, pero sin el `WHERE sitio_id = ...`)
   para que cada dispositivo reciba el catálogo completo de operadores.
-- Definir qué campos viajan — probablemente sí el hash de password acá
-  (a diferencia de lo que se especuló antes): si el objetivo es que el
-  mismo operador entre en cualquier sitio sin recrear la cuenta, ese
-  dispositivo nuevo necesita poder validar esa contraseña localmente y
-  offline, así que el hash tiene que llegar en algún momento de la
-  sincronización. A confirmar si hay alguna objeción de seguridad a esto
-  antes de darlo por decidido.
+- **Decidido: el hash de password NO viaja a la nube.** Se evaluó
+  mandarlo (más simple) contra un enrolamiento único por dispositivo (más
+  seguro, un paso extra sólo la primera vez) — se optó por el segundo.
+  La nube distribuye quién existe y su rol/estado activo, no la
+  contraseña. La primera vez que un operador global entra a un
+  dispositivo nuevo, ese dispositivo pide una confirmación única en
+  línea (código al correo del operador o del admin) para fijar la
+  contraseña ahí — de ahí en adelante ese dispositivo la valida local y
+  offline con su propio hash, generado en el momento (Argon2, mismo
+  código que ya existe en `src/services/password.rs` — confirmado que el
+  hash es autocontenido/portable por formato PHC, no dependiente de la
+  instalación, así que no hay problema técnico de portabilidad; la
+  decisión de no mandarlo es sólo por reducir el radio de un breach de
+  la nube). Motivo real de descartar mandarlo: un solo breach de
+  Supabase expondría los hashes de todos los operadores de todos los
+  sitios en un solo lugar, en vez de "si rompen un sitio, comprometen
+  sólo ese sitio" como hoy.
 
 **Contratistas — la mecánica base ya funciona, falta sacarle el filtro
 por sitio**: `recibir_catalogo_del_sitio` ya trae el catálogo completo en
