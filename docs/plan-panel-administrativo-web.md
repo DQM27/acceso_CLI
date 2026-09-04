@@ -69,14 +69,17 @@ sumar otro proveedor):
   Como beneficio lateral, hereda gratis el "Google prompt" (2FA de la
   propia cuenta de Google de esa persona) sin que Brisas tenga que
   construir nada de eso.
-- **TOTP (Supabase Auth lo soporta nativo)** como segunda capa exigida
-  por la app, independiente de si el admin tiene 2FA en su Google — para
-  no depender de que cada persona lo tenga bien configurado del otro lado.
-- Nota de terminología aclarada en la conversación: "contraseña + correo
-  con un PIN" es *Email OTP* (un segundo factor que si acaso se
-  construye); "te manda a abrir Gmail para comprobar que sos vos" es el
-  *Google prompt*, una función de la cuenta de Google del usuario, no
-  algo que se programa acá — sólo se activa usando "Sign in with Google".
+- **Segunda capa: Email OTP (código por correo), no TOTP.** Se descartó
+  TOTP (Google Authenticator/Authy) a propósito — el usuario prefiere no
+  depender de instalar/abrir una app de terceros aparte; revisar el
+  correo es una acción que ya hace, sin fricción nueva. Supabase Auth
+  soporta Email como tipo de factor MFA nativo, mismo nivel que TOTP.
+- Nota de terminología aclarada en la conversación: "te manda a abrir
+  Gmail para comprobar que sos vos" es el **Google prompt**, una función
+  de la cuenta de Google del usuario, no algo que se programa acá — sólo
+  se activa usando "Sign in with Google". Distinto del Email OTP de
+  arriba (que si acaso se genera, no algo que ya traiga la cuenta de
+  Google de la persona).
 
 ## Modelo de roles (propuesta, a confirmar)
 
@@ -97,6 +100,109 @@ baja a nadie).
 Autorización por **RLS en Postgres filtrando por ese rol**, no lógica de
 permisos sólo en el frontend — mismo criterio que ya sigue el resto del
 proyecto (nunca confiar en el cliente para autorizar).
+
+## Modelo de datos: qué es global y qué es por sitio (decidido)
+
+Terminología aclarada primero: **"sitio" = "unidad operativa" = "grupo"**
+son el mismo concepto (Brisas, Cartago, Belén) — ya existe en el esquema
+(`sitios`, `dispositivos.sitio_id`), no hace falta nada nuevo para esto.
+
+Decisión de fondo, explícita: **contratistas, empresas y usuarios son
+globales — ingresos (historial) son por sitio.**
+
+- Si a un contratista se le niega el acceso en un sitio, queda negado en
+  **todos** los sitios — es la misma persona, la misma decisión, no una
+  copia local independiente por unidad operativa. Mismo criterio para
+  dar de baja a un operador.
+- Motivación real, no hipotética: **un operador puede tener que cubrir
+  turno en otro sitio** — con cuentas globales no hace falta crearlo de
+  nuevo en cada unidad donde vaya a trabajar.
+- Los ingresos (el historial de entradas/salidas) siguen siendo
+  estrictamente por sitio — un movimiento pasó en un lugar físico
+  concreto, eso no se globaliza. Sin cambios sobre lo que ya existe.
+
+**Esto contradice el esquema actual de Supabase, y hay que cambiarlo**:
+hoy `contratistas`/`empresas` tienen columna `sitio_id` y
+`recibir_catalogo_del_sitio` filtra explícitamente por el sitio del
+dispositivo que sincroniza. Con el modelo global:
+- Se saca el filtro por `sitio_id` de esa consulta y de las políticas
+  RLS — cualquier dispositivo, de cualquier sitio, recibe el catálogo
+  completo (no solo "el suyo").
+- La futura tabla `usuarios` (ver huecos más abajo) se diseña así desde
+  el arranque: global, sin `sitio_id` como filtro de lectura.
+- `sitio_id` puede seguir existiendo como dato informativo, pero deja de
+  ser el criterio que decide quién ve o recibe qué.
+- **No hace falta diseñar una migración de datos existentes** — ver
+  "Estado real de los datos hoy" arriba: ningún sitio opera todavía, se
+  puede reseedear limpio en vez de reconciliar filas duplicadas.
+
+**Root inicial y login offline: sin cambios.** Se evaluó (y se descartó)
+que el arranque de un dispositivo nuevo dependiera de la nube para
+recibir sus primeras cuentas — se prefirió no sumar esa complejidad.
+Cada sitio sigue arrancando con `crear_root_inicial` local, como hoy. Lo
+que sí cambia es que, una vez que un operador global existe (creado
+localmente o desde el panel web), se sincroniza a **todos** los
+dispositivos — y el login sigue siendo 100% local/offline en cualquiera
+de ellos una vez que ese dispositivo ya sincronizó ese operador al menos
+una vez.
+
+## Conflicto: mismo contratista con ingreso abierto en dos sitios a la vez (decidido)
+
+Caso real que surge **justo por** volver global a los contratistas: antes
+era imposible ni plantearlo (cada sitio tenía su propio contratista
+aislado). Ahora que es la misma persona en todos lados, puede intentar
+(o ya tener) un ingreso abierto en más de un sitio al mismo tiempo —
+físicamente no debería pasar.
+
+Resuelto con dos niveles, sin sacrificar que el registro de ingreso siga
+funcionando offline (principio ya establecido, no se toca):
+
+1. **Con conexión, en el momento**: antes de confirmar el registro, el
+   dispositivo consulta si ese contratista ya tiene un ingreso abierto en
+   otro sitio. Si lo tiene, **se bloquea el segundo intento** — primero
+   en llegar gana (mismo principio que ya usa `cerrar_ingreso_remoto` para
+   cierres). Es una extensión de `ingresos_remotos`, que hoy sólo mira
+   otros dispositivos del *mismo* sitio, a mirar *todos* los sitios para
+   este chequeo puntual.
+2. **Sin conexión, o si la consulta falla**: el ingreso se registra igual
+   localmente — no se le puede negar el paso a un guardia offline. El
+   conflicto se detecta después, al sincronizar: si aparecen dos ingresos
+   abiertos para el mismo contratista en sitios distintos, se dispara una
+   **alerta hacia ambos sitios involucrados y hacia el admin** (panel
+   web) — ej. "Jenna Ortega tiene entradas abiertas simultáneas en Brisas
+   y Cartago". Ahí un humano llama por teléfono a verificar qué pasó (mal
+   registrado, o de verdad no se marcó la salida en el primer sitio antes
+   de entrar al segundo).
+
+No hay forma honesta de garantizar bloqueo 100% de las veces sin
+depender de red en el momento del registro — la mezcla "bloqueo si hay
+conexión, alerta si no la hay" es la que preserva el offline-first.
+
+## Verificación en dos pasos al dar de alta un dispositivo (decidido)
+
+Corrige una confusión de una vuelta anterior de esta conversación: **no
+es TOTP/Authy, es un código por correo**, y no ocurre al generar el
+secreto sino al **activarlo**:
+
+1. Se genera el secreto del dispositivo (sin gate, como hoy).
+2. Se pega en la app del dispositivo nuevo.
+3. La app, al usar el secreto por primera vez, dispara una petición de
+   verificación al servidor.
+4. El código llega **al correo del admin**, no al dispositivo.
+5. El admin escribe ese código **en la app del dispositivo** (no en el
+   panel web).
+6. Recién ahí el dispositivo queda activado.
+
+El punto: el secreto solo **no alcanza** para activar nada. Si se filtra
+(screenshot, archivo compartido), sin ese código —que sólo llega al
+correo del admin— no sirve de nada. Es un gate humano en el momento de
+activación (no de creación), un patrón de *step-up authentication*
+similar a "confirmar transferencia" de un banco aunque ya estés logueado.
+
+**Implicación de backend real**: la Edge Function `device-auth` (o una
+nueva) necesita un estado intermedio — "secreto válido, pendiente de
+verificación" — antes de emitir el JWT final, más el envío del correo
+con el código. Trabajo concreto a diseñar, no configuración.
 
 ## Los dos huecos reales en el modelo de datos (a decidir antes de construir)
 
@@ -125,20 +231,32 @@ ingresos globales", alguna de:
 
 Hoy son 100% locales a la base SQLite de cada sitio — nunca viajan a
 Supabase (a diferencia de contratistas, empresas y gafetes, que sí
-tienen su tabla espejo). "Dar de baja a un operador de determinada
-unidad desde la web" necesita:
-- Una tabla `usuarios` (o similar) en Supabase, con RLS por sitio.
+tienen su tabla espejo). Con la decisión de operadores globales (ver
+arriba), esto ya no es sólo "para poder dar de baja a un operador desde
+la web" — es también **cómo un operador llega a poder loguearse en un
+sitio nuevo que no es el suyo**. Hace falta:
+- Una tabla `usuarios` (o similar) en Supabase, **sin `sitio_id` como
+  filtro de lectura** (global, no por sitio — ver "Modelo de datos"
+  arriba, a diferencia de lo que se pensaba antes en esta misma sesión).
 - Un `recibir_usuarios` (mismo patrón que `recibir_catalogo_del_sitio`
-  en `src/nube/sincronizacion.rs`) para que cada dispositivo reciba el
-  cambio de vuelta.
-- Definir qué campos viajan (¿el hash de password? probablemente no —
-  sólo `activo`/rol, como con `tiene_acceso` de contratistas).
+  en `src/nube/sincronizacion.rs`, pero sin el `WHERE sitio_id = ...`)
+  para que cada dispositivo reciba el catálogo completo de operadores.
+- Definir qué campos viajan — probablemente sí el hash de password acá
+  (a diferencia de lo que se especuló antes): si el objetivo es que el
+  mismo operador entre en cualquier sitio sin recrear la cuenta, ese
+  dispositivo nuevo necesita poder validar esa contraseña localmente y
+  offline, así que el hash tiene que llegar en algún momento de la
+  sincronización. A confirmar si hay alguna objeción de seguridad a esto
+  antes de darlo por decidido.
 
-**Contratistas sí funciona ya, sin tocar nada**: `recibir_catalogo_del_sitio`
-trae el catálogo completo en cada sync y sobreescribe `tiene_acceso`
-desde la nube — dar de baja a un contratista desde una fuente externa ya
-se propaga sola a todos los dispositivos del sitio (confirmado leyendo
-el código, ver `docs/plan-persistencia-nube.md`, sesión 2026-09-04).
+**Contratistas — la mecánica base ya funciona, falta sacarle el filtro
+por sitio**: `recibir_catalogo_del_sitio` ya trae el catálogo completo en
+cada sync y sobreescribe `tiene_acceso` desde la nube — dar de baja a un
+contratista desde una fuente externa ya se propaga sola (confirmado
+leyendo el código, ver `docs/plan-persistencia-nube.md`, sesión
+2026-09-04). Hoy sólo llega a los dispositivos **del mismo sitio**
+(`?sitio_id=eq...`); con el modelo global (ver arriba) hay que sacar ese
+filtro para que llegue a todos los sitios, no sólo al de origen.
 
 ## Arquitectura propuesta (a confirmar)
 
@@ -156,18 +274,26 @@ el código, ver `docs/plan-persistencia-nube.md`, sesión 2026-09-04).
 
 ## Orden sugerido para retomar
 
-1. Resolver el hueco de **historial** (opción a vs. b arriba) — bloquea
-   diseñar el esquema de reportes.
-2. Resolver el mirror de **usuarios/operadores** — bloquea la función de
-   dar de baja a un operador desde la web.
-3. Definir el modelo de roles del panel web (nombres, granularidad).
-4. Migrar auth: Supabase Auth (Google OAuth + TOTP) reemplazando la clave
-   compartida — esto sí se puede hacer ya, sin esperar a 1/2, porque el
+1. Resolver el hueco de **historial** (opción a vs. b) — bloquea diseñar
+   el esquema de reportes. Sigue siendo por sitio, sólo falta decidir
+   cuánto se agrega/espeja para reportes globales.
+2. Construir el mirror **global** de `usuarios` (`recibir_usuarios`, sin
+   filtro por sitio) — confirmar antes si el hash de password viaja o no.
+   Sacar el filtro `sitio_id` del lado de `recibir_catalogo_del_sitio`
+   (contratistas/empresas) para que también sean globales.
+3. Diseñar el chequeo cruzado de ingreso abierto en más de un sitio
+   (bloqueo online / alerta offline) — depende de 2 (necesita saber "está
+   abierto en otro sitio" más allá del propio).
+4. Definir el modelo de roles del panel web (nombres, granularidad).
+5. Migrar auth: Supabase Auth (Google OAuth + Email OTP) reemplazando la
+   clave compartida — se puede hacer ya, sin esperar a 1-3, porque el
    panel actual (alta/baja de dispositivos) ya usa Edge Functions que
    pueden migrar a validar sesión de Supabase Auth en vez de `x-admin-key`.
-5. Recién ahí: construir el dashboard (React+Vite) sobre el modelo de
+   La verificación en dos pasos al activar un dispositivo (secreto +
+   código por correo) es parte de este mismo trabajo.
+6. Recién ahí: construir el dashboard (React+Vite) sobre el modelo de
    datos y auth ya resueltos.
 
 Sin diseñar el esquema SQL, los RLS puntuales, ni las pantallas todavía
-— eso es la siguiente sesión, una vez que 1-3 tengan respuesta del
-usuario.
+— eso es la siguiente sesión, una vez que 1, 2 y 4 tengan respuesta
+final del usuario (2 tiene una pregunta abierta: el hash de password).
