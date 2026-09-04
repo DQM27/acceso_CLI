@@ -1,7 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 
-// Espejo de comandos/nube.rs. Exclusivo de ROOT (ver App.tsx, rolesPermitidos)
-// -- el secreto identifica al dispositivo entero ante el receptor.
+// Espejo de comandos/nube.rs. `guardarSecretoDispositivo`/
+// `secretoDispositivoGuardado` son exclusivos de ROOT (el secreto identifica
+// al dispositivo entero ante el receptor, ver App.tsx/Nube.tsx). El resto
+// (sincronizar, listar, cerrar) es de cualquier rol activo -- uso diario
+// normal, no administración (ver `Operacion::UsarNube` en
+// `src/domain/autorizacion.rs`) -- por eso el botón "Sincronizar" vive en la
+// barra de estado (`BarraNube.tsx`), visible siempre, no sólo en esta
+// pantalla.
 
 export interface ResumenSincronizacion {
   enviados: number;

@@ -9,7 +9,6 @@ import {
   guardarSecretoDispositivo,
   listarIngresosRemotos,
   secretoDispositivoGuardado,
-  sincronizarConNube,
 } from "../api";
 import type { IngresoRemoto, ResumenSincronizacion } from "../api";
 import { textoHora } from "../tiempo";
@@ -24,7 +23,6 @@ export default function Nube() {
   const [configurado, setConfigurado] = useState<boolean | null>(null);
   const [secreto, setSecreto] = useState("");
   const [guardando, setGuardando] = useState(false);
-  const [sincronizando, setSincronizando] = useState(false);
   const [ultimoResumen, setUltimoResumen] = useState<ResumenSincronizacion | null>(null);
   const [remotos, setRemotos] = useState<IngresoRemoto[]>([]);
   const [cerrandoUuid, setCerrandoUuid] = useState<string | null>(null);
@@ -95,25 +93,6 @@ export default function Nube() {
     }
   }
 
-  async function sincronizar() {
-    setSincronizando(true);
-    try {
-      const resumen = await sincronizarConNube();
-      setUltimoResumen(resumen);
-      if (resumen.fallidos === 0) {
-        toast.success(`Sincronizado — ${resumen.enviados} enviados.`);
-      } else {
-        toast.warning(`${resumen.enviados} enviados, ${resumen.fallidos} fallidos — reintenta más tarde.`);
-      }
-      cargarRemotos();
-      cargarFallosPermanentes();
-    } catch (error) {
-      toast.error(String(error));
-    } finally {
-      setSincronizando(false);
-    }
-  }
-
   async function cerrar(uuid: string) {
     setCerrandoUuid(uuid);
     try {
@@ -173,16 +152,10 @@ export default function Nube() {
 
         <section style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           <h3 style={{ margin: 0 }}>Sincronización</h3>
-          <div>
-            <button
-              type="button"
-              className="boton"
-              onClick={sincronizar}
-              disabled={sincronizando || configurado !== true}
-            >
-              {sincronizando ? "Sincronizando…" : "Sincronizar ahora"}
-            </button>
-          </div>
+          <p style={{ color: "var(--muted)", marginTop: 0, fontSize: "0.85rem" }}>
+            El botón "Sincronizar" vive en la barra de estado (abajo a la derecha), disponible
+            desde cualquier pantalla.
+          </p>
 
           {ultimoResumen && (
             <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>

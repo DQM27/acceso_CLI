@@ -40,12 +40,19 @@ import {
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
+import BarraNube from "./componentes/BarraNube";
 import ErrorBoundary from "./componentes/ErrorBoundary";
 import Login from "./pantallas/Login";
 import Activos from "./pantallas/Activos";
-import { buscarActualizacion, cerrarSesion, instalarActualizacion, requiereConfiguracionInicial } from "./api";
+import {
+  buscarActualizacion,
+  cerrarSesion,
+  instalarActualizacion,
+  requiereConfiguracionInicial,
+  sincronizarConNube,
+} from "./api";
 import type { ResumenSincronizacion, RolUsuario, UsuarioSesion } from "./api";
-import { iniciarRealtimeNube } from "./nubeRealtime";
+import { emitirActualizacion, iniciarRealtimeNube } from "./nubeRealtime";
 import { SesionProvider } from "./contexto/SesionContexto";
 import { BarraEstadoProvider } from "./contexto/BarraEstadoContexto";
 
@@ -237,6 +244,10 @@ function Shell({
   // Sube en cada registro/salida exitosa — Activos lo usa para refrescar su
   // grilla aunque haya salido desde otra pantalla.
   const [refrescarActivos, setRefrescarActivos] = useState(0);
+  // Estado del canal Realtime (`BarraNube.tsx`) — `null` hasta el primer
+  // aviso del socket (ver el doc-comment de `BarraNube`).
+  const [estadoNube, setEstadoNube] = useState<string | null>(null);
+  const [sincronizandoManual, setSincronizandoManual] = useState(false);
 
   // Ctrl+Shift+N/S (no Ctrl+N/S solos — esas convenciones quedan libres
   // para un "nuevo"/"salida" más genéricos más adelante) desde cualquier
@@ -256,6 +267,7 @@ function Shell({
   useEffect(() => {
     const detenerRealtime = iniciarRealtimeNube({
       onSincronizado: () => setRefrescarActivos((n) => n + 1),
+      onEstado: setEstadoNube,
     });
     const cancelarSincronizacionAutomatica = listen<ResumenSincronizacion>(
       "nube://sincronizado",
@@ -267,6 +279,32 @@ function Shell({
       cancelarSincronizacionAutomatica.then((cancelar) => cancelar());
     };
   }, [sesion.id]);
+
+  // Botón "Sincronizar" de la barra de estado (`BarraNube.tsx`) — visible
+  // para cualquier rol activo, ver su doc-comment. `sincronizar_con_nube`
+  // ya falla con un mensaje claro (`GestionNubeError::SinSecreto`) si este
+  // dispositivo todavía no tiene el secreto configurado, así que no hace
+  // falta ocultar el botón para quien no puede configurarlo (eso sigue
+  // siendo exclusivo de ROOT en la pantalla Nube).
+  async function sincronizarManualmente() {
+    setSincronizandoManual(true);
+    try {
+      const resumen = await sincronizarConNube();
+      setRefrescarActivos((n) => n + 1);
+      emitirActualizacion(resumen, "manual");
+      if (resumen.fallidos === 0) {
+        toast.success(`Sincronizado — ${resumen.enviados} enviados.`);
+      } else {
+        toast.warning(
+          `${resumen.enviados} enviados, ${resumen.fallidos} fallidos — reintenta más tarde.`,
+        );
+      }
+    } catch (error) {
+      toast.error(String(error));
+    } finally {
+      setSincronizandoManual(false);
+    }
+  }
 
   // Una sola vez por sesión (no cada X minutos todavía — la app se abre y
   // cierra bastante seguido, esto ya cubre el caso normal). Falla en
@@ -355,7 +393,14 @@ function Shell({
               grilla; a la derecha, el usuario (antes fijo en el sidebar). */}
           <div className="barra-estado">
             <span>{mensajeEstado}</span>
-            <MenuUsuario sesion={sesion} onCerrarSesion={onCerrarSesion} />
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <BarraNube
+                estado={estadoNube}
+                sincronizando={sincronizandoManual}
+                onSincronizar={sincronizarManualmente}
+              />
+              <MenuUsuario sesion={sesion} onCerrarSesion={onCerrarSesion} />
+            </div>
           </div>
 
           <Suspense fallback={null}>

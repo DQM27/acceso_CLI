@@ -439,6 +439,18 @@ input {
   background: color-mix(in srgb, var(--texto) 10%, transparent);
 }
 
+/* Ícono de "Sincronizar" (BarraNube.tsx) mientras la sincronización manual
+   está en curso — mismo criterio que un spinner, sin agregar una librería. */
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.girando {
+  animation: girar 0.8s linear infinite;
+}
+
 .shell-nav {
   display: flex;
   flex-direction: column;

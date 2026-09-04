@@ -6,7 +6,7 @@ import type { ResumenSincronizacion } from "./api/nube";
 export const EVENTO_NUBE_ACTUALIZADA = "nube:actualizada";
 
 export interface NubeActualizadaDetalle {
-  origen: "realtime";
+  origen: "realtime" | "manual";
   resumen: ResumenSincronizacion;
 }
 
@@ -15,10 +15,17 @@ interface OpcionesRealtimeNube {
   onEstado?: (estado: string) => void;
 }
 
-function emitirActualizacion(resumen: ResumenSincronizacion) {
+/** Avisa a quien esté escuchando (hoy: la pantalla Nube, si está montada)
+ * que hay un resumen nuevo — lo usa tanto el aviso en vivo de Realtime como
+ * el botón "Sincronizar" de la barra de estado (`BarraNube.tsx`), para que
+ * ambos caminos actualicen lo mismo sin duplicar la lógica de refresco. */
+export function emitirActualizacion(
+  resumen: ResumenSincronizacion,
+  origen: NubeActualizadaDetalle["origen"] = "realtime",
+) {
   window.dispatchEvent(
     new CustomEvent<NubeActualizadaDetalle>(EVENTO_NUBE_ACTUALIZADA, {
-      detail: { origen: "realtime", resumen },
+      detail: { origen, resumen },
     }),
   );
 }
