@@ -44,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const { data: admin, error: errorConsulta } = await supabase
         .from("administradores_panel")
-        .select("correo, rol")
+        .select("correo")
         .eq("correo", usuario.email)
         .maybeSingle();
 
@@ -64,7 +64,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSesion({
         nombre: (usuario.user_metadata?.full_name as string | undefined) ?? usuario.email,
         correo: usuario.email,
-        rol: admin.rol as UsuarioSesion["rol"],
       });
       setCargando(false);
     }

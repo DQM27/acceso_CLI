@@ -1,9 +1,7 @@
 import { supabase } from "../lib/supabase";
-import type { RolAdminPanel } from "./index";
 
 export interface AdministradorPanel {
   correo: string;
-  rol: RolAdminPanel;
   creado_en: string;
 }
 
@@ -11,26 +9,25 @@ export interface AdministradorPanel {
  * `supabase` directo para esto, mismo criterio que `api/*.ts` en
  * `desktop/` (una sola capa por dominio). RLS (ver migración
  * `administradores_panel_gestion_admin_global`) es quien de verdad decide
- * si esto funciona o no; acá no hay chequeo de rol porque sería
- * redundante -- Postgres ya lo hace. */
+ * si esto funciona o no. Sin distinción de rol -- se eliminó
+ * `admin_regional` (nunca tuvo alcance real, ver migración
+ * `elimina_admin_regional`): esta tabla es una lista simple de quién puede
+ * entrar al panel, nada más. */
 
 export async function listarAdministradores(): Promise<AdministradorPanel[]> {
   const { data, error } = await supabase
     .from("administradores_panel")
-    .select("correo, rol, creado_en")
+    .select("correo, creado_en")
     .order("creado_en", { ascending: false });
 
   if (error) throw new Error(error.message);
   return data;
 }
 
-export async function agregarAdministrador(
-  correo: string,
-  rol: RolAdminPanel,
-): Promise<void> {
+export async function agregarAdministrador(correo: string): Promise<void> {
   const { error } = await supabase
     .from("administradores_panel")
-    .insert({ correo: correo.trim().toLowerCase(), rol });
+    .insert({ correo: correo.trim().toLowerCase() });
 
   if (error) {
     if (error.code === "23505") {

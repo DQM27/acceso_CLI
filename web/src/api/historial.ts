@@ -6,11 +6,10 @@ import { supabase } from "../lib/supabase";
  * ingresos ABIERTOS para el cierre cruzado entre dispositivos del mismo
  * sitio; ahora que también manda el resto de columnas al cerrar, es un
  * historial real (multi-sitio, sin techo de tiempo -- decisión explícita,
- * ver conversación). RLS: sólo `admin_global` puede leer (`es_admin_global()`,
- * migración `administradores_panel_gestion_admin_global`) -- `admin_regional`
- * no tiene acceso todavía porque `administradores_panel` no guarda qué
- * sitios administra cada quien (pendiente, ver
- * docs/plan-panel-administrativo-web.md).
+ * ver conversación). RLS: sólo quien esté en `administradores_panel` puede
+ * leer (`es_admin_global()`, migración
+ * `administradores_panel_gestion_admin_global`) -- sin distinción de rol,
+ * se eliminó `admin_regional` (ver migración `elimina_admin_regional`).
  */
 export interface MovimientoHistorial {
   id: string;

@@ -53,7 +53,7 @@ export default function MenuUsuario({
               <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: 600, color: "var(--texto)" }}>
                 {sesion.nombre}
               </p>
-              <span className="chip">{sesion.rol}</span>
+              <span className="chip">{sesion.correo}</span>
             </div>
             <button
               type="button"

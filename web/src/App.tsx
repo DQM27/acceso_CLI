@@ -11,48 +11,21 @@ import Operadores from "./pantallas/Operadores";
 import Administradores from "./pantallas/Administradores";
 import { borrarAccionPendiente, leerAccionPendienteVigente } from "./componentes/accionesPendientes";
 import { agregarAdministrador, eliminarAdministrador } from "./api/administradores";
-import type { RolAdminPanel, UsuarioSesion } from "./api";
+import type { UsuarioSesion } from "./api";
 import { AuthProvider, useAuth } from "./contexto/AuthContexto";
 import { SesionProvider } from "./contexto/SesionContexto";
 
 export type Seccion = "dispositivos" | "historial" | "contratistas" | "operadores" | "administradores";
 
-const SECCIONES: {
-  id: Seccion;
-  etiqueta: string;
-  Icono: LucideIcon;
-  rolesPermitidos?: RolAdminPanel[];
-}[] = [
+// Sin distinción de rol -- se eliminó `admin_regional` (nunca tuvo alcance
+// real, ver migración `elimina_admin_regional`). Cualquier fila en
+// `administradores_panel` ve y puede tocar todo.
+const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
   { id: "dispositivos", etiqueta: "Dispositivos", Icono: IdCard },
-  {
-    id: "historial",
-    etiqueta: "Historial",
-    Icono: History,
-    // RLS de `ingresos`/`sitios` sólo deja leer a admin_global por ahora
-    // (ver migración agrega_columnas_historial_a_ingresos) -- admin_regional
-    // queda afuera hasta que administradores_panel sepa qué sitios
-    // administra cada quien.
-    rolesPermitidos: ["admin_global"],
-  },
-  {
-    id: "contratistas",
-    etiqueta: "Contratistas",
-    Icono: Users,
-    // Mismo motivo que "historial" -- RLS de `contratistas` sólo deja
-    // pasar a admin_global por ahora (migración
-    // admin_global_gestiona_contratistas).
-    rolesPermitidos: ["admin_global"],
-  },
+  { id: "historial", etiqueta: "Historial", Icono: History },
+  { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
   { id: "operadores", etiqueta: "Operadores", Icono: UserCog },
-  {
-    id: "administradores",
-    etiqueta: "Administradores",
-    Icono: ShieldCheck,
-    // Quién puede entrar al panel es cosa de admin_global -- espejo de
-    // `administradores_panel` (sólo admin_global puede agregar/quitar
-    // filas ahí, ver la migración de RLS).
-    rolesPermitidos: ["admin_global"],
-  },
+  { id: "administradores", etiqueta: "Administradores", Icono: ShieldCheck },
 ];
 
 const CLAVE_SIDEBAR_COLAPSADO = "web:sidebar:colapsado";
@@ -110,7 +83,7 @@ function Contenido() {
       setEstadoAccion({ paso: "verificando" });
       try {
         if (accion.tipo === "agregar_admin") {
-          await agregarAdministrador(accion.correoNuevo, accion.rolNuevo);
+          await agregarAdministrador(accion.correoNuevo);
           setEstadoAccion({ paso: "lista", mensaje: `${accion.correoNuevo} ya puede entrar al panel.` });
         } else {
           await eliminarAdministrador(accion.correoAQuitar);
@@ -194,16 +167,12 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
     });
   }
 
-  const seccionesVisibles = SECCIONES.filter(
-    (item) => !item.rolesPermitidos || item.rolesPermitidos.includes(sesion.rol),
-  );
-
   return (
     <SesionProvider value={null}>
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
         <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
           <Sidebar
-            secciones={seccionesVisibles}
+            secciones={SECCIONES}
             seccionActual={seccion}
             onCambiarSeccion={setSeccion}
             colapsado={colapsado}

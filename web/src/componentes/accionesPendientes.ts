@@ -1,5 +1,3 @@
-import type { RolAdminPanel } from "../api";
-
 const CLAVE = "web:accion-pendiente";
 // El link de confirmación en sí ya vence según la config de Supabase
 // (Auth > Providers > Email > Email OTP Expiration) -- esto es sólo un
@@ -11,7 +9,6 @@ interface AccionAgregarAdmin {
   tipo: "agregar_admin";
   correoSolicitante: string;
   correoNuevo: string;
-  rolNuevo: RolAdminPanel;
   creadaEn: number;
 }
 

@@ -81,23 +81,28 @@ sumar otro proveedor):
   arriba (que si acaso se genera, no algo que ya traiga la cuenta de
   Google de la persona).
 
-## Modelo de roles (propuesta, a confirmar)
+## Modelo de roles (decidido: sin roles)
 
 **Importante: los admins de este panel web son un espacio de actores
 distinto de Root/Administrador/Operador** — esos roles viven dentro de
 cada sitio (base SQLite local de cada dispositivo, ver
-`src/domain/autorizacion.rs`) y siguen existiendo igual. El panel web
-necesita su propia tabla de roles, por ejemplo:
+`src/domain/autorizacion.rs`) y siguen existiendo igual.
 
-- `admin_global` — ve y actúa sobre todas las unidades operativas.
-- `admin_regional` — ve y actúa sólo sobre las unidades operativas
-  asignadas a esa persona.
+Se había propuesto un segundo rol `admin_regional` (ve y actúa sólo sobre
+las unidades operativas asignadas a esa persona), pero se eliminó
+(migración `elimina_admin_regional`, 2026-09-05) sin haberse construido
+nunca: `administradores_panel` nunca guardó qué sitios administraba cada
+quien, así que el rol no tenía alcance real -- todo admin veía y tocaba
+todo igual que `admin_global`. Decisión explícita del usuario: si algún
+día hace falta acotar a alguien a unidades operativas específicas, se
+diseña ese scoping desde cero (con su propia tabla de sitios asignados),
+no reviviendo `admin_regional` como estaba.
 
-**A decidir**: nombres definitivos de los roles, y si hace falta algo más
-granular (ej. un rol de solo-lectura para reportes, sin permiso de dar de
-baja a nadie).
+`administradores_panel` es hoy una lista simple: `correo` + `creado_en`,
+sin columna de rol. Estar en la tabla ES tener acceso completo al panel.
 
-Autorización por **RLS en Postgres filtrando por ese rol**, no lógica de
+Autorización por **RLS en Postgres** (`es_admin_global()`, que ahora sólo
+chequea que el correo esté en `administradores_panel`), no lógica de
 permisos sólo en el frontend — mismo criterio que ya sigue el resto del
 proyecto (nunca confiar en el cliente para autorizar).
 

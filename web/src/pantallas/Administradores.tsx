@@ -8,7 +8,7 @@ import { guardarAccionPendiente } from "../componentes/accionesPendientes";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import { listarAdministradores } from "../api/administradores";
 import type { AdministradorPanel } from "../api/administradores";
-import type { RolAdminPanel, UsuarioSesion } from "../api";
+import type { UsuarioSesion } from "../api";
 
 function textoFechaHora(iso: string): string {
   return `${textoFechaDDMMYYYY(fechaLocalYMD(iso))} ${textoHora(iso)}`;
@@ -30,7 +30,6 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
   const [cargando, setCargando] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [correoNuevo, setCorreoNuevo] = useState("");
-  const [rolNuevo, setRolNuevo] = useState<RolAdminPanel>("admin_regional");
 
   const confirmacionAlta = useVerificacionPorCorreo(sesion.correo);
   const confirmacionBaja = useVerificacionPorCorreo(sesion.correo);
@@ -50,7 +49,6 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
   function cerrarModal() {
     setModalAbierto(false);
     setCorreoNuevo("");
-    setRolNuevo("admin_regional");
     confirmacionAlta.reiniciar();
   }
 
@@ -60,7 +58,6 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
       tipo: "agregar_admin",
       correoSolicitante: sesion.correo,
       correoNuevo: correoNuevo.trim().toLowerCase(),
-      rolNuevo,
     });
     await confirmacionAlta.pedirConfirmacion();
   }
@@ -85,7 +82,6 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
 
   const columnas: ColDef<AdministradorPanel>[] = [
     { field: "correo", headerName: "Correo", flex: 1.8, minWidth: 220, cellStyle: { textAlign: "left" } },
-    { field: "rol", headerName: "Rol", flex: 1, minWidth: 140 },
     {
       field: "creado_en",
       headerName: "Agregado",
@@ -167,18 +163,6 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
                   placeholder="nombre@gmail.com"
                   onChange={(evento) => setCorreoNuevo(evento.target.value)}
                 />
-              </label>
-
-              <label className="campo">
-                Rol
-                <select
-                  value={rolNuevo}
-                  disabled={confirmacionAlta.enviando}
-                  onChange={(evento) => setRolNuevo(evento.target.value as RolAdminPanel)}
-                >
-                  <option value="admin_regional">Administrador regional</option>
-                  <option value="admin_global">Administrador global</option>
-                </select>
               </label>
 
               {confirmacionAlta.error && (
