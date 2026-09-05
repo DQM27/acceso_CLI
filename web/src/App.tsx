@@ -5,6 +5,7 @@ import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
 import Login from "./pantallas/Login";
+import Dispositivos from "./pantallas/Dispositivos";
 import Historial from "./pantallas/Historial";
 import Contratistas from "./pantallas/Contratistas";
 import Operadores from "./pantallas/Operadores";
@@ -180,7 +181,9 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
           />
 
           <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-            {seccion === "administradores" ? (
+            {seccion === "dispositivos" ? (
+              <Dispositivos />
+            ) : seccion === "administradores" ? (
               <Administradores sesion={sesion} />
             ) : seccion === "historial" ? (
               <Historial />
