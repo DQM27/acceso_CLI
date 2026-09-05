@@ -699,22 +699,24 @@ pub fn recibir_catalogo_del_sitio(
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<ResumenCatalogo, SincronizacionError> {
     let cliente = reqwest::blocking::Client::new();
+    // Sin `sitio_id=eq...` a propósito -- contratistas y empresas son
+    // globales (ver docs/plan-panel-administrativo-web.md, "Modelo de
+    // datos"): si a un contratista se le niega el acceso en un sitio, tiene
+    // que quedar negado en TODOS. El nombre de la función quedó del modelo
+    // viejo (un solo sitio por dispositivo); lo que trae ahora es el
+    // catálogo global completo, no "del sitio" de `contexto`.
     let empresas: Vec<FilaEmpresaRemota> = obtener_json(
         &cliente,
         contexto,
-        &format!(
-            "{}/rest/v1/empresas?sitio_id=eq.{}&select=id,nombre,activa",
-            contexto.base_url, contexto.sitio_id
-        ),
+        &format!("{}/rest/v1/empresas?select=id,nombre,activa", contexto.base_url),
     )?;
     let contratistas: Vec<FilaContratistaRemota> = obtener_json(
         &cliente,
         contexto,
         &format!(
-            "{}/rest/v1/contratistas?sitio_id=eq.{}\
-             &select=id,nombre,identificacion,empresa_id,empresa_nombre,activo,\
-             tipo_ingreso,fecha_vencimiento_praind,es_personal_ruta",
-            contexto.base_url, contexto.sitio_id
+            "{}/rest/v1/contratistas?select=id,nombre,identificacion,empresa_id,empresa_nombre,\
+             activo,tipo_ingreso,fecha_vencimiento_praind,es_personal_ruta",
+            contexto.base_url
         ),
     )?;
 
