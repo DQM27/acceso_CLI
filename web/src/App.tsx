@@ -7,6 +7,7 @@ import MenuUsuario from "./componentes/MenuUsuario";
 import Login from "./pantallas/Login";
 import Historial from "./pantallas/Historial";
 import Contratistas from "./pantallas/Contratistas";
+import Operadores from "./pantallas/Operadores";
 import Administradores from "./pantallas/Administradores";
 import { borrarAccionPendiente, leerAccionPendienteVigente } from "./componentes/accionesPendientes";
 import { agregarAdministrador, eliminarAdministrador } from "./api/administradores";
@@ -216,6 +217,8 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
               <Historial />
             ) : seccion === "contratistas" ? (
               <Contratistas />
+            ) : seccion === "operadores" ? (
+              <Operadores />
             ) : (
               <div className="pantalla-cuerpo">
                 <div className="tarjeta" style={{ padding: "1.5rem" }}>
