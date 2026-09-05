@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 22;
+pub const SCHEMA_VERSION: i64 = 23;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -209,6 +209,11 @@ fn aplicar_migraciones_posteriores_a_15(
         *version = 22;
     }
 
+    if *version == 22 {
+        aplicar_migracion_23(connection)?;
+        *version = 23;
+    }
+
     Ok(())
 }
 
@@ -264,6 +269,14 @@ fn aplicar_migracion_22(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_22)?;
     transaction.execute_batch("PRAGMA user_version = 22")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_23(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_23)?;
+    transaction.execute_batch("PRAGMA user_version = 23")?;
     transaction.commit()?;
     Ok(())
 }
@@ -1787,4 +1800,18 @@ ALTER TABLE cola_salida_nueva RENAME TO cola_salida;
 CREATE INDEX idx_cola_salida_pendientes
 ON cola_salida(creado_en)
 WHERE estado = 'pendiente';
+";
+
+// Sync incremental del catálogo (contratistas/empresas/usuarios): antes
+// `recibir_catalogo_del_sitio` traía las tres tablas COMPLETAS en cada
+// ciclo (cada 2 minutos, para siempre), sin importar si algo cambió.
+// Esta fila única guarda desde cuándo pedir "sólo lo que cambió"
+// (`updated_at > catalogo_actualizado_hasta`) -- si es NULL, todavía no
+// hubo un primer sync y se trae todo (caso de sembrado inicial).
+const MIGRACION_23: &str = r"
+CREATE TABLE sincronizacion_estado (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    catalogo_actualizado_hasta TEXT
+) STRICT;
+INSERT INTO sincronizacion_estado (id, catalogo_actualizado_hasta) VALUES (1, NULL);
 ";

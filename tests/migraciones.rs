@@ -257,7 +257,11 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
              -- `uuid` a usuarios -- mismo motivo que las tres de arriba.
              DROP INDEX idx_usuarios_uuid;
              ALTER TABLE usuarios DROP COLUMN uuid;
-             DROP INDEX idx_registro_ingresos_uuid;",
+             DROP INDEX idx_registro_ingresos_uuid;
+             -- MIGRACION_23 (que corre al final al rebobinar) crea
+             -- `sincronizacion_estado` desde cero -- mismo motivo que
+             -- cola_salida/ingresos_remotos/gafetes arriba.
+             DROP TABLE sincronizacion_estado;",
         )
         .unwrap();
     rebobinar_trigger_entrada_inmutable_sin_uuid(&connection);
@@ -340,7 +344,11 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
              -- `uuid` a usuarios -- mismo motivo que las tres de arriba.
              DROP INDEX idx_usuarios_uuid;
              ALTER TABLE usuarios DROP COLUMN uuid;
-             DROP INDEX idx_registro_ingresos_uuid;",
+             DROP INDEX idx_registro_ingresos_uuid;
+             -- MIGRACION_23 (que corre al final al rebobinar) crea
+             -- `sincronizacion_estado` desde cero -- mismo motivo que
+             -- cola_salida/ingresos_remotos/gafetes arriba.
+             DROP TABLE sincronizacion_estado;",
         )
         .unwrap();
     rebobinar_trigger_entrada_inmutable_sin_uuid(&connection);
@@ -436,7 +444,11 @@ fn migracion_12_habilita_cambio_de_cedula() {
              -- `uuid` a usuarios -- mismo motivo que las tres de arriba.
              DROP INDEX idx_usuarios_uuid;
              ALTER TABLE usuarios DROP COLUMN uuid;
-             DROP INDEX idx_registro_ingresos_uuid;",
+             DROP INDEX idx_registro_ingresos_uuid;
+             -- MIGRACION_23 (que corre al final al rebobinar) crea
+             -- `sincronizacion_estado` desde cero -- mismo motivo que
+             -- cola_salida/ingresos_remotos/gafetes arriba.
+             DROP TABLE sincronizacion_estado;",
         )
         .unwrap();
     rebobinar_trigger_entrada_inmutable_sin_uuid(&connection);

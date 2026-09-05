@@ -756,6 +756,25 @@ pub fn recibir_catalogo_del_sitio(
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<ResumenCatalogo, SincronizacionError> {
     let cliente = reqwest::blocking::Client::new();
+
+    // Sync incremental (MIGRACION_23): sin esto, cada ciclo (cada 2 minutos,
+    // para siempre) traía las tres tablas COMPLETAS aunque nada hubiera
+    // cambiado. `marca_anterior` es NULL la primera vez (sembrado inicial,
+    // sin filtro -- hay que traer todo lo que ya existe). `marca_nueva` se
+    // captura ANTES de pedir nada: si algo cambia remoto mientras estas
+    // llamadas están en vuelo, la próxima vuelta lo vuelve a traer -- más
+    // vale repetir una fila que perderla por una marca de agua adelantada.
+    let marca_anterior: Option<String> = connection.query_row(
+        "SELECT catalogo_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let marca_nueva = crate::tiempo::serializar_utc(chrono::Utc::now());
+    let filtro_incremental = marca_anterior
+        .as_deref()
+        .map(|marca| format!("&updated_at=gt.{marca}"))
+        .unwrap_or_default();
+
     // Sin `sitio_id=eq...` a propósito -- contratistas y empresas son
     // globales (ver docs/plan-panel-administrativo-web.md, "Modelo de
     // datos"): si a un contratista se le niega el acceso en un sitio, tiene
@@ -765,14 +784,17 @@ pub fn recibir_catalogo_del_sitio(
     let empresas: Vec<FilaEmpresaRemota> = obtener_json(
         &cliente,
         contexto,
-        &format!("{}/rest/v1/empresas?select=id,nombre,activa", contexto.base_url),
+        &format!(
+            "{}/rest/v1/empresas?select=id,nombre,activa{filtro_incremental}",
+            contexto.base_url
+        ),
     )?;
     let contratistas: Vec<FilaContratistaRemota> = obtener_json(
         &cliente,
         contexto,
         &format!(
             "{}/rest/v1/contratistas?select=id,nombre,identificacion,empresa_id,empresa_nombre,\
-             activo,tipo_ingreso,fecha_vencimiento_praind,es_personal_ruta",
+             activo,tipo_ingreso,fecha_vencimiento_praind,es_personal_ruta{filtro_incremental}",
             contexto.base_url
         ),
     )?;
@@ -780,7 +802,7 @@ pub fn recibir_catalogo_del_sitio(
         &cliente,
         contexto,
         &format!(
-            "{}/rest/v1/usuarios?select=id,cedula,nombre,rol,activo",
+            "{}/rest/v1/usuarios?select=id,cedula,nombre,rol,activo{filtro_incremental}",
             contexto.base_url
         ),
     )?;
@@ -876,6 +898,11 @@ pub fn recibir_catalogo_del_sitio(
         )?;
         resumen.usuarios_recibidos += 1;
     }
+
+    transaction.execute(
+        "UPDATE sincronizacion_estado SET catalogo_actualizado_hasta = ?1 WHERE id = 1",
+        params![marca_nueva],
+    )?;
 
     transaction.commit()?;
     Ok(resumen)
