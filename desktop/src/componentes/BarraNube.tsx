@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 
 /** Estado crudo que entrega `RealtimeChannel.subscribe` (ver
@@ -10,19 +11,42 @@ export type EstadoConexionNube =
   | "CLOSED"
   | null;
 
-function descripcion(estado: EstadoConexionNube): { texto: string; color: string } {
+/** `navigator.onLine` refleja si el sistema operativo tiene una interfaz
+ * de red activa -- cambia al instante (evento `online`/`offline`) al
+ * desconectar el cable/wifi. El estado del canal de Realtime, en cambio,
+ * depende de su propio heartbeat interno (~30s) para darse cuenta de que
+ * el socket murió -- probado a mano: desconectar la red no lo reflejaba
+ * de inmediato. Esta señal del SO es la que manda para "sin conexión";
+ * Realtime sólo afina el texto cuando el SO sí dice que hay red. */
+function useEnLinea(): boolean {
+  const [enLinea, setEnLinea] = useState(() => navigator.onLine);
+  useEffect(() => {
+    const marcarEnLinea = () => setEnLinea(true);
+    const marcarSinConexion = () => setEnLinea(false);
+    window.addEventListener("online", marcarEnLinea);
+    window.addEventListener("offline", marcarSinConexion);
+    return () => {
+      window.removeEventListener("online", marcarEnLinea);
+      window.removeEventListener("offline", marcarSinConexion);
+    };
+  }, []);
+  return enLinea;
+}
+
+function descripcion(estado: EstadoConexionNube, enLinea: boolean): { texto: string; color: string } {
+  if (!enLinea) return { texto: "Sin conexión", color: "var(--error)" };
   switch (estado) {
     case "SUBSCRIBED":
       return { texto: "En línea", color: "var(--exito)" };
     case null:
       return { texto: "Conectando…", color: "var(--muted)" };
     default:
-      // CHANNEL_ERROR/TIMED_OUT/CLOSED -- `iniciarRealtimeNube` ya
-      // reintenta solo con backoff creciente, esto sólo informa que el
-      // aviso en vivo no está llegando ahora mismo. El botón "Sincronizar"
-      // y el pulso automático (cada 2 min) siguen funcionando igual sin
-      // Realtime -- es un problema de latencia del aviso, no de que la
-      // sincronización en sí esté rota.
+      // CHANNEL_ERROR/TIMED_OUT/CLOSED con red del SO activa -- ej. la
+      // nube está caída, o un firewall bloquea el WebSocket específicamente.
+      // `iniciarRealtimeNube` ya reintenta solo con backoff creciente, esto
+      // sólo informa que el aviso en vivo no está llegando ahora mismo. El
+      // botón "Sincronizar" y el pulso automático (cada 2 min) siguen
+      // funcionando igual sin Realtime.
       return { texto: "Sin conexión en vivo", color: "var(--error)" };
   }
 }
@@ -53,7 +77,8 @@ export default function BarraNube({
   onSincronizar: () => void;
   estadoConexion: EstadoConexionNube;
 }) {
-  const { texto, color } = descripcion(estadoConexion);
+  const enLinea = useEnLinea();
+  const { texto, color } = descripcion(estadoConexion, enLinea);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
       <span
