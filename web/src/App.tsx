@@ -4,12 +4,10 @@ import { History, IdCard, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
+import Login from "./pantallas/Login";
 import type { UsuarioSesion } from "./api";
+import { AuthProvider, useAuth } from "./contexto/AuthContexto";
 import { SesionProvider } from "./contexto/SesionContexto";
-
-// TODO: reemplazar por la sesión real una vez conectado Supabase Auth
-// (Google OAuth + Email OTP, ver docs/plan-panel-administrativo-web.md).
-const SESION_PLACEHOLDER: UsuarioSesion = { nombre: "—", rol: "admin_global" };
 
 export type Seccion = "dispositivos" | "historial" | "contratistas" | "operadores";
 
@@ -20,7 +18,7 @@ const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
   { id: "operadores", etiqueta: "Operadores", Icono: UserCog },
 ];
 
-const CLAVE_SIDEBAR_COLAPSADO = "panel-web:sidebar:colapsado";
+const CLAVE_SIDEBAR_COLAPSADO = "web:sidebar:colapsado";
 
 function leerSidebarColapsado(): boolean {
   try {
@@ -39,6 +37,31 @@ function guardarSidebarColapsado(colapsado: boolean) {
 }
 
 export default function App() {
+  return (
+    <AuthProvider>
+      <Contenido />
+    </AuthProvider>
+  );
+}
+
+/** Separado de `App` porque `useAuth` necesita estar DENTRO de
+ * `<AuthProvider>`, no en el mismo componente que lo declara. */
+function Contenido() {
+  const { sesion, cargando } = useAuth();
+
+  if (cargando) {
+    return null;
+  }
+
+  if (!sesion) {
+    return <Login />;
+  }
+
+  return <Shell sesion={sesion} />;
+}
+
+function Shell({ sesion }: { sesion: UsuarioSesion }) {
+  const { cerrarSesion } = useAuth();
   const [seccion, setSeccion] = useState<Seccion>("dispositivos");
   const [colapsado, setColapsado] = useState(leerSidebarColapsado);
 
@@ -69,7 +92,7 @@ export default function App() {
                   {SECCIONES.find((s) => s.id === seccion)?.etiqueta}
                 </h2>
                 <p style={{ margin: 0, color: "var(--muted)" }}>
-                  Scaffold listo — falta conectar Supabase Auth y las pantallas de verdad.
+                  Login conectado — falta esta pantalla de verdad.
                 </p>
               </div>
             </div>
@@ -78,7 +101,7 @@ export default function App() {
 
         <div className="barra-estado">
           <span />
-          <MenuUsuario sesion={SESION_PLACEHOLDER} onCerrarSesion={() => {}} />
+          <MenuUsuario sesion={sesion} onCerrarSesion={cerrarSesion} />
         </div>
 
         <Toaster theme="system" position="bottom-right" richColors={false} />

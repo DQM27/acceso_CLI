@@ -46,8 +46,8 @@ ${declaraciones(d.temas.dark)}
 salidas.set('design/paleta.js', `// ${aviso}\nwindow.Brisas = ${JSON.stringify(d, null, 2)};\n`);
 salidas.set('desktop/src/diseno.css', css);
 salidas.set('desktop/src/controles.css', leer('design/controles.css'));
-salidas.set('panel-web/src/diseno.css', css);
-salidas.set('panel-web/src/controles.css', leer('design/controles.css'));
+salidas.set('web/src/diseno.css', css);
+salidas.set('web/src/controles.css', leer('design/controles.css'));
 salidas.set('design/brisas.css', css + '\n' + leer('design/controles.css'));
 const panelPath = 'admin-panel/panel-dispositivos.html';
 const panel = leer(panelPath);
