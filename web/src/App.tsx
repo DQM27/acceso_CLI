@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Toaster, toast } from "sonner";
-import { CheckCircle2, History, IdCard, Loader2, ShieldCheck, UserCog, Users } from "lucide-react";
+import { CheckCircle2, History, IdCard, Loader2, Menu, ShieldCheck, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
@@ -159,6 +159,11 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
   const { cerrarSesion } = useAuth();
   const [seccion, setSeccion] = useState<Seccion>("dispositivos");
   const [colapsado, setColapsado] = useState(leerSidebarColapsado);
+  // Independiente de `colapsado` (que es el modo ícono-solo de escritorio,
+  // por doble click): en mobile el sidebar es un cajón que está oculto o
+  // abierto de par en par, nunca "colapsado a íconos" -- ver el media query
+  // en index.css.
+  const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
 
   function alternarColapsado() {
     setColapsado((actual) => {
@@ -168,19 +173,39 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
     });
   }
 
+  function cambiarSeccion(id: Seccion) {
+    setSeccion(id);
+    // En mobile, elegir una sección cierra el cajón -- si no, tapa la
+    // pantalla recién elegida hasta que la persona lo cierre a mano.
+    setMenuMovilAbierto(false);
+  }
+
   return (
     <SesionProvider value={null}>
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
         <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+          {menuMovilAbierto && (
+            <div className="shell-sidebar-velo" onClick={() => setMenuMovilAbierto(false)} />
+          )}
+
           <Sidebar
             secciones={SECCIONES}
             seccionActual={seccion}
-            onCambiarSeccion={setSeccion}
+            onCambiarSeccion={cambiarSeccion}
             colapsado={colapsado}
             onToggleColapsado={alternarColapsado}
+            abiertoEnMovil={menuMovilAbierto}
           />
 
           <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+            <button
+              type="button"
+              className="boton-menu-movil"
+              onClick={() => setMenuMovilAbierto((a) => !a)}
+              aria-label="Abrir menú"
+            >
+              <Menu size={20} strokeWidth={2} aria-hidden="true" />
+            </button>
             {seccion === "dispositivos" ? (
               <Dispositivos />
             ) : seccion === "administradores" ? (

@@ -14,15 +14,22 @@ export default function Sidebar({
   onCambiarSeccion,
   colapsado,
   onToggleColapsado,
+  abiertoEnMovil,
 }: {
   secciones: { id: Seccion; etiqueta: string; Icono: LucideIcon }[];
   seccionActual: Seccion;
   onCambiarSeccion: (id: Seccion) => void;
   colapsado: boolean;
   onToggleColapsado: () => void;
+  /** Cajón abierto en pantallas angostas (ver `.shell-sidebar-abierta` en
+   * index.css) -- independiente de `colapsado`, que solo aplica en
+   * escritorio. */
+  abiertoEnMovil: boolean;
 }) {
   return (
-    <nav className={`shell-sidebar ${colapsado ? "shell-sidebar-colapsada" : ""}`}>
+    <nav
+      className={`shell-sidebar ${colapsado ? "shell-sidebar-colapsada" : ""} ${abiertoEnMovil ? "shell-sidebar-abierta" : ""}`}
+    >
       <div className="shell-nav">
         {secciones.map(({ id, etiqueta, Icono }) => (
           <button

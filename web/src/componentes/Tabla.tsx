@@ -285,6 +285,7 @@ function TablaBase<T>(
           justifyContent: "space-between",
           gap: "0.375rem",
           marginBottom: "0.375rem",
+          flexWrap: "wrap",
         }}
       >
         <div
