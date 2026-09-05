@@ -27,3 +27,5 @@ Thumbs.db
 packaging/msix/control_acceso.exe
 packaging/msix/*.msix
 *.pfx
+# Cloudflare Wrangler -- cache local, incluye el ID de cuenta
+.wrangler/
