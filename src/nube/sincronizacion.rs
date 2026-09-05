@@ -869,6 +869,7 @@ pub struct ResumenCatalogo {
     pub empresas_recibidas: u32,
     pub contratistas_recibidos: u32,
     pub usuarios_recibidos: u32,
+    pub gafetes_recibidos: u32,
 }
 
 #[derive(serde::Deserialize)]
@@ -902,6 +903,18 @@ struct FilaContratistaRemota {
     tipo_ingreso: Option<String>,
     fecha_vencimiento_praind: Option<String>,
     es_personal_ruta: Option<bool>,
+}
+
+/// A diferencia de empresas/contratistas/usuarios (globales), gafetes SÍ
+/// se filtra por `sitio_id` -- cada sitio tiene su propio catálogo físico
+/// de gafetes, no tiene sentido que uno global exista en todos.
+#[derive(serde::Deserialize)]
+struct FilaGafeteRemota {
+    id: String,
+    numero: i64,
+    estado: String,
+    contratista_deudor_id: Option<String>,
+    contratista_deudor_nombre: Option<String>,
 }
 
 /// Trae de la nube las empresas y contratistas de *este mismo sitio* que
@@ -975,6 +988,17 @@ pub fn recibir_catalogo_del_sitio(
         &format!(
             "{}/rest/v1/usuarios?select=id,cedula,nombre,rol,activo{filtro_incremental}",
             contexto.base_url
+        ),
+    )?;
+    // Con `sitio_id=eq...` a diferencia de las tres de arriba -- ver
+    // comentario de `FilaGafeteRemota`.
+    let gafetes: Vec<FilaGafeteRemota> = obtener_json(
+        &cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/gafetes?sitio_id=eq.{}&select=id,numero,estado,contratista_deudor_id,\
+             contratista_deudor_nombre{filtro_incremental}",
+            contexto.base_url, contexto.sitio_id
         ),
     )?;
 
@@ -1070,6 +1094,39 @@ pub fn recibir_catalogo_del_sitio(
         resumen.usuarios_recibidos += 1;
     }
 
+    for gafete in &gafetes {
+        // Un gafete PERDIDO sin deudor resoluble localmente violaría el
+        // `CHECK` de la tabla (`estado = 'PERDIDO' AND contratista_deudor_id
+        // IS NOT NULL`) -- se salta por ahora, mismo criterio que un
+        // contratista remoto incompleto: se autorresuelve solo en un sync
+        // posterior, en cuanto ese contratista también llegue acá.
+        let deudor_id_local = if gafete.estado == "PERDIDO" {
+            let Some(id) = resolver_contratista_local(
+                &transaction,
+                gafete.contratista_deudor_id.as_deref(),
+                gafete.contratista_deudor_nombre.as_deref(),
+            ) else {
+                continue;
+            };
+            Some(id)
+        } else {
+            None
+        };
+
+        transaction.execute(
+            "
+            INSERT INTO gafetes (numero, estado, contratista_deudor_id, uuid)
+            VALUES (?1, ?2, ?3, ?4)
+            ON CONFLICT(numero) DO UPDATE SET
+                estado = excluded.estado,
+                contratista_deudor_id = excluded.contratista_deudor_id,
+                uuid = COALESCE(gafetes.uuid, excluded.uuid)
+            ",
+            params![gafete.numero, gafete.estado, deudor_id_local, gafete.id],
+        )?;
+        resumen.gafetes_recibidos += 1;
+    }
+
     transaction.execute(
         "UPDATE sincronizacion_estado SET catalogo_actualizado_hasta = ?1 WHERE id = 1",
         params![marca_nueva],
@@ -1103,6 +1160,41 @@ fn resolver_empresa_local(
                 transaction
                     .query_row(
                         "SELECT id FROM empresas WHERE nombre = ?1",
+                        params![nombre],
+                        |row| row.get(0),
+                    )
+                    .ok()
+            })
+        })
+}
+
+/// Resuelve el `id` local del contratista deudor de un gafete remoto --
+/// mismo criterio de respaldo que `resolver_empresa_local` (primero
+/// `uuid`, si no por nombre), salvo que acá el respaldo por nombre es
+/// más débil: `contratistas.nombre` no es único (`cedula` sí, pero la
+/// nube de gafetes no manda la cédula del deudor). Igual que empresas, se
+/// autorresuelve solo en un sync posterior si el contratista real llega
+/// después.
+fn resolver_contratista_local(
+    transaction: &rusqlite::Transaction<'_>,
+    contratista_uuid: Option<&str>,
+    contratista_nombre: Option<&str>,
+) -> Option<i64> {
+    contratista_uuid
+        .and_then(|uuid| {
+            transaction
+                .query_row(
+                    "SELECT id FROM contratistas WHERE uuid = ?1",
+                    params![uuid],
+                    |row| row.get(0),
+                )
+                .ok()
+        })
+        .or_else(|| {
+            contratista_nombre.and_then(|nombre| {
+                transaction
+                    .query_row(
+                        "SELECT id FROM contratistas WHERE nombre = ?1",
                         params![nombre],
                         |row| row.get(0),
                     )

@@ -18,6 +18,7 @@ export interface ResumenSincronizacion {
   cierres_recibidos: number;
   empresas_recibidas: number;
   contratistas_recibidos: number;
+  gafetes_recibidos: number;
   movimientos_historial_recibidos: number;
   sitio_id: string;
   dispositivo_id: string;
