@@ -6,6 +6,7 @@ import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
 import Login from "./pantallas/Login";
 import Historial from "./pantallas/Historial";
+import Contratistas from "./pantallas/Contratistas";
 import Administradores from "./pantallas/Administradores";
 import { borrarAccionPendiente, leerAccionPendienteVigente } from "./componentes/accionesPendientes";
 import { agregarAdministrador, eliminarAdministrador } from "./api/administradores";
@@ -32,7 +33,15 @@ const SECCIONES: {
     // administra cada quien.
     rolesPermitidos: ["admin_global"],
   },
-  { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
+  {
+    id: "contratistas",
+    etiqueta: "Contratistas",
+    Icono: Users,
+    // Mismo motivo que "historial" -- RLS de `contratistas` sólo deja
+    // pasar a admin_global por ahora (migración
+    // admin_global_gestiona_contratistas).
+    rolesPermitidos: ["admin_global"],
+  },
   { id: "operadores", etiqueta: "Operadores", Icono: UserCog },
   {
     id: "administradores",
@@ -205,6 +214,8 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
               <Administradores sesion={sesion} />
             ) : seccion === "historial" ? (
               <Historial />
+            ) : seccion === "contratistas" ? (
+              <Contratistas />
             ) : (
               <div className="pantalla-cuerpo">
                 <div className="tarjeta" style={{ padding: "1.5rem" }}>
