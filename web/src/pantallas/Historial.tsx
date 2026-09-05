@@ -54,7 +54,7 @@ export default function Historial() {
 
   // Ver `useAutoRefresh` -- sin esto, un ingreso ya cerrado/sincronizado
   // no aparecía hasta apretar "actualizar" a mano.
-  useAutoRefresh(() => recargar({ silencioso: true }), 30_000);
+  useAutoRefresh(() => recargar({ silencioso: true }), 30_000, "ingresos");
 
   function exportarAExcel() {
     const visibles = tablaRef.current?.filasFiltradas() ?? filas;

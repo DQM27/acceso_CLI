@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { solicitarSincronizacionNube } from "../eventosNube";
 
 // Espejo de comandos/empresas.rs y dto/empresas.rs.
 
@@ -28,14 +29,18 @@ export function buscarEmpresas(filtro: FiltroEmpresas): Promise<EmpresaResumen[]
   return invoke("buscar_empresas", { filtro });
 }
 
-export function crearEmpresa(nombre: string): Promise<number> {
-  return invoke("crear_empresa", { nombre });
+export async function crearEmpresa(nombre: string): Promise<number> {
+  const id = await invoke<number>("crear_empresa", { nombre });
+  solicitarSincronizacionNube();
+  return id;
 }
 
-export function actualizarEmpresa(id: number, nombre: string): Promise<void> {
-  return invoke("actualizar_empresa", { id, nombre });
+export async function actualizarEmpresa(id: number, nombre: string): Promise<void> {
+  await invoke("actualizar_empresa", { id, nombre });
+  solicitarSincronizacionNube();
 }
 
-export function establecerEmpresaActiva(id: number, activa: boolean): Promise<void> {
-  return invoke("establecer_empresa_activa", { id, activa });
+export async function establecerEmpresaActiva(id: number, activa: boolean): Promise<void> {
+  await invoke("establecer_empresa_activa", { id, activa });
+  solicitarSincronizacionNube();
 }

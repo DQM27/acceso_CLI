@@ -19,16 +19,16 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
-import uniffi.control_acceso_mobile.ResumenSincronizacion
 
 class NubeRealtime(
     private val nucleo: Nucleo,
     private val directorio: String,
     private val scope: CoroutineScope,
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.Default,
-    private val onSincronizado: (ResumenSincronizacion) -> Unit = {},
+    private val onCambio: () -> Unit = { CambiosNube.solicitar() },
 ) {
     private var trabajo: Job? = null
 
@@ -70,27 +70,24 @@ class NubeRealtime(
 
         try {
             coroutineScope {
-                var sincronizacionPendiente: Job? = null
-                canal.broadcastFlow<JsonObject>("cambio_nube")
-                    .onEach {
-                        sincronizacionPendiente?.cancel()
-                        sincronizacionPendiente = launch {
-                            delay(600)
-                            val resumen = withContext(dispatcherIO) {
-                                nucleo.sincronizarConNube(directorio)
-                            }
-                            onSincronizado(resumen)
-                        }
+                val avisos = canal.broadcastFlow<JsonObject>("cambio_nube")
+                    .onEach { payload ->
+                        if (payload["dispositivo_id"]?.jsonPrimitive?.content != sesion.dispositivoId) onCambio()
                     }
                     .launchIn(this)
-
-                canal.subscribe(blockUntilSubscribed = true)
-                delay(milisegundosHastaRenovar(sesion.expiresIn))
+                try {
+                    canal.subscribe(blockUntilSubscribed = true)
+                    onCambio()
+                    delay(milisegundosHastaRenovar(sesion.expiresIn))
+                } finally {
+                    // El colector infinito debe terminar para poder renovar el JWT.
+                    avisos.cancel()
+                }
             }
         } finally {
             withContext(NonCancellable) {
                 supabase.realtime.removeChannel(canal)
-                supabase.realtime.disconnect()
+                supabase.close()
             }
         }
     }

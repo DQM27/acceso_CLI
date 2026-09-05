@@ -1,5 +1,7 @@
 use control_acceso::mensajes::{mensaje_gestion_nube, mensaje_nube, mensaje_sincronizacion};
 use control_acceso::nube;
+use std::sync::Mutex;
+use tauri::Manager;
 
 use crate::estado::GuiState;
 
@@ -68,6 +70,12 @@ fn autenticar(state: &GuiState) -> Result<nube::TokenDispositivo, String> {
 /// compartido (dentro de `autenticar`), lo suelta, y hace la parte lenta
 /// (red) sobre una conexión propia -- ver `GuiState::conexion_secundaria`.
 pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, String> {
+    // El timer, los avisos remotos y el botón manual comparten la misma cola.
+    // Sólo una ejecución puede drenarla a la vez; el núcleo queda libre.
+    static SINCRONIZACION: Mutex<()> = Mutex::new(());
+    let _sincronizacion = SINCRONIZACION
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let token = autenticar(state)?;
     let contexto = nube::ContextoSincronizacion {
         base_url: nube::BASE_URL,
@@ -81,10 +89,10 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
     let resumen = nube::drenar_cola(&conexion, &contexto, 200).map_err(mensaje_sincronizacion)?;
     let cierres_recibidos = nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)
         .map_err(mensaje_sincronizacion)?;
-    let remotos = nube::recibir_ingresos_abiertos(&conexion, &contexto)
-        .map_err(mensaje_sincronizacion)?;
-    let catalogo = nube::recibir_catalogo_del_sitio(&conexion, &contexto)
-        .map_err(mensaje_sincronizacion)?;
+    let remotos =
+        nube::recibir_ingresos_abiertos(&conexion, &contexto).map_err(mensaje_sincronizacion)?;
+    let catalogo =
+        nube::recibir_catalogo_del_sitio(&conexion, &contexto).map_err(mensaje_sincronizacion)?;
 
     Ok(ResumenSincronizacion {
         enviados: resumen.enviados,
@@ -127,29 +135,32 @@ pub fn secreto_dispositivo_guardado(state: tauri::State<GuiState>) -> Result<boo
 }
 
 #[tauri::command]
-pub fn sincronizar_con_nube(state: tauri::State<GuiState>) -> Result<ResumenSincronizacion, String> {
-    ejecutar_sincronizacion(&state)
+pub async fn sincronizar_con_nube(app: tauri::AppHandle) -> Result<ResumenSincronizacion, String> {
+    tauri::async_runtime::spawn_blocking(move || ejecutar_sincronizacion(&app.state::<GuiState>()))
+        .await
+        .map_err(|error| format!("No se pudo completar la sincronización: {error}"))?
 }
 
 #[tauri::command]
-pub fn sesion_realtime_nube(
-    state: tauri::State<GuiState>,
-) -> Result<SesionRealtimeNube, String> {
-    let actor = state.sesion_activa()?;
-    let sesion = state
-        .core()
-        .sesion_realtime_nube(&actor, None)
-        .map_err(mensaje_gestion_nube)?;
+pub async fn sesion_realtime_nube(app: tauri::AppHandle) -> Result<SesionRealtimeNube, String> {
+    tauri::async_runtime::spawn_blocking(move || preparar_sesion_realtime(&app.state::<GuiState>()))
+        .await
+        .map_err(|error| format!("No se pudo preparar la sesión de nube: {error}"))?
+}
+
+fn preparar_sesion_realtime(state: &GuiState) -> Result<SesionRealtimeNube, String> {
+    // Autoriza con el candado y lo suelta antes de la petición de red.
+    let sesion = autenticar(state)?;
 
     Ok(SesionRealtimeNube {
-        base_url: sesion.base_url,
-        apikey: sesion.apikey,
+        base_url: nube::BASE_URL.to_string(),
+        apikey: nube::APIKEY.to_string(),
         access_token: sesion.access_token,
         expires_in: sesion.expires_in,
+        topic: format!("sitio:{}", sesion.sitio_id),
         sitio_id: sesion.sitio_id,
         dispositivo_id: sesion.dispositivo_id,
         tipo: sesion.tipo,
-        topic: sesion.topic,
     })
 }
 
@@ -170,7 +181,9 @@ pub fn fallos_permanentes_nube(state: tauri::State<GuiState>) -> Result<i64, Str
 /// en el resto del núcleo), y este `SELECT` no debería fallar en la
 /// práctica.
 #[tauri::command]
-pub fn listar_ingresos_remotos(state: tauri::State<GuiState>) -> Result<Vec<IngresoRemoto>, String> {
+pub fn listar_ingresos_remotos(
+    state: tauri::State<GuiState>,
+) -> Result<Vec<IngresoRemoto>, String> {
     state.sesion_activa()?;
     let conexion = state.conexion_secundaria()?;
     let mut statement = conexion

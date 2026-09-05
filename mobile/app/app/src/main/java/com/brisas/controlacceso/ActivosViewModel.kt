@@ -225,6 +225,7 @@ class ActivosViewModel(
     }
 
     fun onIngresoRegistrado() {
+        CambiosNube.solicitar()
         seleccionIngreso = SeleccionIngreso.Ninguna
         texto = ""
         buscar()
@@ -239,6 +240,7 @@ class ActivosViewModel(
         viewModelScope.launch {
             try {
                 withContext(dispatcherIO) { nucleo.registrarSalida(activo.registroId) }
+                CambiosNube.solicitar()
                 buscar()
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
@@ -259,6 +261,7 @@ class ActivosViewModel(
                 }
                 try {
                     withContext(dispatcherIO) { nucleo.registrarSalida(activoCoincidente.registroId) }
+                    CambiosNube.solicitar()
                     registrados.add(activoCoincidente.contratistaNombre)
                 } catch (excepcion: NucleoException) {
                     fallidos.add("gafete ${coincidencia.numero}: ${excepcion.message}")

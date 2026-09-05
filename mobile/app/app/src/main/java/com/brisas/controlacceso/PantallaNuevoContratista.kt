@@ -238,6 +238,7 @@ fun PantallaNuevoContratista(nucleo: Nucleo) {
                                 ),
                             )
                         }
+                        CambiosNube.solicitar()
                         mensaje = "Contratista registrado: $nombre"
                         cedula = ""
                         nombre = ""

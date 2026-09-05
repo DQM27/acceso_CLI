@@ -1,6 +1,6 @@
 -- Broadcast privado por sitio para la sincronización en vivo.
 -- Preparado para el proyecto Supabase xidaepyaljzkpbsxrqsm.
--- Pendiente de aplicar en remoto si el MCP sigue en modo de solo lectura.
+-- Instalado en remoto. Corrección de autorización: 2026-09-05.
 
 drop policy if exists "dispositivos reciben broadcast de su sitio"
 on realtime.messages;
@@ -10,8 +10,7 @@ on realtime.messages
 for select
 to authenticated
 using (
-  realtime.messages.private = true
-  and realtime.messages.extension = 'broadcast'
+  realtime.messages.extension = 'broadcast'
   and (select realtime.topic()) = ('sitio:' || ((select auth.jwt()) ->> 'sitio_id'))
 );
 

@@ -49,7 +49,7 @@ export default function Empresas() {
     [texto],
   );
 
-  useCargaAlCambiar(recargar);
+  useCargaAlCambiar(recargar, true);
 
   async function manejarEdicion(fila: EmpresaResumen) {
     try {

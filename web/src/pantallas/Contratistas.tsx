@@ -40,7 +40,7 @@ export default function Contratistas() {
 
   // Cambia rara vez (altas/bajas puntuales) -- mismo intervalo que usan
   // desktop/mobile para su propio sync periódico.
-  useAutoRefresh(() => recargar({ silencioso: true }), 120_000);
+  useAutoRefresh(() => recargar({ silencioso: true }), 120_000, "contratistas,empresas");
 
   async function manejarEdicion(fila: Contratista) {
     try {

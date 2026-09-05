@@ -72,6 +72,7 @@ fun PantallaNuevaEmpresa(nucleo: Nucleo) {
                 alcance.launch {
                     try {
                         withContext(Dispatchers.Default) { nucleo.crearEmpresa(nombre) }
+                        CambiosNube.solicitar()
                         mensaje = "Empresa registrada: $nombre"
                         nombre = ""
                     } catch (excepcion: NucleoException) {

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { solicitarSincronizacionNube } from "../eventosNube";
 
 // Espejo de comandos/contratistas.rs y dto.rs (los tipos de filtro/edición
 // son los DTO de frontera, no el FiltroContratistas/DatosActualizacionContratista
@@ -64,10 +65,13 @@ export function buscarContratistas(filtro: FiltroContratistas = {}): Promise<Pag
   return invoke("buscar_contratistas", { filtro });
 }
 
-export function crearContratista(datos: DatosContratista): Promise<number> {
-  return invoke("crear_contratista", { datos });
+export async function crearContratista(datos: DatosContratista): Promise<number> {
+  const id = await invoke<number>("crear_contratista", { datos });
+  solicitarSincronizacionNube();
+  return id;
 }
 
-export function actualizarContratista(id: number, datos: DatosContratista): Promise<void> {
-  return invoke("actualizar_contratista", { id, datos });
+export async function actualizarContratista(id: number, datos: DatosContratista): Promise<void> {
+  await invoke("actualizar_contratista", { id, datos });
+  solicitarSincronizacionNube();
 }

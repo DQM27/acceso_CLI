@@ -61,6 +61,8 @@ class HistorialViewModel(
         }
     }
 
+    fun refrescar() = buscar()
+
     companion object {
         fun factory(nucleo: Nucleo): ViewModelProvider.Factory = viewModelFactory {
             initializer { HistorialViewModel(nucleo) }

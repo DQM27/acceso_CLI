@@ -13,6 +13,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -29,8 +30,11 @@ import uniffi.control_acceso_mobile.ResultadoIngresoRegistrado
 /// [Nucleo] viven en [HistorialViewModel] (ver
 /// mobile/app/ARQUITECTURA.md) — este Composable sólo dibuja.
 @Composable
-fun PantallaHistorial(nucleo: Nucleo) {
+fun PantallaHistorial(nucleo: Nucleo, refrescarNube: Int = 0) {
     val viewModel: HistorialViewModel = viewModel(factory = HistorialViewModel.factory(nucleo))
+    LaunchedEffect(refrescarNube) {
+        if (refrescarNube > 0) viewModel.refrescar()
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         OutlinedTextField(

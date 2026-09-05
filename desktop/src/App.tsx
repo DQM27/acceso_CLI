@@ -52,7 +52,7 @@ import {
   sincronizarConNube,
 } from "./api";
 import type { ResumenSincronizacion, RolUsuario, UsuarioSesion } from "./api";
-import { emitirActualizacion } from "./nubeRealtime";
+import { emitirActualizacion, iniciarRealtimeNube } from "./nubeRealtime";
 import { SesionProvider } from "./contexto/SesionContexto";
 import { BarraEstadoProvider } from "./contexto/BarraEstadoContexto";
 
@@ -261,24 +261,22 @@ function Shell({
   // comportan igual.
   useHotkeys("ctrl+q", onCerrarSesion, { preventDefault: true });
 
-  // `iniciarRealtimeNube` queda apagado por ahora (2026-09-03): el canal
-  // privado de Supabase Realtime no logra autorizarse -- bug de la
-  // plataforma con el sistema nuevo de JWT Signing Keys, no de este código
-  // (ver docs/migracion-supabase-realtime-broadcast.sql). Reintentar sin
-  // parar generaba tráfico de red constante que se sentía como la app
-  // entera trabada. El pulso automático de fondo cada 2 minutos
-  // (`crate::iniciar_sincronizacion_automatica`) sigue andando igual --
-  // este listener es lo que hace que Activos se refresque solo cuando eso
-  // pasa. Reactivar `iniciarRealtimeNube` en cuanto Supabase resuelva el
-  // bug (o encontremos un workaround) -- el código sigue en
-  // `nubeRealtime.ts`, sin tocar.
+  // Los avisos privados refrescan de inmediato; el pulso periódico recupera
+  // cambios aunque se pierda el socket o el equipo haya estado sin conexión.
   useEffect(() => {
+    const cancelarRealtime = iniciarRealtimeNube({
+      onSincronizado: () => setRefrescarActivos((n) => n + 1),
+    });
     const cancelarSincronizacionAutomatica = listen<ResumenSincronizacion>(
       "nube://sincronizado",
-      () => setRefrescarActivos((n) => n + 1),
+      ({ payload }) => {
+        setRefrescarActivos((n) => n + 1);
+        emitirActualizacion(payload);
+      },
     );
 
     return () => {
+      cancelarRealtime();
       cancelarSincronizacionAutomatica.then((cancelar) => cancelar());
     };
   }, [sesion.id]);

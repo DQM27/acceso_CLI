@@ -78,7 +78,7 @@ export default function Historial() {
     },
     [desde, hasta],
   );
-  useCargaAlCambiar(recargar);
+  useCargaAlCambiar(recargar, true);
 
   // Lo que la grilla tiene visible AHORA (filtro por columna y selector
   // "Columnas ▾" de AG Grid, ambos del lado del cliente) — Excel y PDF

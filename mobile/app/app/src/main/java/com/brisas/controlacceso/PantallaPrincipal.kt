@@ -65,9 +65,9 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String,
     var menuCreacionAbierto by remember { mutableStateOf(false) }
     var refrescarNube by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
-    // `SincronizacionPeriodica`, no `NubeRealtime` -- ver el comentario de
-    // esa clase sobre por qué (bug de plataforma en Supabase Realtime, no
-    // arreglable desde acá).
+    val realtime = remember(nucleo, directorio, scope) {
+        NubeRealtime(nucleo = nucleo, directorio = directorio, scope = scope)
+    }
     val sincronizacion = remember(nucleo, directorio, scope) {
         SincronizacionPeriodica(
             nucleo = nucleo,
@@ -85,17 +85,24 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String,
     // que un refresco importe. Vuelve a sincronizar solo al volver al
     // primer plano.
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(sincronizacion, lifecycleOwner) {
+    DisposableEffect(sincronizacion, realtime, lifecycleOwner) {
         val observador = LifecycleEventObserver { _, evento ->
             when (evento) {
-                Lifecycle.Event.ON_START -> sincronizacion.iniciar()
-                Lifecycle.Event.ON_STOP -> sincronizacion.detener()
+                Lifecycle.Event.ON_START -> {
+                    sincronizacion.iniciar()
+                    realtime.iniciar()
+                }
+                Lifecycle.Event.ON_STOP -> {
+                    realtime.detener()
+                    sincronizacion.detener()
+                }
                 else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observador)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observador)
+            realtime.detener()
             sincronizacion.detener()
         }
     }
@@ -173,7 +180,7 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String,
                 }
                 when (pestana) {
                     0 -> PantallaActivos(nucleo, refrescarNube)
-                    1 -> PantallaHistorial(nucleo)
+                    1 -> PantallaHistorial(nucleo, refrescarNube)
                     else -> PantallaNube(nucleo, sesion, directorio, refrescarNube)
                 }
             }

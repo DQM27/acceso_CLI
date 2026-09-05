@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { toast } from "sonner";
+import { EVENTO_NUBE_ACTUALIZADA } from "../eventosNube";
 
 /**
  * Corre `recargar(estaVigente)` cada vez que cambia su identidad
@@ -13,12 +14,20 @@ import { toast } from "sonner";
  * pantalla (su propio `useCallback`), acá sólo vive el envoltorio que era
  * idéntico en las tres.
  */
-export function useCargaAlCambiar(recargar: (estaVigente: () => boolean) => Promise<unknown>) {
+export function useCargaAlCambiar(recargar: (estaVigente: () => boolean) => Promise<unknown>, escucharNube = false) {
   useEffect(() => {
     let vigente = true;
-    recargar(() => vigente).catch((error) => vigente && toast.error(String(error)));
+    let revision = 0;
+    const cargar = () => {
+      const actual = ++revision;
+      const estaVigente = () => vigente && actual === revision;
+      recargar(estaVigente).catch((error) => estaVigente() && toast.error(String(error)));
+    };
+    cargar();
+    if (escucharNube) window.addEventListener(EVENTO_NUBE_ACTUALIZADA, cargar);
     return () => {
       vigente = false;
+      window.removeEventListener(EVENTO_NUBE_ACTUALIZADA, cargar);
     };
-  }, [recargar]);
+  }, [recargar, escucharNube]);
 }

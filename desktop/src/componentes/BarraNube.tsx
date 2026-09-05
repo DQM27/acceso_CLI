@@ -9,10 +9,8 @@ import { RefreshCw } from "lucide-react";
  * Nube). Antes este botón vivía únicamente ahí, detrás de una pestaña que ni
  * Administrador ni Operador podían abrir.
  *
- * Sin indicador de conexión: dependía del canal Realtime (`nubeRealtime.ts`),
- * apagado por ahora (ver el comentario en `App.tsx`) — mientras tanto no hay
- * señal de conectividad continua que mostrar, sólo el pulso automático y este
- * botón manual.
+ * Permite forzar una sincronización además de los avisos de Realtime y del
+ * pulso periódico de respaldo.
  */
 export default function BarraNube({
   sincronizando,

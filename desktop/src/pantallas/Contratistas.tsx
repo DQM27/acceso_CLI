@@ -92,7 +92,7 @@ export default function Contratistas() {
       });
   }, []);
 
-  useCargaAlCambiar(recargar);
+  useCargaAlCambiar(recargar, true);
 
   async function manejarEdicion(fila: ContratistaResumen) {
     try {

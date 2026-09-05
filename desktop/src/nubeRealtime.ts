@@ -2,8 +2,9 @@ import { createClient } from "@supabase/supabase-js";
 import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
 import { sesionRealtimeNube, sincronizarConNube } from "./api/nube";
 import type { ResumenSincronizacion } from "./api/nube";
+import { EVENTO_CAMBIO_LOCAL_NUBE, EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
 
-export const EVENTO_NUBE_ACTUALIZADA = "nube:actualizada";
+export { EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
 
 export interface NubeActualizadaDetalle {
   origen: "realtime" | "manual";
@@ -30,13 +31,7 @@ export function emitirActualizacion(
   );
 }
 
-// Tope del backoff exponencial de reconexión -- sin esto, un canal que
-// nunca logra autorizarse (ver docs/migracion-supabase-realtime-broadcast.sql,
-// bug de plataforma de Realtime con JWT Signing Keys) reintenta cada 2
-// segundos para siempre: cada vuelta abre un cliente Supabase nuevo, pide un
-// token (llamada de red bloqueante del lado Rust) y abre un websocket, todo
-// compitiendo por el mismo hilo que atiende la UI -- eso es lo que se sentía
-// como "la app se pega" (2026-09-03).
+// Espacia los reintentos cuando falta conexión o la sesión no está lista.
 const REINTENTO_BASE_MS = 2_000;
 const REINTENTO_TOPE_MS = 60_000;
 
@@ -48,6 +43,7 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
   let temporizadorReconectar: ReturnType<typeof window.setTimeout> | null = null;
   let temporizadorSincronizar: ReturnType<typeof window.setTimeout> | null = null;
   let sincronizando = false;
+  let sincronizacionPendiente = false;
   // Intentos fallidos seguidos desde la última vez que el canal quedó
   // realmente suscrito -- crece el backoff (2s, 4s, 8s… hasta el tope) en
   // vez de reintentar siempre a los 2s. Se reinicia a 0 en cuanto
@@ -61,12 +57,14 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
     temporizadorRenovar = null;
     temporizadorReconectar = null;
 
-    if (canal && cliente) {
-      void cliente.removeChannel(canal);
-    }
-    cliente?.realtime.disconnect();
+    const clienteAnterior = cliente;
+    const canalAnterior = canal;
     canal = null;
     cliente = null;
+    if (canalAnterior && clienteAnterior) {
+      void clienteAnterior.removeChannel(canalAnterior);
+    }
+    clienteAnterior?.realtime.disconnect();
   }
 
   function reconectar() {
@@ -81,16 +79,24 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
   }
 
   async function sincronizarPorAviso() {
-    if (sincronizando || cancelado) return;
+    if (cancelado) return;
+    if (sincronizando) {
+      sincronizacionPendiente = true;
+      return;
+    }
+    sincronizacionPendiente = false;
     sincronizando = true;
     try {
       const resumen = await sincronizarConNube();
-      opciones.onSincronizado?.(resumen);
-      emitirActualizacion(resumen);
+      if (!cancelado) {
+        opciones.onSincronizado?.(resumen);
+        emitirActualizacion(resumen);
+      }
     } catch (error) {
       console.error("No se pudo sincronizar tras aviso Realtime:", error);
     } finally {
       sincronizando = false;
+      if (sincronizacionPendiente && !cancelado) programarSincronizacion();
     }
   }
 
@@ -109,23 +115,38 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
       const sesion = await sesionRealtimeNube();
       if (cancelado) return;
 
-      cliente = createClient(sesion.base_url, sesion.apikey, {
+      const clienteActual = createClient(sesion.base_url, sesion.apikey, {
+        // Supabase vuelve a consultar este callback al conectar y renovar.
+        // setAuth por sí solo se reemplaza por la sesión de Auth (aquí vacía).
+        accessToken: async () => sesion.access_token,
         auth: {
           persistSession: false,
           autoRefreshToken: false,
           detectSessionInUrl: false,
         },
       });
-      await cliente.realtime.setAuth(sesion.access_token);
+      cliente = clienteActual;
+      await clienteActual.realtime.setAuth(sesion.access_token);
+      if (cancelado || cliente !== clienteActual) {
+        clienteActual.realtime.disconnect();
+        return;
+      }
 
       canal = cliente
         .channel(sesion.topic, { config: { private: true } })
-        .on("broadcast", { event: "cambio_nube" }, programarSincronizacion)
-        .subscribe((estado) => {
+        .on("broadcast", { event: "cambio_nube" }, ({ payload }) => {
+          if (cancelado || cliente !== clienteActual) return;
+          if (payload?.dispositivo_id !== sesion.dispositivo_id) programarSincronizacion();
+        })
+        .subscribe((estado, error) => {
+          if (cancelado || cliente !== clienteActual) return;
           opciones.onEstado?.(estado);
           if (estado === "SUBSCRIBED") {
             intentosSeguidos = 0;
+            // Recupera cambios ocurridos mientras el cliente estuvo desconectado.
+            programarSincronizacion();
           } else if (estado === "CHANNEL_ERROR" || estado === "TIMED_OUT" || estado === "CLOSED") {
+            if (error) console.info("No se pudo suscribir al canal de nube:", error.message);
             reconectar();
           }
         });
@@ -138,10 +159,12 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
     }
   }
 
+  window.addEventListener(EVENTO_CAMBIO_LOCAL_NUBE, programarSincronizacion);
   void conectar();
 
   return () => {
     cancelado = true;
+    window.removeEventListener(EVENTO_CAMBIO_LOCAL_NUBE, programarSincronizacion);
     if (temporizadorSincronizar) window.clearTimeout(temporizadorSincronizar);
     limpiarCanal();
   };

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { TipoIngreso } from "./contratistas";
+import { solicitarSincronizacionNube } from "../eventosNube";
 
 // Espejo de comandos/ingresos.rs — ver también src/services/registro_ingreso_service.rs
 // y src/domain/resultado_acceso.rs del núcleo.
@@ -138,14 +139,17 @@ export function prepararIngreso(contratistaId: number): Promise<PreparacionIngre
   return invoke("preparar_ingreso", { contratistaId });
 }
 
-export function registrarIngreso(
+export async function registrarIngreso(
   contratistaId: number,
   medio: MedioIngreso,
   gafete: number | null,
 ): Promise<ResultadoRegistroEntrada> {
-  return invoke("registrar_ingreso", { contratistaId, medio, gafete });
+  const resultado = await invoke<ResultadoRegistroEntrada>("registrar_ingreso", { contratistaId, medio, gafete });
+  solicitarSincronizacionNube();
+  return resultado;
 }
 
-export function registrarSalida(id: number): Promise<void> {
-  return invoke("registrar_salida", { id });
+export async function registrarSalida(id: number): Promise<void> {
+  await invoke("registrar_salida", { id });
+  solicitarSincronizacionNube();
 }

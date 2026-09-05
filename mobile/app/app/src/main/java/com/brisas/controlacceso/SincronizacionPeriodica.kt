@@ -2,9 +2,14 @@ package com.brisas.controlacceso
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.ResumenSincronizacion
 
@@ -14,12 +19,9 @@ import uniffi.control_acceso_mobile.ResumenSincronizacion
  * (`crate::iniciar_sincronizacion_automatica`, cada 2 minutos): sin esto,
  * el celular sólo sincroniza cuando alguien toca "Sincronizar" a mano.
  *
- * Reemplaza a [NubeRealtime] (ese archivo queda sin usar, no se borra): el
- * canal privado de Supabase Realtime no logra autorizarse -- bug de la
- * plataforma con el sistema nuevo de JWT Signing Keys, no de este código
- * (ver docs/migracion-supabase-realtime-broadcast.sql). Reactivar
- * [NubeRealtime] en cuanto Supabase resuelva el bug (o encontremos un
- * workaround), en vez de esta clase.
+ * También atiende [CambiosNube] al guardar datos o recibir un Broadcast.
+ * Serializa las ejecuciones y conserva un aviso pendiente si llega mientras
+ * hay una sincronización en curso. El timer es respaldo ante desconexiones.
  */
 class SincronizacionPeriodica(
     private val nucleo: Nucleo,
@@ -32,19 +34,22 @@ class SincronizacionPeriodica(
     fun iniciar() {
         if (trabajo?.isActive == true) return
         trabajo = scope.launch {
-            delay(ESPERA_INICIAL_MS)
-            while (true) {
-                try {
-                    val resumen = nucleo.sincronizarConNube(directorio)
-                    onSincronizado(resumen)
-                } catch (cancelacion: CancellationException) {
-                    throw cancelacion
-                } catch (_: Throwable) {
-                    // Sin conexión, o el secreto de este dispositivo todavía
-                    // no se configuró -- se reintenta solo en la próxima
-                    // vuelta, sin interrumpir a quien esté usando la app.
+            coroutineScope {
+                val pendientes = Channel<Unit>(Channel.CONFLATED)
+                launch { CambiosNube.cambios.collect { pendientes.trySend(Unit) } }
+                withTimeoutOrNull(ESPERA_INICIAL_MS) { pendientes.receive() }
+                while (true) {
+                    delay(600)
+                    try {
+                        val resumen = withContext(Dispatchers.IO) { nucleo.sincronizarConNube(directorio) }
+                        onSincronizado(resumen)
+                    } catch (cancelacion: CancellationException) {
+                        throw cancelacion
+                    } catch (_: Throwable) {
+                        // La cola local conserva lo pendiente hasta recuperar la conexión.
+                    }
+                    withTimeoutOrNull(INTERVALO_MS) { pendientes.receive() }
                 }
-                delay(INTERVALO_MS)
             }
         }
     }
