@@ -51,7 +51,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!vigente) return;
 
       if (errorConsulta || !admin) {
-        setError("Tu cuenta de Google inició sesión, pero no está autorizada para este panel.");
+        setError(
+          `La cuenta de Google "${usuario.email}" inició sesión, pero no está autorizada para este panel.`,
+        );
         setSesion(null);
         setCargando(false);
         await supabase.auth.signOut();
@@ -61,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null);
       setSesion({
         nombre: (usuario.user_metadata?.full_name as string | undefined) ?? usuario.email,
+        correo: usuario.email,
         rol: admin.rol as UsuarioSesion["rol"],
       });
       setCargando(false);
