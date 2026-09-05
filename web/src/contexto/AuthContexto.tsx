@@ -71,7 +71,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     supabase.auth.getSession().then(({ data }) => autorizar(data.session?.user ?? null));
 
-    const { data: suscripcion } = supabase.auth.onAuthStateChange((_evento, session) => {
+    // Sólo un login/logout de verdad amerita volver a "cargando" y re-
+    // consultar `administradores_panel` -- Supabase también dispara este
+    // evento con `TOKEN_REFRESHED` cada vez que la pestaña vuelve a estar
+    // visible (o el token se renueva solo en segundo plano). Tratar eso
+    // igual que un login real tiraba TODA la Shell a "cargando" (`Contenido`
+    // devuelve `null` mientras tanto) sólo por cambiar de pestaña y volver
+    // -- se sentía como que la página se reiniciaba, perdiendo la sección
+    // en la que se estaba.
+    const { data: suscripcion } = supabase.auth.onAuthStateChange((evento, session) => {
+      if (evento !== "SIGNED_IN" && evento !== "SIGNED_OUT") return;
       setCargando(true);
       autorizar(session?.user ?? null);
     });
