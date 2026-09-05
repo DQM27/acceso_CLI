@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { RefreshCw } from "lucide-react";
 
 /** Estado crudo que entrega `RealtimeChannel.subscribe` (ver
@@ -21,8 +22,17 @@ export type EstadoConexionNube =
 function useEnLinea(): boolean {
   const [enLinea, setEnLinea] = useState(() => navigator.onLine);
   useEffect(() => {
-    const marcarEnLinea = () => setEnLinea(true);
-    const marcarSinConexion = () => setEnLinea(false);
+    // Los eventos `online`/`offline` sólo disparan en una transición real
+    // -- nunca al montar -- así que avisar acá nunca duplica el aviso del
+    // primer render.
+    const marcarEnLinea = () => {
+      setEnLinea(true);
+      toast.success("Conexión restablecida.");
+    };
+    const marcarSinConexion = () => {
+      setEnLinea(false);
+      toast.warning("Sin conexión a internet — trabajando en modo offline.");
+    };
     window.addEventListener("online", marcarEnLinea);
     window.addEventListener("offline", marcarSinConexion);
     return () => {
@@ -34,7 +44,7 @@ function useEnLinea(): boolean {
 }
 
 function descripcion(estado: EstadoConexionNube, enLinea: boolean): { texto: string; color: string } {
-  if (!enLinea) return { texto: "Sin conexión", color: "var(--error)" };
+  if (!enLinea) return { texto: "Sin conexión — modo offline", color: "var(--error)" };
   switch (estado) {
     case "SUBSCRIBED":
       return { texto: "En línea", color: "var(--exito)" };
