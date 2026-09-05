@@ -34,23 +34,27 @@ type SinFecha<T> = T extends AccionPendiente ? Omit<T, "creadaEn"> : never;
  * Acción sensible confirmada por correo, pendiente de completarse cuando
  * la persona vuelva a abrir el panel después de hacer clic en el link de
  * confirmación (ver `useVerificacionPorCorreo` y `Administradores.tsx`).
- * `sessionStorage` (no `localStorage`): si el link se abre en otra pestaña
- * o dispositivo, no hay forma de retomarlo ahí -- mejor que desaparezca
- * solo a que quede pendiente para siempre en un lugar que nadie va a
- * revisar.
+ * `localStorage`, no `sessionStorage` -- el link de confirmación casi
+ * siempre abre en una pestaña NUEVA (comportamiento típico de clientes de
+ * correo), y `sessionStorage` es exclusivo de cada pestaña: la pestaña
+ * nueva nunca vería lo que guardó la original. `localStorage` se comparte
+ * entre pestañas del mismo sitio, así que no importa cuál de las dos
+ * retoma la acción. Sigue expirando sola (`VIGENCIA_MS`) si nadie llega a
+ * confirmar, para no quedar pendiente para siempre en un dispositivo
+ * compartido.
  */
 export function guardarAccionPendiente(accion: SinFecha<AccionPendiente>) {
   try {
-    sessionStorage.setItem(CLAVE, JSON.stringify({ ...accion, creadaEn: Date.now() }));
+    localStorage.setItem(CLAVE, JSON.stringify({ ...accion, creadaEn: Date.now() }));
   } catch {
-    // sessionStorage puede fallar (modo privado, cuota llena) -- sin
+    // localStorage puede fallar (modo privado, cuota llena) -- sin
     // guardado, simplemente no hay nada que retomar al volver.
   }
 }
 
 export function leerAccionPendienteVigente(correoSolicitante: string): AccionPendiente | null {
   try {
-    const crudo = sessionStorage.getItem(CLAVE);
+    const crudo = localStorage.getItem(CLAVE);
     if (!crudo) return null;
     const accion = JSON.parse(crudo) as AccionPendiente;
     if (accion.correoSolicitante !== correoSolicitante) return null;
@@ -63,7 +67,7 @@ export function leerAccionPendienteVigente(correoSolicitante: string): AccionPen
 
 export function borrarAccionPendiente() {
   try {
-    sessionStorage.removeItem(CLAVE);
+    localStorage.removeItem(CLAVE);
   } catch {
     // Ver comentario de guardarAccionPendiente.
   }
