@@ -71,17 +71,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     supabase.auth.getSession().then(({ data }) => autorizar(data.session?.user ?? null));
 
-    // Sólo un login/logout de verdad amerita volver a "cargando" y re-
-    // consultar `administradores_panel` -- Supabase también dispara este
-    // evento con `TOKEN_REFRESHED` cada vez que la pestaña vuelve a estar
-    // visible (o el token se renueva solo en segundo plano). Tratar eso
-    // igual que un login real tiraba TODA la Shell a "cargando" (`Contenido`
-    // devuelve `null` mientras tanto) sólo por cambiar de pestaña y volver
-    // -- se sentía como que la página se reiniciaba, perdiendo la sección
-    // en la que se estaba.
-    const { data: suscripcion } = supabase.auth.onAuthStateChange((evento, session) => {
-      if (evento !== "SIGNED_IN" && evento !== "SIGNED_OUT") return;
-      setCargando(true);
+    // `cargando` sólo vuelve a `true` en el `useState(true)` inicial de
+    // arriba -- nunca se vuelve a tocar acá a propósito. Supabase dispara
+    // `onAuthStateChange` (con `SIGNED_IN`, `TOKEN_REFRESHED` o incluso de
+    // nuevo `SIGNED_IN` según la versión) cada vez que la pestaña recupera
+    // el foco, no sólo en un login real. Poner `cargando` en `true` en cada
+    // uno de esos hacía que `Contenido` devolviera `null` un instante,
+    // desmontando TODA la Shell -- se sentía como que la página se
+    // reiniciaba (perdiendo la sección en la que se estaba) sólo por
+    // cambiar de pestaña y volver. Acá `autorizar` sigue re-chequeando
+    // `administradores_panel` igual (por si el acceso cambió mientras
+    // tanto), pero actualiza `sesion` en silencio sin desmontar nada --
+    // React no resetea el estado de un componente que sigue montado en el
+    // mismo lugar del árbol sólo porque sus props cambiaron.
+    const { data: suscripcion } = supabase.auth.onAuthStateChange((_evento, session) => {
       autorizar(session?.user ?? null);
     });
 
