@@ -50,7 +50,11 @@ export default function Usuarios({ actorRol }: { actorRol: RolUsuario }) {
     [texto],
   );
 
-  useCargaAlCambiar(recargar);
+  // `true`: `recibir_catalogo_del_sitio` también trae usuarios/operadores
+  // globales -- mismo motivo que Contratistas/Empresas/Gafetes, sin esto
+  // un cambio de rol/estado hecho desde otro dispositivo no se veía acá
+  // hasta recargar a mano.
+  useCargaAlCambiar(recargar, true);
 
   async function manejarEdicion(fila: UsuarioResumen) {
     try {
