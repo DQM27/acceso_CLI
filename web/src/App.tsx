@@ -5,6 +5,7 @@ import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
 import Login from "./pantallas/Login";
+import Historial from "./pantallas/Historial";
 import Administradores from "./pantallas/Administradores";
 import { borrarAccionPendiente, leerAccionPendienteVigente } from "./componentes/accionesPendientes";
 import { agregarAdministrador, eliminarAdministrador } from "./api/administradores";
@@ -21,7 +22,16 @@ const SECCIONES: {
   rolesPermitidos?: RolAdminPanel[];
 }[] = [
   { id: "dispositivos", etiqueta: "Dispositivos", Icono: IdCard },
-  { id: "historial", etiqueta: "Historial", Icono: History },
+  {
+    id: "historial",
+    etiqueta: "Historial",
+    Icono: History,
+    // RLS de `ingresos`/`sitios` sólo deja leer a admin_global por ahora
+    // (ver migración agrega_columnas_historial_a_ingresos) -- admin_regional
+    // queda afuera hasta que administradores_panel sepa qué sitios
+    // administra cada quien.
+    rolesPermitidos: ["admin_global"],
+  },
   { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
   { id: "operadores", etiqueta: "Operadores", Icono: UserCog },
   {
@@ -193,6 +203,8 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
           <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
             {seccion === "administradores" ? (
               <Administradores sesion={sesion} />
+            ) : seccion === "historial" ? (
+              <Historial />
             ) : (
               <div className="pantalla-cuerpo">
                 <div className="tarjeta" style={{ padding: "1.5rem" }}>

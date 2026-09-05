@@ -387,25 +387,54 @@ fn enviar_gafete(
 
 /// Ingresos (cola), apertura: mismo criterio de `upsert` que contratistas
 /// -- reintentar un envío ya recibido no duplica nada.
+#[allow(clippy::type_complexity)]
 fn enviar_ingreso(
     cliente: &reqwest::blocking::Client,
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
     uuid: &str,
 ) -> Result<(), SincronizacionError> {
-    let (contratista_id_local, contratista_nombre, fecha_hora_ingreso, usuario_ingreso_nombre): (
+    let (
+        contratista_id_local,
+        contratista_nombre,
+        fecha_hora_ingreso,
+        usuario_ingreso_nombre,
+        contratista_cedula,
+        empresa_nombre,
+        tipo_ingreso,
+        medio_ingreso,
+        gafete_numero,
+    ): (
         i64,
         String,
         String,
         String,
+        String,
+        String,
+        String,
+        String,
+        Option<i64>,
     ) = connection.query_row(
         "
-        SELECT contratista_id, contratista_nombre, fecha_hora_ingreso, usuario_ingreso_nombre
+        SELECT contratista_id, contratista_nombre, fecha_hora_ingreso, usuario_ingreso_nombre,
+               contratista_cedula, empresa_nombre, tipo_ingreso, medio_ingreso, gafete_numero
         FROM registro_ingresos
         WHERE uuid = ?1
         ",
         params![uuid],
-        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+                row.get(7)?,
+                row.get(8)?,
+            ))
+        },
     )?;
     let contratista_uuid: String = connection.query_row(
         "SELECT uuid FROM contratistas WHERE id = ?1",
@@ -421,6 +450,11 @@ fn enviar_ingreso(
         "contratista_nombre": contratista_nombre,
         "hora_entrada": fecha_hora_ingreso,
         "usuario_entrada_nombre": usuario_ingreso_nombre,
+        "contratista_cedula": contratista_cedula,
+        "empresa_nombre": empresa_nombre,
+        "tipo_ingreso": tipo_ingreso,
+        "medio_ingreso": medio_ingreso,
+        "gafete_numero": gafete_numero,
     });
 
     let respuesta = cliente
