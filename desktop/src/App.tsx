@@ -41,6 +41,7 @@ import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
 import BarraNube from "./componentes/BarraNube";
+import type { EstadoConexionNube } from "./componentes/BarraNube";
 import ErrorBoundary from "./componentes/ErrorBoundary";
 import Login from "./pantallas/Login";
 import {
@@ -241,7 +242,8 @@ function Shell({
   // grilla aunque haya salido desde otra pantalla.
   const [refrescarActivos, setRefrescarActivos] = useState(0);
   const [sincronizandoManual, setSincronizandoManual] = useState(false);
-  const [estadoNube, setEstadoNube] = useState("CONNECTING");
+  // `null` hasta que `iniciarRealtimeNube` intenta conectar la primera vez.
+  const [estadoConexionNube, setEstadoConexionNube] = useState<EstadoConexionNube>(null);
 
   // Ctrl+Shift+N/S (no Ctrl+N/S solos — esas convenciones quedan libres
   // para un "nuevo"/"salida" más genéricos más adelante) desde cualquier
@@ -282,7 +284,7 @@ function Shell({
       onSincronizado: (resumen) => {
         if (!manejarResumenSincronizacion(resumen)) setRefrescarActivos((n) => n + 1);
       },
-      onEstado: setEstadoNube,
+      onEstado: setEstadoConexionNube,
     });
     const cancelarSincronizacionAutomatica = listen<ResumenSincronizacion>(
       "nube://sincronizado",
@@ -415,9 +417,9 @@ function Shell({
             <span>{mensajeEstado}</span>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
               <BarraNube
-                estado={estadoNube}
                 sincronizando={sincronizandoManual}
                 onSincronizar={sincronizarManualmente}
+                estadoConexion={estadoConexionNube}
               />
               <MenuUsuario sesion={sesion} onCerrarSesion={onCerrarSesion} />
             </div>
