@@ -22,10 +22,10 @@ export type Seccion = "dispositivos" | "historial" | "contratistas" | "operadore
 // real, ver migración `elimina_admin_regional`). Cualquier fila en
 // `administradores_panel` ve y puede tocar todo.
 const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
-  { id: "dispositivos", etiqueta: "Dispositivos", Icono: IdCard },
   { id: "historial", etiqueta: "Historial", Icono: History },
   { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
   { id: "operadores", etiqueta: "Operadores", Icono: UserCog },
+  { id: "dispositivos", etiqueta: "Dispositivos", Icono: IdCard },
   { id: "administradores", etiqueta: "Administradores", Icono: ShieldCheck },
 ];
 
@@ -67,8 +67,9 @@ function Contenido() {
   // `accionesPendientes.ts` y `Administradores.tsx`) apenas la sesión está
   // lista -- pasa acá y no en `Administradores.tsx` porque esa pantalla ni
   // siquiera está montada al volver del link (la Shell arranca siempre en
-  // "dispositivos"). `intentado` evita reintentar en cada re-render de este
-  // componente una vez que ya se resolvió (o no había nada que resolver).
+  // "historial", nunca en "administradores"). `intentado` evita reintentar
+  // en cada re-render de este componente una vez que ya se resolvió (o no
+  // había nada que resolver).
   const intentado = useRef(false);
   useEffect(() => {
     if (!sesion || intentado.current) return;
@@ -157,7 +158,7 @@ function PantallaAccionPendiente({ estado }: { estado: EstadoAccionPendiente }) 
 
 function Shell({ sesion }: { sesion: UsuarioSesion }) {
   const { cerrarSesion } = useAuth();
-  const [seccion, setSeccion] = useState<Seccion>("dispositivos");
+  const [seccion, setSeccion] = useState<Seccion>("historial");
   const [colapsado, setColapsado] = useState(leerSidebarColapsado);
   // Independiente de `colapsado` (que es el modo ícono-solo de escritorio,
   // por doble click): en mobile el sidebar es un cajón que está oculto o

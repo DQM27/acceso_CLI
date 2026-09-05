@@ -3,15 +3,8 @@ import { toast } from "sonner";
 import { listen } from "@tauri-apps/api/event";
 import { EVENTO_NUBE_ACTUALIZADA } from "../nubeRealtime";
 import type { NubeActualizadaDetalle } from "../nubeRealtime";
-import {
-  cerrarIngresoRemoto,
-  fallosPermanentesNube,
-  guardarSecretoDispositivo,
-  listarIngresosRemotos,
-  secretoDispositivoGuardado,
-} from "../api";
-import type { IngresoRemoto, ResumenSincronizacion } from "../api";
-import { textoHora } from "../tiempo";
+import { fallosPermanentesNube, guardarSecretoDispositivo, secretoDispositivoGuardado } from "../api";
+import type { ResumenSincronizacion } from "../api";
 
 /**
  * Pantalla exclusiva de Root (`Operacion::GestionarNube`, ver `App.tsx`) --
@@ -24,19 +17,11 @@ export default function Nube() {
   const [secreto, setSecreto] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [ultimoResumen, setUltimoResumen] = useState<ResumenSincronizacion | null>(null);
-  const [remotos, setRemotos] = useState<IngresoRemoto[]>([]);
-  const [cerrandoUuid, setCerrandoUuid] = useState<string | null>(null);
   const [fallosPermanentes, setFallosPermanentes] = useState(0);
 
   function cargarEstado() {
     secretoDispositivoGuardado()
       .then(setConfigurado)
-      .catch((error) => toast.error(String(error)));
-  }
-
-  function cargarRemotos() {
-    listarIngresosRemotos()
-      .then(setRemotos)
       .catch((error) => toast.error(String(error)));
   }
 
@@ -47,17 +32,18 @@ export default function Nube() {
   }
 
   useEffect(cargarEstado, []);
-  useEffect(cargarRemotos, []);
   useEffect(cargarFallosPermanentes, []);
 
   // El disparador automático (`crate::iniciar_sincronizacion_automatica`,
   // cada 2 minutos mientras la app está abierta) corre en segundo plano sin
   // que nadie apriete el botón -- este listener es sólo para que, si esta
   // pantalla está abierta cuando eso pasa, se vea el resultado sin recargar.
+  // Los ingresos abiertos del otro dispositivo se muestran/cierran desde
+  // Ingreso Activo (`Activos.tsx`, `FilaRemota`), no acá -- una sola fuente
+  // de verdad para esa lista en vez de dos pantallas leyéndola por separado.
   useEffect(() => {
     const cancelar = listen<ResumenSincronizacion>("nube://sincronizado", (evento) => {
       setUltimoResumen(evento.payload);
-      cargarRemotos();
       cargarFallosPermanentes();
     });
     return () => {
@@ -69,7 +55,6 @@ export default function Nube() {
     function alActualizar(evento: Event) {
       const detalle = (evento as CustomEvent<NubeActualizadaDetalle>).detail;
       setUltimoResumen(detalle.resumen);
-      cargarRemotos();
       cargarFallosPermanentes();
     }
 
@@ -90,19 +75,6 @@ export default function Nube() {
       toast.error(String(error));
     } finally {
       setGuardando(false);
-    }
-  }
-
-  async function cerrar(uuid: string) {
-    setCerrandoUuid(uuid);
-    try {
-      await cerrarIngresoRemoto(uuid);
-      toast.success("Ingreso cerrado.");
-      setRemotos((actuales) => actuales.filter((remoto) => remoto.uuid !== uuid));
-    } catch (error) {
-      toast.error(String(error));
-    } finally {
-      setCerrandoUuid(null);
     }
   }
 
@@ -170,49 +142,6 @@ export default function Nube() {
               {fallosPermanentes} {fallosPermanentes === 1 ? "elemento" : "elementos"} dejaron de
               reintentarse solos tras agotar los intentos automáticos — necesita revisión manual.
             </p>
-          )}
-        </section>
-
-        <section style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-          <h3 style={{ margin: 0 }}>Abiertos en el otro dispositivo del sitio</h3>
-          <p style={{ color: "var(--muted)", marginTop: 0, fontSize: "0.85rem" }}>
-            Se actualiza con la sincronización y con avisos en vivo.
-          </p>
-
-          {remotos.length === 0 && (
-            <p style={{ color: "var(--muted)" }}>Nada abierto del otro lado por ahora.</p>
-          )}
-
-          {remotos.length > 0 && (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: "left", padding: "0.3rem 0.5rem" }}>Contratista</th>
-                  <th style={{ textAlign: "left", padding: "0.3rem 0.5rem" }}>Entrada</th>
-                  <th style={{ textAlign: "left", padding: "0.3rem 0.5rem" }}>Registrado por</th>
-                  <th style={{ padding: "0.3rem 0.5rem" }} />
-                </tr>
-              </thead>
-              <tbody>
-                {remotos.map((remoto) => (
-                  <tr key={remoto.uuid}>
-                    <td style={{ padding: "0.3rem 0.5rem" }}>{remoto.contratista_nombre}</td>
-                    <td style={{ padding: "0.3rem 0.5rem" }}>{textoHora(remoto.hora_entrada)}</td>
-                    <td style={{ padding: "0.3rem 0.5rem" }}>{remoto.usuario_entrada_nombre ?? "—"}</td>
-                    <td style={{ padding: "0.3rem 0.5rem" }}>
-                      <button
-                        type="button"
-                        className="boton"
-                        onClick={() => cerrar(remoto.uuid)}
-                        disabled={cerrandoUuid === remoto.uuid}
-                      >
-                        {cerrandoUuid === remoto.uuid ? "Cerrando…" : "Registrar salida"}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           )}
         </section>
       </div>
