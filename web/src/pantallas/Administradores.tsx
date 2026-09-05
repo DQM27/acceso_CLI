@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
+import { useVerificacionPorCorreo } from "../componentes/useVerificacionPorCorreo";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import {
   agregarAdministrador,
@@ -31,7 +32,13 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [correoNuevo, setCorreoNuevo] = useState("");
   const [rolNuevo, setRolNuevo] = useState<RolAdminPanel>("admin_regional");
-  const [guardando, setGuardando] = useState(false);
+  const [codigo, setCodigo] = useState("");
+
+  // Acción sensible: agregar un admin nuevo exige confirmar con un código
+  // que llega AL CORREO DE QUIEN LO AGREGA (no al del admin nuevo) — es un
+  // "sos realmente vos frente a la pantalla ahora mismo", no una
+  // verificación del correo ajeno. Ver useVerificacionPorCorreo.
+  const verificacion = useVerificacionPorCorreo(sesion.correo);
 
   const recargar = useCallback(() => {
     setCargando(true);
@@ -45,20 +52,32 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
     recargar();
   }, [recargar]);
 
-  async function alAgregar(evento: React.FormEvent) {
+  function cerrarModal() {
+    setModalAbierto(false);
+    setCorreoNuevo("");
+    setRolNuevo("admin_regional");
+    setCodigo("");
+    verificacion.reiniciar();
+  }
+
+  async function alEnviarFormulario(evento: React.FormEvent) {
     evento.preventDefault();
-    setGuardando(true);
+
+    if (verificacion.paso === "inicial") {
+      await verificacion.pedirCodigo();
+      return;
+    }
+
+    const codigoValido = await verificacion.verificarCodigo(codigo);
+    if (!codigoValido) return;
+
     try {
       await agregarAdministrador(correoNuevo, rolNuevo);
       toast.success(`${correoNuevo} ya puede entrar al panel.`);
-      setModalAbierto(false);
-      setCorreoNuevo("");
-      setRolNuevo("admin_regional");
+      cerrarModal();
       recargar();
     } catch (error) {
       toast.error(String(error));
-    } finally {
-      setGuardando(false);
     }
   }
 
@@ -125,8 +144,11 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
       </div>
 
       {modalAbierto && (
-        <Modal titulo="Nuevo administrador" onCerrar={() => setModalAbierto(false)}>
-          <form onSubmit={alAgregar} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <Modal titulo="Nuevo administrador" onCerrar={cerrarModal}>
+          <form
+            onSubmit={alEnviarFormulario}
+            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+          >
             <label className="campo">
               Correo de Google
               <input
@@ -134,7 +156,7 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
                 required
                 autoFocus
                 value={correoNuevo}
-                disabled={guardando}
+                disabled={verificacion.paso !== "inicial" || verificacion.enviando}
                 placeholder="nombre@gmail.com"
                 onChange={(evento) => setCorreoNuevo(evento.target.value)}
               />
@@ -144,7 +166,7 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
               Rol
               <select
                 value={rolNuevo}
-                disabled={guardando}
+                disabled={verificacion.paso !== "inicial" || verificacion.enviando}
                 onChange={(evento) => setRolNuevo(evento.target.value as RolAdminPanel)}
               >
                 <option value="admin_regional">Administrador regional</option>
@@ -152,17 +174,48 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
               </select>
             </label>
 
+            {verificacion.paso === "codigo_enviado" && (
+              <label className="campo">
+                Código de confirmación
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  required
+                  autoFocus
+                  maxLength={6}
+                  value={codigo}
+                  disabled={verificacion.enviando}
+                  placeholder="000000"
+                  onChange={(evento) => setCodigo(evento.target.value)}
+                />
+                <span style={{ color: "var(--muted)", fontSize: "0.78rem" }}>
+                  Te mandamos un código a <strong>{sesion.correo}</strong> para confirmar que sos
+                  vos — no le llega nada al correo nuevo todavía.
+                </span>
+              </label>
+            )}
+
+            {verificacion.error && (
+              <p className="login-error" role="alert">
+                {verificacion.error}
+              </p>
+            )}
+
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
               <button
                 type="button"
                 className="boton"
-                disabled={guardando}
-                onClick={() => setModalAbierto(false)}
+                disabled={verificacion.enviando}
+                onClick={cerrarModal}
               >
                 Cancelar
               </button>
-              <button type="submit" className="boton boton-primario" disabled={guardando}>
-                {guardando ? "Agregando…" : "Agregar"}
+              <button type="submit" className="boton boton-primario" disabled={verificacion.enviando}>
+                {verificacion.enviando
+                  ? "Un momento…"
+                  : verificacion.paso === "inicial"
+                    ? "Enviar código"
+                    : "Confirmar y agregar"}
               </button>
             </div>
           </form>
