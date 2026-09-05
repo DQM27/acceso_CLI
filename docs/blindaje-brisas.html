@@ -1,0 +1,664 @@
+<title>Blindaje Brisas</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --paper: #eef3f1;
+    --panel: #dfe7e4;
+    --panel-2: #d2ddd8;
+    --line: #b9c8c2;
+    --ink: #0f211e;
+    --muted: #4d615c;
+    --accent: #b97a1f;
+    --accent-soft: #f0dcb9;
+    --ok: #256f5d;
+    --ok-soft: #d6ece5;
+    --danger: #a3402f;
+    --danger-soft: #f3ddd6;
+    --radius: 10px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #0c1815;
+      --panel: #132522;
+      --panel-2: #17302b;
+      --line: #2a453e;
+      --ink: #e7efec;
+      --muted: #93aba3;
+      --accent: #d99a3d;
+      --accent-soft: #3a2a10;
+      --ok: #4bab90;
+      --ok-soft: #123a30;
+      --danger: #d17e69;
+      --danger-soft: #3c2019;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #0c1815;
+    --panel: #132522;
+    --panel-2: #17302b;
+    --line: #2a453e;
+    --ink: #e7efec;
+    --muted: #93aba3;
+    --accent: #d99a3d;
+    --accent-soft: #3a2a10;
+    --ok: #4bab90;
+    --ok-soft: #123a30;
+    --danger: #d17e69;
+    --danger-soft: #3c2019;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  .mono {
+    font-family: "IBM Plex Mono", ui-monospace, "Cascadia Code", monospace;
+  }
+
+  .shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 40px 28px 90px;
+  }
+
+  header.masthead {
+    max-width: 760px;
+    margin: 0 auto 56px;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12.5px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  h1.title {
+    font-family: "Big Shoulders", "IBM Plex Sans", sans-serif;
+    font-weight: 800;
+    font-size: clamp(2.6rem, 5vw, 3.6rem);
+    line-height: 0.98;
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+    margin: 6px 0 18px;
+    text-wrap: balance;
+  }
+
+  .lede {
+    font-size: 1.08rem;
+    color: var(--muted);
+    max-width: 62ch;
+  }
+
+  .lede strong { color: var(--ink); font-weight: 600; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 720px);
+    gap: 56px;
+    justify-content: center;
+    align-items: start;
+  }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.rail { position: static; margin-bottom: 32px; }
+  }
+
+  nav.rail {
+    position: sticky;
+    top: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  nav.rail .rail-label {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  nav.rail a {
+    display: block;
+    padding: 9px 10px;
+    border-radius: 6px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 13.5px;
+    line-height: 1.35;
+    border-left: 2px solid transparent;
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  }
+
+  nav.rail a:hover {
+    background: var(--panel);
+    color: var(--ink);
+  }
+
+  nav.rail a .num {
+    font-family: "IBM Plex Mono", monospace;
+    color: var(--accent);
+    margin-right: 6px;
+  }
+
+  main { display: flex; flex-direction: column; gap: 84px; }
+
+  section.mech { scroll-margin-top: 28px; }
+
+  section.mech .eyebrow { display: block; margin-bottom: 8px; }
+
+  h2.mech-title {
+    font-family: "Big Shoulders", sans-serif;
+    font-weight: 700;
+    font-size: 1.9rem;
+    text-transform: uppercase;
+    letter-spacing: -0.005em;
+    margin: 0 0 14px;
+    text-wrap: balance;
+  }
+
+  .mech-thesis {
+    max-width: 62ch;
+    color: var(--ink);
+    margin: 0 0 26px;
+  }
+
+  .mech-thesis .muted { color: var(--muted); }
+
+  figure.diagram {
+    margin: 0 0 18px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 22px 18px 16px;
+    overflow-x: auto;
+  }
+
+  figure.diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+
+  figcaption {
+    font-size: 13px;
+    color: var(--muted);
+    padding: 12px 4px 0;
+    border-top: 1px solid var(--line);
+    margin-top: 14px;
+  }
+
+  .note {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 14.5px;
+    color: var(--muted);
+  }
+
+  .note strong { color: var(--ink); }
+
+  .note.limit { border-left: 3px solid var(--danger); }
+  .note.finding { border-left: 3px solid var(--accent); }
+
+  svg text {
+    font-family: "IBM Plex Sans", sans-serif;
+    fill: currentColor;
+  }
+  svg .mono-label { font-family: "IBM Plex Mono", monospace; }
+
+  .box { fill: var(--paper); stroke: currentColor; stroke-width: 1.4; }
+  .box-ok { fill: var(--ok-soft); stroke: var(--ok); }
+  .box-danger { fill: var(--danger-soft); stroke: var(--danger); }
+  .box-accent { fill: var(--accent-soft); stroke: var(--accent); }
+  .box-muted { fill: var(--panel-2); stroke: var(--line); }
+
+  .arrow { stroke: currentColor; stroke-width: 1.5; fill: none; }
+  .arrow-dashed { stroke-dasharray: 4 4; opacity: 0.85; }
+  .arrow-ok { stroke: var(--ok); }
+  .arrow-danger { stroke: var(--danger); }
+  .arrow-accent { stroke: var(--accent); }
+
+  .lbl { font-size: 11.5px; fill: var(--muted); }
+  .lbl-strong { font-size: 12.5px; font-weight: 600; }
+
+  footer.colophon {
+    max-width: 720px;
+    margin: 70px auto 0;
+    padding-top: 22px;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  footer.colophon code {
+    font-family: "IBM Plex Mono", monospace;
+    background: var(--panel);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+</style>
+
+<div class="shell">
+  <header class="masthead">
+    <span class="eyebrow">Panel administrativo · sincronización multi-sitio</span>
+    <h1 class="title">Blindaje Brisas</h1>
+    <p class="lede">
+      Cinco mecanismos de seguridad definidos para el sistema de control de acceso —
+      <strong>cómo se activa un dispositivo nuevo, cómo viaja (o no) una contraseña,
+      qué datos son globales entre unidades operativas, qué pasa si un contratista
+      aparece en dos sitios a la vez, y cómo queda protegido el secreto de cada
+      dispositivo en reposo.</strong>
+    </p>
+  </header>
+
+  <div class="layout">
+    <nav class="rail" aria-label="Mecanismos">
+      <span class="rail-label">En esta página</span>
+      <a href="#activacion"><span class="num">1</span>Activar un dispositivo</a>
+      <a href="#password"><span class="num">2</span>La contraseña no viaja</a>
+      <a href="#global"><span class="num">3</span>Global vs. por sitio</a>
+      <a href="#doble-ingreso"><span class="num">4</span>Doble ingreso</a>
+      <a href="#secreto"><span class="num">5</span>Secreto en reposo</a>
+    </nav>
+
+    <main>
+      <!-- ================= 1. ACTIVACIÓN DE UN DISPOSITIVO ================= -->
+      <section class="mech" id="activacion">
+        <span class="eyebrow">Mecanismo 1</span>
+        <h2 class="mech-title">Activar un dispositivo nuevo</h2>
+        <p class="mech-thesis">
+          El secreto que identifica a un dispositivo <span class="muted">no alcanza por sí
+          solo</span> para dejarlo operando. Hace falta un segundo gesto humano — un código
+          que sólo le llega al administrador — antes de que el receptor confíe en él.
+        </p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 620 600" role="img"
+               aria-label="El secreto se pega en la app; el receptor manda un código al correo del admin, no al dispositivo; sólo al escribirlo de vuelta en la app queda activado.">
+            <defs>
+              <marker id="arrow1" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="currentColor"/>
+              </marker>
+              <marker id="arrow1a" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="var(--accent)"/>
+              </marker>
+            </defs>
+
+            <!-- lane labels -->
+            <text x="140" y="26" text-anchor="middle" class="lbl mono-label">DISPOSITIVO</text>
+            <text x="470" y="26" text-anchor="middle" class="lbl mono-label" style="fill:var(--accent)">CORREO DEL ADMIN</text>
+
+            <!-- box 1 -->
+            <rect x="30" y="44" width="220" height="58" rx="8" class="box"/>
+            <text x="140" y="68" text-anchor="middle" class="lbl-strong">Se genera el secreto</text>
+            <text x="140" y="86" text-anchor="middle" class="lbl">del dispositivo (panel web)</text>
+
+            <line x1="140" y1="102" x2="140" y2="150" class="arrow" marker-end="url(#arrow1)"/>
+
+            <!-- box 2 -->
+            <rect x="30" y="152" width="220" height="58" rx="8" class="box"/>
+            <text x="140" y="176" text-anchor="middle" class="lbl-strong">Se pega en la app</text>
+            <text x="140" y="194" text-anchor="middle" class="lbl">del dispositivo nuevo</text>
+
+            <line x1="140" y1="210" x2="140" y2="258" class="arrow" marker-end="url(#arrow1)"/>
+
+            <!-- box 3 -->
+            <rect x="30" y="260" width="220" height="58" rx="8" class="box"/>
+            <text x="140" y="284" text-anchor="middle" class="lbl-strong">La app usa el secreto</text>
+            <text x="140" y="302" text-anchor="middle" class="lbl">para conectarse al receptor</text>
+
+            <!-- diagonal to correo -->
+            <path d="M250,296 C 340,296 360,340 380,364" class="arrow arrow-accent" marker-end="url(#arrow1a)"/>
+            <text x="330" y="336" class="lbl" style="fill:var(--accent)">secreto válido → dispara verificación</text>
+
+            <!-- box 4: correo, accent -->
+            <rect x="360" y="366" width="220" height="58" rx="8" class="box box-accent"/>
+            <text x="470" y="390" text-anchor="middle" class="lbl-strong">Código de verificación</text>
+            <text x="470" y="408" text-anchor="middle" class="lbl">enviado al correo del admin</text>
+
+            <!-- diagonal back -->
+            <path d="M380,424 C 340,458 250,470 250,494" class="arrow arrow-accent" marker-end="url(#arrow1a)"/>
+            <text x="230" y="466" text-anchor="end" class="lbl" style="fill:var(--accent)">admin escribe el código</text>
+
+            <!-- box 5 -->
+            <rect x="30" y="496" width="220" height="58" rx="8" class="box box-ok"/>
+            <text x="140" y="520" text-anchor="middle" class="lbl-strong">Dispositivo activado</text>
+            <text x="140" y="538" text-anchor="middle" class="lbl">listo para sincronizar</text>
+
+            <!-- side note -->
+            <text x="470" y="452" text-anchor="middle" class="lbl" style="fill:var(--muted)">canal separado —</text>
+            <text x="470" y="466" text-anchor="middle" class="lbl" style="fill:var(--muted)">sólo el admin lo recibe</text>
+          </svg>
+          <figcaption>
+            Un secreto filtrado (screenshot, archivo compartido) es inútil sin este código:
+            el receptor lo manda a un canal que el dispositivo comprometido no controla.
+          </figcaption>
+        </figure>
+
+        <div class="note finding">
+          <span>→</span>
+          <span><strong>Step-up authentication:</strong> la verificación pasa una sola vez,
+          al activar — no en cada sincronización normal, para no interrumpir el uso diario.</span>
+        </div>
+      </section>
+
+      <!-- ================= 2. LA CONTRASEÑA NO VIAJA ================= -->
+      <section class="mech" id="password">
+        <span class="eyebrow">Mecanismo 2</span>
+        <h2 class="mech-title">La contraseña no viaja a la nube</h2>
+        <p class="mech-thesis">
+          Un operador puede trabajar en cualquier unidad operativa sin recrear su cuenta —
+          pero <span class="muted">su contraseña nunca sale del dispositivo donde se fijó</span>.
+          La nube sólo distribuye quién existe y su rol.
+        </p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 680 320" role="img"
+               aria-label="Comparación: si el hash de contraseña viaja a la nube, un breach expone todos los sitios; si sólo viaja quién existe, un breach no expone ninguna contraseña.">
+            <defs>
+              <marker id="arrow2d" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="var(--danger)"/>
+              </marker>
+              <marker id="arrow2o" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="var(--ok)"/>
+              </marker>
+            </defs>
+
+            <!-- column headers -->
+            <text x="160" y="22" text-anchor="middle" class="lbl mono-label" style="fill:var(--danger)">DESCARTADO</text>
+            <text x="520" y="22" text-anchor="middle" class="lbl mono-label" style="fill:var(--ok)">ELEGIDO</text>
+
+            <!-- left: cloud w/ hash -->
+            <rect x="50" y="36" width="220" height="52" rx="8" class="box box-danger"/>
+            <text x="160" y="58" text-anchor="middle" class="lbl-strong">Nube: hash de cada</text>
+            <text x="160" y="75" text-anchor="middle" class="lbl-strong">contraseña</text>
+
+            <!-- right: cloud w/o hash -->
+            <rect x="410" y="36" width="220" height="52" rx="8" class="box box-ok"/>
+            <text x="520" y="58" text-anchor="middle" class="lbl-strong">Nube: sólo quién existe</text>
+            <text x="520" y="75" text-anchor="middle" class="lbl-strong">y su rol</text>
+
+            <!-- breach zigzag left -->
+            <path d="M160,88 L150,112 L172,118 L152,146" class="arrow arrow-danger" marker-end="url(#arrow2d)"/>
+            <text x="188" y="118" class="lbl" style="fill:var(--danger)">breach</text>
+
+            <!-- breach zigzag right -->
+            <path d="M520,88 L510,112 L532,118 L512,146" class="arrow arrow-ok" marker-end="url(#arrow2o)"/>
+            <text x="548" y="118" class="lbl" style="fill:var(--ok)">breach</text>
+
+            <!-- fan arrows left to 3 sites -->
+            <path d="M152,150 C 90,175 60,185 60,206" class="arrow arrow-danger" marker-end="url(#arrow2d)"/>
+            <path d="M155,150 C 155,178 155,188 155,206" class="arrow arrow-danger" marker-end="url(#arrow2d)"/>
+            <path d="M158,150 C 220,175 250,185 250,206" class="arrow arrow-danger" marker-end="url(#arrow2d)"/>
+
+            <!-- fan arrows right to 3 sites (muted, unaffected) -->
+            <path d="M512,150 C 450,175 420,185 420,206" class="arrow" style="opacity:.5" marker-end="url(#arrow2o)"/>
+            <path d="M515,150 C 515,178 515,188 515,206" class="arrow" style="opacity:.5" marker-end="url(#arrow2o)"/>
+            <path d="M518,150 C 580,175 610,185 610,206" class="arrow" style="opacity:.5" marker-end="url(#arrow2o)"/>
+
+            <!-- left 3 site boxes: compromised -->
+            <rect x="20" y="208" width="80" height="40" rx="6" class="box box-danger"/>
+            <text x="60" y="232" text-anchor="middle" class="lbl-strong">Brisas ⚠</text>
+            <rect x="115" y="208" width="80" height="40" rx="6" class="box box-danger"/>
+            <text x="155" y="232" text-anchor="middle" class="lbl-strong">Cartago ⚠</text>
+            <rect x="210" y="208" width="80" height="40" rx="6" class="box box-danger"/>
+            <text x="250" y="232" text-anchor="middle" class="lbl-strong">Belén ⚠</text>
+            <text x="160" y="270" text-anchor="middle" class="lbl" style="fill:var(--danger)">un breach expone todos los sitios</text>
+
+            <!-- right 3 site boxes: unaffected, each w/ own local password -->
+            <rect x="380" y="208" width="80" height="40" rx="6" class="box box-ok"/>
+            <text x="420" y="232" text-anchor="middle" class="lbl-strong">Brisas ✓</text>
+            <rect x="475" y="208" width="80" height="40" rx="6" class="box box-ok"/>
+            <text x="515" y="232" text-anchor="middle" class="lbl-strong">Cartago ✓</text>
+            <rect x="570" y="208" width="80" height="40" rx="6" class="box box-ok"/>
+            <text x="610" y="232" text-anchor="middle" class="lbl-strong">Belén ✓</text>
+            <text x="520" y="270" text-anchor="middle" class="lbl" style="fill:var(--ok)">cada sitio con su propio hash local</text>
+          </svg>
+          <figcaption>
+            La primera vez que un operador entra a un sitio nuevo, ese dispositivo pide una
+            confirmación única (código por correo) y genera su propio hash — Argon2, igual
+            que hoy en <code class="mono">src/services/password.rs</code>.
+          </figcaption>
+        </figure>
+
+        <div class="note limit">
+          <span>—</span>
+          <span><strong>Costo aceptado:</strong> un poco más de fricción la primera vez que un
+          operador trabaja en un sitio nuevo, a cambio de que ningún breach central exponga
+          credenciales de toda la empresa.</span>
+        </div>
+      </section>
+
+      <!-- ================= 3. GLOBAL VS POR SITIO ================= -->
+      <section class="mech" id="global">
+        <span class="eyebrow">Mecanismo 3</span>
+        <h2 class="mech-title">Qué es global, qué es por sitio</h2>
+        <p class="mech-thesis">
+          Contratistas, empresas y usuarios son <span class="muted">la misma identidad en
+          todos lados</span> — negarle el acceso a alguien en una unidad lo niega en todas.
+          El historial de ingresos, en cambio, se queda donde pasó.
+        </p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 680 400" role="img"
+               aria-label="La nube distribuye el catálogo completo de contratistas, empresas y usuarios a los tres sitios; el historial de ingresos queda local a cada sitio, con sólo un caché liviano de ingresos abiertos subiendo a la nube.">
+            <defs>
+              <marker id="arrow3" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="var(--ok)"/>
+              </marker>
+              <marker id="arrow3m" markerWidth="8" markerHeight="8" refX="6" refY="3.5" orient="auto">
+                <path d="M0,0 L7,3.5 L0,7 Z" fill="var(--muted)"/>
+              </marker>
+            </defs>
+
+            <rect x="230" y="20" width="220" height="60" rx="8" class="box box-ok"/>
+            <text x="340" y="45" text-anchor="middle" class="lbl-strong">Nube — fuente de verdad</text>
+            <text x="340" y="63" text-anchor="middle" class="lbl">contratistas · empresas · usuarios</text>
+
+            <!-- bidirectional bold arrows to 3 sites -->
+            <path d="M280,80 C 200,120 120,140 120,178" class="arrow arrow-ok" marker-end="url(#arrow3)" stroke-width="2"/>
+            <path d="M340,80 L340,178" class="arrow arrow-ok" marker-end="url(#arrow3)" stroke-width="2"/>
+            <path d="M400,80 C 480,120 560,140 560,178" class="arrow arrow-ok" marker-end="url(#arrow3)" stroke-width="2"/>
+            <text x="340" y="118" text-anchor="middle" class="lbl" style="fill:var(--ok)">mismo catálogo, siempre completo</text>
+
+            <!-- 3 sites -->
+            <rect x="40" y="180" width="160" height="50" rx="8" class="box"/>
+            <text x="120" y="210" text-anchor="middle" class="lbl-strong">Brisas</text>
+            <rect x="260" y="180" width="160" height="50" rx="8" class="box"/>
+            <text x="340" y="210" text-anchor="middle" class="lbl-strong">Cartago</text>
+            <rect x="480" y="180" width="160" height="50" rx="8" class="box"/>
+            <text x="560" y="210" text-anchor="middle" class="lbl-strong">Belén</text>
+
+            <!-- each site's local ingresos, no cross links -->
+            <rect x="55" y="260" width="130" height="46" rx="6" class="box-muted" style="stroke:var(--line)"/>
+            <text x="120" y="288" text-anchor="middle" class="lbl">Ingresos (local)</text>
+            <rect x="275" y="260" width="130" height="46" rx="6" class="box-muted" style="stroke:var(--line)"/>
+            <text x="340" y="288" text-anchor="middle" class="lbl">Ingresos (local)</text>
+            <rect x="495" y="260" width="130" height="46" rx="6" class="box-muted" style="stroke:var(--line)"/>
+            <text x="560" y="288" text-anchor="middle" class="lbl">Ingresos (local)</text>
+
+            <!-- thin dashed arrows up, only "abiertos" -->
+            <path d="M120,260 C 120,240 200,220 200,180" class="arrow arrow-dashed" marker-end="url(#arrow3m)" style="color:var(--muted)"/>
+            <path d="M560,260 C 560,240 480,220 480,180" class="arrow arrow-dashed" marker-end="url(#arrow3m)" style="color:var(--muted)"/>
+            <text x="340" y="345" text-anchor="middle" class="lbl">líneas punteadas: sólo ingresos abiertos suben (caché liviano) — el historial cerrado nunca sale del sitio</text>
+          </svg>
+          <figcaption>
+            Sin cambios sobre el historial: sigue siendo por sitio, por diseño, para no cargar
+            en la nube una tabla que crece sin límite.
+          </figcaption>
+        </figure>
+      </section>
+
+      <!-- ================= 4. DOBLE INGRESO ================= -->
+      <section class="mech" id="doble-ingreso">
+        <span class="eyebrow">Mecanismo 4</span>
+        <h2 class="mech-title">El mismo contratista, dos sitios</h2>
+        <p class="mech-thesis">
+          Volver global al contratista abre un caso nuevo: que intente entrar en un sitio
+          mientras ya tiene un ingreso abierto en otro. <span class="muted">Se bloquea si hay
+          conexión; se alerta si no la hay.</span>
+        </p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 640 500" role="img"
+               aria-label="Si hay conexión, el segundo intento se bloquea en el momento. Si no la hay, se registra igual y se detecta el conflicto al sincronizar, disparando una alerta para verificar por teléfono.">
+            <defs>
+              <marker id="arrow4" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="currentColor"/>
+              </marker>
+              <marker id="arrow4d" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="var(--danger)"/>
+              </marker>
+              <marker id="arrow4a" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="var(--accent)"/>
+              </marker>
+            </defs>
+
+            <rect x="190" y="16" width="260" height="50" rx="8" class="box"/>
+            <text x="320" y="46" text-anchor="middle" class="lbl-strong">Ya tiene ingreso abierto en Sitio A</text>
+
+            <line x1="320" y1="66" x2="320" y2="104" class="arrow" marker-end="url(#arrow4)"/>
+            <rect x="190" y="106" width="260" height="50" rx="8" class="box"/>
+            <text x="320" y="136" text-anchor="middle" class="lbl-strong">Intenta registrar en Sitio B</text>
+
+            <line x1="320" y1="156" x2="320" y2="194" class="arrow" marker-end="url(#arrow4)"/>
+            <!-- decision diamond -->
+            <polygon points="320,196 400,232 320,268 240,232" class="box"/>
+            <text x="320" y="228" text-anchor="middle" class="lbl-strong">¿Sitio B tiene</text>
+            <text x="320" y="244" text-anchor="middle" class="lbl-strong">conexión ahora?</text>
+
+            <!-- left branch: sí -->
+            <path d="M260,250 C 190,280 150,290 150,306" class="arrow" marker-end="url(#arrow4)"/>
+            <text x="150" y="296" text-anchor="middle" class="lbl">sí</text>
+            <rect x="50" y="308" width="200" height="44" rx="7" class="box"/>
+            <text x="150" y="335" text-anchor="middle" class="lbl-strong">Consulta al receptor</text>
+
+            <line x1="150" y1="352" x2="150" y2="382" class="arrow arrow-danger" marker-end="url(#arrow4d)"/>
+            <rect x="50" y="384" width="200" height="50" rx="7" class="box box-danger"/>
+            <text x="150" y="410" text-anchor="middle" class="lbl-strong">Bloqueado en Sitio B</text>
+            <text x="150" y="426" text-anchor="middle" class="lbl">primero en llegar gana</text>
+
+            <!-- right branch: no -->
+            <path d="M380,250 C 450,280 490,290 490,306" class="arrow" marker-end="url(#arrow4)"/>
+            <text x="490" y="296" text-anchor="middle" class="lbl">no</text>
+            <rect x="390" y="308" width="200" height="44" rx="7" class="box">
+            </rect>
+            <text x="490" y="330" text-anchor="middle" class="lbl-strong">Se registra igual,</text>
+            <text x="490" y="346" text-anchor="middle" class="lbl-strong">localmente</text>
+
+            <line x1="490" y1="352" x2="490" y2="382" class="arrow arrow-accent" marker-end="url(#arrow4a)"/>
+            <rect x="390" y="384" width="200" height="50" rx="7" class="box box-accent"/>
+            <text x="490" y="405" text-anchor="middle" class="lbl-strong">Al sincronizar: alerta a</text>
+            <text x="490" y="421" text-anchor="middle" class="lbl-strong">Sitio A, Sitio B y Admin</text>
+
+            <line x1="490" y1="434" x2="490" y2="462" class="arrow arrow-accent" marker-end="url(#arrow4a)"/>
+            <rect x="390" y="464" width="200" height="34" rx="7" class="box box-ok"/>
+            <text x="490" y="486" text-anchor="middle" class="lbl-strong">Se llama y se verifica</text>
+          </svg>
+          <figcaption>
+            No hay forma de garantizar bloqueo el 100% de las veces sin depender de red en el
+            momento del registro — por eso conviven las dos rutas, no se sacrifica el trabajo
+            sin conexión.
+          </figcaption>
+        </figure>
+      </section>
+
+      <!-- ================= 5. SECRETO EN REPOSO ================= -->
+      <section class="mech" id="secreto">
+        <span class="eyebrow">Mecanismo 5</span>
+        <h2 class="mech-title">El secreto del dispositivo, en reposo</h2>
+        <p class="mech-thesis">
+          Hoy vive en texto plano en disco. Dos capas lo protegen —
+          <span class="muted">cada una cubre lo que la otra no</span> — con un límite
+          explícito que no se pretende blindar.
+        </p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 680 460" role="img"
+               aria-label="El secreto se cifra con el ID único de la máquina. Si el archivo se copia a otra máquina, no descifra. Si el secreto se extrae en texto plano de la máquina original, el receptor igual lo rechaza por no coincidir el fingerprint del dispositivo.">
+            <defs>
+              <marker id="arrow5" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="currentColor"/>
+              </marker>
+              <marker id="arrow5d" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="var(--danger)"/>
+              </marker>
+            </defs>
+
+            <rect x="240" y="14" width="200" height="46" rx="7" class="box"/>
+            <text x="340" y="42" text-anchor="middle" class="lbl-strong">Secreto del dispositivo</text>
+
+            <line x1="340" y1="60" x2="340" y2="90" class="arrow" marker-end="url(#arrow5)"/>
+            <rect x="215" y="92" width="250" height="50" rx="7" class="box box-ok"/>
+            <text x="340" y="114" text-anchor="middle" class="lbl-strong">Capa 1 — cifrado con el ID</text>
+            <text x="340" y="130" text-anchor="middle" class="lbl">Machine GUID / ANDROID_ID</text>
+
+            <line x1="340" y1="142" x2="340" y2="172" class="arrow" marker-end="url(#arrow5)"/>
+            <rect x="270" y="174" width="140" height="40" rx="7" class="box-muted" style="stroke:var(--line)"/>
+            <text x="340" y="198" text-anchor="middle" class="lbl">Archivo en disco</text>
+
+            <!-- branch left: file copied -->
+            <path d="M300,214 C 200,240 130,250 130,272" class="arrow" marker-end="url(#arrow5)"/>
+            <rect x="30" y="274" width="200" height="46" rx="7" class="box"/>
+            <text x="130" y="298" text-anchor="middle" class="lbl-strong">Se copia a otra máquina</text>
+
+            <line x1="130" y1="320" x2="130" y2="350" class="arrow arrow-danger" marker-end="url(#arrow5d)"/>
+            <rect x="30" y="352" width="200" height="52" rx="7" class="box box-danger"/>
+            <text x="130" y="374" text-anchor="middle" class="lbl-strong">Descifra con OTRO id —</text>
+            <text x="130" y="392" text-anchor="middle" class="lbl-strong">no calza, ilegible</text>
+
+            <!-- branch right: extreme case -->
+            <path d="M380,214 C 480,240 550,250 550,272" class="arrow" marker-end="url(#arrow5)"/>
+            <rect x="450" y="274" width="210" height="46" rx="7" class="box">
+            </rect>
+            <text x="555" y="292" text-anchor="middle" class="lbl-strong">Caso extremo: máquina</text>
+            <text x="555" y="308" text-anchor="middle" class="lbl-strong">original ya comprometida</text>
+
+            <line x1="555" y1="320" x2="555" y2="350" class="arrow" marker-end="url(#arrow5)"/>
+            <rect x="450" y="352" width="210" height="46" rx="7" class="box box-ok"/>
+            <text x="555" y="370" text-anchor="middle" class="lbl-strong">Capa 2 — receptor compara</text>
+            <text x="555" y="386" text-anchor="middle" class="lbl">el fingerprint del dispositivo</text>
+
+            <line x1="555" y1="398" x2="555" y2="420" class="arrow arrow-danger" marker-end="url(#arrow5d)"/>
+            <rect x="450" y="422" width="210" height="34" rx="7" class="box box-danger"/>
+            <text x="555" y="444" text-anchor="middle" class="lbl-strong">No calza — rechazado</text>
+          </svg>
+          <figcaption>
+            Se descartó firmar con la dirección MAC (usada en otro proyecto del usuario) por
+            ser spoofeable e inconsistente entre interfaces de red.
+          </figcaption>
+        </figure>
+
+        <div class="note limit">
+          <span>—</span>
+          <span><strong>Límite aceptado, a propósito:</strong> si el atacante tiene control
+          total de la máquina original, ninguna capa lo detiene ahí — ningún esquema que
+          viva sólo en el dispositivo sobrevive a eso. Estas dos capas cierran el robo y
+          reubicación del secreto, no una máquina totalmente comprometida.</span>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="colophon">
+    Cinco decisiones tomadas en sesión, registradas en detalle en
+    <code>docs/plan-panel-administrativo-web.md</code> del repositorio — este documento es
+    el resumen visual para revisar con el cliente, no la fuente de verdad.
+  </footer>
+</div>
