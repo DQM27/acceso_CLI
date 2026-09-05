@@ -77,6 +77,7 @@ pub fn drenar_cola(
                 enviar_contratista(&cliente, connection, contexto, &fila.entidad_uuid)
             }
             ("gafete", _) => enviar_gafete(&cliente, connection, contexto, &fila.entidad_uuid),
+            ("usuario", _) => enviar_usuario(&cliente, connection, contexto, &fila.entidad_uuid),
             ("ingreso", "cerrar") => {
                 enviar_cierre_ingreso(&cliente, connection, contexto, &fila.entidad_uuid)
             }
@@ -385,6 +386,48 @@ fn enviar_gafete(
     exigir_2xx(respuesta)
 }
 
+/// Usuarios/operadores globales (espejo): mismo criterio de `upsert` que
+/// contratistas -- ROOT nunca llega a encolarse acá (ver el comentario de
+/// `insertar_usuario` en `usuario_repository.rs`), así que esta función
+/// nunca necesita filtrar por rol. Sin `password_hash` a propósito -- la
+/// nube nunca la recibe (ver `SIN_PASSWORD_LOCAL` en
+/// `services/password.rs`): distribuye quién existe y su rol/estado, cada
+/// dispositivo fija su propia contraseña local la primera vez que ese
+/// operador inicia sesión ahí.
+fn enviar_usuario(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let (cedula, nombre, rol, activo): (String, String, String, i64) = connection.query_row(
+        "SELECT cedula, nombre, rol, activo FROM usuarios WHERE uuid = ?1",
+        params![uuid],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+    )?;
+
+    let cuerpo = json!({
+        "id": uuid,
+        "sitio_id": contexto.sitio_id,
+        "dispositivo_origen_id": contexto.dispositivo_id,
+        "cedula": cedula,
+        "nombre": nombre,
+        "rol": rol,
+        "activo": activo != 0,
+    });
+
+    let respuesta = cliente
+        .post(format!("{}/rest/v1/usuarios", contexto.base_url))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
 /// Ingresos (cola), apertura: mismo criterio de `upsert` que contratistas
 /// -- reintentar un envío ya recibido no duplica nada.
 #[allow(clippy::type_complexity)]
@@ -654,6 +697,7 @@ pub fn recibir_ingresos_abiertos(
 pub struct ResumenCatalogo {
     pub empresas_recibidas: u32,
     pub contratistas_recibidos: u32,
+    pub usuarios_recibidos: u32,
 }
 
 #[derive(serde::Deserialize)]
@@ -661,6 +705,19 @@ struct FilaEmpresaRemota {
     id: String,
     nombre: String,
     activa: bool,
+}
+
+/// Sin `password_hash` -- nunca viaja, ver el doc-comment de
+/// `enviar_usuario`. `rol` sólo puede ser 'ADMINISTRADOR'/'OPERADOR' del
+/// lado del receptor (la tabla remota ni admite 'ROOT'), así que acá no
+/// hace falta filtrarlo de nuevo.
+#[derive(serde::Deserialize)]
+struct FilaUsuarioRemota {
+    id: String,
+    cedula: String,
+    nombre: String,
+    rol: String,
+    activo: bool,
 }
 
 #[derive(serde::Deserialize)]
@@ -716,6 +773,14 @@ pub fn recibir_catalogo_del_sitio(
         &format!(
             "{}/rest/v1/contratistas?select=id,nombre,identificacion,empresa_id,empresa_nombre,\
              activo,tipo_ingreso,fecha_vencimiento_praind,es_personal_ruta",
+            contexto.base_url
+        ),
+    )?;
+    let usuarios: Vec<FilaUsuarioRemota> = obtener_json(
+        &cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/usuarios?select=id,cedula,nombre,rol,activo",
             contexto.base_url
         ),
     )?;
@@ -780,6 +845,36 @@ pub fn recibir_catalogo_del_sitio(
             ],
         )?;
         resumen.contratistas_recibidos += 1;
+    }
+
+    for usuario in &usuarios {
+        // `password_hash` queda AFUERA del `DO UPDATE SET` a propósito --
+        // si esta cédula ya existe local (con una contraseña real, fijada
+        // en este mismo dispositivo alguna vez), el `ON CONFLICT` no debe
+        // tocarla nunca. Sólo un usuario recién llegado (el `INSERT` de la
+        // primera vez) arranca con el centinela `SIN_PASSWORD_LOCAL`, que
+        // `AutenticacionService::buscar_candidato` reconoce para mandar al
+        // alta de contraseña en vez de "credenciales inválidas".
+        transaction.execute(
+            "
+            INSERT INTO usuarios (cedula, nombre, rol, activo, password_hash, uuid)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            ON CONFLICT(cedula) DO UPDATE SET
+                nombre = excluded.nombre,
+                rol = excluded.rol,
+                activo = excluded.activo,
+                uuid = COALESCE(usuarios.uuid, excluded.uuid)
+            ",
+            params![
+                usuario.cedula,
+                usuario.nombre,
+                usuario.rol,
+                usuario.activo,
+                crate::services::password::SIN_PASSWORD_LOCAL,
+                usuario.id,
+            ],
+        )?;
+        resumen.usuarios_recibidos += 1;
     }
 
     transaction.commit()?;
@@ -1422,6 +1517,7 @@ mod tests {
              \"identificacion\":\"1-1111\",\"empresa_id\":\"uuid-empresa-remota\",\
              \"empresa_nombre\":\"Empresa Remota\",\"activo\":true,\"tipo_ingreso\":\"SWAT\",\
              \"fecha_vencimiento_praind\":null,\"es_personal_ruta\":false}]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         ]);
 
         let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
@@ -1430,7 +1526,8 @@ mod tests {
             resumen,
             ResumenCatalogo {
                 empresas_recibidas: 1,
-                contratistas_recibidos: 1
+                contratistas_recibidos: 1,
+                usuarios_recibidos: 0
             }
         );
         let (nombre_empresa, uuid_empresa): (String, Option<String>) = connection
@@ -1479,6 +1576,7 @@ mod tests {
              \"identificacion\":\"1-1111\",\"empresa_id\":\"uuid-empresa-remota\",\
              \"empresa_nombre\":\"Empresa Remota\",\"activo\":true,\"tipo_ingreso\":\"SWAT\",\
              \"fecha_vencimiento_praind\":null,\"es_personal_ruta\":false}]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         ]);
 
         recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
@@ -1524,6 +1622,7 @@ mod tests {
              \"identificacion\":null,\"empresa_id\":null,\"empresa_nombre\":null,\
              \"activo\":true,\"tipo_ingreso\":null,\"fecha_vencimiento_praind\":null,\
              \"es_personal_ruta\":null}]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         ]);
 
         let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();

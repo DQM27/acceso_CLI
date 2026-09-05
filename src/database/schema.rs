@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 21;
+pub const SCHEMA_VERSION: i64 = 22;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -204,6 +204,11 @@ fn aplicar_migraciones_posteriores_a_15(
         *version = 21;
     }
 
+    if *version == 21 {
+        aplicar_migracion_22(connection)?;
+        *version = 22;
+    }
+
     Ok(())
 }
 
@@ -251,6 +256,14 @@ fn aplicar_migracion_21(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_21)?;
     transaction.execute_batch("PRAGMA user_version = 21")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_22(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_22)?;
+    transaction.execute_batch("PRAGMA user_version = 22")?;
     transaction.commit()?;
     Ok(())
 }
@@ -1740,4 +1753,38 @@ CREATE TRIGGER registro_ingresos_fts_ai AFTER INSERT ON registro_ingresos BEGIN
         new.id, new.contratista_cedula, new.contratista_nombre, new.empresa_nombre
     );
 END;
+";
+
+// Usuarios/operadores globales (docs/plan-panel-administrativo-web.md) --
+// mismo patrón que MIGRACION_20 para gafetes: agrega `uuid` (identidad
+// estable para el upsert contra Supabase, ver `enviar_usuario`/
+// `recibir_usuarios`) y suma 'usuario' al CHECK de `cola_salida.entidad`.
+const MIGRACION_22: &str = r"
+ALTER TABLE usuarios ADD COLUMN uuid TEXT;
+UPDATE usuarios SET uuid = (
+    lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4'
+    || substr(lower(hex(randomblob(2))), 2) || '-'
+    || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))), 2)
+    || '-' || lower(hex(randomblob(6)))
+) WHERE uuid IS NULL;
+CREATE UNIQUE INDEX idx_usuarios_uuid ON usuarios(uuid);
+
+CREATE TABLE cola_salida_nueva (
+    id INTEGER PRIMARY KEY,
+    entidad TEXT NOT NULL CHECK (entidad IN ('contratista', 'ingreso', 'empresa', 'gafete', 'usuario')),
+    entidad_uuid TEXT NOT NULL,
+    operacion TEXT NOT NULL CHECK (operacion IN ('crear', 'actualizar', 'cerrar')),
+    estado TEXT NOT NULL DEFAULT 'pendiente'
+        CHECK (estado IN ('pendiente', 'enviado', 'fallido')),
+    intentos INTEGER NOT NULL DEFAULT 0 CHECK (intentos >= 0),
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    ultimo_error TEXT
+) STRICT;
+INSERT INTO cola_salida_nueva SELECT * FROM cola_salida;
+DROP TABLE cola_salida;
+ALTER TABLE cola_salida_nueva RENAME TO cola_salida;
+CREATE INDEX idx_cola_salida_pendientes
+ON cola_salida(creado_en)
+WHERE estado = 'pendiente';
 ";

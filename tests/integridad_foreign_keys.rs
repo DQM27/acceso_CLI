@@ -7,7 +7,7 @@ fn base() -> Connection {
     connection
         .execute_batch(
             "INSERT INTO empresas VALUES (1, 'Empresa', 1, 'uuid-empresa-1');
-         INSERT INTO usuarios VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1);
+         INSERT INTO usuarios VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1, 'uuid-usuario-1');
          INSERT INTO contratistas VALUES (1, '2001', 'Persona', 1, 'PRAIND', '2030-01-01', 0, 1, 'uuid-contratista-1');",
         )
         .unwrap();

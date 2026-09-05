@@ -139,17 +139,18 @@ fn crear_esquema_version_1(connection: &Connection) {
 }
 
 /// Usada tanto contra el esquema crudo de la versión 1 (`crear_esquema_version_1`,
-/// sin `empresas.activo` ni `contratistas.uuid`) como contra el esquema actual ya
-/// migrado — de ahí que `empresas` y `contratistas` listen sus columnas
-/// explícitamente en vez de depender del orden posicional: así las columnas que
-/// sólo existen en uno de los dos esquemas (`activo`, `uuid`, ambas con
-/// `DEFAULT`/nullable) no rompen el INSERT en ninguno de los dos casos.
+/// sin `empresas.activo`, `contratistas.uuid` ni `usuarios.uuid`) como contra el
+/// esquema actual ya migrado — de ahí que `empresas`, `usuarios` y `contratistas`
+/// listen sus columnas explícitamente en vez de depender del orden posicional: así
+/// las columnas que sólo existen en uno de los dos esquemas (`activo`, `uuid`,
+/// todas con `DEFAULT`/nullable) no rompen el INSERT en ninguno de los dos casos.
 fn insertar_referencias(connection: &Connection) {
     connection
         .execute_batch(
             "
             INSERT INTO empresas (id, nombre) VALUES (1, 'Empresa');
-            INSERT INTO usuarios VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1);
+            INSERT INTO usuarios (id, cedula, nombre, password_hash, rol, activo)
+                VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1);
             INSERT INTO contratistas
                 (id, cedula, nombre, empresa_id, tipo_ingreso, fecha_vencimiento_praind, es_personal_ruta, tiene_acceso)
                 VALUES (1, '2001', 'Persona', 1, 'PRAIND', '2030-01-01', 0, 1);
@@ -252,6 +253,10 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
              ALTER TABLE empresas DROP COLUMN uuid;
              DROP INDEX idx_contratistas_uuid;
              ALTER TABLE contratistas DROP COLUMN uuid;
+             -- MIGRACION_22 (que corre al final al rebobinar) le agrega
+             -- `uuid` a usuarios -- mismo motivo que las tres de arriba.
+             DROP INDEX idx_usuarios_uuid;
+             ALTER TABLE usuarios DROP COLUMN uuid;
              DROP INDEX idx_registro_ingresos_uuid;",
         )
         .unwrap();
@@ -331,6 +336,10 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
              ALTER TABLE empresas DROP COLUMN uuid;
              DROP INDEX idx_contratistas_uuid;
              ALTER TABLE contratistas DROP COLUMN uuid;
+             -- MIGRACION_22 (que corre al final al rebobinar) le agrega
+             -- `uuid` a usuarios -- mismo motivo que las tres de arriba.
+             DROP INDEX idx_usuarios_uuid;
+             ALTER TABLE usuarios DROP COLUMN uuid;
              DROP INDEX idx_registro_ingresos_uuid;",
         )
         .unwrap();
@@ -423,6 +432,10 @@ fn migracion_12_habilita_cambio_de_cedula() {
              ALTER TABLE empresas DROP COLUMN uuid;
              DROP INDEX idx_contratistas_uuid;
              ALTER TABLE contratistas DROP COLUMN uuid;
+             -- MIGRACION_22 (que corre al final al rebobinar) le agrega
+             -- `uuid` a usuarios -- mismo motivo que las tres de arriba.
+             DROP INDEX idx_usuarios_uuid;
+             ALTER TABLE usuarios DROP COLUMN uuid;
              DROP INDEX idx_registro_ingresos_uuid;",
         )
         .unwrap();

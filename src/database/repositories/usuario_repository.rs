@@ -1,6 +1,8 @@
 use rusqlite::{Connection, Row, Transaction, TransactionBehavior, params};
 
+use crate::database::cola_salida;
 use crate::database::error::DatabaseError;
+use crate::database::identificador::generar_uuid_v4;
 use crate::models::usuario::{RolUsuario, Usuario};
 
 pub trait UsuarioRepository {
@@ -72,11 +74,17 @@ fn rol_a_texto(rol: RolUsuario) -> &'static str {
     }
 }
 
+/// ROOT nunca se encola hacia la nube a propósito (ver
+/// docs/plan-panel-administrativo-web.md: "Root inicial y login offline:
+/// sin cambios" -- cada sitio lo sigue creando 100% local). Sólo
+/// ADMINISTRADOR/OPERADOR son los "operadores globales" que
+/// `nube::sincronizacion::enviar_usuario` sube.
 fn insertar_usuario(connection: &Connection, usuario: &Usuario) -> Result<i64, DatabaseError> {
+    let uuid = generar_uuid_v4();
     connection.execute(
         "
-        INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo)
-        VALUES (?1, ?2, ?3, ?4, ?5)
+        INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo, uuid)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
         ",
         params![
             usuario.cedula,
@@ -84,9 +92,14 @@ fn insertar_usuario(connection: &Connection, usuario: &Usuario) -> Result<i64, D
             usuario.password_hash,
             rol_a_texto(usuario.rol),
             i64::from(usuario.activo),
+            uuid,
         ],
     )?;
-    Ok(connection.last_insert_rowid())
+    let id = connection.last_insert_rowid();
+    if usuario.rol != RolUsuario::Root {
+        cola_salida::encolar(connection, "usuario", &uuid, "crear")?;
+    }
+    Ok(id)
 }
 
 fn buscar_usuario_en_transaccion(
@@ -139,6 +152,15 @@ fn persistir_usuario(transaction: &Connection, usuario: &Usuario) -> Result<(), 
             usuario.id,
         ],
     )?;
+    // ROOT nunca se encola -- ver el comentario de `insertar_usuario`.
+    if usuario.rol != RolUsuario::Root {
+        let uuid: String = transaction.query_row(
+            "SELECT uuid FROM usuarios WHERE id = ?1",
+            params![usuario.id],
+            |row| row.get(0),
+        )?;
+        cola_salida::encolar(transaction, "usuario", &uuid, "actualizar")?;
+    }
     Ok(())
 }
 
