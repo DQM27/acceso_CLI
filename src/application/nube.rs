@@ -185,7 +185,8 @@ impl AppCore {
     ) -> Result<Vec<IngresoRemoto>, GestionNubeError> {
         self.autorizar_uso_nube(actor)?;
         let mut statement = self.connection.prepare(
-            "SELECT uuid, contratista_nombre, hora_entrada, usuario_entrada_nombre
+            "SELECT uuid, contratista_nombre, hora_entrada, usuario_entrada_nombre,
+                    contratista_cedula, empresa_nombre, tipo_ingreso, medio_ingreso, gafete_numero
              FROM ingresos_remotos ORDER BY hora_entrada",
         )?;
         let filas = statement
@@ -195,6 +196,11 @@ impl AppCore {
                     contratista_nombre: row.get(1)?,
                     hora_entrada: row.get(2)?,
                     usuario_entrada_nombre: row.get(3)?,
+                    contratista_cedula: row.get(4)?,
+                    empresa_nombre: row.get(5)?,
+                    tipo_ingreso: row.get(6)?,
+                    medio_ingreso: row.get(7)?,
+                    gafete_numero: row.get(8)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;

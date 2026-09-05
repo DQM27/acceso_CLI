@@ -1,4 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { MedioIngreso } from "./ingresos";
+import type { TipoIngreso } from "./contratistas";
 
 // Espejo de comandos/nube.rs. `guardarSecretoDispositivo`/
 // `secretoDispositivoGuardado` son exclusivos de ROOT (el secreto identifica
@@ -16,6 +18,7 @@ export interface ResumenSincronizacion {
   cierres_recibidos: number;
   empresas_recibidas: number;
   contratistas_recibidos: number;
+  movimientos_historial_recibidos: number;
   sitio_id: string;
   dispositivo_id: string;
   tipo: string;
@@ -41,6 +44,44 @@ export interface IngresoRemoto {
   /** ISO 8601 (UTC). */
   hora_entrada: string;
   usuario_entrada_nombre: string | null;
+  contratista_cedula: string | null;
+  empresa_nombre: string | null;
+  tipo_ingreso: string | null;
+  medio_ingreso: string | null;
+  gafete_numero: number | null;
+}
+
+/** La nube guarda `tipo_ingreso`/`medio_ingreso` en el formato que usa
+ * Supabase (`PRAIND`, `IN_HOUSE`, `CAMINANDO`...), no en el `TipoIngreso`/
+ * `MedioIngreso` que espera esta app (`Praind`, `InHouse`, `Caminando`) --
+ * son dos serializaciones distintas del mismo dominio, nunca se
+ * unificaron porque nunca se habían mostrado juntas hasta que Ingreso
+ * Activo e Historial empezaron a fusionar filas locales con remotas.
+ * Usado por `Activos.tsx` e `Historial.tsx`. */
+export function tipoIngresoDesdeNube(valor: string | null): TipoIngreso | null {
+  switch (valor) {
+    case "PRAIND":
+      return "Praind";
+    case "IN_HOUSE":
+      return "InHouse";
+    case "POR_CORREO":
+      return "PorCorreo";
+    case "SWAT":
+      return "Swat";
+    default:
+      return null;
+  }
+}
+
+export function medioIngresoDesdeNube(valor: string | null): MedioIngreso | null {
+  switch (valor) {
+    case "CAMINANDO":
+      return "Caminando";
+    case "VEHICULO":
+      return "Vehiculo";
+    default:
+      return null;
+  }
 }
 
 export function guardarSecretoDispositivo(secreto: string): Promise<void> {

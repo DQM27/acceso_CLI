@@ -8,11 +8,13 @@ import {
   cerrarIngresoRemoto,
   listarIngresosActivos,
   listarIngresosRemotos,
+  medioIngresoDesdeNube,
   mensajeMotivoDenegacion,
   registrarSalida,
   textoMedio,
+  tipoIngresoDesdeNube,
 } from "../api";
-import type { IngresoActivoResumen, IngresoRemoto } from "../api";
+import type { IngresoActivoResumen, IngresoRemoto, MedioIngreso, TipoIngreso } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
 /** Texto plano del estado — separado del componente visual `EstadoAcceso`
@@ -49,13 +51,13 @@ interface FilaRemota {
   uuid_remoto: string;
   registro_id: null;
   contratista_id: null;
-  cedula: null;
+  cedula: string | null;
   contratista_nombre: string;
-  empresa_nombre: null;
-  tipo_ingreso: null;
-  medio_ingreso: null;
+  empresa_nombre: string | null;
+  tipo_ingreso: TipoIngreso | null;
+  medio_ingreso: MedioIngreso | null;
   fecha_hora_ingreso: string;
-  gafete_numero: null;
+  gafete_numero: number | null;
   usuario_ingreso_nombre: string;
   resultado_registrado: null;
   resultado_acceso: null;
@@ -74,13 +76,13 @@ export function filaDesdeRemoto(remoto: IngresoRemoto): FilaActiva {
     uuid_remoto: remoto.uuid,
     registro_id: null,
     contratista_id: null,
-    cedula: null,
+    cedula: remoto.contratista_cedula,
     contratista_nombre: remoto.contratista_nombre,
-    empresa_nombre: null,
-    tipo_ingreso: null,
-    medio_ingreso: null,
+    empresa_nombre: remoto.empresa_nombre,
+    tipo_ingreso: tipoIngresoDesdeNube(remoto.tipo_ingreso),
+    medio_ingreso: medioIngresoDesdeNube(remoto.medio_ingreso),
     fecha_hora_ingreso: remoto.hora_entrada,
-    gafete_numero: null,
+    gafete_numero: remoto.gafete_numero,
     usuario_ingreso_nombre: remoto.usuario_entrada_nombre ?? "—",
     resultado_registrado: null,
     resultado_acceso: null,
@@ -222,8 +224,7 @@ export default function Activos({
         headerName: "Gafete",
         flex: 0.9,
         minWidth: 90,
-        valueFormatter: (p) =>
-          p.data?.origen === "remoto" ? "—" : p.value == null ? "S/G" : String(p.value),
+        valueFormatter: (p) => (p.value == null ? "S/G" : String(p.value)),
       },
       {
         colId: "fecha_ingreso",

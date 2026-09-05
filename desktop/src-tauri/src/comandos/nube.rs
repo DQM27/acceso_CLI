@@ -15,6 +15,7 @@ pub struct ResumenSincronizacion {
     pub cierres_recibidos: u32,
     pub empresas_recibidas: u32,
     pub contratistas_recibidos: u32,
+    pub movimientos_historial_recibidos: u32,
     pub sitio_id: String,
     pub dispositivo_id: String,
     pub tipo: String,
@@ -42,6 +43,11 @@ pub struct IngresoRemoto {
     pub contratista_nombre: String,
     pub hora_entrada: String,
     pub usuario_entrada_nombre: Option<String>,
+    pub contratista_cedula: Option<String>,
+    pub empresa_nombre: Option<String>,
+    pub tipo_ingreso: Option<String>,
+    pub medio_ingreso: Option<String>,
+    pub gafete_numero: Option<i64>,
 }
 
 /// Autentica este dispositivo contra el receptor -- un solo lugar para no
@@ -93,12 +99,15 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
         nube::recibir_ingresos_abiertos(&conexion, &contexto).map_err(mensaje_sincronizacion)?;
     let catalogo =
         nube::recibir_catalogo_del_sitio(&conexion, &contexto).map_err(mensaje_sincronizacion)?;
+    let movimientos_historial_recibidos =
+        nube::recibir_historial_del_sitio(&conexion, &contexto).map_err(mensaje_sincronizacion)?;
 
     Ok(ResumenSincronizacion {
         enviados: resumen.enviados,
         fallidos: resumen.fallidos,
         remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
         cierres_recibidos,
+        movimientos_historial_recibidos,
         empresas_recibidas: catalogo.empresas_recibidas,
         contratistas_recibidos: catalogo.contratistas_recibidos,
         sitio_id: token.sitio_id,
@@ -188,7 +197,8 @@ pub fn listar_ingresos_remotos(
     let conexion = state.conexion_secundaria()?;
     let mut statement = conexion
         .prepare(
-            "SELECT uuid, contratista_nombre, hora_entrada, usuario_entrada_nombre
+            "SELECT uuid, contratista_nombre, hora_entrada, usuario_entrada_nombre,
+                    contratista_cedula, empresa_nombre, tipo_ingreso, medio_ingreso, gafete_numero
              FROM ingresos_remotos ORDER BY hora_entrada",
         )
         .map_err(|error| error.to_string())?;
@@ -199,6 +209,11 @@ pub fn listar_ingresos_remotos(
                 contratista_nombre: row.get(1)?,
                 hora_entrada: row.get(2)?,
                 usuario_entrada_nombre: row.get(3)?,
+                contratista_cedula: row.get(4)?,
+                empresa_nombre: row.get(5)?,
+                tipo_ingreso: row.get(6)?,
+                medio_ingreso: row.get(7)?,
+                gafete_numero: row.get(8)?,
             })
         })
         .map_err(|error| error.to_string())?

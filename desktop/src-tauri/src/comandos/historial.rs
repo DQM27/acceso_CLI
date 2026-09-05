@@ -8,6 +8,7 @@ use control_acceso::application::{
 use control_acceso::database::queries::ingresos::{FiltroHistorial, MovimientoIngresoResumen};
 use control_acceso::historial::exportacion::ColumnaHistorial;
 use control_acceso::tiempo::{self, TiempoError};
+use rusqlite::params;
 use tauri::Manager;
 
 use crate::estado::GuiState;
@@ -60,6 +61,72 @@ pub fn listar_historial(
     let conexion = state.conexion_secundaria()?;
     buscar_historial_completo_con_conexion(&conexion, &FiltroHistorial::nuevo(desde_utc, hasta_utc))
         .map_err(|error| error.to_string())
+}
+
+/// Espejo de `historial_sitio` (ver `database::schema`, migración 25) --
+/// movimientos del sitio generados por CUALQUIER dispositivo, incluido
+/// éste. Decisión explícita del usuario: no es una vista resumida, es la
+/// misma operación vista desde otro dispositivo. La pantalla combina esto
+/// con `listar_historial` (lo local) y descarta acá los `uuid` que ya
+/// tiene local -- ese dispositivo es la fuente autoritativa para sus
+/// propios movimientos, esto sólo aporta lo que nació en otro lado.
+#[derive(serde::Serialize)]
+pub struct MovimientoHistorialRemoto {
+    pub uuid: String,
+    pub cedula: Option<String>,
+    pub contratista_nombre: String,
+    pub empresa_nombre: Option<String>,
+    pub tipo_ingreso: Option<String>,
+    pub medio_ingreso: Option<String>,
+    pub fecha_hora_ingreso: String,
+    pub fecha_hora_salida: Option<String>,
+    pub gafete_numero: Option<i64>,
+    pub usuario_ingreso_nombre: Option<String>,
+    pub usuario_salida_nombre: Option<String>,
+}
+
+#[tauri::command]
+pub fn listar_historial_sitio(
+    desde: Option<NaiveDate>,
+    hasta: Option<NaiveDate>,
+    state: tauri::State<GuiState>,
+) -> Result<Vec<MovimientoHistorialRemoto>, String> {
+    state.sesion_activa()?;
+    let (desde_utc, hasta_utc) = rango_utc(desde, hasta).map_err(|error| error.to_string())?;
+    let conexion = state.conexion_secundaria()?;
+    let mut statement = conexion
+        .prepare(
+            "SELECT uuid, contratista_cedula, contratista_nombre, empresa_nombre, tipo_ingreso,
+                    medio_ingreso, hora_entrada, hora_salida, gafete_numero,
+                    usuario_entrada_nombre, usuario_salida_nombre
+             FROM historial_sitio
+             WHERE hora_entrada >= ?1 AND hora_entrada < ?2
+             ORDER BY hora_entrada DESC",
+        )
+        .map_err(|error| error.to_string())?;
+    let filas = statement
+        .query_map(
+            params![tiempo::serializar_utc(desde_utc), tiempo::serializar_utc(hasta_utc)],
+            |row| {
+                Ok(MovimientoHistorialRemoto {
+                    uuid: row.get(0)?,
+                    cedula: row.get(1)?,
+                    contratista_nombre: row.get(2)?,
+                    empresa_nombre: row.get(3)?,
+                    tipo_ingreso: row.get(4)?,
+                    medio_ingreso: row.get(5)?,
+                    fecha_hora_ingreso: row.get(6)?,
+                    fecha_hora_salida: row.get(7)?,
+                    gafete_numero: row.get(8)?,
+                    usuario_ingreso_nombre: row.get(9)?,
+                    usuario_salida_nombre: row.get(10)?,
+                })
+            },
+        )
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    Ok(filas)
 }
 
 /// Exporta el historial a un XLSX en `destino`, sólo con las `columnas`

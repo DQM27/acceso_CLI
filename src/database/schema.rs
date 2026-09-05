@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 23;
+pub const SCHEMA_VERSION: i64 = 25;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -214,6 +214,16 @@ fn aplicar_migraciones_posteriores_a_15(
         *version = 23;
     }
 
+    if *version == 23 {
+        aplicar_migracion_24(connection)?;
+        *version = 24;
+    }
+
+    if *version == 24 {
+        aplicar_migracion_25(connection)?;
+        *version = 25;
+    }
+
     Ok(())
 }
 
@@ -277,6 +287,22 @@ fn aplicar_migracion_23(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_23)?;
     transaction.execute_batch("PRAGMA user_version = 23")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_24(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_24)?;
+    transaction.execute_batch("PRAGMA user_version = 24")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_25(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_25)?;
+    transaction.execute_batch("PRAGMA user_version = 25")?;
     transaction.commit()?;
     Ok(())
 }
@@ -1814,4 +1840,64 @@ CREATE TABLE sincronizacion_estado (
     catalogo_actualizado_hasta TEXT
 ) STRICT;
 INSERT INTO sincronizacion_estado (id, catalogo_actualizado_hasta) VALUES (1, NULL);
+";
+
+// `ingresos_remotos` sólo traía lo mínimo para identificar/cerrar un
+// ingreso abierto en otro dispositivo -- al fusionarse con la grilla de
+// Ingreso Activo (`FilaRemota`, `desktop/src/pantallas/Activos.tsx`) esas
+// filas se ven junto a las locales, que sí muestran empresa/tipo/medio/
+// gafete/cédula. La tabla `ingresos` de Supabase ya tiene esas columnas
+// (`recibir_ingresos_abiertos` sólo no las pedía) -- nada del otro lado
+// cambia, sólo se agregan columnas nullable acá para cachearlas también.
+const MIGRACION_24: &str = r"
+ALTER TABLE ingresos_remotos ADD COLUMN contratista_cedula TEXT;
+ALTER TABLE ingresos_remotos ADD COLUMN empresa_nombre TEXT;
+ALTER TABLE ingresos_remotos ADD COLUMN tipo_ingreso TEXT;
+ALTER TABLE ingresos_remotos ADD COLUMN medio_ingreso TEXT;
+ALTER TABLE ingresos_remotos ADD COLUMN gafete_numero INTEGER;
+";
+
+// Historial multi-dispositivo: decisión explícita del usuario -- "es la
+// misma operación vista desde dos dispositivos distintos", no una versión
+// resumida. `historial_sitio` espeja TODO movimiento del sitio (abierto o
+// cerrado, de cualquier dispositivo, incluido este) con los mismos campos
+// que ya muestra Historial local (`MovimientoIngresoResumen`) -- la nube
+// (`ingresos`, ver migración `agrega_auditoria_completa_a_ingresos` del
+// lado de Supabase) ahora también carga `resultado_acceso`/
+// `motivo_resultado`/`reglas_version`/`empresa_activa_snapshot`, así que
+// no hay hueco de datos entre un movimiento local y uno espejado. Nunca
+// reemplaza `registro_ingresos` (misma razón que `ingresos_remotos`: sin
+// FKs reales a `contratistas`/`usuarios` de este dispositivo, todo texto
+// suelto) -- la pantalla de Historial combina ambas fuentes.
+//
+// `historial_actualizado_hasta` es la marca de agua del sync incremental
+// (mismo mecanismo que `catalogo_actualizado_hasta`, columna separada
+// porque son dos ritmos de sync independientes) -- sin esto, cada ciclo
+// traería el historial completo del sitio para siempre.
+const MIGRACION_25: &str = r"
+ALTER TABLE sincronizacion_estado ADD COLUMN historial_actualizado_hasta TEXT;
+
+CREATE TABLE historial_sitio (
+    uuid TEXT PRIMARY KEY,
+    sitio_id TEXT NOT NULL,
+    contratista_cedula TEXT,
+    contratista_nombre TEXT NOT NULL,
+    empresa_nombre TEXT,
+    tipo_ingreso TEXT,
+    medio_ingreso TEXT,
+    hora_entrada TEXT NOT NULL,
+    hora_salida TEXT,
+    gafete_numero INTEGER,
+    usuario_entrada_nombre TEXT,
+    usuario_salida_nombre TEXT,
+    resultado_acceso TEXT,
+    motivo_resultado TEXT,
+    reglas_version INTEGER,
+    empresa_activa_snapshot INTEGER,
+    dispositivo_entrada_id TEXT NOT NULL,
+    dispositivo_salida_id TEXT,
+    actualizado_en TEXT NOT NULL
+) STRICT;
+
+CREATE INDEX idx_historial_sitio_hora_entrada ON historial_sitio(hora_entrada);
 ";

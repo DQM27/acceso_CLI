@@ -138,6 +138,7 @@ pub fn run() {
             comandos::ingresos::registrar_ingreso,
             comandos::ingresos::registrar_salida,
             comandos::historial::listar_historial,
+            comandos::historial::listar_historial_sitio,
             comandos::historial::exportar_historial,
             comandos::historial::exportar_historial_pdf,
             comandos::auditoria::listar_auditoria,

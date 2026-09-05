@@ -74,12 +74,17 @@ describe("filaDesdeLocal / filaDesdeRemoto", () => {
     });
   });
 
-  it("una fila remota no trae id local ni datos que la nube no tiene", () => {
+  it("una fila remota no trae id local, pero sí el resto de los datos que ya manda la nube", () => {
     const remoto: IngresoRemoto = {
       uuid: "uuid-remoto",
       contratista_nombre: "Persona Remota",
       hora_entrada: "2027-03-08T08:00:00Z",
       usuario_entrada_nombre: "Op PC",
+      contratista_cedula: "1-2345-6789",
+      empresa_nombre: "Empresa Remota",
+      tipo_ingreso: "PRAIND",
+      medio_ingreso: "VEHICULO",
+      gafete_numero: 42,
     };
 
     const resultado = filaDesdeRemoto(remoto);
@@ -88,7 +93,13 @@ describe("filaDesdeLocal / filaDesdeRemoto", () => {
       origen: "remoto",
       uuid_remoto: "uuid-remoto",
       registro_id: null,
+      contratista_id: null,
+      cedula: "1-2345-6789",
       contratista_nombre: "Persona Remota",
+      empresa_nombre: "Empresa Remota",
+      tipo_ingreso: "Praind",
+      medio_ingreso: "Vehiculo",
+      gafete_numero: 42,
       usuario_ingreso_nombre: "Op PC",
       estado_texto: "Otro dispositivo",
     });
@@ -100,6 +111,11 @@ describe("filaDesdeLocal / filaDesdeRemoto", () => {
       contratista_nombre: "Persona Remota",
       hora_entrada: "2027-03-08T08:00:00Z",
       usuario_entrada_nombre: null,
+      contratista_cedula: null,
+      empresa_nombre: null,
+      tipo_ingreso: null,
+      medio_ingreso: null,
+      gafete_numero: null,
     };
 
     expect(filaDesdeRemoto(remoto).usuario_ingreso_nombre).toBe("—");

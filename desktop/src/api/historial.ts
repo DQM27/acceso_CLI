@@ -63,6 +63,34 @@ export function listarHistorial(
   return invoke("listar_historial", { desde: desde ?? null, hasta: hasta ?? null });
 }
 
+/** Espejo de `comandos::historial::MovimientoHistorialRemoto` -- un
+ * movimiento del sitio (abierto o cerrado) generado por CUALQUIER
+ * dispositivo, leído de la caché local `historial_sitio`. `tipo_ingreso`/
+ * `medio_ingreso` vienen en el formato de Supabase (`PRAIND`,
+ * `CAMINANDO`...), no en el `TipoIngreso`/`MedioIngreso` de esta app --
+ * convertir con `tipoIngresoDesdeNube`/`medioIngresoDesdeNube`
+ * (`api/nube.ts`) antes de mostrar, mismo criterio que ya usa Activos. */
+export interface MovimientoHistorialRemoto {
+  uuid: string;
+  cedula: string | null;
+  contratista_nombre: string;
+  empresa_nombre: string | null;
+  tipo_ingreso: string | null;
+  medio_ingreso: string | null;
+  fecha_hora_ingreso: string;
+  fecha_hora_salida: string | null;
+  gafete_numero: number | null;
+  usuario_ingreso_nombre: string | null;
+  usuario_salida_nombre: string | null;
+}
+
+export function listarHistorialSitio(
+  desde?: string,
+  hasta?: string,
+): Promise<MovimientoHistorialRemoto[]> {
+  return invoke("listar_historial_sitio", { desde: desde ?? null, hasta: hasta ?? null });
+}
+
 /** `ids`: los `registro_id` que la grilla tiene visibles tras su propio
  * filtro por columna, en `null` cuando la carga se truncó
  * (`CargaCompleta.truncado`) y ya no representa el total real — en ese caso

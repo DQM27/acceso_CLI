@@ -261,7 +261,10 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
              -- MIGRACION_23 (que corre al final al rebobinar) crea
              -- `sincronizacion_estado` desde cero -- mismo motivo que
              -- cola_salida/ingresos_remotos/gafetes arriba.
-             DROP TABLE sincronizacion_estado;",
+             DROP TABLE sincronizacion_estado;
+             -- MIGRACION_25 (que corre al final al rebobinar) crea
+             -- `historial_sitio` desde cero -- mismo motivo.
+             DROP TABLE historial_sitio;",
         )
         .unwrap();
     rebobinar_trigger_entrada_inmutable_sin_uuid(&connection);
@@ -348,7 +351,10 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
              -- MIGRACION_23 (que corre al final al rebobinar) crea
              -- `sincronizacion_estado` desde cero -- mismo motivo que
              -- cola_salida/ingresos_remotos/gafetes arriba.
-             DROP TABLE sincronizacion_estado;",
+             DROP TABLE sincronizacion_estado;
+             -- MIGRACION_25 (que corre al final al rebobinar) crea
+             -- `historial_sitio` desde cero -- mismo motivo.
+             DROP TABLE historial_sitio;",
         )
         .unwrap();
     rebobinar_trigger_entrada_inmutable_sin_uuid(&connection);
@@ -448,7 +454,10 @@ fn migracion_12_habilita_cambio_de_cedula() {
              -- MIGRACION_23 (que corre al final al rebobinar) crea
              -- `sincronizacion_estado` desde cero -- mismo motivo que
              -- cola_salida/ingresos_remotos/gafetes arriba.
-             DROP TABLE sincronizacion_estado;",
+             DROP TABLE sincronizacion_estado;
+             -- MIGRACION_25 (que corre al final al rebobinar) crea
+             -- `historial_sitio` desde cero -- mismo motivo.
+             DROP TABLE historial_sitio;",
         )
         .unwrap();
     rebobinar_trigger_entrada_inmutable_sin_uuid(&connection);

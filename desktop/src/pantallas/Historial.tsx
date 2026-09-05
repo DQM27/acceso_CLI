@@ -8,11 +8,74 @@ import type { TablaHandle } from "../componentes/Tabla";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import SelectorRangoFecha, { textoRangoFecha } from "../componentes/SelectorRangoFecha";
-import { exportarHistorial, exportarHistorialPdf, listarHistorial, textoMedio } from "../api";
-import type { MovimientoIngresoResumen } from "../api";
+import {
+  exportarHistorial,
+  exportarHistorialPdf,
+  listarHistorial,
+  listarHistorialSitio,
+  medioIngresoDesdeNube,
+  textoMedio,
+  tipoIngresoDesdeNube,
+} from "../api";
+import type { MovimientoHistorialRemoto, MovimientoIngresoResumen } from "../api";
 import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
-type FilaHistorial = MovimientoIngresoResumen;
+/** Local (este dispositivo, con la auditoría completa de la decisión de
+ * acceso) o remota (generada por otro dispositivo del mismo sitio, leída
+ * de la caché `historial_sitio` -- ver `docs/plan-persistencia-nube.md`).
+ * Decisión explícita del usuario: es la misma operación vista desde otro
+ * dispositivo, no una versión resumida -- se combinan en una sola grilla
+ * con los mismos campos que ya muestra Historial. `registro_id: null` en
+ * una fila remota significa que no se puede exportar por id (ver
+ * `seleccionParaExportar`) -- limitación conocida, no un bug: el export
+ * hoy recorta por `registro_id` local, que una fila remota no tiene. */
+interface FilaLocal extends MovimientoIngresoResumen {
+  origen: "local";
+}
+
+interface FilaRemota {
+  origen: "remoto";
+  registro_id: null;
+  contratista_id: null;
+  cedula: string | null;
+  contratista_nombre: string;
+  empresa_nombre: string | null;
+  tipo_ingreso: MovimientoIngresoResumen["tipo_ingreso"] | null;
+  medio_ingreso: MovimientoIngresoResumen["medio_ingreso"] | null;
+  fecha_hora_ingreso: string;
+  fecha_hora_salida: string | null;
+  gafete_numero: number | null;
+  usuario_ingreso_nombre: string;
+  usuario_salida_nombre: string | null;
+  resultado_acceso: null;
+  motivo_resultado: null;
+  reglas_version: null;
+  empresa_activa_snapshot: null;
+}
+
+type FilaHistorial = FilaLocal | FilaRemota;
+
+function filaDesdeRemoto(remoto: MovimientoHistorialRemoto): FilaHistorial {
+  return {
+    origen: "remoto",
+    registro_id: null,
+    contratista_id: null,
+    cedula: remoto.cedula,
+    contratista_nombre: remoto.contratista_nombre,
+    empresa_nombre: remoto.empresa_nombre,
+    tipo_ingreso: tipoIngresoDesdeNube(remoto.tipo_ingreso),
+    medio_ingreso: medioIngresoDesdeNube(remoto.medio_ingreso),
+    fecha_hora_ingreso: remoto.fecha_hora_ingreso,
+    fecha_hora_salida: remoto.fecha_hora_salida,
+    gafete_numero: remoto.gafete_numero,
+    usuario_ingreso_nombre: remoto.usuario_ingreso_nombre ?? "—",
+    usuario_salida_nombre: remoto.usuario_salida_nombre,
+    resultado_acceso: null,
+    motivo_resultado: null,
+    reglas_version: null,
+    empresa_activa_snapshot: null,
+  };
+}
 
 /** colId/field de la grilla → clave de `ColumnaHistorial` en el núcleo
  * (`src/historial/exportacion.rs`, `ColumnaHistorial::clave`) — así el
@@ -68,9 +131,13 @@ export default function Historial() {
     async (estaVigente: () => boolean = () => true) => {
       setCargando(true);
       try {
-        const { items, truncado } = await listarHistorial(desde || undefined, hasta || undefined);
+        const [{ items, truncado }, remotos] = await Promise.all([
+          listarHistorial(desde || undefined, hasta || undefined),
+          listarHistorialSitio(desde || undefined, hasta || undefined),
+        ]);
         if (!estaVigente()) return;
-        setFilas(items);
+        const locales: FilaHistorial[] = items.map((item) => ({ ...item, origen: "local" }));
+        setFilas([...locales, ...remotos.map(filaDesdeRemoto)]);
         setTruncado(truncado);
       } finally {
         if (estaVigente()) setCargando(false);
@@ -105,7 +172,19 @@ export default function Historial() {
       toast.error("No hay filas para exportar con el filtro actual.");
       return null;
     }
-    return { ids: visibles.map((fila) => fila.registro_id), claves };
+    // Una fila remota (`origen: "remoto"`, generada por otro dispositivo)
+    // no tiene `registro_id` local -- el export hoy recorta por id contra
+    // `registro_ingresos` de esta base, así que esas filas quedan afuera
+    // del archivo. Se avisa en vez de fallar en silencio.
+    const idsLocales = visibles
+      .map((fila) => fila.registro_id)
+      .filter((id): id is number => id !== null);
+    if (idsLocales.length < visibles.length) {
+      toast.warning(
+        `${visibles.length - idsLocales.length} movimiento(s) de otro dispositivo no se incluyen en el archivo todavía.`,
+      );
+    }
+    return { ids: idsLocales, claves };
   }
 
   async function exportar() {

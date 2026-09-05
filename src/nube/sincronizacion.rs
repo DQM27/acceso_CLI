@@ -447,6 +447,10 @@ fn enviar_ingreso(
         tipo_ingreso,
         medio_ingreso,
         gafete_numero,
+        resultado_acceso,
+        motivo_resultado,
+        reglas_version,
+        empresa_activa_snapshot,
     ): (
         i64,
         String,
@@ -457,10 +461,15 @@ fn enviar_ingreso(
         String,
         String,
         Option<i64>,
+        String,
+        Option<String>,
+        i64,
+        bool,
     ) = connection.query_row(
         "
         SELECT contratista_id, contratista_nombre, fecha_hora_ingreso, usuario_ingreso_nombre,
-               contratista_cedula, empresa_nombre, tipo_ingreso, medio_ingreso, gafete_numero
+               contratista_cedula, empresa_nombre, tipo_ingreso, medio_ingreso, gafete_numero,
+               resultado_acceso, motivo_resultado, reglas_version, empresa_activa_snapshot
         FROM registro_ingresos
         WHERE uuid = ?1
         ",
@@ -476,6 +485,10 @@ fn enviar_ingreso(
                 row.get(6)?,
                 row.get(7)?,
                 row.get(8)?,
+                row.get(9)?,
+                row.get(10)?,
+                row.get(11)?,
+                row.get::<_, i64>(12)? != 0,
             ))
         },
     )?;
@@ -498,6 +511,10 @@ fn enviar_ingreso(
         "tipo_ingreso": tipo_ingreso,
         "medio_ingreso": medio_ingreso,
         "gafete_numero": gafete_numero,
+        "resultado_acceso": resultado_acceso,
+        "motivo_resultado": motivo_resultado,
+        "reglas_version": reglas_version,
+        "empresa_activa_snapshot": empresa_activa_snapshot,
     });
 
     let respuesta = cliente
@@ -564,6 +581,11 @@ pub struct IngresoRemoto {
     pub contratista_nombre: String,
     pub hora_entrada: String,
     pub usuario_entrada_nombre: Option<String>,
+    pub contratista_cedula: Option<String>,
+    pub empresa_nombre: Option<String>,
+    pub tipo_ingreso: Option<String>,
+    pub medio_ingreso: Option<String>,
+    pub gafete_numero: Option<i64>,
 }
 
 #[derive(serde::Deserialize)]
@@ -573,6 +595,11 @@ struct FilaIngresoRemoto {
     hora_entrada: String,
     usuario_entrada_nombre: Option<String>,
     dispositivo_entrada_id: String,
+    contratista_cedula: Option<String>,
+    empresa_nombre: Option<String>,
+    tipo_ingreso: Option<String>,
+    medio_ingreso: Option<String>,
+    gafete_numero: Option<i64>,
 }
 
 #[derive(serde::Deserialize)]
@@ -644,7 +671,8 @@ pub fn recibir_ingresos_abiertos(
     let cliente = reqwest::blocking::Client::new();
     let url = format!(
         "{}/rest/v1/ingresos?sitio_id=eq.{}&dispositivo_entrada_id=neq.{}&hora_salida=is.null\
-         &select=id,contratista_nombre,hora_entrada,usuario_entrada_nombre,dispositivo_entrada_id",
+         &select=id,contratista_nombre,hora_entrada,usuario_entrada_nombre,dispositivo_entrada_id,\
+         contratista_cedula,empresa_nombre,tipo_ingreso,medio_ingreso,gafete_numero",
         contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
     );
     let filas: Vec<FilaIngresoRemoto> = obtener_json(&cliente, contexto, &url)?;
@@ -666,8 +694,9 @@ pub fn recibir_ingresos_abiertos(
             "
             INSERT INTO ingresos_remotos (
                 uuid, sitio_id, contratista_nombre, hora_entrada,
-                usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+                usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en,
+                contratista_cedula, empresa_nombre, tipo_ingreso, medio_ingreso, gafete_numero
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), ?7, ?8, ?9, ?10, ?11)
             ",
             params![
                 fila.id,
@@ -676,6 +705,11 @@ pub fn recibir_ingresos_abiertos(
                 hora_entrada,
                 fila.usuario_entrada_nombre,
                 fila.dispositivo_entrada_id,
+                fila.contratista_cedula,
+                fila.empresa_nombre,
+                fila.tipo_ingreso,
+                fila.medio_ingreso,
+                fila.gafete_numero,
             ],
         )?;
         remotos.push(IngresoRemoto {
@@ -683,11 +717,148 @@ pub fn recibir_ingresos_abiertos(
             contratista_nombre: fila.contratista_nombre,
             hora_entrada,
             usuario_entrada_nombre: fila.usuario_entrada_nombre,
+            contratista_cedula: fila.contratista_cedula,
+            empresa_nombre: fila.empresa_nombre,
+            tipo_ingreso: fila.tipo_ingreso,
+            medio_ingreso: fila.medio_ingreso,
+            gafete_numero: fila.gafete_numero,
         });
     }
     transaction.commit()?;
 
     Ok(remotos)
+}
+
+#[derive(serde::Deserialize)]
+struct FilaHistorialRemota {
+    id: String,
+    contratista_cedula: Option<String>,
+    contratista_nombre: String,
+    empresa_nombre: Option<String>,
+    tipo_ingreso: Option<String>,
+    medio_ingreso: Option<String>,
+    hora_entrada: String,
+    hora_salida: Option<String>,
+    gafete_numero: Option<i64>,
+    usuario_entrada_nombre: Option<String>,
+    usuario_salida_nombre: Option<String>,
+    resultado_acceso: Option<String>,
+    motivo_resultado: Option<String>,
+    reglas_version: Option<i64>,
+    empresa_activa_snapshot: Option<bool>,
+    dispositivo_entrada_id: String,
+    dispositivo_salida_id: Option<String>,
+}
+
+/// Trae a `historial_sitio` todo movimiento (abierto o cerrado) del sitio,
+/// de cualquier dispositivo -- decisión explícita del usuario: "es la
+/// misma operación vista desde dos dispositivos distintos", no un espejo
+/// resumido. Sync incremental, mismo mecanismo que
+/// `recibir_catalogo_del_sitio` (`historial_actualizado_hasta` en vez de
+/// `catalogo_actualizado_hasta` -- ritmos de sync independientes). `ON
+/// CONFLICT` actualiza en vez de insertar de nuevo: un movimiento que
+/// nace abierto y se cierra después reaparece con `updated_at` más nuevo,
+/// trayendo ya el cierre.
+pub fn recibir_historial_del_sitio(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<u32, SincronizacionError> {
+    let cliente = reqwest::blocking::Client::new();
+
+    let marca_anterior: Option<String> = connection.query_row(
+        "SELECT historial_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let marca_nueva = crate::tiempo::serializar_utc(chrono::Utc::now());
+    let filtro_incremental = marca_anterior
+        .as_deref()
+        .map(|marca| format!("&updated_at=gt.{marca}"))
+        .unwrap_or_default();
+
+    // `dispositivo_entrada_id=neq.<el mío>` -- igual que
+    // `recibir_ingresos_abiertos`: lo que ESTE dispositivo generó ya vive
+    // en `registro_ingresos` (fuente autoritativa), así que `historial_sitio`
+    // sólo necesita lo que nació en otro lado. Evita depender de un `uuid`
+    // en el frontend para deduplicar: local ∪ `historial_sitio` nunca se
+    // superponen por construcción.
+    let url = format!(
+        "{}/rest/v1/ingresos?sitio_id=eq.{}&dispositivo_entrada_id=neq.{}{filtro_incremental}\
+         &select=id,contratista_cedula,contratista_nombre,empresa_nombre,tipo_ingreso,\
+         medio_ingreso,hora_entrada,hora_salida,gafete_numero,usuario_entrada_nombre,\
+         usuario_salida_nombre,resultado_acceso,motivo_resultado,reglas_version,\
+         empresa_activa_snapshot,dispositivo_entrada_id,dispositivo_salida_id",
+        contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
+    );
+    let filas: Vec<FilaHistorialRemota> = obtener_json(&cliente, contexto, &url)?;
+
+    let transaction = connection.unchecked_transaction()?;
+    let mut recibidos = 0_u32;
+    let ahora = crate::tiempo::serializar_utc(chrono::Utc::now());
+    for fila in &filas {
+        let hora_entrada = crate::tiempo::parsear_utc(&fila.hora_entrada)
+            .map(crate::tiempo::serializar_utc)
+            .map_err(|_| SincronizacionError::FechaInvalida(fila.hora_entrada.clone()))?;
+        let hora_salida = fila
+            .hora_salida
+            .as_deref()
+            .map(crate::tiempo::parsear_utc)
+            .transpose()
+            .map_err(|_| {
+                SincronizacionError::FechaInvalida(fila.hora_salida.clone().unwrap_or_default())
+            })?
+            .map(crate::tiempo::serializar_utc);
+
+        transaction.execute(
+            "
+            INSERT INTO historial_sitio (
+                uuid, sitio_id, contratista_cedula, contratista_nombre, empresa_nombre,
+                tipo_ingreso, medio_ingreso, hora_entrada, hora_salida, gafete_numero,
+                usuario_entrada_nombre, usuario_salida_nombre, resultado_acceso,
+                motivo_resultado, reglas_version, empresa_activa_snapshot,
+                dispositivo_entrada_id, dispositivo_salida_id, actualizado_en
+            ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)
+            ON CONFLICT(uuid) DO UPDATE SET
+                hora_salida = excluded.hora_salida,
+                usuario_salida_nombre = excluded.usuario_salida_nombre,
+                dispositivo_salida_id = excluded.dispositivo_salida_id,
+                resultado_acceso = excluded.resultado_acceso,
+                motivo_resultado = excluded.motivo_resultado,
+                reglas_version = excluded.reglas_version,
+                empresa_activa_snapshot = excluded.empresa_activa_snapshot,
+                actualizado_en = excluded.actualizado_en
+            ",
+            params![
+                fila.id,
+                contexto.sitio_id,
+                fila.contratista_cedula,
+                fila.contratista_nombre,
+                fila.empresa_nombre,
+                fila.tipo_ingreso,
+                fila.medio_ingreso,
+                hora_entrada,
+                hora_salida,
+                fila.gafete_numero,
+                fila.usuario_entrada_nombre,
+                fila.usuario_salida_nombre,
+                fila.resultado_acceso,
+                fila.motivo_resultado,
+                fila.reglas_version,
+                fila.empresa_activa_snapshot,
+                fila.dispositivo_entrada_id,
+                fila.dispositivo_salida_id,
+                ahora,
+            ],
+        )?;
+        recibidos += 1;
+    }
+
+    transaction.execute(
+        "UPDATE sincronizacion_estado SET historial_actualizado_hasta = ?1 WHERE id = 1",
+        params![marca_nueva],
+    )?;
+    transaction.commit()?;
+    Ok(recibidos)
 }
 
 /// Cuántas filas se aplicaron localmente al traer el catálogo del sitio --
