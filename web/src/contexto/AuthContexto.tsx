@@ -98,9 +98,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signInWithOAuth({ provider: "google" });
   }
 
+  /** Cierra la sesión de Google (Supabase) y, además, la de Cloudflare
+   * Access -- son dos capas independientes con cookies propias; sin este
+   * segundo paso, la persona vuelve a ver el botón de Google directo
+   * porque la cookie `CF_AppSession` (24h) sigue viva y Access ni siquiera
+   * vuelve a pedir el código. `/cdn-cgi/access/logout` es el endpoint que
+   * Cloudflare expone en todo dominio protegido para revocar esa cookie.
+   * Recarga la página entera al final para que el próximo request dispare
+   * el desafío de Access de nuevo (no alcanza con limpiar el estado de
+   * React, la próxima carga la sirve el edge, no esta SPA). */
   async function cerrarSesion() {
     await supabase.auth.signOut();
     setSesion(null);
+    try {
+      await fetch("/cdn-cgi/access/logout", { credentials: "include" });
+    } catch {
+      // Si esto falla (ej. no está detrás de Access en dev local), la
+      // sesión de Google ya se cerró igual -- no es motivo para romper el
+      // flujo normal de logout.
+    }
+    window.location.href = "/";
   }
 
   return (
