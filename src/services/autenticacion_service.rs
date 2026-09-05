@@ -2,7 +2,7 @@ use crate::database::repositories::usuario_repository::UsuarioRepository;
 use crate::models::usuario::RolUsuario;
 
 use super::error::AutenticacionError;
-use super::password::verificar_password;
+use super::password::{SIN_PASSWORD_LOCAL, verificar_password};
 
 /// Identidad autenticada que puede cruzar hacia aplicación/presentación sin exponer el hash.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,6 +71,14 @@ where
 
         if !usuario.activo {
             return Err(AutenticacionError::UsuarioInactivo);
+        }
+
+        // Se resuelve ANTES de pedirle la contraseña a quien intenta entrar
+        // -- el punto es mandarlo al alta de contraseña apenas escribe la
+        // cédula, no después de que también tipeó una contraseña que nunca
+        // se iba a poder verificar contra nada.
+        if usuario.password_hash == SIN_PASSWORD_LOCAL {
+            return Err(AutenticacionError::SinPasswordLocal);
         }
 
         Ok(CandidatoAutenticacion {

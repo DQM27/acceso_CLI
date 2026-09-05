@@ -19,6 +19,9 @@ pub fn mensaje_autenticacion(error: AutenticacionError) -> String {
     match error {
         AutenticacionError::CredencialesInvalidas => "Credenciales inválidas".into(),
         AutenticacionError::UsuarioInactivo => "Usuario inactivo".into(),
+        AutenticacionError::SinPasswordLocal => {
+            "Todavía no tenés contraseña en este dispositivo -- fijá una para continuar".into()
+        }
         AutenticacionError::HashInvalido | AutenticacionError::Database(_) => {
             "No se pudo iniciar sesión, intentá de nuevo".into()
         }

@@ -46,6 +46,14 @@ pub enum AutenticacionError {
     UsuarioInactivo,
     #[error("El hash almacenado no es válido")]
     HashInvalido,
+    /// Usuario global (sincronizado, ver `nube::sincronizacion::recibir_usuarios`)
+    /// que todavía no fijó contraseña en este dispositivo en particular --
+    /// distinto de `CredencialesInvalidas`: acá no hubo contraseña
+    /// incorrecta, todavía no existe ninguna que verificar. El llamador
+    /// decide cómo pedir la contraseña nueva (`UsuarioService::cambiar_password`,
+    /// que no exige conocer la anterior).
+    #[error("Este usuario no tiene contraseña en este dispositivo todavía")]
+    SinPasswordLocal,
     #[error(transparent)]
     Database(#[from] DatabaseError),
 }

@@ -5,6 +5,16 @@ use argon2::password_hash::{
 
 use super::error::PasswordError;
 
+/// Hash "vacío" para un usuario global (llegó por `recibir_usuarios`, ver
+/// `nube::sincronizacion`) que todavía no fijó contraseña EN ESTE
+/// dispositivo -- no es un hash real, nunca puede pasar `PasswordHash::new`
+/// (cualquier string sin el formato PHC cae ahí), que es justo la señal
+/// que `AutenticacionService::buscar_candidato` usa para mandar al alta de
+/// contraseña en vez de tratarlo como credenciales inválidas. Constante
+/// explícita (no `""`) para que grepear el string alcance para encontrar
+/// todo lo que lo usa.
+pub const SIN_PASSWORD_LOCAL: &str = "SIN_PASSWORD_LOCAL";
+
 pub fn generar_hash(password: &str) -> Result<String, PasswordError> {
     let salt = SaltString::generate(&mut OsRng);
     Argon2::default()
