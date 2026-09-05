@@ -62,6 +62,10 @@ const ALTO_MINIMO: u16 = 10;
 #[allow(clippy::option_if_let_else)]
 pub fn render(frame: &mut Frame, app: &AppState) {
     let area = frame.area();
+    frame.render_widget(
+        ratatui::widgets::Block::default().style(estilos::tema().base()),
+        area,
+    );
     if area.width < ANCHO_MINIMO || area.height < ALTO_MINIMO {
         frame.render_widget(
             Paragraph::new(format!(

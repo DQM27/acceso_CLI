@@ -14,7 +14,7 @@ use ratatui::widgets::Paragraph;
 use crate::cli::estado::{AppState, Fase, NivelFeedback};
 
 use super::estilos::{
-    FADE_ACENTO, FADE_ADVERTENCIA, FADE_ERROR, FADE_EXITO, FADE_MUTED, FADE_TEXTO, estilo_fundido,
+    estilo_fundido, fade_acento, fade_advertencia, fade_error, fade_exito, fade_muted, fade_texto,
     glifo_feedback,
 };
 
@@ -86,14 +86,14 @@ pub(super) fn render_login(frame: &mut Frame, area: Rect, app: &AppState) {
 fn linea_titulo_login(fase: &Fase, opacidad: f32) -> Line<'static> {
     let (texto, color) = match fase {
         Fase::LoginCedula | Fase::RootCedula | Fase::RootNombre { .. } => {
-            (crate::cli::NOMBRE_APP.to_uppercase(), FADE_ACENTO)
+            (crate::cli::NOMBRE_APP.to_uppercase(), fade_acento())
         }
         Fase::LoginPassword { nombre, .. }
         | Fase::Verificando { nombre }
         | Fase::RootPassword { nombre, .. }
         | Fase::RootConfirmarPassword { nombre, .. }
-        | Fase::RootCreando { nombre } => (nombre.to_uppercase(), FADE_TEXTO),
-        Fase::Operando { .. } => (String::new(), FADE_TEXTO),
+        | Fase::RootCreando { nombre } => (nombre.to_uppercase(), fade_texto()),
+        Fase::Operando { .. } => (String::new(), fade_texto()),
     };
     Line::from(Span::styled(
         texto,
@@ -105,37 +105,41 @@ fn linea_estado_login(fase: &Fase, opacidad: f32) -> Line<'static> {
     let (texto, color, modificador) = match fase {
         Fase::LoginCedula => (
             "● Paso 1 de 2 · Identificación",
-            FADE_MUTED,
+            fade_muted(),
             Modifier::empty(),
         ),
         Fase::LoginPassword { .. } => (
             "✓ Identidad reconocida · Paso 2 de 2",
-            FADE_EXITO,
+            fade_exito(),
             Modifier::empty(),
         ),
-        Fase::Verificando { .. } => ("● Verificando credenciales", FADE_MUTED, Modifier::empty()),
+        Fase::Verificando { .. } => (
+            "● Verificando credenciales",
+            fade_muted(),
+            Modifier::empty(),
+        ),
         Fase::RootCedula => (
             "● Configuración inicial · Paso 1 de 4",
-            FADE_MUTED,
+            fade_muted(),
             Modifier::empty(),
         ),
         Fase::RootNombre { .. } => (
             "● Configuración inicial · Paso 2 de 4",
-            FADE_MUTED,
+            fade_muted(),
             Modifier::empty(),
         ),
         Fase::RootPassword { .. } => (
             "● Configuración inicial · Paso 3 de 4",
-            FADE_MUTED,
+            fade_muted(),
             Modifier::empty(),
         ),
         Fase::RootConfirmarPassword { .. } => (
             "● Configuración inicial · Paso 4 de 4",
-            FADE_MUTED,
+            fade_muted(),
             Modifier::empty(),
         ),
-        Fase::RootCreando { .. } => ("● Creando usuario ROOT", FADE_MUTED, Modifier::empty()),
-        Fase::Operando { .. } => ("", FADE_MUTED, Modifier::empty()),
+        Fase::RootCreando { .. } => ("● Creando usuario ROOT", fade_muted(), Modifier::empty()),
+        Fase::Operando { .. } => ("", fade_muted(), Modifier::empty()),
     };
     Line::from(Span::styled(
         texto,
@@ -152,7 +156,7 @@ fn linea_verificando(fase: &Fase, opacidad: f32) -> Line<'static> {
     };
     Line::from(Span::styled(
         texto,
-        estilo_fundido(FADE_MUTED, opacidad, Modifier::empty()),
+        estilo_fundido(fade_muted(), opacidad, Modifier::empty()),
     ))
 }
 
@@ -195,34 +199,34 @@ fn linea_prompt(etiqueta: &str, valor_mostrado: &str, vacio: bool, opacidad: f32
         Line::from(vec![
             Span::styled(
                 "› ",
-                estilo_fundido(FADE_ACENTO, opacidad, Modifier::empty()),
+                estilo_fundido(fade_acento(), opacidad, Modifier::empty()),
             ),
             Span::styled(
                 format!("{etiqueta}: "),
-                estilo_fundido(FADE_MUTED, opacidad, Modifier::empty()),
+                estilo_fundido(fade_muted(), opacidad, Modifier::empty()),
             ),
             Span::styled(
                 "_",
-                estilo_fundido(FADE_ACENTO, opacidad, Modifier::empty()),
+                estilo_fundido(fade_acento(), opacidad, Modifier::empty()),
             ),
         ])
     } else {
         Line::from(vec![
             Span::styled(
                 "› ",
-                estilo_fundido(FADE_ACENTO, opacidad, Modifier::empty()),
+                estilo_fundido(fade_acento(), opacidad, Modifier::empty()),
             ),
             Span::styled(
                 format!("{etiqueta}: "),
-                estilo_fundido(FADE_MUTED, opacidad, Modifier::empty()),
+                estilo_fundido(fade_muted(), opacidad, Modifier::empty()),
             ),
             Span::styled(
                 valor_mostrado.to_string(),
-                estilo_fundido(FADE_TEXTO, opacidad, Modifier::empty()),
+                estilo_fundido(fade_texto(), opacidad, Modifier::empty()),
             ),
             Span::styled(
                 "_",
-                estilo_fundido(FADE_ACENTO, opacidad, Modifier::empty()),
+                estilo_fundido(fade_acento(), opacidad, Modifier::empty()),
             ),
         ])
     }
@@ -243,7 +247,7 @@ fn linea_ayuda_login(fase: &Fase, opacidad: f32) -> Line<'static> {
     };
     Line::from(Span::styled(
         texto,
-        estilo_fundido(FADE_MUTED, opacidad, Modifier::empty()),
+        estilo_fundido(fade_muted(), opacidad, Modifier::empty()),
     ))
 }
 
@@ -252,9 +256,9 @@ fn linea_ayuda_login(fase: &Fase, opacidad: f32) -> Line<'static> {
 /// falta poder fundirlo con `estilo_fundido`.
 fn color_nivel_login(nivel: NivelFeedback) -> (u8, u8, u8) {
     match nivel {
-        NivelFeedback::Exito => FADE_EXITO,
-        NivelFeedback::Advertencia => FADE_ADVERTENCIA,
-        NivelFeedback::Error => FADE_ERROR,
+        NivelFeedback::Exito => fade_exito(),
+        NivelFeedback::Advertencia => fade_advertencia(),
+        NivelFeedback::Error => fade_error(),
     }
 }
 

@@ -7,15 +7,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -174,14 +171,14 @@ fun PantallaConfirmarIngreso(
             Text(mensajeError, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 12.dp))
         }
 
-        Button(
+        BotonBrisas(
             onClick = {
                 error = null
                 val gafete: Long? = if (preparacion.requiereGafete) {
                     val numero = gafeteTexto.trim().toLongOrNull()
                     if (numero == null) {
                         error = if (gafeteTexto.isBlank()) "El gafete es requerido" else "Ingrese un número de gafete válido"
-                        return@Button
+                        return@BotonBrisas
                     }
                     numero
                 } else {
@@ -202,16 +199,12 @@ fun PantallaConfirmarIngreso(
                 }
             },
             enabled = !enviando,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ),
             modifier = Modifier.fillMaxWidth().focusRequester(focoConfirmar),
         ) {
             Text(if (enviando) "Registrando…" else "Registrar entrada")
         }
 
-        TextButton(onClick = onCambiar, modifier = Modifier.padding(top = 8.dp)) {
+        BotonDiscretoBrisas(onClick = onCambiar, modifier = Modifier.padding(top = 8.dp)) {
             Text("← Cambiar contratista")
         }
     }

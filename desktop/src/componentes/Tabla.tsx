@@ -35,10 +35,12 @@ const temaBrisas = themeQuartz.withParams({
   headerBackgroundColor: "var(--panel-suave)",
   headerTextColor: "var(--muted)",
   borderColor: "var(--borde)",
+  fontFamily: "var(--fuente)",
   accentColor: "var(--acento)",
+  selectedRowBackgroundColor: "var(--acento-suave)",
   oddRowBackgroundColor: "var(--campo-fondo)",
-  borderRadius: 8,
-  wrapperBorderRadius: 8,
+  borderRadius: "var(--radio-chico)",
+  wrapperBorderRadius: "var(--radio)",
 });
 
 const columnaPorDefecto: ColDef = {

@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -91,12 +89,8 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String) {
             ),
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
         )
-        Button(
+        BotonBrisas(
             onClick = { viewModel.autenticar() },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ),
             modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
         ) {
             Text("Ingresar")

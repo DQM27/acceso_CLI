@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -59,16 +57,16 @@ fun PantallaNuevaEmpresa(nucleo: Nucleo) {
         }
         val mensajeExito = mensaje
         if (mensajeExito != null) {
-            Text(mensajeExito, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp))
+            Text(mensajeExito, color = ColorExitoBrisas, modifier = Modifier.padding(top = 16.dp))
         }
 
-        Button(
+        BotonBrisas(
             onClick = {
                 error = null
                 mensaje = null
                 if (nombre.isBlank()) {
                     error = "El nombre es obligatorio"
-                    return@Button
+                    return@BotonBrisas
                 }
                 enviando = true
                 alcance.launch {
@@ -84,10 +82,6 @@ fun PantallaNuevaEmpresa(nucleo: Nucleo) {
                 }
             },
             enabled = !enviando,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ),
             modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
         ) {
             Text(if (enviando) "Guardando…" else "Guardar")

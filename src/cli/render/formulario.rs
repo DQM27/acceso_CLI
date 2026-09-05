@@ -9,7 +9,7 @@ use crate::cli::formulario::{
     Campo, FormularioContratista, MAX_VISIBLES_EMPRESAS, ModoFormulario, Subfase,
 };
 
-use super::estilos::{FADE_ACENTO, FADE_ERROR, estilo_fundido, exito, muted};
+use super::estilos::{estilo_fundido, exito, fade_acento, fade_error, muted};
 use super::util::si_no;
 
 /// Opacidades vigentes de la Surface del formulario (Fase 5) — una por
@@ -124,14 +124,14 @@ fn linea_campo(
     // El campo activo funde su acento en vez de aparecer a color pleno de
     // golpe — mismo mecanismo que el título del login (Fase 5), sobre el
     // mismo `estilo_fundido`.
-    let estilo_activo = || estilo_fundido(FADE_ACENTO, opacidades.campo, Modifier::empty());
+    let estilo_activo = || estilo_fundido(fade_acento(), opacidades.campo, Modifier::empty());
 
     let (glifo, estilo_glifo) = if activo {
         ("›", estilo_activo())
     } else if formulario.error_de(campo).is_some() {
         (
             "×",
-            estilo_fundido(FADE_ERROR, opacidades.error, Modifier::empty()),
+            estilo_fundido(fade_error(), opacidades.error, Modifier::empty()),
         )
     } else if campo.admite_estado() && valor_presente {
         ("✓", exito())
@@ -191,7 +191,7 @@ fn linea_campo(
     if let Some(mensaje) = formulario.error_de(campo) {
         spans.push(Span::styled(
             format!("  {mensaje}"),
-            estilo_fundido(FADE_ERROR, opacidades.error, Modifier::empty()),
+            estilo_fundido(fade_error(), opacidades.error, Modifier::empty()),
         ));
     }
     Line::from(spans)
@@ -246,7 +246,7 @@ fn lineas_resumen_formulario(
     let mut lineas = vec![
         Line::from(Span::styled(
             "REVISAR Y CONFIRMAR",
-            estilo_fundido(super::estilos::FADE_MUTED, opacidad, Modifier::empty()),
+            estilo_fundido(super::estilos::fade_muted(), opacidad, Modifier::empty()),
         )),
         Line::from(""),
     ];
@@ -259,7 +259,7 @@ fn lineas_resumen_formulario(
     lineas.push(Line::from(""));
     lineas.push(Line::from(Span::styled(
         "ENTER para guardar · Esc para volver a editar",
-        estilo_fundido(FADE_ACENTO, opacidad, Modifier::empty()),
+        estilo_fundido(fade_acento(), opacidad, Modifier::empty()),
     )));
     lineas
 }

@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -212,17 +210,17 @@ fun PantallaNuevoContratista(nucleo: Nucleo) {
         }
         val mensajeExito = mensaje
         if (mensajeExito != null) {
-            Text(mensajeExito, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp))
+            Text(mensajeExito, color = ColorExitoBrisas, modifier = Modifier.padding(top = 16.dp))
         }
 
-        Button(
+        BotonBrisas(
             onClick = {
                 error = null
                 mensaje = null
                 val empresa = empresaSeleccionada
                 if (cedula.isBlank() || nombre.isBlank() || empresa == null) {
                     error = "Complete cédula, nombre y empresa"
-                    return@Button
+                    return@BotonBrisas
                 }
                 enviando = true
                 alcance.launch {
@@ -254,10 +252,6 @@ fun PantallaNuevoContratista(nucleo: Nucleo) {
                 }
             },
             enabled = !enviando,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ),
             modifier = Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 32.dp),
         ) {
             Text(if (enviando) "Guardando…" else "Guardar")

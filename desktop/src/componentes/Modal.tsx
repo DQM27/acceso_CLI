@@ -34,7 +34,7 @@ export default function Modal({
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0, 0, 0, 0.55)",
+        background: "var(--velo)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -44,6 +44,8 @@ export default function Modal({
       <div
         className="tarjeta"
         style={{
+          background: "var(--elevado)",
+          boxShadow: "var(--sombra-panel)",
           width: "32rem",
           maxWidth: "calc(100% - 2rem)",
           maxHeight: "calc(100% - 2rem)",

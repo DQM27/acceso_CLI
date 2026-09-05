@@ -236,8 +236,7 @@ export default function Respaldos({ onRestaurado }: { onRestaurado: () => void }
             </button>
             <button
               type="button"
-              className="boton"
-              style={{ borderColor: "var(--error)", color: "var(--error)", fontWeight: 600 }}
+              className="boton boton-peligro"
               onClick={confirmarRestauracion}
               disabled={restaurando}
             >

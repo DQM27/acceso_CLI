@@ -17,7 +17,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -148,7 +147,7 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String,
                         }
                     }
                 }
-                TextButton(onClick = onCerrarSesion) {
+                BotonDiscretoBrisas(onClick = onCerrarSesion) {
                     Text("Salir")
                 }
             }
@@ -156,7 +155,7 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String,
 
         when (val actual = pantalla) {
             is Pantalla.NuevoContratista, is Pantalla.NuevaEmpresa, is Pantalla.NuevoUsuario -> {
-                TextButton(onClick = { pantalla = Pantalla.Principal }, modifier = Modifier.padding(start = 8.dp)) {
+                BotonDiscretoBrisas(onClick = { pantalla = Pantalla.Principal }, modifier = Modifier.padding(start = 8.dp)) {
                     Text("← Volver")
                 }
                 when (actual) {

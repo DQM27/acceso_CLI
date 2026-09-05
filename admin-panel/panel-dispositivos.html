@@ -6,61 +6,23 @@
 <title>Alta de Dispositivos</title>
 <meta name="description" content="Panel de administración para dar de alta, listar y revocar dispositivos por sitio en el receptor de control de acceso.">
 <link rel="icon" type="image/png" href="/favicon.png">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
   :root {
-    --bg: #f4f6f5;
-    --surface: #ffffff;
-    --surface-2: #eef1f0;
-    --border: #d7dfdc;
-    --text: #16211e;
-    --text-muted: #5b6b66;
-    --accent: #1f8f7d;
-    --accent-ink: #ffffff;
-    --accent-soft: #e1f3ef;
-    --warning: #b6791a;
-    --warning-soft: #fbeed9;
-    --danger: #b8493b;
-    --danger-soft: #f9e4e0;
-    --radius: 10px;
-    --shadow: 0 1px 2px rgba(20, 30, 27, 0.06), 0 8px 24px rgba(20, 30, 27, 0.05);
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #10161a;
-      --surface: #171f24;
-      --surface-2: #1d262b;
-      --border: #2b363c;
-      --text: #e7ede9;
-      --text-muted: #8ea39c;
-      --accent: #45c2ac;
-      --accent-ink: #05201b;
-      --accent-soft: #16332d;
-      --warning: #e2ab52;
-      --warning-soft: #362a12;
-      --danger: #e2796a;
-      --danger-soft: #38201c;
-      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 28px rgba(0, 0, 0, 0.35);
-    }
-  }
-
-  :root[data-theme="dark"] {
-    --bg: #10161a;
-    --surface: #171f24;
-    --surface-2: #1d262b;
-    --border: #2b363c;
-    --text: #e7ede9;
-    --text-muted: #8ea39c;
-    --accent: #45c2ac;
-    --accent-ink: #05201b;
-    --accent-soft: #16332d;
-    --warning: #e2ab52;
-    --warning-soft: #362a12;
-    --danger: #e2796a;
-    --danger-soft: #38201c;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 28px rgba(0, 0, 0, 0.35);
+    --bg: var(--fondo);
+    --surface: var(--panel);
+    --surface-2: var(--panel-suave);
+    --border: var(--borde);
+    --text: var(--texto);
+    --text-muted: var(--muted);
+    --accent: var(--acento);
+    --accent-ink: var(--sobre-acento);
+    --accent-soft: var(--acento-suave);
+    --warning: var(--advertencia);
+    --warning-soft: var(--advertencia-suave);
+    --danger: var(--error);
+    --danger-soft: var(--error-suave);
+    --radius: var(--radio);
+    --shadow: var(--sombra-panel);
   }
 
   * { box-sizing: border-box; }
@@ -68,13 +30,13 @@
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    font-family: var(--fuente);
     font-size: 14px;
     line-height: 1.5;
   }
 
   .mono {
-    font-family: "IBM Plex Mono", ui-monospace, "Cascadia Code", monospace;
+    font-family:  ui-monospace, "Cascadia Code", monospace;
     font-variant-numeric: tabular-nums;
   }
 
@@ -112,12 +74,12 @@
   }
 
   .project-tag {
-    font-family: "IBM Plex Mono", monospace;
+    font-family:  monospace;
     font-size: 11.5px;
     color: var(--text-muted);
     background: var(--surface-2);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radio-chico);
     padding: 3px 8px;
   }
 
@@ -158,10 +120,10 @@
 
   input[type="text"], select {
     width: 100%;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
+    background: var(--campo-fondo);
+    border: 1px solid var(--borde-fuerte);
     color: var(--text);
-    border-radius: 7px;
+    border-radius: var(--radio-chico);
     padding: 9px 11px;
     font-size: 14px;
     font-family: inherit;
@@ -171,41 +133,6 @@
   input[type="text"]:focus, select:focus {
     border-color: var(--accent);
   }
-
-  button {
-    font-family: inherit;
-    font-size: 13.5px;
-    font-weight: 600;
-    border-radius: 7px;
-    border: 1px solid transparent;
-    padding: 9px 16px;
-    cursor: pointer;
-    transition: filter 0.12s ease, background 0.12s ease;
-  }
-  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  button:disabled { opacity: 0.55; cursor: default; }
-
-  .btn-primary {
-    background: var(--accent);
-    color: var(--accent-ink);
-  }
-  .btn-primary:hover:not(:disabled) { filter: brightness(1.06); }
-
-  .btn-ghost {
-    background: transparent;
-    border-color: var(--border);
-    color: var(--text);
-  }
-  .btn-ghost:hover:not(:disabled) { background: var(--surface-2); }
-
-  .btn-danger-ghost {
-    background: transparent;
-    border-color: var(--border);
-    color: var(--danger);
-    font-size: 12px;
-    padding: 5px 10px;
-  }
-  .btn-danger-ghost:hover:not(:disabled) { background: var(--danger-soft); border-color: var(--danger); }
 
   /* --- layout --- */
   .grid {
@@ -289,7 +216,7 @@
 
   .device-icon {
     width: 22px; height: 22px;
-    border-radius: 5px;
+    border-radius: var(--radio-chico);
     background: var(--surface-2);
     border: 1px solid var(--border);
     display: flex; align-items: center; justify-content: center;
@@ -304,7 +231,7 @@
     font-size: 11px;
     font-weight: 600;
     padding: 2px 8px;
-    border-radius: 999px;
+    border-radius: var(--radio-capsula);
     white-space: nowrap;
   }
   .pill-active { background: var(--accent-soft); color: var(--accent); }
@@ -322,7 +249,7 @@
     margin: 14px 18px 18px;
     border: 1px solid var(--warning);
     background: var(--warning-soft);
-    border-radius: 9px;
+    border-radius: var(--radio);
     padding: 14px 16px;
     animation: reveal-in 0.22s ease;
   }
@@ -350,7 +277,7 @@
     flex: 1;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radio-chico);
     padding: 8px 10px;
     font-size: 12.5px;
     word-break: break-all;
@@ -371,7 +298,7 @@
     font-size: 12.5px;
     font-weight: 500;
     padding: 8px 14px;
-    border-radius: 999px;
+    border-radius: var(--radio-capsula);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.15s ease, transform 0.15s ease;
@@ -382,6 +309,198 @@
   }
 
   [hidden] { display: none !important; }
+</style>
+<style id="brisas-generado">
+/* Generado desde design/brisas.json. Editar la fuente y ejecutar node design/generar.mjs. */
+:root {
+  --fuente: "Segoe UI", Roboto, system-ui, sans-serif;
+  --fuente-base: 14px;
+  --fuente-control: 14px;
+  --fuente-titulo: 20px;
+  --peso-control: 600;
+  --radio: 12px;
+  --radio-chico: 8px;
+  --radio-capsula: 999px;
+  --espacio-1: 4px;
+  --espacio-2: 8px;
+  --espacio-3: 12px;
+  --espacio-4: 16px;
+  --espacio-6: 24px;
+  --espacio-8: 32px;
+  --control-altura: 36px;
+  --control-compacto: 28px;
+  --control-tactil: 48px;
+  --control-horizontal: 12px;
+  --control-icono: 18px;
+  --duracion: 150ms;
+}
+:root, [data-theme="light"] {
+  --fondo: #E9EDF3;
+  --panel: #FFFFFF;
+  --panel-suave: #E1E7EF;
+  --elevado: #FFFFFF;
+  --campo-fondo: #F6F8FB;
+  --borde: #C7D0DD;
+  --borde-fuerte: #78879D;
+  --texto: #202B3A;
+  --muted: #536278;
+  --texto-atenuado: #627087;
+  --acento: #203C63;
+  --acento-hover: #2D4E7A;
+  --acento-presionado: #172D4C;
+  --acento-suave: #E5EBF4;
+  --sobre-acento: #FFFFFF;
+  --exito: #35724F;
+  --exito-suave: #E7F1E9;
+  --sobre-exito: #FFFFFF;
+  --advertencia: #89621D;
+  --advertencia-suave: #F6EEDC;
+  --sobre-advertencia: #FFFFFF;
+  --error: #AD4945;
+  --error-suave: #F7E8E5;
+  --sobre-error: #FFFFFF;
+  --info: #426F93;
+  --info-suave: #E7EFF6;
+  --sobre-info: #FFFFFF;
+  --sombra-panel: 0 8px 28px rgba(12, 15, 20, 0.14);
+  --velo: rgba(12, 15, 20, 0.45);
+  --panel-lateral: #F3F5F9;
+  --acento-relleno: #203C63;
+  --sobre-acento-indicador: #FFFFFF;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  --fondo: #0C0F14;
+  --panel: #181C23;
+  --panel-suave: #303844;
+  --elevado: #343E4D;
+  --campo-fondo: #12161D;
+  --borde: #424C5B;
+  --borde-fuerte: #7C8BA2;
+  --texto: #ECF0F6;
+  --muted: #ADB8C8;
+  --texto-atenuado: #96A3B8;
+  --acento: #A6BCD9;
+  --acento-hover: #2D4E7A;
+  --acento-presionado: #172D4C;
+  --acento-suave: #1B304E;
+  --sobre-acento: #FFFFFF;
+  --exito: #8BC49B;
+  --exito-suave: #23382B;
+  --sobre-exito: #102719;
+  --advertencia: #D8BA77;
+  --advertencia-suave: #3B3322;
+  --sobre-advertencia: #29220F;
+  --error: #DE9690;
+  --error-suave: #402B2B;
+  --sobre-error: #301A19;
+  --info: #93B7D4;
+  --info-suave: #263644;
+  --sobre-info: #142431;
+  --sombra-panel: 0 12px 32px rgba(0, 0, 0, 0.32);
+  --velo: rgba(0, 0, 0, 0.55);
+  --panel-lateral: #222831;
+  --acento-relleno: #203C63;
+  --sobre-acento-indicador: #142238;
+    color-scheme: dark;
+  }
+}
+[data-theme="dark"] {
+  --fondo: #0C0F14;
+  --panel: #181C23;
+  --panel-suave: #303844;
+  --elevado: #343E4D;
+  --campo-fondo: #12161D;
+  --borde: #424C5B;
+  --borde-fuerte: #7C8BA2;
+  --texto: #ECF0F6;
+  --muted: #ADB8C8;
+  --texto-atenuado: #96A3B8;
+  --acento: #A6BCD9;
+  --acento-hover: #2D4E7A;
+  --acento-presionado: #172D4C;
+  --acento-suave: #1B304E;
+  --sobre-acento: #FFFFFF;
+  --exito: #8BC49B;
+  --exito-suave: #23382B;
+  --sobre-exito: #102719;
+  --advertencia: #D8BA77;
+  --advertencia-suave: #3B3322;
+  --sobre-advertencia: #29220F;
+  --error: #DE9690;
+  --error-suave: #402B2B;
+  --sobre-error: #301A19;
+  --info: #93B7D4;
+  --info-suave: #263644;
+  --sobre-info: #142431;
+  --sombra-panel: 0 12px 32px rgba(0, 0, 0, 0.32);
+  --velo: rgba(0, 0, 0, 0.55);
+  --panel-lateral: #222831;
+  --acento-relleno: #203C63;
+  --sobre-acento-indicador: #142238;
+  color-scheme: dark;
+}
+
+/* Reglas comunes de escritorio, panel web y catálogo visual. */
+.boton, .btn-primary, .btn-ghost, .btn-danger-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espacio-2);
+  min-height: var(--control-altura);
+  padding: 0 var(--control-horizontal);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-chico);
+  background: var(--panel-suave);
+  color: var(--texto);
+  font-family: var(--fuente);
+  font-size: var(--fuente-control);
+  font-weight: var(--peso-control);
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background-color var(--duracion), border-color var(--duracion);
+}
+.boton:hover:not(:disabled), .btn-ghost:hover:not(:disabled) {
+  background: var(--acento-suave);
+  border-color: var(--acento);
+}
+.boton:active:not(:disabled) { background: var(--campo-fondo); }
+.boton-primario, .btn-primary {
+  background: var(--acento-relleno);
+  border-color: var(--acento-relleno);
+  color: var(--sobre-acento);
+}
+.boton-primario:hover:not(:disabled), .btn-primary:hover:not(:disabled) {
+  background: var(--acento-hover);
+  border-color: var(--acento-hover);
+  filter: none;
+}
+.boton-primario:active:not(:disabled), .btn-primary:active:not(:disabled) {
+  background: var(--acento-presionado);
+  border-color: var(--acento-presionado);
+}
+.boton-discreto, .btn-ghost { background: transparent; border-color: transparent; }
+.boton-peligro, .btn-danger-ghost { color: var(--error); background: var(--panel); }
+.boton-peligro:hover:not(:disabled), .btn-danger-ghost:hover:not(:disabled) {
+  color: var(--error); background: var(--error-suave); border-color: var(--error);
+}
+.boton:focus-visible, .btn-primary:focus-visible, .btn-ghost:focus-visible, .btn-danger-ghost:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+.boton:disabled, .btn-primary:disabled, .btn-ghost:disabled, .btn-danger-ghost:disabled {
+  opacity: 0.5; cursor: default;
+}
+.ag-cell .boton, .boton-compacto { min-height: var(--control-compacto); }
+.boton svg { width: var(--control-icono); height: var(--control-icono); flex-shrink: 0; }
+@media (pointer: coarse) {
+  .boton, .btn-primary, .btn-ghost, .btn-danger-ghost { min-height: var(--control-tactil); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .boton, .btn-primary, .btn-ghost, .btn-danger-ghost { transition: none; }
+}
 </style>
 </head>
 <body>
@@ -401,9 +520,9 @@
       <span class="subtitle">control-acceso-nube</span>
     </div>
     <div style="display:flex; align-items:center; gap:10px;">
-      <a href="/" class="btn-ghost" style="font-size:12px; padding:5px 10px; text-decoration:none; display:inline-block;">← Historial</a>
+      <a href="/" class="btn-ghost" style="text-decoration:none;">← Historial</a>
       <span class="project-tag">xidaepyaljzkpbsxrqsm</span>
-      <button class="btn-ghost" id="btn-logout" style="font-size:12px; padding:5px 10px;">Salir</button>
+      <button class="btn-ghost" id="btn-logout" >Salir</button>
     </div>
   </header>
 
@@ -440,7 +559,7 @@
     <div class="panel">
       <div class="panel-header">
         <h2>Sitios y dispositivos</h2>
-        <button class="btn-ghost" id="btn-refresh" style="font-size:12px; padding:5px 10px;">Actualizar</button>
+        <button class="btn-ghost" id="btn-refresh" >Actualizar</button>
       </div>
       <div class="sites" id="sites-list">
         <div class="empty-state">Cargando…</div>

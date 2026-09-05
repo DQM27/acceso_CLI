@@ -1,5 +1,5 @@
 {
-  "name": "desktop",
+  "name": "panel-web",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -8,13 +8,11 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "tauri": "tauri",
     "design:generate": "node ../design/generar.mjs",
     "design:check": "node ../design/generar.mjs --check"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
-    "@tauri-apps/cli": "^2.11.4",
     "@testing-library/react": "^16.3.3",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
@@ -26,20 +24,12 @@
     "vitest": "^4.1.11"
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.9.1",
     "@supabase/supabase-js": "^2.114.0",
-    "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-dialog": "^2.7.2",
-    "@tauri-apps/plugin-process": "^2.3.1",
-    "@tauri-apps/plugin-updater": "^2.10.1",
     "ag-grid-community": "^36.1.0",
     "ag-grid-react": "^36.1.0",
     "lucide-react": "^1.35.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-hook-form": "^7.86.0",
-    "react-hotkeys-hook": "^5.3.3",
-    "sonner": "^2.0.8",
-    "zod": "^4.4.3"
+    "sonner": "^2.0.8"
   }
 }

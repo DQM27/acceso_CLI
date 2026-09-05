@@ -130,6 +130,7 @@ export function ListaFlotante({
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
+        background: "var(--elevado)",
         boxShadow: "var(--sombra-panel)",
       }}
     >

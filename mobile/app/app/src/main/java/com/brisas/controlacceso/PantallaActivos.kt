@@ -12,8 +12,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -24,7 +22,6 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
@@ -261,7 +258,7 @@ private fun MensajesEstado(error: String?, mensaje: String?, mensajeEsError: Boo
     if (mensaje != null) {
         Text(
             mensaje,
-            color = if (mensajeEsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+            color = if (mensajeEsError) MaterialTheme.colorScheme.error else ColorExitoBrisas,
             modifier = Modifier.padding(top = 12.dp),
         )
     }
@@ -354,13 +351,9 @@ private fun ContenidoModoSalidaGafete(
 
         val encontrados = coincidencias.filter { it.activo != null }
         if (encontrados.isNotEmpty()) {
-            Button(
+            BotonBrisas(
                 onClick = onRegistrarSalidaGafetes,
                 enabled = !enviando,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondary,
-                    contentColor = MaterialTheme.colorScheme.onSecondary,
-                ),
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
             ) {
                 Text(if (enviando) "Registrando…" else "Registrar salida (${encontrados.size})")
@@ -397,12 +390,12 @@ private fun DialogoConfirmarSalida(
             Text("${activo.contratistaNombre} · ${activo.cedula} · ${activo.empresaNombre}")
         },
         confirmButton = {
-            TextButton(onClick = { onConfirmar(activo) }) {
+            BotonDiscretoBrisas(onClick = { onConfirmar(activo) }) {
                 Text("Confirmar")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            BotonDiscretoBrisas(onClick = onDismiss) {
                 Text("Cancelar")
             }
         },

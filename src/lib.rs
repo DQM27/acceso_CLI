@@ -1,5 +1,7 @@
 pub mod application;
 pub mod database;
+#[cfg(feature = "terminal-ui")]
+mod diseno_generado;
 pub mod domain;
 pub mod historial;
 pub mod instancia;

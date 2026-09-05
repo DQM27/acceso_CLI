@@ -11,7 +11,7 @@ use crate::cli::historial::HistorialState;
 use crate::tiempo::a_costa_rica;
 
 use super::estilos::{
-    FADE_ACENTO, FADE_MUTED, advertencia, estilo_fundido, estilo_seleccion, muted,
+    advertencia, estilo_fundido, estilo_seleccion, fade_acento, fade_muted, muted,
 };
 use super::tabla::{anchos_columnas, columnas_visibles, fila_columnas};
 use super::util::tipo_texto;
@@ -161,7 +161,7 @@ fn lineas_exportacion(
     let titulo = || {
         Line::from(Span::styled(
             "EXPORTAR HISTORIAL",
-            estilo_fundido(FADE_MUTED, opacidad, Modifier::empty()),
+            estilo_fundido(fade_muted(), opacidad, Modifier::empty()),
         ))
     };
     if historial.exportando {
@@ -171,7 +171,7 @@ fn lineas_exportacion(
                 Line::from(""),
                 Line::from(Span::styled(
                     "⠋ Exportando…",
-                    estilo_fundido(FADE_ACENTO, opacidad, Modifier::empty()),
+                    estilo_fundido(fade_acento(), opacidad, Modifier::empty()),
                 )),
             ],
             None,
@@ -189,7 +189,7 @@ fn lineas_exportacion(
             Line::from(""),
             Line::from(Span::styled(
                 "Enter para exportar · Esc para cancelar",
-                estilo_fundido(FADE_ACENTO, opacidad, Modifier::empty()),
+                estilo_fundido(fade_acento(), opacidad, Modifier::empty()),
             )),
         ],
         None,
@@ -244,7 +244,7 @@ pub(super) fn lineas_historial(
 
     let mut lineas = vec![Line::from(Span::styled(
         resumen_filtro_historial(historial),
-        estilo_fundido(FADE_MUTED, opacidades.resultado, Modifier::empty()),
+        estilo_fundido(fade_muted(), opacidades.resultado, Modifier::empty()),
     ))];
     if !historial.no_reconocidos.is_empty() {
         lineas.push(Line::from(Span::styled(

@@ -7,21 +7,34 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 
 use crate::cli::estado::NivelFeedback;
+use crate::tui::ui_kit::Theme;
+
+/// BRISAS_THEME=light activa el tema claro. Oscuro es el valor predeterminado.
+pub(super) fn tema() -> Theme {
+    static TEMA: std::sync::OnceLock<Theme> = std::sync::OnceLock::new();
+    *TEMA.get_or_init(|| {
+        if std::env::var("BRISAS_THEME").is_ok_and(|valor| valor == "light") {
+            crate::diseno_generado::LIGHT
+        } else {
+            crate::diseno_generado::DARK
+        }
+    })
+}
 
 pub(super) fn exito() -> Style {
-    Style::default().fg(Color::Green)
+    tema().base().fg(tema().success)
 }
 pub(super) fn advertencia() -> Style {
-    Style::default().fg(Color::Yellow)
+    tema().base().fg(tema().warning)
 }
 pub(super) fn estilo_error() -> Style {
-    Style::default().fg(Color::Red)
+    tema().base().fg(tema().danger)
 }
 pub(super) fn muted() -> Style {
-    Style::default().fg(Color::DarkGray)
+    tema().base().fg(tema().muted)
 }
 pub(super) fn acento() -> Style {
-    Style::default().fg(Color::Cyan)
+    tema().base().fg(tema().accent)
 }
 pub(super) fn estilo_seleccion() -> Style {
     Style::default().add_modifier(Modifier::REVERSED)
@@ -54,17 +67,28 @@ pub(super) fn glifo_feedback_color(nivel: NivelFeedback) -> (&'static str, (u8, 
     (simbolo, color_a_rgb(estilo.fg))
 }
 
-/// Paleta propia del login en RGB explícito (no los `Color` con nombre del
-/// resto del archivo): un fundido necesita interpolar componentes, y sólo
-/// `Color::Rgb` los tiene. Fondo asumido oscuro — es la base de todo el tema
-/// actual (ver `muted()`/`acento()`), no una novedad de esta escena.
-pub(super) const FADE_FONDO: (u8, u8, u8) = (10, 10, 12);
-pub(super) const FADE_ACENTO: (u8, u8, u8) = (86, 200, 214);
-pub(super) const FADE_MUTED: (u8, u8, u8) = (120, 120, 130);
-pub(super) const FADE_TEXTO: (u8, u8, u8) = (225, 225, 230);
-pub(super) const FADE_EXITO: (u8, u8, u8) = (94, 201, 133);
-pub(super) const FADE_ADVERTENCIA: (u8, u8, u8) = (214, 181, 92);
-pub(super) const FADE_ERROR: (u8, u8, u8) = (214, 92, 92);
+/// Colores para animación derivados del mismo tema que el texto en reposo.
+pub(super) fn fade_fondo() -> (u8, u8, u8) {
+    color_a_rgb(Some(tema().background))
+}
+pub(super) fn fade_acento() -> (u8, u8, u8) {
+    color_a_rgb(Some(tema().accent))
+}
+pub(super) fn fade_muted() -> (u8, u8, u8) {
+    color_a_rgb(Some(tema().muted))
+}
+pub(super) fn fade_texto() -> (u8, u8, u8) {
+    color_a_rgb(Some(tema().text))
+}
+pub(super) fn fade_exito() -> (u8, u8, u8) {
+    color_a_rgb(Some(tema().success))
+}
+pub(super) fn fade_advertencia() -> (u8, u8, u8) {
+    color_a_rgb(Some(tema().warning))
+}
+pub(super) fn fade_error() -> (u8, u8, u8) {
+    color_a_rgb(Some(tema().danger))
+}
 
 pub(super) fn interpolar_color(desde: (u8, u8, u8), hasta: (u8, u8, u8), t: f32) -> Color {
     let t = t.clamp(0.0, 1.0);
@@ -85,33 +109,33 @@ pub(super) fn interpolar_color(desde: (u8, u8, u8), hasta: (u8, u8, u8), t: f32)
     )
 }
 
-/// Estilo que funde desde `FADE_FONDO` hacia `color` según `opacidad`
+/// Estilo que funde desde `fade_fondo()` hacia `color` según `opacidad`
 /// (0.0 = invisible, fundido con el fondo; 1.0 = color final). Con
 /// `opacidad` en 1.0 (elemento ya resuelto, o `VisualQuality::Off`) el color
 /// resultante coincide exactamente con el color final, sin diferencia visual.
 pub(super) fn estilo_fundido(color: (u8, u8, u8), opacidad: f32, modificador: Modifier) -> Style {
     Style::default()
-        .fg(interpolar_color(FADE_FONDO, color, opacidad))
+        .fg(interpolar_color(fade_fondo(), color, opacidad))
         .add_modifier(modificador)
 }
 
-/// Contraparte de `estilo_fundido` para el color con nombre (`Color::Cyan`,
-/// no `Color::Rgb`) que ya usan `acento()`/`muted()`/etc. — sólo hace falta
-/// para re-interpolar líneas ya construidas (`atenuar`), donde no hay forma
-/// de saber con qué constante `FADE_*` se armaron originalmente salvo
-/// leyendo qué `Color` terminaron usando.
+/// Conserva los RGB originales durante el fundido y traduce los nombres ANSI heredados.
 pub(super) fn color_a_rgb(color: Option<Color>) -> (u8, u8, u8) {
     match color {
-        Some(Color::Cyan) => FADE_ACENTO,
-        Some(Color::DarkGray) => FADE_MUTED,
-        Some(Color::Red) => FADE_ERROR,
-        Some(Color::Green) => FADE_EXITO,
-        Some(Color::Yellow) => FADE_ADVERTENCIA,
-        _ => FADE_TEXTO,
+        Some(Color::Rgb(r, g, b)) => (r, g, b),
+        Some(Color::Cyan) => fade_acento(),
+        Some(Color::DarkGray) => fade_muted(),
+        Some(Color::Red) => fade_error(),
+        Some(Color::Green) => fade_exito(),
+        Some(Color::Yellow) => fade_advertencia(),
+        _ => match tema().text {
+            Color::Rgb(r, g, b) => (r, g, b),
+            _ => unreachable!("Los temas Brisas usan RGB"),
+        },
     }
 }
 
-/// Re-interpola el color de cada `Span` ya construido hacia `FADE_FONDO`
+/// Re-interpola el color de cada `Span` ya construido hacia `fade_fondo()`
 /// según `opacidad`, sin tocar el modificador (BOLD/REVERSED se
 /// conservan tal cual). Alternativa a enhebrar un parámetro de opacidad
 /// por cada función de `lineas_contexto` (como sí hacen login/formulario/
@@ -136,7 +160,7 @@ pub(super) fn atenuar(lineas: Vec<Line<'static>>, opacidad: f32) -> Vec<Line<'st
                 .map(|span| {
                     let rgb = color_a_rgb(span.style.fg);
                     let estilo = Style {
-                        fg: Some(interpolar_color(FADE_FONDO, rgb, opacidad)),
+                        fg: Some(interpolar_color(fade_fondo(), rgb, opacidad)),
                         ..span.style
                     };
                     Span::styled(span.content, estilo)

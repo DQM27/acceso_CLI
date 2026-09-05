@@ -490,17 +490,12 @@ proyectos (raíz: 491 tests; `desktop/src-tauri`: 20 tests; `desktop/`: `npx tsc
   fecha PRAIND vencida/por vencer en Contratistas sólo tenía color, sin símbolo de
   respaldo (agregado `!` antes de la fecha, mismo criterio que Activos ya usa para
   accesos con advertencia).
-- [x] **Reparado (2026-08-21): cobertura visual sin snapshots aprobados.** Agregada
-  `insta` como dev-dependency; `visual_tests.rs` vuelca cada combinación (texto +
-  tramos de estilo — color/negrita por fragmento, no sólo el texto, para no dejar pasar
-  una regresión que sólo pierde una señal de color) a un snapshot aprobado por
-  `insta::assert_snapshot!`. 120 snapshots generados y aprobados
-  (`src/tui/snapshots/*.snap`, ~1.5 MB). El reloj de `ScreenShell`
-  (`hora_actual_texto()`, hora real del sistema) se enmascara (`··:··`) antes de
-  comparar — sin eso el snapshot habría cambiado solo con el reloj, sin ninguna
-  regresión visual real, y el test habría empezado a fallar en cualquier corrida
-  futura. Para actualizar snapshots tras un cambio visual intencional:
-  `INSTA_UPDATE=always cargo test --lib visual_tests`, revisar el diff, commitear.
+- [x] **Actualizado (2026-09-04): pruebas de render sin archivos de referencia visual.**
+  Por decisión del usuario se retiran `insta` y los 180 archivos `.snap`.
+  `visual_tests.rs` conserva la matriz de 12 pantallas, 5 tamaños y 3 variantes
+  de tema/navegación: comprueba render, contenido, títulos, pestañas y aviso
+  de tamaño insuficiente. Cambiar colores ya no requiere aprobar capturas
+  ni regenerar archivos de referencia.
 - [x] **Reparado (2026-08-21): atajos por letra — el único conflicto real.** La
   auditoría redujo el alcance real a un solo choque: `A` significaba "Activar/
   Desactivar" en Empresas/Usuarios pero "recargar listado" en Respaldos. Renombrado a

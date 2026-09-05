@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -69,13 +67,9 @@ fun PantallaNube(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String, refr
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
         }
 
-        Button(
+        BotonBrisas(
             onClick = { viewModel.sincronizar() },
             enabled = !viewModel.sincronizando,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(if (viewModel.sincronizando) "Sincronizando…" else "Sincronizar")
@@ -136,12 +130,8 @@ private fun SeccionSecretoDispositivo(secretoGuardado: Boolean, onGuardar: (Stri
         ),
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
     )
-    Button(
+    BotonBrisas(
         onClick = { onGuardar(secreto) },
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-        ),
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
     ) {
         Text("Guardar")

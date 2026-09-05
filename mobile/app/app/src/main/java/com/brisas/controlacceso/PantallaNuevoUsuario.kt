@@ -5,8 +5,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -146,16 +144,16 @@ fun PantallaNuevoUsuario(nucleo: Nucleo) {
         }
         val mensajeExito = mensaje
         if (mensajeExito != null) {
-            Text(mensajeExito, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp))
+            Text(mensajeExito, color = ColorExitoBrisas, modifier = Modifier.padding(top = 16.dp))
         }
 
-        Button(
+        BotonBrisas(
             onClick = {
                 error = null
                 mensaje = null
                 if (cedula.isBlank() || nombre.isBlank() || password.isBlank()) {
                     error = "Complete cédula, nombre y contraseña"
-                    return@Button
+                    return@BotonBrisas
                 }
                 enviando = true
                 alcance.launch {
@@ -185,10 +183,6 @@ fun PantallaNuevoUsuario(nucleo: Nucleo) {
                 }
             },
             enabled = !enviando,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ),
             modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
         ) {
             Text(if (enviando) "Guardando…" else "Guardar")

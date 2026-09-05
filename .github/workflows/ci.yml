@@ -47,6 +47,12 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/package-lock.json
 
+      - name: Verificar sistema de diseño
+        run: node design/generar.mjs --check
+
+      - name: Verificar contraste del diseño
+        run: node design/verificar.mjs
+
       - name: Instalar dependencias del frontend
         working-directory: desktop
         run: npm ci

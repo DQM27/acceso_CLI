@@ -4,7 +4,7 @@
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
@@ -137,7 +137,7 @@ const CLAVES_HISTORIAL: [&str; 8] = [
 /// secundario), para no competir con esos dos significados ya establecidos.
 fn estilo_clave() -> Style {
     Style::default()
-        .fg(Color::White)
+        .fg(super::estilos::tema().text)
         .add_modifier(Modifier::BOLD)
 }
 

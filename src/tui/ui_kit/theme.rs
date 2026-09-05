@@ -21,11 +21,11 @@ pub struct Theme {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThemePreset {
-    /// Verde fósforo y ámbar sobre fondo oscuro: consola clásica intencional.
+    /// Brisas claro; conserva la clave histórica de preferencias.
     Classic,
-    /// Cian sobrio, cercano a la identidad visual actual de Brisas.
+    /// Brisas oscuro.
     Brisas,
-    /// Carbón y lavanda: interfaz oscura inspirada en herramientas de terminal modernas.
+    /// Brisas oscuro con navegación por pestañas; conserva la clave histórica.
     Negro,
 }
 
@@ -49,44 +49,11 @@ impl ThemePreset {
 
     pub const fn theme(self) -> Theme {
         match self {
-            Self::Classic => Theme {
-                background: Color::Black,
-                text: Color::Rgb(196, 220, 199),
-                muted: Color::Rgb(105, 135, 111),
-                accent: Color::Rgb(91, 224, 123),
-                success: Color::Rgb(91, 224, 123),
-                warning: Color::Rgb(238, 184, 78),
-                danger: Color::Rgb(239, 105, 101),
-                border: Color::Rgb(76, 119, 85),
-                selection_foreground: Color::Black,
-                selection_background: Color::Rgb(91, 224, 123),
-                navegacion_pestanas: false,
-            },
-            Self::Brisas => Theme {
-                background: Color::Black,
-                text: Color::Rgb(220, 225, 228),
-                muted: Color::Rgb(145, 158, 164),
-                accent: Color::Rgb(70, 200, 215),
-                success: Color::Rgb(95, 190, 125),
-                warning: Color::Rgb(220, 170, 70),
-                danger: Color::Rgb(220, 95, 100),
-                border: Color::Rgb(100, 120, 126),
-                selection_foreground: Color::Black,
-                selection_background: Color::Rgb(70, 200, 215),
-                navegacion_pestanas: false,
-            },
+            Self::Classic => crate::diseno_generado::LIGHT,
+            Self::Brisas => crate::diseno_generado::DARK,
             Self::Negro => Theme {
-                background: Color::Rgb(36, 36, 39),
-                text: Color::Rgb(232, 232, 235),
-                muted: Color::Rgb(148, 148, 158),
-                accent: Color::Rgb(184, 177, 255),
-                success: Color::Rgb(134, 217, 160),
-                warning: Color::Rgb(231, 198, 107),
-                danger: Color::Rgb(240, 140, 140),
-                border: Color::Rgb(86, 86, 94),
-                selection_foreground: Color::Rgb(24, 24, 27),
-                selection_background: Color::Rgb(232, 232, 235),
                 navegacion_pestanas: true,
+                ..crate::diseno_generado::DARK
             },
         }
     }
@@ -101,9 +68,9 @@ impl ThemePreset {
 
     pub const fn name(self) -> &'static str {
         match self {
-            Self::Classic => "CLÁSICO",
-            Self::Brisas => "BRISAS",
-            Self::Negro => "NEGRO",
+            Self::Classic => "BRISAS CLARO",
+            Self::Brisas => "BRISAS OSCURO",
+            Self::Negro => "BRISAS OSCURO · PESTAÑAS",
         }
     }
 }
@@ -136,13 +103,9 @@ impl Theme {
             .add_modifier(Modifier::BOLD)
     }
 
-    /// Selección no cromática para pestañas: invierte fondo y texto incluso
-    /// cuando la terminal no distingue bien los colores del preset.
+    /// Pestaña activa con el mismo azul marino de las demás selecciones.
     pub fn selected_tab(self) -> Style {
-        Style::default()
-            .fg(self.background)
-            .bg(self.text)
-            .add_modifier(Modifier::BOLD)
+        self.selected()
     }
 
     pub fn success(self) -> Style {

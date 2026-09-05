@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "./diseno.css";
+@import "./controles.css";
 
 @theme {
   --color-fondo: var(--fondo);
@@ -15,88 +17,7 @@
   --radius-chico: var(--radio-chico);
 }
 
-/* Paleta reutilizada de src/cli/render/estilos.rs (FADE_*) — mismo
-   lenguaje visual que la CLI, no una paleta nueva. */
-:root {
-  --fondo: #f6f8f9;
-  --acento: #087f91;
-  --muted: #63717c;
-  --texto: #172026;
-  --exito: #287c4d;
-  --advertencia: #9a6a12;
-  --error: #b42318;
-  --panel: #ffffff;
-  --borde: #d8e0e5;
-  --campo-fondo: #fbfcfd;
-  --panel-suave: #eef3f5;
-  --acento-suave: #d9f1f5;
-  --sombra-panel: 0 22px 70px rgba(14, 29, 36, 0.12), 0 2px 10px rgba(14, 29, 36, 0.06);
-  --radio: 8px;
-  --radio-chico: 6px;
-
-  color-scheme: light;
-  font-family:
-    "Segoe UI",
-    system-ui,
-    -apple-system,
-    sans-serif;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --fondo: #0a0d0f;
-    --acento: #56c8d6;
-    --muted: #8a949c;
-    --texto: #e8eef1;
-    --exito: #5ec985;
-    --advertencia: #d6b55c;
-    --error: #ff8a80;
-    --panel: #12171a;
-    --borde: #263238;
-    --campo-fondo: #0d1113;
-    --panel-suave: #101518;
-    --acento-suave: rgba(86, 200, 214, 0.12);
-    --sombra-panel: 0 26px 80px rgba(0, 0, 0, 0.38), 0 2px 12px rgba(0, 0, 0, 0.2);
-
-    color-scheme: dark;
-  }
-}
-
-[data-theme="light"] {
-  --fondo: #f6f8f9;
-  --acento: #087f91;
-  --muted: #63717c;
-  --texto: #172026;
-  --exito: #287c4d;
-  --advertencia: #9a6a12;
-  --error: #b42318;
-  --panel: #ffffff;
-  --borde: #d8e0e5;
-  --campo-fondo: #fbfcfd;
-  --panel-suave: #eef3f5;
-  --acento-suave: #d9f1f5;
-  --sombra-panel: 0 22px 70px rgba(14, 29, 36, 0.12), 0 2px 10px rgba(14, 29, 36, 0.06);
-
-  color-scheme: light;
-}
-
-[data-theme="dark"] {
-  --fondo: #0a0d0f;
-  --acento: #56c8d6;
-  --muted: #8a949c;
-  --texto: #e8eef1;
-  --exito: #5ec985;
-  --advertencia: #d6b55c;
-  --error: #ff8a80;
-  --panel: #12171a;
-  --borde: #263238;
-  --campo-fondo: #0d1113;
-  --panel-suave: #101518;
-  --acento-suave: rgba(86, 200, 214, 0.12);
-  --sombra-panel: 0 26px 80px rgba(0, 0, 0, 0.38), 0 2px 12px rgba(0, 0, 0, 0.2);
-
-  color-scheme: dark;
-}
+:root { font-family: var(--fuente); }
 
 * {
   box-sizing: border-box;
@@ -141,7 +62,7 @@ input {
 
 ::-webkit-scrollbar-thumb {
   background-color: color-mix(in srgb, var(--muted) 45%, transparent);
-  border-radius: 999px;
+  border-radius: var(--radio-capsula);
   border: 3px solid transparent;
   background-clip: padding-box;
 }
@@ -175,12 +96,13 @@ input {
 
 .campo input,
 .campo select {
+  min-height: var(--control-altura);
   padding: 0.4rem 0.7rem;
   border-radius: var(--radio-chico);
-  border: 1px solid var(--borde);
+  border: 1px solid var(--borde-fuerte);
   background: var(--campo-fondo);
   color: var(--texto);
-  font-size: 0.85rem;
+  font-size: var(--fuente-control);
   outline: none;
   transition:
     border-color 0.15s ease,
@@ -198,62 +120,6 @@ input {
   opacity: 0.6;
 }
 
-.boton {
-  padding: 0.4rem 0.85rem;
-  border-radius: var(--radio-chico);
-  border: 1px solid var(--borde);
-  background: var(--panel-suave);
-  color: var(--texto);
-  font-size: 0.85rem;
-  transition:
-    border-color 0.15s ease,
-    background-color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-.boton:hover:not(:disabled) {
-  border-color: var(--acento);
-  background: color-mix(in srgb, var(--panel-suave) 82%, var(--acento));
-}
-
-.boton:active:not(:disabled) {
-  background: var(--campo-fondo);
-}
-
-.boton:focus-visible {
-  outline: none;
-  border-color: var(--acento);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--acento) 35%, transparent);
-}
-
-.boton:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-/* "Primario" ya no es un relleno sólido de acento (se veía como un botón
-   azul/cian chillante, sobre todo en modo oscuro) — mismo fondo sobrio que
-   `.boton`, sólo se distingue por el borde/texto en acento y negrita. La
-   jerarquía (cuál acción es "la" acción) sigue existiendo, pero sin gritar. */
-.boton-primario {
-  border-color: var(--acento);
-  color: var(--acento);
-  font-weight: 600;
-}
-
-.boton-primario:hover:not(:disabled) {
-  background: var(--acento-suave);
-}
-
-.boton-primario:active:not(:disabled) {
-  background: color-mix(in srgb, var(--acento-suave) 70%, var(--panel-suave));
-}
-
-.boton-primario:disabled {
-  border-color: var(--borde);
-  color: var(--muted);
-}
-
 /* Botón con ícono (lucide-react) + texto opcional al lado — hoy sólo
    "Cerrar sesión". Centrado también cuando sólo lleva ícono (texto
    condicional en `false` desde React, no un `display:none` en CSS). */
@@ -261,7 +127,7 @@ input {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: var(--espacio-2);
 }
 
 /* Ancho completo dentro del popover de `MenuUsuario` — su único control. */
@@ -352,8 +218,8 @@ input {
 }
 
 .nav-item-activo {
-  background: var(--campo-fondo);
-  color: var(--acento);
+  background: var(--acento-relleno);
+  color: var(--sobre-acento);
   font-weight: 600;
   box-shadow: inset 2px 0 0 var(--acento);
 }
@@ -371,7 +237,7 @@ input {
   width: 10rem;
   flex-shrink: 0;
   margin: 0.375rem 0 0.375rem 0.375rem;
-  background: var(--panel);
+  background: var(--panel-lateral);
   border: 1px solid var(--borde);
   border-radius: var(--radio);
   transition: width 0.15s ease;
@@ -470,7 +336,7 @@ input {
   align-items: center;
   gap: 0.3rem;
   padding: 0.15rem 0.55rem;
-  border-radius: 999px;
+  border-radius: var(--radio-capsula);
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -499,7 +365,7 @@ input {
   width: 0.45rem;
   height: 0.45rem;
   flex-shrink: 0;
-  border-radius: 999px;
+  border-radius: var(--radio-capsula);
   background: var(--chip-color, var(--muted));
 }
 
@@ -513,7 +379,7 @@ input {
   width: var(--interruptor-ancho);
   height: var(--interruptor-alto);
   padding: 0;
-  border-radius: 999px;
+  border-radius: var(--radio-capsula);
   border: 1px solid var(--borde);
   background: var(--campo-fondo);
   position: relative;

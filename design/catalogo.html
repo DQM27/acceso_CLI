@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brisas · Referencia visual</title>
+<link rel="stylesheet" href="brisas.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: var(--espacio-6); background: var(--fondo); color: var(--texto); font: var(--fuente-base)/1.5 var(--fuente); }
+  main { max-width: 1100px; margin: auto; }
+  header, .fila { display: flex; flex-wrap: wrap; gap: var(--espacio-3); align-items: center; }
+  header { justify-content: space-between; }
+  h1 { font-size: 28px; margin: 0; } h2 { font-size: var(--fuente-titulo); margin: 0 0 var(--espacio-4); }
+  p { color: var(--muted); }
+  section { background: var(--panel); padding: var(--espacio-6); margin-top: var(--espacio-6); border: 1px solid var(--borde); border-radius: var(--radio); }
+  .muestras { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: var(--espacio-3); }
+  .muestra { border: 1px solid var(--borde); border-radius: var(--radio-chico); overflow: hidden; }
+  .color { height: 64px; border-bottom: 1px solid var(--borde); }
+  .etiqueta { padding: var(--espacio-2); } .etiqueta code { display: block; color: var(--muted); }
+  .estado { padding: var(--espacio-2) var(--espacio-3); border-radius: var(--radio-chico); }
+  label { display: grid; gap: var(--espacio-1); color: var(--muted); }
+  input { min-height: var(--control-altura); border: 1px solid var(--borde-fuerte); background: var(--campo-fondo); color: var(--texto); border-radius: var(--radio-chico); padding: var(--espacio-2); font: inherit; }
+  input:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+  input[aria-invalid="true"] { border-color: var(--error); }
+  .tabla { width: 100%; border-collapse: collapse; margin-top: var(--espacio-4); }
+  th { background: var(--panel-suave); color: var(--muted); text-align: left; }
+  td, th { padding: var(--espacio-3); border-bottom: 1px solid var(--borde); }
+  tr.seleccionada { background: var(--acento-suave); }
+  .elevado { margin-top: var(--espacio-4); background: var(--elevado); border: 1px solid var(--borde); border-radius: var(--radio); padding: var(--espacio-4); box-shadow: var(--sombra-panel); }
+</style>
+<main>
+  <header><div><h1>Brisas</h1><p>Sistema de diseño · Referencia de componentes</p></div><div class="fila" aria-label="Tema"><button class="boton" data-elegir="light">Claro</button><button class="boton" data-elegir="dark">Oscuro</button></div></header>
+  <section><h2>Superficies y paleta</h2><div id="muestras" class="muestras"></div></section>
+  <section><h2>Botones</h2><div class="fila"><button class="boton boton-primario">Registrar ingreso</button><button class="boton">Cancelar</button><button class="boton boton-discreto">Ver detalles</button><button class="boton boton-peligro">Revocar acceso</button><button class="boton boton-primario" disabled>Procesando…</button><button class="boton boton-compacto">Acción de tabla</button></div><p>Pasá el cursor, presioná un botón o usá Tab para revisar los estados de interacción.</p></section>
+  <section><h2>Formularios y estados</h2><div class="fila"><label>Nombre<input placeholder="Buscar persona"></label><label>Cédula<input aria-invalid="true" aria-describedby="error-campo" value="Dato incompleto"><small id="error-campo" style="color:var(--error)">Revisá la cédula</small></label><label>Deshabilitado<input disabled value="Sin edición"></label></div><div id="estados" class="fila" style="margin-top:var(--espacio-4)"></div></section>
+  <section><h2>Panel de accesos</h2><p>El panel se distingue del fondo general; el encabezado y la selección tienen superficies propias.</p><div style="overflow:auto"><table class="tabla"><thead><tr><th>Persona</th><th>Empresa</th><th>Estado</th></tr></thead><tbody><tr><td>María López</td><td>Empresa de ejemplo</td><td style="color:var(--exito)">● Acceso permitido</td></tr><tr class="seleccionada"><td>José Mora</td><td>Empresa de ejemplo</td><td>Fila seleccionada</td></tr><tr><td>Ana Pérez</td><td>Empresa de ejemplo</td><td style="color:var(--advertencia)">! Pendiente de revisión</td></tr></tbody></table></div><div class="elevado"><strong>Superficie elevada</strong><p>Referencia para menús y modales. Radio de panel y sombra compartidos.</p></div></section>
+</main>
+<script src="paleta.js"></script>
+<script>
+  function mostrar(tema) {
+    document.documentElement.dataset.theme = tema;
+    document.querySelectorAll('[data-elegir]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.elegir === tema)));
+    const muestras = document.getElementById('muestras'); muestras.replaceChildren();
+    for (const [rol, valor] of Object.entries(window.Brisas.temas[tema])) {
+      if (!valor.startsWith('#')) continue;
+      const tarjeta = document.createElement('div'); tarjeta.className = 'muestra';
+      const color = document.createElement('div'); color.className = 'color'; color.style.background = valor;
+      const etiqueta = document.createElement('div'); etiqueta.className = 'etiqueta'; etiqueta.textContent = rol;
+      const codigo = document.createElement('code'); codigo.textContent = valor; etiqueta.append(codigo); tarjeta.append(color, etiqueta); muestras.append(tarjeta);
+    }
+    const estados = document.getElementById('estados'); estados.replaceChildren();
+    for (const [rol, texto] of Object.entries({exito:'✓ Acceso permitido',advertencia:'! Requiere atención',error:'× Acceso denegado',info:'ⓘ Información'})) {
+      const e = document.createElement('span'); e.className = 'estado'; e.textContent = texto; e.style.color = `var(--${rol})`; e.style.background = `var(--${rol}-suave)`; estados.append(e);
+    }
+  }
+  document.querySelectorAll('[data-elegir]').forEach(b => b.addEventListener('click', () => mostrar(b.dataset.elegir)));
+  const elegido = new URLSearchParams(location.search).get('tema');
+  mostrar(elegido === 'dark' || elegido === 'light' ? elegido : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+</script>
+</html>
