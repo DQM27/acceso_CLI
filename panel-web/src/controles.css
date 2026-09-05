@@ -1,0 +1,59 @@
+/* Reglas comunes de escritorio, panel web y catálogo visual. */
+.boton, .btn-primary, .btn-ghost, .btn-danger-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espacio-2);
+  min-height: var(--control-altura);
+  padding: 0 var(--control-horizontal);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-chico);
+  background: var(--panel-suave);
+  color: var(--texto);
+  font-family: var(--fuente);
+  font-size: var(--fuente-control);
+  font-weight: var(--peso-control);
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background-color var(--duracion), border-color var(--duracion);
+}
+.boton:hover:not(:disabled), .btn-ghost:hover:not(:disabled) {
+  background: var(--acento-suave);
+  border-color: var(--acento);
+}
+.boton:active:not(:disabled) { background: var(--campo-fondo); }
+.boton-primario, .btn-primary {
+  background: var(--acento-relleno);
+  border-color: var(--acento-relleno);
+  color: var(--sobre-acento);
+}
+.boton-primario:hover:not(:disabled), .btn-primary:hover:not(:disabled) {
+  background: var(--acento-hover);
+  border-color: var(--acento-hover);
+  filter: none;
+}
+.boton-primario:active:not(:disabled), .btn-primary:active:not(:disabled) {
+  background: var(--acento-presionado);
+  border-color: var(--acento-presionado);
+}
+.boton-discreto, .btn-ghost { background: transparent; border-color: transparent; }
+.boton-peligro, .btn-danger-ghost { color: var(--error); background: var(--panel); }
+.boton-peligro:hover:not(:disabled), .btn-danger-ghost:hover:not(:disabled) {
+  color: var(--error); background: var(--error-suave); border-color: var(--error);
+}
+.boton:focus-visible, .btn-primary:focus-visible, .btn-ghost:focus-visible, .btn-danger-ghost:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+.boton:disabled, .btn-primary:disabled, .btn-ghost:disabled, .btn-danger-ghost:disabled {
+  opacity: 0.5; cursor: default;
+}
+.ag-cell .boton, .boton-compacto { min-height: var(--control-compacto); }
+.boton svg { width: var(--control-icono); height: var(--control-icono); flex-shrink: 0; }
+@media (pointer: coarse) {
+  .boton, .btn-primary, .btn-ghost, .btn-danger-ghost { min-height: var(--control-tactil); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .boton, .btn-primary, .btn-ghost, .btn-danger-ghost { transition: none; }
+}

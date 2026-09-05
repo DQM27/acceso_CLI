@@ -1,0 +1,448 @@
+@import "tailwindcss";
+@import "./diseno.css";
+@import "./controles.css";
+
+@theme {
+  --color-fondo: var(--fondo);
+  --color-panel: var(--panel);
+  --color-borde: var(--borde);
+  --color-campo: var(--campo-fondo);
+  --color-texto: var(--texto);
+  --color-muted: var(--muted);
+  --color-acento: var(--acento);
+  --color-exito: var(--exito);
+  --color-advertencia: var(--advertencia);
+  --color-error: var(--error);
+  --radius-DEFAULT: var(--radio);
+  --radius-chico: var(--radio-chico);
+}
+
+:root { font-family: var(--fuente); }
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--fondo);
+  color: var(--texto);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input {
+  font-family: inherit;
+}
+
+/* Scrollbar temático en toda la app — mismo criterio que desktop/src/index.css
+   (WebView2/Chromium entienden ::-webkit-scrollbar, y cualquier navegador
+   basado en Chromium/Edge/Safari también). AG Grid no dibuja el suyo propio:
+   usa un contenedor `overflow:scroll` normal, así que esto también alcanza a
+   las grillas (vertical y horizontal) sin tocar su tema. */
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--muted) 45%, transparent);
+  border-radius: var(--radio-capsula);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--acento) 60%, transparent);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Componentes compartidos — un solo punto para el estilo de formularios en
+   toda la app. No son componentes React, son clases: cualquier pantalla las
+   reutiliza sin depender de un componente nuevo. */
+
+.tarjeta {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.campo input,
+.campo select {
+  min-height: var(--control-altura);
+  padding: 0.4rem 0.7rem;
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--borde-fuerte);
+  background: var(--campo-fondo);
+  color: var(--texto);
+  font-size: var(--fuente-control);
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.campo input:focus,
+.campo select:focus {
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--acento) 35%, transparent);
+}
+
+.campo input:disabled,
+.campo select:disabled {
+  opacity: 0.6;
+}
+
+/* Botón con ícono (lucide-react) + texto opcional al lado. Centrado también
+   cuando sólo lleva ícono (texto condicional en `false` desde React, no un
+   `display:none` en CSS). */
+.boton-icono {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espacio-2);
+}
+
+/* Ancho completo dentro del popover de `MenuUsuario` — su único control. */
+.boton-salir {
+  width: 100%;
+}
+
+.login-card {
+  backdrop-filter: blur(16px);
+}
+
+/* El ícono real (waves+leaf, `public/favicon.svg`) ya trae su propio fondo
+   oscuro y esquinas redondeadas horneadas en el asset — el contenedor sólo
+   lo tamaña/recorta, sin agregar un segundo fondo/borde que se vería como un
+   marco doble alrededor del ícono. */
+.marca-sello {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--radio);
+}
+
+.marca-sello img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.login-error {
+  margin: 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--error) 45%, var(--borde));
+  border-radius: var(--radio-chico);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  color: var(--error);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.login-error-campo {
+  color: var(--error);
+  font-size: 0.8rem;
+}
+
+/* Ítem del sidebar de navegación (App.tsx) — mismo lenguaje de hover/foco
+   nítido que .boton, pero de ancho completo y sin borde (no es un botón de
+   acción, es un item de lista). El estado activo lo decide React con
+   .nav-item-activo; acá sólo hover/foco. */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border: none;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  color: var(--texto);
+  font-size: 0.95rem;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.nav-item svg {
+  flex-shrink: 0;
+}
+
+/* Colapsada: sólo el ícono, centrado — sin el `gap` del texto (que ya no se
+   renderiza) para que quede perfectamente centrado en la columna angosta,
+   no corrido a la izquierda por el padding horizontal normal. */
+.shell-sidebar-colapsada .nav-item {
+  justify-content: center;
+  padding: 0.65rem 0;
+}
+
+.nav-item:hover:not(.nav-item-activo) {
+  background: color-mix(in srgb, var(--campo-fondo) 60%, transparent);
+}
+
+.nav-item:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--acento);
+}
+
+.nav-item-activo {
+  background: var(--acento-relleno);
+  color: var(--sobre-acento);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--acento);
+}
+
+/* Shell — sidebar y encabezado de pantalla, el mismo lenguaje sobrio del
+   Login (marca-sello, tarjeta) propagado al resto de la app. Flota sobre
+   `--fondo` (ver `body`) como una tarjeta más, mismo margen (0.375rem) que
+   separa el contenido del borde de la ventana en `.pantalla-cuerpo`. */
+.shell-sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 10rem;
+  flex-shrink: 0;
+  margin: 0.375rem 0 0.375rem 0.375rem;
+  background: var(--panel-lateral);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  transition: width 0.15s ease;
+}
+
+/* Encabezados de columna centrados por defecto en las grillas — ver
+   `columnaPorDefecto` en Tabla.tsx. */
+.columna-centrada .ag-header-cell-label {
+  justify-content: center;
+}
+
+/* Encabezados de columna en mayúscula en todas las grillas. */
+.ag-header-cell-text {
+  text-transform: uppercase;
+}
+
+.shell-sidebar-colapsada {
+  width: 3.75rem;
+}
+
+/* Barra de estado — de lado a lado, debajo de sidebar + contenido, mismo
+   lugar que la de VSC. A propósito SIN fondo/borde propio (a diferencia de
+   `.shell-sidebar`/la grilla, que sí son tarjetas): vive directo sobre
+   `--fondo` (ver `body`). */
+.barra-estado {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0.375rem 0.375rem 0.75rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+/* Disparador de `MenuUsuario` — mismo lenguaje que los ítems de la status bar
+   de VSC: texto plano hasta que se pasa el mouse, ahí aparece el fondo de
+   botón (no se ve como un control de formulario en reposo). */
+.barra-estado-boton {
+  padding: 0.2rem 0.5rem;
+  border: none;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.barra-estado-boton:hover {
+  background: color-mix(in srgb, var(--texto) 10%, transparent);
+}
+
+/* Spinner sin librería — mismo criterio que un ícono "girando" mientras una
+   acción está en curso (ej. sincronizar). */
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.girando {
+  animation: girar 0.8s linear infinite;
+}
+
+.shell-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem 0.375rem 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radio-capsula);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: color-mix(in srgb, var(--chip-color, var(--muted)) 14%, transparent);
+  color: var(--chip-color, var(--muted));
+  white-space: nowrap;
+}
+
+/* Mismo chip, pero dentro de una celda de grilla (fila de 36px, columna
+   angosta) — la versión normal se ve como una píldora enorme ahí. */
+.ag-cell .chip {
+  gap: 0.35rem;
+  padding: 0;
+  border-radius: 0;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  background: none;
+  color: var(--texto);
+}
+
+.ag-cell .chip::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  flex-shrink: 0;
+  border-radius: var(--radio-capsula);
+  background: var(--chip-color, var(--muted));
+}
+
+/* Switch on/off de columnas booleanas editables — reemplaza al checkbox
+   nativo de AG Grid, que con el border-radius del tema se veía casi
+   circular y se confundía con un radio button. */
+.interruptor {
+  --interruptor-ancho: 2.15rem;
+  --interruptor-alto: 1.15rem;
+  width: var(--interruptor-ancho);
+  height: var(--interruptor-alto);
+  padding: 0;
+  border-radius: var(--radio-capsula);
+  border: 1px solid var(--borde);
+  background: var(--campo-fondo);
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.interruptor::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: calc(var(--interruptor-alto) - 4px);
+  height: calc(var(--interruptor-alto) - 4px);
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.interruptor:hover {
+  border-color: color-mix(in srgb, var(--acento) 45%, var(--borde));
+}
+
+.interruptor:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--acento) 35%, transparent);
+}
+
+.interruptor-activo {
+  background: var(--acento-suave);
+  border-color: var(--acento);
+}
+
+.interruptor-activo::after {
+  background: var(--acento);
+  transform: translateX(calc(var(--interruptor-ancho) - var(--interruptor-alto)));
+}
+
+/* Variante para los interruptores que deciden si alguien/algo puede entrar
+   — a diferencia de uno informativo, que usa el mismo acento neutro
+   prendido o apagado, acá el estado importa a simple vista. */
+.interruptor-critico:not(.interruptor-activo) {
+  border-color: color-mix(in srgb, var(--error) 45%, var(--borde));
+  background: color-mix(in srgb, var(--error) 8%, var(--campo-fondo));
+}
+
+.interruptor-critico:not(.interruptor-activo)::after {
+  background: var(--error);
+}
+
+.interruptor-critico.interruptor-activo {
+  background: color-mix(in srgb, var(--exito) 16%, transparent);
+  border-color: var(--exito);
+}
+
+.interruptor-critico.interruptor-activo::after {
+  background: var(--exito);
+}
+
+/* VSC: el contenido arranca casi pegado al splitter del sidebar, sin gutter
+   propio — mismo criterio acá, sólo lo justo para que la grilla no quede
+   literalmente pegada al borde. */
+.pantalla-cuerpo {
+  flex: 1;
+  min-height: 0;
+  padding: 0.375rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+/* Toasts (sonner) con la misma paleta clara/oscura del resto de la app en
+   vez de sus colores por defecto. `!important`: sonner inyecta su propia
+   hoja de estilos en tiempo de ejecución (al montar <Toaster/>), después de
+   que esta hoja ya cargó — sin !important, su regla gana por orden de
+   aparición sin importar qué esté antes acá. */
+[data-sonner-toaster] {
+  --normal-bg: var(--panel) !important;
+  --normal-border: var(--borde) !important;
+  --normal-text: var(--texto) !important;
+  --success-bg: var(--panel) !important;
+  --success-border: var(--exito) !important;
+  --success-text: var(--exito) !important;
+  --error-bg: var(--panel) !important;
+  --error-border: var(--error) !important;
+  --error-text: var(--error) !important;
+  --warning-bg: var(--panel) !important;
+  --warning-border: var(--advertencia) !important;
+  --warning-text: var(--advertencia) !important;
+  --info-bg: var(--panel) !important;
+  --info-border: var(--acento) !important;
+  --info-text: var(--acento) !important;
+  --border-radius: var(--radio-chico) !important;
+  font-family: inherit !important;
+}
