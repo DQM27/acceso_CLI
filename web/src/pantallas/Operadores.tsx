@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import InterruptorCelda from "../componentes/InterruptorCelda";
+import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { actualizarActivoUsuario, listarUsuarios } from "../api/usuarios";
 import type { Usuario } from "../api/usuarios";
 
@@ -17,17 +18,26 @@ export default function Operadores() {
   const [filas, setFilas] = useState<Usuario[]>([]);
   const [cargando, setCargando] = useState(true);
 
-  const recargar = useCallback(() => {
-    setCargando(true);
+  const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
+    const silencioso = opciones?.silencioso ?? false;
+    if (!silencioso) setCargando(true);
     return listarUsuarios()
       .then(setFilas)
-      .catch((error) => toast.error(String(error)))
-      .finally(() => setCargando(false));
+      .catch((error) => {
+        if (!silencioso) toast.error(String(error));
+      })
+      .finally(() => {
+        if (!silencioso) setCargando(false);
+      });
   }, []);
 
   useEffect(() => {
     recargar();
   }, [recargar]);
+
+  // Cambia rara vez (altas/bajas puntuales) -- mismo intervalo que usan
+  // desktop/mobile para su propio sync periódico.
+  useAutoRefresh(() => recargar({ silencioso: true }), 120_000);
 
   async function manejarEdicion(fila: Usuario) {
     try {

@@ -6,6 +6,7 @@ import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
 import SelectorRangoFecha from "../componentes/SelectorRangoFecha";
+import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { listarHistorial } from "../api/historial";
 import type { MovimientoHistorial } from "../api/historial";
 import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
@@ -34,17 +35,26 @@ export default function Historial() {
   const [hasta, setHasta] = useState("");
   const tablaRef = useRef<TablaHandle<MovimientoHistorial>>(null);
 
-  const recargar = useCallback(() => {
-    setCargando(true);
+  const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
+    const silencioso = opciones?.silencioso ?? false;
+    if (!silencioso) setCargando(true);
     return listarHistorial(desde || undefined, hasta || undefined)
       .then(setFilas)
-      .catch((error) => toast.error(String(error)))
-      .finally(() => setCargando(false));
+      .catch((error) => {
+        if (!silencioso) toast.error(String(error));
+      })
+      .finally(() => {
+        if (!silencioso) setCargando(false);
+      });
   }, [desde, hasta]);
 
   useEffect(() => {
     recargar();
   }, [recargar]);
+
+  // Ver `useAutoRefresh` -- sin esto, un ingreso ya cerrado/sincronizado
+  // no aparecía hasta apretar "actualizar" a mano.
+  useAutoRefresh(() => recargar({ silencioso: true }), 30_000);
 
   function exportarAExcel() {
     const visibles = tablaRef.current?.filasFiltradas() ?? filas;

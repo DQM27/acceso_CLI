@@ -4,6 +4,7 @@ import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
 import { useVerificacionPorCorreo } from "../componentes/useVerificacionPorCorreo";
+import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { guardarAccionPendiente } from "../componentes/accionesPendientes";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import { listarAdministradores } from "../api/administradores";
@@ -34,13 +35,22 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
   const confirmacionAlta = useVerificacionPorCorreo(sesion.correo);
   const confirmacionBaja = useVerificacionPorCorreo(sesion.correo);
 
-  const recargar = useCallback(() => {
-    setCargando(true);
+  const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
+    const silencioso = opciones?.silencioso ?? false;
+    if (!silencioso) setCargando(true);
     return listarAdministradores()
       .then(setFilas)
-      .catch((error) => toast.error(String(error)))
-      .finally(() => setCargando(false));
+      .catch((error) => {
+        if (!silencioso) toast.error(String(error));
+      })
+      .finally(() => {
+        if (!silencioso) setCargando(false);
+      });
   }, []);
+
+  // Cambia rara vez (alta/baja de admins del panel) -- mismo intervalo que
+  // usan desktop/mobile para su propio sync periódico.
+  useAutoRefresh(() => recargar({ silencioso: true }), 120_000);
 
   useEffect(() => {
     recargar();
