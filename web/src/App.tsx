@@ -1,11 +1,13 @@
-import { useState } from "react";
-import { Toaster } from "sonner";
-import { History, IdCard, ShieldCheck, UserCog, Users } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Toaster, toast } from "sonner";
+import { CheckCircle2, History, IdCard, Loader2, ShieldCheck, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
 import Login from "./pantallas/Login";
 import Administradores from "./pantallas/Administradores";
+import { borrarAccionPendiente, leerAccionPendienteVigente } from "./componentes/accionesPendientes";
+import { agregarAdministrador, eliminarAdministrador } from "./api/administradores";
 import type { RolAdminPanel, UsuarioSesion } from "./api";
 import { AuthProvider, useAuth } from "./contexto/AuthContexto";
 import { SesionProvider } from "./contexto/SesionContexto";
@@ -61,11 +63,59 @@ export default function App() {
 
 /** Separado de `App` porque `useAuth` necesita estar DENTRO de
  * `<AuthProvider>`, no en el mismo componente que lo declara. */
+type EstadoAccionPendiente = { paso: "verificando" } | { paso: "lista"; mensaje: string };
+
 function Contenido() {
   const { sesion, cargando } = useAuth();
+  const [estadoAccion, setEstadoAccion] = useState<EstadoAccionPendiente | null>(null);
+
+  // Retoma una acción sensible confirmada por correo (ver
+  // `accionesPendientes.ts` y `Administradores.tsx`) apenas la sesión está
+  // lista -- pasa acá y no en `Administradores.tsx` porque esa pantalla ni
+  // siquiera está montada al volver del link (la Shell arranca siempre en
+  // "dispositivos"). `intentado` evita reintentar en cada re-render de este
+  // componente una vez que ya se resolvió (o no había nada que resolver).
+  const intentado = useRef(false);
+  useEffect(() => {
+    if (!sesion || intentado.current) return;
+    intentado.current = true;
+
+    const accion = leerAccionPendienteVigente(sesion.correo);
+    if (!accion) return;
+
+    // Recibe `accion` por parámetro (no por closure) a propósito: el
+    // narrowing de una unión discriminada no cruza el límite de una
+    // función anidada aunque la variable capturada sea `const`.
+    async function resolver(accion: NonNullable<ReturnType<typeof leerAccionPendienteVigente>>) {
+      setEstadoAccion({ paso: "verificando" });
+      try {
+        if (accion.tipo === "agregar_admin") {
+          await agregarAdministrador(accion.correoNuevo, accion.rolNuevo);
+          setEstadoAccion({ paso: "lista", mensaje: `${accion.correoNuevo} ya puede entrar al panel.` });
+        } else {
+          await eliminarAdministrador(accion.correoAQuitar);
+          setEstadoAccion({ paso: "lista", mensaje: `${accion.correoAQuitar} ya no tiene acceso.` });
+        }
+        // El check queda visible un momento antes de pasar al panel --
+        // desaparecer de golpe se sentiría como que no pasó nada.
+        setTimeout(() => setEstadoAccion(null), 1400);
+      } catch (error) {
+        toast.error(String(error));
+        setEstadoAccion(null);
+      } finally {
+        borrarAccionPendiente();
+      }
+    }
+
+    resolver(accion);
+  }, [sesion]);
 
   if (cargando) {
     return null;
+  }
+
+  if (estadoAccion) {
+    return <PantallaAccionPendiente estado={estadoAccion} />;
   }
 
   if (!sesion) {
@@ -73,6 +123,42 @@ function Contenido() {
   }
 
   return <Shell sesion={sesion} />;
+}
+
+/** Spinner mientras se termina de agregar/quitar el admin confirmado por
+ * correo, con un check al terminar -- sin esto, el momento entre volver del
+ * link y ver el panel se sentía como una pantalla en blanco rota, no como
+ * "está pasando algo". */
+function PantallaAccionPendiente({ estado }: { estado: EstadoAccionPendiente }) {
+  return (
+    <div className="grid min-h-full place-items-center bg-fondo px-6 py-10 text-texto">
+      <div
+        className="tarjeta"
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "1rem",
+          padding: "2rem",
+          width: "100%",
+          maxWidth: "22rem",
+          textAlign: "center",
+        }}
+      >
+        {estado.paso === "verificando" ? (
+          <>
+            <Loader2 size={32} strokeWidth={2} className="girando" color="var(--acento)" />
+            <p style={{ margin: 0, color: "var(--muted)" }}>Confirmando…</p>
+          </>
+        ) : (
+          <>
+            <CheckCircle2 size={32} strokeWidth={2} color="var(--exito)" />
+            <p style={{ margin: 0 }}>{estado.mensaje}</p>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function Shell({ sesion }: { sesion: UsuarioSesion }) {

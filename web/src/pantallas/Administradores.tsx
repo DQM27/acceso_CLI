@@ -4,12 +4,9 @@ import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
 import { useVerificacionPorCorreo } from "../componentes/useVerificacionPorCorreo";
+import { guardarAccionPendiente } from "../componentes/accionesPendientes";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
-import {
-  agregarAdministrador,
-  eliminarAdministrador,
-  listarAdministradores,
-} from "../api/administradores";
+import { listarAdministradores } from "../api/administradores";
 import type { AdministradorPanel } from "../api/administradores";
 import type { RolAdminPanel, UsuarioSesion } from "../api";
 
@@ -19,12 +16,14 @@ function textoFechaHora(iso: string): string {
 
 /**
  * Alta/baja de quién puede entrar al panel — esto ES la autorización real
- * (ver `AuthContexto.tsx` y la migración `crea_administradores_panel`),
- * no una pantalla de conveniencia. Sin correo automático al agregar a
- * alguien: se le avisa la persona que lo agrega, por fuera del panel
- * (decisión explícita, ver conversación — agregar el envío de correo es
- * una Edge Function más para mantener, sin beneficio real con tan pocos
- * admins).
+ * (ver `AuthContexto.tsx` y la migración `crea_administradores_panel`), no
+ * una pantalla de conveniencia. Agregar Y quitar piden confirmación por
+ * correo (ver `useVerificacionPorCorreo`): el correo llega a quien hace la
+ * acción, no al admin nuevo/afectado -- es un "sos vos ahora mismo", no
+ * una verificación del correo ajeno. La acción de verdad (el INSERT/DELETE
+ * en `administradores_panel`) no pasa acá -- queda guardada
+ * (`guardarAccionPendiente`) y `App.tsx` la retoma cuando la persona vuelve
+ * a abrir el panel después de hacer clic en el link del correo.
  */
 export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
   const [filas, setFilas] = useState<AdministradorPanel[]>([]);
@@ -32,13 +31,9 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [correoNuevo, setCorreoNuevo] = useState("");
   const [rolNuevo, setRolNuevo] = useState<RolAdminPanel>("admin_regional");
-  const [codigo, setCodigo] = useState("");
 
-  // Acción sensible: agregar un admin nuevo exige confirmar con un código
-  // que llega AL CORREO DE QUIEN LO AGREGA (no al del admin nuevo) — es un
-  // "sos realmente vos frente a la pantalla ahora mismo", no una
-  // verificación del correo ajeno. Ver useVerificacionPorCorreo.
-  const verificacion = useVerificacionPorCorreo(sesion.correo);
+  const confirmacionAlta = useVerificacionPorCorreo(sesion.correo);
+  const confirmacionBaja = useVerificacionPorCorreo(sesion.correo);
 
   const recargar = useCallback(() => {
     setCargando(true);
@@ -56,39 +51,35 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
     setModalAbierto(false);
     setCorreoNuevo("");
     setRolNuevo("admin_regional");
-    setCodigo("");
-    verificacion.reiniciar();
+    confirmacionAlta.reiniciar();
   }
 
   async function alEnviarFormulario(evento: React.FormEvent) {
     evento.preventDefault();
-
-    if (verificacion.paso === "inicial") {
-      await verificacion.pedirCodigo();
-      return;
-    }
-
-    const codigoValido = await verificacion.verificarCodigo(codigo);
-    if (!codigoValido) return;
-
-    try {
-      await agregarAdministrador(correoNuevo, rolNuevo);
-      toast.success(`${correoNuevo} ya puede entrar al panel.`);
-      cerrarModal();
-      recargar();
-    } catch (error) {
-      toast.error(String(error));
-    }
+    guardarAccionPendiente({
+      tipo: "agregar_admin",
+      correoSolicitante: sesion.correo,
+      correoNuevo: correoNuevo.trim().toLowerCase(),
+      rolNuevo,
+    });
+    await confirmacionAlta.pedirConfirmacion();
   }
 
   async function alBorrar(fila: AdministradorPanel) {
-    if (!confirm(`¿Sacarle el acceso a ${fila.correo}?`)) return;
-    try {
-      await eliminarAdministrador(fila.correo);
-      toast.success(`${fila.correo} ya no tiene acceso.`);
-      recargar();
-    } catch (error) {
-      toast.error(String(error));
+    if (
+      !confirm(
+        `Se te va a mandar un link de confirmación a ${sesion.correo}. ¿Continuar para sacarle el acceso a ${fila.correo}?`,
+      )
+    )
+      return;
+    guardarAccionPendiente({
+      tipo: "quitar_admin",
+      correoSolicitante: sesion.correo,
+      correoAQuitar: fila.correo,
+    });
+    await confirmacionBaja.pedirConfirmacion();
+    if (!confirmacionBaja.error) {
+      toast.info(`Revisá tu correo (${sesion.correo}) y hacé clic en el link para confirmar.`);
     }
   }
 
@@ -145,80 +136,76 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
 
       {modalAbierto && (
         <Modal titulo="Nuevo administrador" onCerrar={cerrarModal}>
-          <form
-            onSubmit={alEnviarFormulario}
-            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-          >
-            <label className="campo">
-              Correo de Google
-              <input
-                type="email"
-                required
-                autoFocus
-                value={correoNuevo}
-                disabled={verificacion.paso !== "inicial" || verificacion.enviando}
-                placeholder="nombre@gmail.com"
-                onChange={(evento) => setCorreoNuevo(evento.target.value)}
-              />
-            </label>
-
-            <label className="campo">
-              Rol
-              <select
-                value={rolNuevo}
-                disabled={verificacion.paso !== "inicial" || verificacion.enviando}
-                onChange={(evento) => setRolNuevo(evento.target.value as RolAdminPanel)}
-              >
-                <option value="admin_regional">Administrador regional</option>
-                <option value="admin_global">Administrador global</option>
-              </select>
-            </label>
-
-            {verificacion.paso === "codigo_enviado" && (
+          {confirmacionAlta.enviado ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <p style={{ margin: 0 }}>
+                Te mandamos un link de confirmación a <strong>{sesion.correo}</strong>. Abrilo y
+                hacé clic — cuando vuelvas a abrir el panel, {correoNuevo} ya va a tener acceso.
+              </p>
+              <p style={{ margin: 0, color: "var(--muted)", fontSize: "0.85rem" }}>
+                Podés cerrar esta ventana, no hace falta esperar acá.
+              </p>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button type="button" className="boton boton-primario" onClick={cerrarModal}>
+                  Listo
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form
+              onSubmit={alEnviarFormulario}
+              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+            >
               <label className="campo">
-                Código de confirmación
+                Correo de Google
                 <input
-                  type="text"
-                  inputMode="numeric"
+                  type="email"
                   required
                   autoFocus
-                  maxLength={6}
-                  value={codigo}
-                  disabled={verificacion.enviando}
-                  placeholder="000000"
-                  onChange={(evento) => setCodigo(evento.target.value)}
+                  value={correoNuevo}
+                  disabled={confirmacionAlta.enviando}
+                  placeholder="nombre@gmail.com"
+                  onChange={(evento) => setCorreoNuevo(evento.target.value)}
                 />
-                <span style={{ color: "var(--muted)", fontSize: "0.78rem" }}>
-                  Te mandamos un código a <strong>{sesion.correo}</strong> para confirmar que sos
-                  vos — no le llega nada al correo nuevo todavía.
-                </span>
               </label>
-            )}
 
-            {verificacion.error && (
-              <p className="login-error" role="alert">
-                {verificacion.error}
-              </p>
-            )}
+              <label className="campo">
+                Rol
+                <select
+                  value={rolNuevo}
+                  disabled={confirmacionAlta.enviando}
+                  onChange={(evento) => setRolNuevo(evento.target.value as RolAdminPanel)}
+                >
+                  <option value="admin_regional">Administrador regional</option>
+                  <option value="admin_global">Administrador global</option>
+                </select>
+              </label>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-              <button
-                type="button"
-                className="boton"
-                disabled={verificacion.enviando}
-                onClick={cerrarModal}
-              >
-                Cancelar
-              </button>
-              <button type="submit" className="boton boton-primario" disabled={verificacion.enviando}>
-                {verificacion.enviando
-                  ? "Un momento…"
-                  : verificacion.paso === "inicial"
-                    ? "Enviar código"
-                    : "Confirmar y agregar"}
-              </button>
-            </div>
-          </form>
+              {confirmacionAlta.error && (
+                <p className="login-error" role="alert">
+                  {confirmacionAlta.error}
+                </p>
+              )}
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                <button
+                  type="button"
+                  className="boton"
+                  disabled={confirmacionAlta.enviando}
+                  onClick={cerrarModal}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="boton boton-primario"
+                  disabled={confirmacionAlta.enviando}
+                >
+                  {confirmacionAlta.enviando ? "Enviando…" : "Enviar link de confirmación"}
+                </button>
+              </div>
+            </form>
+          )}
         </Modal>
       )}
     </div>
