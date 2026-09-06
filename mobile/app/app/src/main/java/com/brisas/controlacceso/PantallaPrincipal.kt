@@ -6,9 +6,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -165,6 +168,13 @@ fun PantallaPrincipal(
                             )
                         }
                     }
+                }
+                val oscuroActual = GestorTema.oscuroForzado ?: isSystemInDarkTheme()
+                IconButton(onClick = { GestorTema.alternar(oscuroActual) }) {
+                    Icon(
+                        if (oscuroActual) Icons.Default.LightMode else Icons.Default.DarkMode,
+                        contentDescription = if (oscuroActual) "Cambiar a modo claro" else "Cambiar a modo oscuro",
+                    )
                 }
                 BotonDiscretoBrisas(onClick = onCerrarSesion) {
                     Text("Salir")

@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
         // límite de un fabricante raro.
         val identificadorDispositivo =
             Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: ""
+        GestorTema.inicializar(this)
         setContent {
             val archivoBaseDatos = File(filesDir, "control_acceso.db")
             val rutaBaseDatos = archivoBaseDatos.absolutePath
