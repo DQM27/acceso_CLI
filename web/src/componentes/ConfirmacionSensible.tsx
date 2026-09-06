@@ -73,7 +73,7 @@ export default function ConfirmacionSensible({
       {confirmacion.enviado ? (
         <form onSubmit={alConfirmar} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           <p style={{ margin: 0 }}>
-            Te mandamos un código a <strong>{correo}</strong>. Escribilo acá para {descripcion}.
+            Te mandamos un código a tu correo. Escribilo acá para {descripcion}.
           </p>
           <label className="campo">
             Código de confirmación
@@ -116,7 +116,7 @@ export default function ConfirmacionSensible({
           </div>
         </div>
       ) : (
-        <p style={{ margin: 0, color: "var(--muted)" }}>Enviando código a {correo}…</p>
+        <p style={{ margin: 0, color: "var(--muted)" }}>Enviando código…</p>
       )}
     </Modal>
   );
