@@ -4,6 +4,7 @@ import { History, Menu, MonitorSmartphone, ShieldCheck, UserCog, Users } from "l
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
+import SelectorTema from "./componentes/SelectorTema";
 import Login from "./pantallas/Login";
 import type { UsuarioSesion } from "./api";
 import { AuthProvider, useAuth } from "./contexto/AuthContexto";
@@ -156,7 +157,7 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
         </div>
 
         <div className="barra-estado">
-          <span />
+          <SelectorTema />
           <MenuUsuario sesion={sesion} onCerrarSesion={cerrarSesion} />
         </div>
 
