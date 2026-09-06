@@ -1,6 +1,6 @@
 import { Suspense, lazy, useState } from "react";
 import { Toaster } from "sonner";
-import { History, IdCard, Menu, ShieldCheck, UserCog, Users } from "lucide-react";
+import { History, Menu, MonitorSmartphone, ShieldCheck, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
@@ -31,7 +31,7 @@ const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
   { id: "historial", etiqueta: "Historial", Icono: History },
   { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
   { id: "usuarios", etiqueta: "Usuarios", Icono: UserCog },
-  { id: "dispositivos", etiqueta: "Dispositivos", Icono: IdCard },
+  { id: "dispositivos", etiqueta: "Dispositivos", Icono: MonitorSmartphone },
   { id: "administradores", etiqueta: "Administradores", Icono: ShieldCheck },
 ];
 
