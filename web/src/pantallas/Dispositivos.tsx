@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
+import ConfirmacionSensible from "../componentes/ConfirmacionSensible";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import {
@@ -14,6 +15,7 @@ import {
   suspenderDispositivo,
 } from "../api/dispositivos";
 import type { Dispositivo, DispositivoProvisionado, TipoDispositivo } from "../api/dispositivos";
+import type { UsuarioSesion } from "../api";
 
 const ETIQUETAS_TIPO: Record<TipoDispositivo, string> = {
   pc: "PC",
@@ -37,8 +39,15 @@ function textoFechaHora(iso: string): string {
  * secreto de un dispositivo nuevo se muestra UNA sola vez al crearlo -- no
  * queda guardado en texto plano en ningún lado que se pueda volver a leer,
  * ni siquiera acá.
+ *
+ * Revocar y Eliminar (las dos acciones que de verdad le cortan el paso a un
+ * dispositivo, la segunda sin vuelta atrás) piden código de confirmación
+ * por correo -- misma "sos vos ahora mismo" que alta/baja de administradores
+ * (ver `ConfirmacionSensible`). Suspender no lo pide: es reversible con un
+ * click (Reactivar), no hace falta ese costo extra para algo que se
+ * deshace solo.
  */
-export default function Dispositivos() {
+export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   const [sitios, setSitios] = useState<{ id: string; nombre: string }[]>([]);
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -57,10 +66,11 @@ export default function Dispositivos() {
   const [creandoSitio, setCreandoSitio] = useState(false);
   const [errorSitio, setErrorSitio] = useState<string | null>(null);
 
-  // Modal genérico de confirmación (Revocar/Suspender/Eliminar) -- reemplaza
-  // el confirm() nativo del navegador, que se ve fuera de lugar (barra con
-  // el dominio, botones del sistema) al lado del resto de la app. Mismo
-  // patrón que `confirmarSalidaMasiva` en desktop/src/pantallas/Activos.tsx.
+  // Modal de confirmación simple (Suspender -- reversible con un click,
+  // Reactivar) -- reemplaza el confirm() nativo del navegador, que se ve
+  // fuera de lugar (barra con el dominio, botones del sistema) al lado del
+  // resto de la app. Mismo patrón que `confirmarSalidaMasiva` en
+  // desktop/src/pantallas/Activos.tsx.
   const [confirmacion, setConfirmacion] = useState<{
     titulo: string;
     mensaje: string;
@@ -81,6 +91,16 @@ export default function Dispositivos() {
       setConfirmando(false);
     }
   }
+
+  // Revocar/Eliminar piden código de correo además de confirmar -- ver el
+  // doc-comment del componente. `accion` maneja su propio error/toast (no
+  // tira), para que `ConfirmacionSensible` no se quede con una excepción
+  // sin atrapar entre medio de su propio manejo del código.
+  const [confirmacionSensible, setConfirmacionSensible] = useState<{
+    titulo: string;
+    descripcion: string;
+    accion: () => Promise<void>;
+  } | null>(null);
 
   const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
     const silencioso = opciones?.silencioso ?? false;
@@ -193,31 +213,39 @@ export default function Dispositivos() {
   }
 
   const alEliminar = useCallback((fila: FilaDispositivo) => {
-    setConfirmacion({
+    setConfirmacionSensible({
       titulo: "Borrar dispositivo",
-      mensaje: `¿Borrar "${fila.etiqueta}" de la lista? Esto no se puede deshacer.`,
-      textoConfirmar: "Borrar",
+      descripcion: `borrar "${fila.etiqueta}" de la lista -- esto no se puede deshacer`,
       accion: async () => {
-        const { borrado } = await eliminarDispositivo(fila.id);
-        toast.success(
-          borrado
-            ? `${fila.etiqueta} borrado.`
-            : `${fila.etiqueta} ya tiene historial y no se puede borrar del todo -- se ocultó de la lista.`,
-        );
-        await recargar();
+        try {
+          const { borrado } = await eliminarDispositivo(fila.id);
+          toast.success(
+            borrado
+              ? `${fila.etiqueta} borrado.`
+              : `${fila.etiqueta} ya tiene historial y no se puede borrar del todo -- se ocultó de la lista.`,
+          );
+          setConfirmacionSensible(null);
+          await recargar();
+        } catch (error) {
+          toast.error(String(error));
+        }
       },
     });
   }, [recargar]);
 
   const alRevocar = useCallback((fila: FilaDispositivo) => {
-    setConfirmacion({
+    setConfirmacionSensible({
       titulo: "Revocar dispositivo",
-      mensaje: `¿Revocar "${fila.etiqueta}"? Ese dispositivo va a dejar de poder sincronizar.`,
-      textoConfirmar: "Revocar",
+      descripcion: `revocar "${fila.etiqueta}" -- ese dispositivo va a dejar de poder sincronizar`,
       accion: async () => {
-        await revocarDispositivo(fila.id);
-        toast.success(`${fila.etiqueta} revocado.`);
-        await recargar();
+        try {
+          await revocarDispositivo(fila.id);
+          toast.success(`${fila.etiqueta} revocado.`);
+          setConfirmacionSensible(null);
+          await recargar();
+        } catch (error) {
+          toast.error(String(error));
+        }
       },
     });
   }, [recargar]);
@@ -545,6 +573,15 @@ export default function Dispositivos() {
           </div>
         </Modal>
       )}
+
+      <ConfirmacionSensible
+        abierto={confirmacionSensible !== null}
+        correo={sesion.correo}
+        titulo={confirmacionSensible?.titulo ?? ""}
+        descripcion={confirmacionSensible?.descripcion ?? ""}
+        onConfirmar={() => confirmacionSensible?.accion() ?? Promise.resolve()}
+        onCerrar={() => setConfirmacionSensible(null)}
+      />
     </div>
   );
 }

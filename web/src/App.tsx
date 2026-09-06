@@ -130,7 +130,7 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
             </button>
             <Suspense fallback={<div className="pantalla-cuerpo" role="status">Cargando pantalla…</div>}>
               {seccion === "dispositivos" ? (
-                <Dispositivos />
+                <Dispositivos sesion={sesion} />
               ) : seccion === "administradores" ? (
                 <Administradores sesion={sesion} />
               ) : seccion === "historial" ? (
