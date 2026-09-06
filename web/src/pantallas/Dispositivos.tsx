@@ -57,6 +57,31 @@ export default function Dispositivos() {
   const [creandoSitio, setCreandoSitio] = useState(false);
   const [errorSitio, setErrorSitio] = useState<string | null>(null);
 
+  // Modal genérico de confirmación (Revocar/Suspender/Eliminar) -- reemplaza
+  // el confirm() nativo del navegador, que se ve fuera de lugar (barra con
+  // el dominio, botones del sistema) al lado del resto de la app. Mismo
+  // patrón que `confirmarSalidaMasiva` en desktop/src/pantallas/Activos.tsx.
+  const [confirmacion, setConfirmacion] = useState<{
+    titulo: string;
+    mensaje: string;
+    textoConfirmar: string;
+    accion: () => Promise<void>;
+  } | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
+
+  async function ejecutarConfirmacion() {
+    if (!confirmacion) return;
+    setConfirmando(true);
+    try {
+      await confirmacion.accion();
+      setConfirmacion(null);
+    } catch (error) {
+      toast.error(String(error));
+    } finally {
+      setConfirmando(false);
+    }
+  }
+
   const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
     const silencioso = opciones?.silencioso ?? false;
     if (!silencioso) setCargando(true);
@@ -167,52 +192,48 @@ export default function Dispositivos() {
     }
   }
 
-  const alEliminar = useCallback(
-    async (fila: FilaDispositivo) => {
-      if (!confirm(`¿Borrar "${fila.etiqueta}" de la lista? Esto no se puede deshacer.`)) return;
-      try {
+  const alEliminar = useCallback((fila: FilaDispositivo) => {
+    setConfirmacion({
+      titulo: "Borrar dispositivo",
+      mensaje: `¿Borrar "${fila.etiqueta}" de la lista? Esto no se puede deshacer.`,
+      textoConfirmar: "Borrar",
+      accion: async () => {
         const { borrado } = await eliminarDispositivo(fila.id);
         toast.success(
           borrado
             ? `${fila.etiqueta} borrado.`
             : `${fila.etiqueta} ya tiene historial y no se puede borrar del todo -- se ocultó de la lista.`,
         );
-        recargar();
-      } catch (error) {
-        toast.error(String(error));
-      }
-    },
-    [recargar],
-  );
+        await recargar();
+      },
+    });
+  }, [recargar]);
 
-  const alRevocar = useCallback(
-    async (fila: FilaDispositivo) => {
-      if (!confirm(`¿Revocar "${fila.etiqueta}"? Ese dispositivo va a dejar de poder sincronizar.`)) return;
-      try {
+  const alRevocar = useCallback((fila: FilaDispositivo) => {
+    setConfirmacion({
+      titulo: "Revocar dispositivo",
+      mensaje: `¿Revocar "${fila.etiqueta}"? Ese dispositivo va a dejar de poder sincronizar.`,
+      textoConfirmar: "Revocar",
+      accion: async () => {
         await revocarDispositivo(fila.id);
         toast.success(`${fila.etiqueta} revocado.`);
-        recargar();
-      } catch (error) {
-        toast.error(String(error));
-      }
-    },
-    [recargar],
-  );
+        await recargar();
+      },
+    });
+  }, [recargar]);
 
-  const alSuspender = useCallback(
-    async (fila: FilaDispositivo) => {
-      if (!confirm(`¿Suspender "${fila.etiqueta}"? Va a dejar de poder sincronizar hasta que lo reactivés.`))
-        return;
-      try {
+  const alSuspender = useCallback((fila: FilaDispositivo) => {
+    setConfirmacion({
+      titulo: "Suspender dispositivo",
+      mensaje: `¿Suspender "${fila.etiqueta}"? Va a dejar de poder sincronizar hasta que lo reactivés.`,
+      textoConfirmar: "Suspender",
+      accion: async () => {
         await suspenderDispositivo(fila.id, true);
         toast.success(`${fila.etiqueta} suspendido.`);
-        recargar();
-      } catch (error) {
-        toast.error(String(error));
-      }
-    },
-    [recargar],
-  );
+        await recargar();
+      },
+    });
+  }, [recargar]);
 
   const alReactivar = useCallback(
     async (fila: FilaDispositivo) => {
@@ -498,6 +519,30 @@ export default function Dispositivos() {
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {confirmacion && (
+        <Modal titulo={confirmacion.titulo} onCerrar={() => setConfirmacion(null)}>
+          <p style={{ marginTop: 0 }}>{confirmacion.mensaje}</p>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+            <button
+              type="button"
+              className="boton"
+              disabled={confirmando}
+              onClick={() => setConfirmacion(null)}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="boton boton-primario"
+              disabled={confirmando}
+              onClick={ejecutarConfirmacion}
+            >
+              {confirmando ? "Un momento…" : confirmacion.textoConfirmar}
+            </button>
+          </div>
         </Modal>
       )}
     </div>
