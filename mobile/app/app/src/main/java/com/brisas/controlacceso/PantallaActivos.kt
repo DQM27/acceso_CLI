@@ -54,16 +54,17 @@ import uniffi.control_acceso_mobile.TipoIngreso
 /// solo campo, la interpretación cambia), llevado a un selector de tres
 /// porque acá hace falta distinguir tres búsquedas, no dos:
 ///
-/// - **Entrada** (por defecto): vacío lista quién está adentro (tocar un
-///   nombre confirma su salida); con texto busca en el catálogo completo de
-///   contratistas (antes pestaña "Buscar" aparte) para arrancar el flujo de
-///   confirmar entrada.
-/// - **Salida: nombre**: filtra la lista de activos por cédula/nombre —
-///   tocar un resultado abre el mismo diálogo de confirmar salida de
-///   siempre. Vacío no trae nada (es un buscador, no una lista para
-///   recorrer — para eso ya está la pestaña Entrada).
-/// - **Salida: gafete**: acepta varios números de gafete separados por
-///   coma ("2, 25, 85") — igual que el modo gafete de `SalidaModal.tsx` —
+/// - **Ingreso** (por defecto, `ModoBusqueda.ENTRADA`): vacío lista quién
+///   está adentro (tocar un nombre confirma su salida); con texto busca en
+///   el catálogo completo de contratistas (antes pestaña "Buscar" aparte)
+///   para arrancar el flujo de confirmar entrada.
+/// - **Salida** (`ModoBusqueda.SALIDA_NOMBRE`): filtra la lista de activos
+///   por cédula/nombre — tocar un resultado abre el mismo diálogo de
+///   confirmar salida de siempre. Vacío no trae nada (es un buscador, no
+///   una lista para recorrer — para eso ya está la pestaña Ingreso).
+/// - **Gafete** (`ModoBusqueda.SALIDA_GAFETE`): acepta varios números de
+///   gafete separados por coma ("2, 25, 85") — igual que el modo gafete de
+///   `SalidaModal.tsx` —
 ///   y muestra a quién le corresponde cada uno antes de confirmar. Un solo
 ///   botón registra la salida de todos los que sí tienen ingreso activo de
 ///   una vez, sin diálogo por persona: es la misma decisión de desktop
@@ -186,31 +187,33 @@ private fun SelectorModoBusqueda(modo: ModoBusqueda, onCambiar: (ModoBusqueda) -
             onClick = { onCambiar(ModoBusqueda.ENTRADA) },
             shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
         ) {
-            EtiquetaSegmento("Entrada")
+            EtiquetaSegmento("Ingreso")
         }
         SegmentedButton(
             selected = modo == ModoBusqueda.SALIDA_NOMBRE,
             onClick = { onCambiar(ModoBusqueda.SALIDA_NOMBRE) },
             shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
         ) {
-            EtiquetaSegmento("Salida: nombre")
+            EtiquetaSegmento("Salida")
         }
         SegmentedButton(
             selected = modo == ModoBusqueda.SALIDA_GAFETE,
             onClick = { onCambiar(ModoBusqueda.SALIDA_GAFETE) },
             shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
         ) {
-            EtiquetaSegmento("Salida: gafete")
+            EtiquetaSegmento("Gafete")
         }
     }
 }
 
-/// Sin esto, "Salida: nombre"/"Salida: gafete" (casi el doble de largo que
-/// "Entrada") se parten en dos líneas dentro de su tercio del selector,
-/// mientras "Entrada" queda en una — el selector completo termina con
-/// altura despareja (reportado con foto real: dos botones "enormes" al
-/// lado de uno chico). Una sola línea, sin importar cuánto texto entre,
-/// deja los tres segmentos siempre a la misma altura.
+/// Antes las etiquetas eran "Entrada"/"Salida: nombre"/"Salida: gafete" --
+/// las dos últimas, casi el doble de largo, se partían en dos líneas
+/// dentro de su tercio del selector mientras la primera quedaba en una, y
+/// el selector completo terminaba con altura despareja (reportado con
+/// foto real: dos botones "enormes" al lado de uno chico). Ya no pasa con
+/// las etiquetas cortas actuales ("Ingreso"/"Salida"/"Gafete"), pero
+/// forzar una sola línea sigue siendo la defensa correcta si el texto
+/// vuelve a crecer (más idioma, tipografía más grande por accesibilidad).
 @Composable
 private fun EtiquetaSegmento(texto: String) {
     Text(texto, maxLines = 1, overflow = TextOverflow.Ellipsis)
