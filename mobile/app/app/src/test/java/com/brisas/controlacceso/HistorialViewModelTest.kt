@@ -100,6 +100,39 @@ class HistorialViewModelTest {
     }
 
     @Test
+    fun `ordena por fecha sin crashear con offset numerico (formato real de Rust y Supabase)`() =
+        runTest(dispatcher) {
+            // `to_rfc3339()` del lado Rust (y lo que devuelve Supabase para
+            // `timestamptz`) usa offset numerico ("+00:00"), no el sufijo
+            // "Z" que produce `strftime(...'Z')` acá arriba -- con menos de
+            // dos filas, `sortedByDescending` ni siquiera llega a comparar
+            // fechas, así que hacen falta DOS filas para reproducir el
+            // `DateTimeParseException` real (`Instant.parse` lo rechaza,
+            // `OffsetDateTime.parse` no).
+            nucleo = NucleoDePrueba.abrir(
+                archivo,
+                NucleoDePrueba.sqlUsuarioRoot(),
+                """
+                INSERT INTO historial_sitio (uuid, sitio_id, contratista_cedula, contratista_nombre,
+                    hora_entrada, hora_salida, gafete_numero, dispositivo_entrada_id, actualizado_en)
+                VALUES
+                    ('movimiento-viejo', 'sitio-prueba', '222222222', 'Persona vieja',
+                        '2026-09-06T20:00:00+00:00', null, null, 'otro-equipo', '2026-09-06T20:00:00+00:00'),
+                    ('movimiento-nuevo', 'sitio-prueba', '333333333', 'Persona nueva',
+                        '2026-09-06T21:00:00+00:00', null, null, 'otro-equipo', '2026-09-06T21:00:00+00:00');
+                """.trimIndent(),
+            )
+            nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "", "")
+            val viewModel = HistorialViewModel(nucleo, dispatcherIO = dispatcher)
+            advanceUntilIdle()
+
+            assertNull(viewModel.error)
+            assertEquals(2, viewModel.movimientos.size)
+            assertEquals("Persona nueva", viewModel.movimientos[0].contratistaNombre)
+            assertEquals("Persona vieja", viewModel.movimientos[1].contratistaNombre)
+        }
+
+    @Test
     fun `cambiarTexto sin coincidencias deja la lista vacia`() = runTest(dispatcher) {
         nucleo = NucleoDePrueba.abrir(
             archivo,

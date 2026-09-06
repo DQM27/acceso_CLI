@@ -105,7 +105,14 @@ class HistorialViewModel(
                     val locales = nucleo.buscarHistorial(texto).map(FilaHistorial::local)
                     val remotos = nucleo.listarHistorialSitio(texto).map(FilaHistorial::remota)
                     (locales + remotos)
-                        .sortedByDescending { java.time.Instant.parse(it.fechaHoraIngreso) }
+                        // `Instant.parse` exige el sufijo "Z" -- las fechas
+                        // que llegan de Rust (`to_rfc3339()`, o crudas de
+                        // Supabase) usan offset numérico ("+00:00"), que
+                        // `Instant.parse` rechaza (`DateTimeParseException`,
+                        // crasheaba la pantalla apenas había algo que
+                        // ordenar). `OffsetDateTime.parse` acepta los dos
+                        // formatos.
+                        .sortedByDescending { java.time.OffsetDateTime.parse(it.fechaHoraIngreso) }
                         .take(30)
                 }
                 error = null
