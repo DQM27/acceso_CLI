@@ -2,6 +2,7 @@ package com.brisas.controlacceso
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,6 +26,10 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -72,6 +78,7 @@ import uniffi.control_acceso_mobile.TipoIngreso
 @Composable
 fun PantallaActivos(nucleo: Nucleo, directorio: String, refrescarNube: Int = 0) {
     val viewModel: ActivosViewModel = viewModel(factory = ActivosViewModel.factory(nucleo, directorio))
+    var escanerAbierto by remember { mutableStateOf(false) }
     LaunchedEffect(refrescarNube) {
         if (refrescarNube > 0) {
             viewModel.refrescar()
@@ -100,6 +107,20 @@ fun PantallaActivos(nucleo: Nucleo, directorio: String, refrescarNube: Int = 0) 
         else -> Unit
     }
 
+    if (escanerAbierto) {
+        PantallaEscanearCedula(
+            onCedulaDetectada = { cedula ->
+                escanerAbierto = false
+                if (viewModel.modo != ModoBusqueda.ENTRADA) {
+                    viewModel.cambiarModo(ModoBusqueda.ENTRADA)
+                }
+                viewModel.cambiarTexto(cedula)
+            },
+            onCerrar = { escanerAbierto = false },
+        )
+        return
+    }
+
     val verificando = viewModel.seleccionIngreso is SeleccionIngreso.Cargando
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -109,6 +130,7 @@ fun PantallaActivos(nucleo: Nucleo, directorio: String, refrescarNube: Int = 0) 
             modo = viewModel.modo,
             texto = viewModel.texto,
             onCambiarTexto = { viewModel.cambiarTexto(it) },
+            onEscanearCedula = { escanerAbierto = true },
         )
 
         // Sólo fuera del modo gafete — ese modo tiene su propio texto de
@@ -193,7 +215,12 @@ private fun EtiquetaSegmento(texto: String) {
 }
 
 @Composable
-private fun CampoBusquedaActivos(modo: ModoBusqueda, texto: String, onCambiarTexto: (String) -> Unit) {
+private fun CampoBusquedaActivos(
+    modo: ModoBusqueda,
+    texto: String,
+    onCambiarTexto: (String) -> Unit,
+    onEscanearCedula: () -> Unit,
+) {
     // Color propio para "estoy buscando a quién SACAR" — evita confundir el
     // modo entrada (color normal de la app) con el de salida, que es la
     // acción de mayor consecuencia.
@@ -203,31 +230,38 @@ private fun CampoBusquedaActivos(modo: ModoBusqueda, texto: String, onCambiarTex
         MaterialTheme.colorScheme.secondary
     }
 
-    OutlinedTextField(
-        value = texto,
-        onValueChange = onCambiarTexto,
-        label = {
-            Text(
-                if (modo == ModoBusqueda.SALIDA_GAFETE) {
-                    "Números de gafete, separados por coma"
-                } else {
-                    "Cédula o nombre"
-                },
-            )
-        },
-        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-        singleLine = true,
-        keyboardOptions = if (modo == ModoBusqueda.SALIDA_GAFETE) {
-            KeyboardOptions(keyboardType = KeyboardType.Number)
-        } else {
-            KeyboardOptions.Default
-        },
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = colorModo,
-            focusedLabelColor = colorModo,
-        ),
-        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-    )
+    Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value = texto,
+            onValueChange = onCambiarTexto,
+            label = {
+                Text(
+                    if (modo == ModoBusqueda.SALIDA_GAFETE) {
+                        "Números de gafete, separados por coma"
+                    } else {
+                        "Cédula o nombre"
+                    },
+                )
+            },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            singleLine = true,
+            keyboardOptions = if (modo == ModoBusqueda.SALIDA_GAFETE) {
+                KeyboardOptions(keyboardType = KeyboardType.Number)
+            } else {
+                KeyboardOptions.Default
+            },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = colorModo,
+                focusedLabelColor = colorModo,
+            ),
+            modifier = Modifier.weight(1f),
+        )
+        if (modo == ModoBusqueda.ENTRADA) {
+            BotonDiscretoBrisas(onClick = onEscanearCedula) {
+                Icon(Icons.Default.PhotoCamera, contentDescription = "Escanear cédula")
+            }
+        }
+    }
 }
 
 @Composable

@@ -795,6 +795,11 @@ pub fn gafete_ocupado_en_otro_dispositivo(
 }
 
 #[derive(serde::Deserialize)]
+struct DispositivoEmbebido {
+    tipo: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
 struct FilaHistorialRemota {
     id: String,
     contratista_cedula: Option<String>,
@@ -814,6 +819,13 @@ struct FilaHistorialRemota {
     dispositivo_entrada_id: String,
     dispositivo_salida_id: Option<String>,
     updated_at: String,
+    /// `"pc"`/`"movil"` (`dispositivos.tipo`) -- embebido vía PostgREST
+    /// (`dispositivo_entrada:dispositivos!ingresos_dispositivo_entrada_id_fkey(tipo)`)
+    /// para que la pantalla pueda mostrar de qué tipo de dispositivo vino
+    /// un movimiento sin tener que resolver el UUID a mano. Pedido del
+    /// usuario tras no poder diferenciar de un vistazo un movimiento de la
+    /// PC de uno del celular en Historial.
+    dispositivo_entrada: Option<DispositivoEmbebido>,
 }
 
 /// Trae a `historial_sitio` todo movimiento (abierto o cerrado) del sitio,
@@ -852,7 +864,8 @@ pub fn recibir_historial_del_sitio(
          &select=id,contratista_cedula,contratista_nombre,empresa_nombre,tipo_ingreso,\
          medio_ingreso,hora_entrada,hora_salida,gafete_numero,usuario_entrada_nombre,\
          usuario_salida_nombre,resultado_acceso,motivo_resultado,reglas_version,\
-         empresa_activa_snapshot,dispositivo_entrada_id,dispositivo_salida_id,updated_at",
+         empresa_activa_snapshot,dispositivo_entrada_id,dispositivo_salida_id,updated_at,\
+         dispositivo_entrada:dispositivos!ingresos_dispositivo_entrada_id_fkey(tipo)",
         contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
     );
     let filas: Vec<FilaHistorialRemota> = obtener_json(&cliente, contexto, &url)?;
@@ -895,8 +908,9 @@ pub fn recibir_historial_del_sitio(
                 tipo_ingreso, medio_ingreso, hora_entrada, hora_salida, gafete_numero,
                 usuario_entrada_nombre, usuario_salida_nombre, resultado_acceso,
                 motivo_resultado, reglas_version, empresa_activa_snapshot,
-                dispositivo_entrada_id, dispositivo_salida_id, actualizado_en
-            ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)
+                dispositivo_entrada_id, dispositivo_salida_id, actualizado_en,
+                dispositivo_entrada_tipo
+            ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20)
             ON CONFLICT(uuid) DO UPDATE SET
                 hora_salida = excluded.hora_salida,
                 usuario_salida_nombre = excluded.usuario_salida_nombre,
@@ -927,6 +941,7 @@ pub fn recibir_historial_del_sitio(
                 fila.dispositivo_entrada_id,
                 fila.dispositivo_salida_id,
                 ahora,
+                fila.dispositivo_entrada.as_ref().and_then(|d| d.tipo.clone()),
             ],
         )?;
         recibidos += 1;
@@ -1760,6 +1775,57 @@ mod tests {
             cacheados, 0,
             "lo que ya no viene en la respuesta se borra de la caché"
         );
+    }
+
+    #[test]
+    fn recibe_historial_del_sitio_y_guarda_el_tipo_de_dispositivo_embebido() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"mov-1\",\"contratista_nombre\":\"Persona Remota\",\
+             \"hora_entrada\":\"2026-01-01T08:00:00Z\",\
+             \"dispositivo_entrada_id\":\"otro-dispositivo\",\
+             \"updated_at\":\"2026-01-01T08:00:05Z\",\
+             \"dispositivo_entrada\":{\"tipo\":\"movil\"}}]",
+        );
+
+        let recibidos = recibir_historial_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(recibidos, 1);
+        let tipo: Option<String> = connection
+            .query_row(
+                "SELECT dispositivo_entrada_tipo FROM historial_sitio WHERE uuid = 'mov-1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(tipo.as_deref(), Some("movil"));
+    }
+
+    #[test]
+    fn recibe_historial_del_sitio_sin_dispositivo_embebido_no_falla() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"mov-2\",\"contratista_nombre\":\"Persona Remota\",\
+             \"hora_entrada\":\"2026-01-01T08:00:00Z\",\
+             \"dispositivo_entrada_id\":\"otro-dispositivo\",\
+             \"updated_at\":\"2026-01-01T08:00:05Z\"}]",
+        );
+
+        let recibidos = recibir_historial_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(recibidos, 1);
+        let tipo: Option<String> = connection
+            .query_row(
+                "SELECT dispositivo_entrada_tipo FROM historial_sitio WHERE uuid = 'mov-2'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(tipo, None, "sin embed, queda NULL en vez de fallar");
     }
 
     #[test]

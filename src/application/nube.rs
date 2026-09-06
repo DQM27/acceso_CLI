@@ -42,6 +42,9 @@ pub struct MovimientoHistorialSitio {
     pub usuario_ingreso_nombre: Option<String>,
     pub usuario_salida_nombre: Option<String>,
     pub motivo_resultado: Option<String>,
+    /// `"pc"`/`"movil"` (o `None` para filas sincronizadas antes de que
+    /// esto existiera) -- ver `nube::sincronizacion::FilaHistorialRemota`.
+    pub dispositivo_entrada_tipo: Option<String>,
 }
 
 impl AppCore {
@@ -57,7 +60,7 @@ impl AppCore {
         let mut consulta = self.connection.prepare(
             "SELECT uuid, contratista_cedula, contratista_nombre, empresa_nombre,
                     hora_entrada, hora_salida, gafete_numero, usuario_entrada_nombre,
-                    usuario_salida_nombre, motivo_resultado
+                    usuario_salida_nombre, motivo_resultado, dispositivo_entrada_tipo
              FROM historial_sitio
              WHERE hora_entrada >= ?1 AND hora_entrada < ?2
                AND (?3 = '' OR instr(lower(contratista_nombre), lower(?3)) > 0
@@ -83,6 +86,7 @@ impl AppCore {
                         usuario_ingreso_nombre: row.get(7)?,
                         usuario_salida_nombre: row.get(8)?,
                         motivo_resultado: row.get(9)?,
+                        dispositivo_entrada_tipo: row.get(10)?,
                     })
                 },
             )?

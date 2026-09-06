@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 25;
+pub const SCHEMA_VERSION: i64 = 26;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -224,6 +224,11 @@ fn aplicar_migraciones_posteriores_a_15(
         *version = 25;
     }
 
+    if *version == 25 {
+        aplicar_migracion_26(connection)?;
+        *version = 26;
+    }
+
     Ok(())
 }
 
@@ -303,6 +308,14 @@ fn aplicar_migracion_25(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_25)?;
     transaction.execute_batch("PRAGMA user_version = 25")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_26(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_26)?;
+    transaction.execute_batch("PRAGMA user_version = 26")?;
     transaction.commit()?;
     Ok(())
 }
@@ -1900,4 +1913,15 @@ CREATE TABLE historial_sitio (
 ) STRICT;
 
 CREATE INDEX idx_historial_sitio_hora_entrada ON historial_sitio(hora_entrada);
+";
+
+// Pedido del usuario tras no poder diferenciar de un vistazo si un
+// movimiento de `historial_sitio` vino de la PC o del celular del mismo
+// sitio -- `dispositivo_entrada_id` ya viajaba, pero es un UUID sin
+// significado visible. Queda `NULL` para filas ya sincronizadas antes de
+// esta migración (el sync incremental no las vuelve a tocar a menos que
+// cambien) -- la pantalla debe mostrar algo neutro ("—"/ícono genérico)
+// para ese caso, no asumir un valor.
+const MIGRACION_26: &str = r"
+ALTER TABLE historial_sitio ADD COLUMN dispositivo_entrada_tipo TEXT;
 ";

@@ -31,6 +31,10 @@ import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "..
  * hoy recorta por `registro_id` local, que una fila remota no tiene. */
 interface FilaLocal extends MovimientoIngresoResumen {
   origen: "local";
+  // Siempre "pc": esta pantalla sólo existe en el build de escritorio, no
+  // hace falta leerlo de ningún lado -- a diferencia de una fila remota,
+  // que sí puede venir de cualquier tipo de dispositivo del sitio.
+  dispositivo_tipo: "pc";
 }
 
 interface FilaRemota {
@@ -51,9 +55,21 @@ interface FilaRemota {
   motivo_resultado: null;
   reglas_version: null;
   empresa_activa_snapshot: null;
+  // `null` para movimientos remotos sincronizados antes de que
+  // `historial_sitio.dispositivo_entrada_tipo` existiera (migración 26).
+  dispositivo_tipo: string | null;
 }
 
 type FilaHistorial = FilaLocal | FilaRemota;
+
+/** "pc"/"movil" (`dispositivos.tipo`) → texto corto para la columna
+ * "Dispositivo" -- cualquier otro valor (o `null`) se muestra tal cual /
+ * como "—", nunca se inventa un tipo que no vino. */
+function textoDispositivo(tipo: string | null): string {
+  if (tipo === "pc") return "💻 PC";
+  if (tipo === "movil") return "📱 Celular";
+  return tipo ?? "—";
+}
 
 function filaDesdeRemoto(remoto: MovimientoHistorialRemoto): FilaHistorial {
   return {
@@ -74,6 +90,7 @@ function filaDesdeRemoto(remoto: MovimientoHistorialRemoto): FilaHistorial {
     motivo_resultado: null,
     reglas_version: null,
     empresa_activa_snapshot: null,
+    dispositivo_tipo: remoto.dispositivo_entrada_tipo,
   };
 }
 
@@ -136,7 +153,11 @@ export default function Historial() {
           listarHistorialSitio(desde || undefined, hasta || undefined),
         ]);
         if (!estaVigente()) return;
-        const locales: FilaHistorial[] = items.map((item) => ({ ...item, origen: "local" }));
+        const locales: FilaHistorial[] = items.map((item) => ({
+          ...item,
+          origen: "local",
+          dispositivo_tipo: "pc",
+        }));
         setFilas([...locales, ...remotos.map(filaDesdeRemoto)]);
         setTruncado(truncado);
       } finally {
@@ -259,6 +280,13 @@ export default function Historial() {
         cellStyle: { textAlign: "left" },
       },
       { field: "empresa_nombre", headerName: "Empresa", flex: 1, minWidth: 130 },
+      {
+        field: "dispositivo_tipo",
+        headerName: "Dispositivo",
+        flex: 1,
+        minWidth: 110,
+        valueFormatter: (p) => textoDispositivo(p.value ?? null),
+      },
       { field: "tipo_ingreso", headerName: "Tipo", flex: 1, minWidth: 100 },
       {
         field: "medio_ingreso",

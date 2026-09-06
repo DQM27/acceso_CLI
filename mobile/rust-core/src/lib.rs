@@ -409,6 +409,11 @@ pub struct MovimientoHistorialSitio {
     pub usuario_ingreso_nombre: Option<String>,
     pub usuario_salida_nombre: Option<String>,
     pub motivo_resultado: Option<String>,
+    /// `"pc"`/`"movil"`, o `None` para filas sincronizadas antes de que
+    /// esto existiera (`database::schema`, migración 26) -- pedido del
+    /// usuario para diferenciar de un vistazo de qué dispositivo vino un
+    /// movimiento.
+    pub dispositivo_entrada_tipo: Option<String>,
 }
 
 impl From<control_acceso::application::MovimientoHistorialSitio> for MovimientoHistorialSitio {
@@ -424,6 +429,7 @@ impl From<control_acceso::application::MovimientoHistorialSitio> for MovimientoH
             usuario_ingreso_nombre: m.usuario_ingreso_nombre,
             usuario_salida_nombre: m.usuario_salida_nombre,
             motivo_resultado: m.motivo_resultado,
+            dispositivo_entrada_tipo: m.dispositivo_entrada_tipo,
         }
     }
 }

@@ -31,6 +31,11 @@ data class FilaHistorial(
     val usuarioIngresoNombre: String,
     val usuarioSalidaNombre: String?,
     val advertenciaPraind: Boolean,
+    // "pc"/"movil", o null si vino sin dato (fila remota sincronizada antes
+    // de que esto existiera). Una fila local siempre es "movil": esta
+    // pantalla sólo existe en el build de Android, no hace falta leerlo de
+    // ningún lado.
+    val dispositivoTipo: String?,
 ) {
     companion object {
         fun local(m: MovimientoHistorial) = FilaHistorial(
@@ -38,14 +43,24 @@ data class FilaHistorial(
             m.fechaHoraIngreso, m.fechaHoraSalida, m.gafeteNumero,
             m.usuarioIngresoNombre, m.usuarioSalidaNombre,
             m.resultadoAcceso is ResultadoIngresoRegistrado.PermitidoConAdvertencia,
+            dispositivoTipo = "movil",
         )
         fun remota(m: MovimientoHistorialSitio) = FilaHistorial(
             "nube:${m.uuid}", m.cedula ?: "—", m.contratistaNombre, m.empresaNombre ?: "—",
             m.fechaHoraIngreso, m.fechaHoraSalida, m.gafeteNumero,
             m.usuarioIngresoNombre ?: "—", m.usuarioSalidaNombre,
             m.motivoResultado == "PRAIND_PROXIMO_VENCER",
+            dispositivoTipo = m.dispositivoEntradaTipo,
         )
     }
+}
+
+/// "pc"/"movil" → texto corto para mostrar en la fila -- cualquier otro
+/// valor (o null) se muestra como "—", nunca se inventa un tipo que no vino.
+fun textoDispositivo(tipo: String?): String = when (tipo) {
+    "pc" -> "💻 PC"
+    "movil" -> "📱 Celular"
+    else -> tipo ?: "—"
 }
 
 /// Dueño del estado de [PantallaHistorial] y de la llamada a
