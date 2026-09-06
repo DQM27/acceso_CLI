@@ -17,11 +17,23 @@ export function textoMedio(medio: string | null): string {
   return "";
 }
 
-/** "pc"/"mobile"/"visor" (`dispositivos.tipo`) → texto corto para la
- * columna "Dispositivo" -- mismo mapeo que `textoDispositivo` en
- * `desktop/src/pantallas/Historial.tsx` y `HistorialViewModel.kt` del
- * móvil, para que los tres lados muestren lo mismo. */
+/** "pc"/"mobile"/"visor" (`dispositivos.tipo`) → sólo el ícono, para la
+ * columna "Dispositivo" en pantalla -- mismo mapeo que `textoDispositivo`
+ * en `desktop/src/pantallas/Historial.tsx` y `HistorialViewModel.kt` del
+ * móvil (esas sí devuelven ícono + palabra, no exportan a Excel/PDF). Acá
+ * ver [`textoDispositivoExport`] para Excel/PDF, donde un emoji solo no
+ * sirve. */
 export function textoDispositivo(tipo: string | null): string {
+  if (tipo === "pc") return "💻";
+  if (tipo === "mobile") return "📱";
+  return tipo ?? "—";
+}
+
+/** Versión con palabra completa de [`textoDispositivo`] -- la pantalla
+ * quiere sólo el ícono (más parejo visualmente que "💻 PC"/"📱 Celular"),
+ * pero un reporte impreso o una celda de Excel sí necesita texto legible,
+ * no un glifo solo. */
+export function textoDispositivoExport(tipo: string | null): string {
   if (tipo === "pc") return "💻 PC";
   if (tipo === "mobile") return "📱 Celular";
   return tipo ?? "—";
@@ -64,7 +76,7 @@ export const DEFINICIONES_EXPORT: DefinicionColumnaExport[] = [
   {
     colId: "dispositivo_entrada_tipo",
     etiqueta: "Dispositivo",
-    valor: (f) => textoDispositivo(f.dispositivo_entrada_tipo),
+    valor: (f) => textoDispositivoExport(f.dispositivo_entrada_tipo),
   },
   { colId: "tipo_ingreso", etiqueta: "Tipo", valor: (f) => f.tipo_ingreso ?? "" },
   { colId: "medio_ingreso", etiqueta: "Medio", valor: (f) => textoMedio(f.medio_ingreso) },

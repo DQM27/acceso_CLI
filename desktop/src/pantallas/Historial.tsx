@@ -62,12 +62,14 @@ interface FilaRemota {
 
 type FilaHistorial = FilaLocal | FilaRemota;
 
-/** "pc"/"mobile" (`dispositivos.tipo`) → texto corto para la columna
- * "Dispositivo" -- cualquier otro valor (o `null`) se muestra tal cual /
- * como "—", nunca se inventa un tipo que no vino. */
+/** "pc"/"mobile" (`dispositivos.tipo`) → sólo el ícono para la columna
+ * "Dispositivo" -- ícono+palabra ("💻 PC"/"📱 Celular") quedaba desparejo
+ * visualmente (una palabra bastante más larga que la otra). Cualquier otro
+ * valor (o `null`) se muestra tal cual / como "—", nunca se inventa un tipo
+ * que no vino. */
 function textoDispositivo(tipo: string | null): string {
-  if (tipo === "pc") return "💻 PC";
-  if (tipo === "mobile") return "📱 Celular";
+  if (tipo === "pc") return "💻";
+  if (tipo === "mobile") return "📱";
   return tipo ?? "—";
 }
 

@@ -55,11 +55,13 @@ data class FilaHistorial(
     }
 }
 
-/// "pc"/"mobile" → texto corto para mostrar en la fila -- cualquier otro
-/// valor (o null) se muestra como "—", nunca se inventa un tipo que no vino.
+/// "pc"/"mobile" → sólo el ícono para mostrar en la fila -- ícono+palabra
+/// ("💻 PC"/"📱 Celular") quedaba desparejo visualmente (una palabra bastante
+/// más larga que la otra). Cualquier otro valor (o null) se muestra como
+/// "—", nunca se inventa un tipo que no vino.
 fun textoDispositivo(tipo: String?): String = when (tipo) {
-    "pc" -> "💻 PC"
-    "mobile" -> "📱 Celular"
+    "pc" -> "💻"
+    "mobile" -> "📱"
     else -> tipo ?: "—"
 }
 
