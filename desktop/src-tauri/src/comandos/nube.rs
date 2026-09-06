@@ -66,7 +66,15 @@ fn autenticar(state: &GuiState) -> Result<nube::TokenDispositivo, String> {
 
     let secreto = nube::credenciales::cargar_secreto()
         .ok_or_else(|| "Todavía no se guardó el secreto de este dispositivo".to_string())?;
-    nube::autenticar_dispositivo(nube::BASE_URL, &secreto).map_err(mensaje_nube)
+    let token = nube::autenticar_dispositivo(nube::BASE_URL, &secreto).map_err(mensaje_nube)?;
+    // El candado ya se soltó (`autorizar_uso_nube` arriba fue la única
+    // sección crítica) -- volver a pedirlo acá es una lectura/escritura
+    // atómica sobre un `AtomicI64` (ver `RelojCorregido`), no compite con
+    // nada lento.
+    if let Some(desfase_ms) = token.desfase_reloj_ms {
+        state.core().actualizar_desfase_reloj(desfase_ms);
+    }
+    Ok(token)
 }
 
 /// Autentica, drena la bandeja de salida pendiente y refresca la caché de

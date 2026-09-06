@@ -44,6 +44,7 @@ use control_acceso::services::registro_ingreso_service::{
     ResultadoRegistroEntrada as ResultadoRegistroEntradaNucleo,
 };
 use control_acceso::services::usuario_service::CrearUsuarioInput as CrearUsuarioInputNucleo;
+use control_acceso::tiempo::RelojCorregido;
 
 uniffi::setup_scaffolding!();
 
@@ -649,9 +650,15 @@ pub struct Nucleo {
 impl Nucleo {
     #[uniffi::constructor]
     pub fn abrir(ruta_base_datos: String) -> Result<Self, NucleoError> {
-        let core = AppCore::abrir(&ruta_base_datos).map_err(|origen| NucleoError::Apertura {
-            mensaje: origen.to_string(),
-        })?;
+        // `RelojCorregido`, no `RelojSistema` -- un teléfono con la hora mal
+        // puesta manualmente (o sin datos/GPS para que Android la ajuste
+        // solo) tiene el mismo problema que se vio en escritorio: cada
+        // autenticación contra la nube mide el desfase real y lo aplica acá
+        // (ver `application::nube::AppCore::actualizar_desfase_reloj`).
+        let core = AppCore::abrir_con_reloj(&ruta_base_datos, std::sync::Arc::new(RelojCorregido::nuevo()))
+            .map_err(|origen| NucleoError::Apertura {
+                mensaje: origen.to_string(),
+            })?;
         Ok(Self {
             core: Mutex::new(core),
             sesion: Mutex::new(None),

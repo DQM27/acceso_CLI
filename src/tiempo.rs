@@ -7,6 +7,13 @@ const FORMATO_UTC: &str = "%Y-%m-%dT%H:%M:%SZ";
 
 pub trait Reloj: Send + Sync {
     fn ahora_utc(&self) -> DateTime<Utc>;
+
+    /// No-op por defecto -- sólo [`RelojCorregido`] hace algo con esto.
+    /// Que viva en el trait (en vez de exigir un downcast) permite que
+    /// quien recibe un `Arc<dyn Reloj>` cualquiera (`RelojSistema` en
+    /// CLI/TUI, `RelojCorregido` en escritorio/móvil) llame esto sin saber
+    /// qué implementación hay detrás.
+    fn actualizar_desfase_ms(&self, _desfase_ms: i64) {}
 }
 
 #[derive(Debug, Default)]
@@ -32,6 +39,42 @@ impl RelojFijo {
 impl Reloj for RelojFijo {
     fn ahora_utc(&self) -> DateTime<Utc> {
         self.instante
+    }
+}
+
+/// Reloj del sistema corregido por un desfase medido contra una hora
+/// confiable externa (el header `Date` de cualquier respuesta HTTPS del
+/// receptor en la nube, ver `nube::cliente::autenticar_dispositivo`) --
+/// pensado para equipos cuyo reloj de Windows no se puede corregir
+/// (permisos, política corporativa, hardware sin pila/CMOS confiable).
+/// Reproducido en producción: un reloj adelantado ~11 minutos sin
+/// sincronizar hacía que la marca de agua del sync incremental
+/// (`nube::sincronizacion`) se calculara mal y perdiera movimientos/altas
+/// en silencio -- eso ya se corrigió calculando esa marca a partir del
+/// `updated_at` real del servidor, pero el resto de la app (horas de
+/// entrada/salida, auditoría) seguía dependiendo del reloj de Windows tal
+/// cual. `AtomicI64` en vez de un `Mutex`: `ahora_utc()` se llama en cada
+/// registro de ingreso/salida, no vale la pena bloquear por una lectura.
+#[derive(Debug, Default)]
+pub struct RelojCorregido {
+    desfase_ms: std::sync::atomic::AtomicI64,
+}
+
+impl RelojCorregido {
+    pub fn nuevo() -> Self {
+        Self::default()
+    }
+}
+
+impl Reloj for RelojCorregido {
+    fn ahora_utc(&self) -> DateTime<Utc> {
+        let desfase_ms = self.desfase_ms.load(std::sync::atomic::Ordering::Relaxed);
+        Utc::now() - chrono::Duration::milliseconds(desfase_ms)
+    }
+
+    fn actualizar_desfase_ms(&self, desfase_ms: i64) {
+        self.desfase_ms
+            .store(desfase_ms, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
@@ -87,9 +130,29 @@ mod tests {
     use chrono::{NaiveDate, TimeZone, Timelike, Utc};
 
     use super::{
-        a_costa_rica, fecha_costa_rica, inicio_dia_costa_rica_utc, local_costa_rica_a_utc,
-        parsear_utc, serializar_utc,
+        Reloj, RelojCorregido, a_costa_rica, fecha_costa_rica, inicio_dia_costa_rica_utc,
+        local_costa_rica_a_utc, parsear_utc, serializar_utc,
     };
+
+    #[test]
+    fn reloj_corregido_sin_desfase_medido_todavia_se_comporta_como_el_sistema() {
+        let reloj = RelojCorregido::nuevo();
+        let diferencia = (reloj.ahora_utc() - Utc::now()).num_milliseconds().abs();
+        assert!(diferencia < 1000, "sin desfase aplicado debería ser ~ahora");
+    }
+
+    #[test]
+    fn reloj_corregido_resta_el_desfase_medido() {
+        let reloj = RelojCorregido::nuevo();
+        // Reloj local "adelantado" 5 minutos respecto al confiable -- mismo
+        // caso reproducido en producción (ver doc-comment del tipo).
+        reloj.actualizar_desfase_ms(5 * 60 * 1000);
+        let diferencia = (Utc::now() - reloj.ahora_utc()).num_milliseconds();
+        assert!(
+            (299_000..301_000).contains(&diferencia),
+            "debería quedar ~5 minutos detrás del reloj del sistema: {diferencia}ms"
+        );
+    }
 
     #[test]
     fn costa_rica_define_hoy_sin_depender_de_la_zona_del_sistema() {

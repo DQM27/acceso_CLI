@@ -1,8 +1,10 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use control_acceso::application::AppCore;
 use control_acceso::database::connection::ruta_base_datos;
 use control_acceso::instancia::InstanciaGuard;
+use control_acceso::tiempo::RelojCorregido;
 use tauri::{Emitter, Manager};
 
 mod comandos;
@@ -89,9 +91,17 @@ pub fn run() {
              misma base de datos?): {error}"
         ))
     });
-    let core = AppCore::abrir(&ruta_base_datos).unwrap_or_else(|error| {
-        mostrar_error_fatal_y_salir(&format!("No se pudo abrir la base de datos: {error}"))
-    });
+    // `RelojCorregido`, no `RelojSistema`: en equipos cuyo reloj de Windows
+    // no se puede corregir (visto en producción, ~11 min adelantado y sin
+    // sincronizar), cada autenticación contra la nube mide el desfase real
+    // contra el receptor y lo aplica acá -- ver
+    // `application::nube::AppCore::actualizar_desfase_reloj`. Sin nube
+    // configurada nunca se mide nada y este reloj se comporta igual que
+    // `RelojSistema`.
+    let core = AppCore::abrir_con_reloj(&ruta_base_datos, Arc::new(RelojCorregido::nuevo()))
+        .unwrap_or_else(|error| {
+            mostrar_error_fatal_y_salir(&format!("No se pudo abrir la base de datos: {error}"))
+        });
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())

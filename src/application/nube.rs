@@ -20,6 +20,15 @@ use crate::services::autenticacion_service::UsuarioSesion;
 
 use super::{AppCore, verificar_actor_activo};
 
+/// Campo interno de `AppCore` (ver `token_nube_cacheado` en `application::mod`)
+/// -- guarda el último `TokenDispositivo` obtenido junto con cuándo, para
+/// que `AppCore::autenticar_con_cache` decida si todavía es reutilizable.
+pub(super) struct TokenCacheado {
+    pub(super) secreto: String,
+    pub(super) token: crate::nube::TokenDispositivo,
+    pub(super) obtenido_en: std::time::Instant,
+}
+
 /// Movimiento del espejo de Supabase, sin inventar valores para datos antiguos ausentes.
 #[derive(Debug, Clone)]
 pub struct MovimientoHistorialSitio {
@@ -182,7 +191,7 @@ impl AppCore {
                 crate::nube::credenciales::cargar_secreto_en,
             )
             .ok_or(GestionNubeError::SinSecreto)?;
-        let token = crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, &secreto)?;
+        let token = self.autenticar_con_cache(&secreto)?;
 
         let contexto = crate::nube::ContextoSincronizacion {
             base_url: crate::nube::BASE_URL,
@@ -229,7 +238,7 @@ impl AppCore {
                 crate::nube::credenciales::cargar_secreto_en,
             )
             .ok_or(GestionNubeError::SinSecreto)?;
-        let token = crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, &secreto)?;
+        let token = self.autenticar_con_cache(&secreto)?;
         let topic = format!("sitio:{}", token.sitio_id);
 
         Ok(SesionRealtimeNube {
@@ -300,7 +309,7 @@ impl AppCore {
         let Some(secreto) = secreto else {
             return Ok(false);
         };
-        let token = crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, &secreto)?;
+        let token = self.autenticar_con_cache(&secreto)?;
         let contexto = crate::nube::ContextoSincronizacion {
             base_url: crate::nube::BASE_URL,
             apikey: crate::nube::APIKEY,
@@ -330,7 +339,7 @@ impl AppCore {
                 crate::nube::credenciales::cargar_secreto_en,
             )
             .ok_or(GestionNubeError::SinSecreto)?;
-        let token = crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, &secreto)?;
+        let token = self.autenticar_con_cache(&secreto)?;
 
         let contexto = crate::nube::ContextoSincronizacion {
             base_url: crate::nube::BASE_URL,
@@ -377,5 +386,73 @@ impl AppCore {
             return Err(GestionNubeError::UsoNoAutorizado);
         }
         Ok(())
+    }
+
+    fn aplicar_desfase_reloj(&self, token: &crate::nube::TokenDispositivo) {
+        if let Some(desfase_ms) = token.desfase_reloj_ms {
+            self.actualizar_desfase_reloj(desfase_ms);
+        }
+    }
+
+    /// Reusa el último `TokenDispositivo` mientras siga vigente en vez de
+    /// autenticar de cero en cada llamada -- reproducido en el celular:
+    /// confirmar un ingreso con gafete (`gafete_ocupado_en_sitio`) hacía
+    /// una autenticación completa contra la nube aunque el dispositivo ya
+    /// se hubiera autenticado segundos antes para sincronizar, sintiéndose
+    /// como que la app se colgaba en cada registro. Margen de 30s antes del
+    /// vencimiento real para no arrancar una operación con un token que
+    /// puede vencer a mitad de camino. Un acierto de caché no vuelve a
+    /// medir el desfase de reloj (`desfase_reloj_ms` queda en `None`) --
+    /// no hace falta remedirlo en cada llamada, sólo cuando de verdad se
+    /// habla con el receptor.
+    fn autenticar_con_cache(
+        &self,
+        secreto: &str,
+    ) -> Result<crate::nube::TokenDispositivo, GestionNubeError> {
+        const MARGEN_EXPIRACION: std::time::Duration = std::time::Duration::from_secs(30);
+
+        {
+            let cache = self
+                .token_nube_cacheado
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(entrada) = cache.as_ref() {
+                let vigente_por =
+                    std::time::Duration::from_secs(entrada.token.expires_in)
+                        .saturating_sub(MARGEN_EXPIRACION);
+                if entrada.secreto == secreto && entrada.obtenido_en.elapsed() < vigente_por {
+                    let mut token = entrada.token.clone();
+                    token.desfase_reloj_ms = None;
+                    return Ok(token);
+                }
+            }
+        }
+
+        let token = crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, secreto)?;
+        self.aplicar_desfase_reloj(&token);
+        *self
+            .token_nube_cacheado
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(TokenCacheado {
+            secreto: secreto.to_string(),
+            token: token.clone(),
+            obtenido_en: std::time::Instant::now(),
+        });
+        Ok(token)
+    }
+
+    /// Corrige el reloj de este `AppCore` con un desfase ya medido (ver
+    /// `TokenDispositivo::desfase_reloj_ms`) -- no-op si el reloj inyectado
+    /// no es [`crate::tiempo::RelojCorregido`] (CLI/TUI siguen con
+    /// `RelojSistema`, que ignora esta llamada). Pública porque algunas
+    /// autenticaciones pasan por fuera de `AppCore` a propósito (Tauri
+    /// evita retener el `Mutex` compartido durante la parte de red, ver
+    /// `comandos/nube.rs::autenticar` en el escritorio) y necesitan un
+    /// punto para devolver lo medido. Cada autenticación exitosa vuelve a
+    /// medir y sobrescribe -- no acumula, así que un desfase que ya se
+    /// corrigió (o empeoró) en Windows se refleja solo, sin reiniciar la
+    /// app.
+    pub fn actualizar_desfase_reloj(&self, desfase_ms: i64) {
+        self.reloj.actualizar_desfase_ms(desfase_ms);
     }
 }

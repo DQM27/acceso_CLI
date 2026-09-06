@@ -71,6 +71,12 @@ pub struct AppCore {
     /// Ruta del archivo activo, sólo conocida cuando se abre con [`AppCore::abrir`].
     /// Se usa exclusivamente para ubicar el directorio de respaldos junto a la base.
     ruta_base_datos: PathBuf,
+    /// Último `TokenDispositivo` obtenido, mientras siga vigente -- ver
+    /// `nube::TokenCacheado`. Sólo tiene sentido con la feature `nube`
+    /// (nada más la llena); en el resto de las interfaces (CLI/TUI) queda
+    /// siempre en `None` sin costo real (un `Mutex` vacío).
+    #[cfg(feature = "nube")]
+    token_nube_cacheado: std::sync::Mutex<Option<nube::TokenCacheado>>,
 }
 
 impl AppCore {
@@ -89,6 +95,8 @@ impl AppCore {
             connection,
             reloj,
             ruta_base_datos: PathBuf::new(),
+            #[cfg(feature = "nube")]
+            token_nube_cacheado: std::sync::Mutex::new(None),
         }
     }
 

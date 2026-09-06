@@ -285,8 +285,18 @@ fn enviar_contratista(
         "es_personal_ruta": es_personal_ruta != 0,
     });
 
+    // `on_conflict=identificacion`, no el default (la PK `id`) -- sin esto,
+    // dos bases locales que nunca compartieron el mismo `uuid` para el
+    // mismo contratista (una base vieja o reconstruida, `uuid` local
+    // perdido, etc.) generan cada una un `id` propio al azar, y el upsert
+    // por PK los acepta como dos personas distintas en vez de fusionarlos
+    // -- exactamente el bug reproducido en producción (117 contratistas
+    // duplicados). `identificacion` es la cédula real, única de verdad.
     let respuesta = cliente
-        .post(format!("{}/rest/v1/contratistas", contexto.base_url))
+        .post(format!(
+            "{}/rest/v1/contratistas?on_conflict=identificacion",
+            contexto.base_url
+        ))
         .header("apikey", contexto.apikey)
         .header("Authorization", format!("Bearer {}", contexto.token))
         .header("Prefer", "resolution=merge-duplicates,return=minimal")
@@ -323,8 +333,16 @@ fn enviar_empresa(
         "activa": activo != 0,
     });
 
+    // `on_conflict=nombre` -- mismo motivo que `enviar_contratista`: sin
+    // esto, dos bases locales sin el mismo `uuid` para la misma empresa
+    // (nunca hubo constraint de unicidad remota más que el `id`) generan
+    // cada una un `id` propio y el upsert por PK las acepta como empresas
+    // distintas en vez de fusionarlas.
     let respuesta = cliente
-        .post(format!("{}/rest/v1/empresas", contexto.base_url))
+        .post(format!(
+            "{}/rest/v1/empresas?on_conflict=nombre",
+            contexto.base_url
+        ))
         .header("apikey", contexto.apikey)
         .header("Authorization", format!("Bearer {}", contexto.token))
         .header("Prefer", "resolution=merge-duplicates,return=minimal")
@@ -374,8 +392,14 @@ fn enviar_gafete(
         "contratista_deudor_nombre": deudor_nombre,
     });
 
+    // `on_conflict=sitio_id,numero` -- mismo motivo que
+    // `enviar_contratista`/`enviar_empresa`: el número de gafete es único
+    // dentro de un sitio aunque el `id` remoto no coincida entre bases.
     let respuesta = cliente
-        .post(format!("{}/rest/v1/gafetes", contexto.base_url))
+        .post(format!(
+            "{}/rest/v1/gafetes?on_conflict=sitio_id,numero",
+            contexto.base_url
+        ))
         .header("apikey", contexto.apikey)
         .header("Authorization", format!("Bearer {}", contexto.token))
         .header("Prefer", "resolution=merge-duplicates,return=minimal")
@@ -416,8 +440,16 @@ fn enviar_usuario(
         "activo": activo != 0,
     });
 
+    // `on_conflict=cedula` -- la tabla remota ya tiene `UNIQUE(cedula)`, pero
+    // sin decirlo acá el upsert infiere la PK (`id`) como blanco del
+    // conflicto: reenviar este usuario con un `uuid` local distinto (mismo
+    // caso que contratistas/empresas) violaría esa constraint en vez de
+    // fusionarse.
     let respuesta = cliente
-        .post(format!("{}/rest/v1/usuarios", contexto.base_url))
+        .post(format!(
+            "{}/rest/v1/usuarios?on_conflict=cedula",
+            contexto.base_url
+        ))
         .header("apikey", contexto.apikey)
         .header("Authorization", format!("Bearer {}", contexto.token))
         .header("Prefer", "resolution=merge-duplicates,return=minimal")
@@ -932,6 +964,7 @@ struct FilaEmpresaRemota {
     id: String,
     nombre: String,
     activa: bool,
+    updated_at: String,
 }
 
 /// Sin `password_hash` -- nunca viaja, ver el doc-comment de
@@ -945,6 +978,7 @@ struct FilaUsuarioRemota {
     nombre: String,
     rol: String,
     activo: bool,
+    updated_at: String,
 }
 
 #[derive(serde::Deserialize)]
@@ -958,6 +992,7 @@ struct FilaContratistaRemota {
     tipo_ingreso: Option<String>,
     fecha_vencimiento_praind: Option<String>,
     es_personal_ruta: Option<bool>,
+    updated_at: String,
 }
 
 /// A diferencia de empresas/contratistas/usuarios (globales), gafetes SÍ
@@ -999,16 +1034,19 @@ pub fn recibir_catalogo_del_sitio(
     // Sync incremental (MIGRACION_23): sin esto, cada ciclo (cada 2 minutos,
     // para siempre) traía las tres tablas COMPLETAS aunque nada hubiera
     // cambiado. `marca_anterior` es NULL la primera vez (sembrado inicial,
-    // sin filtro -- hay que traer todo lo que ya existe). `marca_nueva` se
-    // captura ANTES de pedir nada: si algo cambia remoto mientras estas
-    // llamadas están en vuelo, la próxima vuelta lo vuelve a traer -- más
-    // vale repetir una fila que perderla por una marca de agua adelantada.
+    // sin filtro -- hay que traer todo lo que ya existe). La marca nueva se
+    // calcula DESPUÉS, a partir del `updated_at` real que devolvió el
+    // servidor (ver `recibir_historial_del_sitio`) -- no del reloj de este
+    // dispositivo: un reloj local apenas adelantado respecto al del
+    // servidor dejaba la marca "en el futuro", y cualquier fila con
+    // `updated_at` real por debajo quedaba fuera de `WHERE updated_at > marca`
+    // para siempre, sin ningún error visible (bug real, reproducido en
+    // producción).
     let marca_anterior: Option<String> = connection.query_row(
         "SELECT catalogo_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
         [],
         |row| row.get(0),
     )?;
-    let marca_nueva = crate::tiempo::serializar_utc(chrono::Utc::now());
     let filtro_incremental = marca_anterior
         .as_deref()
         .map(|marca| format!("&updated_at=gt.{marca}"))
@@ -1024,7 +1062,7 @@ pub fn recibir_catalogo_del_sitio(
         &cliente,
         contexto,
         &format!(
-            "{}/rest/v1/empresas?select=id,nombre,activa{filtro_incremental}",
+            "{}/rest/v1/empresas?select=id,nombre,activa,updated_at{filtro_incremental}",
             contexto.base_url
         ),
     )?;
@@ -1033,7 +1071,7 @@ pub fn recibir_catalogo_del_sitio(
         contexto,
         &format!(
             "{}/rest/v1/contratistas?select=id,nombre,identificacion,empresa_id,empresa_nombre,\
-             activo,tipo_ingreso,fecha_vencimiento_praind,es_personal_ruta{filtro_incremental}",
+             activo,tipo_ingreso,fecha_vencimiento_praind,es_personal_ruta,updated_at{filtro_incremental}",
             contexto.base_url
         ),
     )?;
@@ -1041,7 +1079,7 @@ pub fn recibir_catalogo_del_sitio(
         &cliente,
         contexto,
         &format!(
-            "{}/rest/v1/usuarios?select=id,cedula,nombre,rol,activo{filtro_incremental}",
+            "{}/rest/v1/usuarios?select=id,cedula,nombre,rol,activo,updated_at{filtro_incremental}",
             contexto.base_url
         ),
     )?;
@@ -1059,6 +1097,27 @@ pub fn recibir_catalogo_del_sitio(
             contexto.base_url, contexto.sitio_id
         ),
     )?;
+
+    // Máximo `updated_at` real entre las tres tablas incrementales (gafetes
+    // no participa, se descarga completo cada vez -- ver su comentario más
+    // abajo). Sin filas nuevas, la marca no avanza -- preferible repetir la
+    // misma consulta (ya sabemos que no trae nada) a arriesgar perder una
+    // fila por un reloj local desviado.
+    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_anterior
+        .as_deref()
+        .and_then(|marca| crate::tiempo::parsear_utc(marca).ok());
+    for actualizado_en in empresas
+        .iter()
+        .map(|f| &f.updated_at)
+        .chain(contratistas.iter().map(|f| &f.updated_at))
+        .chain(usuarios.iter().map(|f| &f.updated_at))
+    {
+        let actualizado_en = crate::tiempo::parsear_utc(actualizado_en)
+            .map_err(|_| SincronizacionError::FechaInvalida(actualizado_en.clone()))?;
+        if marca_mas_nueva.is_none_or(|marca| actualizado_en > marca) {
+            marca_mas_nueva = Some(actualizado_en);
+        }
+    }
 
     let transaction = connection.unchecked_transaction()?;
     let mut resumen = ResumenCatalogo::default();
@@ -1185,10 +1244,12 @@ pub fn recibir_catalogo_del_sitio(
         resumen.gafetes_recibidos += 1;
     }
 
-    transaction.execute(
-        "UPDATE sincronizacion_estado SET catalogo_actualizado_hasta = ?1 WHERE id = 1",
-        params![marca_nueva],
-    )?;
+    if let Some(marca) = marca_mas_nueva {
+        transaction.execute(
+            "UPDATE sincronizacion_estado SET catalogo_actualizado_hasta = ?1 WHERE id = 1",
+            params![crate::tiempo::serializar_utc(marca)],
+        )?;
+    }
 
     transaction.commit()?;
     Ok(resumen)
@@ -1913,12 +1974,14 @@ mod tests {
         initialize_database(&connection).unwrap();
         let base_url = servidor_de_respuestas(vec![
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-             [{\"id\":\"uuid-empresa-remota\",\"nombre\":\"Empresa Remota\",\"activa\":true}]",
+             [{\"id\":\"uuid-empresa-remota\",\"nombre\":\"Empresa Remota\",\"activa\":true,\
+             \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
              [{\"id\":\"uuid-contratista-remoto\",\"nombre\":\"Persona Remota\",\
              \"identificacion\":\"1-1111\",\"empresa_id\":\"uuid-empresa-remota\",\
              \"empresa_nombre\":\"Empresa Remota\",\"activo\":true,\"tipo_ingreso\":\"SWAT\",\
-             \"fecha_vencimiento_praind\":null,\"es_personal_ruta\":false}]",
+             \"fecha_vencimiento_praind\":null,\"es_personal_ruta\":false,\
+             \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         ]);
@@ -1974,12 +2037,14 @@ mod tests {
             .unwrap();
         let base_url = servidor_de_respuestas(vec![
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-             [{\"id\":\"uuid-empresa-remota\",\"nombre\":\"Empresa Remota\",\"activa\":true}]",
+             [{\"id\":\"uuid-empresa-remota\",\"nombre\":\"Empresa Remota\",\"activa\":true,\
+             \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
              [{\"id\":\"uuid-contratista-remoto\",\"nombre\":\"Persona Remota\",\
              \"identificacion\":\"1-1111\",\"empresa_id\":\"uuid-empresa-remota\",\
              \"empresa_nombre\":\"Empresa Remota\",\"activo\":true,\"tipo_ingreso\":\"SWAT\",\
-             \"fecha_vencimiento_praind\":null,\"es_personal_ruta\":false}]",
+             \"fecha_vencimiento_praind\":null,\"es_personal_ruta\":false,\
+             \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         ]);
@@ -2026,7 +2091,7 @@ mod tests {
              [{\"id\":\"uuid-incompleto\",\"nombre\":\"Persona Incompleta\",\
              \"identificacion\":null,\"empresa_id\":null,\"empresa_nombre\":null,\
              \"activo\":true,\"tipo_ingreso\":null,\"fecha_vencimiento_praind\":null,\
-             \"es_personal_ruta\":null}]",
+             \"es_personal_ruta\":null,\"updated_at\":\"2026-01-01T00:00:00Z\"}]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         ]);

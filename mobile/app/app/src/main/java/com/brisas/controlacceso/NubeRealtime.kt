@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonObject
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
@@ -42,9 +43,16 @@ class NubeRealtime(
                     2_000L
                 } catch (cancelacion: CancellationException) {
                     throw cancelacion
-                } catch (_: NucleoException) {
+                } catch (excepcion: NucleoException) {
+                    Log.w("SincronizacionNube", "No se pudo autenticar para Realtime", excepcion)
                     30_000L
-                } catch (_: Throwable) {
+                } catch (excepcion: Throwable) {
+                    // Antes esto se descartaba en silencio -- si Realtime nunca
+                    // conectaba, no había ni un solo log que explicara por qué
+                    // (el pulso periódico de `SincronizacionPeriodica` disimulaba
+                    // el problema, todo seguía funcionando pero sin la parte en
+                    // vivo).
+                    Log.w("SincronizacionNube", "Fallo conectando el canal de Realtime", excepcion)
                     30_000L
                 }
                 delay(esperaTrasError)
