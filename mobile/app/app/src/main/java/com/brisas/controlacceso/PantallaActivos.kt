@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
@@ -30,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -230,7 +232,11 @@ private fun CampoBusquedaActivos(
         MaterialTheme.colorScheme.secondary
     }
 
-    Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         OutlinedTextField(
             value = texto,
             onValueChange = onCambiarTexto,
@@ -258,7 +264,11 @@ private fun CampoBusquedaActivos(
         )
         if (modo == ModoBusqueda.ENTRADA) {
             BotonDiscretoBrisas(onClick = onEscanearCedula) {
-                Icon(Icons.Default.PhotoCamera, contentDescription = "Escanear cédula")
+                Icon(
+                    Icons.Default.PhotoCamera,
+                    contentDescription = "Escanear cédula",
+                    modifier = Modifier.size(32.dp),
+                )
             }
         }
     }
