@@ -64,7 +64,7 @@ fn intentar_login_local(
 fn refrescar_catalogo_sin_sesion(state: &GuiState) -> Result<(), String> {
     let secreto = nube::credenciales::cargar_secreto()
         .ok_or_else(|| "Todavía no se guardó el secreto de este dispositivo".to_string())?;
-    let token = nube::autenticar_dispositivo(nube::BASE_URL, &secreto).map_err(mensaje_nube)?;
+    let token = state.autenticar_con_cache(&secreto).map_err(mensaje_nube)?;
     if let Some(desfase_ms) = token.desfase_reloj_ms {
         state.core().actualizar_desfase_reloj(desfase_ms);
     }
@@ -78,6 +78,30 @@ fn refrescar_catalogo_sin_sesion(state: &GuiState) -> Result<(), String> {
     let conexion = state.conexion_secundaria()?;
     nube::recibir_catalogo_del_sitio(&conexion, &contexto).map_err(mensaje_sincronizacion)?;
     Ok(())
+}
+
+/// Confirma en vivo si `cedula` sigue activa, sin sincronizar nada más --
+/// una fila, una columna. Reemplaza a la sincronización completa que este
+/// chequeo hacía antes: medida como la causa real del retraso perceptible
+/// al loguearse (varios cientos de milisegundos a un par de segundos según
+/// el tamaño del sitio), cuando lo único que hace falta acá es esto. La
+/// sincronización completa (cola, catálogo, historial...) sigue
+/// corriendo, pero en segundo plano -- ver `login`.
+fn usuario_sigue_activo_remoto(state: &GuiState, cedula: &str) -> Result<bool, String> {
+    let secreto = nube::credenciales::cargar_secreto()
+        .ok_or_else(|| "Todavía no se guardó el secreto de este dispositivo".to_string())?;
+    let token = state.autenticar_con_cache(&secreto).map_err(mensaje_nube)?;
+    if let Some(desfase_ms) = token.desfase_reloj_ms {
+        state.core().actualizar_desfase_reloj(desfase_ms);
+    }
+    let contexto = nube::ContextoSincronizacion {
+        base_url: nube::BASE_URL,
+        apikey: nube::APIKEY,
+        token: &token.access_token,
+        dispositivo_id: &token.dispositivo_id,
+        sitio_id: &token.sitio_id,
+    };
+    nube::usuario_sigue_activo_remoto(&contexto, cedula).map_err(mensaje_sincronizacion)
 }
 
 /// Login en dos pasos, igual que la TUI (ver `AutenticacionService`), pero sin
@@ -100,14 +124,17 @@ fn refrescar_catalogo_sin_sesion(state: &GuiState) -> Result<(), String> {
 ///    local una vez más. Sin esto, una reactivación remota nunca se podía
 ///    reflejar acá: el login fallaba en el chequeo local ANTES de llegar a
 ///    sincronizar nada.
-/// 2. **Baja**: tras un login local exitoso, intenta una sincronización
-///    completa para que una desactivación reciente en otro dispositivo se
-///    refleje antes de confirmar la entrada -- `ejecutar_sincronizacion`
-///    ya cierra la sesión sola si la encuentra (`ResumenSincronizacion::sesion_expulsada`).
+/// 2. **Baja**: tras un login local exitoso, confirma en vivo que la
+///    cédula sigue activa (`usuario_sigue_activo_remoto` -- una fila, una
+///    columna, no una sincronización completa: eso era lo que hacía sentir
+///    el login lento). La sincronización completa (cola, catálogo,
+///    historial...) igual se dispara, pero **en segundo plano**, sin que
+///    el login espere por ella -- se sigue beneficiando el resto de la
+///    sesión sin agregarle ni un milisegundo a la espera de entrar.
 ///
 /// En ambos casos, sin red o si tarda más del tope, sigue con lo que ya
-/// haya en local -- si de verdad cambió algo, la próxima sincronización
-/// (periódica, Realtime, o el próximo login) lo termina reflejando.
+/// haya en local -- si de verdad cambió algo, la sincronización de fondo
+/// (o la próxima periódica/Realtime/login) lo termina reflejando.
 #[tauri::command]
 pub async fn login(
     cedula: String,
@@ -131,24 +158,44 @@ pub async fn login(
         }
         Err(otro) => return Err(otro.into()),
     };
-    state.iniciar_sesion(sesion.clone());
 
+    let cedula_chequeo = sesion.cedula.clone();
     let manejador = app.clone();
-    let _ = tokio::time::timeout(
+    let chequeo = tokio::time::timeout(
         ESPERA_MAXIMA_SYNC_LOGIN,
         tauri::async_runtime::spawn_blocking(move || {
-            crate::comandos::nube::ejecutar_sincronizacion(&manejador.state::<GuiState>())
+            usuario_sigue_activo_remoto(&manejador.state::<GuiState>(), &cedula_chequeo)
         }),
     )
     .await;
+    // Sólo el `Ok(Ok(Ok(false)))` explícito (respondió a tiempo, sin error,
+    // y dijo que no) rechaza el login -- cualquier otra combinación (sin
+    // red, tardó, o dijo que sí) sigue adelante con lo que ya validó local.
+    if let Ok(Ok(Ok(false))) = chequeo {
+        return Err(ErrorLogin {
+            mensaje: "Este usuario fue desactivado".to_string(),
+            sin_password_local: false,
+        });
+    }
 
-    // `ejecutar_sincronizacion` ya se encarga de cerrar la sesión sola si
-    // la sincronización (si llegó a completarse a tiempo) trajo la baja de
-    // este usuario -- acá sólo hace falta confirmar si sigue existiendo.
-    state.sesion_activa().map_err(|_| ErrorLogin {
-        mensaje: "Este usuario fue desactivado".to_string(),
-        sin_password_local: false,
-    })
+    state.iniciar_sesion(sesion.clone());
+
+    // Sincronización completa en segundo plano, sin bloquear la respuesta
+    // de este comando -- `ejecutar_sincronizacion` ya cierra la sesión
+    // sola si de todos modos encuentra una baja (`ResumenSincronizacion::sesion_expulsada`),
+    // así que no perder esta corrida no debilita la protección, sólo la
+    // vuelve un poco menos inmediata en el caso raro de que el chequeo
+    // rápido de arriba haya dicho que sí pero algo más haya cambiado justo
+    // en el medio.
+    let manejador = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let _ = tauri::async_runtime::spawn_blocking(move || {
+            crate::comandos::nube::ejecutar_sincronizacion(&manejador.state::<GuiState>())
+        })
+        .await;
+    });
+
+    Ok(sesion)
 }
 
 /// Completa el alta de contraseña de un usuario global que la pantalla de

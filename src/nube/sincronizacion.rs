@@ -767,6 +767,35 @@ struct FilaGafeteOcupado {
     id: String,
 }
 
+#[derive(serde::Deserialize)]
+struct FilaUsuarioActivo {
+    activo: bool,
+}
+
+/// Consulta puntual -- una fila, una columna -- de si `cedula` sigue
+/// activa en el catálogo global, sin traer ni tocar nada más. Antes esto
+/// se resolvía con una sincronización completa (cola de salida + cierres +
+/// ingresos abiertos + catálogo + historial) sólo para confirmar un
+/// booleano -- medido como el causante real del retraso perceptible en el
+/// login (varios cientos de milisegundos a un par de segundos según el
+/// tamaño del sitio), cuando lo único que hace falta acá es esto. `true`
+/// si la cédula no existe en el catálogo remoto todavía (usuarios ROOT,
+/// que nunca se sincronizan, o un usuario que este dispositivo creó y
+/// todavía no llegó a subir) -- no hay nada que decir que esté desactivado
+/// si la nube ni siquiera lo conoce.
+pub fn usuario_sigue_activo_remoto(
+    contexto: &ContextoSincronizacion<'_>,
+    cedula: &str,
+) -> Result<bool, SincronizacionError> {
+    let cliente = cliente_http();
+    let url = format!(
+        "{}/rest/v1/usuarios?cedula=eq.{cedula}&select=activo&limit=1",
+        contexto.base_url,
+    );
+    let filas: Vec<FilaUsuarioActivo> = obtener_json(&cliente, contexto, &url)?;
+    Ok(filas.first().is_none_or(|fila| fila.activo))
+}
+
 /// Consulta en vivo -- no la caché local `ingresos_remotos` (que sólo se
 /// refresca en cada sync y podría estar desactualizada por minutos) -- si
 /// `numero` ya tiene un ingreso abierto en este sitio, creado por *otro*
@@ -1826,6 +1855,32 @@ mod tests {
             )
             .unwrap();
         assert_eq!(tipo, None, "sin embed, queda NULL en vez de fallar");
+    }
+
+    #[test]
+    fn usuario_sigue_activo_remoto_lee_el_booleano_de_una_sola_fila() {
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"activo\":false}]",
+        );
+
+        let activo = usuario_sigue_activo_remoto(&contexto(&base_url), "999999999").unwrap();
+
+        assert!(!activo);
+    }
+
+    #[test]
+    fn usuario_sigue_activo_remoto_sin_fila_asume_activo() {
+        // ROOT (nunca se sincroniza) o un usuario que este dispositivo creó
+        // y todavía no subió -- la nube no tiene nada que decir de él, no
+        // hay motivo para expulsarlo por eso.
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let activo = usuario_sigue_activo_remoto(&contexto(&base_url), "ROOT1").unwrap();
+
+        assert!(activo);
     }
 
     #[test]

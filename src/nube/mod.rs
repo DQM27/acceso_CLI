@@ -15,7 +15,7 @@ pub use sincronizacion::{
     ContextoSincronizacion, IngresoRemoto, ResumenCatalogo, ResumenDrenado, SincronizacionError,
     cerrar_ingreso_remoto, contar_fallos_permanentes, drenar_cola, gafete_ocupado_en_otro_dispositivo,
     recibir_catalogo_del_sitio, recibir_cierres_de_ingresos_propios, recibir_historial_del_sitio,
-    recibir_ingresos_abiertos,
+    recibir_ingresos_abiertos, usuario_sigue_activo_remoto,
 };
 
 /// URL del proyecto Supabase (`control-acceso-nube`) -- pública, no un

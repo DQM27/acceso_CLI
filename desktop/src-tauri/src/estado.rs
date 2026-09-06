@@ -1,12 +1,27 @@
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use control_acceso::application::{AppCore, BootstrapError};
 use control_acceso::database::backup::{RespaldoError, TipoRespaldo};
 use control_acceso::instancia::InstanciaGuard;
+use control_acceso::nube::{self, NubeError, TokenDispositivo};
 use control_acceso::services::autenticacion_service::UsuarioSesion;
 use rusqlite::Connection;
+
+/// Ver `GuiState::autenticar_con_cache` -- último `TokenDispositivo`
+/// obtenido mientras siga vigente, para no autenticar de cero en cada
+/// comando que necesita hablar con la nube (login, registrar un ingreso
+/// con gafete, etc.). Duplica la idea de `application::nube::TokenCacheado`
+/// (interno a `AppCore`, usado por móvil) en vez de reutilizarla porque acá
+/// varios comandos autentican SIN pasar por `AppCore`/`state.core()` a
+/// propósito -- retener el candado compartido durante la llamada de red es
+/// justo lo que esos comandos evitan (ver doc-comment de `GuiState::core`).
+struct TokenCacheado {
+    secreto: String,
+    token: TokenDispositivo,
+    obtenido_en: Instant,
+}
 
 /// Estado administrado por Tauri. Dos mutexes separados porque ningún flujo
 /// necesita actualizar sesión y base de datos como una sola operación atómica
@@ -24,6 +39,7 @@ pub struct GuiState {
     /// lee, sólo existe para que no se libere antes de tiempo (mismo patrón
     /// que `main.rs` con `_instancia`).
     _instancia: InstanciaGuard,
+    token_nube_cacheado: Mutex<Option<TokenCacheado>>,
 }
 
 impl GuiState {
@@ -32,7 +48,50 @@ impl GuiState {
             core: Mutex::new(core),
             sesion: Mutex::new(None),
             _instancia: instancia,
+            token_nube_cacheado: Mutex::new(None),
         }
+    }
+
+    /// Reusa el último `TokenDispositivo` mientras siga vigente en vez de
+    /// autenticar de cero -- ver `TokenCacheado`. Reproducido en producción:
+    /// "Registrar" con gafete pagaba una autenticación completa contra la
+    /// nube en cada registro (`gafete_libre_en_otro_dispositivo`), aunque
+    /// el dispositivo ya se hubiera autenticado segundos antes para
+    /// sincronizar o loguearse -- se sentía como que la app se colgaba en
+    /// cada registro. Margen de 30s antes del vencimiento real para no
+    /// arrancar una operación con un token que puede vencer a mitad de
+    /// camino. Un acierto de caché no vuelve a medir el desfase de reloj
+    /// (`desfase_reloj_ms` queda en `None`) -- no hace falta remedirlo en
+    /// cada llamada, sólo cuando de verdad se habla con el receptor.
+    pub fn autenticar_con_cache(&self, secreto: &str) -> Result<TokenDispositivo, NubeError> {
+        const MARGEN_EXPIRACION: Duration = Duration::from_secs(30);
+
+        {
+            let cache = self
+                .token_nube_cacheado
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(entrada) = cache.as_ref() {
+                let vigente_por =
+                    Duration::from_secs(entrada.token.expires_in).saturating_sub(MARGEN_EXPIRACION);
+                if entrada.secreto == secreto && entrada.obtenido_en.elapsed() < vigente_por {
+                    let mut token = entrada.token.clone();
+                    token.desfase_reloj_ms = None;
+                    return Ok(token);
+                }
+            }
+        }
+
+        let token = nube::autenticar_dispositivo(nube::BASE_URL, secreto)?;
+        *self
+            .token_nube_cacheado
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(TokenCacheado {
+            secreto: secreto.to_string(),
+            token: token.clone(),
+            obtenido_en: Instant::now(),
+        });
+        Ok(token)
     }
 
     /// Acceso al núcleo compartido por todos los comandos.

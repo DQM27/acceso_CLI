@@ -19,13 +19,15 @@ import uniffi.control_acceso_mobile.UsuarioSesion
 /// Dueño del estado de [PantallaLogin] y de las llamadas a [Nucleo] para
 /// autenticar/cerrar sesión — ver mobile/app/ARQUITECTURA.md.
 ///
-/// `Nucleo.autenticar` intenta una sincronización corta contra la nube
-/// antes de confirmar el login (ver su doc-comment en Rust: trae una
-/// baja/desactivación reciente si hay señal, sigue con lo local si no) —
-/// por eso, a diferencia de antes, sí hace falta despachar a
-/// `Dispatchers.Default` como cualquier otra llamada con red de por medio
-/// (mismo criterio que `ActivosViewModel`), en vez de llamarlo directo
-/// desde el hilo de UI.
+/// `Nucleo.autenticar` confirma en vivo (una consulta puntual, no una
+/// sincronización completa -- ver su doc-comment en Rust) que la cuenta
+/// sigue activa antes de dejar entrar, así que sigue con red de por medio y
+/// hace falta despachar a `Dispatchers.Default` (mismo criterio que
+/// `ActivosViewModel`) en vez de llamarlo directo desde el hilo de UI.
+/// La sincronización completa (cola, catálogo, historial...) ya no la
+/// dispara `autenticar` -- se lanza acá, aparte, sin que el login la
+/// espere (`lanzarSincronizacionDeFondo`): antes retenerla adentro del
+/// login era la causa real del retraso de "un par de segundos" al entrar.
 class LoginViewModel(
     private val nucleo: Nucleo,
     private val directorio: String,
@@ -63,12 +65,32 @@ class LoginViewModel(
         viewModelScope.launch {
             try {
                 sesion = withContext(dispatcherIO) { nucleo.autenticar(cedula, password, directorio) }
+                lanzarSincronizacionDeFondo()
             } catch (excepcion: NucleoException.SinPasswordLocal) {
                 cedulaSinPassword = cedula
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
             } finally {
                 autenticando = false
+            }
+        }
+    }
+
+    /// Sincronización completa (cola de salida, catálogo, historial...)
+    /// disparada al loguearse, sin que `autenticar()` la espere -- ver el
+    /// doc-comment de la clase. Fire-and-forget real: ni actualiza estado
+    /// propio ni reporta error acá (el pulso periódico de
+    /// `SincronizacionPeriodica`, que arranca apenas se monta la pantalla
+    /// principal, retoma la sincronización normal enseguida de todos
+    /// modos).
+    private fun lanzarSincronizacionDeFondo() {
+        viewModelScope.launch {
+            try {
+                withContext(dispatcherIO) { nucleo.sincronizarConNube(directorio) }
+            } catch (_: NucleoException) {
+                // Sin red, o sin secreto configurado todavía -- no es un
+                // error que el login deba mostrar, el pulso periódico
+                // reintenta solo.
             }
         }
     }

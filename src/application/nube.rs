@@ -271,6 +271,41 @@ impl AppCore {
         })
     }
 
+    /// Confirma en vivo si `actor` sigue activo en el catálogo remoto, sin
+    /// sincronizar nada más -- mucho más rápido que `sincronizar_con_nube`
+    /// (una fila, una columna, vs. cola de salida + cierres + ingresos
+    /// abiertos + catálogo + historial completos). Pensado para el login:
+    /// medido como el causante real del retraso de "un par de segundos"
+    /// que se sentía al entrar -- ver `desktop/src-tauri/src/comandos/autenticacion.rs::login`
+    /// y `Nucleo::autenticar` en móvil, que ahora usan esto para el chequeo
+    /// de seguridad y dejan la sincronización completa corriendo aparte,
+    /// sin bloquear la entrada.
+    pub fn usuario_sigue_activo_remoto(
+        &self,
+        actor: &UsuarioSesion,
+        directorio: Option<&Path>,
+    ) -> Result<bool, GestionNubeError> {
+        self.autorizar_uso_nube(actor)?;
+        let secreto = directorio
+            .map_or_else(
+                crate::nube::credenciales::cargar_secreto,
+                crate::nube::credenciales::cargar_secreto_en,
+            )
+            .ok_or(GestionNubeError::SinSecreto)?;
+        let token = self.autenticar_con_cache(&secreto)?;
+        let contexto = crate::nube::ContextoSincronizacion {
+            base_url: crate::nube::BASE_URL,
+            apikey: crate::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        Ok(crate::nube::usuario_sigue_activo_remoto(
+            &contexto,
+            &actor.cedula,
+        )?)
+    }
+
     /// Autentica este dispositivo y devuelve lo mínimo para que la capa de
     /// plataforma escuche Broadcast privado por sitio. No abre sockets ni
     /// interpreta mensajes: cada aviso debe disparar `sincronizar_con_nube`.
