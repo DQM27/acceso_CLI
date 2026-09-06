@@ -27,7 +27,7 @@ import { sanearSoloDigitos, sanearSoloLetras } from "../validacion";
  * abrir el modal. Si algún día hay más de uno, ahí sí hace falta sumar el
  * selector (y decidir qué sitio le corresponde a cada alta).
  */
-export default function Operadores() {
+export default function Usuarios() {
   const [busqueda, setBusqueda] = useState("");
   const [filas, setFilas] = useState<Usuario[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -140,7 +140,7 @@ export default function Operadores() {
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<Usuario>
-            id="operadores"
+            id="usuarios"
             columnas={columnas}
             filas={filas}
             busqueda={busqueda}

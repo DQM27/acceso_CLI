@@ -13,18 +13,24 @@ import { SesionProvider } from "./contexto/SesionContexto";
 const Dispositivos = lazy(() => import("./pantallas/Dispositivos"));
 const Historial = lazy(() => import("./pantallas/Historial"));
 const Contratistas = lazy(() => import("./pantallas/Contratistas"));
-const Operadores = lazy(() => import("./pantallas/Operadores"));
+const Usuarios = lazy(() => import("./pantallas/Usuarios"));
 const Administradores = lazy(() => import("./pantallas/Administradores"));
 
-export type Seccion = "dispositivos" | "historial" | "contratistas" | "operadores" | "administradores";
+export type Seccion = "dispositivos" | "historial" | "contratistas" | "usuarios" | "administradores";
 
 // Sin distinción de rol -- se eliminó `admin_regional` (nunca tuvo alcance
 // real, ver migración `elimina_admin_regional`). Cualquier fila en
 // `administradores_panel` ve y puede tocar todo.
+//
+// "usuarios" (no "operadores") a propósito -- mismo nombre que la sección
+// equivalente de escritorio (`App.tsx` de desktop/), aunque ahí sea
+// Root/Administrador/Operador y acá sea Administrador/Operador (ver
+// `Usuarios.tsx` de esta carpeta): es la misma entidad global, conviene que
+// se llame igual en las dos apps.
 const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
   { id: "historial", etiqueta: "Historial", Icono: History },
   { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
-  { id: "operadores", etiqueta: "Operadores", Icono: UserCog },
+  { id: "usuarios", etiqueta: "Usuarios", Icono: UserCog },
   { id: "dispositivos", etiqueta: "Dispositivos", Icono: IdCard },
   { id: "administradores", etiqueta: "Administradores", Icono: ShieldCheck },
 ];
@@ -131,8 +137,8 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
                 <Historial />
               ) : seccion === "contratistas" ? (
                 <Contratistas />
-              ) : seccion === "operadores" ? (
-                <Operadores />
+              ) : seccion === "usuarios" ? (
+                <Usuarios />
               ) : (
                 <div className="pantalla-cuerpo">
                   <div className="tarjeta" style={{ padding: "1.5rem" }}>
