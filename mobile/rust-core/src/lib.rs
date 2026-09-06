@@ -730,6 +730,7 @@ impl Nucleo {
         cedula: String,
         password: String,
         directorio: String,
+        identificador_dispositivo: String,
     ) -> Result<UsuarioSesion, NucleoError> {
         let intento = self.core_lock().autenticar(&cedula, &password);
         let sesion = match intento {
@@ -738,9 +739,10 @@ impl Nucleo {
                 AutenticacionErrorNucleo::UsuarioInactivo
                 | AutenticacionErrorNucleo::CredencialesInvalidas,
             ) => {
-                let _ = self
-                    .core_lock()
-                    .refrescar_catalogo_sin_sesion(Some(std::path::Path::new(&directorio)));
+                let _ = self.core_lock().refrescar_catalogo_sin_sesion(
+                    Some(std::path::Path::new(&directorio)),
+                    Some(&identificador_dispositivo),
+                );
                 self.core_lock().autenticar(&cedula, &password)?
             }
             Err(otro) => return Err(otro.into()),
@@ -748,7 +750,11 @@ impl Nucleo {
 
         let sigue_activo = self
             .core_lock()
-            .usuario_sigue_activo_remoto(&sesion, Some(std::path::Path::new(&directorio)))
+            .usuario_sigue_activo_remoto(
+                &sesion,
+                Some(std::path::Path::new(&directorio)),
+                Some(&identificador_dispositivo),
+            )
             .unwrap_or(true);
         if !sigue_activo {
             return Err(NucleoError::UsuarioInactivo);
@@ -1086,11 +1092,16 @@ impl Nucleo {
     pub fn sincronizar_con_nube(
         &self,
         directorio: String,
+        identificador_dispositivo: String,
     ) -> Result<ResumenSincronizacion, NucleoError> {
         let actor = self.actor_autenticado()?;
         let resumen: ResumenSincronizacion = self
             .core_lock()
-            .sincronizar_con_nube(&actor, Some(std::path::Path::new(&directorio)))?
+            .sincronizar_con_nube(
+                &actor,
+                Some(std::path::Path::new(&directorio)),
+                Some(&identificador_dispositivo),
+            )?
             .into();
         // Igual que en escritorio: si esta sincronización trajo la baja de
         // quien la disparó, la sesión de ESTE teléfono se cierra sola acá
@@ -1213,6 +1224,7 @@ mod tests {
             "000000000".to_string(),
             "loquesea".to_string(),
             String::new(),
+            String::new(),
         );
 
         assert!(matches!(resultado, Err(NucleoError::CredencialesInvalidas)));
@@ -1259,6 +1271,7 @@ mod tests {
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
                 String::new(),
+                String::new(),
             )
             .unwrap();
 
@@ -1298,6 +1311,7 @@ mod tests {
             .autenticar(
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
+                String::new(),
                 String::new(),
             )
             .unwrap();
@@ -1353,6 +1367,7 @@ mod tests {
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
                 String::new(),
+                String::new(),
             )
             .unwrap();
         nucleo
@@ -1401,6 +1416,7 @@ mod tests {
             .autenticar(
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
+                String::new(),
                 String::new(),
             )
             .unwrap();
@@ -1451,6 +1467,7 @@ mod tests {
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
                 String::new(),
+                String::new(),
             )
             .unwrap();
 
@@ -1489,6 +1506,7 @@ mod tests {
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
                 String::new(),
+                String::new(),
             )
             .unwrap();
 
@@ -1526,6 +1544,7 @@ mod tests {
             .autenticar(
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
+                String::new(),
                 String::new(),
             )
             .unwrap();
@@ -1566,6 +1585,7 @@ mod tests {
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
                 String::new(),
+                String::new(),
             )
             .unwrap();
 
@@ -1588,6 +1608,7 @@ mod tests {
             .autenticar(
                 "888888888".to_string(),
                 "clave_prueba_123".to_string(),
+                String::new(),
                 String::new(),
             )
             .unwrap();

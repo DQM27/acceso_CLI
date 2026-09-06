@@ -45,7 +45,7 @@ class LoginViewModelTest {
 
     @Test
     fun `autenticar con credenciales validas guarda la sesion`() = runTest(dispatcher) {
-        val viewModel = LoginViewModel(nucleo, directorio = "", dispatcherIO = dispatcher)
+        val viewModel = LoginViewModel(nucleo, directorio = "", identificadorDispositivo = "", dispatcherIO = dispatcher)
 
         viewModel.cambiarCedula("999999999")
         viewModel.cambiarPassword(NucleoDePrueba.CLAVE_PRUEBA)
@@ -59,7 +59,7 @@ class LoginViewModelTest {
 
     @Test
     fun `autenticar con contrasena incorrecta deja error y no guarda sesion`() = runTest(dispatcher) {
-        val viewModel = LoginViewModel(nucleo, directorio = "", dispatcherIO = dispatcher)
+        val viewModel = LoginViewModel(nucleo, directorio = "", identificadorDispositivo = "", dispatcherIO = dispatcher)
 
         viewModel.cambiarCedula("999999999")
         viewModel.cambiarPassword("no-es-la-clave")
@@ -72,7 +72,7 @@ class LoginViewModelTest {
 
     @Test
     fun `cerrarSesion limpia cedula password y sesion`() = runTest(dispatcher) {
-        val viewModel = LoginViewModel(nucleo, directorio = "", dispatcherIO = dispatcher)
+        val viewModel = LoginViewModel(nucleo, directorio = "", identificadorDispositivo = "", dispatcherIO = dispatcher)
         viewModel.cambiarCedula("999999999")
         viewModel.cambiarPassword(NucleoDePrueba.CLAVE_PRUEBA)
         viewModel.autenticar()

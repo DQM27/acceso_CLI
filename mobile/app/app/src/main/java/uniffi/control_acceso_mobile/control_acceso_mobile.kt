@@ -747,7 +747,7 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_constructor_nucleo_abrir(`rutaBaseDatos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,`directorio`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_contratistas(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -793,7 +793,7 @@ internal object UniffiLib {
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sesion_realtime_nube(`ptr`: Long,`directorio`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube(`ptr`: Long,`directorio`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun ffi_control_acceso_mobile_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -914,7 +914,7 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
-    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() != 38675) {
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() != 26187) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas() != 3985) {
@@ -983,7 +983,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube() != 41771) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube() != 32215) {
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube() != 55855) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir() != 57593) {
@@ -1409,14 +1409,27 @@ public interface NucleoInterface {
      * bloqueante" (el teléfono tiene que poder operar sin internet), así
      * que los dos son best-effort (con el tope de `nube::cliente::TIMEOUT_HTTP`):
      *
-     * 1. **Reactivación**: si el chequeo local dice "inactivo"
-     * (`AutenticacionErrorNucleo::UsuarioInactivo`), puede ser que a
-     * este usuario lo hayan reactivado en otro dispositivo y esta base
-     * todavía no se enteró -- antes de rendirse, refresca sólo el
-     * catálogo (`refrescar_catalogo_sin_sesion`, sin sesión) y
-     * reintenta el login local una vez más. Sin esto, una reactivación
-     * remota nunca se podía reflejar acá: el login fallaba en el
-     * chequeo local ANTES de llegar a sincronizar nada.
+     * 1. **Alta o reactivación**: si el chequeo local dice "inactivo"
+     * (`AutenticacionErrorNucleo::UsuarioInactivo`) o "no existe"
+     * (`CredencialesInvalidas` -- que es la misma variante que una
+     * contraseña incorrecta, ver `autenticacion_service.rs`), puede ser
+     * que a este usuario lo hayan reactivado en otro dispositivo, o
+     * creado en el panel/otro sitio DESPUÉS del primer arranque de este
+     * teléfono, y esta base todavía no se enteró -- antes de rendirse,
+     * refresca sólo el catálogo (`refrescar_catalogo_sin_sesion`, sin
+     * sesión) y reintenta el login local una vez más. Sin esto, un
+     * usuario nuevo o una reactivación remota nunca se podían reflejar
+     * acá: la sincronización periódica (`SincronizacionPeriodica.kt`)
+     * recién arranca DESPUÉS de un primer login exitoso, así que una
+     * cédula que todavía no existe en este teléfono se quedaba
+     * "credenciales inválidas" para siempre, sin importar cuánto se
+     * esperara -- reportado en vivo: un ROOT creado en Supabase después
+     * del primer arranque del emulador nunca podía entrar. Costo
+     * aceptado: una contraseña tipeada mal también dispara este
+     * refresco de más (no hay forma barata de distinguir los dos casos
+     * antes de sincronizar) -- mismo costo que ya paga escritorio, que
+     * sincroniza el catálogo en CADA intento de login, acierte o no
+     * (`desktop/src-tauri/src/comandos/autenticacion.rs`).
      * 2. **Baja**: tras un login local exitoso, confirma en vivo que la
      * cédula sigue activa (`usuario_sigue_activo_remoto` -- una fila,
      * una columna, no la sincronización completa que hacía esto antes:
@@ -1427,7 +1440,7 @@ public interface NucleoInterface {
      * espere -- acá retener el candado durante una sincronización
      * entera hubiera vuelto a sentirse lento.
      */
-    fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String, `directorio`: kotlin.String): UsuarioSesion
+    fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String, `directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): UsuarioSesion
     
     /**
      * Búsqueda en vivo (la vía primaria del guardia — ver
@@ -1593,7 +1606,7 @@ public interface NucleoInterface {
      * refresca la caché de lo que el otro dispositivo del mismo sitio
      * tiene abierto ahora mismo.
      */
-    fun `sincronizarConNube`(`directorio`: kotlin.String): ResumenSincronizacion
+    fun `sincronizarConNube`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): ResumenSincronizacion
     
     companion object
 }
@@ -1716,14 +1729,27 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
      * bloqueante" (el teléfono tiene que poder operar sin internet), así
      * que los dos son best-effort (con el tope de `nube::cliente::TIMEOUT_HTTP`):
      *
-     * 1. **Reactivación**: si el chequeo local dice "inactivo"
-     * (`AutenticacionErrorNucleo::UsuarioInactivo`), puede ser que a
-     * este usuario lo hayan reactivado en otro dispositivo y esta base
-     * todavía no se enteró -- antes de rendirse, refresca sólo el
-     * catálogo (`refrescar_catalogo_sin_sesion`, sin sesión) y
-     * reintenta el login local una vez más. Sin esto, una reactivación
-     * remota nunca se podía reflejar acá: el login fallaba en el
-     * chequeo local ANTES de llegar a sincronizar nada.
+     * 1. **Alta o reactivación**: si el chequeo local dice "inactivo"
+     * (`AutenticacionErrorNucleo::UsuarioInactivo`) o "no existe"
+     * (`CredencialesInvalidas` -- que es la misma variante que una
+     * contraseña incorrecta, ver `autenticacion_service.rs`), puede ser
+     * que a este usuario lo hayan reactivado en otro dispositivo, o
+     * creado en el panel/otro sitio DESPUÉS del primer arranque de este
+     * teléfono, y esta base todavía no se enteró -- antes de rendirse,
+     * refresca sólo el catálogo (`refrescar_catalogo_sin_sesion`, sin
+     * sesión) y reintenta el login local una vez más. Sin esto, un
+     * usuario nuevo o una reactivación remota nunca se podían reflejar
+     * acá: la sincronización periódica (`SincronizacionPeriodica.kt`)
+     * recién arranca DESPUÉS de un primer login exitoso, así que una
+     * cédula que todavía no existe en este teléfono se quedaba
+     * "credenciales inválidas" para siempre, sin importar cuánto se
+     * esperara -- reportado en vivo: un ROOT creado en Supabase después
+     * del primer arranque del emulador nunca podía entrar. Costo
+     * aceptado: una contraseña tipeada mal también dispara este
+     * refresco de más (no hay forma barata de distinguir los dos casos
+     * antes de sincronizar) -- mismo costo que ya paga escritorio, que
+     * sincroniza el catálogo en CADA intento de login, acierte o no
+     * (`desktop/src-tauri/src/comandos/autenticacion.rs`).
      * 2. **Baja**: tras un login local exitoso, confirma en vivo que la
      * cédula sigue activa (`usuario_sigue_activo_remoto` -- una fila,
      * una columna, no la sincronización completa que hacía esto antes:
@@ -1734,7 +1760,7 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
      * espere -- acá retener el candado durante una sincronización
      * entera hubiera vuelto a sentirse lento.
      */
-    @Throws(NucleoException::class)override fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String, `directorio`: kotlin.String): UsuarioSesion {
+    @Throws(NucleoException::class)override fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String, `directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): UsuarioSesion {
             return FfiConverterTypeUsuarioSesion.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
@@ -1743,7 +1769,8 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         
         FfiConverterString.lower(`cedula`),
         FfiConverterString.lower(`password`),
-        FfiConverterString.lower(`directorio`),_status)
+        FfiConverterString.lower(`directorio`),
+        FfiConverterString.lower(`identificadorDispositivo`),_status)
 }
     }
     )
@@ -2203,14 +2230,15 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
      * refresca la caché de lo que el otro dispositivo del mismo sitio
      * tiene abierto ahora mismo.
      */
-    @Throws(NucleoException::class)override fun `sincronizarConNube`(`directorio`: kotlin.String): ResumenSincronizacion {
+    @Throws(NucleoException::class)override fun `sincronizarConNube`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): ResumenSincronizacion {
             return FfiConverterTypeResumenSincronizacion.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube(
         it,
         
-        FfiConverterString.lower(`directorio`),_status)
+        FfiConverterString.lower(`directorio`),
+        FfiConverterString.lower(`identificadorDispositivo`),_status)
 }
     }
     )

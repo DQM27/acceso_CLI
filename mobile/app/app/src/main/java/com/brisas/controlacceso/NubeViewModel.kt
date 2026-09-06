@@ -98,7 +98,9 @@ class NubeViewModel(
         sincronizando = true
         viewModelScope.launch {
             try {
-                val resumen = withContext(dispatcherIO) { nucleo.sincronizarConNube(directorio) }
+                val resumen = withContext(dispatcherIO) {
+                    nucleo.sincronizarConNube(directorio, identificadorDispositivo)
+                }
                 ultimoResumen = resumen
                 if (resumen.sesionExpulsada) onSesionExpulsada()
             } catch (excepcion: NucleoException) {

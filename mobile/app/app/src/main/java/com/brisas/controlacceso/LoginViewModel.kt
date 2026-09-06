@@ -31,6 +31,10 @@ import uniffi.control_acceso_mobile.UsuarioSesion
 class LoginViewModel(
     private val nucleo: Nucleo,
     private val directorio: String,
+    // `Settings.Secure.ANDROID_ID` -- descifra el secreto de dispositivo en
+    // disco (ver `NubeViewModel.guardarSecreto`), lo necesitan tanto el
+    // reintento de `autenticar` como la sincronización de fondo.
+    private val identificadorDispositivo: String,
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
     var cedula by mutableStateOf("")
@@ -64,7 +68,9 @@ class LoginViewModel(
         autenticando = true
         viewModelScope.launch {
             try {
-                sesion = withContext(dispatcherIO) { nucleo.autenticar(cedula, password, directorio) }
+                sesion = withContext(dispatcherIO) {
+                    nucleo.autenticar(cedula, password, directorio, identificadorDispositivo)
+                }
                 lanzarSincronizacionDeFondo()
             } catch (excepcion: NucleoException.SinPasswordLocal) {
                 cedulaSinPassword = cedula
@@ -86,7 +92,7 @@ class LoginViewModel(
     private fun lanzarSincronizacionDeFondo() {
         viewModelScope.launch {
             try {
-                withContext(dispatcherIO) { nucleo.sincronizarConNube(directorio) }
+                withContext(dispatcherIO) { nucleo.sincronizarConNube(directorio, identificadorDispositivo) }
             } catch (_: NucleoException) {
                 // Sin red, o sin secreto configurado todavía -- no es un
                 // error que el login deba mostrar, el pulso periódico
@@ -132,8 +138,12 @@ class LoginViewModel(
     }
 
     companion object {
-        fun factory(nucleo: Nucleo, directorio: String): ViewModelProvider.Factory = viewModelFactory {
-            initializer { LoginViewModel(nucleo, directorio) }
+        fun factory(
+            nucleo: Nucleo,
+            directorio: String,
+            identificadorDispositivo: String,
+        ): ViewModelProvider.Factory = viewModelFactory {
+            initializer { LoginViewModel(nucleo, directorio, identificadorDispositivo) }
         }
     }
 }

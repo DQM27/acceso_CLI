@@ -28,6 +28,9 @@ import uniffi.control_acceso_mobile.ResumenSincronizacion
 class SincronizacionPeriodica(
     private val nucleo: Nucleo,
     private val directorio: String,
+    // `Settings.Secure.ANDROID_ID` -- descifra el secreto de dispositivo en
+    // disco, ver `NubeViewModel.guardarSecreto`.
+    private val identificadorDispositivo: String,
     private val scope: CoroutineScope,
     private val onSincronizado: (ResumenSincronizacion) -> Unit = {},
 ) {
@@ -43,7 +46,9 @@ class SincronizacionPeriodica(
                 while (true) {
                     delay(600)
                     try {
-                        val resumen = withContext(Dispatchers.IO) { nucleo.sincronizarConNube(directorio) }
+                        val resumen = withContext(Dispatchers.IO) {
+                            nucleo.sincronizarConNube(directorio, identificadorDispositivo)
+                        }
                         Log.i("SincronizacionNube", "Recibidos: gafetes=${resumen.gafetesRecibidos}, historial=${resumen.movimientosHistorialRecibidos}, abiertos=${resumen.remotosAbiertos}")
                         onSincronizado(resumen)
                     } catch (cancelacion: CancellationException) {

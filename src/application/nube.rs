@@ -157,6 +157,29 @@ pub struct SesionRealtimeNube {
     pub topic: String,
 }
 
+/// Único punto que resuelve "¿cuál es el secreto guardado?" a partir de las
+/// mismas dos variables que ya usan `guardar_secreto_dispositivo`/
+/// `configurar_dispositivo_inicial` -- antes cada método con acceso a la
+/// nube (`refrescar_catalogo_sin_sesion`, `sincronizar_con_nube`,
+/// `usuario_sigue_activo_remoto`) repetía un `directorio.map_or_else(...)`
+/// que llamaba a `cargar_secreto_en` (SIN identificador) incluso en móvil,
+/// donde el archivo está cifrado con el `ANDROID_ID` -- `cargar_secreto_en`
+/// no sabe descifrarlo (cae al camino de texto plano, falla en silencio) y
+/// esos tres métodos quedaban rotos en cualquier teléfono con el secreto
+/// cifrado: nunca podían reautenticar el dispositivo para nada que no fuera
+/// el primer arranque. Bug real, no un caso de espera -- reportado en vivo
+/// (un usuario sembrado en Supabase después del primer arranque de un
+/// teléfono no podía entrar nunca, ni esperando el pulso periódico).
+fn cargar_secreto_de(directorio: Option<&Path>, identificador_dispositivo: Option<&str>) -> Option<String> {
+    match (directorio, identificador_dispositivo) {
+        (Some(directorio), Some(identificador)) => {
+            crate::nube::credenciales::cargar_secreto_en_con_identificador(directorio, identificador)
+        }
+        (Some(directorio), None) => crate::nube::credenciales::cargar_secreto_en(directorio),
+        (None, _) => crate::nube::credenciales::cargar_secreto(),
+    }
+}
+
 impl AppCore {
     /// `identificador_dispositivo` cifra el secreto en disco con una clave
     /// derivada de ese identificador (ver `nube::credenciales`, "Protección
@@ -227,12 +250,9 @@ impl AppCore {
     pub fn refrescar_catalogo_sin_sesion(
         &self,
         directorio: Option<&Path>,
+        identificador_dispositivo: Option<&str>,
     ) -> Result<(), GestionNubeError> {
-        let secreto = directorio
-            .map_or_else(
-                crate::nube::credenciales::cargar_secreto,
-                crate::nube::credenciales::cargar_secreto_en,
-            )
+        let secreto = cargar_secreto_de(directorio, identificador_dispositivo)
             .ok_or(GestionNubeError::SinSecreto)?;
         let token = crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, &secreto)?;
         self.aplicar_desfase_reloj(&token);
@@ -258,14 +278,11 @@ impl AppCore {
         &self,
         actor: &UsuarioSesion,
         directorio: Option<&Path>,
+        identificador_dispositivo: Option<&str>,
     ) -> Result<ResumenSincronizacion, GestionNubeError> {
         self.autorizar_uso_nube(actor)?;
 
-        let secreto = directorio
-            .map_or_else(
-                crate::nube::credenciales::cargar_secreto,
-                crate::nube::credenciales::cargar_secreto_en,
-            )
+        let secreto = cargar_secreto_de(directorio, identificador_dispositivo)
             .ok_or(GestionNubeError::SinSecreto)?;
         let token = self.autenticar_con_cache(&secreto)?;
 
@@ -378,13 +395,10 @@ impl AppCore {
         &self,
         actor: &UsuarioSesion,
         directorio: Option<&Path>,
+        identificador_dispositivo: Option<&str>,
     ) -> Result<bool, GestionNubeError> {
         self.autorizar_uso_nube(actor)?;
-        let secreto = directorio
-            .map_or_else(
-                crate::nube::credenciales::cargar_secreto,
-                crate::nube::credenciales::cargar_secreto_en,
-            )
+        let secreto = cargar_secreto_de(directorio, identificador_dispositivo)
             .ok_or(GestionNubeError::SinSecreto)?;
         let token = self.autenticar_con_cache(&secreto)?;
         let contexto = crate::nube::ContextoSincronizacion {

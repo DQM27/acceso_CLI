@@ -81,6 +81,7 @@ fun PantallaPrincipal(
         SincronizacionPeriodica(
             nucleo = nucleo,
             directorio = directorio,
+            identificadorDispositivo = identificadorDispositivo,
             scope = scope,
             onSincronizado = { resumen ->
                 // Si a esta sesión la desactivaron en otro dispositivo, el
