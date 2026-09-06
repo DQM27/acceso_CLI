@@ -207,6 +207,18 @@ input {
   padding: 0.65rem 0;
 }
 
+/* Oculta la etiqueta en modo colapsado de escritorio -- vía CSS, no
+   condicional de JSX, para que el media query de mobile (más abajo) pueda
+   forzarla visible ahí sin importar este estado. Antes `Sidebar.tsx` ni
+   siquiera renderizaba el texto cuando `colapsado` era true (una decisión
+   de JS) -- eso significaba que si alguien había colapsado el sidebar en
+   escritorio alguna vez (queda guardado en localStorage), el cajón de
+   mobile heredaba ese mismo estado y aparecía sin ninguna etiqueta, solo
+   íconos, aunque tuviera de sobra los 15rem de ancho para mostrarlas. */
+.shell-sidebar-colapsada .nav-item-etiqueta {
+  display: none;
+}
+
 .nav-item:hover:not(.nav-item-activo) {
   background: color-mix(in srgb, var(--campo-fondo) 60%, transparent);
 }
@@ -307,6 +319,17 @@ input {
 
   .shell-sidebar.shell-sidebar-abierta {
     transform: translateX(0);
+  }
+
+  /* Forzada visible acá, sin importar `.shell-sidebar-colapsada` -- ver
+     comentario junto a la regla que la oculta, más arriba. */
+  .shell-sidebar-colapsada .nav-item-etiqueta {
+    display: inline;
+  }
+
+  .shell-sidebar-colapsada .nav-item {
+    justify-content: flex-start;
+    padding: 0.65rem 0.9rem;
   }
 
   .shell-sidebar-velo {

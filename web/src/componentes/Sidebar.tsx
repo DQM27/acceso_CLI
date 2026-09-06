@@ -44,7 +44,7 @@ export default function Sidebar({
             className={`nav-item ${seccionActual === id ? "nav-item-activo" : ""}`}
           >
             <Icono size={18} strokeWidth={2} aria-hidden="true" />
-            {!colapsado && etiqueta}
+            <span className="nav-item-etiqueta">{etiqueta}</span>
           </button>
         ))}
       </div>
