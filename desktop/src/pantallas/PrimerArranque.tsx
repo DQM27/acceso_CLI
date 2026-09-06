@@ -52,14 +52,17 @@ export default function PrimerArranque({ onListo }: { onListo: () => void }) {
           </p>
         </div>
 
-        <input
-          type="password"
-          autoFocus
-          value={secreto}
-          onChange={(evento) => setSecreto(evento.target.value)}
-          placeholder="Secreto del dispositivo"
-          disabled={enviando}
-        />
+        <label className="campo">
+          Secreto del dispositivo
+          <input
+            type="password"
+            autoFocus
+            value={secreto}
+            onChange={(evento) => setSecreto(evento.target.value)}
+            placeholder="Pegá el secreto acá"
+            disabled={enviando}
+          />
+        </label>
 
         {error && (
           <p className="login-error" role="alert" style={{ margin: 0 }}>
