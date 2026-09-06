@@ -21,6 +21,15 @@ serde = ["dep:serde", "chrono/serde"]
 # reqwest en modo "blocking": el resto del crate es síncrono, evita meter
 # un runtime async (tokio) para esto solo.
 nube = ["dep:reqwest", "dep:serde_json", "serde"]
+# Cifra `dispositivo-nube.secret` en disco con una clave derivada del ID de
+# esta máquina (ver docs/plan-panel-administrativo-web.md, "Protección del
+# secreto del dispositivo en reposo") -- copiar el archivo a otra máquina
+# descifra mal, no da un secreto usable. Sólo escritorio la activa por ahora
+# (`desktop/src-tauri/Cargo.toml`): `machine-uid` resuelve el Machine GUID de
+# Windows vía el registro, algo que no tiene sentido (ni se probó) en el
+# target de Android de `mobile/rust-core` -- ese lado sigue en texto plano
+# hasta que se le sume su propio identificador (`ANDROID_ID`, pendiente).
+cifrado-secreto-dispositivo = ["dep:machine-uid", "dep:aes-gcm", "dep:sha2"]
 
 [dependencies]
 chrono = "0.4.45"
@@ -39,6 +48,9 @@ rpassword = { version = "7", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"], optional = true }
+machine-uid = { version = "0.6", optional = true }
+aes-gcm = { version = "0.11", default-features = false, features = ["aes", "alloc"], optional = true }
+sha2 = { version = "0.11", default-features = false, optional = true }
 
 [build-dependencies]
 winresource = "0.1"
