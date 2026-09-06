@@ -44,15 +44,36 @@ decía la nota vieja.
 - [ ] **Panel de alta de dispositivos.** La creación de un dispositivo nuevo (generar
   secreto + insertarlo hasheado) sigue siendo a mano por SQL vía MCP — no hay formulario
   real ni Edge Function de alta.
-- [ ] **Escritorio sin onboarding por GUI para el primer usuario ROOT.** Sólo existe vía
-  CLI/TUI (`--reset-root`/consola de arranque) — si hace falta resetear una base de
-  producción sin la consola a mano, hoy no se puede desde la app de escritorio sola.
-  Detectado al resetear la base local de pruebas (2026-09-06): hubo que sembrar el ROOT a
-  mano con un script en vez de usar la app.
+- [x] **Escritorio/móvil sin onboarding por GUI para el primer usuario ROOT (2026-09-06).**
+  Antes sólo existía vía CLI/TUI (`--reset-root`/consola de arranque) -- detectado al
+  resetear la base local de pruebas: hubo que sembrar el ROOT a mano con un script en vez
+  de usar la app. Resuelto sin sembrar un usuario ficticio (se evaluó y se descartó por dejar
+  una contraseña compartida entre instalaciones): con la base vacía (`requiere_configuracion_
+  inicial`), la app abre directo en una pantalla de "pegá el secreto de dispositivo", sin
+  pedir login -- pegar el secreto dispara una sincronización inicial que trae el catálogo
+  real (contratistas/empresas/gafetes/**usuarios**) desde la nube. Como esos usuarios llegan
+  con el centinela `SIN_PASSWORD_LOCAL`, el primer login de cualquiera de ellos cae solo en
+  el flujo de "fijar contraseña" que ya existía (`AppCore::fijar_password_inicial`). El
+  camino CLI/TUI se mantiene como rescate si alguna vez hace falta un sitio 100% sin nube.
 - [ ] **Revisar y ajustar roles y permisos (Root/Administrador/Operador).** Pedido explícito
   del usuario (2026-09-06) tras entender cómo viajan los usuarios entre dispositivos — el
   esquema actual (`domain::autorizacion::Operacion`/`RolUsuario::puede`) queda documentado
   para revisión, ajustes a definir en la conversación.
+- [ ] **Activación de dispositivo con verificación por correo (Capa 2, evaluado y pospuesto
+  2026-09-06).** Hoy pegar el secreto correcto alcanza para activar un dispositivo al
+  instante -- si el secreto se filtra (screenshot, archivo compartido), quien lo tenga puede
+  usarlo sin ningún gate extra. Se diseñó un flujo de step-up por correo, sólo en la
+  **primera** activación de cada secreto (no en cada sync, eso sería fricción diaria
+  innecesaria para una app de uso básicamente personal): pegar el secreto dispara un código
+  al correo del admin (reusando el OTP nativo de Supabase que ya usa
+  `web/src/componentes/useVerificacionPorCorreo.ts` para step-up en el panel -- sin sumar un
+  proveedor de correo nuevo), la persona lo escribe en la misma app, y recién ahí el
+  dispositivo queda activado de verdad. Se evaluó como sobre-ingeniería para el alcance
+  actual del proyecto y se pospone -- diagrama comparativo (activación simple de hoy vs. esta
+  con verificación) en `docs/activacion-dispositivo-comparacion.html` para retomar la
+  decisión más adelante, con o sin un cliente de por medio. Requeriría: columna
+  `activado_en` en `dispositivos`, una Edge Function de dos pasos (pedir código / confirmar +
+  emitir JWT), y el paso extra de UI en escritorio y móvil.
 
 ## Clippy pedantic/nursery — en curso, subiendo el nivel por capas (2026-09-01)
 

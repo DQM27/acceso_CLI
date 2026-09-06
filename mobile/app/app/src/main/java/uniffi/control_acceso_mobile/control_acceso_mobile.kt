@@ -683,6 +683,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_empresa(
@@ -710,6 +712,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_configuracion_inicial(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_secreto_dispositivo_guardado(
     ): Int
@@ -753,6 +757,8 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_contratista(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_empresa(`ptr`: Long,`nombre`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -781,6 +787,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida(`ptr`: Long,`registroId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_requiere_configuracion_inicial(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_secreto_dispositivo_guardado(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sesion_realtime_nube(`ptr`: Long,`directorio`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -921,6 +929,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion() != 60001) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial() != 15546) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista() != 57741) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -961,6 +972,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida() != 34276) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_configuracion_inicial() != 516) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_secreto_dispositivo_guardado() != 12281) {
@@ -1452,6 +1466,18 @@ public interface NucleoInterface {
     fun `cerrarSesion`()
     
     /**
+     * Arranque de una base vacía -- sin sesión, porque todavía no existe
+     * ningún usuario con quien autenticar. Guarda el secreto pegado en la
+     * pantalla de arranque y trae el catálogo remoto (usuarios incluidos),
+     * para que el próximo intento de login ya tenga con quién autenticar
+     * (con el centinela `SIN_PASSWORD_LOCAL`, cae solo en "fijar
+     * contraseña"). `identificador_dispositivo` es
+     * `Settings.Secure.ANDROID_ID`, igual que en
+     * [`Nucleo::guardar_secreto_dispositivo`].
+     */
+    fun `configurarDispositivoInicial`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String, `secreto`: kotlin.String): ResumenSincronizacion
+    
+    /**
      * Alta de contratista — mismo formulario que
      * `desktop/src/pantallas/FormularioContratista.tsx`, sólo creación
      * (ver docs/plan-app-movil.md). La validación real y definitiva vuelve
@@ -1542,6 +1568,13 @@ public interface NucleoInterface {
     fun `registrarIngreso`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?): ResultadoRegistroEntrada
     
     fun `registrarSalida`(`registroId`: kotlin.Long)
+    
+    /**
+     * `true` mientras la base no tenga ningún usuario todavía -- Kotlin lo
+     * usa para decidir si mostrar la pantalla de arranque (pegar el
+     * secreto) en vez del login (ver `MainActivity.kt`).
+     */
+    fun `requiereConfiguracionInicial`(): kotlin.Boolean
     
     /**
      * No revela el secreto -- sólo si ya hay uno guardado. Ver
@@ -1800,6 +1833,33 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 }
     }
     
+    
+
+    
+    /**
+     * Arranque de una base vacía -- sin sesión, porque todavía no existe
+     * ningún usuario con quien autenticar. Guarda el secreto pegado en la
+     * pantalla de arranque y trae el catálogo remoto (usuarios incluidos),
+     * para que el próximo intento de login ya tenga con quién autenticar
+     * (con el centinela `SIN_PASSWORD_LOCAL`, cae solo en "fijar
+     * contraseña"). `identificador_dispositivo` es
+     * `Settings.Secure.ANDROID_ID`, igual que en
+     * [`Nucleo::guardar_secreto_dispositivo`].
+     */
+    @Throws(NucleoException::class)override fun `configurarDispositivoInicial`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String, `secreto`: kotlin.String): ResumenSincronizacion {
+            return FfiConverterTypeResumenSincronizacion.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial(
+        it,
+        
+        FfiConverterString.lower(`directorio`),
+        FfiConverterString.lower(`identificadorDispositivo`),
+        FfiConverterString.lower(`secreto`),_status)
+}
+    }
+    )
+    }
     
 
     
@@ -2077,6 +2137,25 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 }
     }
     
+    
+
+    
+    /**
+     * `true` mientras la base no tenga ningún usuario todavía -- Kotlin lo
+     * usa para decidir si mostrar la pantalla de arranque (pegar el
+     * secreto) en vez del login (ver `MainActivity.kt`).
+     */
+    @Throws(NucleoException::class)override fun `requiereConfiguracionInicial`(): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_requiere_configuracion_inicial(
+        it,
+        _status)
+}
+    }
+    )
+    }
     
 
     

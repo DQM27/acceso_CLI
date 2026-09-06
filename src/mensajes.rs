@@ -189,13 +189,18 @@ pub fn mensaje_gestion_nube(error: crate::application::GestionNubeError) -> Stri
         GestionNubeError::UsoNoAutorizado => {
             "Su sesión no está autorizada para usar la nube".into()
         }
-        GestionNubeError::Sqlite(_) => "No se pudo leer la base de datos local".into(),
+        GestionNubeError::Sqlite(_) | GestionNubeError::Usuario(_) => {
+            "No se pudo leer la base de datos local".into()
+        }
         GestionNubeError::SinSecreto => {
             "Todavía no se guardó el secreto de este dispositivo".into()
         }
         GestionNubeError::Io(_) => "No se pudo guardar el secreto localmente".into(),
         GestionNubeError::Autenticacion(error) => mensaje_nube(error),
         GestionNubeError::Sincronizacion(error) => mensaje_sincronizacion(error),
+        GestionNubeError::YaConfigurado => {
+            "Este dispositivo ya tiene usuarios locales -- no hace falta el arranque inicial".into()
+        }
     }
 }
 

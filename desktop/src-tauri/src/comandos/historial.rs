@@ -111,7 +111,10 @@ pub fn listar_historial_sitio(
         .map_err(|error| error.to_string())?;
     let filas = statement
         .query_map(
-            params![tiempo::serializar_utc(desde_utc), tiempo::serializar_utc(hasta_utc)],
+            params![
+                tiempo::serializar_utc(desde_utc),
+                tiempo::serializar_utc(hasta_utc)
+            ],
             |row| {
                 Ok(MovimientoHistorialRemoto {
                     uuid: row.get(0)?,

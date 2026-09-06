@@ -110,6 +110,10 @@ pub enum GestionNubeError {
     Autenticacion(#[from] crate::nube::NubeError),
     #[error(transparent)]
     Sincronizacion(#[from] crate::nube::SincronizacionError),
+    #[error("Este dispositivo ya tiene usuarios locales -- no es un bootstrap de base vacía")]
+    YaConfigurado,
+    #[error(transparent)]
+    Usuario(#[from] crate::services::error::UsuarioServiceError),
 }
 
 /// Resultado de una sincronización manual -- lo suficiente para que la
@@ -293,6 +297,71 @@ impl AppCore {
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,
             sesion_expulsada: !self.sesion_sigue_activa(actor),
+        })
+    }
+
+    /// Bootstrap de una base sin ningún usuario todavía
+    /// (`requiere_configuracion_inicial() == true`) -- sin sesión posible,
+    /// porque no hay con quién autenticar todavía. Guarda el secreto pegado
+    /// en la pantalla de arranque y trae el catálogo remoto (usuarios
+    /// incluidos), para que el próximo Login tenga con quién autenticar.
+    /// Cada usuario que llega así arranca con el centinela
+    /// `SIN_PASSWORD_LOCAL` (ver `recibir_catalogo_del_sitio`), así que el
+    /// primer login de cualquiera de ellos cae solo en el flujo de "fijar
+    /// contraseña" ya existente (`AppCore::fijar_password_inicial`).
+    ///
+    /// Se rechaza a propósito si ya existe algún usuario local -- este
+    /// camino es sólo el bootstrap de una base vacía, no una forma
+    /// alternativa de reconfigurar un dispositivo ya en uso (para eso sigue
+    /// existiendo `guardar_secreto_dispositivo`, detrás de una sesión Root
+    /// real).
+    pub fn configurar_dispositivo_inicial(
+        &self,
+        directorio: Option<&Path>,
+        identificador_dispositivo: Option<&str>,
+        secreto: &str,
+    ) -> Result<ResumenSincronizacion, GestionNubeError> {
+        if !self.requiere_configuracion_inicial()? {
+            return Err(GestionNubeError::YaConfigurado);
+        }
+
+        match (directorio, identificador_dispositivo) {
+            (Some(directorio), Some(identificador)) => {
+                crate::nube::credenciales::guardar_secreto_en_con_identificador(
+                    directorio,
+                    secreto,
+                    identificador,
+                )?;
+            }
+            (Some(directorio), None) => {
+                crate::nube::credenciales::guardar_secreto_en(directorio, secreto)?;
+            }
+            (None, _) => crate::nube::credenciales::guardar_secreto(secreto)?,
+        }
+
+        let token = self.autenticar_con_cache(secreto)?;
+        let contexto = crate::nube::ContextoSincronizacion {
+            base_url: crate::nube::BASE_URL,
+            apikey: crate::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        let catalogo = crate::nube::recibir_catalogo_del_sitio(&self.connection, &contexto)?;
+
+        Ok(ResumenSincronizacion {
+            enviados: 0,
+            fallidos: 0,
+            remotos_abiertos: 0,
+            cierres_recibidos: 0,
+            empresas_recibidas: catalogo.empresas_recibidas,
+            contratistas_recibidos: catalogo.contratistas_recibidos,
+            gafetes_recibidos: catalogo.gafetes_recibidos,
+            movimientos_historial_recibidos: 0,
+            sitio_id: token.sitio_id,
+            dispositivo_id: token.dispositivo_id,
+            tipo: token.tipo,
+            sesion_expulsada: false,
         })
     }
 

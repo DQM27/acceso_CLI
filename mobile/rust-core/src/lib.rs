@@ -993,6 +993,37 @@ impl Nucleo {
         )?)
     }
 
+    /// `true` mientras la base no tenga ningún usuario todavía -- Kotlin lo
+    /// usa para decidir si mostrar la pantalla de arranque (pegar el
+    /// secreto) en vez del login (ver `MainActivity.kt`).
+    pub fn requiere_configuracion_inicial(&self) -> Result<bool, NucleoError> {
+        Ok(self.core_lock().requiere_configuracion_inicial()?)
+    }
+
+    /// Arranque de una base vacía -- sin sesión, porque todavía no existe
+    /// ningún usuario con quien autenticar. Guarda el secreto pegado en la
+    /// pantalla de arranque y trae el catálogo remoto (usuarios incluidos),
+    /// para que el próximo intento de login ya tenga con quién autenticar
+    /// (con el centinela `SIN_PASSWORD_LOCAL`, cae solo en "fijar
+    /// contraseña"). `identificador_dispositivo` es
+    /// `Settings.Secure.ANDROID_ID`, igual que en
+    /// [`Nucleo::guardar_secreto_dispositivo`].
+    pub fn configurar_dispositivo_inicial(
+        &self,
+        directorio: String,
+        identificador_dispositivo: String,
+        secreto: String,
+    ) -> Result<ResumenSincronizacion, NucleoError> {
+        Ok(self
+            .core_lock()
+            .configurar_dispositivo_inicial(
+                Some(std::path::Path::new(&directorio)),
+                Some(&identificador_dispositivo),
+                &secreto,
+            )?
+            .into())
+    }
+
     /// Guarda el secreto de este dispositivo, pegado desde el panel de
     /// administración (mismo mecanismo que la GUI de escritorio, ver
     /// `docs/plan-persistencia-nube.md`). `directorio` es el mismo que

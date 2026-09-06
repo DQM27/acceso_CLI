@@ -166,6 +166,7 @@ pub fn run() {
             comandos::respaldos::validar_respaldo,
             comandos::respaldos::exportar_respaldo,
             comandos::respaldos::restaurar_respaldo,
+            comandos::nube::configurar_dispositivo_inicial,
             comandos::nube::guardar_secreto_dispositivo,
             comandos::nube::secreto_dispositivo_guardado,
             comandos::nube::sincronizar_con_nube,

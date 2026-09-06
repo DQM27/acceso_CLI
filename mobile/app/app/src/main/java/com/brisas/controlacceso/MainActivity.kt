@@ -12,7 +12,10 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -55,19 +58,13 @@ class MainActivity : ComponentActivity() {
             Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: ""
         setContent {
             val archivoBaseDatos = File(filesDir, "control_acceso.db")
-            // Prueba de campo puntual: si todavía no hay base local, arranca
-            // con `assets/semilla.db` (un usuario ROOT ya cargado) en vez de
-            // la base vacía de siempre -- evita depender de `adb`/USB, que
-            // este teléfono no permitió. Sólo copia una vez: si ya existe
-            // `control_acceso.db` (segundo arranque en adelante, o cualquier
-            // instalación futura sin este atajo) no la toca.
-            if (!archivoBaseDatos.exists()) {
-                assets.open("semilla.db").use { entrada ->
-                    archivoBaseDatos.outputStream().use { salida -> entrada.copyTo(salida) }
-                }
-            }
             val rutaBaseDatos = archivoBaseDatos.absolutePath
             val nucleo = remember { Nucleo.abrir(rutaBaseDatos) }
+            // Base recién instalada, sin ningún usuario todavía -- pegar el
+            // secreto en PantallaPrimerArranque trae el catálogo real desde
+            // la nube (contratistas/empresas/gafetes/usuarios) en vez de
+            // depender de un usuario de prueba instalado de fábrica.
+            var requiereArranque by remember { mutableStateOf(nucleo.requiereConfiguracionInicial()) }
             TemaBrisas {
                 // `targetSdk` 36 (Android 15+) obliga a la app a dibujar
                 // "borde a borde": sin este padding, el contenido queda
@@ -84,11 +81,20 @@ class MainActivity : ComponentActivity() {
                 ) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                         Box(modifier = Modifier.widthIn(max = ANCHO_MAXIMO_CONTENIDO).fillMaxHeight()) {
-                            PantallaLogin(
-                                nucleo,
-                                directorio = filesDir.absolutePath,
-                                identificadorDispositivo = identificadorDispositivo,
-                            )
+                            if (requiereArranque) {
+                                PantallaPrimerArranque(
+                                    nucleo,
+                                    directorio = filesDir.absolutePath,
+                                    identificadorDispositivo = identificadorDispositivo,
+                                    onListo = { requiereArranque = false },
+                                )
+                            } else {
+                                PantallaLogin(
+                                    nucleo,
+                                    directorio = filesDir.absolutePath,
+                                    identificadorDispositivo = identificadorDispositivo,
+                                )
+                            }
                         }
                     }
                 }

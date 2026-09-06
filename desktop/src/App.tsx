@@ -30,7 +30,6 @@ import {
   Archive,
   Building2,
   ClipboardList,
-  Cloud,
   History,
   IdCard,
   UserCheck,
@@ -44,6 +43,7 @@ import BarraNube from "./componentes/BarraNube";
 import type { EstadoConexionNube } from "./componentes/BarraNube";
 import ErrorBoundary from "./componentes/ErrorBoundary";
 import Login from "./pantallas/Login";
+import PrimerArranque from "./pantallas/PrimerArranque";
 import {
   buscarActualizacion,
   cerrarSesion,
@@ -65,7 +65,6 @@ const Historial = lazy(() => import("./pantallas/Historial"));
 const Auditoria = lazy(() => import("./pantallas/Auditoria"));
 const Gafetes = lazy(() => import("./pantallas/Gafetes"));
 const Respaldos = lazy(() => import("./pantallas/Respaldos"));
-const Nube = lazy(() => import("./pantallas/Nube"));
 const NuevoIngresoModal = lazy(() => import("./pantallas/NuevoIngresoModal"));
 const SalidaModal = lazy(() => import("./pantallas/SalidaModal"));
 
@@ -118,14 +117,7 @@ export default function App() {
   }
 
   if (pantalla.tipo === "requiere-configuracion-inicial") {
-    return (
-      <div style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center" }}>
-        <p style={{ maxWidth: "24rem", textAlign: "center", color: "var(--muted)" }}>
-          Todavía no existe un usuario ROOT. Creá el usuario ROOT inicial desde la consola
-          (<code>--tui-clasica</code> o <code>--cli</code>) y volvé a abrir esta ventana.
-        </p>
-      </div>
-    );
+    return <PrimerArranque onListo={() => setPantalla({ tipo: "login" })} />;
   }
 
   if (pantalla.tipo === "login") {
@@ -151,8 +143,7 @@ export type Seccion =
   | "empresas"
   | "usuarios"
   | "gafetes"
-  | "respaldos"
-  | "nube";
+  | "respaldos";
 
 /** `rolesPermitidos` ausente = visible para cualquier rol logueado.
  * Auditoría lo restringe — espejo de `RolUsuario::puede(VerAuditoria)` en
@@ -195,14 +186,6 @@ const SECCIONES: {
     Icono: Archive,
     // Espejo de `Operacion::GestionarRespaldos` (`src/domain/autorizacion.rs`):
     // sólo Root puede gestionar respaldos, ni siquiera Administrador.
-    rolesPermitidos: ["Root"],
-  },
-  {
-    id: "nube",
-    etiqueta: "Nube",
-    Icono: Cloud,
-    // Espejo de `Operacion::GestionarNube` (`src/domain/autorizacion.rs`):
-    // el secreto de dispositivo es delicado, sólo Root lo administra.
     rolesPermitidos: ["Root"],
   },
 ];
@@ -403,7 +386,6 @@ function Shell({
                   {seccion === "usuarios" && <Usuarios actorRol={sesion.rol} />}
                   {seccion === "gafetes" && <Gafetes />}
                   {seccion === "respaldos" && <Respaldos onRestaurado={onVolverALogin} />}
-                  {seccion === "nube" && <Nube />}
                 </Suspense>
               </ErrorBoundary>
             </main>
