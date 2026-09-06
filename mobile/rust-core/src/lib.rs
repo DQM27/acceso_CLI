@@ -677,25 +677,44 @@ impl Nucleo {
         })
     }
 
-    /// `directorio` sólo para el intento de sincronización previa (ver
-    /// abajo) -- el resto del login sigue sin necesitarlo, la base ya está
-    /// abierta desde `abrir`.
+    /// `directorio` sólo para los intentos de sincronización (ver abajo) --
+    /// el resto del login sigue sin necesitarlo, la base ya está abierta
+    /// desde `abrir`.
     ///
-    /// Después de validar localmente, intenta sincronizar (con el tope de
-    /// `nube::cliente::TIMEOUT_HTTP`) para que una baja/desactivación
-    /// reciente en otro dispositivo se refleje antes de dejar entrar --
-    /// decisión explícita: "por seguridad, pero nunca bloqueante" (el
-    /// teléfono tiene que poder operar sin internet). Sin red o si tarda,
-    /// sigue con lo que ya validó local -- si de verdad estaba
-    /// desactivado, la próxima sincronización que sí tenga señal lo
-    /// expulsa sola (ver `sincronizar_con_nube`).
+    /// Dos chequeos contra la nube, uno para cada dirección de un cambio de
+    /// estado remoto -- decisión explícita: "por seguridad, pero nunca
+    /// bloqueante" (el teléfono tiene que poder operar sin internet), así
+    /// que los dos son best-effort (con el tope de `nube::cliente::TIMEOUT_HTTP`):
+    ///
+    /// 1. **Reactivación**: si el chequeo local dice "inactivo"
+    ///    (`AutenticacionErrorNucleo::UsuarioInactivo`), puede ser que a
+    ///    este usuario lo hayan reactivado en otro dispositivo y esta base
+    ///    todavía no se enteró -- antes de rendirse, refresca sólo el
+    ///    catálogo (`refrescar_catalogo_sin_sesion`, sin sesión) y
+    ///    reintenta el login local una vez más. Sin esto, una reactivación
+    ///    remota nunca se podía reflejar acá: el login fallaba en el
+    ///    chequeo local ANTES de llegar a sincronizar nada.
+    /// 2. **Baja**: tras un login local exitoso, intenta sincronizar
+    ///    completo para que una desactivación reciente en otro dispositivo
+    ///    se refleje antes de dejar entrar -- `sincronizar_con_nube` ya
+    ///    cierra la sesión sola si la encuentra.
     pub fn autenticar(
         &self,
         cedula: String,
         password: String,
         directorio: String,
     ) -> Result<UsuarioSesion, NucleoError> {
-        let sesion = self.core_lock().autenticar(&cedula, &password)?;
+        let intento = self.core_lock().autenticar(&cedula, &password);
+        let sesion = match intento {
+            Ok(sesion) => sesion,
+            Err(AutenticacionErrorNucleo::UsuarioInactivo) => {
+                let _ = self
+                    .core_lock()
+                    .refrescar_catalogo_sin_sesion(Some(std::path::Path::new(&directorio)));
+                self.core_lock().autenticar(&cedula, &password)?
+            }
+            Err(otro) => return Err(otro.into()),
+        };
         *self.sesion_lock() = Some(sesion.clone());
 
         let _ = self.sincronizar_con_nube(directorio);

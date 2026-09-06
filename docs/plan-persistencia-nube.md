@@ -1,9 +1,97 @@
-# Persistencia en la nube — definiciones pendientes (borrador, sin código todavía)
+# Persistencia en la nube — bitácora de decisiones de arquitectura
 
 > Documento de continuidad para retomar esta conversación en otra sesión
 > (VS Code). Recoge lo que ya se discutió y, sobre todo, la pregunta de
 > arquitectura que quedó sin resolver antes de escribir una sola línea de
 > código.
+>
+> **Las tareas realmente pendientes viven en `docs/pendientes.md`**
+> (sección "Nube / multi-dispositivo y panel web") — este documento es
+> memoria de decisiones y su porqué, no un rastreador de tareas. Varias
+> notas de sesiones viejas de acá abajo decían "pendiente" sobre cosas que
+> ya se resolvieron sin que se actualizara la nota (ver la corrección al
+> principio de la sesión 2026-09-06) — si una nota vieja y `pendientes.md`
+> no coinciden, `pendientes.md` manda.
+
+## Sesión 2026-09-06: Realtime bidireccional confirmado, timer de móvil ya existe, catálogo blindado contra duplicados
+
+**Corrección importante sobre la nota "Sí sigue afuera" de la sesión
+2026-09-02 (línea ~114, más abajo): Realtime YA NO está descartado — quedó
+confirmado bidireccional (escritorio↔móvil) probado en los dos sentidos por
+el usuario.** La causa de que antes pareciera "no confiable" (motivó la
+nota de 2026-09-04 sobre cierre cruzado) resultó ser un bug concreto, no
+una limitación de la plataforma: el trigger de Postgres que emite el aviso
+(`private.emitir_cambio_nube_sitio`) identificaba el origen del cambio
+leyendo `dispositivo_origen_id`/`dispositivo_entrada_id` de la FILA —un
+campo que se fija una sola vez al crearla y nunca se actualiza en ediciones
+posteriores—, así que cualquier edición externa (panel web, u otro
+dispositivo) sobre una fila que un dispositivo importó hacía tiempo le
+llegaba a ESE dispositivo marcada como si fuera su propio eco, y su propio
+filtro de "descartar ecos" la tiraba — nunca disparaba el resync instantáneo
+para el dispositivo que más lo necesitaba (el que tiene más contratistas a
+su nombre). Arreglado usando `auth.jwt() ->> 'sub'` (quién ejecuta ESTA
+escritura) en vez de la columna de la fila — migración
+`20260906044549_avisa_cambio_nube_segun_quien_escribe_no_quien_creo_la_fila`.
+El polling periódico se conserva como respaldo (nunca se depende
+exclusivamente de Realtime), pero ya no es "la foto real" — Realtime
+dispara el resync en segundos cuando hay señal.
+
+**Corrección sobre el "hueco real" de móvil (misma sesión 2026-09-04, línea
+~46 más abajo): ya no existe.** `SincronizacionPeriodica.kt` (móvil) ya
+implementa un timer propio equivalente al de escritorio (pulso cada 2
+minutos + reacciona a Realtime/`CambiosNube`, atado a `ON_START`/`ON_STOP`
+del ciclo de vida para no gastar batería en segundo plano) — no se detectó
+cuándo se agregó exactamente, pero ya estaba en el código antes de esta
+sesión. El punto "Pendiente a decidir: agregar a móvil un timer periódico"
+de abajo queda resuelto.
+
+**Corrección sobre gafetes (línea ~28 más abajo, sesión 2026-09-04): el
+`recibir_gafetes` que se daba por faltante YA EXISTE.**
+`recibir_catalogo_del_sitio` trae también el catálogo completo de
+`gafetes` del sitio (no incremental, se descarga entero cada vez por ser
+chico) — verificado leyendo `src/nube/sincronizacion.rs` línea ~1091. Mismo
+patrón que empresas/contratistas.
+
+**Nuevo: duplicados de catálogo detectados y cerrados.** Se encontraron 117
+contratistas duplicados en producción (dos bases locales sin el mismo
+`uuid` para el mismo contratista generaban cada una un `id` propio, y el
+upsert por PK los aceptaba como personas distintas). Causa raíz: `contratistas`/
+`empresas`/`gafetes` en Supabase nunca tuvieron una restricción de unicidad
+real más allá del `id` interno. Cerrado con:
+- Restricciones únicas nuevas: `contratistas(identificacion)`,
+  `empresas(nombre)`, `gafetes(sitio_id, numero)` — migración
+  `20260906031836_reset_datos_prueba_y_unicidad_catalogo` (que de paso
+  limpió los datos de prueba existentes, ya no aplica a datos reales).
+- `enviar_contratista`/`enviar_empresa`/`enviar_gafete`/`enviar_usuario`
+  ahora upsertean con `on_conflict=<columna real>` en vez del default (la
+  PK), así que aunque una base rara vuelva a mandar un `uuid` distinto para
+  lo mismo, Supabase lo fusiona en vez de duplicarlo.
+
+**Nuevo: reloj corregido por servidor (`RelojCorregido`, `src/tiempo.rs`).**
+Un reloj de Windows/Android desincronizado (caso real: ~11 min adelantado,
+sin sincronizar, sin permisos de admin para corregirlo) rompía la marca de
+agua del sync incremental (`recibir_historial_del_sitio`/
+`recibir_catalogo_del_sitio`, que antes usaban `Utc::now()` local) —
+movimientos y altas se perdían en silencio. Ahora esas marcas se calculan
+del `updated_at` real que devuelve el servidor, inmune al desfase; además,
+cada autenticación contra la nube mide el desfase real (header HTTP `Date`)
+y corrige el reloj de toda la app (horas de entrada/salida, auditoría) sin
+depender de que el sistema operativo tenga la hora bien puesta.
+
+**Nuevo: login exige verificación remota antes de confirmar, sin bloquear
+offline.** Al loguearse, si hay señal, sincroniza (con tope de tiempo
+corto) antes de confirmar — trae una baja/desactivación reciente si la
+hay. Sin señal o si tarda, sigue con lo local. Además, **cualquier**
+sincronización posterior (periódica, Realtime, o manual) que descubra que
+la sesión activa ya no está vigente la cierra sola —
+`ResumenSincronizacion::sesion_expulsada`. Ver `AppCore::sesion_sigue_activa`,
+`AppCore::fijar_password_inicial` (alta de contraseña de un usuario global
+la primera vez que entra a un dispositivo nuevo — antes existía el
+mecanismo en los servicios pero ninguna pantalla lo usaba).
+
+**Nuevo: timeout real en todas las llamadas HTTP a la nube (`nube::cliente::cliente_http`,
+10s).** Antes ninguna tenía límite — una conexión colgada (no rechazada, no
+error, simplemente muda) podía bloquear a quien llama para siempre.
 
 ## Sesión 2026-09-04: cierre cruzado descartado, "seed inicial" ya resuelto, edición externa de contratistas
 

@@ -1,7 +1,9 @@
 # App móvil
 
-Ver `docs/plan-app-movil.md` en la raíz del repo para el plan completo y las
-decisiones de diseño.
+Ver `docs/plan-persistencia-nube.md` en la raíz del repo para las decisiones
+de diseño (multi-dispositivo, sincronización, roles) que aplican también al
+móvil — el plan original específico de la app móvil quedó superado por ese
+documento y se retiró.
 
 - `rust-core/` — puente `uniffi` sobre `control_acceso` (reusado sin
   modificar). No se commitea `target/` ni `bindings/` (generado).
@@ -109,5 +111,4 @@ adb shell run-as com.brisas.controlacceso cp /data/local/tmp/control_acceso.db f
 ```
 
 Esto es solo para desarrollo — no reemplaza el flujo real de alta de
-usuarios, que sigue sin resolver (ver puntos abiertos en
-`docs/plan-app-movil.md`).
+usuarios, que sigue sin resolver (ver `docs/pendientes.md`).

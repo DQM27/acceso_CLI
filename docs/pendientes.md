@@ -7,7 +7,11 @@ se descartó. Ese historial sigue disponible en `git log`/`git show` de los comm
 crearon si hace falta el detalle completo de un hallazgo ya reparado.
 
 `docs/diagrama-logico.md` y `docs/evaluacion-sqlite.md` siguen aparte: son referencia de
-arquitectura y configuración, no rastreadores de tareas.
+arquitectura y configuración, no rastreadores de tareas. `docs/plan-persistencia-nube.md`
+también queda aparte por el mismo motivo (bitácora de decisiones de arquitectura de la nube,
+con su propio historial de sesiones) — sus tareas realmente abiertas se consolidan acá abajo.
+`docs/plan-app-movil.md` se eliminó (2026-09-06): describía un diseño ya superado (un solo
+teléfono, sin sincronización en vivo) que `plan-persistencia-nube.md` reemplazó por completo.
 
 ## Regla de este documento
 
@@ -17,6 +21,38 @@ hacerse, se marca `[x]` igual con una nota de por qué se descartó (no se borra
 que quede el rastro de la decisión).
 
 ---
+
+## Nube / multi-dispositivo y panel web — pendientes reales (2026-09-06)
+
+Consolidado acá tras revisar `docs/plan-persistencia-nube.md` de punta a punta: varias notas
+ahí decían "pendiente" sobre cosas que ya se habían resuelto sin actualizar el documento
+(timer de sync en móvil, bajar el catálogo de gafetes a un dispositivo nuevo, Realtime
+bidireccional). Esta sección es la lista real, verificada contra el código, no contra lo que
+decía la nota vieja.
+
+- [ ] **Pulir los paneles web** (historial-brisas.pages.dev: historial + admin). Pedido
+  explícito del usuario (2026-09-06), sin alcance definido todavía — a concretar en una
+  próxima sesión.
+- [ ] **Delegar la creación de usuarios (Administrador/Operador) al panel web**, en vez de
+  crearlos desde un dispositivo local. Encaja con `AppCore::fijar_password_inicial` (ya
+  construido, 2026-09-06): el panel crearía el usuario con el centinela
+  `SIN_PASSWORD_LOCAL` (nunca una contraseña real ni siquiera temporal viajando por la web),
+  y el primer dispositivo donde esa persona inicia sesión sería el que la fija. Falta: una
+  tabla/función en Supabase análoga a la que ya existe para contratistas
+  (`admin_global_gestiona_contratistas`), y que el panel respete las mismas reglas que ya
+  aplica `crear_usuario` localmente (cédula única, un Administrador no puede crear un ROOT).
+- [ ] **Panel de alta de dispositivos.** La creación de un dispositivo nuevo (generar
+  secreto + insertarlo hasheado) sigue siendo a mano por SQL vía MCP — no hay formulario
+  real ni Edge Function de alta.
+- [ ] **Escritorio sin onboarding por GUI para el primer usuario ROOT.** Sólo existe vía
+  CLI/TUI (`--reset-root`/consola de arranque) — si hace falta resetear una base de
+  producción sin la consola a mano, hoy no se puede desde la app de escritorio sola.
+  Detectado al resetear la base local de pruebas (2026-09-06): hubo que sembrar el ROOT a
+  mano con un script en vez de usar la app.
+- [ ] **Revisar y ajustar roles y permisos (Root/Administrador/Operador).** Pedido explícito
+  del usuario (2026-09-06) tras entender cómo viajan los usuarios entre dispositivos — el
+  esquema actual (`domain::autorizacion::Operacion`/`RolUsuario::puede`) queda documentado
+  para revisión, ajustes a definir en la conversación.
 
 ## Clippy pedantic/nursery — en curso, subiendo el nivel por capas (2026-09-01)
 

@@ -180,6 +180,40 @@ impl AppCore {
         Ok(guardado.is_some())
     }
 
+    /// Trae sólo el catálogo (usuarios/contratistas/empresas/gafetes), sin
+    /// exigir una sesión de aplicación como el resto de los métodos de este
+    /// archivo (`autorizar_uso_nube`) -- a propósito: pensado para el caso
+    /// "a este usuario lo reactivaron en otro dispositivo y acá todavía
+    /// figura inactivo" (ver `Nucleo::autenticar` en móvil, y su equivalente
+    /// en `desktop/src-tauri/src/comandos/autenticacion.rs::login`). En ese
+    /// momento el chequeo local "¿está activo?" falla ANTES de que exista
+    /// ninguna sesión válida que autorice sincronizar -- es justo lo que se
+    /// está tratando de determinar. La identidad ante la nube es del
+    /// dispositivo (el secreto), no del usuario que intenta entrar, así que
+    /// no hace falta una sesión para esto.
+    pub fn refrescar_catalogo_sin_sesion(
+        &self,
+        directorio: Option<&Path>,
+    ) -> Result<(), GestionNubeError> {
+        let secreto = directorio
+            .map_or_else(
+                crate::nube::credenciales::cargar_secreto,
+                crate::nube::credenciales::cargar_secreto_en,
+            )
+            .ok_or(GestionNubeError::SinSecreto)?;
+        let token = crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, &secreto)?;
+        self.aplicar_desfase_reloj(&token);
+        let contexto = crate::nube::ContextoSincronizacion {
+            base_url: crate::nube::BASE_URL,
+            apikey: crate::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        crate::nube::recibir_catalogo_del_sitio(&self.connection, &contexto)?;
+        Ok(())
+    }
+
     /// Autentica este dispositivo, drena la bandeja de salida y refresca
     /// la caché de lo que el otro dispositivo del mismo sitio tiene
     /// abierto. Pensado para el celular, que no tiene el concepto de
