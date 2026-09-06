@@ -83,13 +83,7 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
     cerrarModal();
   }
 
-  async function alBorrar(fila: AdministradorPanel) {
-    if (
-      !confirm(
-        `Se te va a mandar un código de confirmación a ${sesion.correo}. ¿Continuar para sacarle el acceso a ${fila.correo}?`,
-      )
-    )
-      return;
+  function alBorrar(fila: AdministradorPanel) {
     setBajaEnCurso(fila);
   }
 
@@ -186,6 +180,7 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
         abierto={modalAbierto && pidiendoCodigoAlta}
         correo={sesion.correo}
         titulo="Nuevo administrador"
+        pregunta={`¿Agregar a ${correoNuevo} como administrador del panel?`}
         descripcion={`confirmar que agregás a ${correoNuevo}`}
         onConfirmar={alConfirmarAlta}
         onCerrar={cerrarConfirmacionAlta}
@@ -195,6 +190,7 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
         abierto={bajaEnCurso !== null}
         correo={sesion.correo}
         titulo={bajaEnCurso ? `Confirmar — sacarle el acceso a ${bajaEnCurso.correo}` : ""}
+        pregunta={`¿Sacarle el acceso a ${bajaEnCurso?.correo}? Va a dejar de poder entrar al panel.`}
         descripcion="confirmar"
         onConfirmar={alConfirmarBaja}
         onCerrar={() => setBajaEnCurso(null)}

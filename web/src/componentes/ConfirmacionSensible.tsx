@@ -4,18 +4,23 @@ import { useVerificacionPorCorreo } from "./useVerificacionPorCorreo";
 
 /**
  * Confirmación por código de correo para acciones sensibles (alta/baja de
- * administradores, y cualquier otra mutación que en el futuro necesite el
- * mismo "sos vos ahora mismo" -- ver `useVerificacionPorCorreo`). Absorbe
- * el modal + form + manejo de error que antes vivía duplicado (alta y baja)
- * en `Administradores.tsx`.
+ * administradores, Revocar/Eliminar dispositivos, y cualquier otra mutación
+ * que en el futuro necesite el mismo "sos vos ahora mismo" -- ver
+ * `useVerificacionPorCorreo`). Absorbe el modal + form + manejo de error
+ * que antes vivía duplicado en cada pantalla.
  *
- * El código se pide solo al montarse (abrir el modal), no en cada render --
- * quien lo usa controla el ciclo de vida con la prop `abierto`.
+ * Dos pasos, a propósito -- "pregunta" primero (sin pedir código todavía) y
+ * recién si se confirma ahí se pide el código ("codigo"). Antes el código
+ * se mandaba apenas se abría el modal: un click de más (o probar dos veces
+ * seguidas) quemaba un envío real contra el límite de reenvío de Supabase
+ * (~1 cada 60s por correo, ver `useVerificacionPorCorreo`). Es un paso más,
+ * pero evita gastar códigos en aperturas que no van a terminar en nada.
  */
 export default function ConfirmacionSensible({
   abierto,
   correo,
   titulo,
+  pregunta,
   descripcion,
   onConfirmar,
   onCerrar,
@@ -24,31 +29,42 @@ export default function ConfirmacionSensible({
   /** Correo de quien está haciendo la acción -- ahí llega el código. */
   correo: string;
   titulo: string;
-  /** Texto que explica qué se va a confirmar (ej. "agregás a fulano@..."). */
+  /** Pregunta del primer paso, antes de mandar ningún código (ej. "¿Revocar
+   * 'Brisas - PC'? Va a dejar de poder sincronizar."). */
+  pregunta: string;
+  /** Texto del segundo paso, ya con el código pedido (ej. "agregás a
+   * fulano@..."). */
   descripcion: string;
   /** Mutación real, ejecutada recién después de validar el código. Si tira,
    * el modal queda abierto y el error se muestra vía toast en quien llama. */
   onConfirmar: () => Promise<void>;
   onCerrar: () => void;
 }) {
+  const [paso, setPaso] = useState<"pregunta" | "codigo">("pregunta");
   const [codigo, setCodigo] = useState("");
   const [confirmando, setConfirmando] = useState(false);
   const confirmacion = useVerificacionPorCorreo(correo);
 
+  // Cada apertura arranca de nuevo en "pregunta" -- si alguien cerró a
+  // mitad del código y vuelve a abrir, no debe caer directo en el paso 2
+  // con el estado viejo de useVerificacionPorCorreo.
   useEffect(() => {
-    if (abierto) confirmacion.pedirConfirmacion();
-    // Sólo al abrir -- pedirConfirmacion/confirmacion cambian de identidad en
-    // cada render y no deben re-disparar el envío del código.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (abierto) setPaso("pregunta");
   }, [abierto]);
 
   function cerrar() {
     setCodigo("");
+    setPaso("pregunta");
     confirmacion.reiniciar();
     onCerrar();
   }
 
-  async function alConfirmar(evento: React.FormEvent) {
+  function alConfirmarPregunta() {
+    setPaso("codigo");
+    confirmacion.pedirConfirmacion();
+  }
+
+  async function alConfirmarCodigo(evento: React.FormEvent) {
     evento.preventDefault();
     setConfirmando(true);
     try {
@@ -70,8 +86,20 @@ export default function ConfirmacionSensible({
 
   return (
     <Modal titulo={titulo} onCerrar={cerrar}>
-      {confirmacion.enviado ? (
-        <form onSubmit={alConfirmar} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      {paso === "pregunta" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <p style={{ margin: 0 }}>{pregunta}</p>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+            <button type="button" className="boton" onClick={cerrar}>
+              Cancelar
+            </button>
+            <button type="button" className="boton boton-primario" onClick={alConfirmarPregunta}>
+              Sí, enviar código
+            </button>
+          </div>
+        </div>
+      ) : confirmacion.enviado ? (
+        <form onSubmit={alConfirmarCodigo} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           <p style={{ margin: 0 }}>
             Te mandamos un código a tu correo. Escribilo acá para {descripcion}.
           </p>

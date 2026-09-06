@@ -98,6 +98,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   // sin atrapar entre medio de su propio manejo del código.
   const [confirmacionSensible, setConfirmacionSensible] = useState<{
     titulo: string;
+    pregunta: string;
     descripcion: string;
     accion: () => Promise<void>;
   } | null>(null);
@@ -215,6 +216,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   const alEliminar = useCallback((fila: FilaDispositivo) => {
     setConfirmacionSensible({
       titulo: "Borrar dispositivo",
+      pregunta: `¿Borrar "${fila.etiqueta}" de la lista? Esto no se puede deshacer.`,
       descripcion: `borrar "${fila.etiqueta}" de la lista -- esto no se puede deshacer`,
       accion: async () => {
         try {
@@ -236,6 +238,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   const alRevocar = useCallback((fila: FilaDispositivo) => {
     setConfirmacionSensible({
       titulo: "Revocar dispositivo",
+      pregunta: `¿Revocar "${fila.etiqueta}"? Ese dispositivo va a dejar de poder sincronizar.`,
       descripcion: `revocar "${fila.etiqueta}" -- ese dispositivo va a dejar de poder sincronizar`,
       accion: async () => {
         try {
@@ -578,6 +581,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
         abierto={confirmacionSensible !== null}
         correo={sesion.correo}
         titulo={confirmacionSensible?.titulo ?? ""}
+        pregunta={confirmacionSensible?.pregunta ?? ""}
         descripcion={confirmacionSensible?.descripcion ?? ""}
         onConfirmar={() => confirmacionSensible?.accion() ?? Promise.resolve()}
         onCerrar={() => setConfirmacionSensible(null)}
