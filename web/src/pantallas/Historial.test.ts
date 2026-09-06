@@ -21,6 +21,7 @@ function fila(sobrescribir: Partial<MovimientoHistorial> = {}): MovimientoHistor
     hora_salida: null,
     usuario_entrada_nombre: "Quintana",
     usuario_salida_nombre: null,
+    dispositivo_entrada_tipo: "pc",
     ...sobrescribir,
   };
 }

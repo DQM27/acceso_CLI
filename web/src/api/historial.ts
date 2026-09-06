@@ -25,6 +25,9 @@ export interface MovimientoHistorial {
   hora_salida: string | null;
   usuario_entrada_nombre: string | null;
   usuario_salida_nombre: string | null;
+  // "pc"/"mobile"/"visor" (`dispositivos.tipo`) -- null si el dispositivo
+  // de entrada fue borrado, o para filas viejas sin dispositivo_entrada_id.
+  dispositivo_entrada_tipo: string | null;
 }
 
 interface FilaCruda {
@@ -41,6 +44,7 @@ interface FilaCruda {
   hora_salida: string | null;
   usuario_entrada_nombre: string | null;
   usuario_salida_nombre: string | null;
+  dispositivo_entrada: { tipo: string } | null;
 }
 
 export async function listarHistorial(desde?: string, hasta?: string): Promise<MovimientoHistorial[]> {
@@ -49,7 +53,8 @@ export async function listarHistorial(desde?: string, hasta?: string): Promise<M
     .select(
       "id, sitio_id, contratista_cedula, contratista_nombre, empresa_nombre, tipo_ingreso, " +
         "medio_ingreso, gafete_numero, hora_entrada, hora_salida, usuario_entrada_nombre, " +
-        "usuario_salida_nombre, sitios(nombre)",
+        "usuario_salida_nombre, sitios(nombre), " +
+        "dispositivo_entrada:dispositivos!ingresos_dispositivo_entrada_id_fkey(tipo)",
     )
     .order("hora_entrada", { ascending: false });
 
@@ -59,5 +64,9 @@ export async function listarHistorial(desde?: string, hasta?: string): Promise<M
   const { data, error } = await consulta.returns<FilaCruda[]>();
   if (error) throw new Error(error.message);
 
-  return data.map(({ sitios, ...resto }) => ({ ...resto, sitio_nombre: sitios?.nombre ?? null }));
+  return data.map(({ sitios, dispositivo_entrada, ...resto }) => ({
+    ...resto,
+    sitio_nombre: sitios?.nombre ?? null,
+    dispositivo_entrada_tipo: dispositivo_entrada?.tipo ?? null,
+  }));
 }

@@ -42,7 +42,7 @@ pub struct MovimientoHistorialSitio {
     pub usuario_ingreso_nombre: Option<String>,
     pub usuario_salida_nombre: Option<String>,
     pub motivo_resultado: Option<String>,
-    /// `"pc"`/`"movil"` (o `None` para filas sincronizadas antes de que
+    /// `"pc"`/`"mobile"` (o `None` para filas sincronizadas antes de que
     /// esto existiera) -- ver `nube::sincronizacion::FilaHistorialRemota`.
     pub dispositivo_entrada_tipo: Option<String>,
 }

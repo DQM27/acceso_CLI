@@ -848,7 +848,7 @@ struct FilaHistorialRemota {
     dispositivo_entrada_id: String,
     dispositivo_salida_id: Option<String>,
     updated_at: String,
-    /// `"pc"`/`"movil"` (`dispositivos.tipo`) -- embebido vía PostgREST
+    /// `"pc"`/`"mobile"` (`dispositivos.tipo`) -- embebido vía PostgREST
     /// (`dispositivo_entrada:dispositivos!ingresos_dispositivo_entrada_id_fkey(tipo)`)
     /// para que la pantalla pueda mostrar de qué tipo de dispositivo vino
     /// un movimiento sin tener que resolver el UUID a mano. Pedido del
@@ -1816,7 +1816,7 @@ mod tests {
              \"hora_entrada\":\"2026-01-01T08:00:00Z\",\
              \"dispositivo_entrada_id\":\"otro-dispositivo\",\
              \"updated_at\":\"2026-01-01T08:00:05Z\",\
-             \"dispositivo_entrada\":{\"tipo\":\"movil\"}}]",
+             \"dispositivo_entrada\":{\"tipo\":\"mobile\"}}]",
         );
 
         let recibidos = recibir_historial_del_sitio(&connection, &contexto(&base_url)).unwrap();
@@ -1829,7 +1829,7 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(tipo.as_deref(), Some("movil"));
+        assert_eq!(tipo.as_deref(), Some("mobile"));
     }
 
     #[test]

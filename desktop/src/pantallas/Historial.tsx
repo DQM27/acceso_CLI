@@ -62,12 +62,12 @@ interface FilaRemota {
 
 type FilaHistorial = FilaLocal | FilaRemota;
 
-/** "pc"/"movil" (`dispositivos.tipo`) → texto corto para la columna
+/** "pc"/"mobile" (`dispositivos.tipo`) → texto corto para la columna
  * "Dispositivo" -- cualquier otro valor (o `null`) se muestra tal cual /
  * como "—", nunca se inventa un tipo que no vino. */
 function textoDispositivo(tipo: string | null): string {
   if (tipo === "pc") return "💻 PC";
-  if (tipo === "movil") return "📱 Celular";
+  if (tipo === "mobile") return "📱 Celular";
   return tipo ?? "—";
 }
 

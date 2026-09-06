@@ -31,10 +31,10 @@ data class FilaHistorial(
     val usuarioIngresoNombre: String,
     val usuarioSalidaNombre: String?,
     val advertenciaPraind: Boolean,
-    // "pc"/"movil", o null si vino sin dato (fila remota sincronizada antes
-    // de que esto existiera). Una fila local siempre es "movil": esta
-    // pantalla sólo existe en el build de Android, no hace falta leerlo de
-    // ningún lado.
+    // "pc"/"mobile" (`dispositivos.tipo` en Supabase), o null si vino sin
+    // dato (fila remota sincronizada antes de que esto existiera). Una fila
+    // local siempre es "mobile": esta pantalla sólo existe en el build de
+    // Android, no hace falta leerlo de ningún lado.
     val dispositivoTipo: String?,
 ) {
     companion object {
@@ -43,7 +43,7 @@ data class FilaHistorial(
             m.fechaHoraIngreso, m.fechaHoraSalida, m.gafeteNumero,
             m.usuarioIngresoNombre, m.usuarioSalidaNombre,
             m.resultadoAcceso is ResultadoIngresoRegistrado.PermitidoConAdvertencia,
-            dispositivoTipo = "movil",
+            dispositivoTipo = "mobile",
         )
         fun remota(m: MovimientoHistorialSitio) = FilaHistorial(
             "nube:${m.uuid}", m.cedula ?: "—", m.contratistaNombre, m.empresaNombre ?: "—",
@@ -55,11 +55,11 @@ data class FilaHistorial(
     }
 }
 
-/// "pc"/"movil" → texto corto para mostrar en la fila -- cualquier otro
+/// "pc"/"mobile" → texto corto para mostrar en la fila -- cualquier otro
 /// valor (o null) se muestra como "—", nunca se inventa un tipo que no vino.
 fun textoDispositivo(tipo: String?): String = when (tipo) {
     "pc" -> "💻 PC"
-    "movil" -> "📱 Celular"
+    "mobile" -> "📱 Celular"
     else -> tipo ?: "—"
 }
 
