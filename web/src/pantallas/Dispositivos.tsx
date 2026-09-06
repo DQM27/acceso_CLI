@@ -108,7 +108,7 @@ export default function Dispositivos() {
     evento.preventDefault();
     const sitio = sitios.find((s) => s.id === sitioId);
     if (!sitio) {
-      setErrorForm("Elegí un sitio (o creá uno con el botón +).");
+      setErrorForm("Elegí una unidad operativa (o creá una con el botón +).");
       return;
     }
     setCreando(true);
@@ -227,7 +227,7 @@ export default function Dispositivos() {
       minWidth: 150,
       valueFormatter: ({ value }) => ETIQUETAS_TIPO[value as TipoDispositivo],
     },
-    { field: "sitio_nombre", headerName: "Sitio", flex: 1, minWidth: 130 },
+    { field: "sitio_nombre", headerName: "Unidad operativa", flex: 1.3, minWidth: 160 },
     {
       field: "created_at",
       headerName: "Creado",
@@ -367,7 +367,7 @@ export default function Dispositivos() {
               style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
             >
               <label className="campo">
-                Sitio
+                Unidad operativa
                 <div style={{ display: "flex", gap: "0.5rem" }}>
                   <select
                     required
@@ -436,7 +436,7 @@ export default function Dispositivos() {
       )}
 
       {modalSitioAbierto && (
-        <Modal titulo="Nuevo sitio" onCerrar={cerrarModalSitio}>
+        <Modal titulo="Nueva unidad operativa" onCerrar={cerrarModalSitio}>
           <form onSubmit={alCrearSitio} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
             <label className="campo">
               Nombre
@@ -471,7 +471,7 @@ export default function Dispositivos() {
                 Cancelar
               </button>
               <button type="submit" className="boton boton-primario" disabled={creandoSitio}>
-                {creandoSitio ? "Creando…" : "Crear sitio"}
+                {creandoSitio ? "Creando…" : "Crear unidad operativa"}
               </button>
             </div>
           </form>

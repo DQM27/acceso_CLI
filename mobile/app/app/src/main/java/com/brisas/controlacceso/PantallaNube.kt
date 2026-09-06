@@ -141,7 +141,7 @@ private fun TarjetaResumenSincronizacion(resumen: ResumenSincronizacion, modifie
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                "Sitio ${resumen.sitioId} · dispositivo ${resumen.dispositivoId} (${resumen.tipo})",
+                "Unidad operativa ${resumen.sitioId} · dispositivo ${resumen.dispositivoId} (${resumen.tipo})",
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
             )
@@ -152,7 +152,7 @@ private fun TarjetaResumenSincronizacion(resumen: ResumenSincronizacion, modifie
             )
             Text(
                 "${resumen.empresasRecibidas} empresas y ${resumen.contratistasRecibidos} " +
-                    "contratistas recibidos del catálogo del sitio",
+                    "contratistas recibidos del catálogo de la unidad operativa",
                 style = MaterialTheme.typography.bodySmall,
             )
         }

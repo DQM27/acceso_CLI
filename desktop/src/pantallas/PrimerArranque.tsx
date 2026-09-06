@@ -75,7 +75,7 @@ export default function PrimerArranque({ onListo }: { onListo: () => void }) {
         </button>
 
         <p style={{ margin: 0, color: "var(--muted)", fontSize: "0.78rem" }}>
-          Sin nube todavía disponible para este sitio? Creá el usuario ROOT desde la consola
+          Sin nube todavía disponible para esta unidad operativa? Creá el usuario ROOT desde la consola
           (<code>--tui-clasica</code> o <code>--cli</code>) y volvé a abrir esta ventana.
         </p>
       </form>

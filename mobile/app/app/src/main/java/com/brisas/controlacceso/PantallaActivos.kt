@@ -434,7 +434,7 @@ private fun DialogoConfirmarSalida(
             Text(
                 when (fila) {
                     is FilaActiva.Local -> "${fila.activo.contratistaNombre} · ${fila.activo.cedula} · ${fila.activo.empresaNombre}"
-                    is FilaActiva.Remota -> "${fila.remoto.contratistaNombre} · registrado en otro dispositivo del sitio"
+                    is FilaActiva.Remota -> "${fila.remoto.contratistaNombre} · registrado en otro dispositivo de la unidad operativa"
                 },
             )
         },

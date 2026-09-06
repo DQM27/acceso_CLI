@@ -41,7 +41,7 @@ import uniffi.control_acceso_mobile.ResultadoAcceso
 /// (`Nucleo.gafeteOcupadoEnSitio`) -- distinto de [NucleoException] porque
 /// esto nunca llega a tocar `registrar_ingreso` en Rust, se corta acá mismo.
 class GafeteOcupadoEnSitioException(numero: Long) :
-    Exception("El gafete $numero ya está en uso en otro dispositivo del sitio")
+    Exception("El gafete $numero ya está en uso en otro dispositivo de la unidad operativa")
 
 /// Misma decisión que `desktop/src/api/ingresos.ts` (puedeContinuar /
 /// mensajeBloqueo): `preparar_ingreso` no rechaza estos casos, ya vienen

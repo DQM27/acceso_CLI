@@ -49,7 +49,7 @@ export interface DefinicionColumnaExport {
 }
 
 export const DEFINICIONES_EXPORT: DefinicionColumnaExport[] = [
-  { colId: "sitio_nombre", etiqueta: "Sitio", valor: (f) => f.sitio_nombre ?? "" },
+  { colId: "sitio_nombre", etiqueta: "Unidad operativa", valor: (f) => f.sitio_nombre ?? "" },
   {
     colId: "contratista_cedula",
     etiqueta: "Cédula",
@@ -350,7 +350,7 @@ export default function Historial() {
   // `Tabla`).
   const columnas: ColDef<MovimientoHistorial>[] = useMemo(
     () => [
-      { field: "sitio_nombre", headerName: "Sitio", flex: 1, minWidth: 110 },
+      { field: "sitio_nombre", headerName: "Unidad operativa", flex: 1.3, minWidth: 160 },
       {
         field: "contratista_cedula",
         headerName: "Cédula",
