@@ -8,8 +8,10 @@
 --   - public.administradores_panel: SOLO daniel.bleach1@gmail.com.
 --
 -- Uso pensado: correr esto muchas veces mientras el proyecto sigue en
--- desarrollo, antes de repoblar con supabase/scripts/poblar_catalogo.sql
--- (o datos reales del cliente). NO se ejecuta solo -- pegarlo a mano en el
+-- desarrollo. Después de esto, contratistas/empresas se repueblan con
+-- `cargo run --example importar_catalogo_limpio` contra la base local
+-- (ver supabase/scripts/poblar_catalogo.sql para el detalle) -- NO con
+-- INSERTs de Postgres a mano. NO se ejecuta solo -- pegarlo a mano en el
 -- SQL Editor de Supabase (o `supabase db execute -f este-archivo`) cuando
 -- se decida de verdad borrar.
 --

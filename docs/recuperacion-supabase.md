@@ -107,7 +107,15 @@ los tres si el `project ref` cambió:
 ## 6. Repoblar datos
 
 - Estructura vacía y sana: no hace falta nada más que lo de arriba.
-- Para volver a tener sitios/dispositivos/contratistas de prueba (o los
-  reales del cliente), ver el script de reset (`supabase/scripts/`, borra
-  datos sin tocar estructura/reglas) y el de siembra que se prepara junto
-  con este documento.
+- Para vaciar datos de prueba conservando el sitio "Brisas" y el admin
+  principal: `supabase/scripts/resetear_datos_prueba.sql`.
+- Para contratistas/empresas reales (semi-producción, hoy en
+  `contratistas_base_final_limpia_v15.sql` en la raíz del repo): **no**
+  es un script de Supabase -- se importa contra la base local de un
+  dispositivo real con `cargo run --example importar_catalogo_limpio` y
+  se deja que la sincronización normal lo suba (ver
+  `supabase/scripts/poblar_catalogo.sql` para el detalle exacto). Eso
+  respeta `dispositivo_origen_id`/`sitio_id`, que un INSERT directo a
+  Postgres no puede resolver solo.
+- Gafetes (sin catálogo real todavía): plantilla de INSERT directo en el
+  mismo `supabase/scripts/poblar_catalogo.sql`.

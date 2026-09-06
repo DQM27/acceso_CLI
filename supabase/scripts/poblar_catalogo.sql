@@ -1,89 +1,49 @@
--- Plantilla para poblar el catálogo (empresas/contratistas/gafetes) tras
--- correr resetear_datos_prueba.sql. Pensado para reemplazar los bloques de
--- ejemplo por datos reales del cliente cuando estén listos -- hoy sólo
--- deja la estructura correcta (columnas NOT NULL, constraints, orden de
--- inserción por FK) para no perder tiempo redescubriéndola cada vez.
+-- LEER ANTES DE USAR: contratistas y empresas NO se pueblan con INSERTs
+-- de Postgres a mano -- ya existe la herramienta correcta para eso, que
+-- reusa el mismo camino que cualquier sincronización real (no bypassea
+-- dispositivo_origen_id/sitio_id ni el resto de las columnas NOT NULL):
 --
--- NO se ejecuta solo -- pegarlo a mano en el SQL Editor de Supabase (o
--- `supabase db execute -f este-archivo`). Reemplazar los VALUES de ejemplo
--- antes de correrlo con datos que sirvan de verdad.
+--   cargo run --example importar_catalogo_limpio -- <archivo.sql> [ruta_db]
 --
--- Requiere: la fila "Brisas" en sitios (siempre existe, nunca se borra) y
--- al menos un dispositivo -- contratistas/empresas/gafetes tienen
--- dispositivo_origen_id NOT NULL (registra qué dispositivo originó cada
--- fila). Si se corre esto recién después de resetear_datos_prueba.sql
--- (que borra todos los dispositivos), el bloque de abajo crea uno
--- "Semilla de datos (script)" para poder insertar -- no es un dispositivo
--- real, nadie se autentica con su secreto (secret_hash es basura
--- intencional), sólo sirve como origen de estas filas. Si ya provisionaste
--- un dispositivo real desde el panel antes de correr esto, usá su id en
--- vez de crear este de más (cambiar la referencia en la sección
--- "variables" de abajo).
+-- Ese comando corre CONTRA LA BASE LOCAL (SQLite) de un dispositivo real
+-- ya configurado (con su secreto pegado) -- ver examples/importar_
+-- catalogo_limpio.rs: hace un respaldo, corre el <archivo.sql> (formato
+-- SQLite, `INSERT INTO empresas/contratistas ... ON CONFLICT`), rellena
+-- UUIDs, reconstruye el índice de búsqueda, y ENCOLA todo para subir a la
+-- nube (cola_salida). El próximo "Sincronizar" (o el pulso automático de
+-- 2 min) empuja los datos a Supabase con el dispositivo_origen_id/sitio_id
+-- reales de esa máquina -- exactamente lo que las columnas NOT NULL de
+-- contratistas/empresas en Supabase exigen.
+--
+-- Los datos semi-producción de contratistas/empresas hoy están en
+-- `contratistas_base_final_limpia_v15.sql` (raíz del repo) -- ese es el
+-- <archivo.sql> a usar:
+--
+--   cargo run --example importar_catalogo_limpio -- contratistas_base_final_limpia_v15.sql
+--   -- (sin ruta_db: usa la misma base que la app de escritorio)
+--   -- después: abrir la app y apretar "Sincronizar", o esperar el pulso
+--   -- automático de 2 minutos.
+--
+-- Si en cambio se quiere una base local 100% limpia antes de importar
+-- (en vez de fusionar sobre lo que ya haya), agregar `--recrear` antes
+-- del nombre del archivo -- hace un respaldo y arranca de una base vacía.
+--
+-- ============================================================
+-- Lo de abajo es sólo para GAFETES -- no hay (todavía) un archivo de
+-- datos reales ni una herramienta de import como la de arriba, así que
+-- sigue siendo un INSERT directo a Postgres. Reemplazar los números de
+-- ejemplo cuando haya un rango real que cargar.
+-- ============================================================
 begin;
 
--- === Variables (ajustar acá, se usan en todo el resto del script) ===
-with variables as (
-  select
-    (select id from public.sitios where nombre = 'Brisas') as sitio_id
-),
-dispositivo_semilla as (
-  insert into public.dispositivos (sitio_id, tipo, etiqueta, secret_hash)
-  select sitio_id, 'pc', 'Semilla de datos (script)', 'no-usar-' || gen_random_uuid()::text
-  from variables
-  on conflict do nothing
-  returning id, sitio_id
-)
-select * from dispositivo_semilla;
-
--- Si el insert de arriba no corrió (ya existía un dispositivo semilla de
--- una corrida anterior de este mismo script), resolvelo a mano:
---   select id from public.dispositivos where etiqueta = 'Semilla de datos (script)';
--- y reemplazá `(select id from dispositivo_semilla)` de abajo por ese uuid literal.
-
--- === Empresas (ejemplo -- reemplazar) ===
 with sitio as (select id from public.sitios where nombre = 'Brisas'),
      dispositivo as (
-       select id from public.dispositivos where etiqueta = 'Semilla de datos (script)' limit 1
-     )
-insert into public.empresas (sitio_id, dispositivo_origen_id, nombre, activa)
-select sitio.id, dispositivo.id, valores.nombre, true
-from sitio, dispositivo,
-  (values
-    ('Constructora Ejemplo S.A.'),
-    ('Servicios Generales Ejemplo Ltda.')
-  ) as valores(nombre)
-on conflict (nombre) do nothing;
-
--- === Contratistas (ejemplo -- reemplazar) ===
--- tipo_ingreso: 'PRAIND' | 'IN_HOUSE' | 'POR_CORREO' | 'SWAT'
--- fecha_vencimiento_praind sólo aplica (y sólo tiene sentido) para PRAIND.
-with sitio as (select id from public.sitios where nombre = 'Brisas'),
-     dispositivo as (
-       select id from public.dispositivos where etiqueta = 'Semilla de datos (script)' limit 1
-     )
-insert into public.contratistas (
-  sitio_id, dispositivo_origen_id, nombre, identificacion, empresa_id, empresa_nombre,
-  activo, tipo_ingreso, fecha_vencimiento_praind, es_personal_ruta
-)
-select
-  sitio.id, dispositivo.id, datos.nombre, datos.identificacion, empresa.id, empresa.nombre,
-  true, datos.tipo_ingreso, datos.fecha_vencimiento_praind, datos.es_personal_ruta
-from sitio, dispositivo,
-  (values
-    ('Contratista Ejemplo Uno', '100000001', 'Constructora Ejemplo S.A.', 'PRAIND', '2027-01-01'::date, false),
-    ('Contratista Ejemplo Dos', '100000002', 'Servicios Generales Ejemplo Ltda.', 'IN_HOUSE', null::date, false)
-  ) as datos(nombre, identificacion, empresa_nombre, tipo_ingreso, fecha_vencimiento_praind, es_personal_ruta)
-join public.empresas empresa
-  on empresa.nombre = datos.empresa_nombre and empresa.sitio_id = sitio.id
-on conflict (identificacion) do nothing;
-
--- === Gafetes (ejemplo -- reemplazar) ===
--- estado: 'DISPONIBLE' | 'PERDIDO' | 'DE_BAJA'. Un gafete PERDIDO exige
--- contratista_deudor_id (constraint de la tabla) -- no aplica a este
--- ejemplo, todos arrancan DISPONIBLE.
-with sitio as (select id from public.sitios where nombre = 'Brisas'),
-     dispositivo as (
-       select id from public.dispositivos where etiqueta = 'Semilla de datos (script)' limit 1
+       -- Cualquier dispositivo real ya provisionado sirve como origen --
+       -- a diferencia de contratistas/empresas, acá no hace falta un
+       -- dispositivo "semilla" de mentira porque este INSERT es puntual,
+       -- no un catálogo completo que además tenga que viajar de vuelta
+       -- a un dispositivo local.
+       select id from public.dispositivos where sitio_id = (select id from sitio) limit 1
      )
 insert into public.gafetes (sitio_id, dispositivo_origen_id, numero, estado)
 select sitio.id, dispositivo.id, numero, 'DISPONIBLE'
@@ -91,10 +51,7 @@ from sitio, dispositivo,
   (values (1), (2), (3), (4), (5)) as valores(numero)
 on conflict (sitio_id, numero) do nothing;
 
-select
-  (select count(*) from public.empresas) as empresas,
-  (select count(*) from public.contratistas) as contratistas,
-  (select count(*) from public.gafetes) as gafetes;
+select (select count(*) from public.gafetes) as gafetes;
 
 -- Revisar el resultado del SELECT de arriba antes de decidir.
 commit;
