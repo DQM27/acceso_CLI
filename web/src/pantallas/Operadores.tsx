@@ -36,8 +36,12 @@ export default function Operadores() {
   }, [recargar]);
 
   // Cambia rara vez (altas/bajas puntuales) -- mismo intervalo que usan
-  // desktop/mobile para su propio sync periódico.
-  useAutoRefresh(() => recargar({ silencioso: true }), 120_000);
+  // desktop/mobile para su propio sync periódico. "usuarios" para el aviso
+  // en vivo (ver migración avisa_cambio_nube_en_usuarios) -- sin esto, una
+  // baja/reactivación hecha desde otra sesión del panel o un dispositivo no
+  // se veía acá hasta el próximo poll de 2 minutos (mismo gap que tenía
+  // Contratistas.tsx antes de sumarle "contratistas,empresas").
+  useAutoRefresh(() => recargar({ silencioso: true }), 120_000, "usuarios");
 
   async function manejarEdicion(fila: Usuario) {
     try {
