@@ -213,7 +213,26 @@ nueva) necesita un estado intermedio — "secreto válido, pendiente de
 verificación" — antes de emitir el JWT final, más el envío del correo
 con el código. Trabajo concreto a diseñar, no configuración.
 
-## Protección del secreto del dispositivo en reposo (decidido)
+## Protección del secreto del dispositivo en reposo (decidido, Capa 1 revertida en móvil 2026-09-06)
+
+**Actualización 2026-09-06**: Capa 1 se implementó para las dos plataformas
+y después se revirtió en móvil (sigue activa en escritorio, que nunca dio
+problemas). En la misma sesión de pruebas aparecieron dos bugs reales
+seguidos con el archivo cifrado en Android: primero, tres funciones de
+`AppCore` (`refrescar_catalogo_sin_sesion`/`sincronizar_con_nube`/
+`usuario_sigue_activo_remoto`) nunca recibían el identificador necesario
+para descifrar, así que la sincronización periódica y el reintento de
+login llevaban rotos desde que se activó el cifrado; arreglado eso,
+después el mismo emulador dejó de poder leer su propio secreto cifrado
+sin causa identificada. Decisión: no vale la pena la complejidad para lo
+que protege — `cifrado-secreto-dispositivo-portable` se sacó de las
+features de `mobile/rust-core` (ver commit "mobile: vuelve a texto plano
+el secreto de dispositivo"). El secreto vuelve a texto plano en Android;
+si se retoma esto en el futuro, hacerlo con pruebas de extremo a extremo
+en un dispositivo real desde el principio, no sólo unitarias.
+
+Descripción original de las dos capas (Capa 1 hoy sólo aplica a
+escritorio):
 
 Hoy se guarda en texto plano (`src/nube/credenciales.rs`,
 `fs::write(directorio.join(FILE_NAME), secreto.trim())`), tanto en
