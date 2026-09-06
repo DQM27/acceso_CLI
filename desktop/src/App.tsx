@@ -39,6 +39,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
+import SelectorTema from "./componentes/SelectorTema";
 import BarraNube from "./componentes/BarraNube";
 import type { EstadoConexionNube } from "./componentes/BarraNube";
 import ErrorBoundary from "./componentes/ErrorBoundary";
@@ -403,6 +404,7 @@ function Shell({
                 onSincronizar={sincronizarManualmente}
                 estadoConexion={estadoConexionNube}
               />
+              <SelectorTema />
               <MenuUsuario sesion={sesion} onCerrarSesion={onCerrarSesion} />
             </div>
           </div>
