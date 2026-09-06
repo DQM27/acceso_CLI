@@ -103,6 +103,10 @@ function BotonProbarOtp({ correo }: { correo: string }) {
         fontSize: "0.75rem",
         textAlign: "left",
         color: "var(--muted)",
+        width: "calc(100% - 1rem)",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
       }}
       onClick={alClicar}
       disabled={enviando}
@@ -153,7 +157,7 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
             colapsado={colapsado}
             onToggleColapsado={alternarColapsado}
             abiertoEnMovil={menuMovilAbierto}
-            pie={!colapsado && <BotonProbarOtp correo={sesion.correo} />}
+            pie={<BotonProbarOtp correo={sesion.correo} />}
           />
 
           <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
