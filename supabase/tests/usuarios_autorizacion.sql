@@ -94,5 +94,19 @@ begin
   end if;
 end $$;
 
-select '5 comprobaciones de autorización correctas' as resultado;
+-- admin_global también puede CREAR usuarios (migración admin_global_
+-- crea_usuarios), sin sitio_id en el JWT -- el panel web delega la
+-- creación de Administrador/Operador acá, ver docs/plan-panel-
+-- administrativo-web.md punto 4. sitio_id lo elige el panel (hoy hay un
+-- solo sitio, "Diagnóstico A" acá).
+do $$
+begin
+  insert into public.usuarios (id, sitio_id, cedula, nombre, rol)
+  values (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'diag-cedula-3', 'Diagnóstico admin_global', 'ADMINISTRADOR');
+  if not found then
+    raise exception 'admin_global no pudo crear un usuario';
+  end if;
+end $$;
+
+select '6 comprobaciones de autorización correctas' as resultado;
 rollback;

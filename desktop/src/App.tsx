@@ -380,7 +380,7 @@ function Shell({
                     />
                   )}
                   {seccion === "historial" && <Historial />}
-                  {seccion === "contratistas" && <Contratistas />}
+                  {seccion === "contratistas" && <Contratistas actorRol={sesion.rol} />}
                   {seccion === "auditoria" && <Auditoria />}
                   {seccion === "empresas" && <Empresas />}
                   {seccion === "usuarios" && <Usuarios actorRol={sesion.rol} />}
