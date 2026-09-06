@@ -30,6 +30,7 @@ export interface Dispositivo {
   revoked_at: string | null;
   suspended_at: string | null;
   last_seen_at: string | null;
+  oculto_en_panel: boolean;
 }
 
 export interface DispositivoProvisionado {
@@ -85,9 +86,16 @@ export function suspenderDispositivo(dispositivoId: string, suspendido: boolean)
   return invocar("admin-suspend-device", { dispositivo_id: dispositivoId, suspendido });
 }
 
-/** Borrado definitivo (no revocación) -- falla con un mensaje claro si el
- * dispositivo ya generó historial real (ver admin-delete-device/index.ts).
- * Pensado para limpiar dispositivos de prueba que nunca sincronizaron nada. */
-export function eliminarDispositivo(dispositivoId: string): Promise<void> {
+/**
+ * Intenta un borrado definitivo. Si el dispositivo ya generó historial real
+ * (contratistas/ingresos/usuarios/gafetes con `dispositivo_origen_id`
+ * apuntando a él), Postgres rechaza el borrado -- en ese caso
+ * admin-delete-device no falla, lo marca `oculto_en_panel` y devuelve
+ * `borrado: false`, así igual desaparece de la lista sin perder su
+ * historial. Recuperar uno oculto es a propósito solo por SQL directo en
+ * Supabase (`update dispositivos set oculto_en_panel = false where ...`),
+ * no hay botón para eso en el panel.
+ */
+export function eliminarDispositivo(dispositivoId: string): Promise<{ borrado: boolean }> {
   return invocar("admin-delete-device", { dispositivo_id: dispositivoId });
 }

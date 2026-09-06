@@ -86,8 +86,14 @@ export default function Dispositivos() {
     return (sitioId: string) => mapa.get(sitioId) ?? "?";
   }, [sitios]);
 
+  // Los ocultos (ver alEliminar) no se muestran nunca desde acá a
+  // propósito -- recuperar uno es por SQL directo en Supabase, no hay
+  // botón para eso en el panel.
   const filas: FilaDispositivo[] = useMemo(
-    () => dispositivos.map((d) => ({ ...d, sitio_nombre: nombrePorSitio(d.sitio_id) })),
+    () =>
+      dispositivos
+        .filter((d) => !d.oculto_en_panel)
+        .map((d) => ({ ...d, sitio_nombre: nombrePorSitio(d.sitio_id) })),
     [dispositivos, nombrePorSitio],
   );
 
@@ -161,53 +167,65 @@ export default function Dispositivos() {
     }
   }
 
-  async function alEliminar(fila: FilaDispositivo) {
-    if (
-      !confirm(
-        `¿Borrar "${fila.etiqueta}" del todo? A diferencia de Revocar, esto no se puede deshacer.`,
-      )
-    )
-      return;
-    try {
-      await eliminarDispositivo(fila.id);
-      toast.success(`${fila.etiqueta} borrado.`);
-      recargar();
-    } catch (error) {
-      toast.error(String(error));
-    }
-  }
+  const alEliminar = useCallback(
+    async (fila: FilaDispositivo) => {
+      if (!confirm(`¿Borrar "${fila.etiqueta}" de la lista? Esto no se puede deshacer.`)) return;
+      try {
+        const { borrado } = await eliminarDispositivo(fila.id);
+        toast.success(
+          borrado
+            ? `${fila.etiqueta} borrado.`
+            : `${fila.etiqueta} ya tiene historial y no se puede borrar del todo -- se ocultó de la lista.`,
+        );
+        recargar();
+      } catch (error) {
+        toast.error(String(error));
+      }
+    },
+    [recargar],
+  );
 
-  async function alRevocar(fila: FilaDispositivo) {
-    if (!confirm(`¿Revocar "${fila.etiqueta}"? Ese dispositivo va a dejar de poder sincronizar.`)) return;
-    try {
-      await revocarDispositivo(fila.id);
-      toast.success(`${fila.etiqueta} revocado.`);
-      recargar();
-    } catch (error) {
-      toast.error(String(error));
-    }
-  }
+  const alRevocar = useCallback(
+    async (fila: FilaDispositivo) => {
+      if (!confirm(`¿Revocar "${fila.etiqueta}"? Ese dispositivo va a dejar de poder sincronizar.`)) return;
+      try {
+        await revocarDispositivo(fila.id);
+        toast.success(`${fila.etiqueta} revocado.`);
+        recargar();
+      } catch (error) {
+        toast.error(String(error));
+      }
+    },
+    [recargar],
+  );
 
-  async function alSuspender(fila: FilaDispositivo) {
-    if (!confirm(`¿Suspender "${fila.etiqueta}"? Va a dejar de poder sincronizar hasta que lo reactivés.`)) return;
-    try {
-      await suspenderDispositivo(fila.id, true);
-      toast.success(`${fila.etiqueta} suspendido.`);
-      recargar();
-    } catch (error) {
-      toast.error(String(error));
-    }
-  }
+  const alSuspender = useCallback(
+    async (fila: FilaDispositivo) => {
+      if (!confirm(`¿Suspender "${fila.etiqueta}"? Va a dejar de poder sincronizar hasta que lo reactivés.`))
+        return;
+      try {
+        await suspenderDispositivo(fila.id, true);
+        toast.success(`${fila.etiqueta} suspendido.`);
+        recargar();
+      } catch (error) {
+        toast.error(String(error));
+      }
+    },
+    [recargar],
+  );
 
-  async function alReactivar(fila: FilaDispositivo) {
-    try {
-      await suspenderDispositivo(fila.id, false);
-      toast.success(`${fila.etiqueta} reactivado.`);
-      recargar();
-    } catch (error) {
-      toast.error(String(error));
-    }
-  }
+  const alReactivar = useCallback(
+    async (fila: FilaDispositivo) => {
+      try {
+        await suspenderDispositivo(fila.id, false);
+        toast.success(`${fila.etiqueta} reactivado.`);
+        recargar();
+      } catch (error) {
+        toast.error(String(error));
+      }
+    },
+    [recargar],
+  );
 
   async function copiarSecreto(secret: string) {
     try {
@@ -218,100 +236,105 @@ export default function Dispositivos() {
     }
   }
 
-  const columnas: ColDef<FilaDispositivo>[] = [
-    { field: "etiqueta", headerName: "Etiqueta", flex: 1.6, minWidth: 180, cellStyle: { textAlign: "left" } },
-    {
-      field: "tipo",
-      headerName: "Tipo",
-      flex: 1,
-      minWidth: 150,
-      valueFormatter: ({ value }) => ETIQUETAS_TIPO[value as TipoDispositivo],
-    },
-    { field: "sitio_nombre", headerName: "Unidad operativa", flex: 1.3, minWidth: 160 },
-    {
-      field: "created_at",
-      headerName: "Creado",
-      flex: 1.2,
-      minWidth: 160,
-      valueFormatter: ({ value }) => textoFechaHora(value),
-    },
-    {
-      field: "last_seen_at",
-      headerName: "Último uso",
-      flex: 1.2,
-      minWidth: 160,
-      valueFormatter: ({ value }) => (value ? textoFechaHora(value) : "Nunca"),
-    },
-    {
-      field: "revoked_at",
-      headerName: "Estado",
-      flex: 0.9,
-      minWidth: 110,
-      filter: false,
-      cellRenderer: ({ data }: { data: FilaDispositivo }) => {
-        const [texto, color] = data.revoked_at
-          ? ["Revocado", "var(--error)"]
-          : data.suspended_at
-            ? ["Suspendido", "var(--advertencia)"]
-            : ["Activo", "var(--exito)"];
-        return (
-          <span className="chip" style={{ ["--chip-color" as string]: color }}>
-            {texto}
-          </span>
-        );
+  const columnas: ColDef<FilaDispositivo>[] = useMemo(
+    () => [
+      { field: "etiqueta", headerName: "Etiqueta", flex: 1.6, minWidth: 180, cellStyle: { textAlign: "left" } },
+      {
+        field: "tipo",
+        headerName: "Tipo",
+        flex: 1,
+        minWidth: 150,
+        valueFormatter: ({ value }) => ETIQUETAS_TIPO[value as TipoDispositivo],
       },
-    },
-    {
-      colId: "acciones",
-      headerName: "",
-      flex: 1.8,
-      minWidth: 260,
-      sortable: false,
-      filter: false,
-      cellRenderer: ({ data }: { data: FilaDispositivo }) => (
-        <div style={{ display: "flex", gap: "0.4rem" }}>
-          {!data.revoked_at &&
-            (data.suspended_at ? (
+      { field: "sitio_nombre", headerName: "Unidad operativa", flex: 1.3, minWidth: 160 },
+      {
+        field: "created_at",
+        headerName: "Creado",
+        flex: 1.2,
+        minWidth: 160,
+        valueFormatter: ({ value }) => textoFechaHora(value),
+      },
+      {
+        field: "last_seen_at",
+        headerName: "Último uso",
+        flex: 1.2,
+        minWidth: 160,
+        valueFormatter: ({ value }) => (value ? textoFechaHora(value) : "Nunca"),
+      },
+      {
+        field: "revoked_at",
+        headerName: "Estado",
+        flex: 0.9,
+        minWidth: 110,
+        filter: false,
+        cellRenderer: ({ data }: { data: FilaDispositivo }) => {
+          const [texto, color] = data.revoked_at
+            ? ["Revocado", "var(--error)"]
+            : data.suspended_at
+              ? ["Suspendido", "var(--advertencia)"]
+              : ["Activo", "var(--exito)"];
+          return (
+            <span className="chip" style={{ ["--chip-color" as string]: color }}>
+              {texto}
+            </span>
+          );
+        },
+      },
+      {
+        colId: "acciones",
+        headerName: "Acción",
+        flex: 1.8,
+        minWidth: 260,
+        sortable: false,
+        filter: false,
+        cellRenderer: ({ data }: { data: FilaDispositivo }) => (
+          <div
+            style={{ display: "flex", gap: "0.4rem", justifyContent: "center", alignItems: "center", height: "100%" }}
+          >
+            {!data.revoked_at &&
+              (data.suspended_at ? (
+                <button
+                  type="button"
+                  className="boton"
+                  style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
+                  onClick={() => alReactivar(data)}
+                >
+                  Reactivar
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="boton"
+                  style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
+                  onClick={() => alSuspender(data)}
+                >
+                  Suspender
+                </button>
+              ))}
+            {!data.revoked_at && (
               <button
                 type="button"
                 className="boton"
                 style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
-                onClick={() => alReactivar(data)}
+                onClick={() => alRevocar(data)}
               >
-                Reactivar
+                Revocar
               </button>
-            ) : (
-              <button
-                type="button"
-                className="boton"
-                style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
-                onClick={() => alSuspender(data)}
-              >
-                Suspender
-              </button>
-            ))}
-          {!data.revoked_at && (
+            )}
             <button
               type="button"
               className="boton"
               style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
-              onClick={() => alRevocar(data)}
+              onClick={() => alEliminar(data)}
             >
-              Revocar
+              Eliminar
             </button>
-          )}
-          <button
-            type="button"
-            className="boton"
-            style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
-            onClick={() => alEliminar(data)}
-          >
-            Eliminar
-          </button>
-        </div>
-      ),
-    },
-  ];
+          </div>
+        ),
+      },
+    ],
+    [alReactivar, alSuspender, alRevocar, alEliminar],
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
