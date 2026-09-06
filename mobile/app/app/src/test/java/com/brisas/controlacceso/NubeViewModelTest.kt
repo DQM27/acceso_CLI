@@ -29,6 +29,13 @@ import uniffi.control_acceso_mobile.Nucleo
 @OptIn(ExperimentalCoroutinesApi::class)
 class NubeViewModelTest {
     private val dispatcher = StandardTestDispatcher()
+
+    /// Equivalente de prueba a `Settings.Secure.ANDROID_ID` -- ver
+    /// `MainActivity.onCreate`. Cualquier valor fijo sirve acá: estos tests
+    /// no verifican el cifrado en sí (eso ya lo cubre
+    /// `src/nube/credenciales.rs`), sólo que el secreto guardado se lee de
+    /// vuelta con el mismo identificador.
+    private val identificadorPrueba = "id-dispositivo-prueba"
     private lateinit var archivoDb: File
     private lateinit var directorioSecreto: File
     private lateinit var nucleo: Nucleo
@@ -55,7 +62,7 @@ class NubeViewModelTest {
     fun `sin secreto guardado actualizarEstadoSecreto devuelve false`() {
         nucleo = NucleoDePrueba.abrir(archivoDb, NucleoDePrueba.sqlUsuarioRoot())
         nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
-        val viewModel = NubeViewModel(nucleo, directorioSecreto.absolutePath, dispatcherIO = dispatcher)
+        val viewModel = NubeViewModel(nucleo, directorioSecreto.absolutePath, identificadorPrueba, dispatcherIO = dispatcher)
 
         viewModel.actualizarEstadoSecreto()
 
@@ -67,7 +74,7 @@ class NubeViewModelTest {
     fun `guardarSecreto como Root lo persiste y actualiza el estado`() {
         nucleo = NucleoDePrueba.abrir(archivoDb, NucleoDePrueba.sqlUsuarioRoot())
         nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
-        val viewModel = NubeViewModel(nucleo, directorioSecreto.absolutePath, dispatcherIO = dispatcher)
+        val viewModel = NubeViewModel(nucleo, directorioSecreto.absolutePath, identificadorPrueba, dispatcherIO = dispatcher)
 
         viewModel.guardarSecreto("secreto-de-prueba")
 
@@ -91,7 +98,7 @@ class NubeViewModelTest {
             """.trimIndent(),
         )
         nucleo.autenticar("888888888", NucleoDePrueba.CLAVE_PRUEBA, "")
-        val viewModel = NubeViewModel(nucleo, directorioSecreto.absolutePath, dispatcherIO = dispatcher)
+        val viewModel = NubeViewModel(nucleo, directorioSecreto.absolutePath, identificadorPrueba, dispatcherIO = dispatcher)
 
         viewModel.guardarSecreto("secreto-de-prueba")
 
@@ -103,7 +110,7 @@ class NubeViewModelTest {
     fun `sincronizar sin secreto guardado falla sin intentar red`() = runTest(dispatcher) {
         nucleo = NucleoDePrueba.abrir(archivoDb, NucleoDePrueba.sqlUsuarioRoot())
         nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
-        val viewModel = NubeViewModel(nucleo, directorioSecreto.absolutePath, dispatcherIO = dispatcher)
+        val viewModel = NubeViewModel(nucleo, directorioSecreto.absolutePath, identificadorPrueba, dispatcherIO = dispatcher)
 
         viewModel.sincronizar()
         advanceUntilIdle()
@@ -125,7 +132,7 @@ class NubeViewModelTest {
                 """.trimIndent(),
             )
             nucleo.autenticar("888888888", NucleoDePrueba.CLAVE_PRUEBA, "")
-            val viewModel = NubeViewModel(nucleo, directorioSecreto.absolutePath, dispatcherIO = dispatcher)
+            val viewModel = NubeViewModel(nucleo, directorioSecreto.absolutePath, identificadorPrueba, dispatcherIO = dispatcher)
 
             viewModel.sincronizar()
             advanceUntilIdle()
@@ -142,7 +149,7 @@ class NubeViewModelTest {
     @Test
     fun `sin sesion autenticada cualquier llamada falla`() {
         nucleo = NucleoDePrueba.abrir(archivoDb, NucleoDePrueba.sqlUsuarioRoot())
-        val viewModel = NubeViewModel(nucleo, directorioSecreto.absolutePath, dispatcherIO = dispatcher)
+        val viewModel = NubeViewModel(nucleo, directorioSecreto.absolutePath, identificadorPrueba, dispatcherIO = dispatcher)
 
         viewModel.actualizarEstadoSecreto()
 

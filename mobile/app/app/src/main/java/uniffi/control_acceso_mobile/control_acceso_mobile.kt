@@ -763,7 +763,7 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio(`ptr`: Long,`directorio`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_guardar_secreto_dispositivo(`ptr`: Long,`directorio`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_guardar_secreto_dispositivo(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_empresas(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -781,7 +781,7 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida(`ptr`: Long,`registroId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_secreto_dispositivo_guardado(`ptr`: Long,`directorio`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_secreto_dispositivo_guardado(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sesion_realtime_nube(`ptr`: Long,`directorio`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -906,7 +906,7 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
-    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() != 51641) {
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() != 38675) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas() != 3985) {
@@ -936,7 +936,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio() != 35345) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_guardar_secreto_dispositivo() != 47548) {
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_guardar_secreto_dispositivo() != 11890) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas() != 65509) {
@@ -963,7 +963,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida() != 34276) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_secreto_dispositivo_guardado() != 23136) {
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_secreto_dispositivo_guardado() != 12281) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube() != 41771) {
@@ -1403,10 +1403,15 @@ public interface NucleoInterface {
      * reintenta el login local una vez más. Sin esto, una reactivación
      * remota nunca se podía reflejar acá: el login fallaba en el
      * chequeo local ANTES de llegar a sincronizar nada.
-     * 2. **Baja**: tras un login local exitoso, intenta sincronizar
-     * completo para que una desactivación reciente en otro dispositivo
-     * se refleje antes de dejar entrar -- `sincronizar_con_nube` ya
-     * cierra la sesión sola si la encuentra.
+     * 2. **Baja**: tras un login local exitoso, confirma en vivo que la
+     * cédula sigue activa (`usuario_sigue_activo_remoto` -- una fila,
+     * una columna, no la sincronización completa que hacía esto antes:
+     * medida como la causa real del retraso de "un par de segundos"
+     * que se sentía al entrar). La sincronización completa (cola,
+     * catálogo, historial...) sigue disparándose, pero Kotlin la lanza
+     * aparte (ver `LoginViewModel.autenticar`) sin que este método la
+     * espere -- acá retener el candado durante una sincronización
+     * entera hubiera vuelto a sentirse lento.
      */
     fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String, `directorio`: kotlin.String): UsuarioSesion
     
@@ -1490,8 +1495,13 @@ public interface NucleoInterface {
      * `docs/plan-persistencia-nube.md`). `directorio` es el mismo que
      * Kotlin ya usa para ubicar la base `SQLite` -- Android no tiene
      * `%LOCALAPPDATA%`, así que acá no hay resolución automática de ruta.
+     * `identificador_dispositivo` es `Settings.Secure.ANDROID_ID` -- cifra
+     * el secreto en disco con una clave derivada de ese valor (ver
+     * `docs/plan-panel-administrativo-web.md`, "Protección del secreto del
+     * dispositivo en reposo"); copiar el archivo a otro teléfono descifra
+     * mal, no da un secreto usable.
      */
-    fun `guardarSecretoDispositivo`(`directorio`: kotlin.String, `secreto`: kotlin.String)
+    fun `guardarSecretoDispositivo`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String, `secreto`: kotlin.String)
     
     fun `listarEmpresas`(): List<Empresa>
     
@@ -1534,9 +1544,10 @@ public interface NucleoInterface {
     fun `registrarSalida`(`registroId`: kotlin.Long)
     
     /**
-     * No revela el secreto -- sólo si ya hay uno guardado.
+     * No revela el secreto -- sólo si ya hay uno guardado. Ver
+     * [`Nucleo::guardar_secreto_dispositivo`] sobre `identificador_dispositivo`.
      */
-    fun `secretoDispositivoGuardado`(`directorio`: kotlin.String): kotlin.Boolean
+    fun `secretoDispositivoGuardado`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): kotlin.Boolean
     
     /**
      * Devuelve lo mínimo para que Kotlin escuche Broadcast privado por
@@ -1680,10 +1691,15 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
      * reintenta el login local una vez más. Sin esto, una reactivación
      * remota nunca se podía reflejar acá: el login fallaba en el
      * chequeo local ANTES de llegar a sincronizar nada.
-     * 2. **Baja**: tras un login local exitoso, intenta sincronizar
-     * completo para que una desactivación reciente en otro dispositivo
-     * se refleje antes de dejar entrar -- `sincronizar_con_nube` ya
-     * cierra la sesión sola si la encuentra.
+     * 2. **Baja**: tras un login local exitoso, confirma en vivo que la
+     * cédula sigue activa (`usuario_sigue_activo_remoto` -- una fila,
+     * una columna, no la sincronización completa que hacía esto antes:
+     * medida como la causa real del retraso de "un par de segundos"
+     * que se sentía al entrar). La sincronización completa (cola,
+     * catálogo, historial...) sigue disparándose, pero Kotlin la lanza
+     * aparte (ver `LoginViewModel.autenticar`) sin que este método la
+     * espere -- acá retener el candado durante una sincronización
+     * entera hubiera vuelto a sentirse lento.
      */
     @Throws(NucleoException::class)override fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String, `directorio`: kotlin.String): UsuarioSesion {
             return FfiConverterTypeUsuarioSesion.lift(
@@ -1898,8 +1914,13 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
      * `docs/plan-persistencia-nube.md`). `directorio` es el mismo que
      * Kotlin ya usa para ubicar la base `SQLite` -- Android no tiene
      * `%LOCALAPPDATA%`, así que acá no hay resolución automática de ruta.
+     * `identificador_dispositivo` es `Settings.Secure.ANDROID_ID` -- cifra
+     * el secreto en disco con una clave derivada de ese valor (ver
+     * `docs/plan-panel-administrativo-web.md`, "Protección del secreto del
+     * dispositivo en reposo"); copiar el archivo a otro teléfono descifra
+     * mal, no da un secreto usable.
      */
-    @Throws(NucleoException::class)override fun `guardarSecretoDispositivo`(`directorio`: kotlin.String, `secreto`: kotlin.String)
+    @Throws(NucleoException::class)override fun `guardarSecretoDispositivo`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String, `secreto`: kotlin.String)
         = 
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
@@ -1907,6 +1928,7 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         it,
         
         FfiConverterString.lower(`directorio`),
+        FfiConverterString.lower(`identificadorDispositivo`),
         FfiConverterString.lower(`secreto`),_status)
 }
     }
@@ -2059,16 +2081,18 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * No revela el secreto -- sólo si ya hay uno guardado.
+     * No revela el secreto -- sólo si ya hay uno guardado. Ver
+     * [`Nucleo::guardar_secreto_dispositivo`] sobre `identificador_dispositivo`.
      */
-    @Throws(NucleoException::class)override fun `secretoDispositivoGuardado`(`directorio`: kotlin.String): kotlin.Boolean {
+    @Throws(NucleoException::class)override fun `secretoDispositivoGuardado`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_secreto_dispositivo_guardado(
         it,
         
-        FfiConverterString.lower(`directorio`),_status)
+        FfiConverterString.lower(`directorio`),
+        FfiConverterString.lower(`identificadorDispositivo`),_status)
 }
     }
     )
@@ -2658,7 +2682,7 @@ data class MovimientoHistorialSitio (
     var `motivoResultado`: kotlin.String?
     , 
     /**
-     * `"pc"`/`"movil"`, o `None` para filas sincronizadas antes de que
+     * `"pc"`/`"mobile"`, o `None` para filas sincronizadas antes de que
      * esto existiera (`database::schema`, migración 26) -- pedido del
      * usuario para diferenciar de un vistazo de qué dispositivo vino un
      * movimiento.

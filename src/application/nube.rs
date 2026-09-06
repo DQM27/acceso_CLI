@@ -154,33 +154,58 @@ pub struct SesionRealtimeNube {
 }
 
 impl AppCore {
+    /// `identificador_dispositivo` cifra el secreto en disco con una clave
+    /// derivada de ese identificador (ver `nube::credenciales`, "Protección
+    /// del secreto del dispositivo en reposo") -- escritorio pasa `None`
+    /// (resuelve el Machine GUID de Windows solo); móvil pasa
+    /// `Some(ANDROID_ID)`, el único identificador de dispositivo estable que
+    /// Android expone, porque a diferencia de escritorio no hay forma de
+    /// resolverlo desde este lado sin que Kotlin lo lea primero.
     pub fn guardar_secreto_dispositivo(
         &self,
         actor: &UsuarioSesion,
         directorio: Option<&Path>,
+        identificador_dispositivo: Option<&str>,
         secreto: &str,
     ) -> Result<(), GestionNubeError> {
         self.autorizar_gestion_nube(actor)?;
-        match directorio {
-            Some(directorio) => crate::nube::credenciales::guardar_secreto_en(directorio, secreto)?,
-            None => crate::nube::credenciales::guardar_secreto(secreto)?,
+        match (directorio, identificador_dispositivo) {
+            (Some(directorio), Some(identificador)) => {
+                crate::nube::credenciales::guardar_secreto_en_con_identificador(
+                    directorio,
+                    secreto,
+                    identificador,
+                )?;
+            }
+            (Some(directorio), None) => {
+                crate::nube::credenciales::guardar_secreto_en(directorio, secreto)?;
+            }
+            (None, _) => crate::nube::credenciales::guardar_secreto(secreto)?,
         }
         Ok(())
     }
 
     /// No revela el secreto ya guardado -- sólo si hay uno o no, para que
     /// la pantalla sepa si mostrar "pegá el secreto" o "dispositivo ya
-    /// configurado".
+    /// configurado". Ver [`Self::guardar_secreto_dispositivo`] sobre
+    /// `identificador_dispositivo`.
     pub fn secreto_dispositivo_guardado(
         &self,
         actor: &UsuarioSesion,
         directorio: Option<&Path>,
+        identificador_dispositivo: Option<&str>,
     ) -> Result<bool, GestionNubeError> {
         self.autorizar_gestion_nube(actor)?;
-        let guardado = directorio.map_or_else(
-            crate::nube::credenciales::cargar_secreto,
-            crate::nube::credenciales::cargar_secreto_en,
-        );
+        let guardado = match (directorio, identificador_dispositivo) {
+            (Some(directorio), Some(identificador)) => {
+                crate::nube::credenciales::cargar_secreto_en_con_identificador(
+                    directorio,
+                    identificador,
+                )
+            }
+            (Some(directorio), None) => crate::nube::credenciales::cargar_secreto_en(directorio),
+            (None, _) => crate::nube::credenciales::cargar_secreto(),
+        };
         Ok(guardado.is_some())
     }
 

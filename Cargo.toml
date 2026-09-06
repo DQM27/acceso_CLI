@@ -21,15 +21,19 @@ serde = ["dep:serde", "chrono/serde"]
 # reqwest en modo "blocking": el resto del crate es síncrono, evita meter
 # un runtime async (tokio) para esto solo.
 nube = ["dep:reqwest", "dep:serde_json", "serde"]
-# Cifra `dispositivo-nube.secret` en disco con una clave derivada del ID de
-# esta máquina (ver docs/plan-panel-administrativo-web.md, "Protección del
-# secreto del dispositivo en reposo") -- copiar el archivo a otra máquina
-# descifra mal, no da un secreto usable. Sólo escritorio la activa por ahora
-# (`desktop/src-tauri/Cargo.toml`): `machine-uid` resuelve el Machine GUID de
-# Windows vía el registro, algo que no tiene sentido (ni se probó) en el
-# target de Android de `mobile/rust-core` -- ese lado sigue en texto plano
-# hasta que se le sume su propio identificador (`ANDROID_ID`, pendiente).
-cifrado-secreto-dispositivo = ["dep:machine-uid", "dep:aes-gcm", "dep:sha2"]
+# Primitivas de cifrado de `dispositivo-nube.secret` en disco, parametrizadas
+# por un identificador de dispositivo que cada plataforma resuelve a su
+# manera (ver docs/plan-panel-administrativo-web.md, "Protección del secreto
+# del dispositivo en reposo") -- copiar el archivo a otro dispositivo
+# descifra mal, no da un secreto usable. `aes-gcm`/`sha2` son puro Rust, sin
+# código específico de SO -- compilan igual para el target Android de
+# `mobile/rust-core` (activa sólo esta parte: Kotlin le pasa `ANDROID_ID`).
+cifrado-secreto-dispositivo-portable = ["dep:aes-gcm", "dep:sha2"]
+# Además de lo anterior, resuelve el identificador de máquina solo (Machine
+# GUID de Windows vía el registro, crate `machine-uid`) -- sólo tiene sentido
+# en escritorio (`desktop/src-tauri/Cargo.toml`), por eso es un feature aparte
+# en vez de sumarlo directo al de arriba.
+cifrado-secreto-dispositivo = ["dep:machine-uid", "cifrado-secreto-dispositivo-portable"]
 
 [dependencies]
 chrono = "0.4.45"

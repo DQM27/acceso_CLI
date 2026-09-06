@@ -60,7 +60,13 @@ private sealed class Pantalla {
 }
 
 @Composable
-fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String, onCerrarSesion: () -> Unit) {
+fun PantallaPrincipal(
+    nucleo: Nucleo,
+    sesion: UsuarioSesion,
+    directorio: String,
+    identificadorDispositivo: String,
+    onCerrarSesion: () -> Unit,
+) {
     var pantalla by remember { mutableStateOf<Pantalla>(Pantalla.Principal) }
     var menuCreacionAbierto by remember { mutableStateOf(false) }
     var refrescarNube by remember { mutableIntStateOf(0) }
@@ -187,7 +193,14 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String,
                 when (pestana) {
                     0 -> PantallaActivos(nucleo, directorio, refrescarNube)
                     1 -> PantallaHistorial(nucleo, refrescarNube)
-                    else -> PantallaNube(nucleo, sesion, directorio, onSesionExpulsada = onCerrarSesion)
+                    else ->
+                        PantallaNube(
+                            nucleo,
+                            sesion,
+                            directorio,
+                            identificadorDispositivo,
+                            onSesionExpulsada = onCerrarSesion,
+                        )
                 }
             }
         }

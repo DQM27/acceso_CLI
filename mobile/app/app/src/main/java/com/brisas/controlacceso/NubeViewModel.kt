@@ -39,6 +39,9 @@ import uniffi.control_acceso_mobile.ResumenSincronizacion
 class NubeViewModel(
     private val nucleo: Nucleo,
     private val directorio: String,
+    // `Settings.Secure.ANDROID_ID` (resuelto en `MainActivity`) -- cifra el
+    // secreto de dispositivo en disco, ver `guardarSecreto` más abajo.
+    private val identificadorDispositivo: String,
     // Ver `PantallaPrincipal.kt` / `SincronizacionPeriodica` -- misma
     // reacción ante `sesionExpulsada` que el pulso periódico, para el botón
     // manual "Sincronizar" de esta pantalla.
@@ -61,7 +64,7 @@ class NubeViewModel(
     /// criterio que `LoginViewModel.autenticar`).
     fun actualizarEstadoSecreto() {
         try {
-            secretoGuardado = nucleo.secretoDispositivoGuardado(directorio)
+            secretoGuardado = nucleo.secretoDispositivoGuardado(directorio, identificadorDispositivo)
             error = null
         } catch (excepcion: NucleoException) {
             error = excepcion.message
@@ -74,7 +77,7 @@ class NubeViewModel(
     fun guardarSecreto(secreto: String) {
         error = null
         try {
-            nucleo.guardarSecretoDispositivo(directorio, secreto)
+            nucleo.guardarSecretoDispositivo(directorio, identificadorDispositivo, secreto)
             secretoGuardado = true
         } catch (excepcion: NucleoException) {
             error = excepcion.message
@@ -114,9 +117,10 @@ class NubeViewModel(
         fun factory(
             nucleo: Nucleo,
             directorio: String,
+            identificadorDispositivo: String,
             onSesionExpulsada: () -> Unit = {},
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { NubeViewModel(nucleo, directorio, onSesionExpulsada) }
+            initializer { NubeViewModel(nucleo, directorio, identificadorDispositivo, onSesionExpulsada) }
         }
     }
 }

@@ -673,10 +673,13 @@ impl Nucleo {
         // solo) tiene el mismo problema que se vio en escritorio: cada
         // autenticación contra la nube mide el desfase real y lo aplica acá
         // (ver `application::nube::AppCore::actualizar_desfase_reloj`).
-        let core = AppCore::abrir_con_reloj(&ruta_base_datos, std::sync::Arc::new(RelojCorregido::nuevo()))
-            .map_err(|origen| NucleoError::Apertura {
-                mensaje: origen.to_string(),
-            })?;
+        let core = AppCore::abrir_con_reloj(
+            &ruta_base_datos,
+            std::sync::Arc::new(RelojCorregido::nuevo()),
+        )
+        .map_err(|origen| NucleoError::Apertura {
+            mensaje: origen.to_string(),
+        })?;
         Ok(Self {
             core: Mutex::new(core),
             sesion: Mutex::new(None),
@@ -995,25 +998,39 @@ impl Nucleo {
     /// `docs/plan-persistencia-nube.md`). `directorio` es el mismo que
     /// Kotlin ya usa para ubicar la base `SQLite` -- Android no tiene
     /// `%LOCALAPPDATA%`, así que acá no hay resolución automática de ruta.
+    /// `identificador_dispositivo` es `Settings.Secure.ANDROID_ID` -- cifra
+    /// el secreto en disco con una clave derivada de ese valor (ver
+    /// `docs/plan-panel-administrativo-web.md`, "Protección del secreto del
+    /// dispositivo en reposo"); copiar el archivo a otro teléfono descifra
+    /// mal, no da un secreto usable.
     pub fn guardar_secreto_dispositivo(
         &self,
         directorio: String,
+        identificador_dispositivo: String,
         secreto: String,
     ) -> Result<(), NucleoError> {
         let actor = self.actor_autenticado()?;
         Ok(self.core_lock().guardar_secreto_dispositivo(
             &actor,
             Some(std::path::Path::new(&directorio)),
+            Some(&identificador_dispositivo),
             &secreto,
         )?)
     }
 
-    /// No revela el secreto -- sólo si ya hay uno guardado.
-    pub fn secreto_dispositivo_guardado(&self, directorio: String) -> Result<bool, NucleoError> {
+    /// No revela el secreto -- sólo si ya hay uno guardado. Ver
+    /// [`Nucleo::guardar_secreto_dispositivo`] sobre `identificador_dispositivo`.
+    pub fn secreto_dispositivo_guardado(
+        &self,
+        directorio: String,
+        identificador_dispositivo: String,
+    ) -> Result<bool, NucleoError> {
         let actor = self.actor_autenticado()?;
-        Ok(self
-            .core_lock()
-            .secreto_dispositivo_guardado(&actor, Some(std::path::Path::new(&directorio)))?)
+        Ok(self.core_lock().secreto_dispositivo_guardado(
+            &actor,
+            Some(std::path::Path::new(&directorio)),
+            Some(&identificador_dispositivo),
+        )?)
     }
 
     /// Autentica este dispositivo, drena la bandeja de salida pendiente y
@@ -1145,8 +1162,11 @@ mod tests {
         let ruta = archivo.path().to_str().unwrap().to_string();
         let nucleo = Nucleo::abrir(ruta).unwrap();
 
-        let resultado =
-            nucleo.autenticar("000000000".to_string(), "loquesea".to_string(), String::new());
+        let resultado = nucleo.autenticar(
+            "000000000".to_string(),
+            "loquesea".to_string(),
+            String::new(),
+        );
 
         assert!(matches!(resultado, Err(NucleoError::CredencialesInvalidas)));
     }
@@ -1188,7 +1208,11 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+            )
             .unwrap();
 
         let preparacion = nucleo.preparar_ingreso(1).unwrap();
@@ -1224,7 +1248,11 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+            )
             .unwrap();
         let registro = nucleo
             .registrar_ingreso(1, MedioIngreso::Caminando, None)
@@ -1274,7 +1302,11 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+            )
             .unwrap();
         nucleo
             .registrar_ingreso(1, MedioIngreso::Caminando, Some(7))
@@ -1319,7 +1351,11 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+            )
             .unwrap();
 
         let empresas = nucleo.listar_empresas().unwrap();
@@ -1364,7 +1400,11 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+            )
             .unwrap();
 
         let resultado = nucleo.crear_contratista(DatosContratista {
@@ -1398,7 +1438,11 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+            )
             .unwrap();
 
         let id = nucleo.crear_empresa("Empresa Nueva".to_string()).unwrap();
@@ -1432,7 +1476,11 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+            )
             .unwrap();
         nucleo
             .registrar_ingreso(1, MedioIngreso::Caminando, None)
@@ -1467,7 +1515,11 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+            )
             .unwrap();
 
         let id = nucleo
@@ -1486,7 +1538,11 @@ mod tests {
 
         nucleo.cerrar_sesion();
         nucleo
-            .autenticar("888888888".to_string(), "clave_prueba_123".to_string(), String::new())
+            .autenticar(
+                "888888888".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+            )
             .unwrap();
 
         let resultado = nucleo.listar_usuarios(String::new());

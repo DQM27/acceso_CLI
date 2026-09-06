@@ -47,10 +47,13 @@ fun PantallaNube(
     nucleo: Nucleo,
     sesion: UsuarioSesion,
     directorio: String,
+    identificadorDispositivo: String,
     onSesionExpulsada: () -> Unit = {},
 ) {
     val viewModel: NubeViewModel =
-        viewModel(factory = NubeViewModel.factory(nucleo, directorio, onSesionExpulsada))
+        viewModel(
+            factory = NubeViewModel.factory(nucleo, directorio, identificadorDispositivo, onSesionExpulsada),
+        )
     val esRoot = sesion.rol == RolUsuario.ROOT
 
     LaunchedEffect(Unit) {

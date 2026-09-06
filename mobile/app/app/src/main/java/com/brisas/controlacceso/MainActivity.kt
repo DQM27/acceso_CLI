@@ -1,6 +1,8 @@
 package com.brisas.controlacceso
 
+import android.annotation.SuppressLint
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
@@ -34,8 +36,23 @@ private val ANCHO_MAXIMO_CONTENIDO = 480.dp
 /// (`PantallaPrincipal.kt`) viven en sus propios archivos — este sólo
 /// arranca la Activity.
 class MainActivity : ComponentActivity() {
+    @SuppressLint("HardwareIds")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Identificador estable de este teléfono -- cifra el secreto de
+        // dispositivo en disco (ver NubeViewModel.guardarSecreto,
+        // docs/plan-panel-administrativo-web.md "Protección del secreto del
+        // dispositivo en reposo"), nunca viaja a la nube ni se muestra en
+        // ningún lado. `@SuppressLint("HardwareIds")`: el lint de Android
+        // marca cualquier lectura de ANDROID_ID por su potencial de
+        // fingerprinting entre apps -- acá no aplica, es puramente local y
+        // nunca sale de este dispositivo.
+        // `getString` es un tipo de plataforma (`String!`) -- en la práctica
+        // nunca es null desde API 26, pero el fallback a "" mantiene el tipo
+        // `String` sin un `!!` que podría tirar en el arranque por un caso
+        // límite de un fabricante raro.
+        val identificadorDispositivo =
+            Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: ""
         setContent {
             val archivoBaseDatos = File(filesDir, "control_acceso.db")
             // Prueba de campo puntual: si todavía no hay base local, arranca
@@ -67,7 +84,11 @@ class MainActivity : ComponentActivity() {
                 ) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                         Box(modifier = Modifier.widthIn(max = ANCHO_MAXIMO_CONTENIDO).fillMaxHeight()) {
-                            PantallaLogin(nucleo, directorio = filesDir.absolutePath)
+                            PantallaLogin(
+                                nucleo,
+                                directorio = filesDir.absolutePath,
+                                identificadorDispositivo = identificadorDispositivo,
+                            )
                         }
                     }
                 }
