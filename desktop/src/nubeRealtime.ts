@@ -111,6 +111,7 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
 
   async function conectar() {
     if (cancelado) return;
+    opciones.onEstado?.("CONNECTING");
     try {
       const sesion = await sesionRealtimeNube();
       if (cancelado) return;
@@ -154,6 +155,8 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
       const renovarEnSegundos = Math.max(60, sesion.expires_in - 60);
       temporizadorRenovar = window.setTimeout(reconectar, renovarEnSegundos * 1000);
     } catch (error) {
+      if (cancelado) return;
+      opciones.onEstado?.("CHANNEL_ERROR");
       console.info("Realtime de nube no quedó activo todavía:", error);
       reconectar();
     }

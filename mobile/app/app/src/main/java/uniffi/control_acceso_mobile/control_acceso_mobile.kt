@@ -689,9 +689,13 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_guardar_secreto_dispositivo(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_historial_sitio(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos(
     ): Int
@@ -753,9 +757,13 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_usuario(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio(`ptr`: Long,`directorio`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_guardar_secreto_dispositivo(`ptr`: Long,`directorio`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_empresas(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_historial_sitio(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_activos(`ptr`: Long,`texto`: RustBuffer.ByValue,`modo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -918,10 +926,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario() != 28771) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio() != 35345) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_guardar_secreto_dispositivo() != 47548) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas() != 65509) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_historial_sitio() != 22322) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos() != 52849) {
@@ -1423,6 +1437,17 @@ public interface NucleoInterface {
     fun `crearUsuario`(`datos`: DatosUsuario): kotlin.Long
     
     /**
+     * Chequeo en vivo (no la caché local) de si `gafete_numero` ya está
+     * activo en este sitio del lado de OTRO dispositivo -- llamar justo
+     * antes de `registrar_ingreso` cuando el ingreso lleva gafete. Cada
+     * dispositivo sólo valida el gafete contra su propia base `SQLite`,
+     * que nunca ve lo que hizo el otro hasta sincronizar, así que dos
+     * dispositivos del mismo sitio podían aceptar el mismo número como
+     * activo a la vez.
+     */
+    fun `gafeteOcupadoEnSitio`(`directorio`: kotlin.String, `gafeteNumero`: kotlin.Long): kotlin.Boolean
+    
+    /**
      * Guarda el secreto de este dispositivo, pegado desde el panel de
      * administración (mismo mecanismo que la GUI de escritorio, ver
      * `docs/plan-persistencia-nube.md`). `directorio` es el mismo que
@@ -1432,6 +1457,8 @@ public interface NucleoInterface {
     fun `guardarSecretoDispositivo`(`directorio`: kotlin.String, `secreto`: kotlin.String)
     
     fun `listarEmpresas`(): List<Empresa>
+    
+    fun `listarHistorialSitio`(`texto`: kotlin.String): List<MovimientoHistorialSitio>
     
     /**
      * Mismo criterio tacaño que `buscar_contratistas`: página acotada, no
@@ -1759,6 +1786,31 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Chequeo en vivo (no la caché local) de si `gafete_numero` ya está
+     * activo en este sitio del lado de OTRO dispositivo -- llamar justo
+     * antes de `registrar_ingreso` cuando el ingreso lleva gafete. Cada
+     * dispositivo sólo valida el gafete contra su propia base `SQLite`,
+     * que nunca ve lo que hizo el otro hasta sincronizar, así que dos
+     * dispositivos del mismo sitio podían aceptar el mismo número como
+     * activo a la vez.
+     */
+    @Throws(NucleoException::class)override fun `gafeteOcupadoEnSitio`(`directorio`: kotlin.String, `gafeteNumero`: kotlin.Long): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio(
+        it,
+        
+        FfiConverterString.lower(`directorio`),
+        FfiConverterLong.lower(`gafeteNumero`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Guarda el secreto de este dispositivo, pegado desde el panel de
      * administración (mismo mecanismo que la GUI de escritorio, ver
      * `docs/plan-persistencia-nube.md`). `directorio` es el mismo que
@@ -1787,6 +1839,21 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_empresas(
         it,
         _status)
+}
+    }
+    )
+    }
+    
+
+    
+    @Throws(NucleoException::class)override fun `listarHistorialSitio`(`texto`: kotlin.String): List<MovimientoHistorialSitio> {
+            return FfiConverterSequenceTypeMovimientoHistorialSitio.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_historial_sitio(
+        it,
+        
+        FfiConverterString.lower(`texto`),_status)
 }
     }
     )
@@ -2487,6 +2554,84 @@ public object FfiConverterTypeMovimientoHistorial: FfiConverterRustBuffer<Movimi
 
 
 
+data class MovimientoHistorialSitio (
+    var `uuid`: kotlin.String
+    , 
+    var `cedula`: kotlin.String?
+    , 
+    var `contratistaNombre`: kotlin.String
+    , 
+    var `empresaNombre`: kotlin.String?
+    , 
+    var `fechaHoraIngreso`: kotlin.String
+    , 
+    var `fechaHoraSalida`: kotlin.String?
+    , 
+    var `gafeteNumero`: kotlin.Long?
+    , 
+    var `usuarioIngresoNombre`: kotlin.String?
+    , 
+    var `usuarioSalidaNombre`: kotlin.String?
+    , 
+    var `motivoResultado`: kotlin.String?
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMovimientoHistorialSitio: FfiConverterRustBuffer<MovimientoHistorialSitio> {
+    override fun read(buf: ByteBuffer): MovimientoHistorialSitio {
+        return MovimientoHistorialSitio(
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalLong.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: MovimientoHistorialSitio) = (
+            FfiConverterString.allocationSize(value.`uuid`) +
+            FfiConverterOptionalString.allocationSize(value.`cedula`) +
+            FfiConverterString.allocationSize(value.`contratistaNombre`) +
+            FfiConverterOptionalString.allocationSize(value.`empresaNombre`) +
+            FfiConverterString.allocationSize(value.`fechaHoraIngreso`) +
+            FfiConverterOptionalString.allocationSize(value.`fechaHoraSalida`) +
+            FfiConverterOptionalLong.allocationSize(value.`gafeteNumero`) +
+            FfiConverterOptionalString.allocationSize(value.`usuarioIngresoNombre`) +
+            FfiConverterOptionalString.allocationSize(value.`usuarioSalidaNombre`) +
+            FfiConverterOptionalString.allocationSize(value.`motivoResultado`)
+    )
+
+    override fun write(value: MovimientoHistorialSitio, buf: ByteBuffer) {
+            FfiConverterString.write(value.`uuid`, buf)
+            FfiConverterOptionalString.write(value.`cedula`, buf)
+            FfiConverterString.write(value.`contratistaNombre`, buf)
+            FfiConverterOptionalString.write(value.`empresaNombre`, buf)
+            FfiConverterString.write(value.`fechaHoraIngreso`, buf)
+            FfiConverterOptionalString.write(value.`fechaHoraSalida`, buf)
+            FfiConverterOptionalLong.write(value.`gafeteNumero`, buf)
+            FfiConverterOptionalString.write(value.`usuarioIngresoNombre`, buf)
+            FfiConverterOptionalString.write(value.`usuarioSalidaNombre`, buf)
+            FfiConverterOptionalString.write(value.`motivoResultado`, buf)
+    }
+}
+
+
+
 /**
  * Espejo de `PreparacionIngreso` — vista previa antes de confirmar; no es
  * una autorización cacheada, `registrar_ingreso` vuelve a validar todo.
@@ -2618,6 +2763,10 @@ data class ResumenSincronizacion (
     , 
     var `contratistasRecibidos`: kotlin.UInt
     , 
+    var `gafetesRecibidos`: kotlin.UInt
+    , 
+    var `movimientosHistorialRecibidos`: kotlin.UInt
+    , 
     var `sitioId`: kotlin.String
     , 
     var `dispositivoId`: kotlin.String
@@ -2645,6 +2794,8 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
@@ -2658,6 +2809,8 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterUInt.allocationSize(value.`cierresRecibidos`) +
             FfiConverterUInt.allocationSize(value.`empresasRecibidas`) +
             FfiConverterUInt.allocationSize(value.`contratistasRecibidos`) +
+            FfiConverterUInt.allocationSize(value.`gafetesRecibidos`) +
+            FfiConverterUInt.allocationSize(value.`movimientosHistorialRecibidos`) +
             FfiConverterString.allocationSize(value.`sitioId`) +
             FfiConverterString.allocationSize(value.`dispositivoId`) +
             FfiConverterString.allocationSize(value.`tipo`)
@@ -2670,6 +2823,8 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterUInt.write(value.`cierresRecibidos`, buf)
             FfiConverterUInt.write(value.`empresasRecibidas`, buf)
             FfiConverterUInt.write(value.`contratistasRecibidos`, buf)
+            FfiConverterUInt.write(value.`gafetesRecibidos`, buf)
+            FfiConverterUInt.write(value.`movimientosHistorialRecibidos`, buf)
             FfiConverterString.write(value.`sitioId`, buf)
             FfiConverterString.write(value.`dispositivoId`, buf)
             FfiConverterString.write(value.`tipo`, buf)
@@ -3549,6 +3704,34 @@ public object FfiConverterSequenceTypeMovimientoHistorial: FfiConverterRustBuffe
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMovimientoHistorial.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeMovimientoHistorialSitio: FfiConverterRustBuffer<List<MovimientoHistorialSitio>> {
+    override fun read(buf: ByteBuffer): List<MovimientoHistorialSitio> {
+        val len = buf.getInt()
+        return List<MovimientoHistorialSitio>(len) {
+            FfiConverterTypeMovimientoHistorialSitio.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<MovimientoHistorialSitio>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeMovimientoHistorialSitio.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<MovimientoHistorialSitio>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeMovimientoHistorialSitio.write(it, buf)
         }
     }
 }

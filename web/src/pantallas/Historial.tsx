@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { FileSpreadsheet, FileText } from "lucide-react";
-import * as XLSX from "xlsx";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
@@ -258,7 +257,7 @@ export default function Historial() {
     return visibles;
   }
 
-  function exportarAExcel() {
+  async function exportarAExcel() {
     const visibles = filasParaExportar();
     if (!visibles) return;
     const definiciones = definicionesVisibles();
@@ -267,12 +266,17 @@ export default function Historial() {
       return;
     }
 
-    const encabezados = definiciones.map((d) => d.etiqueta);
-    const filasHoja = visibles.map((fila) => definiciones.map((d) => d.valor(fila)));
-    const hoja = XLSX.utils.aoa_to_sheet([encabezados, ...filasHoja]);
-    const libro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(libro, hoja, "Historial");
-    XLSX.writeFile(libro, "historial.xlsx");
+    try {
+      const XLSX = await import("xlsx");
+      const encabezados = definiciones.map((d) => d.etiqueta);
+      const filasHoja = visibles.map((fila) => definiciones.map((d) => d.valor(fila)));
+      const hoja = XLSX.utils.aoa_to_sheet([encabezados, ...filasHoja]);
+      const libro = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(libro, hoja, "Historial");
+      XLSX.writeFile(libro, "historial.xlsx");
+    } catch (error) {
+      toast.error(`No se pudo exportar a Excel: ${String(error)}`);
+    }
   }
 
   /** Mismo mecanismo que la exportación de escritorio (WebView2

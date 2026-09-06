@@ -37,6 +37,12 @@ import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.PreparacionIngreso
 import uniffi.control_acceso_mobile.ResultadoAcceso
 
+/// El gafete ya está activo en este sitio del lado de otro dispositivo
+/// (`Nucleo.gafeteOcupadoEnSitio`) -- distinto de [NucleoException] porque
+/// esto nunca llega a tocar `registrar_ingreso` en Rust, se corta acá mismo.
+class GafeteOcupadoEnSitioException(numero: Long) :
+    Exception("El gafete $numero ya está en uso en otro dispositivo del sitio")
+
 /// Misma decisión que `desktop/src/api/ingresos.ts` (puedeContinuar /
 /// mensajeBloqueo): `preparar_ingreso` no rechaza estos casos, ya vienen
 /// calculados por Rust (`verificar_acceso`) — esto solo lee el resultado.
@@ -88,6 +94,7 @@ fun mensajeMotivoDenegacion(motivo: MotivoDenegacion): String =
 @Composable
 fun PantallaConfirmarIngreso(
     nucleo: Nucleo,
+    directorio: String,
     preparacion: PreparacionIngreso,
     onRegistrado: () -> Unit,
     onCambiar: () -> Unit,
@@ -188,9 +195,19 @@ fun PantallaConfirmarIngreso(
                 alcance.launch {
                     try {
                         withContext(Dispatchers.Default) {
+                            // Chequeo en vivo: dos dispositivos del mismo sitio
+                            // sólo validan el gafete contra su propia base local,
+                            // así que sin esto ambos podían aceptar el mismo
+                            // número como activo a la vez (ver
+                            // `Nucleo.gafeteOcupadoEnSitio`).
+                            if (gafete != null && nucleo.gafeteOcupadoEnSitio(directorio, gafete)) {
+                                throw GafeteOcupadoEnSitioException(gafete)
+                            }
                             nucleo.registrarIngreso(preparacion.contratistaId, medio, gafete)
                         }
                         onRegistrado()
+                    } catch (excepcion: GafeteOcupadoEnSitioException) {
+                        error = excepcion.message
                     } catch (excepcion: NucleoException) {
                         error = excepcion.message
                     } finally {

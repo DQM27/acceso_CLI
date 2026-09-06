@@ -13,14 +13,38 @@ import { RefreshCw } from "lucide-react";
  * pulso periódico de respaldo.
  */
 export default function BarraNube({
+  estado,
   sincronizando,
   onSincronizar,
 }: {
+  estado: string;
   sincronizando: boolean;
   onSincronizar: () => void;
 }) {
+  const conectado = estado === "SUBSCRIBED";
+  const textoConexion = conectado
+    ? "Nube conectada"
+    : estado === "CONNECTING"
+      ? "Conectando a la nube…"
+      : "Sin conexión en vivo";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+      <span
+        role="status"
+        title="Estado del canal de avisos en vivo; la sincronización también se intenta periódicamente."
+        style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
+      >
+        <span
+          aria-hidden="true"
+          style={{
+            width: "0.5rem",
+            height: "0.5rem",
+            borderRadius: "50%",
+            background: conectado ? "var(--exito)" : "var(--muted)",
+          }}
+        />
+        {textoConexion}
+      </span>
       <button
         type="button"
         className="barra-estado-boton"

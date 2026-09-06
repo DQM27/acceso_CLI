@@ -1,20 +1,22 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Toaster, toast } from "sonner";
 import { CheckCircle2, History, IdCard, Loader2, Menu, ShieldCheck, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
 import Login from "./pantallas/Login";
-import Dispositivos from "./pantallas/Dispositivos";
-import Historial from "./pantallas/Historial";
-import Contratistas from "./pantallas/Contratistas";
-import Operadores from "./pantallas/Operadores";
-import Administradores from "./pantallas/Administradores";
 import { borrarAccionPendiente, leerAccionPendienteVigente } from "./componentes/accionesPendientes";
 import { agregarAdministrador, eliminarAdministrador } from "./api/administradores";
 import type { UsuarioSesion } from "./api";
 import { AuthProvider, useAuth } from "./contexto/AuthContexto";
 import { SesionProvider } from "./contexto/SesionContexto";
+
+// Descargar cada pantalla cuando el usuario entra a su sección.
+const Dispositivos = lazy(() => import("./pantallas/Dispositivos"));
+const Historial = lazy(() => import("./pantallas/Historial"));
+const Contratistas = lazy(() => import("./pantallas/Contratistas"));
+const Operadores = lazy(() => import("./pantallas/Operadores"));
+const Administradores = lazy(() => import("./pantallas/Administradores"));
 
 export type Seccion = "dispositivos" | "historial" | "contratistas" | "operadores" | "administradores";
 
@@ -207,28 +209,30 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
             >
               <Menu size={20} strokeWidth={2} aria-hidden="true" />
             </button>
-            {seccion === "dispositivos" ? (
-              <Dispositivos />
-            ) : seccion === "administradores" ? (
-              <Administradores sesion={sesion} />
-            ) : seccion === "historial" ? (
-              <Historial />
-            ) : seccion === "contratistas" ? (
-              <Contratistas />
-            ) : seccion === "operadores" ? (
-              <Operadores />
-            ) : (
-              <div className="pantalla-cuerpo">
-                <div className="tarjeta" style={{ padding: "1.5rem" }}>
-                  <h2 style={{ margin: "0 0 0.5rem", color: "var(--acento)" }}>
-                    {SECCIONES.find((s) => s.id === seccion)?.etiqueta}
-                  </h2>
-                  <p style={{ margin: 0, color: "var(--muted)" }}>
-                    Login conectado — falta esta pantalla de verdad.
-                  </p>
+            <Suspense fallback={<div className="pantalla-cuerpo" role="status">Cargando pantalla…</div>}>
+              {seccion === "dispositivos" ? (
+                <Dispositivos />
+              ) : seccion === "administradores" ? (
+                <Administradores sesion={sesion} />
+              ) : seccion === "historial" ? (
+                <Historial />
+              ) : seccion === "contratistas" ? (
+                <Contratistas />
+              ) : seccion === "operadores" ? (
+                <Operadores />
+              ) : (
+                <div className="pantalla-cuerpo">
+                  <div className="tarjeta" style={{ padding: "1.5rem" }}>
+                    <h2 style={{ margin: "0 0 0.5rem", color: "var(--acento)" }}>
+                      {SECCIONES.find((s) => s.id === seccion)?.etiqueta}
+                    </h2>
+                    <p style={{ margin: 0, color: "var(--muted)" }}>
+                      Login conectado — falta esta pantalla de verdad.
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </Suspense>
           </main>
         </div>
 

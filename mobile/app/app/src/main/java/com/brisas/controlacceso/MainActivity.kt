@@ -37,7 +37,19 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            val rutaBaseDatos = File(filesDir, "control_acceso.db").absolutePath
+            val archivoBaseDatos = File(filesDir, "control_acceso.db")
+            // Prueba de campo puntual: si todavía no hay base local, arranca
+            // con `assets/semilla.db` (un usuario ROOT ya cargado) en vez de
+            // la base vacía de siempre -- evita depender de `adb`/USB, que
+            // este teléfono no permitió. Sólo copia una vez: si ya existe
+            // `control_acceso.db` (segundo arranque en adelante, o cualquier
+            // instalación futura sin este atajo) no la toca.
+            if (!archivoBaseDatos.exists()) {
+                assets.open("semilla.db").use { entrada ->
+                    archivoBaseDatos.outputStream().use { salida -> entrada.copyTo(salida) }
+                }
+            }
+            val rutaBaseDatos = archivoBaseDatos.absolutePath
             val nucleo = remember { Nucleo.abrir(rutaBaseDatos) }
             TemaBrisas {
                 // `targetSdk` 36 (Android 15+) obliga a la app a dibujar

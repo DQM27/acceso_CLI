@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import uniffi.control_acceso_mobile.ContratistaResumen
 import uniffi.control_acceso_mobile.IngresoActivoResumen
+import uniffi.control_acceso_mobile.IngresoRemoto
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.ResultadoAcceso
 import uniffi.control_acceso_mobile.TipoIngreso
@@ -69,8 +70,8 @@ import uniffi.control_acceso_mobile.TipoIngreso
 /// más abajo) a funciones chicas de una sola responsabilidad cada una, en
 /// vez de tener los tres modos mezclados en un único bloque `if`/`else`.
 @Composable
-fun PantallaActivos(nucleo: Nucleo, refrescarNube: Int = 0) {
-    val viewModel: ActivosViewModel = viewModel(factory = ActivosViewModel.factory(nucleo))
+fun PantallaActivos(nucleo: Nucleo, directorio: String, refrescarNube: Int = 0) {
+    val viewModel: ActivosViewModel = viewModel(factory = ActivosViewModel.factory(nucleo, directorio))
     LaunchedEffect(refrescarNube) {
         if (refrescarNube > 0) {
             viewModel.refrescar()
@@ -81,6 +82,7 @@ fun PantallaActivos(nucleo: Nucleo, refrescarNube: Int = 0) {
         is SeleccionIngreso.Formulario -> {
             PantallaConfirmarIngreso(
                 nucleo = nucleo,
+                directorio = directorio,
                 preparacion = actual.preparacion,
                 onRegistrado = { viewModel.onIngresoRegistrado() },
                 onCambiar = { viewModel.cancelarSeleccionIngreso() },
@@ -145,7 +147,7 @@ fun PantallaActivos(nucleo: Nucleo, refrescarNube: Int = 0) {
     }
 
     DialogoConfirmarSalida(
-        activo = viewModel.seleccionSalida,
+        fila = viewModel.seleccionSalida,
         onDismiss = { viewModel.elegirSeleccionSalida(null) },
         onConfirmar = { viewModel.confirmarSalida(it) },
     )
@@ -229,7 +231,7 @@ private fun CampoBusquedaActivos(modo: ModoBusqueda, texto: String, onCambiarTex
 }
 
 @Composable
-private fun LeyendaBusqueda(modo: ModoBusqueda, texto: String, activos: List<IngresoActivoResumen>) {
+private fun LeyendaBusqueda(modo: ModoBusqueda, texto: String, activos: List<FilaActiva>) {
     val leyenda = when {
         texto.isBlank() && modo == ModoBusqueda.ENTRADA ->
             if (activos.isEmpty()) {
@@ -277,10 +279,10 @@ private fun MensajesEstado(error: String?, mensaje: String?, mensajeEsError: Boo
 @Composable
 private fun ContenidoModoEntrada(
     texto: String,
-    activos: List<IngresoActivoResumen>,
+    activos: List<FilaActiva>,
     resultadosBusqueda: List<ContratistaResumen>,
     verificando: Boolean,
-    onElegirActivo: (IngresoActivoResumen) -> Unit,
+    onElegirActivo: (FilaActiva) -> Unit,
     onElegirContratista: (ContratistaResumen) -> Unit,
 ) {
     if (texto.isBlank()) {
@@ -306,7 +308,7 @@ private fun ContenidoModoEntrada(
 /// buscador para acotar, no una lista para recorrer (esa es el modo
 /// Entrada). Ver el doc-comment de [PantallaActivos].
 @Composable
-private fun ContenidoModoSalidaNombre(activos: List<IngresoActivoResumen>, onElegirActivo: (IngresoActivoResumen) -> Unit) {
+private fun ContenidoModoSalidaNombre(activos: List<FilaActiva>, onElegirActivo: (FilaActiva) -> Unit) {
     ListaActivos(activos, onClick = onElegirActivo)
 }
 
@@ -366,10 +368,18 @@ private fun ContenidoModoSalidaGafete(
 /// nombre — mismas filas, mismo comportamiento, sólo cambia qué hace
 /// `onClick` según quién la use.
 @Composable
-private fun ListaActivos(activos: List<IngresoActivoResumen>, onClick: (IngresoActivoResumen) -> Unit) {
+private fun ListaActivos(activos: List<FilaActiva>, onClick: (FilaActiva) -> Unit) {
     LazyColumn(modifier = Modifier.padding(top = 8.dp)) {
-        items(activos, key = { it.registroId }) { activo ->
-            FilaActivo(activo, onClick = { onClick(activo) })
+        items(
+            activos,
+            key = { fila ->
+                when (fila) {
+                    is FilaActiva.Local -> "local-${fila.activo.registroId}"
+                    is FilaActiva.Remota -> "remota-${fila.remoto.uuid}"
+                }
+            },
+        ) { fila ->
+            FilaActivo(fila, onClick = { onClick(fila) })
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
         }
     }
@@ -377,20 +387,25 @@ private fun ListaActivos(activos: List<IngresoActivoResumen>, onClick: (IngresoA
 
 @Composable
 private fun DialogoConfirmarSalida(
-    activo: IngresoActivoResumen?,
+    fila: FilaActiva?,
     onDismiss: () -> Unit,
-    onConfirmar: (IngresoActivoResumen) -> Unit,
+    onConfirmar: (FilaActiva) -> Unit,
 ) {
-    if (activo == null) return
+    if (fila == null) return
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Registrar salida") },
         text = {
-            Text("${activo.contratistaNombre} · ${activo.cedula} · ${activo.empresaNombre}")
+            Text(
+                when (fila) {
+                    is FilaActiva.Local -> "${fila.activo.contratistaNombre} · ${fila.activo.cedula} · ${fila.activo.empresaNombre}"
+                    is FilaActiva.Remota -> "${fila.remoto.contratistaNombre} · registrado en otro dispositivo del sitio"
+                },
+            )
         },
         confirmButton = {
-            BotonDiscretoBrisas(onClick = { onConfirmar(activo) }) {
+            BotonDiscretoBrisas(onClick = { onConfirmar(fila) }) {
                 Text("Confirmar")
             }
         },
@@ -403,7 +418,15 @@ private fun DialogoConfirmarSalida(
 }
 
 @Composable
-private fun FilaActivo(activo: IngresoActivoResumen, onClick: () -> Unit) {
+private fun FilaActivo(fila: FilaActiva, onClick: () -> Unit) {
+    when (fila) {
+        is FilaActiva.Local -> FilaActivoLocal(fila.activo, onClick)
+        is FilaActiva.Remota -> FilaActivoRemota(fila.remoto, onClick)
+    }
+}
+
+@Composable
+private fun FilaActivoLocal(activo: IngresoActivoResumen, onClick: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -424,6 +447,31 @@ private fun FilaActivo(activo: IngresoActivoResumen, onClick: () -> Unit) {
             textoEstadoAcceso(activo.resultadoAcceso),
             style = MaterialTheme.typography.bodySmall,
             color = colorEstadoAcceso(activo.resultadoAcceso),
+        )
+    }
+}
+
+/// Ver el doc-comment de [FilaActiva] -- un ingreso abierto por el otro
+/// dispositivo del sitio, sin cédula/empresa/gafete propios (esos datos
+/// nunca viajan en la caché `ingresos_remotos`, sólo lo mínimo para
+/// mostrarlo y poder cerrarlo).
+@Composable
+private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(remoto.contratistaNombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        Text(
+            "Entrada ${textoFechaHora(remoto.horaEntrada)}" +
+                (remoto.usuarioEntradaNombre?.let { " ($it)" } ?: ""),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "Otro dispositivo",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
         )
     }
 }

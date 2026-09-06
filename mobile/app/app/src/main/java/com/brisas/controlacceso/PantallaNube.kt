@@ -2,22 +2,17 @@ package com.brisas.controlacceso
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,7 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import uniffi.control_acceso_mobile.IngresoRemoto
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.ResumenSincronizacion
 import uniffi.control_acceso_mobile.RolUsuario
@@ -35,23 +29,22 @@ import uniffi.control_acceso_mobile.UsuarioSesion
 
 /// Sincronización con la nube (ver docs/plan-persistencia-nube.md) — todo
 /// el estado y las llamadas a [Nucleo] viven en [NubeViewModel] (ver
-/// mobile/app/ARQUITECTURA.md), este Composable sólo dibuja.
+/// mobile/app/ARQUITECTURA.md), este Composable sólo dibuja. Los ingresos
+/// abiertos por el otro dispositivo del sitio NO se listan acá -- eso vive
+/// sólo en Activos (que ya los mezcla con los propios y permite cerrarlos
+/// ahí mismo, ver `ActivosViewModel.FilaActiva`); listarlos también acá era
+/// la misma información duplicada en dos pantallas.
 ///
 /// La sección de secreto del dispositivo sólo se dibuja para Root
 /// (`Operacion::GestionarNube` es exclusivo de Root del lado de Rust, ver
 /// `src/application/nube.rs`) — por eso `actualizarEstadoSecreto` sólo se
 /// dispara en `LaunchedEffect` cuando `esRoot`, igual que el propio
 /// [NubeViewModel] evita llamarlo desde `init` para no generar un error a
-/// un Operador que ni ve ese botón. `sincronizar`/`cerrarIngresoRemoto` sí
-/// están disponibles para cualquier rol, sin gateo acá.
+/// un Operador que ni ve ese botón. `sincronizar` sí está disponible para
+/// cualquier rol, sin gateo acá.
 @Composable
-fun PantallaNube(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String, refrescarNube: Int = 0) {
+fun PantallaNube(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String) {
     val viewModel: NubeViewModel = viewModel(factory = NubeViewModel.factory(nucleo, directorio))
-    LaunchedEffect(refrescarNube) {
-        if (refrescarNube > 0) {
-            viewModel.refrescarCacheLocal()
-        }
-    }
     val esRoot = sesion.rol == RolUsuario.ROOT
 
     LaunchedEffect(Unit) {
@@ -87,13 +80,6 @@ fun PantallaNube(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String, refr
         val resumen = viewModel.ultimoResumen
         if (resumen != null) {
             TarjetaResumenSincronizacion(resumen, modifier = Modifier.padding(top = 16.dp))
-        }
-
-        LazyColumn(modifier = Modifier.padding(top = 12.dp)) {
-            items(viewModel.ingresosRemotos, key = { it.uuid }) { ingreso ->
-                FilaIngresoRemoto(ingreso, onCerrar = { viewModel.cerrarIngresoRemoto(ingreso.uuid) })
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-            }
         }
     }
 }
@@ -160,27 +146,6 @@ private fun TarjetaResumenSincronizacion(resumen: ResumenSincronizacion, modifie
                     "contratistas recibidos del catálogo del sitio",
                 style = MaterialTheme.typography.bodySmall,
             )
-        }
-    }
-}
-
-@Composable
-private fun FilaIngresoRemoto(ingreso: IngresoRemoto, onCerrar: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(ingreso.contratistaNombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-            Text(
-                "Entrada ${textoFechaHora(ingreso.horaEntrada)}" +
-                    (ingreso.usuarioEntradaNombre?.let { " ($it)" } ?: ""),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        OutlinedButton(onClick = onCerrar) {
-            Text("Cerrar")
         }
     }
 }

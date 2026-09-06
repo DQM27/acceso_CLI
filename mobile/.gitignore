@@ -24,3 +24,6 @@ app/keystore.properties
 # reales de contratistas (build puntual con la base embebida); nunca al
 # repo, se comparten aparte.
 dist/
+
+# Logs de builds puntuales, no fuente.
+build-verificacion.log

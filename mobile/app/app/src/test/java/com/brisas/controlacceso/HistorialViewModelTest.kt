@@ -39,12 +39,41 @@ class HistorialViewModelTest {
     @Test
     fun `base vacia no falla y no muestra movimientos`() = runTest(dispatcher) {
         nucleo = NucleoDePrueba.abrir(archivo, NucleoDePrueba.sqlUsuarioRoot())
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
         val viewModel = HistorialViewModel(nucleo, dispatcherIO = dispatcher)
 
         advanceUntilIdle()
 
         assertTrue(viewModel.movimientos.isEmpty())
         assertNull(viewModel.error)
+    }
+
+    @Test
+    fun `muestra el historial de otro dispositivo y filtra por cedula`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            NucleoDePrueba.sqlUsuarioRoot(),
+            """
+            INSERT INTO historial_sitio (uuid, sitio_id, contratista_cedula, contratista_nombre,
+                hora_entrada, hora_salida, gafete_numero, dispositivo_entrada_id, actualizado_en)
+            VALUES ('movimiento-remoto', 'sitio-prueba', '222222222', 'Persona de otro equipo',
+                strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-1 hour'),
+                strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 26, 'otro-equipo',
+                strftime('%Y-%m-%dT%H:%M:%SZ', 'now'));
+            """.trimIndent(),
+        )
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
+        val viewModel = HistorialViewModel(nucleo, dispatcherIO = dispatcher)
+        advanceUntilIdle()
+        assertNull(viewModel.error)
+        assertEquals("nube:movimiento-remoto", viewModel.movimientos.single().clave)
+        assertEquals(26L, viewModel.movimientos.single().gafeteNumero)
+        viewModel.cambiarTexto("222222222")
+        advanceUntilIdle()
+        assertEquals(1, viewModel.movimientos.size)
+        viewModel.cambiarTexto("No existe")
+        advanceUntilIdle()
+        assertTrue(viewModel.movimientos.isEmpty())
     }
 
     @Test

@@ -20,6 +20,67 @@ use crate::services::autenticacion_service::UsuarioSesion;
 
 use super::{AppCore, verificar_actor_activo};
 
+/// Movimiento del espejo de Supabase, sin inventar valores para datos antiguos ausentes.
+#[derive(Debug, Clone)]
+pub struct MovimientoHistorialSitio {
+    pub uuid: String,
+    pub cedula: Option<String>,
+    pub contratista_nombre: String,
+    pub empresa_nombre: Option<String>,
+    pub fecha_hora_ingreso: String,
+    pub fecha_hora_salida: Option<String>,
+    pub gafete_numero: Option<i64>,
+    pub usuario_ingreso_nombre: Option<String>,
+    pub usuario_salida_nombre: Option<String>,
+    pub motivo_resultado: Option<String>,
+}
+
+impl AppCore {
+    /// Lee el historial recibido del sitio con el mismo rango y búsqueda del móvil.
+    pub fn listar_historial_sitio(
+        &self,
+        actor: &UsuarioSesion,
+        desde: chrono::DateTime<chrono::Utc>,
+        hasta: chrono::DateTime<chrono::Utc>,
+        texto: &str,
+    ) -> Result<Vec<MovimientoHistorialSitio>, GestionNubeError> {
+        self.autorizar_uso_nube(actor)?;
+        let mut consulta = self.connection.prepare(
+            "SELECT uuid, contratista_cedula, contratista_nombre, empresa_nombre,
+                    hora_entrada, hora_salida, gafete_numero, usuario_entrada_nombre,
+                    usuario_salida_nombre, motivo_resultado
+             FROM historial_sitio
+             WHERE hora_entrada >= ?1 AND hora_entrada < ?2
+               AND (?3 = '' OR instr(lower(contratista_nombre), lower(?3)) > 0
+                    OR instr(contratista_cedula, ?3) > 0)
+             ORDER BY hora_entrada DESC, uuid LIMIT 30",
+        )?;
+        Ok(consulta
+            .query_map(
+                rusqlite::params![
+                    crate::tiempo::serializar_utc(desde),
+                    crate::tiempo::serializar_utc(hasta),
+                    texto.trim()
+                ],
+                |row| {
+                    Ok(MovimientoHistorialSitio {
+                        uuid: row.get(0)?,
+                        cedula: row.get(1)?,
+                        contratista_nombre: row.get(2)?,
+                        empresa_nombre: row.get(3)?,
+                        fecha_hora_ingreso: row.get(4)?,
+                        fecha_hora_salida: row.get(5)?,
+                        gafete_numero: row.get(6)?,
+                        usuario_ingreso_nombre: row.get(7)?,
+                        usuario_salida_nombre: row.get(8)?,
+                        motivo_resultado: row.get(9)?,
+                    })
+                },
+            )?
+            .collect::<Result<Vec<_>, _>>()?)
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum GestionNubeError {
     #[error("Sólo una sesión ROOT activa puede gestionar la nube")]
@@ -211,6 +272,46 @@ impl AppCore {
             })?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(filas)
+    }
+
+    /// Chequeo en vivo (no la caché local) de si `gafete_numero` ya está
+    /// activo en este sitio del lado de OTRO dispositivo -- ver
+    /// `nube::gafete_ocupado_en_otro_dispositivo`. Pensada para llamarse
+    /// justo antes de confirmar un ingreso nuevo con gafete: sin secreto
+    /// guardado (dispositivo sin nube configurada, o un sitio de un solo
+    /// dispositivo) no hay con quién chocar, así que no hace falta red --
+    /// se resuelve `Ok(false)` directo. Con nube configurada, en cambio,
+    /// esto exige estar en línea: si la consulta falla, el error se
+    /// propaga (`Autenticacion`/`Sincronizacion`) en vez de asumir que el
+    /// gafete está libre -- decisión explícita del usuario, prefiere
+    /// bloquear el ingreso a arriesgar el mismo número duplicado entre
+    /// dispositivos otra vez.
+    pub fn gafete_ocupado_en_sitio(
+        &self,
+        actor: &UsuarioSesion,
+        directorio: Option<&Path>,
+        gafete_numero: i64,
+    ) -> Result<bool, GestionNubeError> {
+        self.autorizar_uso_nube(actor)?;
+        let secreto = directorio.map_or_else(
+            crate::nube::credenciales::cargar_secreto,
+            crate::nube::credenciales::cargar_secreto_en,
+        );
+        let Some(secreto) = secreto else {
+            return Ok(false);
+        };
+        let token = crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, &secreto)?;
+        let contexto = crate::nube::ContextoSincronizacion {
+            base_url: crate::nube::BASE_URL,
+            apikey: crate::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        Ok(crate::nube::gafete_ocupado_en_otro_dispositivo(
+            &contexto,
+            gafete_numero,
+        )?)
     }
 
     /// Cierra, contra la nube, un ingreso abierto por el otro dispositivo

@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.ContratistaResumen
 import uniffi.control_acceso_mobile.IngresoActivoResumen
+import uniffi.control_acceso_mobile.IngresoRemoto
 import uniffi.control_acceso_mobile.ModoBusquedaActivos
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
@@ -54,6 +55,23 @@ enum class ModoBusqueda { ENTRADA, SALIDA_NOMBRE, SALIDA_GAFETE }
 /// `SalidaModal.tsx` en desktop.
 data class CoincidenciaGafete(val numero: Int, val activo: IngresoActivoResumen?)
 
+/// Fila local (este dispositivo) o remota (abierta por el otro dispositivo
+/// del mismo sitio, cacheada en `ingresos_remotos` -- nunca vive en el
+/// historial local) -- mismo espíritu que `FilaActiva` en Activos.tsx de
+/// desktop: una sola lista para las dos, la pantalla no necesita dos
+/// secciones separadas para poder cerrar cualquiera de las dos desde acá.
+sealed class FilaActiva {
+    abstract val contratistaNombre: String
+
+    data class Local(val activo: IngresoActivoResumen) : FilaActiva() {
+        override val contratistaNombre get() = activo.contratistaNombre
+    }
+
+    data class Remota(val remoto: IngresoRemoto) : FilaActiva() {
+        override val contratistaNombre get() = remoto.contratistaNombre
+    }
+}
+
 private const val MAX_LARGO_GAFETES = 60
 
 /// Espejo de `sanearGafetes` (desktop/src/api/ingresos.ts): sólo dígitos,
@@ -85,6 +103,9 @@ private fun gafetesDeTexto(texto: String): List<Int> =
 /// propaga sin envolver — es un bug, no un caso de negocio esperado.
 class ActivosViewModel(
     private val nucleo: Nucleo,
+    // Sólo hace falta para `cerrarIngresoRemoto` -- ver el mismo parámetro
+    // en NubeViewModel.
+    private val directorio: String,
     // Inyectable para poder correr los tests con un dispatcher de tiempo
     // controlado (StandardTestDispatcher) en vez de hilos reales — sin
     // esto los tests dependerían de una carrera real entre corrutinas,
@@ -96,7 +117,7 @@ class ActivosViewModel(
         private set
     var modo by mutableStateOf(ModoBusqueda.ENTRADA)
         private set
-    var activos by mutableStateOf<List<IngresoActivoResumen>>(emptyList())
+    var activos by mutableStateOf<List<FilaActiva>>(emptyList())
         private set
     var resultadosBusqueda by mutableStateOf<List<ContratistaResumen>>(emptyList())
         private set
@@ -115,7 +136,7 @@ class ActivosViewModel(
         private set
     var enviandoGafetes by mutableStateOf(false)
         private set
-    var seleccionSalida by mutableStateOf<IngresoActivoResumen?>(null)
+    var seleccionSalida by mutableStateOf<FilaActiva?>(null)
         private set
     var seleccionIngreso by mutableStateOf<SeleccionIngreso>(SeleccionIngreso.Ninguna)
         private set
@@ -153,6 +174,21 @@ class ActivosViewModel(
         buscar()
     }
 
+    /// `listarIngresosRemotos` no hace red -- lee la caché local que ya
+    /// llenó la última sincronización (manual o automática) -- pero sí
+    /// exige sesión autenticada, y explota (`NucleoException`) si todavía
+    /// no hay una (recién abierta la app, o la nube nunca se configuró en
+    /// este dispositivo). Ninguno de esos dos casos debe voltear la lista
+    /// de activos LOCALES ni ensuciar `error` -- son normales, no una
+    /// falla real: sin nube configurada, simplemente no hay nada remoto
+    /// que mostrar.
+    private suspend fun remotosSeguro(): List<IngresoRemoto> =
+        try {
+            withContext(dispatcherIO) { nucleo.listarIngresosRemotos() }
+        } catch (_: NucleoException) {
+            emptyList()
+        }
+
     private fun buscar() {
         trabajoBusqueda?.cancel()
         trabajoBusqueda = viewModelScope.launch {
@@ -160,9 +196,11 @@ class ActivosViewModel(
                 when (modo) {
                     ModoBusqueda.ENTRADA -> {
                         if (texto.isBlank()) {
-                            activos = withContext(dispatcherIO) {
+                            val locales = withContext(dispatcherIO) {
                                 nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA)
                             }
+                            val remotos = remotosSeguro()
+                            activos = locales.map { FilaActiva.Local(it) } + remotos.map { FilaActiva.Remota(it) }
                         } else {
                             resultadosBusqueda =
                                 withContext(dispatcherIO) { nucleo.buscarContratistas(texto) }
@@ -176,9 +214,12 @@ class ActivosViewModel(
                         activos = if (texto.isBlank()) {
                             emptyList()
                         } else {
-                            withContext(dispatcherIO) {
+                            val locales = withContext(dispatcherIO) {
                                 nucleo.listarIngresosActivos(texto, ModoBusquedaActivos.NOMBRE_CEDULA)
                             }
+                            val remotos = remotosSeguro()
+                                .filter { it.contratistaNombre.contains(texto, ignoreCase = true) }
+                            locales.map { FilaActiva.Local(it) } + remotos.map { FilaActiva.Remota(it) }
                         }
                     }
                     ModoBusqueda.SALIDA_GAFETE -> {
@@ -231,15 +272,24 @@ class ActivosViewModel(
         buscar()
     }
 
-    fun elegirSeleccionSalida(activo: IngresoActivoResumen?) {
-        seleccionSalida = activo
+    fun elegirSeleccionSalida(fila: FilaActiva?) {
+        seleccionSalida = fila
     }
 
-    fun confirmarSalida(activo: IngresoActivoResumen) {
+    /// Local: cierra en `registro_ingresos` (este dispositivo). Remota:
+    /// cierra directo contra la nube (`Nucleo.cerrarIngresoRemoto`) -- nunca
+    /// toca el historial local, esa fila no es -- ni fue -- de este
+    /// teléfono. Mismo criterio que `cerrarFila` en Activos.tsx de desktop.
+    fun confirmarSalida(fila: FilaActiva) {
         seleccionSalida = null
         viewModelScope.launch {
             try {
-                withContext(dispatcherIO) { nucleo.registrarSalida(activo.registroId) }
+                withContext(dispatcherIO) {
+                    when (fila) {
+                        is FilaActiva.Local -> nucleo.registrarSalida(fila.activo.registroId)
+                        is FilaActiva.Remota -> nucleo.cerrarIngresoRemoto(directorio, fila.remoto.uuid)
+                    }
+                }
                 CambiosNube.solicitar()
                 buscar()
             } catch (excepcion: NucleoException) {
@@ -283,8 +333,8 @@ class ActivosViewModel(
     }
 
     companion object {
-        fun factory(nucleo: Nucleo): ViewModelProvider.Factory = viewModelFactory {
-            initializer { ActivosViewModel(nucleo) }
+        fun factory(nucleo: Nucleo, directorio: String): ViewModelProvider.Factory = viewModelFactory {
+            initializer { ActivosViewModel(nucleo, directorio) }
         }
     }
 }

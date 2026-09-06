@@ -730,6 +730,39 @@ pub fn recibir_ingresos_abiertos(
 }
 
 #[derive(serde::Deserialize)]
+struct FilaGafeteOcupado {
+    #[allow(dead_code)]
+    id: String,
+}
+
+/// Consulta en vivo -- no la caché local `ingresos_remotos` (que sólo se
+/// refresca en cada sync y podría estar desactualizada por minutos) -- si
+/// `numero` ya tiene un ingreso abierto en este sitio, creado por *otro*
+/// dispositivo. Pensada para llamarse justo antes de confirmar un ingreso
+/// nuevo con gafete: dos dispositivos del mismo sitio comparten el mismo
+/// rango de gafetes físicos, pero cada uno valida contra su propia base
+/// `SQLite` (`idx_registro_ingresos_gafete_activo`), que nunca ve lo que
+/// hizo el otro hasta sincronizar -- de ahí que ambos pudieran aceptar el
+/// mismo número como activo a la vez. No reserva nada del lado del
+/// receptor: sigue existiendo una ventana muy angosta entre esta consulta
+/// y que el ingreso realmente se drene a la cola de salida (ver
+/// `drenar_cola`), pero cierra el caso normal (no perfectamente
+/// simultáneo) que sí se pudo reproducir.
+pub fn gafete_ocupado_en_otro_dispositivo(
+    contexto: &ContextoSincronizacion<'_>,
+    numero: i64,
+) -> Result<bool, SincronizacionError> {
+    let cliente = reqwest::blocking::Client::new();
+    let url = format!(
+        "{}/rest/v1/ingresos?sitio_id=eq.{}&dispositivo_entrada_id=neq.{}&hora_salida=is.null\
+         &gafete_numero=eq.{numero}&select=id&limit=1",
+        contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
+    );
+    let filas: Vec<FilaGafeteOcupado> = obtener_json(&cliente, contexto, &url)?;
+    Ok(!filas.is_empty())
+}
+
+#[derive(serde::Deserialize)]
 struct FilaHistorialRemota {
     id: String,
     contratista_cedula: Option<String>,
@@ -748,6 +781,7 @@ struct FilaHistorialRemota {
     empresa_activa_snapshot: Option<bool>,
     dispositivo_entrada_id: String,
     dispositivo_salida_id: Option<String>,
+    updated_at: String,
 }
 
 /// Trae a `historial_sitio` todo movimiento (abierto o cerrado) del sitio,
@@ -770,7 +804,6 @@ pub fn recibir_historial_del_sitio(
         [],
         |row| row.get(0),
     )?;
-    let marca_nueva = crate::tiempo::serializar_utc(chrono::Utc::now());
     let filtro_incremental = marca_anterior
         .as_deref()
         .map(|marca| format!("&updated_at=gt.{marca}"))
@@ -787,7 +820,7 @@ pub fn recibir_historial_del_sitio(
          &select=id,contratista_cedula,contratista_nombre,empresa_nombre,tipo_ingreso,\
          medio_ingreso,hora_entrada,hora_salida,gafete_numero,usuario_entrada_nombre,\
          usuario_salida_nombre,resultado_acceso,motivo_resultado,reglas_version,\
-         empresa_activa_snapshot,dispositivo_entrada_id,dispositivo_salida_id",
+         empresa_activa_snapshot,dispositivo_entrada_id,dispositivo_salida_id,updated_at",
         contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
     );
     let filas: Vec<FilaHistorialRemota> = obtener_json(&cliente, contexto, &url)?;
@@ -795,6 +828,20 @@ pub fn recibir_historial_del_sitio(
     let transaction = connection.unchecked_transaction()?;
     let mut recibidos = 0_u32;
     let ahora = crate::tiempo::serializar_utc(chrono::Utc::now());
+    // La marca de agua del próximo sync incremental es el `updated_at` más
+    // nuevo que realmente vino del servidor -- no el reloj de este
+    // dispositivo (como quedó mal en la primera versión): si el reloj local
+    // está apenas adelantado respecto al de Supabase, una marca tomada de
+    // `Utc::now()` queda "en el futuro" para el servidor y cualquier fila
+    // con `updated_at` real por debajo de esa marca deja de calificar en
+    // `WHERE updated_at > marca` para siempre -- el movimiento desaparece
+    // del historial de este dispositivo sin ningún error visible. Sin filas
+    // nuevas, la marca no avanza (se vuelve a pedir el mismo rango la
+    // próxima vez, que ya sabemos que no trae nada -- preferible a arriesgar
+    // perder una fila).
+    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_anterior
+        .as_deref()
+        .and_then(|marca| crate::tiempo::parsear_utc(marca).ok());
     for fila in &filas {
         let hora_entrada = crate::tiempo::parsear_utc(&fila.hora_entrada)
             .map(crate::tiempo::serializar_utc)
@@ -851,12 +898,20 @@ pub fn recibir_historial_del_sitio(
             ],
         )?;
         recibidos += 1;
+
+        let actualizado_en = crate::tiempo::parsear_utc(&fila.updated_at)
+            .map_err(|_| SincronizacionError::FechaInvalida(fila.updated_at.clone()))?;
+        if marca_mas_nueva.is_none_or(|marca| actualizado_en > marca) {
+            marca_mas_nueva = Some(actualizado_en);
+        }
     }
 
-    transaction.execute(
-        "UPDATE sincronizacion_estado SET historial_actualizado_hasta = ?1 WHERE id = 1",
-        params![marca_nueva],
-    )?;
+    if let Some(marca) = marca_mas_nueva {
+        transaction.execute(
+            "UPDATE sincronizacion_estado SET historial_actualizado_hasta = ?1 WHERE id = 1",
+            params![crate::tiempo::serializar_utc(marca)],
+        )?;
+    }
     transaction.commit()?;
     Ok(recibidos)
 }
@@ -990,6 +1045,9 @@ pub fn recibir_catalogo_del_sitio(
             contexto.base_url
         ),
     )?;
+    // El catálogo de gafetes es pequeño y se descarga completo: el cursor
+    // compartido puede ser anterior a la incorporación de gafetes al pull.
+    // También permite reintentar deudores que todavía no se pudieron resolver.
     // Con `sitio_id=eq...` a diferencia de las tres de arriba -- ver
     // comentario de `FilaGafeteRemota`.
     let gafetes: Vec<FilaGafeteRemota> = obtener_json(
@@ -997,7 +1055,7 @@ pub fn recibir_catalogo_del_sitio(
         contexto,
         &format!(
             "{}/rest/v1/gafetes?sitio_id=eq.{}&select=id,numero,estado,contratista_deudor_id,\
-             contratista_deudor_nombre{filtro_incremental}",
+             contratista_deudor_nombre",
             contexto.base_url, contexto.sitio_id
         ),
     )?;
@@ -1796,6 +1854,60 @@ mod tests {
     }
 
     #[test]
+    fn recibe_estado_de_gafete_desde_nube_aunque_el_cursor_local_ya_exista() {
+        let (connection, _) = conexion_con_contratista();
+        connection
+            .execute(
+                "INSERT INTO gafetes (numero, estado) VALUES (26, 'DISPONIBLE')",
+                [],
+            )
+            .unwrap();
+        connection.execute(
+            "UPDATE sincronizacion_estado SET catalogo_actualizado_hasta = '2099-01-01T00:00:00Z'", [],
+        ).unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            for paso in 0..4 {
+                let (mut socket, _) = listener.accept().unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                let mut pedido = Vec::new();
+                let mut buffer = [0; 4096];
+                while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                    let leidos = socket.read(&mut buffer).unwrap();
+                    assert!(leidos > 0);
+                    pedido.extend_from_slice(&buffer[..leidos]);
+                }
+                let cuerpo = if paso == 3 {
+                    let pedido = String::from_utf8(pedido).unwrap();
+                    assert!(pedido.contains("/gafetes?sitio_id=eq.sitio-1"));
+                    assert!(
+                        !pedido.contains("updated_at"),
+                        "el cursor no debe omitir gafetes antiguos"
+                    );
+                    r#"[{"id":"gafete-remoto","numero":26,"estado":"PERDIDO","contratista_deudor_id":"uuid-contratista","contratista_deudor_nombre":null}]"#
+                } else {
+                    "[]"
+                };
+                write!(socket, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}", cuerpo.len()).unwrap();
+            }
+        });
+        let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+        servidor.join().unwrap();
+        assert_eq!(resumen.gafetes_recibidos, 1);
+        let estado: (String, i64) = connection
+            .query_row(
+                "SELECT estado, contratista_deudor_id FROM gafetes WHERE numero=26",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(estado, ("PERDIDO".to_string(), 1));
+    }
+
+    #[test]
     fn recibe_catalogo_del_sitio_y_lo_guarda_local() {
         let connection = Connection::open_in_memory().unwrap();
         initialize_database(&connection).unwrap();
@@ -1808,6 +1920,7 @@ mod tests {
              \"empresa_nombre\":\"Empresa Remota\",\"activo\":true,\"tipo_ingreso\":\"SWAT\",\
              \"fecha_vencimiento_praind\":null,\"es_personal_ruta\":false}]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         ]);
 
         let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
@@ -1817,7 +1930,8 @@ mod tests {
             ResumenCatalogo {
                 empresas_recibidas: 1,
                 contratistas_recibidos: 1,
-                usuarios_recibidos: 0
+                usuarios_recibidos: 0,
+                gafetes_recibidos: 0,
             }
         );
         let (nombre_empresa, uuid_empresa): (String, Option<String>) = connection
@@ -1867,6 +1981,7 @@ mod tests {
              \"empresa_nombre\":\"Empresa Remota\",\"activo\":true,\"tipo_ingreso\":\"SWAT\",\
              \"fecha_vencimiento_praind\":null,\"es_personal_ruta\":false}]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         ]);
 
         recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
@@ -1912,6 +2027,7 @@ mod tests {
              \"identificacion\":null,\"empresa_id\":null,\"empresa_nombre\":null,\
              \"activo\":true,\"tipo_ingreso\":null,\"fecha_vencimiento_praind\":null,\
              \"es_personal_ruta\":null}]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         ]);
 

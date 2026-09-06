@@ -396,6 +396,37 @@ pub struct MovimientoHistorial {
     pub resultado_acceso: ResultadoIngresoRegistrado,
 }
 
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct MovimientoHistorialSitio {
+    pub uuid: String,
+    pub cedula: Option<String>,
+    pub contratista_nombre: String,
+    pub empresa_nombre: Option<String>,
+    pub fecha_hora_ingreso: String,
+    pub fecha_hora_salida: Option<String>,
+    pub gafete_numero: Option<i64>,
+    pub usuario_ingreso_nombre: Option<String>,
+    pub usuario_salida_nombre: Option<String>,
+    pub motivo_resultado: Option<String>,
+}
+
+impl From<control_acceso::application::MovimientoHistorialSitio> for MovimientoHistorialSitio {
+    fn from(m: control_acceso::application::MovimientoHistorialSitio) -> Self {
+        Self {
+            uuid: m.uuid,
+            cedula: m.cedula,
+            contratista_nombre: m.contratista_nombre,
+            empresa_nombre: m.empresa_nombre,
+            fecha_hora_ingreso: m.fecha_hora_ingreso,
+            fecha_hora_salida: m.fecha_hora_salida,
+            gafete_numero: m.gafete_numero,
+            usuario_ingreso_nombre: m.usuario_ingreso_nombre,
+            usuario_salida_nombre: m.usuario_salida_nombre,
+            motivo_resultado: m.motivo_resultado,
+        }
+    }
+}
+
 impl From<MovimientoIngresoResumenNucleo> for MovimientoHistorial {
     fn from(movimiento: MovimientoIngresoResumenNucleo) -> Self {
         Self {
@@ -819,6 +850,25 @@ impl Nucleo {
         Ok(pagina.items.into_iter().map(Into::into).collect())
     }
 
+    pub fn listar_historial_sitio(
+        &self,
+        texto: String,
+    ) -> Result<Vec<MovimientoHistorialSitio>, NucleoError> {
+        let actor = self.actor_autenticado()?;
+        let ahora = chrono::Utc::now();
+        Ok(self
+            .core_lock()
+            .listar_historial_sitio(
+                &actor,
+                ahora - chrono::Duration::days(180),
+                ahora + chrono::Duration::days(1),
+                &texto,
+            )?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
     /// Sólo Root/Administrador — ver el doc-comment de `UsuarioResumen`.
     pub fn listar_usuarios(&self, texto: String) -> Result<Vec<UsuarioResumen>, NucleoError> {
         let actor = self.actor_autenticado()?;
@@ -917,6 +967,26 @@ impl Nucleo {
             .into_iter()
             .map(Into::into)
             .collect())
+    }
+
+    /// Chequeo en vivo (no la caché local) de si `gafete_numero` ya está
+    /// activo en este sitio del lado de OTRO dispositivo -- llamar justo
+    /// antes de `registrar_ingreso` cuando el ingreso lleva gafete. Cada
+    /// dispositivo sólo valida el gafete contra su propia base `SQLite`,
+    /// que nunca ve lo que hizo el otro hasta sincronizar, así que dos
+    /// dispositivos del mismo sitio podían aceptar el mismo número como
+    /// activo a la vez.
+    pub fn gafete_ocupado_en_sitio(
+        &self,
+        directorio: String,
+        gafete_numero: i64,
+    ) -> Result<bool, NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self.core_lock().gafete_ocupado_en_sitio(
+            &actor,
+            Some(std::path::Path::new(&directorio)),
+            gafete_numero,
+        )?)
     }
 
     /// Cierra, contra la nube, un ingreso abierto por el otro dispositivo

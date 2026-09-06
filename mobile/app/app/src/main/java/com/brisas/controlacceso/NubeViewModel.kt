@@ -12,7 +12,6 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import uniffi.control_acceso_mobile.IngresoRemoto
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.ResumenSincronizacion
@@ -50,8 +49,6 @@ class NubeViewModel(
         private set
     var ultimoResumen by mutableStateOf<ResumenSincronizacion?>(null)
         private set
-    var ingresosRemotos by mutableStateOf<List<IngresoRemoto>>(emptyList())
-        private set
     var error by mutableStateOf<String?>(null)
         private set
 
@@ -85,48 +82,20 @@ class NubeViewModel(
     /// abierto ahora mismo. Es una llamada de red real (cientos de
     /// milisegundos o más, ver doc-comment de `sincronizar_con_nube` en
     /// `src/application/nube.rs`) — `sincronizando` es lo que la pantalla
-    /// usa para deshabilitar el botón mientras tanto.
+    /// usa para deshabilitar el botón mientras tanto. Los ingresos abiertos
+    /// por el otro dispositivo (`ingresos_remotos`, ya actualizada por esta
+    /// misma llamada) se leen y se cierran desde Activos, no desde acá --
+    /// ver `ActivosViewModel.FilaActiva`.
     fun sincronizar() {
         error = null
         sincronizando = true
         viewModelScope.launch {
             try {
                 ultimoResumen = withContext(dispatcherIO) { nucleo.sincronizarConNube(directorio) }
-                // La propia sincronización ya llenó la caché local
-                // ingresos_remotos — esta lectura es local, no vuelve a
-                // pegarle a la red (ver doc-comment de
-                // `listar_ingresos_remotos` en src/application/nube.rs).
-                ingresosRemotos = withContext(dispatcherIO) { nucleo.listarIngresosRemotos() }
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
             } finally {
                 sincronizando = false
-            }
-        }
-    }
-
-    fun refrescarCacheLocal() {
-        viewModelScope.launch {
-            try {
-                ingresosRemotos = withContext(dispatcherIO) { nucleo.listarIngresosRemotos() }
-                error = null
-            } catch (excepcion: NucleoException) {
-                error = excepcion.message
-            }
-        }
-    }
-
-    /// Cualquier rol — cierra, contra la nube, un ingreso que abrió el
-    /// otro dispositivo del sitio. Nunca toca el historial local de este
-    /// teléfono.
-    fun cerrarIngresoRemoto(uuid: String) {
-        error = null
-        viewModelScope.launch {
-            try {
-                withContext(dispatcherIO) { nucleo.cerrarIngresoRemoto(directorio, uuid) }
-                ingresosRemotos = withContext(dispatcherIO) { nucleo.listarIngresosRemotos() }
-            } catch (excepcion: NucleoException) {
-                error = excepcion.message
             }
         }
     }

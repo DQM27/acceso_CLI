@@ -1,5 +1,7 @@
 package com.brisas.controlacceso
 
+import android.util.Log
+
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.realtime.broadcastFlow
@@ -19,7 +21,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
 
@@ -71,12 +72,16 @@ class NubeRealtime(
         try {
             coroutineScope {
                 val avisos = canal.broadcastFlow<JsonObject>("cambio_nube")
-                    .onEach { payload ->
-                        if (payload["dispositivo_id"]?.jsonPrimitive?.content != sesion.dispositivoId) onCambio()
+                    .onEach {
+                        // El dispositivo del payload es el origen del registro, no
+                        // necesariamente quien lo modificó desde el panel web.
+                        Log.i("SincronizacionNube", "Aviso remoto recibido; solicitando descarga")
+                        onCambio()
                     }
                     .launchIn(this)
                 try {
                     canal.subscribe(blockUntilSubscribed = true)
+                    Log.i("SincronizacionNube", "Canal de avisos suscrito")
                     onCambio()
                     delay(milisegundosHastaRenovar(sesion.expiresIn))
                 } finally {

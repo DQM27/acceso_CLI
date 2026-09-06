@@ -14,8 +14,39 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.MovimientoHistorial
+import uniffi.control_acceso_mobile.MovimientoHistorialSitio
+import uniffi.control_acceso_mobile.ResultadoIngresoRegistrado
+
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
+
+data class FilaHistorial(
+    val clave: String,
+    val cedula: String,
+    val contratistaNombre: String,
+    val empresaNombre: String,
+    val fechaHoraIngreso: String,
+    val fechaHoraSalida: String?,
+    val gafeteNumero: Long?,
+    val usuarioIngresoNombre: String,
+    val usuarioSalidaNombre: String?,
+    val advertenciaPraind: Boolean,
+) {
+    companion object {
+        fun local(m: MovimientoHistorial) = FilaHistorial(
+            "local:${m.registroId}", m.cedula, m.contratistaNombre, m.empresaNombre,
+            m.fechaHoraIngreso, m.fechaHoraSalida, m.gafeteNumero,
+            m.usuarioIngresoNombre, m.usuarioSalidaNombre,
+            m.resultadoAcceso is ResultadoIngresoRegistrado.PermitidoConAdvertencia,
+        )
+        fun remota(m: MovimientoHistorialSitio) = FilaHistorial(
+            "nube:${m.uuid}", m.cedula ?: "—", m.contratistaNombre, m.empresaNombre ?: "—",
+            m.fechaHoraIngreso, m.fechaHoraSalida, m.gafeteNumero,
+            m.usuarioIngresoNombre ?: "—", m.usuarioSalidaNombre,
+            m.motivoResultado == "PRAIND_PROXIMO_VENCER",
+        )
+    }
+}
 
 /// Dueño del estado de [PantallaHistorial] y de la llamada a
 /// `Nucleo.buscarHistorial` — ver mobile/app/ARQUITECTURA.md. A diferencia
@@ -31,7 +62,7 @@ class HistorialViewModel(
 ) : ViewModel() {
     var texto by mutableStateOf("")
         private set
-    var movimientos by mutableStateOf<List<MovimientoHistorial>>(emptyList())
+    var movimientos by mutableStateOf<List<FilaHistorial>>(emptyList())
         private set
     var error by mutableStateOf<String?>(null)
         private set
@@ -53,7 +84,13 @@ class HistorialViewModel(
         trabajoBusqueda?.cancel()
         trabajoBusqueda = viewModelScope.launch {
             try {
-                movimientos = withContext(dispatcherIO) { nucleo.buscarHistorial(texto) }
+                movimientos = withContext(dispatcherIO) {
+                    val locales = nucleo.buscarHistorial(texto).map(FilaHistorial::local)
+                    val remotos = nucleo.listarHistorialSitio(texto).map(FilaHistorial::remota)
+                    (locales + remotos)
+                        .sortedByDescending { java.time.Instant.parse(it.fechaHoraIngreso) }
+                        .take(30)
+                }
                 error = null
             } catch (excepcion: NucleoException) {
                 error = excepcion.message

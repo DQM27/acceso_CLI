@@ -44,7 +44,7 @@ class ActivosViewModelTest {
     @Test
     fun `base vacia no falla y no muestra a nadie adentro`() = runTest(dispatcher) {
         nucleo = NucleoDePrueba.abrir(archivo, NucleoDePrueba.sqlUsuarioRoot())
-        val viewModel = ActivosViewModel(nucleo, dispatcherIO = dispatcher)
+        val viewModel = ActivosViewModel(nucleo, directorio = "/tmp", dispatcherIO = dispatcher)
 
         advanceUntilIdle()
 
@@ -64,7 +64,7 @@ class ActivosViewModelTest {
             """.trimIndent(),
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        val viewModel = ActivosViewModel(nucleo, dispatcherIO = dispatcher)
+        val viewModel = ActivosViewModel(nucleo, directorio = "/tmp", dispatcherIO = dispatcher)
         advanceUntilIdle()
 
         viewModel.cambiarTexto("Buscable")
@@ -86,7 +86,7 @@ class ActivosViewModelTest {
             """.trimIndent(),
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        val viewModel = ActivosViewModel(nucleo, dispatcherIO = dispatcher)
+        val viewModel = ActivosViewModel(nucleo, directorio = "/tmp", dispatcherIO = dispatcher)
         advanceUntilIdle()
         viewModel.cambiarTexto("Contratista")
         advanceUntilIdle()
@@ -112,7 +112,7 @@ class ActivosViewModelTest {
             """.trimIndent(),
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        val viewModel = ActivosViewModel(nucleo, dispatcherIO = dispatcher)
+        val viewModel = ActivosViewModel(nucleo, directorio = "/tmp", dispatcherIO = dispatcher)
         advanceUntilIdle()
         viewModel.cambiarTexto("Sin Acceso")
         advanceUntilIdle()
@@ -127,7 +127,7 @@ class ActivosViewModelTest {
     @Test
     fun `cambiarModo limpia el texto y el mensaje anterior`() = runTest(dispatcher) {
         nucleo = NucleoDePrueba.abrir(archivo, NucleoDePrueba.sqlUsuarioRoot())
-        val viewModel = ActivosViewModel(nucleo, dispatcherIO = dispatcher)
+        val viewModel = ActivosViewModel(nucleo, directorio = "/tmp", dispatcherIO = dispatcher)
         advanceUntilIdle()
         viewModel.cambiarTexto("algo")
         advanceUntilIdle()

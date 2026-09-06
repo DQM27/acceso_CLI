@@ -179,9 +179,9 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String,
                     Tab(selected = pestana == 2, onClick = { pestana = 2 }, text = { Text("Nube") })
                 }
                 when (pestana) {
-                    0 -> PantallaActivos(nucleo, refrescarNube)
+                    0 -> PantallaActivos(nucleo, directorio, refrescarNube)
                     1 -> PantallaHistorial(nucleo, refrescarNube)
-                    else -> PantallaNube(nucleo, sesion, directorio, refrescarNube)
+                    else -> PantallaNube(nucleo, sesion, directorio)
                 }
             }
         }

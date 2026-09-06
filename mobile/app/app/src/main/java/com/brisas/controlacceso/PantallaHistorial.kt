@@ -18,9 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import uniffi.control_acceso_mobile.MovimientoHistorial
 import uniffi.control_acceso_mobile.Nucleo
-import uniffi.control_acceso_mobile.ResultadoIngresoRegistrado
 
 /// Sólo lectura, sin acción — a diferencia de Activos no hay nada que
 /// confirmar acá. Últimos 6 meses por defecto (mismo criterio que
@@ -59,7 +57,7 @@ fun PantallaHistorial(nucleo: Nucleo, refrescarNube: Int = 0) {
         }
 
         LazyColumn(modifier = Modifier.padding(top = 12.dp)) {
-            items(viewModel.movimientos, key = { it.registroId }) { movimiento ->
+            items(viewModel.movimientos, key = { it.clave }) { movimiento ->
                 FilaMovimiento(movimiento)
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline)
             }
@@ -68,7 +66,7 @@ fun PantallaHistorial(nucleo: Nucleo, refrescarNube: Int = 0) {
 }
 
 @Composable
-private fun FilaMovimiento(movimiento: MovimientoHistorial) {
+private fun FilaMovimiento(movimiento: FilaHistorial) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -100,7 +98,7 @@ private fun FilaMovimiento(movimiento: MovimientoHistorial) {
                 color = MaterialTheme.colorScheme.primary,
             )
         }
-        if (movimiento.resultadoAcceso is ResultadoIngresoRegistrado.PermitidoConAdvertencia) {
+        if (movimiento.advertenciaPraind) {
             Text(
                 "⚠ PRAIND próximo a vencer al momento del ingreso",
                 style = MaterialTheme.typography.bodySmall,

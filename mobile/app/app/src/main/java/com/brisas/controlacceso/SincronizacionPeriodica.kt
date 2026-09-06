@@ -1,5 +1,7 @@
 package com.brisas.controlacceso
 
+import android.util.Log
+
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,10 +44,12 @@ class SincronizacionPeriodica(
                     delay(600)
                     try {
                         val resumen = withContext(Dispatchers.IO) { nucleo.sincronizarConNube(directorio) }
+                        Log.i("SincronizacionNube", "Recibidos: gafetes=${resumen.gafetesRecibidos}, historial=${resumen.movimientosHistorialRecibidos}, abiertos=${resumen.remotosAbiertos}")
                         onSincronizado(resumen)
                     } catch (cancelacion: CancellationException) {
                         throw cancelacion
-                    } catch (_: Throwable) {
+                    } catch (error: Throwable) {
+                        Log.w("SincronizacionNube", "No se completó la sincronización: ${error.javaClass.simpleName}")
                         // La cola local conserva lo pendiente hasta recuperar la conexión.
                     }
                     withTimeoutOrNull(INTERVALO_MS) { pendientes.receive() }

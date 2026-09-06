@@ -43,7 +43,6 @@ import MenuUsuario from "./componentes/MenuUsuario";
 import BarraNube from "./componentes/BarraNube";
 import ErrorBoundary from "./componentes/ErrorBoundary";
 import Login from "./pantallas/Login";
-import Activos from "./pantallas/Activos";
 import {
   buscarActualizacion,
   cerrarSesion,
@@ -56,11 +55,8 @@ import { emitirActualizacion, iniciarRealtimeNube } from "./nubeRealtime";
 import { SesionProvider } from "./contexto/SesionContexto";
 import { BarraEstadoProvider } from "./contexto/BarraEstadoContexto";
 
-// Cargadas bajo demanda (`lazy`): salvo Activos (sección por defecto) y
-// Login, ninguna pantalla ni modal hace falta en el primer render — cada
-// una se pide recién cuando el usuario navega a su sección o abre su modal,
-// en vez de sumarse al bundle inicial (ver el <Suspense> que las envuelve
-// en `Shell`).
+// Las pantallas y sus tablas se cargan al entrar a cada sección.
+const Activos = lazy(() => import("./pantallas/Activos"));
 const Contratistas = lazy(() => import("./pantallas/Contratistas"));
 const Empresas = lazy(() => import("./pantallas/Empresas"));
 const Usuarios = lazy(() => import("./pantallas/Usuarios"));
@@ -245,6 +241,7 @@ function Shell({
   // grilla aunque haya salido desde otra pantalla.
   const [refrescarActivos, setRefrescarActivos] = useState(0);
   const [sincronizandoManual, setSincronizandoManual] = useState(false);
+  const [estadoNube, setEstadoNube] = useState("CONNECTING");
 
   // Ctrl+Shift+N/S (no Ctrl+N/S solos — esas convenciones quedan libres
   // para un "nuevo"/"salida" más genéricos más adelante) desde cualquier
@@ -266,6 +263,7 @@ function Shell({
   useEffect(() => {
     const cancelarRealtime = iniciarRealtimeNube({
       onSincronizado: () => setRefrescarActivos((n) => n + 1),
+      onEstado: setEstadoNube,
     });
     const cancelarSincronizacionAutomatica = listen<ResumenSincronizacion>(
       "nube://sincronizado",
@@ -396,6 +394,7 @@ function Shell({
             <span>{mensajeEstado}</span>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
               <BarraNube
+                estado={estadoNube}
                 sincronizando={sincronizandoManual}
                 onSincronizar={sincronizarManualmente}
               />

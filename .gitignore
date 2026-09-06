@@ -9,6 +9,9 @@
 # Variables de entorno y secretos
 .env
 .env.*
+supabase_admin_key.txt
+supabase_signing_key.json
+nueva_clave_firma.json
 
 # IDE / editores
 .vscode/

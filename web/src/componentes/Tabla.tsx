@@ -1,3 +1,4 @@
+import "./modulosTabla";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { AgGridReact } from "ag-grid-react";
