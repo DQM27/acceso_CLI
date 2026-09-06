@@ -15,6 +15,19 @@ import { supabase } from "../lib/supabase";
  * (confirma su propio correo), así que no hay cambio de identidad, sólo
  * queda su sesión refrescada.
  */
+/** Supabase manda sus mensajes de error en inglés -- acá se traducen los
+ * que de verdad puede ver alguien usando el panel (el límite de reenvío es
+ * el más común, si se piden dos códigos seguidos). Cualquier otro queda con
+ * un mensaje genérico en vez del inglés crudo. */
+function mensajeErrorEnEspanol(error: unknown): string {
+  const mensaje = error instanceof Error ? error.message : String(error);
+  const limite = mensaje.match(/only request this after (\d+) seconds?/i);
+  if (limite) {
+    return `Por seguridad, esperá ${limite[1]} segundos antes de pedir otro código.`;
+  }
+  return "No se pudo enviar el código -- intentá de nuevo en un momento.";
+}
+
 export function useVerificacionPorCorreo(correo: string) {
   const [enviado, setEnviado] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -31,7 +44,7 @@ export function useVerificacionPorCorreo(correo: string) {
       if (error) throw error;
       setEnviado(true);
     } catch (error) {
-      setError(String(error instanceof Error ? error.message : error));
+      setError(mensajeErrorEnEspanol(error));
     } finally {
       setEnviando(false);
     }
