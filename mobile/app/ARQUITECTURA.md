@@ -182,19 +182,21 @@ y no hay otro ya dueño de esa decisión (rotación, cambio de pestaña); acá
 `ActivosViewModel` ya es quien decide cuándo esta pantalla vive o muere".
 
 `PantallaNuevaEmpresa.kt`, `PantallaNuevoContratista.kt` y
-`PantallaNuevoUsuario.kt` (2026-09-02) confirman la misma regla: las tres
-son formularios de alta que `PantallaPrincipal` abre desde el menú "+" y
-desmonta por completo al volver ("← Volver") — exactamente el mismo caso
-que `PantallaConfirmarIngreso`, así que tampoco llevan ViewModel. Lo que sí
-se corrigió en las tres: `catch(Exception)` → `catch(NucleoException)`, y
-los campos de texto/selección a `rememberSaveable` — **con una excepción
-real**: `empresaSeleccionada` (`Empresa?`) en `PantallaNuevoContratista.kt`
-se quedó en `remember` porque `Empresa` es un `data class` generado por
-uniffi sin `Serializable`; `rememberSaveable` sobre un tipo no guardable
-falla en tiempo de ejecución, no en compilación — antes de aplicar
-`rememberSaveable` a cualquier tipo que no sea `String`/`Boolean`/un enum
-generado por uniffi (los enums sí son `Serializable`, heredado de
-`java.lang.Enum`), confirmar que el tipo realmente se puede guardar.
+`PantallaNuevoUsuario.kt` (2026-09-02, borradas 2026-09-06) eran los tres
+formularios de alta que `PantallaPrincipal` abría desde el menú "+" y
+desmontaba por completo al volver ("← Volver") — exactamente el mismo caso
+que `PantallaConfirmarIngreso`, así que tampoco llevaban ViewModel. Se
+sacaron junto con el menú "+" al limitar la app móvil a registros rápidos
++ historial (ver nota de `NubeViewModel.kt` más abajo) -- dar de alta un
+contratista, empresa o usuario sigue disponible por escritorio/web/CLI,
+sólo dejó de tener una pantalla propia en el celular. Quedó una lección
+real de esas tres pantallas por si un formulario de alta similar vuelve a
+aparecer en otra parte de la app: `catch(Exception)` → siempre
+`catch(NucleoException)` específico, campos de texto/selección a
+`rememberSaveable` **salvo** cuando el tipo no es `String`/`Boolean`/un
+enum generado por uniffi -- `Empresa` (un `data class` de uniffi sin
+`Serializable`) fallaba en tiempo de ejecución al envolverlo en
+`rememberSaveable`, no en compilación.
 
 `NubeViewModel.kt` (2026-09-03, recortado 2026-09-06) — en origen tenía
 también una pantalla `PantallaNube.kt` propia (tercera pestaña) con
