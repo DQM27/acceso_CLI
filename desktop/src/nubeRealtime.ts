@@ -116,7 +116,6 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
 
   async function conectar() {
     if (cancelado) return;
-    opciones.onEstado?.("CONNECTING");
     try {
       const sesion = await sesionRealtimeNube();
       if (cancelado) return;
