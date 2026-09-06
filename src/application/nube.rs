@@ -500,9 +500,8 @@ impl AppCore {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             if let Some(entrada) = cache.as_ref() {
-                let vigente_por =
-                    std::time::Duration::from_secs(entrada.token.expires_in)
-                        .saturating_sub(MARGEN_EXPIRACION);
+                let vigente_por = std::time::Duration::from_secs(entrada.token.expires_in)
+                    .saturating_sub(MARGEN_EXPIRACION);
                 if entrada.secreto == secreto && entrada.obtenido_en.elapsed() < vigente_por {
                     let mut token = entrada.token.clone();
                     token.desfase_reloj_ms = None;

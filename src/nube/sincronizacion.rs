@@ -848,7 +848,7 @@ struct FilaHistorialRemota {
     dispositivo_entrada_id: String,
     dispositivo_salida_id: Option<String>,
     updated_at: String,
-    /// `"pc"`/`"mobile"` (`dispositivos.tipo`) -- embebido vía PostgREST
+    /// `"pc"`/`"mobile"` (`dispositivos.tipo`) -- embebido vía `PostgREST`
     /// (`dispositivo_entrada:dispositivos!ingresos_dispositivo_entrada_id_fkey(tipo)`)
     /// para que la pantalla pueda mostrar de qué tipo de dispositivo vino
     /// un movimiento sin tener que resolver el UUID a mano. Pedido del
@@ -970,7 +970,9 @@ pub fn recibir_historial_del_sitio(
                 fila.dispositivo_entrada_id,
                 fila.dispositivo_salida_id,
                 ahora,
-                fila.dispositivo_entrada.as_ref().and_then(|d| d.tipo.clone()),
+                fila.dispositivo_entrada
+                    .as_ref()
+                    .and_then(|d| d.tipo.clone()),
             ],
         )?;
         recibidos += 1;
@@ -1069,30 +1071,27 @@ struct FilaGafeteRemota {
 /// antes de que el espejo mandara estos campos) se salta -- ambos son
 /// `NOT NULL` en la tabla local, y en una app de control de acceso no se
 /// inventan datos de clasificación para completar el hueco.
-pub fn recibir_catalogo_del_sitio(
-    connection: &Connection,
-    contexto: &ContextoSincronizacion<'_>,
-) -> Result<ResumenCatalogo, SincronizacionError> {
-    let cliente = cliente_http();
+/// Resultado de la descarga (sin tocar la base todavía) -- separado de
+/// `recibir_catalogo_del_sitio` sólo para que esa función no crezca más allá
+/// del límite de líneas del lint `too_many_lines`; el corte natural ya
+/// existía en el código (todo el HTTP primero, todo el `INSERT` después).
+struct CatalogoRemotoDescargado {
+    empresas: Vec<FilaEmpresaRemota>,
+    contratistas: Vec<FilaContratistaRemota>,
+    usuarios: Vec<FilaUsuarioRemota>,
+    gafetes: Vec<FilaGafeteRemota>,
+    marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>>,
+}
 
-    // Sync incremental (MIGRACION_23): sin esto, cada ciclo (cada 2 minutos,
-    // para siempre) traía las tres tablas COMPLETAS aunque nada hubiera
-    // cambiado. `marca_anterior` es NULL la primera vez (sembrado inicial,
-    // sin filtro -- hay que traer todo lo que ya existe). La marca nueva se
-    // calcula DESPUÉS, a partir del `updated_at` real que devolvió el
-    // servidor (ver `recibir_historial_del_sitio`) -- no del reloj de este
-    // dispositivo: un reloj local apenas adelantado respecto al del
-    // servidor dejaba la marca "en el futuro", y cualquier fila con
-    // `updated_at` real por debajo quedaba fuera de `WHERE updated_at > marca`
-    // para siempre, sin ningún error visible (bug real, reproducido en
-    // producción).
-    let marca_anterior: Option<String> = connection.query_row(
-        "SELECT catalogo_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
-        [],
-        |row| row.get(0),
-    )?;
+/// Trae empresas/contratistas/usuarios (incremental, filtrados por
+/// `marca_anterior`) y gafetes (completo) -- ver los comentarios que tenían
+/// estas mismas consultas en `recibir_catalogo_del_sitio` antes del corte.
+fn descargar_catalogo_remoto(
+    contexto: &ContextoSincronizacion<'_>,
+    marca_anterior: Option<&str>,
+) -> Result<CatalogoRemotoDescargado, SincronizacionError> {
+    let cliente = cliente_http();
     let filtro_incremental = marca_anterior
-        .as_deref()
         .map(|marca| format!("&updated_at=gt.{marca}"))
         .unwrap_or_default();
 
@@ -1144,12 +1143,11 @@ pub fn recibir_catalogo_del_sitio(
 
     // Máximo `updated_at` real entre las tres tablas incrementales (gafetes
     // no participa, se descarga completo cada vez -- ver su comentario más
-    // abajo). Sin filas nuevas, la marca no avanza -- preferible repetir la
+    // arriba). Sin filas nuevas, la marca no avanza -- preferible repetir la
     // misma consulta (ya sabemos que no trae nada) a arriesgar perder una
     // fila por un reloj local desviado.
-    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_anterior
-        .as_deref()
-        .and_then(|marca| crate::tiempo::parsear_utc(marca).ok());
+    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> =
+        marca_anterior.and_then(|marca| crate::tiempo::parsear_utc(marca).ok());
     for actualizado_en in empresas
         .iter()
         .map(|f| &f.updated_at)
@@ -1163,10 +1161,21 @@ pub fn recibir_catalogo_del_sitio(
         }
     }
 
-    let transaction = connection.unchecked_transaction()?;
-    let mut resumen = ResumenCatalogo::default();
+    Ok(CatalogoRemotoDescargado {
+        empresas,
+        contratistas,
+        usuarios,
+        gafetes,
+        marca_mas_nueva,
+    })
+}
 
-    for empresa in &empresas {
+fn guardar_empresas(
+    transaction: &rusqlite::Transaction<'_>,
+    empresas: &[FilaEmpresaRemota],
+) -> Result<u32, SincronizacionError> {
+    let mut recibidas = 0;
+    for empresa in empresas {
         transaction.execute(
             "
             INSERT INTO empresas (nombre, activo, uuid) VALUES (?1, ?2, ?3)
@@ -1176,10 +1185,17 @@ pub fn recibir_catalogo_del_sitio(
             ",
             params![empresa.nombre, empresa.activa, empresa.id],
         )?;
-        resumen.empresas_recibidas += 1;
+        recibidas += 1;
     }
+    Ok(recibidas)
+}
 
-    for contratista in &contratistas {
+fn guardar_contratistas(
+    transaction: &rusqlite::Transaction<'_>,
+    contratistas: &[FilaContratistaRemota],
+) -> Result<u32, SincronizacionError> {
+    let mut recibidos = 0;
+    for contratista in contratistas {
         let (Some(cedula), Some(tipo_ingreso), Some(es_personal_ruta)) = (
             contratista.identificacion.as_deref(),
             contratista.tipo_ingreso.as_deref(),
@@ -1188,7 +1204,7 @@ pub fn recibir_catalogo_del_sitio(
             continue;
         };
         let empresa_id_local = resolver_empresa_local(
-            &transaction,
+            transaction,
             contratista.empresa_id.as_deref(),
             contratista.empresa_nombre.as_deref(),
         );
@@ -1222,10 +1238,17 @@ pub fn recibir_catalogo_del_sitio(
                 contratista.id,
             ],
         )?;
-        resumen.contratistas_recibidos += 1;
+        recibidos += 1;
     }
+    Ok(recibidos)
+}
 
-    for usuario in &usuarios {
+fn guardar_usuarios(
+    transaction: &rusqlite::Transaction<'_>,
+    usuarios: &[FilaUsuarioRemota],
+) -> Result<u32, SincronizacionError> {
+    let mut recibidos = 0;
+    for usuario in usuarios {
         // `password_hash` queda AFUERA del `DO UPDATE SET` a propósito --
         // si esta cédula ya existe local (con una contraseña real, fijada
         // en este mismo dispositivo alguna vez), el `ON CONFLICT` no debe
@@ -1252,10 +1275,17 @@ pub fn recibir_catalogo_del_sitio(
                 usuario.id,
             ],
         )?;
-        resumen.usuarios_recibidos += 1;
+        recibidos += 1;
     }
+    Ok(recibidos)
+}
 
-    for gafete in &gafetes {
+fn guardar_gafetes(
+    transaction: &rusqlite::Transaction<'_>,
+    gafetes: &[FilaGafeteRemota],
+) -> Result<u32, SincronizacionError> {
+    let mut recibidos = 0;
+    for gafete in gafetes {
         // Un gafete PERDIDO sin deudor resoluble localmente violaría el
         // `CHECK` de la tabla (`estado = 'PERDIDO' AND contratista_deudor_id
         // IS NOT NULL`) -- se salta por ahora, mismo criterio que un
@@ -1263,7 +1293,7 @@ pub fn recibir_catalogo_del_sitio(
         // posterior, en cuanto ese contratista también llegue acá.
         let deudor_id_local = if gafete.estado == "PERDIDO" {
             let Some(id) = resolver_contratista_local(
-                &transaction,
+                transaction,
                 gafete.contratista_deudor_id.as_deref(),
                 gafete.contratista_deudor_nombre.as_deref(),
             ) else {
@@ -1285,10 +1315,41 @@ pub fn recibir_catalogo_del_sitio(
             ",
             params![gafete.numero, gafete.estado, deudor_id_local, gafete.id],
         )?;
-        resumen.gafetes_recibidos += 1;
+        recibidos += 1;
     }
+    Ok(recibidos)
+}
 
-    if let Some(marca) = marca_mas_nueva {
+pub fn recibir_catalogo_del_sitio(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<ResumenCatalogo, SincronizacionError> {
+    // Sync incremental (MIGRACION_23): sin esto, cada ciclo (cada 2 minutos,
+    // para siempre) traía las tres tablas COMPLETAS aunque nada hubiera
+    // cambiado. `marca_anterior` es NULL la primera vez (sembrado inicial,
+    // sin filtro -- hay que traer todo lo que ya existe). La marca nueva se
+    // calcula a partir del `updated_at` real que devolvió el servidor -- no
+    // del reloj de este dispositivo: un reloj local apenas adelantado
+    // respecto al del servidor dejaba la marca "en el futuro", y cualquier
+    // fila con `updated_at` real por debajo quedaba fuera de
+    // `WHERE updated_at > marca` para siempre, sin ningún error visible
+    // (bug real, reproducido en producción).
+    let marca_anterior: Option<String> = connection.query_row(
+        "SELECT catalogo_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let descarga = descargar_catalogo_remoto(contexto, marca_anterior.as_deref())?;
+
+    let transaction = connection.unchecked_transaction()?;
+    let resumen = ResumenCatalogo {
+        empresas_recibidas: guardar_empresas(&transaction, &descarga.empresas)?,
+        contratistas_recibidos: guardar_contratistas(&transaction, &descarga.contratistas)?,
+        usuarios_recibidos: guardar_usuarios(&transaction, &descarga.usuarios)?,
+        gafetes_recibidos: guardar_gafetes(&transaction, &descarga.gafetes)?,
+    };
+
+    if let Some(marca) = descarga.marca_mas_nueva {
         transaction.execute(
             "UPDATE sincronizacion_estado SET catalogo_actualizado_hasta = ?1 WHERE id = 1",
             params![crate::tiempo::serializar_utc(marca)],
