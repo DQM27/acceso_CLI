@@ -695,14 +695,27 @@ impl Nucleo {
     /// bloqueante" (el teléfono tiene que poder operar sin internet), así
     /// que los dos son best-effort (con el tope de `nube::cliente::TIMEOUT_HTTP`):
     ///
-    /// 1. **Reactivación**: si el chequeo local dice "inactivo"
-    ///    (`AutenticacionErrorNucleo::UsuarioInactivo`), puede ser que a
-    ///    este usuario lo hayan reactivado en otro dispositivo y esta base
-    ///    todavía no se enteró -- antes de rendirse, refresca sólo el
-    ///    catálogo (`refrescar_catalogo_sin_sesion`, sin sesión) y
-    ///    reintenta el login local una vez más. Sin esto, una reactivación
-    ///    remota nunca se podía reflejar acá: el login fallaba en el
-    ///    chequeo local ANTES de llegar a sincronizar nada.
+    /// 1. **Alta o reactivación**: si el chequeo local dice "inactivo"
+    ///    (`AutenticacionErrorNucleo::UsuarioInactivo`) o "no existe"
+    ///    (`CredencialesInvalidas` -- que es la misma variante que una
+    ///    contraseña incorrecta, ver `autenticacion_service.rs`), puede ser
+    ///    que a este usuario lo hayan reactivado en otro dispositivo, o
+    ///    creado en el panel/otro sitio DESPUÉS del primer arranque de este
+    ///    teléfono, y esta base todavía no se enteró -- antes de rendirse,
+    ///    refresca sólo el catálogo (`refrescar_catalogo_sin_sesion`, sin
+    ///    sesión) y reintenta el login local una vez más. Sin esto, un
+    ///    usuario nuevo o una reactivación remota nunca se podían reflejar
+    ///    acá: la sincronización periódica (`SincronizacionPeriodica.kt`)
+    ///    recién arranca DESPUÉS de un primer login exitoso, así que una
+    ///    cédula que todavía no existe en este teléfono se quedaba
+    ///    "credenciales inválidas" para siempre, sin importar cuánto se
+    ///    esperara -- reportado en vivo: un ROOT creado en Supabase después
+    ///    del primer arranque del emulador nunca podía entrar. Costo
+    ///    aceptado: una contraseña tipeada mal también dispara este
+    ///    refresco de más (no hay forma barata de distinguir los dos casos
+    ///    antes de sincronizar) -- mismo costo que ya paga escritorio, que
+    ///    sincroniza el catálogo en CADA intento de login, acierte o no
+    ///    (`desktop/src-tauri/src/comandos/autenticacion.rs`).
     /// 2. **Baja**: tras un login local exitoso, confirma en vivo que la
     ///    cédula sigue activa (`usuario_sigue_activo_remoto` -- una fila,
     ///    una columna, no la sincronización completa que hacía esto antes:
@@ -721,7 +734,10 @@ impl Nucleo {
         let intento = self.core_lock().autenticar(&cedula, &password);
         let sesion = match intento {
             Ok(sesion) => sesion,
-            Err(AutenticacionErrorNucleo::UsuarioInactivo) => {
+            Err(
+                AutenticacionErrorNucleo::UsuarioInactivo
+                | AutenticacionErrorNucleo::CredencialesInvalidas,
+            ) => {
                 let _ = self
                     .core_lock()
                     .refrescar_catalogo_sin_sesion(Some(std::path::Path::new(&directorio)));
