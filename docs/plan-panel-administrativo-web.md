@@ -141,14 +141,18 @@ dispositivo que sincroniza. Con el modelo global:
   "Estado real de los datos hoy" arriba: ningún sitio opera todavía, se
   puede reseedear limpio en vez de reconciliar filas duplicadas.
 
-**Root inicial y login offline: sin cambios.** Se evaluó (y se descartó)
-que el arranque de un dispositivo nuevo dependiera de la nube para
-recibir sus primeras cuentas — se prefirió no sumar esa complejidad.
-Cada sitio sigue arrancando con `crear_root_inicial` local, como hoy. Lo
-que sí cambia es que, una vez que un operador global existe (creado
-localmente o desde el panel web), se sincroniza a **todos** los
+**Root inicial y login offline: decisión revertida (2026-09-06).** Acá
+decía que ROOT quedaba afuera de la nube a propósito -- se prefería no
+sumar esa complejidad, cada sitio seguía arrancando con
+`crear_root_inicial` local. Se revirtió al construir la pantalla de
+arranque sin login (pegar el secreto trae el catálogo, ver
+`docs/pendientes.md`): un dispositivo nuevo necesita también poder
+recibir su ROOT real desde la nube, no sólo administradores/operadores
+-- si no, ese primer arranque sólo sirve para cuentas no-ROOT. Ver
+migración `permite_root_en_usuarios_globales`. Una vez que un usuario
+(ROOT incluido) existe globalmente, se sincroniza a **todos** los
 dispositivos — y el login sigue siendo 100% local/offline en cualquiera
-de ellos una vez que ese dispositivo ya sincronizó ese operador al menos
+de ellos una vez que ese dispositivo ya sincronizó esa cuenta al menos
 una vez.
 
 ## Conflicto: mismo contratista con ingreso abierto en dos sitios a la vez (decidido)

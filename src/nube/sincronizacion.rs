@@ -410,10 +410,8 @@ fn enviar_gafete(
     exigir_2xx(respuesta)
 }
 
-/// Usuarios/operadores globales (espejo): mismo criterio de `upsert` que
-/// contratistas -- ROOT nunca llega a encolarse acá (ver el comentario de
-/// `insertar_usuario` en `usuario_repository.rs`), así que esta función
-/// nunca necesita filtrar por rol. Sin `password_hash` a propósito -- la
+/// Usuarios globales (ROOT/ADMINISTRADOR/OPERADOR, espejo): mismo criterio
+/// de `upsert` que contratistas. Sin `password_hash` a propósito -- la
 /// nube nunca la recibe (ver `SIN_PASSWORD_LOCAL` en
 /// `services/password.rs`): distribuye quién existe y su rol/estado, cada
 /// dispositivo fija su propia contraseña local la primera vez que ese
@@ -1014,9 +1012,8 @@ struct FilaEmpresaRemota {
 }
 
 /// Sin `password_hash` -- nunca viaja, ver el doc-comment de
-/// `enviar_usuario`. `rol` sólo puede ser 'ADMINISTRADOR'/'OPERADOR' del
-/// lado del receptor (la tabla remota ni admite 'ROOT'), así que acá no
-/// hace falta filtrarlo de nuevo.
+/// `enviar_usuario`. `rol` puede ser 'ROOT'/'ADMINISTRADOR'/'OPERADOR' (ver
+/// migración `permite_root_en_usuarios_globales`).
 #[derive(serde::Deserialize)]
 struct FilaUsuarioRemota {
     id: String,
@@ -1932,9 +1929,10 @@ mod tests {
 
     #[test]
     fn usuario_sigue_activo_remoto_sin_fila_asume_activo() {
-        // ROOT (nunca se sincroniza) o un usuario que este dispositivo creó
-        // y todavía no subió -- la nube no tiene nada que decir de él, no
-        // hay motivo para expulsarlo por eso.
+        // Un usuario que este dispositivo creó y todavía no subió (o que
+        // subió hace un instante y el receptor todavía no lo ve) -- la nube
+        // no tiene nada que decir de él, no hay motivo para expulsarlo por
+        // eso.
         let base_url = servidor_de_una_respuesta(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         );

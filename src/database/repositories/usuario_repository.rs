@@ -74,11 +74,10 @@ fn rol_a_texto(rol: RolUsuario) -> &'static str {
     }
 }
 
-/// ROOT nunca se encola hacia la nube a propósito (ver
-/// docs/plan-panel-administrativo-web.md: "Root inicial y login offline:
-/// sin cambios" -- cada sitio lo sigue creando 100% local). Sólo
-/// ADMINISTRADOR/OPERADOR son los "operadores globales" que
-/// `nube::sincronizacion::enviar_usuario` sube.
+/// ROOT viaja por la nube igual que ADMINISTRADOR/OPERADOR (ver migración
+/// `permite_root_en_usuarios_globales`) -- un dispositivo nuevo, sin
+/// ningún usuario local todavía, necesita poder recibir su ROOT real al
+/// pegar el secreto, no sólo administradores/operadores.
 fn insertar_usuario(connection: &Connection, usuario: &Usuario) -> Result<i64, DatabaseError> {
     let uuid = generar_uuid_v4();
     connection.execute(
@@ -96,9 +95,7 @@ fn insertar_usuario(connection: &Connection, usuario: &Usuario) -> Result<i64, D
         ],
     )?;
     let id = connection.last_insert_rowid();
-    if usuario.rol != RolUsuario::Root {
-        cola_salida::encolar(connection, "usuario", &uuid, "crear")?;
-    }
+    cola_salida::encolar(connection, "usuario", &uuid, "crear")?;
     Ok(id)
 }
 
@@ -152,15 +149,13 @@ fn persistir_usuario(transaction: &Connection, usuario: &Usuario) -> Result<(), 
             usuario.id,
         ],
     )?;
-    // ROOT nunca se encola -- ver el comentario de `insertar_usuario`.
-    if usuario.rol != RolUsuario::Root {
-        let uuid: String = transaction.query_row(
-            "SELECT uuid FROM usuarios WHERE id = ?1",
-            params![usuario.id],
-            |row| row.get(0),
-        )?;
-        cola_salida::encolar(transaction, "usuario", &uuid, "actualizar")?;
-    }
+    // ROOT también se encola -- ver el comentario de `insertar_usuario`.
+    let uuid: String = transaction.query_row(
+        "SELECT uuid FROM usuarios WHERE id = ?1",
+        params![usuario.id],
+        |row| row.get(0),
+    )?;
+    cola_salida::encolar(transaction, "usuario", &uuid, "actualizar")?;
     Ok(())
 }
 

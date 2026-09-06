@@ -55,6 +55,10 @@ decía la nota vieja.
   con el centinela `SIN_PASSWORD_LOCAL`, el primer login de cualquiera de ellos cae solo en
   el flujo de "fijar contraseña" que ya existía (`AppCore::fijar_password_inicial`). El
   camino CLI/TUI se mantiene como rescate si alguna vez hace falta un sitio 100% sin nube.
+  Esto forzó revertir otra decisión (ver "Root inicial y login offline" en
+  `docs/plan-panel-administrativo-web.md`): ROOT ahora también viaja por la nube junto con
+  ADMINISTRADOR/OPERADOR (migración `permite_root_en_usuarios_globales`) -- sin eso, este
+  primer arranque sólo servía para cuentas no-ROOT.
 - [ ] **Revisar y ajustar roles y permisos (Root/Administrador/Operador).** Pedido explícito
   del usuario (2026-09-06) tras entender cómo viajan los usuarios entre dispositivos — el
   esquema actual (`domain::autorizacion::Operacion`/`RolUsuario::puede`) queda documentado
