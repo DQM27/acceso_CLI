@@ -77,7 +77,6 @@ export default function Contratistas() {
       },
       { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: ESTILO_IZQUIERDA },
       { field: "empresa_nombre", headerName: "Empresa", flex: 1.3, minWidth: 140 },
-      { field: "sitio_nombre", headerName: "Unidad operativa de origen", flex: 1.4, minWidth: 190 },
       { field: "tipo_ingreso", headerName: "Tipo", flex: 1.1, minWidth: 110 },
       {
         field: "fecha_vencimiento_praind",
