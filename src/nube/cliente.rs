@@ -13,6 +13,29 @@ pub enum NubeError {
     CredencialesInvalidas,
 }
 
+/// Tope por operación de red contra el receptor (conexión + respuesta
+/// completa). Sin esto, `reqwest::blocking::Client::new()` no tiene ningún
+/// límite -- una conexión que se queda colgada a mitad de camino (no
+/// rechazada, no un error, simplemente muda) bloquearía a quien llama para
+/// siempre. Importa especialmente en el login del celular
+/// (`Nucleo::autenticar`, que intenta un sync corto antes de dejar entrar):
+/// sin este tope, esa sincronización "best effort" podría no ser tan
+/// "best effort".
+const TIMEOUT_HTTP: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Único punto de construcción del cliente HTTP bloqueante -- ver
+/// `TIMEOUT_HTTP`. `unwrap_or_else` en vez de `expect`: si el backend TLS
+/// del sistema fallara al construirlo con el timeout (no debería, es la
+/// misma config con la que ya se usaba `Client::new()` en todo el crate),
+/// cae al cliente sin timeout en vez de entrar en pánico mitad de una
+/// sincronización.
+pub(crate) fn cliente_http() -> reqwest::blocking::Client {
+    reqwest::blocking::Client::builder()
+        .timeout(TIMEOUT_HTTP)
+        .build()
+        .unwrap_or_else(|_| reqwest::blocking::Client::new())
+}
+
 /// Token que autoriza a este dispositivo a leer/escribir únicamente los
 /// datos de su propio sitio. Vence a los `expires_in` segundos — hay que
 /// volver a llamar a `autenticar_dispositivo` para renovarlo, no se refresca
@@ -42,7 +65,7 @@ pub fn autenticar_dispositivo(
     secreto: &str,
 ) -> Result<TokenDispositivo, NubeError> {
     let url = format!("{base_url}/functions/v1/device-auth");
-    let respuesta = reqwest::blocking::Client::new()
+    let respuesta = cliente_http()
         .post(url)
         .json(&serde_json::json!({ "secret": secreto }))
         .send()?;

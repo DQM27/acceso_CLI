@@ -20,6 +20,10 @@ pub struct ResumenSincronizacion {
     pub sitio_id: String,
     pub dispositivo_id: String,
     pub tipo: String,
+    /// Ver `application::nube::ResumenSincronizacion::sesion_expulsada` --
+    /// el frontend debe cerrar la sesión local y volver al login apenas
+    /// vea esto en `true`.
+    pub sesion_expulsada: bool,
 }
 
 /// Datos temporales para que el frontend abra un canal Realtime privado.
@@ -111,6 +115,19 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
     let movimientos_historial_recibidos =
         nube::recibir_historial_del_sitio(&conexion, &contexto).map_err(mensaje_sincronizacion)?;
 
+    // Si a quien disparó esto lo desactivaron en otro dispositivo, el
+    // catálogo recién recibido ya lo refleja -- lo saca de la sesión acá
+    // mismo (no sólo avisa al frontend) para que el próximo comando que
+    // dependa de `sesion_activa()` falle de inmediato, sin esperar a que la
+    // pantalla reaccione al resumen.
+    let sesion_expulsada = match state.sesion_activa() {
+        Ok(actor) if !state.core().sesion_sigue_activa(&actor) => {
+            state.cerrar_sesion();
+            true
+        }
+        _ => false,
+    };
+
     Ok(ResumenSincronizacion {
         enviados: resumen.enviados,
         fallidos: resumen.fallidos,
@@ -123,6 +140,7 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
         sitio_id: token.sitio_id,
         dispositivo_id: token.dispositivo_id,
         tipo: token.tipo,
+        sesion_expulsada,
     })
 }
 

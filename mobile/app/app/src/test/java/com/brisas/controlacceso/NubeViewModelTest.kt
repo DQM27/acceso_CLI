@@ -54,7 +54,7 @@ class NubeViewModelTest {
     @Test
     fun `sin secreto guardado actualizarEstadoSecreto devuelve false`() {
         nucleo = NucleoDePrueba.abrir(archivoDb, NucleoDePrueba.sqlUsuarioRoot())
-        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
         val viewModel = NubeViewModel(nucleo, directorioSecreto.absolutePath, dispatcherIO = dispatcher)
 
         viewModel.actualizarEstadoSecreto()
@@ -66,7 +66,7 @@ class NubeViewModelTest {
     @Test
     fun `guardarSecreto como Root lo persiste y actualiza el estado`() {
         nucleo = NucleoDePrueba.abrir(archivoDb, NucleoDePrueba.sqlUsuarioRoot())
-        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
         val viewModel = NubeViewModel(nucleo, directorioSecreto.absolutePath, dispatcherIO = dispatcher)
 
         viewModel.guardarSecreto("secreto-de-prueba")
@@ -90,7 +90,7 @@ class NubeViewModelTest {
             );
             """.trimIndent(),
         )
-        nucleo.autenticar("888888888", NucleoDePrueba.CLAVE_PRUEBA)
+        nucleo.autenticar("888888888", NucleoDePrueba.CLAVE_PRUEBA, "")
         val viewModel = NubeViewModel(nucleo, directorioSecreto.absolutePath, dispatcherIO = dispatcher)
 
         viewModel.guardarSecreto("secreto-de-prueba")
@@ -102,7 +102,7 @@ class NubeViewModelTest {
     @Test
     fun `sincronizar sin secreto guardado falla sin intentar red`() = runTest(dispatcher) {
         nucleo = NucleoDePrueba.abrir(archivoDb, NucleoDePrueba.sqlUsuarioRoot())
-        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
         val viewModel = NubeViewModel(nucleo, directorioSecreto.absolutePath, dispatcherIO = dispatcher)
 
         viewModel.sincronizar()
@@ -124,7 +124,7 @@ class NubeViewModelTest {
                 );
                 """.trimIndent(),
             )
-            nucleo.autenticar("888888888", NucleoDePrueba.CLAVE_PRUEBA)
+            nucleo.autenticar("888888888", NucleoDePrueba.CLAVE_PRUEBA, "")
             val viewModel = NubeViewModel(nucleo, directorioSecreto.absolutePath, dispatcherIO = dispatcher)
 
             viewModel.sincronizar()

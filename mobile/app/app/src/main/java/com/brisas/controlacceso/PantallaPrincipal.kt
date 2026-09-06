@@ -73,7 +73,13 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String,
             nucleo = nucleo,
             directorio = directorio,
             scope = scope,
-            onSincronizado = { refrescarNube += 1 },
+            onSincronizado = { resumen ->
+                // Si a esta sesión la desactivaron en otro dispositivo, el
+                // pulso periódico (o Realtime, que dispara por el mismo
+                // camino) ya trajo la baja -- cerrar sesión acá, no sólo
+                // refrescar pantallas que ya no deberían verse.
+                if (resumen.sesionExpulsada) onCerrarSesion() else refrescarNube += 1
+            },
         )
     }
 
@@ -181,7 +187,7 @@ fun PantallaPrincipal(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String,
                 when (pestana) {
                     0 -> PantallaActivos(nucleo, directorio, refrescarNube)
                     1 -> PantallaHistorial(nucleo, refrescarNube)
-                    else -> PantallaNube(nucleo, sesion, directorio)
+                    else -> PantallaNube(nucleo, sesion, directorio, onSesionExpulsada = onCerrarSesion)
                 }
             }
         }

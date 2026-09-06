@@ -23,6 +23,11 @@ export interface ResumenSincronizacion {
   sitio_id: string;
   dispositivo_id: string;
   tipo: string;
+  /** `true` si esta sincronización trajo la baja/desactivación de quien la
+   * disparó -- el llamador debe cerrar la sesión local y volver al login
+   * (ver `App.tsx`, donde ya se cerró del lado de Rust; esto es sólo para
+   * que la UI reaccione). */
+  sesion_expulsada: boolean;
 }
 
 export interface SesionRealtimeNube {

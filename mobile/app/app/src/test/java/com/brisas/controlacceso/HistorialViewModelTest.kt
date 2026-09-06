@@ -39,7 +39,7 @@ class HistorialViewModelTest {
     @Test
     fun `base vacia no falla y no muestra movimientos`() = runTest(dispatcher) {
         nucleo = NucleoDePrueba.abrir(archivo, NucleoDePrueba.sqlUsuarioRoot())
-        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
         val viewModel = HistorialViewModel(nucleo, dispatcherIO = dispatcher)
 
         advanceUntilIdle()
@@ -62,7 +62,7 @@ class HistorialViewModelTest {
                 strftime('%Y-%m-%dT%H:%M:%SZ', 'now'));
             """.trimIndent(),
         )
-        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
         val viewModel = HistorialViewModel(nucleo, dispatcherIO = dispatcher)
         advanceUntilIdle()
         assertNull(viewModel.error)
@@ -88,7 +88,7 @@ class HistorialViewModelTest {
             """.trimIndent(),
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
         nucleo.registrarIngreso(1, MedioIngreso.CAMINANDO, null)
 
         val viewModel = HistorialViewModel(nucleo, dispatcherIO = dispatcher)
@@ -111,7 +111,7 @@ class HistorialViewModelTest {
             """.trimIndent(),
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
         nucleo.registrarIngreso(1, MedioIngreso.CAMINANDO, null)
 
         val viewModel = HistorialViewModel(nucleo, dispatcherIO = dispatcher)

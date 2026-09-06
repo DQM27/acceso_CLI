@@ -495,6 +495,10 @@ pub struct ResumenSincronizacion {
     pub sitio_id: String,
     pub dispositivo_id: String,
     pub tipo: String,
+    /// `true` si esta sincronización trajo la baja/desactivación de quien
+    /// la disparó -- ver `application::nube::ResumenSincronizacion::sesion_expulsada`.
+    /// Kotlin debe cerrar la sesión local y volver al login apenas vea esto.
+    pub sesion_expulsada: bool,
 }
 
 impl From<ResumenSincronizacionNucleo> for ResumenSincronizacion {
@@ -511,6 +515,7 @@ impl From<ResumenSincronizacionNucleo> for ResumenSincronizacion {
             sitio_id: resumen.sitio_id,
             dispositivo_id: resumen.dispositivo_id,
             tipo: resumen.tipo,
+            sesion_expulsada: resumen.sesion_expulsada,
         }
     }
 }
@@ -572,6 +577,12 @@ pub enum NucleoError {
     CredencialesInvalidas,
     #[error("usuario inactivo")]
     UsuarioInactivo,
+    /// Usuario global (sincronizado) que todavía no fijó contraseña en
+    /// este teléfono -- Kotlin la distingue para mostrar la pantalla de
+    /// "fijar contraseña" en vez de un error de login (ver
+    /// `AppCore::fijar_password_inicial`, `PantallaLogin.kt`).
+    #[error("todavía no tenés contraseña en este dispositivo")]
+    SinPasswordLocal,
     #[error("no hay una sesión iniciada")]
     NoAutenticado,
     #[error("fecha de PRAIND inválida: {mensaje}")]
@@ -585,6 +596,7 @@ impl From<AutenticacionErrorNucleo> for NucleoError {
         match error {
             AutenticacionErrorNucleo::CredencialesInvalidas => Self::CredencialesInvalidas,
             AutenticacionErrorNucleo::UsuarioInactivo => Self::UsuarioInactivo,
+            AutenticacionErrorNucleo::SinPasswordLocal => Self::SinPasswordLocal,
             otro => Self::Interno {
                 mensaje: otro.to_string(),
             },
@@ -665,12 +677,46 @@ impl Nucleo {
         })
     }
 
+    /// `directorio` sólo para el intento de sincronización previa (ver
+    /// abajo) -- el resto del login sigue sin necesitarlo, la base ya está
+    /// abierta desde `abrir`.
+    ///
+    /// Después de validar localmente, intenta sincronizar (con el tope de
+    /// `nube::cliente::TIMEOUT_HTTP`) para que una baja/desactivación
+    /// reciente en otro dispositivo se refleje antes de dejar entrar --
+    /// decisión explícita: "por seguridad, pero nunca bloqueante" (el
+    /// teléfono tiene que poder operar sin internet). Sin red o si tarda,
+    /// sigue con lo que ya validó local -- si de verdad estaba
+    /// desactivado, la próxima sincronización que sí tenga señal lo
+    /// expulsa sola (ver `sincronizar_con_nube`).
     pub fn autenticar(
         &self,
         cedula: String,
         password: String,
+        directorio: String,
     ) -> Result<UsuarioSesion, NucleoError> {
         let sesion = self.core_lock().autenticar(&cedula, &password)?;
+        *self.sesion_lock() = Some(sesion.clone());
+
+        let _ = self.sincronizar_con_nube(directorio);
+
+        match self.sesion_lock().clone() {
+            Some(sesion) => Ok(sesion.into()),
+            None => Err(NucleoError::UsuarioInactivo),
+        }
+    }
+
+    /// Completa el alta de contraseña de un usuario global que `autenticar`
+    /// rechazó con `NucleoError::SinPasswordLocal` -- ver
+    /// `AppCore::fijar_password_inicial`. Deja la sesión iniciada directo.
+    pub fn fijar_password_inicial(
+        &self,
+        cedula: String,
+        nueva_password: String,
+    ) -> Result<UsuarioSesion, NucleoError> {
+        let sesion = self
+            .core_lock()
+            .fijar_password_inicial(&cedula, &nueva_password)?;
         *self.sesion_lock() = Some(sesion.clone());
         Ok(sesion.into())
     }
@@ -945,10 +991,18 @@ impl Nucleo {
         directorio: String,
     ) -> Result<ResumenSincronizacion, NucleoError> {
         let actor = self.actor_autenticado()?;
-        Ok(self
+        let resumen: ResumenSincronizacion = self
             .core_lock()
             .sincronizar_con_nube(&actor, Some(std::path::Path::new(&directorio)))?
-            .into())
+            .into();
+        // Igual que en escritorio: si esta sincronización trajo la baja de
+        // quien la disparó, la sesión de ESTE teléfono se cierra sola acá
+        // mismo, no sólo se avisa -- cualquier llamada siguiente que
+        // dependa de `actor_autenticado()` debe fallar de inmediato.
+        if resumen.sesion_expulsada {
+            *self.sesion_lock() = None;
+        }
+        Ok(resumen)
     }
 
     /// Devuelve lo mínimo para que Kotlin escuche Broadcast privado por
@@ -1058,7 +1112,8 @@ mod tests {
         let ruta = archivo.path().to_str().unwrap().to_string();
         let nucleo = Nucleo::abrir(ruta).unwrap();
 
-        let resultado = nucleo.autenticar("000000000".to_string(), "loquesea".to_string());
+        let resultado =
+            nucleo.autenticar("000000000".to_string(), "loquesea".to_string(), String::new());
 
         assert!(matches!(resultado, Err(NucleoError::CredencialesInvalidas)));
     }
@@ -1100,7 +1155,7 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
+            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
             .unwrap();
 
         let preparacion = nucleo.preparar_ingreso(1).unwrap();
@@ -1136,7 +1191,7 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
+            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
             .unwrap();
         let registro = nucleo
             .registrar_ingreso(1, MedioIngreso::Caminando, None)
@@ -1186,7 +1241,7 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
+            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
             .unwrap();
         nucleo
             .registrar_ingreso(1, MedioIngreso::Caminando, Some(7))
@@ -1231,7 +1286,7 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
+            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
             .unwrap();
 
         let empresas = nucleo.listar_empresas().unwrap();
@@ -1276,7 +1331,7 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
+            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
             .unwrap();
 
         let resultado = nucleo.crear_contratista(DatosContratista {
@@ -1310,7 +1365,7 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
+            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
             .unwrap();
 
         let id = nucleo.crear_empresa("Empresa Nueva".to_string()).unwrap();
@@ -1344,7 +1399,7 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
+            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
             .unwrap();
         nucleo
             .registrar_ingreso(1, MedioIngreso::Caminando, None)
@@ -1379,7 +1434,7 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
+            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
             .unwrap();
 
         let id = nucleo
@@ -1398,7 +1453,7 @@ mod tests {
 
         nucleo.cerrar_sesion();
         nucleo
-            .autenticar("888888888".to_string(), "clave_prueba_123".to_string())
+            .autenticar("888888888".to_string(), "clave_prueba_123".to_string(), String::new())
             .unwrap();
 
         let resultado = nucleo.listar_usuarios(String::new());

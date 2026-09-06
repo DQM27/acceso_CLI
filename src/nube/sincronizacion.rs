@@ -7,7 +7,7 @@
 use rusqlite::{Connection, params};
 use serde_json::json;
 
-use super::cliente::NubeError;
+use super::cliente::{NubeError, cliente_http};
 
 /// Todo lo que hace falta para hablar con el receptor en nombre de este
 /// dispositivo. `apikey` es la clave publicable del proyecto (no un
@@ -67,7 +67,7 @@ pub fn drenar_cola(
     contexto: &ContextoSincronizacion<'_>,
     limite: u32,
 ) -> Result<ResumenDrenado, SincronizacionError> {
-    let cliente = reqwest::blocking::Client::new();
+    let cliente = cliente_http();
     let mut resumen = ResumenDrenado::default();
 
     for fila in pendientes(connection, limite)? {
@@ -649,7 +649,7 @@ pub fn recibir_cierres_de_ingresos_propios(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<u32, SincronizacionError> {
-    let cliente = reqwest::blocking::Client::new();
+    let cliente = cliente_http();
     let url = format!(
         "{}/rest/v1/ingresos?sitio_id=eq.{}&dispositivo_entrada_id=eq.{}\
          &hora_salida=not.is.null&select=id,hora_salida,usuario_salida_nombre",
@@ -700,7 +700,7 @@ pub fn recibir_ingresos_abiertos(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<Vec<IngresoRemoto>, SincronizacionError> {
-    let cliente = reqwest::blocking::Client::new();
+    let cliente = cliente_http();
     let url = format!(
         "{}/rest/v1/ingresos?sitio_id=eq.{}&dispositivo_entrada_id=neq.{}&hora_salida=is.null\
          &select=id,contratista_nombre,hora_entrada,usuario_entrada_nombre,dispositivo_entrada_id,\
@@ -784,7 +784,7 @@ pub fn gafete_ocupado_en_otro_dispositivo(
     contexto: &ContextoSincronizacion<'_>,
     numero: i64,
 ) -> Result<bool, SincronizacionError> {
-    let cliente = reqwest::blocking::Client::new();
+    let cliente = cliente_http();
     let url = format!(
         "{}/rest/v1/ingresos?sitio_id=eq.{}&dispositivo_entrada_id=neq.{}&hora_salida=is.null\
          &gafete_numero=eq.{numero}&select=id&limit=1",
@@ -829,7 +829,7 @@ pub fn recibir_historial_del_sitio(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<u32, SincronizacionError> {
-    let cliente = reqwest::blocking::Client::new();
+    let cliente = cliente_http();
 
     let marca_anterior: Option<String> = connection.query_row(
         "SELECT historial_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
@@ -1029,7 +1029,7 @@ pub fn recibir_catalogo_del_sitio(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<ResumenCatalogo, SincronizacionError> {
-    let cliente = reqwest::blocking::Client::new();
+    let cliente = cliente_http();
 
     // Sync incremental (MIGRACION_23): sin esto, cada ciclo (cada 2 minutos,
     // para siempre) traía las tres tablas COMPLETAS aunque nada hubiera
@@ -1333,7 +1333,7 @@ pub fn cerrar_ingreso_remoto(
     uuid: &str,
     usuario_salida_nombre: &str,
 ) -> Result<(), SincronizacionError> {
-    let cliente = reqwest::blocking::Client::new();
+    let cliente = cliente_http();
     let cuerpo = json!({
         "hora_salida": crate::tiempo::serializar_utc(chrono::Utc::now()),
         "dispositivo_salida_id": contexto.dispositivo_id,

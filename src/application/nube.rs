@@ -124,6 +124,15 @@ pub struct ResumenSincronizacion {
     pub sitio_id: String,
     pub dispositivo_id: String,
     pub tipo: String,
+    /// `true` si esta misma sincronización trajo la baja/desactivación de
+    /// quien la disparó -- ver `AppCore::sesion_sigue_activa`. Decisión
+    /// explícita del usuario: el login local (offline-first) no puede
+    /// exigir estar en línea para dejar operar, pero una sesión YA abierta
+    /// que se entera -- en cuanto vuelve a tener señal -- de que a su
+    /// usuario lo desactivaron en otro dispositivo, se cierra sola en vez
+    /// de seguir operando con un permiso que ya no existe. Quien recibe
+    /// esto debe cerrar la sesión local y volver al login.
+    pub sesion_expulsada: bool,
 }
 
 /// Datos temporales para que una capa de plataforma abra un canal Realtime.
@@ -220,6 +229,7 @@ impl AppCore {
             sitio_id: token.sitio_id,
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,
+            sesion_expulsada: !self.sesion_sigue_activa(actor),
         })
     }
 

@@ -129,6 +129,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             comandos::autenticacion::requiere_configuracion_inicial,
             comandos::autenticacion::login,
+            comandos::autenticacion::fijar_password_inicial,
             comandos::autenticacion::cerrar_sesion,
             comandos::contratistas::buscar_contratistas,
             comandos::contratistas::crear_contratista,

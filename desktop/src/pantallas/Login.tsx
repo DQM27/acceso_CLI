@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import marca from "../assets/marca.png";
-import { login } from "../api";
+import { esErrorLogin, login } from "../api";
 import type { UsuarioSesion } from "../api";
+import FijarPasswordInicial from "./FijarPasswordInicial";
 
 const esquemaLogin = z.object({
   cedula: z.string().min(1, "La cédula es obligatoria"),
@@ -17,6 +19,14 @@ export default function Login({
 }: {
   onAutenticado: (sesion: UsuarioSesion) => void;
 }) {
+  // Usuario global (Administrador/Operador sincronizado, ver
+  // `services/error.rs::AutenticacionError::SinPasswordLocal`) que intentó
+  // entrar en ESTE dispositivo por primera vez -- no hay nada que verificar
+  // todavía, así que en vez de un error se le ofrece fijar una acá mismo.
+  // `null` es el estado normal (formulario de login); con la cédula puesta,
+  // se reemplaza por `FijarPasswordInicial`.
+  const [cedulaSinPassword, setCedulaSinPassword] = useState<string | null>(null);
+
   const {
     register,
     handleSubmit,
@@ -32,8 +42,22 @@ export default function Login({
       const sesion = await login(valores.cedula, valores.password);
       onAutenticado(sesion);
     } catch (error) {
-      setError("root", { message: String(error) });
+      if (esErrorLogin(error) && error.sin_password_local) {
+        setCedulaSinPassword(valores.cedula);
+        return;
+      }
+      setError("root", { message: esErrorLogin(error) ? error.mensaje : String(error) });
     }
+  }
+
+  if (cedulaSinPassword !== null) {
+    return (
+      <FijarPasswordInicial
+        cedula={cedulaSinPassword}
+        onListo={onAutenticado}
+        onCancelar={() => setCedulaSinPassword(null)}
+      />
+    );
   }
 
   return (

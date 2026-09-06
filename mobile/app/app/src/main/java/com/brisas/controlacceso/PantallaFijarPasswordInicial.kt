@@ -9,10 +9,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -20,40 +25,23 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import uniffi.control_acceso_mobile.Nucleo
 
-/// Login real contra `Nucleo.autenticar` (Rust) — todo el estado y la
-/// llamada viven en [LoginViewModel] (ver mobile/app/ARQUITECTURA.md), este
-/// Composable sólo dibuja el formulario. Una vez hay sesión, delega a
-/// [PantallaPrincipal] en vez de dibujar nada propio — mismo `Nucleo` para
-/// toda la app, no se reabre la base al loguear.
+/// Reemplaza al formulario de login cuando `NucleoException.SinPasswordLocal`
+/// avisa que esta cédula existe (sincronizada de otro dispositivo) pero
+/// nunca fijó contraseña en este teléfono -- ver el doc-comment de
+/// [LoginViewModel.autenticar]. No pide contraseña anterior a propósito:
+/// nunca existió una acá.
 @Composable
-fun PantallaLogin(nucleo: Nucleo, directorio: String) {
-    val viewModel: LoginViewModel = viewModel(factory = LoginViewModel.factory(nucleo, directorio))
-
-    val sesionActual = viewModel.sesion
-    if (sesionActual != null) {
-        PantallaPrincipal(
-            nucleo = nucleo,
-            sesion = sesionActual,
-            directorio = directorio,
-            onCerrarSesion = { viewModel.cerrarSesion() },
-        )
-        return
-    }
-
-    val cedulaSinPassword = viewModel.cedulaSinPassword
-    if (cedulaSinPassword != null) {
-        PantallaFijarPasswordInicial(
-            cedula = cedulaSinPassword,
-            error = viewModel.error,
-            enviando = viewModel.autenticando,
-            onFijar = { nueva -> viewModel.fijarPasswordInicial(nueva) },
-            onCancelar = { viewModel.cancelarFijarPassword() },
-        )
-        return
-    }
+fun PantallaFijarPasswordInicial(
+    cedula: String,
+    error: String?,
+    enviando: Boolean,
+    onFijar: (String) -> Unit,
+    onCancelar: () -> Unit,
+) {
+    var password by remember { mutableStateOf("") }
+    var confirmar by remember { mutableStateOf("") }
+    var errorLocal by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -67,22 +55,23 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String) {
         )
 
         Text(
-            "Control de acceso",
+            "Fijar contraseña",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(top = 16.dp),
         )
         Text(
-            "Brisas",
+            "Cédula $cedula · primera vez en este dispositivo",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         OutlinedTextField(
-            value = viewModel.cedula,
-            onValueChange = { viewModel.cambiarCedula(it) },
-            label = { Text("Cédula") },
+            value = password,
+            onValueChange = { password = it },
+            label = { Text("Contraseña nueva") },
             singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
                 focusedLabelColor = MaterialTheme.colorScheme.primary,
@@ -90,9 +79,9 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String) {
             modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
         )
         OutlinedTextField(
-            value = viewModel.password,
-            onValueChange = { viewModel.cambiarPassword(it) },
-            label = { Text("Contraseña") },
+            value = confirmar,
+            onValueChange = { confirmar = it },
+            label = { Text("Confirmar contraseña") },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
             colors = OutlinedTextFieldDefaults.colors(
@@ -101,15 +90,31 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String) {
             ),
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
         )
+
         BotonBrisas(
-            onClick = { viewModel.autenticar() },
-            enabled = !viewModel.autenticando,
+            onClick = {
+                errorLocal = null
+                when {
+                    password.length < 8 -> errorLocal = "Al menos 8 caracteres"
+                    password != confirmar -> errorLocal = "Las contraseñas no coinciden"
+                    else -> onFijar(password)
+                }
+            },
+            enabled = !enviando,
             modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
         ) {
-            Text(if (viewModel.autenticando) "Verificando…" else "Ingresar")
+            Text(if (enviando) "Guardando…" else "Fijar y entrar")
         }
 
-        val mensajeError = viewModel.error
+        OutlinedButton(
+            onClick = onCancelar,
+            enabled = !enviando,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        ) {
+            Text("Volver")
+        }
+
+        val mensajeError = errorLocal ?: error
         if (mensajeError != null) {
             Text(
                 mensajeError,

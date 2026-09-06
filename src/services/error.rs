@@ -32,6 +32,17 @@ pub enum UsuarioServiceError {
     OperacionNoAutorizada,
     #[error("La contraseña actual es incorrecta")]
     PasswordActualIncorrecta,
+    /// Ver `AppCore::fijar_password_inicial` -- una cuenta desactivada no
+    /// puede arrancar sesión en un dispositivo nuevo fijando una contraseña,
+    /// igual que tampoco podría con una contraseña ya fijada.
+    #[error("Usuario inactivo")]
+    UsuarioInactivo,
+    /// Ídem -- `fijar_password_inicial` sólo es válido mientras el usuario
+    /// siga con el centinela `SIN_PASSWORD_LOCAL`; una vez fijada, cambiarla
+    /// pasa por `cambiar_password_propio`/`cambiar_password` (gestión), no
+    /// por acá.
+    #[error("Este usuario ya tiene contraseña en este dispositivo")]
+    YaTienePasswordLocal,
     #[error(transparent)]
     Password(#[from] PasswordError),
     #[error(transparent)]

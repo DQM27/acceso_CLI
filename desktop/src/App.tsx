@@ -258,16 +258,36 @@ function Shell({
   // comportan igual.
   useHotkeys("ctrl+q", onCerrarSesion, { preventDefault: true });
 
+  // Cualquier sincronización (Realtime, el pulso periódico, o "Sincronizar"
+  // a mano) puede traer la baja/desactivación de quien tiene la sesión
+  // abierta ACÁ MISMO -- el lado Rust ya cerró esa sesión
+  // (`ejecutar_sincronizacion`, ver `ResumenSincronizacion::sesion_expulsada`),
+  // esto sólo hace que la pantalla reaccione en vez de seguir mostrando el
+  // Shell con una sesión que el backend ya no reconoce. `true` (en vez de
+  // sumar a `refrescarActivos`) corta ahí: no tiene sentido refrescar
+  // pantallas de una sesión que ya no existe.
+  function manejarResumenSincronizacion(resumen: ResumenSincronizacion): boolean {
+    if (resumen.sesion_expulsada) {
+      toast.error("Tu usuario fue desactivado — se cerró la sesión.");
+      onCerrarSesion();
+      return true;
+    }
+    return false;
+  }
+
   // Los avisos privados refrescan de inmediato; el pulso periódico recupera
   // cambios aunque se pierda el socket o el equipo haya estado sin conexión.
   useEffect(() => {
     const cancelarRealtime = iniciarRealtimeNube({
-      onSincronizado: () => setRefrescarActivos((n) => n + 1),
+      onSincronizado: (resumen) => {
+        if (!manejarResumenSincronizacion(resumen)) setRefrescarActivos((n) => n + 1);
+      },
       onEstado: setEstadoNube,
     });
     const cancelarSincronizacionAutomatica = listen<ResumenSincronizacion>(
       "nube://sincronizado",
       ({ payload }) => {
+        if (manejarResumenSincronizacion(payload)) return;
         setRefrescarActivos((n) => n + 1);
         emitirActualizacion(payload);
       },
@@ -289,6 +309,7 @@ function Shell({
     setSincronizandoManual(true);
     try {
       const resumen = await sincronizarConNube();
+      if (manejarResumenSincronizacion(resumen)) return;
       setRefrescarActivos((n) => n + 1);
       emitirActualizacion(resumen, "manual");
       if (resumen.fallidos === 0) {

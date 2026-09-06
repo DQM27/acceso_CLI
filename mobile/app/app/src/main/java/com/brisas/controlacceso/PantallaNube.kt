@@ -43,8 +43,14 @@ import uniffi.control_acceso_mobile.UsuarioSesion
 /// un Operador que ni ve ese botón. `sincronizar` sí está disponible para
 /// cualquier rol, sin gateo acá.
 @Composable
-fun PantallaNube(nucleo: Nucleo, sesion: UsuarioSesion, directorio: String) {
-    val viewModel: NubeViewModel = viewModel(factory = NubeViewModel.factory(nucleo, directorio))
+fun PantallaNube(
+    nucleo: Nucleo,
+    sesion: UsuarioSesion,
+    directorio: String,
+    onSesionExpulsada: () -> Unit = {},
+) {
+    val viewModel: NubeViewModel =
+        viewModel(factory = NubeViewModel.factory(nucleo, directorio, onSesionExpulsada))
     val esRoot = sesion.rol == RolUsuario.ROOT
 
     LaunchedEffect(Unit) {

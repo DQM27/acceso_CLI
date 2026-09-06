@@ -689,6 +689,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_fijar_password_inicial(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_guardar_secreto_dispositivo(
@@ -741,7 +743,7 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_constructor_nucleo_abrir(`rutaBaseDatos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,`directorio`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_contratistas(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -757,6 +759,8 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_usuario(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_fijar_password_inicial(`ptr`: Long,`cedula`: RustBuffer.ByValue,`nuevaPassword`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio(`ptr`: Long,`directorio`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_guardar_secreto_dispositivo(`ptr`: Long,`directorio`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -902,7 +906,7 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
-    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() != 22780) {
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() != 18570) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas() != 3985) {
@@ -924,6 +928,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario() != 28771) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_fijar_password_inicial() != 9730) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio() != 35345) {
@@ -1378,7 +1385,21 @@ public object FfiConverterString: FfiConverter<String, RustBuffer.ByValue> {
  */
 public interface NucleoInterface {
     
-    fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String): UsuarioSesion
+    /**
+     * `directorio` sólo para el intento de sincronización previa (ver
+     * abajo) -- el resto del login sigue sin necesitarlo, la base ya está
+     * abierta desde `abrir`.
+     *
+     * Después de validar localmente, intenta sincronizar (con el tope de
+     * `nube::cliente::TIMEOUT_HTTP`) para que una baja/desactivación
+     * reciente en otro dispositivo se refleje antes de dejar entrar --
+     * decisión explícita: "por seguridad, pero nunca bloqueante" (el
+     * teléfono tiene que poder operar sin internet). Sin red o si tarda,
+     * sigue con lo que ya validó local -- si de verdad estaba
+     * desactivado, la próxima sincronización que sí tenga señal lo
+     * expulsa sola (ver `sincronizar_con_nube`).
+     */
+    fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String, `directorio`: kotlin.String): UsuarioSesion
     
     /**
      * Búsqueda en vivo (la vía primaria del guardia — ver
@@ -1435,6 +1456,13 @@ public interface NucleoInterface {
      * como atajo de UX, no como el control real.
      */
     fun `crearUsuario`(`datos`: DatosUsuario): kotlin.Long
+    
+    /**
+     * Completa el alta de contraseña de un usuario global que `autenticar`
+     * rechazó con `NucleoError::SinPasswordLocal` -- ver
+     * `AppCore::fijar_password_inicial`. Deja la sesión iniciada directo.
+     */
+    fun `fijarPasswordInicial`(`cedula`: kotlin.String, `nuevaPassword`: kotlin.String): UsuarioSesion
     
     /**
      * Chequeo en vivo (no la caché local) de si `gafete_numero` ya está
@@ -1625,7 +1653,21 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     }
 
     
-    @Throws(NucleoException::class)override fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String): UsuarioSesion {
+    /**
+     * `directorio` sólo para el intento de sincronización previa (ver
+     * abajo) -- el resto del login sigue sin necesitarlo, la base ya está
+     * abierta desde `abrir`.
+     *
+     * Después de validar localmente, intenta sincronizar (con el tope de
+     * `nube::cliente::TIMEOUT_HTTP`) para que una baja/desactivación
+     * reciente en otro dispositivo se refleje antes de dejar entrar --
+     * decisión explícita: "por seguridad, pero nunca bloqueante" (el
+     * teléfono tiene que poder operar sin internet). Sin red o si tarda,
+     * sigue con lo que ya validó local -- si de verdad estaba
+     * desactivado, la próxima sincronización que sí tenga señal lo
+     * expulsa sola (ver `sincronizar_con_nube`).
+     */
+    @Throws(NucleoException::class)override fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String, `directorio`: kotlin.String): UsuarioSesion {
             return FfiConverterTypeUsuarioSesion.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
@@ -1633,7 +1675,8 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         it,
         
         FfiConverterString.lower(`cedula`),
-        FfiConverterString.lower(`password`),_status)
+        FfiConverterString.lower(`password`),
+        FfiConverterString.lower(`directorio`),_status)
 }
     }
     )
@@ -1778,6 +1821,27 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         it,
         
         FfiConverterTypeDatosUsuario.lower(`datos`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Completa el alta de contraseña de un usuario global que `autenticar`
+     * rechazó con `NucleoError::SinPasswordLocal` -- ver
+     * `AppCore::fijar_password_inicial`. Deja la sesión iniciada directo.
+     */
+    @Throws(NucleoException::class)override fun `fijarPasswordInicial`(`cedula`: kotlin.String, `nuevaPassword`: kotlin.String): UsuarioSesion {
+            return FfiConverterTypeUsuarioSesion.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_fijar_password_inicial(
+        it,
+        
+        FfiConverterString.lower(`cedula`),
+        FfiConverterString.lower(`nuevaPassword`),_status)
 }
     }
     )
@@ -2772,6 +2836,13 @@ data class ResumenSincronizacion (
     var `dispositivoId`: kotlin.String
     , 
     var `tipo`: kotlin.String
+    , 
+    /**
+     * `true` si esta sincronización trajo la baja/desactivación de quien
+     * la disparó -- ver `application::nube::ResumenSincronizacion::sesion_expulsada`.
+     * Kotlin debe cerrar la sesión local y volver al login apenas vea esto.
+     */
+    var `sesionExpulsada`: kotlin.Boolean
     
 ){
     
@@ -2799,6 +2870,7 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
         )
     }
 
@@ -2813,7 +2885,8 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterUInt.allocationSize(value.`movimientosHistorialRecibidos`) +
             FfiConverterString.allocationSize(value.`sitioId`) +
             FfiConverterString.allocationSize(value.`dispositivoId`) +
-            FfiConverterString.allocationSize(value.`tipo`)
+            FfiConverterString.allocationSize(value.`tipo`) +
+            FfiConverterBoolean.allocationSize(value.`sesionExpulsada`)
     )
 
     override fun write(value: ResumenSincronizacion, buf: ByteBuffer) {
@@ -2828,6 +2901,7 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterString.write(value.`sitioId`, buf)
             FfiConverterString.write(value.`dispositivoId`, buf)
             FfiConverterString.write(value.`tipo`, buf)
+            FfiConverterBoolean.write(value.`sesionExpulsada`, buf)
     }
 }
 
@@ -3161,6 +3235,14 @@ sealed class NucleoException(message: String): kotlin.Exception(message) {
         
         class UsuarioInactivo(message: String) : NucleoException(message)
         
+    /**
+     * Usuario global (sincronizado) que todavía no fijó contraseña en
+     * este teléfono -- Kotlin la distingue para mostrar la pantalla de
+     * "fijar contraseña" en vez de un error de login (ver
+     * `AppCore::fijar_password_inicial`, `PantallaLogin.kt`).
+     */
+        class SinPasswordLocal(message: String) : NucleoException(message)
+        
         class NoAutenticado(message: String) : NucleoException(message)
         
         class FechaInvalida(message: String) : NucleoException(message)
@@ -3183,9 +3265,10 @@ public object FfiConverterTypeNucleoError : FfiConverterRustBuffer<NucleoExcepti
             1 -> NucleoException.Apertura(FfiConverterString.read(buf))
             2 -> NucleoException.CredencialesInvalidas(FfiConverterString.read(buf))
             3 -> NucleoException.UsuarioInactivo(FfiConverterString.read(buf))
-            4 -> NucleoException.NoAutenticado(FfiConverterString.read(buf))
-            5 -> NucleoException.FechaInvalida(FfiConverterString.read(buf))
-            6 -> NucleoException.Interno(FfiConverterString.read(buf))
+            4 -> NucleoException.SinPasswordLocal(FfiConverterString.read(buf))
+            5 -> NucleoException.NoAutenticado(FfiConverterString.read(buf))
+            6 -> NucleoException.FechaInvalida(FfiConverterString.read(buf))
+            7 -> NucleoException.Interno(FfiConverterString.read(buf))
             else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
         }
         
@@ -3209,16 +3292,20 @@ public object FfiConverterTypeNucleoError : FfiConverterRustBuffer<NucleoExcepti
                 buf.putInt(3)
                 Unit
             }
-            is NucleoException.NoAutenticado -> {
+            is NucleoException.SinPasswordLocal -> {
                 buf.putInt(4)
                 Unit
             }
-            is NucleoException.FechaInvalida -> {
+            is NucleoException.NoAutenticado -> {
                 buf.putInt(5)
                 Unit
             }
-            is NucleoException.Interno -> {
+            is NucleoException.FechaInvalida -> {
                 buf.putInt(6)
+                Unit
+            }
+            is NucleoException.Interno -> {
+                buf.putInt(7)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }

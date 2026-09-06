@@ -11,11 +11,12 @@
 
 use rusqlite::Connection;
 
+use control_acceso::application::AppCore;
 use control_acceso::database::repositories::usuario_repository::SqliteUsuarioRepository;
 use control_acceso::database::schema::initialize_database;
 use control_acceso::models::usuario::RolUsuario;
 use control_acceso::services::autenticacion_service::AutenticacionService;
-use control_acceso::services::error::AutenticacionError;
+use control_acceso::services::error::{AutenticacionError, UsuarioServiceError};
 use control_acceso::services::password::SIN_PASSWORD_LOCAL;
 use control_acceso::services::usuario_service::{CrearRootInicialInput, UsuarioService};
 
@@ -91,5 +92,46 @@ fn fija_password_y_puede_iniciar_sesion_de_ahi_en_adelante() {
     assert!(matches!(
         autenticacion.autenticar("9-0002", "password-incorrecta"),
         Err(AutenticacionError::CredencialesInvalidas)
+    ));
+}
+
+/// Camino real que usan escritorio/móvil: `AppCore::fijar_password_inicial`
+/// -- la pantalla de login lo llama tras recibir `SinPasswordLocal`, sin
+/// pasar por los servicios de bajo nivel a mano como los tests de arriba.
+#[test]
+fn app_core_fija_password_inicial_y_deja_la_sesion_lista() {
+    let connection = base_con_root();
+    insertar_usuario_global_sin_password(&connection, "9-0003");
+    let core = AppCore::new(connection);
+
+    let sesion = core
+        .fijar_password_inicial("9-0003", "mi-password-nueva")
+        .expect("debería poder fijarla");
+    assert_eq!(sesion.cedula, "9-0003");
+    assert_eq!(sesion.rol, RolUsuario::Operador);
+
+    // Ya logueada esa vez, un segundo intento de "fijar inicial" no debe
+    // pisarla -- la pantalla de login ya no vuelve a llamar esto una vez
+    // que el login normal funciona, pero el backend no debe confiar en que
+    // el frontend nunca lo llame dos veces.
+    assert!(matches!(
+        core.fijar_password_inicial("9-0003", "otra-password"),
+        Err(UsuarioServiceError::YaTienePasswordLocal)
+    ));
+
+    // Y el login normal ya funciona con la contraseña recién fijada.
+    assert!(core.autenticar("9-0003", "mi-password-nueva").is_ok());
+}
+
+/// Una cédula que no existe da "usuario no encontrado", no algo genérico --
+/// mismo criterio que el resto de `UsuarioService`.
+#[test]
+fn app_core_fija_password_inicial_rechaza_cedula_inexistente() {
+    let connection = base_con_root();
+    let core = AppCore::new(connection);
+
+    assert!(matches!(
+        core.fijar_password_inicial("no-existe", "cualquier-password"),
+        Err(UsuarioServiceError::UsuarioNoEncontrado)
     ));
 }

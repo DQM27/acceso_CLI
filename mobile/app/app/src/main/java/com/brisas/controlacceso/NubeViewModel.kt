@@ -39,6 +39,10 @@ import uniffi.control_acceso_mobile.ResumenSincronizacion
 class NubeViewModel(
     private val nucleo: Nucleo,
     private val directorio: String,
+    // Ver `PantallaPrincipal.kt` / `SincronizacionPeriodica` -- misma
+    // reacción ante `sesionExpulsada` que el pulso periódico, para el botón
+    // manual "Sincronizar" de esta pantalla.
+    private val onSesionExpulsada: () -> Unit = {},
     // Ver el mismo parámetro en ActivosViewModel/HistorialViewModel —
     // permite tests con tiempo controlado en vez de hilos reales.
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.Default,
@@ -91,7 +95,9 @@ class NubeViewModel(
         sincronizando = true
         viewModelScope.launch {
             try {
-                ultimoResumen = withContext(dispatcherIO) { nucleo.sincronizarConNube(directorio) }
+                val resumen = withContext(dispatcherIO) { nucleo.sincronizarConNube(directorio) }
+                ultimoResumen = resumen
+                if (resumen.sesionExpulsada) onSesionExpulsada()
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
             } finally {
@@ -105,8 +111,12 @@ class NubeViewModel(
         /// base `SQLite` (`filesDir.absolutePath`) — no un archivo, la
         /// carpeta; Android no tiene `%LOCALAPPDATA%`, así que a diferencia
         /// de escritorio acá siempre hay que pasarlo explícito.
-        fun factory(nucleo: Nucleo, directorio: String): ViewModelProvider.Factory = viewModelFactory {
-            initializer { NubeViewModel(nucleo, directorio) }
+        fun factory(
+            nucleo: Nucleo,
+            directorio: String,
+            onSesionExpulsada: () -> Unit = {},
+        ): ViewModelProvider.Factory = viewModelFactory {
+            initializer { NubeViewModel(nucleo, directorio, onSesionExpulsada) }
         }
     }
 }

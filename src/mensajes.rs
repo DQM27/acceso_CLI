@@ -76,6 +76,10 @@ pub fn mensaje_usuario(error: UsuarioServiceError) -> String {
         UsuarioServiceError::PasswordActualIncorrecta => {
             "La contraseña actual es incorrecta".into()
         }
+        UsuarioServiceError::UsuarioInactivo => "Usuario inactivo".into(),
+        UsuarioServiceError::YaTienePasswordLocal => {
+            "Este usuario ya tiene contraseña en este dispositivo".into()
+        }
         _ => "No se pudo guardar el usuario".into(),
     }
 }
