@@ -8,10 +8,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -20,8 +23,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -37,15 +42,17 @@ import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.RolUsuario
 import uniffi.control_acceso_mobile.UsuarioSesion
 
-/// Sólo las pantallas de uso frecuente son pestañas (Activos, Historial,
-/// Nube) — las de creación (uso esporádico: dar de alta un contratista,
-/// empresa o usuario nuevos) viven detrás del botón "+", no compitiendo por
-/// espacio en la barra de pestañas. Nube entra como pestaña y no detrás del
-/// "+" por el mismo motivo que Activos/Historial: su estado
-/// (`NubeViewModel.ingresosRemotos`, `secretoGuardado`) debe sobrevivir
-/// cambiar de pestaña y volver, no reiniciarse como si fuera un formulario
-/// de alta de un solo uso. `Principal` es la única bandera "no es pantalla
-/// de creación" — qué pestaña se ve la decide el `pestana` local más abajo.
+/// Sólo las pantallas de uso frecuente son pestañas (Activos, Historial) —
+/// las de creación (uso esporádico: dar de alta un contratista, empresa o
+/// usuario nuevos) viven detrás del botón "+", no compitiendo por espacio
+/// en la barra de pestañas. `Principal` es la única bandera "no es
+/// pantalla de creación" — qué pestaña se ve la decide el `pestana` local
+/// más abajo.
+///
+/// Ya no hay una tercera pestaña "Nube" (sacada 2026-09-06, ver
+/// `NubeViewModel.kt`/`ARQUITECTURA.md`) -- la app móvil se limita a
+/// registros rápidos + historial. Lo único que queda de esa pantalla es
+/// el ícono "Sincronizar" de la barra superior, más abajo.
 ///
 /// Vive como estado local del Composable (no en un ViewModel) a propósito:
 /// es puramente de navegación — qué se ve en pantalla — sin ninguna llamada
@@ -73,6 +80,10 @@ fun PantallaPrincipal(
     var pantalla by remember { mutableStateOf<Pantalla>(Pantalla.Principal) }
     var menuCreacionAbierto by remember { mutableStateOf(false) }
     var refrescarNube by remember { mutableIntStateOf(0) }
+    val nubeViewModel: NubeViewModel =
+        viewModel(
+            factory = NubeViewModel.factory(nucleo, directorio, identificadorDispositivo, onCerrarSesion),
+        )
     val scope = rememberCoroutineScope()
     val realtime = remember(nucleo, directorio, scope) {
         NubeRealtime(nucleo = nucleo, directorio = directorio, scope = scope)
@@ -121,6 +132,14 @@ fun PantallaPrincipal(
             realtime.detener()
             sincronizacion.detener()
         }
+    }
+
+    // El botón manual también refresca Activos/Historial al terminar --
+    // mismo camino que ya usa el pulso periódico (`onSincronizado` más
+    // arriba), para que tocar "Sincronizar" se sienta instantáneo en vez
+    // de esperar al próximo ciclo de 2 minutos.
+    LaunchedEffect(nubeViewModel.ultimoResumen) {
+        if (nubeViewModel.ultimoResumen != null) refrescarNube += 1
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -177,10 +196,30 @@ fun PantallaPrincipal(
                         contentDescription = if (oscuroActual) "Cambiar a modo claro" else "Cambiar a modo oscuro",
                     )
                 }
+                IconButton(
+                    onClick = { nubeViewModel.sincronizar() },
+                    enabled = !nubeViewModel.sincronizando,
+                ) {
+                    if (nubeViewModel.sincronizando) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Default.Sync, contentDescription = "Sincronizar")
+                    }
+                }
                 BotonDiscretoBrisas(onClick = onCerrarSesion) {
                     Text("Salir")
                 }
             }
+        }
+
+        val errorSincronizacion = nubeViewModel.error
+        if (errorSincronizacion != null) {
+            Text(
+                errorSincronizacion,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            )
         }
 
         when (val actual = pantalla) {
@@ -199,19 +238,10 @@ fun PantallaPrincipal(
                 PrimaryTabRow(selectedTabIndex = pestana) {
                     Tab(selected = pestana == 0, onClick = { pestana = 0 }, text = { Text("Activos") })
                     Tab(selected = pestana == 1, onClick = { pestana = 1 }, text = { Text("Historial") })
-                    Tab(selected = pestana == 2, onClick = { pestana = 2 }, text = { Text("Nube") })
                 }
                 when (pestana) {
                     0 -> PantallaActivos(nucleo, directorio, refrescarNube)
-                    1 -> PantallaHistorial(nucleo, refrescarNube)
-                    else ->
-                        PantallaNube(
-                            nucleo,
-                            sesion,
-                            directorio,
-                            identificadorDispositivo,
-                            onSesionExpulsada = onCerrarSesion,
-                        )
+                    else -> PantallaHistorial(nucleo, refrescarNube)
                 }
             }
         }

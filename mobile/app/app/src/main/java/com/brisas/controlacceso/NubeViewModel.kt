@@ -16,42 +16,32 @@ import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.ResumenSincronizacion
 
-/// Dueño del estado de la sincronización con la nube (ver
+/// Dueño del estado del botón manual "Sincronizar" (ver
 /// docs/plan-persistencia-nube.md y mobile/app/ARQUITECTURA.md) — el
 /// Composable que lo use sólo dibuja lo que expone acá y le reporta
 /// eventos, nunca llama a [Nucleo] directamente.
 ///
-/// `guardarSecreto`/`actualizarEstadoSecreto` exigen Root del lado de Rust
-/// (`Operacion::GestionarNube`, ver `src/application/nube.rs`) —
-/// `sincronizar`/`cerrarIngresoRemoto` los puede llamar cualquier rol
-/// (`Operacion::UsarNube`). Esta clase no repite esas reglas: si alguien
-/// sin permiso llama un método exclusivo de Root, `Nucleo` tira
-/// [NucleoException] y acá sólo se refleja como `error` — el gateo de UI
-/// (qué ve un Operador) es responsabilidad de quien arme la pantalla, no
-/// de este ViewModel.
-///
-/// A propósito **no** llama a nada en `init` — a diferencia de
-/// `ActivosViewModel`/`HistorialViewModel` (que sí cargan datos apenas se
-/// crean), acá hasta comprobar si ya hay un secreto guardado es una
-/// operación exclusiva de Root; auto-dispararla para cualquier usuario
-/// que entre a la pantalla generaría un error para todo el que no sea
-/// Root sin que haya pedido nada.
+/// Antes también manejaba pegar/consultar el secreto del dispositivo
+/// (`Operacion::GestionarNube`, sólo Root) desde una pantalla "Nube"
+/// propia -- se sacó junto con esa pestaña (la app móvil se limita a
+/// registros rápidos + historial; configurar un dispositivo de cero sigue
+/// siendo el primer arranque, `PantallaPrimerArranque.kt`). Lo que queda
+/// acá es `sincronizar`, disponible para cualquier rol
+/// (`Operacion::UsarNube`).
 class NubeViewModel(
     private val nucleo: Nucleo,
     private val directorio: String,
-    // `Settings.Secure.ANDROID_ID` (resuelto en `MainActivity`) -- cifra el
-    // secreto de dispositivo en disco, ver `guardarSecreto` más abajo.
+    // `Settings.Secure.ANDROID_ID` (resuelto en `MainActivity`) -- lo pide
+    // `Nucleo.sincronizarConNube` para el reintento post-login, aunque hoy
+    // el secreto se guarda en texto plano (ver mobile/rust-core/Cargo.toml).
     private val identificadorDispositivo: String,
-    // Ver `PantallaPrincipal.kt` / `SincronizacionPeriodica` -- misma
-    // reacción ante `sesionExpulsada` que el pulso periódico, para el botón
-    // manual "Sincronizar" de esta pantalla.
+    // Misma reacción ante `sesionExpulsada` que el pulso periódico
+    // (`SincronizacionPeriodica`, ver `PantallaPrincipal.kt`).
     private val onSesionExpulsada: () -> Unit = {},
     // Ver el mismo parámetro en ActivosViewModel/HistorialViewModel —
     // permite tests con tiempo controlado en vez de hilos reales.
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
-    var secretoGuardado by mutableStateOf(false)
-        private set
     var sincronizando by mutableStateOf(false)
         private set
     var ultimoResumen by mutableStateOf<ResumenSincronizacion?>(null)
@@ -59,40 +49,15 @@ class NubeViewModel(
     var error by mutableStateOf<String?>(null)
         private set
 
-    /// Sólo Root — ver el doc-comment de la clase. Síncrono a propósito:
-    /// es una lectura de archivo local, sin red de por medio (mismo
-    /// criterio que `LoginViewModel.autenticar`).
-    fun actualizarEstadoSecreto() {
-        try {
-            secretoGuardado = nucleo.secretoDispositivoGuardado(directorio, identificadorDispositivo)
-            error = null
-        } catch (excepcion: NucleoException) {
-            error = excepcion.message
-        }
-    }
-
-    /// Sólo Root — ver el doc-comment de la clase. Síncrono, mismo motivo
-    /// que [actualizarEstadoSecreto]: guardar el secreto es escribir un
-    /// archivo, no hablar con la nube.
-    fun guardarSecreto(secreto: String) {
-        error = null
-        try {
-            nucleo.guardarSecretoDispositivo(directorio, identificadorDispositivo, secreto)
-            secretoGuardado = true
-        } catch (excepcion: NucleoException) {
-            error = excepcion.message
-        }
-    }
-
-    /// Cualquier rol — autentica este dispositivo, drena la bandeja de
-    /// salida pendiente y trae lo que el otro dispositivo del sitio tiene
-    /// abierto ahora mismo. Es una llamada de red real (cientos de
-    /// milisegundos o más, ver doc-comment de `sincronizar_con_nube` en
-    /// `src/application/nube.rs`) — `sincronizando` es lo que la pantalla
-    /// usa para deshabilitar el botón mientras tanto. Los ingresos abiertos
-    /// por el otro dispositivo (`ingresos_remotos`, ya actualizada por esta
-    /// misma llamada) se leen y se cierran desde Activos, no desde acá --
-    /// ver `ActivosViewModel.FilaActiva`.
+    /// Autentica este dispositivo, drena la bandeja de salida pendiente y
+    /// trae lo que el otro dispositivo del sitio tiene abierto ahora
+    /// mismo. Es una llamada de red real (cientos de milisegundos o más,
+    /// ver doc-comment de `sincronizar_con_nube` en
+    /// `src/application/nube.rs`) -- `sincronizando` es lo que la pantalla
+    /// usa para deshabilitar el botón mientras tanto. Los ingresos
+    /// abiertos por el otro dispositivo (`ingresos_remotos`, ya
+    /// actualizada por esta misma llamada) se leen y se cierran desde
+    /// Activos, no desde acá -- ver `ActivosViewModel.FilaActiva`.
     fun sincronizar() {
         error = null
         sincronizando = true

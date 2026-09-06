@@ -196,30 +196,14 @@ falla en tiempo de ejecución, no en compilación — antes de aplicar
 generado por uniffi (los enums sí son `Serializable`, heredado de
 `java.lang.Enum`), confirmar que el tipo realmente se puede guardar.
 
-`PantallaNube.kt` + `NubeViewModel.kt` (2026-09-03) — sincronización con la
-nube (`docs/plan-persistencia-nube.md`) — es el sexto ejemplo y aporta dos
-matices nuevos:
-
-- **Split de autorización dentro de un mismo ViewModel.** A diferencia de
-  todos los casos anteriores (donde toda la pantalla es de un rol o de
-  todos), acá `Operacion::GestionarNube` (guardar/leer si hay secreto) es
-  exclusivo de Root y `Operacion::UsarNube` (sincronizar, listar y cerrar
-  ingresos remotos) es de cualquier rol — dos operaciones del dominio
-  reales, no una preferencia de UI. `NubeViewModel` no oculta esto: expone
-  los cuatro métodos tal cual, y es `PantallaNube` quien decide, con
-  `sesion.rol`, qué botones dibujar — el mismo criterio que ya usa el menú
-  "+" de `PantallaPrincipal` para "Nuevo usuario". La consecuencia práctica
-  es que `NubeViewModel` **no llama nada en `init`**: ni siquiera comprobar
-  si ya hay un secreto guardado es seguro hacerlo a ciegas, porque para un
-  Operador esa llamada fallaría por permiso antes de que la pantalla
-  decida no mostrarle esa sección. `actualizarEstadoSecreto()` se dispara
-  desde un `LaunchedEffect(Unit) { if (esRoot) ... }` en el Composable, no
-  desde el ViewModel.
-- **Nube es pestaña, no pantalla detrás del "+".** Aunque a primera vista
-  se parece a un formulario de alta esporádico, su estado
-  (`ingresosRemotos`, `secretoGuardado`, `ultimoResumen`) tiene el mismo
-  requisito que `ActivosViewModel`/`HistorialViewModel`: sobrevivir que el
-  usuario cambie de pestaña y vuelva, no reiniciarse en cada entrada como
-  sí necesitan `PantallaConfirmarIngreso` o los tres formularios de alta.
-  Por eso entra como tercera pestaña en `PantallaPrincipal`
-  (`Activos`/`Historial`/`Nube`), no como una cuarta opción del menú "+".
+`NubeViewModel.kt` (2026-09-03, recortado 2026-09-06) — en origen tenía
+también una pantalla `PantallaNube.kt` propia (tercera pestaña) con
+`Operacion::GestionarNube` (guardar/leer el secreto, sólo Root) además de
+`Operacion::UsarNube` (sincronizar). Se sacó junto con esa pestaña al
+limitar la app móvil a registros rápidos + historial: configurar un
+dispositivo de cero sigue siendo el primer arranque
+(`PantallaPrimerArranque.kt`), y reconfigurar uno ya armado no tiene hoy
+una pantalla propia. Lo que queda de `NubeViewModel` es sólo
+`sincronizar()` (`Operacion::UsarNube`, cualquier rol) — un ícono en la
+barra superior de `PantallaPrincipal`, no una pestaña, porque ya no hace
+falta que sobreviva cambios de pestaña por su cuenta (no hay pestaña).
