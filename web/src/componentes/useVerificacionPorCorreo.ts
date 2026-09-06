@@ -20,7 +20,13 @@ export function useVerificacionPorCorreo(correo: string) {
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function pedirConfirmacion() {
+  /** Devuelve el mensaje de error (o `null` si salió bien) además de dejarlo
+   * en `error` -- el valor de retorno es para quien necesita reaccionar en
+   * el mismo tick (ver `BotonProbarOtp` en `App.tsx`); leer `error` del
+   * estado justo después de este `await` no sirve ahí porque el closure de
+   * un callback async queda con el valor de cuando se creó, no el que
+   * `setError` acaba de fijar. */
+  async function pedirConfirmacion(): Promise<string | null> {
     setEnviando(true);
     setError(null);
     try {
@@ -30,8 +36,11 @@ export function useVerificacionPorCorreo(correo: string) {
       });
       if (error) throw error;
       setEnviado(true);
+      return null;
     } catch (error) {
-      setError(String(error instanceof Error ? error.message : error));
+      const mensaje = String(error instanceof Error ? error.message : error);
+      setError(mensaje);
+      return mensaje;
     } finally {
       setEnviando(false);
     }

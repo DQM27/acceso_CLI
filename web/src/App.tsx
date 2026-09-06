@@ -1,10 +1,11 @@
 import { Suspense, lazy, useState } from "react";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import { History, IdCard, Menu, ShieldCheck, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
 import Login from "./pantallas/Login";
+import { useVerificacionPorCorreo } from "./componentes/useVerificacionPorCorreo";
 import type { UsuarioSesion } from "./api";
 import { AuthProvider, useAuth } from "./contexto/AuthContexto";
 import { SesionProvider } from "./contexto/SesionContexto";
@@ -71,6 +72,47 @@ function Contenido() {
   return <Shell sesion={sesion} />;
 }
 
+/**
+ * Botón de diagnóstico -- dispara SOLO el envío del código OTP
+ * (`signInWithOtp`) al correo de la sesión actual, sin pasar por ningún
+ * alta/baja de administrador. Aísla si un problema es de la plantilla de
+ * correo (Auth > Emails > "Magic Link" en el dashboard de Supabase) o de
+ * otra parte del flujo -- ver conversación sobre por qué llegaba un link
+ * en vez de un código de 6 dígitos. TODO: sacar este botón una vez
+ * confirmado que la plantilla ya manda el código bien.
+ */
+function BotonProbarOtp({ correo }: { correo: string }) {
+  const { enviando, pedirConfirmacion } = useVerificacionPorCorreo(correo);
+
+  async function alClicar() {
+    const error = await pedirConfirmacion();
+    if (error) {
+      toast.error(error);
+    } else {
+      toast.info(`Código pedido para ${correo} -- revisá el correo (no confirma nada acá).`);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      className="boton-discreto"
+      style={{
+        margin: "0.5rem",
+        padding: "0.4rem 0.6rem",
+        fontSize: "0.75rem",
+        textAlign: "left",
+        color: "var(--muted)",
+      }}
+      onClick={alClicar}
+      disabled={enviando}
+      title="Diagnóstico: manda un código OTP a este correo sin agregar/quitar ningún admin"
+    >
+      {enviando ? "Pidiendo código…" : "🧪 Probar código OTP"}
+    </button>
+  );
+}
+
 function Shell({ sesion }: { sesion: UsuarioSesion }) {
   const { cerrarSesion } = useAuth();
   const [seccion, setSeccion] = useState<Seccion>("historial");
@@ -111,6 +153,7 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
             colapsado={colapsado}
             onToggleColapsado={alternarColapsado}
             abiertoEnMovil={menuMovilAbierto}
+            pie={!colapsado && <BotonProbarOtp correo={sesion.correo} />}
           />
 
           <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import type { Seccion } from "../App";
 
@@ -15,6 +16,7 @@ export default function Sidebar({
   colapsado,
   onToggleColapsado,
   abiertoEnMovil,
+  pie,
 }: {
   secciones: { id: Seccion; etiqueta: string; Icono: LucideIcon }[];
   seccionActual: Seccion;
@@ -25,6 +27,9 @@ export default function Sidebar({
    * index.css) -- independiente de `colapsado`, que solo aplica en
    * escritorio. */
   abiertoEnMovil: boolean;
+  /** Contenido opcional al pie del sidebar, debajo de la navegación --
+   * hoy solo el botón de diagnóstico "Probar código OTP" (ver `Shell`). */
+  pie?: ReactNode;
 }) {
   return (
     <nav
@@ -49,6 +54,8 @@ export default function Sidebar({
         title="Doble click para colapsar/expandir"
         onDoubleClick={onToggleColapsado}
       />
+
+      {pie}
     </nav>
   );
 }
