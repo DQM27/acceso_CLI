@@ -121,7 +121,6 @@ export default function Usuarios() {
       { field: "cedula", headerName: "Cédula", flex: 1, minWidth: 130, cellStyle: { textAlign: "left" } },
       { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
       { field: "rol", headerName: "Rol", flex: 1, minWidth: 130 },
-      { field: "sitio_nombre", headerName: "Unidad operativa de origen", flex: 1.4, minWidth: 190 },
       {
         field: "activo",
         headerName: "Activo",

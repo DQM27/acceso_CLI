@@ -2,11 +2,13 @@ import { supabase } from "../lib/supabase";
 
 /**
  * Usuarios globales (ver docs/plan-panel-administrativo-web.md, punto 4):
- * mismo modelo que contratistas.ts -- dar de baja desde acá los deja sin
- * acceso en TODOS los sitios, `sitio_id` queda como dato informativo ("de
- * dónde es"), no como filtro. RLS: SELECT/UPDATE global para cualquier
- * sesión autenticada (migración crea_usuarios_globales), igual que
- * contratistas/empresas -- INSERT sólo para admin_global (migración
+ * un usuario/operador no pertenece a un sitio -- dar de baja desde acá lo
+ * deja sin acceso en TODOS a la vez. `sitio_id` en la tabla real queda como
+ * dato de procedencia (qué dispositivo lo creó, o a qué sitio quedó
+ * asociado un alta desde el panel), pero no se pide para esta lista -- no
+ * aporta nada para decidir nada acá (mismo criterio que contratistas.ts).
+ * RLS: SELECT/UPDATE global para cualquier sesión autenticada (migración
+ * crea_usuarios_globales) -- INSERT sólo para admin_global (migración
  * admin_global_crea_usuarios) o un dispositivo creando en su propio sitio.
  * ROOT viaja acá también desde 2026-09-06 (migración
  * permite_root_en_usuarios_globales) -- antes quedaba 100% local a cada
@@ -16,18 +18,6 @@ export type RolUsuario = "ROOT" | "ADMINISTRADOR" | "OPERADOR";
 
 export interface Usuario {
   id: string;
-  sitio_id: string;
-  sitio_nombre: string | null;
-  cedula: string;
-  nombre: string;
-  rol: RolUsuario;
-  activo: boolean;
-}
-
-interface FilaCruda {
-  id: string;
-  sitio_id: string;
-  sitios: { nombre: string } | null;
   cedula: string;
   nombre: string;
   rol: RolUsuario;
@@ -37,12 +27,12 @@ interface FilaCruda {
 export async function listarUsuarios(): Promise<Usuario[]> {
   const { data, error } = await supabase
     .from("usuarios")
-    .select("id, sitio_id, cedula, nombre, rol, activo, sitios(nombre)")
+    .select("id, cedula, nombre, rol, activo")
     .order("nombre")
-    .returns<FilaCruda[]>();
+    .returns<Usuario[]>();
 
   if (error) throw new Error(error.message);
-  return data.map(({ sitios, ...resto }) => ({ ...resto, sitio_nombre: sitios?.nombre ?? null }));
+  return data;
 }
 
 export async function actualizarActivoUsuario(id: string, activo: boolean): Promise<void> {
