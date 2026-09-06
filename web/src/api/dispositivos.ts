@@ -61,6 +61,13 @@ export function listarDispositivosYSitios(): Promise<{ sitios: Sitio[]; disposit
   return invocar("admin-list-devices");
 }
 
+/** Crea (o reutiliza, si ya existe por nombre) un sitio suelto -- para el
+ * desplegable de "Sitio" del alta de dispositivos, sin tener que crear un
+ * dispositivo a la vez. */
+export function crearSitio(datos: { nombre: string; direccion?: string }): Promise<Sitio> {
+  return invocar("admin-create-site", datos);
+}
+
 export function provisionarDispositivo(datos: {
   sitio_nombre: string;
   sitio_direccion?: string;
@@ -76,4 +83,11 @@ export function revocarDispositivo(dispositivoId: string): Promise<void> {
 
 export function suspenderDispositivo(dispositivoId: string, suspendido: boolean): Promise<void> {
   return invocar("admin-suspend-device", { dispositivo_id: dispositivoId, suspendido });
+}
+
+/** Borrado definitivo (no revocación) -- falla con un mensaje claro si el
+ * dispositivo ya generó historial real (ver admin-delete-device/index.ts).
+ * Pensado para limpiar dispositivos de prueba que nunca sincronizaron nada. */
+export function eliminarDispositivo(dispositivoId: string): Promise<void> {
+  return invocar("admin-delete-device", { dispositivo_id: dispositivoId });
 }

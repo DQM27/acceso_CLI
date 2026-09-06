@@ -6,6 +6,8 @@ import Modal from "../componentes/Modal";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import {
+  crearSitio,
+  eliminarDispositivo,
   listarDispositivosYSitios,
   provisionarDispositivo,
   revocarDispositivo,
@@ -45,10 +47,15 @@ export default function Dispositivos() {
   const [errorForm, setErrorForm] = useState<string | null>(null);
   const [provisionado, setProvisionado] = useState<DispositivoProvisionado | null>(null);
 
-  const [sitioNombre, setSitioNombre] = useState("");
-  const [sitioDireccion, setSitioDireccion] = useState("");
+  const [sitioId, setSitioId] = useState("");
   const [tipo, setTipo] = useState<TipoDispositivo>("pc");
   const [etiqueta, setEtiqueta] = useState("");
+
+  const [modalSitioAbierto, setModalSitioAbierto] = useState(false);
+  const [nuevoSitioNombre, setNuevoSitioNombre] = useState("");
+  const [nuevoSitioDireccion, setNuevoSitioDireccion] = useState("");
+  const [creandoSitio, setCreandoSitio] = useState(false);
+  const [errorSitio, setErrorSitio] = useState<string | null>(null);
 
   const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
     const silencioso = opciones?.silencioso ?? false;
@@ -84,10 +91,13 @@ export default function Dispositivos() {
     [dispositivos, nombrePorSitio],
   );
 
+  function abrirModal() {
+    setModalAbierto(true);
+    setSitioId((actual) => actual || sitios[0]?.id || "");
+  }
+
   function cerrarModal() {
     setModalAbierto(false);
-    setSitioNombre("");
-    setSitioDireccion("");
     setTipo("pc");
     setEtiqueta("");
     setErrorForm(null);
@@ -96,12 +106,19 @@ export default function Dispositivos() {
 
   async function alEnviarFormulario(evento: React.FormEvent) {
     evento.preventDefault();
+    const sitio = sitios.find((s) => s.id === sitioId);
+    if (!sitio) {
+      setErrorForm("Elegí un sitio (o creá uno con el botón +).");
+      return;
+    }
     setCreando(true);
     setErrorForm(null);
     try {
+      // Manda el nombre, no el id -- admin-provision-device resuelve el
+      // sitio por nombre (upsert), así que reutiliza el que ya existe en
+      // vez de duplicarlo.
       const resultado = await provisionarDispositivo({
-        sitio_nombre: sitioNombre.trim(),
-        sitio_direccion: sitioDireccion.trim() || undefined,
+        sitio_nombre: sitio.nombre,
         tipo,
         etiqueta: etiqueta.trim(),
       });
@@ -111,6 +128,52 @@ export default function Dispositivos() {
       setErrorForm(String(error));
     } finally {
       setCreando(false);
+    }
+  }
+
+  function abrirModalSitio() {
+    setModalSitioAbierto(true);
+    setNuevoSitioNombre("");
+    setNuevoSitioDireccion("");
+    setErrorSitio(null);
+  }
+
+  function cerrarModalSitio() {
+    setModalSitioAbierto(false);
+  }
+
+  async function alCrearSitio(evento: React.FormEvent) {
+    evento.preventDefault();
+    setCreandoSitio(true);
+    setErrorSitio(null);
+    try {
+      const nuevo = await crearSitio({
+        nombre: nuevoSitioNombre.trim(),
+        direccion: nuevoSitioDireccion.trim() || undefined,
+      });
+      setSitios((actual) => (actual.some((s) => s.id === nuevo.id) ? actual : [...actual, nuevo]));
+      setSitioId(nuevo.id);
+      setModalSitioAbierto(false);
+    } catch (error) {
+      setErrorSitio(String(error));
+    } finally {
+      setCreandoSitio(false);
+    }
+  }
+
+  async function alEliminar(fila: FilaDispositivo) {
+    if (
+      !confirm(
+        `¿Borrar "${fila.etiqueta}" del todo? A diferencia de Revocar, esto no se puede deshacer.`,
+      )
+    )
+      return;
+    try {
+      await eliminarDispositivo(fila.id);
+      toast.success(`${fila.etiqueta} borrado.`);
+      recargar();
+    } catch (error) {
+      toast.error(String(error));
     }
   }
 
@@ -201,8 +264,8 @@ export default function Dispositivos() {
     {
       colId: "acciones",
       headerName: "",
-      flex: 1.4,
-      minWidth: 190,
+      flex: 1.8,
+      minWidth: 260,
       sortable: false,
       filter: false,
       cellRenderer: ({ data }: { data: FilaDispositivo }) => (
@@ -237,6 +300,14 @@ export default function Dispositivos() {
               Revocar
             </button>
           )}
+          <button
+            type="button"
+            className="boton"
+            style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
+            onClick={() => alEliminar(data)}
+          >
+            Eliminar
+          </button>
         </div>
       ),
     },
@@ -252,8 +323,8 @@ export default function Dispositivos() {
             filas={filas}
             filtrosPorColumna
             controles={
-              <button type="button" className="boton" onClick={() => setModalAbierto(true)}>
-                + Nuevo dispositivo
+              <button type="button" className="boton" onClick={abrirModal}>
+                + Nuevo
               </button>
             }
           />
@@ -297,30 +368,28 @@ export default function Dispositivos() {
             >
               <label className="campo">
                 Sitio
-                <input
-                  list="sitios-existentes"
-                  required
-                  autoFocus
-                  value={sitioNombre}
-                  disabled={creando}
-                  placeholder="ej. Brisas"
-                  onChange={(evento) => setSitioNombre(evento.target.value)}
-                />
-                <datalist id="sitios-existentes">
-                  {sitios.map((s) => (
-                    <option key={s.id} value={s.nombre} />
-                  ))}
-                </datalist>
-              </label>
-
-              <label className="campo">
-                Dirección (opcional)
-                <input
-                  value={sitioDireccion}
-                  disabled={creando}
-                  placeholder="ej. San Rafael"
-                  onChange={(evento) => setSitioDireccion(evento.target.value)}
-                />
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <select
+                    required
+                    autoFocus
+                    style={{ flex: 1 }}
+                    value={sitioId}
+                    disabled={creando}
+                    onChange={(evento) => setSitioId(evento.target.value)}
+                  >
+                    <option value="" disabled>
+                      Seleccionar…
+                    </option>
+                    {sitios.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="button" className="boton" disabled={creando} onClick={abrirModalSitio}>
+                    + Crear
+                  </button>
+                </div>
               </label>
 
               <label className="campo">
@@ -363,6 +432,49 @@ export default function Dispositivos() {
               </div>
             </form>
           )}
+        </Modal>
+      )}
+
+      {modalSitioAbierto && (
+        <Modal titulo="Nuevo sitio" onCerrar={cerrarModalSitio}>
+          <form onSubmit={alCrearSitio} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <label className="campo">
+              Nombre
+              <input
+                required
+                autoFocus
+                value={nuevoSitioNombre}
+                disabled={creandoSitio}
+                placeholder="ej. Brisas"
+                onChange={(evento) => setNuevoSitioNombre(evento.target.value)}
+              />
+            </label>
+
+            <label className="campo">
+              Dirección (opcional)
+              <input
+                value={nuevoSitioDireccion}
+                disabled={creandoSitio}
+                placeholder="ej. San Rafael"
+                onChange={(evento) => setNuevoSitioDireccion(evento.target.value)}
+              />
+            </label>
+
+            {errorSitio && (
+              <p className="login-error" role="alert">
+                {errorSitio}
+              </p>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+              <button type="button" className="boton" disabled={creandoSitio} onClick={cerrarModalSitio}>
+                Cancelar
+              </button>
+              <button type="submit" className="boton boton-primario" disabled={creandoSitio}>
+                {creandoSitio ? "Creando…" : "Crear sitio"}
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
     </div>
