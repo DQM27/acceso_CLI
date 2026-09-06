@@ -409,6 +409,11 @@ pub struct MovimientoHistorialSitio {
     pub usuario_ingreso_nombre: Option<String>,
     pub usuario_salida_nombre: Option<String>,
     pub motivo_resultado: Option<String>,
+    /// `"pc"`/`"mobile"`, o `None` para filas sincronizadas antes de que
+    /// esto existiera (`database::schema`, migración 26) -- pedido del
+    /// usuario para diferenciar de un vistazo de qué dispositivo vino un
+    /// movimiento.
+    pub dispositivo_entrada_tipo: Option<String>,
 }
 
 impl From<control_acceso::application::MovimientoHistorialSitio> for MovimientoHistorialSitio {
@@ -424,6 +429,7 @@ impl From<control_acceso::application::MovimientoHistorialSitio> for MovimientoH
             usuario_ingreso_nombre: m.usuario_ingreso_nombre,
             usuario_salida_nombre: m.usuario_salida_nombre,
             motivo_resultado: m.motivo_resultado,
+            dispositivo_entrada_tipo: m.dispositivo_entrada_tipo,
         }
     }
 }
@@ -694,10 +700,15 @@ impl Nucleo {
     ///    reintenta el login local una vez más. Sin esto, una reactivación
     ///    remota nunca se podía reflejar acá: el login fallaba en el
     ///    chequeo local ANTES de llegar a sincronizar nada.
-    /// 2. **Baja**: tras un login local exitoso, intenta sincronizar
-    ///    completo para que una desactivación reciente en otro dispositivo
-    ///    se refleje antes de dejar entrar -- `sincronizar_con_nube` ya
-    ///    cierra la sesión sola si la encuentra.
+    /// 2. **Baja**: tras un login local exitoso, confirma en vivo que la
+    ///    cédula sigue activa (`usuario_sigue_activo_remoto` -- una fila,
+    ///    una columna, no la sincronización completa que hacía esto antes:
+    ///    medida como la causa real del retraso de "un par de segundos"
+    ///    que se sentía al entrar). La sincronización completa (cola,
+    ///    catálogo, historial...) sigue disparándose, pero Kotlin la lanza
+    ///    aparte (ver `LoginViewModel.autenticar`) sin que este método la
+    ///    espere -- acá retener el candado durante una sincronización
+    ///    entera hubiera vuelto a sentirse lento.
     pub fn autenticar(
         &self,
         cedula: String,
@@ -715,14 +726,17 @@ impl Nucleo {
             }
             Err(otro) => return Err(otro.into()),
         };
-        *self.sesion_lock() = Some(sesion.clone());
 
-        let _ = self.sincronizar_con_nube(directorio);
-
-        match self.sesion_lock().clone() {
-            Some(sesion) => Ok(sesion.into()),
-            None => Err(NucleoError::UsuarioInactivo),
+        let sigue_activo = self
+            .core_lock()
+            .usuario_sigue_activo_remoto(&sesion, Some(std::path::Path::new(&directorio)))
+            .unwrap_or(true);
+        if !sigue_activo {
+            return Err(NucleoError::UsuarioInactivo);
         }
+
+        *self.sesion_lock() = Some(sesion.clone());
+        Ok(sesion.into())
     }
 
     /// Completa el alta de contraseña de un usuario global que `autenticar`

@@ -7,9 +7,9 @@ import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import {
   listarDispositivosYSitios,
-  moverDispositivo,
   provisionarDispositivo,
   revocarDispositivo,
+  suspenderDispositivo,
 } from "../api/dispositivos";
 import type { Dispositivo, DispositivoProvisionado, TipoDispositivo } from "../api/dispositivos";
 
@@ -28,14 +28,13 @@ function textoFechaHora(iso: string): string {
 }
 
 /**
- * Alta/baja/cambio de sitio de dispositivos -- reemplaza
+ * Alta/baja/suspensión de dispositivos -- reemplaza
  * `admin-panel/panel-dispositivos.html` (clave compartida, sin saber quién
  * hizo qué) por esta pantalla dentro del panel nuevo, autenticada con la
  * misma sesión de Google que el resto (ver `api/dispositivos.ts`). El
  * secreto de un dispositivo nuevo se muestra UNA sola vez al crearlo -- no
  * queda guardado en texto plano en ningún lado que se pueda volver a leer,
- * ni siquiera acá. "Cambiar sitio" reasigna `dispositivos.sitio_id` --
- * hueco que no existía antes (docs/plan-panel-administrativo-web.md).
+ * ni siquiera acá.
  */
 export default function Dispositivos() {
   const [sitios, setSitios] = useState<{ id: string; nombre: string }[]>([]);
@@ -50,12 +49,6 @@ export default function Dispositivos() {
   const [sitioDireccion, setSitioDireccion] = useState("");
   const [tipo, setTipo] = useState<TipoDispositivo>("pc");
   const [etiqueta, setEtiqueta] = useState("");
-
-  const [dispositivoAMover, setDispositivoAMover] = useState<FilaDispositivo | null>(null);
-  const [sitioNombreMover, setSitioNombreMover] = useState("");
-  const [sitioDireccionMover, setSitioDireccionMover] = useState("");
-  const [moviendo, setMoviendo] = useState(false);
-  const [errorMover, setErrorMover] = useState<string | null>(null);
 
   const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
     const silencioso = opciones?.silencioso ?? false;
@@ -132,37 +125,24 @@ export default function Dispositivos() {
     }
   }
 
-  function abrirMover(fila: FilaDispositivo) {
-    setDispositivoAMover(fila);
-    setSitioNombreMover(fila.sitio_nombre);
-    setSitioDireccionMover("");
-    setErrorMover(null);
-  }
-
-  function cerrarMover() {
-    setDispositivoAMover(null);
-    setSitioNombreMover("");
-    setSitioDireccionMover("");
-    setErrorMover(null);
-  }
-
-  async function alConfirmarMover(evento: React.FormEvent) {
-    evento.preventDefault();
-    if (!dispositivoAMover) return;
-    setMoviendo(true);
-    setErrorMover(null);
+  async function alSuspender(fila: FilaDispositivo) {
+    if (!confirm(`¿Suspender "${fila.etiqueta}"? Va a dejar de poder sincronizar hasta que lo reactivés.`)) return;
     try {
-      const { sitio_nombre } = await moverDispositivo(dispositivoAMover.id, {
-        sitio_nombre: sitioNombreMover.trim(),
-        sitio_direccion: sitioDireccionMover.trim() || undefined,
-      });
-      toast.success(`${dispositivoAMover.etiqueta} ahora es de ${sitio_nombre}.`);
-      cerrarMover();
+      await suspenderDispositivo(fila.id, true);
+      toast.success(`${fila.etiqueta} suspendido.`);
       recargar();
     } catch (error) {
-      setErrorMover(String(error));
-    } finally {
-      setMoviendo(false);
+      toast.error(String(error));
+    }
+  }
+
+  async function alReactivar(fila: FilaDispositivo) {
+    try {
+      await suspenderDispositivo(fila.id, false);
+      toast.success(`${fila.etiqueta} reactivado.`);
+      recargar();
+    } catch (error) {
+      toast.error(String(error));
     }
   }
 
@@ -193,19 +173,30 @@ export default function Dispositivos() {
       valueFormatter: ({ value }) => textoFechaHora(value),
     },
     {
+      field: "last_seen_at",
+      headerName: "Último uso",
+      flex: 1.2,
+      minWidth: 160,
+      valueFormatter: ({ value }) => (value ? textoFechaHora(value) : "Nunca"),
+    },
+    {
       field: "revoked_at",
       headerName: "Estado",
       flex: 0.9,
       minWidth: 110,
       filter: false,
-      cellRenderer: ({ value }: { value: string | null }) => (
-        <span
-          className="chip"
-          style={{ ["--chip-color" as string]: value ? "var(--error)" : "var(--exito)" }}
-        >
-          {value ? "Revocado" : "Activo"}
-        </span>
-      ),
+      cellRenderer: ({ data }: { data: FilaDispositivo }) => {
+        const [texto, color] = data.revoked_at
+          ? ["Revocado", "var(--error)"]
+          : data.suspended_at
+            ? ["Suspendido", "var(--advertencia)"]
+            : ["Activo", "var(--exito)"];
+        return (
+          <span className="chip" style={{ ["--chip-color" as string]: color }}>
+            {texto}
+          </span>
+        );
+      },
     },
     {
       colId: "acciones",
@@ -216,14 +207,26 @@ export default function Dispositivos() {
       filter: false,
       cellRenderer: ({ data }: { data: FilaDispositivo }) => (
         <div style={{ display: "flex", gap: "0.4rem" }}>
-          <button
-            type="button"
-            className="boton"
-            style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
-            onClick={() => abrirMover(data)}
-          >
-            Cambiar sitio
-          </button>
+          {!data.revoked_at &&
+            (data.suspended_at ? (
+              <button
+                type="button"
+                className="boton"
+                style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
+                onClick={() => alReactivar(data)}
+              >
+                Reactivar
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="boton"
+                style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
+                onClick={() => alSuspender(data)}
+              >
+                Suspender
+              </button>
+            ))}
           {!data.revoked_at && (
             <button
               type="button"
@@ -360,62 +363,6 @@ export default function Dispositivos() {
               </div>
             </form>
           )}
-        </Modal>
-      )}
-
-      {dispositivoAMover && (
-        <Modal titulo={`Cambiar sitio — ${dispositivoAMover.etiqueta}`} onCerrar={cerrarMover}>
-          <form
-            onSubmit={alConfirmarMover}
-            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-          >
-            <p style={{ margin: 0, color: "var(--muted)" }}>
-              Está en <strong>{dispositivoAMover.sitio_nombre}</strong>. Elegí el sitio nuevo (o
-              escribí uno que no exista todavía para crearlo).
-            </p>
-
-            <label className="campo">
-              Sitio
-              <input
-                list="sitios-existentes-mover"
-                required
-                autoFocus
-                value={sitioNombreMover}
-                disabled={moviendo}
-                onChange={(evento) => setSitioNombreMover(evento.target.value)}
-              />
-              <datalist id="sitios-existentes-mover">
-                {sitios.map((s) => (
-                  <option key={s.id} value={s.nombre} />
-                ))}
-              </datalist>
-            </label>
-
-            <label className="campo">
-              Dirección (opcional, sólo si el sitio es nuevo)
-              <input
-                value={sitioDireccionMover}
-                disabled={moviendo}
-                placeholder="ej. San Rafael"
-                onChange={(evento) => setSitioDireccionMover(evento.target.value)}
-              />
-            </label>
-
-            {errorMover && (
-              <p className="login-error" role="alert">
-                {errorMover}
-              </p>
-            )}
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-              <button type="button" className="boton" disabled={moviendo} onClick={cerrarMover}>
-                Cancelar
-              </button>
-              <button type="submit" className="boton boton-primario" disabled={moviendo}>
-                {moviendo ? "Moviendo…" : "Cambiar sitio"}
-              </button>
-            </div>
-          </form>
         </Modal>
       )}
     </div>

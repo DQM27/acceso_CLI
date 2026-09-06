@@ -74,7 +74,8 @@ private fun FilaMovimiento(movimiento: FilaHistorial) {
         Text(movimiento.contratistaNombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
         Text(
             "${movimiento.cedula} · ${movimiento.empresaNombre}" +
-                if (movimiento.gafeteNumero != null) " · Gafete ${movimiento.gafeteNumero}" else "",
+                (if (movimiento.gafeteNumero != null) " · Gafete ${movimiento.gafeteNumero}" else "") +
+                " · ${textoDispositivo(movimiento.dispositivoTipo)}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

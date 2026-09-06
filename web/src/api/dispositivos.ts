@@ -1,13 +1,12 @@
 import { supabase } from "../lib/supabase";
 
 /**
- * Alta/baja/reasignación de dispositivos -- llama a las Edge Functions
- * admin-list-devices/admin-provision-device/admin-revoke-device (mismas
- * que usaba el panel viejo, `admin-panel/panel-dispositivos.html`) más
- * admin-move-device (nueva, para cambiar un dispositivo de sitio -- hueco
- * que no existía antes). Ya no con la clave compartida `x-admin-key`:
- * ahora verifican la sesión real de Supabase Auth de quien llama contra
- * `administradores_panel`
+ * Alta/baja/suspensión de dispositivos -- llama a las Edge Functions
+ * admin-list-devices/admin-provision-device/admin-revoke-device/
+ * admin-suspend-device (las tres primeras ya las usaba el panel viejo,
+ * `admin-panel/panel-dispositivos.html`). Ya no con la clave compartida
+ * `x-admin-key`: ahora verifican la sesión real de Supabase Auth de quien
+ * llama contra `administradores_panel`
  * (mismo criterio que el resto del panel via RLS). `supabase.functions.invoke`
  * manda el JWT de la sesión activa solo -- el panel viejo deja de
  * funcionar a partir de este cambio, a propósito (ver
@@ -29,6 +28,8 @@ export interface Dispositivo {
   etiqueta: string;
   created_at: string;
   revoked_at: string | null;
+  suspended_at: string | null;
+  last_seen_at: string | null;
 }
 
 export interface DispositivoProvisionado {
@@ -73,9 +74,6 @@ export function revocarDispositivo(dispositivoId: string): Promise<void> {
   return invocar("admin-revoke-device", { dispositivo_id: dispositivoId });
 }
 
-export function moverDispositivo(
-  dispositivoId: string,
-  datos: { sitio_nombre: string; sitio_direccion?: string },
-): Promise<{ sitio_id: string; sitio_nombre: string }> {
-  return invocar("admin-move-device", { dispositivo_id: dispositivoId, ...datos });
+export function suspenderDispositivo(dispositivoId: string, suspendido: boolean): Promise<void> {
+  return invocar("admin-suspend-device", { dispositivo_id: dispositivoId, suspendido });
 }

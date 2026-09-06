@@ -34,7 +34,7 @@ fn gafete_libre_en_otro_dispositivo(state: &GuiState, numero: i64) -> Result<boo
         .autorizar_uso_nube(&actor)
         .map_err(mensaje_gestion_nube)?;
 
-    let token = nube::autenticar_dispositivo(nube::BASE_URL, &secreto).map_err(mensaje_nube)?;
+    let token = state.autenticar_con_cache(&secreto).map_err(mensaje_nube)?;
     if let Some(desfase_ms) = token.desfase_reloj_ms {
         state.core().actualizar_desfase_reloj(desfase_ms);
     }

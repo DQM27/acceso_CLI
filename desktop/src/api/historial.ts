@@ -82,6 +82,9 @@ export interface MovimientoHistorialRemoto {
   gafete_numero: number | null;
   usuario_ingreso_nombre: string | null;
   usuario_salida_nombre: string | null;
+  /** `"pc"`/`"movil"`, o `null` para filas sincronizadas antes de que esto
+   * existiera. */
+  dispositivo_entrada_tipo: string | null;
 }
 
 export function listarHistorialSitio(

@@ -60,7 +60,10 @@ fn manda_a_fijar_password_en_vez_de_credenciales_invalidas() {
     // verificar, así que ni siquiera se llega a intentar Argon2.
     let resultado = autenticacion.autenticar("9-0001", "cualquier-cosa");
 
-    assert!(matches!(resultado, Err(AutenticacionError::SinPasswordLocal)));
+    assert!(matches!(
+        resultado,
+        Err(AutenticacionError::SinPasswordLocal)
+    ));
 }
 
 #[test]

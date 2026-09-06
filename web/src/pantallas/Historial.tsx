@@ -17,6 +17,16 @@ export function textoMedio(medio: string | null): string {
   return "";
 }
 
+/** "pc"/"mobile"/"visor" (`dispositivos.tipo`) → texto corto para la
+ * columna "Dispositivo" -- mismo mapeo que `textoDispositivo` en
+ * `desktop/src/pantallas/Historial.tsx` y `HistorialViewModel.kt` del
+ * móvil, para que los tres lados muestren lo mismo. */
+export function textoDispositivo(tipo: string | null): string {
+  if (tipo === "pc") return "💻 PC";
+  if (tipo === "mobile") return "📱 Celular";
+  return tipo ?? "—";
+}
+
 /**
  * Una sola definición por columna (etiqueta + alineación + cómo sacar el
  * texto de una fila) que alimenta la grilla, el Excel y el PDF -- mismo
@@ -51,6 +61,11 @@ export const DEFINICIONES_EXPORT: DefinicionColumnaExport[] = [
     valor: (f) => f.contratista_nombre,
   },
   { colId: "empresa_nombre", etiqueta: "Empresa", izquierda: true, valor: (f) => f.empresa_nombre ?? "" },
+  {
+    colId: "dispositivo_entrada_tipo",
+    etiqueta: "Dispositivo",
+    valor: (f) => textoDispositivo(f.dispositivo_entrada_tipo),
+  },
   { colId: "tipo_ingreso", etiqueta: "Tipo", valor: (f) => f.tipo_ingreso ?? "" },
   { colId: "medio_ingreso", etiqueta: "Medio", valor: (f) => textoMedio(f.medio_ingreso) },
   {
@@ -349,6 +364,13 @@ export default function Historial() {
         cellStyle: { textAlign: "left" },
       },
       { field: "empresa_nombre", headerName: "Empresa", flex: 1, minWidth: 130 },
+      {
+        field: "dispositivo_entrada_tipo",
+        headerName: "Dispositivo",
+        flex: 1,
+        minWidth: 110,
+        valueFormatter: (p) => textoDispositivo(p.value ?? null),
+      },
       { field: "tipo_ingreso", headerName: "Tipo", flex: 1, minWidth: 100 },
       {
         field: "medio_ingreso",

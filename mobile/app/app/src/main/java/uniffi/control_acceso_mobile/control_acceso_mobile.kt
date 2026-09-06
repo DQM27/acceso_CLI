@@ -906,7 +906,7 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
-    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() != 18570) {
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() != 51641) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas() != 3985) {
@@ -1386,18 +1386,27 @@ public object FfiConverterString: FfiConverter<String, RustBuffer.ByValue> {
 public interface NucleoInterface {
     
     /**
-     * `directorio` sólo para el intento de sincronización previa (ver
-     * abajo) -- el resto del login sigue sin necesitarlo, la base ya está
-     * abierta desde `abrir`.
+     * `directorio` sólo para los intentos de sincronización (ver abajo) --
+     * el resto del login sigue sin necesitarlo, la base ya está abierta
+     * desde `abrir`.
      *
-     * Después de validar localmente, intenta sincronizar (con el tope de
-     * `nube::cliente::TIMEOUT_HTTP`) para que una baja/desactivación
-     * reciente en otro dispositivo se refleje antes de dejar entrar --
-     * decisión explícita: "por seguridad, pero nunca bloqueante" (el
-     * teléfono tiene que poder operar sin internet). Sin red o si tarda,
-     * sigue con lo que ya validó local -- si de verdad estaba
-     * desactivado, la próxima sincronización que sí tenga señal lo
-     * expulsa sola (ver `sincronizar_con_nube`).
+     * Dos chequeos contra la nube, uno para cada dirección de un cambio de
+     * estado remoto -- decisión explícita: "por seguridad, pero nunca
+     * bloqueante" (el teléfono tiene que poder operar sin internet), así
+     * que los dos son best-effort (con el tope de `nube::cliente::TIMEOUT_HTTP`):
+     *
+     * 1. **Reactivación**: si el chequeo local dice "inactivo"
+     * (`AutenticacionErrorNucleo::UsuarioInactivo`), puede ser que a
+     * este usuario lo hayan reactivado en otro dispositivo y esta base
+     * todavía no se enteró -- antes de rendirse, refresca sólo el
+     * catálogo (`refrescar_catalogo_sin_sesion`, sin sesión) y
+     * reintenta el login local una vez más. Sin esto, una reactivación
+     * remota nunca se podía reflejar acá: el login fallaba en el
+     * chequeo local ANTES de llegar a sincronizar nada.
+     * 2. **Baja**: tras un login local exitoso, intenta sincronizar
+     * completo para que una desactivación reciente en otro dispositivo
+     * se refleje antes de dejar entrar -- `sincronizar_con_nube` ya
+     * cierra la sesión sola si la encuentra.
      */
     fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String, `directorio`: kotlin.String): UsuarioSesion
     
@@ -1654,18 +1663,27 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * `directorio` sólo para el intento de sincronización previa (ver
-     * abajo) -- el resto del login sigue sin necesitarlo, la base ya está
-     * abierta desde `abrir`.
+     * `directorio` sólo para los intentos de sincronización (ver abajo) --
+     * el resto del login sigue sin necesitarlo, la base ya está abierta
+     * desde `abrir`.
      *
-     * Después de validar localmente, intenta sincronizar (con el tope de
-     * `nube::cliente::TIMEOUT_HTTP`) para que una baja/desactivación
-     * reciente en otro dispositivo se refleje antes de dejar entrar --
-     * decisión explícita: "por seguridad, pero nunca bloqueante" (el
-     * teléfono tiene que poder operar sin internet). Sin red o si tarda,
-     * sigue con lo que ya validó local -- si de verdad estaba
-     * desactivado, la próxima sincronización que sí tenga señal lo
-     * expulsa sola (ver `sincronizar_con_nube`).
+     * Dos chequeos contra la nube, uno para cada dirección de un cambio de
+     * estado remoto -- decisión explícita: "por seguridad, pero nunca
+     * bloqueante" (el teléfono tiene que poder operar sin internet), así
+     * que los dos son best-effort (con el tope de `nube::cliente::TIMEOUT_HTTP`):
+     *
+     * 1. **Reactivación**: si el chequeo local dice "inactivo"
+     * (`AutenticacionErrorNucleo::UsuarioInactivo`), puede ser que a
+     * este usuario lo hayan reactivado en otro dispositivo y esta base
+     * todavía no se enteró -- antes de rendirse, refresca sólo el
+     * catálogo (`refrescar_catalogo_sin_sesion`, sin sesión) y
+     * reintenta el login local una vez más. Sin esto, una reactivación
+     * remota nunca se podía reflejar acá: el login fallaba en el
+     * chequeo local ANTES de llegar a sincronizar nada.
+     * 2. **Baja**: tras un login local exitoso, intenta sincronizar
+     * completo para que una desactivación reciente en otro dispositivo
+     * se refleje antes de dejar entrar -- `sincronizar_con_nube` ya
+     * cierra la sesión sola si la encuentra.
      */
     @Throws(NucleoException::class)override fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String, `directorio`: kotlin.String): UsuarioSesion {
             return FfiConverterTypeUsuarioSesion.lift(
@@ -2638,6 +2656,14 @@ data class MovimientoHistorialSitio (
     var `usuarioSalidaNombre`: kotlin.String?
     , 
     var `motivoResultado`: kotlin.String?
+    , 
+    /**
+     * `"pc"`/`"movil"`, o `None` para filas sincronizadas antes de que
+     * esto existiera (`database::schema`, migración 26) -- pedido del
+     * usuario para diferenciar de un vistazo de qué dispositivo vino un
+     * movimiento.
+     */
+    var `dispositivoEntradaTipo`: kotlin.String?
     
 ){
     
@@ -2664,6 +2690,7 @@ public object FfiConverterTypeMovimientoHistorialSitio: FfiConverterRustBuffer<M
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
         )
     }
 
@@ -2677,7 +2704,8 @@ public object FfiConverterTypeMovimientoHistorialSitio: FfiConverterRustBuffer<M
             FfiConverterOptionalLong.allocationSize(value.`gafeteNumero`) +
             FfiConverterOptionalString.allocationSize(value.`usuarioIngresoNombre`) +
             FfiConverterOptionalString.allocationSize(value.`usuarioSalidaNombre`) +
-            FfiConverterOptionalString.allocationSize(value.`motivoResultado`)
+            FfiConverterOptionalString.allocationSize(value.`motivoResultado`) +
+            FfiConverterOptionalString.allocationSize(value.`dispositivoEntradaTipo`)
     )
 
     override fun write(value: MovimientoHistorialSitio, buf: ByteBuffer) {
@@ -2691,6 +2719,7 @@ public object FfiConverterTypeMovimientoHistorialSitio: FfiConverterRustBuffer<M
             FfiConverterOptionalString.write(value.`usuarioIngresoNombre`, buf)
             FfiConverterOptionalString.write(value.`usuarioSalidaNombre`, buf)
             FfiConverterOptionalString.write(value.`motivoResultado`, buf)
+            FfiConverterOptionalString.write(value.`dispositivoEntradaTipo`, buf)
     }
 }
 

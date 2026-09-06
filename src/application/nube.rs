@@ -42,6 +42,9 @@ pub struct MovimientoHistorialSitio {
     pub usuario_ingreso_nombre: Option<String>,
     pub usuario_salida_nombre: Option<String>,
     pub motivo_resultado: Option<String>,
+    /// `"pc"`/`"mobile"` (o `None` para filas sincronizadas antes de que
+    /// esto existiera) -- ver `nube::sincronizacion::FilaHistorialRemota`.
+    pub dispositivo_entrada_tipo: Option<String>,
 }
 
 impl AppCore {
@@ -57,7 +60,7 @@ impl AppCore {
         let mut consulta = self.connection.prepare(
             "SELECT uuid, contratista_cedula, contratista_nombre, empresa_nombre,
                     hora_entrada, hora_salida, gafete_numero, usuario_entrada_nombre,
-                    usuario_salida_nombre, motivo_resultado
+                    usuario_salida_nombre, motivo_resultado, dispositivo_entrada_tipo
              FROM historial_sitio
              WHERE hora_entrada >= ?1 AND hora_entrada < ?2
                AND (?3 = '' OR instr(lower(contratista_nombre), lower(?3)) > 0
@@ -83,6 +86,7 @@ impl AppCore {
                         usuario_ingreso_nombre: row.get(7)?,
                         usuario_salida_nombre: row.get(8)?,
                         motivo_resultado: row.get(9)?,
+                        dispositivo_entrada_tipo: row.get(10)?,
                     })
                 },
             )?
@@ -265,6 +269,41 @@ impl AppCore {
             tipo: token.tipo,
             sesion_expulsada: !self.sesion_sigue_activa(actor),
         })
+    }
+
+    /// Confirma en vivo si `actor` sigue activo en el catálogo remoto, sin
+    /// sincronizar nada más -- mucho más rápido que `sincronizar_con_nube`
+    /// (una fila, una columna, vs. cola de salida + cierres + ingresos
+    /// abiertos + catálogo + historial completos). Pensado para el login:
+    /// medido como el causante real del retraso de "un par de segundos"
+    /// que se sentía al entrar -- ver `desktop/src-tauri/src/comandos/autenticacion.rs::login`
+    /// y `Nucleo::autenticar` en móvil, que ahora usan esto para el chequeo
+    /// de seguridad y dejan la sincronización completa corriendo aparte,
+    /// sin bloquear la entrada.
+    pub fn usuario_sigue_activo_remoto(
+        &self,
+        actor: &UsuarioSesion,
+        directorio: Option<&Path>,
+    ) -> Result<bool, GestionNubeError> {
+        self.autorizar_uso_nube(actor)?;
+        let secreto = directorio
+            .map_or_else(
+                crate::nube::credenciales::cargar_secreto,
+                crate::nube::credenciales::cargar_secreto_en,
+            )
+            .ok_or(GestionNubeError::SinSecreto)?;
+        let token = self.autenticar_con_cache(&secreto)?;
+        let contexto = crate::nube::ContextoSincronizacion {
+            base_url: crate::nube::BASE_URL,
+            apikey: crate::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        Ok(crate::nube::usuario_sigue_activo_remoto(
+            &contexto,
+            &actor.cedula,
+        )?)
     }
 
     /// Autentica este dispositivo y devuelve lo mínimo para que la capa de
@@ -461,9 +500,8 @@ impl AppCore {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             if let Some(entrada) = cache.as_ref() {
-                let vigente_por =
-                    std::time::Duration::from_secs(entrada.token.expires_in)
-                        .saturating_sub(MARGEN_EXPIRACION);
+                let vigente_por = std::time::Duration::from_secs(entrada.token.expires_in)
+                    .saturating_sub(MARGEN_EXPIRACION);
                 if entrada.secreto == secreto && entrada.obtenido_en.elapsed() < vigente_por {
                     let mut token = entrada.token.clone();
                     token.desfase_reloj_ms = None;

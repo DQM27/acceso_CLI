@@ -9,7 +9,7 @@ use ratatui::text::{Line, Span};
 use crate::cli::estado::NivelFeedback;
 use crate::tui::ui_kit::Theme;
 
-/// BRISAS_THEME=light activa el tema claro. Oscuro es el valor predeterminado.
+/// `BRISAS_THEME=light` activa el tema claro. Oscuro es el valor predeterminado.
 pub(super) fn tema() -> Theme {
     static TEMA: std::sync::OnceLock<Theme> = std::sync::OnceLock::new();
     *TEMA.get_or_init(|| {

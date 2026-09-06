@@ -49,12 +49,6 @@ salidas.set('desktop/src/controles.css', leer('design/controles.css'));
 salidas.set('web/src/diseno.css', css);
 salidas.set('web/src/controles.css', leer('design/controles.css'));
 salidas.set('design/brisas.css', css + '\n' + leer('design/controles.css'));
-const panelPath = 'admin-panel/panel-dispositivos.html';
-const panel = leer(panelPath);
-const bloque = `<style id="brisas-generado">\n${css}\n${leer('design/controles.css')}</style>`;
-salidas.set(panelPath, panel.includes('<style id="brisas-generado">')
-  ? panel.replace(/<style id="brisas-generado">[\s\S]*?<\/style>/, bloque)
-  : panel.replace('</head>', `${bloque}\n</head>`));
 
 const rgb = hex => hex.slice(1).match(/../g).map(v => parseInt(v, 16)).join(', ');
 const rustRoles = { fondo:'background', texto:'text', muted:'muted', acento:'accent', exito:'success', advertencia:'warning', error:'danger', 'borde-fuerte':'border', 'sobre-acento':'selection_foreground' };

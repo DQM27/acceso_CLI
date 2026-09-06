@@ -11,9 +11,14 @@ export interface NubeActualizadaDetalle {
   resumen: ResumenSincronizacion;
 }
 
+/** Mismos 4 valores que entrega `RealtimeChannel.subscribe` de
+ * supabase-js -- ver `EstadoConexionNube` en `componentes/BarraNube.tsx`,
+ * que agrega el `null` de "todavía no se intentó conectar". */
+export type EstadoCanalRealtime = "SUBSCRIBED" | "CHANNEL_ERROR" | "TIMED_OUT" | "CLOSED";
+
 interface OpcionesRealtimeNube {
   onSincronizado?: (resumen: ResumenSincronizacion) => void;
-  onEstado?: (estado: string) => void;
+  onEstado?: (estado: EstadoCanalRealtime) => void;
 }
 
 /** Avisa a quien esté escuchando (hoy: la pantalla Nube, si está montada)
@@ -111,7 +116,6 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
 
   async function conectar() {
     if (cancelado) return;
-    opciones.onEstado?.("CONNECTING");
     try {
       const sesion = await sesionRealtimeNube();
       if (cancelado) return;

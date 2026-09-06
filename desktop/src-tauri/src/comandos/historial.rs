@@ -83,6 +83,11 @@ pub struct MovimientoHistorialRemoto {
     pub gafete_numero: Option<i64>,
     pub usuario_ingreso_nombre: Option<String>,
     pub usuario_salida_nombre: Option<String>,
+    /// `"pc"`/`"movil"`, o `None` para filas sincronizadas antes de que
+    /// esto existiera (`database::schema`, migración 26) -- pedido del
+    /// usuario para diferenciar de un vistazo de qué dispositivo vino un
+    /// movimiento.
+    pub dispositivo_entrada_tipo: Option<String>,
 }
 
 #[tauri::command]
@@ -98,7 +103,7 @@ pub fn listar_historial_sitio(
         .prepare(
             "SELECT uuid, contratista_cedula, contratista_nombre, empresa_nombre, tipo_ingreso,
                     medio_ingreso, hora_entrada, hora_salida, gafete_numero,
-                    usuario_entrada_nombre, usuario_salida_nombre
+                    usuario_entrada_nombre, usuario_salida_nombre, dispositivo_entrada_tipo
              FROM historial_sitio
              WHERE hora_entrada >= ?1 AND hora_entrada < ?2
              ORDER BY hora_entrada DESC",
@@ -120,6 +125,7 @@ pub fn listar_historial_sitio(
                     gafete_numero: row.get(8)?,
                     usuario_ingreso_nombre: row.get(9)?,
                     usuario_salida_nombre: row.get(10)?,
+                    dispositivo_entrada_tipo: row.get(11)?,
                 })
             },
         )

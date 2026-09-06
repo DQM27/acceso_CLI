@@ -1,6 +1,8 @@
 //! Arranque (configuración inicial / ROOT inicial) y autenticación.
 
-use crate::database::repositories::usuario_repository::{SqliteUsuarioRepository, UsuarioRepository};
+use crate::database::repositories::usuario_repository::{
+    SqliteUsuarioRepository, UsuarioRepository,
+};
 use crate::services::autenticacion_service::{
     AutenticacionService, CandidatoAutenticacion, UsuarioSesion,
 };
@@ -56,9 +58,7 @@ impl AppCore {
     /// ante un error de base de datos -- un glitch transitorio durante un
     /// sync no debería expulsar a nadie por las dudas.
     pub fn sesion_sigue_activa(&self, sesion: &UsuarioSesion) -> bool {
-        verificar_actor_activo(&self.connection, sesion)
-            .map(|usuario| usuario.is_some())
-            .unwrap_or(true)
+        verificar_actor_activo(&self.connection, sesion).map_or(true, |usuario| usuario.is_some())
     }
 
     /// Resuelve la cédula sin verificar todavía la contraseña — rápido, sólo `SQLite`. Permite
