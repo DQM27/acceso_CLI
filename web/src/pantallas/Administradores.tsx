@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
-import { useVerificacionPorCorreo } from "../componentes/useVerificacionPorCorreo";
+import ConfirmacionSensible from "../componentes/ConfirmacionSensible";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import { agregarAdministrador, eliminarAdministrador, listarAdministradores } from "../api/administradores";
@@ -22,28 +22,19 @@ function mensajeError(error: unknown): string {
  * Alta/baja de quién puede entrar al panel — esto ES la autorización real
  * (ver `AuthContexto.tsx` y la migración `crea_administradores_panel`), no
  * una pantalla de conveniencia. Agregar Y quitar piden confirmación por
- * correo (ver `useVerificacionPorCorreo`): el código llega a quien hace la
- * acción, no al admin nuevo/afectado -- es un "sos vos ahora mismo", no una
- * verificación del correo ajeno. A diferencia de la versión anterior (magic
- * link + retomar la acción al volver del redirect, ver `App.tsx` en git
- * history), el código de 6 dígitos se confirma en esta misma pestaña, así
- * que el INSERT/DELETE en `administradores_panel` pasa directo acá, sin
- * pasar el estado a otra pantalla.
+ * correo (ver `ConfirmacionSensible`/`useVerificacionPorCorreo`): el código
+ * llega a quien hace la acción, no al admin nuevo/afectado -- es un "sos vos
+ * ahora mismo", no una verificación del correo ajeno.
  */
 export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
   const [filas, setFilas] = useState<AdministradorPanel[]>([]);
   const [cargando, setCargando] = useState(true);
+
   const [modalAbierto, setModalAbierto] = useState(false);
   const [correoNuevo, setCorreoNuevo] = useState("");
-  const [codigoAlta, setCodigoAlta] = useState("");
-  const [confirmandoAlta, setConfirmandoAlta] = useState(false);
+  const [pidiendoCodigoAlta, setPidiendoCodigoAlta] = useState(false);
 
   const [bajaEnCurso, setBajaEnCurso] = useState<AdministradorPanel | null>(null);
-  const [codigoBaja, setCodigoBaja] = useState("");
-  const [confirmandoBaja, setConfirmandoBaja] = useState(false);
-
-  const confirmacionAlta = useVerificacionPorCorreo(sesion.correo);
-  const confirmacionBaja = useVerificacionPorCorreo(sesion.correo);
 
   const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
     const silencioso = opciones?.silencioso ?? false;
@@ -69,24 +60,14 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
   function cerrarModal() {
     setModalAbierto(false);
     setCorreoNuevo("");
-    setCodigoAlta("");
-    confirmacionAlta.reiniciar();
   }
 
-  async function alPedirCodigoAlta(evento: React.FormEvent) {
+  function alPedirCorreoNuevo(evento: React.FormEvent) {
     evento.preventDefault();
-    await confirmacionAlta.pedirConfirmacion();
+    setPidiendoCodigoAlta(true);
   }
 
-  async function alConfirmarCodigoAlta(evento: React.FormEvent) {
-    evento.preventDefault();
-    setConfirmandoAlta(true);
-    try {
-      await confirmacionAlta.confirmarCodigo(codigoAlta);
-    } catch {
-      setConfirmandoAlta(false);
-      return; // el error ya quedó en confirmacionAlta.error, mostrado inline
-    }
+  async function alConfirmarAlta() {
     try {
       await agregarAdministrador(correoNuevo);
       toast.success(`${correoNuevo} ya tiene acceso.`);
@@ -94,15 +75,12 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
       recargar();
     } catch (error) {
       toast.error(mensajeError(error));
-    } finally {
-      setConfirmandoAlta(false);
     }
   }
 
-  function cerrarBaja() {
-    setBajaEnCurso(null);
-    setCodigoBaja("");
-    confirmacionBaja.reiniciar();
+  function cerrarConfirmacionAlta() {
+    setPidiendoCodigoAlta(false);
+    cerrarModal();
   }
 
   async function alBorrar(fila: AdministradorPanel) {
@@ -113,28 +91,17 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
     )
       return;
     setBajaEnCurso(fila);
-    await confirmacionBaja.pedirConfirmacion();
   }
 
-  async function alConfirmarCodigoBaja(evento: React.FormEvent) {
-    evento.preventDefault();
+  async function alConfirmarBaja() {
     if (!bajaEnCurso) return;
-    setConfirmandoBaja(true);
-    try {
-      await confirmacionBaja.confirmarCodigo(codigoBaja);
-    } catch {
-      setConfirmandoBaja(false);
-      return;
-    }
     try {
       await eliminarAdministrador(bajaEnCurso.correo);
       toast.success(`${bajaEnCurso.correo} ya no tiene acceso.`);
-      cerrarBaja();
+      setBajaEnCurso(null);
       recargar();
     } catch (error) {
       toast.error(mensajeError(error));
-    } finally {
-      setConfirmandoBaja(false);
     }
   }
 
@@ -188,143 +155,50 @@ export default function Administradores({ sesion }: { sesion: UsuarioSesion }) {
         )}
       </div>
 
-      {modalAbierto && (
+      {modalAbierto && !pidiendoCodigoAlta && (
         <Modal titulo="Nuevo administrador" onCerrar={cerrarModal}>
-          {confirmacionAlta.enviado ? (
-            <form
-              onSubmit={alConfirmarCodigoAlta}
-              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-            >
-              <p style={{ margin: 0 }}>
-                Te mandamos un código a <strong>{sesion.correo}</strong>. Escribilo acá para
-                confirmar que agregás a {correoNuevo}.
-              </p>
-              <label className="campo">
-                Código de 6 dígitos
-                <input
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  required
-                  autoFocus
-                  value={codigoAlta}
-                  disabled={confirmandoAlta}
-                  placeholder="123456"
-                  onChange={(evento) => setCodigoAlta(evento.target.value)}
-                />
-              </label>
+          <form onSubmit={alPedirCorreoNuevo} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <label className="campo">
+              Correo de Google
+              <input
+                type="email"
+                required
+                autoFocus
+                value={correoNuevo}
+                placeholder="nombre@gmail.com"
+                onChange={(evento) => setCorreoNuevo(evento.target.value.trim().toLowerCase())}
+              />
+            </label>
 
-              {confirmacionAlta.error && (
-                <p className="login-error" role="alert">
-                  {confirmacionAlta.error}
-                </p>
-              )}
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-                <button type="button" className="boton" disabled={confirmandoAlta} onClick={cerrarModal}>
-                  Cancelar
-                </button>
-                <button type="submit" className="boton boton-primario" disabled={confirmandoAlta}>
-                  {confirmandoAlta ? "Confirmando…" : "Confirmar"}
-                </button>
-              </div>
-            </form>
-          ) : (
-            <form
-              onSubmit={alPedirCodigoAlta}
-              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-            >
-              <label className="campo">
-                Correo de Google
-                <input
-                  type="email"
-                  required
-                  autoFocus
-                  value={correoNuevo}
-                  disabled={confirmacionAlta.enviando}
-                  placeholder="nombre@gmail.com"
-                  onChange={(evento) => setCorreoNuevo(evento.target.value.trim().toLowerCase())}
-                />
-              </label>
-
-              {confirmacionAlta.error && (
-                <p className="login-error" role="alert">
-                  {confirmacionAlta.error}
-                </p>
-              )}
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-                <button
-                  type="button"
-                  className="boton"
-                  disabled={confirmacionAlta.enviando}
-                  onClick={cerrarModal}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="boton boton-primario"
-                  disabled={confirmacionAlta.enviando}
-                >
-                  {confirmacionAlta.enviando ? "Enviando…" : "Enviar código de confirmación"}
-                </button>
-              </div>
-            </form>
-          )}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+              <button type="button" className="boton" onClick={cerrarModal}>
+                Cancelar
+              </button>
+              <button type="submit" className="boton boton-primario">
+                Enviar código de confirmación
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
 
-      {bajaEnCurso && (
-        <Modal titulo={`Confirmar — sacarle el acceso a ${bajaEnCurso.correo}`} onCerrar={cerrarBaja}>
-          {confirmacionBaja.enviado ? (
-            <form
-              onSubmit={alConfirmarCodigoBaja}
-              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-            >
-              <p style={{ margin: 0 }}>
-                Te mandamos un código a <strong>{sesion.correo}</strong>. Escribilo acá para
-                confirmar.
-              </p>
-              <label className="campo">
-                Código de 6 dígitos
-                <input
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  required
-                  autoFocus
-                  value={codigoBaja}
-                  disabled={confirmandoBaja}
-                  placeholder="123456"
-                  onChange={(evento) => setCodigoBaja(evento.target.value)}
-                />
-              </label>
+      <ConfirmacionSensible
+        abierto={modalAbierto && pidiendoCodigoAlta}
+        correo={sesion.correo}
+        titulo="Nuevo administrador"
+        descripcion={`confirmar que agregás a ${correoNuevo}`}
+        onConfirmar={alConfirmarAlta}
+        onCerrar={cerrarConfirmacionAlta}
+      />
 
-              {confirmacionBaja.error && (
-                <p className="login-error" role="alert">
-                  {confirmacionBaja.error}
-                </p>
-              )}
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-                <button type="button" className="boton" disabled={confirmandoBaja} onClick={cerrarBaja}>
-                  Cancelar
-                </button>
-                <button type="submit" className="boton boton-primario" disabled={confirmandoBaja}>
-                  {confirmandoBaja ? "Confirmando…" : "Confirmar"}
-                </button>
-              </div>
-            </form>
-          ) : confirmacionBaja.error ? (
-            <p className="login-error" role="alert">
-              {confirmacionBaja.error}
-            </p>
-          ) : (
-            <p style={{ margin: 0, color: "var(--muted)" }}>Enviando código a {sesion.correo}…</p>
-          )}
-        </Modal>
-      )}
+      <ConfirmacionSensible
+        abierto={bajaEnCurso !== null}
+        correo={sesion.correo}
+        titulo={bajaEnCurso ? `Confirmar — sacarle el acceso a ${bajaEnCurso.correo}` : ""}
+        descripcion="confirmar"
+        onConfirmar={alConfirmarBaja}
+        onCerrar={() => setBajaEnCurso(null)}
+      />
     </div>
   );
 }
