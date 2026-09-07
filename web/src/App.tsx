@@ -1,5 +1,5 @@
-import { Suspense, lazy, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Suspense, lazy, useEffect, useState } from "react";
+import { BrowserRouter, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 import { History, Menu, MonitorSmartphone, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -19,9 +19,9 @@ const Usuarios = lazy(() => import("./pantallas/Usuarios"));
 
 export type Seccion = "dispositivos" | "historial" | "contratistas" | "usuarios";
 
-/** Ruta real de cada sección -- `Sidebar` arma sus `NavLink` con esto y las
- * `Route` de abajo usan el mismo valor, así las dos fuentes no pueden
- * desincronizarse en silencio. */
+/** Ruta real de cada sección -- `Sidebar` arma sus `NavLink` con esto y
+ * `Shell` compara `location.pathname` contra el mismo valor para decidir
+ * qué mostrar, así las dos fuentes no pueden desincronizarse en silencio. */
 export function rutaSeccion(id: Seccion): string {
   return `/${id}`;
 }
@@ -97,12 +97,31 @@ function Contenido() {
 
 function Shell({ sesion }: { sesion: UsuarioSesion }) {
   const { cerrarSesion } = useAuth();
+  const location = useLocation();
+  const seccionActual = SECCIONES.find((s) => rutaSeccion(s.id) === location.pathname)?.id;
+  // Cada sección visitada se queda MONTADA (oculta con CSS) en vez de
+  // desmontarse al navegar a otra -- antes, con <Routes>/<Route>, salir de
+  // una pestaña la desmontaba del todo, así que volver a ella disparaba
+  // todo de nuevo (pedía los datos otra vez, AG Grid se reconstruía de
+  // cero) con el parpadeo de "Cargando pantalla…" cada vez, aunque ya se
+  // hubiera visto. Ahora sólo la PRIMERA visita a cada sección paga ese
+  // costo (bajar su chunk + el primer fetch) -- volver después es
+  // instantáneo. El costo real: cada sección visitada sigue con su
+  // `useAutoRefresh` (canal Realtime + poll) corriendo de fondo aunque no
+  // se esté viendo -- aceptable para un panel con un puñado de personas
+  // usándolo a la vez, no para miles.
+  const [visitadas, setVisitadas] = useState<Seccion[]>(() => (seccionActual ? [seccionActual] : []));
   const [colapsado, setColapsado] = useState(leerSidebarColapsado);
   // Independiente de `colapsado` (que es el modo ícono-solo de escritorio,
   // por doble click): en mobile el sidebar es un cajón que está oculto o
   // abierto de par en par, nunca "colapsado a íconos" -- ver el media query
   // en index.css.
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
+
+  useEffect(() => {
+    if (!seccionActual) return;
+    setVisitadas((actual) => (actual.includes(seccionActual) ? actual : [...actual, seccionActual]));
+  }, [seccionActual]);
 
   function alternarColapsado() {
     setColapsado((actual) => {
@@ -139,18 +158,36 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
             >
               <Menu size={20} strokeWidth={2} aria-hidden="true" />
             </button>
-            <Suspense fallback={<div className="pantalla-cuerpo" role="status">Cargando pantalla…</div>}>
-              <Routes>
-                <Route path={rutaSeccion("historial")} element={<Historial />} />
-                <Route path={rutaSeccion("contratistas")} element={<Contratistas />} />
-                <Route path={rutaSeccion("usuarios")} element={<Usuarios />} />
-                <Route path={rutaSeccion("dispositivos")} element={<Dispositivos sesion={sesion} />} />
-                {/* Ruta desconocida (incluida "/") -- mismo default de
-                    siempre: caer en Historial en vez de una pantalla en
-                    blanco. */}
-                <Route path="*" element={<Navigate to={rutaSeccion("historial")} replace />} />
-              </Routes>
-            </Suspense>
+            {/* Ruta desconocida (incluida "/") -- mismo default de siempre:
+                caer en Historial en vez de una pantalla en blanco. */}
+            {!seccionActual && <Navigate to={rutaSeccion("historial")} replace />}
+            {visitadas.map((id) => (
+              <div
+                key={id}
+                style={{
+                  display: id === seccionActual ? "flex" : "none",
+                  flexDirection: "column",
+                  flex: 1,
+                  minHeight: 0,
+                }}
+              >
+                {/* Suspense por sección, no uno compartido -- así la
+                    primera visita a una sección NUEVA (bajando su chunk)
+                    no vuelve a tapar con "Cargando pantalla…" las que ya
+                    están montadas y visibles detrás. */}
+                <Suspense fallback={<div className="pantalla-cuerpo" role="status">Cargando pantalla…</div>}>
+                  {id === "historial" ? (
+                    <Historial />
+                  ) : id === "contratistas" ? (
+                    <Contratistas />
+                  ) : id === "usuarios" ? (
+                    <Usuarios />
+                  ) : (
+                    <Dispositivos sesion={sesion} />
+                  )}
+                </Suspense>
+              </div>
+            ))}
           </main>
         </div>
 
