@@ -1,6 +1,6 @@
 import { Suspense, lazy, useState } from "react";
 import { Toaster } from "sonner";
-import { History, Menu, MonitorSmartphone, ShieldCheck, UserCog, Users } from "lucide-react";
+import { History, Menu, MonitorSmartphone, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
@@ -15,13 +15,21 @@ const Dispositivos = lazy(() => import("./pantallas/Dispositivos"));
 const Historial = lazy(() => import("./pantallas/Historial"));
 const Contratistas = lazy(() => import("./pantallas/Contratistas"));
 const Usuarios = lazy(() => import("./pantallas/Usuarios"));
-const Administradores = lazy(() => import("./pantallas/Administradores"));
 
-export type Seccion = "dispositivos" | "historial" | "contratistas" | "usuarios" | "administradores";
+export type Seccion = "dispositivos" | "historial" | "contratistas" | "usuarios";
 
 // Sin distinción de rol -- se eliminó `admin_regional` (nunca tuvo alcance
 // real, ver migración `elimina_admin_regional`). Cualquier fila en
 // `administradores_panel` ve y puede tocar todo.
+//
+// Sin sección "Administradores" a propósito: el alta/baja de quién puede
+// entrar al panel se saca deliberadamente del panel mismo (mismo criterio
+// que ROOT en desktop/TUI, que tampoco se gestiona desde ninguna app --
+// ver `crear_root_inicial`) -- así un compromiso del panel web (XSS, una
+// dependencia comprometida) no puede fabricarse a sí mismo un admin nuevo.
+// Se gestiona con SQL directo en el dashboard de Supabase:
+//   insert into administradores_panel (correo) values ('nuevo@admin.com');
+//   delete from administradores_panel where correo = 'quitar@admin.com';
 //
 // "usuarios" (no "operadores") a propósito -- mismo nombre que la sección
 // equivalente de escritorio (`App.tsx` de desktop/), aunque ahí sea
@@ -33,7 +41,6 @@ const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
   { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
   { id: "usuarios", etiqueta: "Usuarios", Icono: UserCog },
   { id: "dispositivos", etiqueta: "Dispositivos", Icono: MonitorSmartphone },
-  { id: "administradores", etiqueta: "Administradores", Icono: ShieldCheck },
 ];
 
 const CLAVE_SIDEBAR_COLAPSADO = "web:sidebar:colapsado";
@@ -132,8 +139,6 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
             <Suspense fallback={<div className="pantalla-cuerpo" role="status">Cargando pantalla…</div>}>
               {seccion === "dispositivos" ? (
                 <Dispositivos sesion={sesion} />
-              ) : seccion === "administradores" ? (
-                <Administradores sesion={sesion} />
               ) : seccion === "historial" ? (
                 <Historial />
               ) : seccion === "contratistas" ? (

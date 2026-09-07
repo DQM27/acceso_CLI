@@ -101,6 +101,23 @@ no reviviendo `admin_regional` como estaba.
 `administradores_panel` es hoy una lista simple: `correo` + `creado_en`,
 sin columna de rol. Estar en la tabla ES tener acceso completo al panel.
 
+**Alta/baja de administradores: deliberadamente sin pantalla en el panel
+web** (2026-09-06, se sacó `Administradores.tsx`/`api/administradores.ts`
+tras la auditoría de seguridad -- existieron un tiempo con confirmación
+por código de correo, `ConfirmacionSensible`). Mismo criterio que ROOT en
+desktop/TUI, que tampoco se gestiona desde ninguna app
+(`crear_root_inicial`): si el panel web mismo se compromete (XSS, una
+dependencia de terceros comprometida), no debe poder fabricarse a sí mismo
+un admin nuevo -- esa capacidad no puede vivir en la misma superficie que
+se está protegiendo. Se gestiona con SQL directo en el SQL Editor del
+dashboard de Supabase (login separado, con su propio 2FA si está
+activado):
+
+```sql
+insert into administradores_panel (correo) values ('nuevo@admin.com');
+delete from administradores_panel where correo = 'quitar@admin.com';
+```
+
 Autorización por **RLS en Postgres** (`es_admin_global()`, que ahora sólo
 chequea que el correo esté en `administradores_panel`), no lógica de
 permisos sólo en el frontend — mismo criterio que ya sigue el resto del
