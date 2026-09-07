@@ -117,4 +117,20 @@ describe("AuthContexto", () => {
     expect(mocks.signOut).not.toHaveBeenCalled();
     expect(screen.getByTestId("sesion").textContent).toBe("null");
   });
+
+  it("no deja la app en blanco para siempre si getSession() rechaza", async () => {
+    mocks.getSession.mockRejectedValue(new Error("fallo interno de supabase-js"));
+
+    render(
+      <AuthProvider>
+        <Sonda />
+      </AuthProvider>,
+    );
+
+    // Sin el fix, `cargando` se queda en "true" para siempre (la rejection
+    // no tiene ningún manejo) y `Contenido` nunca renderiza nada.
+    await screen.findByText("false", { selector: "[data-testid=cargando]" });
+    expect(screen.getByTestId("sesion").textContent).toBe("null");
+    expect(screen.getByTestId("error").textContent).toContain("verificación");
+  });
 });
