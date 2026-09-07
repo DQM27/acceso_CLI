@@ -206,6 +206,67 @@ fn obtener_json<T: serde::de::DeserializeOwned>(
     Ok(filas)
 }
 
+/// Filas por página al paginar con `obtener_json_paginado` -- por debajo
+/// del tope de filas por respuesta que Supabase/`PostgREST` impone por
+/// defecto (`db-max-rows`, 1000) para que ninguna página sola pueda
+/// chocar con ese límite y perder el resto en silencio.
+const TAMANO_PAGINA_REMOTA: usize = 500;
+
+/// Igual que `obtener_json`, pero para listas que pueden superar el tope de
+/// filas por respuesta de `PostgREST` -- sin esto, un catálogo o un
+/// historial que ya cruzó ese tope (típico en el primer sync de un sitio
+/// grande, sin `marca_anterior` que acote nada) perdía en silencio todo lo
+/// que sobraba: no un error, sólo datos que nunca llegaban. Pagina con
+/// `Range` (protocolo estándar de `PostgREST`) hasta que una página vuelve
+/// con menos filas que `TAMANO_PAGINA_REMOTA`, señal de que no queda nada
+/// más. `url_base` no debe traer su propio `order=` -- esta función agrega
+/// uno por `id` (columna presente en todo lo que hoy pagina) para que el
+/// orden entre páginas sea estable; sin un orden fijo, dos páginas
+/// consecutivas de una tabla que sigue cambiando mientras se pagina
+/// podrían saltarse o repetir filas.
+fn obtener_json_paginado<T: serde::de::DeserializeOwned>(
+    cliente: &reqwest::blocking::Client,
+    contexto: &ContextoSincronizacion<'_>,
+    url_base: &str,
+) -> Result<Vec<T>, SincronizacionError> {
+    let separador = if url_base.contains('?') { '&' } else { '?' };
+    let url = format!("{url_base}{separador}order=id.asc");
+
+    let mut resultado = Vec::new();
+    let mut desde = 0_usize;
+    loop {
+        let respuesta = cliente
+            .get(&url)
+            .header("apikey", contexto.apikey)
+            .header("Authorization", format!("Bearer {}", contexto.token))
+            .header("Range-Unit", "items")
+            .header(
+                "Range",
+                format!("{desde}-{}", desde + TAMANO_PAGINA_REMOTA - 1),
+            )
+            .send()
+            .map_err(NubeError::Red)?;
+
+        // `is_success()` ya cubre el 206 Partial Content que `PostgREST`
+        // devuelve cuando la página pedida no alcanza a cubrir todo lo que
+        // hay -- no hace falta distinguirlo de un 200 normal, el criterio
+        // de "¿hay más?" de abajo (cuántas filas vinieron) es el mismo.
+        if !respuesta.status().is_success() {
+            let status = respuesta.status().as_u16();
+            let cuerpo = respuesta.text().unwrap_or_default();
+            return Err(SincronizacionError::RespuestaInesperada { status, cuerpo });
+        }
+        let pagina: Vec<T> = respuesta.json().map_err(NubeError::Red)?;
+        let recibidas_en_esta_pagina = pagina.len();
+        resultado.extend(pagina);
+        if recibidas_en_esta_pagina < TAMANO_PAGINA_REMOTA {
+            break;
+        }
+        desde += TAMANO_PAGINA_REMOTA;
+    }
+    Ok(resultado)
+}
+
 /// Contratistas (espejo): crear y actualizar se resuelven igual -- un
 /// `upsert` (`Prefer: resolution=merge-duplicates`) es idempotente y la
 /// versión más nueva siempre termina ganando, así que no hace falta
@@ -895,7 +956,7 @@ pub fn recibir_historial_del_sitio(
          dispositivo_entrada:dispositivos!ingresos_dispositivo_entrada_id_fkey(tipo)",
         contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
     );
-    let filas: Vec<FilaHistorialRemota> = obtener_json(&cliente, contexto, &url)?;
+    let filas: Vec<FilaHistorialRemota> = obtener_json_paginado(&cliente, contexto, &url)?;
 
     let transaction = connection.unchecked_transaction()?;
     let mut recibidos = 0_u32;
@@ -1098,7 +1159,7 @@ fn descargar_catalogo_remoto(
     // que quedar negado en TODOS. El nombre de la función quedó del modelo
     // viejo (un solo sitio por dispositivo); lo que trae ahora es el
     // catálogo global completo, no "del sitio" de `contexto`.
-    let empresas: Vec<FilaEmpresaRemota> = obtener_json(
+    let empresas: Vec<FilaEmpresaRemota> = obtener_json_paginado(
         &cliente,
         contexto,
         &format!(
@@ -1106,7 +1167,7 @@ fn descargar_catalogo_remoto(
             contexto.base_url
         ),
     )?;
-    let contratistas: Vec<FilaContratistaRemota> = obtener_json(
+    let contratistas: Vec<FilaContratistaRemota> = obtener_json_paginado(
         &cliente,
         contexto,
         &format!(
@@ -1115,7 +1176,7 @@ fn descargar_catalogo_remoto(
             contexto.base_url
         ),
     )?;
-    let usuarios: Vec<FilaUsuarioRemota> = obtener_json(
+    let usuarios: Vec<FilaUsuarioRemota> = obtener_json_paginado(
         &cliente,
         contexto,
         &format!(
@@ -1128,7 +1189,7 @@ fn descargar_catalogo_remoto(
     // También permite reintentar deudores que todavía no se pudieron resolver.
     // Con `sitio_id=eq...` a diferencia de las tres de arriba -- ver
     // comentario de `FilaGafeteRemota`.
-    let gafetes: Vec<FilaGafeteRemota> = obtener_json(
+    let gafetes: Vec<FilaGafeteRemota> = obtener_json_paginado(
         &cliente,
         contexto,
         &format!(
@@ -2033,7 +2094,7 @@ mod tests {
                 ",
             )
             .unwrap();
-        // Formato real que devuelve PostgREST para un `timestamptz`
+        // Formato real que devuelve `PostgREST` para un `timestamptz`
         // (fracción de segundo + offset "+00:00", no el "...Z" sin fracción
         // que exige `registro_ingresos_salida_utc`) -- este caso rompía la
         // sincronización en vivo aunque los tests con formato ya-canónico

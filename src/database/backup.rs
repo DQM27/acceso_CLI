@@ -290,7 +290,7 @@ pub fn restaurar_respaldo(ruta_candidata: &Path, ruta_activa: &Path) -> Result<(
         if ruta.exists() {
             fs::remove_file(ruta)?;
         }
-        limpiar_sidecars_wal(&ruta);
+        limpiar_sidecars_wal(ruta);
     }
 
     // Paso 1: copiar la candidata a un temporal en el mismo directorio, sin
