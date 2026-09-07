@@ -7,8 +7,18 @@ import { supabase } from "../lib/supabase";
  * esa baja se ve en TODOS los sitios a la vez. `sitio_id` en la tabla real
  * queda como dato de procedencia (qué dispositivo lo dio de alta), pero
  * el panel ni siquiera lo pide -- no aporta nada para decidir nada acá.
- * RLS: sólo `admin_global` (`es_admin_global()`, migración
- * `admin_global_gestiona_contratistas`).
+ * RLS: `admin_global` (`es_admin_global()`) O cualquier dispositivo
+ * autenticado (JWT con `sitio_id` -- móvil/escritorio de cualquier sitio,
+ * necesario para que `recibir_catalogo_del_sitio` sincronice el catálogo
+ * completo, ver `src/nube/sincronizacion.rs`). Ojo: NO es "sólo
+ * admin_global" -- ese fue el estado original
+ * (`admin_global_gestiona_contratistas`), reemplazado por la política
+ * "(global)" en `globaliza_contratistas_y_empresas.sql`, y acotado de
+ * nuevo (pero a device-o-admin_global, no sólo admin_global) en
+ * `cierra_acceso_global_a_cuentas_sin_dispositivo_ni_admin.sql` -- ver esa
+ * migración para el hallazgo de seguridad que la motivó (cualquier cuenta
+ * de Google, ni siquiera un dispositivo, tenía el mismo acceso antes de
+ * ese fix).
  */
 export interface Contratista {
   id: string;
