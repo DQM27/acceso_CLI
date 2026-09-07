@@ -17,6 +17,16 @@ app/app/src/main/jniLibs/
 # archivo no se puede generar un APK de release nuevo que los usuarios
 # puedan instalar encima de uno anterior; hay que resguardarlo aparte
 # (ver mobile/README.md).
+#
+# Dos rutas a propósito: app/app/keystore/ es donde build.gradle.kts busca
+# de verdad (rootProject.file(...) resuelve contra app/, el root de Gradle,
+# + "app/keystore/..." del storeFile en keystore.properties) -- un
+# "app/keystore/" a secas (como estaba antes) NO matcheaba esa ruta real y
+# casi deja pasar la keystore al repo con un `git add -A` corrido desde
+# otra carpeta. app/keystore/ (sin el segundo "app/") también se ignora
+# porque hay un .jks suelto ahí de una prueba anterior -- por las dudas,
+# aunque no esté wireado a ningún build.gradle.kts hoy.
+app/app/keystore/
 app/keystore/
 app/keystore.properties
 
