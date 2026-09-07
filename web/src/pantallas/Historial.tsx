@@ -4,12 +4,14 @@ import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
+import AvisoTruncado from "../componentes/AvisoTruncado";
 import SelectorRangoFecha, { textoRangoFecha } from "../componentes/SelectorRangoFecha";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { useAuth } from "../contexto/AuthContexto";
 import { listarHistorial } from "../api/historial";
 import type { MovimientoHistorial } from "../api/historial";
 import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { mensajeError } from "../mensajeError";
 
 export function textoMedio(medio: string | null): string {
   if (medio === "CAMINANDO") return "Caminando";
@@ -17,13 +19,15 @@ export function textoMedio(medio: string | null): string {
   return "";
 }
 
-/** "pc"/"mobile"/"visor" (`dispositivos.tipo`) → texto corto para la
- * columna "Dispositivo" -- mismo mapeo que `textoDispositivo` en
- * `desktop/src/pantallas/Historial.tsx` y `HistorialViewModel.kt` del
- * móvil, para que los tres lados muestren lo mismo. */
+/** "pc"/"mobile"/"visor" (`dispositivos.tipo`) → sólo el ícono, para la
+ * columna "Dispositivo" -- tanto en pantalla como en Excel/PDF (mismo
+ * mapeo que `textoDispositivo` en `desktop/src/pantallas/Historial.tsx` y
+ * `HistorialViewModel.kt` del móvil). Antes devolvía ícono + palabra
+ * ("💻 PC"/"📱 Celular"), pero quedaba desparejo visualmente -- una palabra
+ * bastante más larga que la otra. */
 export function textoDispositivo(tipo: string | null): string {
-  if (tipo === "pc") return "💻 PC";
-  if (tipo === "mobile") return "📱 Celular";
+  if (tipo === "pc") return "💻";
+  if (tipo === "mobile") return "📱";
   return tipo ?? "—";
 }
 
@@ -47,7 +51,7 @@ export interface DefinicionColumnaExport {
 }
 
 export const DEFINICIONES_EXPORT: DefinicionColumnaExport[] = [
-  { colId: "sitio_nombre", etiqueta: "Sitio", valor: (f) => f.sitio_nombre ?? "" },
+  { colId: "sitio_nombre", etiqueta: "Unidad operativa", valor: (f) => f.sitio_nombre ?? "" },
   {
     colId: "contratista_cedula",
     etiqueta: "Cédula",
@@ -220,6 +224,7 @@ export function generarHtmlHistorial(
 export default function Historial() {
   const { sesion } = useAuth();
   const [filas, setFilas] = useState<MovimientoHistorial[]>([]);
+  const [truncado, setTruncado] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   // Mismo default que desktop/src/pantallas/Historial.tsx -- últimos 6
@@ -232,9 +237,12 @@ export default function Historial() {
     const silencioso = opciones?.silencioso ?? false;
     if (!silencioso) setCargando(true);
     return listarHistorial(desde || undefined, hasta || undefined)
-      .then(setFilas)
+      .then(({ filas, truncado }) => {
+        setFilas(filas);
+        setTruncado(truncado);
+      })
       .catch((error) => {
-        if (!silencioso) toast.error(String(error));
+        if (!silencioso) toast.error(mensajeError(error));
       })
       .finally(() => {
         if (!silencioso) setCargando(false);
@@ -290,7 +298,7 @@ export default function Historial() {
       XLSX.utils.book_append_sheet(libro, hoja, "Historial");
       XLSX.writeFile(libro, "historial.xlsx");
     } catch (error) {
-      toast.error(`No se pudo exportar a Excel: ${String(error)}`);
+      toast.error(`No se pudo exportar a Excel: ${mensajeError(error)}`);
     }
   }
 
@@ -348,7 +356,7 @@ export default function Historial() {
   // `Tabla`).
   const columnas: ColDef<MovimientoHistorial>[] = useMemo(
     () => [
-      { field: "sitio_nombre", headerName: "Sitio", flex: 1, minWidth: 110 },
+      { field: "sitio_nombre", headerName: "Unidad operativa", flex: 1.3, minWidth: 160 },
       {
         field: "contratista_cedula",
         headerName: "Cédula",
@@ -425,6 +433,11 @@ export default function Historial() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
+        {truncado && (
+          <AvisoTruncado
+            mensaje={`Este rango tiene más de ${filas.length.toLocaleString("es-CR")} movimientos — se muestran solo los primeros, y Excel/PDF exportan lo mismo que está cargado acá (a diferencia de escritorio, acá no hay un rango "completo" aparte). Acotá las fechas para ver/exportar el resto.`}
+          />
+        )}
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<MovimientoHistorial>
             ref={tablaRef}

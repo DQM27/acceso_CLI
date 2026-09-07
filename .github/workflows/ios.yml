@@ -1,0 +1,196 @@
+name: iOS
+
+on:
+  push:
+    paths:
+      - ".github/workflows/ios.yml"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "src/**"
+      - "mobile/rust-core/**"
+      - "mobile/ios/**"
+  pull_request:
+    paths:
+      - ".github/workflows/ios.yml"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "src/**"
+      - "mobile/rust-core/**"
+      - "mobile/ios/**"
+  workflow_dispatch:
+    inputs:
+      generar_ipa_firmado:
+        description: "Generar .ipa firmado usando secretos Apple"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build-ios-simulator:
+    name: Build iOS sin firma
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar toolchain de Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            mobile/rust-core
+
+      - name: Instalar XcodeGen
+        run: brew install xcodegen
+
+      - name: Mostrar version de Xcode
+        run: xcodebuild -version
+
+      - name: Generar bindings Swift y XCFramework
+        working-directory: mobile/ios
+        run: bash Scripts/build-rust-xcframework.sh
+
+      - name: Generar proyecto Xcode
+        working-directory: mobile/ios
+        run: xcodegen generate
+
+      - name: Compilar app iOS para simulador
+        working-directory: mobile/ios
+        run: |
+          xcodebuild \
+            -project ControlAccesoIOS.xcodeproj \
+            -scheme ControlAccesoIOS \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Publicar artefactos iOS generados
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-base
+          path: |
+            mobile/ios/ControlAccesoIOS.xcodeproj
+            mobile/ios/Frameworks/ControlAccesoMobile.xcframework
+            mobile/ios/Generated/Swift
+
+  build-ios-ipa:
+    name: Build iOS firmado
+    runs-on: macos-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.generar_ipa_firmado
+    env:
+      IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+      IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+      IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_BUNDLE_ID: ${{ secrets.APPLE_BUNDLE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar secretos requeridos
+        run: |
+          test -n "$IOS_CERTIFICATE_P12_BASE64"
+          test -n "$IOS_CERTIFICATE_PASSWORD"
+          test -n "$IOS_PROVISIONING_PROFILE_BASE64"
+          test -n "$APPLE_TEAM_ID"
+          test -n "$APPLE_BUNDLE_ID"
+
+      - name: Instalar toolchain de Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            mobile/rust-core
+
+      - name: Instalar XcodeGen
+        run: brew install xcodegen
+
+      - name: Importar certificado y provisioning profile
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/ios-signing.keychain-db"
+          CERTIFICATE_PATH="$RUNNER_TEMP/certificate.p12"
+          PROFILE_PATH="$RUNNER_TEMP/profile.mobileprovision"
+          PROFILE_PLIST="$RUNNER_TEMP/profile.plist"
+
+          echo "$IOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+          echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+
+          security create-keychain -p "$IOS_CERTIFICATE_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$IOS_CERTIFICATE_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security default-keychain -s "$KEYCHAIN_PATH"
+
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          security cms -D -i "$PROFILE_PATH" > "$PROFILE_PLIST"
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' "$PROFILE_PLIST")
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          echo "IOS_PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
+
+      - name: Generar bindings Swift y XCFramework
+        working-directory: mobile/ios
+        run: bash Scripts/build-rust-xcframework.sh
+
+      - name: Generar proyecto Xcode
+        working-directory: mobile/ios
+        run: xcodegen generate
+
+      - name: Archivar app iOS
+        working-directory: mobile/ios
+        run: |
+          xcodebuild \
+            -project ControlAccesoIOS.xcodeproj \
+            -scheme ControlAccesoIOS \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath "$RUNNER_TEMP/ControlAccesoIOS.xcarchive" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            PRODUCT_BUNDLE_IDENTIFIER="$APPLE_BUNDLE_ID" \
+            PROVISIONING_PROFILE_SPECIFIER="$IOS_PROFILE_UUID" \
+            CODE_SIGN_STYLE=Manual \
+            archive
+
+      - name: Crear ExportOptions.plist
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>development</string>
+            <key>teamID</key>
+            <string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>$APPLE_BUNDLE_ID</key>
+              <string>$IOS_PROFILE_UUID</string>
+            </dict>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Exportar .ipa
+        working-directory: mobile/ios
+        run: |
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$RUNNER_TEMP/ControlAccesoIOS.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/ipa"
+
+      - name: Publicar .ipa firmado
+        uses: actions/upload-artifact@v4
+        with:
+          name: ControlAccesoIOS-ipa
+          path: ${{ runner.temp }}/ipa/*.ipa

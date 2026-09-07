@@ -171,7 +171,7 @@ pub async fn login(
     // Sólo el `Ok(Ok(Ok(false)))` explícito (respondió a tiempo, sin error,
     // y dijo que no) rechaza el login -- cualquier otra combinación (sin
     // red, tardó, o dijo que sí) sigue adelante con lo que ya validó local.
-    if let Ok(Ok(Ok(false))) = chequeo {
+    if matches!(chequeo, Ok(Ok(Ok(false)))) {
         return Err(ErrorLogin {
             mensaje: "Este usuario fue desactivado".to_string(),
             sin_password_local: false,

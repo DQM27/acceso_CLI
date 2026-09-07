@@ -156,7 +156,7 @@ pub fn guardar_secreto_dispositivo(
     let actor = state.sesion_activa()?;
     state
         .core()
-        .guardar_secreto_dispositivo(&actor, None, &secreto)
+        .guardar_secreto_dispositivo(&actor, None, None, &secreto)
         .map_err(mensaje_gestion_nube)
 }
 
@@ -167,8 +167,45 @@ pub fn secreto_dispositivo_guardado(state: tauri::State<GuiState>) -> Result<boo
     let actor = state.sesion_activa()?;
     state
         .core()
-        .secreto_dispositivo_guardado(&actor, None)
+        .secreto_dispositivo_guardado(&actor, None, None)
         .map_err(mensaje_gestion_nube)
+}
+
+/// Arranque de una base vacía (`requiere_configuracion_inicial` en
+/// `comandos::autenticacion`) -- sin `sesion_activa()` a propósito, porque
+/// todavía no existe ningún usuario con quien loguearse. Guarda el secreto
+/// pegado en la pantalla de arranque (ver `App.tsx`) y trae el catálogo
+/// remoto completo, usuarios incluidos, para que el próximo intento de
+/// login ya tenga con quién autenticar (con el centinela
+/// `SIN_PASSWORD_LOCAL`, así que cae solo en "fijar contraseña").
+#[tauri::command]
+pub async fn configurar_dispositivo_inicial(
+    app: tauri::AppHandle,
+    secreto: String,
+) -> Result<ResumenSincronizacion, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<GuiState>();
+        let resumen = state
+            .core()
+            .configurar_dispositivo_inicial(None, None, &secreto)
+            .map_err(mensaje_gestion_nube)?;
+        Ok(ResumenSincronizacion {
+            enviados: resumen.enviados,
+            fallidos: resumen.fallidos,
+            remotos_abiertos: resumen.remotos_abiertos,
+            cierres_recibidos: resumen.cierres_recibidos,
+            movimientos_historial_recibidos: resumen.movimientos_historial_recibidos,
+            empresas_recibidas: resumen.empresas_recibidas,
+            contratistas_recibidos: resumen.contratistas_recibidos,
+            gafetes_recibidos: resumen.gafetes_recibidos,
+            sitio_id: resumen.sitio_id,
+            dispositivo_id: resumen.dispositivo_id,
+            tipo: resumen.tipo,
+            sesion_expulsada: resumen.sesion_expulsada,
+        })
+    })
+    .await
+    .map_err(|error| format!("No se pudo completar el arranque inicial: {error}"))?
 }
 
 #[tauri::command]

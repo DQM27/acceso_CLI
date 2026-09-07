@@ -1,12 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { ColDef } from "ag-grid-community";
+import { Check } from "lucide-react";
+import type { CellStyle, ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import InterruptorCelda from "../componentes/InterruptorCelda";
+import AvisoTruncado from "../componentes/AvisoTruncado";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { actualizarAccesoContratista, listarContratistas } from "../api/contratistas";
 import type { Contratista } from "../api/contratistas";
 import { textoFechaDDMMYYYY } from "../tiempo";
+import { mensajeError } from "../mensajeError";
+
+// Declarados afuera del array de columnas y ya tipados como `CellStyle` --
+// dentro del array, mezclar objetos literales con distintas claves
+// (`textAlign` acá, `display`/`justifyContent`/`alignItems` en
+// "es_personal_ruta") hace que TS infiera un único tipo combinado para
+// todos los elementos y rechace la asignación a `ColDef<Contratista>[]`.
+const ESTILO_IZQUIERDA: CellStyle = { textAlign: "left" };
+const ESTILO_CENTRO_FLEX: CellStyle = { display: "flex", justifyContent: "center", alignItems: "center" };
 
 /**
  * Vista + baja de contratistas (alcance pedido en
@@ -19,15 +30,19 @@ import { textoFechaDDMMYYYY } from "../tiempo";
 export default function Contratistas() {
   const [busqueda, setBusqueda] = useState("");
   const [filas, setFilas] = useState<Contratista[]>([]);
+  const [truncado, setTruncado] = useState(false);
   const [cargando, setCargando] = useState(true);
 
   const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
     const silencioso = opciones?.silencioso ?? false;
     if (!silencioso) setCargando(true);
     return listarContratistas()
-      .then(setFilas)
+      .then(({ filas, truncado }) => {
+        setFilas(filas);
+        setTruncado(truncado);
+      })
       .catch((error) => {
-        if (!silencioso) toast.error(String(error));
+        if (!silencioso) toast.error(mensajeError(error));
       })
       .finally(() => {
         if (!silencioso) setCargando(false);
@@ -52,23 +67,27 @@ export default function Contratistas() {
       // La grilla ya muestra el valor nuevo (edición optimista de AG Grid) --
       // si el guardado falla, hay que volver a pedir los datos reales para
       // que la celda no quede mintiendo.
-      toast.error(String(error));
+      toast.error(mensajeError(error));
       recargar();
     }
   }
 
-  const columnas: ColDef<Contratista>[] = useMemo(
+  const columnas = useMemo<ColDef<Contratista>[]>(
     () => [
       {
         field: "identificacion",
-        headerName: "Identificación",
+        // "Cédula", no "Identificación" -- mismo término que usan
+        // Historial y Usuarios para el mismo dato (columna `cedula`/
+        // `contratista_cedula` ahí, `identificacion` acá por herencia del
+        // nombre de columna en Supabase) -- antes cada pantalla le decía
+        // distinto a lo mismo.
+        headerName: "Cédula",
         flex: 1.3,
         minWidth: 140,
-        cellStyle: { textAlign: "left" },
+        cellStyle: ESTILO_IZQUIERDA,
       },
-      { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
+      { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: ESTILO_IZQUIERDA },
       { field: "empresa_nombre", headerName: "Empresa", flex: 1.3, minWidth: 140 },
-      { field: "sitio_nombre", headerName: "Sitio de origen", flex: 1.1, minWidth: 130 },
       { field: "tipo_ingreso", headerName: "Tipo", flex: 1.1, minWidth: 110 },
       {
         field: "fecha_vencimiento_praind",
@@ -86,6 +105,14 @@ export default function Contratistas() {
         flex: 1.6,
         minWidth: 160,
         valueFormatter: (p) => (p.value ? "Sí" : "No"),
+        // Render propio (no InterruptorCelda -- ese es el switch editable
+        // que usa desktop/src/pantallas/Contratistas.tsx; acá es de sólo
+        // lectura a propósito, ver el doc-comment de arriba) -- así el
+        // ícono queda centrado y en verde cuando es "Sí" en vez del check
+        // gris por defecto que AG Grid le pone a un campo booleano.
+        cellStyle: ESTILO_CENTRO_FLEX,
+        cellRenderer: ({ value }: { value: boolean }) =>
+          value ? <Check size={16} color="var(--exito)" strokeWidth={2.5} aria-label="Sí" /> : null,
         filter: false,
       },
       {
@@ -104,6 +131,11 @@ export default function Contratistas() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
+        {truncado && (
+          <AvisoTruncado
+            mensaje={`Hay más de ${filas.length.toLocaleString("es-CR")} contratistas -- se muestran solo los primeros (la búsqueda de acá arriba sólo filtra entre esos, no trae más).`}
+          />
+        )}
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<Contratista>
             id="contratistas"
@@ -115,7 +147,7 @@ export default function Contratistas() {
             controles={
               <div className="campo" style={{ flex: "0 1 16rem" }}>
                 <input
-                  placeholder="Identificación o nombre…"
+                  placeholder="Cédula o nombre…"
                   value={busqueda}
                   disabled={cargando}
                   onChange={(evento) => setBusqueda(evento.target.value)}

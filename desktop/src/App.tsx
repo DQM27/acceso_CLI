@@ -30,7 +30,6 @@ import {
   Archive,
   Building2,
   ClipboardList,
-  Cloud,
   History,
   IdCard,
   UserCheck,
@@ -40,10 +39,12 @@ import {
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
+import SelectorTema from "./componentes/SelectorTema";
 import BarraNube from "./componentes/BarraNube";
 import type { EstadoConexionNube } from "./componentes/BarraNube";
 import ErrorBoundary from "./componentes/ErrorBoundary";
 import Login from "./pantallas/Login";
+import PrimerArranque from "./pantallas/PrimerArranque";
 import {
   buscarActualizacion,
   cerrarSesion,
@@ -54,7 +55,7 @@ import {
 import type { ResumenSincronizacion, RolUsuario, UsuarioSesion } from "./api";
 import { emitirActualizacion, iniciarRealtimeNube } from "./nubeRealtime";
 import { SesionProvider } from "./contexto/SesionContexto";
-import { BarraEstadoProvider } from "./contexto/BarraEstadoContexto";
+import { BarraEstadoProvider, SeccionActivaProvider } from "./contexto/BarraEstadoContexto";
 
 // Las pantallas y sus tablas se cargan al entrar a cada sección.
 const Activos = lazy(() => import("./pantallas/Activos"));
@@ -65,7 +66,6 @@ const Historial = lazy(() => import("./pantallas/Historial"));
 const Auditoria = lazy(() => import("./pantallas/Auditoria"));
 const Gafetes = lazy(() => import("./pantallas/Gafetes"));
 const Respaldos = lazy(() => import("./pantallas/Respaldos"));
-const Nube = lazy(() => import("./pantallas/Nube"));
 const NuevoIngresoModal = lazy(() => import("./pantallas/NuevoIngresoModal"));
 const SalidaModal = lazy(() => import("./pantallas/SalidaModal"));
 
@@ -118,14 +118,7 @@ export default function App() {
   }
 
   if (pantalla.tipo === "requiere-configuracion-inicial") {
-    return (
-      <div style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center" }}>
-        <p style={{ maxWidth: "24rem", textAlign: "center", color: "var(--muted)" }}>
-          Todavía no existe un usuario ROOT. Creá el usuario ROOT inicial desde la consola
-          (<code>--tui-clasica</code> o <code>--cli</code>) y volvé a abrir esta ventana.
-        </p>
-      </div>
-    );
+    return <PrimerArranque onListo={() => setPantalla({ tipo: "login" })} />;
   }
 
   if (pantalla.tipo === "login") {
@@ -151,8 +144,7 @@ export type Seccion =
   | "empresas"
   | "usuarios"
   | "gafetes"
-  | "respaldos"
-  | "nube";
+  | "respaldos";
 
 /** `rolesPermitidos` ausente = visible para cualquier rol logueado.
  * Auditoría lo restringe — espejo de `RolUsuario::puede(VerAuditoria)` en
@@ -197,14 +189,6 @@ const SECCIONES: {
     // sólo Root puede gestionar respaldos, ni siquiera Administrador.
     rolesPermitidos: ["Root"],
   },
-  {
-    id: "nube",
-    etiqueta: "Nube",
-    Icono: Cloud,
-    // Espejo de `Operacion::GestionarNube` (`src/domain/autorizacion.rs`):
-    // el secreto de dispositivo es delicado, sólo Root lo administra.
-    rolesPermitidos: ["Root"],
-  },
 ];
 
 /**
@@ -222,6 +206,20 @@ function Shell({
   onVolverALogin: () => void;
 }) {
   const [seccion, setSeccion] = useState<Seccion>("activos");
+  // Cada sección visitada se queda MONTADA (oculta con CSS) en vez de
+  // desmontarse al cambiar a otra -- antes, el `{seccion === "x" && <X/>}`
+  // de abajo desmontaba la pantalla anterior por completo al elegir otra,
+  // así que volver a una ya vista reconstruía todo de cero (nuevo fetch a
+  // SQLite vía Tauri, AG Grid desde cero, scroll/filtro perdidos). Acá es
+  // peor que en la web (donde al menos hay una descarga de red real de por
+  // medio): todo vive en el mismo binario, nada que "descargar" -- no
+  // había ninguna razón real para pagar ese costo cada vez. Sólo la
+  // PRIMERA visita a cada sección monta su componente; volver después es
+  // instantáneo.
+  const [visitadas, setVisitadas] = useState<Seccion[]>(["activos"]);
+  useEffect(() => {
+    setVisitadas((actual) => (actual.includes(seccion) ? actual : [...actual, seccion]));
+  }, [seccion]);
   const [colapsado, setColapsado] = useState(leerSidebarColapsado);
   // La pantalla montada publica acá su propio texto (ver `useBarraEstado`) —
   // `null` mientras ninguna lo hizo todavía (primer render) o entre una
@@ -376,36 +374,64 @@ function Shell({
             />
 
             <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-              {/* `key={seccion}` resetea el boundary al cambiar de sección — sin
-                  esto, una vez que una pantalla rompe, el error queda "pegado" acá
-                  aunque se elija otra sección del menú, porque este `<main>` nunca
-                  se desmonta. */}
-              <ErrorBoundary
-                key={seccion}
-                mensaje="Esta sección no pudo cargar. La sesión sigue activa — elegí otra desde el menú, o reiniciá la app si el problema persiste."
-              >
-                {/* Fallback `null`: las pantallas lazy vienen del mismo bundle
-                    local (nada de red de por medio), el chunk carga en
-                    milisegundos — no vale la pena un spinner que sólo
-                    parpadearía. */}
-                <Suspense fallback={null}>
-                  {seccion === "activos" && (
-                    <Activos
-                      refrescarSenal={refrescarActivos}
-                      onAbrirNuevoIngreso={() => setModalNuevoIngreso(true)}
-                      onAbrirSalida={() => setModalSalida(true)}
-                    />
-                  )}
-                  {seccion === "historial" && <Historial />}
-                  {seccion === "contratistas" && <Contratistas />}
-                  {seccion === "auditoria" && <Auditoria />}
-                  {seccion === "empresas" && <Empresas />}
-                  {seccion === "usuarios" && <Usuarios actorRol={sesion.rol} />}
-                  {seccion === "gafetes" && <Gafetes />}
-                  {seccion === "respaldos" && <Respaldos onRestaurado={onVolverALogin} />}
-                  {seccion === "nube" && <Nube />}
-                </Suspense>
-              </ErrorBoundary>
+              {visitadas.map((id) => (
+                <div
+                  key={id}
+                  style={{
+                    display: id === seccion ? "flex" : "none",
+                    flexDirection: "column",
+                    flex: 1,
+                    minHeight: 0,
+                  }}
+                >
+                  {/* Un ErrorBoundary por sección (ya no `key={seccion}`
+                      compartido) -- con las secciones montadas para
+                      siempre, resetear por key ya no aplica igual: si una
+                      rompe, queda rota hasta reiniciar la app (el propio
+                      mensaje ya lo decía como salida). Lo que se pierde es
+                      "reelegir la misma sección para reintentar" -- costo
+                      aceptado, es un caso raro y la app entera sigue
+                      funcionando en todas las demás secciones. */}
+                  <ErrorBoundary mensaje="Esta sección no pudo cargar. La sesión sigue activa — elegí otra desde el menú, o reiniciá la app si el problema persiste.">
+                    {/* Fallback `null`: las pantallas lazy vienen del mismo
+                        bundle local (nada de red de por medio), el chunk
+                        carga en milisegundos — no vale la pena un spinner
+                        que sólo parpadearía. Suspense por sección, no uno
+                        compartido, para que la primera visita a una
+                        sección nueva no tape las que ya están montadas. */}
+                    <Suspense fallback={null}>
+                      {/* Ver el doc-comment de SeccionActivaContexto --
+                          sin esto, useBarraEstado no se entera de cuándo
+                          esta sección deja de ser la visible (ya no se
+                          desmonta) y el mensaje de una sección vieja
+                          queda pegado en la barra de estado. */}
+                      <SeccionActivaProvider value={id === seccion}>
+                        {id === "activos" ? (
+                          <Activos
+                            refrescarSenal={refrescarActivos}
+                            onAbrirNuevoIngreso={() => setModalNuevoIngreso(true)}
+                            onAbrirSalida={() => setModalSalida(true)}
+                          />
+                        ) : id === "historial" ? (
+                          <Historial />
+                        ) : id === "contratistas" ? (
+                          <Contratistas actorRol={sesion.rol} />
+                        ) : id === "auditoria" ? (
+                          <Auditoria />
+                        ) : id === "empresas" ? (
+                          <Empresas />
+                        ) : id === "usuarios" ? (
+                          <Usuarios actorRol={sesion.rol} />
+                        ) : id === "gafetes" ? (
+                          <Gafetes />
+                        ) : (
+                          <Respaldos onRestaurado={onVolverALogin} />
+                        )}
+                      </SeccionActivaProvider>
+                    </Suspense>
+                  </ErrorBoundary>
+                </div>
+              ))}
             </main>
           </div>
 
@@ -421,6 +447,7 @@ function Shell({
                 onSincronizar={sincronizarManualmente}
                 estadoConexion={estadoConexionNube}
               />
+              <SelectorTema />
               <MenuUsuario sesion={sesion} onCerrarSesion={onCerrarSesion} />
             </div>
           </div>

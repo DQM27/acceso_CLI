@@ -5,12 +5,14 @@ de diseño (multi-dispositivo, sincronización, roles) que aplican también al
 móvil — el plan original específico de la app móvil quedó superado por ese
 documento y se retiró.
 
-- `rust-core/` — puente `uniffi` sobre `control_acceso` (reusado sin
-  modificar). No se commitea `target/` ni `bindings/` (generado).
-- `app/` — proyecto Android (Kotlin + Jetpack Compose). No se commitea
+- `rust-core/` — puente `uniffi` sobre `control_acceso` compartido por las
+  apps moviles. No se commitea `target/` ni `bindings/` (generado).
+- `android/` — proyecto Android (Kotlin + Jetpack Compose). No se commitea
   `build/`, `.gradle/`, `.kotlin/`, `local.properties` (ruta del SDK,
   depende de la máquina), `jniLibs/` (el `.so` compilado), ni la keystore de
-  release (`app/keystore/`, `app/keystore.properties`).
+  release (`android/keystore/`, `android/keystore.properties`).
+- `ios/` — base iOS (SwiftUI + UniFFI) preparada para generar el proyecto con
+  XcodeGen y compilarlo desde una Mac o CI macOS.
 - `dist/` — APKs de distribución ya compilados (tampoco se commitea).
 
 ## Cómo reconstruir desde cero
@@ -30,13 +32,13 @@ cargo run --features bindgen --bin uniffi-bindgen -- generate \
 
 # 3. Copiar ambos al proyecto Android
 cp bindings/uniffi/control_acceso_mobile/control_acceso_mobile.kt \
-   ../app/app/src/main/java/uniffi/control_acceso_mobile/
-mkdir -p ../app/app/src/main/jniLibs/arm64-v8a
+   ../android/app/src/main/java/uniffi/control_acceso_mobile/
+mkdir -p ../android/app/src/main/jniLibs/arm64-v8a
 cp target/aarch64-linux-android/release/libcontrol_acceso_mobile.so \
-   ../app/app/src/main/jniLibs/arm64-v8a/
+   ../android/app/src/main/jniLibs/arm64-v8a/
 
 # 4. Compilar el APK
-cd ../app
+cd ../android
 echo "sdk.dir=<ruta al SDK, con / no \\>" > local.properties
 ./gradlew assembleDebug
 ```
@@ -53,37 +55,37 @@ si también se va a probar en el emulador antes de repartirlo.
 ## Tests unitarios de los ViewModel
 
 ```sh
-cd app
+cd android
 ./gradlew test
 ```
 
 Corren en el JVM del host, sin emulador ni dispositivo — el propio
-`app/build.gradle.kts` compila `rust-core` para el host (no para Android,
+`android/build.gradle.kts` compila `rust-core` para el host (no para Android,
 `cargo build --release` normal, sin NDK) antes de correr los tests, así
 que `./gradlew test` alcanza solo. Cada test abre un `Nucleo` real sobre
 un archivo `SQLite` temporal, con la misma lógica de negocio que corre en
-el teléfono — ver `app/src/test/.../NucleoDePrueba.kt` para cómo se
+el teléfono — ver `android/app/src/test/.../NucleoDePrueba.kt` para cómo se
 siembran los fixtures (con SQL crudo vía JDBC, porque `Nucleo` no expone
 ningún método para insertar datos sin autenticarse primero).
 
 ## Compilar un APK de distribución (release firmado)
 
 Android no deja instalar un `release` sin firmar. La keystore vive en
-`app/keystore/release.keystore.jks` — **no está en git, hay que resguardarla
+`android/keystore/release.keystore.jks` — **no está en git, hay que resguardarla
 aparte** (ej. gestor de contraseñas + copia de la carpeta) junto con
-`app/keystore.properties` (contraseñas + alias). Sin ese archivo,
+`android/keystore.properties` (contraseñas + alias). Sin ese archivo,
 `assembleRelease` genera un APK sin firmar (inservible) — el build sigue
 funcionando igual para `assembleDebug`, que no lo necesita. Si se pierde la
 keystore no hay forma de firmar una actualización compatible con una versión
 ya instalada: hay que resguardarla como si fuera una contraseña maestra.
 
 ```sh
-cd app
+cd android
 ./gradlew assembleRelease
 ```
 
-El APK firmado queda en `app/app/build/outputs/apk/release/app-release.apk`.
-`versionCode`/`versionName` (en `app/app/build.gradle.kts`) hay que subirlos
+El APK firmado queda en `android/app/build/outputs/apk/release/app-release.apk`.
+`versionCode`/`versionName` (en `android/app/build.gradle.kts`) hay que subirlos
 a mano en cada release para que Android reconozca que es una actualización.
 
 ## Base de datos de desarrollo (emulador/dispositivo de prueba)

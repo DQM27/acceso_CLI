@@ -4,6 +4,8 @@
 //! `fallido` según la respuesta. Una fila fallida no detiene a las demás --
 //! se reintenta en la próxima llamada, no bloquea el resto de la cola.
 
+use std::collections::HashMap;
+
 use rusqlite::{Connection, params};
 use serde_json::json;
 
@@ -204,6 +206,67 @@ fn obtener_json<T: serde::de::DeserializeOwned>(
     }
     let filas = respuesta.json().map_err(NubeError::Red)?;
     Ok(filas)
+}
+
+/// Filas por página al paginar con `obtener_json_paginado` -- por debajo
+/// del tope de filas por respuesta que Supabase/`PostgREST` impone por
+/// defecto (`db-max-rows`, 1000) para que ninguna página sola pueda
+/// chocar con ese límite y perder el resto en silencio.
+const TAMANO_PAGINA_REMOTA: usize = 500;
+
+/// Igual que `obtener_json`, pero para listas que pueden superar el tope de
+/// filas por respuesta de `PostgREST` -- sin esto, un catálogo o un
+/// historial que ya cruzó ese tope (típico en el primer sync de un sitio
+/// grande, sin `marca_anterior` que acote nada) perdía en silencio todo lo
+/// que sobraba: no un error, sólo datos que nunca llegaban. Pagina con
+/// `Range` (protocolo estándar de `PostgREST`) hasta que una página vuelve
+/// con menos filas que `TAMANO_PAGINA_REMOTA`, señal de que no queda nada
+/// más. `url_base` no debe traer su propio `order=` -- esta función agrega
+/// uno por `id` (columna presente en todo lo que hoy pagina) para que el
+/// orden entre páginas sea estable; sin un orden fijo, dos páginas
+/// consecutivas de una tabla que sigue cambiando mientras se pagina
+/// podrían saltarse o repetir filas.
+fn obtener_json_paginado<T: serde::de::DeserializeOwned>(
+    cliente: &reqwest::blocking::Client,
+    contexto: &ContextoSincronizacion<'_>,
+    url_base: &str,
+) -> Result<Vec<T>, SincronizacionError> {
+    let separador = if url_base.contains('?') { '&' } else { '?' };
+    let url = format!("{url_base}{separador}order=id.asc");
+
+    let mut resultado = Vec::new();
+    let mut desde = 0_usize;
+    loop {
+        let respuesta = cliente
+            .get(&url)
+            .header("apikey", contexto.apikey)
+            .header("Authorization", format!("Bearer {}", contexto.token))
+            .header("Range-Unit", "items")
+            .header(
+                "Range",
+                format!("{desde}-{}", desde + TAMANO_PAGINA_REMOTA - 1),
+            )
+            .send()
+            .map_err(NubeError::Red)?;
+
+        // `is_success()` ya cubre el 206 Partial Content que `PostgREST`
+        // devuelve cuando la página pedida no alcanza a cubrir todo lo que
+        // hay -- no hace falta distinguirlo de un 200 normal, el criterio
+        // de "¿hay más?" de abajo (cuántas filas vinieron) es el mismo.
+        if !respuesta.status().is_success() {
+            let status = respuesta.status().as_u16();
+            let cuerpo = respuesta.text().unwrap_or_default();
+            return Err(SincronizacionError::RespuestaInesperada { status, cuerpo });
+        }
+        let pagina: Vec<T> = respuesta.json().map_err(NubeError::Red)?;
+        let recibidas_en_esta_pagina = pagina.len();
+        resultado.extend(pagina);
+        if recibidas_en_esta_pagina < TAMANO_PAGINA_REMOTA {
+            break;
+        }
+        desde += TAMANO_PAGINA_REMOTA;
+    }
+    Ok(resultado)
 }
 
 /// Contratistas (espejo): crear y actualizar se resuelven igual -- un
@@ -410,10 +473,8 @@ fn enviar_gafete(
     exigir_2xx(respuesta)
 }
 
-/// Usuarios/operadores globales (espejo): mismo criterio de `upsert` que
-/// contratistas -- ROOT nunca llega a encolarse acá (ver el comentario de
-/// `insertar_usuario` en `usuario_repository.rs`), así que esta función
-/// nunca necesita filtrar por rol. Sin `password_hash` a propósito -- la
+/// Usuarios globales (ROOT/ADMINISTRADOR/OPERADOR, espejo): mismo criterio
+/// de `upsert` que contratistas. Sin `password_hash` a propósito -- la
 /// nube nunca la recibe (ver `SIN_PASSWORD_LOCAL` en
 /// `services/password.rs`): distribuye quién existe y su rol/estado, cada
 /// dispositivo fija su propia contraseña local la primera vez que ese
@@ -897,7 +958,7 @@ pub fn recibir_historial_del_sitio(
          dispositivo_entrada:dispositivos!ingresos_dispositivo_entrada_id_fkey(tipo)",
         contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
     );
-    let filas: Vec<FilaHistorialRemota> = obtener_json(&cliente, contexto, &url)?;
+    let filas: Vec<FilaHistorialRemota> = obtener_json_paginado(&cliente, contexto, &url)?;
 
     let transaction = connection.unchecked_transaction()?;
     let mut recibidos = 0_u32;
@@ -1014,9 +1075,8 @@ struct FilaEmpresaRemota {
 }
 
 /// Sin `password_hash` -- nunca viaja, ver el doc-comment de
-/// `enviar_usuario`. `rol` sólo puede ser 'ADMINISTRADOR'/'OPERADOR' del
-/// lado del receptor (la tabla remota ni admite 'ROOT'), así que acá no
-/// hace falta filtrarlo de nuevo.
+/// `enviar_usuario`. `rol` puede ser 'ROOT'/'ADMINISTRADOR'/'OPERADOR' (ver
+/// migración `permite_root_en_usuarios_globales`).
 #[derive(serde::Deserialize)]
 struct FilaUsuarioRemota {
     id: String,
@@ -1101,7 +1161,7 @@ fn descargar_catalogo_remoto(
     // que quedar negado en TODOS. El nombre de la función quedó del modelo
     // viejo (un solo sitio por dispositivo); lo que trae ahora es el
     // catálogo global completo, no "del sitio" de `contexto`.
-    let empresas: Vec<FilaEmpresaRemota> = obtener_json(
+    let empresas: Vec<FilaEmpresaRemota> = obtener_json_paginado(
         &cliente,
         contexto,
         &format!(
@@ -1109,7 +1169,7 @@ fn descargar_catalogo_remoto(
             contexto.base_url
         ),
     )?;
-    let contratistas: Vec<FilaContratistaRemota> = obtener_json(
+    let contratistas: Vec<FilaContratistaRemota> = obtener_json_paginado(
         &cliente,
         contexto,
         &format!(
@@ -1118,7 +1178,7 @@ fn descargar_catalogo_remoto(
             contexto.base_url
         ),
     )?;
-    let usuarios: Vec<FilaUsuarioRemota> = obtener_json(
+    let usuarios: Vec<FilaUsuarioRemota> = obtener_json_paginado(
         &cliente,
         contexto,
         &format!(
@@ -1131,7 +1191,7 @@ fn descargar_catalogo_remoto(
     // También permite reintentar deudores que todavía no se pudieron resolver.
     // Con `sitio_id=eq...` a diferencia de las tres de arriba -- ver
     // comentario de `FilaGafeteRemota`.
-    let gafetes: Vec<FilaGafeteRemota> = obtener_json(
+    let gafetes: Vec<FilaGafeteRemota> = obtener_json_paginado(
         &cliente,
         contexto,
         &format!(
@@ -1194,6 +1254,15 @@ fn guardar_contratistas(
     transaction: &rusqlite::Transaction<'_>,
     contratistas: &[FilaContratistaRemota],
 ) -> Result<u32, SincronizacionError> {
+    // Un solo `SELECT` de todas las empresas locales antes del lote, en vez
+    // de hasta dos por cada contratista remoto (`resolver_empresa_local`
+    // anterior) -- con un catálogo grande eran miles de consultas
+    // individuales secuenciales sólo para resolver el vínculo. `empresas`
+    // ya está completa en este punto (`guardar_empresas` corrió antes, ver
+    // `recibir_catalogo_del_sitio`) y esta función nunca la modifica, así
+    // que el índice no se desactualiza durante el resto del lote.
+    let indice_empresas = indexar_empresas(transaction)?;
+
     let mut recibidos = 0;
     for contratista in contratistas {
         let (Some(cedula), Some(tipo_ingreso), Some(es_personal_ruta)) = (
@@ -1203,8 +1272,7 @@ fn guardar_contratistas(
         ) else {
             continue;
         };
-        let empresa_id_local = resolver_empresa_local(
-            transaction,
+        let empresa_id_local = indice_empresas.resolver(
             contratista.empresa_id.as_deref(),
             contratista.empresa_nombre.as_deref(),
         );
@@ -1284,6 +1352,14 @@ fn guardar_gafetes(
     transaction: &rusqlite::Transaction<'_>,
     gafetes: &[FilaGafeteRemota],
 ) -> Result<u32, SincronizacionError> {
+    // Mismo motivo que `indice_empresas` en `guardar_contratistas`: un solo
+    // `SELECT` de todos los contratistas locales antes del lote, en vez de
+    // hasta dos por cada gafete PERDIDO (`resolver_contratista_local`
+    // anterior). `guardar_contratistas` ya corrió antes en el mismo
+    // `recibir_catalogo_del_sitio` y esta función no modifica
+    // `contratistas`, así que el índice se mantiene válido todo el lote.
+    let indice_contratistas = indexar_contratistas(transaction)?;
+
     let mut recibidos = 0;
     for gafete in gafetes {
         // Un gafete PERDIDO sin deudor resoluble localmente violaría el
@@ -1292,8 +1368,7 @@ fn guardar_gafetes(
         // contratista remoto incompleto: se autorresuelve solo en un sync
         // posterior, en cuanto ese contratista también llegue acá.
         let deudor_id_local = if gafete.estado == "PERDIDO" {
-            let Some(id) = resolver_contratista_local(
-                transaction,
+            let Some(id) = indice_contratistas.resolver(
                 gafete.contratista_deudor_id.as_deref(),
                 gafete.contratista_deudor_nombre.as_deref(),
             ) else {
@@ -1360,71 +1435,75 @@ pub fn recibir_catalogo_del_sitio(
     Ok(resumen)
 }
 
-/// Resuelve el `id` local de la empresa de un contratista remoto: primero
-/// por `uuid` (el vínculo real), y si esa empresa todavía no llegó acá por
-/// ese camino, por nombre (mismo respaldo que ya usa el lado de envío,
-/// `enviar_contratista`).
-fn resolver_empresa_local(
-    transaction: &rusqlite::Transaction<'_>,
-    empresa_uuid: Option<&str>,
-    empresa_nombre: Option<&str>,
-) -> Option<i64> {
-    empresa_uuid
-        .and_then(|uuid| {
-            transaction
-                .query_row(
-                    "SELECT id FROM empresas WHERE uuid = ?1",
-                    params![uuid],
-                    |row| row.get(0),
-                )
-                .ok()
-        })
-        .or_else(|| {
-            empresa_nombre.and_then(|nombre| {
-                transaction
-                    .query_row(
-                        "SELECT id FROM empresas WHERE nombre = ?1",
-                        params![nombre],
-                        |row| row.get(0),
-                    )
-                    .ok()
-            })
-        })
+/// Índice en memoria de una tabla local por `uuid` y por `nombre`,
+/// construido con un solo `SELECT` antes de recorrer un lote remoto -- ver
+/// `indexar_empresas`/`indexar_contratistas`. Reemplaza a
+/// `resolver_empresa_local`/`resolver_contratista_local`, que antes hacían
+/// hasta dos `SELECT` individuales POR FILA del lote (miles de round-trips
+/// secuenciales para un catálogo grande).
+struct IndiceLocal {
+    por_uuid: HashMap<String, i64>,
+    por_nombre: HashMap<String, i64>,
 }
 
-/// Resuelve el `id` local del contratista deudor de un gafete remoto --
-/// mismo criterio de respaldo que `resolver_empresa_local` (primero
-/// `uuid`, si no por nombre), salvo que acá el respaldo por nombre es
-/// más débil: `contratistas.nombre` no es único (`cedula` sí, pero la
-/// nube de gafetes no manda la cédula del deudor). Igual que empresas, se
-/// autorresuelve solo en un sync posterior si el contratista real llega
-/// después.
-fn resolver_contratista_local(
+impl IndiceLocal {
+    /// Primero por `uuid` (el vínculo real), y si todavía no llegó acá por
+    /// ese camino, por nombre (mismo respaldo que ya usaban las funciones
+    /// que esto reemplaza). `nombre` no es único en ninguna de las dos
+    /// tablas que usan esto -- misma ambigüedad que ya tenía el `SELECT
+    /// ... WHERE nombre = ?1` original (sin `ORDER BY`, ya devolvía una
+    /// fila arbitraria entre varias); acá el índice simplemente se queda
+    /// con la última que recorrió `indexar_empresas`/`indexar_contratistas`.
+    fn resolver(&self, uuid: Option<&str>, nombre: Option<&str>) -> Option<i64> {
+        uuid.and_then(|uuid| self.por_uuid.get(uuid).copied())
+            .or_else(|| nombre.and_then(|nombre| self.por_nombre.get(nombre).copied()))
+    }
+}
+
+fn indexar_empresas(transaction: &rusqlite::Transaction<'_>) -> Result<IndiceLocal, SincronizacionError> {
+    let mut statement = transaction.prepare("SELECT id, uuid, nombre FROM empresas")?;
+    let filas = statement.query_map([], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, Option<String>>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
+
+    let mut por_uuid = HashMap::new();
+    let mut por_nombre = HashMap::new();
+    for fila in filas {
+        let (id, uuid, nombre) = fila?;
+        if let Some(uuid) = uuid {
+            por_uuid.insert(uuid, id);
+        }
+        por_nombre.insert(nombre, id);
+    }
+    Ok(IndiceLocal { por_uuid, por_nombre })
+}
+
+fn indexar_contratistas(
     transaction: &rusqlite::Transaction<'_>,
-    contratista_uuid: Option<&str>,
-    contratista_nombre: Option<&str>,
-) -> Option<i64> {
-    contratista_uuid
-        .and_then(|uuid| {
-            transaction
-                .query_row(
-                    "SELECT id FROM contratistas WHERE uuid = ?1",
-                    params![uuid],
-                    |row| row.get(0),
-                )
-                .ok()
-        })
-        .or_else(|| {
-            contratista_nombre.and_then(|nombre| {
-                transaction
-                    .query_row(
-                        "SELECT id FROM contratistas WHERE nombre = ?1",
-                        params![nombre],
-                        |row| row.get(0),
-                    )
-                    .ok()
-            })
-        })
+) -> Result<IndiceLocal, SincronizacionError> {
+    let mut statement = transaction.prepare("SELECT id, uuid, nombre FROM contratistas")?;
+    let filas = statement.query_map([], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, Option<String>>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
+
+    let mut por_uuid = HashMap::new();
+    let mut por_nombre = HashMap::new();
+    for fila in filas {
+        let (id, uuid, nombre) = fila?;
+        if let Some(uuid) = uuid {
+            por_uuid.insert(uuid, id);
+        }
+        por_nombre.insert(nombre, id);
+    }
+    Ok(IndiceLocal { por_uuid, por_nombre })
 }
 
 /// Cierra, directo contra la nube, un ingreso que abrió el otro
@@ -1932,9 +2011,10 @@ mod tests {
 
     #[test]
     fn usuario_sigue_activo_remoto_sin_fila_asume_activo() {
-        // ROOT (nunca se sincroniza) o un usuario que este dispositivo creó
-        // y todavía no subió -- la nube no tiene nada que decir de él, no
-        // hay motivo para expulsarlo por eso.
+        // Un usuario que este dispositivo creó y todavía no subió (o que
+        // subió hace un instante y el receptor todavía no lo ve) -- la nube
+        // no tiene nada que decir de él, no hay motivo para expulsarlo por
+        // eso.
         let base_url = servidor_de_una_respuesta(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         );
@@ -2035,7 +2115,7 @@ mod tests {
                 ",
             )
             .unwrap();
-        // Formato real que devuelve PostgREST para un `timestamptz`
+        // Formato real que devuelve `PostgREST` para un `timestamptz`
         // (fracción de segundo + offset "+00:00", no el "...Z" sin fracción
         // que exige `registro_ingresos_salida_utc`) -- este caso rompía la
         // sincronización en vivo aunque los tests con formato ya-canónico

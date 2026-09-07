@@ -50,7 +50,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!vigente) return;
 
-      if (errorConsulta || !admin) {
+      // Error de red/consulta (timeout, Postgres caído un instante) NO es
+      // lo mismo que "no está en administradores_panel" -- antes los dos
+      // casos deslogueaban igual, así que un blip de conectividad durante
+      // un re-chequeo en segundo plano (cambio de foco de pestaña, refresh
+      // de token -- ver el comentario grande más abajo, esto pasa seguido)
+      // podía sacar a un admin real de una sesión que ya tenía andando,
+      // con un mensaje que además le hacía dudar si tenía acceso. Acá no
+      // se toca `sesion` ni se cierra sesión -- si ya había una sesión
+      // válida, se mantiene tal cual hasta el próximo re-chequeo exitoso.
+      if (errorConsulta) {
+        setError(
+          "No se pudo confirmar tu acceso al panel (falla de conexión) -- probá iniciar sesión de nuevo.",
+        );
+        setCargando(false);
+        return;
+      }
+
+      if (!admin) {
         setError(
           `La cuenta de Google "${usuario.email}" inició sesión, pero no está autorizada para este panel.`,
         );
@@ -68,7 +85,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setCargando(false);
     }
 
-    supabase.auth.getSession().then(({ data }) => autorizar(data.session?.user ?? null));
+    // `.catch`, no sólo `.then`: si esta promesa rechaza (falla del
+    // storage/lock interno de supabase-js, error inesperado), sin manejo
+    // quedaba como una rejection sin atrapar y `cargando` nunca volvía a
+    // `false` -- `Contenido` (ver App.tsx) sigue devolviendo `null` para
+    // siempre, pantalla en blanco sin ningún mensaje ni forma de
+    // recuperarse salvo recargar a mano.
+    supabase.auth.getSession().then(
+      ({ data }) => autorizar(data.session?.user ?? null),
+      () => {
+        if (!vigente) return;
+        setError("No se pudo iniciar la verificación de tu sesión -- recargá la página.");
+        setSesion(null);
+        setCargando(false);
+      },
+    );
 
     // `cargando` sólo vuelve a `true` en el `useState(true)` inicial de
     // arriba -- nunca se vuelve a tocar acá a propósito. Supabase dispara

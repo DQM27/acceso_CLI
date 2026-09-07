@@ -46,22 +46,69 @@ pub enum SchemaError {
     MigracionStrictReferenciasInvalidas,
 }
 
+/// `PRAGMA journal_mode = WAL` sobre un archivo que TODAVÍA no está en WAL
+/// exige convertirlo (reescribir el encabezado, crear el `-shm`) -- a
+/// diferencia del resto de transacciones normales bajo WAL, esta
+/// conversión puntual puede devolver "database is locked" de forma
+/// inmediata si otra conexión intenta la misma conversión al mismo tiempo,
+/// SIN pasar por el reintento automático de `busy_timeout` (reproducido en
+/// vivo: `dos_conexiones_migran_una_base_vacia_sin_reaplicar_pasos`, dos
+/// conexiones nuevas abriendo el mismo archivo recién creado a la vez).
+/// Una vez que cualquiera de las dos ya lo dejó en WAL, la misma pragma en
+/// la otra es un no-op instantáneo -- de ahí que reintentar unas pocas
+/// veces con una espera corta alcance, sin necesitar coordinación real
+/// entre conexiones.
+fn fijar_pragmas_iniciales(connection: &Connection) -> Result<(), SchemaError> {
+    const PRAGMAS: &str = "
+        PRAGMA foreign_keys = ON;
+        PRAGMA busy_timeout = 5000;
+        PRAGMA journal_mode = WAL;
+        PRAGMA synchronous = EXTRA;
+        PRAGMA trusted_schema = OFF;
+        PRAGMA secure_delete = FAST;
+        ";
+    const REINTENTOS: u32 = 20;
+    const ESPERA_ENTRE_REINTENTOS: std::time::Duration = std::time::Duration::from_millis(50);
+
+    for intento in 1..=REINTENTOS {
+        match connection.execute_batch(PRAGMAS) {
+            Ok(()) => return Ok(()),
+            Err(rusqlite::Error::SqliteFailure(codigo, _))
+                if intento < REINTENTOS
+                    && matches!(
+                        codigo.code,
+                        rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked
+                    ) =>
+            {
+                std::thread::sleep(ESPERA_ENTRE_REINTENTOS);
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+    unreachable!("el bucle de arriba siempre retorna en el último intento (Ok o Err)")
+}
+
 pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
     registrar_funcion_plegar(connection)?;
 
     // `foreign_keys`, `journal_mode` y `trusted_schema` no pueden cambiarse
     // dentro de una transacción activa, así que se fijan antes de abrir la
     // transacción de migración.
-    connection.execute_batch(
-        "
-        PRAGMA foreign_keys = ON;
-        PRAGMA busy_timeout = 5000;
-        PRAGMA journal_mode = DELETE;
-        PRAGMA synchronous = EXTRA;
-        PRAGMA trusted_schema = OFF;
-        PRAGMA secure_delete = FAST;
-        ",
-    )?;
+    // WAL en vez de DELETE (rollback journal clásico): con DELETE, cualquier
+    // transacción de escritura toma un lock exclusivo del archivo completo y
+    // bloquea toda lectura concurrente hasta que termina o vence
+    // `busy_timeout` -- eso ya no es aceptable ahora que el escritorio abre
+    // una segunda conexión a propósito (`GuiState::conexion_secundaria`)
+    // para leer/sincronizar sin retener el candado de `AppCore`, y el
+    // celular sincroniza en segundo plano cada 2 minutos mientras el guardia
+    // sigue buscando. WAL persiste en el propio archivo (no es una pragma
+    // por conexión): una vez que cualquier conexión lo activa acá, todas las
+    // conexiones que abran después el mismo archivo -- incluida
+    // `conexion_secundaria`, que nunca vuelve a llamar `initialize_database`
+    // -- lo heredan solas. `synchronous = EXTRA` se deja igual a propósito:
+    // cambiar journal y durabilidad en el mismo paso complica diagnosticar
+    // cuál de los dos causó un problema si aparece uno.
+    fijar_pragmas_iniciales(connection)?;
 
     rechazar_archivo_ajeno(connection)?;
     verificar_integridad_rapida(connection)?;

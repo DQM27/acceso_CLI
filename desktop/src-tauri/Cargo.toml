@@ -1,6 +1,6 @@
 [package]
 name = "control-acceso-desktop"
-version = "1.1.0"
+version = "1.1.1"
 description = "Interfaz gráfica de escritorio para Control de Acceso Brisas"
 authors = ["DQM27"]
 license = "MIT"
@@ -23,7 +23,7 @@ crate-type = ["staticlib", "rlib"]
 tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
-control_acceso = { path = "../..", default-features = false, features = ["serde", "nube"] }
+control_acceso = { path = "../..", default-features = false, features = ["serde", "nube", "cifrado-secreto-dispositivo"] }
 # Sólo para abrir una segunda `Connection` propia en comandos que no deben
 # retener el `Mutex<AppCore>` compartido durante consultas largas (ver
 # `comandos/historial.rs`/`comandos/auditoria.rs`) — misma versión que fija

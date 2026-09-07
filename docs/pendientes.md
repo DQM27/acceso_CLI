@@ -33,26 +33,119 @@ decía la nota vieja.
 - [ ] **Pulir los paneles web** (historial-brisas.pages.dev: historial + admin). Pedido
   explícito del usuario (2026-09-06), sin alcance definido todavía — a concretar en una
   próxima sesión.
-- [ ] **Delegar la creación de usuarios (Administrador/Operador) al panel web**, en vez de
-  crearlos desde un dispositivo local. Encaja con `AppCore::fijar_password_inicial` (ya
-  construido, 2026-09-06): el panel crearía el usuario con el centinela
-  `SIN_PASSWORD_LOCAL` (nunca una contraseña real ni siquiera temporal viajando por la web),
-  y el primer dispositivo donde esa persona inicia sesión sería el que la fija. Falta: una
-  tabla/función en Supabase análoga a la que ya existe para contratistas
-  (`admin_global_gestiona_contratistas`), y que el panel respete las mismas reglas que ya
-  aplica `crear_usuario` localmente (cédula única, un Administrador no puede crear un ROOT).
-- [ ] **Panel de alta de dispositivos.** La creación de un dispositivo nuevo (generar
-  secreto + insertarlo hasheado) sigue siendo a mano por SQL vía MCP — no hay formulario
-  real ni Edge Function de alta.
-- [ ] **Escritorio sin onboarding por GUI para el primer usuario ROOT.** Sólo existe vía
-  CLI/TUI (`--reset-root`/consola de arranque) — si hace falta resetear una base de
-  producción sin la consola a mano, hoy no se puede desde la app de escritorio sola.
-  Detectado al resetear la base local de pruebas (2026-09-06): hubo que sembrar el ROOT a
-  mano con un script en vez de usar la app.
+- [x] **Delegar la creación de usuarios (Administrador/Operador) al panel web — hecho
+  (2026-09-06/07, confirmado al auditar el repo el 2026-09-07).** `admin_global_gestiona_
+  usuarios` (migración `admin_global_crea_usuarios`) + el panel web crea usuarios con el
+  centinela `SIN_PASSWORD_LOCAL`, mismo criterio ya descrito acá arriba — ya no crea
+  contraseña real ni temporal desde la web.
+- [x] **Panel de alta de dispositivos — hecho (confirmado al auditar el repo el
+  2026-09-07).** `web/src/pantallas/Dispositivos.tsx` tiene el formulario real, contra las
+  Edge Functions `admin-provision-device`/`admin-create-site` (ambas versionadas en
+  `supabase/functions/` recién, ver nota de Edge Functions más abajo) — ya no es a mano por
+  SQL vía MCP.
+- [x] **Escritorio/móvil sin onboarding por GUI para el primer usuario ROOT (2026-09-06).**
+  Antes sólo existía vía CLI/TUI (`--reset-root`/consola de arranque) -- detectado al
+  resetear la base local de pruebas: hubo que sembrar el ROOT a mano con un script en vez
+  de usar la app. Resuelto sin sembrar un usuario ficticio (se evaluó y se descartó por dejar
+  una contraseña compartida entre instalaciones): con la base vacía (`requiere_configuracion_
+  inicial`), la app abre directo en una pantalla de "pegá el secreto de dispositivo", sin
+  pedir login -- pegar el secreto dispara una sincronización inicial que trae el catálogo
+  real (contratistas/empresas/gafetes/**usuarios**) desde la nube. Como esos usuarios llegan
+  con el centinela `SIN_PASSWORD_LOCAL`, el primer login de cualquiera de ellos cae solo en
+  el flujo de "fijar contraseña" que ya existía (`AppCore::fijar_password_inicial`). El
+  camino CLI/TUI se mantiene como rescate si alguna vez hace falta un sitio 100% sin nube.
+  Esto forzó revertir otra decisión (ver "Root inicial y login offline" en
+  `docs/plan-panel-administrativo-web.md`): ROOT ahora también viaja por la nube junto con
+  ADMINISTRADOR/OPERADOR (migración `permite_root_en_usuarios_globales`) -- sin eso, este
+  primer arranque sólo servía para cuentas no-ROOT.
 - [ ] **Revisar y ajustar roles y permisos (Root/Administrador/Operador).** Pedido explícito
   del usuario (2026-09-06) tras entender cómo viajan los usuarios entre dispositivos — el
   esquema actual (`domain::autorizacion::Operacion`/`RolUsuario::puede`) queda documentado
   para revisión, ajustes a definir en la conversación.
+- [ ] **Activación de dispositivo con verificación por correo (Capa 2, evaluado y pospuesto
+  2026-09-06).** Hoy pegar el secreto correcto alcanza para activar un dispositivo al
+  instante -- si el secreto se filtra (screenshot, archivo compartido), quien lo tenga puede
+  usarlo sin ningún gate extra. Se diseñó un flujo de step-up por correo, sólo en la
+  **primera** activación de cada secreto (no en cada sync, eso sería fricción diaria
+  innecesaria para una app de uso básicamente personal): pegar el secreto dispara un código
+  al correo del admin (reusando el OTP nativo de Supabase que ya usa
+  `web/src/componentes/useVerificacionPorCorreo.ts` para step-up en el panel -- sin sumar un
+  proveedor de correo nuevo), la persona lo escribe en la misma app, y recién ahí el
+  dispositivo queda activado de verdad. Se evaluó como sobre-ingeniería para el alcance
+  actual del proyecto y se pospone -- diagrama comparativo (activación simple de hoy vs. esta
+  con verificación) en `docs/activacion-dispositivo-comparacion.html` para retomar la
+  decisión más adelante, con o sin un cliente de por medio. Requeriría: columna
+  `activado_en` en `dispositivos`, una Edge Function de dos pasos (pedir código / confirmar +
+  emitir JWT), y el paso extra de UI en escritorio y móvil.
+
+## Auditoría de secretos/nube — pendiente de decidir (2026-09-07)
+
+Reporte externo pegado por el usuario, verificado punto por punto contra el código (no
+aceptado a ciegas) antes de anotarlo acá. Nada de esto se tocó todavía — queda para cuando
+el usuario confirme que se arregla.
+
+- [ ] **Secreto del dispositivo en móvil sin cifrar — confirmado, prioridad alta.**
+  `mobile/rust-core/Cargo.toml` no activa el feature `cifrado-secreto-dispositivo-portable`
+  al declarar la dependencia de `control_acceso` (línea `features = ["nube"]`). El cableado
+  para usarlo ya existe entero: Kotlin ya lee `Settings.Secure.ANDROID_ID` y se lo pasa a
+  Rust, y `mobile/rust-core/src/lib.rs` ya llama a
+  `guardar_secreto_en_con_identificador`/`cargar_secreto_en_con_identificador` con ese
+  identificador (ver `src/nube/credenciales.rs`). Sin el feature activo, ese identificador
+  se ignora y el secreto (la credencial que autentica todo el teléfono ante la nube) queda
+  en texto plano en el almacenamiento del teléfono. Arreglo es una sola línea en el
+  `Cargo.toml` de `mobile/rust-core` — impacto real más alto que el esfuerzo.
+- [ ] **`Debug` derivado expone tokens/API keys en texto plano — confirmado, riesgo latente
+  (no activo hoy).** `TokenDispositivo` (`src/nube/cliente.rs`) y `SesionRealtimeNube`
+  (`src/application/nube.rs`) derivan `Debug` con `access_token`/`apikey` sin redactar. Hoy
+  nada los loguea, pero cualquier `log::debug!`/`{:?}` futuro los expondría enteros. Mismo
+  patrón que ya existe para el hash de password (`CandidatoAutenticacion` en
+  `src/services/autenticacion_service.rs`, `Debug` manual con `"«redactado»"`) — replicar acá.
+- [ ] **Timing attack en login local — confirmado, prioridad baja.**
+  `AutenticacionService::buscar_candidato` (`src/services/autenticacion_service.rs`) rechaza
+  una cédula inexistente sin correr Argon2, pero si la cédula existe sí lo corre (lento) antes
+  de rechazar por password incorrecta — permite distinguir por tiempo de respuesta si una
+  cédula está en el sistema. Riesgo bajo en esta app (interna, un solo sitio); mitigación
+  sería un hash dummy cuando el usuario no exista.
+
+Del mismo reporte, evaluado y **descartado** (no quedan como pendientes):
+- Timeout HTTP con fallback a cliente sin timeout (`src/nube/cliente.rs::cliente_http`): ya
+  es una decisión deliberada y documentada en el propio comentario, no un descuido —
+  cambiarla (propagar error o entrar en pánico a mitad de una sincronización) sería peor.
+- Índice de la cola de sincronización: el índice parcial ya existente
+  (`idx_cola_salida_pendientes ON cola_salida(creado_en) WHERE estado='pendiente'`) ya excluye
+  del escaneo todo lo que no está pendiente, que es la mayoría de las filas en cualquier
+  momento normal — el reporte exageraba el impacto.
+- `listar()` sin límite en repositorios de catálogo (contratistas/empresas/usuarios/gafetes):
+  ya evaluado en la auditoría de rendimiento previa y dejado así a propósito — son catálogos
+  de un solo sitio (cientos, no miles de filas).
+
+## Repo incompleto respecto a lo desplegado (2026-09-07)
+
+Auditoría pedida por el usuario ("revisa bien que tengamos en el repo todo lo necesario")
+tras un reporte que señalaba que las Edge Functions de dispositivos no estaban versionadas.
+Verificado contra `list_edge_functions`/`get_edge_function` (MCP) en vez de confiar en el
+reporte a ciegas: el reclamo era correcto.
+
+- [x] **Versionadas las 9 Edge Functions que sólo existían en remoto (2026-09-07).**
+  `supabase/functions/` sólo tenía `sync-access-policy`. Se trajo el código fuente exacto
+  (tal cual desplegado) de `device-auth`, `admin-list-devices`, `admin-provision-device`,
+  `admin-revoke-device`, `admin-suspend-device`, `admin-delete-device`, `admin-create-site`,
+  `admin-move-device` y `admin-hide-device`. Se revisó cada una: todas las `admin-*` ya
+  tienen su propio `correoAdminAutorizado()` (JWT de sesión → `administradores_panel`), no
+  clave compartida — el hallazgo era sólo de versionado, no de seguridad.
+- [x] **`admin-move-device` y `admin-hide-device` eliminadas (2026-09-07).** Sin llamador en
+  `web/src` ni en `desktop/src` (revisado tras versionarlas) — decisión explícita del
+  usuario ("sino se usan... quitalas") en vez de dejarlas huérfanas. Borradas del proyecto
+  de Supabase (`supabase functions delete`) y de `supabase/functions/`. No tocó la columna
+  `oculto_en_panel` (`dispositivos`): sigue en uso real por `admin-delete-device`, que la
+  marca cuando el borrado definitivo falla por historial (`23503`) — eso no dependía de
+  `admin-hide-device`, que sólo exponía el toggle manual de esa misma columna.
+- [ ] **Bucket de Storage `historial-web` (público, vacío, creado 2026-09-03) sin ninguna
+  referencia en el repo** (ni migración que lo cree, ni código que lo use en `web/`,
+  `desktop/`, `mobile/` o `src/`). No se tocó — puede ser vestigio de una prueba o algo
+  pensado para una función futura. Si se confirma que no hace falta, borrarlo (es público:
+  aunque esté vacío hoy, cualquiera con la URL podría escribir/leer ahí si algo empieza a
+  usarlo sin querer).
 
 ## Clippy pedantic/nursery — en curso, subiendo el nivel por capas (2026-09-01)
 

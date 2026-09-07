@@ -3,15 +3,20 @@ import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
+import ConfirmacionSensible from "../componentes/ConfirmacionSensible";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { mensajeError } from "../mensajeError";
 import {
+  crearSitio,
+  eliminarDispositivo,
   listarDispositivosYSitios,
   provisionarDispositivo,
   revocarDispositivo,
   suspenderDispositivo,
 } from "../api/dispositivos";
 import type { Dispositivo, DispositivoProvisionado, TipoDispositivo } from "../api/dispositivos";
+import type { UsuarioSesion } from "../api";
 
 const ETIQUETAS_TIPO: Record<TipoDispositivo, string> = {
   pc: "PC",
@@ -35,8 +40,15 @@ function textoFechaHora(iso: string): string {
  * secreto de un dispositivo nuevo se muestra UNA sola vez al crearlo -- no
  * queda guardado en texto plano en ningún lado que se pueda volver a leer,
  * ni siquiera acá.
+ *
+ * Revocar y Eliminar (las dos acciones que de verdad le cortan el paso a un
+ * dispositivo, la segunda sin vuelta atrás) piden código de confirmación
+ * por correo -- misma "sos vos ahora mismo" que alta/baja de administradores
+ * (ver `ConfirmacionSensible`). Suspender no lo pide: es reversible con un
+ * click (Reactivar), no hace falta ese costo extra para algo que se
+ * deshace solo.
  */
-export default function Dispositivos() {
+export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   const [sitios, setSitios] = useState<{ id: string; nombre: string }[]>([]);
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -45,10 +57,52 @@ export default function Dispositivos() {
   const [errorForm, setErrorForm] = useState<string | null>(null);
   const [provisionado, setProvisionado] = useState<DispositivoProvisionado | null>(null);
 
-  const [sitioNombre, setSitioNombre] = useState("");
-  const [sitioDireccion, setSitioDireccion] = useState("");
+  const [sitioId, setSitioId] = useState("");
   const [tipo, setTipo] = useState<TipoDispositivo>("pc");
   const [etiqueta, setEtiqueta] = useState("");
+
+  const [modalSitioAbierto, setModalSitioAbierto] = useState(false);
+  const [nuevoSitioNombre, setNuevoSitioNombre] = useState("");
+  const [nuevoSitioDireccion, setNuevoSitioDireccion] = useState("");
+  const [creandoSitio, setCreandoSitio] = useState(false);
+  const [errorSitio, setErrorSitio] = useState<string | null>(null);
+
+  // Modal de confirmación simple (Suspender -- reversible con un click,
+  // Reactivar) -- reemplaza el confirm() nativo del navegador, que se ve
+  // fuera de lugar (barra con el dominio, botones del sistema) al lado del
+  // resto de la app. Mismo patrón que `confirmarSalidaMasiva` en
+  // desktop/src/pantallas/Activos.tsx.
+  const [confirmacion, setConfirmacion] = useState<{
+    titulo: string;
+    mensaje: string;
+    textoConfirmar: string;
+    accion: () => Promise<void>;
+  } | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
+
+  async function ejecutarConfirmacion() {
+    if (!confirmacion) return;
+    setConfirmando(true);
+    try {
+      await confirmacion.accion();
+      setConfirmacion(null);
+    } catch (error) {
+      toast.error(mensajeError(error));
+    } finally {
+      setConfirmando(false);
+    }
+  }
+
+  // Revocar/Eliminar piden código de correo además de confirmar -- ver el
+  // doc-comment del componente. `accion` maneja su propio error/toast (no
+  // tira), para que `ConfirmacionSensible` no se quede con una excepción
+  // sin atrapar entre medio de su propio manejo del código.
+  const [confirmacionSensible, setConfirmacionSensible] = useState<{
+    titulo: string;
+    pregunta: string;
+    descripcion: string;
+    accion: () => Promise<void>;
+  } | null>(null);
 
   const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
     const silencioso = opciones?.silencioso ?? false;
@@ -59,7 +113,7 @@ export default function Dispositivos() {
         setDispositivos(dispositivos);
       })
       .catch((error) => {
-        if (!silencioso) toast.error(String(error));
+        if (!silencioso) toast.error(mensajeError(error));
       })
       .finally(() => {
         if (!silencioso) setCargando(false);
@@ -79,15 +133,24 @@ export default function Dispositivos() {
     return (sitioId: string) => mapa.get(sitioId) ?? "?";
   }, [sitios]);
 
+  // Los ocultos (ver alEliminar) no se muestran nunca desde acá a
+  // propósito -- recuperar uno es por SQL directo en Supabase, no hay
+  // botón para eso en el panel.
   const filas: FilaDispositivo[] = useMemo(
-    () => dispositivos.map((d) => ({ ...d, sitio_nombre: nombrePorSitio(d.sitio_id) })),
+    () =>
+      dispositivos
+        .filter((d) => !d.oculto_en_panel)
+        .map((d) => ({ ...d, sitio_nombre: nombrePorSitio(d.sitio_id) })),
     [dispositivos, nombrePorSitio],
   );
 
+  function abrirModal() {
+    setModalAbierto(true);
+    setSitioId((actual) => actual || sitios[0]?.id || "");
+  }
+
   function cerrarModal() {
     setModalAbierto(false);
-    setSitioNombre("");
-    setSitioDireccion("");
     setTipo("pc");
     setEtiqueta("");
     setErrorForm(null);
@@ -96,55 +159,126 @@ export default function Dispositivos() {
 
   async function alEnviarFormulario(evento: React.FormEvent) {
     evento.preventDefault();
+    const sitio = sitios.find((s) => s.id === sitioId);
+    if (!sitio) {
+      setErrorForm("Elegí una unidad operativa (o creá una con el botón +).");
+      return;
+    }
     setCreando(true);
     setErrorForm(null);
     try {
+      // Manda el nombre, no el id -- admin-provision-device resuelve el
+      // sitio por nombre (upsert), así que reutiliza el que ya existe en
+      // vez de duplicarlo.
       const resultado = await provisionarDispositivo({
-        sitio_nombre: sitioNombre.trim(),
-        sitio_direccion: sitioDireccion.trim() || undefined,
+        sitio_nombre: sitio.nombre,
         tipo,
         etiqueta: etiqueta.trim(),
       });
       setProvisionado(resultado);
       recargar();
     } catch (error) {
-      setErrorForm(String(error));
+      setErrorForm(mensajeError(error));
     } finally {
       setCreando(false);
     }
   }
 
-  async function alRevocar(fila: FilaDispositivo) {
-    if (!confirm(`¿Revocar "${fila.etiqueta}"? Ese dispositivo va a dejar de poder sincronizar.`)) return;
+  function abrirModalSitio() {
+    setModalSitioAbierto(true);
+    setNuevoSitioNombre("");
+    setNuevoSitioDireccion("");
+    setErrorSitio(null);
+  }
+
+  function cerrarModalSitio() {
+    setModalSitioAbierto(false);
+  }
+
+  async function alCrearSitio(evento: React.FormEvent) {
+    evento.preventDefault();
+    setCreandoSitio(true);
+    setErrorSitio(null);
     try {
-      await revocarDispositivo(fila.id);
-      toast.success(`${fila.etiqueta} revocado.`);
-      recargar();
+      const nuevo = await crearSitio({
+        nombre: nuevoSitioNombre.trim(),
+        direccion: nuevoSitioDireccion.trim() || undefined,
+      });
+      setSitios((actual) => (actual.some((s) => s.id === nuevo.id) ? actual : [...actual, nuevo]));
+      setSitioId(nuevo.id);
+      setModalSitioAbierto(false);
     } catch (error) {
-      toast.error(String(error));
+      setErrorSitio(mensajeError(error));
+    } finally {
+      setCreandoSitio(false);
     }
   }
 
-  async function alSuspender(fila: FilaDispositivo) {
-    if (!confirm(`¿Suspender "${fila.etiqueta}"? Va a dejar de poder sincronizar hasta que lo reactivés.`)) return;
-    try {
-      await suspenderDispositivo(fila.id, true);
-      toast.success(`${fila.etiqueta} suspendido.`);
-      recargar();
-    } catch (error) {
-      toast.error(String(error));
-    }
-  }
+  const alEliminar = useCallback((fila: FilaDispositivo) => {
+    setConfirmacionSensible({
+      titulo: "Borrar dispositivo",
+      pregunta: `¿Borrar "${fila.etiqueta}" de la lista? Esto no se puede deshacer.`,
+      descripcion: `borrar "${fila.etiqueta}" de la lista -- esto no se puede deshacer`,
+      accion: async () => {
+        try {
+          const { borrado } = await eliminarDispositivo(fila.id);
+          toast.success(
+            borrado
+              ? `${fila.etiqueta} borrado.`
+              : `${fila.etiqueta} ya tiene historial y no se puede borrar del todo -- se ocultó de la lista.`,
+          );
+          setConfirmacionSensible(null);
+          await recargar();
+        } catch (error) {
+          toast.error(mensajeError(error));
+        }
+      },
+    });
+  }, [recargar]);
 
-  async function alReactivar(fila: FilaDispositivo) {
-    try {
-      await suspenderDispositivo(fila.id, false);
-      toast.success(`${fila.etiqueta} reactivado.`);
-      recargar();
-    } catch (error) {
-      toast.error(String(error));
-    }
-  }
+  const alRevocar = useCallback((fila: FilaDispositivo) => {
+    setConfirmacionSensible({
+      titulo: "Revocar dispositivo",
+      pregunta: `¿Revocar "${fila.etiqueta}"? Ese dispositivo va a dejar de poder sincronizar.`,
+      descripcion: `revocar "${fila.etiqueta}" -- ese dispositivo va a dejar de poder sincronizar`,
+      accion: async () => {
+        try {
+          await revocarDispositivo(fila.id);
+          toast.success(`${fila.etiqueta} revocado.`);
+          setConfirmacionSensible(null);
+          await recargar();
+        } catch (error) {
+          toast.error(mensajeError(error));
+        }
+      },
+    });
+  }, [recargar]);
+
+  const alSuspender = useCallback((fila: FilaDispositivo) => {
+    setConfirmacion({
+      titulo: "Suspender dispositivo",
+      mensaje: `¿Suspender "${fila.etiqueta}"? Va a dejar de poder sincronizar hasta que lo reactivés.`,
+      textoConfirmar: "Suspender",
+      accion: async () => {
+        await suspenderDispositivo(fila.id, true);
+        toast.success(`${fila.etiqueta} suspendido.`);
+        await recargar();
+      },
+    });
+  }, [recargar]);
+
+  const alReactivar = useCallback(
+    async (fila: FilaDispositivo) => {
+      try {
+        await suspenderDispositivo(fila.id, false);
+        toast.success(`${fila.etiqueta} reactivado.`);
+        recargar();
+      } catch (error) {
+        toast.error(mensajeError(error));
+      }
+    },
+    [recargar],
+  );
 
   async function copiarSecreto(secret: string) {
     try {
@@ -155,92 +289,105 @@ export default function Dispositivos() {
     }
   }
 
-  const columnas: ColDef<FilaDispositivo>[] = [
-    { field: "etiqueta", headerName: "Etiqueta", flex: 1.6, minWidth: 180, cellStyle: { textAlign: "left" } },
-    {
-      field: "tipo",
-      headerName: "Tipo",
-      flex: 1,
-      minWidth: 150,
-      valueFormatter: ({ value }) => ETIQUETAS_TIPO[value as TipoDispositivo],
-    },
-    { field: "sitio_nombre", headerName: "Sitio", flex: 1, minWidth: 130 },
-    {
-      field: "created_at",
-      headerName: "Creado",
-      flex: 1.2,
-      minWidth: 160,
-      valueFormatter: ({ value }) => textoFechaHora(value),
-    },
-    {
-      field: "last_seen_at",
-      headerName: "Último uso",
-      flex: 1.2,
-      minWidth: 160,
-      valueFormatter: ({ value }) => (value ? textoFechaHora(value) : "Nunca"),
-    },
-    {
-      field: "revoked_at",
-      headerName: "Estado",
-      flex: 0.9,
-      minWidth: 110,
-      filter: false,
-      cellRenderer: ({ data }: { data: FilaDispositivo }) => {
-        const [texto, color] = data.revoked_at
-          ? ["Revocado", "var(--error)"]
-          : data.suspended_at
-            ? ["Suspendido", "var(--advertencia)"]
-            : ["Activo", "var(--exito)"];
-        return (
-          <span className="chip" style={{ ["--chip-color" as string]: color }}>
-            {texto}
-          </span>
-        );
+  const columnas: ColDef<FilaDispositivo>[] = useMemo(
+    () => [
+      { field: "etiqueta", headerName: "Etiqueta", flex: 1.6, minWidth: 180, cellStyle: { textAlign: "left" } },
+      {
+        field: "tipo",
+        headerName: "Tipo",
+        flex: 1,
+        minWidth: 150,
+        valueFormatter: ({ value }) => ETIQUETAS_TIPO[value as TipoDispositivo],
       },
-    },
-    {
-      colId: "acciones",
-      headerName: "",
-      flex: 1.4,
-      minWidth: 190,
-      sortable: false,
-      filter: false,
-      cellRenderer: ({ data }: { data: FilaDispositivo }) => (
-        <div style={{ display: "flex", gap: "0.4rem" }}>
-          {!data.revoked_at &&
-            (data.suspended_at ? (
+      { field: "sitio_nombre", headerName: "Unidad operativa", flex: 1.3, minWidth: 160 },
+      {
+        field: "created_at",
+        headerName: "Creado",
+        flex: 1.2,
+        minWidth: 160,
+        valueFormatter: ({ value }) => textoFechaHora(value),
+      },
+      {
+        field: "last_seen_at",
+        headerName: "Último uso",
+        flex: 1.2,
+        minWidth: 160,
+        valueFormatter: ({ value }) => (value ? textoFechaHora(value) : "Nunca"),
+      },
+      {
+        field: "revoked_at",
+        headerName: "Estado",
+        flex: 0.9,
+        minWidth: 110,
+        filter: false,
+        cellRenderer: ({ data }: { data: FilaDispositivo }) => {
+          const [texto, color] = data.revoked_at
+            ? ["Revocado", "var(--error)"]
+            : data.suspended_at
+              ? ["Suspendido", "var(--advertencia)"]
+              : ["Activo", "var(--exito)"];
+          return (
+            <span className="chip" style={{ ["--chip-color" as string]: color }}>
+              {texto}
+            </span>
+          );
+        },
+      },
+      {
+        colId: "acciones",
+        headerName: "Acción",
+        flex: 1.8,
+        minWidth: 260,
+        sortable: false,
+        filter: false,
+        cellRenderer: ({ data }: { data: FilaDispositivo }) => (
+          <div
+            style={{ display: "flex", gap: "0.4rem", justifyContent: "center", alignItems: "center", height: "100%" }}
+          >
+            {!data.revoked_at &&
+              (data.suspended_at ? (
+                <button
+                  type="button"
+                  className="boton"
+                  style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
+                  onClick={() => alReactivar(data)}
+                >
+                  Reactivar
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="boton"
+                  style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
+                  onClick={() => alSuspender(data)}
+                >
+                  Suspender
+                </button>
+              ))}
+            {!data.revoked_at && (
               <button
                 type="button"
                 className="boton"
                 style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
-                onClick={() => alReactivar(data)}
+                onClick={() => alRevocar(data)}
               >
-                Reactivar
+                Revocar
               </button>
-            ) : (
-              <button
-                type="button"
-                className="boton"
-                style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
-                onClick={() => alSuspender(data)}
-              >
-                Suspender
-              </button>
-            ))}
-          {!data.revoked_at && (
+            )}
             <button
               type="button"
               className="boton"
               style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
-              onClick={() => alRevocar(data)}
+              onClick={() => alEliminar(data)}
             >
-              Revocar
+              Eliminar
             </button>
-          )}
-        </div>
-      ),
-    },
-  ];
+          </div>
+        ),
+      },
+    ],
+    [alReactivar, alSuspender, alRevocar, alEliminar],
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -252,8 +399,8 @@ export default function Dispositivos() {
             filas={filas}
             filtrosPorColumna
             controles={
-              <button type="button" className="boton" onClick={() => setModalAbierto(true)}>
-                + Nuevo dispositivo
+              <button type="button" className="boton" onClick={abrirModal}>
+                + Nuevo
               </button>
             }
           />
@@ -296,31 +443,29 @@ export default function Dispositivos() {
               style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
             >
               <label className="campo">
-                Sitio
-                <input
-                  list="sitios-existentes"
-                  required
-                  autoFocus
-                  value={sitioNombre}
-                  disabled={creando}
-                  placeholder="ej. Brisas"
-                  onChange={(evento) => setSitioNombre(evento.target.value)}
-                />
-                <datalist id="sitios-existentes">
-                  {sitios.map((s) => (
-                    <option key={s.id} value={s.nombre} />
-                  ))}
-                </datalist>
-              </label>
-
-              <label className="campo">
-                Dirección (opcional)
-                <input
-                  value={sitioDireccion}
-                  disabled={creando}
-                  placeholder="ej. San Rafael"
-                  onChange={(evento) => setSitioDireccion(evento.target.value)}
-                />
+                Unidad operativa
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <select
+                    required
+                    autoFocus
+                    style={{ flex: 1 }}
+                    value={sitioId}
+                    disabled={creando}
+                    onChange={(evento) => setSitioId(evento.target.value)}
+                  >
+                    <option value="" disabled>
+                      Seleccionar…
+                    </option>
+                    {sitios.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="button" className="boton" disabled={creando} onClick={abrirModalSitio}>
+                    + Crear
+                  </button>
+                </div>
               </label>
 
               <label className="campo">
@@ -365,6 +510,83 @@ export default function Dispositivos() {
           )}
         </Modal>
       )}
+
+      {modalSitioAbierto && (
+        <Modal titulo="Nueva unidad operativa" onCerrar={cerrarModalSitio}>
+          <form onSubmit={alCrearSitio} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <label className="campo">
+              Nombre
+              <input
+                required
+                autoFocus
+                value={nuevoSitioNombre}
+                disabled={creandoSitio}
+                placeholder="ej. Brisas"
+                onChange={(evento) => setNuevoSitioNombre(evento.target.value)}
+              />
+            </label>
+
+            <label className="campo">
+              Dirección (opcional)
+              <input
+                value={nuevoSitioDireccion}
+                disabled={creandoSitio}
+                placeholder="ej. San Rafael"
+                onChange={(evento) => setNuevoSitioDireccion(evento.target.value)}
+              />
+            </label>
+
+            {errorSitio && (
+              <p className="login-error" role="alert">
+                {errorSitio}
+              </p>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+              <button type="button" className="boton" disabled={creandoSitio} onClick={cerrarModalSitio}>
+                Cancelar
+              </button>
+              <button type="submit" className="boton boton-primario" disabled={creandoSitio}>
+                {creandoSitio ? "Creando…" : "Crear unidad operativa"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {confirmacion && (
+        <Modal titulo={confirmacion.titulo} onCerrar={() => setConfirmacion(null)}>
+          <p style={{ marginTop: 0 }}>{confirmacion.mensaje}</p>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+            <button
+              type="button"
+              className="boton"
+              disabled={confirmando}
+              onClick={() => setConfirmacion(null)}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="boton boton-primario"
+              disabled={confirmando}
+              onClick={ejecutarConfirmacion}
+            >
+              {confirmando ? "Un momento…" : confirmacion.textoConfirmar}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      <ConfirmacionSensible
+        abierto={confirmacionSensible !== null}
+        correo={sesion.correo}
+        titulo={confirmacionSensible?.titulo ?? ""}
+        pregunta={confirmacionSensible?.pregunta ?? ""}
+        descripcion={confirmacionSensible?.descripcion ?? ""}
+        onConfirmar={() => confirmacionSensible?.accion() ?? Promise.resolve()}
+        onCerrar={() => setConfirmacionSensible(null)}
+      />
     </div>
   );
 }

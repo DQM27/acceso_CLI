@@ -1,17 +1,28 @@
+import { z } from "zod";
 import { supabase } from "../lib/supabase";
 
 /**
  * Contratistas globales (ver docs/plan-panel-administrativo-web.md,
- * "Modelo de datos"): dar de baja desde acá los deja sin acceso en TODOS
- * los sitios, no sólo el de origen -- `sitio_id` queda como dato
- * informativo ("de dónde es"), no como filtro de qué puede tocar el panel.
- * RLS: sólo `admin_global` (`es_admin_global()`, migración
- * `admin_global_gestiona_contratistas`).
+ * "Modelo de datos"): un contratista no pertenece a un sitio -- puede
+ * entrar en cualquier unidad operativa salvo que se le niegue el acceso, y
+ * esa baja se ve en TODOS los sitios a la vez. `sitio_id` en la tabla real
+ * queda como dato de procedencia (qué dispositivo lo dio de alta), pero
+ * el panel ni siquiera lo pide -- no aporta nada para decidir nada acá.
+ * RLS: `admin_global` (`es_admin_global()`) O cualquier dispositivo
+ * autenticado (JWT con `sitio_id` -- móvil/escritorio de cualquier sitio,
+ * necesario para que `recibir_catalogo_del_sitio` sincronice el catálogo
+ * completo, ver `src/nube/sincronizacion.rs`). Ojo: NO es "sólo
+ * admin_global" -- ese fue el estado original
+ * (`admin_global_gestiona_contratistas`), reemplazado por la política
+ * "(global)" en `globaliza_contratistas_y_empresas.sql`, y acotado de
+ * nuevo (pero a device-o-admin_global, no sólo admin_global) en
+ * `cierra_acceso_global_a_cuentas_sin_dispositivo_ni_admin.sql` -- ver esa
+ * migración para el hallazgo de seguridad que la motivó (cualquier cuenta
+ * de Google, ni siquiera un dispositivo, tenía el mismo acceso antes de
+ * ese fix).
  */
 export interface Contratista {
   id: string;
-  sitio_id: string;
-  sitio_nombre: string | null;
   identificacion: string | null;
   nombre: string;
   empresa_nombre: string | null;
@@ -21,31 +32,46 @@ export interface Contratista {
   activo: boolean;
 }
 
-interface FilaCruda {
-  id: string;
-  sitio_id: string;
-  sitios: { nombre: string } | null;
-  identificacion: string | null;
-  nombre: string;
-  empresa_nombre: string | null;
-  tipo_ingreso: string | null;
-  fecha_vencimiento_praind: string | null;
-  es_personal_ruta: boolean | null;
-  activo: boolean;
+export interface ResultadoContratistas {
+  filas: Contratista[];
+  /** Ver el mismo campo en `ResultadoHistorial` (`api/historial.ts`) --
+   * misma razón: AG Grid corre client-side (`componentes/Tabla.tsx`), sin
+   * este tope la tabla completa crece sin cota junto con el catálogo real. */
+  truncado: boolean;
 }
 
-export async function listarContratistas(): Promise<Contratista[]> {
-  const { data, error } = await supabase
+// Valida en runtime la forma real de lo que devuelve Supabase -- sin esto,
+// un cambio de contrato del lado del backend (columna renombrada, tipo
+// cambiado) pasaba en silencio hasta romper algo mucho más abajo, con un
+// mensaje de error que no señalaba la causa real.
+const filaContratistaEsquema = z.object({
+  id: z.string(),
+  identificacion: z.string().nullable(),
+  nombre: z.string(),
+  empresa_nombre: z.string().nullable(),
+  tipo_ingreso: z.string().nullable(),
+  fecha_vencimiento_praind: z.string().nullable(),
+  es_personal_ruta: z.boolean().nullable(),
+  activo: z.boolean(),
+});
+
+// Válvula de seguridad, no paginación real -- muy por encima de cualquier
+// catálogo de contratistas real de un solo sitio.
+const LIMITE_CONTRATISTAS = 10_000;
+
+export async function listarContratistas(): Promise<ResultadoContratistas> {
+  const { data, error, count } = await supabase
     .from("contratistas")
     .select(
-      "id, sitio_id, identificacion, nombre, empresa_nombre, tipo_ingreso, " +
-        "fecha_vencimiento_praind, es_personal_ruta, activo, sitios(nombre)",
+      "id, identificacion, nombre, empresa_nombre, tipo_ingreso, " +
+        "fecha_vencimiento_praind, es_personal_ruta, activo",
+      { count: "exact" },
     )
     .order("nombre")
-    .returns<FilaCruda[]>();
+    .range(0, LIMITE_CONTRATISTAS - 1);
 
   if (error) throw new Error(error.message);
-  return data.map(({ sitios, ...resto }) => ({ ...resto, sitio_nombre: sitios?.nombre ?? null }));
+  return { filas: z.array(filaContratistaEsquema).parse(data), truncado: count !== null && count > data.length };
 }
 
 export async function actualizarAccesoContratista(id: string, activo: boolean): Promise<void> {

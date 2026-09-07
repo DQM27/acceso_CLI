@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
@@ -8,7 +8,7 @@ import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import FormularioContratista from "./FormularioContratista";
 import { actualizarContratista, buscarContratistas, listarEmpresas } from "../api";
-import type { ContratistaResumen, Empresa } from "../api";
+import type { ContratistaResumen, Empresa, RolUsuario } from "../api";
 import { textoFechaDDMMYYYY } from "../tiempo";
 
 // "es de ruta"/"tiene acceso" se pueden tocar directo desde la grilla (ambos
@@ -22,40 +22,52 @@ import { textoFechaDDMMYYYY } from "../tiempo";
 // booleanos no llevan filtro de columna (`filter: false`): AG Grid Community
 // no tiene un filtro booleano nativo decente, y ya se ven/tocan directo con
 // el switch.
-const columnas: ColDef<ContratistaResumen>[] = [
-  { field: "cedula", headerName: "Cédula", flex: 1.4, minWidth: 140, cellStyle: { textAlign: "left" } },
-  { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
-  { field: "empresa_nombre", headerName: "Empresa", flex: 1.4, minWidth: 140 },
-  { field: "tipo_ingreso", headerName: "Tipo", flex: 1.2, minWidth: 120 },
-  {
-    field: "fecha_vencimiento_praind",
-    headerName: "PRAIND vence",
-    flex: 1.4,
-    minWidth: 140,
-    valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
-  },
-  {
-    field: "es_personal_ruta",
-    headerName: "Personal de ruta",
-    // 140 truncaba el encabezado ("PERSONAL DE …") — 170 es lo que
-    // necesita "PERSONAL DE RUTA" para no cortarse.
-    flex: 1.7,
-    minWidth: 170,
-    cellRenderer: InterruptorCelda,
-    filter: false,
-  },
-  {
-    field: "tiene_acceso",
-    headerName: "Acceso",
-    flex: 1,
-    minWidth: 100,
-    cellRenderer: InterruptorCelda,
-    cellRendererParams: { critico: true },
-    filter: false,
-  },
-];
+//
+// "Acceso" (`tiene_acceso`) se oculta para Operador (ver `Contratistas`,
+// más abajo) -- 2026-09-06: el cambio de este estado se delega a los
+// admins (panel web), un Operador viéndola sin poder usarla para nada
+// sólo generaba confusión. El núcleo todavía no lo exige (cualquier rol
+// autenticado puede llamar `actualizarContratista` igual) -- esto es sólo
+// la UI, no un candado de permisos nuevo.
+function columnasPara(actorRol: RolUsuario): ColDef<ContratistaResumen>[] {
+  const columnas: ColDef<ContratistaResumen>[] = [
+    { field: "cedula", headerName: "Cédula", flex: 1.4, minWidth: 140, cellStyle: { textAlign: "left" } },
+    { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
+    { field: "empresa_nombre", headerName: "Empresa", flex: 1.4, minWidth: 140 },
+    { field: "tipo_ingreso", headerName: "Tipo", flex: 1.2, minWidth: 120 },
+    {
+      field: "fecha_vencimiento_praind",
+      headerName: "PRAIND vence",
+      flex: 1.4,
+      minWidth: 140,
+      valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
+    },
+    {
+      field: "es_personal_ruta",
+      headerName: "Personal de ruta",
+      // 140 truncaba el encabezado ("PERSONAL DE …") — 170 es lo que
+      // necesita "PERSONAL DE RUTA" para no cortarse.
+      flex: 1.7,
+      minWidth: 170,
+      cellRenderer: InterruptorCelda,
+      filter: false,
+    },
+  ];
+  if (actorRol !== "Operador") {
+    columnas.push({
+      field: "tiene_acceso",
+      headerName: "Acceso",
+      flex: 1,
+      minWidth: 100,
+      cellRenderer: InterruptorCelda,
+      cellRendererParams: { critico: true },
+      filter: false,
+    });
+  }
+  return columnas;
+}
 
-export default function Contratistas() {
+export default function Contratistas({ actorRol }: { actorRol: RolUsuario }) {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [busqueda, setBusqueda] = useState("");
   const [filas, setFilas] = useState<ContratistaResumen[]>([]);
@@ -64,6 +76,11 @@ export default function Contratistas() {
   const [formularioAbierto, setFormularioAbierto] = useState<"crear" | ContratistaResumen | null>(
     null,
   );
+
+  // useMemo -- mismo motivo que en Historial.tsx: si `columnas` se recrea en
+  // cada render, AG Grid reaplica el orden/ancho literales encima del layout
+  // que la persona ya acomodó (persistido en localStorage vía `Tabla`).
+  const columnas = useMemo(() => columnasPara(actorRol), [actorRol]);
 
   useBarraEstado(
     cargando

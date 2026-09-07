@@ -1,15 +1,16 @@
 -- Ejecutar en una sola sesión. Todas las filas de prueba se revierten.
 --
--- `dispositivos` solo tiene la política "leer dispositivos del propio
--- sitio" -- NO hay ninguna política de admin_global. El panel web
--- administra altas/bajas de dispositivos vía Edge Functions con
--- service_role (que no pasa por RLS), pero eso significa que si algún día
--- se agrega una lectura directa a esta tabla desde el panel (o se le pasa
--- "dispositivos" a useAutoRefresh para Realtime), NO va a traer nada: un
--- admin_global autenticado por Google no tiene sitio_id en su JWT. Este
--- test documenta ese hueco -- si se agrega una política admin_global acá,
--- hay que sumar el caso a este archivo, no solo confiar en que "ya
--- funciona" por las Edge Functions.
+-- `dispositivos` tiene dos políticas de SELECT: "leer dispositivos del
+-- propio sitio" (dispositivos) y "admin_global lee dispositivos" (migración
+-- admin_global_lee_dispositivos, 2026-09-06 -- la necesita el embed
+-- `dispositivos!ingresos_dispositivo_entrada_id_fkey(tipo)` del historial
+-- multi-sitio en el panel web, ver Historial.tsx/useAutoRefresh). Antes de
+-- esa migración NO existía acceso global acá -- si esta tercera
+-- comprobación empieza a fallar de nuevo, es que se sacó esa política sin
+-- actualizar este test.
+--
+-- Alta/baja de dispositivos sigue siendo vía Edge Functions con
+-- service_role (no pasa por RLS) -- esto sólo cubre la lectura directa.
 begin;
 
 insert into public.sitios (id, nombre) values
@@ -48,15 +49,15 @@ begin
   end if;
 end $$;
 
--- admin_global (panel web) HOY NO puede leer dispositivos por esta vía --
--- gap conocido, documentado en docs/plan-panel-administrativo-web.md.
+-- admin_global (panel web) SÍ puede leer dispositivos de cualquier sitio,
+-- sin sitio_id en el JWT -- lo necesita el historial multi-sitio.
 select set_config('request.jwt.claims',
   json_build_object('role', 'authenticated', 'email', current_setting('diagnostico.correo_admin'))::text,
   true);
 do $$
 begin
-  if exists (select 1 from public.dispositivos where etiqueta = 'Diagnóstico PC A') then
-    raise exception 'admin_global ya puede leer dispositivos -- actualizar este comentario y useAutoRefresh en Dispositivos.tsx';
+  if not exists (select 1 from public.dispositivos where etiqueta = 'Diagnóstico PC A') then
+    raise exception 'admin_global no puede leer dispositivos';
   end if;
 end $$;
 

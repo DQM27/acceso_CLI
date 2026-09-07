@@ -48,10 +48,11 @@ begin
   end;
 end $$;
 
--- Cualquier dispositivo autenticado puede LEER contratistas de cualquier
--- sitio (modelo global, ver migración crea_usuarios_globales) -- se
--- documenta acá a propósito: si algún día se decide acotar esto por sitio,
--- este test tiene que actualizarse junto con la política.
+-- Cualquier DISPOSITIVO autenticado (JWT con sitio_id) puede LEER
+-- contratistas de cualquier sitio (modelo global, ver migración
+-- crea_usuarios_globales) -- se documenta acá a propósito: si algún día se
+-- decide acotar esto por sitio, este test tiene que actualizarse junto con
+-- la política.
 select set_config('request.jwt.claims',
   json_build_object('role', 'authenticated', 'sitio_id', current_setting('diagnostico.sitio_b'))::text,
   true);
@@ -63,14 +64,37 @@ begin
 end $$;
 
 -- Un dispositivo de OTRO sitio también puede actualizar ese contratista
--- ajeno (misma política "actualizar contratistas (global)", qual: true) --
--- de nuevo, comportamiento intencional pero riesgoso: cualquier sesión
--- autenticada puede tocar cualquier contratista de cualquier sitio.
+-- ajeno (misma política "actualizar contratistas (global)") -- de nuevo,
+-- comportamiento intencional pero riesgoso: cualquier DISPOSITIVO
+-- autenticado puede tocar cualquier contratista de cualquier sitio.
 do $$
 begin
   update public.contratistas set activo = false where nombre = 'Diagnóstico contratista A';
   if not found then
     raise exception 'Un dispositivo de otro sitio no pudo actualizar un contratista ajeno (se esperaba que sí, por diseño)';
+  end if;
+end $$;
+
+-- El hueco que SÍ se cerró (cierra_acceso_global_a_cuentas_sin_dispositivo_
+-- ni_admin): una sesión `authenticated` que no es dispositivo (sin
+-- sitio_id) ni admin_global -- p. ej. cualquier cuenta de Google que
+-- complete el login OAuth del panel sin estar en administradores_panel --
+-- ya no puede leer ni escribir contratistas. Antes, `using (true)` no
+-- distinguía nada de esto.
+select set_config('request.jwt.claims',
+  json_build_object('role', 'authenticated', 'email', 'diagnostico-sin-permiso@example.com')::text,
+  true);
+do $$
+begin
+  if exists (select 1 from public.contratistas where nombre = 'Diagnóstico contratista A') then
+    raise exception 'Una sesión sin sitio_id ni admin_global pudo leer contratistas (hueco de seguridad reabierto)';
+  end if;
+end $$;
+do $$
+begin
+  update public.contratistas set activo = true where nombre = 'Diagnóstico contratista A';
+  if found then
+    raise exception 'Una sesión sin sitio_id ni admin_global pudo actualizar un contratista (hueco de seguridad reabierto)';
   end if;
 end $$;
 
@@ -89,5 +113,5 @@ begin
   end if;
 end $$;
 
-select '5 comprobaciones de autorización correctas' as resultado;
+select '7 comprobaciones de autorización correctas' as resultado;
 rollback;

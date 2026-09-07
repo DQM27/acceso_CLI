@@ -38,7 +38,7 @@ fn fija_el_perfil_de_durabilidad_esperado() {
     let journal_mode: String = connection
         .query_row("PRAGMA journal_mode", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(journal_mode.to_lowercase(), "delete");
+    assert_eq!(journal_mode.to_lowercase(), "wal");
 
     let synchronous: i64 = connection
         .query_row("PRAGMA synchronous", [], |r| r.get(0))

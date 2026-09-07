@@ -221,7 +221,7 @@ Falta, en orden:
 2. Armar la UI en Kotlin — pantalla/estado para guardar el secreto de
    dispositivo, disparar la sincronización, mostrar `ingresos_remotos` y
    cerrarlos. Mismo patrón que `ActivosViewModel`/`HistorialViewModel`
-   (ver `mobile/app/ARQUITECTURA.md`) — sin diseñar ni construir todavía,
+   (ver `mobile/android/ARQUITECTURA.md`) — sin diseñar ni construir todavía,
    alcance a confirmar aparte.
 
 **Pendiente, en la lista, sin resolver todavía** (en el orden que se

@@ -110,6 +110,10 @@ pub enum GestionNubeError {
     Autenticacion(#[from] crate::nube::NubeError),
     #[error(transparent)]
     Sincronizacion(#[from] crate::nube::SincronizacionError),
+    #[error("Este dispositivo ya tiene usuarios locales -- no es un bootstrap de base vacía")]
+    YaConfigurado,
+    #[error(transparent)]
+    Usuario(#[from] crate::services::error::UsuarioServiceError),
 }
 
 /// Resultado de una sincronización manual -- lo suficiente para que la
@@ -153,34 +157,82 @@ pub struct SesionRealtimeNube {
     pub topic: String,
 }
 
+/// Único punto que resuelve "¿cuál es el secreto guardado?" a partir de las
+/// mismas dos variables que ya usan `guardar_secreto_dispositivo`/
+/// `configurar_dispositivo_inicial` -- antes cada método con acceso a la
+/// nube (`refrescar_catalogo_sin_sesion`, `sincronizar_con_nube`,
+/// `usuario_sigue_activo_remoto`) repetía un `directorio.map_or_else(...)`
+/// que llamaba a `cargar_secreto_en` (SIN identificador) incluso en móvil,
+/// donde el archivo está cifrado con el `ANDROID_ID` -- `cargar_secreto_en`
+/// no sabe descifrarlo (cae al camino de texto plano, falla en silencio) y
+/// esos tres métodos quedaban rotos en cualquier teléfono con el secreto
+/// cifrado: nunca podían reautenticar el dispositivo para nada que no fuera
+/// el primer arranque. Bug real, no un caso de espera -- reportado en vivo
+/// (un usuario sembrado en Supabase después del primer arranque de un
+/// teléfono no podía entrar nunca, ni esperando el pulso periódico).
+fn cargar_secreto_de(directorio: Option<&Path>, identificador_dispositivo: Option<&str>) -> Option<String> {
+    match (directorio, identificador_dispositivo) {
+        (Some(directorio), Some(identificador)) => {
+            crate::nube::credenciales::cargar_secreto_en_con_identificador(directorio, identificador)
+        }
+        (Some(directorio), None) => crate::nube::credenciales::cargar_secreto_en(directorio),
+        (None, _) => crate::nube::credenciales::cargar_secreto(),
+    }
+}
+
 impl AppCore {
+    /// `identificador_dispositivo` cifra el secreto en disco con una clave
+    /// derivada de ese identificador (ver `nube::credenciales`, "Protección
+    /// del secreto del dispositivo en reposo") -- escritorio pasa `None`
+    /// (resuelve el Machine GUID de Windows solo); móvil pasa
+    /// `Some(ANDROID_ID)`, el único identificador de dispositivo estable que
+    /// Android expone, porque a diferencia de escritorio no hay forma de
+    /// resolverlo desde este lado sin que Kotlin lo lea primero.
     pub fn guardar_secreto_dispositivo(
         &self,
         actor: &UsuarioSesion,
         directorio: Option<&Path>,
+        identificador_dispositivo: Option<&str>,
         secreto: &str,
     ) -> Result<(), GestionNubeError> {
         self.autorizar_gestion_nube(actor)?;
-        match directorio {
-            Some(directorio) => crate::nube::credenciales::guardar_secreto_en(directorio, secreto)?,
-            None => crate::nube::credenciales::guardar_secreto(secreto)?,
+        match (directorio, identificador_dispositivo) {
+            (Some(directorio), Some(identificador)) => {
+                crate::nube::credenciales::guardar_secreto_en_con_identificador(
+                    directorio,
+                    secreto,
+                    identificador,
+                )?;
+            }
+            (Some(directorio), None) => {
+                crate::nube::credenciales::guardar_secreto_en(directorio, secreto)?;
+            }
+            (None, _) => crate::nube::credenciales::guardar_secreto(secreto)?,
         }
         Ok(())
     }
 
     /// No revela el secreto ya guardado -- sólo si hay uno o no, para que
     /// la pantalla sepa si mostrar "pegá el secreto" o "dispositivo ya
-    /// configurado".
+    /// configurado". Ver [`Self::guardar_secreto_dispositivo`] sobre
+    /// `identificador_dispositivo`.
     pub fn secreto_dispositivo_guardado(
         &self,
         actor: &UsuarioSesion,
         directorio: Option<&Path>,
+        identificador_dispositivo: Option<&str>,
     ) -> Result<bool, GestionNubeError> {
         self.autorizar_gestion_nube(actor)?;
-        let guardado = directorio.map_or_else(
-            crate::nube::credenciales::cargar_secreto,
-            crate::nube::credenciales::cargar_secreto_en,
-        );
+        let guardado = match (directorio, identificador_dispositivo) {
+            (Some(directorio), Some(identificador)) => {
+                crate::nube::credenciales::cargar_secreto_en_con_identificador(
+                    directorio,
+                    identificador,
+                )
+            }
+            (Some(directorio), None) => crate::nube::credenciales::cargar_secreto_en(directorio),
+            (None, _) => crate::nube::credenciales::cargar_secreto(),
+        };
         Ok(guardado.is_some())
     }
 
@@ -198,12 +250,9 @@ impl AppCore {
     pub fn refrescar_catalogo_sin_sesion(
         &self,
         directorio: Option<&Path>,
+        identificador_dispositivo: Option<&str>,
     ) -> Result<(), GestionNubeError> {
-        let secreto = directorio
-            .map_or_else(
-                crate::nube::credenciales::cargar_secreto,
-                crate::nube::credenciales::cargar_secreto_en,
-            )
+        let secreto = cargar_secreto_de(directorio, identificador_dispositivo)
             .ok_or(GestionNubeError::SinSecreto)?;
         let token = crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, &secreto)?;
         self.aplicar_desfase_reloj(&token);
@@ -229,14 +278,11 @@ impl AppCore {
         &self,
         actor: &UsuarioSesion,
         directorio: Option<&Path>,
+        identificador_dispositivo: Option<&str>,
     ) -> Result<ResumenSincronizacion, GestionNubeError> {
         self.autorizar_uso_nube(actor)?;
 
-        let secreto = directorio
-            .map_or_else(
-                crate::nube::credenciales::cargar_secreto,
-                crate::nube::credenciales::cargar_secreto_en,
-            )
+        let secreto = cargar_secreto_de(directorio, identificador_dispositivo)
             .ok_or(GestionNubeError::SinSecreto)?;
         let token = self.autenticar_con_cache(&secreto)?;
 
@@ -271,6 +317,71 @@ impl AppCore {
         })
     }
 
+    /// Bootstrap de una base sin ningún usuario todavía
+    /// (`requiere_configuracion_inicial() == true`) -- sin sesión posible,
+    /// porque no hay con quién autenticar todavía. Guarda el secreto pegado
+    /// en la pantalla de arranque y trae el catálogo remoto (usuarios
+    /// incluidos), para que el próximo Login tenga con quién autenticar.
+    /// Cada usuario que llega así arranca con el centinela
+    /// `SIN_PASSWORD_LOCAL` (ver `recibir_catalogo_del_sitio`), así que el
+    /// primer login de cualquiera de ellos cae solo en el flujo de "fijar
+    /// contraseña" ya existente (`AppCore::fijar_password_inicial`).
+    ///
+    /// Se rechaza a propósito si ya existe algún usuario local -- este
+    /// camino es sólo el bootstrap de una base vacía, no una forma
+    /// alternativa de reconfigurar un dispositivo ya en uso (para eso sigue
+    /// existiendo `guardar_secreto_dispositivo`, detrás de una sesión Root
+    /// real).
+    pub fn configurar_dispositivo_inicial(
+        &self,
+        directorio: Option<&Path>,
+        identificador_dispositivo: Option<&str>,
+        secreto: &str,
+    ) -> Result<ResumenSincronizacion, GestionNubeError> {
+        if !self.requiere_configuracion_inicial()? {
+            return Err(GestionNubeError::YaConfigurado);
+        }
+
+        match (directorio, identificador_dispositivo) {
+            (Some(directorio), Some(identificador)) => {
+                crate::nube::credenciales::guardar_secreto_en_con_identificador(
+                    directorio,
+                    secreto,
+                    identificador,
+                )?;
+            }
+            (Some(directorio), None) => {
+                crate::nube::credenciales::guardar_secreto_en(directorio, secreto)?;
+            }
+            (None, _) => crate::nube::credenciales::guardar_secreto(secreto)?,
+        }
+
+        let token = self.autenticar_con_cache(secreto)?;
+        let contexto = crate::nube::ContextoSincronizacion {
+            base_url: crate::nube::BASE_URL,
+            apikey: crate::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        let catalogo = crate::nube::recibir_catalogo_del_sitio(&self.connection, &contexto)?;
+
+        Ok(ResumenSincronizacion {
+            enviados: 0,
+            fallidos: 0,
+            remotos_abiertos: 0,
+            cierres_recibidos: 0,
+            empresas_recibidas: catalogo.empresas_recibidas,
+            contratistas_recibidos: catalogo.contratistas_recibidos,
+            gafetes_recibidos: catalogo.gafetes_recibidos,
+            movimientos_historial_recibidos: 0,
+            sitio_id: token.sitio_id,
+            dispositivo_id: token.dispositivo_id,
+            tipo: token.tipo,
+            sesion_expulsada: false,
+        })
+    }
+
     /// Confirma en vivo si `actor` sigue activo en el catálogo remoto, sin
     /// sincronizar nada más -- mucho más rápido que `sincronizar_con_nube`
     /// (una fila, una columna, vs. cola de salida + cierres + ingresos
@@ -284,13 +395,10 @@ impl AppCore {
         &self,
         actor: &UsuarioSesion,
         directorio: Option<&Path>,
+        identificador_dispositivo: Option<&str>,
     ) -> Result<bool, GestionNubeError> {
         self.autorizar_uso_nube(actor)?;
-        let secreto = directorio
-            .map_or_else(
-                crate::nube::credenciales::cargar_secreto,
-                crate::nube::credenciales::cargar_secreto_en,
-            )
+        let secreto = cargar_secreto_de(directorio, identificador_dispositivo)
             .ok_or(GestionNubeError::SinSecreto)?;
         let token = self.autenticar_con_cache(&secreto)?;
         let contexto = crate::nube::ContextoSincronizacion {

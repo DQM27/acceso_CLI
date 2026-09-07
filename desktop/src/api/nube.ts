@@ -90,6 +90,14 @@ export function medioIngresoDesdeNube(valor: string | null): MedioIngreso | null
   }
 }
 
+/** Sólo tiene sentido con la base vacía (`requiereConfiguracionInicial`) --
+ * ver `App.tsx`, pantalla "arranque". Guarda el secreto y trae el catálogo
+ * remoto (usuarios incluidos) en el mismo paso, sin sesión: no hay con
+ * quién loguearse todavía. */
+export function configurarDispositivoInicial(secreto: string): Promise<ResumenSincronizacion> {
+  return invoke("configurar_dispositivo_inicial", { secreto });
+}
+
 export function guardarSecretoDispositivo(secreto: string): Promise<void> {
   return invoke("guardar_secreto_dispositivo", { secreto });
 }

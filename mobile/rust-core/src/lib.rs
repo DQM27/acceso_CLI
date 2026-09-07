@@ -650,6 +650,18 @@ impl From<GestionNubeErrorNucleo> for NucleoError {
     }
 }
 
+/// Ver `Nucleo::autenticar_con_cache`. Duplica la idea de
+/// `application::nube::TokenCacheado` (interno a `AppCore`) en vez de
+/// reutilizarla por el mismo motivo que ya la duplicó escritorio
+/// (`desktop/src-tauri/src/estado.rs::TokenCacheado`): autenticar contra la
+/// nube acá no debe pasar por `core_lock()` -- retener ese candado durante
+/// la llamada de red es justo lo que esto evita.
+struct TokenCacheadoNucleo {
+    secreto: String,
+    token: control_acceso::nube::TokenDispositivo,
+    obtenido_en: std::time::Instant,
+}
+
 /// Sesión del núcleo: dueña de la única conexión `SQLite` del teléfono. Se
 /// abre una vez al arrancar la app y se reusa en todas las pantallas (login,
 /// buscar contratista, registrar entrada/salida) — nunca se reabre por
@@ -662,6 +674,27 @@ pub struct Nucleo {
     /// `autenticar` y vive mientras dure el proceso (no hay "cerrar sesión"
     /// todavía en el piloto).
     sesion: Mutex<Option<UsuarioSesionNucleo>>,
+    /// Caché del último `TokenDispositivo`, deliberadamente FUERA del
+    /// `Mutex<AppCore>` de arriba -- ver `Nucleo::autenticar_con_cache`.
+    /// Antes de esto, `autenticar`/`gafete_ocupado_en_sitio` llamaban a los
+    /// métodos de red de `AppCore` a través de `core_lock()`, que quedaba
+    /// tomado durante toda la llamada HTTP: cualquier otra pantalla
+    /// (buscar, listar activos, otro registro) se quedaba esperando ese
+    /// mismo candado mientras tanto -- se sentía como que la app se
+    /// congelaba al iniciar sesión o al confirmar un ingreso con gafete,
+    /// sobre todo si la sincronización periódica estaba en curso al mismo
+    /// tiempo.
+    token_nube_cacheado: Mutex<Option<TokenCacheadoNucleo>>,
+    /// Serializa las sincronizaciones completas (`sincronizar_con_nube`,
+    /// llamada desde el timer periódico, un aviso Realtime Y el botón
+    /// manual -- ver `SincronizacionPeriodica.kt`/`NubeViewModel.kt`) para
+    /// que nunca corran dos en simultáneo pisándose la cola de salida --
+    /// mismo motivo que el `static SINCRONIZACION: Mutex<()>` de
+    /// `desktop/src-tauri/src/comandos/nube.rs::ejecutar_sincronizacion`.
+    /// Deliberadamente NO es el mismo candado que `core`: mientras una
+    /// sincronización espera acá (o corre su red), cualquier búsqueda o
+    /// registro sigue andando con total normalidad.
+    sincronizacion_en_curso: Mutex<()>,
 }
 
 #[uniffi::export]
@@ -673,13 +706,18 @@ impl Nucleo {
         // solo) tiene el mismo problema que se vio en escritorio: cada
         // autenticación contra la nube mide el desfase real y lo aplica acá
         // (ver `application::nube::AppCore::actualizar_desfase_reloj`).
-        let core = AppCore::abrir_con_reloj(&ruta_base_datos, std::sync::Arc::new(RelojCorregido::nuevo()))
-            .map_err(|origen| NucleoError::Apertura {
-                mensaje: origen.to_string(),
-            })?;
+        let core = AppCore::abrir_con_reloj(
+            &ruta_base_datos,
+            std::sync::Arc::new(RelojCorregido::nuevo()),
+        )
+        .map_err(|origen| NucleoError::Apertura {
+            mensaje: origen.to_string(),
+        })?;
         Ok(Self {
             core: Mutex::new(core),
             sesion: Mutex::new(None),
+            token_nube_cacheado: Mutex::new(None),
+            sincronizacion_en_curso: Mutex::new(()),
         })
     }
 
@@ -692,14 +730,27 @@ impl Nucleo {
     /// bloqueante" (el teléfono tiene que poder operar sin internet), así
     /// que los dos son best-effort (con el tope de `nube::cliente::TIMEOUT_HTTP`):
     ///
-    /// 1. **Reactivación**: si el chequeo local dice "inactivo"
-    ///    (`AutenticacionErrorNucleo::UsuarioInactivo`), puede ser que a
-    ///    este usuario lo hayan reactivado en otro dispositivo y esta base
-    ///    todavía no se enteró -- antes de rendirse, refresca sólo el
-    ///    catálogo (`refrescar_catalogo_sin_sesion`, sin sesión) y
-    ///    reintenta el login local una vez más. Sin esto, una reactivación
-    ///    remota nunca se podía reflejar acá: el login fallaba en el
-    ///    chequeo local ANTES de llegar a sincronizar nada.
+    /// 1. **Alta o reactivación**: si el chequeo local dice "inactivo"
+    ///    (`AutenticacionErrorNucleo::UsuarioInactivo`) o "no existe"
+    ///    (`CredencialesInvalidas` -- que es la misma variante que una
+    ///    contraseña incorrecta, ver `autenticacion_service.rs`), puede ser
+    ///    que a este usuario lo hayan reactivado en otro dispositivo, o
+    ///    creado en el panel/otro sitio DESPUÉS del primer arranque de este
+    ///    teléfono, y esta base todavía no se enteró -- antes de rendirse,
+    ///    refresca sólo el catálogo (`refrescar_catalogo_sin_sesion`, sin
+    ///    sesión) y reintenta el login local una vez más. Sin esto, un
+    ///    usuario nuevo o una reactivación remota nunca se podían reflejar
+    ///    acá: la sincronización periódica (`SincronizacionPeriodica.kt`)
+    ///    recién arranca DESPUÉS de un primer login exitoso, así que una
+    ///    cédula que todavía no existe en este teléfono se quedaba
+    ///    "credenciales inválidas" para siempre, sin importar cuánto se
+    ///    esperara -- reportado en vivo: un ROOT creado en Supabase después
+    ///    del primer arranque del emulador nunca podía entrar. Costo
+    ///    aceptado: una contraseña tipeada mal también dispara este
+    ///    refresco de más (no hay forma barata de distinguir los dos casos
+    ///    antes de sincronizar) -- mismo costo que ya paga escritorio, que
+    ///    sincroniza el catálogo en CADA intento de login, acierte o no
+    ///    (`desktop/src-tauri/src/comandos/autenticacion.rs`).
     /// 2. **Baja**: tras un login local exitoso, confirma en vivo que la
     ///    cédula sigue activa (`usuario_sigue_activo_remoto` -- una fila,
     ///    una columna, no la sincronización completa que hacía esto antes:
@@ -714,23 +765,49 @@ impl Nucleo {
         cedula: String,
         password: String,
         directorio: String,
+        identificador_dispositivo: String,
     ) -> Result<UsuarioSesion, NucleoError> {
         let intento = self.core_lock().autenticar(&cedula, &password);
         let sesion = match intento {
             Ok(sesion) => sesion,
-            Err(AutenticacionErrorNucleo::UsuarioInactivo) => {
-                let _ = self
-                    .core_lock()
-                    .refrescar_catalogo_sin_sesion(Some(std::path::Path::new(&directorio)));
+            Err(
+                AutenticacionErrorNucleo::UsuarioInactivo
+                | AutenticacionErrorNucleo::CredencialesInvalidas,
+            ) => {
+                let _ = self.refrescar_catalogo_sin_sesion(&directorio, &identificador_dispositivo);
                 self.core_lock().autenticar(&cedula, &password)?
             }
             Err(otro) => return Err(otro.into()),
         };
 
-        let sigue_activo = self
-            .core_lock()
-            .usuario_sigue_activo_remoto(&sesion, Some(std::path::Path::new(&directorio)))
-            .unwrap_or(true);
+        // Ver el comentario de `token_nube_cacheado`: a diferencia de la
+        // línea de arriba (autenticación local, SQLite puro), este chequeo
+        // habla con la nube -- por eso ya no pasa por `core_lock()` más que
+        // un instante para `autorizar_uso_nube` (verificar que `sesion`
+        // todavía puede usar la nube, chequeo local rápido). El resto
+        // (caché de token + la llamada HTTP en sí) corre sin el candado de
+        // `AppCore` tomado.
+        let autorizado_para_nube = self.core_lock().autorizar_uso_nube(&sesion).is_ok();
+        let sigue_activo = if autorizado_para_nube {
+            control_acceso::nube::credenciales::cargar_secreto_en_con_identificador(
+                std::path::Path::new(&directorio),
+                &identificador_dispositivo,
+            )
+            .and_then(|secreto| {
+                let token = self.autenticar_con_cache(&secreto).ok()?;
+                let contexto = control_acceso::nube::ContextoSincronizacion {
+                    base_url: control_acceso::nube::BASE_URL,
+                    apikey: control_acceso::nube::APIKEY,
+                    token: &token.access_token,
+                    dispositivo_id: &token.dispositivo_id,
+                    sitio_id: &token.sitio_id,
+                };
+                control_acceso::nube::usuario_sigue_activo_remoto(&contexto, &sesion.cedula).ok()
+            })
+            .unwrap_or(true)
+        } else {
+            true
+        };
         if !sigue_activo {
             return Err(NucleoError::UsuarioInactivo);
         }
@@ -990,30 +1067,75 @@ impl Nucleo {
         )?)
     }
 
+    /// `true` mientras la base no tenga ningún usuario todavía -- Kotlin lo
+    /// usa para decidir si mostrar la pantalla de arranque (pegar el
+    /// secreto) en vez del login (ver `MainActivity.kt`).
+    pub fn requiere_configuracion_inicial(&self) -> Result<bool, NucleoError> {
+        Ok(self.core_lock().requiere_configuracion_inicial()?)
+    }
+
+    /// Arranque de una base vacía -- sin sesión, porque todavía no existe
+    /// ningún usuario con quien autenticar. Guarda el secreto pegado en la
+    /// pantalla de arranque y trae el catálogo remoto (usuarios incluidos),
+    /// para que el próximo intento de login ya tenga con quién autenticar
+    /// (con el centinela `SIN_PASSWORD_LOCAL`, cae solo en "fijar
+    /// contraseña"). `identificador_dispositivo` es
+    /// `Settings.Secure.ANDROID_ID`, igual que en
+    /// [`Nucleo::guardar_secreto_dispositivo`].
+    pub fn configurar_dispositivo_inicial(
+        &self,
+        directorio: String,
+        identificador_dispositivo: String,
+        secreto: String,
+    ) -> Result<ResumenSincronizacion, NucleoError> {
+        Ok(self
+            .core_lock()
+            .configurar_dispositivo_inicial(
+                Some(std::path::Path::new(&directorio)),
+                Some(&identificador_dispositivo),
+                &secreto,
+            )?
+            .into())
+    }
+
     /// Guarda el secreto de este dispositivo, pegado desde el panel de
     /// administración (mismo mecanismo que la GUI de escritorio, ver
     /// `docs/plan-persistencia-nube.md`). `directorio` es el mismo que
     /// Kotlin ya usa para ubicar la base `SQLite` -- Android no tiene
     /// `%LOCALAPPDATA%`, así que acá no hay resolución automática de ruta.
+    /// `identificador_dispositivo` es `Settings.Secure.ANDROID_ID` -- cifra
+    /// el secreto en disco con una clave derivada de ese valor (ver
+    /// `docs/plan-panel-administrativo-web.md`, "Protección del secreto del
+    /// dispositivo en reposo"); copiar el archivo a otro teléfono descifra
+    /// mal, no da un secreto usable.
     pub fn guardar_secreto_dispositivo(
         &self,
         directorio: String,
+        identificador_dispositivo: String,
         secreto: String,
     ) -> Result<(), NucleoError> {
         let actor = self.actor_autenticado()?;
         Ok(self.core_lock().guardar_secreto_dispositivo(
             &actor,
             Some(std::path::Path::new(&directorio)),
+            Some(&identificador_dispositivo),
             &secreto,
         )?)
     }
 
-    /// No revela el secreto -- sólo si ya hay uno guardado.
-    pub fn secreto_dispositivo_guardado(&self, directorio: String) -> Result<bool, NucleoError> {
+    /// No revela el secreto -- sólo si ya hay uno guardado. Ver
+    /// [`Nucleo::guardar_secreto_dispositivo`] sobre `identificador_dispositivo`.
+    pub fn secreto_dispositivo_guardado(
+        &self,
+        directorio: String,
+        identificador_dispositivo: String,
+    ) -> Result<bool, NucleoError> {
         let actor = self.actor_autenticado()?;
-        Ok(self
-            .core_lock()
-            .secreto_dispositivo_guardado(&actor, Some(std::path::Path::new(&directorio)))?)
+        Ok(self.core_lock().secreto_dispositivo_guardado(
+            &actor,
+            Some(std::path::Path::new(&directorio)),
+            Some(&identificador_dispositivo),
+        )?)
     }
 
     /// Autentica este dispositivo, drena la bandeja de salida pendiente y
@@ -1022,20 +1144,89 @@ impl Nucleo {
     pub fn sincronizar_con_nube(
         &self,
         directorio: String,
+        identificador_dispositivo: String,
     ) -> Result<ResumenSincronizacion, NucleoError> {
+        // Serializa contra cualquier otra sincronización ya en curso (timer
+        // periódico, un aviso Realtime, este mismo método llamado dos veces
+        // seguidas) -- nunca dos a la vez pisándose la cola de salida. Ver
+        // el comentario de `sincronizacion_en_curso`: mientras se espera
+        // acá (o corre la red de abajo), NINGÚN otro método del núcleo se
+        // ve afectado, sólo otra sincronización.
+        let _sincronizacion = self
+            .sincronizacion_en_curso
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
         let actor = self.actor_autenticado()?;
-        let resumen: ResumenSincronizacion = self
-            .core_lock()
-            .sincronizar_con_nube(&actor, Some(std::path::Path::new(&directorio)))?
-            .into();
+        self.core_lock().autorizar_uso_nube(&actor)?;
+
+        let secreto = control_acceso::nube::credenciales::cargar_secreto_en_con_identificador(
+            std::path::Path::new(&directorio),
+            &identificador_dispositivo,
+        )
+        .ok_or_else(|| NucleoError::Interno {
+            mensaje: "Todavía no se guardó el secreto de este dispositivo".to_string(),
+        })?;
+        let token = self
+            .autenticar_con_cache(&secreto)
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })?;
+        if let Some(desfase_ms) = token.desfase_reloj_ms {
+            self.core_lock().actualizar_desfase_reloj(desfase_ms);
+        }
+
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::BASE_URL,
+            apikey: control_acceso::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        // A partir de acá, ninguna llamada más toca `core_lock()` hasta el
+        // chequeo de `sesion_sigue_activa` al final -- toda la cadena de
+        // red corre sobre `conexion`, propia, sin bloquear ninguna otra
+        // pantalla mientras dura.
+        let conexion = self.conexion_secundaria()?;
+        let mapear = |error: control_acceso::nube::SincronizacionError| NucleoError::Interno {
+            mensaje: error.to_string(),
+        };
+        let resumen_cola =
+            control_acceso::nube::drenar_cola(&conexion, &contexto, 200).map_err(mapear)?;
+        let cierres_recibidos =
+            control_acceso::nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)
+                .map_err(mapear)?;
+        let remotos = control_acceso::nube::recibir_ingresos_abiertos(&conexion, &contexto)
+            .map_err(mapear)?;
+        let catalogo = control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto)
+            .map_err(mapear)?;
+        let movimientos_historial_recibidos =
+            control_acceso::nube::recibir_historial_del_sitio(&conexion, &contexto)
+                .map_err(mapear)?;
+
         // Igual que en escritorio: si esta sincronización trajo la baja de
         // quien la disparó, la sesión de ESTE teléfono se cierra sola acá
         // mismo, no sólo se avisa -- cualquier llamada siguiente que
         // dependa de `actor_autenticado()` debe fallar de inmediato.
-        if resumen.sesion_expulsada {
+        let sesion_expulsada = !self.core_lock().sesion_sigue_activa(&actor);
+        if sesion_expulsada {
             *self.sesion_lock() = None;
         }
-        Ok(resumen)
+
+        Ok(ResumenSincronizacion {
+            enviados: resumen_cola.enviados,
+            fallidos: resumen_cola.fallidos,
+            remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
+            cierres_recibidos,
+            empresas_recibidas: catalogo.empresas_recibidas,
+            contratistas_recibidos: catalogo.contratistas_recibidos,
+            gafetes_recibidos: catalogo.gafetes_recibidos,
+            movimientos_historial_recibidos,
+            sitio_id: token.sitio_id,
+            dispositivo_id: token.dispositivo_id,
+            tipo: token.tipo,
+            sesion_expulsada,
+        })
     }
 
     /// Devuelve lo mínimo para que Kotlin escuche Broadcast privado por
@@ -1076,11 +1267,43 @@ impl Nucleo {
         gafete_numero: i64,
     ) -> Result<bool, NucleoError> {
         let actor = self.actor_autenticado()?;
-        Ok(self.core_lock().gafete_ocupado_en_sitio(
-            &actor,
-            Some(std::path::Path::new(&directorio)),
-            gafete_numero,
-        )?)
+        // Ver el comentario de `token_nube_cacheado`: este chequeo corre
+        // justo antes de confirmar un ingreso con gafete, así que retener
+        // `core_lock()` durante la red acá es exactamente el freeze que se
+        // sentía al registrar. `autorizar_uso_nube` sigue pasando por el
+        // candado -- es SQLite puro, dura microsegundos -- pero se libera
+        // antes de tocar la red.
+        self.core_lock().autorizar_uso_nube(&actor)?;
+
+        let Some(secreto) = control_acceso::nube::credenciales::cargar_secreto_en(
+            std::path::Path::new(&directorio),
+        ) else {
+            // Sin secreto guardado (sitio de un solo dispositivo, o nube
+            // sin configurar): no hay con quién chocar, no hace falta red.
+            return Ok(false);
+        };
+        let token = self
+            .autenticar_con_cache(&secreto)
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })?;
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::BASE_URL,
+            apikey: control_acceso::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        // A diferencia de `autenticar`, acá un fallo de red SÍ se propaga
+        // (no `.unwrap_or`): con nube configurada, más vale bloquear el
+        // ingreso que arriesgar el mismo gafete duplicado entre
+        // dispositivos -- decisión ya documentada en
+        // `application::nube::AppCore::gafete_ocupado_en_sitio`.
+        control_acceso::nube::gafete_ocupado_en_otro_dispositivo(&contexto, gafete_numero).map_err(
+            |error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            },
+        )
     }
 
     /// Cierra, contra la nube, un ingreso abierto por el otro dispositivo
@@ -1114,6 +1337,113 @@ impl Nucleo {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
+    /// Reusa el último `TokenDispositivo` mientras siga vigente en vez de
+    /// autenticar de cero -- mismo margen y misma lógica que
+    /// `GuiState::autenticar_con_cache` en escritorio (y que
+    /// `AppCore::autenticar_con_cache`, que este método reemplaza para
+    /// móvil: ver el comentario de `token_nube_cacheado`). Nunca toca
+    /// `core_lock()`.
+    fn autenticar_con_cache(
+        &self,
+        secreto: &str,
+    ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
+        const MARGEN_EXPIRACION: std::time::Duration = std::time::Duration::from_secs(30);
+
+        {
+            let cache = self
+                .token_nube_cacheado
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(entrada) = cache.as_ref() {
+                let vigente_por = std::time::Duration::from_secs(entrada.token.expires_in)
+                    .saturating_sub(MARGEN_EXPIRACION);
+                if entrada.secreto == secreto && entrada.obtenido_en.elapsed() < vigente_por {
+                    let mut token = entrada.token.clone();
+                    token.desfase_reloj_ms = None;
+                    return Ok(token);
+                }
+            }
+        }
+
+        let token = control_acceso::nube::autenticar_dispositivo(
+            control_acceso::nube::BASE_URL,
+            secreto,
+        )?;
+        *self
+            .token_nube_cacheado
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(TokenCacheadoNucleo {
+            secreto: secreto.to_string(),
+            token: token.clone(),
+            obtenido_en: std::time::Instant::now(),
+        });
+        Ok(token)
+    }
+
+    /// Ver `AppCore::refrescar_catalogo_sin_sesion` -- misma idea (la
+    /// identidad ante la nube es del dispositivo, no de un usuario que
+    /// todavía no logró entrar), reimplementada acá para no retener
+    /// `core_lock()` durante la red ni la escritura del catálogo -- mismo
+    /// motivo que el resto de este archivo. Sólo se llama desde el camino
+    /// de reintento de `autenticar` (usuario recién reactivado o creado en
+    /// otro dispositivo), best-effort a propósito: el `let _ =` de quien
+    /// llama ya ignora el resultado.
+    fn refrescar_catalogo_sin_sesion(
+        &self,
+        directorio: &str,
+        identificador_dispositivo: &str,
+    ) -> Result<(), NucleoError> {
+        let mapear_nube = |error: control_acceso::nube::NubeError| NucleoError::Interno {
+            mensaje: error.to_string(),
+        };
+        let secreto = control_acceso::nube::credenciales::cargar_secreto_en_con_identificador(
+            std::path::Path::new(directorio),
+            identificador_dispositivo,
+        )
+        .ok_or_else(|| NucleoError::Interno {
+            mensaje: "Todavía no se guardó el secreto de este dispositivo".to_string(),
+        })?;
+        let token = self.autenticar_con_cache(&secreto).map_err(mapear_nube)?;
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::BASE_URL,
+            apikey: control_acceso::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        let conexion = self.conexion_secundaria()?;
+        control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto).map_err(|error| {
+            NucleoError::Interno {
+                mensaje: error.to_string(),
+            }
+        })?;
+        Ok(())
+    }
+
+    /// Conexión propia al mismo archivo, independiente de `core` -- mismo
+    /// patrón y mismo motivo que `GuiState::conexion_secundaria` en
+    /// escritorio: `sincronizar_con_nube` hace varias llamadas HTTP
+    /// seguidas (drenar cola, cierres, ingresos abiertos, catálogo,
+    /// historial) y cada una escribe lo que trae -- sin esto, esa cadena
+    /// entera retendría `core_lock()`, bloqueando cualquier otra pantalla
+    /// mientras dura. Sólo funciona sin pisarse con la conexión principal
+    /// porque la base está en `journal_mode=WAL` (ver `database::schema`):
+    /// con el rollback journal clásico, la primera escritura de cualquiera
+    /// de las dos conexiones bloquearía a la otra igual que si compartieran
+    /// el mismo candado.
+    fn conexion_secundaria(&self) -> Result<rusqlite::Connection, NucleoError> {
+        let ruta = self.core_lock().ruta_base_datos().to_path_buf();
+        let conexion = rusqlite::Connection::open(&ruta).map_err(|error| NucleoError::Interno {
+            mensaje: error.to_string(),
+        })?;
+        conexion
+            .busy_timeout(std::time::Duration::from_secs(5))
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })?;
+        Ok(conexion)
+    }
+
     fn sesion_lock(&self) -> std::sync::MutexGuard<'_, Option<UsuarioSesionNucleo>> {
         self.sesion
             .lock()
@@ -1145,8 +1475,12 @@ mod tests {
         let ruta = archivo.path().to_str().unwrap().to_string();
         let nucleo = Nucleo::abrir(ruta).unwrap();
 
-        let resultado =
-            nucleo.autenticar("000000000".to_string(), "loquesea".to_string(), String::new());
+        let resultado = nucleo.autenticar(
+            "000000000".to_string(),
+            "loquesea".to_string(),
+            String::new(),
+            String::new(),
+        );
 
         assert!(matches!(resultado, Err(NucleoError::CredencialesInvalidas)));
     }
@@ -1188,7 +1522,12 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
             .unwrap();
 
         let preparacion = nucleo.preparar_ingreso(1).unwrap();
@@ -1224,7 +1563,12 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
             .unwrap();
         let registro = nucleo
             .registrar_ingreso(1, MedioIngreso::Caminando, None)
@@ -1274,7 +1618,12 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
             .unwrap();
         nucleo
             .registrar_ingreso(1, MedioIngreso::Caminando, Some(7))
@@ -1319,7 +1668,12 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
             .unwrap();
 
         let empresas = nucleo.listar_empresas().unwrap();
@@ -1364,7 +1718,12 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
             .unwrap();
 
         let resultado = nucleo.crear_contratista(DatosContratista {
@@ -1398,7 +1757,12 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
             .unwrap();
 
         let id = nucleo.crear_empresa("Empresa Nueva".to_string()).unwrap();
@@ -1432,7 +1796,12 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
             .unwrap();
         nucleo
             .registrar_ingreso(1, MedioIngreso::Caminando, None)
@@ -1467,7 +1836,12 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar("999999999".to_string(), "clave_prueba_123".to_string(), String::new())
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
             .unwrap();
 
         let id = nucleo
@@ -1486,7 +1860,12 @@ mod tests {
 
         nucleo.cerrar_sesion();
         nucleo
-            .autenticar("888888888".to_string(), "clave_prueba_123".to_string(), String::new())
+            .autenticar(
+                "888888888".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
             .unwrap();
 
         let resultado = nucleo.listar_usuarios(String::new());

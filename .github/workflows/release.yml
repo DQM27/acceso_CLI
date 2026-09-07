@@ -7,6 +7,8 @@ on:
 
 jobs:
   build:
+    permissions:
+      contents: write
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,11 +28,30 @@ jobs:
       # el paso que envía target/release/control_acceso.exe a firmar antes de
       # publicarlo como artefacto de la release. Sin este paso, el .exe que
       # sube este workflow queda sin firmar (igual que ahora).
-      - name: Publicar el ejecutable como artefacto
+      - name: Publicar el ejecutable como artefacto de Actions
         uses: actions/upload-artifact@v4
         with:
           name: control_acceso-${{ github.ref_name }}
           path: target/release/control_acceso.exe
+
+      # Además del artifact de Actions (arriba, requiere estar logueado en el
+      # repo para bajarlo), se adjunta también a la Release pública -- mismo
+      # lugar que el instalador de escritorio y el APK, para no obligar a
+      # nadie a buscar el ejecutable de la CLI/TUI en otro sitio. `tag_name`
+      # apunta al mismo tag que usa tauri-action en `build-gui`: GitHub
+      # identifica una Release por su tag, así que este paso encuentra/
+      # completa la MISMA Release en vez de crear una duplicada, sin
+      # importar cuál de los dos jobs termine primero.
+      - name: Preparar el ejecutable para la Release
+        run: Copy-Item target/release/control_acceso.exe ControlAcceso-CLI-${{ github.ref_name }}-windows-x64.exe
+
+      - name: Adjuntar el ejecutable a la Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Control de Acceso Brisas ${{ github.ref_name }}"
+          draft: true
+          files: ControlAcceso-CLI-${{ github.ref_name }}-windows-x64.exe
 
   build-gui:
     permissions:
@@ -89,3 +110,98 @@ jobs:
           # decisión aparte, cuando el pipeline ya generó confianza.
           releaseDraft: true
           prerelease: false
+
+  build-android:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Falla rápido y con un mensaje claro si todavía no se cargaron los
+      # 4 secretos -- sin esto, gradlew fallaría bastante más adelante (al
+      # firmar) con un error mucho menos obvio.
+      - name: Verificar secretos requeridos
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+
+      - name: Instalar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Instalar toolchain de Rust para Android
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: mobile/rust-core
+
+      - name: Instalar NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27
+
+      - name: Instalar cargo-ndk
+        run: cargo install cargo-ndk
+
+      # Mismos dos ABIs que el build local (ver mobile/README.md):
+      # arm64-v8a para el dispositivo real, x86_64 además por si algún día
+      # hace falta correr este mismo APK en un emulador de pruebas.
+      - name: Compilar el núcleo Rust para Android (arm64-v8a + x86_64)
+        working-directory: mobile/rust-core
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          mkdir -p ../android/app/src/main/jniLibs/arm64-v8a
+          mkdir -p ../android/app/src/main/jniLibs/x86_64
+          cargo ndk -t aarch64-linux-android build --release
+          cp target/aarch64-linux-android/release/libcontrol_acceso_mobile.so ../android/app/src/main/jniLibs/arm64-v8a/
+          cargo ndk -t x86_64-linux-android build --release
+          cp target/x86_64-linux-android/release/libcontrol_acceso_mobile.so ../android/app/src/main/jniLibs/x86_64/
+
+      # El keystore real nunca está en el repo (ver mobile/.gitignore) --
+      # se reconstruye acá desde un secreto en base64, sólo en memoria del
+      # runner efímero de Actions, nunca escrito a ningún lugar persistente.
+      - name: Restaurar el keystore de firma
+        working-directory: mobile/android
+        run: |
+          mkdir -p app/keystore
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > app/keystore/release.keystore
+          cat > keystore.properties <<EOF
+          storeFile=app/keystore/release.keystore
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+
+      - name: Tests
+        working-directory: mobile/android
+        run: ./gradlew test
+
+      - name: Compilar el APK de release
+        working-directory: mobile/android
+        run: ./gradlew assembleRelease
+
+      - name: Preparar el APK para la Release
+        run: cp mobile/android/app/build/outputs/apk/release/app-release.apk ControlAcceso-Brisas-${{ github.ref_name }}.apk
+
+      - name: Adjuntar el APK a la Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Control de Acceso Brisas ${{ github.ref_name }}"
+          draft: true
+          files: ControlAcceso-Brisas-${{ github.ref_name }}.apk

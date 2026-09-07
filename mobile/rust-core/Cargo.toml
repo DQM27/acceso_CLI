@@ -7,9 +7,10 @@ license = "MIT"
 
 [lib]
 name = "control_acceso_mobile"
-# "cdylib" es lo que Android carga como .so vía JNI; "lib" se deja además
+# "cdylib" es lo que Android carga como .so vía JNI; "staticlib" permite
+# empacar el mismo puente en un XCFramework para iOS; "lib" se deja además
 # para poder correr los tests de este crate en el host sin pasar por el NDK.
-crate-type = ["cdylib", "lib"]
+crate-type = ["cdylib", "staticlib", "lib"]
 
 [features]
 # Sólo para generar los bindings Kotlin desde el host — no se activa al
@@ -26,6 +27,12 @@ control_acceso = { path = "../..", default-features = false, features = ["nube"]
 uniffi = "0.32.0"
 thiserror = "2"
 chrono = "0.4.45"
+# Misma version que declara el crate raiz (Cargo.toml de la raiz del repo)
+# y que desktop/src-tauri -- necesaria para abrir una segunda conexion al
+# mismo archivo (ver Nucleo::conexion_secundaria) con el MISMO tipo
+# `rusqlite::Connection` que usa `control_acceso::application::AppCore`
+# internamente, no una version incompatible.
+rusqlite = "0.40.2"
 
 [dev-dependencies]
 tempfile = "3"

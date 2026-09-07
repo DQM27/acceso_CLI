@@ -101,6 +101,64 @@ no reviviendo `admin_regional` como estaba.
 `administradores_panel` es hoy una lista simple: `correo` + `creado_en`,
 sin columna de rol. Estar en la tabla ES tener acceso completo al panel.
 
+**Alta/baja de administradores: deliberadamente sin pantalla en el panel
+web** (2026-09-06, se sacó `Administradores.tsx`/`api/administradores.ts`
+tras la auditoría de seguridad -- existieron un tiempo con confirmación
+por código de correo, `ConfirmacionSensible`). Mismo criterio que ROOT en
+desktop/TUI, que tampoco se gestiona desde ninguna app
+(`crear_root_inicial`): si el panel web mismo se compromete (XSS, una
+dependencia de terceros comprometida), no debe poder fabricarse a sí mismo
+un admin nuevo -- esa capacidad no puede vivir en la misma superficie que
+se está protegiendo. Se gestiona con SQL directo en el SQL Editor del
+dashboard de Supabase (login separado, con su propio 2FA si está
+activado):
+
+```sql
+insert into administradores_panel (correo) values ('nuevo@admin.com');
+delete from administradores_panel where correo = 'quitar@admin.com';
+```
+
+Ese `insert`/`delete` ya sincroniza solo la política de Cloudflare Access
+("Panel Brisas") -- hay un trigger en la tabla (`agrega_webhook_sync_access_policy.sql`)
+que se dispara en cualquier cambio, sin importar si vino de una app o de
+SQL a mano, y llama a la Edge Function `sync-access-policy` para que la
+lista de quién pasa el desafío de Access nunca quede desincronizada de
+`administradores_panel`. No hace falta tocar nada en el dashboard de
+Cloudflare aparte.
+
+**Configuración manual del webhook (una sola vez, nunca commiteado)** --
+`sync_access_policy()` (migración `endurece_webhook_sync_access_policy`)
+lee dos secretos de Vault en vez de tenerlos hardcodeados en la migración
+(la versión anterior sí los tenía así, hallazgo de la auditoría de
+seguridad 2026-09-06 -- quedó un JWT anon legado para siempre en el
+historial de git). Correr en el SQL Editor del dashboard de Supabase,
+**nunca** en un archivo de migración versionado:
+
+```sql
+-- El apikey que la plataforma exige para llegar a cualquier Edge
+-- Function (verify_jwt) -- puede ser el mismo anon/publishable key ya
+-- público del panel (web/src/lib/supabase.ts), no hace falta que sea
+-- distinto: no es la autorización real, sólo la compuerta de la
+-- plataforma.
+select vault.create_secret('<anon o publishable key del proyecto>', 'sync_access_policy_apikey');
+
+-- La autorización real de la función -- un secreto propio, random, que
+-- NO es ningún key de Supabase. Generarlo una vez (ej. `openssl rand
+-- -hex 32`) y usar el mismo valor acá y en el siguiente paso.
+select vault.create_secret('<secreto random propio>', 'sync_access_policy_webhook_secret');
+```
+
+Y del lado de la Edge Function (terminal, con la CLI de Supabase logueada
+en el proyecto):
+
+```sh
+supabase secrets set WEBHOOK_SHARED_SECRET='<el mismo secreto random de arriba>'
+supabase functions deploy sync-access-policy
+```
+
+Sin este paso, `sync_access_policy()` falla con una excepción clara
+("Faltan secretos de Vault…") en vez de fallar en silencio.
+
 Autorización por **RLS en Postgres** (`es_admin_global()`, que ahora sólo
 chequea que el correo esté en `administradores_panel`), no lógica de
 permisos sólo en el frontend — mismo criterio que ya sigue el resto del
@@ -141,14 +199,18 @@ dispositivo que sincroniza. Con el modelo global:
   "Estado real de los datos hoy" arriba: ningún sitio opera todavía, se
   puede reseedear limpio en vez de reconciliar filas duplicadas.
 
-**Root inicial y login offline: sin cambios.** Se evaluó (y se descartó)
-que el arranque de un dispositivo nuevo dependiera de la nube para
-recibir sus primeras cuentas — se prefirió no sumar esa complejidad.
-Cada sitio sigue arrancando con `crear_root_inicial` local, como hoy. Lo
-que sí cambia es que, una vez que un operador global existe (creado
-localmente o desde el panel web), se sincroniza a **todos** los
+**Root inicial y login offline: decisión revertida (2026-09-06).** Acá
+decía que ROOT quedaba afuera de la nube a propósito -- se prefería no
+sumar esa complejidad, cada sitio seguía arrancando con
+`crear_root_inicial` local. Se revirtió al construir la pantalla de
+arranque sin login (pegar el secreto trae el catálogo, ver
+`docs/pendientes.md`): un dispositivo nuevo necesita también poder
+recibir su ROOT real desde la nube, no sólo administradores/operadores
+-- si no, ese primer arranque sólo sirve para cuentas no-ROOT. Ver
+migración `permite_root_en_usuarios_globales`. Una vez que un usuario
+(ROOT incluido) existe globalmente, se sincroniza a **todos** los
 dispositivos — y el login sigue siendo 100% local/offline en cualquiera
-de ellos una vez que ese dispositivo ya sincronizó ese operador al menos
+de ellos una vez que ese dispositivo ya sincronizó esa cuenta al menos
 una vez.
 
 ## Conflicto: mismo contratista con ingreso abierto en dos sitios a la vez (decidido)
@@ -209,7 +271,26 @@ nueva) necesita un estado intermedio — "secreto válido, pendiente de
 verificación" — antes de emitir el JWT final, más el envío del correo
 con el código. Trabajo concreto a diseñar, no configuración.
 
-## Protección del secreto del dispositivo en reposo (decidido)
+## Protección del secreto del dispositivo en reposo (decidido, Capa 1 revertida en móvil 2026-09-06)
+
+**Actualización 2026-09-06**: Capa 1 se implementó para las dos plataformas
+y después se revirtió en móvil (sigue activa en escritorio, que nunca dio
+problemas). En la misma sesión de pruebas aparecieron dos bugs reales
+seguidos con el archivo cifrado en Android: primero, tres funciones de
+`AppCore` (`refrescar_catalogo_sin_sesion`/`sincronizar_con_nube`/
+`usuario_sigue_activo_remoto`) nunca recibían el identificador necesario
+para descifrar, así que la sincronización periódica y el reintento de
+login llevaban rotos desde que se activó el cifrado; arreglado eso,
+después el mismo emulador dejó de poder leer su propio secreto cifrado
+sin causa identificada. Decisión: no vale la pena la complejidad para lo
+que protege — `cifrado-secreto-dispositivo-portable` se sacó de las
+features de `mobile/rust-core` (ver commit "mobile: vuelve a texto plano
+el secreto de dispositivo"). El secreto vuelve a texto plano en Android;
+si se retoma esto en el futuro, hacerlo con pruebas de extremo a extremo
+en un dispositivo real desde el principio, no sólo unitarias.
+
+Descripción original de las dos capas (Capa 1 hoy sólo aplica a
+escritorio):
 
 Hoy se guarda en texto plano (`src/nube/credenciales.rs`,
 `fs::write(directorio.join(FILE_NAME), secreto.trim())`), tanto en

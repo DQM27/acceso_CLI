@@ -21,6 +21,19 @@ serde = ["dep:serde", "chrono/serde"]
 # reqwest en modo "blocking": el resto del crate es síncrono, evita meter
 # un runtime async (tokio) para esto solo.
 nube = ["dep:reqwest", "dep:serde_json", "serde"]
+# Primitivas de cifrado de `dispositivo-nube.secret` en disco, parametrizadas
+# por un identificador de dispositivo que cada plataforma resuelve a su
+# manera (ver docs/plan-panel-administrativo-web.md, "Protección del secreto
+# del dispositivo en reposo") -- copiar el archivo a otro dispositivo
+# descifra mal, no da un secreto usable. `aes-gcm`/`sha2` son puro Rust, sin
+# código específico de SO -- compilan igual para el target Android de
+# `mobile/rust-core` (activa sólo esta parte: Kotlin le pasa `ANDROID_ID`).
+cifrado-secreto-dispositivo-portable = ["dep:aes-gcm", "dep:sha2"]
+# Además de lo anterior, resuelve el identificador de máquina solo (Machine
+# GUID de Windows vía el registro, crate `machine-uid`) -- sólo tiene sentido
+# en escritorio (`desktop/src-tauri/Cargo.toml`), por eso es un feature aparte
+# en vez de sumarlo directo al de arriba.
+cifrado-secreto-dispositivo = ["dep:machine-uid", "cifrado-secreto-dispositivo-portable"]
 
 [dependencies]
 chrono = "0.4.45"
@@ -39,6 +52,9 @@ rpassword = { version = "7", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"], optional = true }
+machine-uid = { version = "0.6", optional = true }
+aes-gcm = { version = "0.11", default-features = false, features = ["aes", "alloc"], optional = true }
+sha2 = { version = "0.11", default-features = false, optional = true }
 
 [build-dependencies]
 winresource = "0.1"

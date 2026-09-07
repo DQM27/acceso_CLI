@@ -3,6 +3,14 @@ rust-core/target/
 rust-core/bindings/
 
 # Gradle / Android
+android/.gradle/
+android/.android/
+android/.kotlin/
+android/build/
+android/app/build/
+android/local.properties
+
+# Layout anterior durante la transicion app/ -> android/.
 app/.gradle/
 app/.kotlin/
 app/build/
@@ -11,14 +19,38 @@ app/local.properties
 
 # El .so es un artefacto de build (~40MB, no optimizado) — se regenera con
 # `cargo ndk -t aarch64-linux-android build`, ver mobile/README.md.
+android/app/src/main/jniLibs/
 app/app/src/main/jniLibs/
 
 # Keystore de firma de release y sus contraseñas — nunca al repo. Sin este
 # archivo no se puede generar un APK de release nuevo que los usuarios
 # puedan instalar encima de uno anterior; hay que resguardarlo aparte
 # (ver mobile/README.md).
+#
+# Dos rutas a propósito: android/app/keystore/ es donde build.gradle.kts busca
+# de verdad (rootProject.file(...) resuelve contra android/, el root de
+# Gradle, + "app/keystore/..." del storeFile en keystore.properties).
+# android/keystore/ tambien se ignora por compatibilidad con pruebas locales.
+# Las rutas app/ quedan como red de seguridad del layout anterior.
+android/app/keystore/
+android/keystore/
+android/keystore.properties
+app/app/keystore/
 app/keystore/
 app/keystore.properties
+
+# iOS / Xcode
+ios/DerivedData/
+ios/build/
+ios/Generated/Headers/
+ios/Generated/Swift/*
+!ios/Generated/Swift/.gitkeep
+ios/**/*.xcuserstate
+ios/**/*.xcuserdata/
+ios/**/*.xcodeproj/project.xcworkspace/xcuserdata/
+ios/**/*.xcworkspace/xcuserdata/
+ios/Frameworks/*
+!ios/Frameworks/.gitkeep
 
 # APKs de distribución generados — pesan ~20MB y algunos incluyen datos
 # reales de contratistas (build puntual con la base embebida); nunca al
