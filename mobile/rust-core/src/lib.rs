@@ -683,12 +683,18 @@ pub struct Nucleo {
     /// mismo candado mientras tanto -- se sentía como que la app se
     /// congelaba al iniciar sesión o al confirmar un ingreso con gafete,
     /// sobre todo si la sincronización periódica estaba en curso al mismo
-    /// tiempo. `sincronizar_con_nube` sigue reteniendo `core_lock()` durante
-    /// su red -- a diferencia de estos dos chequeos, sí necesita la conexión
-    /// para escribir lo que sincroniza, así que separarlo exige una segunda
-    /// conexión (no sólo mover este caché); queda pendiente si el freeze de
-    /// escritorio+WAL no alcanza a aliviarlo también acá.
+    /// tiempo.
     token_nube_cacheado: Mutex<Option<TokenCacheadoNucleo>>,
+    /// Serializa las sincronizaciones completas (`sincronizar_con_nube`,
+    /// llamada desde el timer periódico, un aviso Realtime Y el botón
+    /// manual -- ver `SincronizacionPeriodica.kt`/`NubeViewModel.kt`) para
+    /// que nunca corran dos en simultáneo pisándose la cola de salida --
+    /// mismo motivo que el `static SINCRONIZACION: Mutex<()>` de
+    /// `desktop/src-tauri/src/comandos/nube.rs::ejecutar_sincronizacion`.
+    /// Deliberadamente NO es el mismo candado que `core`: mientras una
+    /// sincronización espera acá (o corre su red), cualquier búsqueda o
+    /// registro sigue andando con total normalidad.
+    sincronizacion_en_curso: Mutex<()>,
 }
 
 #[uniffi::export]
@@ -711,6 +717,7 @@ impl Nucleo {
             core: Mutex::new(core),
             sesion: Mutex::new(None),
             token_nube_cacheado: Mutex::new(None),
+            sincronizacion_en_curso: Mutex::new(()),
         })
     }
 
@@ -767,10 +774,7 @@ impl Nucleo {
                 AutenticacionErrorNucleo::UsuarioInactivo
                 | AutenticacionErrorNucleo::CredencialesInvalidas,
             ) => {
-                let _ = self.core_lock().refrescar_catalogo_sin_sesion(
-                    Some(std::path::Path::new(&directorio)),
-                    Some(&identificador_dispositivo),
-                );
+                let _ = self.refrescar_catalogo_sin_sesion(&directorio, &identificador_dispositivo);
                 self.core_lock().autenticar(&cedula, &password)?
             }
             Err(otro) => return Err(otro.into()),
@@ -1142,23 +1146,87 @@ impl Nucleo {
         directorio: String,
         identificador_dispositivo: String,
     ) -> Result<ResumenSincronizacion, NucleoError> {
+        // Serializa contra cualquier otra sincronización ya en curso (timer
+        // periódico, un aviso Realtime, este mismo método llamado dos veces
+        // seguidas) -- nunca dos a la vez pisándose la cola de salida. Ver
+        // el comentario de `sincronizacion_en_curso`: mientras se espera
+        // acá (o corre la red de abajo), NINGÚN otro método del núcleo se
+        // ve afectado, sólo otra sincronización.
+        let _sincronizacion = self
+            .sincronizacion_en_curso
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
         let actor = self.actor_autenticado()?;
-        let resumen: ResumenSincronizacion = self
-            .core_lock()
-            .sincronizar_con_nube(
-                &actor,
-                Some(std::path::Path::new(&directorio)),
-                Some(&identificador_dispositivo),
-            )?
-            .into();
+        self.core_lock().autorizar_uso_nube(&actor)?;
+
+        let secreto = control_acceso::nube::credenciales::cargar_secreto_en_con_identificador(
+            std::path::Path::new(&directorio),
+            &identificador_dispositivo,
+        )
+        .ok_or_else(|| NucleoError::Interno {
+            mensaje: "Todavía no se guardó el secreto de este dispositivo".to_string(),
+        })?;
+        let token = self
+            .autenticar_con_cache(&secreto)
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })?;
+        if let Some(desfase_ms) = token.desfase_reloj_ms {
+            self.core_lock().actualizar_desfase_reloj(desfase_ms);
+        }
+
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::BASE_URL,
+            apikey: control_acceso::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        // A partir de acá, ninguna llamada más toca `core_lock()` hasta el
+        // chequeo de `sesion_sigue_activa` al final -- toda la cadena de
+        // red corre sobre `conexion`, propia, sin bloquear ninguna otra
+        // pantalla mientras dura.
+        let conexion = self.conexion_secundaria()?;
+        let mapear = |error: control_acceso::nube::SincronizacionError| NucleoError::Interno {
+            mensaje: error.to_string(),
+        };
+        let resumen_cola =
+            control_acceso::nube::drenar_cola(&conexion, &contexto, 200).map_err(mapear)?;
+        let cierres_recibidos =
+            control_acceso::nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)
+                .map_err(mapear)?;
+        let remotos = control_acceso::nube::recibir_ingresos_abiertos(&conexion, &contexto)
+            .map_err(mapear)?;
+        let catalogo = control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto)
+            .map_err(mapear)?;
+        let movimientos_historial_recibidos =
+            control_acceso::nube::recibir_historial_del_sitio(&conexion, &contexto)
+                .map_err(mapear)?;
+
         // Igual que en escritorio: si esta sincronización trajo la baja de
         // quien la disparó, la sesión de ESTE teléfono se cierra sola acá
         // mismo, no sólo se avisa -- cualquier llamada siguiente que
         // dependa de `actor_autenticado()` debe fallar de inmediato.
-        if resumen.sesion_expulsada {
+        let sesion_expulsada = !self.core_lock().sesion_sigue_activa(&actor);
+        if sesion_expulsada {
             *self.sesion_lock() = None;
         }
-        Ok(resumen)
+
+        Ok(ResumenSincronizacion {
+            enviados: resumen_cola.enviados,
+            fallidos: resumen_cola.fallidos,
+            remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
+            cierres_recibidos,
+            empresas_recibidas: catalogo.empresas_recibidas,
+            contratistas_recibidos: catalogo.contratistas_recibidos,
+            gafetes_recibidos: catalogo.gafetes_recibidos,
+            movimientos_historial_recibidos,
+            sitio_id: token.sitio_id,
+            dispositivo_id: token.dispositivo_id,
+            tipo: token.tipo,
+            sesion_expulsada,
+        })
     }
 
     /// Devuelve lo mínimo para que Kotlin escuche Broadcast privado por
@@ -1310,6 +1378,70 @@ impl Nucleo {
             obtenido_en: std::time::Instant::now(),
         });
         Ok(token)
+    }
+
+    /// Ver `AppCore::refrescar_catalogo_sin_sesion` -- misma idea (la
+    /// identidad ante la nube es del dispositivo, no de un usuario que
+    /// todavía no logró entrar), reimplementada acá para no retener
+    /// `core_lock()` durante la red ni la escritura del catálogo -- mismo
+    /// motivo que el resto de este archivo. Sólo se llama desde el camino
+    /// de reintento de `autenticar` (usuario recién reactivado o creado en
+    /// otro dispositivo), best-effort a propósito: el `let _ =` de quien
+    /// llama ya ignora el resultado.
+    fn refrescar_catalogo_sin_sesion(
+        &self,
+        directorio: &str,
+        identificador_dispositivo: &str,
+    ) -> Result<(), NucleoError> {
+        let mapear_nube = |error: control_acceso::nube::NubeError| NucleoError::Interno {
+            mensaje: error.to_string(),
+        };
+        let secreto = control_acceso::nube::credenciales::cargar_secreto_en_con_identificador(
+            std::path::Path::new(directorio),
+            identificador_dispositivo,
+        )
+        .ok_or_else(|| NucleoError::Interno {
+            mensaje: "Todavía no se guardó el secreto de este dispositivo".to_string(),
+        })?;
+        let token = self.autenticar_con_cache(&secreto).map_err(mapear_nube)?;
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::BASE_URL,
+            apikey: control_acceso::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        let conexion = self.conexion_secundaria()?;
+        control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto).map_err(|error| {
+            NucleoError::Interno {
+                mensaje: error.to_string(),
+            }
+        })?;
+        Ok(())
+    }
+
+    /// Conexión propia al mismo archivo, independiente de `core` -- mismo
+    /// patrón y mismo motivo que `GuiState::conexion_secundaria` en
+    /// escritorio: `sincronizar_con_nube` hace varias llamadas HTTP
+    /// seguidas (drenar cola, cierres, ingresos abiertos, catálogo,
+    /// historial) y cada una escribe lo que trae -- sin esto, esa cadena
+    /// entera retendría `core_lock()`, bloqueando cualquier otra pantalla
+    /// mientras dura. Sólo funciona sin pisarse con la conexión principal
+    /// porque la base está en `journal_mode=WAL` (ver `database::schema`):
+    /// con el rollback journal clásico, la primera escritura de cualquiera
+    /// de las dos conexiones bloquearía a la otra igual que si compartieran
+    /// el mismo candado.
+    fn conexion_secundaria(&self) -> Result<rusqlite::Connection, NucleoError> {
+        let ruta = self.core_lock().ruta_base_datos().to_path_buf();
+        let conexion = rusqlite::Connection::open(&ruta).map_err(|error| NucleoError::Interno {
+            mensaje: error.to_string(),
+        })?;
+        conexion
+            .busy_timeout(std::time::Duration::from_secs(5))
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })?;
+        Ok(conexion)
     }
 
     fn sesion_lock(&self) -> std::sync::MutexGuard<'_, Option<UsuarioSesionNucleo>> {
