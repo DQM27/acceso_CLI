@@ -29,7 +29,7 @@ class NubeRealtime(
     private val nucleo: Nucleo,
     private val directorio: String,
     private val scope: CoroutineScope,
-    private val dispatcherIO: CoroutineDispatcher = Dispatchers.Default,
+    private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
     private val onCambio: () -> Unit = { CambiosNube.solicitar() },
 ) {
     private var trabajo: Job? = null

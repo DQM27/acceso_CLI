@@ -11,6 +11,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.MovimientoHistorial
@@ -75,7 +76,7 @@ class HistorialViewModel(
     private val nucleo: Nucleo,
     // Ver el mismo parámetro en ActivosViewModel — permite tests con
     // tiempo controlado en vez de hilos reales.
-    private val dispatcherIO: CoroutineDispatcher = Dispatchers.Default,
+    private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     var texto by mutableStateOf("")
         private set
@@ -94,12 +95,17 @@ class HistorialViewModel(
 
     fun cambiarTexto(nuevo: String) {
         texto = nuevo
-        buscar()
+        // Con debounce: cada tecla no debe disparar un LIKE sobre 180 días
+        // de historial (local + remoto) -- sólo la última pulsación
+        // después de una pausa llega a `buscar`. Ver el mismo criterio en
+        // `ActivosViewModel.cambiarTexto`.
+        buscar(debounce = true)
     }
 
-    private fun buscar() {
+    private fun buscar(debounce: Boolean = false) {
         trabajoBusqueda?.cancel()
         trabajoBusqueda = viewModelScope.launch {
+            if (debounce) delay(DEBOUNCE_BUSQUEDA_MS)
             try {
                 movimientos = withContext(dispatcherIO) {
                     val locales = nucleo.buscarHistorial(texto).map(FilaHistorial::local)
@@ -125,6 +131,9 @@ class HistorialViewModel(
     fun refrescar() = buscar()
 
     companion object {
+        // Ver el mismo comentario en `ActivosViewModel`.
+        private const val DEBOUNCE_BUSQUEDA_MS = 300L
+
         fun factory(nucleo: Nucleo): ViewModelProvider.Factory = viewModelFactory {
             initializer { HistorialViewModel(nucleo) }
         }

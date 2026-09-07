@@ -22,7 +22,7 @@ import uniffi.control_acceso_mobile.UsuarioSesion
 /// `Nucleo.autenticar` confirma en vivo (una consulta puntual, no una
 /// sincronización completa -- ver su doc-comment en Rust) que la cuenta
 /// sigue activa antes de dejar entrar, así que sigue con red de por medio y
-/// hace falta despachar a `Dispatchers.Default` (mismo criterio que
+/// hace falta despachar a `Dispatchers.IO` (mismo criterio que
 /// `ActivosViewModel`) en vez de llamarlo directo desde el hilo de UI.
 /// La sincronización completa (cola, catálogo, historial...) ya no la
 /// dispara `autenticar` -- se lanza acá, aparte, sin que el login la
@@ -35,7 +35,7 @@ class LoginViewModel(
     // disco (ver `NubeViewModel.guardarSecreto`), lo necesitan tanto el
     // reintento de `autenticar` como la sincronización de fondo.
     private val identificadorDispositivo: String,
-    private val dispatcherIO: CoroutineDispatcher = Dispatchers.Default,
+    private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     var cedula by mutableStateOf("")
         private set

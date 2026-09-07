@@ -11,6 +11,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.ContratistaResumen
@@ -111,7 +112,7 @@ class ActivosViewModel(
     // esto los tests dependerían de una carrera real entre corrutinas,
     // exactamente el tipo de cosa que no queremos dejar al azar. El valor
     // por defecto es el real que usa la app.
-    private val dispatcherIO: CoroutineDispatcher = Dispatchers.Default,
+    private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     var texto by mutableStateOf("")
         private set
@@ -157,7 +158,12 @@ class ActivosViewModel(
         // Mismo criterio que `cambiarTexto` en SalidaModal.tsx: escribir de
         // nuevo abandona el mensaje de la confirmación anterior.
         mensaje = null
-        buscar()
+        // Con debounce: tipear rápido no debe disparar una consulta a SQLite
+        // por cada tecla (en modo gafete, una por cada número escrito) --
+        // sólo la última pulsación después de una pausa llega a `buscar`.
+        // `trabajoBusqueda?.cancel()` dentro de `buscar` ya mata la espera
+        // anterior antes de que llegue a consultar nada.
+        buscar(debounce = true)
     }
 
     fun cambiarModo(nuevo: ModoBusqueda) {
@@ -189,9 +195,10 @@ class ActivosViewModel(
             emptyList()
         }
 
-    private fun buscar() {
+    private fun buscar(debounce: Boolean = false) {
         trabajoBusqueda?.cancel()
         trabajoBusqueda = viewModelScope.launch {
+            if (debounce) delay(DEBOUNCE_BUSQUEDA_MS)
             try {
                 when (modo) {
                     ModoBusqueda.ENTRADA -> {
@@ -333,6 +340,12 @@ class ActivosViewModel(
     }
 
     companion object {
+        // Ver el comentario en `cambiarTexto`. 300ms es el mismo orden de
+        // magnitud que usan la mayoría de buscadores con debounce -- ya no
+        // se siente el retraso al escribir, pero absorbe una racha normal
+        // de tecleo.
+        private const val DEBOUNCE_BUSQUEDA_MS = 300L
+
         fun factory(nucleo: Nucleo, directorio: String): ViewModelProvider.Factory = viewModelFactory {
             initializer { ActivosViewModel(nucleo, directorio) }
         }

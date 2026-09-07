@@ -22,7 +22,7 @@ class PrimerArranqueViewModel(
     private val nucleo: Nucleo,
     private val directorio: String,
     private val identificadorDispositivo: String,
-    private val dispatcherIO: CoroutineDispatcher = Dispatchers.Default,
+    private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     var conectando by mutableStateOf(false)
         private set

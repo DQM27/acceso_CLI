@@ -243,15 +243,7 @@ private fun CampoBusquedaActivos(
         OutlinedTextField(
             value = texto,
             onValueChange = onCambiarTexto,
-            label = {
-                Text(
-                    if (modo == ModoBusqueda.SALIDA_GAFETE) {
-                        "Números de gafete, separados por coma"
-                    } else {
-                        "Cédula o nombre"
-                    },
-                )
-            },
+            label = null,
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,
             keyboardOptions = if (modo == ModoBusqueda.SALIDA_GAFETE) {

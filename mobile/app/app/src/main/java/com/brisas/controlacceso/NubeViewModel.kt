@@ -40,7 +40,7 @@ class NubeViewModel(
     private val onSesionExpulsada: () -> Unit = {},
     // Ver el mismo parámetro en ActivosViewModel/HistorialViewModel —
     // permite tests con tiempo controlado en vez de hilos reales.
-    private val dispatcherIO: CoroutineDispatcher = Dispatchers.Default,
+    private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     var sincronizando by mutableStateOf(false)
         private set

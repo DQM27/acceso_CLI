@@ -110,6 +110,15 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
                             .build()
                             .also {
                                 it.setAnalyzer(ejecutor) { imagen ->
+                                    // Ya se detectó una cédula y se avisó al
+                                    // llamador -- seguir corriendo ML Kit en
+                                    // cada frame mientras la pantalla termina
+                                    // de cerrarse sólo quema CPU sin ganar
+                                    // nada (el resultado ya se usó).
+                                    if (detectada) {
+                                        imagen.close()
+                                        return@setAnalyzer
+                                    }
                                     analizarCedula(
                                         imagen = imagen,
                                         recognizer = recognizer,

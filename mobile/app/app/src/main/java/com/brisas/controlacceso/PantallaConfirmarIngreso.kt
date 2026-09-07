@@ -194,7 +194,7 @@ fun PantallaConfirmarIngreso(
                 enviando = true
                 alcance.launch {
                     try {
-                        withContext(Dispatchers.Default) {
+                        withContext(Dispatchers.IO) {
                             // Chequeo en vivo: dos dispositivos del mismo sitio
                             // sólo validan el gafete contra su propia base local,
                             // así que sin esto ambos podían aceptar el mismo
