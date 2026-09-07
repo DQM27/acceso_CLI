@@ -26,7 +26,7 @@ import uniffi.control_acceso_mobile.Nucleo
 /// límite, nunca se trae "todo" (el límite de fecha vive del lado de
 /// `Nucleo.buscarHistorial`, no acá). Todo el estado y la llamada a
 /// [Nucleo] viven en [HistorialViewModel] (ver
-/// mobile/app/ARQUITECTURA.md) — este Composable sólo dibuja.
+/// mobile/android/ARQUITECTURA.md) — este Composable sólo dibuja.
 @Composable
 fun PantallaHistorial(nucleo: Nucleo, refrescarNube: Int = 0) {
     val viewModel: HistorialViewModel = viewModel(factory = HistorialViewModel.factory(nucleo))

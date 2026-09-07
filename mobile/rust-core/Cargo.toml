@@ -7,9 +7,10 @@ license = "MIT"
 
 [lib]
 name = "control_acceso_mobile"
-# "cdylib" es lo que Android carga como .so vía JNI; "lib" se deja además
+# "cdylib" es lo que Android carga como .so vía JNI; "staticlib" permite
+# empacar el mismo puente en un XCFramework para iOS; "lib" se deja además
 # para poder correr los tests de este crate en el host sin pasar por el NDK.
-crate-type = ["cdylib", "lib"]
+crate-type = ["cdylib", "staticlib", "lib"]
 
 [features]
 # Sólo para generar los bindings Kotlin desde el host — no se activa al

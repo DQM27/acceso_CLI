@@ -82,7 +82,7 @@ dependencies {
     // Requerido por el código Kotlin que genera uniffi para llamar al .so vía FFI.
     implementation("net.java.dev.jna:jna:5.15.0@aar")
     // ViewModel + su integración con Compose (`viewModel()`, `viewModelScope`)
-    // — ver mobile/app/ARQUITECTURA.md: el estado y las llamadas a Nucleo
+    // — ver mobile/android/ARQUITECTURA.md: el estado y las llamadas a Nucleo
     // viven acá, no en el @Composable.
     // 2.9.4 es la última que compila contra compileSdk 36 — 2.10+ pide 37
     // (ver AAR metadata al subir la versión; no forma parte de este cambio
@@ -95,7 +95,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
 
     // Tests unitarios de los ViewModel (JVM puro, sin emulador) — ver
-    // mobile/app/src/test/.../NucleoDePrueba.kt para el porqué de cada uno.
+    // mobile/android/app/src/test/.../NucleoDePrueba.kt para el porqué de cada uno.
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     // JNA "de escritorio" (no el @aar de arriba, que es sólo para Android)

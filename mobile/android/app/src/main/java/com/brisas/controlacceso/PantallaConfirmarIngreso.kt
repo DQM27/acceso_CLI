@@ -70,7 +70,7 @@ fun mensajeMotivoDenegacion(motivo: MotivoDenegacion): String =
 
 /// A diferencia de `PantallaActivos`/`PantallaLogin`, esta pantalla se
 /// queda con `remember`/`rememberSaveable` en vez de un `ViewModel` — a
-/// propósito, ver mobile/app/ARQUITECTURA.md sobre cuándo uno hace falta y
+/// propósito, ver mobile/android/ARQUITECTURA.md sobre cuándo uno hace falta y
 /// cuándo no:
 ///
 /// El árbol de estados `SeleccionIngreso` en `ActivosViewModel` desmonta

@@ -91,7 +91,7 @@ private fun gafetesDeTexto(texto: String): List<Int> =
         .mapNotNull { it.toIntOrNull() }
 
 /// Dueño de todo el estado de [PantallaActivos] y de las llamadas a
-/// [Nucleo] — ver mobile/app/ARQUITECTURA.md. El `@Composable` sólo lee
+/// [Nucleo] — ver mobile/android/ARQUITECTURA.md. El `@Composable` sólo lee
 /// este estado (propiedades de sólo lectura desde afuera) y reporta
 /// eventos a través de estas funciones; ninguna decisión de negocio ni
 /// llamada a `Nucleo` vive del lado de la UI.

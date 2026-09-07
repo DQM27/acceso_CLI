@@ -67,7 +67,7 @@ fun textoDispositivo(tipo: String?): String = when (tipo) {
 }
 
 /// Dueño del estado de [PantallaHistorial] y de la llamada a
-/// `Nucleo.buscarHistorial` — ver mobile/app/ARQUITECTURA.md. A diferencia
+/// `Nucleo.buscarHistorial` — ver mobile/android/ARQUITECTURA.md. A diferencia
 /// de `PantallaConfirmarIngreso` (que a propósito no tiene ViewModel),
 /// Historial es una pestaña que persiste mientras el usuario navega
 /// (mismo rol que `ActivosViewModel` para su pestaña), así que sí aplica

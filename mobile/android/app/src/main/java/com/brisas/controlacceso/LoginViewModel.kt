@@ -17,7 +17,7 @@ import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.UsuarioSesion
 
 /// Dueño del estado de [PantallaLogin] y de las llamadas a [Nucleo] para
-/// autenticar/cerrar sesión — ver mobile/app/ARQUITECTURA.md.
+/// autenticar/cerrar sesión — ver mobile/android/ARQUITECTURA.md.
 ///
 /// `Nucleo.autenticar` confirma en vivo (una consulta puntual, no una
 /// sincronización completa -- ver su doc-comment en Rust) que la cuenta
