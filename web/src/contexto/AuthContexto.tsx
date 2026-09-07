@@ -50,7 +50,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!vigente) return;
 
-      if (errorConsulta || !admin) {
+      // Error de red/consulta (timeout, Postgres caído un instante) NO es
+      // lo mismo que "no está en administradores_panel" -- antes los dos
+      // casos deslogueaban igual, así que un blip de conectividad durante
+      // un re-chequeo en segundo plano (cambio de foco de pestaña, refresh
+      // de token -- ver el comentario grande más abajo, esto pasa seguido)
+      // podía sacar a un admin real de una sesión que ya tenía andando,
+      // con un mensaje que además le hacía dudar si tenía acceso. Acá no
+      // se toca `sesion` ni se cierra sesión -- si ya había una sesión
+      // válida, se mantiene tal cual hasta el próximo re-chequeo exitoso.
+      if (errorConsulta) {
+        setError(
+          "No se pudo confirmar tu acceso al panel (falla de conexión) -- probá iniciar sesión de nuevo.",
+        );
+        setCargando(false);
+        return;
+      }
+
+      if (!admin) {
         setError(
           `La cuenta de Google "${usuario.email}" inició sesión, pero no está autorizada para este panel.`,
         );
