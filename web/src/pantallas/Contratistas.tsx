@@ -76,7 +76,12 @@ export default function Contratistas() {
     () => [
       {
         field: "identificacion",
-        headerName: "Identificación",
+        // "Cédula", no "Identificación" -- mismo término que usan
+        // Historial y Usuarios para el mismo dato (columna `cedula`/
+        // `contratista_cedula` ahí, `identificacion` acá por herencia del
+        // nombre de columna en Supabase) -- antes cada pantalla le decía
+        // distinto a lo mismo.
+        headerName: "Cédula",
         flex: 1.3,
         minWidth: 140,
         cellStyle: ESTILO_IZQUIERDA,
@@ -142,7 +147,7 @@ export default function Contratistas() {
             controles={
               <div className="campo" style={{ flex: "0 1 16rem" }}>
                 <input
-                  placeholder="Identificación o nombre…"
+                  placeholder="Cédula o nombre…"
                   value={busqueda}
                   disabled={cargando}
                   onChange={(evento) => setBusqueda(evento.target.value)}
