@@ -118,6 +118,47 @@ insert into administradores_panel (correo) values ('nuevo@admin.com');
 delete from administradores_panel where correo = 'quitar@admin.com';
 ```
 
+Ese `insert`/`delete` ya sincroniza solo la política de Cloudflare Access
+("Panel Brisas") -- hay un trigger en la tabla (`agrega_webhook_sync_access_policy.sql`)
+que se dispara en cualquier cambio, sin importar si vino de una app o de
+SQL a mano, y llama a la Edge Function `sync-access-policy` para que la
+lista de quién pasa el desafío de Access nunca quede desincronizada de
+`administradores_panel`. No hace falta tocar nada en el dashboard de
+Cloudflare aparte.
+
+**Configuración manual del webhook (una sola vez, nunca commiteado)** --
+`sync_access_policy()` (migración `endurece_webhook_sync_access_policy`)
+lee dos secretos de Vault en vez de tenerlos hardcodeados en la migración
+(la versión anterior sí los tenía así, hallazgo de la auditoría de
+seguridad 2026-09-06 -- quedó un JWT anon legado para siempre en el
+historial de git). Correr en el SQL Editor del dashboard de Supabase,
+**nunca** en un archivo de migración versionado:
+
+```sql
+-- El apikey que la plataforma exige para llegar a cualquier Edge
+-- Function (verify_jwt) -- puede ser el mismo anon/publishable key ya
+-- público del panel (web/src/lib/supabase.ts), no hace falta que sea
+-- distinto: no es la autorización real, sólo la compuerta de la
+-- plataforma.
+select vault.create_secret('<anon o publishable key del proyecto>', 'sync_access_policy_apikey');
+
+-- La autorización real de la función -- un secreto propio, random, que
+-- NO es ningún key de Supabase. Generarlo una vez (ej. `openssl rand
+-- -hex 32`) y usar el mismo valor acá y en el siguiente paso.
+select vault.create_secret('<secreto random propio>', 'sync_access_policy_webhook_secret');
+```
+
+Y del lado de la Edge Function (terminal, con la CLI de Supabase logueada
+en el proyecto):
+
+```sh
+supabase secrets set WEBHOOK_SHARED_SECRET='<el mismo secreto random de arriba>'
+supabase functions deploy sync-access-policy
+```
+
+Sin este paso, `sync_access_policy()` falla con una excepción clara
+("Faltan secretos de Vault…") en vez de fallar en silencio.
+
 Autorización por **RLS en Postgres** (`es_admin_global()`, que ahora sólo
 chequea que el correo esté en `administradores_panel`), no lógica de
 permisos sólo en el frontend — mismo criterio que ya sigue el resto del
