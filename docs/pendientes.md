@@ -33,17 +33,16 @@ decía la nota vieja.
 - [ ] **Pulir los paneles web** (historial-brisas.pages.dev: historial + admin). Pedido
   explícito del usuario (2026-09-06), sin alcance definido todavía — a concretar en una
   próxima sesión.
-- [ ] **Delegar la creación de usuarios (Administrador/Operador) al panel web**, en vez de
-  crearlos desde un dispositivo local. Encaja con `AppCore::fijar_password_inicial` (ya
-  construido, 2026-09-06): el panel crearía el usuario con el centinela
-  `SIN_PASSWORD_LOCAL` (nunca una contraseña real ni siquiera temporal viajando por la web),
-  y el primer dispositivo donde esa persona inicia sesión sería el que la fija. Falta: una
-  tabla/función en Supabase análoga a la que ya existe para contratistas
-  (`admin_global_gestiona_contratistas`), y que el panel respete las mismas reglas que ya
-  aplica `crear_usuario` localmente (cédula única, un Administrador no puede crear un ROOT).
-- [ ] **Panel de alta de dispositivos.** La creación de un dispositivo nuevo (generar
-  secreto + insertarlo hasheado) sigue siendo a mano por SQL vía MCP — no hay formulario
-  real ni Edge Function de alta.
+- [x] **Delegar la creación de usuarios (Administrador/Operador) al panel web — hecho
+  (2026-09-06/07, confirmado al auditar el repo el 2026-09-07).** `admin_global_gestiona_
+  usuarios` (migración `admin_global_crea_usuarios`) + el panel web crea usuarios con el
+  centinela `SIN_PASSWORD_LOCAL`, mismo criterio ya descrito acá arriba — ya no crea
+  contraseña real ni temporal desde la web.
+- [x] **Panel de alta de dispositivos — hecho (confirmado al auditar el repo el
+  2026-09-07).** `web/src/pantallas/Dispositivos.tsx` tiene el formulario real, contra las
+  Edge Functions `admin-provision-device`/`admin-create-site` (ambas versionadas en
+  `supabase/functions/` recién, ver nota de Edge Functions más abajo) — ya no es a mano por
+  SQL vía MCP.
 - [x] **Escritorio/móvil sin onboarding por GUI para el primer usuario ROOT (2026-09-06).**
   Antes sólo existía vía CLI/TUI (`--reset-root`/consola de arranque) -- detectado al
   resetear la base local de pruebas: hubo que sembrar el ROOT a mano con un script en vez
@@ -78,6 +77,32 @@ decía la nota vieja.
   decisión más adelante, con o sin un cliente de por medio. Requeriría: columna
   `activado_en` en `dispositivos`, una Edge Function de dos pasos (pedir código / confirmar +
   emitir JWT), y el paso extra de UI en escritorio y móvil.
+
+## Repo incompleto respecto a lo desplegado (2026-09-07)
+
+Auditoría pedida por el usuario ("revisa bien que tengamos en el repo todo lo necesario")
+tras un reporte que señalaba que las Edge Functions de dispositivos no estaban versionadas.
+Verificado contra `list_edge_functions`/`get_edge_function` (MCP) en vez de confiar en el
+reporte a ciegas: el reclamo era correcto.
+
+- [x] **Versionadas las 9 Edge Functions que sólo existían en remoto (2026-09-07).**
+  `supabase/functions/` sólo tenía `sync-access-policy`. Se trajo el código fuente exacto
+  (tal cual desplegado) de `device-auth`, `admin-list-devices`, `admin-provision-device`,
+  `admin-revoke-device`, `admin-suspend-device`, `admin-delete-device`, `admin-create-site`,
+  `admin-move-device` y `admin-hide-device`. Se revisó cada una: todas las `admin-*` ya
+  tienen su propio `correoAdminAutorizado()` (JWT de sesión → `administradores_panel`), no
+  clave compartida — el hallazgo era sólo de versionado, no de seguridad.
+- [ ] **`admin-move-device` y `admin-hide-device` parecen huérfanas.** No hay ningún
+  llamador en `web/src` (`grep` sin resultados) — `docs/pendientes.md` ya documentaba que
+  "cambiar sitio" se sacó de la UI. Quedan desplegadas y activas en Supabase igual. Decidir:
+  si de verdad no hacen falta, borrarlas también del lado de Supabase (no sólo dejar de
+  llamarlas) — o si sí se van a usar pronto, dejar constancia de para qué.
+- [ ] **Bucket de Storage `historial-web` (público, vacío, creado 2026-09-03) sin ninguna
+  referencia en el repo** (ni migración que lo cree, ni código que lo use en `web/`,
+  `desktop/`, `mobile/` o `src/`). No se tocó — puede ser vestigio de una prueba o algo
+  pensado para una función futura. Si se confirma que no hace falta, borrarlo (es público:
+  aunque esté vacío hoy, cualquiera con la URL podría escribir/leer ahí si algo empieza a
+  usarlo sin querer).
 
 ## Clippy pedantic/nursery — en curso, subiendo el nivel por capas (2026-09-01)
 
