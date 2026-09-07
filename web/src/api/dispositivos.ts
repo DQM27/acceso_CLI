@@ -40,7 +40,20 @@ export interface DispositivoProvisionado {
   secret: string;
 }
 
-async function invocar<T>(nombre: string, body?: Record<string, unknown>): Promise<T> {
+/** `data as T` (sin validar) hacía que un cambio de contrato del lado de
+ * la Edge Function (backend y frontend viven en el mismo repo, pero se
+ * despliegan por separado -- un deploy de función sin el del panel es
+ * perfectamente posible) fallara silenciosamente más abajo, en cualquier
+ * `.algo` sobre `undefined`, lejos de esta función y sin ningún mensaje
+ * claro. `esperado` es un chequeo mínimo de forma (no un schema completo
+ * tipo zod -- no vale la pena esa dependencia nueva para esto), sólo lo
+ * suficiente para fallar acá, con un mensaje que diga qué función y qué
+ * se esperaba. */
+async function invocar<T>(
+  nombre: string,
+  esperado: (data: unknown) => data is T,
+  body?: Record<string, unknown>,
+): Promise<T> {
   const { data, error } = await supabase.functions.invoke<T>(nombre, { body });
   if (error) {
     let detalle: string | undefined;
@@ -55,18 +68,61 @@ async function invocar<T>(nombre: string, body?: Record<string, unknown>): Promi
     }
     throw new Error(detalle ?? error.message);
   }
-  return data as T;
+  if (!esperado(data)) {
+    throw new Error(`${nombre} devolvió una respuesta con forma inesperada.`);
+  }
+  return data;
+}
+
+function esObjeto(valor: unknown): valor is Record<string, unknown> {
+  return typeof valor === "object" && valor !== null;
+}
+
+function esSitio(valor: unknown): valor is Sitio {
+  return esObjeto(valor) && typeof valor.id === "string" && typeof valor.nombre === "string";
+}
+
+function esListaDispositivosYSitios(
+  valor: unknown,
+): valor is { sitios: Sitio[]; dispositivos: Dispositivo[] } {
+  return (
+    esObjeto(valor) &&
+    Array.isArray(valor.sitios) &&
+    Array.isArray(valor.dispositivos) &&
+    valor.sitios.every(esSitio) &&
+    valor.dispositivos.every((d) => esObjeto(d) && typeof d.id === "string")
+  );
+}
+
+function esDispositivoProvisionado(valor: unknown): valor is DispositivoProvisionado {
+  return (
+    esObjeto(valor) &&
+    typeof valor.sitio_id === "string" &&
+    typeof valor.sitio_nombre === "string" &&
+    typeof valor.dispositivo_id === "string" &&
+    typeof valor.secret === "string"
+  );
+}
+
+function esResultadoEliminar(valor: unknown): valor is { borrado: boolean } {
+  return esObjeto(valor) && typeof valor.borrado === "boolean";
+}
+
+/** Las Edge Functions de acción (revocar/suspender) no devuelven body --
+ * cualquier respuesta sin error ya vale como "anduvo". */
+function loQueSea(_valor: unknown): _valor is void {
+  return true;
 }
 
 export function listarDispositivosYSitios(): Promise<{ sitios: Sitio[]; dispositivos: Dispositivo[] }> {
-  return invocar("admin-list-devices");
+  return invocar("admin-list-devices", esListaDispositivosYSitios);
 }
 
 /** Crea (o reutiliza, si ya existe por nombre) un sitio suelto -- para el
  * desplegable de "Sitio" del alta de dispositivos, sin tener que crear un
  * dispositivo a la vez. */
 export function crearSitio(datos: { nombre: string; direccion?: string }): Promise<Sitio> {
-  return invocar("admin-create-site", datos);
+  return invocar("admin-create-site", esSitio, datos);
 }
 
 export function provisionarDispositivo(datos: {
@@ -75,15 +131,15 @@ export function provisionarDispositivo(datos: {
   tipo: TipoDispositivo;
   etiqueta: string;
 }): Promise<DispositivoProvisionado> {
-  return invocar("admin-provision-device", datos);
+  return invocar("admin-provision-device", esDispositivoProvisionado, datos);
 }
 
 export function revocarDispositivo(dispositivoId: string): Promise<void> {
-  return invocar("admin-revoke-device", { dispositivo_id: dispositivoId });
+  return invocar("admin-revoke-device", loQueSea, { dispositivo_id: dispositivoId });
 }
 
 export function suspenderDispositivo(dispositivoId: string, suspendido: boolean): Promise<void> {
-  return invocar("admin-suspend-device", { dispositivo_id: dispositivoId, suspendido });
+  return invocar("admin-suspend-device", loQueSea, { dispositivo_id: dispositivoId, suspendido });
 }
 
 /**
@@ -97,5 +153,5 @@ export function suspenderDispositivo(dispositivoId: string, suspendido: boolean)
  * no hay botón para eso en el panel.
  */
 export function eliminarDispositivo(dispositivoId: string): Promise<{ borrado: boolean }> {
-  return invocar("admin-delete-device", { dispositivo_id: dispositivoId });
+  return invocar("admin-delete-device", esResultadoEliminar, { dispositivo_id: dispositivoId });
 }
