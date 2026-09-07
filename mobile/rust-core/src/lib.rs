@@ -650,6 +650,18 @@ impl From<GestionNubeErrorNucleo> for NucleoError {
     }
 }
 
+/// Ver `Nucleo::autenticar_con_cache`. Duplica la idea de
+/// `application::nube::TokenCacheado` (interno a `AppCore`) en vez de
+/// reutilizarla por el mismo motivo que ya la duplicó escritorio
+/// (`desktop/src-tauri/src/estado.rs::TokenCacheado`): autenticar contra la
+/// nube acá no debe pasar por `core_lock()` -- retener ese candado durante
+/// la llamada de red es justo lo que esto evita.
+struct TokenCacheadoNucleo {
+    secreto: String,
+    token: control_acceso::nube::TokenDispositivo,
+    obtenido_en: std::time::Instant,
+}
+
 /// Sesión del núcleo: dueña de la única conexión `SQLite` del teléfono. Se
 /// abre una vez al arrancar la app y se reusa en todas las pantallas (login,
 /// buscar contratista, registrar entrada/salida) — nunca se reabre por
@@ -662,6 +674,21 @@ pub struct Nucleo {
     /// `autenticar` y vive mientras dure el proceso (no hay "cerrar sesión"
     /// todavía en el piloto).
     sesion: Mutex<Option<UsuarioSesionNucleo>>,
+    /// Caché del último `TokenDispositivo`, deliberadamente FUERA del
+    /// `Mutex<AppCore>` de arriba -- ver `Nucleo::autenticar_con_cache`.
+    /// Antes de esto, `autenticar`/`gafete_ocupado_en_sitio` llamaban a los
+    /// métodos de red de `AppCore` a través de `core_lock()`, que quedaba
+    /// tomado durante toda la llamada HTTP: cualquier otra pantalla
+    /// (buscar, listar activos, otro registro) se quedaba esperando ese
+    /// mismo candado mientras tanto -- se sentía como que la app se
+    /// congelaba al iniciar sesión o al confirmar un ingreso con gafete,
+    /// sobre todo si la sincronización periódica estaba en curso al mismo
+    /// tiempo. `sincronizar_con_nube` sigue reteniendo `core_lock()` durante
+    /// su red -- a diferencia de estos dos chequeos, sí necesita la conexión
+    /// para escribir lo que sincroniza, así que separarlo exige una segunda
+    /// conexión (no sólo mover este caché); queda pendiente si el freeze de
+    /// escritorio+WAL no alcanza a aliviarlo también acá.
+    token_nube_cacheado: Mutex<Option<TokenCacheadoNucleo>>,
 }
 
 #[uniffi::export]
@@ -683,6 +710,7 @@ impl Nucleo {
         Ok(Self {
             core: Mutex::new(core),
             sesion: Mutex::new(None),
+            token_nube_cacheado: Mutex::new(None),
         })
     }
 
@@ -748,14 +776,34 @@ impl Nucleo {
             Err(otro) => return Err(otro.into()),
         };
 
-        let sigue_activo = self
-            .core_lock()
-            .usuario_sigue_activo_remoto(
-                &sesion,
-                Some(std::path::Path::new(&directorio)),
-                Some(&identificador_dispositivo),
+        // Ver el comentario de `token_nube_cacheado`: a diferencia de la
+        // línea de arriba (autenticación local, SQLite puro), este chequeo
+        // habla con la nube -- por eso ya no pasa por `core_lock()` más que
+        // un instante para `autorizar_uso_nube` (verificar que `sesion`
+        // todavía puede usar la nube, chequeo local rápido). El resto
+        // (caché de token + la llamada HTTP en sí) corre sin el candado de
+        // `AppCore` tomado.
+        let autorizado_para_nube = self.core_lock().autorizar_uso_nube(&sesion).is_ok();
+        let sigue_activo = if autorizado_para_nube {
+            control_acceso::nube::credenciales::cargar_secreto_en_con_identificador(
+                std::path::Path::new(&directorio),
+                &identificador_dispositivo,
             )
-            .unwrap_or(true);
+            .and_then(|secreto| {
+                let token = self.autenticar_con_cache(&secreto).ok()?;
+                let contexto = control_acceso::nube::ContextoSincronizacion {
+                    base_url: control_acceso::nube::BASE_URL,
+                    apikey: control_acceso::nube::APIKEY,
+                    token: &token.access_token,
+                    dispositivo_id: &token.dispositivo_id,
+                    sitio_id: &token.sitio_id,
+                };
+                control_acceso::nube::usuario_sigue_activo_remoto(&contexto, &sesion.cedula).ok()
+            })
+            .unwrap_or(true)
+        } else {
+            true
+        };
         if !sigue_activo {
             return Err(NucleoError::UsuarioInactivo);
         }
@@ -1151,11 +1199,43 @@ impl Nucleo {
         gafete_numero: i64,
     ) -> Result<bool, NucleoError> {
         let actor = self.actor_autenticado()?;
-        Ok(self.core_lock().gafete_ocupado_en_sitio(
-            &actor,
-            Some(std::path::Path::new(&directorio)),
-            gafete_numero,
-        )?)
+        // Ver el comentario de `token_nube_cacheado`: este chequeo corre
+        // justo antes de confirmar un ingreso con gafete, así que retener
+        // `core_lock()` durante la red acá es exactamente el freeze que se
+        // sentía al registrar. `autorizar_uso_nube` sigue pasando por el
+        // candado -- es SQLite puro, dura microsegundos -- pero se libera
+        // antes de tocar la red.
+        self.core_lock().autorizar_uso_nube(&actor)?;
+
+        let Some(secreto) = control_acceso::nube::credenciales::cargar_secreto_en(
+            std::path::Path::new(&directorio),
+        ) else {
+            // Sin secreto guardado (sitio de un solo dispositivo, o nube
+            // sin configurar): no hay con quién chocar, no hace falta red.
+            return Ok(false);
+        };
+        let token = self
+            .autenticar_con_cache(&secreto)
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })?;
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::BASE_URL,
+            apikey: control_acceso::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        // A diferencia de `autenticar`, acá un fallo de red SÍ se propaga
+        // (no `.unwrap_or`): con nube configurada, más vale bloquear el
+        // ingreso que arriesgar el mismo gafete duplicado entre
+        // dispositivos -- decisión ya documentada en
+        // `application::nube::AppCore::gafete_ocupado_en_sitio`.
+        control_acceso::nube::gafete_ocupado_en_otro_dispositivo(&contexto, gafete_numero).map_err(
+            |error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            },
+        )
     }
 
     /// Cierra, contra la nube, un ingreso abierto por el otro dispositivo
@@ -1187,6 +1267,49 @@ impl Nucleo {
         self.core
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Reusa el último `TokenDispositivo` mientras siga vigente en vez de
+    /// autenticar de cero -- mismo margen y misma lógica que
+    /// `GuiState::autenticar_con_cache` en escritorio (y que
+    /// `AppCore::autenticar_con_cache`, que este método reemplaza para
+    /// móvil: ver el comentario de `token_nube_cacheado`). Nunca toca
+    /// `core_lock()`.
+    fn autenticar_con_cache(
+        &self,
+        secreto: &str,
+    ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
+        const MARGEN_EXPIRACION: std::time::Duration = std::time::Duration::from_secs(30);
+
+        {
+            let cache = self
+                .token_nube_cacheado
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(entrada) = cache.as_ref() {
+                let vigente_por = std::time::Duration::from_secs(entrada.token.expires_in)
+                    .saturating_sub(MARGEN_EXPIRACION);
+                if entrada.secreto == secreto && entrada.obtenido_en.elapsed() < vigente_por {
+                    let mut token = entrada.token.clone();
+                    token.desfase_reloj_ms = None;
+                    return Ok(token);
+                }
+            }
+        }
+
+        let token = control_acceso::nube::autenticar_dispositivo(
+            control_acceso::nube::BASE_URL,
+            secreto,
+        )?;
+        *self
+            .token_nube_cacheado
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(TokenCacheadoNucleo {
+            secreto: secreto.to_string(),
+            token: token.clone(),
+            obtenido_en: std::time::Instant::now(),
+        });
+        Ok(token)
     }
 
     fn sesion_lock(&self) -> std::sync::MutexGuard<'_, Option<UsuarioSesionNucleo>> {
