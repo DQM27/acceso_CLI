@@ -13,6 +13,14 @@ export default defineConfig({
           groups: [
             // React se comparte entre pantallas y se puede cachear por separado.
             { name: "react-vendor", test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+            // Sin este grupo explícito, rolldown agrupaba AG Grid (pesado,
+            // ~870 KB sin comprimir -- lo importa casi toda pantalla vía
+            // Tabla.tsx) bajo el nombre de cualquier módulo chico que
+            // cayera al lado alfabéticamente (visto como "Tabla-*.js",
+            // escondiendo el tamaño real) -- confundía cualquier análisis
+            // de bundle size futuro. Mismo fix ya aplicado en web/
+            // (vite.config.ts), mismo criterio que "react-vendor".
+            { name: "ag-grid-vendor", test: /node_modules[\\/]ag-grid-(community|react)[\\/]/ },
           ],
         },
       },
