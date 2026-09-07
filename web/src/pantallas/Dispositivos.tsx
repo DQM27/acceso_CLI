@@ -6,6 +6,7 @@ import Modal from "../componentes/Modal";
 import ConfirmacionSensible from "../componentes/ConfirmacionSensible";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { mensajeError } from "../mensajeError";
 import {
   crearSitio,
   eliminarDispositivo,
@@ -86,7 +87,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
       await confirmacion.accion();
       setConfirmacion(null);
     } catch (error) {
-      toast.error(String(error));
+      toast.error(mensajeError(error));
     } finally {
       setConfirmando(false);
     }
@@ -112,7 +113,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
         setDispositivos(dispositivos);
       })
       .catch((error) => {
-        if (!silencioso) toast.error(String(error));
+        if (!silencioso) toast.error(mensajeError(error));
       })
       .finally(() => {
         if (!silencioso) setCargando(false);
@@ -177,7 +178,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
       setProvisionado(resultado);
       recargar();
     } catch (error) {
-      setErrorForm(String(error));
+      setErrorForm(mensajeError(error));
     } finally {
       setCreando(false);
     }
@@ -207,7 +208,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
       setSitioId(nuevo.id);
       setModalSitioAbierto(false);
     } catch (error) {
-      setErrorSitio(String(error));
+      setErrorSitio(mensajeError(error));
     } finally {
       setCreandoSitio(false);
     }
@@ -229,7 +230,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
           setConfirmacionSensible(null);
           await recargar();
         } catch (error) {
-          toast.error(String(error));
+          toast.error(mensajeError(error));
         }
       },
     });
@@ -247,7 +248,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
           setConfirmacionSensible(null);
           await recargar();
         } catch (error) {
-          toast.error(String(error));
+          toast.error(mensajeError(error));
         }
       },
     });
@@ -273,7 +274,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
         toast.success(`${fila.etiqueta} reactivado.`);
         recargar();
       } catch (error) {
-        toast.error(String(error));
+        toast.error(mensajeError(error));
       }
     },
     [recargar],

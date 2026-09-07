@@ -10,6 +10,7 @@ import { useAuth } from "../contexto/AuthContexto";
 import { listarHistorial } from "../api/historial";
 import type { MovimientoHistorial } from "../api/historial";
 import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { mensajeError } from "../mensajeError";
 
 export function textoMedio(medio: string | null): string {
   if (medio === "CAMINANDO") return "Caminando";
@@ -236,7 +237,7 @@ export default function Historial() {
     return listarHistorial(desde || undefined, hasta || undefined)
       .then(setFilas)
       .catch((error) => {
-        if (!silencioso) toast.error(String(error));
+        if (!silencioso) toast.error(mensajeError(error));
       })
       .finally(() => {
         if (!silencioso) setCargando(false);
@@ -292,7 +293,7 @@ export default function Historial() {
       XLSX.utils.book_append_sheet(libro, hoja, "Historial");
       XLSX.writeFile(libro, "historial.xlsx");
     } catch (error) {
-      toast.error(`No se pudo exportar a Excel: ${String(error)}`);
+      toast.error(`No se pudo exportar a Excel: ${mensajeError(error)}`);
     }
   }
 

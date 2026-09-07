@@ -8,6 +8,7 @@ import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { actualizarActivoUsuario, crearUsuario, listarSitios, listarUsuarios } from "../api/usuarios";
 import type { Usuario } from "../api/usuarios";
 import { sanearSoloDigitos, sanearSoloLetras } from "../validacion";
+import { mensajeError } from "../mensajeError";
 
 /**
  * Vista + baja + alta de operadores/administradores globales (ver
@@ -46,7 +47,7 @@ export default function Usuarios() {
     return listarUsuarios()
       .then(setFilas)
       .catch((error) => {
-        if (!silencioso) toast.error(String(error));
+        if (!silencioso) toast.error(mensajeError(error));
       })
       .finally(() => {
         if (!silencioso) setCargando(false);
@@ -75,7 +76,7 @@ export default function Usuarios() {
       // La grilla ya muestra el valor nuevo (edición optimista de AG Grid) --
       // si el guardado falla, hay que volver a pedir los datos reales para
       // que la celda no quede mintiendo.
-      toast.error(String(error));
+      toast.error(mensajeError(error));
       recargar();
     }
   }
@@ -85,7 +86,7 @@ export default function Usuarios() {
     setErrorForm(null);
     listarSitios()
       .then((lista) => setSitioId(lista[0]?.id ?? null))
-      .catch((error) => toast.error(String(error)));
+      .catch((error) => toast.error(mensajeError(error)));
   }
 
   function cerrarModal() {
@@ -110,7 +111,7 @@ export default function Usuarios() {
       cerrarModal();
       recargar();
     } catch (error) {
-      setErrorForm(String(error instanceof Error ? error.message : error));
+      setErrorForm(mensajeError(error));
     } finally {
       setCreando(false);
     }

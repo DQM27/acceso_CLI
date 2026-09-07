@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Modal from "./Modal";
 import { useVerificacionPorCorreo } from "./useVerificacionPorCorreo";
+import { mensajeError } from "../mensajeError";
 
 /**
  * Confirmación por código de correo para acciones sensibles (alta/baja de
@@ -97,7 +98,7 @@ export default function ConfirmacionSensible({
       // hacen toast) -- este catch cubre a un futuro llamador que sí lo
       // haga, para no dejar una promesa rechazada sin manejar ni un modal
       // sin ninguna pista de qué pasó.
-      setErrorAccion(error instanceof Error ? error.message : String(error));
+      setErrorAccion(mensajeError(error));
     } finally {
       setConfirmando(false);
     }

@@ -6,16 +6,13 @@ import Modal from "../componentes/Modal";
 import ConfirmacionSensible from "../componentes/ConfirmacionSensible";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { mensajeError } from "../mensajeError";
 import { agregarAdministrador, eliminarAdministrador, listarAdministradores } from "../api/administradores";
 import type { AdministradorPanel } from "../api/administradores";
 import type { UsuarioSesion } from "../api";
 
 function textoFechaHora(iso: string): string {
   return `${textoFechaDDMMYYYY(fechaLocalYMD(iso))} ${textoHora(iso)}`;
-}
-
-function mensajeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 /**

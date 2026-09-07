@@ -8,6 +8,7 @@ import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { actualizarAccesoContratista, listarContratistas } from "../api/contratistas";
 import type { Contratista } from "../api/contratistas";
 import { textoFechaDDMMYYYY } from "../tiempo";
+import { mensajeError } from "../mensajeError";
 
 // Declarados afuera del array de columnas y ya tipados como `CellStyle` --
 // dentro del array, mezclar objetos literales con distintas claves
@@ -36,7 +37,7 @@ export default function Contratistas() {
     return listarContratistas()
       .then(setFilas)
       .catch((error) => {
-        if (!silencioso) toast.error(String(error));
+        if (!silencioso) toast.error(mensajeError(error));
       })
       .finally(() => {
         if (!silencioso) setCargando(false);
@@ -61,7 +62,7 @@ export default function Contratistas() {
       // La grilla ya muestra el valor nuevo (edición optimista de AG Grid) --
       // si el guardado falla, hay que volver a pedir los datos reales para
       // que la celda no quede mintiendo.
-      toast.error(String(error));
+      toast.error(mensajeError(error));
       recargar();
     }
   }
