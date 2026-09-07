@@ -78,6 +78,47 @@ decía la nota vieja.
   `activado_en` en `dispositivos`, una Edge Function de dos pasos (pedir código / confirmar +
   emitir JWT), y el paso extra de UI en escritorio y móvil.
 
+## Auditoría de secretos/nube — pendiente de decidir (2026-09-07)
+
+Reporte externo pegado por el usuario, verificado punto por punto contra el código (no
+aceptado a ciegas) antes de anotarlo acá. Nada de esto se tocó todavía — queda para cuando
+el usuario confirme que se arregla.
+
+- [ ] **Secreto del dispositivo en móvil sin cifrar — confirmado, prioridad alta.**
+  `mobile/rust-core/Cargo.toml` no activa el feature `cifrado-secreto-dispositivo-portable`
+  al declarar la dependencia de `control_acceso` (línea `features = ["nube"]`). El cableado
+  para usarlo ya existe entero: Kotlin ya lee `Settings.Secure.ANDROID_ID` y se lo pasa a
+  Rust, y `mobile/rust-core/src/lib.rs` ya llama a
+  `guardar_secreto_en_con_identificador`/`cargar_secreto_en_con_identificador` con ese
+  identificador (ver `src/nube/credenciales.rs`). Sin el feature activo, ese identificador
+  se ignora y el secreto (la credencial que autentica todo el teléfono ante la nube) queda
+  en texto plano en el almacenamiento del teléfono. Arreglo es una sola línea en el
+  `Cargo.toml` de `mobile/rust-core` — impacto real más alto que el esfuerzo.
+- [ ] **`Debug` derivado expone tokens/API keys en texto plano — confirmado, riesgo latente
+  (no activo hoy).** `TokenDispositivo` (`src/nube/cliente.rs`) y `SesionRealtimeNube`
+  (`src/application/nube.rs`) derivan `Debug` con `access_token`/`apikey` sin redactar. Hoy
+  nada los loguea, pero cualquier `log::debug!`/`{:?}` futuro los expondría enteros. Mismo
+  patrón que ya existe para el hash de password (`CandidatoAutenticacion` en
+  `src/services/autenticacion_service.rs`, `Debug` manual con `"«redactado»"`) — replicar acá.
+- [ ] **Timing attack en login local — confirmado, prioridad baja.**
+  `AutenticacionService::buscar_candidato` (`src/services/autenticacion_service.rs`) rechaza
+  una cédula inexistente sin correr Argon2, pero si la cédula existe sí lo corre (lento) antes
+  de rechazar por password incorrecta — permite distinguir por tiempo de respuesta si una
+  cédula está en el sistema. Riesgo bajo en esta app (interna, un solo sitio); mitigación
+  sería un hash dummy cuando el usuario no exista.
+
+Del mismo reporte, evaluado y **descartado** (no quedan como pendientes):
+- Timeout HTTP con fallback a cliente sin timeout (`src/nube/cliente.rs::cliente_http`): ya
+  es una decisión deliberada y documentada en el propio comentario, no un descuido —
+  cambiarla (propagar error o entrar en pánico a mitad de una sincronización) sería peor.
+- Índice de la cola de sincronización: el índice parcial ya existente
+  (`idx_cola_salida_pendientes ON cola_salida(creado_en) WHERE estado='pendiente'`) ya excluye
+  del escaneo todo lo que no está pendiente, que es la mayoría de las filas en cualquier
+  momento normal — el reporte exageraba el impacto.
+- `listar()` sin límite en repositorios de catálogo (contratistas/empresas/usuarios/gafetes):
+  ya evaluado en la auditoría de rendimiento previa y dejado así a propósito — son catálogos
+  de un solo sitio (cientos, no miles de filas).
+
 ## Repo incompleto respecto a lo desplegado (2026-09-07)
 
 Auditoría pedida por el usuario ("revisa bien que tengamos en el repo todo lo necesario")
