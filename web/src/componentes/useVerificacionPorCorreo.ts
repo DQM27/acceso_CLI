@@ -58,7 +58,17 @@ export function useVerificacionPorCorreo(correo: string) {
       type: "email",
     });
     if (error) {
-      const mensaje = "Código inválido o vencido -- pedí uno nuevo.";
+      // `status` (y `code`) vienen `undefined` cuando el error pasó ANTES
+      // de recibir respuesta del servidor -- sin conexión, timeout, DNS --
+      // documentado en `AuthError` de `@supabase/auth-js`. Un código
+      // realmente inválido/vencido, en cambio, sí llega con un status HTTP
+      // real (400). Decirle "pedí uno nuevo" cuando el problema es la red
+      // es la acción equivocada -- el código puede seguir siendo válido,
+      // sólo hace falta reintentar.
+      const mensaje =
+        error.status === undefined
+          ? "No se pudo verificar el código (falla de conexión) -- probá de nuevo."
+          : "Código inválido o vencido -- pedí uno nuevo.";
       setError(mensaje);
       throw new Error(mensaje);
     }
