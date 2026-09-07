@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { supabase } from "../lib/supabase";
 
 /**
@@ -30,22 +31,26 @@ export interface MovimientoHistorial {
   dispositivo_entrada_tipo: string | null;
 }
 
-interface FilaCruda {
-  id: string;
-  sitio_id: string;
-  sitios: { nombre: string } | null;
-  contratista_cedula: string | null;
-  contratista_nombre: string;
-  empresa_nombre: string | null;
-  tipo_ingreso: string | null;
-  medio_ingreso: string | null;
-  gafete_numero: number | null;
-  hora_entrada: string;
-  hora_salida: string | null;
-  usuario_entrada_nombre: string | null;
-  usuario_salida_nombre: string | null;
-  dispositivo_entrada: { tipo: string } | null;
-}
+// Valida en runtime la forma real de lo que devuelve Supabase -- ver el
+// mismo criterio en contratistas.ts/usuarios.ts. `z.infer` reemplaza a la
+// interfaz `FilaCruda` que había antes, para no mantener dos fuentes de
+// verdad del mismo shape.
+const filaCrudaEsquema = z.object({
+  id: z.string(),
+  sitio_id: z.string(),
+  sitios: z.object({ nombre: z.string() }).nullable(),
+  contratista_cedula: z.string().nullable(),
+  contratista_nombre: z.string(),
+  empresa_nombre: z.string().nullable(),
+  tipo_ingreso: z.string().nullable(),
+  medio_ingreso: z.string().nullable(),
+  gafete_numero: z.number().nullable(),
+  hora_entrada: z.string(),
+  hora_salida: z.string().nullable(),
+  usuario_entrada_nombre: z.string().nullable(),
+  usuario_salida_nombre: z.string().nullable(),
+  dispositivo_entrada: z.object({ tipo: z.string() }).nullable(),
+});
 
 export interface ResultadoHistorial {
   filas: MovimientoHistorial[];
@@ -84,8 +89,9 @@ export async function listarHistorial(desde?: string, hasta?: string): Promise<R
   if (desde) consulta = consulta.gte("hora_entrada", desde);
   if (hasta) consulta = consulta.lte("hora_entrada", hasta);
 
-  const { data, error, count } = await consulta.returns<FilaCruda[]>();
+  const { data: crudo, error, count } = await consulta;
   if (error) throw new Error(error.message);
+  const data = z.array(filaCrudaEsquema).parse(crudo);
 
   return {
     filas: data.map(({ sitios, dispositivo_entrada, ...resto }) => ({

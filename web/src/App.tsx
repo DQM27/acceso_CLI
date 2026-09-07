@@ -1,4 +1,5 @@
 import { Suspense, lazy, useState } from "react";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import { History, Menu, MonitorSmartphone, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -17,6 +18,13 @@ const Contratistas = lazy(() => import("./pantallas/Contratistas"));
 const Usuarios = lazy(() => import("./pantallas/Usuarios"));
 
 export type Seccion = "dispositivos" | "historial" | "contratistas" | "usuarios";
+
+/** Ruta real de cada sección -- `Sidebar` arma sus `NavLink` con esto y las
+ * `Route` de abajo usan el mismo valor, así las dos fuentes no pueden
+ * desincronizarse en silencio. */
+export function rutaSeccion(id: Seccion): string {
+  return `/${id}`;
+}
 
 // Sin distinción de rol -- se eliminó `admin_regional` (nunca tuvo alcance
 // real, ver migración `elimina_admin_regional`). Cualquier fila en
@@ -63,9 +71,11 @@ function guardarSidebarColapsado(colapsado: boolean) {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <Contenido />
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <Contenido />
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 
@@ -87,7 +97,6 @@ function Contenido() {
 
 function Shell({ sesion }: { sesion: UsuarioSesion }) {
   const { cerrarSesion } = useAuth();
-  const [seccion, setSeccion] = useState<Seccion>("historial");
   const [colapsado, setColapsado] = useState(leerSidebarColapsado);
   // Independiente de `colapsado` (que es el modo ícono-solo de escritorio,
   // por doble click): en mobile el sidebar es un cajón que está oculto o
@@ -103,13 +112,6 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
     });
   }
 
-  function cambiarSeccion(id: Seccion) {
-    setSeccion(id);
-    // En mobile, elegir una sección cierra el cajón -- si no, tapa la
-    // pantalla recién elegida hasta que la persona lo cierre a mano.
-    setMenuMovilAbierto(false);
-  }
-
   return (
     <SesionProvider value={null}>
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -120,8 +122,9 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
 
           <Sidebar
             secciones={SECCIONES}
-            seccionActual={seccion}
-            onCambiarSeccion={cambiarSeccion}
+            // En mobile, elegir una sección cierra el cajón -- si no, tapa la
+            // pantalla recién elegida hasta que la persona lo cierre a mano.
+            onNavegar={() => setMenuMovilAbierto(false)}
             colapsado={colapsado}
             onToggleColapsado={alternarColapsado}
             abiertoEnMovil={menuMovilAbierto}
@@ -137,26 +140,16 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
               <Menu size={20} strokeWidth={2} aria-hidden="true" />
             </button>
             <Suspense fallback={<div className="pantalla-cuerpo" role="status">Cargando pantalla…</div>}>
-              {seccion === "dispositivos" ? (
-                <Dispositivos sesion={sesion} />
-              ) : seccion === "historial" ? (
-                <Historial />
-              ) : seccion === "contratistas" ? (
-                <Contratistas />
-              ) : seccion === "usuarios" ? (
-                <Usuarios />
-              ) : (
-                <div className="pantalla-cuerpo">
-                  <div className="tarjeta" style={{ padding: "1.5rem" }}>
-                    <h2 style={{ margin: "0 0 0.5rem", color: "var(--acento)" }}>
-                      {SECCIONES.find((s) => s.id === seccion)?.etiqueta}
-                    </h2>
-                    <p style={{ margin: 0, color: "var(--muted)" }}>
-                      Login conectado — falta esta pantalla de verdad.
-                    </p>
-                  </div>
-                </div>
-              )}
+              <Routes>
+                <Route path={rutaSeccion("historial")} element={<Historial />} />
+                <Route path={rutaSeccion("contratistas")} element={<Contratistas />} />
+                <Route path={rutaSeccion("usuarios")} element={<Usuarios />} />
+                <Route path={rutaSeccion("dispositivos")} element={<Dispositivos sesion={sesion} />} />
+                {/* Ruta desconocida (incluida "/") -- mismo default de
+                    siempre: caer en Historial en vez de una pantalla en
+                    blanco. */}
+                <Route path="*" element={<Navigate to={rutaSeccion("historial")} replace />} />
+              </Routes>
             </Suspense>
           </main>
         </div>

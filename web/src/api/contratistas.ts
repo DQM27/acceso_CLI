@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { supabase } from "../lib/supabase";
 
 /**
@@ -39,6 +40,21 @@ export interface ResultadoContratistas {
   truncado: boolean;
 }
 
+// Valida en runtime la forma real de lo que devuelve Supabase -- sin esto,
+// un cambio de contrato del lado del backend (columna renombrada, tipo
+// cambiado) pasaba en silencio hasta romper algo mucho más abajo, con un
+// mensaje de error que no señalaba la causa real.
+const filaContratistaEsquema = z.object({
+  id: z.string(),
+  identificacion: z.string().nullable(),
+  nombre: z.string(),
+  empresa_nombre: z.string().nullable(),
+  tipo_ingreso: z.string().nullable(),
+  fecha_vencimiento_praind: z.string().nullable(),
+  es_personal_ruta: z.boolean().nullable(),
+  activo: z.boolean(),
+});
+
 // Válvula de seguridad, no paginación real -- muy por encima de cualquier
 // catálogo de contratistas real de un solo sitio.
 const LIMITE_CONTRATISTAS = 10_000;
@@ -52,11 +68,10 @@ export async function listarContratistas(): Promise<ResultadoContratistas> {
       { count: "exact" },
     )
     .order("nombre")
-    .range(0, LIMITE_CONTRATISTAS - 1)
-    .returns<Contratista[]>();
+    .range(0, LIMITE_CONTRATISTAS - 1);
 
   if (error) throw new Error(error.message);
-  return { filas: data, truncado: count !== null && count > data.length };
+  return { filas: z.array(filaContratistaEsquema).parse(data), truncado: count !== null && count > data.length };
 }
 
 export async function actualizarAccesoContratista(id: string, activo: boolean): Promise<void> {

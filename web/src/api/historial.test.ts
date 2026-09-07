@@ -84,4 +84,11 @@ describe("listarHistorial", () => {
 
     await expect(listarHistorial()).rejects.toThrow("timeout");
   });
+
+  it("lanza un error de validación si Supabase devuelve una fila con forma inesperada", async () => {
+    const filas = [filaCruda({ gafete_numero: "12" })];
+    mocks.from.mockReturnValue(mockConsulta({ data: filas, error: null, count: 1 }));
+
+    await expect(listarHistorial()).rejects.toThrow();
+  });
 });
