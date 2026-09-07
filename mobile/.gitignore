@@ -4,6 +4,7 @@ rust-core/bindings/
 
 # Gradle / Android
 android/.gradle/
+android/.android/
 android/.kotlin/
 android/build/
 android/app/build/
@@ -41,6 +42,9 @@ app/keystore.properties
 # iOS / Xcode
 ios/DerivedData/
 ios/build/
+ios/Generated/Headers/
+ios/Generated/Swift/*
+!ios/Generated/Swift/.gitkeep
 ios/**/*.xcuserstate
 ios/**/*.xcuserdata/
 ios/**/*.xcodeproj/project.xcworkspace/xcuserdata/

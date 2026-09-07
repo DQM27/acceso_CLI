@@ -24,6 +24,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.brisas.controlacceso.ios
         INFOPLIST_FILE: Sources/App/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SWIFT_OBJC_BRIDGING_HEADER: Generated/Swift/control_acceso_mobileFFI.h
     dependencies:
       - framework: Frameworks/ControlAccesoMobile.xcframework
         optional: true
