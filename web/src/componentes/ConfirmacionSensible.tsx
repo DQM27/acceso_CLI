@@ -43,19 +43,33 @@ export default function ConfirmacionSensible({
   const [paso, setPaso] = useState<"pregunta" | "codigo">("pregunta");
   const [codigo, setCodigo] = useState("");
   const [confirmando, setConfirmando] = useState(false);
+  // Error de `onConfirmar` en sí (la mutación real), separado de
+  // `confirmacion.error` (error de validar el código) -- ver el catch de
+  // `alConfirmarCodigo` más abajo.
+  const [errorAccion, setErrorAccion] = useState<string | null>(null);
   const confirmacion = useVerificacionPorCorreo(correo);
 
-  // Cada apertura arranca de nuevo en "pregunta" -- si alguien cerró a
-  // mitad del código y vuelve a abrir, no debe caer directo en el paso 2
-  // con el estado viejo de useVerificacionPorCorreo.
+  // Reinicia todo cada vez que el modal se cierra -- sea porque alguien
+  // canceló, o porque `onConfirmar` terminó bien y quien llama bajó
+  // `abierto` (cierra el modal desde afuera, ver el doc-comment de esa
+  // prop). Deliberadamente NO se reinicia nada dentro de
+  // `alConfirmarCodigo`: si `onConfirmar` falla y quien llama no baja
+  // `abierto` (el patrón real hoy: atrapa su propio error y sólo hace
+  // toast, sin cerrar el modal), este efecto no corre y el paso "código"
+  // se queda tal cual estaba -- con botones para reintentar o cancelar --
+  // en vez de caer en un estado sin ninguno.
   useEffect(() => {
-    if (abierto) setPaso("pregunta");
+    if (abierto) {
+      setPaso("pregunta");
+    } else {
+      setCodigo("");
+      setErrorAccion(null);
+      confirmacion.reiniciar();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abierto]);
 
   function cerrar() {
-    setCodigo("");
-    setPaso("pregunta");
-    confirmacion.reiniciar();
     onCerrar();
   }
 
@@ -67,6 +81,7 @@ export default function ConfirmacionSensible({
   async function alConfirmarCodigo(evento: React.FormEvent) {
     evento.preventDefault();
     setConfirmando(true);
+    setErrorAccion(null);
     try {
       await confirmacion.confirmarCodigo(codigo);
     } catch {
@@ -75,8 +90,14 @@ export default function ConfirmacionSensible({
     }
     try {
       await onConfirmar();
-      setCodigo("");
-      confirmacion.reiniciar();
+      // Éxito: la responsabilidad de cerrar (bajar `abierto`) es de quien
+      // llama -- el efecto de arriba limpia el resto cuando eso pasa.
+    } catch (error) {
+      // Hoy ningún llamador relanza (atrapan su propio error y sólo
+      // hacen toast) -- este catch cubre a un futuro llamador que sí lo
+      // haga, para no dejar una promesa rechazada sin manejar ni un modal
+      // sin ninguna pista de qué pasó.
+      setErrorAccion(error instanceof Error ? error.message : String(error));
     } finally {
       setConfirmando(false);
     }
@@ -117,9 +138,9 @@ export default function ConfirmacionSensible({
             />
           </label>
 
-          {confirmacion.error && (
+          {(confirmacion.error || errorAccion) && (
             <p className="login-error" role="alert">
-              {confirmacion.error}
+              {confirmacion.error ?? errorAccion}
             </p>
           )}
 
@@ -128,7 +149,7 @@ export default function ConfirmacionSensible({
               Cancelar
             </button>
             <button type="submit" className="boton boton-primario" disabled={confirmando}>
-              {confirmando ? "Confirmando…" : "Confirmar"}
+              {confirmando ? "Confirmando…" : errorAccion ? "Reintentar" : "Confirmar"}
             </button>
           </div>
         </form>
