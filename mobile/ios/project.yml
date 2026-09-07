@@ -26,5 +26,4 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
       - framework: Frameworks/ControlAccesoMobile.xcframework
-        embed: true
         optional: true
