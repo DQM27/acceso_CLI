@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
@@ -40,6 +40,11 @@ export default function Usuarios() {
   const [rol, setRol] = useState<"ADMINISTRADOR" | "OPERADOR">("OPERADOR");
   const [creando, setCreando] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
+  // Guarda de vigencia para `abrirModal` -- ver ese comentario. Mismo
+  // patrón que `vigente` en AuthContexto/useAutoRefresh, pero como
+  // contador (no booleano) porque acá puede haber más de una apertura en
+  // vuelo, y sólo la última importa.
+  const aperturaModalRef = useRef(0);
 
   const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
     const silencioso = opciones?.silencioso ?? false;
@@ -84,9 +89,20 @@ export default function Usuarios() {
   function abrirModal() {
     setModalAbierto(true);
     setErrorForm(null);
+    // Si el modal se cierra y se vuelve a abrir antes de que resuelva esta
+    // llamada, la respuesta de la apertura VIEJA no debe pisar el
+    // `sitioId` que ya eligió la apertura NUEVA -- de ahí el número de
+    // apertura: sólo aplica el resultado si sigue siendo la última.
+    const apertura = ++aperturaModalRef.current;
     listarSitios()
-      .then((lista) => setSitioId(lista[0]?.id ?? null))
-      .catch((error) => toast.error(mensajeError(error)));
+      .then((lista) => {
+        if (aperturaModalRef.current !== apertura) return;
+        setSitioId(lista[0]?.id ?? null);
+      })
+      .catch((error) => {
+        if (aperturaModalRef.current !== apertura) return;
+        toast.error(mensajeError(error));
+      });
   }
 
   function cerrarModal() {
