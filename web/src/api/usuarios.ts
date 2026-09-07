@@ -24,15 +24,28 @@ export interface Usuario {
   activo: boolean;
 }
 
-export async function listarUsuarios(): Promise<Usuario[]> {
-  const { data, error } = await supabase
+export interface ResultadoUsuarios {
+  filas: Usuario[];
+  /** Ver el mismo campo en `ResultadoHistorial` (`api/historial.ts`) --
+   * misma razón: AG Grid corre client-side (`componentes/Tabla.tsx`), sin
+   * este tope la tabla completa crece sin cota junto con el catálogo real. */
+  truncado: boolean;
+}
+
+// Válvula de seguridad, no paginación real -- muy por encima de cualquier
+// catálogo de usuarios/operadores real de un solo sitio.
+const LIMITE_USUARIOS = 10_000;
+
+export async function listarUsuarios(): Promise<ResultadoUsuarios> {
+  const { data, error, count } = await supabase
     .from("usuarios")
-    .select("id, cedula, nombre, rol, activo")
+    .select("id, cedula, nombre, rol, activo", { count: "exact" })
     .order("nombre")
+    .range(0, LIMITE_USUARIOS - 1)
     .returns<Usuario[]>();
 
   if (error) throw new Error(error.message);
-  return data;
+  return { filas: data, truncado: count !== null && count > data.length };
 }
 
 export async function actualizarActivoUsuario(id: string, activo: boolean): Promise<void> {

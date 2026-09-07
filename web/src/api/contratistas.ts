@@ -31,18 +31,32 @@ export interface Contratista {
   activo: boolean;
 }
 
-export async function listarContratistas(): Promise<Contratista[]> {
-  const { data, error } = await supabase
+export interface ResultadoContratistas {
+  filas: Contratista[];
+  /** Ver el mismo campo en `ResultadoHistorial` (`api/historial.ts`) --
+   * misma razón: AG Grid corre client-side (`componentes/Tabla.tsx`), sin
+   * este tope la tabla completa crece sin cota junto con el catálogo real. */
+  truncado: boolean;
+}
+
+// Válvula de seguridad, no paginación real -- muy por encima de cualquier
+// catálogo de contratistas real de un solo sitio.
+const LIMITE_CONTRATISTAS = 10_000;
+
+export async function listarContratistas(): Promise<ResultadoContratistas> {
+  const { data, error, count } = await supabase
     .from("contratistas")
     .select(
       "id, identificacion, nombre, empresa_nombre, tipo_ingreso, " +
         "fecha_vencimiento_praind, es_personal_ruta, activo",
+      { count: "exact" },
     )
     .order("nombre")
+    .range(0, LIMITE_CONTRATISTAS - 1)
     .returns<Contratista[]>();
 
   if (error) throw new Error(error.message);
-  return data;
+  return { filas: data, truncado: count !== null && count > data.length };
 }
 
 export async function actualizarAccesoContratista(id: string, activo: boolean): Promise<void> {

@@ -4,6 +4,7 @@ import { Check } from "lucide-react";
 import type { CellStyle, ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import InterruptorCelda from "../componentes/InterruptorCelda";
+import AvisoTruncado from "../componentes/AvisoTruncado";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { actualizarAccesoContratista, listarContratistas } from "../api/contratistas";
 import type { Contratista } from "../api/contratistas";
@@ -29,13 +30,17 @@ const ESTILO_CENTRO_FLEX: CellStyle = { display: "flex", justifyContent: "center
 export default function Contratistas() {
   const [busqueda, setBusqueda] = useState("");
   const [filas, setFilas] = useState<Contratista[]>([]);
+  const [truncado, setTruncado] = useState(false);
   const [cargando, setCargando] = useState(true);
 
   const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
     const silencioso = opciones?.silencioso ?? false;
     if (!silencioso) setCargando(true);
     return listarContratistas()
-      .then(setFilas)
+      .then(({ filas, truncado }) => {
+        setFilas(filas);
+        setTruncado(truncado);
+      })
       .catch((error) => {
         if (!silencioso) toast.error(mensajeError(error));
       })
@@ -121,6 +126,11 @@ export default function Contratistas() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
+        {truncado && (
+          <AvisoTruncado
+            mensaje={`Hay más de ${filas.length.toLocaleString("es-CR")} contratistas -- se muestran solo los primeros (la búsqueda de acá arriba sólo filtra entre esos, no trae más).`}
+          />
+        )}
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<Contratista>
             id="contratistas"

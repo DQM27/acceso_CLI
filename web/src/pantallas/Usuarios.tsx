@@ -4,6 +4,7 @@ import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
 import InterruptorCelda from "../componentes/InterruptorCelda";
+import AvisoTruncado from "../componentes/AvisoTruncado";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { actualizarActivoUsuario, crearUsuario, listarSitios, listarUsuarios } from "../api/usuarios";
 import type { Usuario } from "../api/usuarios";
@@ -31,6 +32,7 @@ import { mensajeError } from "../mensajeError";
 export default function Usuarios() {
   const [busqueda, setBusqueda] = useState("");
   const [filas, setFilas] = useState<Usuario[]>([]);
+  const [truncado, setTruncado] = useState(false);
   const [cargando, setCargando] = useState(true);
 
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -50,7 +52,10 @@ export default function Usuarios() {
     const silencioso = opciones?.silencioso ?? false;
     if (!silencioso) setCargando(true);
     return listarUsuarios()
-      .then(setFilas)
+      .then(({ filas, truncado }) => {
+        setFilas(filas);
+        setTruncado(truncado);
+      })
       .catch((error) => {
         if (!silencioso) toast.error(mensajeError(error));
       })
@@ -154,6 +159,11 @@ export default function Usuarios() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
+        {truncado && (
+          <AvisoTruncado
+            mensaje={`Hay más de ${filas.length.toLocaleString("es-CR")} usuarios -- se muestran solo los primeros (la búsqueda de acá arriba sólo filtra entre esos, no trae más).`}
+          />
+        )}
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<Usuario>
             id="usuarios"

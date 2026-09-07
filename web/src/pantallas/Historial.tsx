@@ -4,6 +4,7 @@ import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
+import AvisoTruncado from "../componentes/AvisoTruncado";
 import SelectorRangoFecha, { textoRangoFecha } from "../componentes/SelectorRangoFecha";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { useAuth } from "../contexto/AuthContexto";
@@ -223,6 +224,7 @@ export function generarHtmlHistorial(
 export default function Historial() {
   const { sesion } = useAuth();
   const [filas, setFilas] = useState<MovimientoHistorial[]>([]);
+  const [truncado, setTruncado] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   // Mismo default que desktop/src/pantallas/Historial.tsx -- últimos 6
@@ -235,7 +237,10 @@ export default function Historial() {
     const silencioso = opciones?.silencioso ?? false;
     if (!silencioso) setCargando(true);
     return listarHistorial(desde || undefined, hasta || undefined)
-      .then(setFilas)
+      .then(({ filas, truncado }) => {
+        setFilas(filas);
+        setTruncado(truncado);
+      })
       .catch((error) => {
         if (!silencioso) toast.error(mensajeError(error));
       })
@@ -428,6 +433,11 @@ export default function Historial() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
+        {truncado && (
+          <AvisoTruncado
+            mensaje={`Este rango tiene más de ${filas.length.toLocaleString("es-CR")} movimientos — se muestran solo los primeros, y Excel/PDF exportan lo mismo que está cargado acá (a diferencia de escritorio, acá no hay un rango "completo" aparte). Acotá las fechas para ver/exportar el resto.`}
+          />
+        )}
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<MovimientoHistorial>
             ref={tablaRef}

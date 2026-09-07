@@ -47,7 +47,28 @@ interface FilaCruda {
   dispositivo_entrada: { tipo: string } | null;
 }
 
-export async function listarHistorial(desde?: string, hasta?: string): Promise<MovimientoHistorial[]> {
+export interface ResultadoHistorial {
+  filas: MovimientoHistorial[];
+  /** `true` si el rango pedido tiene más filas que `LIMITE_HISTORIAL` -- ver
+   * esa constante. AG Grid corre en modo client-side (trae todo, filtra en
+   * el navegador, ver `componentes/Tabla.tsx`); sin este tope, un rango
+   * amplio (o el preset "Todo el historial", sin fecha) podía crecer sin
+   * cota junto con el uso real del sistema. Mismo criterio que
+   * `CargaCompleta.truncado` del núcleo Rust en la versión de escritorio
+   * (`desktop/src/pantallas/Historial.tsx`) -- filas visibles acotadas,
+   * exportar (Excel/PDF) sigue trayendo el rango completo sin este límite
+   * (ver `exportarAExcel`/`exportarAPdf` en `pantallas/Historial.tsx`).
+   */
+  truncado: boolean;
+}
+
+// Bien por encima de cualquier volumen real de un rango de fechas típico
+// (6 meses por defecto, ver `Historial.tsx`) -- es una válvula de
+// seguridad, no una paginación real: mientras el volumen se mantenga
+// razonable, nadie la nota.
+const LIMITE_HISTORIAL = 20_000;
+
+export async function listarHistorial(desde?: string, hasta?: string): Promise<ResultadoHistorial> {
   let consulta = supabase
     .from("ingresos")
     .select(
@@ -55,18 +76,23 @@ export async function listarHistorial(desde?: string, hasta?: string): Promise<M
         "medio_ingreso, gafete_numero, hora_entrada, hora_salida, usuario_entrada_nombre, " +
         "usuario_salida_nombre, sitios(nombre), " +
         "dispositivo_entrada:dispositivos!ingresos_dispositivo_entrada_id_fkey(tipo)",
+      { count: "exact" },
     )
-    .order("hora_entrada", { ascending: false });
+    .order("hora_entrada", { ascending: false })
+    .range(0, LIMITE_HISTORIAL - 1);
 
   if (desde) consulta = consulta.gte("hora_entrada", desde);
   if (hasta) consulta = consulta.lte("hora_entrada", hasta);
 
-  const { data, error } = await consulta.returns<FilaCruda[]>();
+  const { data, error, count } = await consulta.returns<FilaCruda[]>();
   if (error) throw new Error(error.message);
 
-  return data.map(({ sitios, dispositivo_entrada, ...resto }) => ({
-    ...resto,
-    sitio_nombre: sitios?.nombre ?? null,
-    dispositivo_entrada_tipo: dispositivo_entrada?.tipo ?? null,
-  }));
+  return {
+    filas: data.map(({ sitios, dispositivo_entrada, ...resto }) => ({
+      ...resto,
+      sitio_nombre: sitios?.nombre ?? null,
+      dispositivo_entrada_tipo: dispositivo_entrada?.tipo ?? null,
+    })),
+    truncado: count !== null && count > data.length,
+  };
 }

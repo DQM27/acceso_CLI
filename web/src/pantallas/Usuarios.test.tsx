@@ -25,7 +25,7 @@ function deferido<T>() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.listarUsuarios.mockResolvedValue([]);
+  mocks.listarUsuarios.mockResolvedValue({ filas: [], truncado: false });
 });
 afterEach(() => {
   vi.restoreAllMocks();
