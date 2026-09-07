@@ -170,10 +170,16 @@ pub struct SesionRealtimeNube {
 /// el primer arranque. Bug real, no un caso de espera -- reportado en vivo
 /// (un usuario sembrado en Supabase después del primer arranque de un
 /// teléfono no podía entrar nunca, ni esperando el pulso periódico).
-fn cargar_secreto_de(directorio: Option<&Path>, identificador_dispositivo: Option<&str>) -> Option<String> {
+fn cargar_secreto_de(
+    directorio: Option<&Path>,
+    identificador_dispositivo: Option<&str>,
+) -> Option<String> {
     match (directorio, identificador_dispositivo) {
         (Some(directorio), Some(identificador)) => {
-            crate::nube::credenciales::cargar_secreto_en_con_identificador(directorio, identificador)
+            crate::nube::credenciales::cargar_secreto_en_con_identificador(
+                directorio,
+                identificador,
+            )
         }
         (Some(directorio), None) => crate::nube::credenciales::cargar_secreto_en(directorio),
         (None, _) => crate::nube::credenciales::cargar_secreto(),

@@ -107,7 +107,7 @@ internal val TipografiaBrisas = Typography(
     titleLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = ${d.tipografia.titulo}.sp, fontWeight = FontWeight(${d.tipografia.pesoControl})),
 )
 `;
-salidas.set('mobile/app/app/src/main/java/com/brisas/controlacceso/DisenoGenerado.kt', kt);
+salidas.set('mobile/android/app/src/main/java/com/brisas/controlacceso/DisenoGenerado.kt', kt);
 
 let errores = 0;
 for (const [ruta, contenido] of salidas) {

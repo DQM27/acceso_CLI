@@ -1460,7 +1460,9 @@ impl IndiceLocal {
     }
 }
 
-fn indexar_empresas(transaction: &rusqlite::Transaction<'_>) -> Result<IndiceLocal, SincronizacionError> {
+fn indexar_empresas(
+    transaction: &rusqlite::Transaction<'_>,
+) -> Result<IndiceLocal, SincronizacionError> {
     let mut statement = transaction.prepare("SELECT id, uuid, nombre FROM empresas")?;
     let filas = statement.query_map([], |row| {
         Ok((
@@ -1479,7 +1481,10 @@ fn indexar_empresas(transaction: &rusqlite::Transaction<'_>) -> Result<IndiceLoc
         }
         por_nombre.insert(nombre, id);
     }
-    Ok(IndiceLocal { por_uuid, por_nombre })
+    Ok(IndiceLocal {
+        por_uuid,
+        por_nombre,
+    })
 }
 
 fn indexar_contratistas(
@@ -1503,7 +1508,10 @@ fn indexar_contratistas(
         }
         por_nombre.insert(nombre, id);
     }
-    Ok(IndiceLocal { por_uuid, por_nombre })
+    Ok(IndiceLocal {
+        por_uuid,
+        por_nombre,
+    })
 }
 
 /// Cierra, directo contra la nube, un ingreso que abrió el otro
