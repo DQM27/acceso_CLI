@@ -44,7 +44,8 @@ supabase functions deploy admin-list-devices
 supabase functions deploy admin-provision-device
 supabase functions deploy admin-revoke-device
 supabase functions deploy admin-suspend-device
-supabase functions deploy admin-move-device
+supabase functions deploy admin-delete-device
+supabase functions deploy admin-create-site
 supabase functions deploy sync-access-policy
 ```
 

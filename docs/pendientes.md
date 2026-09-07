@@ -92,11 +92,13 @@ reporte a ciegas: el reclamo era correcto.
   `admin-move-device` y `admin-hide-device`. Se revisó cada una: todas las `admin-*` ya
   tienen su propio `correoAdminAutorizado()` (JWT de sesión → `administradores_panel`), no
   clave compartida — el hallazgo era sólo de versionado, no de seguridad.
-- [ ] **`admin-move-device` y `admin-hide-device` parecen huérfanas.** No hay ningún
-  llamador en `web/src` (`grep` sin resultados) — `docs/pendientes.md` ya documentaba que
-  "cambiar sitio" se sacó de la UI. Quedan desplegadas y activas en Supabase igual. Decidir:
-  si de verdad no hacen falta, borrarlas también del lado de Supabase (no sólo dejar de
-  llamarlas) — o si sí se van a usar pronto, dejar constancia de para qué.
+- [x] **`admin-move-device` y `admin-hide-device` eliminadas (2026-09-07).** Sin llamador en
+  `web/src` ni en `desktop/src` (revisado tras versionarlas) — decisión explícita del
+  usuario ("sino se usan... quitalas") en vez de dejarlas huérfanas. Borradas del proyecto
+  de Supabase (`supabase functions delete`) y de `supabase/functions/`. No tocó la columna
+  `oculto_en_panel` (`dispositivos`): sigue en uso real por `admin-delete-device`, que la
+  marca cuando el borrado definitivo falla por historial (`23503`) — eso no dependía de
+  `admin-hide-device`, que sólo exponía el toggle manual de esa misma columna.
 - [ ] **Bucket de Storage `historial-web` (público, vacío, creado 2026-09-03) sin ninguna
   referencia en el repo** (ni migración que lo cree, ni código que lo use en `web/`,
   `desktop/`, `mobile/` o `src/`). No se tocó — puede ser vestigio de una prueba o algo
