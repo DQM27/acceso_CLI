@@ -14,6 +14,7 @@ import type {
 } from "ag-grid-community";
 import { useUsuarioId } from "../contexto/SesionContexto";
 import { ListaFlotante, useListaFlotante } from "./ListaFlotante";
+import { useDebounced } from "./useDebounced";
 
 /**
  * Tema y comportamiento compartido de TODAS las tablas de la app — un solo
@@ -164,6 +165,12 @@ function TablaBase<T>(
 ) {
   const usuarioId = useUsuarioId();
   const idGrilla = idPorUsuario(id, usuarioId);
+  // AG Grid recalcula el quickFilter sobre TODAS las filas cargadas
+  // (client-side, ver el doc-comment de `busqueda` arriba) en cada
+  // pulsación -- con un dataset grande (historial, contratistas) eso es
+  // trabajo real por tecla. El input en sí (lo que la persona ve mientras
+  // escribe) no se debounce -- sólo lo que le llega a AG Grid.
+  const busquedaDebounced = useDebounced(busqueda, 250);
   const [ocultas, setOcultas] = useState<Set<string>>(
     () => new Set(leerEstadoGuardado(idGrilla)?.ocultas ?? []),
   );
@@ -367,7 +374,7 @@ function TablaBase<T>(
           }
           rowData={filas}
           columnDefs={columnasConVisibilidad}
-          quickFilterText={busqueda}
+          quickFilterText={busquedaDebounced}
           overlayNoRowsTemplate={MENSAJE_SIN_FILAS}
           // Resguardo además de memoizar `columnas` en cada pantalla: si de
           // todos modos algo le pasa un `columnDefs` nuevo, esto evita que
