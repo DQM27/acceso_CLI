@@ -4,6 +4,8 @@
 //! `fallido` según la respuesta. Una fila fallida no detiene a las demás --
 //! se reintenta en la próxima llamada, no bloquea el resto de la cola.
 
+use std::collections::HashMap;
+
 use rusqlite::{Connection, params};
 use serde_json::json;
 
@@ -1252,6 +1254,15 @@ fn guardar_contratistas(
     transaction: &rusqlite::Transaction<'_>,
     contratistas: &[FilaContratistaRemota],
 ) -> Result<u32, SincronizacionError> {
+    // Un solo `SELECT` de todas las empresas locales antes del lote, en vez
+    // de hasta dos por cada contratista remoto (`resolver_empresa_local`
+    // anterior) -- con un catálogo grande eran miles de consultas
+    // individuales secuenciales sólo para resolver el vínculo. `empresas`
+    // ya está completa en este punto (`guardar_empresas` corrió antes, ver
+    // `recibir_catalogo_del_sitio`) y esta función nunca la modifica, así
+    // que el índice no se desactualiza durante el resto del lote.
+    let indice_empresas = indexar_empresas(transaction)?;
+
     let mut recibidos = 0;
     for contratista in contratistas {
         let (Some(cedula), Some(tipo_ingreso), Some(es_personal_ruta)) = (
@@ -1261,8 +1272,7 @@ fn guardar_contratistas(
         ) else {
             continue;
         };
-        let empresa_id_local = resolver_empresa_local(
-            transaction,
+        let empresa_id_local = indice_empresas.resolver(
             contratista.empresa_id.as_deref(),
             contratista.empresa_nombre.as_deref(),
         );
@@ -1342,6 +1352,14 @@ fn guardar_gafetes(
     transaction: &rusqlite::Transaction<'_>,
     gafetes: &[FilaGafeteRemota],
 ) -> Result<u32, SincronizacionError> {
+    // Mismo motivo que `indice_empresas` en `guardar_contratistas`: un solo
+    // `SELECT` de todos los contratistas locales antes del lote, en vez de
+    // hasta dos por cada gafete PERDIDO (`resolver_contratista_local`
+    // anterior). `guardar_contratistas` ya corrió antes en el mismo
+    // `recibir_catalogo_del_sitio` y esta función no modifica
+    // `contratistas`, así que el índice se mantiene válido todo el lote.
+    let indice_contratistas = indexar_contratistas(transaction)?;
+
     let mut recibidos = 0;
     for gafete in gafetes {
         // Un gafete PERDIDO sin deudor resoluble localmente violaría el
@@ -1350,8 +1368,7 @@ fn guardar_gafetes(
         // contratista remoto incompleto: se autorresuelve solo en un sync
         // posterior, en cuanto ese contratista también llegue acá.
         let deudor_id_local = if gafete.estado == "PERDIDO" {
-            let Some(id) = resolver_contratista_local(
-                transaction,
+            let Some(id) = indice_contratistas.resolver(
                 gafete.contratista_deudor_id.as_deref(),
                 gafete.contratista_deudor_nombre.as_deref(),
             ) else {
@@ -1418,71 +1435,75 @@ pub fn recibir_catalogo_del_sitio(
     Ok(resumen)
 }
 
-/// Resuelve el `id` local de la empresa de un contratista remoto: primero
-/// por `uuid` (el vínculo real), y si esa empresa todavía no llegó acá por
-/// ese camino, por nombre (mismo respaldo que ya usa el lado de envío,
-/// `enviar_contratista`).
-fn resolver_empresa_local(
-    transaction: &rusqlite::Transaction<'_>,
-    empresa_uuid: Option<&str>,
-    empresa_nombre: Option<&str>,
-) -> Option<i64> {
-    empresa_uuid
-        .and_then(|uuid| {
-            transaction
-                .query_row(
-                    "SELECT id FROM empresas WHERE uuid = ?1",
-                    params![uuid],
-                    |row| row.get(0),
-                )
-                .ok()
-        })
-        .or_else(|| {
-            empresa_nombre.and_then(|nombre| {
-                transaction
-                    .query_row(
-                        "SELECT id FROM empresas WHERE nombre = ?1",
-                        params![nombre],
-                        |row| row.get(0),
-                    )
-                    .ok()
-            })
-        })
+/// Índice en memoria de una tabla local por `uuid` y por `nombre`,
+/// construido con un solo `SELECT` antes de recorrer un lote remoto -- ver
+/// `indexar_empresas`/`indexar_contratistas`. Reemplaza a
+/// `resolver_empresa_local`/`resolver_contratista_local`, que antes hacían
+/// hasta dos `SELECT` individuales POR FILA del lote (miles de round-trips
+/// secuenciales para un catálogo grande).
+struct IndiceLocal {
+    por_uuid: HashMap<String, i64>,
+    por_nombre: HashMap<String, i64>,
 }
 
-/// Resuelve el `id` local del contratista deudor de un gafete remoto --
-/// mismo criterio de respaldo que `resolver_empresa_local` (primero
-/// `uuid`, si no por nombre), salvo que acá el respaldo por nombre es
-/// más débil: `contratistas.nombre` no es único (`cedula` sí, pero la
-/// nube de gafetes no manda la cédula del deudor). Igual que empresas, se
-/// autorresuelve solo en un sync posterior si el contratista real llega
-/// después.
-fn resolver_contratista_local(
+impl IndiceLocal {
+    /// Primero por `uuid` (el vínculo real), y si todavía no llegó acá por
+    /// ese camino, por nombre (mismo respaldo que ya usaban las funciones
+    /// que esto reemplaza). `nombre` no es único en ninguna de las dos
+    /// tablas que usan esto -- misma ambigüedad que ya tenía el `SELECT
+    /// ... WHERE nombre = ?1` original (sin `ORDER BY`, ya devolvía una
+    /// fila arbitraria entre varias); acá el índice simplemente se queda
+    /// con la última que recorrió `indexar_empresas`/`indexar_contratistas`.
+    fn resolver(&self, uuid: Option<&str>, nombre: Option<&str>) -> Option<i64> {
+        uuid.and_then(|uuid| self.por_uuid.get(uuid).copied())
+            .or_else(|| nombre.and_then(|nombre| self.por_nombre.get(nombre).copied()))
+    }
+}
+
+fn indexar_empresas(transaction: &rusqlite::Transaction<'_>) -> Result<IndiceLocal, SincronizacionError> {
+    let mut statement = transaction.prepare("SELECT id, uuid, nombre FROM empresas")?;
+    let filas = statement.query_map([], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, Option<String>>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
+
+    let mut por_uuid = HashMap::new();
+    let mut por_nombre = HashMap::new();
+    for fila in filas {
+        let (id, uuid, nombre) = fila?;
+        if let Some(uuid) = uuid {
+            por_uuid.insert(uuid, id);
+        }
+        por_nombre.insert(nombre, id);
+    }
+    Ok(IndiceLocal { por_uuid, por_nombre })
+}
+
+fn indexar_contratistas(
     transaction: &rusqlite::Transaction<'_>,
-    contratista_uuid: Option<&str>,
-    contratista_nombre: Option<&str>,
-) -> Option<i64> {
-    contratista_uuid
-        .and_then(|uuid| {
-            transaction
-                .query_row(
-                    "SELECT id FROM contratistas WHERE uuid = ?1",
-                    params![uuid],
-                    |row| row.get(0),
-                )
-                .ok()
-        })
-        .or_else(|| {
-            contratista_nombre.and_then(|nombre| {
-                transaction
-                    .query_row(
-                        "SELECT id FROM contratistas WHERE nombre = ?1",
-                        params![nombre],
-                        |row| row.get(0),
-                    )
-                    .ok()
-            })
-        })
+) -> Result<IndiceLocal, SincronizacionError> {
+    let mut statement = transaction.prepare("SELECT id, uuid, nombre FROM contratistas")?;
+    let filas = statement.query_map([], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, Option<String>>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
+
+    let mut por_uuid = HashMap::new();
+    let mut por_nombre = HashMap::new();
+    for fila in filas {
+        let (id, uuid, nombre) = fila?;
+        if let Some(uuid) = uuid {
+            por_uuid.insert(uuid, id);
+        }
+        por_nombre.insert(nombre, id);
+    }
+    Ok(IndiceLocal { por_uuid, por_nombre })
 }
 
 /// Cierra, directo contra la nube, un ingreso que abrió el otro
