@@ -38,6 +38,7 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 @Composable
 fun PantallaEscanearCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () -> Unit) {
@@ -83,7 +84,12 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
     val ejecutor = remember { Executors.newSingleThreadExecutor() }
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     var ultimoMensaje by remember { mutableStateOf("Alinee la cédula dentro de la cámara") }
-    var detectada by remember { mutableStateOf(false) }
+    // AtomicBoolean, no `mutableStateOf` -- esta bandera se lee en el hilo
+    // del analizador de cámara (`ejecutor`) y se escribe desde el hilo
+    // principal (callback de ML Kit); un booleano de Compose no garantiza
+    // esa visibilidad entre hilos, y además el `compareAndSet` evita que
+    // dos frames en vuelo disparen `onCedulaDetectada` dos veces.
+    val detectada = remember { AtomicBoolean(false) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -115,7 +121,7 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
                                     // cada frame mientras la pantalla termina
                                     // de cerrarse sólo quema CPU sin ganar
                                     // nada (el resultado ya se usó).
-                                    if (detectada) {
+                                    if (detectada.get()) {
                                         imagen.close()
                                         return@setAnalyzer
                                     }
@@ -124,8 +130,7 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
                                         recognizer = recognizer,
                                         onTexto = { ultimoMensaje = it },
                                         onCedula = { cedula ->
-                                            if (!detectada) {
-                                                detectada = true
+                                            if (detectada.compareAndSet(false, true)) {
                                                 onCedulaDetectada(cedula)
                                             }
                                         },
