@@ -290,6 +290,7 @@ pub fn restaurar_respaldo(ruta_candidata: &Path, ruta_activa: &Path) -> Result<(
         if ruta.exists() {
             fs::remove_file(ruta)?;
         }
+        limpiar_sidecars_wal(&ruta);
     }
 
     // Paso 1: copiar la candidata a un temporal en el mismo directorio, sin
@@ -299,6 +300,18 @@ pub fn restaurar_respaldo(ruta_candidata: &Path, ruta_activa: &Path) -> Result<(
     // Paso 2: intercambiar sin destruir inmediatamente la anterior — dos
     // renames en vez de una sobrescritura directa, para que en cualquier
     // punto intermedio quede algo recuperable.
+    //
+    // Con `journal_mode=WAL` (ver `database::schema`), la base activa puede
+    // tener `-wal`/`-shm` junto al `.db` -- el llamador ya garantiza que
+    // cerró su conexión antes de llegar acá (ver el comentario de esta
+    // función), lo que en condiciones normales checkpointea y borra esos dos
+    // archivos solo. Pero si por lo que sea sobrevivieron (otra conexión al
+    // mismo archivo -- p. ej. `GuiState::conexion_secundaria` -- seguía
+    // abierta en ese instante), un `-wal` viejo apuntando al nombre de
+    // `ruta_activa` quedaría ahí esperando a que la CONNECTION NUEVA sobre
+    // el archivo restaurado lo confunda con datos propios. Se limpian a
+    // mano antes de mover nada, nunca después.
+    limpiar_sidecars_wal(ruta_activa);
     let habia_base_activa = ruta_activa.exists();
     if habia_base_activa {
         fs::rename(ruta_activa, &ruta_previa)?;
@@ -337,6 +350,18 @@ fn abrir_y_verificar(ruta: &Path) -> Result<(), RespaldoError> {
     let connection = Connection::open(ruta)?;
     initialize_database(&connection)?;
     Ok(())
+}
+
+/// Borra, si existen, los archivos `-wal`/`-shm` que `journal_mode=WAL` deja
+/// junto a `ruta` -- best-effort a propósito: en el caso normal ya no están
+/// (la última conexión los checkpointea y borra sola al cerrarse), así que
+/// `NotFound` no es un error acá, es lo esperado.
+fn limpiar_sidecars_wal(ruta: &Path) {
+    for sufijo in ["-wal", "-shm"] {
+        let mut nombre = ruta.as_os_str().to_owned();
+        nombre.push(sufijo);
+        let _ = fs::remove_file(std::path::PathBuf::from(nombre));
+    }
 }
 
 /// Abre `ruta` en modo sólo lectura (nunca crea ni modifica el archivo) y

@@ -52,11 +52,25 @@ pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
     // `foreign_keys`, `journal_mode` y `trusted_schema` no pueden cambiarse
     // dentro de una transacción activa, así que se fijan antes de abrir la
     // transacción de migración.
+    // WAL en vez de DELETE (rollback journal clásico): con DELETE, cualquier
+    // transacción de escritura toma un lock exclusivo del archivo completo y
+    // bloquea toda lectura concurrente hasta que termina o vence
+    // `busy_timeout` -- eso ya no es aceptable ahora que el escritorio abre
+    // una segunda conexión a propósito (`GuiState::conexion_secundaria`)
+    // para leer/sincronizar sin retener el candado de `AppCore`, y el
+    // celular sincroniza en segundo plano cada 2 minutos mientras el guardia
+    // sigue buscando. WAL persiste en el propio archivo (no es una pragma
+    // por conexión): una vez que cualquier conexión lo activa acá, todas las
+    // conexiones que abran después el mismo archivo -- incluida
+    // `conexion_secundaria`, que nunca vuelve a llamar `initialize_database`
+    // -- lo heredan solas. `synchronous = EXTRA` se deja igual a propósito:
+    // cambiar journal y durabilidad en el mismo paso complica diagnosticar
+    // cuál de los dos causó un problema si aparece uno.
     connection.execute_batch(
         "
         PRAGMA foreign_keys = ON;
         PRAGMA busy_timeout = 5000;
-        PRAGMA journal_mode = DELETE;
+        PRAGMA journal_mode = WAL;
         PRAGMA synchronous = EXTRA;
         PRAGMA trusted_schema = OFF;
         PRAGMA secure_delete = FAST;
