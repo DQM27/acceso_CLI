@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { supabase } from "../lib/supabase";
 
 /**
@@ -32,6 +33,16 @@ export interface ResultadoUsuarios {
   truncado: boolean;
 }
 
+// Ver el mismo criterio en contratistas.ts -- valida en runtime la forma
+// real de lo que devuelve Supabase.
+const filaUsuarioEsquema = z.object({
+  id: z.string(),
+  cedula: z.string(),
+  nombre: z.string(),
+  rol: z.enum(["ROOT", "ADMINISTRADOR", "OPERADOR"]),
+  activo: z.boolean(),
+});
+
 // Válvula de seguridad, no paginación real -- muy por encima de cualquier
 // catálogo de usuarios/operadores real de un solo sitio.
 const LIMITE_USUARIOS = 10_000;
@@ -41,11 +52,10 @@ export async function listarUsuarios(): Promise<ResultadoUsuarios> {
     .from("usuarios")
     .select("id, cedula, nombre, rol, activo", { count: "exact" })
     .order("nombre")
-    .range(0, LIMITE_USUARIOS - 1)
-    .returns<Usuario[]>();
+    .range(0, LIMITE_USUARIOS - 1);
 
   if (error) throw new Error(error.message);
-  return { filas: data, truncado: count !== null && count > data.length };
+  return { filas: z.array(filaUsuarioEsquema).parse(data), truncado: count !== null && count > data.length };
 }
 
 export async function actualizarActivoUsuario(id: string, activo: boolean): Promise<void> {

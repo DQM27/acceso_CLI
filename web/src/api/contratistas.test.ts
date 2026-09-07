@@ -28,9 +28,23 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function filaCompleta(sobrescribir: Record<string, unknown> = {}) {
+  return {
+    id: "1",
+    identificacion: "1-2345-6789",
+    nombre: "Alguien",
+    empresa_nombre: "Constructora X",
+    tipo_ingreso: "PRAIND",
+    fecha_vencimiento_praind: "2027-01-01",
+    es_personal_ruta: false,
+    activo: true,
+    ...sobrescribir,
+  };
+}
+
 describe("listarContratistas", () => {
   it("truncado en false cuando el conteo real coincide con lo que vino", async () => {
-    const filas = [{ id: "1", nombre: "Alguien" }];
+    const filas = [filaCompleta()];
     mocks.from.mockReturnValue(mockConsulta({ data: filas, error: null, count: 1 }));
 
     const resultado = await listarContratistas();
@@ -40,7 +54,7 @@ describe("listarContratistas", () => {
   });
 
   it("truncado en true cuando el conteo real es mayor que las filas devueltas (tope alcanzado)", async () => {
-    const filas = Array.from({ length: 3 }, (_, i) => ({ id: String(i), nombre: `Fila ${i}` }));
+    const filas = Array.from({ length: 3 }, (_, i) => filaCompleta({ id: String(i), nombre: `Fila ${i}` }));
     // El conteo real (lo que devuelve Postgres con count:'exact') es mayor
     // que lo que vino en `data` -- exactamente lo que pasa cuando `.range()`
     // corta antes de llegar al final.
@@ -58,5 +72,14 @@ describe("listarContratistas", () => {
     );
 
     await expect(listarContratistas()).rejects.toThrow("RLS denegó el acceso");
+  });
+
+  it("lanza un error de validación si Supabase devuelve una fila con forma inesperada", async () => {
+    // Simula un cambio de contrato del backend (ej. `activo` deja de ser
+    // boolean) -- sin la validación zod, esto pasaría en silencio.
+    const filas = [filaCompleta({ activo: "sí" })];
+    mocks.from.mockReturnValue(mockConsulta({ data: filas, error: null, count: 1 }));
+
+    await expect(listarContratistas()).rejects.toThrow();
   });
 });

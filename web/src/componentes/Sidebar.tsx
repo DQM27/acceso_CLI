@@ -1,24 +1,29 @@
+import { NavLink } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import type { Seccion } from "../App";
+import { rutaSeccion } from "../App";
 
 /**
  * Sidebar izquierdo de `Shell` (`App.tsx`) — sólo navegación de secciones.
  * Usuario y "Cerrar sesión" viven en `MenuUsuario`, en la barra de estado
- * (ver `Shell`) — no acá. Copiado de `desktop/src/componentes/Sidebar.tsx`.
- * Sin estado propio más allá de lo puramente visual: `seccion` actual y
- * colapsado siguen viviendo en `Shell`, acá sólo llegan por props.
+ * (ver `Shell`) — no acá. Copiado de `desktop/src/componentes/Sidebar.tsx`,
+ * salvo que acá la sección activa la decide la URL (`NavLink`), no un
+ * `useState` en `Shell` -- así recargar la página o compartir un link no
+ * pierde en qué sección estabas.
+ * Sin estado propio más allá de lo puramente visual: colapsado sigue
+ * viviendo en `Shell`, acá sólo llega por props.
  */
 export default function Sidebar({
   secciones,
-  seccionActual,
-  onCambiarSeccion,
+  onNavegar,
   colapsado,
   onToggleColapsado,
   abiertoEnMovil,
 }: {
   secciones: { id: Seccion; etiqueta: string; Icono: LucideIcon }[];
-  seccionActual: Seccion;
-  onCambiarSeccion: (id: Seccion) => void;
+  /** Se dispara al elegir una sección -- hoy sólo usado para cerrar el cajón
+   * en mobile; cuál queda activa la decide el propio `NavLink`. */
+  onNavegar: () => void;
   colapsado: boolean;
   onToggleColapsado: () => void;
   /** Cajón abierto en pantallas angostas (ver `.shell-sidebar-abierta` en
@@ -32,15 +37,16 @@ export default function Sidebar({
     >
       <div className="shell-nav">
         {secciones.map(({ id, etiqueta, Icono }) => (
-          <button
+          <NavLink
             key={id}
-            onClick={() => onCambiarSeccion(id)}
+            to={rutaSeccion(id)}
+            onClick={onNavegar}
             title={colapsado ? etiqueta : undefined}
-            className={`nav-item ${seccionActual === id ? "nav-item-activo" : ""}`}
+            className={({ isActive }) => `nav-item ${isActive ? "nav-item-activo" : ""}`}
           >
             <Icono size={18} strokeWidth={2} aria-hidden="true" />
             <span className="nav-item-etiqueta">{etiqueta}</span>
-          </button>
+          </NavLink>
         ))}
       </div>
 

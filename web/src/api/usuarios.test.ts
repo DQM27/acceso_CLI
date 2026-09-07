@@ -56,4 +56,11 @@ describe("listarUsuarios", () => {
 
     await expect(listarUsuarios()).rejects.toThrow("sin permiso");
   });
+
+  it("lanza un error de validación si Supabase devuelve una fila con forma inesperada", async () => {
+    const filas = [{ id: "1", cedula: "123", nombre: "Alguien", rol: "SUPERADMIN", activo: true }];
+    mocks.from.mockReturnValue(mockConsulta({ data: filas, error: null, count: 1 }));
+
+    await expect(listarUsuarios()).rejects.toThrow();
+  });
 });
