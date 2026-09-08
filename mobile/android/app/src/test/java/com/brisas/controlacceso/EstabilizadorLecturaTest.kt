@@ -93,4 +93,27 @@ class EstabilizadorLecturaTest {
         val r = EstabilizadorLectura().procesarFrame(texto)
         assertEquals(EstadoEscaneo.BUSCANDO, r.estado)
     }
+
+    // --- Feedback del tipo detectado (nunca se elige a mano) ---
+
+    @Test
+    fun mensajeNombraElTipoDetectadoAunqueTodavíaNoConfirme() {
+        val texto = "Licencia de Conducir\nVencimiento 03-04-2026"
+        val r = EstabilizadorLectura().procesarFrame(texto)
+        assertEquals("Licencia de conducir detectado — mantenga firme", r.mensaje)
+    }
+
+    @Test
+    fun mensajeDeConfirmacionNombraElTipoDetectadoPorFrente() {
+        val estabilizador = EstabilizadorLectura(framesRequeridos = 1)
+        val r = estabilizador.procesarFrame(licenciaTexto)
+        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
+        assertEquals("Licencia de conducir confirmado", r.mensaje)
+    }
+
+    @Test
+    fun mensajeDeConfirmacionNombraElTipoDetectadoPorMrz() {
+        val r = EstabilizadorLectura().procesarFrame(td1Valido)
+        assertEquals("Cédula de residencia (DIMEX) confirmado", r.mensaje)
+    }
 }

@@ -38,12 +38,14 @@ class EstabilizadorLectura(private val framesRequeridos: Int = 3) {
             return when {
                 mrz.numeroDocumentoExtendidoSinSoporte ->
                     ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no reconocido")
-                mrz.checksumsValidos ->
+                mrz.checksumsValidos -> {
+                    val documento = mrz.aDocumentoDetectado()
                     ResultadoEstabilizacion(
                         EstadoEscaneo.CONFIRMADO,
-                        documento = mrz.aDocumentoDetectado(),
-                        mensaje = "Documento confirmado",
+                        documento = documento,
+                        mensaje = "${documento.tipo.nombreLegible()} confirmado",
                     )
+                }
                 else ->
                     ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no reconocido")
             }
@@ -58,9 +60,10 @@ class EstabilizadorLectura(private val framesRequeridos: Int = 3) {
         val documento = leerDocumentoDeTexto(texto)
         if (documento == null) {
             // Tipo reconocible por palabras clave, pero todavía no se pudo
-            // extraer el número -- lectura parcial (glare, ángulo, foco),
-            // no un documento inválido.
-            return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = "Mantenga firme")
+            // extraer el número -- lectura parcial (glare, ángulo, foco), no
+            // un documento inválido. Ya se sabe qué es: se lo decimos a
+            // quien opera en vez de un "mantenga firme" genérico.
+            return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = "${tipo.nombreLegible()} detectado — mantenga firme")
         }
 
         if (documento == ultimoCandidato) {
@@ -71,9 +74,13 @@ class EstabilizadorLectura(private val framesRequeridos: Int = 3) {
         }
 
         return if (repeticiones >= framesRequeridos) {
-            ResultadoEstabilizacion(EstadoEscaneo.CONFIRMADO, documento = documento, mensaje = "Documento confirmado")
+            ResultadoEstabilizacion(
+                EstadoEscaneo.CONFIRMADO,
+                documento = documento,
+                mensaje = "${documento.tipo.nombreLegible()} confirmado",
+            )
         } else {
-            ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = "Mantenga firme")
+            ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = "${tipo.nombreLegible()} detectado — mantenga firme")
         }
     }
 

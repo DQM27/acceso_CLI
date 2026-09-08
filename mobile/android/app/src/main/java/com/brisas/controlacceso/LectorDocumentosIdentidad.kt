@@ -30,6 +30,18 @@ data class DocumentoDetectado(
     val checksumValido: Boolean? = null,
 )
 
+/// Nombre para mostrar en el feedback in-cámara -- quien opera nunca elige
+/// el tipo de documento a mano, así que esto es lo único que le confirma
+/// qué detectó el lector (sección 8 del plan, mensajes in-cámara).
+fun TipoDocumento.nombreLegible(): String = when (this) {
+    TipoDocumento.CEDULA_NACIONAL -> "Cédula de identidad"
+    TipoDocumento.CEDULA_RESIDENCIA -> "Cédula de residencia (DIMEX)"
+    TipoDocumento.LICENCIA_NACIONAL -> "Licencia de conducir"
+    TipoDocumento.LICENCIA_EXTRANJERO -> "Licencia de conducir de extranjero"
+    TipoDocumento.PASAPORTE -> "Pasaporte"
+    TipoDocumento.DESCONOCIDO -> "Documento"
+}
+
 /// Traduce un MRZ ya parseado al modelo normalizado. TD1 se etiqueta como
 /// `CEDULA_RESIDENCIA` por ahora -- la cédula nacional 2025+ también usa
 /// TD1 y hoy no hay forma de distinguirlas sólo por el MRZ (el campo de
