@@ -359,11 +359,12 @@ Confirmado que es viable y recomendable:
 1. ✅ Enum `TipoDocumento` + clasificador por keywords.
 2. ✅ Extractores de campo específicos por tipo (frente).
 3. ✅ Parser de MRZ + checksum (TD1 y TD3), incluyendo el mecanismo estándar
-   ICAO de número extendido (>9 caracteres) — ver `fixtures-ocr-sinteticos.md`
-   sección 4.1. **Pendiente real:** la convención específica del DIMEX
-   costarricense (dígito en vez de `<` en la posición 15, sección 4.2 de
-   fixtures) no sigue el estándar y sigue sin implementar por falta de una
-   referencia confiable — el número de DIMEX sigue viniendo del frente.
+   ICAO de número extendido (>9 caracteres) y la convención costarricense
+   del DIMEX (perfil `CR_DIMEX_TD1_2023`, resuelto y verificado contra un
+   documento real recalculando los 4 checksums independientemente) — ver
+   `fixtures-ocr-sinteticos.md` secciones 4.1 y 4.2. Sin especificación
+   pública oficial del TSE/DGME que lo confirme por escrito, pero la
+   evidencia matemática es sólida.
 4. ✅ Estado central `EstadoEscaneo` + lógica de estabilidad/debounce.
 5. ✅ Viewfinder con esquineros de 3 estados. Recorte del área de análisis
    implementado **filtrando los `TextBlock` de ML Kit por su `boundingBox`**

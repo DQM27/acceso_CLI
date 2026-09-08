@@ -120,13 +120,28 @@ fun parsearMrzTd1(texto: String): ResultadoMrz? {
         val checkExtendido = trasRelleno.last()
         numeroDocumento = bloqueNumero + continuacion
         numeroValido = checksumValido(bloqueNumero + checkNumero + continuacion, checkExtendido)
+    } else if (paisEmisor == "CRI" && checksumValido(bloqueNumero, checkNumero) &&
+        opcional1.takeWhile { it != '<' }.let { it.isNotEmpty() && it.all(Char::isDigit) }
+    ) {
+        // Convención costarricense del DIMEX (perfil CR_DIMEX_TD1_2023),
+        // distinta del mecanismo "long document number" de ICAO: la posición
+        // 15 SÍ es el check digit normal de las 9 posiciones base (no '<'),
+        // y los dígitos nacionales que faltan del DIMEX de 11-12 dígitos
+        // continúan sin check digit propio en el campo opcional. Verificado
+        // contra un DIMEX real (155824395 + check 6 + continuación 105 =
+        // 155824395105) con las 4 validaciones ICAO calzando: check del
+        // bloque base, nacimiento, vencimiento y el compuesto final -- este
+        // último ya cubre el campo opcional completo tal cual viene
+        // impreso, así que no necesita tratamiento aparte acá.
+        val continuacion = opcional1.takeWhile { it != '<' }
+        numeroDocumento = bloqueNumero + continuacion
+        numeroValido = true
     } else {
-        // Caso observado en el DIMEX costarricense real: la posición 15 trae
-        // un dígito (no el relleno '<' que exige el estándar) y aun así hay
-        // más dígitos del número en el campo opcional -- convención que no
-        // sigue el mecanismo estándar de ICAO y no está verificada todavía
-        // contra una referencia confiable. Se marca explícitamente en vez de
-        // inventar un algoritmo de checksum sin poder confirmarlo.
+        // Dígito (no '<') en la posición 15 con más dígitos en el campo
+        // opcional, pero sin calzar ni el mecanismo estándar de ICAO ni la
+        // convención de DIMEX verificada (país distinto de CRI, o el check
+        // digit del bloque base no valida) -- no se arriesga un algoritmo
+        // sin poder confirmarlo.
         val pareceExtendidoNoEstandar = opcional1.takeWhile { it != '<' }.any { it.isDigit() }
         if (pareceExtendidoNoEstandar) {
             return ResultadoMrz(

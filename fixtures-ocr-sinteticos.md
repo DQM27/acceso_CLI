@@ -120,19 +120,46 @@ IDBEL123456789<1234<<<<<<<<<<<
 PEREZ<<MARIA<JOSE<<<<<<<<<<<<<
 ```
 
-### 4.2 Número extendido — convención no estándar (DIMEX costarricense real)
+### 4.2 Número extendido — convención costarricense del DIMEX (RESUELTO)
 
-El DIMEX real (ver fotos del hilo) trae un **dígito**, no `<`, en la
-posición 15, con más dígitos del número todavía en el campo opcional:
+El DIMEX real trae un **dígito**, no `<`, en la posición 15, con más dígitos
+del número en el campo opcional. Investigación externa (confirmada de forma
+independiente recalculando los checksums con el mismo algoritmo) estableció
+que **sí es un mecanismo real, no ruido**: la posición 15 es el check digit
+normal ICAO del bloque de 9 dígitos (no el `<` que exige el mecanismo
+"long document number" de ICAO), y los dígitos que faltan del DIMEX de
+11-12 dígitos continúan en el campo opcional **sin check digit propio**.
+
+Contra el DIMEX real analizado, las 4 validaciones ICAO calzan:
+- Check digit del bloque base (`155824395` → `6`) ✅
+- Check digit de nacimiento ✅
+- Check digit de vencimiento ✅
+- Check digit compuesto final (cubre todo el campo opcional tal cual viene
+  impreso) ✅
+
+Perfil implementado como `CR_DIMEX_TD1_2023` en `parsearMrzTd1`: se activa
+cuando el país emisor es `CRI`, el check digit de la posición 15 valida
+correctamente el bloque de 9 dígitos, y hay dígitos (no relleno) inmediatamente
+después. Fixture sintético (datos inventados, mismo patrón verificado):
 ```
-IDCRI1558243956105<<<<<<<<<<<<
+C<CRI1999888772701<<<<<<<<<<<<
+9001011M3001019NIC<<<<<<<<<<<0
+PEREZ<<MARIA<JOSE<<<<<<<<<<<<<
 ```
-Esto no seguiría el mecanismo estándar de la sección 4.1. **No implementado
-todavía** — no hay una referencia confiable para confirmar el algoritmo
-exacto que usa el TSE/DGME en este caso, así que el parser lo marca como
-`numeroDocumentoExtendidoSinSoporte = true` en vez de adivinar un checksum.
-Mientras tanto, el número de DIMEX sigue viniendo del frente (sección 3),
-no del MRZ.
+Reconstruye a `199988877701`.
+
+**Lo que sigue sin verificar formalmente:** no se encontró una especificación
+pública del TSE/DGME que documente este layout con ese nivel de detalle — la
+evidencia es matemática (4 checksums calzando en un documento real), no una
+fuente oficial escrita. Si aparece esa fuente, confirmar contra ella.
+**Nota de robustez:** DIMEX puede tener 11 o 12 dígitos según normativa
+citada (Hacienda) — la continuación se lee como todos los dígitos hasta el
+primer `<`, no como una longitud fija de 3.
+
+**Trampa a evitar:** el MRZ ilustrativo que DGME publica en sus circulares
+oficiales (número ficticio `123456789012`) **no tiene checksums ICAO
+válidos** — no sirve como fixture de test, solo como referencia visual del
+layout.
 
 ## 5. Licencia de conducir — nacional
 

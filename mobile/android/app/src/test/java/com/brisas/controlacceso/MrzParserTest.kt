@@ -75,18 +75,51 @@ class MrzParserTest {
     }
 
     @Test
-    fun detectaNumeroExtendidoNoEstandarSinCalcularChecksumIncorrecto() {
-        // Caso real de DIMEX: dígito (no relleno '<') en la posición 15 y
-        // más dígitos del número siguen en el área opcional -- no sigue el
-        // mecanismo estándar de ICAO y no está verificado contra una
-        // referencia confiable. Debe marcarse explícitamente en vez de
-        // fingir un checksum válido con un algoritmo sin confirmar.
-        val td1NumeroLargo = """
-            IDCRI1558243956105<<<<<<<<<<<<
-            9001011F3001019NIC<<<<<<<<<<<8
+    fun resuelveNumeroExtendidoDeDimexCostarricense() {
+        // Convención costarricense (perfil CR_DIMEX_TD1_2023): la posición
+        // 15 SÍ es el check digit normal del bloque de 9 dígitos, y el resto
+        // del DIMEX (11-12 dígitos en total) sigue como dígitos nacionales
+        // sin check digit propio en el campo opcional -- distinto del
+        // mecanismo "long document number" de ICAO (ese exige '<' en la
+        // posición 15). Datos inventados, pero estructura y checksums
+        // (incluido el compuesto) verificados con el mismo algoritmo contra
+        // un DIMEX real que sí trae este patrón.
+        val td1Dimex = """
+            C<CRI1999888772701<<<<<<<<<<<<
+            9001011M3001019NIC<<<<<<<<<<<0
             PEREZ<<MARIA<JOSE<<<<<<<<<<<<<
         """.trimIndent()
-        val resultado = parsearMrzTd1(td1NumeroLargo)
+
+        val resultado = parsearMrzTd1(td1Dimex)
+
+        assertEquals(false, resultado?.numeroDocumentoExtendidoSinSoporte)
+        assertEquals("199988877701", resultado?.numeroDocumento)
+        assertTrue(resultado?.checksumsValidos == true)
+    }
+
+    @Test
+    fun dimexConCheckDigitDelBloqueBaseAlteradoNoConfirma() {
+        val td1DimexCorrupto = """
+            C<CRI1999888773701<<<<<<<<<<<<
+            9001011M3001019NIC<<<<<<<<<<<0
+            PEREZ<<MARIA<JOSE<<<<<<<<<<<<<
+        """.trimIndent()
+        val resultado = parsearMrzTd1(td1DimexCorrupto)
+        assertEquals(false, resultado?.checksumsValidos)
+    }
+
+    @Test
+    fun digitoEnPosicion15SinChecksumValidoYSinSerCriQuedaSinSoporte() {
+        // Mismo patrón visual (dígito + más dígitos en el opcional) pero de
+        // otro país -- no se asume que siga la convención de Costa Rica sin
+        // verificarlo, se marca explícitamente en vez de arriesgar un
+        // número mal reconstruido.
+        val td1OtroPais = """
+            C<ARG1999888772701<<<<<<<<<<<<
+            9001011M3001019ARG<<<<<<<<<<<0
+            PEREZ<<MARIA<JOSE<<<<<<<<<<<<<
+        """.trimIndent()
+        val resultado = parsearMrzTd1(td1OtroPais)
         assertTrue(resultado?.numeroDocumentoExtendidoSinSoporte == true)
         assertEquals(false, resultado?.checksumsValidos)
     }
