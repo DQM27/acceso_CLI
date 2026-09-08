@@ -389,6 +389,10 @@ Confirmado que es viable y recomendable:
    contra la fecha actual y se reclasifica si es menor de 18
    (`DocumentoDetectado.reclasificarPorEdad()`) — ver
    `fixtures-ocr-sinteticos.md` sección 4.3.
+9. ✅ Vibración corta al confirmar (sección 8, "check verde + vibración").
+   `VibrationEffect.createOneShot()` (permiso `VIBRATE`, normal, sin diálogo
+   de runtime), disparada una sola vez en el mismo punto donde ya se
+   garantizaba una única llamada a `onCedulaDetectada` (`compareAndSet`).
 
 ## 12. Preguntas abiertas / pendientes de refinar
 

@@ -1,7 +1,12 @@
 package com.brisas.controlacceso
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -156,6 +161,7 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
                         val documento = resultado.documento
                         if (resultado.estado == EstadoEscaneo.CONFIRMADO && documento != null) {
                             if (detectada.compareAndSet(false, true)) {
+                                vibrarConfirmacion(contexto)
                                 onCedulaDetectada(documento.numeroDocumento)
                             }
                         }
@@ -275,6 +281,21 @@ private fun enfocarCentro(camara: androidx.camera.core.Camera) {
         .disableAutoCancel()
         .build()
     camara.cameraControl.startFocusAndMetering(accionEnfoque)
+}
+
+/// Vibración corta de confirmación (plan, sección 7-8: "check verde +
+/// vibración corta" al aceptar una lectura) -- señal táctil de que ya
+/// terminó, para no depender solo del color del marco o del mensaje en
+/// pantalla. `minSdk` de la app es 26, así que `VibrationEffect` siempre
+/// existe; sólo cambia de dónde se obtiene el `Vibrator` según la versión.
+private fun vibrarConfirmacion(contexto: Context) {
+    val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        (contexto.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager)?.defaultVibrator
+    } else {
+        @Suppress("DEPRECATION")
+        contexto.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+    }
+    vibrator?.vibrate(VibrationEffect.createOneShot(80, VibrationEffect.DEFAULT_AMPLITUDE))
 }
 
 /// Sólo entrega a ML Kit y devuelve el texto YA recortado al área guía --
