@@ -2,9 +2,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- Permiso "normal" (no requiere pedirlo en runtime): vibración
-         corta de confirmación al escanear un documento. -->
-    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Sin permiso VIBRATE: la vibración de confirmación al escanear usa
+         la API háptica semántica de Compose (HapticFeedbackType.Confirm),
+         que corre por View.performHapticFeedback y no lo necesita. -->
 
     <!-- La base de datos local trae cédulas, hashes de contraseña e
          historial de accesos. Con allowBackup=true (el default), Android

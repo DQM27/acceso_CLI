@@ -389,10 +389,21 @@ Confirmado que es viable y recomendable:
    contra la fecha actual y se reclasifica si es menor de 18
    (`DocumentoDetectado.reclasificarPorEdad()`) — ver
    `fixtures-ocr-sinteticos.md` sección 4.3.
-9. ✅ Vibración corta al confirmar (sección 8, "check verde + vibración").
-   `VibrationEffect.createOneShot()` (permiso `VIBRATE`, normal, sin diálogo
-   de runtime), disparada una sola vez en el mismo punto donde ya se
-   garantizaba una única llamada a `onCedulaDetectada` (`compareAndSet`).
+9. ✅ Vibración + sonido corto al confirmar (sección 8, "check verde +
+   vibración"). Revisado contra buenas prácticas antes de implementar:
+   - **Háptica**: `HapticFeedbackType.Confirm` de Compose (`LocalHapticFeedback`),
+     no `Vibrator`/`VibrationEffect` crudo -- Android desaconseja
+     explícitamente `createOneShot`/`createWaveform` para feedback de UI
+     regular ("demasiado fuerte"); `Confirm` es el tipo semántico pensado
+     para esto, no requiere permiso `VIBRATE`, y respeta la intensidad
+     háptica que la persona ya configuró en el sistema.
+   - **Sonido**: `ToneGenerator.TONE_PROP_ACK` (el tono que Android reserva
+     para "confirmación positiva", no un beep genérico) en
+     `STREAM_NOTIFICATION` -- ese stream respeta solo/vibrador/No molestar
+     automáticamente, sin tener que consultar `AudioManager.getRingerMode()`
+     a mano. Volumen bajo (40/100) y 100ms, deliberadamente sutil.
+   - Disparados una sola vez, en el mismo punto donde ya se garantizaba una
+     única llamada a `onCedulaDetectada` (`compareAndSet`).
 
 ## 12. Preguntas abiertas / pendientes de refinar
 

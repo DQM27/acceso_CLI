@@ -1,12 +1,11 @@
 package com.brisas.controlacceso
 
 import android.Manifest
-import android.content.Context
 import android.content.pm.PackageManager
-import android.os.Build
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
+import android.media.AudioManager
+import android.media.ToneGenerator
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -37,7 +36,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -89,6 +90,14 @@ fun PantallaEscanearCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () -> 
 private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () -> Unit) {
     val contexto = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    // Háptica semántica de Compose (`HapticFeedbackType.Confirm`), no
+    // `Vibrator`/`VibrationEffect` crudo -- la guía oficial de Android
+    // desaconseja `createOneShot`/`createWaveform` para feedback de UI
+    // regular ("demasiado fuerte/genérico"); el tipo `Confirm` está pensado
+    // exactamente para esto, no requiere permiso VIBRATE, y respeta la
+    // intensidad háptica que la persona ya configuró en el sistema en vez
+    // de imponer una vibración fija.
+    val haptica = LocalHapticFeedback.current
     val ejecutor = remember { Executors.newSingleThreadExecutor() }
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     var ultimoMensaje by remember { mutableStateOf("Alinee el documento dentro de la cámara") }
@@ -161,7 +170,8 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
                         val documento = resultado.documento
                         if (resultado.estado == EstadoEscaneo.CONFIRMADO && documento != null) {
                             if (detectada.compareAndSet(false, true)) {
-                                vibrarConfirmacion(contexto)
+                                haptica.performHapticFeedback(HapticFeedbackType.Confirm)
+                                reproducirSonidoConfirmacion()
                                 onCedulaDetectada(documento.numeroDocumento)
                             }
                         }
@@ -283,20 +293,33 @@ private fun enfocarCentro(camara: androidx.camera.core.Camera) {
     camara.cameraControl.startFocusAndMetering(accionEnfoque)
 }
 
-/// Vibración corta de confirmación (plan, sección 7-8: "check verde +
-/// vibración corta" al aceptar una lectura) -- señal táctil de que ya
-/// terminó, para no depender solo del color del marco o del mensaje en
-/// pantalla. `minSdk` de la app es 26, así que `VibrationEffect` siempre
-/// existe; sólo cambia de dónde se obtiene el `Vibrator` según la versión.
-private fun vibrarConfirmacion(contexto: Context) {
-    val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        (contexto.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager)?.defaultVibrator
-    } else {
-        @Suppress("DEPRECATION")
-        contexto.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+/// Sonido corto y discreto de confirmación -- complementa la háptica, no la
+/// reemplaza (alguien con el celular en silencio/vibrador no debería
+/// quedarse sin ninguna señal, y viceversa). `TONE_PROP_ACK` es
+/// literalmente el tono que Android reserva para "confirmación positiva",
+/// no un beep genérico. Se reproduce en `STREAM_NOTIFICATION`: ese stream
+/// respeta el modo silencioso/No molestar del sistema automáticamente, así
+/// que no hace falta consultar `AudioManager.getRingerMode()` a mano --
+/// dejar que el sistema decida si corresponde sonar es más confiable que
+/// replicar esa lógica acá. Volumen bajo (`MAX_VOLUME` es 100) y duración
+/// corta a propósito: nada de un beep de escáner de supermercado.
+private fun reproducirSonidoConfirmacion() {
+    try {
+        val generador = ToneGenerator(AudioManager.STREAM_NOTIFICATION, VOLUMEN_SONIDO_CONFIRMACION)
+        generador.startTone(ToneGenerator.TONE_PROP_ACK, DURACION_SONIDO_CONFIRMACION_MS)
+        // ToneGenerator reserva un recurso nativo de audio hasta `release()` --
+        // sin esto se queda tomado el resto de la vida del proceso. El
+        // delay deja que el tono realmente termine de sonar antes de soltarlo.
+        Handler(Looper.getMainLooper()).postDelayed(generador::release, DURACION_SONIDO_CONFIRMACION_MS + 50L)
+    } catch (e: RuntimeException) {
+        // El constructor de ToneGenerator puede fallar si el dispositivo no
+        // tiene el recurso de audio disponible en ese momento -- el sonido
+        // es un complemento, nunca debe tumbar el flujo de escaneo por esto.
     }
-    vibrator?.vibrate(VibrationEffect.createOneShot(80, VibrationEffect.DEFAULT_AMPLITUDE))
 }
+
+private const val VOLUMEN_SONIDO_CONFIRMACION = 40 // sobre 100 -- sutil, no un beep de caja registradora
+private const val DURACION_SONIDO_CONFIRMACION_MS = 100
 
 /// Sólo entrega a ML Kit y devuelve el texto YA recortado al área guía --
 /// la clasificación de tipo de documento, extracción de campos y decisión
