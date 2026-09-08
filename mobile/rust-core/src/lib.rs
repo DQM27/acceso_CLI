@@ -1154,16 +1154,38 @@ impl Nucleo {
     /// persistir el secreto desde Rust. Android lo guarda con Android
     /// Keystore y sólo entrega el secreto descifrado en memoria para esta
     /// autenticación inicial.
+    ///
+    /// Los parámetros de metadata (todos opcionales, `""` = no disponible)
+    /// viajan una única vez, en esta primera autenticación -- ver
+    /// `control_acceso::nube::MetadatosDispositivo`. No se vuelven a
+    /// reenviar en cada renovación de token porque casi nunca cambian, y
+    /// esto ya alcanza para que el panel de administración distinga el
+    /// teléfono físico detrás de cada secreto (ver
+    /// `docs/plan-sesion-unica-dispositivos.md`).
+    #[allow(clippy::too_many_arguments)]
     pub fn configurar_dispositivo_inicial_con_secreto(
         &self,
         secreto: String,
+        android_id: String,
+        modelo: String,
+        fabricante: String,
+        fingerprint: String,
+        app_version: String,
     ) -> Result<ResumenSincronizacion, NucleoError> {
         if !self.core_lock().requiere_configuracion_inicial()? {
             return Err(NucleoError::from(GestionNubeErrorNucleo::YaConfigurado));
         }
 
+        let cadena_opcional = |texto: String| (!texto.trim().is_empty()).then_some(texto);
+        let metadata = control_acceso::nube::MetadatosDispositivo {
+            android_id: cadena_opcional(android_id),
+            modelo: cadena_opcional(modelo),
+            fabricante: cadena_opcional(fabricante),
+            fingerprint: cadena_opcional(fingerprint),
+            app_version: cadena_opcional(app_version),
+        };
         let token = self
-            .autenticar_con_cache(&secreto)
+            .autenticar_y_cachear(&secreto, Some(&metadata))
             .map_err(|error| NucleoError::Interno {
                 mensaje: error.to_string(),
             })?;
@@ -1554,6 +1576,18 @@ impl Nucleo {
         &self,
         secreto: &str,
     ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
+        self.autenticar_y_cachear(secreto, None)
+    }
+
+    /// Igual que [`Nucleo::autenticar_con_cache`], pero permite adjuntar
+    /// `metadata` cuando hace falta mandarla (sólo la activación inicial,
+    /// ver [`Nucleo::configurar_dispositivo_inicial_con_secreto`]). El resto
+    /// de los llamadores pasan `None` a través de `autenticar_con_cache`.
+    fn autenticar_y_cachear(
+        &self,
+        secreto: &str,
+        metadata: Option<&control_acceso::nube::MetadatosDispositivo>,
+    ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
         const MARGEN_EXPIRACION: std::time::Duration = std::time::Duration::from_secs(30);
 
         {
@@ -1572,8 +1606,11 @@ impl Nucleo {
             }
         }
 
-        let token =
-            control_acceso::nube::autenticar_dispositivo(control_acceso::nube::BASE_URL, secreto)?;
+        let token = control_acceso::nube::autenticar_dispositivo(
+            control_acceso::nube::BASE_URL,
+            secreto,
+            metadata,
+        )?;
         *self
             .token_nube_cacheado
             .lock()

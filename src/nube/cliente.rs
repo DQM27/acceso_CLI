@@ -71,17 +71,43 @@ impl std::fmt::Debug for TokenDispositivo {
     }
 }
 
+/// Datos del teléfono físico capturados en la activación inicial (ver
+/// `Nucleo::configurar_dispositivo_inicial_con_secreto`) -- sólo viajan una
+/// vez, no en cada renovación de token. Sirven para que el panel de
+/// administración distinga "el mismo teléfono de siempre" de un teléfono
+/// distinto usando el mismo secreto, y como evidencia si hace falta
+/// denunciar un intento de fraude (ver `docs/plan-sesion-unica-dispositivos.md`).
+/// Ninguno es secreto en sí mismo -- todos observables por cualquier app en
+/// el propio teléfono -- así que viajan en texto plano en el body, igual
+/// que el secreto.
+#[derive(Default, serde::Serialize)]
+pub struct MetadatosDispositivo {
+    pub android_id: Option<String>,
+    pub modelo: Option<String>,
+    pub fabricante: Option<String>,
+    pub fingerprint: Option<String>,
+    pub app_version: Option<String>,
+}
+
 /// Intercambia el secreto de este dispositivo (ver `super::credenciales`)
-/// por un `TokenDispositivo` firmado por el receptor.
+/// por un `TokenDispositivo` firmado por el receptor. `metadata`, si viene,
+/// se adjunta al mismo request -- ver `MetadatosDispositivo`.
 pub fn autenticar_dispositivo(
     base_url: &str,
     secreto: &str,
+    metadata: Option<&MetadatosDispositivo>,
 ) -> Result<TokenDispositivo, NubeError> {
     let url = format!("{base_url}/functions/v1/device-auth");
-    let respuesta = cliente_http()
-        .post(url)
-        .json(&serde_json::json!({ "secret": secreto }))
-        .send()?;
+    let mut cuerpo = serde_json::json!({ "secret": secreto });
+    if let Some(metadata) = metadata {
+        if let serde_json::Value::Object(mapa) = &mut cuerpo {
+            mapa.insert(
+                "metadata".to_string(),
+                serde_json::to_value(metadata).unwrap_or_default(),
+            );
+        }
+    }
+    let respuesta = cliente_http().post(url).json(&cuerpo).send()?;
 
     if respuesta.status() == reqwest::StatusCode::UNAUTHORIZED {
         return Err(NubeError::CredencialesInvalidas);
@@ -160,7 +186,7 @@ mod tests {
              \"dispositivo_id\":\"d1\",\"tipo\":\"pc\"}",
         );
 
-        let token = autenticar_dispositivo(&base_url, "cualquier-secreto").expect("token ok");
+        let token = autenticar_dispositivo(&base_url, "cualquier-secreto", None).expect("token ok");
 
         assert_eq!(token.access_token, "abc");
         assert_eq!(token.expires_in, 3600);
@@ -206,7 +232,7 @@ mod tests {
              \"dispositivo_id\":\"d1\",\"tipo\":\"pc\"}}"
         ));
 
-        let token = autenticar_dispositivo(&base_url, "cualquier-secreto").expect("token ok");
+        let token = autenticar_dispositivo(&base_url, "cualquier-secreto", None).expect("token ok");
 
         let desfase_ms = token
             .desfase_reloj_ms
@@ -226,7 +252,7 @@ mod tests {
              Connection: close\r\n\r\n{\"error\":\"invalid_credentials\"}",
         );
 
-        let resultado = autenticar_dispositivo(&base_url, "secreto-invalido");
+        let resultado = autenticar_dispositivo(&base_url, "secreto-invalido", None);
 
         assert!(matches!(resultado, Err(NubeError::CredencialesInvalidas)));
     }
@@ -238,7 +264,7 @@ mod tests {
              Connection: close\r\n\r\n{\"error\":\"boom\"}",
         );
 
-        let resultado = autenticar_dispositivo(&base_url, "secreto");
+        let resultado = autenticar_dispositivo(&base_url, "secreto", None);
 
         assert!(matches!(resultado, Err(NubeError::Red(_))));
     }
@@ -250,7 +276,7 @@ mod tests {
              Connection: close\r\n\r\nesto no es json",
         );
 
-        let resultado = autenticar_dispositivo(&base_url, "secreto");
+        let resultado = autenticar_dispositivo(&base_url, "secreto", None);
 
         assert!(matches!(resultado, Err(NubeError::Red(_))));
     }

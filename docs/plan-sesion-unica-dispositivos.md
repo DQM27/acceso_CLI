@@ -151,6 +151,22 @@ hay activas — apoyado en presence de Realtime o un heartbeat simple.
 Esto depende de que el punto 4 exista primero; construirlo antes sería
 maquillaje sobre un problema de seguridad sin resolver.
 
+**Infraestructura ya verificada (2026-09-08):** no hace falta tabla nueva
+ni edge function nueva para esto. El canal privado por sitio ya existe
+(`NubeRealtime.kt`, `topic = "sitio:{sitio_id}"`), ya está atado al ciclo
+de vida `ON_START`/`ON_STOP` de la pantalla principal (exactamente "solo
+mientras la app está abierta"), y el panel web ya lo escucha para avisos
+de cambios. Agregar presencia es sumarle tracking de presencia a ese
+mismo canal — no abrir uno nuevo. Costo de red/batería extra: prácticamente
+cero, viaja sobre la conexión que ya existe.
+
+**Pedido explícito del usuario: la web debe ver toda la metadata del
+dispositivo, incluida la IP.** No alcanza con guardar la metadata
+forense (punto 2, `ANDROID_ID`/modelo/fingerprint/IP) solo como respaldo
+para denuncias — el panel de administración debe poder consultarla
+directamente para cada dispositivo, no quedar oculta en una tabla que
+solo se mira cuando ya hubo un incidente.
+
 ## Orden de implementación
 
 0. Identidad canónica del dispositivo (tabla maestra en Supabase).

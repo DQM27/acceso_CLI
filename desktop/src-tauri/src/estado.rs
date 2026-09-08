@@ -82,7 +82,7 @@ impl GuiState {
             }
         }
 
-        let token = nube::autenticar_dispositivo(nube::BASE_URL, secreto)?;
+        let token = nube::autenticar_dispositivo(nube::BASE_URL, secreto, None)?;
         *self
             .token_nube_cacheado
             .lock()

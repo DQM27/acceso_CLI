@@ -61,7 +61,10 @@ Deno.serve(async (req: Request) => {
 
   const { data: dispositivos, error: dispositivosError } = await supabase
     .from("dispositivos")
-    .select("id, sitio_id, tipo, etiqueta, created_at, revoked_at, suspended_at, last_seen_at, oculto_en_panel")
+    .select(
+      "id, sitio_id, tipo, etiqueta, created_at, revoked_at, suspended_at, last_seen_at, oculto_en_panel, " +
+        "android_id, modelo, fabricante, fingerprint, app_version, last_ip",
+    )
     .order("created_at", { ascending: false });
 
   if (dispositivosError) {

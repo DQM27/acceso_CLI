@@ -94,6 +94,13 @@ class MainActivity : ComponentActivity() {
                                 PantallaPrimerArranque(
                                     nucleo,
                                     secretoStore = secretoStore,
+                                    metadata =
+                                        remember(identificadorDispositivo) {
+                                            MetadatosDispositivoLocal.capturar(
+                                                context = this@MainActivity,
+                                                androidId = identificadorDispositivo,
+                                            )
+                                        },
                                     onListo = { requiereArranque = false },
                                 )
                             } else {

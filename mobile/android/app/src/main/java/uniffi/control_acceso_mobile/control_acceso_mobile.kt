@@ -779,7 +779,7 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`androidId`: RustBuffer.ByValue,`modelo`: RustBuffer.ByValue,`fabricante`: RustBuffer.ByValue,`fingerprint`: RustBuffer.ByValue,`appVersion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_contratista(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
@@ -969,7 +969,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial() != 9648) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial_con_secreto() != 51433) {
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial_con_secreto() != 32213) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista() != 57741) {
@@ -1564,8 +1564,16 @@ public interface NucleoInterface {
      * persistir el secreto desde Rust. Android lo guarda con Android
      * Keystore y sólo entrega el secreto descifrado en memoria para esta
      * autenticación inicial.
+     *
+     * Los parámetros de metadata (todos opcionales, `""` = no disponible)
+     * viajan una única vez, en esta primera autenticación -- ver
+     * `control_acceso::nube::MetadatosDispositivo`. No se vuelven a
+     * reenviar en cada renovación de token porque casi nunca cambian, y
+     * esto ya alcanza para que el panel de administración distinga el
+     * teléfono físico detrás de cada secreto (ver
+     * `docs/plan-sesion-unica-dispositivos.md`).
      */
-    fun `configurarDispositivoInicialConSecreto`(`secreto`: kotlin.String): ResumenSincronizacion
+    fun `configurarDispositivoInicialConSecreto`(`secreto`: kotlin.String, `androidId`: kotlin.String, `modelo`: kotlin.String, `fabricante`: kotlin.String, `fingerprint`: kotlin.String, `appVersion`: kotlin.String): ResumenSincronizacion
     
     /**
      * Alta de contratista — mismo formulario que
@@ -2044,15 +2052,28 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
      * persistir el secreto desde Rust. Android lo guarda con Android
      * Keystore y sólo entrega el secreto descifrado en memoria para esta
      * autenticación inicial.
+     *
+     * Los parámetros de metadata (todos opcionales, `""` = no disponible)
+     * viajan una única vez, en esta primera autenticación -- ver
+     * `control_acceso::nube::MetadatosDispositivo`. No se vuelven a
+     * reenviar en cada renovación de token porque casi nunca cambian, y
+     * esto ya alcanza para que el panel de administración distinga el
+     * teléfono físico detrás de cada secreto (ver
+     * `docs/plan-sesion-unica-dispositivos.md`).
      */
-    @Throws(NucleoException::class)override fun `configurarDispositivoInicialConSecreto`(`secreto`: kotlin.String): ResumenSincronizacion {
+    @Throws(NucleoException::class)override fun `configurarDispositivoInicialConSecreto`(`secreto`: kotlin.String, `androidId`: kotlin.String, `modelo`: kotlin.String, `fabricante`: kotlin.String, `fingerprint`: kotlin.String, `appVersion`: kotlin.String): ResumenSincronizacion {
             return FfiConverterTypeResumenSincronizacion.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial_con_secreto(
         it,
         
-        FfiConverterString.lower(`secreto`),_status)
+        FfiConverterString.lower(`secreto`),
+        FfiConverterString.lower(`androidId`),
+        FfiConverterString.lower(`modelo`),
+        FfiConverterString.lower(`fabricante`),
+        FfiConverterString.lower(`fingerprint`),
+        FfiConverterString.lower(`appVersion`),_status)
 }
     }
     )

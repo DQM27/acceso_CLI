@@ -31,6 +31,12 @@ export interface Dispositivo {
   suspended_at: string | null;
   last_seen_at: string | null;
   oculto_en_panel: boolean;
+  android_id: string | null;
+  modelo: string | null;
+  fabricante: string | null;
+  fingerprint: string | null;
+  app_version: string | null;
+  last_ip: string | null;
 }
 
 export interface DispositivoProvisionado {

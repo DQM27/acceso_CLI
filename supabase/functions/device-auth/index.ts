@@ -39,7 +39,16 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  let body: { secret?: string };
+  let body: {
+    secret?: string;
+    metadata?: {
+      android_id?: string;
+      modelo?: string;
+      fabricante?: string;
+      fingerprint?: string;
+      app_version?: string;
+    };
+  };
   try {
     body = await req.json();
   } catch {
@@ -56,6 +65,13 @@ Deno.serve(async (req: Request) => {
       headers: { "Content-Type": "application/json", ...CORS_HEADERS },
     });
   }
+
+  // La IP la observa el propio servidor -- no depende de lo que mande el
+  // cliente (que se podria alterar con un APK modificado), asi que es el
+  // dato mas confiable para evidencia forense. Supabase Edge Functions
+  // corre detras de su proxy, que agrega este header; no hay acceso directo
+  // al socket TCP en Deno Deploy.
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
 
   const secretHash = await sha256Hex(secret);
 
@@ -102,10 +118,26 @@ Deno.serve(async (req: Request) => {
     .sign(privateKey);
 
   // No bloquea la respuesta: si falla, no vale la pena tumbar el login por
-  // esto -- last_seen_at es informativo, no un mecanismo de seguridad.
+  // esto -- last_seen_at/last_ip/metadata son informativos, no un mecanismo
+  // de seguridad. metadata sólo viaja en la activación inicial (ver
+  // Nucleo.configurarDispositivoInicialConSecreto) -- sólo se pisan los
+  // campos que de verdad vinieron, para no borrar lo ya guardado en cada
+  // renovación de token de rutina, que no manda nada de esto.
+  const actualizacion: Record<string, string> = {
+    last_seen_at: new Date().toISOString(),
+  };
+  if (ip) actualizacion.last_ip = ip;
+  const metadata = body.metadata;
+  if (metadata && typeof metadata === "object") {
+    if (metadata.android_id) actualizacion.android_id = metadata.android_id;
+    if (metadata.modelo) actualizacion.modelo = metadata.modelo;
+    if (metadata.fabricante) actualizacion.fabricante = metadata.fabricante;
+    if (metadata.fingerprint) actualizacion.fingerprint = metadata.fingerprint;
+    if (metadata.app_version) actualizacion.app_version = metadata.app_version;
+  }
   supabase
     .from("dispositivos")
-    .update({ last_seen_at: new Date().toISOString() })
+    .update(actualizacion)
     .eq("id", dispositivo.id)
     .then(() => {});
 

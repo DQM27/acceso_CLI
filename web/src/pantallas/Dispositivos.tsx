@@ -315,6 +315,21 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
         valueFormatter: ({ value }) => (value ? textoFechaHora(value) : "Nunca"),
       },
       {
+        colId: "dispositivo_fisico",
+        headerName: "Dispositivo",
+        flex: 1.3,
+        minWidth: 170,
+        valueGetter: ({ data }) =>
+          [data?.fabricante, data?.modelo].filter(Boolean).join(" ") || "—",
+      },
+      {
+        field: "last_ip",
+        headerName: "IP",
+        flex: 0.9,
+        minWidth: 120,
+        valueFormatter: ({ value }) => value ?? "—",
+      },
+      {
         field: "revoked_at",
         headerName: "Estado",
         flex: 0.9,

@@ -95,7 +95,7 @@ fn main() {
 
     let secreto =
         nube::credenciales::cargar_secreto().expect("no hay secreto de dispositivo guardado");
-    let token = nube::autenticar_dispositivo(nube::BASE_URL, &secreto)
+    let token = nube::autenticar_dispositivo(nube::BASE_URL, &secreto, None)
         .expect("no se pudo autenticar el dispositivo");
     println!(
         "Autenticado: sitio={} dispositivo={} tipo={}",

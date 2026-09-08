@@ -275,7 +275,7 @@ impl AppCore {
     ) -> Result<(), GestionNubeError> {
         let secreto = cargar_secreto_de(directorio, identificador_dispositivo)
             .ok_or(GestionNubeError::SinSecreto)?;
-        let token = crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, &secreto)?;
+        let token = crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, &secreto, None)?;
         self.aplicar_desfase_reloj(&token);
         let contexto = crate::nube::ContextoSincronizacion {
             base_url: crate::nube::BASE_URL,
@@ -639,7 +639,7 @@ impl AppCore {
             }
         }
 
-        let token = crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, secreto)?;
+        let token = crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, secreto, None)?;
         self.aplicar_desfase_reloj(&token);
         *self
             .token_nube_cacheado

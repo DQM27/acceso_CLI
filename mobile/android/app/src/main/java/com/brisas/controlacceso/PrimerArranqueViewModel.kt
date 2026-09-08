@@ -21,6 +21,7 @@ import uniffi.control_acceso_mobile.NucleoException
 class PrimerArranqueViewModel(
     private val nucleo: Nucleo,
     private val secretoStore: SecretoDispositivoStore,
+    private val metadata: MetadatosDispositivoLocal,
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     var conectando by mutableStateOf(false)
@@ -35,7 +36,14 @@ class PrimerArranqueViewModel(
         viewModelScope.launch {
             try {
                 withContext(dispatcherIO) {
-                    nucleo.configurarDispositivoInicialConSecreto(secreto)
+                    nucleo.configurarDispositivoInicialConSecreto(
+                        secreto = secreto,
+                        androidId = metadata.androidId,
+                        modelo = metadata.modelo,
+                        fabricante = metadata.fabricante,
+                        fingerprint = metadata.fingerprint,
+                        appVersion = metadata.appVersion,
+                    )
                     secretoStore.guardar(secreto)
                 }
                 onListo()
@@ -53,8 +61,9 @@ class PrimerArranqueViewModel(
         fun factory(
             nucleo: Nucleo,
             secretoStore: SecretoDispositivoStore,
+            metadata: MetadatosDispositivoLocal,
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { PrimerArranqueViewModel(nucleo, secretoStore) }
+            initializer { PrimerArranqueViewModel(nucleo, secretoStore, metadata) }
         }
     }
 }

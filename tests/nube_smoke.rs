@@ -19,7 +19,7 @@ fn autentica_un_dispositivo_real_y_recibe_un_token() {
     let secreto = std::env::var("CONTROL_ACCESO_NUBE_SECRETO")
         .expect("definí CONTROL_ACCESO_NUBE_SECRETO con un secreto de dispositivo válido");
 
-    let token = autenticar_dispositivo(BASE_URL, &secreto).expect("la autenticación no falló");
+    let token = autenticar_dispositivo(BASE_URL, &secreto, None).expect("la autenticación no falló");
 
     assert!(!token.access_token.is_empty());
     assert_eq!(token.expires_in, 3600);
