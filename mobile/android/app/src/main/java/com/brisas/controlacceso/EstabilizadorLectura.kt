@@ -9,6 +9,11 @@ data class ResultadoEstabilizacion(
     val estado: EstadoEscaneo,
     val documento: DocumentoDetectado? = null,
     val mensaje: String,
+    // Sólo tiene sentido cuando estado == CONFIRMADO y el documento trae
+    // fecha de vencimiento. `false` no significa "vigente confirmado", sólo
+    // "no se detectó como vencido" (puede ser vigente, o simplemente no
+    // haber fecha de vencimiento disponible para ese tipo de documento).
+    val vencido: Boolean = false,
 )
 
 /// Decide, frame a frame, si ya hay lectura suficiente para aceptarla.
@@ -22,7 +27,12 @@ data class ResultadoEstabilizacion(
 ///
 /// Con instancia por sesión de escaneo: crear una nueva por cada vez que se
 /// abre la pantalla de cámara, no reusar entre escaneos distintos.
-class EstabilizadorLectura(private val framesRequeridos: Int = 3) {
+class EstabilizadorLectura(
+    private val framesRequeridos: Int = 3,
+    // Inyectable para poder fijar la fecha en tests sin depender del reloj
+    // del sistema -- ver `fechaDeHoy()`.
+    private val obtenerFechaHoy: () -> FechaDocumento = ::fechaDeHoy,
+) {
     private var ultimoCandidato: DocumentoDetectado? = null
     private var repeticiones = 0
 
@@ -40,11 +50,8 @@ class EstabilizadorLectura(private val framesRequeridos: Int = 3) {
                     ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no reconocido")
                 mrz.checksumsValidos -> {
                     val documento = mrz.aDocumentoDetectado()
-                    ResultadoEstabilizacion(
-                        EstadoEscaneo.CONFIRMADO,
-                        documento = documento,
-                        mensaje = "${documento.tipo.nombreLegible()} confirmado",
-                    )
+                    val (mensaje, vencido) = mensajeDeConfirmacion(documento)
+                    ResultadoEstabilizacion(EstadoEscaneo.CONFIRMADO, documento = documento, mensaje = mensaje, vencido = vencido)
                 }
                 else ->
                     ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no reconocido")
@@ -74,14 +81,23 @@ class EstabilizadorLectura(private val framesRequeridos: Int = 3) {
         }
 
         return if (repeticiones >= framesRequeridos) {
-            ResultadoEstabilizacion(
-                EstadoEscaneo.CONFIRMADO,
-                documento = documento,
-                mensaje = "${documento.tipo.nombreLegible()} confirmado",
-            )
+            val (mensaje, vencido) = mensajeDeConfirmacion(documento)
+            ResultadoEstabilizacion(EstadoEscaneo.CONFIRMADO, documento = documento, mensaje = mensaje, vencido = vencido)
         } else {
             ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = "${tipo.nombreLegible()} detectado — mantenga firme")
         }
+    }
+
+    /// Anuncia vencimiento en el mismo mensaje de confirmación -- un
+    /// documento vencido igual se identificó correctamente (por eso sigue
+    /// siendo CONFIRMADO, no INVALIDO), pero quien opera necesita saberlo de
+    /// inmediato sin tener que leer la fecha en la pantalla por su cuenta.
+    private fun mensajeDeConfirmacion(documento: DocumentoDetectado): Pair<String, Boolean> {
+        val nombre = documento.tipo.nombreLegible()
+        val vencimiento = documento.vencimiento
+        val vencido = vencimiento != null && vencimiento.estaVencida(obtenerFechaHoy())
+        val mensaje = if (vencido) "$nombre confirmado — DOCUMENTO VENCIDO" else "$nombre confirmado"
+        return mensaje to vencido
     }
 
     private fun reiniciar() {

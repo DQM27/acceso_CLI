@@ -68,6 +68,15 @@ data class FechaDocumento(val dia: Int, val mes: Int, val anio: Int) {
     }
 }
 
+/// La fecha real del dispositivo, envuelta en `FechaDocumento` -- factorizada
+/// en su propia función (en vez de llamar `LocalDate.now()` directo donde se
+/// necesite) para poder inyectar una fecha fija en tests y no depender del
+/// reloj del sistema al probar vigencia/vencimiento.
+fun fechaDeHoy(): FechaDocumento {
+    val hoy = java.time.LocalDate.now()
+    return FechaDocumento(hoy.dayOfMonth, hoy.monthValue, hoy.year)
+}
+
 /// Clasifica el tipo de documento a partir del texto crudo de ML Kit, antes
 /// de intentar extraer ningún campo -- este orden importa porque DIMEX y
 /// licencia de extranjero comparten el mismo rango de número de documento,

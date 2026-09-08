@@ -6,7 +6,7 @@ import org.junit.Test
 
 class EstabilizadorLecturaTest {
 
-    private val licenciaTexto = "Licencia de Conducir\nNº: 112340567\nVencimiento 03-04-2026"
+    private val licenciaTexto = "Licencia de Conducir\nNº: 112340567\nVencimiento 03-04-2030"
 
     private val td1Valido = """
         IDCRI9998887774<<<<<<<<<<<<<<<
@@ -79,7 +79,7 @@ class EstabilizadorLecturaTest {
         estabilizador.procesarFrame(licenciaTexto)
         // Un frame con otro número (ej. reflejo cambió un dígito leído) --
         // no debe heredar las repeticiones acumuladas del candidato previo.
-        val otraLicencia = "Licencia de Conducir\nNº: 999888777\nVencimiento 03-04-2026"
+        val otraLicencia = "Licencia de Conducir\nNº: 999888777\nVencimiento 03-04-2030"
         val r3 = estabilizador.procesarFrame(otraLicencia)
         assertEquals(EstadoEscaneo.BUSCANDO, r3.estado)
     }
@@ -89,7 +89,7 @@ class EstabilizadorLecturaTest {
         // Palabras clave de licencia presentes, pero sin número legible
         // todavía (glare/ángulo) -- es lectura parcial, no un documento
         // desconocido.
-        val texto = "Licencia de Conducir\nVencimiento 03-04-2026"
+        val texto = "Licencia de Conducir\nVencimiento 03-04-2030"
         val r = EstabilizadorLectura().procesarFrame(texto)
         assertEquals(EstadoEscaneo.BUSCANDO, r.estado)
     }
@@ -98,7 +98,7 @@ class EstabilizadorLecturaTest {
 
     @Test
     fun mensajeNombraElTipoDetectadoAunqueTodavíaNoConfirme() {
-        val texto = "Licencia de Conducir\nVencimiento 03-04-2026"
+        val texto = "Licencia de Conducir\nVencimiento 03-04-2030"
         val r = EstabilizadorLectura().procesarFrame(texto)
         assertEquals("Licencia de conducir detectado — mantenga firme", r.mensaje)
     }
@@ -115,5 +115,47 @@ class EstabilizadorLecturaTest {
     fun mensajeDeConfirmacionNombraElTipoDetectadoPorMrz() {
         val r = EstabilizadorLectura().procesarFrame(td1Valido)
         assertEquals("Cédula de residencia (DIMEX) confirmado", r.mensaje)
+    }
+
+    // --- Vigencia (fecha inyectada, no depende del reloj real) ---
+
+    @Test
+    fun documentoVigenteNoSeMarcaComoVencido() {
+        val hoyFijo = FechaDocumento(1, 1, 2026) // antes del 03-04-2030 de licenciaTexto
+        val estabilizador = EstabilizadorLectura(framesRequeridos = 1, obtenerFechaHoy = { hoyFijo })
+        val r = estabilizador.procesarFrame(licenciaTexto)
+        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
+        assertEquals(false, r.vencido)
+        assertEquals("Licencia de conducir confirmado", r.mensaje)
+    }
+
+    @Test
+    fun documentoVencidoSeAnunciaEnElMensajeDeConfirmacionPorFrente() {
+        val hoyFijo = FechaDocumento(1, 1, 2031) // después del 03-04-2030 de licenciaTexto
+        val estabilizador = EstabilizadorLectura(framesRequeridos = 1, obtenerFechaHoy = { hoyFijo })
+        val r = estabilizador.procesarFrame(licenciaTexto)
+        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
+        assertEquals(true, r.vencido)
+        assertEquals("Licencia de conducir confirmado — DOCUMENTO VENCIDO", r.mensaje)
+    }
+
+    @Test
+    fun documentoVencidoSeAnunciaEnElMensajeDeConfirmacionPorMrz() {
+        // td1Valido vence 01/01/2030 -- fijamos "hoy" después de esa fecha.
+        val hoyFijo = FechaDocumento(1, 1, 2031)
+        val estabilizador = EstabilizadorLectura(obtenerFechaHoy = { hoyFijo })
+        val r = estabilizador.procesarFrame(td1Valido)
+        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
+        assertEquals(true, r.vencido)
+        assertEquals("Cédula de residencia (DIMEX) confirmado — DOCUMENTO VENCIDO", r.mensaje)
+    }
+
+    @Test
+    fun sinFechaDeVencimientoNuncaSeMarcaComoVencido() {
+        // Cédula nacional no trae fecha de vencimiento extraíble hoy.
+        val estabilizador = EstabilizadorLectura(framesRequeridos = 1)
+        val r = estabilizador.procesarFrame("TRIBUNAL SUPREMO DE ELECCIONES\n1-1234-0567\nCOSTA RICA")
+        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
+        assertEquals(false, r.vencido)
     }
 }

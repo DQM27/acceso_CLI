@@ -97,6 +97,7 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     var ultimoMensaje by remember { mutableStateOf("Alinee el documento dentro de la cámara") }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
+    var vencido by remember { mutableStateOf(false) }
     // Una instancia por apertura de pantalla -- lleva el conteo de frames
     // consistentes del debounce (ver EstabilizadorLectura), no debe
     // compartirse entre sesiones de escaneo distintas.
@@ -130,10 +131,16 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
     val colorBuscando = Color(0xFF9E9E9E)
     val colorInvalido = Color(0xFFE53935)
     val colorConfirmado = Color(0xFF43A047)
-    val colorMarco = when (estado) {
-        EstadoEscaneo.BUSCANDO -> colorBuscando
-        EstadoEscaneo.INVALIDO -> colorInvalido
-        EstadoEscaneo.CONFIRMADO -> colorConfirmado
+    // Un documento vencido igual se leyó bien (por eso el estado sigue
+    // siendo CONFIRMADO, no INVALIDO), pero visualmente no puede quedar
+    // idéntico a uno vigente -- ámbar, ni el verde de "todo bien" ni el
+    // rojo de "no reconocido".
+    val colorVencido = Color(0xFFFF8F00)
+    val colorMarco = when {
+        estado == EstadoEscaneo.CONFIRMADO && vencido -> colorVencido
+        estado == EstadoEscaneo.CONFIRMADO -> colorConfirmado
+        estado == EstadoEscaneo.INVALIDO -> colorInvalido
+        else -> colorBuscando
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -171,6 +178,7 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
                                             val resultado = estabilizador.procesarFrame(texto)
                                             estado = resultado.estado
                                             ultimoMensaje = resultado.mensaje
+                                            vencido = resultado.vencido
                                             val documento = resultado.documento
                                             if (resultado.estado == EstadoEscaneo.CONFIRMADO && documento != null) {
                                                 if (detectada.compareAndSet(false, true)) {
@@ -180,6 +188,7 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
                                         },
                                         onFallo = {
                                             estado = EstadoEscaneo.BUSCANDO
+                                            vencido = false
                                             ultimoMensaje = "No se pudo leer el texto. Intente acercar el documento."
                                         },
                                     )
