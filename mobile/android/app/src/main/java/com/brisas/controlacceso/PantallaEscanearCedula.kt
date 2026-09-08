@@ -213,7 +213,7 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
             },
             modifier = Modifier.fillMaxSize(),
         )
-        MarcoGuiaCedula(color = colorMarco, areaTexto = areaTexto, modifier = Modifier.fillMaxSize())
+        MarcoGuiaCedula(color = colorMarco, estado = estado, areaTexto = areaTexto, modifier = Modifier.fillMaxSize())
         Column(
             modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
