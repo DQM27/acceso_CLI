@@ -8,13 +8,14 @@ enum class TipoDocumento {
     CEDULA_RESIDENCIA,
     LICENCIA_NACIONAL,
     LICENCIA_EXTRANJERO,
+    PASAPORTE,
     DESCONOCIDO,
 }
 
-/// Resultado normalizado de leer el frente de un documento, sin importar
-/// cuál extractor lo produjo. Los campos que un tipo de documento no trae
-/// (ej. nacionalidad en una licencia nacional) quedan en `null` en vez de
-/// forzar un valor -- ver sección 0.2 del plan de OCR.
+/// Resultado normalizado de leer un documento, sin importar cuál extractor
+/// lo produjo (frente vía regex, o MRZ vía checksum). Los campos que un
+/// tipo de documento no trae (ej. nacionalidad en una licencia nacional)
+/// quedan en `null` en vez de forzar un valor -- ver sección 0.2 del plan.
 data class DocumentoDetectado(
     val tipo: TipoDocumento,
     val numeroDocumento: String,
@@ -23,6 +24,28 @@ data class DocumentoDetectado(
     val nacionalidad: String? = null,
     val esExtranjero: Boolean = false,
     val vencimiento: FechaDocumento? = null,
+    val fechaNacimiento: FechaDocumento? = null,
+    val sexo: Char? = null,
+    val fuenteDatos: FuenteDatos = FuenteDatos.OCR_FRENTE,
+    val checksumValido: Boolean? = null,
+)
+
+/// Traduce un MRZ ya parseado al modelo normalizado. TD1 se etiqueta como
+/// `CEDULA_RESIDENCIA` por ahora -- la cédula nacional 2025+ también usa
+/// TD1 y hoy no hay forma de distinguirlas sólo por el MRZ (el campo de
+/// tipo de documento no está estandarizado entre emisores); si esto
+/// importa en la práctica, resolver combinando con el frente.
+fun ResultadoMrz.aDocumentoDetectado(): DocumentoDetectado = DocumentoDetectado(
+    tipo = if (formato == "TD3") TipoDocumento.PASAPORTE else TipoDocumento.CEDULA_RESIDENCIA,
+    numeroDocumento = numeroDocumento,
+    nombre = nombres.ifBlank { null },
+    apellidos = apellidos.ifBlank { null },
+    nacionalidad = nacionalidad.ifBlank { null },
+    vencimiento = fechaVencimiento,
+    fechaNacimiento = fechaNacimiento,
+    sexo = sexo,
+    fuenteDatos = FuenteDatos.MRZ,
+    checksumValido = checksumsValidos,
 )
 
 data class FechaDocumento(val dia: Int, val mes: Int, val anio: Int) {
@@ -64,6 +87,9 @@ fun leerDocumentoDeTexto(texto: String): DocumentoDetectado? {
         TipoDocumento.CEDULA_RESIDENCIA -> extraerDimex(texto)
         TipoDocumento.LICENCIA_NACIONAL -> extraerLicencia(texto, esExtranjero = false)
         TipoDocumento.LICENCIA_EXTRANJERO -> extraerLicencia(texto, esExtranjero = true)
+        // El clasificador por palabras clave del frente no distingue
+        // pasaporte todavía -- llega sólo vía MRZ (ver ResultadoMrz.aDocumentoDetectado).
+        TipoDocumento.PASAPORTE -> null
         TipoDocumento.DESCONOCIDO -> null
     }
 }
