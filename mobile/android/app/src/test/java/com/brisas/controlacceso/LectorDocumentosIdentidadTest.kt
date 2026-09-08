@@ -37,6 +37,56 @@ class LectorDocumentosIdentidadTest {
         assertEquals(TipoDocumento.DESCONOCIDO, clasificarTipoDocumento(texto))
     }
 
+    // --- Carnet de inducción PRAIND -- dos variantes de diseño reales ---
+
+    @Test
+    fun praindVarianteConEncabezadoCarnetDeInduccionAlSite() {
+        val texto = """
+            CARNET DE INDUCCIÓN AL SITE
+            CEDIS COSTA RICA
+            Nombre: Marco Anthony Jimenez Reyes
+            No. de cédula: 155834532920
+            Empresa: Expenic Ing S.A
+            Fecha de inducción: 09/07/2026
+            Fecha de vencimiento de
+            inducción: 08/07/2028
+            COCA COLA FEMSA COSTA RICA
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.CARNET_INDUCCION_PRAIND, doc?.tipo)
+        assertEquals("155834532920", doc?.numeroDocumento)
+        assertEquals("Marco Anthony Jimenez Reyes", doc?.nombre)
+        assertEquals(FechaDocumento(8, 7, 2028), doc?.vencimiento)
+    }
+
+    @Test
+    fun praindVarianteConPieDeNormasDeSeguridad() {
+        // Segunda variante de diseño: el texto "CARNET DE INDUCCIÓN" está en
+        // el pie de página, no en el encabezado, y el número de cédula acá
+        // tiene 9 dígitos (el mismo largo que una cédula nacional) -- por
+        // eso la clasificación de PRAIND tiene que ganarle a la de cédula
+        // nacional, no sólo coincidir con ella.
+        val texto = """
+            Nombre: Mariela Cordero Salazar
+            No. de cédula: 113850770
+            Empresa: Expenic Ing S.A
+            Fecha de inducción: 29/07/2026
+            Fecha de vencimiento de
+            inducción: 29/07/2027
+            CARNET DE INDUCCIÓN EN NORMAS DE SEGURIDAD, AMBIENTE, CALIDAD E INOCUIDAD PARA CONTRATISTAS ML-SC-RGCR0369
+            COCA COLA FEMSA COSTA RICA
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.CARNET_INDUCCION_PRAIND, doc?.tipo)
+        assertEquals("113850770", doc?.numeroDocumento)
+        assertEquals("Mariela Cordero Salazar", doc?.nombre)
+        assertEquals(FechaDocumento(29, 7, 2027), doc?.vencimiento)
+    }
+
     // --- Caso central del plan: Documento No. vs Expediente No. ---
 
     @Test

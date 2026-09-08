@@ -10,11 +10,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
-import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
-import androidx.camera.core.SurfaceOrientedMeteringPointFactory
 import androidx.camera.core.UseCaseGroup
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -282,30 +280,30 @@ private fun iniciarCamara(
                 .addUseCase(analisis)
                 .apply { previewView.viewPort?.let { setViewPort(it) } }
                 .build()
-            val camara = proveedor.bindToLifecycle(
+            proveedor.bindToLifecycle(
                 lifecycleOwner,
                 CameraSelector.DEFAULT_BACK_CAMERA,
                 grupoUseCases,
             )
-            enfocarCentro(camara)
         },
         ContextCompat.getMainExecutor(ctx),
     )
 }
 
-/// Enfoque continuo en el centro (donde vive el recuadro guía) en vez de
-/// confiar en el autofocus por defecto: a la distancia típica de escaneo
-/// (10-15cm) muchos dispositivos no enfocan bien sin esta ayuda -- ver
-/// plan, sección 0.6. Se usa un factory normalizado (0..1) en vez de las
-/// dimensiones reales de `previewView` porque en este punto su layout
-/// todavía puede no tener tamaño.
-private fun enfocarCentro(camara: androidx.camera.core.Camera) {
-    val puntoCentral = SurfaceOrientedMeteringPointFactory(1f, 1f).createPoint(0.5f, 0.5f)
-    val accionEnfoque = FocusMeteringAction.Builder(puntoCentral, FocusMeteringAction.FLAG_AF)
-        .disableAutoCancel()
-        .build()
-    camara.cameraControl.startFocusAndMetering(accionEnfoque)
-}
+// Hubo acá un empujón manual de autofocus al centro (`FocusMeteringAction`)
+// para ayudar a enfocar de cerca (10-15cm) al arrancar -- ver plan, sección
+// 0.6. Se sacó por completo: el autofocus continuo por defecto de CameraX
+// (sin ningún `FocusMeteringAction` custom) es exactamente lo que tenía la
+// app cuando el reconocimiento era instantáneo, antes de que se agregara
+// este empujón. Una variante intermedia con `disableAutoCancel()` resultó
+// ser el bug real detrás de "hay que sostenerlo en un ángulo muy
+// específico": esa llamada no da "enfoque continuo" pese a lo que decía un
+// comentario anterior acá -- bloquea el foco para siempre en lo que la
+// cámara haya visto en el instante en que arrancó, antes de que la persona
+// alcance a poner el documento enfrente. Sacar `disableAutoCancel()` mejoró
+// las cosas pero seguía sin sentirse tan rápido como el autofocus puramente
+// por defecto -- un empujón puntual solo puede sumar latencia sin garantía
+// de ayudar, así que se sacó del todo.
 
 /// Sonido corto y discreto de confirmación -- complementa la háptica, no la
 /// reemplaza (alguien con el celular en silencio/vibrador no debería
@@ -335,15 +333,20 @@ private fun reproducirSonidoConfirmacion() {
 private const val VOLUMEN_SONIDO_CONFIRMACION = 40 // sobre 100 -- sutil, no un beep de caja registradora
 private const val DURACION_SONIDO_CONFIRMACION_MS = 100
 
-/// Sólo entrega a ML Kit y devuelve el texto YA recortado al área guía --
-/// la clasificación de tipo de documento, extracción de campos y decisión
-/// de aceptar o no la lectura viven en [EstabilizadorLectura], no acá
-/// (separar esto evita que esta función termine "sabiendo" de
-/// cédulas/DIMEX/licencias/MRZ).
+/// Sólo entrega a ML Kit y devuelve el texto reconocido -- la clasificación
+/// de tipo de documento, extracción de campos y decisión de aceptar o no la
+/// lectura viven en [EstabilizadorLectura], no acá (separar esto evita que
+/// esta función termine "sabiendo" de cédulas/DIMEX/licencias/MRZ).
 ///
-/// El recorte (plan, sección 9) se hace filtrando los `TextBlock` de ML Kit
-/// por su `boundingBox` contra el recuadro guía -- no convirtiendo el frame
-/// a Bitmap para recortar píxeles, ver [filtrarTextoEnAreaGuia].
+/// Analiza el frame completo, sin recortar al recuadro guía -- el plan
+/// (sección 9) proponía filtrar los `TextBlock` de ML Kit por su
+/// `boundingBox` contra el recuadro para "no distraer" a ML Kit con texto de
+/// fondo, pero en la práctica volvía el escaneo mucho más incómodo (había
+/// que encuadrar el documento con precisión milimétrica para que
+/// reconociera algo, contra el reconocimiento casi instantáneo de antes) sin
+/// aportar la velocidad prometida -- ML Kit igual procesa el frame entero
+/// antes de filtrar, el recorte solo descartaba resultados después. El
+/// recuadro (`MarcoGuiaCedula`) queda como guía visual, no como filtro.
 ///
 /// `ejecutorPrincipal` se pasa explícito a los listeners en vez de dejar que
 /// la Tasks API use su default (que también es el hilo principal, pero de
@@ -365,16 +368,9 @@ private fun analizarCedula(
         return
     }
     val rotacion = imagen.imageInfo.rotationDegrees
-    val (anchoUpright, altoUpright) = dimensionesUpright(mediaImage.width, mediaImage.height, rotacion)
     val input = InputImage.fromMediaImage(mediaImage, rotacion)
     recognizer.process(input)
-        .addOnSuccessListener(ejecutorPrincipal) { resultado ->
-            val bloques = resultado.textBlocks.map { bloque ->
-                val caja = bloque.boundingBox?.let { CajaTexto(it.left, it.top, it.right, it.bottom) }
-                BloqueTextoOcr(caja, bloque.text)
-            }
-            onTexto(filtrarTextoEnAreaGuia(bloques, anchoUpright, altoUpright))
-        }
+        .addOnSuccessListener(ejecutorPrincipal) { resultado -> onTexto(resultado.text) }
         .addOnFailureListener(ejecutorPrincipal) { onFallo() }
         .addOnCompleteListener(ejecutorPrincipal) {
             imagen.close()

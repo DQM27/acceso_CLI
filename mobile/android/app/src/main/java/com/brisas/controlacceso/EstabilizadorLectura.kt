@@ -21,27 +21,37 @@ data class ResultadoEstabilizacion(
 /// Regla (plan, sección 5): si el MRZ trae checksum válido, se acepta en el
 /// mismo frame -- no hace falta esperar repeticiones porque el dígito
 /// verificador ya es la prueba de que la lectura es correcta. Sin checksum
-/// (extracción del frente por regex), se exige que el mismo resultado se
-/// repita en `framesRequeridos` frames consecutivos antes de aceptarlo, para
-/// no disparar sobre una lectura a medio acomodar el documento.
+/// (extracción del frente por regex), se exige que el mismo resultado
+/// aparezca `framesRequeridos` veces dentro de los últimos `ventana` frames
+/// -- no necesariamente consecutivos.
+///
+/// Antes exigía que fueran consecutivos (un candidato distinto reiniciaba
+/// el conteo a cero). Eso resultó ser demasiado frágil con reflejos: un
+/// solo frame afectado por un reflejo (que hace que ML Kit lea mal un
+/// dígito) tiraba todo el progreso acumulado, y con reflejos intermitentes
+/// el conteo nunca llegaba a completarse. La ventana deslizante tolera
+/// algún frame malo salteado entre medio sin perder lo ya leído bien.
 ///
 /// Con instancia por sesión de escaneo: crear una nueva por cada vez que se
 /// abre la pantalla de cámara, no reusar entre escaneos distintos.
 ///
-/// **No es thread-safe** -- `ultimoCandidato`/`repeticiones` se leen y
-/// escriben sin sincronización. Sólo es seguro porque `procesarFrame` se
-/// llama exclusivamente desde el hilo principal (el callback de ML Kit se
-/// entrega ahí explícitamente, ver `PantallaEscanearCedula.analizarCedula`).
-/// Si algún día se llama desde el hilo del analizador de CameraX en vez del
+/// **No es thread-safe** -- `candidatosRecientes` se lee y escribe sin
+/// sincronización. Sólo es seguro porque `procesarFrame` se llama
+/// exclusivamente desde el hilo principal (el callback de ML Kit se entrega
+/// ahí explícitamente, ver `PantallaEscanearCedula.analizarCedula`). Si
+/// algún día se llama desde el hilo del analizador de CameraX en vez del
 /// principal, hay que agregar sincronización acá.
 class EstabilizadorLectura(
     private val framesRequeridos: Int = 3,
+    // Un poco más grande que `framesRequeridos` -- da lugar a tolerar algún
+    // frame malo salteado sin exigir tampoco una ventana tan larga que
+    // acepte una racha vieja de candidatos ya abandonados.
+    private val ventana: Int = framesRequeridos + 2,
     // Inyectable para poder fijar la fecha en tests sin depender del reloj
     // del sistema -- ver `fechaDeHoy()`.
     private val obtenerFechaHoy: () -> FechaDocumento = ::fechaDeHoy,
 ) {
-    private var ultimoCandidato: DocumentoDetectado? = null
-    private var repeticiones = 0
+    private val candidatosRecientes = ArrayDeque<DocumentoDetectado>()
 
     fun procesarFrame(texto: String): ResultadoEstabilizacion {
         if (texto.isBlank() || texto.trim().length < 10) {
@@ -80,12 +90,9 @@ class EstabilizadorLectura(
             return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = "${tipo.nombreLegible()} detectado — mantenga firme")
         }
 
-        if (documento == ultimoCandidato) {
-            repeticiones++
-        } else {
-            ultimoCandidato = documento
-            repeticiones = 1
-        }
+        candidatosRecientes.addLast(documento)
+        while (candidatosRecientes.size > ventana) candidatosRecientes.removeFirst()
+        val repeticiones = candidatosRecientes.count { it == documento }
 
         return if (repeticiones >= framesRequeridos) {
             val (mensaje, vencido) = mensajeDeConfirmacion(documento)
@@ -108,7 +115,6 @@ class EstabilizadorLectura(
     }
 
     private fun reiniciar() {
-        ultimoCandidato = null
-        repeticiones = 0
+        candidatosRecientes.clear()
     }
 }

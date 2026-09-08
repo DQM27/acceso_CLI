@@ -338,15 +338,29 @@ que interrumpa el flujo. Mensajes específicos y accionables, no genéricos:
 | `INVALIDO` (tipo detectado pero campo incompleto/glare) | "Reducí el reflejo" |
 | `CONFIRMADO` | Check verde + vibración, transición automática |
 
-## 9. Acotar el área de escaneo al recuadro guía
+## 9. Acotar el área de escaneo al recuadro guía -- probado y descartado (2026-09-08)
 
-Confirmado que es viable y recomendable:
-- CameraX permite definir un `cropRect` en el `ImageAnalysis.Analyzer` para
-  que solo la región del recuadro guía se mande a ML Kit.
-- Beneficios: menos píxeles a procesar (más rápido, no más lento), y ML Kit
-  no se distrae con texto de fondo fuera de la tarjeta.
-- El recuadro guía deja de ser solo decorativo: define el límite real de
-  análisis, coherente con los esquineros de la sección 7.
+Se implementó filtrando los `TextBlock` de ML Kit por `boundingBox` contra
+el recuadro guía (no un `cropRect` real -- ver el punto 5 del historial más
+abajo) y se probó en un dispositivo real. Resultado: **empeoró la
+experiencia sin la mejora de velocidad prometida**.
+
+- ML Kit igual procesa el frame completo antes de que el filtro descarte
+  resultados -- no hay ahorro de píxeles real con esta implementación (un
+  `cropRect` de verdad sí lo daría, pero no se llegó a probar esa variante).
+- En la práctica, había que encuadrar el documento con precisión
+  milimétrica para que reconociera algo -- muy por debajo del
+  reconocimiento casi instantáneo de antes de este cambio, incluso después
+  de agrandar el recuadro de 82% a 94% del ancho.
+- Un bug de geometría adicional (el recuadro visible en pantalla y la zona
+  realmente analizada eran rectángulos físicos distintos, por el recorte de
+  `PreviewView` con `FILL_CENTER`) se corrigió con `UseCaseGroup`/`ViewPort`
+  de CameraX, pero ni así el filtro resultó cómodo de usar.
+- **Revertido:** `analizarCedula` vuelve a usar `resultado.text` (frame
+  completo), igual que antes de este intento. El recuadro guía
+  (`MarcoGuiaCedula`) queda como guía visual pura, sin filtrar nada. Si se
+  retoma esta idea a futuro, evaluar un `cropRect` real (que si reduciría
+  píxeles procesados) en vez de filtrar resultados después.
 
 ## 10. Fuera de alcance por ahora (futuro)
 
@@ -366,15 +380,14 @@ Confirmado que es viable y recomendable:
    pública oficial del TSE/DGME que lo confirme por escrito, pero la
    evidencia matemática es sólida.
 4. ✅ Estado central `EstadoEscaneo` + lógica de estabilidad/debounce.
-5. ✅ Viewfinder con esquineros de 3 estados. Recorte del área de análisis
-   implementado **filtrando los `TextBlock` de ML Kit por su `boundingBox`**
-   contra el recuadro guía (`filtrarTextoEnAreaGuia`), no convirtiendo el
-   frame a Bitmap para recortar píxeles -- esa alternativa habría agregado
-   una conversión YUV→RGB completa por frame, violando la regla de la
-   sección 0.6/5 (nada nuevo debe ser `O(imagen)`). Enfoque continuo en el
-   centro implementado vía `FocusMeteringAction` de CameraX (costo único al
-   iniciar la cámara, no por frame). **Pendiente:** detección de glare (sí
-   requeriría analizar píxeles, evaluar por separado si vale el costo).
+5. ✅ Viewfinder con esquineros de 3 estados. Enfoque continuo en el centro
+   implementado vía `FocusMeteringAction` de CameraX (costo único al iniciar
+   la cámara, no por frame). Recorte del área de análisis al recuadro guía:
+   implementado, probado en dispositivo real y **revertido** -- ver sección
+   9 para el detalle completo de por qué. `analizarCedula` procesa el frame
+   completo; el recuadro es guía visual únicamente. **Pendiente:** detección
+   de glare (sí requeriría analizar píxeles, evaluar por separado si vale el
+   costo).
 6. ✅ Mensajes in-cámara conectados al estado central, incluyendo el nombre
    del tipo de documento detectado (nadie lo selecciona a mano).
 7. ✅ Cédula nacional 2025+ vs DIMEX distinguidas **solo por el MRZ**

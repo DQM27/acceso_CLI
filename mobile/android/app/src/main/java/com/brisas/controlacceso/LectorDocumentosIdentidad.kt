@@ -14,6 +14,14 @@ enum class TipoDocumento {
     LICENCIA_NACIONAL,
     LICENCIA_EXTRANJERO,
     PASAPORTE,
+    // Carnet de inducción al sitio (PRAIND) -- corresponde al mismo campo
+    // `fecha_vencimiento_praind` que ya existe en `Contratista`. Visto en
+    // dos variantes de diseño distintas (encabezado/pie de página
+    // distintos), pero ambas comparten las mismas etiquetas de campo
+    // ("Nombre:", "No. de cédula:", "Fecha de inducción:", "Fecha de
+    // vencimiento de inducción:") y la frase "CARNET DE INDUCCIÓN", que es
+    // la señal de clasificación.
+    CARNET_INDUCCION_PRAIND,
     DESCONOCIDO,
 }
 
@@ -45,6 +53,7 @@ fun TipoDocumento.nombreLegible(): String = when (this) {
     TipoDocumento.LICENCIA_NACIONAL -> "Licencia de conducir"
     TipoDocumento.LICENCIA_EXTRANJERO -> "Licencia de conducir de extranjero"
     TipoDocumento.PASAPORTE -> "Pasaporte"
+    TipoDocumento.CARNET_INDUCCION_PRAIND -> "Carnet de inducción (PRAIND)"
     TipoDocumento.DESCONOCIDO -> "Documento"
 }
 
@@ -136,6 +145,19 @@ private val REGEX_DIMEX_NOMBRE = Regex("""Nombre:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)"
 private val REGEX_DIMEX_APELLIDOS = Regex("""Apellidos:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
 private val REGEX_DIMEX_NACIONALIDAD = Regex("""Nacionalidad:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
 private val REGEX_LICENCIA_NUMERO = Regex("""N[º9O]?[:.]?\s*(?:DM[- ])?(\d{6,15})""", RegexOption.IGNORE_CASE)
+private val REGEX_PRAIND_CEDULA = Regex("""No\.?\s*de\s*c[ée]dula:?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
+private val REGEX_PRAIND_NOMBRE = Regex("""Nombre:?[ \t]*\n?[ \t]*([^\n]+)""", RegexOption.IGNORE_CASE)
+// `vencimiento` va antes que `induccion` en el orden de declaración
+// solamente por legibilidad -- lo que importa es que la frase completa de
+// cada regex es literal, así que "Fecha de inducción" nunca matchea dentro
+// de "Fecha de vencimiento de inducción" (tiene "vencimiento de" injertado
+// en el medio) ni al revés. `\s+` entre "de" e "inducción" en la de
+// vencimiento tolera el salto de línea que trae uno de los dos diseños de
+// carnet vistos ("Fecha de vencimiento de\ninducción:").
+private val REGEX_PRAIND_FECHA_VENCIMIENTO = Regex(
+    """Fecha\s+de\s+vencimiento\s+de\s+inducci[oó]n:?\s*(\d{1,2})[/-](\d{1,2})[/-](\d{4})""",
+    RegexOption.IGNORE_CASE,
+)
 
 /// Clasifica el tipo de documento a partir del texto crudo de ML Kit, antes
 /// de intentar extraer ningún campo -- este orden importa porque DIMEX y
@@ -151,6 +173,12 @@ fun clasificarTipoDocumento(texto: String): TipoDocumento {
         "DGME" in mayus || "MIGRACIÓN Y EXTRANJERÍA" in mayus || "MIGRACION Y EXTRANJERIA" in mayus ||
             "RESIDENTE PERMANENTE" in mayus || "RESIDENTE TEMPORAL" in mayus ->
             TipoDocumento.CEDULA_RESIDENCIA
+        // Antes que la cédula nacional a propósito: un carnet PRAIND trae su
+        // propio "No. de cédula: 123456789" de 9 dígitos, que si no se
+        // clasificara primero acá calzaría con `extraerCedulaDeTexto` de
+        // abajo y el carnet se leería como si fuera la cédula misma.
+        "CARNET DE INDUCCIÓN" in mayus || "CARNET DE INDUCCION" in mayus ->
+            TipoDocumento.CARNET_INDUCCION_PRAIND
         "TRIBUNAL SUPREMO DE ELECCIONES" in mayus || extraerCedulaDeTexto(texto) != null ->
             TipoDocumento.CEDULA_NACIONAL
         else -> TipoDocumento.DESCONOCIDO
@@ -168,6 +196,7 @@ fun leerDocumentoDeTexto(texto: String): DocumentoDetectado? {
         TipoDocumento.CEDULA_RESIDENCIA -> extraerDimex(texto)
         TipoDocumento.LICENCIA_NACIONAL -> extraerLicencia(texto, esExtranjero = false)
         TipoDocumento.LICENCIA_EXTRANJERO -> extraerLicencia(texto, esExtranjero = true)
+        TipoDocumento.CARNET_INDUCCION_PRAIND -> extraerPraind(texto)
         // El clasificador por palabras clave del frente no distingue
         // pasaporte todavía -- llega sólo vía MRZ (ver ResultadoMrz.aDocumentoDetectado).
         TipoDocumento.PASAPORTE -> null
@@ -212,6 +241,29 @@ private fun extraerLicencia(texto: String, esExtranjero: Boolean): DocumentoDete
         tipo = if (esExtranjero) TipoDocumento.LICENCIA_EXTRANJERO else TipoDocumento.LICENCIA_NACIONAL,
         numeroDocumento = numero,
         esExtranjero = esExtranjero,
+        vencimiento = vencimiento,
+    )
+}
+
+/// El carnet PRAIND identifica a la persona por cédula (`numeroDocumento`),
+/// no es un documento de identidad en sí mismo -- lo que de verdad importa
+/// leer es `vencimiento`, que corresponde 1:1 al campo
+/// `fecha_vencimiento_praind` que ya existe en `Contratista`. Se probó
+/// contra las dos variantes de diseño reales (encabezado/pie de página
+/// distintos, mismas etiquetas de campo) -- ver `LectorDocumentosIdentidadTest`.
+private fun extraerPraind(texto: String): DocumentoDetectado? {
+    val numero = REGEX_PRAIND_CEDULA.find(texto)?.groupValues?.get(1) ?: return null
+
+    val nombre = REGEX_PRAIND_NOMBRE.find(texto)?.groupValues?.get(1)?.trim()
+    val vencimiento = REGEX_PRAIND_FECHA_VENCIMIENTO.find(texto)?.let { match ->
+        val (dia, mes, anio) = match.destructured
+        FechaDocumento(dia.toInt(), mes.toInt(), anio.toInt())
+    }
+
+    return DocumentoDetectado(
+        tipo = TipoDocumento.CARNET_INDUCCION_PRAIND,
+        numeroDocumento = numero,
+        nombre = nombre,
         vencimiento = vencimiento,
     )
 }

@@ -14,12 +14,12 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.dp
 
-/// Recorte oscuro + marco de esquinas al estilo "encuadre de escáner". Ya no
-/// es sólo decorativo: [analizarCedula] filtra el texto de ML Kit contra
-/// esta misma área (ver [filtrarTextoEnAreaGuia]) -- si las proporciones de
-/// acá cambian, deben cambiar junto con las de esa función. Proporción
-/// 1.586:1, la misma de una tarjeta ID-1 (cédula/carnet), no un cuadrado
-/// genérico.
+/// Recorte oscuro + marco de esquinas al estilo "encuadre de escáner".
+/// Puramente visual -- guía dónde poner el documento, pero
+/// [analizarCedula] procesa el frame completo, no solo esta área (ver el
+/// doc-comment de esa función: filtrar por este recuadro volvía el escaneo
+/// incómodo sin acelerarlo de verdad). Proporción 1.586:1, la misma de una
+/// tarjeta ID-1 (cédula/carnet), no un cuadrado genérico.
 ///
 /// En su propio archivo (separado de `PantallaEscanearCedula.kt`) porque es
 /// puramente dibujo de UI -- no conoce cámara, ML Kit, ni el estado de
@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun MarcoGuiaCedula(color: Color, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
-        val anchoMarco = size.width * 0.82f
+        val anchoMarco = size.width * 0.94f
         val altoMarco = anchoMarco / 1.586f
         val izquierda = (size.width - anchoMarco) / 2f
         val arriba = (size.height - altoMarco) / 2f
