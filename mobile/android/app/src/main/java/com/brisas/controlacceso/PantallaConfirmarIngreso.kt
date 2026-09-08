@@ -11,6 +11,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -109,6 +110,7 @@ fun PantallaConfirmarIngreso(
     var error by remember { mutableStateOf<String?>(null) }
     var enviando by remember { mutableStateOf(false) }
     var escanerGafeteAbierto by remember { mutableStateOf(false) }
+    var ingresoAutomatico by rememberSaveable { mutableStateOf(false) }
     val alcance = rememberCoroutineScope()
 
     val focoGafete = remember { FocusRequester() }
@@ -125,13 +127,53 @@ fun PantallaConfirmarIngreso(
         }
     }
 
+    fun registrarIngreso(gafete: Long?) {
+        error = null
+        enviando = true
+        alcance.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    // Chequeo en vivo: dos dispositivos del mismo sitio
+                    // sólo validan el gafete contra su propia base local,
+                    // así que sin esto ambos podían aceptar el mismo
+                    // número como activo a la vez (ver
+                    // `Nucleo.gafeteOcupadoEnSitio`).
+                    if (gafete != null) {
+                        val secreto = secretoStore.cargar()
+                        if (
+                            secreto != null &&
+                            nucleo.gafeteOcupadoEnSitioConSecreto(secreto, gafete)
+                        ) {
+                            throw GafeteOcupadoEnSitioException(gafete)
+                        }
+                    }
+                    nucleo.registrarIngreso(preparacion.contratistaId, medio, gafete)
+                }
+                onRegistrado()
+            } catch (excepcion: GafeteOcupadoEnSitioException) {
+                error = excepcion.message
+            } catch (excepcion: NucleoException) {
+                error = excepcion.message
+            } catch (excepcion: SecretoDispositivoStoreException) {
+                error = excepcion.message
+            } finally {
+                enviando = false
+            }
+        }
+    }
+
     if (escanerGafeteAbierto) {
         PantallaEscanearCedula(
             modo = ModoEscaneoDocumento.GAFETE_CONTRATISTA,
             onCedulaDetectada = { numero ->
-                gafeteTexto = numero.filter(Char::isDigit)
+                val limpio = numero.filter(Char::isDigit)
+                gafeteTexto = limpio
                 error = null
                 escanerGafeteAbierto = false
+                val gafete = limpio.toLongOrNull()
+                if (ingresoAutomatico && gafete != null) {
+                    registrarIngreso(gafete)
+                }
             },
             onCerrar = { escanerGafeteAbierto = false },
         )
@@ -179,6 +221,21 @@ fun PantallaConfirmarIngreso(
 
         if (preparacion.requiereGafete) {
             Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = ingresoAutomatico,
+                    onCheckedChange = { ingresoAutomatico = it },
+                    enabled = !enviando,
+                )
+                Text(
+                    "Automático",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+            }
+            Row(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -225,37 +282,7 @@ fun PantallaConfirmarIngreso(
                 } else {
                     null
                 }
-                enviando = true
-                alcance.launch {
-                    try {
-                        withContext(Dispatchers.IO) {
-                            // Chequeo en vivo: dos dispositivos del mismo sitio
-                            // sólo validan el gafete contra su propia base local,
-                            // así que sin esto ambos podían aceptar el mismo
-                            // número como activo a la vez (ver
-                            // `Nucleo.gafeteOcupadoEnSitio`).
-                            if (gafete != null) {
-                                val secreto = secretoStore.cargar()
-                                if (
-                                    secreto != null &&
-                                    nucleo.gafeteOcupadoEnSitioConSecreto(secreto, gafete)
-                                ) {
-                                    throw GafeteOcupadoEnSitioException(gafete)
-                                }
-                            }
-                            nucleo.registrarIngreso(preparacion.contratistaId, medio, gafete)
-                        }
-                        onRegistrado()
-                    } catch (excepcion: GafeteOcupadoEnSitioException) {
-                        error = excepcion.message
-                    } catch (excepcion: NucleoException) {
-                        error = excepcion.message
-                    } catch (excepcion: SecretoDispositivoStoreException) {
-                        error = excepcion.message
-                    } finally {
-                        enviando = false
-                    }
-                }
+                registrarIngreso(gafete)
             },
             enabled = !enviando,
             modifier = Modifier.fillMaxWidth().focusRequester(focoConfirmar),

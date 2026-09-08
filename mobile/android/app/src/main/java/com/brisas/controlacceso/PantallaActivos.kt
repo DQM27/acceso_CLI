@@ -87,6 +87,7 @@ fun PantallaActivos(
     val viewModel: ActivosViewModel =
         viewModel(factory = ActivosViewModel.factory(nucleo, secretoStore))
     var escanerAbierto by remember { mutableStateOf(false) }
+    var escanerGafeteSalidaAbierto by remember { mutableStateOf(false) }
     LaunchedEffect(refrescarNube) {
         if (refrescarNube > 0) {
             viewModel.refrescar()
@@ -130,6 +131,21 @@ fun PantallaActivos(
         return
     }
 
+    if (escanerGafeteSalidaAbierto) {
+        PantallaEscanearCedula(
+            modo = ModoEscaneoDocumento.GAFETE_CONTRATISTA,
+            onCedulaDetectada = { gafete ->
+                escanerGafeteSalidaAbierto = false
+                if (viewModel.modo != ModoBusqueda.SALIDA_GAFETE) {
+                    viewModel.cambiarModo(ModoBusqueda.SALIDA_GAFETE)
+                }
+                viewModel.cambiarTexto(gafete)
+            },
+            onCerrar = { escanerGafeteSalidaAbierto = false },
+        )
+        return
+    }
+
     val verificando = viewModel.seleccionIngreso is SeleccionIngreso.Cargando
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -140,6 +156,7 @@ fun PantallaActivos(
             texto = viewModel.texto,
             onCambiarTexto = { viewModel.cambiarTexto(it) },
             onEscanearCedula = { escanerAbierto = true },
+            onEscanearGafete = { escanerGafeteSalidaAbierto = true },
         )
 
         // Sólo fuera del modo gafete — ese modo tiene su propio texto de
@@ -231,6 +248,7 @@ private fun CampoBusquedaActivos(
     texto: String,
     onCambiarTexto: (String) -> Unit,
     onEscanearCedula: () -> Unit,
+    onEscanearGafete: () -> Unit,
 ) {
     // Color propio para "estoy buscando a quién SACAR" — evita confundir el
     // modo entrada (color normal de la app) con el de salida, que es la
@@ -263,11 +281,13 @@ private fun CampoBusquedaActivos(
             ),
             modifier = Modifier.weight(1f),
         )
-        if (modo == ModoBusqueda.ENTRADA) {
-            BotonDiscretoBrisas(onClick = onEscanearCedula) {
+        if (modo == ModoBusqueda.ENTRADA || modo == ModoBusqueda.SALIDA_GAFETE) {
+            BotonDiscretoBrisas(
+                onClick = if (modo == ModoBusqueda.ENTRADA) onEscanearCedula else onEscanearGafete,
+            ) {
                 Icon(
                     Icons.Default.PhotoCamera,
-                    contentDescription = "Escanear cédula",
+                    contentDescription = if (modo == ModoBusqueda.ENTRADA) "Escanear documento" else "Escanear gafete",
                     modifier = Modifier.size(32.dp),
                 )
             }
