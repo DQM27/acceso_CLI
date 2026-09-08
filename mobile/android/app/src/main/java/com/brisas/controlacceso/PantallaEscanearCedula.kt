@@ -2,10 +2,16 @@ package com.brisas.controlacceso
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.Context
+import android.graphics.Rect
 import android.media.AudioManager
 import android.media.ToneGenerator
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -106,6 +112,7 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
     var ultimoMensaje by remember { mutableStateOf("Apunte al documento") }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
     var vencido by remember { mutableStateOf(false) }
+    var areaTexto by remember { mutableStateOf<AreaTextoOcr?>(null) }
     // Una instancia por apertura de pantalla -- lleva el conteo de frames
     // consistentes del debounce (ver EstabilizadorLectura), no debe
     // compartirse entre sesiones de escaneo distintas.
@@ -174,6 +181,7 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
                         if (resultado.estado == EstadoEscaneo.CONFIRMADO && documento != null) {
                             if (detectada.compareAndSet(false, true)) {
                                 haptica.performHapticFeedback(HapticFeedbackType.Confirm)
+                                reproducirVibracionConfirmacion(contexto)
                                 reproducirSonidoConfirmacion()
                                 if (resultado.vencido) {
                                     Handler(Looper.getMainLooper()).postDelayed(
@@ -189,8 +197,10 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
                     onFallo = {
                         estado = EstadoEscaneo.BUSCANDO
                         vencido = false
+                        areaTexto = null
                         ultimoMensaje = "No se pudo leer el texto. Intente acercar el documento."
                     },
+                    onAreaTexto = { areaTexto = it },
                 )
                 iniciarCamara(
                     ctx = ctx,
@@ -203,7 +213,7 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
             },
             modifier = Modifier.fillMaxSize(),
         )
-        MarcoGuiaCedula(color = colorMarco, modifier = Modifier.fillMaxSize())
+        MarcoGuiaCedula(color = colorMarco, areaTexto = areaTexto, modifier = Modifier.fillMaxSize())
         Column(
             modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -236,6 +246,7 @@ private fun construirAnalizadorOcr(
     detectada: AtomicBoolean,
     onResultado: (ResultadoEstabilizacion) -> Unit,
     onFallo: () -> Unit,
+    onAreaTexto: (AreaTextoOcr?) -> Unit,
 ): ImageAnalysis =
     ImageAnalysis.Builder()
         .setResolutionSelector(
@@ -266,6 +277,7 @@ private fun construirAnalizadorOcr(
                     ejecutorPrincipal = ejecutorPrincipal,
                     onTexto = { texto -> onResultado(estabilizador.procesarFrame(texto)) },
                     onFallo = onFallo,
+                    onAreaTexto = onAreaTexto,
                 )
             }
         }
@@ -357,6 +369,36 @@ private fun reproducirSonidoConfirmacion() {
 private const val VOLUMEN_SONIDO_CONFIRMACION = 40 // sobre 100 -- sutil, no un beep de caja registradora
 private const val DURACION_SONIDO_CONFIRMACION_MS = 100
 private const val DEMORA_AVISO_VENCIDO_MS = 1200L
+private const val DURACION_VIBRACION_CONFIRMACION_MS = 70L
+
+private fun reproducirVibracionConfirmacion(contexto: android.content.Context) {
+    try {
+        val vibrador = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val manager = contexto.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            manager.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            contexto.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
+        if (!vibrador.hasVibrator()) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrador.vibrate(
+                VibrationEffect.createOneShot(
+                    DURACION_VIBRACION_CONFIRMACION_MS,
+                    VibrationEffect.DEFAULT_AMPLITUDE,
+                ),
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            vibrador.vibrate(DURACION_VIBRACION_CONFIRMACION_MS)
+        }
+    } catch (e: RuntimeException) {
+        // La vibración confirma, pero nunca debe cortar el escaneo si el
+        // dispositivo o el perfil del sistema la bloquea.
+    } catch (e: SecurityException) {
+        // Igual que arriba: sin permiso efectivo, el flujo continúa normal.
+    }
+}
 
 /// Sólo entrega a ML Kit y devuelve el texto reconocido -- la clasificación
 /// de tipo de documento, extracción de campos y decisión de aceptar o no la
@@ -386,6 +428,7 @@ private fun analizarCedula(
     ejecutorPrincipal: java.util.concurrent.Executor,
     onTexto: (String) -> Unit,
     onFallo: () -> Unit,
+    onAreaTexto: (AreaTextoOcr?) -> Unit,
 ) {
     val mediaImage = imagen.image
     if (mediaImage == null) {
@@ -393,9 +436,14 @@ private fun analizarCedula(
         return
     }
     val rotacion = imagen.imageInfo.rotationDegrees
+    val anchoAnalisis = if (rotacion == 90 || rotacion == 270) imagen.height else imagen.width
+    val altoAnalisis = if (rotacion == 90 || rotacion == 270) imagen.width else imagen.height
     val input = InputImage.fromMediaImage(mediaImage, rotacion)
     recognizer.process(input)
-        .addOnSuccessListener(ejecutorPrincipal) { resultado -> onTexto(resultado.text) }
+        .addOnSuccessListener(ejecutorPrincipal) { resultado ->
+            onAreaTexto(calcularAreaTexto(resultado.textBlocks.mapNotNull { it.boundingBox }, anchoAnalisis, altoAnalisis))
+            onTexto(resultado.text)
+        }
         .addOnFailureListener(ejecutorPrincipal) { onFallo() }
         .addOnCompleteListener(ejecutorPrincipal) {
             imagen.close()
@@ -433,4 +481,26 @@ fun extraerCedulaDeTexto(texto: String): String? {
     }
 
     return null
+}
+
+data class AreaTextoOcr(
+    val izquierda: Float,
+    val arriba: Float,
+    val derecha: Float,
+    val abajo: Float,
+)
+
+private fun calcularAreaTexto(bloques: List<Rect>, ancho: Int, alto: Int): AreaTextoOcr? {
+    if (bloques.isEmpty() || ancho <= 0 || alto <= 0) return null
+    val izquierda = bloques.minOf { it.left }.coerceIn(0, ancho)
+    val arriba = bloques.minOf { it.top }.coerceIn(0, alto)
+    val derecha = bloques.maxOf { it.right }.coerceIn(0, ancho)
+    val abajo = bloques.maxOf { it.bottom }.coerceIn(0, alto)
+    if (derecha - izquierda < ancho * 0.12f || abajo - arriba < alto * 0.06f) return null
+    return AreaTextoOcr(
+        izquierda = izquierda.toFloat() / ancho.toFloat(),
+        arriba = arriba.toFloat() / alto.toFloat(),
+        derecha = derecha.toFloat() / ancho.toFloat(),
+        abajo = abajo.toFloat() / alto.toFloat(),
+    )
 }

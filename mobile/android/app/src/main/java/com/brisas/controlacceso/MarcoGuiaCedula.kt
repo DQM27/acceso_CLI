@@ -7,6 +7,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
@@ -24,7 +25,7 @@ import androidx.compose.ui.unit.dp
 /// mismo archivo no aportaba nada y hacía ese archivo más grande de lo que
 /// necesitaba ser.
 @Composable
-fun MarcoGuiaCedula(color: Color, modifier: Modifier = Modifier) {
+fun MarcoGuiaCedula(color: Color, areaTexto: AreaTextoOcr? = null, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
         val anchoMarco = size.width * 0.94f
         val altoMarco = anchoMarco / 1.586f
@@ -39,6 +40,29 @@ fun MarcoGuiaCedula(color: Color, modifier: Modifier = Modifier) {
             cornerRadius = radio,
             style = Stroke(width = 1.5.dp.toPx()),
         )
+
+        if (areaTexto != null) {
+            val margen = 18.dp.toPx()
+            val izquierdaTexto = (areaTexto.izquierda * size.width - margen).coerceIn(0f, size.width)
+            val arribaTexto = (areaTexto.arriba * size.height - margen).coerceIn(0f, size.height)
+            val derechaTexto = (areaTexto.derecha * size.width + margen).coerceIn(0f, size.width)
+            val abajoTexto = (areaTexto.abajo * size.height + margen).coerceIn(0f, size.height)
+            val anchoTexto = derechaTexto - izquierdaTexto
+            val altoTexto = abajoTexto - arribaTexto
+
+            if (anchoTexto > 0f && altoTexto > 0f) {
+                drawRoundRect(
+                    color = color.copy(alpha = 0.9f),
+                    topLeft = Offset(izquierdaTexto, arribaTexto),
+                    size = Size(anchoTexto, altoTexto),
+                    cornerRadius = CornerRadius(14.dp.toPx()),
+                    style = Stroke(
+                        width = 2.5.dp.toPx(),
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(18.dp.toPx(), 10.dp.toPx())),
+                    ),
+                )
+            }
+        }
 
         // Cuatro esquinas acentuadas, más gruesas que el borde fino de
         // arriba -- lo que el ojo realmente sigue al alinear la cédula.
