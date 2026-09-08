@@ -219,7 +219,10 @@ Casos reales que motivan esto (ver adjuntos del hilo):
    sacar al usuario del flujo de cámara.
 6. Acotar el área de análisis al recuadro guía en pantalla (mejora velocidad
    y precisión).
-7. Dejar la arquitectura abierta para agregar placas vehiculares a futuro.
+7. ~~Dejar la arquitectura abierta para agregar placas vehiculares a futuro.~~
+   Descartado: placas vehiculares no son parte de esta app — quedan
+   documentadas por separado en `idea-lector-placas-vehiculares.md` para una
+   aplicación distinta.
 
 ## 3. Clasificación de tipo de documento
 
@@ -232,8 +235,6 @@ Kit contra palabras clave, antes de aplicar regexes de campos.
 | `CEDULA_RESIDENCIA` (DIMEX) | `DGME`, `DIRECCIÓN GENERAL DE MIGRACIÓN`, `RESIDENTE PERMANENTE`/`RESIDENTE TEMPORAL` |
 | `LICENCIA_NACIONAL` | `Licencia de Conducir` sin prefijo `DM-` en el número |
 | `LICENCIA_EXTRANJERO` | `Licencia de Conducir` + número con prefijo `DM-` |
-| `PLACA_VEHICULAR` (futuro) | Formato de placa MOPT, contexto distinto a licencia |
-
 Modelo propuesto (sealed class/enum en Kotlin):
 
 ```kotlin
@@ -242,7 +243,6 @@ enum class TipoDocumento {
     CEDULA_RESIDENCIA,
     LICENCIA_NACIONAL,
     LICENCIA_EXTRANJERO,
-    PLACA_VEHICULAR, // futuro
     DESCONOCIDO
 }
 ```
@@ -350,9 +350,9 @@ Confirmado que es viable y recomendable:
 
 ## 10. Fuera de alcance por ahora (futuro)
 
-- Reconocimiento de placas vehiculares (mencionado como caso de uso futuro).
-  El enum `TipoDocumento` y el pipeline de clasificación quedan abiertos para
-  agregarlo sin tocar la lógica de cédulas/licencias.
+- Reconocimiento de placas vehiculares: **no es parte de esta app**. Análisis
+  completo hecho y documentado en `idea-lector-placas-vehiculares.md`, para
+  implementar en la aplicación que corresponda, no acá.
 
 ## 11. Orden sugerido de implementación (a confirmar)
 
