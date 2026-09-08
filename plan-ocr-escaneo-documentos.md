@@ -130,7 +130,37 @@ identificados. Los datasets externos (MIDV, DocXPand) se evalúan como
 recurso de **robustecimiento en una fase posterior**, una vez el motor base
 funcione, y solo tras confirmar sus términos de licencia.
 
-### 0.6 Postura sobre ML Kit vs OCR propio
+### 0.6 Cámara e iluminación
+
+Evaluado explícitamente el uso de flash/linterna como ayuda de iluminación:
+**descartado**. Las cédulas/licencias son laminadas y semi-brillantes; a la
+distancia típica de escaneo (10-15cm) el flash genera un punto de reflejo
+(glare) que frecuentemente cae encima del número o del MRZ — empeora la
+lectura en vez de mejorarla. No se implementa control de flash/torch.
+
+En su lugar, mejoras de cámara con impacto real para este caso de uso:
+
+1. **Enfoque continuo optimizado a distancia cercana.** El autofocus por
+   defecto de muchos dispositivos no está calibrado para 10-15cm. Configurar
+   el modo de autofocus de CameraX/Camera2 para rango cercano (o usar cámara
+   macro si el dispositivo la expone) da más ganancia real que cualquier
+   ajuste de iluminación.
+2. **Detección de glare como parte del score de confianza** (mismo estado
+   central `EstadoEscaneo` de la sección 7): si una zona sobresaturada se
+   superpone al área de texto esperada, disparar el mensaje "Reducí el
+   reflejo" ya definido en la sección 8 — ataca la causa real (ángulo/posición
+   del documento), no la compensa con más luz.
+3. **Exposición automática con posible compensación leve** en ambientes muy
+   oscuros — más seguro que flash porque ajusta brillo global sin crear
+   puntos calientes.
+4. **Estabilización (OIS/EIS)** si el dispositivo la expone — ayuda contra
+   motion blur (mano temblando), no contra falta de luz, pero es gratis de
+   activar vía CameraX/Camera2 si está disponible.
+
+Prioridad de implementación: (1) enfoque cercano y (2) detección de glare
+primero, por atacar la causa real; (3) y (4) como mejoras secundarias.
+
+### 0.7 Postura sobre ML Kit vs OCR propio
 
 No se plantea reemplazar ML Kit Text Recognition por un modelo propio. ML
 Kit ya resuelve detección + reconocimiento en tiempo real con bloques,
