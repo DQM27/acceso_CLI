@@ -19,6 +19,14 @@ export type EstadoCanalRealtime = "SUBSCRIBED" | "CHANNEL_ERROR" | "TIMED_OUT" |
 interface OpcionesRealtimeNube {
   onSincronizado?: (resumen: ResumenSincronizacion) => void;
   onEstado?: (estado: EstadoCanalRealtime) => void;
+  // Quién tiene la sesión abierta en esta PC ahora -- viaja en el mismo
+  // `track()` que ya marca el dispositivo como presente, para que el panel
+  // pueda mostrar "usuarios en línea y desde dónde" (ver
+  // docs/plan-sesion-unica-dispositivos.md). Cédula, no el `id` local (el
+  // rowid de este SQLite no es el id global de `usuarios` en Supabase que
+  // ve el panel -- la cédula es la única clave que coincide en los dos
+  // lados).
+  usuario?: { cedula: string; nombre: string };
 }
 
 /** Avisa a quien esté escuchando (hoy: la pantalla Nube, si está montada)
@@ -155,7 +163,11 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
             // conectado mientras dure la suscripción -- sin "untrack"
             // explícito, `limpiarCanal`/el cierre del socket ya lo saca de
             // la lista de presentes del lado del servidor.
-            void canal?.track({ dispositivo_id: sesion.dispositivo_id });
+            void canal?.track({
+              dispositivo_id: sesion.dispositivo_id,
+              usuario_cedula: opciones.usuario?.cedula,
+              usuario_nombre: opciones.usuario?.nombre,
+            });
           } else if (estado === "CHANNEL_ERROR" || estado === "TIMED_OUT" || estado === "CLOSED") {
             if (error) console.info("No se pudo suscribir al canal de nube:", error.message);
             reconectar();

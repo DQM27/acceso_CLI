@@ -31,6 +31,7 @@ beforeEach(() => {
     const canal = {
       on: vi.fn((_tipo, _filtro, callback) => { control.aviso = callback; return canal; }),
       subscribe: vi.fn((callback) => { control.estado = callback; return canal; }),
+      track: vi.fn().mockResolvedValue(undefined),
     };
     canales.push(control);
     return {

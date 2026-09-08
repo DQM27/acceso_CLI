@@ -59,8 +59,14 @@ fun PantallaPrincipal(
             factory = NubeViewModel.factory(nucleo, secretoStore, onCerrarSesion),
         )
     val scope = rememberCoroutineScope()
-    val realtime = remember(nucleo, secretoStore, scope) {
-        NubeRealtime(nucleo = nucleo, secretoStore = secretoStore, scope = scope)
+    val realtime = remember(nucleo, secretoStore, scope, sesion) {
+        NubeRealtime(
+            nucleo = nucleo,
+            secretoStore = secretoStore,
+            scope = scope,
+            usuarioCedula = sesion.cedula,
+            usuarioNombre = sesion.nombre,
+        )
     }
     val sincronizacion = remember(nucleo, secretoStore, scope) {
         SincronizacionPeriodica(

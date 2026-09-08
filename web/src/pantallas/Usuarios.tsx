@@ -8,8 +8,10 @@ import AvisoTruncado from "../componentes/AvisoTruncado";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { actualizarActivoUsuario, crearUsuario, listarSitios, listarUsuarios } from "../api/usuarios";
 import type { Usuario } from "../api/usuarios";
+import { listarDispositivosYSitios } from "../api/dispositivos";
 import { sanearSoloDigitos, sanearSoloLetras } from "../validacion";
 import { mensajeError } from "../mensajeError";
+import { supabase } from "../lib/supabase";
 
 /**
  * Vista + baja + alta de operadores/administradores globales (ver
@@ -29,6 +31,11 @@ import { mensajeError } from "../mensajeError";
  * abrir el modal. Si algún día hay más de uno, ahí sí hace falta sumar el
  * selector (y decidir qué sitio le corresponde a cada alta).
  */
+interface FilaUsuario extends Usuario {
+  conectado: boolean;
+  dispositivo_etiqueta: string | null;
+}
+
 export default function Usuarios() {
   const [busqueda, setBusqueda] = useState("");
   const [filas, setFilas] = useState<Usuario[]>([]);
@@ -75,6 +82,72 @@ export default function Usuarios() {
   // se veía acá hasta el próximo poll de 2 minutos (mismo gap que tenía
   // Contratistas.tsx antes de sumarle "contratistas,empresas").
   useAutoRefresh(() => recargar({ silencioso: true }), 120_000, "usuarios");
+
+  // Presencia en tiempo real (docs/plan-sesion-unica-dispositivos.md,
+  // "Panel de presencia en tiempo real"): mismo mecanismo que
+  // Dispositivos.tsx, pero acá lo que importa es el `usuario_cedula` que
+  // viaja en el mismo `track()` -- quién tiene sesión abierta ahora y en
+  // qué dispositivo. `etiquetaPorDispositivo` sólo sirve para mostrar el
+  // nombre del dispositivo en vez de su UUID.
+  const [sitios, setSitios] = useState<{ id: string }[]>([]);
+  const [etiquetaPorDispositivo, setEtiquetaPorDispositivo] = useState<Record<string, string>>({});
+  useEffect(() => {
+    listarDispositivosYSitios()
+      .then(({ sitios, dispositivos }) => {
+        setSitios(sitios);
+        setEtiquetaPorDispositivo(
+          Object.fromEntries(dispositivos.map((d) => [d.id, d.etiqueta])),
+        );
+      })
+      .catch(() => {
+        // Sólo degrada la presencia a "sin nombre de dispositivo" -- la
+        // lista de usuarios en sí ya cargó por su cuenta.
+      });
+  }, []);
+
+  const [conectadosPorSitio, setConectadosPorSitio] = useState<
+    Record<string, Record<string, { nombre: string; dispositivoId?: string }>>
+  >({});
+  useEffect(() => {
+    if (sitios.length === 0) return;
+    const canales = sitios.map((sitio) => {
+      const canal = supabase.channel(`sitio:${sitio.id}`, { config: { private: true } });
+      canal
+        .on("presence", { event: "sync" }, () => {
+          const estado = canal.presenceState<{
+            usuario_cedula?: string;
+            usuario_nombre?: string;
+            dispositivo_id?: string;
+          }>();
+          const porCedula: Record<string, { nombre: string; dispositivoId?: string }> = {};
+          for (const presencias of Object.values(estado)) {
+            for (const presencia of presencias) {
+              if (presencia.usuario_cedula) {
+                porCedula[presencia.usuario_cedula] = {
+                  nombre: presencia.usuario_nombre ?? presencia.usuario_cedula,
+                  dispositivoId: presencia.dispositivo_id,
+                };
+              }
+            }
+          }
+          setConectadosPorSitio((actual) => ({ ...actual, [sitio.id]: porCedula }));
+        })
+        .subscribe();
+      return canal;
+    });
+    return () => {
+      canales.forEach((canal) => void supabase.removeChannel(canal));
+      setConectadosPorSitio({});
+    };
+  }, [sitios]);
+
+  const conectadoPorCedula = useMemo(() => {
+    const todos: Record<string, { dispositivoId?: string }> = {};
+    for (const porCedula of Object.values(conectadosPorSitio)) {
+      for (const [cedula, info] of Object.entries(porCedula)) todos[cedula] = info;
+    }
+    return todos;
+  }, [conectadosPorSitio]);
 
   async function manejarEdicion(fila: Usuario) {
     try {
@@ -138,11 +211,52 @@ export default function Usuarios() {
     }
   }
 
-  const columnas: ColDef<Usuario>[] = useMemo(
+  const filasConPresencia: FilaUsuario[] = useMemo(
+    () =>
+      filas.map((fila) => {
+        const presencia = conectadoPorCedula[fila.cedula];
+        return {
+          ...fila,
+          conectado: presencia !== undefined,
+          dispositivo_etiqueta:
+            presencia?.dispositivoId != null
+              ? (etiquetaPorDispositivo[presencia.dispositivoId] ?? "—")
+              : null,
+        };
+      }),
+    [filas, conectadoPorCedula, etiquetaPorDispositivo],
+  );
+
+  const columnas: ColDef<FilaUsuario>[] = useMemo(
     () => [
       { field: "cedula", headerName: "Cédula", flex: 1, minWidth: 130, cellStyle: { textAlign: "left" } },
       { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
       { field: "rol", headerName: "Rol", flex: 1, minWidth: 130 },
+      {
+        field: "conectado",
+        headerName: "Conexión",
+        flex: 0.9,
+        minWidth: 130,
+        filter: false,
+        cellRenderer: ({ data }: { data: FilaUsuario }) => {
+          const [texto, color] = data.conectado
+            ? ["Conectado", "var(--exito)"]
+            : ["Desconectado", "var(--muted)"];
+          return (
+            <span className="chip" style={{ ["--chip-color" as string]: color }}>
+              {texto}
+            </span>
+          );
+        },
+      },
+      {
+        field: "dispositivo_etiqueta",
+        headerName: "Desde",
+        flex: 1.2,
+        minWidth: 150,
+        filter: false,
+        valueFormatter: ({ value }) => value ?? "—",
+      },
       {
         field: "activo",
         headerName: "Activo",
@@ -165,10 +279,10 @@ export default function Usuarios() {
           />
         )}
         <div style={{ flex: 1, minHeight: 0 }}>
-          <Tabla<Usuario>
+          <Tabla<FilaUsuario>
             id="usuarios"
             columnas={columnas}
-            filas={filas}
+            filas={filasConPresencia}
             busqueda={busqueda}
             filtrosPorColumna
             onCeldaEditada={manejarEdicion}

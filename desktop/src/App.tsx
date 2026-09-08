@@ -283,6 +283,7 @@ function Shell({
         if (!manejarResumenSincronizacion(resumen)) setRefrescarActivos((n) => n + 1);
       },
       onEstado: setEstadoConexionNube,
+      usuario: { cedula: sesion.cedula, nombre: sesion.nombre },
     });
     const cancelarSincronizacionAutomatica = listen<ResumenSincronizacion>(
       "nube://sincronizado",

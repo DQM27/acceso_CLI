@@ -31,6 +31,16 @@ class NubeRealtime(
     private val nucleo: Nucleo,
     private val secretoStore: SecretoDispositivoStore,
     private val scope: CoroutineScope,
+    // Quién tiene la sesión abierta en este teléfono ahora -- viaja en el
+    // mismo `track()` que ya marca el dispositivo como presente, para que
+    // el panel pueda mostrar "usuarios en línea y desde dónde" sin abrir
+    // una conexión nueva (ver docs/plan-sesion-unica-dispositivos.md). Se
+    // manda la cédula, no el id local (`UsuarioSesion.id` es el rowid de
+    // ESTE SQLite, no el id global de la tabla `usuarios` de Supabase que
+    // ve el panel -- la cédula es la única clave que de verdad coincide en
+    // los dos lados).
+    private val usuarioCedula: String,
+    private val usuarioNombre: String,
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
     private val onCambio: () -> Unit = { CambiosNube.solicitar() },
 ) {
@@ -104,7 +114,13 @@ class NubeRealtime(
                     // servidor de Realtime lo saca de la lista de
                     // presentes. Costo de red/batería: cero extra, viaja
                     // sobre esta misma conexión.
-                    canal.track(buildJsonObject { put("dispositivo_id", sesion.dispositivoId) })
+                    canal.track(
+                        buildJsonObject {
+                            put("dispositivo_id", sesion.dispositivoId)
+                            put("usuario_cedula", usuarioCedula)
+                            put("usuario_nombre", usuarioNombre)
+                        },
+                    )
                     onCambio()
                     delay(milisegundosHastaRenovar(sesion.expiresIn))
                 } finally {
