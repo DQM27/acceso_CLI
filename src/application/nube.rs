@@ -145,7 +145,7 @@ pub struct ResumenSincronizacion {
 
 /// Datos temporales para que una capa de plataforma abra un canal Realtime.
 /// El núcleo autentica y autoriza; el WebSocket queda fuera de esta capa.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct SesionRealtimeNube {
     pub base_url: String,
     pub apikey: String,
@@ -155,6 +155,21 @@ pub struct SesionRealtimeNube {
     pub dispositivo_id: String,
     pub tipo: String,
     pub topic: String,
+}
+
+impl std::fmt::Debug for SesionRealtimeNube {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SesionRealtimeNube")
+            .field("base_url", &self.base_url)
+            .field("apikey", &"<redactado>")
+            .field("access_token", &"<redactado>")
+            .field("expires_in", &self.expires_in)
+            .field("sitio_id", &self.sitio_id)
+            .field("dispositivo_id", &self.dispositivo_id)
+            .field("tipo", &self.tipo)
+            .field("topic", &self.topic)
+            .finish()
+    }
 }
 
 /// Único punto que resuelve "¿cuál es el secreto guardado?" a partir de las
@@ -650,5 +665,31 @@ impl AppCore {
     /// app.
     pub fn actualizar_desfase_reloj(&self, desfase_ms: i64) {
         self.reloj.actualizar_desfase_ms(desfase_ms);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SesionRealtimeNube;
+
+    #[test]
+    fn debug_de_sesion_realtime_no_expone_credenciales() {
+        let sesion = SesionRealtimeNube {
+            base_url: "https://example.test".to_string(),
+            apikey: "apikey-super-secreta".to_string(),
+            access_token: "token-super-secreto".to_string(),
+            expires_in: 3600,
+            sitio_id: "s1".to_string(),
+            dispositivo_id: "d1".to_string(),
+            tipo: "pc".to_string(),
+            topic: "sitio:s1".to_string(),
+        };
+
+        let debug = format!("{sesion:?}");
+
+        assert!(!debug.contains("apikey-super-secreta"));
+        assert!(!debug.contains("token-super-secreto"));
+        assert!(debug.contains("<redactado>"));
+        assert!(debug.contains("sitio:s1"));
     }
 }

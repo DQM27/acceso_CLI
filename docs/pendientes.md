@@ -31,9 +31,9 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   sigue guardándose en texto plano. La auditoría recomienda implementar el cifrado en
   Kotlin con Android Keystore/`EncryptedFile`, no volver al esquema basado en
   `ANDROID_ID`. Desktop mantiene su cifrado actual sin cambios.
-- [ ] **Redactar `Debug` de credenciales de nube.** `TokenDispositivo`
-  (`src/nube/cliente.rs`) y `SesionRealtimeNube` (`src/application/nube.rs`) no deben
-  exponer `access_token` ni `apikey` si alguien usa `{:?}` en el futuro.
+- [x] **Redactar `Debug` de credenciales de nube.** `TokenDispositivo`
+  (`src/nube/cliente.rs`) y `SesionRealtimeNube` (`src/application/nube.rs`) tienen
+  `Debug` manual con `access_token`/`apikey` redactados, cubierto por pruebas.
 - [ ] **Mitigar timing attack en login local.** Si la cédula no existe,
   `AutenticacionService::buscar_candidato` rechaza sin correr Argon2; usar un hash dummy
   reduciría la diferencia de tiempo. Riesgo bajo, pero confirmado.

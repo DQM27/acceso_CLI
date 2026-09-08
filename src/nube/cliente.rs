@@ -40,7 +40,7 @@ pub(crate) fn cliente_http() -> reqwest::blocking::Client {
 /// datos de su propio sitio. Vence a los `expires_in` segundos — hay que
 /// volver a llamar a `autenticar_dispositivo` para renovarlo, no se refresca
 /// solo.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct TokenDispositivo {
     pub access_token: String,
     pub expires_in: u64,
@@ -56,6 +56,19 @@ pub struct TokenDispositivo {
     /// tocar el reloj corregido en ese caso, no asumir desfase cero.
     #[serde(skip, default)]
     pub desfase_reloj_ms: Option<i64>,
+}
+
+impl std::fmt::Debug for TokenDispositivo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TokenDispositivo")
+            .field("access_token", &"<redactado>")
+            .field("expires_in", &self.expires_in)
+            .field("sitio_id", &self.sitio_id)
+            .field("dispositivo_id", &self.dispositivo_id)
+            .field("tipo", &self.tipo)
+            .field("desfase_reloj_ms", &self.desfase_reloj_ms)
+            .finish()
+    }
 }
 
 /// Intercambia el secreto de este dispositivo (ver `super::credenciales`)
@@ -158,6 +171,25 @@ mod tests {
             token.desfase_reloj_ms, None,
             "sin header Date no hay nada que medir"
         );
+    }
+
+    #[test]
+    fn debug_de_token_no_expone_access_token() {
+        let token = TokenDispositivo {
+            access_token: "token-super-secreto".to_string(),
+            expires_in: 3600,
+            sitio_id: "s1".to_string(),
+            dispositivo_id: "d1".to_string(),
+            tipo: "pc".to_string(),
+            desfase_reloj_ms: Some(25),
+        };
+
+        let debug = format!("{token:?}");
+
+        assert!(!debug.contains("token-super-secreto"));
+        assert!(debug.contains("<redactado>"));
+        assert!(debug.contains("s1"));
+        assert!(debug.contains("d1"));
     }
 
     #[test]
