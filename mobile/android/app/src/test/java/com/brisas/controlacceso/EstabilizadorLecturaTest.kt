@@ -56,20 +56,19 @@ class EstabilizadorLecturaTest {
 
     @Test
     fun sinChecksumNoConfirmaEnElPrimerFrame() {
-        val estabilizador = EstabilizadorLectura(framesRequeridos = 3)
+        val estabilizador = EstabilizadorLectura()
         val r1 = estabilizador.procesarFrame(licenciaTexto)
         assertEquals(EstadoEscaneo.BUSCANDO, r1.estado)
         assertNull(r1.documento)
     }
 
     @Test
-    fun sinChecksumConfirmaTrasFramesConsistentesRequeridos() {
-        val estabilizador = EstabilizadorLectura(framesRequeridos = 3)
+    fun sinChecksumConfirmaTrasDosFramesConsistentesPorDefecto() {
+        val estabilizador = EstabilizadorLectura()
         estabilizador.procesarFrame(licenciaTexto)
-        estabilizador.procesarFrame(licenciaTexto)
-        val r3 = estabilizador.procesarFrame(licenciaTexto)
-        assertEquals(EstadoEscaneo.CONFIRMADO, r3.estado)
-        assertEquals("112340567", r3.documento?.numeroDocumento)
+        val r2 = estabilizador.procesarFrame(licenciaTexto)
+        assertEquals(EstadoEscaneo.CONFIRMADO, r2.estado)
+        assertEquals("112340567", r2.documento?.numeroDocumento)
     }
 
     @Test

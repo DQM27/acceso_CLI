@@ -6,6 +6,7 @@ import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Handler
 import android.os.Looper
+import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -14,6 +15,8 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.core.UseCaseGroup
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.Arrangement
@@ -38,10 +41,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -99,7 +102,7 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
     val haptica = LocalHapticFeedback.current
     val ejecutor = remember { Executors.newSingleThreadExecutor() }
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
-    var ultimoMensaje by remember { mutableStateOf("Alinee el documento dentro de la cámara") }
+    var ultimoMensaje by remember { mutableStateOf("Apunte al documento") }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
     var vencido by remember { mutableStateOf(false) }
     // Una instancia por apertura de pantalla -- lleva el conteo de frames
@@ -224,6 +227,16 @@ private fun construirAnalizadorOcr(
     onFallo: () -> Unit,
 ): ImageAnalysis =
     ImageAnalysis.Builder()
+        .setResolutionSelector(
+            ResolutionSelector.Builder()
+                .setResolutionStrategy(
+                    ResolutionStrategy(
+                        Size(1280, 720),
+                        ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
+                    ),
+                )
+                .build(),
+        )
         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
         .build()
         .also { analisis ->
@@ -383,14 +396,29 @@ private fun analizarCedula(
 private val REGEX_CARACTERES_NO_CEDULA = Regex("[^0-9\\n -]")
 private val REGEX_CEDULA_CON_GUIONES_O_ESPACIOS = Regex("""\b\d[- ]?\d{4}[- ]?\d{4}\b""")
 private val REGEX_CEDULA_PEGADA = Regex("""\b\d{9}\b""")
+private val REGEX_LINEA_NUMERO_AJENO = Regex(
+    """\bEXPEDIENTE\s*(?:N[O°º.]*)?""",
+    RegexOption.IGNORE_CASE,
+)
 
 fun extraerCedulaDeTexto(texto: String): String? {
-    val normalizado = texto.replace(REGEX_CARACTERES_NO_CEDULA, " ")
-    REGEX_CEDULA_CON_GUIONES_O_ESPACIOS
-        .find(normalizado)
-        ?.let { return it.value.filter(Char::isDigit) }
+    val lineasCandidatas = texto
+        .lines()
+        .filterNot { REGEX_LINEA_NUMERO_AJENO.containsMatchIn(it) }
 
-    return REGEX_CEDULA_PEGADA
-        .find(normalizado)
-        ?.value
+    for (linea in lineasCandidatas) {
+        val normalizada = linea.replace(REGEX_CARACTERES_NO_CEDULA, " ")
+        REGEX_CEDULA_CON_GUIONES_O_ESPACIOS
+            .find(normalizada)
+            ?.let { return it.value.filter(Char::isDigit) }
+    }
+
+    for (linea in lineasCandidatas) {
+        val normalizada = linea.replace(REGEX_CARACTERES_NO_CEDULA, " ")
+        REGEX_CEDULA_PEGADA
+            .find(normalizada)
+            ?.let { return it.value }
+    }
+
+    return null
 }

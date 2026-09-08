@@ -42,7 +42,7 @@ data class ResultadoEstabilizacion(
 /// algún día se llama desde el hilo del analizador de CameraX en vez del
 /// principal, hay que agregar sincronización acá.
 class EstabilizadorLectura(
-    private val framesRequeridos: Int = 3,
+    private val framesRequeridos: Int = 2,
     // Un poco más grande que `framesRequeridos` -- da lugar a tolerar algún
     // frame malo salteado sin exigir tampoco una ventana tan larga que
     // acepte una racha vieja de candidatos ya abandonados.

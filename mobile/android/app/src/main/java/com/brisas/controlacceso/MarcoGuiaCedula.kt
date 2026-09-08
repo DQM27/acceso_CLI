@@ -6,16 +6,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.dp
 
-/// Recorte oscuro + marco de esquinas al estilo "encuadre de escáner".
-/// Puramente visual -- guía dónde poner el documento, pero
+/// Guía liviana de esquinas al estilo "encuadre de escáner".
+/// Puramente visual -- sugiere dónde poner el documento, pero
 /// [analizarCedula] procesa el frame completo, no solo esta área (ver el
 /// doc-comment de esa función: filtrar por este recuadro volvía el escaneo
 /// incómodo sin acelerarlo de verdad). Proporción 1.586:1, la misma de una
@@ -35,25 +32,8 @@ fun MarcoGuiaCedula(color: Color, modifier: Modifier = Modifier) {
         val arriba = (size.height - altoMarco) / 2f
         val radio = CornerRadius(20.dp.toPx())
 
-        // `saveLayer` + `BlendMode.Clear` recorta un hueco transparente en
-        // el velo oscuro -- dibujar el rectángulo directo con alpha no
-        // sirve, dejaría ver el velo encima de la vista previa también
-        // dentro del marco.
-        drawIntoCanvas { canvas ->
-            val capa = canvas.nativeCanvas.saveLayer(null, null)
-            drawRect(color = Color.Black.copy(alpha = 0.55f))
-            drawRoundRect(
-                color = Color.Transparent,
-                topLeft = Offset(izquierda, arriba),
-                size = Size(anchoMarco, altoMarco),
-                cornerRadius = radio,
-                blendMode = BlendMode.Clear,
-            )
-            canvas.nativeCanvas.restoreToCount(capa)
-        }
-
         drawRoundRect(
-            color = Color.White.copy(alpha = 0.85f),
+            color = Color.White.copy(alpha = 0.45f),
             topLeft = Offset(izquierda, arriba),
             size = Size(anchoMarco, altoMarco),
             cornerRadius = radio,

@@ -24,4 +24,9 @@ class CedulaOcrTest {
     fun ignoraTextoSinCedula() {
         assertNull(extraerCedulaDeTexto("Documento sin numeros completos"))
     }
+
+    @Test
+    fun ignoraNumeroDeExpedienteConFormatoDeCedula() {
+        assertNull(extraerCedulaDeTexto("Expediente No.: 1-2345-6789"))
+    }
 }
