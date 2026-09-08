@@ -1,9 +1,148 @@
-# Plan: Refinamiento de OCR y escaneo de documentos (Android)
+# Plan: Motor general de lectura de documentos de identidad (Android)
 
 > Estado: **planificación** — sin cambios de código todavía. Este documento se irá
-> refinando en conversación antes de implementar. Última actualización: 2026-09-07.
+> refinando en conversación antes de implementar. Última actualización: 2026-09-08.
 
-## 1. Contexto y problema actual
+## 0. Cambio de alcance: de "lector de cédulas CR" a motor general
+
+A partir de esta revisión, el proyecto deja de plantearse como un lector de
+cédulas costarricenses con extensiones puntuales, y pasa a diseñarse como un
+**motor general de documentos de identidad**, donde Costa Rica es un conjunto
+de reglas específicas (un "paquete de país") dentro del motor, no el centro
+del diseño. Motivo: agregar soporte de pasaportes obliga a que el núcleo ya
+sea agnóstico de país desde el modelo de datos, no como parche después.
+
+### 0.1 Por qué el MRZ es la columna vertebral, no el layout visual
+
+El estándar **ICAO Doc 9303** (OACI) define varias familias de zona de
+lectura mecánica, cada una con estructura fija sin importar el país emisor:
+
+| Formato | Estructura | Uso típico |
+|---|---|---|
+| TD1 | 3 líneas × 30 caracteres | cédulas, tarjetas de residencia (DIMEX, cédula CR 2025+) |
+| TD2 | 2 líneas × 36 caracteres | documentos de viaje/tarjetas grandes |
+| TD3 | 2 líneas × 44 caracteres | pasaportes |
+| MRV-A | 2 líneas × 44 caracteres | visas |
+| MRV-B | 2 líneas × 36 caracteres | visas |
+
+El layout visual (frente del documento) cambia por país y por versión. El
+MRZ no — es el mismo algoritmo de checksum (módulo 10, pesos `7,3,1`
+repetidos, `A-Z`=10-35, `<`=0) para cualquier país que siga el estándar. Esto
+ya lo aplicamos en `fixtures-ocr-sinteticos.md` para TD1; el mismo mecanismo
+aplica sin cambios a TD2/TD3/MRV — solo cambia el layout de campos dentro de
+la línea, no la matemática de validación.
+
+**Implicación práctica:** el parser de MRZ debe diseñarse como un módulo
+único parametrizado por formato (TD1/TD2/TD3/MRV-A/MRV-B), no como un parser
+"de DIMEX" que después se duplica para pasaporte.
+
+### 0.2 Arquitectura de tres lectores en paralelo
+
+```
+CÁMARA
+   ├── Barcode Scanner (ML Kit Barcode Scanning — on-device, ya soporta esto)
+   │      ├─ PDF417
+   │      ├─ QR
+   │      └─ DataMatrix / Aztec
+   │
+   ├── MRZ Detector (módulo propio, sobre el texto de ML Kit OCR)
+   │      ├─ TD1 / TD2 / TD3 / MRV-A / MRV-B
+   │
+   └── ML Kit OCR (ya en uso)
+          └─ texto visual del frente / fallback cuando no hay MRZ ni barcode
+```
+
+Los tres desembocan en **un único modelo de identidad normalizado**,
+independiente de por cuál vía llegó el dato:
+
+```
+tipo_documento
+pais_emisor
+numero_documento
+nombre
+apellidos
+nacionalidad
+fecha_nacimiento
+sexo
+fecha_vencimiento
+fecha_emision
+fuente_datos        (mrz | barcode | ocr_frente)
+checksum_valido
+ocr_confidence
+texto_crudo
+```
+
+### 0.3 Caso Costa Rica: dos generaciones de cédula, dos estrategias
+
+Verificado (comunicado oficial TSE, octubre 2025): la cédula costarricense
+tiene un quiebre de formato, no una evolución continua.
+
+- **Cédula anterior a oct-2025:** reverso con código de barras **PDF417**.
+  Confirmado que el contenido de ese PDF417 **viene cifrado** — un lector
+  puede decodificar el barcode sin problema (ML Kit lo soporta nativamente),
+  pero el texto resultante no es utilizable sin la clave/licencia de
+  descifrado del TSE. **No asumir que este camino funciona sin antes
+  confirmar acceso legítimo al esquema de descifrado** (existe al menos una
+  tesis del TEC que investigó el formato — revisar antes de invertir tiempo
+  de implementación aquí). Mientras no se resuelva, la fuente primaria para
+  cédulas viejas sigue siendo el **frente vía OCR**, como ya está planificado
+  en las secciones 3-4 de este documento.
+- **Cédula desde oct-2025:** reverso con **MRZ TD1** (reemplaza el PDF417
+  directamente, sin barcode). Esta es la vía "fácil" — mismo mecanismo que ya
+  diseñamos para DIMEX.
+
+Ambas generaciones coexisten en circulación (el TSE no obliga a renovar
+mientras la cédula esté vigente), así que el motor debe reconocer ambas: si
+hay MRZ, usarlo como fuente primaria; si no, caer a OCR de frente + (a
+futuro, si se resuelve el descifrado) PDF417.
+
+### 0.4 Pasaportes (TD3) — la ganancia real de este pivote
+
+Un TD3 típico (ejemplo ICAO, datos ficticios):
+```
+P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<
+L898902C36UTO7408122F3404159ZE184226B<<<<<16
+```
+Con el parser de MRZ ya generalizado (0.1), leer un pasaporte de cualquier
+país que siga ICAO 9303 no requiere un parser nuevo por país — solo el
+layout TD3 en vez de TD1. Ya se agregó un ejemplo TD3 sintético en
+`fixtures-ocr-sinteticos.md` (sección 8); falta ampliarlo con más variantes
+y casos corruptos, igual que se hizo para TD1.
+
+### 0.5 Estrategia de datasets (más allá de los fixtures propios)
+
+Se evaluaron fuentes externas de datos/documentos para robustecer las
+pruebas más allá de los fixtures sintéticos propios (`fixtures-ocr-sinteticos.md`):
+
+| Fuente | Qué es | Uso recomendado en este proyecto |
+|---|---|---|
+| PRADO (Consejo UE) | Catálogo de referencia de documentos reales por país (fotos + ficha técnica), no dataset de entrenamiento | Consultar para saber qué versiones/layouts existen por país (incluye Costa Rica); **no** redistribuir sus imágenes sin revisar condiciones de reuso |
+| Casos de prueba MRZ de librerías ICAO 9303 | MRZ sintéticos válidos e inválidos a propósito | Directamente reutilizables — mismo enfoque que ya usamos en fixtures propios |
+| MIDV-500 / MIDV-2020 / MIDV-Holo | Datasets académicos de video/foto de documentos ficticios (incluye IDs, licencias, pasaportes), pensados para captura desde celular | Útiles como prueba de robustez de captura (blur, reflejo, perspectiva) en una fase posterior — **revisar licencia de uso antes de integrarlos**, no asumir uso libre |
+| DocXPand-25k | ~25k documentos sintéticos generados, incluye plantillas de pasaporte TD3 | Interesante porque es generador, no solo imágenes — permite producir casos con errores inyectados y verdad de referencia conocida; evaluar en fase de robustecimiento, no ahora |
+| IDNet | ~598k imágenes sintéticas, ~400GB | Demasiado grande para el estado actual del proyecto; descartar por ahora, revisar solo si se llega a necesitar entrenamiento propio de modelo (no es el plan — seguimos usando ML Kit) |
+| SIDTD | Documentos originales/manipulados, orientado a antifraude | Fuera de alcance actual (este proyecto no hace detección de fraude documental) |
+
+**Decisión para esta etapa:** seguir con fixtures sintéticos propios
+(`fixtures-ocr-sinteticos.md`) como base de pruebas unitarias — son gratis,
+controlables, sin problema de licencia y ya cubren los casos límite
+identificados. Los datasets externos (MIDV, DocXPand) se evalúan como
+recurso de **robustecimiento en una fase posterior**, una vez el motor base
+funcione, y solo tras confirmar sus términos de licencia.
+
+### 0.6 Postura sobre ML Kit vs OCR propio
+
+No se plantea reemplazar ML Kit Text Recognition por un modelo propio. ML
+Kit ya resuelve detección + reconocimiento en tiempo real con bloques,
+líneas, elementos y bounding boxes (ver sección de disección de OCR más
+abajo). El esfuerzo del proyecto se concentra en lo que ML Kit **no** hace
+por sí solo: clasificar tipo de documento, reconstruir y validar MRZ,
+corregir mediante checksum, extraer campos, validar vigencia, leer
+PDF417/QR vía Barcode Scanning, y normalizar todo a un modelo único.
+
+---
+
+## 1. Contexto y problema actual (cédula nacional CR — caso original)
 
 La app (`PantallaEscanearCedula.kt`, ML Kit Text Recognition + CameraX) hoy solo
 reconoce la cédula nacional costarricense con una única regex genérica:
