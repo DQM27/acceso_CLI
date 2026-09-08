@@ -97,6 +97,43 @@ El check digit `4` ya no corresponde a `999888778` → el parser debe
 Este es el caso de prueba central de la sección 5 del plan (estabilidad de
 lectura vía checksum).
 
+### 4.1 Número extendido (más de 9 caracteres) — mecanismo estándar ICAO
+
+Verificado contra un caso real documentado (cédula belga,
+[issue #4 de Arg0s1080/mrz](https://github.com/Arg0s1080/mrz/issues/4)) y
+recalculado con el mismo algoritmo de checksum:
+
+```
+IDBEL123456789<1233<<<<<<<<<<<
+9001011F3001019BEL<<<<<<<<<<<8
+PEREZ<<MARIA<JOSE<<<<<<<<<<<<<
+```
+Posición 15 = `<` (no un check digit) señala la extensión. La continuación
+(`123`) y su check digit (`3`) siguen en el campo opcional. El check digit
+de la extensión se calcula sobre `"123456789" + "<" + "123"`, no solo sobre
+la continuación. Número completo resultante: `123456789123`.
+
+**Corrupto a propósito** (check digit de la extensión alterado, `3`→`4`):
+```
+IDBEL123456789<1234<<<<<<<<<<<
+9001011F3001019BEL<<<<<<<<<<<8
+PEREZ<<MARIA<JOSE<<<<<<<<<<<<<
+```
+
+### 4.2 Número extendido — convención no estándar (DIMEX costarricense real)
+
+El DIMEX real (ver fotos del hilo) trae un **dígito**, no `<`, en la
+posición 15, con más dígitos del número todavía en el campo opcional:
+```
+IDCRI1558243956105<<<<<<<<<<<<
+```
+Esto no seguiría el mecanismo estándar de la sección 4.1. **No implementado
+todavía** — no hay una referencia confiable para confirmar el algoritmo
+exacto que usa el TSE/DGME en este caso, así que el parser lo marca como
+`numeroDocumentoExtendidoSinSoporte = true` en vez de adivinar un checksum.
+Mientras tanto, el número de DIMEX sigue viniendo del frente (sección 3),
+no del MRZ.
+
 ## 5. Licencia de conducir — nacional
 
 ```

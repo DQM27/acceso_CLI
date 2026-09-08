@@ -93,24 +93,49 @@ fun parsearMrzTd1(texto: String): ResultadoMrz? {
     val paisEmisor = l1.substring(2, 5)
     val bloqueNumero = l1.substring(5, 14) // 9 caracteres
     val checkNumero = l1[14]
-    val opcional1 = l1.substring(15, 30)
+    val opcional1 = l1.substring(15, 30) // 15 caracteres
 
     // Mecanismo de número extendido (ICAO 9303, TD1): cuando el número real
-    // supera 9 caracteres -- el caso real de las cédulas/DIMEX
-    // costarricenses, con 12-13 dígitos -- la posición 15 deja de ser un
-    // check digit simple y el resto del número continúa en el campo
-    // opcional con su propio checksum. Ese mecanismo extendido NO está
-    // implementado todavía: se detecta (heurística: aparecen dígitos justo
-    // después de la posición 15, antes del primer relleno '<') y se marca
-    // explícitamente en vez de calcular un checksum o un número
-    // incompletos con apariencia de válidos.
-    val pareceNumeroExtendido = opcional1.takeWhile { it != '<' }.any { it.isDigit() }
-    if (pareceNumeroExtendido) {
-        return ResultadoMrz(
-            formato = "TD1", paisEmisor = paisEmisor, numeroDocumento = bloqueNumero,
-            apellidos = "", nombres = "", nacionalidad = "", fechaNacimiento = null, sexo = null,
-            fechaVencimiento = null, checksumsValidos = false, numeroDocumentoExtendidoSinSoporte = true,
-        )
+    // supera 9 caracteres, la posición 15 se reemplaza por el relleno '<' y
+    // el resto del número continúa en el campo opcional, seguido de un
+    // check digit para el número completo. Confirmado contra un caso real
+    // documentado (cédulas belgas, ver issue github.com/Arg0s1080/mrz/issues/4):
+    // el check digit de la extensión se calcula sobre
+    // "bloque base + '<' de la posición 15 + continuación", y el número
+    // completo resulta de bloque base + continuación (sin el '<').
+    var numeroDocumento = bloqueNumero
+    val numeroValido: Boolean
+    if (checkNumero == '<') {
+        val trasRelleno = opcional1.trimEnd('<')
+        if (trasRelleno.isEmpty()) {
+            // Extensión declarada (posición 15 = '<') pero sin continuación
+            // ni check digit legibles -- MRZ incompleto, no un número normal.
+            return ResultadoMrz(
+                formato = "TD1", paisEmisor = paisEmisor, numeroDocumento = bloqueNumero,
+                apellidos = "", nombres = "", nacionalidad = "", fechaNacimiento = null, sexo = null,
+                fechaVencimiento = null, checksumsValidos = false, numeroDocumentoExtendidoSinSoporte = true,
+            )
+        }
+        val continuacion = trasRelleno.dropLast(1)
+        val checkExtendido = trasRelleno.last()
+        numeroDocumento = bloqueNumero + continuacion
+        numeroValido = checksumValido(bloqueNumero + checkNumero + continuacion, checkExtendido)
+    } else {
+        // Caso observado en el DIMEX costarricense real: la posición 15 trae
+        // un dígito (no el relleno '<' que exige el estándar) y aun así hay
+        // más dígitos del número en el campo opcional -- convención que no
+        // sigue el mecanismo estándar de ICAO y no está verificada todavía
+        // contra una referencia confiable. Se marca explícitamente en vez de
+        // inventar un algoritmo de checksum sin poder confirmarlo.
+        val pareceExtendidoNoEstandar = opcional1.takeWhile { it != '<' }.any { it.isDigit() }
+        if (pareceExtendidoNoEstandar) {
+            return ResultadoMrz(
+                formato = "TD1", paisEmisor = paisEmisor, numeroDocumento = bloqueNumero,
+                apellidos = "", nombres = "", nacionalidad = "", fechaNacimiento = null, sexo = null,
+                fechaVencimiento = null, checksumsValidos = false, numeroDocumentoExtendidoSinSoporte = true,
+            )
+        }
+        numeroValido = checksumValido(bloqueNumero, checkNumero)
     }
 
     val nacimientoStr = l2.substring(0, 6)
@@ -122,10 +147,15 @@ fun parsearMrzTd1(texto: String): ResultadoMrz? {
     val opcional2 = l2.substring(18, 29)
     val checkCompuesto = l2[29]
 
-    val compuestoInput = bloqueNumero + checkNumero + nacimientoStr + checkNacimiento +
-        vencimientoStr + checkVencimiento + opcional2
+    // El checksum compuesto cubre TODO el campo de línea 1 desde el número
+    // hasta el final (bloque + check + opcional1 completo, 25 caracteres),
+    // no sólo bloque+check -- con relleno puro esto no cambia el resultado
+    // (aporta valor 0), pero con datos reales en el opcional (como en el
+    // número extendido) sí importa y antes se omitía por error.
+    val compuestoInput = bloqueNumero + checkNumero + opcional1 +
+        nacimientoStr + checkNacimiento + vencimientoStr + checkVencimiento + opcional2
 
-    val checksumsValidos = checksumValido(bloqueNumero, checkNumero) &&
+    val checksumsValidos = numeroValido &&
         checksumValido(nacimientoStr, checkNacimiento) &&
         checksumValido(vencimientoStr, checkVencimiento) &&
         checksumValido(compuestoInput, checkCompuesto)
@@ -135,7 +165,7 @@ fun parsearMrzTd1(texto: String): ResultadoMrz? {
     return ResultadoMrz(
         formato = "TD1",
         paisEmisor = paisEmisor,
-        numeroDocumento = bloqueNumero,
+        numeroDocumento = numeroDocumento,
         apellidos = apellidos,
         nombres = nombres,
         nacionalidad = nacionalidad,

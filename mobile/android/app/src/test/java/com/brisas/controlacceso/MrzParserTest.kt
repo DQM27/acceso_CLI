@@ -75,10 +75,12 @@ class MrzParserTest {
     }
 
     @Test
-    fun detectaNumeroExtendidoSinCalcularChecksumIncorrecto() {
-        // Caso real de DIMEX: número de documento de más de 9 dígitos,
-        // continúa en el área opcional -- mecanismo no soportado todavía,
-        // debe marcarse explícitamente en vez de fingir un checksum válido.
+    fun detectaNumeroExtendidoNoEstandarSinCalcularChecksumIncorrecto() {
+        // Caso real de DIMEX: dígito (no relleno '<') en la posición 15 y
+        // más dígitos del número siguen en el área opcional -- no sigue el
+        // mecanismo estándar de ICAO y no está verificado contra una
+        // referencia confiable. Debe marcarse explícitamente en vez de
+        // fingir un checksum válido con un algoritmo sin confirmar.
         val td1NumeroLargo = """
             IDCRI1558243956105<<<<<<<<<<<<
             9001011F3001019NIC<<<<<<<<<<<8
@@ -86,6 +88,37 @@ class MrzParserTest {
         """.trimIndent()
         val resultado = parsearMrzTd1(td1NumeroLargo)
         assertTrue(resultado?.numeroDocumentoExtendidoSinSoporte == true)
+        assertEquals(false, resultado?.checksumsValidos)
+    }
+
+    @Test
+    fun parseaNumeroExtendidoEstandarIcaoConChecksumValido() {
+        // Mecanismo estándar ICAO 9303: posición 15 = '<', continuación +
+        // check digit en el campo opcional. Fixture verificado contra un
+        // caso real documentado (cédula belga, issue #4 de Arg0s1080/mrz) y
+        // recalculado con el mismo algoritmo de checksum vía Python.
+        val td1ExtendidoEstandar = """
+            IDBEL123456789<1233<<<<<<<<<<<
+            9001011F3001019BEL<<<<<<<<<<<8
+            PEREZ<<MARIA<JOSE<<<<<<<<<<<<<
+        """.trimIndent()
+
+        val resultado = parsearMrzTd1(td1ExtendidoEstandar)
+
+        assertEquals(false, resultado?.numeroDocumentoExtendidoSinSoporte)
+        assertEquals("123456789123", resultado?.numeroDocumento)
+        assertTrue(resultado?.checksumsValidos == true)
+    }
+
+    @Test
+    fun rechazaNumeroExtendidoEstandarConCheckDigitAlterado() {
+        val td1Corrupto = """
+            IDBEL123456789<1234<<<<<<<<<<<
+            9001011F3001019BEL<<<<<<<<<<<8
+            PEREZ<<MARIA<JOSE<<<<<<<<<<<<<
+        """.trimIndent()
+        val resultado = parsearMrzTd1(td1Corrupto)
+        assertEquals(false, resultado?.numeroDocumentoExtendidoSinSoporte)
         assertEquals(false, resultado?.checksumsValidos)
     }
 

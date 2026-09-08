@@ -356,12 +356,19 @@ Confirmado que es viable y recomendable:
 
 ## 11. Orden sugerido de implementación (a confirmar)
 
-1. Enum `TipoDocumento` + clasificador por keywords.
-2. Extractores de campo específicos por tipo (frente).
-3. Parser de MRZ + checksum (reverso DIMEX).
-4. Estado central `EstadoEscaneo` + lógica de estabilidad/debounce.
-5. Viewfinder con esquineros de 3 estados + recorte del área de análisis.
-6. Mensajes in-cámara conectados al estado central.
+1. ✅ Enum `TipoDocumento` + clasificador por keywords.
+2. ✅ Extractores de campo específicos por tipo (frente).
+3. ✅ Parser de MRZ + checksum (TD1 y TD3), incluyendo el mecanismo estándar
+   ICAO de número extendido (>9 caracteres) — ver `fixtures-ocr-sinteticos.md`
+   sección 4.1. **Pendiente real:** la convención específica del DIMEX
+   costarricense (dígito en vez de `<` en la posición 15, sección 4.2 de
+   fixtures) no sigue el estándar y sigue sin implementar por falta de una
+   referencia confiable — el número de DIMEX sigue viniendo del frente.
+4. ✅ Estado central `EstadoEscaneo` + lógica de estabilidad/debounce.
+5. ⬜ Viewfinder con esquineros de 3 estados (hecho) + recorte del área de
+   análisis (pendiente) + enfoque cercano/detección de glare (pendiente).
+6. ✅ Mensajes in-cámara conectados al estado central, incluyendo el nombre
+   del tipo de documento detectado (nadie lo selecciona a mano).
 
 ## 12. Preguntas abiertas / pendientes de refinar
 
