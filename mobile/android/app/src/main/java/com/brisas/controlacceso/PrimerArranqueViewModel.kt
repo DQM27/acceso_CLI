@@ -38,10 +38,10 @@ class PrimerArranqueViewModel(
                 withContext(dispatcherIO) {
                     nucleo.configurarDispositivoInicialConSecreto(
                         secreto = secreto,
-                        androidId = metadata.androidId,
-                        modelo = metadata.modelo,
-                        fabricante = metadata.fabricante,
-                        fingerprint = metadata.fingerprint,
+                        identificadorHardware = metadata.identificadorHardware,
+                        nombreDispositivo = metadata.nombreDispositivo,
+                        plataforma = metadata.plataforma,
+                        versionBuild = metadata.versionBuild,
                         appVersion = metadata.appVersion,
                     )
                     secretoStore.guardar(secreto)

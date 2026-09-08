@@ -353,11 +353,18 @@ impl AppCore {
     /// alternativa de reconfigurar un dispositivo ya en uso (para eso sigue
     /// existiendo `guardar_secreto_dispositivo`, detrás de una sesión Root
     /// real).
+    /// `metadata`, si viene, viaja en el mismo request que la autenticación
+    /// inicial -- ver `nube::MetadatosDispositivo`. Cada plataforma decide
+    /// qué mandar (o `None`): escritorio arma la suya en
+    /// `comandos::nube::configurar_dispositivo_inicial`, el camino legado de
+    /// móvil (`Nucleo::configurar_dispositivo_inicial`, reemplazado por
+    /// `configurar_dispositivo_inicial_con_secreto`) sigue sin mandar nada.
     pub fn configurar_dispositivo_inicial(
         &self,
         directorio: Option<&Path>,
         identificador_dispositivo: Option<&str>,
         secreto: &str,
+        metadata: Option<&crate::nube::MetadatosDispositivo>,
     ) -> Result<ResumenSincronizacion, GestionNubeError> {
         if !self.requiere_configuracion_inicial()? {
             return Err(GestionNubeError::YaConfigurado);
@@ -377,7 +384,7 @@ impl AppCore {
             (None, _) => crate::nube::credenciales::guardar_secreto(secreto)?,
         }
 
-        let token = self.autenticar_con_cache(secreto)?;
+        let token = self.autenticar_y_cachear(secreto, metadata)?;
         let contexto = crate::nube::ContextoSincronizacion {
             base_url: crate::nube::BASE_URL,
             apikey: crate::nube::APIKEY,
@@ -621,6 +628,18 @@ impl AppCore {
         &self,
         secreto: &str,
     ) -> Result<crate::nube::TokenDispositivo, GestionNubeError> {
+        self.autenticar_y_cachear(secreto, None)
+    }
+
+    /// Igual que [`Self::autenticar_con_cache`], pero permite adjuntar
+    /// `metadata` cuando hace falta mandarla -- sólo la activación inicial
+    /// (ver [`Self::configurar_dispositivo_inicial`]). El resto de los
+    /// llamadores pasan `None` a través de `autenticar_con_cache`.
+    fn autenticar_y_cachear(
+        &self,
+        secreto: &str,
+        metadata: Option<&crate::nube::MetadatosDispositivo>,
+    ) -> Result<crate::nube::TokenDispositivo, GestionNubeError> {
         const MARGEN_EXPIRACION: std::time::Duration = std::time::Duration::from_secs(30);
 
         {
@@ -639,7 +658,8 @@ impl AppCore {
             }
         }
 
-        let token = crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, secreto, None)?;
+        let token =
+            crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, secreto, metadata)?;
         self.aplicar_desfase_reloj(&token);
         *self
             .token_nube_cacheado

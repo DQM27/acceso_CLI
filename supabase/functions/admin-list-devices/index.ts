@@ -63,7 +63,7 @@ Deno.serve(async (req: Request) => {
     .from("dispositivos")
     .select(
       "id, sitio_id, tipo, etiqueta, created_at, revoked_at, suspended_at, last_seen_at, oculto_en_panel, " +
-        "android_id, modelo, fabricante, fingerprint, app_version, last_ip",
+        "identificador_hardware, nombre_dispositivo, plataforma, version_build, app_version, last_ip",
     )
     .order("created_at", { ascending: false });
 

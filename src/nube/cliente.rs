@@ -71,21 +71,32 @@ impl std::fmt::Debug for TokenDispositivo {
     }
 }
 
-/// Datos del teléfono físico capturados en la activación inicial (ver
-/// `Nucleo::configurar_dispositivo_inicial_con_secreto`) -- sólo viajan una
-/// vez, no en cada renovación de token. Sirven para que el panel de
-/// administración distinga "el mismo teléfono de siempre" de un teléfono
+/// Datos del dispositivo físico capturados en la activación inicial (ver
+/// `Nucleo::configurar_dispositivo_inicial_con_secreto` en móvil,
+/// `comandos::nube::configurar_dispositivo_inicial` en escritorio) -- sólo
+/// viajan una vez, no en cada renovación de token. Sirven para que el panel
+/// de administración distinga "el mismo dispositivo de siempre" de uno
 /// distinto usando el mismo secreto, y como evidencia si hace falta
 /// denunciar un intento de fraude (ver `docs/plan-sesion-unica-dispositivos.md`).
-/// Ninguno es secreto en sí mismo -- todos observables por cualquier app en
-/// el propio teléfono -- así que viajan en texto plano en el body, igual
-/// que el secreto.
+/// Nombres de campo neutrales a propósito -- esto lo usan tanto móvil como
+/// escritorio, cada uno con su propio significado (ver los doc-comments de
+/// cada campo). Ninguno es secreto en sí mismo -- todos observables por
+/// cualquier app en el propio dispositivo -- así que viajan en texto plano
+/// en el body, igual que el secreto.
 #[derive(Default, serde::Serialize)]
 pub struct MetadatosDispositivo {
-    pub android_id: Option<String>,
-    pub modelo: Option<String>,
-    pub fabricante: Option<String>,
-    pub fingerprint: Option<String>,
+    /// Identificador estable de hardware: `Settings.Secure.ANDROID_ID` en
+    /// móvil, Machine GUID de Windows en escritorio.
+    pub identificador_hardware: Option<String>,
+    /// Nombre por el que el dispositivo se identifica a sí mismo:
+    /// `Build.MODEL` en móvil, nombre de red (`COMPUTERNAME`) en escritorio.
+    pub nombre_dispositivo: Option<String>,
+    /// Quién/qué hizo el dispositivo o su sistema: `Build.MANUFACTURER` en
+    /// móvil, sistema operativo ("Windows") en escritorio.
+    pub plataforma: Option<String>,
+    /// Huella más específica de la build exacta: `Build.FINGERPRINT` en
+    /// móvil, sistema operativo + arquitectura en escritorio.
+    pub version_build: Option<String>,
     pub app_version: Option<String>,
 }
 

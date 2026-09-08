@@ -320,7 +320,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
         flex: 1.3,
         minWidth: 170,
         valueGetter: ({ data }) =>
-          [data?.fabricante, data?.modelo].filter(Boolean).join(" ") || "—",
+          [data?.plataforma, data?.nombre_dispositivo].filter(Boolean).join(" ") || "—",
       },
       {
         field: "last_ip",

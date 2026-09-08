@@ -31,10 +31,10 @@ export interface Dispositivo {
   suspended_at: string | null;
   last_seen_at: string | null;
   oculto_en_panel: boolean;
-  android_id: string | null;
-  modelo: string | null;
-  fabricante: string | null;
-  fingerprint: string | null;
+  identificador_hardware: string | null;
+  nombre_dispositivo: string | null;
+  plataforma: string | null;
+  version_build: string | null;
   app_version: string | null;
   last_ip: string | null;
 }

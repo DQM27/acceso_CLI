@@ -42,10 +42,10 @@ Deno.serve(async (req: Request) => {
   let body: {
     secret?: string;
     metadata?: {
-      android_id?: string;
-      modelo?: string;
-      fabricante?: string;
-      fingerprint?: string;
+      identificador_hardware?: string;
+      nombre_dispositivo?: string;
+      plataforma?: string;
+      version_build?: string;
       app_version?: string;
     };
   };
@@ -129,10 +129,10 @@ Deno.serve(async (req: Request) => {
   if (ip) actualizacion.last_ip = ip;
   const metadata = body.metadata;
   if (metadata && typeof metadata === "object") {
-    if (metadata.android_id) actualizacion.android_id = metadata.android_id;
-    if (metadata.modelo) actualizacion.modelo = metadata.modelo;
-    if (metadata.fabricante) actualizacion.fabricante = metadata.fabricante;
-    if (metadata.fingerprint) actualizacion.fingerprint = metadata.fingerprint;
+    if (metadata.identificador_hardware) actualizacion.identificador_hardware = metadata.identificador_hardware;
+    if (metadata.nombre_dispositivo) actualizacion.nombre_dispositivo = metadata.nombre_dispositivo;
+    if (metadata.plataforma) actualizacion.plataforma = metadata.plataforma;
+    if (metadata.version_build) actualizacion.version_build = metadata.version_build;
     if (metadata.app_version) actualizacion.app_version = metadata.app_version;
   }
   supabase

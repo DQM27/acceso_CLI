@@ -98,9 +98,12 @@ fn directorio_default() -> Option<PathBuf> {
 /// inaccesible, permisos) -- [`guardar_secreto_en`]/[`cargar_secreto_en`]
 /// caen a texto plano en ese caso antes que perder el secreto; un
 /// dispositivo real con Windows corrupto al punto de no poder leer su
-/// propio registro ya tiene problemas más grandes que éste.
+/// propio registro ya tiene problemas más grandes que éste. `pub` (no sólo
+/// de uso interno de este módulo) porque `desktop-tauri` también la usa
+/// para armar la metadata forense de la activación inicial -- ver
+/// `comandos::nube::configurar_dispositivo_inicial`.
 #[cfg(feature = "cifrado-secreto-dispositivo")]
-fn identificador_de_esta_maquina() -> Option<String> {
+pub fn identificador_de_esta_maquina() -> Option<String> {
     machine_uid::get().ok()
 }
 
@@ -187,6 +190,20 @@ pub fn cargar_secreto_en_con_identificador(
         return cifrado::descifrar(&contenido, identificador);
     }
     secreto_de_texto_plano(contenido)
+}
+
+/// Borra `<directorio>/dispositivo-nube.secret` si existe -- para cuando ya
+/// se migró su contenido a otro almacén (ver Android Keystore en
+/// `SecretoDispositivoStore.kt`) y no tiene sentido dejar la copia vieja
+/// (en texto plano en móvil, ver el doc-comment del módulo) huérfana en
+/// disco. `Ok(())` si el archivo ya no existía -- borrar algo que no está
+/// no es un error para quien llama.
+pub fn borrar_secreto_en(directorio: &Path) -> io::Result<()> {
+    match fs::remove_file(directorio.join(FILE_NAME)) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
 }
 
 /// Sin ningún feature de cifrado activo -- texto plano, como siempre.

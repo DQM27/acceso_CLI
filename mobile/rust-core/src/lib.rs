@@ -1146,6 +1146,7 @@ impl Nucleo {
                 Some(std::path::Path::new(&directorio)),
                 Some(&identificador_dispositivo),
                 &secreto,
+                None,
             )?
             .into())
     }
@@ -1166,10 +1167,10 @@ impl Nucleo {
     pub fn configurar_dispositivo_inicial_con_secreto(
         &self,
         secreto: String,
-        android_id: String,
-        modelo: String,
-        fabricante: String,
-        fingerprint: String,
+        identificador_hardware: String,
+        nombre_dispositivo: String,
+        plataforma: String,
+        version_build: String,
         app_version: String,
     ) -> Result<ResumenSincronizacion, NucleoError> {
         if !self.core_lock().requiere_configuracion_inicial()? {
@@ -1178,10 +1179,10 @@ impl Nucleo {
 
         let cadena_opcional = |texto: String| (!texto.trim().is_empty()).then_some(texto);
         let metadata = control_acceso::nube::MetadatosDispositivo {
-            android_id: cadena_opcional(android_id),
-            modelo: cadena_opcional(modelo),
-            fabricante: cadena_opcional(fabricante),
-            fingerprint: cadena_opcional(fingerprint),
+            identificador_hardware: cadena_opcional(identificador_hardware),
+            nombre_dispositivo: cadena_opcional(nombre_dispositivo),
+            plataforma: cadena_opcional(plataforma),
+            version_build: cadena_opcional(version_build),
             app_version: cadena_opcional(app_version),
         };
         let token = self
@@ -1266,6 +1267,17 @@ impl Nucleo {
             std::path::Path::new(&directorio),
             &identificador_dispositivo,
         )
+    }
+
+    /// Borra el archivo legado de `cargar_secreto_dispositivo_legado` --
+    /// Kotlin lo llama justo después de migrar ese secreto al Keystore, para
+    /// no dejar la copia vieja (en texto plano, ver el módulo
+    /// `nube::credenciales`) huérfana en el almacenamiento de la app.
+    pub fn borrar_secreto_dispositivo_legado(&self, directorio: String) -> Result<(), NucleoError> {
+        control_acceso::nube::credenciales::borrar_secreto_en(std::path::Path::new(&directorio))
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })
     }
 
     /// Autentica este dispositivo, drena la bandeja de salida pendiente y

@@ -677,6 +677,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar_con_secreto(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_borrar_secreto_dispositivo_legado(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_historial(
@@ -765,6 +767,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar_con_secreto(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_borrar_secreto_dispositivo_legado(`ptr`: Long,`directorio`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_contratistas(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_historial(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -779,7 +783,7 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`androidId`: RustBuffer.ByValue,`modelo`: RustBuffer.ByValue,`fabricante`: RustBuffer.ByValue,`fingerprint`: RustBuffer.ByValue,`appVersion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`identificadorHardware`: RustBuffer.ByValue,`nombreDispositivo`: RustBuffer.ByValue,`plataforma`: RustBuffer.ByValue,`versionBuild`: RustBuffer.ByValue,`appVersion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_contratista(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
@@ -948,6 +952,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar_con_secreto() != 52036) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_borrar_secreto_dispositivo_legado() != 50777) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas() != 3985) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -969,7 +976,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial() != 9648) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial_con_secreto() != 32213) {
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial_con_secreto() != 47466) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista() != 57741) {
@@ -1500,6 +1507,14 @@ public interface NucleoInterface {
     fun `autenticarConSecreto`(`cedula`: kotlin.String, `password`: kotlin.String, `secreto`: kotlin.String): UsuarioSesion
     
     /**
+     * Borra el archivo legado de `cargar_secreto_dispositivo_legado` --
+     * Kotlin lo llama justo después de migrar ese secreto al Keystore, para
+     * no dejar la copia vieja (en texto plano, ver el módulo
+     * `nube::credenciales`) huérfana en el almacenamiento de la app.
+     */
+    fun `borrarSecretoDispositivoLegado`(`directorio`: kotlin.String)
+    
+    /**
      * Búsqueda en vivo (la vía primaria del guardia — ver
      * docs/plan-app-movil.md, "Prioridad de esfuerzo: el buscador"). Un
      * `texto` vacío trae la primera página completa, no una lista vacía.
@@ -1573,7 +1588,7 @@ public interface NucleoInterface {
      * teléfono físico detrás de cada secreto (ver
      * `docs/plan-sesion-unica-dispositivos.md`).
      */
-    fun `configurarDispositivoInicialConSecreto`(`secreto`: kotlin.String, `androidId`: kotlin.String, `modelo`: kotlin.String, `fabricante`: kotlin.String, `fingerprint`: kotlin.String, `appVersion`: kotlin.String): ResumenSincronizacion
+    fun `configurarDispositivoInicialConSecreto`(`secreto`: kotlin.String, `identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String): ResumenSincronizacion
     
     /**
      * Alta de contratista — mismo formulario que
@@ -1898,6 +1913,26 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Borra el archivo legado de `cargar_secreto_dispositivo_legado` --
+     * Kotlin lo llama justo después de migrar ese secreto al Keystore, para
+     * no dejar la copia vieja (en texto plano, ver el módulo
+     * `nube::credenciales`) huérfana en el almacenamiento de la app.
+     */
+    @Throws(NucleoException::class)override fun `borrarSecretoDispositivoLegado`(`directorio`: kotlin.String)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_borrar_secreto_dispositivo_legado(
+        it,
+        
+        FfiConverterString.lower(`directorio`),_status)
+}
+    }
+    
+    
+
+    
+    /**
      * Búsqueda en vivo (la vía primaria del guardia — ver
      * docs/plan-app-movil.md, "Prioridad de esfuerzo: el buscador"). Un
      * `texto` vacío trae la primera página completa, no una lista vacía.
@@ -2061,7 +2096,7 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
      * teléfono físico detrás de cada secreto (ver
      * `docs/plan-sesion-unica-dispositivos.md`).
      */
-    @Throws(NucleoException::class)override fun `configurarDispositivoInicialConSecreto`(`secreto`: kotlin.String, `androidId`: kotlin.String, `modelo`: kotlin.String, `fabricante`: kotlin.String, `fingerprint`: kotlin.String, `appVersion`: kotlin.String): ResumenSincronizacion {
+    @Throws(NucleoException::class)override fun `configurarDispositivoInicialConSecreto`(`secreto`: kotlin.String, `identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String): ResumenSincronizacion {
             return FfiConverterTypeResumenSincronizacion.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
@@ -2069,10 +2104,10 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         it,
         
         FfiConverterString.lower(`secreto`),
-        FfiConverterString.lower(`androidId`),
-        FfiConverterString.lower(`modelo`),
-        FfiConverterString.lower(`fabricante`),
-        FfiConverterString.lower(`fingerprint`),
+        FfiConverterString.lower(`identificadorHardware`),
+        FfiConverterString.lower(`nombreDispositivo`),
+        FfiConverterString.lower(`plataforma`),
+        FfiConverterString.lower(`versionBuild`),
         FfiConverterString.lower(`appVersion`),_status)
 }
     }

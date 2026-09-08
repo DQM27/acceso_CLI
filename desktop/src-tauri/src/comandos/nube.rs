@@ -5,6 +5,26 @@ use tauri::Manager;
 
 use crate::estado::GuiState;
 
+/// Metadata de esta PC, capturada una sola vez en la activación inicial --
+/// misma idea que `MetadatosDispositivoLocal.kt` en el lado móvil (ver
+/// `docs/plan-sesion-unica-dispositivos.md`), reusando los mismos nombres
+/// de campo aunque el significado en escritorio es distinto: `android_id`
+/// pasa a ser el Machine GUID de Windows (el mismo identificador estable
+/// que ya usa `cifrado-secreto-dispositivo` para cifrar el secreto en
+/// disco, no uno nuevo), `modelo` el nombre de esta PC en la red,
+/// `fabricante`/`fingerprint` el sistema operativo y su arquitectura.
+/// Nada de esto es secreto en sí mismo -- viaja igual que el resto de esta
+/// metadata, en texto plano en el body de `device-auth`.
+fn metadata_de_esta_maquina() -> nube::MetadatosDispositivo {
+    nube::MetadatosDispositivo {
+        identificador_hardware: control_acceso::nube::credenciales::identificador_de_esta_maquina(),
+        nombre_dispositivo: std::env::var("COMPUTERNAME").ok(),
+        plataforma: Some("Windows".to_string()),
+        version_build: Some(format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)),
+        app_version: Some(env!("CARGO_PKG_VERSION").to_string()),
+    }
+}
+
 /// Resultado de una sincronización, para la pantalla y para el evento que
 /// emite la sincronización automática en segundo plano (ver `crate::run`).
 #[derive(Debug, Clone, serde::Serialize)]
@@ -185,9 +205,10 @@ pub async fn configurar_dispositivo_inicial(
 ) -> Result<ResumenSincronizacion, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<GuiState>();
+        let metadata = metadata_de_esta_maquina();
         let resumen = state
             .core()
-            .configurar_dispositivo_inicial(None, None, &secreto)
+            .configurar_dispositivo_inicial(None, None, &secreto, Some(&metadata))
             .map_err(mensaje_gestion_nube)?;
         Ok(ResumenSincronizacion {
             enviados: resumen.enviados,

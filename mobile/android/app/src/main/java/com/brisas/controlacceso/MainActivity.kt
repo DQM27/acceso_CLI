@@ -98,7 +98,7 @@ class MainActivity : ComponentActivity() {
                                         remember(identificadorDispositivo) {
                                             MetadatosDispositivoLocal.capturar(
                                                 context = this@MainActivity,
-                                                androidId = identificadorDispositivo,
+                                                identificadorHardware = identificadorDispositivo,
                                             )
                                         },
                                     onListo = { requiereArranque = false },

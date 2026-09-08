@@ -7,16 +7,18 @@ import android.os.Build
 /// inicial (ver `PrimerArranqueViewModel.conectar` y
 /// `Nucleo.configurarDispositivoInicialConSecreto`). Ninguno es secreto en
 /// sí mismo -- observables por cualquier app en el propio teléfono -- ver
-/// `docs/plan-sesion-unica-dispositivos.md`.
+/// `docs/plan-sesion-unica-dispositivos.md`. Nombres de campo neutrales a
+/// propósito -- el mismo contrato (`MetadatosDispositivo` en Rust) también
+/// lo llena escritorio, con su propio significado.
 data class MetadatosDispositivoLocal(
-    val androidId: String,
-    val modelo: String,
-    val fabricante: String,
-    val fingerprint: String,
+    val identificadorHardware: String,
+    val nombreDispositivo: String,
+    val plataforma: String,
+    val versionBuild: String,
     val appVersion: String,
 ) {
     companion object {
-        fun capturar(context: Context, androidId: String): MetadatosDispositivoLocal {
+        fun capturar(context: Context, identificadorHardware: String): MetadatosDispositivoLocal {
             val version =
                 try {
                     context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
@@ -24,10 +26,10 @@ data class MetadatosDispositivoLocal(
                     ""
                 }
             return MetadatosDispositivoLocal(
-                androidId = androidId,
-                modelo = Build.MODEL ?: "",
-                fabricante = Build.MANUFACTURER ?: "",
-                fingerprint = Build.FINGERPRINT ?: "",
+                identificadorHardware = identificadorHardware,
+                nombreDispositivo = Build.MODEL ?: "",
+                plataforma = Build.MANUFACTURER ?: "",
+                versionBuild = Build.FINGERPRINT ?: "",
                 appVersion = version,
             )
         }

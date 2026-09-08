@@ -53,6 +53,13 @@ class AndroidKeystoreSecretoDispositivoStore(
             val legado = nucleo.cargarSecretoDispositivoLegado(directorio, identificadorDispositivo)
                 ?: return null
             guardar(legado)
+            // Ya migrado al Keystore -- no dejar la copia vieja (en texto
+            // plano, ver el módulo `nube::credenciales` en Rust) huérfana en
+            // el almacenamiento de la app. Si el borrado falla, no aborta la
+            // migración: ya se guardó bien en el Keystore, perder el
+            // secreto entero por esto sería peor que dejar el archivo viejo
+            // un rato más.
+            runCatching { nucleo.borrarSecretoDispositivoLegado(directorio) }
             return legado
         } catch (error: SecretoDispositivoStoreException) {
             throw error
