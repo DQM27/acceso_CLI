@@ -1,953 +1,185 @@
-# Pendientes
+# Pendientes consolidados
 
-Documento único de trabajo pendiente en el repositorio. Reemplaza a las auditorías y
-planes previos (`hallazgos-*.md`, `auditoria-*.md`, `plan-*.md` de saneamiento/respaldos/
-autorización, `refactor-app-y-errores.md`), cuyo contenido ya cerrado se consolidó aquí o
-se descartó. Ese historial sigue disponible en `git log`/`git show` de los commits que los
-crearon si hace falta el detalle completo de un hallazgo ya reparado.
+Documento único de trabajo pendiente del repo. Reemplaza las listas paralelas y notas
+viejas de auditoría, nube, móvil, escritorio, OCR, empaquetado y planes de producto.
 
-`docs/diagrama-logico.md` y `docs/evaluacion-sqlite.md` siguen aparte: son referencia de
-arquitectura y configuración, no rastreadores de tareas. `docs/plan-persistencia-nube.md`
-también queda aparte por el mismo motivo (bitácora de decisiones de arquitectura de la nube,
-con su propio historial de sesiones) — sus tareas realmente abiertas se consolidan acá abajo.
-`docs/plan-app-movil.md` se eliminó (2026-09-06): describía un diseño ya superado (un solo
-teléfono, sin sincronización en vivo) que `plan-persistencia-nube.md` reemplazó por completo.
+## Regla del archivo
 
-## Regla de este documento
+Al terminar una tarea de aquí, se marca `[x]` en el mismo commit o en el siguiente. Si
+una tarea se descarta, también se marca `[x]` con una nota corta de por qué. Los planes
+históricos pueden seguir existiendo como contexto, pero esta lista manda.
 
-**Al terminar una tarea de aquí, se marca `[x]` en el mismo commit (o el siguiente) que la
-resuelve — no se deja para una limpieza posterior.** Si una tarea se descarta en vez de
-hacerse, se marca `[x]` igual con una nota de por qué se descartó (no se borra la línea:
-que quede el rastro de la decisión).
+## Fuentes consolidadas
+
+- `docs/auditoria-calidad-2026-09.md`
+- `docs/plan-persistencia-nube.md`
+- `docs/plan-panel-administrativo-web.md`
+- `docs/plan-ocr-escaneo-documentos.md`
+- `docs/fixtures-ocr-sinteticos.md`
+- `docs/idea-lector-placas-vehiculares.md`
+- `mobile/android/ARQUITECTURA.md`
+- `mobile/README.md`
+- tracker anterior de escritorio (absorbido aquí; ya no existe como lista aparte)
+- `README.md`, `packaging/msix/README.md`, `packaging/alacritty/README.md`,
+  `docs/recuperacion-supabase.md`, `docs/realtime-verificado.md`
 
 ---
 
-## Nube / multi-dispositivo y panel web — pendientes reales (2026-09-06)
-
-Consolidado acá tras revisar `docs/plan-persistencia-nube.md` de punta a punta: varias notas
-ahí decían "pendiente" sobre cosas que ya se habían resuelto sin actualizar el documento
-(timer de sync en móvil, bajar el catálogo de gafetes a un dispositivo nuevo, Realtime
-bidireccional). Esta sección es la lista real, verificada contra el código, no contra lo que
-decía la nota vieja.
-
-- [ ] **Pulir los paneles web** (historial-brisas.pages.dev: historial + admin). Pedido
-  explícito del usuario (2026-09-06), sin alcance definido todavía — a concretar en una
-  próxima sesión.
-- [x] **Delegar la creación de usuarios (Administrador/Operador) al panel web — hecho
-  (2026-09-06/07, confirmado al auditar el repo el 2026-09-07).** `admin_global_gestiona_
-  usuarios` (migración `admin_global_crea_usuarios`) + el panel web crea usuarios con el
-  centinela `SIN_PASSWORD_LOCAL`, mismo criterio ya descrito acá arriba — ya no crea
-  contraseña real ni temporal desde la web.
-- [x] **Panel de alta de dispositivos — hecho (confirmado al auditar el repo el
-  2026-09-07).** `web/src/pantallas/Dispositivos.tsx` tiene el formulario real, contra las
-  Edge Functions `admin-provision-device`/`admin-create-site` (ambas versionadas en
-  `supabase/functions/` recién, ver nota de Edge Functions más abajo) — ya no es a mano por
-  SQL vía MCP.
-- [x] **Escritorio/móvil sin onboarding por GUI para el primer usuario ROOT (2026-09-06).**
-  Antes sólo existía vía CLI/TUI (`--reset-root`/consola de arranque) -- detectado al
-  resetear la base local de pruebas: hubo que sembrar el ROOT a mano con un script en vez
-  de usar la app. Resuelto sin sembrar un usuario ficticio (se evaluó y se descartó por dejar
-  una contraseña compartida entre instalaciones): con la base vacía (`requiere_configuracion_
-  inicial`), la app abre directo en una pantalla de "pegá el secreto de dispositivo", sin
-  pedir login -- pegar el secreto dispara una sincronización inicial que trae el catálogo
-  real (contratistas/empresas/gafetes/**usuarios**) desde la nube. Como esos usuarios llegan
-  con el centinela `SIN_PASSWORD_LOCAL`, el primer login de cualquiera de ellos cae solo en
-  el flujo de "fijar contraseña" que ya existía (`AppCore::fijar_password_inicial`). El
-  camino CLI/TUI se mantiene como rescate si alguna vez hace falta un sitio 100% sin nube.
-  Esto forzó revertir otra decisión (ver "Root inicial y login offline" en
-  `docs/plan-panel-administrativo-web.md`): ROOT ahora también viaja por la nube junto con
-  ADMINISTRADOR/OPERADOR (migración `permite_root_en_usuarios_globales`) -- sin eso, este
-  primer arranque sólo servía para cuentas no-ROOT.
-- [ ] **Revisar y ajustar roles y permisos (Root/Administrador/Operador).** Pedido explícito
-  del usuario (2026-09-06) tras entender cómo viajan los usuarios entre dispositivos — el
-  esquema actual (`domain::autorizacion::Operacion`/`RolUsuario::puede`) queda documentado
-  para revisión, ajustes a definir en la conversación.
-- [ ] **Activación de dispositivo con verificación por correo (Capa 2, evaluado y pospuesto
-  2026-09-06).** Hoy pegar el secreto correcto alcanza para activar un dispositivo al
-  instante -- si el secreto se filtra (screenshot, archivo compartido), quien lo tenga puede
-  usarlo sin ningún gate extra. Se diseñó un flujo de step-up por correo, sólo en la
-  **primera** activación de cada secreto (no en cada sync, eso sería fricción diaria
-  innecesaria para una app de uso básicamente personal): pegar el secreto dispara un código
-  al correo del admin (reusando el OTP nativo de Supabase que ya usa
-  `web/src/componentes/useVerificacionPorCorreo.ts` para step-up en el panel -- sin sumar un
-  proveedor de correo nuevo), la persona lo escribe en la misma app, y recién ahí el
-  dispositivo queda activado de verdad. Se evaluó como sobre-ingeniería para el alcance
-  actual del proyecto y se pospone -- diagrama comparativo (activación simple de hoy vs. esta
-  con verificación) en `docs/activacion-dispositivo-comparacion.html` para retomar la
-  decisión más adelante, con o sin un cliente de por medio. Requeriría: columna
-  `activado_en` en `dispositivos`, una Edge Function de dos pasos (pedir código / confirmar +
-  emitir JWT), y el paso extra de UI en escritorio y móvil.
-
-## Auditoría de secretos/nube — pendiente de decidir (2026-09-07)
-
-Reporte externo pegado por el usuario, verificado punto por punto contra el código (no
-aceptado a ciegas) antes de anotarlo acá. Nada de esto se tocó todavía — queda para cuando
-el usuario confirme que se arregla.
-
-- [ ] **Secreto del dispositivo en móvil sin cifrar — confirmado, prioridad alta.**
-  `mobile/rust-core/Cargo.toml` no activa el feature `cifrado-secreto-dispositivo-portable`
-  al declarar la dependencia de `control_acceso` (línea `features = ["nube"]`). El cableado
-  para usarlo ya existe entero: Kotlin ya lee `Settings.Secure.ANDROID_ID` y se lo pasa a
-  Rust, y `mobile/rust-core/src/lib.rs` ya llama a
-  `guardar_secreto_en_con_identificador`/`cargar_secreto_en_con_identificador` con ese
-  identificador (ver `src/nube/credenciales.rs`). Sin el feature activo, ese identificador
-  se ignora y el secreto (la credencial que autentica todo el teléfono ante la nube) queda
-  en texto plano en el almacenamiento del teléfono. Arreglo es una sola línea en el
-  `Cargo.toml` de `mobile/rust-core` — impacto real más alto que el esfuerzo.
-- [ ] **`Debug` derivado expone tokens/API keys en texto plano — confirmado, riesgo latente
-  (no activo hoy).** `TokenDispositivo` (`src/nube/cliente.rs`) y `SesionRealtimeNube`
-  (`src/application/nube.rs`) derivan `Debug` con `access_token`/`apikey` sin redactar. Hoy
-  nada los loguea, pero cualquier `log::debug!`/`{:?}` futuro los expondría enteros. Mismo
-  patrón que ya existe para el hash de password (`CandidatoAutenticacion` en
-  `src/services/autenticacion_service.rs`, `Debug` manual con `"«redactado»"`) — replicar acá.
-- [ ] **Timing attack en login local — confirmado, prioridad baja.**
-  `AutenticacionService::buscar_candidato` (`src/services/autenticacion_service.rs`) rechaza
-  una cédula inexistente sin correr Argon2, pero si la cédula existe sí lo corre (lento) antes
-  de rechazar por password incorrecta — permite distinguir por tiempo de respuesta si una
-  cédula está en el sistema. Riesgo bajo en esta app (interna, un solo sitio); mitigación
-  sería un hash dummy cuando el usuario no exista.
-
-Del mismo reporte, evaluado y **descartado** (no quedan como pendientes):
-- Timeout HTTP con fallback a cliente sin timeout (`src/nube/cliente.rs::cliente_http`): ya
-  es una decisión deliberada y documentada en el propio comentario, no un descuido —
-  cambiarla (propagar error o entrar en pánico a mitad de una sincronización) sería peor.
-- Índice de la cola de sincronización: el índice parcial ya existente
-  (`idx_cola_salida_pendientes ON cola_salida(creado_en) WHERE estado='pendiente'`) ya excluye
-  del escaneo todo lo que no está pendiente, que es la mayoría de las filas en cualquier
-  momento normal — el reporte exageraba el impacto.
-- `listar()` sin límite en repositorios de catálogo (contratistas/empresas/usuarios/gafetes):
-  ya evaluado en la auditoría de rendimiento previa y dejado así a propósito — son catálogos
-  de un solo sitio (cientos, no miles de filas).
-
-## Repo incompleto respecto a lo desplegado (2026-09-07)
-
-Auditoría pedida por el usuario ("revisa bien que tengamos en el repo todo lo necesario")
-tras un reporte que señalaba que las Edge Functions de dispositivos no estaban versionadas.
-Verificado contra `list_edge_functions`/`get_edge_function` (MCP) en vez de confiar en el
-reporte a ciegas: el reclamo era correcto.
-
-- [x] **Versionadas las 9 Edge Functions que sólo existían en remoto (2026-09-07).**
-  `supabase/functions/` sólo tenía `sync-access-policy`. Se trajo el código fuente exacto
-  (tal cual desplegado) de `device-auth`, `admin-list-devices`, `admin-provision-device`,
-  `admin-revoke-device`, `admin-suspend-device`, `admin-delete-device`, `admin-create-site`,
-  `admin-move-device` y `admin-hide-device`. Se revisó cada una: todas las `admin-*` ya
-  tienen su propio `correoAdminAutorizado()` (JWT de sesión → `administradores_panel`), no
-  clave compartida — el hallazgo era sólo de versionado, no de seguridad.
-- [x] **`admin-move-device` y `admin-hide-device` eliminadas (2026-09-07).** Sin llamador en
-  `web/src` ni en `desktop/src` (revisado tras versionarlas) — decisión explícita del
-  usuario ("sino se usan... quitalas") en vez de dejarlas huérfanas. Borradas del proyecto
-  de Supabase (`supabase functions delete`) y de `supabase/functions/`. No tocó la columna
-  `oculto_en_panel` (`dispositivos`): sigue en uso real por `admin-delete-device`, que la
-  marca cuando el borrado definitivo falla por historial (`23503`) — eso no dependía de
-  `admin-hide-device`, que sólo exponía el toggle manual de esa misma columna.
-- [ ] **Bucket de Storage `historial-web` (público, vacío, creado 2026-09-03) sin ninguna
-  referencia en el repo** (ni migración que lo cree, ni código que lo use en `web/`,
-  `desktop/`, `mobile/` o `src/`). No se tocó — puede ser vestigio de una prueba o algo
-  pensado para una función futura. Si se confirma que no hace falta, borrarlo (es público:
-  aunque esté vacío hoy, cualquiera con la URL podría escribir/leer ahí si algo empieza a
-  usarlo sin querer).
-
-## Clippy pedantic/nursery — en curso, subiendo el nivel por capas (2026-09-01)
-
-Contexto: al comparar este repo con otro proyecto del usuario que hace lo mismo
-("Brisas app"), salió que ese otro activa `clippy::pedantic`+`clippy::nursery` en su
-`Cargo.toml` y este no — nunca se habían activado acá. Decisión: activarlos también,
-pero **de a poco, de lo más crítico (riesgo real de bug) a lo más cosmético**, en vez de
-tragarse los ~1076 warnings de golpe. `Cargo.toml` tiene ambos grupos en `"warn"` (no
-bloquean el build); cada lint puntual que se termina de revisar en todo el crate pasa a
-`"deny"` ahí mismo, capa por capa, para que no pueda volver a colarse.
-
-**Importante para cualquiera que retome esto:** mientras el barrido siga en curso, verificar
-con `cargo clippy --all-targets --all-features` a secas — sin `-D warnings` en la terminal,
-que convertiría de golpe cada warning todavía sin revisar en error de compilación. La vara
-histórica del proyecto (grupos por defecto de Clippy: correctness/suspicious/style/
-complexity/perf) se sigue verificando igual que siempre con
-`cargo clippy --all-targets --all-features -- -D warnings` y sigue en verde.
-
-- [x] **Capa 1 — `match_same_arms` + `float_cmp` (2026-09-01).** Las 13 duplicaciones de
-  brazos de `match` se revisaron una por una: **ninguna escondía un bug real** — en todos
-  los casos, variantes distintas del dominio comparten a propósito el mismo resultado (ej.
-  `RolUsuario::Auditoria`/`Usuarios` con la misma regla de visibilidad porque
-  `Operacion::VerAuditoria` y `GestionarUsuarios` dan el mismo resultado por rol;
-  confirmado cruzando contra `src/domain/autorizacion.rs`). Se fusionaron con `|` los casos
-  donde era seguro (mismo tipo en los campos ligados, o `{ .. }` que no liga nada):
-  `lenguaje_comandos/parser.rs`, `cli/render/{auditoria,busqueda,login}.rs`, `cli/mod.rs`,
-  `tui/configuracion/state.rs`, `tui/menu_principal/state.rs`, `tui/app/auth_jobs.rs`,
-  y una fusión real en `cli/operando.rs` (`CoincidenciasActivos`/`TablaActivos`, mismo
-  `Vec<IngresoActivoResumen>`). Donde fusionar con `|` no compila (ej. `ContextState` en
-  `cli/operando.rs::mover_seleccion`, cada variante con un `Vec<T>` de dominio distinto —
-  `ContratistaResumen`, `EmpresaResumen`, `IngresoActivoResumen`...) o perdía un comentario
-  explicando por qué esa variante puntual cae ahí (`database/backup.rs`,
-  `From<SchemaError>`), se dejó un `#[allow(clippy::match_same_arms)]` puntual con una nota
-  en el sitio en vez de forzar la fusión. Las 5 comparaciones estrictas de floats eran todas
-  de tests contra extremos exactos garantizados (un clamp, o el valor inicial de una
-  animación con `VisualQuality::Off`) — sin error de punto flotante acumulado que una
-  comparación aproximada tuviera sentido de esconder; se dejó `#[allow(clippy::float_cmp)]`
-  a nivel de módulo de test en `cli/presentation/{easing,engine}.rs`, con la razón anotada.
-  `cargo fmt`, la suite completa y `cargo clippy --all-targets --all-features -- -A
-  clippy::pedantic -A clippy::nursery -D warnings` (la vara de siempre) en verde.
-- [x] **Capa 2 (2026-09-01) — casts que truncan/wrappean/pierden signo/precisión (~69
-  casos) + 1 resta de `Duration` sin checar + 1 nombre de variable "demasiado parecido a
-  otro".** Los ~69 casts se resolvieron con el mismo patrón que ya usaba el repo
-  (`X::try_from(v).unwrap_or(X::MAX)`, antes sólo en `offset`/`total` de las consultas SQL
-  y en `application/historial.rs`) — ahora también en las coordenadas de layout de Ratatui
-  (`usize→u16`, ~30 casos) y en el movimiento de índices con signo (`usize↔isize` con
-  `.clamp()`/`.rem_euclid()`, ~25 casos). En `cli/operando.rs`, que tenía el mismo cálculo
-  de "mover índice acotado" repetido 3 veces dentro del propio archivo, se extrajo
-  `mover_indice_clamped` — simplificación real (duplicación comprobada dentro de un mismo
-  archivo), no una abstracción nueva de gran alcance. Dos casos quedaron con
-  `#[allow]` puntual en vez de forzar `try_from`: la mezcla de color en
-  `cli/render/estilos.rs` (ya acotada por un `.clamp(0.0, 255.0)` que Clippy no razona en
-  tiempo de compilación) y el tamaño de archivo en `tui/configuracion/state.rs` (conversión
-  a `f64` sólo para mostrar KB/MB, la precisión de un tamaño de archivo real nunca se
-  acerca al límite de 2^52 de todos modos). La resta de `Duration`
-  (`tui/app.rs`, inicializar "última revisión" 60s atrás para que la primera vuelta del
-  bucle ya dispare la revisión automática) pasó a `checked_sub` con fallback a `Instant::now()`
-  — sin eso, una máquina con menos de 60s de uptime real habría entrado en pánico al abrir
-  la app. El nombre "parecido" (`usuarios` vs. `usuario1/2/3` en un test) era falso
-  positivo, `#[allow]` con nota. `match_same_arms`/`cast_possible_truncation`/
-  `cast_possible_wrap`/`cast_sign_loss`/`cast_precision_loss`/`unchecked_time_subtraction`/
-  `similar_names`/`float_cmp` ya en `"deny"`. `cargo fmt`, la suite completa y la vara de
-  siempre en verde — de 1076 warnings iniciales quedan 931.
-- [x] **Capa 3 (2026-09-01) — simplificaciones de `Option`/`Result` y legibilidad menor.**
-  `map(f).unwrap_or_else(g)` → `map_or_else`, `map(f).unwrap_or(a)` → `map_or`, closures
-  redundantes (`.map(|x| x.metodo())` → `.map(Tipo::metodo)`), `match`/`if let` de un solo
-  patrón → `if let`/`let...else`, `collect()` de más, `Default::default()` ambiguo →
-  `Tipo::default()` explícito. Cada conversión se revisó a mano por el motivo que ya
-  anotaba esta nota (`unwrap_or` evalúa siempre su argumento, `unwrap_or_else` no) — en la
-  práctica, todos los casos con default no trivial (una llamada, no un literal) ya usaban
-  `unwrap_or_else`/`_else` y se tradujeron a la variante lazy correcta (`map_or_else`),
-  nunca a la eager (`map_or`) sobre un cómputo real.
-
-  Un lote de `#[allow]` puntuales documentados donde la reescritura mecánica habría sido
-  peor, no simplemente evitada por pereza: dos sitios (`cli/historial_controller.rs`,
-  `tui/historial/state.rs`) arman una ruta por defecto a partir del mismo `String` que la
-  otra rama toma prestado — forzar `map_or_else` ahí exige clonar sólo para complacer al
-  lint, sin beneficio real. Dos despachadores de render (`cli/render/prompt.rs`,
-  `cli/render/mod.rs`) encadenan `if let`/`else if let` sobre campos `Option` DISTINTOS
-  (historial, formulario, formulario_password, salida_gafete...) — no es "mapear un solo
-  Option", y la reescritura sugerida anida el resto de la cascada dentro del closure por
-  defecto, invirtiendo el orden de prioridad. Las tres funciones de login
-  (`cli/login.rs`) se dejaron con su `match Ok/Err` explícito — más claro que un
-  `if let/else` con negación implícita en código de autenticación, y no valía el riesgo de
-  transcribir a mano un flujo de credenciales. Dos tests de `root_inicial.rs` que lanzan
-  hilos contra un `Barrier`: el `collect()` que el lint marcaba "innecesario" es en
-  realidad necesario — fuerza a lanzar los dos hilos antes de unir ninguno, sin eso la
-  carrera que el test verifica no ocurriría.
-
-  **Regresión real encontrada y corregida antes de cerrar la capa:** tres de las
-  conversiones a `map_or(bool_literal, |x| x.metodo())` introdujeron una violación de
-  `unnecessary_map_or` (grupo por defecto de Clippy, no pedantic/nursery) — la vara
-  histórica del proyecto (`-A clippy::pedantic -A clippy::nursery -D warnings`) la agarró
-  antes de cerrar, como debía. Corregidas a `is_some_and`/`is_none_or`
-  (`cli/columnas.rs`, `cli/formulario_controller.rs`, `cli/formulario_usuario_controller.rs`).
-
-  `map_unwrap_or`, `option_if_let_else`, `redundant_closure_for_method_calls`,
-  `single_match_else`, `single_match`, `manual_let_else`, `needless_collect` ya en
-  `"deny"`. `cargo fmt`, la suite completa (502 tests) y la vara histórica en verde — de
-  931 warnings quedan 865.
-- [x] **Capa 4 (2026-09-01) — mantenibilidad.** El inventario actualizado con Rust 1.97
-  resultó en 15 imports wildcard (10 de módulo + 5 de variantes de enum), 14 funciones de
-  más de 100 líneas (8 de producción + 6 pruebas), 2 `struct` con más de 3 booleanos y un
-  `impl Debug` manual incompleto. Los imports ahora nombran cada símbolo y
-  `wildcard_imports`/`enum_glob_use` quedaron en `"deny"`.
-
-  Las funciones largas se revisaron una por una. Había tres separaciones con fronteras
-  reales: `historial/exportacion.rs` ahora determina una `CeldaMovimiento` aparte de
-  escribirla en Excel; `cli/render/historial.rs` separó los estados de exportación y edición
-  del armado de resultados; `tui/app.rs` separó render, sondeo de trabajos y tareas periódicas
-  del loop de eventos. Los otros cinco casos de producción son despachadores exhaustivos o
-  máquinas de estado (`cli/operando.rs`, `cli/render/prompt.rs`, acciones de gafetes y
-  formulario de contratistas): partirlos dispersaría el mapa estado→efecto o transferiría
-  estado mutable entre helpers sin aislar una responsabilidad. Quedaron con `#[allow]`
-  puntual y la razón en el sitio. Mismo criterio para las seis pruebas largas: son escenarios
-  integrados o matrices que necesitan compartir preparación y estado, no varias pruebas
-  pegadas accidentalmente.
-
-  Los booleanos también son independientes, no un estado combinable: datos + permisos del
-  formulario CLI y negaciones por término del filtro de Historial. Se conservaron explícitos
-  con `#[allow(clippy::struct_excessive_bools)]` documentado en cada tipo. El `Debug` de
-  configuración inicial sí estaba incompleto por descuido: ahora incluye solicitud, cursor y
-  ayuda, mientras `SolicitudRoot` sigue redactando la contraseña. `too_many_lines`,
-  `struct_excessive_bools` y `missing_fields_in_debug` quedaron en `"deny"`.
-
-  Al validar apareció además un remanente de Capa 3 que el toolchain nuevo ya detecta:
-  `map(...).unwrap_or(0)` en `lenguaje_comandos/resolver.rs`; corregido a `map_or`. `cargo
-  fmt --check`, la vara histórica de Clippy, Clippy pedantic/nursery completo y la suite raíz
-  (502 tests) en verde; también los 17 tests Rust de `desktop/src-tauri`. Quedan 843 warnings
-  pedantic/nursery, todos fuera de las categorías cerradas y reservados para decidir la Capa 5.
-- [x] **Capa 5 (2026-09-01) — cosmética y ergonomía de API.** Se actualizó el inventario
-  con Rust 1.97 y se aplicaron las correcciones mecánicas de bajo riesgo: Markdown en docs,
-  punto y coma consistente, clones sobre destinos existentes, casts sin pérdida, raw strings,
-  `Self`, lifetimes elidibles, constantes antes de sentencias, equivalencias de `if let`,
-  visibilidad redundante, patrones unitarios, escritura sobre `String`, inversión de `if`,
-  literales legibles y métodos sin uso de `self`. Las 19 reglas correspondientes quedaron en
-  `"deny"` para impedir regresiones.
-
-  Dos decisiones semánticas se conservaron mediante excepciones locales y explicadas: los
-  nombres `columnas_*` de preferencias reflejan claves persistidas y son más claros que
-  abreviarlos; en la prueba concurrente de ROOT, el arreglo explícito representa mejor el
-  conjunto fijo de participantes que convertir una tupla.
-
-  No se adoptaron siete categorías cuyo costo o cambio contractual no aporta valor a esta
-  aplicación interna: 197 `missing_errors_doc`, 179 `must_use_candidate` más 2
-  `return_self_not_must_use`, 171 `missing_const_for_fn`, 57 párrafos iniciales largos, 16
-  argumentos por valor y 4 sugerencias de `mul_add`. Documentar cada `Result`, comprometer
-  API con `#[must_use]`/`const`, cambiar ownership de DTO/errores o alterar mínimamente el
-  redondeo visual sería ruido o riesgo sin corregir defectos. Estas reglas quedaron en
-  `"allow"` explícito, siguiendo además el criterio del proyecto de referencia para
-  documentación y `must_use`. Resultado final: Clippy pedantic/nursery completo sin
-  advertencias; `cargo fmt --check`, la vara histórica, la suite raíz (502 tests) y los 17
-  tests Rust de Tauri en verde.
-
-## Refactor en curso — `refactor/app-y-errores`
-
-Contexto: `src/tui/app.rs` era el archivo más grande del repo (2.971 líneas). Fases 1 y 2
-completas (pruebas y errores extraídos, quedó en 1.556 líneas). Fases 3-5 pendientes, en
-este orden:
-
-- [x] **Fase 3 — Extraer trabajos asincrónicos (2026-08-21).** Movidos a
-  `src/tui/app/auth_jobs.rs`: los 4 flujos de Argon2 (login, ROOT inicial, crear
-  usuario, cambiar contraseña administrativa/propia), sus tipos (`HiloUsuarioPendiente`,
-  `DatosUsuarioPendiente`, `ReceptorHash`/`ReceptorCambioPropio`/`ReceptorAutenticacion`)
-  y `finalizar_hilos_pendientes`. Movimiento mecánico — mismo `impl App` en otro archivo,
-  sin cambiar lógica; los campos de estado async se quedaron en el `struct App` de
-  `app.rs`. `app.rs` pasó de 1.556 a 1.189 líneas. `cargo fmt`, Clippy estricto
-  (`-D warnings`) y la suite completa en verde.
-- [x] **Fase 4 — Agrupar despachadores por área (2026-08-21).** Movidos a
-  `src/tui/app/actions/{accesos,catalogos,admin}.rs`: accesos (Activos, Historial, Nuevo
-  Ingreso, Salida Rápida), catálogos (Contratistas, Empresas), administración (Usuarios,
-  Auditoría, Respaldos). Métodos marcados `pub(in crate::tui::app)` para que `app.rs`
-  (ancestro del submódulo `actions`) siga pudiendo llamarlos — visibilidad de Rust sólo da
-  acceso automático a descendientes, no a ancestros. `app.rs` pasó de 1.189 a 620 líneas.
-  `cargo fmt`, Clippy estricto y la suite completa en verde.
-- [x] **Fase 5 — Separar navegación y runtime: descartada por decisión (2026-08-21).**
-  `app.rs` ya quedó en 620 líneas tras las Fases 3-4 — dejó de ser el hotspot que
-  justificaba el refactor original (2.971 líneas). Partirlo más en `navigation.rs`/
-  `runtime.rs` tendría retorno decreciente: cada pieza restante (loop de render,
-  navegación global, sesión) ya es chica y de propósito claro. Se prioriza
-  `application.rs` (965 líneas, más señal real de necesitar el corte) en su lugar.
-
-Riesgos a conservar bajo prueba durante el refactor: una vista autenticada no debe quedar
-activa sin sesión; F2 debe refrescar Activos/Historial/Nuevo Ingreso según la vista debajo
-del overlay; los hilos de Argon2 no deben bloquear el loop ni perder una escritura
-validada al cerrar; la restauración sólo devuelve `SalidaApp::Restaurar`; el modo sin
-`AppCore` no debe dejar formularios esperando indefinidamente. Cada corte: `cargo fmt` +
-suite completa + Clippy estricto.
-
-## Siguiente candidato tras `app.rs`: repartir `AppCore`
-
-- [x] **Repartido (2026-08-21).** `src/application.rs` (965 líneas) se repartió en
-  `src/application/{mod,autenticacion,accesos,catalogos,usuarios,respaldos,historial}.rs`
-  (61-291 líneas cada uno), API pública sin cambios — `mod.rs` conserva la estructura,
-  construcción, `Drop`, y el único helper realmente transversal
-  (`verificar_actor_activo`, usado por 4 de los 6 submódulos). Los demás helpers
-  privados (`en_transaccion_con_reloj_validado`, `validar_reloj`,
-  `verificar_operador_activo`, `verificar_creacion_usuario`, `verificar_gestion_usuario`,
-  `establecer_empresa_activa`, `establecer_usuario_activo`, los de respaldos) se movieron
-  junto con su único grupo consumidor en vez de quedar en `mod.rs`. `cargo fmt`, Clippy
-  estricto y la suite completa en verde.
-
-## Otros archivos grandes (orden sugerido, después de lo anterior)
-
-- [x] **Repartido (2026-08-21).** `src/database/queries/ingresos.rs` (807 líneas) se
-  separó en `ingresos/{mod,activos,historial}.rs` (144/313/438 líneas). `mod.rs` conserva
-  el trait `IngresosQuery`, `SqliteIngresosQuery` (que delega cada método a su
-  submódulo — un `impl Trait` no se puede partir entre archivos) y los conversores de
-  fila que ambas consultas comparten (`resultado_desde_fila`, `motivo_desde_fila`,
-  `tipo_desde_fila`, `medio_desde_fila`, `fecha_hora_desde_fila`); cada submódulo se
-  quedó con su propio `WHERE` dinámico, conversor específico y pruebas de plan de
-  consulta (`EXPLAIN QUERY PLAN`). `cargo fmt`, Clippy estricto y la suite completa en
-  verde.
-- [x] **Repartido (2026-08-21).** `src/tui/contratistas/state.rs` (934 líneas) →
-  `query.rs` (lenguaje `clave:valor`, 120 líneas), `form.rs` (validación y construcción
-  del formulario, 114 líneas), `state.rs` queda en 737. `FormularioContratista` y sus
-  enums (`CampoFormulario`/`ModoFormulario`/`Desplegable`) se quedaron en `state.rs` a
-  propósito: `render.rs` lee sus campos privados directamente, y moverlos habría exigido
-  `pub(in ...)` en cada campo sólo para separar código sin beneficio real. Sólo se
-  extrajeron las funciones libres que no tienen ese acoplamiento
-  (`construir`/`convertir_actualizacion`/`mover_campo`/`agregar_fecha`/`tipos`/
-  `texto_tipo`, con `tipos`/`texto_tipo` visibles también para `render.rs` vía
-  `pub(in crate::tui::contratistas::state)`, ya que ese archivo los usa directo). `cargo
-  fmt`, Clippy estricto y la suite completa en verde.
-- [x] **Repartido (2026-08-21).** `src/tui/usuarios/state.rs` (870 líneas) → `form.rs`
-  (validación y selector de rol, 42 líneas), `password.rs` (regla de validación de
-  contraseña compartida por crear-usuario y cambiar-contraseña, 17 líneas), `state.rs`
-  queda en 833. Igual que en Contratistas: `Secreto`/`FormularioUsuario`/
-  `FormularioPassword` se quedan en `state.rs` porque `render.rs` lee sus campos
-  privados directamente — sólo se extrajeron las funciones libres sin ese acoplamiento
-  (`ROLES`/`texto_rol`/`si_no` visibles también para `render.rs` vía
-  `pub(in crate::tui::usuarios::state)`). `cargo fmt`, Clippy estricto y la suite
-  completa en verde.
-- `src/database/schema.rs` (804 líneas) y los `render.rs` de 500-600 líneas: revisados, sin
-  acción urgente — cohesión aceptable. Reevaluar sólo si agregar una migración o una
-  sección visual nueva empieza a doler.
-
-## Agregados de dominio con campos públicos — diferido a propósito hasta V3
-
-- [ ] **`NuevoRegistroIngreso` construible con campos públicos**
-  (`src/models/registro_ingreso.rs`). Nada en producción lo construye fuera de
-  `RegistroIngresoService::registrar_entrada`, pero nada del tipo lo impide tampoco.
-- [ ] **`Contratista` con campos públicos, incluido el derivado `empresa_activa`**
-  (`src/models/contratista.rs`). `verificar_acceso` confía en ese booleano sin que el tipo
-  lo proteja.
-
-  Corrección de fondo para ambos: mover a agregados de dominio con constructor privado
-  (`crear`/`actualizar`/`evaluar_acceso`), para que los servicios orquesten en vez de
-  recordar cada invariante. **Decisión ya tomada: no es prioridad hoy.** La app es de
-  instancia única y un solo hilo — la protección sería cosmética porque nada en el camino
-  real la viola. Retomar cuando se diseñe **concurrencia multi-terminal (V3)**, no antes.
-
-## Respaldo automático
-
-- [x] **Reparado (2026-08-21): el respaldo automático corre a la 01:00 (hora Costa Rica),
-  no a cualquier hora del día.** Antes se disparaba apenas la app arrancaba, sin importar
-  la hora — si abrías a las 9 AM, el respaldo del día quedaba sellado a las 9 AM. Ahora
-  `respaldo_automatico_diario_si_hace_falta` (`application/respaldos.rs`) no hace nada
-  antes de la 01:00 Costa Rica. **Bug real encontrado y reparado en el mismo cambio:** el
-  chequeo sólo se evaluaba una vez, al arrancar el proceso (`main.rs`) — si la app se
-  queda abierta varios días seguidos sin reiniciar (el caso normal, "la app siempre está
-  abierta"), el respaldo de un día nuevo nunca se disparaba. Se agregó una revisión
-  periódica (cada 60s) dentro del bucle de la TUI (`tui/app.rs::run_internal`) para que
-  también corra mientras la app sigue corriendo, no sólo al abrir. Si la app estuvo
-  cerrada cuando pasó la 01:00, se sigue capturando apenas se vuelve a abrir (ya
-  funcionaba así). Pruebas nuevas en `tests/configuracion_respaldos.rs` cubren el límite
-  de hora exacto (antes/después de la 01:00).
-- [x] **Retención de 30 días — evaluado, se deja en 7.** La retención actual es por
-  *cantidad* de archivos automáticos (`RETENCION_AUTOMATICOS`), no por fecha real — con
-  el respaldo corriendo ~1 vez/día, ambas nociones coinciden en el uso normal, pero
-  divergen si la app estuvo cerrada varias semanas (el conteo de "últimos N archivos" no
-  es lo mismo que "últimos N días calendario" si hay huecos). Decisión del usuario:
-  mantener el criterio por cantidad, y **7 ya es suficiente** — no se cambia.
-- [ ] **Omitido a propósito: importar un respaldo en una instalación sin base de datos
-  detectada.** La base ya es portátil hoy sin cambios de código (`journal_mode = DELETE`,
-  un solo archivo `.db`, sin `-wal`/`-shm`) — copiarla a otra máquina con ambas apps
-  cerradas ya funciona. Lo que falta es la UX: hoy, si no hay base, la app crea una vacía
-  en silencio y va directo a "Configuración Inicial" (crear ROOT), sin ofrecer nunca
-  importar un respaldo existente. El usuario pidió omitirlo por ahora ("no quiero entrar
-  en cosas tan complejas"). Si se retoma, la restauración ya validada
-  (`database::backup::restaurar_respaldo`) es reutilizable casi tal cual — falta la
-  pantalla previa al login que detecte "no existe archivo" y ofrezca importar vs. crear
-  nueva.
-- [x] **Reparado (2026-08-21): el fallo del respaldo automático ya no queda en silencio.**
-  Solución en dos fases, según lo pedido: **Fase 1** — si
-  `respaldo_automatico_diario_si_hace_falta` falla, el Menú Principal muestra un aviso
-  genérico ("Fallo en el sistema de respaldo de la base de datos. Contacte al
-  administrador.") en la barra de estado, para cualquier rol — no en Login, porque una
-  sesión puede pasar días sin que nadie inicie sesión. **Fase 2** — el motivo exacto (se
-  reutilizan los mensajes de `RespaldoError`, p.ej. "disco lleno") sólo se muestra en la
-  pantalla Respaldos (sólo Root). No se construyó ningún sistema de log persistente: el
-  estado vive en memoria (`MenuPrincipalState::fallo_respaldo_automatico` y
-  `RespaldosState::fallo_automatico`), se actualiza en cada revisión periódica (60s, en
-  `tui/app.rs::run_internal`) y se reemplaza en el próximo intento (éxito u otro fallo).
-  `respaldo_automatico_diario_si_hace_falta` ahora devuelve `EstadoRespaldoAutomatico`
-  (`SinCambios`/`Creado`/`Fallo(mensaje)`) en vez de descartar el resultado. La limpieza
-  por retención sigue sin reportar sus propios errores por separado (se ignora con `let
-  _ =`, como antes) — no se consideró necesario para este alcance.
-
-## Búsqueda `clave:valor` e Historial
-
-- [x] **Reparado (2026-08-21): Historial no avisaba de clave no reconocida.** Se agregó
-  `filtros::resumen_consulta` (usa `resolver_terminos_detallado`, igual que Contratistas/
-  Activos) y `render.rs::etiqueta_busqueda` ahora lo llama en vez de leer directo de
-  `state.filtro_aplicado` — de paso corrige que la etiqueta nunca reflejaba `tipo`/
-  `estado`/`ingreso`/`salida` realmente tecleados, porque nada en producción escribía en
-  `filtro_aplicado` (sólo los tests lo tocaban a mano). La consulta SQL real no cambió.
-- [x] **Reparado (2026-08-21): Historial ocultaba la negación de `tipo`.** Nuevo campo
-  `FiltrosHistorial::tipos_negado`; `resumen_consulta` reconstruye la lista original
-  (complemento del complemento) y muestra `"tipo: no SWAT"` en vez de `"tipo: PRAIND o IN
-  HOUSE o POR CORREO"`. `estado` se dejó tal cual a propósito: negar uno de sus 2 valores
-  reales ya produce el otro valor exacto y sin ambigüedad (`-estado:cerrados` → `Activos`
-  es la respuesta correcta, no hay información que se pierda al mostrarla en positivo) —
-  a diferencia de `tipo`, donde negar 1 de 4 exige leer una lista de 3 para inferirlo.
-- [x] **Reparado (2026-08-21): F1 no documentaba sintaxis de valores.** Las 3 pantallas
-  (`contratistas`, `activos`, `historial`) ahora listan los valores aceptados por clave
-  (`praind:vence|vencido|sin`, `ruta:si|no`, `medio:caminando|vehiculo`,
-  `estado:activos|cerrados|todos`, formato de fecha, etc.) y mencionan la negación con
-  guion en `ayuda_extra`.
-- [x] **Reparado (2026-08-21): `ingreso:`/`salida:` en Historial no plegaban tildes.**
-  `database/queries/ingresos/historial.rs` cambió `LIKE ... COLLATE NOCASE` (sólo pliega
-  ASCII) por `PLEGAR(...) LIKE PLEGAR(...)` — misma función SQL que ya usan `empresa:`/
-  texto libre. "María José" — `salida:jose` y `salida:josé` ahora matchean igual.
-  **Efecto secundario encontrado y reparado en el mismo cambio:** `usuario_salida_nombre`
-  es la primera columna nullable a la que se le aplica `PLEGAR` — la función nunca había
-  manejado `NULL` (siempre se usó antes sólo con columnas `NOT NULL`) y rompía toda la
-  consulta con "Invalid function parameter type Null" en vez de simplemente excluir la
-  fila, como sí hacía `LIKE` con `NULL` de forma nativa. `registrar_funcion_plegar`
-  (`src/database/schema.rs`) ahora toma `Option<String>` y devuelve `None` si la entrada
-  es `NULL` — semántica SQL estándar, detectado por
-  `tests/ingreso_queries.rs::historial_filtra_por_quien_dio_ingreso_y_quien_dio_salida`
-  (ya existente, no hizo falta un test nuevo).
-
-## Catálogo de gafetes (`docs/plan-gafetes.md`)
-
-Plan aprobado el 2026-08-22, implementado el 2026-08-30 — antes `gafete_numero` en
-`registro_ingresos` era un `INTEGER` libre sin relación con los gafetes físicos reales,
-sin forma de sacar de circulación uno perdido ni de saber quién lo debe.
-
-- [x] **Núcleo (2026-08-30).** `MIGRACION_14` (el plan pedía `MIGRACION_13`, ya ocupada por
-  la generalización de auditoría): tablas `gafetes` (estado DISPONIBLE/PERDIDO/DE_BAJA +
-  deudor) y `gafetes_incidentes` (historial append-only). `GafeteService` valida las
-  transiciones (Disponible ↔ Perdido, Disponible → DeBaja) y el alta individual/por rango
-  (tope defensivo de 200, atómica — si un número del rango falla, ninguno queda creado).
-  `RegistroIngresoService` gana un tercer genérico (`GafeteRepository`): `registrar_entrada`
-  valida el catálogo (no existe/perdido/de baja) antes del chequeo de ocupación existente, y
-  `PreparacionIngreso.gafetes_deuda` viaja no bloqueante. Tocó los ~40 call sites de
-  `RegistroIngresoService::new(...)` (3 en `application/accesos.rs`, 37 repartidos en 4
-  archivos de test) más fixtures de gafete en los tests que registran entradas reales.
-  `AppCore::gafetes` (fachada) sin restricción de rol a propósito — decisión explícita del
-  usuario, a diferencia de Empresas/Usuarios: cualquier operador con sesión gestiona el
-  catálogo completo.
-- [x] **TUI (2026-08-30).** Aviso de deuda no bloqueante en Nuevo Ingreso. Pantalla
-  `src/tui/gafetes/` completa (maestro-detalle, alta individual/rango con Tab, marcar
-  perdido con buscador de contratista deudor, resolver con 1=Pagado/2=Apareció, dar de
-  baja). `OpcionMenu::GestionGafetes`, atajo por letra `G` — deliberadamente fuera de la
-  barra de pestañas del tema Negro (mismo grupo que Cli/CerrarSesion/Salir, los
-  otros accesos por letra) para no tocar el corpus de snapshots visuales de las 9 pantallas
-  que sí son pestaña; único snapshot que cambió fue el propio Menú Principal (3 temas),
-  regenerado y revisado. Filtro de búsqueda del catálogo simplificado a propósito (número
-  exacto o `estado:`/`-estado:`) en vez del motor `clave:valor` completo — el catálogo es
-  chico, no lo justifica.
-- [x] **GUI (2026-08-30) — decisión explícita al retomar el plan: paridad con la TUI, no
-  sólo la validación heredada.** El plan original (pre-GUI) sólo cubría la TUI; al
-  retomarlo se decidió construir también la pantalla de gestión en `desktop/`, mismo
-  criterio de paridad que ya tienen Contratistas/Empresas/Usuarios/Auditoría. Comandos
-  Tauri (`comandos::gafetes`, sin restricción de rol, mismo criterio que el núcleo) +
-  `Gafetes.tsx`/`FormularioGafete.tsx`/`GestionGafeteModal.tsx` (el buscador de deudor
-  reusa el mecanismo de `ListaFlotante` que ya tenía `NuevoIngresoModal`). Aviso de deuda
-  no bloqueante también en el modal de Nuevo Ingreso de la GUI.
-- [x] **Corregido de paso: `AppCore::marcar_gafete_perdido`/`resolver_gafete` calculaban
-  "ahora" fuera de `AppCore`.** El plan (sección 7) no detallaba este punto a nivel de
-  firma; el resto de `AppCore` siempre calcula la fecha/hora con `self.reloj.ahora_utc()`
-  adentro, nunca como parámetro del llamador — se corrigió para seguir esa única
-  convención en vez de quedar como la excepción.
-
-`cargo fmt`, Clippy estricto (`-D warnings`) y la suite completa en verde en los tres
-proyectos (raíz: 491 tests; `desktop/src-tauri`: 20 tests; `desktop/`: `npx tsc --noEmit` +
-`npm run build` + 130 tests de Vitest).
-
-- [x] **Historial por gafete (2026-08-30).** `gafetes_incidentes` ya guardaba
-  `usuario_id` de quién marcó perdido/resolvió, pero sin lector ni pantalla. Se agregó
-  `GafetesIncidentesQuery::historial` (núcleo, sin paginar — un gafete tiene a lo sumo un
-  puñado de incidentes) y se mostró en un modal propio (`HistorialGafeteModal.tsx`, tabla
-  simple sin AG Grid), separado de `GestionGafeteModal.tsx` (que sólo maneja acciones) —
-  columna "Historial" en el catálogo, botón "Detalles". Columna "Resolver" también agregada
-  (visible sólo en estado Perdido, abre el mismo modal de gestión) para que el operador no
-  dependa de conocer el doble click. Columna "Deudor" renombrada a "Asignado a" en los tres
-  lugares donde aparecía (catálogo, modal de gestión, modal de historial) — sólo el texto
-  visible, los campos internos (`contratista_deudor_*`) quedan igual.
-  - [x] **Réplica en TUI (2026-08-31).** Atajo `H` en Gestión de Gafetes (Normal, sobre el
-    gafete seleccionado): `ModoGafetes::Historial` reemplaza el maestro-detalle por una
-    tabla de ancho completo (mismo patrón que `auditoria/render.rs`), con las mismas
-    columnas que `HistorialGafeteModal.tsx` (fecha, evento, operador, asignado a, motivo).
-    Sin estado "cargando" — a diferencia de lo previsto, no hizo falta cablear un tick
-    async nuevo: la app es de instancia única y un solo hilo, así que
-    `AppCore::historial_gafete` (ya existía, usado hasta ahora sólo por el comando Tauri)
-    se llama y resuelve dentro del mismo tick que procesa `AccionGafetes::VerHistorial`,
-    igual que el resto de acciones de este dispatcher. `cargo fmt`, Clippy estricto y la
-    suite completa (497 tests) en verde.
-- [x] **Incidentes de gafetes en Auditoría general (2026-08-30).** El historial por gafete
-  (arriba) sigue sin restricción de rol; además se sumaron los mismos incidentes
-  (`gafetes_incidentes`, vía `GafetesIncidentesQuery::historial_completo`, nuevo) a la
-  pantalla de Auditoría general (`Auditoria.tsx`), gateados por `Operacion::VerAuditoria`
-  igual que el resto — mismo patrón que contratistas/empresas: el registro completo se ve
-  sin restricción, su auditoría de cambios no. `AppCore::buscar_auditoria_gafetes`
-  (`application/catalogos.rs`, junto a `buscar_auditoria`) reusa `ContratistaServiceError`
-  a propósito, mismo criterio que el resto de la auditoría genérica. Sin tabla nueva ni
-  duplicar el dato — `gafetes_incidentes` sigue siendo la única fuente; el merge de las dos
-  listas (`auditoria_cambios` + `gafetes_incidentes`) es puramente de presentación en
-  `Auditoria.tsx`, ordenado por fecha.
-
-## Sistema visual / UI
-
-- [x] **Tema Negro y navegación por pestañas (2026-08-22).** Se agregó un tercer tema
-  oscuro inspirado en la referencia entregada: fondo carbón, texto claro, acento lavanda
-  y selección por video inverso. Las 9 pantallas operativas comparten una barra creada
-  con `ratatui::widgets::Tabs` desde `ScreenShell`; Login, Configuración Inicial y el Menú
-  Principal quedan fuera, igual que las acciones Cerrar sesión/Salir. La barra reutiliza
-  `OpcionMenu::visible_para`, conserva el estado de cada pantalla al alternar y responde a
-  `Ctrl+←/→` o `Ctrl+1..9`. En anchos reducidos degrada de nombres completos a nombres
-  cortos y finalmente sólo números. Se regeneraron y revisaron los snapshots de los tres
-  temas: 180 combinaciones en total. Animaciones, transiciones y mouse quedaron fuera del
-  alcance por decisión explícita.
-- [x] **Ajustado (2026-08-22): la barra se fusionó al encabezado y la navegación por
-  pestañas quedó exclusiva del tema Negro.** Feedback del usuario tras probar la primera
-  versión: la barra vivía en su propia fila separada del encabezado por una línea propia
-  (fatiga visual, "dos piezas sueltas"), el título de pantalla repetía lo que la pestaña
-  resaltada ya decía, y las pestañas no debían convivir con Classic/Brisas — para el
-  usuario "tema" siempre significó todo el entorno, no sólo el color. Cambios: (1)
-  `ScreenShell` (`ui_kit/shell.rs`) ahora dibuja la pestaña como 3ª línea del mismo bloque
-  de encabezado, sin línea divisoria de por medio, a todo lo ancho del viewport (antes
-  compartía 1/3 de columna con el reloj y degradaba a sólo números en anchos normales); el
-  título de pantalla se omite cuando hay pestañas. (2) Nuevo campo
-  `Theme::navegacion_pestanas` (`ui_kit/theme.rs`), `true` sólo en `ThemePreset::Negro` —
-  las 9 pantallas gatean `tabs: theme.navegacion_pestanas.then_some(&tabs)` en vez de
-  pasarlo siempre. (3) `App::sincronizar_vista_con_tema` (`tui/app.rs`), llamada al iniciar
-  sesión y en cada F7: entrar a Negro salta del Menú Principal directo a la primera
-  pestaña visible para el rol (el Menú no es alcanzable ahí); salir de Negro vuelve al
-  Menú con `menu.seleccion` sincronizada a la última pantalla vista. Los atajos
-  `Ctrl+←/→`/`Ctrl+1..9` y el "Volver" de Cambiar contraseña (Esc) quedaron gateados igual.
-  Suite completa (289 tests, con 2 casos nuevos para la sincronización) + snapshots
-  regenerados y revisados + Clippy estricto + `cargo fmt`, todo en verde.
-- [x] **Bug (2026-08-21): el buscador no arrancaba vacío al activarlo.** Al presionar `/`
-  en Activos, Contratistas, Empresas, Nuevo Ingreso y Usuarios, el campo se prellenaba con
-  el filtro anterior (`TextInput::new(self.filtro.clone())`) en vez de arrancar limpio —
-  reportado por el usuario como "entorpece" escribir una búsqueda nueva. Reparado en las 5
-  pantallas (`TextInput::default()`); `self.filtro` no se toca hasta que el operador
-  escribe algo, así que salir sin escribir (Enter sin cambios) conserva el filtro anterior
-  intacto. Historial y Salida Rápida no tenían el bug (su caja es un campo permanente, no
-  un modo que se abre/cierra).
-- [x] **Reparado (2026-08-21): componentes visuales duplicados.** `render_campo` (alias
-  sin valor agregado de `render_form_field`) estaba copiado en 8 `render.rs`; eliminado,
-  llaman a `render_form_field` directo. Cálculo de posición del cursor duplicado en 6
-  sitios → `ui_kit::{posicionar_cursor, posicionar_cursor_campo}`. Mensaje de "sin
-  resultados" y de "nada seleccionado" duplicados en 7 pantallas →
-  `ui_kit::{empty_state, panel_vacio}`. Clasificación `✓`/error de la barra de estado,
-  idéntica en 4 pantallas → `ui_kit::clasificar_mensaje` (Historial/Respaldos tienen una
-  3ª categoría real y se quedan con su propia lógica). **Sin tocar, evaluado y
-  descartado por ahora:** un `ConfirmationView` único — unificarlo de verdad exigiría
-  promover Activos/Empresas/Usuarios (hoy una línea en la barra de estado) al panel
-  completo que ya tiene Salida Rápida, un cambio de UX visible que el usuario prefirió
-  dejar para revisar después con calma, no meterlo en este barrido. La máquina de
-  estados del modo búsqueda (abrir/cerrar/debounce) también sigue duplicada 5 veces —
-  cada pantalla interpreta su propio `clave:valor`, unificarla exige un callback
-  conectable, no es un corte mecánico.
-- [x] **Reparado (2026-08-21): foco/selección/severidad dependían del color.** Auditado
-  a fondo: las pantallas usan el marcador no cromático `▶` para foco y selección vía
-  `ui_kit`. Gaps reales encontrados y cerrados: la tabla de Respaldos era la única sin
-  ningún marcador de selección (agregado `▶`); la
-  fecha PRAIND vencida/por vencer en Contratistas sólo tenía color, sin símbolo de
-  respaldo (agregado `!` antes de la fecha, mismo criterio que Activos ya usa para
-  accesos con advertencia).
-- [x] **Actualizado (2026-09-04): pruebas de render sin archivos de referencia visual.**
-  Por decisión del usuario se retiran `insta` y los 180 archivos `.snap`.
-  `visual_tests.rs` conserva la matriz de 12 pantallas, 5 tamaños y 3 variantes
-  de tema/navegación: comprueba render, contenido, títulos, pestañas y aviso
-  de tamaño insuficiente. Cambiar colores ya no requiere aprobar capturas
-  ni regenerar archivos de referencia.
-- [x] **Reparado (2026-08-21): atajos por letra — el único conflicto real.** La
-  auditoría redujo el alcance real a un solo choque: `A` significaba "Activar/
-  Desactivar" en Empresas/Usuarios pero "recargar listado" en Respaldos. Renombrado a
-  `L` en Respaldos. El resto de letras señaladas (`C`, `E`, `N`, `P`, `R`) no chocan
-  entre pantallas — cada una se usa en una sola pantalla con su propio significado, no
-  hay una referencia global de teclado formal pero tampoco ambigüedad real que resolver.
-
-## SQLite — decisiones abiertas
-
-- [x] **Descartado del todo (2026-09-01): sin cifrado en reposo.** `secure_delete=FAST` ya
-  reduce restos recuperables pero no cifra la base — se evaluaron BitLocker (decisión de
-  despliegue, no toca código) y SQLCipher (más fuerte, pero su integración vía `rusqlite`
-  es frágil en Windows: exige Perl+NASM o un `OPENSSL_DIR` externo, ver
-  `docs/evaluacion-sqlite.md` sección 8). Decisión explícita del usuario: no se implementa
-  ninguna de las dos, ni siquiera cifrar sólo los respaldos exportados. No queda como
-  "abierto para más adelante" — si la amenaza cambia (ej. equipos que salen de las
-  instalaciones sin BitLocker propio), se reevalúa desde cero con ese caso concreto
-  delante, no se retoma esta nota.
-- [x] **Hecho (2026-08-31): tablas `STRICT`.** `MIGRACION_15` (`SCHEMA_VERSION` 14 → 15)
-  recreó las 7 tablas normales (`empresas`, `usuarios`, `contratistas`, `gafetes`,
-  `gafetes_incidentes`, `registro_ingresos`, `auditoria_cambios`) con `STRICT` —
-  `docs/evaluacion-sqlite.md` sección 7 sigue teniendo el detalle de qué hace `STRICT`,
-  ya no dice "pendiente". Las tablas FTS5 (`*_fts` y sus tablas sombra) no admiten
-  `STRICT` y quedaron igual. Hallazgo real durante la migración: `DROP TABLE` sobre una
-  tabla con hijos (`empresas`/`usuarios`/`contratistas`/`gafetes`) dispara `ON DELETE
-  RESTRICT` en cada uno — SQLite trata el drop como si borrara todas las filas antes de
-  eliminarla. `foreign_keys` no se puede tocar dentro de una transacción activa, así
-  que `MIGRACION_15` corre en su propia transacción (`aplicar_migracion_15`,
-  `schema.rs`), separada de la de migraciones 1-14, con `foreign_keys=OFF` sólo
-  mientras dura y un `PRAGMA foreign_key_check` antes de reactivarlo. Verificado con
-  `cargo test --lib --tests` completo (incluye una prueba nueva,
-  `migracion_15_deja_tablas_strict_sin_romper_claves_foraneas`, que confirma que
-  `STRICT` rechaza un tipo incorrecto y que ninguna FK quedó rota) y build limpio de
-  `desktop/src-tauri`.
-
-## Respaldos — acción menor no acordada
-
-- [ ] Eliminar un respaldo no utilizado, con confirmación (mismo patrón que Exportar). No
-  se acordó para la pasada de Fases 1-4 de respaldos; sigue disponible si se quiere.
-
-## Respaldos en la GUI (Tauri)
-
-- [x] **Hecho (2026-09-01): pantalla de Respaldos en `desktop/`.** Paridad completa con la
-  TUI (crear/listar/validar/exportar/restaurar) — `comandos/respaldos.rs` (5 comandos) +
-  `pantallas/Respaldos.tsx`, sección visible sólo para Root (`rolesPermitidos: ["Root"]`,
-  espejo de `Operacion::GestionarRespaldos`). Tabla simple sin AG Grid (mismo criterio que
-  `HistorialGafeteModal.tsx`: la lista de respaldos es chica, no hace falta virtualización).
-
-  Cada comando evita la trampa descrita más abajo (retener `GuiState.core` durante trabajo
-  largo) sin necesitar un hilo manual — a diferencia de TUI/CLI, un comando Tauri no-async
-  ya corre en el pool de hilos bloqueantes propio de Tauri, así que "no bloquear la UI" y
-  "no retener el mutex compartido" son dos problemas distintos y sólo el segundo aplicaba
-  acá: `crear_respaldo` autoriza con el núcleo, suelta el candado y usa
-  `GuiState::conexion_secundaria()` (ya existente, de los fixes de Historial/Auditoría) para
-  copiar+validar sin bloquear otros comandos; `validar_respaldo`/`exportar_respaldo`
-  autorizan y sueltan el candado antes de tocar el archivo (ninguno de los dos pasa por
-  `self.connection` en absoluto del lado del núcleo).
-
-  `restaurar_respaldo` es la excepción deliberada: retiene el candado de principio a fin,
-  porque acá SÍ es correcto bloquear todo — nada más debería tocar la base mientras se
-  reemplaza el archivo. El intercambio (mismo flujo que la TUI en
-  `tui/app/actions/admin.rs`/`main.rs`, adaptado a que acá `AppCore` vive en un `Mutex` para
-  toda la vida del proceso, sin poder reiniciarlo): 1) crea un respaldo `PreRestauracion`
-  con la conexión todavía viva; 2) la cierra (`AppCore::cerrar`, nuevo — consume `self` y
-  devuelve la ruta) reemplazándola por un `AppCore` en memoria mientras dura el intercambio
-  de archivos, exigido por el contrato de `database::backup::restaurar_respaldo`; 3)
-  reemplaza el archivo; 4) abre un `AppCore` nuevo. Cierra la sesión al terminar (éxito o
-  error) — la base cambió de identidad, igual que la TUI fuerza login nuevo.
-
-  `TipoRespaldo`/`RespaldoResumen`/`ResultadoValidacion` (`database/backup.rs`) ganaron
-  `#[cfg_attr(feature = "serde", derive(Serialize))]` para cruzar el IPC — mismo criterio ya
-  usado en el resto del núcleo (`CargaCompleta`, `CambioAuditado`), sin afectar TUI/CLI (el
-  feature no está activo ahí). `desktop/src-tauri` ya tenía `rusqlite` como dependencia
-  directa desde los fixes de Historial/Auditoría.
-
-  Verificado del lado del frontend con el toolchain completo disponible esta vez
-  (`npm install` sí funcionó en este entorno): `tsc --noEmit`, `vitest run` (140 tests) y
-  `vite build` los tres limpios. Del lado de Rust, `cargo fmt`/Clippy estricto/502 tests
-  del crate raíz en verde con y sin el feature `serde`; `desktop/src-tauri` en sí sigue sin
-  poder compilarse en este entorno (faltan las libs de GTK, mismo límite de siempre) —
-  revisado a mano con el máximo cuidado posible, pendiente de un `cargo check` real.
-
-- **Trampa real a no repetir** (documentada antes de resolver lo de arriba, se deja como
-  referencia): `GuiState.core` es un `Mutex<AppCore>` compartido por *todos* los comandos
-  (`desktop/src-tauri/src/estado.rs`). Si el comando de respaldo mantiene ese lock durante
-  los ~200ms–2s que tarda copiar+validar (medido, ver más abajo "Respaldo automático"),
-  **cualquier otro comando de la GUI** (buscar contratistas, registrar ingreso, lo que sea)
-  se queda esperando el mismo lock — la ventana no se congela visualmente, pero la app
-  entera deja de responder igual que antes se congelaba la TUI. La solución es la misma
-  idea que ya se usó en `tui/app/backup_jobs.rs`: abrir una conexión de lectura aparte al
-  mismo archivo (`Connection::open(core.ruta_base_datos())` + `busy_timeout`) y soltar el
-  lock de `GuiState` apenas se lee la ruta y se autoriza, antes de copiar/validar.
-
-## Módulo de actualizaciones — ya construido (esta nota estaba desactualizada)
-
-Esta sección decía "no iniciado, condicionado" — quedó obsoleta: el actualizador ya está
-construido, firmado y funcionando en CI (`desktop/docs/pendientes.md`, sección "Empaquetado
-y actualizaciones", tiene el detalle completo — no se duplica acá). Repaso de los 5 puntos
-que esta nota dejaba como condición, contra lo que de verdad se construyó:
-
-- [x] **El fallo de red nunca impide iniciar la app.** `buscarActualizacion()` corre en un
-  `useEffect` de `Shell` (`App.tsx`) que ya arrancó con la sesión autenticada — un `catch`
-  sólo hace `console.error`, nunca bloquea el render. Confirmado leyendo el código.
-- [x] **Descargar y verificar firma antes de instalar.** `instalarActualizacion()`
-  (`api/actualizaciones.ts`) delega en `Update.downloadAndInstall()` de
-  `tauri-plugin-updater`, que verifica contra `plugins.updater.pubkey`
-  (`tauri.conf.json`) antes de instalar — si no coincide, la promesa rechaza sin tocar
-  nada. Llave real cargada y confirmada firmando bien en CI (`desktop/docs/pendientes.md`).
-- [ ] **Impedir la actualización mientras la app tenga el bloqueo de instancia — sin
-  verificar de verdad.** A diferencia de los otros cuatro puntos, no encontré evidencia de
-  que esto se haya probado explícitamente: `relaunch()` reinicia el mismo proceso (no hay
-  un instalador externo separado corriendo mientras `InstanciaGuard` sigue en pie), así que
-  el riesgo original probablemente no aplica tal cual se pensó, pero eso es una suposición
-  mía, no algo confirmado. Si se quiere cerrar del todo, valdría instalar una actualización
-  real en una máquina con otra ventana de la app abierta y confirmar qué pasa.
-- [x] **Respaldar antes de migrar, con rollback.** Ya existe independientemente del
-  actualizador — `respaldar_antes_de_migrar` (`src/database/connection.rs`) crea un
-  respaldo `TipoRespaldo::PreMigracion` antes de que `initialize_database` aplique
-  cualquier migración pendiente, obligatorio (si el respaldo falla, la migración no corre).
-  Cubre una actualización nueva igual que cualquier apertura con esquema pendiente.
-- [x] **Cliente de actualización separado del núcleo.** `api/actualizaciones.ts` sólo usa
-  `@tauri-apps/plugin-updater`/`@tauri-apps/plugin-process` — ningún comando en
-  `desktop/src-tauri/src/comandos/` ni tipo de `control_acceso` está involucrado.
-
-4 de 5 confirmados; el de instancia queda anotado como el único punto realmente sin
-verificar, no descartado ni dado por hecho.
-
-## Permisos granulares por usuario — descartado por ahora
-
-- [x] **Evaluado (2026-08-22): no se construye.** Hoy los permisos son RBAC simple
-  (`rol.puede(Operacion::X)`, ej. `application/catalogos.rs`) — agregar que un rol pueda
-  hacer algo nuevo es un match arm, no una migración. Un sistema de permisos por usuario
-  individual (matriz configurable, pantalla de asignación) resolvería un problema
-  hipotético, no uno real. Retomar sólo si aparece un caso concreto donde los 3 roles
-  actuales ya no alcanzan (ej. "este operador puede X pero no Y") — ahí se evalúa una vez
-  con el caso real delante, no antes.
-
-## Percepción de velocidad — sugerencias UX (sin acordar, evaluar con calma)
-
-Origen: el usuario reportó una sensación de lentitud en la app (no en el buscador ni en
-animaciones puntuales — "no sé si es la app o soy yo"). Auditoría de
-`src/tui/app.rs`/`terminal.rs`/`ui_kit/debounce.rs`: no hay nada objetivamente lento —
-redibujo sólo por evento (no hay loop de 60fps quemando CPU), `event::poll` cada 50ms,
-debounce de búsqueda en 120ms (`activos`/`empresas`/`nuevo_ingreso`/`usuarios`/`historial`/
-`contratistas`/`salida_rapida`, todos `state.rs`), Argon2 en hilos aparte
-(`app/auth_jobs.rs`) sin bloquear el loop. Conclusión: es percepción, no rendimiento real
-— Ratatui redibuja por *snapshot* (la pantalla entera cambia de golpe, sin transición),
-mientras que una CLI tipo Ink/React va mostrando actividad progresiva (cursor, streaming,
-spinners), lo que se lee como "viva" aunque no sea más rápida. Ideas para achicar esa
-brecha perceptual, en orden de costo/beneficio:
-
-- [ ] **Spinner o indicador durante el debounce de búsqueda (120ms).** Hoy no hay ninguna
-  señal entre que se deja de teclear y que aparece el resultado filtrado — se siente como
-  un salto. Un indicador chico (p. ej. `⏳` o `…` en la etiqueta de búsqueda) mientras
-  `Debounce::listo` todavía no disparó daría la sensación de "está procesando" en vez de
-  "no reaccionó".
-- [ ] **Parpadeo de cursor en campos de texto ya existe en Login** (`DURACION_PARPADEO`,
-  `login/state.rs`) **pero no en los demás formularios** (Contratistas, Usuarios, Nuevo
-  Ingreso, etc.). Extender el mismo patrón a `ui_kit/text_input.rs` daría consistencia y
-  una señal continua de "esto está vivo" incluso sin tecleo.
-- [ ] **Confirmación visual breve tras guardar/registrar** (p. ej. resaltar la fila
-  recién creada/editada por un instante) en vez de sólo el mensaje de estado en texto —
-  hoy el cambio es instantáneo y silencioso, lo que puede leerse como "¿pasó algo?".
-- [x] **Medido y reparado (2026-08-31): crear respaldo sí bloqueaba, y de verdad.**
-  Medición real (no sólo lectura de código) con datos de volumen creciente: copiar +
-  validar la base completa (Online Backup API + `integrity_check` + `foreign_key_check`)
-  tarda ~200ms con unos pocos miles de movimientos y **~2 segundos con ~100,000** — ya
-  perceptible hoy, y empeora con la antigüedad de la instalación. Antes corría
-  síncrono en el mismo hilo que dibuja la pantalla, tanto para el botón manual
-  (Respaldos → Crear) como para la revisión automática diaria (`run_internal`, cada
-  60s). El resto de la app se midió también y está lejos de ser un problema: cada
-  escritura normal (Nuevo Ingreso, contratistas, gafetes) tarda ~1.3ms pese al perfil
-  de durabilidad estricto (`journal_mode=DELETE` + `synchronous=EXTRA`), y las
-  búsquedas/Historial son sub-milisegundo incluso con 10,000 filas — los índices están
-  bien puestos.
-
-  Reparado con el mismo patrón que `auth_jobs.rs` (hilo + `mpsc::Receiver` sondeado en
-  el bucle) en un módulo nuevo, `tui/app/backup_jobs.rs`: el hilo abre su PROPIA
-  conexión de sólo lectura al mismo archivo (`Connection::open` + `busy_timeout`) en
-  vez de compartir la conexión viva de `AppCore` entre hilos — SQLite admite varias
-  conexiones concurrentes al mismo archivo, y `Backup::run_to_completion` ya reintenta
-  solo ante un bloqueo transitorio. `AppCore` ganó `autorizar_creacion_respaldo`
-  (autorización sola, rápida, en el hilo principal), `ruta_base_datos()`,
-  `directorio_respaldos()` (ahora público) y `hace_falta_respaldo_automatico_hoy`
-  (la mitad "decidir" de `respaldo_automatico_diario_si_hace_falta`, que se conserva
-  intacta para los llamadores previos al bucle de la TUI en `main.rs`, donde un
-  respaldo síncrono no compite con nadie mirando la pantalla). Respaldos → Crear
-  muestra "⠋ Creando respaldo…" (`RespaldosState::creando`, mismo patrón que
-  `UsuariosState::guardando`) y bloquea disparar uno segundo mientras el primero sigue
-  en vuelo. El respaldo previo a una restauración (`AccionRespaldos::Restaurar`) se
-  dejó síncrono a propósito: la app sale inmediatamente después
-  (`SalidaApp::Restaurar`), así que un freno breve ahí importa mucho menos que uno en
-  medio de una sesión activa. `cargo fmt`, Clippy estricto y la suite completa (499
-  tests) en verde, con pruebas nuevas de la creación real en un hilo aparte
-  (`tui/app/tests.rs`) y del límite de decisión "hace falta hoy" (`tests/configuracion_respaldos.rs`).
-- [x] **Medido y reparado (2026-08-31): exportar Historial a XLSX (F5) era el punto
-  realmente bloqueante, peor que el respaldo.** Al verificar si el respaldo era el
-  único proceso que necesitaba su propio hilo, se midió también la exportación:
-  armar el XLSX de 100,000 movimientos tarda **~33 segundos** — muy por encima de los
-  ~2 segundos del respaldo, y corría igual de síncrona en el hilo que dibuja la
-  pantalla. Peor todavía: el aviso "Exportando historial…" que ya existía en el
-  código nunca llegaba a pintarse — se fijaba en el mismo tick que arrancaba la
-  exportación, pero el `terminal.draw()` que lo hubiera mostrado corre en la vuelta
-  *siguiente* del bucle, que nunca llegaba hasta que la exportación (síncrona)
-  terminaba. El operador se quedaba con la pantalla congelada sin ninguna señal.
-
-  Reparado con el mismo patrón que `backup_jobs.rs`: módulo nuevo
-  `tui/app/historial_jobs.rs` (hilo + `mpsc::Receiver`, conexión de sólo lectura
-  propia). El núcleo de `AppCore::{buscar_historial, movimientos_en_orden,
-  exportar_historial_seleccion}` se extrajo a funciones libres que reciben
-  `&Connection` en vez de `&self` (`buscar_historial_con_conexion`,
-  `movimientos_en_orden_con_conexion`, `exportar_historial_seleccion_con_conexion`,
-  `application/historial.rs`, reexportada la última desde `application::mod`) —
-  mismo motivo que separar `crear_respaldo` de `AppCore`: el hilo necesita operar
-  sobre una conexión que no es la de `AppCore` sin duplicar la lógica de consulta.
-  Los métodos de `AppCore` quedaron como delegadores finos sobre `&self.connection`,
-  API pública sin cambios (la GUI/Tauri, que sí usa estos métodos directo, no se vio
-  afectada). Historial muestra "⠋ Exportando historial…"
-  (`HistorialState::exportando`, mismo patrón que `RespaldosState::creando`) y F5
-  no encola una segunda exportación mientras la primera sigue en vuelo. `cargo fmt`,
-  Clippy estricto y la suite completa (501 tests) en verde, con pruebas nuevas del
-  guard de F5 (`tui/historial/tests.rs`) y de la exportación real en un hilo aparte
-  con el archivo terminando en disco (`tui/app/tests.rs`).
-- [x] **Frame de transición mínimo en cambios de vista: descartado (2026-08-22).** La
-  navegación por pestañas se pidió sin animaciones ni transiciones; se conserva el cambio
-  inmediato y no se agrega trabajo visual ajeno al alcance.
-- [x] **Auditoría de cuellos de botella en las tres capas (2026-09-01): mismo bug de
-  exportar Historial replicado en CLI, más dos hallazgos propios de Tauri.** Con el fix
-  de la TUI ya en pie, se auditaron también CLI (`src/cli/`) y la GUI de escritorio
-  (`desktop/src-tauri/`) buscando el mismo patrón (trabajo bloqueante retenido en un
-  lugar compartido). Tres hallazgos, los tres reparados:
-
-  1. **CLI: exportar Historial (F5) tenía el mismo freeze que la TUI antes del fix.**
-     El bucle de eventos del CLI es igual de single-thread que el de la TUI, y
-     `confirmar_exportacion` llamaba `exportar_historial_seleccion` de forma síncrona.
-     Reparado reusando las mismas funciones libres `_con_conexion` extraídas para la
-     TUI: `src/cli/historial_controller.rs` ahora lanza un hilo con conexión propia y
-     un `mpsc::Receiver` sondeado en `run()` (`recibir_exportacion_si_lista`, agregado
-     también a `proxima_espera` para no dormir hasta 1h sin notar que terminó). La
-     Surface de Historial muestra "⠋ Exportando…" y bloquea el input mientras dura
-     (`HistorialState::exportando`). Prueba nueva de la exportación real en un hilo
-     aparte con el archivo terminando en disco.
-  2. **Tauri: `exportar_historial` retenía el `Mutex<AppCore>` compartido durante toda
-     la exportación.** A diferencia de la TUI/CLI, un comando Tauri no-async ya corre
-     en el pool de hilos bloqueantes propio de Tauri (no congela la ventana) — pero
-     retener el núcleo compartido sí bloqueaba cualquier OTRO comando (Activos,
-     Contratistas, etc.) mientras duraban esos ~33s con un historial grande. No hizo
-     falta un hilo propio: alcanzó con no abrir el mutex durante la consulta.
-     `GuiState` ganó `conexion_secundaria()` (`desktop/src-tauri/src/estado.rs`), que
-     sólo toma el candado para leer `ruta_base_datos()` y abre una `Connection`
-     independiente (mismo patrón `busy_timeout` que TUI/CLI); `exportar_historial`
-     ahora la usa con `exportar_historial_seleccion_con_conexion` en vez de
-     `state.core().exportar_historial_seleccion(...)`.
-  3. **Tauri: `listar_historial`/`listar_auditoria` retenían el mismo mutex ~750ms al
-     tope de carga completa (20,000 filas, `LIMITE_CARGA_COMPLETA_MAXIMO`).** Menos
-     grave que el punto 2, pero mismo problema de fondo. Se extrajeron
-     `buscar_historial_completo_con_conexion` (`src/application/historial.rs`) y
-     `buscar_auditoria_con_conexion`/`buscar_auditoria_completo_con_conexion`
-     (`src/application/catalogos.rs`), reexportadas desde `application::mod`; los
-     métodos de `AppCore` quedaron como delegadores finos, igual criterio que ya
-     se usó para historial. Ambos comandos Tauri pasaron a usar
-     `GuiState::conexion_secundaria()` en vez de `state.core()`.
-
-  `desktop/src-tauri` sumó `rusqlite` como dependencia directa (misma versión que fija
-  el crate raíz, Cargo unifica una sola copia) para poder abrir esa segunda conexión.
-  No se pudo compilar `desktop/src-tauri` en el entorno de esta sesión (siguen
-  faltando las librerías de desarrollo de GTK, mismo límite ya documentado al renombrar
-  `comandos/` → `cli/`) — los cambios se verificaron con la máxima revisión manual
-  posible y comparando contra el patrón ya probado de TUI/CLI, pero quedan pendientes
-  de una compilación real (`cargo check`) en un entorno con el toolchain completo antes
-  de darlos por definitivos. El núcleo (`cargo fmt`, Clippy estricto, 502 tests) sí está
-  verde.
-
-Nada de esto es un bug ni tiene prioridad definida — quedan acá como banco de ideas para
-retomar cuando se decida invertir tiempo en pulido visual, no porque haya un problema de
-rendimiento real que resolver.
-
-## Empaquetado — ideas de lujo, no para v1
-
-- [ ] **Instalador único que incluya la CLI (`control_acceso.exe`) además del bundle de
-  Tauri.** Es técnicamente posible: el bundler de Tauri (NSIS/WiX en Windows) admite
-  copiar binarios extra al directorio de instalación vía `bundle.resources` en
-  `tauri.conf.json`, y un template NSIS custom podría agregarle su propio acceso directo
-  de Start Menu. Explícitamente catalogado por el usuario como "lujo", no una necesidad —
-  se descartó para v1: hoy los dos binarios ya se generan en el mismo `release.yml`
-  (jobs `build` y `build-gui`, ver más abajo), sólo que en destinos separados (artifact de
-  Actions vs. GitHub Release). Fusionarlos en un solo instalador suma un template NSIS a
-  mantener y no cambia nada para quien sólo usa la GUI — se retoma si en algún momento hay
-  una razón concreta (ej. onboarding de alguien que necesita ambas interfaces a la vez).
-
-- [ ] **CLI: detectar Alacritty instalado y usarlo como terminal por defecto, con una
-  preferencia en config para elegir cuál usar.** Anotado a pedido del usuario, sin
-  acordar todavía — opinión técnica para cuando se retome:
-  - La CLI hoy no elige su terminal: `control_acceso.exe` simplemente renderiza con
-    Ratatui dentro del proceso que ya lo lanzó (conhost, PowerShell, Windows Terminal,
-    lo que sea). "Usar Alacritty automáticamente" implicaría que el binario se
-    re-ejecute a sí mismo envuelto en `alacritty -e control_acceso.exe` y cierre la
-    ventana original — no es una config que se lee, es reemplazar el proceso en
-    marcha.
-  - Eso trae riesgos que no tiene la recomendación pasiva que ya está en el README
-    ([línea 142](../README.md#L142)): parpadeo de ventana (se abre una, se cierra,
-    abre otra), y sobre todo **una carrera con `InstanciaGuard`** (el candado de
-    instancia única que ya usa tanto la CLI como la GUI) — si el proceso padre suelta
-    el candado antes de que el hijo lo tome, hay una ventana donde en teoría podría
-    colarse otra instancia.
-  - Además, si alguien ya abrió la CLI a propósito desde su terminal de siempre
-    (PowerShell, Windows Terminal), reemplazarle la ventana por Alacritty sin que lo
-    pida es sorpresivo — va contra elegir la terminal, que es justamente lo que se
-    quiere respetar con la preferencia de config.
-  - **Alternativa más simple que da el mismo resultado práctico:** un acceso directo
-    opcional ("Control de Acceso (Alacritty)") que invoque
-    `alacritty -e control_acceso.exe`, generado sólo si el instalador detecta
-    Alacritty presente. Cero código nuevo en el binario, cero relanzamiento, cero
-    carrera con el candado — es packaging, no lógica de la app. La preferencia de
-    config seguiría teniendo sentido aparte (qué terminal *recuerda* la app la
-    próxima vez que haya que decirle algo al usuario, no cuál usar para lanzarla).
-  - Sin decidir todavía si vale la pena ninguna de las dos — es la línea de base para
-    cuando se retome.
-
-## Roadmap de producto (V2/V3, fuera del alcance actual)
-
-- V2: visitas/proveedores y "a quién viene a ver"; notificación proactiva de PRAIND
-  descartada.
-- V3: concurrencia multi-terminal — dispara revisar los agregados con campos públicos de
-  arriba, y columna de versión + actualizaciones optimistas para ediciones concurrentes de
-  contratistas (hoy imposible con instancia única + loop síncrono, así que no aplica).
+## Seguridad y nube
+
+- [ ] **Android: proteger el secreto del dispositivo con Keystore.** El secreto móvil
+  sigue guardándose en texto plano. La auditoría recomienda implementar el cifrado en
+  Kotlin con Android Keystore/`EncryptedFile`, no volver al esquema basado en
+  `ANDROID_ID`. Desktop mantiene su cifrado actual sin cambios.
+- [ ] **Redactar `Debug` de credenciales de nube.** `TokenDispositivo`
+  (`src/nube/cliente.rs`) y `SesionRealtimeNube` (`src/application/nube.rs`) no deben
+  exponer `access_token` ni `apikey` si alguien usa `{:?}` en el futuro.
+- [ ] **Mitigar timing attack en login local.** Si la cédula no existe,
+  `AutenticacionService::buscar_candidato` rechaza sin correr Argon2; usar un hash dummy
+  reduciría la diferencia de tiempo. Riesgo bajo, pero confirmado.
+- [ ] **Activación de dispositivo con verificación por correo.** Hoy el secreto correcto
+  activa el dispositivo. El flujo diseñado agrega un código por correo en la primera
+  activación del secreto, con estado intermedio antes de emitir el JWT final.
+- [ ] **Revisar bucket público `historial-web`.** Está documentado como público, vacío y
+  sin referencias en código. Confirmar si es vestigio; si no se usa, eliminarlo desde
+  Supabase.
+- [x] **Edge Functions de dispositivos versionadas.** Se trajo al repo el código remoto y
+  se eliminó lo que no tenía llamadores reales.
+- [x] **Políticas y funciones de seguridad del panel endurecidas.** Se cerraron accesos
+  globales indebidos, ejecución pública de funciones sensibles y dependencias de secretos
+  hardcodeados.
+- [x] **Realtime probado y acotado a su papel correcto.** Sirve como aviso rápido; el
+  polling periódico se mantiene como respaldo.
+- [x] **Timeout HTTP de nube agregado.** Las llamadas de red ya no pueden quedar colgadas
+  indefinidamente.
+- [x] **Reloj corregido por servidor.** Las marcas de sincronización ya no dependen del
+  reloj local del dispositivo.
+
+## Panel web y modelo multi-sitio
+
+- [ ] **Pulir paneles web existentes.** Mejorar historial y administración del panel
+  desplegado; alcance visual y funcional pendiente de definir.
+- [ ] **Revisar roles y permisos Root/Administrador/Operador.** El modelo actual está en
+  `domain::autorizacion`; falta decidir si las reglas coinciden con el uso real.
+- [x] **Reportes globales decididos: historial completo en Supabase.** `web/src/api/historial.ts`
+  lee la tabla `ingresos` como historial multi-sitio y la migración
+  `agrega_auditoria_completa_a_ingresos` agregó el detalle de auditoría que faltaba.
+- [ ] **Chequeo cruzado de ingresos abiertos entre sitios.** Con conexión, bloquear el
+  segundo ingreso abierto del mismo contratista en otro sitio; offline, registrar y
+  alertar luego al sincronizar.
+- [x] **Scoping futuro de administradores del panel omitido por ahora.** Hoy estar en
+  `administradores_panel` da acceso completo; limitar admins por sitio queda fuera hasta
+  que exista un caso real.
+- [x] **Hosting del panel aceptado para el alcance actual.** El panel vive en Cloudflare
+  Pages; reabrir la decisión sólo si el alcance cambia.
+- [x] **Alta de dispositivos desde panel web.** `web/src/pantallas/Dispositivos.tsx` usa
+  Edge Functions versionadas para crear sitios y provisionar dispositivos.
+- [x] **Usuarios globales sincronizados.** ROOT/Administrador/Operador viajan por nube con
+  `SIN_PASSWORD_LOCAL`; la contraseña local se fija por dispositivo.
+- [x] **Contratistas, empresas y gafetes sincronizados.** El catálogo se recibe completo y
+  se fusiona por claves reales, evitando duplicados.
+- [x] **Creación de usuarios delegada al panel web.** El panel crea usuarios globales sin
+  contraseña real ni temporal.
+- [x] **Administradores del panel sin autogestión desde la app.** Alta/baja queda fuera del
+  propio panel para no permitir que la superficie protegida se fabrique acceso.
+
+## Android y lector de documentos
+
+Revisado contra código el 2026-09-08. Evidencia principal:
+`MrzParser.kt`, `LectorDocumentosIdentidad.kt`, `EstabilizadorLectura.kt`,
+`PantallaEscanearCedula.kt` y pruebas unitarias dirigidas en verde para parser,
+estabilizador, clasificador y región de interés.
+
+- [x] **Flujo frente/reverso resuelto en una sola cámara.** `EstabilizadorLectura` intenta
+  MRZ primero y cae a OCR de frente si no hay MRZ; no se requiere paso manual para voltear
+  el documento.
+- [x] **Fallback de MRZ corrupto decidido: rechazar y reintentar.** Si hay MRZ pero falla
+  checksum, `EstabilizadorLectura` devuelve `INVALIDO`; tests cubren que un MRZ corrupto no
+  confirma aunque se repita.
+- [x] **FPS de CameraX omitido como requisito.** El debounce quedó en 3 frames configurables
+  (`EstabilizadorLectura(framesRequeridos = 3)`) y cubierto por tests; calibrar FPS real no
+  desbloquea ninguna implementación actual.
+- [x] **Detección de reflejo omitida por ahora.** Requeriría análisis de píxeles por frame;
+  el lector ya maneja lectura parcial con mensaje de mantener firme sin agregar costo
+  `O(imagen)`.
+- [x] **Fixtures TD3/pasaporte suficientes para el alcance actual.** Existe parser TD3,
+  modelo `PASAPORTE` y test `parseaTd3ValidoCompleto`; ampliar variantes queda para cuando
+  pasaporte sea un producto formal.
+- [x] **PDF417 de cédula anterior omitido.** El plan documenta que el contenido viene
+  cifrado; no se implementa sin acceso legítimo al esquema de descifrado.
+- [x] **Refactor móvil a ViewModels convertido en criterio, no pendiente abierto.**
+  `mobile/android/ARQUITECTURA.md` fija la regla incremental y ya hay ViewModels reales
+  para pantallas clave.
+- [x] **Clasificador y extractores por tipo de documento.**
+- [x] **Parser MRZ TD1/TD3 y checksums.**
+- [x] **Distinción de cédula nacional 2025+, DIMEX y menores por MRZ/edad.**
+- [x] **Estado central de escaneo, estabilidad y viewfinder.**
+- [x] **Recorte lógico del área de análisis por `TextBlock.boundingBox`.**
+- [x] **Feedback háptico y sonido sutil al confirmar.**
+- [x] **Timer periódico móvil de sincronización.** `SincronizacionPeriodica.kt` hace pulso
+  cada 2 minutos y convive con Realtime.
+- [x] **Placas vehiculares fuera de esta app.** La idea queda documentada sólo como
+  referencia para otro proyecto.
+- [x] **Control de flash descartado.** El reflejo perjudica más de lo que ayuda en este
+  caso.
+
+## Escritorio, Tauri y empaquetado
+
+- [ ] **Verificar actualización con otra instancia abierta.** El riesgo quizá no aplica
+  por cómo `relaunch()` reinicia el proceso, pero falta una prueba real.
+- [x] **Instalador único que incluya CLI y GUI omitido para v1.** Lujo fuera del alcance;
+  reabrir sólo con una necesidad concreta.
+- [x] **CLI: Alacritty implementado sin preferencia nueva.** `src/main.rs` relanza en
+  `Alacritty.exe` si está junto al binario y evita bucles con
+  `CONTROL_ACCESO_EN_ALACRITTY`; no queda como feature abierta.
+- [x] **PDF: numeración estilizada de páginas omitida.** Requeriría DevTools Protocol de
+  WebView2; no se arma sin pedirlo explícitamente.
+- [x] **PDF/WebView2: reporte río arriba omitido.** La solución productiva ya sondea el
+  archivo en disco; aislar el bug del callback no aporta al uso actual.
+- [x] **Excel: gafete como número y bordes omitido.** Quedó fuera porque no se pidió; el
+  exportador actual ya cumple el alcance acordado.
+- [x] **Pipeline de release de GUI.**
+- [x] **Updater firmado vía GitHub Releases.**
+- [x] **Error Boundary en React.**
+- [x] **Mensajes de login sin filtrar errores crudos de SQLite.**
+- [x] **PDF de Historial implementado.**
+- [x] **RBAC visual de la GUI corregido.**
+- [x] **Auditoría GUI genérica construida.**
+- [x] **Respaldos en GUI construidos y revisados.**
+- [x] **Exportaciones largas sin bloquear UI/comandos.**
+- [x] **Clippy pedantic/nursery cerrado en núcleo y adaptador Tauri.**
+
+## Respaldo, base local y dominio
+
+- [ ] **Eliminar respaldos no usados con confirmación.** Acción menor, mismo patrón que
+  exportar/restaurar.
+- [x] **Importar respaldo cuando no existe base local omitido a propósito.** La base ya es
+  portátil y la restauración técnica existe; no se construye UX previa al primer arranque
+  hasta que se pida.
+- [x] **Agregados de dominio con constructores privados diferidos a V3.** Los campos
+  públicos no violan el flujo actual; reabrir con concurrencia multi-terminal.
+- [x] **Respaldo automático a la 01:00 hora Costa Rica.**
+- [x] **Retención automática queda en 7 respaldos.**
+- [x] **Respaldo previo a migraciones y rollback.**
+- [x] **SQLite STRICT aplicado donde corresponde.**
+- [x] **Historial y auditoría usan conexiones secundarias para cargas/exportaciones.**
+
+## UX y percepción de velocidad
+
+- [ ] **Spinner durante debounce de búsqueda.** Señal pequeña mientras pasan los 120ms de
+  debounce.
+- [ ] **Parpadeo de cursor en formularios.** Login ya lo tiene; extender el patrón a
+  `ui_kit/text_input.rs`.
+- [ ] **Confirmación visual breve tras guardar/registrar.** Resaltar fila o elemento recién
+  creado/editado para que el cambio no se sienta silencioso.
+- [x] **Respaldo manual y exportación de historial dejaron de congelar la UI.**
+- [x] **Frame de transición entre vistas descartado.** La navegación se conserva inmediata.
+
+## Roadmap fuera del alcance actual
+
+- [ ] **V2: visitas/proveedores y “a quién viene a ver”.**
+- [ ] **V2: aviso proactivo de PRAIND por vencer.**
+- [ ] **V3: concurrencia multi-terminal.** Dispara revisar agregados de dominio y reglas de
+  sincronización local.
+- [x] **Permisos granulares por usuario descartados por ahora.** Retomar sólo con un caso
+  real que los roles actuales no cubran.

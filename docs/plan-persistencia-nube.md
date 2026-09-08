@@ -323,7 +323,7 @@ decide dónde vive el código nuevo.
       falta en vivo.
   - **Ya no se piensa como "varios dispositivos sincronizando entre
     sí"** (eso es lo que hacía difícil el intento anterior: conflictos
-    entre escritores). Se piensa como **"cada lugar (garita, sitio)
+    entre escritores). Se piensa como **"cada lugar (punto de acceso, sitio)
     dueño de su propia base local, que empuja lo suyo hacia un mismo
     receptor en la nube, sin necesitar leer lo de los demás"** — un
     modelo de reporte de una sola vía (dispositivo → nube), no de
@@ -347,7 +347,7 @@ decide dónde vive el código nuevo.
   anotado desde el plan original de la app móvil que el mecanismo exacto
   de "reportar a la PC" quedaba sin definir — este documento retoma esa
   misma pregunta con más contexto, ahora que se habla de nube y no sólo
-  de la PC de la garita.
+  de la PC del punto de acceso.
 
 ## La pregunta central, tal cual se planteó
 

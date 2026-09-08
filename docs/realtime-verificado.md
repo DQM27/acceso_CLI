@@ -59,7 +59,7 @@ toda la transacción al terminar.
 Las pruebas nativas de Tauri encontraron un bloqueo del entorno:
 GNU/MinGW produce `STATUS_ENTRYPOINT_NOT_FOUND` al arrancar el ejecutable;
 el toolchain MSVC instalado no encuentra `link.exe`. Es el problema descrito
-en `desktop/docs/pendientes.md`, sección de entorno de desarrollo. La
+en `docs/pendientes.md`, sección de escritorio/Tauri. La
 validación de tipos de Rust se ejecuta por separado con `cargo check`.
 
 El asesor de seguridad devolvió los mismos avisos anteriores al cambio:

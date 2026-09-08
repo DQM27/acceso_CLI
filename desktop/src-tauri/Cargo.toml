@@ -40,7 +40,7 @@ tauri-plugin-log = "2"
 # Diálogo nativo "Guardar como" para exportar Historial a Excel.
 tauri-plugin-dialog = "2.7.2"
 # Actualizaciones automáticas vía GitHub Releases (ver tauri.conf.json,
-# plugins.updater, y desktop/docs/pendientes.md). tauri-plugin-process sólo
+# plugins.updater, y docs/pendientes.md). tauri-plugin-process sólo
 # aporta `relaunch()` para reiniciar la app después de instalar.
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
@@ -113,7 +113,7 @@ missing_panics_doc = "deny"
 [target.'cfg(windows)'.dependencies]
 # Exportar Historial a PDF: WebView2 (ya viene con Tauri en Windows) sabe
 # imprimir a PDF nativamente (`ICoreWebView2_7::PrintToPdf`), evita meter un
-# motor de tipografía nuevo (ver desktop/docs/pendientes.md). Versiones
+# motor de tipografía nuevo (ver docs/pendientes.md). Versiones
 # fijadas a lo que `wry` ya trae transitivamente (ver Cargo.lock) — dos
 # copias de estas crates en el árbol sería un dolor de cabeza innecesario.
 webview2-com = "=0.38.2"

@@ -6,7 +6,7 @@ export type { Update };
 
 // Consulta plugins.updater.endpoints (tauri.conf.json) — hoy apunta a
 // releases/latest/download/latest.json de GitHub Releases (ver
-// desktop/docs/pendientes.md). `null` = ya está en la última versión, o el
+// docs/pendientes.md). `null` = ya está en la última versión, o el
 // check falló (sin conexión, por ejemplo) — quien llama decide si avisar.
 export function buscarActualizacion(): Promise<Update | null> {
   return check();

@@ -113,4 +113,4 @@ adb shell run-as com.brisas.controlacceso cp /data/local/tmp/control_acceso.db f
 ```
 
 Esto es solo para desarrollo — no reemplaza el flujo real de alta de
-usuarios, que sigue sin resolver (ver `docs/pendientes.md`).
+usuarios globales, documentado en `docs/pendientes.md`.

@@ -9,7 +9,7 @@ use crate::estado::GuiState;
 /// Cuánto esperar, como máximo, a que la sincronización previa al login
 /// termine antes de seguir con lo que ya haya en local -- ver el
 /// doc-comment de `login`. 5s alcanza de sobra para el puñado de usuarios
-/// típico de un sitio; una red lenta o caída no debe dejar a la garita sin
+/// típico de un sitio; una red lenta o caída no debe dejar al punto de acceso sin
 /// poder operar.
 const ESPERA_MAXIMA_SYNC_LOGIN: std::time::Duration = std::time::Duration::from_secs(5);
 
@@ -113,7 +113,7 @@ fn usuario_sigue_activo_remoto(state: &GuiState, cedula: &str) -> Result<bool, S
 ///
 /// Dos chequeos contra la nube, uno para cada dirección de un cambio de
 /// estado remoto -- decisión explícita: "por seguridad, pero nunca
-/// bloqueante" (la garita tiene que poder operar sin internet), así que
+/// bloqueante" (el punto de acceso tiene que poder operar sin internet), así que
 /// los dos son best-effort con `ESPERA_MAXIMA_SYNC_LOGIN` de tope:
 ///
 /// 1. **Reactivación**: si el chequeo local dice "inactivo"
