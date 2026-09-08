@@ -5,6 +5,8 @@ package com.brisas.controlacceso
 /// "qué está pasando", el resto de la UI sólo reacciona a este valor.
 enum class EstadoEscaneo { BUSCANDO, INVALIDO, CONFIRMADO }
 
+enum class ModoEscaneoDocumento { DOCUMENTO_CONTRATISTA, GAFETE_CONTRATISTA }
+
 data class ResultadoEstabilizacion(
     val estado: EstadoEscaneo,
     val documento: DocumentoDetectado? = null,
@@ -42,6 +44,7 @@ data class ResultadoEstabilizacion(
 /// algún día se llama desde el hilo del analizador de CameraX en vez del
 /// principal, hay que agregar sincronización acá.
 class EstabilizadorLectura(
+    private val modo: ModoEscaneoDocumento = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
     private val framesRequeridos: Int = 2,
     // Un poco más grande que `framesRequeridos` -- da lugar a tolerar algún
     // frame malo salteado sin exigir tampoco una ventana tan larga que
@@ -59,7 +62,7 @@ class EstabilizadorLectura(
             return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = "Acerque el documento")
         }
 
-        val mrz = leerMrzDeTexto(texto)
+        val mrz = if (modo == ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA) leerMrzDeTexto(texto) else null
         if (mrz != null) {
             reiniciar() // el MRZ no depende del debounce por candidato repetido
             return when {
@@ -78,7 +81,11 @@ class EstabilizadorLectura(
         val tipo = clasificarTipoDocumento(texto)
         if (tipo == TipoDocumento.DESCONOCIDO) {
             reiniciar()
-            return ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no reconocido")
+            return ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = mensajeNoReconocido())
+        }
+        if (!tipo.esValidoParaModo(modo)) {
+            reiniciar()
+            return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = mensajeApuntar())
         }
 
         val documento = leerDocumentoDeTexto(texto)
@@ -117,4 +124,24 @@ class EstabilizadorLectura(
     private fun reiniciar() {
         candidatosRecientes.clear()
     }
+
+    private fun mensajeApuntar(): String =
+        when (modo) {
+            ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA -> "Apunte al documento del contratista"
+            ModoEscaneoDocumento.GAFETE_CONTRATISTA -> "Apunte al gafete de contratista"
+        }
+
+    private fun mensajeNoReconocido(): String =
+        when (modo) {
+            ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA -> "Documento no reconocido"
+            ModoEscaneoDocumento.GAFETE_CONTRATISTA -> "Gafete no reconocido"
+        }
 }
+
+private fun TipoDocumento.esValidoParaModo(modo: ModoEscaneoDocumento): Boolean =
+    when (modo) {
+        ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA ->
+            this != TipoDocumento.GAFETE_CONTRATISTA && this != TipoDocumento.DESCONOCIDO
+        ModoEscaneoDocumento.GAFETE_CONTRATISTA ->
+            this == TipoDocumento.GAFETE_CONTRATISTA
+    }

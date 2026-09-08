@@ -151,7 +151,7 @@ class LectorDocumentosIdentidadTest {
 
         assertEquals(TipoDocumento.GAFETE_CONTRATISTA, doc?.tipo)
         assertEquals("16", doc?.numeroDocumento)
-        assertEquals("CRC 16", doc?.textoBusqueda)
+        assertEquals("16", doc?.textoBusqueda)
     }
 
     @Test

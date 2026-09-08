@@ -117,6 +117,43 @@ class EstabilizadorLecturaTest {
     }
 
     @Test
+    fun modoDocumentoNoAceptaGafeteContratista() {
+        val texto = """
+            CARNÉ
+            PROVISIONAL
+            CRC - 16
+            CONTRATISTAS
+            Costa Rica
+        """.trimIndent()
+
+        val r = EstabilizadorLectura(framesRequeridos = 1).procesarFrame(texto)
+
+        assertEquals(EstadoEscaneo.BUSCANDO, r.estado)
+        assertNull(r.documento)
+        assertEquals("Apunte al documento del contratista", r.mensaje)
+    }
+
+    @Test
+    fun modoGafeteAceptaSoloGafeteContratista() {
+        val texto = """
+            CARNÉ
+            PROVISIONAL
+            CRC - 16
+            CONTRATISTAS
+            Costa Rica
+        """.trimIndent()
+
+        val r = EstabilizadorLectura(
+            modo = ModoEscaneoDocumento.GAFETE_CONTRATISTA,
+            framesRequeridos = 1,
+        ).procesarFrame(texto)
+
+        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
+        assertEquals(TipoDocumento.GAFETE_CONTRATISTA, r.documento?.tipo)
+        assertEquals("16", r.documento?.numeroDocumento)
+    }
+
+    @Test
     fun distingueCedulaNacionalDeDimexUsandoSoloElMrz() {
         // Mismo formato TD1 que el DIMEX, distinto código de documento en
         // posiciones 1-2 (ID en vez de C<) -- código real confirmado contra

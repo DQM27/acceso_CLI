@@ -339,7 +339,7 @@ private fun extraerGafeteContratista(texto: String): DocumentoDetectado? {
     return DocumentoDetectado(
         tipo = TipoDocumento.GAFETE_CONTRATISTA,
         numeroDocumento = numero,
-        textoBusqueda = "CRC $numero",
+        textoBusqueda = numero,
     )
 }
 

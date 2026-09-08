@@ -5,9 +5,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -21,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -103,6 +108,7 @@ fun PantallaConfirmarIngreso(
     var gafeteTexto by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var enviando by remember { mutableStateOf(false) }
+    var escanerGafeteAbierto by remember { mutableStateOf(false) }
     val alcance = rememberCoroutineScope()
 
     val focoGafete = remember { FocusRequester() }
@@ -117,6 +123,19 @@ fun PantallaConfirmarIngreso(
         } else {
             focoConfirmar.requestFocus()
         }
+    }
+
+    if (escanerGafeteAbierto) {
+        PantallaEscanearCedula(
+            modo = ModoEscaneoDocumento.GAFETE_CONTRATISTA,
+            onCedulaDetectada = { numero ->
+                gafeteTexto = numero.filter(Char::isDigit)
+                error = null
+                escanerGafeteAbierto = false
+            },
+            onCerrar = { escanerGafeteAbierto = false },
+        )
+        return
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -159,18 +178,33 @@ fun PantallaConfirmarIngreso(
         }
 
         if (preparacion.requiereGafete) {
-            OutlinedTextField(
-                value = gafeteTexto,
-                onValueChange = { gafeteTexto = it.filter(Char::isDigit) },
-                label = { Text("Número de gafete") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                ),
-                modifier = Modifier.fillMaxWidth().focusRequester(focoGafete).padding(bottom = 16.dp),
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = gafeteTexto,
+                    onValueChange = { gafeteTexto = it.filter(Char::isDigit) },
+                    label = { Text("Número de gafete") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                    ),
+                    modifier = Modifier.weight(1f).focusRequester(focoGafete),
+                )
+                BotonDiscretoBrisas(
+                    onClick = { escanerGafeteAbierto = true },
+                    modifier = Modifier.padding(start = 8.dp),
+                ) {
+                    Icon(
+                        Icons.Default.PhotoCamera,
+                        contentDescription = "Escanear gafete",
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
+            }
         }
 
         val mensajeError = error

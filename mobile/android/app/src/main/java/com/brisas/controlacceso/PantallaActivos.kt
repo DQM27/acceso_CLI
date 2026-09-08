@@ -117,6 +117,7 @@ fun PantallaActivos(
 
     if (escanerAbierto) {
         PantallaEscanearCedula(
+            modo = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
             onCedulaDetectada = { cedula ->
                 escanerAbierto = false
                 if (viewModel.modo != ModoBusqueda.ENTRADA) {

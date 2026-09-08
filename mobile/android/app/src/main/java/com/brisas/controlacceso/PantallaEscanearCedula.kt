@@ -59,7 +59,11 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 @Composable
-fun PantallaEscanearCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () -> Unit) {
+fun PantallaEscanearCedula(
+    modo: ModoEscaneoDocumento = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
+    onCedulaDetectada: (String) -> Unit,
+    onCerrar: () -> Unit,
+) {
     val contexto = LocalContext.current
     var permisoConcedido by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(contexto, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
@@ -75,7 +79,7 @@ fun PantallaEscanearCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () -> 
     }
 
     if (permisoConcedido) {
-        VistaCamaraCedula(onCedulaDetectada = onCedulaDetectada, onCerrar = onCerrar)
+        VistaCamaraCedula(modo = modo, onCedulaDetectada = onCedulaDetectada, onCerrar = onCerrar)
     } else {
         Column(
             modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -96,7 +100,11 @@ fun PantallaEscanearCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () -> 
 }
 
 @Composable
-private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () -> Unit) {
+private fun VistaCamaraCedula(
+    modo: ModoEscaneoDocumento,
+    onCedulaDetectada: (String) -> Unit,
+    onCerrar: () -> Unit,
+) {
     val contexto = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     // Háptica semántica de Compose (`HapticFeedbackType.Confirm`), no
@@ -109,14 +117,14 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
     val haptica = LocalHapticFeedback.current
     val ejecutor = remember { Executors.newSingleThreadExecutor() }
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
-    var ultimoMensaje by remember { mutableStateOf("Apunte al documento") }
+    var ultimoMensaje by remember { mutableStateOf(mensajeInicialEscaneo(modo)) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
     var vencido by remember { mutableStateOf(false) }
     var areaTexto by remember { mutableStateOf<AreaTextoOcr?>(null) }
     // Una instancia por apertura de pantalla -- lleva el conteo de frames
     // consistentes del debounce (ver EstabilizadorLectura), no debe
     // compartirse entre sesiones de escaneo distintas.
-    val estabilizador = remember { EstabilizadorLectura() }
+    val estabilizador = remember(modo) { EstabilizadorLectura(modo = modo) }
     // AtomicBoolean, no `mutableStateOf` -- esta bandera se lee en el hilo
     // del analizador de cámara (`ejecutor`) y se escribe desde el hilo
     // principal (callback de ML Kit); un booleano de Compose no garantiza
@@ -198,7 +206,7 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
                         estado = EstadoEscaneo.BUSCANDO
                         vencido = false
                         areaTexto = null
-                        ultimoMensaje = "No se pudo leer el texto. Intente acercar el documento."
+                        ultimoMensaje = "No se pudo leer el texto. Intente acercar."
                     },
                     onAreaTexto = { areaTexto = it },
                 )
@@ -370,6 +378,12 @@ private const val VOLUMEN_SONIDO_CONFIRMACION = 40 // sobre 100 -- sutil, no un 
 private const val DURACION_SONIDO_CONFIRMACION_MS = 100
 private const val DEMORA_AVISO_VENCIDO_MS = 1200L
 private const val DURACION_VIBRACION_CONFIRMACION_MS = 70L
+
+private fun mensajeInicialEscaneo(modo: ModoEscaneoDocumento): String =
+    when (modo) {
+        ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA -> "Apunte al documento"
+        ModoEscaneoDocumento.GAFETE_CONTRATISTA -> "Apunte al gafete"
+    }
 
 private fun reproducirVibracionConfirmacion(contexto: android.content.Context) {
     try {
