@@ -15,6 +15,7 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.core.SurfaceOrientedMeteringPointFactory
+import androidx.camera.core.UseCaseGroup
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.Arrangement
@@ -267,11 +268,24 @@ private fun iniciarCamara(
                 it.surfaceProvider = previewView.surfaceProvider
             }
             proveedor.unbindAll()
+            // `previewView.viewPort` ata el recorte de `analisis` al mismo
+            // rectángulo que en verdad se ve en pantalla (la vista previa
+            // usa FILL_CENTER, que recorta/escala el frame del sensor a la
+            // proporción de la pantalla -- casi nunca la misma proporción
+            // que el sensor). Sin esto, `filtrarTextoEnAreaGuia` compara
+            // contra las dimensiones crudas del sensor, no contra lo que la
+            // persona realmente ve dentro del recuadro guía: el recuadro en
+            // pantalla y la zona que de verdad analiza ML Kit terminan
+            // siendo rectángulos físicos distintos.
+            val grupoUseCases = UseCaseGroup.Builder()
+                .addUseCase(preview)
+                .addUseCase(analisis)
+                .apply { previewView.viewPort?.let { setViewPort(it) } }
+                .build()
             val camara = proveedor.bindToLifecycle(
                 lifecycleOwner,
                 CameraSelector.DEFAULT_BACK_CAMERA,
-                preview,
-                analisis,
+                grupoUseCases,
             )
             enfocarCentro(camara)
         },
