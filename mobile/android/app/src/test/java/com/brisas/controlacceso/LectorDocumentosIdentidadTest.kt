@@ -87,6 +87,92 @@ class LectorDocumentosIdentidadTest {
         assertEquals(FechaDocumento(29, 7, 2027), doc?.vencimiento)
     }
 
+    // --- Carnets de contratista in-house / BAC ---
+
+    @Test
+    fun inHouseFrenteBuscaPorNombreSiNoTraeCedulaVisible() {
+        val texto = """
+            Wardner Eduardo
+            Marin Umaña
+            CONTRATISTA
+            COSTA RICA
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.CARNET_IN_HOUSE, doc?.tipo)
+        assertEquals("Wardner Eduardo Marin Umaña", doc?.textoBusqueda)
+        assertEquals("Wardner Eduardo Marin Umaña", doc?.nombre)
+    }
+
+    @Test
+    fun inHouseReversoBuscaPorCedula() {
+        val texto = """
+            EMPRESA:
+            ALDAMA
+            CEDULA:
+            172400408127
+            CONTRATISTA
+            COSTA RICA
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.CARNET_IN_HOUSE, doc?.tipo)
+        assertEquals("172400408127", doc?.numeroDocumento)
+    }
+
+    @Test
+    fun bacFrenteBuscaPorCedula() {
+        val texto = """
+            BAC
+            ANTHONNY JOSE MURILLO RAMIREZ
+            116030489
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.CARNET_BAC, doc?.tipo)
+        assertEquals("116030489", doc?.numeroDocumento)
+        assertEquals("ANTHONNY JOSE MURILLO RAMIREZ", doc?.nombre)
+    }
+
+    @Test
+    fun gafeteContratistaReconoceCodigoCrcSinUsarloComoCedula() {
+        val texto = """
+            CARNÉ
+            PROVISIONAL
+            CRC - 16
+            CONTRATISTAS
+            Costa Rica
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.GAFETE_CONTRATISTA, doc?.tipo)
+        assertEquals("16", doc?.numeroDocumento)
+        assertEquals("CRC 16", doc?.textoBusqueda)
+    }
+
+    @Test
+    fun carneProvisionalPermisoLaboralBuscaPorDocumento() {
+        val texto = """
+            Carné Provisional - Permiso Laboral
+            Expediente 135 788985
+            N° Documento 155846198814
+            CATEGORIA ESPECIAL R
+            Primer Apellido CASTILLO
+            Segundo Apellido MONTIEL
+            Fecha Vencimiento 14/03/2027
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.CEDULA_RESIDENCIA, doc?.tipo)
+        assertEquals("155846198814", doc?.numeroDocumento)
+        assertEquals(FechaDocumento(14, 3, 2027), doc?.vencimiento)
+    }
+
     // --- Caso central del plan: Documento No. vs Expediente No. ---
 
     @Test

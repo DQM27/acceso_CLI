@@ -22,6 +22,9 @@ enum class TipoDocumento {
     // vencimiento de inducción:") y la frase "CARNET DE INDUCCIÓN", que es
     // la señal de clasificación.
     CARNET_INDUCCION_PRAIND,
+    CARNET_IN_HOUSE,
+    CARNET_BAC,
+    GAFETE_CONTRATISTA,
     DESCONOCIDO,
 }
 
@@ -32,6 +35,7 @@ enum class TipoDocumento {
 data class DocumentoDetectado(
     val tipo: TipoDocumento,
     val numeroDocumento: String,
+    val textoBusqueda: String? = null,
     val nombre: String? = null,
     val apellidos: String? = null,
     val nacionalidad: String? = null,
@@ -54,6 +58,9 @@ fun TipoDocumento.nombreLegible(): String = when (this) {
     TipoDocumento.LICENCIA_EXTRANJERO -> "Licencia de conducir de extranjero"
     TipoDocumento.PASAPORTE -> "Pasaporte"
     TipoDocumento.CARNET_INDUCCION_PRAIND -> "Carnet de inducción (PRAIND)"
+    TipoDocumento.CARNET_IN_HOUSE -> "Carnet in-house"
+    TipoDocumento.CARNET_BAC -> "Carnet BAC"
+    TipoDocumento.GAFETE_CONTRATISTA -> "Gafete de contratista"
     TipoDocumento.DESCONOCIDO -> "Documento"
 }
 
@@ -142,6 +149,7 @@ fun fechaDeHoy(): FechaDocumento {
 private val REGEX_LICENCIA_EXTRANJERO = Regex("""N[º9O]?[:.]?\s*DM[- ]""")
 private val REGEX_LICENCIA_DM_DIRECTO = Regex("""\bDM[- ]?(\d{6,15})\b""", RegexOption.IGNORE_CASE)
 private val REGEX_DIMEX_NUMERO = Regex("""DOCUMENTO\s*NO\.?:?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
+private val REGEX_DIMEX_NUMERO_PROVISIONAL = Regex("""N[°ºO]?\s*DOCUMENTO\s*:?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
 private val REGEX_DIMEX_NOMBRE = Regex("""Nombre:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
 private val REGEX_DIMEX_APELLIDOS = Regex("""Apellidos:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
 private val REGEX_DIMEX_NACIONALIDAD = Regex("""Nacionalidad:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
@@ -159,6 +167,9 @@ private val REGEX_PRAIND_FECHA_VENCIMIENTO = Regex(
     """Fecha\s+de\s+vencimiento\s+de\s+inducci[oó]n:?\s*(\d{1,2})[/-](\d{1,2})[/-](\d{4})""",
     RegexOption.IGNORE_CASE,
 )
+private val REGEX_INHOUSE_CEDULA = Regex("""C[ÉE]DULA:?\s*\n?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
+private val REGEX_DIGITOS_BAC = Regex("""\b\d{9,15}\b""")
+private val REGEX_GAFETE_CONTRATISTA = Regex("""\bCRC\s*[-:]?\s*(\d{1,4})\b""", RegexOption.IGNORE_CASE)
 
 /// Clasifica el tipo de documento a partir del texto crudo de ML Kit, antes
 /// de intentar extraer ningún campo -- este orden importa porque DIMEX y
@@ -174,7 +185,8 @@ fun clasificarTipoDocumento(texto: String): TipoDocumento {
         "LICENCIA DE CONDUCIR" in mayus ->
             TipoDocumento.LICENCIA_NACIONAL
         "DGME" in mayus || "MIGRACIÓN Y EXTRANJERÍA" in mayus || "MIGRACION Y EXTRANJERIA" in mayus ||
-            "RESIDENTE PERMANENTE" in mayus || "RESIDENTE TEMPORAL" in mayus ->
+            "RESIDENTE PERMANENTE" in mayus || "RESIDENTE TEMPORAL" in mayus ||
+            "CARNE PROVISIONAL" in mayus || "CARNÉ PROVISIONAL" in mayus || "PERMISO LABORAL" in mayus ->
             TipoDocumento.CEDULA_RESIDENCIA
         // Antes que la cédula nacional a propósito: un carnet PRAIND trae su
         // propio "No. de cédula: 123456789" de 9 dígitos, que si no se
@@ -182,6 +194,14 @@ fun clasificarTipoDocumento(texto: String): TipoDocumento {
         // abajo y el carnet se leería como si fuera la cédula misma.
         "CARNET DE INDUCCIÓN" in mayus || "CARNET DE INDUCCION" in mayus ->
             TipoDocumento.CARNET_INDUCCION_PRAIND
+        "BAC" in mayus && REGEX_DIGITOS_BAC.containsMatchIn(mayus) ->
+            TipoDocumento.CARNET_BAC
+        "CONTRATISTAS" in mayus && "COSTA RICA" in mayus && REGEX_GAFETE_CONTRATISTA.containsMatchIn(mayus) ->
+            TipoDocumento.GAFETE_CONTRATISTA
+        "CONTRATISTA" in mayus && "COSTA RICA" in mayus && ("EMPRESA" in mayus || REGEX_INHOUSE_CEDULA.containsMatchIn(texto)) ->
+            TipoDocumento.CARNET_IN_HOUSE
+        "CONTRATISTA" in mayus && "COSTA RICA" in mayus && extraerNombreInHouseFrente(texto) != null ->
+            TipoDocumento.CARNET_IN_HOUSE
         "TRIBUNAL SUPREMO DE ELECCIONES" in mayus || extraerCedulaDeTexto(texto) != null ->
             TipoDocumento.CEDULA_NACIONAL
         else -> TipoDocumento.DESCONOCIDO
@@ -200,6 +220,9 @@ fun leerDocumentoDeTexto(texto: String): DocumentoDetectado? {
         TipoDocumento.LICENCIA_NACIONAL -> extraerLicencia(texto, esExtranjero = false)
         TipoDocumento.LICENCIA_EXTRANJERO -> extraerLicencia(texto, esExtranjero = true)
         TipoDocumento.CARNET_INDUCCION_PRAIND -> extraerPraind(texto)
+        TipoDocumento.CARNET_IN_HOUSE -> extraerInHouse(texto)
+        TipoDocumento.CARNET_BAC -> extraerBac(texto)
+        TipoDocumento.GAFETE_CONTRATISTA -> extraerGafeteContratista(texto)
         // El clasificador por palabras clave del frente no distingue
         // pasaporte todavía -- llega sólo vía MRZ (ver ResultadoMrz.aDocumentoDetectado).
         TipoDocumento.PASAPORTE -> null
@@ -215,12 +238,15 @@ fun leerDocumentoDeTexto(texto: String): DocumentoDetectado? {
 /// ambos son números de longitud similar en el mismo bloque de texto, y una
 /// regex genérica sin contexto de etiqueta puede agarrar el equivocado.
 private fun extraerDimex(texto: String): DocumentoDetectado? {
-    val numero = REGEX_DIMEX_NUMERO.find(texto)?.groupValues?.get(1) ?: return null
+    val numero = REGEX_DIMEX_NUMERO.find(texto)?.groupValues?.get(1)
+        ?: REGEX_DIMEX_NUMERO_PROVISIONAL.find(texto)?.groupValues?.get(1)
+        ?: return null
 
     val nombre = REGEX_DIMEX_NOMBRE.find(texto)?.groupValues?.get(1)?.trim()
     val apellidos = REGEX_DIMEX_APELLIDOS.find(texto)?.groupValues?.get(1)?.trim()
     val nacionalidad = REGEX_DIMEX_NACIONALIDAD.find(texto)?.groupValues?.get(1)?.trim()
     val vencimiento = extraerFecha(texto, etiqueta = "Vence")
+        ?: extraerFecha(texto, etiqueta = "Fecha Vencimiento")
 
     return DocumentoDetectado(
         tipo = TipoDocumento.CEDULA_RESIDENCIA,
@@ -273,6 +299,75 @@ private fun extraerPraind(texto: String): DocumentoDetectado? {
     )
 }
 
+private fun extraerInHouse(texto: String): DocumentoDetectado? {
+    val cedula = REGEX_INHOUSE_CEDULA.find(texto)?.groupValues?.get(1)
+    if (cedula != null) {
+        return DocumentoDetectado(
+            tipo = TipoDocumento.CARNET_IN_HOUSE,
+            numeroDocumento = cedula,
+        )
+    }
+
+    val nombre = extraerNombreInHouseFrente(texto) ?: return null
+    return DocumentoDetectado(
+        tipo = TipoDocumento.CARNET_IN_HOUSE,
+        numeroDocumento = nombre,
+        textoBusqueda = nombre,
+        nombre = nombre,
+    )
+}
+
+private fun extraerBac(texto: String): DocumentoDetectado? {
+    val numero = REGEX_DIGITOS_BAC.find(texto)?.value ?: return null
+    val nombre = texto.lines()
+        .map { it.trim() }
+        .firstOrNull { linea ->
+            linea.length >= 6 &&
+                linea.any(Char::isLetter) &&
+                "BAC" !in linea.uppercase()
+        }
+
+    return DocumentoDetectado(
+        tipo = TipoDocumento.CARNET_BAC,
+        numeroDocumento = numero,
+        nombre = nombre,
+    )
+}
+
+private fun extraerGafeteContratista(texto: String): DocumentoDetectado? {
+    val numero = REGEX_GAFETE_CONTRATISTA.find(texto)?.groupValues?.get(1) ?: return null
+    return DocumentoDetectado(
+        tipo = TipoDocumento.GAFETE_CONTRATISTA,
+        numeroDocumento = numero,
+        textoBusqueda = "CRC $numero",
+    )
+}
+
+private fun extraerNombreInHouseFrente(texto: String): String? {
+    val lineas = texto.lines()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+
+    val indiceContratista = lineas.indexOfFirst { "CONTRATISTA" in it.uppercase() }
+    if (indiceContratista <= 0) return null
+
+    val candidatas = lineas
+        .take(indiceContratista)
+        .filter { linea ->
+            val mayus = linea.uppercase()
+            linea.any(Char::isLetter) &&
+                "EMPRESA" !in mayus &&
+                "CÉDULA" !in mayus &&
+                "CEDULA" !in mayus &&
+                "COSTA RICA" !in mayus &&
+                !linea.any(Char::isDigit)
+        }
+        .takeLast(2)
+
+    val nombre = candidatas.joinToString(" ").replace(Regex("""\s+"""), " ").trim()
+    return nombre.takeIf { it.length >= 6 }
+}
+
 // Una entrada por etiqueta usada ("Vence", "Vencimiento"), compilada la
 // primera vez que se pide y reusada después -- mismo motivo que las demás
 // constantes de arriba (esto corre en cada frame). `Regex.escape(etiqueta)`
@@ -283,7 +378,7 @@ private val regexesPorEtiquetaFecha = mutableMapOf<String, Regex>()
 
 private fun extraerFecha(texto: String, etiqueta: String): FechaDocumento? {
     val regex = regexesPorEtiquetaFecha.getOrPut(etiqueta) {
-        Regex("""${Regex.escape(etiqueta)}[:.]?\s*(\d{1,2})[-\s](\d{1,2})[-\s](\d{4})""", RegexOption.IGNORE_CASE)
+        Regex("""${Regex.escape(etiqueta)}[:.]?\s*(\d{1,2})[-/\s](\d{1,2})[-/\s](\d{4})""", RegexOption.IGNORE_CASE)
     }
     val match = regex.find(texto) ?: return null
     val (dia, mes, anio) = match.destructured

@@ -185,11 +185,11 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
                                 reproducirSonidoConfirmacion()
                                 if (resultado.vencido) {
                                     Handler(Looper.getMainLooper()).postDelayed(
-                                        { onCedulaDetectada(documento.numeroDocumento) },
+                                        { onCedulaDetectada(documento.textoBusqueda ?: documento.numeroDocumento) },
                                         DEMORA_AVISO_VENCIDO_MS,
                                     )
                                 } else {
-                                    onCedulaDetectada(documento.numeroDocumento)
+                                    onCedulaDetectada(documento.textoBusqueda ?: documento.numeroDocumento)
                                 }
                             }
                         }
