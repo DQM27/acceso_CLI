@@ -153,7 +153,7 @@ private val REGEX_DIMEX_NUMERO_PROVISIONAL = Regex("""N[°ºO]?\s*DOCUMENTO\s*:?
 private val REGEX_DIMEX_NOMBRE = Regex("""Nombre:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
 private val REGEX_DIMEX_APELLIDOS = Regex("""Apellidos:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
 private val REGEX_DIMEX_NACIONALIDAD = Regex("""Nacionalidad:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
-private val REGEX_LICENCIA_NUMERO = Regex("""N[º9O]?[:.]?\s*(?:DM[- ])?(\d{6,15})""", RegexOption.IGNORE_CASE)
+private val REGEX_LICENCIA_NUMERO = Regex("""N[º°9O]?[:.]?\s*(?:DM|CI)?[- ]?(\d{6,15})""", RegexOption.IGNORE_CASE)
 private val REGEX_PRAIND_CEDULA = Regex("""No\.?\s*de\s*c[ée]dula:?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
 private val REGEX_PRAIND_NOMBRE = Regex("""Nombre:?[ \t]*\n?[ \t]*([^\n]+)""", RegexOption.IGNORE_CASE)
 // `vencimiento` va antes que `induccion` en el orden de declaración

@@ -222,6 +222,27 @@ class LectorDocumentosIdentidadTest {
     }
 
     @Test
+    fun licenciaNacionalAceptaPrefijoCi() {
+        val texto = """
+            REPUBLICA DE COSTA RICA
+            Licencia de Conducir
+            N° CI-205300606
+            Expedición 08-08-2024
+            Nacimiento 04-02-1978
+            Vencimiento 08-08-2027
+            Tipo B3
+            GUTIERREZ MARTINEZ JUAN JOSE
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.LICENCIA_NACIONAL, doc?.tipo)
+        assertEquals("205300606", doc?.numeroDocumento)
+        assertEquals(false, doc?.esExtranjero)
+        assertEquals(FechaDocumento(8, 8, 2027), doc?.vencimiento)
+    }
+
+    @Test
     fun licenciaExtranjeroRemuevePrefijoDM() {
         val texto = "Licencia de Conducir\nNº: DM-999888777\nVencimiento 03-04-2026"
         val doc = leerDocumentoDeTexto(texto)
