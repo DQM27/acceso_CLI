@@ -5,7 +5,7 @@ import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
 import ConfirmacionSensible from "../componentes/ConfirmacionSensible";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
-import { supabase } from "../lib/supabase";
+import { usePresenciaPorSitio } from "../presenciaSitios";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import { mensajeError } from "../mensajeError";
 import {
@@ -133,43 +133,23 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   useAutoRefresh(() => recargar({ silencioso: true }), 120_000, "dispositivos");
 
   // Presencia en tiempo real (docs/plan-sesion-unica-dispositivos.md,
-  // "Panel de presencia en tiempo real"): un canal por unidad operativa,
-  // el mismo `sitio:{id}` que ya usan mobile/escritorio para avisos de
-  // cambios -- acá sólo se escucha, nunca se hace `track()` (el panel no
-  // es un dispositivo). La migración `autoriza_presencia_realtime_por_sitio`
-  // deja entrar a cualquier admin, no sólo al dispositivo dueño del sitio.
-  const [conectadosPorSitio, setConectadosPorSitio] = useState<Record<string, Set<string>>>({});
-  useEffect(() => {
-    if (sitios.length === 0) return;
-    const canales = sitios.map((sitio) => {
-      const canal = supabase.channel(`sitio:${sitio.id}`, { config: { private: true } });
-      canal
-        .on("presence", { event: "sync" }, () => {
-          const estado = canal.presenceState<{ dispositivo_id?: string }>();
-          const ids = new Set<string>();
-          for (const presencias of Object.values(estado)) {
-            for (const presencia of presencias) {
-              if (presencia.dispositivo_id) ids.add(presencia.dispositivo_id);
-            }
-          }
-          setConectadosPorSitio((actual) => ({ ...actual, [sitio.id]: ids }));
-        })
-        .subscribe();
-      return canal;
-    });
-    return () => {
-      canales.forEach((canal) => void supabase.removeChannel(canal));
-      setConectadosPorSitio({});
-    };
-  }, [sitios]);
-
+  // "Panel de presencia en tiempo real") -- suscripción compartida
+  // (`usePresenciaPorSitio`, ver ese archivo) porque Usuarios.tsx también
+  // la necesita para el mismo `sitio:{id}`, y las secciones del panel
+  // quedan montadas de fondo una vez visitadas.
+  const sitioIds = useMemo(() => sitios.map((s) => s.id), [sitios]);
+  const presenciaPorSitio = usePresenciaPorSitio(sitioIds);
   const conectados = useMemo(() => {
     const todos = new Set<string>();
-    for (const ids of Object.values(conectadosPorSitio)) {
-      for (const id of ids) todos.add(id);
+    for (const estado of Object.values(presenciaPorSitio)) {
+      for (const presencias of Object.values(estado)) {
+        for (const presencia of presencias as { dispositivo_id?: string }[]) {
+          if (presencia.dispositivo_id) todos.add(presencia.dispositivo_id);
+        }
+      }
     }
     return todos;
-  }, [conectadosPorSitio]);
+  }, [presenciaPorSitio]);
 
   const nombrePorSitio = useMemo(() => {
     const mapa = new Map(sitios.map((s) => [s.id, s.nombre]));

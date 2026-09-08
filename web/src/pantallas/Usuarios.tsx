@@ -9,9 +9,9 @@ import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { actualizarActivoUsuario, crearUsuario, listarSitios, listarUsuarios } from "../api/usuarios";
 import type { Usuario } from "../api/usuarios";
 import { listarDispositivosYSitios } from "../api/dispositivos";
+import { usePresenciaPorSitio } from "../presenciaSitios";
 import { sanearSoloDigitos, sanearSoloLetras } from "../validacion";
 import { mensajeError } from "../mensajeError";
-import { supabase } from "../lib/supabase";
 
 /**
  * Vista + baja + alta de operadores/administradores globales (ver
@@ -105,49 +105,24 @@ export default function Usuarios() {
       });
   }, []);
 
-  const [conectadosPorSitio, setConectadosPorSitio] = useState<
-    Record<string, Record<string, { nombre: string; dispositivoId?: string }>>
-  >({});
-  useEffect(() => {
-    if (sitios.length === 0) return;
-    const canales = sitios.map((sitio) => {
-      const canal = supabase.channel(`sitio:${sitio.id}`, { config: { private: true } });
-      canal
-        .on("presence", { event: "sync" }, () => {
-          const estado = canal.presenceState<{
-            usuario_cedula?: string;
-            usuario_nombre?: string;
-            dispositivo_id?: string;
-          }>();
-          const porCedula: Record<string, { nombre: string; dispositivoId?: string }> = {};
-          for (const presencias of Object.values(estado)) {
-            for (const presencia of presencias) {
-              if (presencia.usuario_cedula) {
-                porCedula[presencia.usuario_cedula] = {
-                  nombre: presencia.usuario_nombre ?? presencia.usuario_cedula,
-                  dispositivoId: presencia.dispositivo_id,
-                };
-              }
-            }
-          }
-          setConectadosPorSitio((actual) => ({ ...actual, [sitio.id]: porCedula }));
-        })
-        .subscribe();
-      return canal;
-    });
-    return () => {
-      canales.forEach((canal) => void supabase.removeChannel(canal));
-      setConectadosPorSitio({});
-    };
-  }, [sitios]);
-
+  const sitioIds = useMemo(() => sitios.map((s) => s.id), [sitios]);
+  const presenciaPorSitio = usePresenciaPorSitio(sitioIds);
   const conectadoPorCedula = useMemo(() => {
     const todos: Record<string, { dispositivoId?: string }> = {};
-    for (const porCedula of Object.values(conectadosPorSitio)) {
-      for (const [cedula, info] of Object.entries(porCedula)) todos[cedula] = info;
+    for (const estado of Object.values(presenciaPorSitio)) {
+      for (const presencias of Object.values(estado)) {
+        for (const presencia of presencias as {
+          usuario_cedula?: string;
+          dispositivo_id?: string;
+        }[]) {
+          if (presencia.usuario_cedula) {
+            todos[presencia.usuario_cedula] = { dispositivoId: presencia.dispositivo_id };
+          }
+        }
+      }
     }
     return todos;
-  }, [conectadosPorSitio]);
+  }, [presenciaPorSitio]);
 
   async function manejarEdicion(fila: Usuario) {
     try {
