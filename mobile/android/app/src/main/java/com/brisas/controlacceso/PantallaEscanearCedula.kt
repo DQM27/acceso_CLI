@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -174,7 +175,14 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
                             if (detectada.compareAndSet(false, true)) {
                                 haptica.performHapticFeedback(HapticFeedbackType.Confirm)
                                 reproducirSonidoConfirmacion()
-                                onCedulaDetectada(documento.numeroDocumento)
+                                if (resultado.vencido) {
+                                    Handler(Looper.getMainLooper()).postDelayed(
+                                        { onCedulaDetectada(documento.numeroDocumento) },
+                                        DEMORA_AVISO_VENCIDO_MS,
+                                    )
+                                } else {
+                                    onCedulaDetectada(documento.numeroDocumento)
+                                }
                             }
                         }
                     },
@@ -202,9 +210,12 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
         ) {
             Text(
                 ultimoMensaje,
-                color = MaterialTheme.colorScheme.onPrimary,
+                color = Color.White,
                 style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.78f))
+                    .padding(12.dp),
             )
             BotonDiscretoBrisas(onClick = onCerrar) {
                 Text("Cancelar")
@@ -345,6 +356,7 @@ private fun reproducirSonidoConfirmacion() {
 
 private const val VOLUMEN_SONIDO_CONFIRMACION = 40 // sobre 100 -- sutil, no un beep de caja registradora
 private const val DURACION_SONIDO_CONFIRMACION_MS = 100
+private const val DEMORA_AVISO_VENCIDO_MS = 1200L
 
 /// Sólo entrega a ML Kit y devuelve el texto reconocido -- la clasificación
 /// de tipo de documento, extracción de campos y decisión de aceptar o no la

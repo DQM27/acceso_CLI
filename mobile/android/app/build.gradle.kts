@@ -26,8 +26,8 @@ android {
         // y x86_64 (emulador de desarrollo).
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.1.2"
+        versionCode = 4
+        versionName = "1.1.3"
     }
 
     signingConfigs {

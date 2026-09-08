@@ -145,6 +145,25 @@ class LectorDocumentosIdentidadTest {
         assertEquals(FechaDocumento(3, 4, 2026), doc?.vencimiento)
     }
 
+    @Test
+    fun licenciaExtranjeroAceptaDmAunqueOcrPierdaEtiquetaNumero() {
+        val texto = """
+            REPUBLICA DE COSTA RICA
+            Licencia de Conducir
+            DM-155824395105
+            Expedición 03-04-2023
+            Vencimiento 03-04-2026
+            Tipo A3
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.LICENCIA_EXTRANJERO, doc?.tipo)
+        assertEquals("155824395105", doc?.numeroDocumento)
+        assertTrue(doc?.esExtranjero == true)
+        assertEquals(FechaDocumento(3, 4, 2026), doc?.vencimiento)
+    }
+
     // --- Vigencia ---
 
     @Test

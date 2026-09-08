@@ -140,6 +140,7 @@ fun fechaDeHoy(): FechaDocumento {
 // viven en PantallaEscanearCedula.kt junto a extraerCedulaDeTexto, que es
 // donde se usan; `private` a nivel de archivo en Kotlin no cruza archivos.)
 private val REGEX_LICENCIA_EXTRANJERO = Regex("""N[º9O]?[:.]?\s*DM[- ]""")
+private val REGEX_LICENCIA_DM_DIRECTO = Regex("""\bDM[- ]?(\d{6,15})\b""", RegexOption.IGNORE_CASE)
 private val REGEX_DIMEX_NUMERO = Regex("""DOCUMENTO\s*NO\.?:?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
 private val REGEX_DIMEX_NOMBRE = Regex("""Nombre:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
 private val REGEX_DIMEX_APELLIDOS = Regex("""Apellidos:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
@@ -167,6 +168,8 @@ fun clasificarTipoDocumento(texto: String): TipoDocumento {
     val mayus = texto.uppercase()
     return when {
         "LICENCIA DE CONDUCIR" in mayus && REGEX_LICENCIA_EXTRANJERO.containsMatchIn(mayus) ->
+            TipoDocumento.LICENCIA_EXTRANJERO
+        "LICENCIA DE CONDUCIR" in mayus && REGEX_LICENCIA_DM_DIRECTO.containsMatchIn(mayus) ->
             TipoDocumento.LICENCIA_EXTRANJERO
         "LICENCIA DE CONDUCIR" in mayus ->
             TipoDocumento.LICENCIA_NACIONAL
@@ -233,7 +236,9 @@ private fun extraerDimex(texto: String): DocumentoDetectado? {
 /// plan, sección 3) -- se remueve del número final pero ya se usó para
 /// clasificar, así que `esExtranjero` llega como parámetro ya decidido.
 private fun extraerLicencia(texto: String, esExtranjero: Boolean): DocumentoDetectado? {
-    val numero = REGEX_LICENCIA_NUMERO.find(texto)?.groupValues?.get(1) ?: return null
+    val numero = REGEX_LICENCIA_NUMERO.find(texto)?.groupValues?.get(1)
+        ?: REGEX_LICENCIA_DM_DIRECTO.find(texto)?.groupValues?.get(1)
+        ?: return null
 
     val vencimiento = extraerFecha(texto, etiqueta = "Vencimiento")
 
