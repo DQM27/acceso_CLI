@@ -168,6 +168,26 @@ class EstabilizadorLecturaTest {
     }
 
     @Test
+    fun reconoceComoTimUnaCedulaNacionalDeMenorPorLaFechaDeNacimiento() {
+        // Mismo código de documento (IDCRI) que la cédula nacional de
+        // adulto -- se distingue calculando la edad desde fechaNacimiento,
+        // no por el código (ver LectorDocumentosIdentidad.reclasificarPorEdad).
+        val td1Menor = """
+            IDCRI2020202028<<<<<<<<<<<<<<<
+            1806151M3001019CRI<<<<<<<<<<<8
+            PEREZ<<CARLOS<ANDRES<<<<<<<<<<
+        """.trimIndent()
+        val hoyFijo = FechaDocumento(8, 9, 2026) // nacido 15/06/2018 -> 8 años
+        val estabilizador = EstabilizadorLectura(obtenerFechaHoy = { hoyFijo })
+
+        val r = estabilizador.procesarFrame(td1Menor)
+
+        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
+        assertEquals(TipoDocumento.TARJETA_IDENTIDAD_MENOR, r.documento?.tipo)
+        assertEquals("Tarjeta de Identidad de Menores confirmado", r.mensaje)
+    }
+
+    @Test
     fun sinFechaDeVencimientoNuncaSeMarcaComoVencido() {
         // Cédula nacional no trae fecha de vencimiento extraíble hoy.
         val estabilizador = EstabilizadorLectura(framesRequeridos = 1)

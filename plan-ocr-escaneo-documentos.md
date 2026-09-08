@@ -384,13 +384,16 @@ Confirmado que es viable y recomendable:
    MRZ genérico, para no llenarlo de excepciones por país cuando se agreguen
    otros. Vencimiento in-camara ahora se anuncia correctamente también para
    el reverso de ambos documentos, ya no solo para el frente.
+8. ✅ Cédula de adulto vs Tarjeta de Identidad de Menores (TIM) — ambas usan
+   `IDCRI...`, pero el MRZ ya trae fecha de nacimiento: se calcula la edad
+   contra la fecha actual y se reclasifica si es menor de 18
+   (`DocumentoDetectado.reclasificarPorEdad()`) — ver
+   `fixtures-ocr-sinteticos.md` sección 4.3.
 
 ## 12. Preguntas abiertas / pendientes de refinar
 
 - ¿El flujo actual permite escanear frente y reverso en la misma sesión, o
   hay que agregar un paso de "dale vuelta al documento"?
-- Distinguir cédula de adulto vs Tarjeta de Identidad de Menores (TIM) —
-  ambas parecen usar `IDCRI...`, el código de documento solo no alcanza.
 - ¿Qué hacer si el checksum del MRZ falla pero el frente sí calza (documento
   dañado/mal iluminado)? ¿Aceptar con advertencia o rechazar?
 - Confirmar fps de análisis actual de CameraX para calibrar el número de

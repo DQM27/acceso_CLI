@@ -49,7 +49,7 @@ class EstabilizadorLectura(
                 mrz.numeroDocumentoExtendidoSinSoporte ->
                     ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no reconocido")
                 mrz.checksumsValidos -> {
-                    val documento = mrz.aDocumentoDetectado()
+                    val documento = mrz.aDocumentoDetectado().reclasificarPorEdad(obtenerFechaHoy())
                     val (mensaje, vencido) = mensajeDeConfirmacion(documento)
                     ResultadoEstabilizacion(EstadoEscaneo.CONFIRMADO, documento = documento, mensaje = mensaje, vencido = vencido)
                 }

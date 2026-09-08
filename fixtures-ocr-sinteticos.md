@@ -191,10 +191,19 @@ números ilustrativos del decreto como fixture de checksum (el ejemplo
 publicado por el TSE, `807580679` con check digit impreso `7`, da `4` al
 recalcularlo).
 
-**Fuera de alcance por ahora:** la Tarjeta de Identidad de Menores (TIM)
-también parece usar `IDCRI...` según imágenes públicas de 2026 — con el
-código de documento solo no alcanza para distinguir cédula de adulto vs
-TIM. No se implementa esa distinción todavía.
+**TIM vs cédula de adulto — RESUELTO.** La Tarjeta de Identidad de Menores
+también usa `IDCRI...`, así que el código de documento solo no alcanza. Pero
+el MRZ ya trae la fecha de nacimiento (línea 2) — es simple aritmética:
+calcular la edad contra la fecha actual y, si es menor de 18 años, es TIM,
+no cédula de adulto. Implementado en `DocumentoDetectado.reclasificarPorEdad()`,
+aplicado después de `ResultadoMrz.aDocumentoDetectado()` en
+`EstabilizadorLectura` (el único lugar que tiene la fecha de hoy disponible).
+Fixture sintético (nacimiento 15/06/2018, checksums verificados):
+```
+IDCRI2020202028<<<<<<<<<<<<<<<
+1806151M3001019CRI<<<<<<<<<<<8
+PEREZ<<CARLOS<ANDRES<<<<<<<<<<
+```
 
 ## 5. Licencia de conducir — nacional
 

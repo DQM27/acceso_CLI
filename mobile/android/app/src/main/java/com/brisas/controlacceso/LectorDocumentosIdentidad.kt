@@ -5,6 +5,11 @@ package com.brisas.controlacceso
 /// de escaneo debe seguir buscando, no tratarlo como error terminal.
 enum class TipoDocumento {
     CEDULA_NACIONAL,
+    // TIM: Tarjeta de Identidad de Menores -- mismo código de documento MRZ
+    // que la cédula nacional (`IDCRI`, ver ResultadoMrz.aDocumentoDetectado),
+    // se distingue por edad calculada desde `fechaNacimiento`, no por el
+    // código -- ver `reclasificarPorEdad`.
+    TARJETA_IDENTIDAD_MENOR,
     CEDULA_RESIDENCIA,
     LICENCIA_NACIONAL,
     LICENCIA_EXTRANJERO,
@@ -35,6 +40,7 @@ data class DocumentoDetectado(
 /// qué detectó el lector (sección 8 del plan, mensajes in-cámara).
 fun TipoDocumento.nombreLegible(): String = when (this) {
     TipoDocumento.CEDULA_NACIONAL -> "Cédula de identidad"
+    TipoDocumento.TARJETA_IDENTIDAD_MENOR -> "Tarjeta de Identidad de Menores"
     TipoDocumento.CEDULA_RESIDENCIA -> "Cédula de residencia (DIMEX)"
     TipoDocumento.LICENCIA_NACIONAL -> "Licencia de conducir"
     TipoDocumento.LICENCIA_EXTRANJERO -> "Licencia de conducir de extranjero"
@@ -77,6 +83,32 @@ data class FechaDocumento(val dia: Int, val mes: Int, val anio: Int) {
         val propia = anio * 10000 + mes * 100 + dia
         val actual = hoy.anio * 10000 + hoy.mes * 100 + hoy.dia
         return propia < actual
+    }
+
+    /// Edad en años cumplidos a la fecha `hoy` -- resta los años, y le quita
+    /// uno más si el cumpleaños todavía no pasó este año (comparando
+    /// mes/día directamente, sin pasar por fechas reales de calendario).
+    fun edadEnAnios(hoy: FechaDocumento): Int {
+        val cumpleañosYaPaso = (hoy.mes > mes) || (hoy.mes == mes && hoy.dia >= dia)
+        return hoy.anio - anio - if (cumpleañosYaPaso) 0 else 1
+    }
+}
+
+private const val EDAD_MAYORIA_DE_EDAD = 18
+
+/// La TIM (Tarjeta de Identidad de Menores) usa el mismo código de MRZ que
+/// la cédula nacional de adulto (`IDCRI`, ver sección 4.3 de
+/// fixtures-ocr-sinteticos.md) -- el código de documento por sí solo no
+/// alcanza para distinguirlas, pero la fecha de nacimiento sí. Sin efecto
+/// sobre otros tipos (DIMEX, licencias, pasaporte) ni si no hay fecha de
+/// nacimiento disponible.
+fun DocumentoDetectado.reclasificarPorEdad(hoy: FechaDocumento): DocumentoDetectado {
+    val nacimiento = fechaNacimiento ?: return this
+    if (tipo != TipoDocumento.CEDULA_NACIONAL) return this
+    return if (nacimiento.edadEnAnios(hoy) < EDAD_MAYORIA_DE_EDAD) {
+        copy(tipo = TipoDocumento.TARJETA_IDENTIDAD_MENOR)
+    } else {
+        this
     }
 }
 
@@ -123,6 +155,9 @@ fun leerDocumentoDeTexto(texto: String): DocumentoDetectado? {
         // El clasificador por palabras clave del frente no distingue
         // pasaporte todavía -- llega sólo vía MRZ (ver ResultadoMrz.aDocumentoDetectado).
         TipoDocumento.PASAPORTE -> null
+        // Nunca lo produce el clasificador del frente -- sólo aparece vía
+        // reclasificación por edad después de leer el MRZ (reclasificarPorEdad).
+        TipoDocumento.TARJETA_IDENTIDAD_MENOR -> null
         TipoDocumento.DESCONOCIDO -> null
     }
 }

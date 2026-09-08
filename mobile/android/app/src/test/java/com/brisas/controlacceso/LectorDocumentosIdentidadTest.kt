@@ -117,4 +117,69 @@ class LectorDocumentosIdentidadTest {
     fun devuelveNullSiNoHaySuficienteInformacion() {
         assertNull(leerDocumentoDeTexto("Documento sin numeros completos"))
     }
+
+    // --- Edad / TIM vs cédula de adulto ---
+
+    @Test
+    fun edadCuandoYaPasoElCumpleañosEsteAnio() {
+        val nacimiento = FechaDocumento(15, 6, 2000)
+        val hoy = FechaDocumento(8, 9, 2026) // cumpleaños (15/06) ya pasó
+        assertEquals(26, nacimiento.edadEnAnios(hoy))
+    }
+
+    @Test
+    fun edadCuandoAunNoLlegaElCumpleañosEsteAnio() {
+        val nacimiento = FechaDocumento(15, 12, 2000)
+        val hoy = FechaDocumento(8, 9, 2026) // cumpleaños (15/12) todavía no llega
+        assertEquals(25, nacimiento.edadEnAnios(hoy))
+    }
+
+    @Test
+    fun edadElMismoDiaDelCumpleañosYaCuentaComoCumplida() {
+        val nacimiento = FechaDocumento(8, 9, 2000)
+        val hoy = FechaDocumento(8, 9, 2026)
+        assertEquals(26, nacimiento.edadEnAnios(hoy))
+    }
+
+    @Test
+    fun reclasificaCedulaNacionalDeMenorComoTim() {
+        val documento = DocumentoDetectado(
+            tipo = TipoDocumento.CEDULA_NACIONAL,
+            numeroDocumento = "202020202",
+            fechaNacimiento = FechaDocumento(15, 6, 2018),
+        )
+        val hoy = FechaDocumento(8, 9, 2026) // 8 años
+        assertEquals(TipoDocumento.TARJETA_IDENTIDAD_MENOR, documento.reclasificarPorEdad(hoy).tipo)
+    }
+
+    @Test
+    fun noReclasificaCedulaNacionalDeAdulto() {
+        val documento = DocumentoDetectado(
+            tipo = TipoDocumento.CEDULA_NACIONAL,
+            numeroDocumento = "101110111",
+            fechaNacimiento = FechaDocumento(15, 6, 1990),
+        )
+        val hoy = FechaDocumento(8, 9, 2026)
+        assertEquals(TipoDocumento.CEDULA_NACIONAL, documento.reclasificarPorEdad(hoy).tipo)
+    }
+
+    @Test
+    fun noReclasificaOtrosTiposAunqueSeanMenoresDeEdad() {
+        // La regla es específica de cédula nacional -- DIMEX/licencia/pasaporte
+        // de un menor no deben convertirse en TIM (no es lo que son).
+        val documento = DocumentoDetectado(
+            tipo = TipoDocumento.CEDULA_RESIDENCIA,
+            numeroDocumento = "999888777",
+            fechaNacimiento = FechaDocumento(15, 6, 2018),
+        )
+        val hoy = FechaDocumento(8, 9, 2026)
+        assertEquals(TipoDocumento.CEDULA_RESIDENCIA, documento.reclasificarPorEdad(hoy).tipo)
+    }
+
+    @Test
+    fun noReclasificaSiNoHayFechaDeNacimiento() {
+        val documento = DocumentoDetectado(tipo = TipoDocumento.CEDULA_NACIONAL, numeroDocumento = "101110111")
+        val hoy = FechaDocumento(8, 9, 2026)
+        assertEquals(TipoDocumento.CEDULA_NACIONAL, documento.reclasificarPorEdad(hoy).tipo)
+    }
 }
