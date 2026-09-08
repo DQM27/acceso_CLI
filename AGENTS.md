@@ -6,3 +6,4 @@
   comentarios ni documentación. Para referirse al puesto de control de acceso usar
   términos como "puesto de control", "portería" o "punto de acceso".
 - Comunicarse siempre en español.
+- Siempre que se complete un cambio exitoso, hacer un commit bien documentado y subirlo.
