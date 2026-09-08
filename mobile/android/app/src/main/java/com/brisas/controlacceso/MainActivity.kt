@@ -42,14 +42,13 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("HardwareIds")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Identificador estable de este teléfono -- cifra el secreto de
-        // dispositivo en disco (ver NubeViewModel.guardarSecreto,
-        // docs/plan-panel-administrativo-web.md "Protección del secreto del
-        // dispositivo en reposo"), nunca viaja a la nube ni se muestra en
-        // ningún lado. `@SuppressLint("HardwareIds")`: el lint de Android
-        // marca cualquier lectura de ANDROID_ID por su potencial de
-        // fingerprinting entre apps -- acá no aplica, es puramente local y
-        // nunca sale de este dispositivo.
+        // Identificador estable de este teléfono. Ya no protege el secreto
+        // nuevo (eso vive en Android Keystore), pero permite migrar una
+        // instalación anterior que lo hubiera guardado con el esquema
+        // legado de Rust. Nunca viaja a la nube ni se muestra en ningún
+        // lado. `@SuppressLint("HardwareIds")`: el lint de Android marca
+        // cualquier lectura de ANDROID_ID por su potencial de fingerprinting
+        // entre apps -- acá no aplica, es puramente local.
         // `getString` es un tipo de plataforma (`String!`) -- en la práctica
         // nunca es null desde API 26, pero el fallback a "" mantiene el tipo
         // `String` sin un `!!` que podría tirar en el arranque por un caso
@@ -61,6 +60,15 @@ class MainActivity : ComponentActivity() {
             val archivoBaseDatos = File(filesDir, "control_acceso.db")
             val rutaBaseDatos = archivoBaseDatos.absolutePath
             val nucleo = remember { Nucleo.abrir(rutaBaseDatos) }
+            val directorio = filesDir.absolutePath
+            val secretoStore = remember(nucleo, directorio, identificadorDispositivo) {
+                AndroidKeystoreSecretoDispositivoStore(
+                    context = this@MainActivity,
+                    nucleo = nucleo,
+                    directorio = directorio,
+                    identificadorDispositivo = identificadorDispositivo,
+                )
+            }
             // Base recién instalada, sin ningún usuario todavía -- pegar el
             // secreto en PantallaPrimerArranque trae el catálogo real desde
             // la nube (contratistas/empresas/gafetes/usuarios) en vez de
@@ -85,15 +93,14 @@ class MainActivity : ComponentActivity() {
                             if (requiereArranque) {
                                 PantallaPrimerArranque(
                                     nucleo,
-                                    directorio = filesDir.absolutePath,
-                                    identificadorDispositivo = identificadorDispositivo,
+                                    secretoStore = secretoStore,
                                     onListo = { requiereArranque = false },
                                 )
                             } else {
                                 PantallaLogin(
                                     nucleo,
-                                    directorio = filesDir.absolutePath,
-                                    identificadorDispositivo = identificadorDispositivo,
+                                    directorio = directorio,
+                                    secretoStore = secretoStore,
                                 )
                             }
                         }

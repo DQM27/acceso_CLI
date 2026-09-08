@@ -104,9 +104,7 @@ private fun gafetesDeTexto(texto: String): List<Int> =
 /// propaga sin envolver — es un bug, no un caso de negocio esperado.
 class ActivosViewModel(
     private val nucleo: Nucleo,
-    // Sólo hace falta para `cerrarIngresoRemoto` -- ver el mismo parámetro
-    // en NubeViewModel.
-    private val directorio: String,
+    private val secretoStore: SecretoDispositivoStore,
     // Inyectable para poder correr los tests con un dispatcher de tiempo
     // controlado (StandardTestDispatcher) en vez de hilos reales — sin
     // esto los tests dependerían de una carrera real entre corrutinas,
@@ -247,6 +245,10 @@ class ActivosViewModel(
                 error = null
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
+            } catch (excepcion: SecretoDispositivoNoEncontradoException) {
+                error = excepcion.message
+            } catch (excepcion: SecretoDispositivoStoreException) {
+                error = excepcion.message
             }
         }
     }
@@ -294,12 +296,20 @@ class ActivosViewModel(
                 withContext(dispatcherIO) {
                     when (fila) {
                         is FilaActiva.Local -> nucleo.registrarSalida(fila.activo.registroId)
-                        is FilaActiva.Remota -> nucleo.cerrarIngresoRemoto(directorio, fila.remoto.uuid)
+                        is FilaActiva.Remota -> {
+                            val secreto = secretoStore.cargar()
+                                ?: throw SecretoDispositivoNoEncontradoException()
+                            nucleo.cerrarIngresoRemotoConSecreto(secreto, fila.remoto.uuid)
+                        }
                     }
                 }
                 CambiosNube.solicitar()
                 buscar()
             } catch (excepcion: NucleoException) {
+                error = excepcion.message
+            } catch (excepcion: SecretoDispositivoNoEncontradoException) {
+                error = excepcion.message
+            } catch (excepcion: SecretoDispositivoStoreException) {
                 error = excepcion.message
             }
         }
@@ -346,8 +356,11 @@ class ActivosViewModel(
         // de tecleo.
         private const val DEBOUNCE_BUSQUEDA_MS = 300L
 
-        fun factory(nucleo: Nucleo, directorio: String): ViewModelProvider.Factory = viewModelFactory {
-            initializer { ActivosViewModel(nucleo, directorio) }
+        fun factory(
+            nucleo: Nucleo,
+            secretoStore: SecretoDispositivoStore,
+        ): ViewModelProvider.Factory = viewModelFactory {
+            initializer { ActivosViewModel(nucleo, secretoStore) }
         }
     }
 }

@@ -27,7 +27,7 @@ import uniffi.control_acceso_mobile.NucleoException
 
 class NubeRealtime(
     private val nucleo: Nucleo,
-    private val directorio: String,
+    private val secretoStore: SecretoDispositivoStore,
     private val scope: CoroutineScope,
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
     private val onCambio: () -> Unit = { CambiosNube.solicitar() },
@@ -66,7 +66,10 @@ class NubeRealtime(
     }
 
     private suspend fun conectarHastaRenovar() {
-        val sesion = withContext(dispatcherIO) { nucleo.sesionRealtimeNube(directorio) }
+        val sesion = withContext(dispatcherIO) {
+            val secreto = secretoStore.cargar() ?: throw SecretoDispositivoNoEncontradoException()
+            nucleo.sesionRealtimeNubeConSecreto(secreto)
+        }
         val token = sesion.accessToken
         val supabase = createSupabaseClient(sesion.baseUrl, sesion.apikey) {
             install(Realtime) {

@@ -19,6 +19,7 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 - `docs/idea-lector-placas-vehiculares.md`
 - `mobile/android/ARQUITECTURA.md`
 - `mobile/README.md`
+- `docs/plan-sesion-unica-dispositivos.md`
 - tracker anterior de escritorio (absorbido aquí; ya no existe como lista aparte)
 - `README.md`, `packaging/msix/README.md`, `packaging/alacritty/README.md`,
   `docs/recuperacion-supabase.md`, `docs/realtime-verificado.md`
@@ -27,10 +28,10 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 
 ## Seguridad y nube
 
-- [ ] **Android: proteger el secreto del dispositivo con Keystore.** El secreto móvil
-  sigue guardándose en texto plano. La auditoría recomienda implementar el cifrado en
-  Kotlin con Android Keystore/`EncryptedFile`, no volver al esquema basado en
-  `ANDROID_ID`. Desktop mantiene su cifrado actual sin cambios.
+- [x] **Android: proteger el secreto del dispositivo con Keystore.** El secreto móvil
+  se guarda desde Kotlin con Android Keystore (`AES/GCM/NoPadding`) y el núcleo móvil recibe
+  el secreto descifrado sólo en memoria para autenticarse/sincronizar. Incluye migración
+  suave del archivo legado administrado por Rust; desktop mantiene su cifrado actual.
 - [x] **Redactar `Debug` de credenciales de nube.** `TokenDispositivo`
   (`src/nube/cliente.rs`) y `SesionRealtimeNube` (`src/application/nube.rs`) tienen
   `Debug` manual con `access_token`/`apikey` redactados, cubierto por pruebas.
@@ -40,6 +41,12 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 - [ ] **Activación de dispositivo con verificación por correo.** Hoy el secreto correcto
   activa el dispositivo. El flujo diseñado agrega un código por correo en la primera
   activación del secreto, con estado intermedio antes de emitir el JWT final.
+- [ ] **Sesión única por dispositivo y presencia en tiempo real.** Ver
+  `docs/plan-sesion-unica-dispositivos.md`. El mismo secreto hoy activa más de un
+  dispositivo sin límite. Plan: secreto de un solo uso, identidad canónica del
+  dispositivo en Supabase, sesión propia desacoplada del secreto, panel de presencia,
+  y regla de desempate por fecha de alta + expulsión automática para conflictos
+  detectados offline.
 - [ ] **Revisar bucket público `historial-web`.** Está documentado como público, vacío y
   sin referencias en código. Confirmar si es vestigio; si no se usa, eliminarlo desde
   Supabase.

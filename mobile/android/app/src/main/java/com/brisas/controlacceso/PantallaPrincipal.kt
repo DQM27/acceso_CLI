@@ -50,23 +50,22 @@ fun PantallaPrincipal(
     nucleo: Nucleo,
     sesion: UsuarioSesion,
     directorio: String,
-    identificadorDispositivo: String,
+    secretoStore: SecretoDispositivoStore,
     onCerrarSesion: () -> Unit,
 ) {
     var refrescarNube by remember { mutableIntStateOf(0) }
     val nubeViewModel: NubeViewModel =
         viewModel(
-            factory = NubeViewModel.factory(nucleo, directorio, identificadorDispositivo, onCerrarSesion),
+            factory = NubeViewModel.factory(nucleo, secretoStore, onCerrarSesion),
         )
     val scope = rememberCoroutineScope()
-    val realtime = remember(nucleo, directorio, scope) {
-        NubeRealtime(nucleo = nucleo, directorio = directorio, scope = scope)
+    val realtime = remember(nucleo, secretoStore, scope) {
+        NubeRealtime(nucleo = nucleo, secretoStore = secretoStore, scope = scope)
     }
-    val sincronizacion = remember(nucleo, directorio, scope) {
+    val sincronizacion = remember(nucleo, secretoStore, scope) {
         SincronizacionPeriodica(
             nucleo = nucleo,
-            directorio = directorio,
-            identificadorDispositivo = identificadorDispositivo,
+            secretoStore = secretoStore,
             scope = scope,
             onSincronizado = { resumen ->
                 // Si a esta sesión la desactivaron en otro dispositivo, el
@@ -167,7 +166,7 @@ fun PantallaPrincipal(
             Tab(selected = pestana == 1, onClick = { pestana = 1 }, text = { Text("Historial") })
         }
         when (pestana) {
-            0 -> PantallaActivos(nucleo, directorio, refrescarNube)
+            0 -> PantallaActivos(nucleo, secretoStore, refrescarNube)
             else -> PantallaHistorial(nucleo, refrescarNube)
         }
     }

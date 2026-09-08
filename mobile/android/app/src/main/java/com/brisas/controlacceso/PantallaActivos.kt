@@ -79,8 +79,13 @@ import uniffi.control_acceso_mobile.TipoIngreso
 /// más abajo) a funciones chicas de una sola responsabilidad cada una, en
 /// vez de tener los tres modos mezclados en un único bloque `if`/`else`.
 @Composable
-fun PantallaActivos(nucleo: Nucleo, directorio: String, refrescarNube: Int = 0) {
-    val viewModel: ActivosViewModel = viewModel(factory = ActivosViewModel.factory(nucleo, directorio))
+fun PantallaActivos(
+    nucleo: Nucleo,
+    secretoStore: SecretoDispositivoStore,
+    refrescarNube: Int = 0,
+) {
+    val viewModel: ActivosViewModel =
+        viewModel(factory = ActivosViewModel.factory(nucleo, secretoStore))
     var escanerAbierto by remember { mutableStateOf(false) }
     LaunchedEffect(refrescarNube) {
         if (refrescarNube > 0) {
@@ -92,7 +97,7 @@ fun PantallaActivos(nucleo: Nucleo, directorio: String, refrescarNube: Int = 0) 
         is SeleccionIngreso.Formulario -> {
             PantallaConfirmarIngreso(
                 nucleo = nucleo,
-                directorio = directorio,
+                secretoStore = secretoStore,
                 preparacion = actual.preparacion,
                 onRegistrado = { viewModel.onIngresoRegistrado() },
                 onCambiar = { viewModel.cancelarSeleccionIngreso() },

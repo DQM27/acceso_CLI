@@ -41,9 +41,9 @@ import uniffi.control_acceso_mobile.Nucleo
 /// campo fijo) que vivía en [MainActivity] -- ya no hace falta un usuario
 /// de mentira instalado de fábrica.
 @Composable
-fun PantallaPrimerArranque(nucleo: Nucleo, directorio: String, identificadorDispositivo: String, onListo: () -> Unit) {
+fun PantallaPrimerArranque(nucleo: Nucleo, secretoStore: SecretoDispositivoStore, onListo: () -> Unit) {
     val viewModel: PrimerArranqueViewModel =
-        viewModel(factory = PrimerArranqueViewModel.factory(nucleo, directorio, identificadorDispositivo))
+        viewModel(factory = PrimerArranqueViewModel.factory(nucleo, secretoStore))
     var secreto by remember { mutableStateOf("") }
 
     Column(

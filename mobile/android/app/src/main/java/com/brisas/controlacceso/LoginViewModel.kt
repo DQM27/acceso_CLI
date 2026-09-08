@@ -30,11 +30,7 @@ import uniffi.control_acceso_mobile.UsuarioSesion
 /// login era la causa real del retraso de "un par de segundos" al entrar.
 class LoginViewModel(
     private val nucleo: Nucleo,
-    private val directorio: String,
-    // `Settings.Secure.ANDROID_ID` -- descifra el secreto de dispositivo en
-    // disco (ver `NubeViewModel.guardarSecreto`), lo necesitan tanto el
-    // reintento de `autenticar` como la sincronización de fondo.
-    private val identificadorDispositivo: String,
+    private val secretoStore: SecretoDispositivoStore,
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     var cedula by mutableStateOf("")
@@ -69,12 +65,15 @@ class LoginViewModel(
         viewModelScope.launch {
             try {
                 sesion = withContext(dispatcherIO) {
-                    nucleo.autenticar(cedula, password, directorio, identificadorDispositivo)
+                    val secreto = secretoStore.cargar().orEmpty()
+                    nucleo.autenticarConSecreto(cedula, password, secreto)
                 }
                 lanzarSincronizacionDeFondo()
             } catch (excepcion: NucleoException.SinPasswordLocal) {
                 cedulaSinPassword = cedula
             } catch (excepcion: NucleoException) {
+                error = excepcion.message
+            } catch (excepcion: SecretoDispositivoStoreException) {
                 error = excepcion.message
             } finally {
                 autenticando = false
@@ -92,7 +91,10 @@ class LoginViewModel(
     private fun lanzarSincronizacionDeFondo() {
         viewModelScope.launch {
             try {
-                withContext(dispatcherIO) { nucleo.sincronizarConNube(directorio, identificadorDispositivo) }
+                withContext(dispatcherIO) {
+                    val secreto = secretoStore.cargar() ?: return@withContext
+                    nucleo.sincronizarConNubeConSecreto(secreto)
+                }
             } catch (_: NucleoException) {
                 // Sin red, o sin secreto configurado todavía -- no es un
                 // error que el login deba mostrar, el pulso periódico
@@ -140,10 +142,9 @@ class LoginViewModel(
     companion object {
         fun factory(
             nucleo: Nucleo,
-            directorio: String,
-            identificadorDispositivo: String,
+            secretoStore: SecretoDispositivoStore,
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { LoginViewModel(nucleo, directorio, identificadorDispositivo) }
+            initializer { LoginViewModel(nucleo, secretoStore) }
         }
     }
 }

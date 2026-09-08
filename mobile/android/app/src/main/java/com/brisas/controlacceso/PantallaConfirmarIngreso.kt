@@ -94,7 +94,7 @@ fun mensajeMotivoDenegacion(motivo: MotivoDenegacion): String =
 @Composable
 fun PantallaConfirmarIngreso(
     nucleo: Nucleo,
-    directorio: String,
+    secretoStore: SecretoDispositivoStore,
     preparacion: PreparacionIngreso,
     onRegistrado: () -> Unit,
     onCambiar: () -> Unit,
@@ -200,8 +200,14 @@ fun PantallaConfirmarIngreso(
                             // así que sin esto ambos podían aceptar el mismo
                             // número como activo a la vez (ver
                             // `Nucleo.gafeteOcupadoEnSitio`).
-                            if (gafete != null && nucleo.gafeteOcupadoEnSitio(directorio, gafete)) {
-                                throw GafeteOcupadoEnSitioException(gafete)
+                            if (gafete != null) {
+                                val secreto = secretoStore.cargar()
+                                if (
+                                    secreto != null &&
+                                    nucleo.gafeteOcupadoEnSitioConSecreto(secreto, gafete)
+                                ) {
+                                    throw GafeteOcupadoEnSitioException(gafete)
+                                }
                             }
                             nucleo.registrarIngreso(preparacion.contratistaId, medio, gafete)
                         }
@@ -209,6 +215,8 @@ fun PantallaConfirmarIngreso(
                     } catch (excepcion: GafeteOcupadoEnSitioException) {
                         error = excepcion.message
                     } catch (excepcion: NucleoException) {
+                        error = excepcion.message
+                    } catch (excepcion: SecretoDispositivoStoreException) {
                         error = excepcion.message
                     } finally {
                         enviando = false

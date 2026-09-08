@@ -30,11 +30,7 @@ import uniffi.control_acceso_mobile.ResumenSincronizacion
 /// (`Operacion::UsarNube`).
 class NubeViewModel(
     private val nucleo: Nucleo,
-    private val directorio: String,
-    // `Settings.Secure.ANDROID_ID` (resuelto en `MainActivity`) -- lo pide
-    // `Nucleo.sincronizarConNube` para el reintento post-login, aunque hoy
-    // el secreto se guarda en texto plano (ver mobile/rust-core/Cargo.toml).
-    private val identificadorDispositivo: String,
+    private val secretoStore: SecretoDispositivoStore,
     // Misma reacción ante `sesionExpulsada` que el pulso periódico
     // (`SincronizacionPeriodica`, ver `PantallaPrincipal.kt`).
     private val onSesionExpulsada: () -> Unit = {},
@@ -64,11 +60,17 @@ class NubeViewModel(
         viewModelScope.launch {
             try {
                 val resumen = withContext(dispatcherIO) {
-                    nucleo.sincronizarConNube(directorio, identificadorDispositivo)
+                    val secreto = secretoStore.cargar()
+                        ?: throw SecretoDispositivoNoEncontradoException()
+                    nucleo.sincronizarConNubeConSecreto(secreto)
                 }
                 ultimoResumen = resumen
                 if (resumen.sesionExpulsada) onSesionExpulsada()
             } catch (excepcion: NucleoException) {
+                error = excepcion.message
+            } catch (excepcion: SecretoDispositivoNoEncontradoException) {
+                error = excepcion.message
+            } catch (excepcion: SecretoDispositivoStoreException) {
                 error = excepcion.message
             } finally {
                 sincronizando = false
@@ -77,17 +79,12 @@ class NubeViewModel(
     }
 
     companion object {
-        /// `directorio` es el mismo que ya usa [MainActivity] para abrir la
-        /// base `SQLite` (`filesDir.absolutePath`) — no un archivo, la
-        /// carpeta; Android no tiene `%LOCALAPPDATA%`, así que a diferencia
-        /// de escritorio acá siempre hay que pasarlo explícito.
         fun factory(
             nucleo: Nucleo,
-            directorio: String,
-            identificadorDispositivo: String,
+            secretoStore: SecretoDispositivoStore,
             onSesionExpulsada: () -> Unit = {},
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { NubeViewModel(nucleo, directorio, identificadorDispositivo, onSesionExpulsada) }
+            initializer { NubeViewModel(nucleo, secretoStore, onSesionExpulsada) }
         }
     }
 }

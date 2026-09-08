@@ -816,6 +816,58 @@ impl Nucleo {
         Ok(sesion.into())
     }
 
+    /// Igual que [`Nucleo::autenticar`], pero con el secreto ya descifrado
+    /// por Android Keystore. Si el login local necesita refrescar catálogo
+    /// por un usuario recién creado/reactivado, usa este secreto en memoria
+    /// sin leer credenciales desde disco.
+    pub fn autenticar_con_secreto(
+        &self,
+        cedula: String,
+        password: String,
+        secreto: String,
+    ) -> Result<UsuarioSesion, NucleoError> {
+        let intento = self.core_lock().autenticar(&cedula, &password);
+        let sesion = match intento {
+            Ok(sesion) => sesion,
+            Err(
+                AutenticacionErrorNucleo::UsuarioInactivo
+                | AutenticacionErrorNucleo::CredencialesInvalidas,
+            ) => {
+                if !secreto.trim().is_empty() {
+                    let _ = self.refrescar_catalogo_sin_sesion_con_secreto(&secreto);
+                }
+                self.core_lock().autenticar(&cedula, &password)?
+            }
+            Err(otro) => return Err(otro.into()),
+        };
+
+        let autorizado_para_nube = self.core_lock().autorizar_uso_nube(&sesion).is_ok();
+        let sigue_activo = if autorizado_para_nube && !secreto.trim().is_empty() {
+            let token = self.autenticar_con_cache(&secreto).ok();
+            token
+                .and_then(|token| {
+                    let contexto = control_acceso::nube::ContextoSincronizacion {
+                        base_url: control_acceso::nube::BASE_URL,
+                        apikey: control_acceso::nube::APIKEY,
+                        token: &token.access_token,
+                        dispositivo_id: &token.dispositivo_id,
+                        sitio_id: &token.sitio_id,
+                    };
+                    control_acceso::nube::usuario_sigue_activo_remoto(&contexto, &sesion.cedula)
+                        .ok()
+                })
+                .unwrap_or(true)
+        } else {
+            true
+        };
+        if !sigue_activo {
+            return Err(NucleoError::UsuarioInactivo);
+        }
+
+        *self.sesion_lock() = Some(sesion.clone());
+        Ok(sesion.into())
+    }
+
     /// Completa el alta de contraseña de un usuario global que `autenticar`
     /// rechazó con `NucleoError::SinPasswordLocal` -- ver
     /// `AppCore::fijar_password_inicial`. Deja la sesión iniciada directo.
@@ -1079,9 +1131,9 @@ impl Nucleo {
     /// pantalla de arranque y trae el catálogo remoto (usuarios incluidos),
     /// para que el próximo intento de login ya tenga con quién autenticar
     /// (con el centinela `SIN_PASSWORD_LOCAL`, cae solo en "fijar
-    /// contraseña"). `identificador_dispositivo` es
-    /// `Settings.Secure.ANDROID_ID`, igual que en
-    /// [`Nucleo::guardar_secreto_dispositivo`].
+    /// contraseña"). Método legado: la app Android nueva usa
+    /// [`Nucleo::configurar_dispositivo_inicial_con_secreto`] y persiste el
+    /// secreto con Android Keystore.
     pub fn configurar_dispositivo_inicial(
         &self,
         directorio: String,
@@ -1098,16 +1150,59 @@ impl Nucleo {
             .into())
     }
 
-    /// Guarda el secreto de este dispositivo, pegado desde el panel de
-    /// administración (mismo mecanismo que la GUI de escritorio, ver
-    /// `docs/plan-persistencia-nube.md`). `directorio` es el mismo que
-    /// Kotlin ya usa para ubicar la base `SQLite` -- Android no tiene
-    /// `%LOCALAPPDATA%`, así que acá no hay resolución automática de ruta.
-    /// `identificador_dispositivo` es `Settings.Secure.ANDROID_ID` -- cifra
-    /// el secreto en disco con una clave derivada de ese valor (ver
-    /// `docs/plan-panel-administrativo-web.md`, "Protección del secreto del
-    /// dispositivo en reposo"); copiar el archivo a otro teléfono descifra
-    /// mal, no da un secreto usable.
+    /// Igual que [`Nucleo::configurar_dispositivo_inicial`], pero sin
+    /// persistir el secreto desde Rust. Android lo guarda con Android
+    /// Keystore y sólo entrega el secreto descifrado en memoria para esta
+    /// autenticación inicial.
+    pub fn configurar_dispositivo_inicial_con_secreto(
+        &self,
+        secreto: String,
+    ) -> Result<ResumenSincronizacion, NucleoError> {
+        if !self.core_lock().requiere_configuracion_inicial()? {
+            return Err(NucleoError::from(GestionNubeErrorNucleo::YaConfigurado));
+        }
+
+        let token = self
+            .autenticar_con_cache(&secreto)
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })?;
+        if let Some(desfase_ms) = token.desfase_reloj_ms {
+            self.core_lock().actualizar_desfase_reloj(desfase_ms);
+        }
+
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::BASE_URL,
+            apikey: control_acceso::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        let conexion = self.conexion_secundaria()?;
+        let catalogo = control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto)
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })?;
+
+        Ok(ResumenSincronizacion {
+            enviados: 0,
+            fallidos: 0,
+            remotos_abiertos: 0,
+            cierres_recibidos: 0,
+            empresas_recibidas: catalogo.empresas_recibidas,
+            contratistas_recibidos: catalogo.contratistas_recibidos,
+            gafetes_recibidos: catalogo.gafetes_recibidos,
+            movimientos_historial_recibidos: 0,
+            sitio_id: token.sitio_id,
+            dispositivo_id: token.dispositivo_id,
+            tipo: token.tipo,
+            sesion_expulsada: false,
+        })
+    }
+
+    /// Guarda el secreto de este dispositivo en el archivo administrado por
+    /// Rust. Método legado: Android nuevo usa Android Keystore desde Kotlin
+    /// y sólo mantiene este camino para compatibilidad/migración.
     pub fn guardar_secreto_dispositivo(
         &self,
         directorio: String,
@@ -1136,6 +1231,19 @@ impl Nucleo {
             Some(std::path::Path::new(&directorio)),
             Some(&identificador_dispositivo),
         )?)
+    }
+
+    /// Lee el secreto guardado por versiones móviles anteriores a Android
+    /// Keystore. Kotlin lo usa sólo para migrarlo al almacén seguro nuevo.
+    pub fn cargar_secreto_dispositivo_legado(
+        &self,
+        directorio: String,
+        identificador_dispositivo: String,
+    ) -> Option<String> {
+        control_acceso::nube::credenciales::cargar_secreto_en_con_identificador(
+            std::path::Path::new(&directorio),
+            &identificador_dispositivo,
+        )
     }
 
     /// Autentica este dispositivo, drena la bandeja de salida pendiente y
@@ -1229,6 +1337,15 @@ impl Nucleo {
         })
     }
 
+    /// Sincroniza usando el secreto ya descifrado por Android Keystore.
+    /// Evita que el núcleo móvil lea un secreto persistido en texto plano.
+    pub fn sincronizar_con_nube_con_secreto(
+        &self,
+        secreto: String,
+    ) -> Result<ResumenSincronizacion, NucleoError> {
+        self.sincronizar_con_secreto(&secreto)
+    }
+
     /// Devuelve lo mínimo para que Kotlin escuche Broadcast privado por
     /// sitio; el socket y sus reconexiones viven fuera del núcleo.
     pub fn sesion_realtime_nube(
@@ -1240,6 +1357,37 @@ impl Nucleo {
             .core_lock()
             .sesion_realtime_nube(&actor, Some(std::path::Path::new(&directorio)))?
             .into())
+    }
+
+    /// Igual que [`Nucleo::sesion_realtime_nube`], pero tomando el secreto
+    /// desde Android Keystore en Kotlin en vez del archivo administrado por
+    /// Rust.
+    pub fn sesion_realtime_nube_con_secreto(
+        &self,
+        secreto: String,
+    ) -> Result<SesionRealtimeNube, NucleoError> {
+        let actor = self.actor_autenticado()?;
+        self.core_lock().autorizar_uso_nube(&actor)?;
+        let token = self
+            .autenticar_con_cache(&secreto)
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })?;
+        if let Some(desfase_ms) = token.desfase_reloj_ms {
+            self.core_lock().actualizar_desfase_reloj(desfase_ms);
+        }
+        let topic = format!("sitio:{}", token.sitio_id);
+
+        Ok(SesionRealtimeNube {
+            base_url: control_acceso::nube::BASE_URL.to_string(),
+            apikey: control_acceso::nube::APIKEY.to_string(),
+            access_token: token.access_token,
+            expires_in: token.expires_in,
+            sitio_id: token.sitio_id,
+            dispositivo_id: token.dispositivo_id,
+            tipo: token.tipo,
+            topic,
+        })
     }
 
     /// Lectura pura de la caché local `ingresos_remotos` -- no hace falta
@@ -1306,6 +1454,36 @@ impl Nucleo {
         )
     }
 
+    /// Chequeo remoto usando el secreto ya descifrado por Android Keystore.
+    pub fn gafete_ocupado_en_sitio_con_secreto(
+        &self,
+        secreto: String,
+        gafete_numero: i64,
+    ) -> Result<bool, NucleoError> {
+        if secreto.trim().is_empty() {
+            return Ok(false);
+        }
+        let actor = self.actor_autenticado()?;
+        self.core_lock().autorizar_uso_nube(&actor)?;
+        let token = self
+            .autenticar_con_cache(&secreto)
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })?;
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::BASE_URL,
+            apikey: control_acceso::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        control_acceso::nube::gafete_ocupado_en_otro_dispositivo(&contexto, gafete_numero).map_err(
+            |error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            },
+        )
+    }
+
     /// Cierra, contra la nube, un ingreso abierto por el otro dispositivo
     /// del mismo sitio -- nunca toca el historial local de este teléfono.
     pub fn cerrar_ingreso_remoto(
@@ -1319,6 +1497,35 @@ impl Nucleo {
             Some(std::path::Path::new(&directorio)),
             &uuid,
         )?)
+    }
+
+    /// Cierra un ingreso remoto usando el secreto ya descifrado por Android
+    /// Keystore.
+    pub fn cerrar_ingreso_remoto_con_secreto(
+        &self,
+        secreto: String,
+        uuid: String,
+    ) -> Result<(), NucleoError> {
+        let actor = self.actor_autenticado()?;
+        self.core_lock().autorizar_uso_nube(&actor)?;
+        let token = self
+            .autenticar_con_cache(&secreto)
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })?;
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::BASE_URL,
+            apikey: control_acceso::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        let conexion = self.conexion_secundaria()?;
+        control_acceso::nube::cerrar_ingreso_remoto(&conexion, &contexto, &uuid, &actor.nombre)
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })?;
+        Ok(())
     }
 }
 
@@ -1365,10 +1572,8 @@ impl Nucleo {
             }
         }
 
-        let token = control_acceso::nube::autenticar_dispositivo(
-            control_acceso::nube::BASE_URL,
-            secreto,
-        )?;
+        let token =
+            control_acceso::nube::autenticar_dispositivo(control_acceso::nube::BASE_URL, secreto)?;
         *self
             .token_nube_cacheado
             .lock()
@@ -1412,11 +1617,32 @@ impl Nucleo {
             sitio_id: &token.sitio_id,
         };
         let conexion = self.conexion_secundaria()?;
-        control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto).map_err(|error| {
-            NucleoError::Interno {
+        control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto).map_err(
+            |error| NucleoError::Interno {
                 mensaje: error.to_string(),
-            }
-        })?;
+            },
+        )?;
+        Ok(())
+    }
+
+    fn refrescar_catalogo_sin_sesion_con_secreto(&self, secreto: &str) -> Result<(), NucleoError> {
+        let mapear_nube = |error: control_acceso::nube::NubeError| NucleoError::Interno {
+            mensaje: error.to_string(),
+        };
+        let token = self.autenticar_con_cache(secreto).map_err(mapear_nube)?;
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::BASE_URL,
+            apikey: control_acceso::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        let conexion = self.conexion_secundaria()?;
+        control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto).map_err(
+            |error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            },
+        )?;
         Ok(())
     }
 
@@ -1452,6 +1678,69 @@ impl Nucleo {
 
     fn actor_autenticado(&self) -> Result<UsuarioSesionNucleo, NucleoError> {
         self.sesion_lock().clone().ok_or(NucleoError::NoAutenticado)
+    }
+
+    fn sincronizar_con_secreto(&self, secreto: &str) -> Result<ResumenSincronizacion, NucleoError> {
+        let _sincronizacion = self
+            .sincronizacion_en_curso
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let actor = self.actor_autenticado()?;
+        self.core_lock().autorizar_uso_nube(&actor)?;
+
+        let token = self
+            .autenticar_con_cache(secreto)
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })?;
+        if let Some(desfase_ms) = token.desfase_reloj_ms {
+            self.core_lock().actualizar_desfase_reloj(desfase_ms);
+        }
+
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::BASE_URL,
+            apikey: control_acceso::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        let conexion = self.conexion_secundaria()?;
+        let mapear = |error: control_acceso::nube::SincronizacionError| NucleoError::Interno {
+            mensaje: error.to_string(),
+        };
+        let resumen_cola =
+            control_acceso::nube::drenar_cola(&conexion, &contexto, 200).map_err(mapear)?;
+        let cierres_recibidos =
+            control_acceso::nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)
+                .map_err(mapear)?;
+        let remotos = control_acceso::nube::recibir_ingresos_abiertos(&conexion, &contexto)
+            .map_err(mapear)?;
+        let catalogo = control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto)
+            .map_err(mapear)?;
+        let movimientos_historial_recibidos =
+            control_acceso::nube::recibir_historial_del_sitio(&conexion, &contexto)
+                .map_err(mapear)?;
+
+        let sesion_expulsada = !self.core_lock().sesion_sigue_activa(&actor);
+        if sesion_expulsada {
+            *self.sesion_lock() = None;
+        }
+
+        Ok(ResumenSincronizacion {
+            enviados: resumen_cola.enviados,
+            fallidos: resumen_cola.fallidos,
+            remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
+            cierres_recibidos,
+            empresas_recibidas: catalogo.empresas_recibidas,
+            contratistas_recibidos: catalogo.contratistas_recibidos,
+            gafetes_recibidos: catalogo.gafetes_recibidos,
+            movimientos_historial_recibidos,
+            sitio_id: token.sitio_id,
+            dispositivo_id: token.dispositivo_id,
+            tipo: token.tipo,
+            sesion_expulsada,
+        })
     }
 }
 

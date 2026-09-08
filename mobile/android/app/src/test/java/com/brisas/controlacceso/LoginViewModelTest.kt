@@ -19,10 +19,10 @@ import uniffi.control_acceso_mobile.Nucleo
 /// `LoginViewModel.autenticar` intenta una sincronización corta antes de
 /// confirmar (ver su doc-comment) -- ya no es puramente síncrono, así que
 /// estos tests necesitan el mismo patrón `runTest`/`StandardTestDispatcher`
-/// que `HistorialViewModelTest`. Sin secreto de nube guardado en la base de
-/// prueba, esa sincronización falla rápido (sin red real de por medio) y
-/// el login sigue con lo que ya validó local -- mismo comportamiento que en
-/// producción cuando el dispositivo no tiene la nube configurada.
+/// que `HistorialViewModelTest`. Sin secreto de nube en el store de prueba,
+/// la sincronización de fondo no toca red y el login sigue con lo que ya
+/// validó local -- mismo comportamiento que en producción cuando el
+/// dispositivo no tiene la nube configurada.
 @OptIn(ExperimentalCoroutinesApi::class)
 class LoginViewModelTest {
     private val dispatcher = StandardTestDispatcher()
@@ -45,7 +45,7 @@ class LoginViewModelTest {
 
     @Test
     fun `autenticar con credenciales validas guarda la sesion`() = runTest(dispatcher) {
-        val viewModel = LoginViewModel(nucleo, directorio = "", identificadorDispositivo = "", dispatcherIO = dispatcher)
+        val viewModel = LoginViewModel(nucleo, SecretoDispositivoStoreDePrueba(), dispatcherIO = dispatcher)
 
         viewModel.cambiarCedula("999999999")
         viewModel.cambiarPassword(NucleoDePrueba.CLAVE_PRUEBA)
@@ -59,7 +59,7 @@ class LoginViewModelTest {
 
     @Test
     fun `autenticar con contrasena incorrecta deja error y no guarda sesion`() = runTest(dispatcher) {
-        val viewModel = LoginViewModel(nucleo, directorio = "", identificadorDispositivo = "", dispatcherIO = dispatcher)
+        val viewModel = LoginViewModel(nucleo, SecretoDispositivoStoreDePrueba(), dispatcherIO = dispatcher)
 
         viewModel.cambiarCedula("999999999")
         viewModel.cambiarPassword("no-es-la-clave")
@@ -72,7 +72,7 @@ class LoginViewModelTest {
 
     @Test
     fun `cerrarSesion limpia cedula password y sesion`() = runTest(dispatcher) {
-        val viewModel = LoginViewModel(nucleo, directorio = "", identificadorDispositivo = "", dispatcherIO = dispatcher)
+        val viewModel = LoginViewModel(nucleo, SecretoDispositivoStoreDePrueba(), dispatcherIO = dispatcher)
         viewModel.cambiarCedula("999999999")
         viewModel.cambiarPassword(NucleoDePrueba.CLAVE_PRUEBA)
         viewModel.autenticar()

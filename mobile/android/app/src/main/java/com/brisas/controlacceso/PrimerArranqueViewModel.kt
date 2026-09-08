@@ -20,8 +20,7 @@ import uniffi.control_acceso_mobile.NucleoException
 /// secreto es inválido o no hay red, la persona lo ve y decide si reintenta.
 class PrimerArranqueViewModel(
     private val nucleo: Nucleo,
-    private val directorio: String,
-    private val identificadorDispositivo: String,
+    private val secretoStore: SecretoDispositivoStore,
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     var conectando by mutableStateOf(false)
@@ -36,10 +35,13 @@ class PrimerArranqueViewModel(
         viewModelScope.launch {
             try {
                 withContext(dispatcherIO) {
-                    nucleo.configurarDispositivoInicial(directorio, identificadorDispositivo, secreto)
+                    nucleo.configurarDispositivoInicialConSecreto(secreto)
+                    secretoStore.guardar(secreto)
                 }
                 onListo()
             } catch (excepcion: NucleoException) {
+                error = excepcion.message
+            } catch (excepcion: SecretoDispositivoStoreException) {
                 error = excepcion.message
             } finally {
                 conectando = false
@@ -50,10 +52,9 @@ class PrimerArranqueViewModel(
     companion object {
         fun factory(
             nucleo: Nucleo,
-            directorio: String,
-            identificadorDispositivo: String,
+            secretoStore: SecretoDispositivoStore,
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { PrimerArranqueViewModel(nucleo, directorio, identificadorDispositivo) }
+            initializer { PrimerArranqueViewModel(nucleo, secretoStore) }
         }
     }
 }

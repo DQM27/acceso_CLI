@@ -41,10 +41,17 @@ class ActivosViewModelTest {
         Dispatchers.resetMain()
     }
 
+    private fun viewModel(): ActivosViewModel =
+        ActivosViewModel(
+            nucleo,
+            secretoStore = SecretoDispositivoStoreDePrueba(),
+            dispatcherIO = dispatcher,
+        )
+
     @Test
     fun `base vacia no falla y no muestra a nadie adentro`() = runTest(dispatcher) {
         nucleo = NucleoDePrueba.abrir(archivo, NucleoDePrueba.sqlUsuarioRoot())
-        val viewModel = ActivosViewModel(nucleo, directorio = "/tmp", dispatcherIO = dispatcher)
+        val viewModel = viewModel()
 
         advanceUntilIdle()
 
@@ -64,7 +71,7 @@ class ActivosViewModelTest {
             """.trimIndent(),
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        val viewModel = ActivosViewModel(nucleo, directorio = "/tmp", dispatcherIO = dispatcher)
+        val viewModel = viewModel()
         advanceUntilIdle()
 
         viewModel.cambiarTexto("Buscable")
@@ -86,7 +93,7 @@ class ActivosViewModelTest {
             """.trimIndent(),
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        val viewModel = ActivosViewModel(nucleo, directorio = "/tmp", dispatcherIO = dispatcher)
+        val viewModel = viewModel()
         advanceUntilIdle()
         viewModel.cambiarTexto("Contratista")
         advanceUntilIdle()
@@ -112,7 +119,7 @@ class ActivosViewModelTest {
             """.trimIndent(),
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        val viewModel = ActivosViewModel(nucleo, directorio = "/tmp", dispatcherIO = dispatcher)
+        val viewModel = viewModel()
         advanceUntilIdle()
         viewModel.cambiarTexto("Sin Acceso")
         advanceUntilIdle()
@@ -127,7 +134,7 @@ class ActivosViewModelTest {
     @Test
     fun `cambiarModo limpia el texto y el mensaje anterior`() = runTest(dispatcher) {
         nucleo = NucleoDePrueba.abrir(archivo, NucleoDePrueba.sqlUsuarioRoot())
-        val viewModel = ActivosViewModel(nucleo, directorio = "/tmp", dispatcherIO = dispatcher)
+        val viewModel = viewModel()
         advanceUntilIdle()
         viewModel.cambiarTexto("algo")
         advanceUntilIdle()
