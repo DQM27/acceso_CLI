@@ -56,6 +56,18 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   dispositivo en Supabase, sesión propia desacoplada del secreto, panel de presencia,
   y regla de desempate por fecha de alta + expulsión automática para conflictos
   detectados offline.
+  - [x] Presencia en tiempo real ya funcionando (2026-09-08): Dispositivos.tsx y
+    Usuarios.tsx muestran en vivo quién/qué está conectado y desde dónde.
+  - [ ] El resto (secreto de un solo uso, identidad canónica, desempate offline)
+    sigue sin implementar.
+- [ ] **Sesión única por USUARIO (no por dispositivo).** Ver
+  `docs/plan-sesion-unica-dispositivos.md`, sección 7. Evitar que la misma cédula
+  tenga sesión abierta en dos dispositivos a la vez -- política ya decidida
+  (bloquear el login nuevo, no expulsar al viejo), pero el primer diseño (chequear
+  contra la presencia del mismo sitio) se descartó: los usuarios son globales, no
+  por sitio, así que ese chequeo tiene un hueco entre sitios distintos. Falta
+  diseñar un chequeo genuinamente global (probablemente una tabla/lock en Supabase
+  con heartbeat, no presence).
 - [ ] **Revisar bucket público `historial-web`.** Está documentado como público, vacío y
   sin referencias en código. Confirmar si es vestigio; si no se usa, eliminarlo desde
   Supabase.

@@ -167,6 +167,51 @@ para denuncias — el panel de administración debe poder consultarla
 directamente para cada dispositivo, no quedar oculta en una tabla que
 solo se mira cuando ya hubo un incidente.
 
+## 7. Sesión única por USUARIO -- pendiente, sin resolver (2026-09-08)
+
+Distinto de todo lo anterior (que es sobre el *dispositivo* y su
+secreto): esto es evitar que la misma **persona** (cédula) tenga sesión
+iniciada en dos dispositivos a la vez. Motivado por ver, en producción,
+que nada lo impedía -- login es 100% local (SQLite en cada dispositivo),
+no hay ningún lugar central que sepa "esta cédula ya está adentro en
+otro lado".
+
+**Ya construido y funcionando, útil como base:** presencia por sitio
+(punto 6) ya manda `usuario_cedula` en el mismo `track()` del
+dispositivo -- Usuarios.tsx en el panel ya muestra en vivo quién está
+conectado y desde qué dispositivo.
+
+**Política ya decidida por el usuario:** si alguien ya está logueado en
+un dispositivo y otro intenta loguear con el mismo usuario, **bloquear
+el login nuevo** (no expulsar al viejo).
+
+**Intento descartado (2026-09-08): chequear contra la presencia
+existente al momento del login.** Se propuso que el dispositivo, antes
+de completar el login, chequee si esa cédula ya aparece presente en el
+canal de su propio sitio -- sin tabla nueva, sin problema de "candado
+fantasma" (la presencia se autolimpia sola si el otro socket se cae).
+**Rechazado por el usuario:** los usuarios son **globales**, no viven
+atados a un sitio (a diferencia de los dispositivos) -- un chequeo
+así solo ve presencia del mismo sitio, así que una misma persona podría
+loguearse sin bloqueo en dos sitios distintos a la vez. Con un solo
+sitio activo hoy ("Brisas") el hueco no se nota, pero la solución no es
+correcta de fondo para el modelo real (usuarios globales), así que no
+se implementó a medias.
+
+**Lo que hay que resolver la próxima vez que se retome:** un chequeo
+que de verdad sea global (todas las unidades operativas), no por sitio.
+Presence de Realtime no sirve tal cual para esto porque cada canal está
+scopeado a un sitio y un dispositivo no tiene permiso de escuchar la
+presencia de sitios ajenos (sólo el admin global lo tiene, vía
+`es_admin_global()` en la policy de presencia). Un chequeo genuinamente
+global probablemente necesita volver a la idea de una tabla/lock del
+lado de Supabase (ej. `sesiones_usuario` con `usuario_cedula` +
+`dispositivo_id` + marca de tiempo), con el problema del "candado
+fantasma" resuelto vía heartbeat/renovación periódica (el pulso de
+sincronización que ya existe cada ~2 minutos podría renovarlo) en vez
+de vía presence. No se diseñó en detalle todavía -- queda para la
+próxima sesión que retome este tema.
+
 ## Orden de implementación
 
 0. Identidad canónica del dispositivo (tabla maestra en Supabase).
