@@ -365,8 +365,15 @@ Confirmado que es viable y recomendable:
    fixtures) no sigue el estándar y sigue sin implementar por falta de una
    referencia confiable — el número de DIMEX sigue viniendo del frente.
 4. ✅ Estado central `EstadoEscaneo` + lógica de estabilidad/debounce.
-5. ⬜ Viewfinder con esquineros de 3 estados (hecho) + recorte del área de
-   análisis (pendiente) + enfoque cercano/detección de glare (pendiente).
+5. ✅ Viewfinder con esquineros de 3 estados. Recorte del área de análisis
+   implementado **filtrando los `TextBlock` de ML Kit por su `boundingBox`**
+   contra el recuadro guía (`filtrarTextoEnAreaGuia`), no convirtiendo el
+   frame a Bitmap para recortar píxeles -- esa alternativa habría agregado
+   una conversión YUV→RGB completa por frame, violando la regla de la
+   sección 0.6/5 (nada nuevo debe ser `O(imagen)`). Enfoque continuo en el
+   centro implementado vía `FocusMeteringAction` de CameraX (costo único al
+   iniciar la cámara, no por frame). **Pendiente:** detección de glare (sí
+   requeriría analizar píxeles, evaluar por separado si vale el costo).
 6. ✅ Mensajes in-cámara conectados al estado central, incluyendo el nombre
    del tipo de documento detectado (nadie lo selecciona a mano).
 

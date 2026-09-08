@@ -6,9 +6,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.SurfaceOrientedMeteringPointFactory
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
@@ -184,12 +186,27 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
                                 }
                             }
                         proveedor.unbindAll()
-                        proveedor.bindToLifecycle(
+                        val camara = proveedor.bindToLifecycle(
                             lifecycleOwner,
                             CameraSelector.DEFAULT_BACK_CAMERA,
                             preview,
                             analisis,
                         )
+
+                        // Enfoque continuo en el centro (donde vive el
+                        // recuadro guía) en vez de confiar en el autofocus
+                        // por defecto: a la distancia típica de escaneo
+                        // (10-15cm) muchos dispositivos no enfocan bien sin
+                        // esta ayuda -- ver plan, sección 0.6. Se usa un
+                        // factory normalizado (0..1) en vez de las
+                        // dimensiones reales de `previewView` porque en este
+                        // punto su layout todavía puede no tener tamaño.
+                        val puntoCentral = SurfaceOrientedMeteringPointFactory(1f, 1f)
+                            .createPoint(0.5f, 0.5f)
+                        val accionEnfoque = FocusMeteringAction.Builder(puntoCentral, FocusMeteringAction.FLAG_AF)
+                            .disableAutoCancel()
+                            .build()
+                        camara.cameraControl.startFocusAndMetering(accionEnfoque)
                     },
                     ContextCompat.getMainExecutor(ctx),
                 )
@@ -215,11 +232,12 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
     }
 }
 
-/// Recorte oscuro + marco de esquinas al estilo "encuadre de escáner",
-/// puramente decorativo -- no restringe ni recorta lo que ML Kit analiza
-/// (sigue leyendo el frame completo, ver [analizarCedula]), sólo le indica
-/// visualmente a quien opera dónde alinear la cédula. Proporción 1.586:1,
-/// la misma de una tarjeta ID-1 (cédula/carnet), no un cuadrado genérico.
+/// Recorte oscuro + marco de esquinas al estilo "encuadre de escáner". Ya no
+/// es sólo decorativo: [analizarCedula] filtra el texto de ML Kit contra
+/// esta misma área (ver [filtrarTextoEnAreaGuia]) -- si las proporciones de
+/// acá cambian, deben cambiar junto con las de esa función. Proporción
+/// 1.586:1, la misma de una tarjeta ID-1 (cédula/carnet), no un cuadrado
+/// genérico.
 @Composable
 private fun MarcoGuiaCedula(color: Color, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
@@ -288,10 +306,15 @@ private fun MarcoGuiaCedula(color: Color, modifier: Modifier = Modifier) {
     }
 }
 
-/// Sólo entrega a ML Kit y devuelve el texto crudo -- la clasificación de
-/// tipo de documento, extracción de campos y decisión de aceptar o no la
-/// lectura viven en [EstabilizadorLectura], no acá (separar esto evita que
-/// esta función termine "sabiendo" de cédulas/DIMEX/licencias/MRZ).
+/// Sólo entrega a ML Kit y devuelve el texto YA recortado al área guía --
+/// la clasificación de tipo de documento, extracción de campos y decisión
+/// de aceptar o no la lectura viven en [EstabilizadorLectura], no acá
+/// (separar esto evita que esta función termine "sabiendo" de
+/// cédulas/DIMEX/licencias/MRZ).
+///
+/// El recorte (plan, sección 9) se hace filtrando los `TextBlock` de ML Kit
+/// por su `boundingBox` contra el recuadro guía -- no convirtiendo el frame
+/// a Bitmap para recortar píxeles, ver [filtrarTextoEnAreaGuia].
 @androidx.annotation.OptIn(ExperimentalGetImage::class)
 private fun analizarCedula(
     imagen: ImageProxy,
@@ -304,9 +327,17 @@ private fun analizarCedula(
         imagen.close()
         return
     }
-    val input = InputImage.fromMediaImage(mediaImage, imagen.imageInfo.rotationDegrees)
+    val rotacion = imagen.imageInfo.rotationDegrees
+    val (anchoUpright, altoUpright) = dimensionesUpright(mediaImage.width, mediaImage.height, rotacion)
+    val input = InputImage.fromMediaImage(mediaImage, rotacion)
     recognizer.process(input)
-        .addOnSuccessListener { resultado -> onTexto(resultado.text) }
+        .addOnSuccessListener { resultado ->
+            val bloques = resultado.textBlocks.map { bloque ->
+                val caja = bloque.boundingBox?.let { CajaTexto(it.left, it.top, it.right, it.bottom) }
+                BloqueTextoOcr(caja, bloque.text)
+            }
+            onTexto(filtrarTextoEnAreaGuia(bloques, anchoUpright, altoUpright))
+        }
         .addOnFailureListener { onFallo() }
         .addOnCompleteListener {
             imagen.close()
