@@ -161,6 +161,41 @@ oficiales (número ficticio `123456789012`) **no tiene checksums ICAO
 válidos** — no sirve como fixture de test, solo como referencia visual del
 layout.
 
+### 4.3 Cédula nacional 2025+ vs DIMEX — cómo distinguirlas por el MRZ (RESUELTO)
+
+Ambas usan TD1 (mismo formato de 3 líneas × 30), pero el **código de
+documento** (posiciones 1-2 de la línea 1) difiere:
+
+| Documento | Código (pos. 1-2) | Fuente |
+|---|---|---|
+| Cédula nacional (TSE, vigente desde oct-2025) | `ID` | Decreto TSE n.° 22-2025 |
+| Cédula de residencia / DIMEX (DGME) | `C<` | Confirmado contra documento real |
+
+Compatible con ICAO 9303: el primer carácter del código de documento TD1
+puede ser `A`, `C` o `I`, y el segundo queda a discreción del Estado
+emisor — no hay conflicto de estándar, son dos autoridades costarricenses
+(TSE y DGME) usando códigos distintos.
+
+Fixture sintético de cédula nacional (checksums verificados):
+```
+IDCRI1011101119<<<<<<<<<<<<<<<
+9001011F3001019CRI<<<<<<<<<<<8
+PEREZ<<MARIA<JOSE<<<<<<<<<<<<<
+```
+
+**Lo que sigue sin verificar formalmente:** igual que en 4.2, no hay
+especificación técnica pública que documente el código de documento con
+este nivel de detalle — la fuente es la imagen del decreto/circular del
+TSE, no un documento técnico. La misma trampa de 4.2 aplica: no usar los
+números ilustrativos del decreto como fixture de checksum (el ejemplo
+publicado por el TSE, `807580679` con check digit impreso `7`, da `4` al
+recalcularlo).
+
+**Fuera de alcance por ahora:** la Tarjeta de Identidad de Menores (TIM)
+también parece usar `IDCRI...` según imágenes públicas de 2026 — con el
+código de documento solo no alcanza para distinguir cédula de adulto vs
+TIM. No se implementa esa distinción todavía.
+
 ## 5. Licencia de conducir — nacional
 
 ```

@@ -377,11 +377,20 @@ Confirmado que es viable y recomendable:
    requeriría analizar píxeles, evaluar por separado si vale el costo).
 6. ✅ Mensajes in-cámara conectados al estado central, incluyendo el nombre
    del tipo de documento detectado (nadie lo selecciona a mano).
+7. ✅ Cédula nacional 2025+ vs DIMEX distinguidas **solo por el MRZ**
+   (código de documento en posiciones 1-2: `ID` = cédula nacional, `C<` =
+   DIMEX) — ver `fixtures-ocr-sinteticos.md` sección 4.3. La regla vive en
+   `ResultadoMrz.aDocumentoDetectado()` (país + código), no en el parser
+   MRZ genérico, para no llenarlo de excepciones por país cuando se agreguen
+   otros. Vencimiento in-camara ahora se anuncia correctamente también para
+   el reverso de ambos documentos, ya no solo para el frente.
 
 ## 12. Preguntas abiertas / pendientes de refinar
 
 - ¿El flujo actual permite escanear frente y reverso en la misma sesión, o
   hay que agregar un paso de "dale vuelta al documento"?
+- Distinguir cédula de adulto vs Tarjeta de Identidad de Menores (TIM) —
+  ambas parecen usar `IDCRI...`, el código de documento solo no alcanza.
 - ¿Qué hacer si el checksum del MRZ falla pero el frente sí calza (documento
   dañado/mal iluminado)? ¿Aceptar con advertencia o rechazar?
 - Confirmar fps de análisis actual de CameraX para calibrar el número de

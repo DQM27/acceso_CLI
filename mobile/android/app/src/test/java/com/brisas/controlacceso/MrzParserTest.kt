@@ -10,14 +10,14 @@ class MrzParserTest {
     // Checksum verificado con script Python (algoritmo ICAO 9303 real) --
     // ver fixtures-ocr-sinteticos.md sección 4. Datos inventados.
     private val td1Valido = """
-        IDCRI9998887774<<<<<<<<<<<<<<<
+        C<CRI9998887774<<<<<<<<<<<<<<<
         9001011F3001019NIC<<<<<<<<<<<8
         PEREZ<<MARIA<JOSE<<<<<<<<<<<<<
     """.trimIndent()
 
     // Mismo caso, con un dígito alterado en el número de documento (línea 1).
     private val td1Corrupto = """
-        IDCRI9998887784<<<<<<<<<<<<<<<
+        C<CRI9998887784<<<<<<<<<<<<<<<
         9001011F3001019NIC<<<<<<<<<<<8
         PEREZ<<MARIA<JOSE<<<<<<<<<<<<<
     """.trimIndent()
@@ -65,7 +65,7 @@ class MrzParserTest {
         // Mismo contenido que td1Valido, con espacios de más como los que
         // ML Kit a veces mete al leer la banda MRZ.
         val conRuido = """
-            IDCRI 9998887774<<<<<<<<<<<<<<<
+            C<CRI 9998887774<<<<<<<<<<<<<<<
             9001011F3001019NIC<<<<<<<<<<<8
             PEREZ<<MARIA<JOSE<<<<<<<<<<<<<
         """.trimIndent()

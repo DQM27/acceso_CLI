@@ -28,6 +28,12 @@ private fun checksumValido(datos: String, esperado: Char): Boolean =
 
 data class ResultadoMrz(
     val formato: String, // "TD1" | "TD3"
+    // Posiciones 1-2 de la línea 1 ("código de documento" según ICAO 9303 --
+    // el primer carácter puede ser A/C/I, el segundo queda a discreción del
+    // Estado emisor). Deliberadamente NO se interpreta acá qué significa
+    // cada valor para cada país -- eso es una regla de país, vive en
+    // `ResultadoMrz.aDocumentoDetectado()`, no en este parser genérico.
+    val codigoDocumento: String,
     val paisEmisor: String,
     val numeroDocumento: String,
     val apellidos: String,
@@ -37,10 +43,12 @@ data class ResultadoMrz(
     val sexo: Char?,
     val fechaVencimiento: FechaDocumento?,
     val checksumsValidos: Boolean,
-    // Ver nota junto a `pareceNumeroExtendido` en parsearMrzTd1: cuando es
-    // true, `numeroDocumento` sólo trae los primeros 9 caracteres y NO debe
-    // usarse como número completo -- falta implementar el mecanismo de
-    // número extendido de ICAO 9303 antes de confiar en este campo.
+    // true cuando la posición 15 trae un dígito (no relleno) y hay más
+    // dígitos en el campo opcional, pero no calza ni el mecanismo estándar
+    // de ICAO ni ninguna convención de país verificada (ver
+    // `CR_DIMEX_TD1_2023` en `parsearMrzTd1`) -- en ese caso `numeroDocumento`
+    // sólo trae los primeros 9 caracteres y NO debe usarse como número
+    // completo.
     val numeroDocumentoExtendidoSinSoporte: Boolean = false,
 )
 
@@ -90,6 +98,7 @@ fun parsearMrzTd1(texto: String): ResultadoMrz? {
     val lineas = buscarLineasMrz(texto, longitud = 30, cantidad = 3) ?: return null
     val (l1, l2, l3) = Triple(lineas[0], lineas[1], lineas[2])
 
+    val codigoDocumento = l1.substring(0, 2)
     val paisEmisor = l1.substring(2, 5)
     val bloqueNumero = l1.substring(5, 14) // 9 caracteres
     val checkNumero = l1[14]
@@ -111,7 +120,7 @@ fun parsearMrzTd1(texto: String): ResultadoMrz? {
             // Extensión declarada (posición 15 = '<') pero sin continuación
             // ni check digit legibles -- MRZ incompleto, no un número normal.
             return ResultadoMrz(
-                formato = "TD1", paisEmisor = paisEmisor, numeroDocumento = bloqueNumero,
+                formato = "TD1", codigoDocumento = codigoDocumento, paisEmisor = paisEmisor, numeroDocumento = bloqueNumero,
                 apellidos = "", nombres = "", nacionalidad = "", fechaNacimiento = null, sexo = null,
                 fechaVencimiento = null, checksumsValidos = false, numeroDocumentoExtendidoSinSoporte = true,
             )
@@ -145,7 +154,7 @@ fun parsearMrzTd1(texto: String): ResultadoMrz? {
         val pareceExtendidoNoEstandar = opcional1.takeWhile { it != '<' }.any { it.isDigit() }
         if (pareceExtendidoNoEstandar) {
             return ResultadoMrz(
-                formato = "TD1", paisEmisor = paisEmisor, numeroDocumento = bloqueNumero,
+                formato = "TD1", codigoDocumento = codigoDocumento, paisEmisor = paisEmisor, numeroDocumento = bloqueNumero,
                 apellidos = "", nombres = "", nacionalidad = "", fechaNacimiento = null, sexo = null,
                 fechaVencimiento = null, checksumsValidos = false, numeroDocumentoExtendidoSinSoporte = true,
             )
@@ -179,6 +188,7 @@ fun parsearMrzTd1(texto: String): ResultadoMrz? {
 
     return ResultadoMrz(
         formato = "TD1",
+        codigoDocumento = codigoDocumento,
         paisEmisor = paisEmisor,
         numeroDocumento = numeroDocumento,
         apellidos = apellidos,
@@ -198,6 +208,7 @@ fun parsearMrzTd3(texto: String): ResultadoMrz? {
     val lineas = buscarLineasMrz(texto, longitud = 44, cantidad = 2) ?: return null
     val (l1, l2) = lineas[0] to lineas[1]
 
+    val codigoDocumento = l1.substring(0, 2)
     val paisEmisor = l1.substring(2, 5)
     val (apellidos, nombres) = separarNombres(l1.substring(5))
 
@@ -224,6 +235,7 @@ fun parsearMrzTd3(texto: String): ResultadoMrz? {
 
     return ResultadoMrz(
         formato = "TD3",
+        codigoDocumento = codigoDocumento,
         paisEmisor = paisEmisor,
         numeroDocumento = bloqueNumero.trimEnd('<'),
         apellidos = apellidos,

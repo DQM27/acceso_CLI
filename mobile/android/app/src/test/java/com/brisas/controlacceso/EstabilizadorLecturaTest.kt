@@ -9,13 +9,13 @@ class EstabilizadorLecturaTest {
     private val licenciaTexto = "Licencia de Conducir\nNº: 112340567\nVencimiento 03-04-2030"
 
     private val td1Valido = """
-        IDCRI9998887774<<<<<<<<<<<<<<<
+        C<CRI9998887774<<<<<<<<<<<<<<<
         9001011F3001019NIC<<<<<<<<<<<8
         PEREZ<<MARIA<JOSE<<<<<<<<<<<<<
     """.trimIndent()
 
     private val td1Corrupto = """
-        IDCRI9998887784<<<<<<<<<<<<<<<
+        C<CRI9998887784<<<<<<<<<<<<<<<
         9001011F3001019NIC<<<<<<<<<<<8
         PEREZ<<MARIA<JOSE<<<<<<<<<<<<<
     """.trimIndent()
@@ -115,6 +115,23 @@ class EstabilizadorLecturaTest {
     fun mensajeDeConfirmacionNombraElTipoDetectadoPorMrz() {
         val r = EstabilizadorLectura().procesarFrame(td1Valido)
         assertEquals("Cédula de residencia (DIMEX) confirmado", r.mensaje)
+    }
+
+    @Test
+    fun distingueCedulaNacionalDeDimexUsandoSoloElMrz() {
+        // Mismo formato TD1 que el DIMEX, distinto código de documento en
+        // posiciones 1-2 (ID en vez de C<) -- código real confirmado contra
+        // el Decreto TSE n.° 22-2025 (cédula nacional vigente desde
+        // oct-2025). Datos numéricos inventados, checksums verificados.
+        val td1CedulaNacional = """
+            IDCRI1011101119<<<<<<<<<<<<<<<
+            9001011F3001019CRI<<<<<<<<<<<8
+            PEREZ<<MARIA<JOSE<<<<<<<<<<<<<
+        """.trimIndent()
+        val r = EstabilizadorLectura().procesarFrame(td1CedulaNacional)
+        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
+        assertEquals(TipoDocumento.CEDULA_NACIONAL, r.documento?.tipo)
+        assertEquals("Cédula de identidad confirmado", r.mensaje)
     }
 
     // --- Vigencia (fecha inyectada, no depende del reloj real) ---

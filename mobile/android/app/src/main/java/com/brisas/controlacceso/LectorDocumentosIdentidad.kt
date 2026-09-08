@@ -42,13 +42,25 @@ fun TipoDocumento.nombreLegible(): String = when (this) {
     TipoDocumento.DESCONOCIDO -> "Documento"
 }
 
-/// Traduce un MRZ ya parseado al modelo normalizado. TD1 se etiqueta como
-/// `CEDULA_RESIDENCIA` por ahora -- la cédula nacional 2025+ también usa
-/// TD1 y hoy no hay forma de distinguirlas sólo por el MRZ (el campo de
-/// tipo de documento no está estandarizado entre emisores); si esto
-/// importa en la práctica, resolver combinando con el frente.
+/// Traduce un MRZ ya parseado al modelo normalizado. La distinción entre
+/// cédula nacional y DIMEX (ambas TD1) es una regla de Costa Rica, no algo
+/// que ICAO estandarice -- por eso vive acá, no en `MrzParser.kt`: el
+/// código de documento (ICAO 9303 permite A/C/I como primer carácter, el
+/// segundo a discreción del emisor) usado por Costa Rica es `ID` para la
+/// cédula nacional (Decreto TSE n.° 22-2025, vigente desde oct-2025) y `C<`
+/// para el DIMEX/residencia de DGME (confirmado contra un documento real).
+/// Sin especificación pública oficial que lo documente con este nivel de
+/// detalle -- basado en las imágenes de las circulares/decreto del TSE.
+/// Un TD1 de otro país (o de Costa Rica con un código distinto de estos
+/// dos) queda como `DESCONOCIDO`: no hay regla verificada para él todavía,
+/// mejor eso que asumir uno de los dos casos costarricenses sin fundamento.
 fun ResultadoMrz.aDocumentoDetectado(): DocumentoDetectado = DocumentoDetectado(
-    tipo = if (formato == "TD3") TipoDocumento.PASAPORTE else TipoDocumento.CEDULA_RESIDENCIA,
+    tipo = when {
+        formato == "TD3" -> TipoDocumento.PASAPORTE
+        formato == "TD1" && paisEmisor == "CRI" && codigoDocumento == "ID" -> TipoDocumento.CEDULA_NACIONAL
+        formato == "TD1" && paisEmisor == "CRI" && codigoDocumento == "C<" -> TipoDocumento.CEDULA_RESIDENCIA
+        else -> TipoDocumento.DESCONOCIDO
+    },
     numeroDocumento = numeroDocumento,
     nombre = nombres.ifBlank { null },
     apellidos = apellidos.ifBlank { null },
