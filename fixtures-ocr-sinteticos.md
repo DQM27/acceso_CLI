@@ -144,7 +144,7 @@ documentado para cuando se evalúe soporte de pasaporte:
 
 ```
 P<CRIPEREZ<<MARIA<JOSE<<<<<<<<<<<<<<<<<<<<<<
-A1234567<6CRI9001011F3001019<<<<<<<<<<<<<<06
+A1234567<6CRI9001011F3001019<<<<<<<<<<<<<<04
 ```
 
 ## 9. Uso sugerido
