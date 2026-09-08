@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -30,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,6 +90,7 @@ fun PantallaActivos(
         viewModel(factory = ActivosViewModel.factory(nucleo, secretoStore))
     var escanerAbierto by remember { mutableStateOf(false) }
     var escanerGafeteSalidaAbierto by remember { mutableStateOf(false) }
+    var automatico by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(refrescarNube) {
         if (refrescarNube > 0) {
             viewModel.refrescar()
@@ -100,6 +103,8 @@ fun PantallaActivos(
                 nucleo = nucleo,
                 secretoStore = secretoStore,
                 preparacion = actual.preparacion,
+                ingresoAutomatico = automatico,
+                onCambiarIngresoAutomatico = { automatico = it },
                 onRegistrado = { viewModel.onIngresoRegistrado() },
                 onCambiar = { viewModel.cancelarSeleccionIngreso() },
             )
@@ -124,7 +129,7 @@ fun PantallaActivos(
                 if (viewModel.modo != ModoBusqueda.ENTRADA) {
                     viewModel.cambiarModo(ModoBusqueda.ENTRADA)
                 }
-                viewModel.cambiarTexto(cedula)
+                viewModel.usarDocumentoEscaneadoIngreso(cedula)
             },
             onCerrar = { escanerAbierto = false },
         )
@@ -139,7 +144,11 @@ fun PantallaActivos(
                 if (viewModel.modo != ModoBusqueda.SALIDA_GAFETE) {
                     viewModel.cambiarModo(ModoBusqueda.SALIDA_GAFETE)
                 }
-                viewModel.cambiarTexto(gafete)
+                if (automatico) {
+                    viewModel.registrarSalidaPorGafeteEscaneado(gafete)
+                } else {
+                    viewModel.cambiarTexto(gafete)
+                }
             },
             onCerrar = { escanerGafeteSalidaAbierto = false },
         )
@@ -189,6 +198,8 @@ fun PantallaActivos(
                 texto = viewModel.texto,
                 coincidencias = viewModel.coincidenciasGafete,
                 enviando = viewModel.enviandoGafetes,
+                automatico = automatico,
+                onCambiarAutomatico = { automatico = it },
                 onRegistrarSalidaGafetes = { viewModel.registrarSalidaPorGafetes() },
             )
         }
@@ -385,19 +396,36 @@ private fun ContenidoModoSalidaGafete(
     texto: String,
     coincidencias: List<CoincidenciaGafete>,
     enviando: Boolean,
+    automatico: Boolean,
+    onCambiarAutomatico: (Boolean) -> Unit,
     onRegistrarSalidaGafetes: () -> Unit,
 ) {
-    if (texto.isBlank()) {
-        Text(
-            "Escriba uno o más números de gafete, separados por coma",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        return
-    }
-
     Column(modifier = Modifier.padding(top = 8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Checkbox(
+                checked = automatico,
+                onCheckedChange = onCambiarAutomatico,
+                enabled = !enviando,
+            )
+            Text(
+                "Automático",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+        }
+
+        if (texto.isBlank()) {
+            Text(
+                "Escriba uno o más números de gafete, separados por coma",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return
+        }
+
         coincidencias.forEach { coincidencia ->
             val activoCoincidente = coincidencia.activo
             Text(

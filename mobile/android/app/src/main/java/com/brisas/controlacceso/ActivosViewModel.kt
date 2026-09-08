@@ -164,6 +164,26 @@ class ActivosViewModel(
         buscar(debounce = true)
     }
 
+    fun usarDocumentoEscaneadoIngreso(valor: String) {
+        modo = ModoBusqueda.ENTRADA
+        texto = valor
+        mensaje = null
+        trabajoBusqueda?.cancel()
+        trabajoBusqueda = viewModelScope.launch {
+            try {
+                val resultados = withContext(dispatcherIO) { nucleo.buscarContratistas(valor) }
+                resultadosBusqueda = resultados
+                val contratista = contratistaEscaneadoClaro(valor, resultados)
+                if (contratista != null) {
+                    elegir(contratista)
+                }
+                error = null
+            } catch (excepcion: NucleoException) {
+                error = excepcion.message
+            }
+        }
+    }
+
     fun cambiarModo(nuevo: ModoBusqueda) {
         modo = nuevo
         // Al cambiar de modo el texto que había queda escrito con otro
@@ -349,6 +369,44 @@ class ActivosViewModel(
         }
     }
 
+    fun registrarSalidaPorGafeteEscaneado(valor: String) {
+        val numero = valor.filter(Char::isDigit).toIntOrNull()
+        if (numero == null) {
+            mensaje = "Gafete no válido"
+            mensajeEsError = true
+            return
+        }
+        modo = ModoBusqueda.SALIDA_GAFETE
+        texto = numero.toString()
+        mensaje = null
+        trabajoBusqueda?.cancel()
+        trabajoBusqueda = viewModelScope.launch {
+            enviandoGafetes = true
+            try {
+                val activo = withContext(dispatcherIO) {
+                    nucleo.listarIngresosActivos(numero.toString(), ModoBusquedaActivos.GAFETE).firstOrNull()
+                }
+                coincidenciasGafete = listOf(CoincidenciaGafete(numero, activo))
+                if (activo == null) {
+                    mensaje = "Gafete $numero: sin ingreso activo"
+                    mensajeEsError = true
+                    return@launch
+                }
+                withContext(dispatcherIO) { nucleo.registrarSalida(activo.registroId) }
+                CambiosNube.solicitar()
+                mensaje = "Salida registrada: ${activo.contratistaNombre}"
+                mensajeEsError = false
+                texto = ""
+                coincidenciasGafete = emptyList()
+            } catch (excepcion: NucleoException) {
+                mensaje = "Gafete $numero: ${excepcion.message}"
+                mensajeEsError = true
+            } finally {
+                enviandoGafetes = false
+            }
+        }
+    }
+
     companion object {
         // Ver el comentario en `cambiarTexto`. 300ms es el mismo orden de
         // magnitud que usan la mayoría de buscadores con debounce -- ya no
@@ -363,4 +421,11 @@ class ActivosViewModel(
             initializer { ActivosViewModel(nucleo, secretoStore) }
         }
     }
+}
+
+private fun contratistaEscaneadoClaro(valor: String, resultados: List<ContratistaResumen>): ContratistaResumen? {
+    if (resultados.size == 1) return resultados.single()
+    val digitos = valor.filter(Char::isDigit)
+    if (digitos.isEmpty()) return null
+    return resultados.singleOrNull { it.cedula.filter(Char::isDigit) == digitos }
 }

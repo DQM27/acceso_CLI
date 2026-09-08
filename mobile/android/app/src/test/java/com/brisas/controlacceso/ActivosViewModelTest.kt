@@ -14,6 +14,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import uniffi.control_acceso_mobile.MedioIngreso
+import uniffi.control_acceso_mobile.ModoBusquedaActivos
 import uniffi.control_acceso_mobile.Nucleo
 
 /// `ActivosViewModel` sí usa `viewModelScope.launch` + `withContext`, así
@@ -105,6 +107,61 @@ class ActivosViewModelTest {
         val seleccion = viewModel.seleccionIngreso
         assertTrue(seleccion is SeleccionIngreso.Formulario)
         assertEquals("Contratista Test", (seleccion as SeleccionIngreso.Formulario).preparacion.nombre)
+    }
+
+    @Test
+    fun `documento escaneado con coincidencia clara abre formulario de ingreso`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');",
+            """
+            INSERT INTO contratistas (
+                cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+            ) VALUES ('111111111', 'Contratista Escaneado', 1, 'SWAT', 0, 1);
+            """.trimIndent(),
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.usarDocumentoEscaneadoIngreso("111111111")
+        advanceUntilIdle()
+
+        val seleccion = viewModel.seleccionIngreso
+        assertTrue(seleccion is SeleccionIngreso.Formulario)
+        assertEquals("Contratista Escaneado", (seleccion as SeleccionIngreso.Formulario).preparacion.nombre)
+    }
+
+    @Test
+    fun `salida por gafete escaneado registra y mantiene modo gafete`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');",
+            """
+            INSERT INTO contratistas (
+                cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso,
+                fecha_vencimiento_praind
+            ) VALUES ('111111117', 'Con Gafete Siete', 1, 'PRAIND', 0, 1, '2099-12-31');
+            """.trimIndent(),
+            "INSERT INTO gafetes (numero, estado) VALUES (7, 'DISPONIBLE');",
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        nucleo.autenticar(
+            "999999999",
+            NucleoDePrueba.CLAVE_PRUEBA,
+            "",
+            "",
+        )
+        nucleo.registrarIngreso(1, MedioIngreso.CAMINANDO, 7L)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.registrarSalidaPorGafeteEscaneado("7")
+        advanceUntilIdle()
+
+        assertEquals(ModoBusqueda.SALIDA_GAFETE, viewModel.modo)
+        assertEquals("Salida registrada: Con Gafete Siete", viewModel.mensaje)
+        assertTrue(nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA).isEmpty())
     }
 
     @Test

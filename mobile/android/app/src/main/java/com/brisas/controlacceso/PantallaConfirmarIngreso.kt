@@ -102,6 +102,8 @@ fun PantallaConfirmarIngreso(
     nucleo: Nucleo,
     secretoStore: SecretoDispositivoStore,
     preparacion: PreparacionIngreso,
+    ingresoAutomatico: Boolean,
+    onCambiarIngresoAutomatico: (Boolean) -> Unit,
     onRegistrado: () -> Unit,
     onCambiar: () -> Unit,
 ) {
@@ -110,7 +112,6 @@ fun PantallaConfirmarIngreso(
     var error by remember { mutableStateOf<String?>(null) }
     var enviando by remember { mutableStateOf(false) }
     var escanerGafeteAbierto by remember { mutableStateOf(false) }
-    var ingresoAutomatico by rememberSaveable { mutableStateOf(false) }
     val alcance = rememberCoroutineScope()
 
     val focoGafete = remember { FocusRequester() }
@@ -226,7 +227,7 @@ fun PantallaConfirmarIngreso(
             ) {
                 Checkbox(
                     checked = ingresoAutomatico,
-                    onCheckedChange = { ingresoAutomatico = it },
+                    onCheckedChange = onCambiarIngresoAutomatico,
                     enabled = !enviando,
                 )
                 Text(
