@@ -93,7 +93,12 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
     val lifecycleOwner = LocalLifecycleOwner.current
     val ejecutor = remember { Executors.newSingleThreadExecutor() }
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
-    var ultimoMensaje by remember { mutableStateOf("Alinee la cédula dentro de la cámara") }
+    var ultimoMensaje by remember { mutableStateOf("Alinee el documento dentro de la cámara") }
+    var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
+    // Una instancia por apertura de pantalla -- lleva el conteo de frames
+    // consistentes del debounce (ver EstabilizadorLectura), no debe
+    // compartirse entre sesiones de escaneo distintas.
+    val estabilizador = remember { EstabilizadorLectura() }
     // AtomicBoolean, no `mutableStateOf` -- esta bandera se lee en el hilo
     // del analizador de cámara (`ejecutor`) y se escribe desde el hilo
     // principal (callback de ML Kit); un booleano de Compose no garantiza
@@ -116,10 +121,18 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
         }
     }
 
-    // Capturado acá (fuera de Canvas, que no es @Composable) para que el
-    // marco respete el color de acento del tema activo, en vez de un color
-    // fijo que desentone con Classic/Brisas/Negro.
-    val colorAcento = MaterialTheme.colorScheme.primary
+    // Colores de estado fijos, no dependientes del tema (Classic/Brisas/Negro):
+    // acá el color comunica significado (buscando/inválido/confirmado), y ese
+    // significado debe leerse igual sin importar qué tema tenga activo quien
+    // opera -- a diferencia del acento decorativo que usaba antes este marco.
+    val colorBuscando = Color(0xFF9E9E9E)
+    val colorInvalido = Color(0xFFE53935)
+    val colorConfirmado = Color(0xFF43A047)
+    val colorMarco = when (estado) {
+        EstadoEscaneo.BUSCANDO -> colorBuscando
+        EstadoEscaneo.INVALIDO -> colorInvalido
+        EstadoEscaneo.CONFIRMADO -> colorConfirmado
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -152,11 +165,20 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
                                     analizarCedula(
                                         imagen = imagen,
                                         recognizer = recognizer,
-                                        onTexto = { ultimoMensaje = it },
-                                        onCedula = { cedula ->
-                                            if (detectada.compareAndSet(false, true)) {
-                                                onCedulaDetectada(cedula)
+                                        onTexto = { texto ->
+                                            val resultado = estabilizador.procesarFrame(texto)
+                                            estado = resultado.estado
+                                            ultimoMensaje = resultado.mensaje
+                                            val documento = resultado.documento
+                                            if (resultado.estado == EstadoEscaneo.CONFIRMADO && documento != null) {
+                                                if (detectada.compareAndSet(false, true)) {
+                                                    onCedulaDetectada(documento.numeroDocumento)
+                                                }
                                             }
+                                        },
+                                        onFallo = {
+                                            estado = EstadoEscaneo.BUSCANDO
+                                            ultimoMensaje = "No se pudo leer el texto. Intente acercar el documento."
                                         },
                                     )
                                 }
@@ -175,7 +197,7 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
             },
             modifier = Modifier.fillMaxSize(),
         )
-        MarcoGuiaCedula(color = colorAcento, modifier = Modifier.fillMaxSize())
+        MarcoGuiaCedula(color = colorMarco, modifier = Modifier.fillMaxSize())
         Column(
             modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -266,12 +288,16 @@ private fun MarcoGuiaCedula(color: Color, modifier: Modifier = Modifier) {
     }
 }
 
+/// Sólo entrega a ML Kit y devuelve el texto crudo -- la clasificación de
+/// tipo de documento, extracción de campos y decisión de aceptar o no la
+/// lectura viven en [EstabilizadorLectura], no acá (separar esto evita que
+/// esta función termine "sabiendo" de cédulas/DIMEX/licencias/MRZ).
 @androidx.annotation.OptIn(ExperimentalGetImage::class)
 private fun analizarCedula(
     imagen: ImageProxy,
     recognizer: com.google.mlkit.vision.text.TextRecognizer,
     onTexto: (String) -> Unit,
-    onCedula: (String) -> Unit,
+    onFallo: () -> Unit,
 ) {
     val mediaImage = imagen.image
     if (mediaImage == null) {
@@ -280,18 +306,8 @@ private fun analizarCedula(
     }
     val input = InputImage.fromMediaImage(mediaImage, imagen.imageInfo.rotationDegrees)
     recognizer.process(input)
-        .addOnSuccessListener { resultado ->
-            val cedula = extraerCedulaDeTexto(resultado.text)
-            if (cedula != null) {
-                onTexto("Cédula detectada: $cedula")
-                onCedula(cedula)
-            } else {
-                onTexto("Buscando número de cédula…")
-            }
-        }
-        .addOnFailureListener {
-            onTexto("No se pudo leer el texto. Intente acercar la cédula.")
-        }
+        .addOnSuccessListener { resultado -> onTexto(resultado.text) }
+        .addOnFailureListener { onFallo() }
         .addOnCompleteListener {
             imagen.close()
         }
