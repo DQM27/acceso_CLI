@@ -35,6 +35,15 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 - [x] **Redactar `Debug` de credenciales de nube.** `TokenDispositivo`
   (`src/nube/cliente.rs`) y `SesionRealtimeNube` (`src/application/nube.rs`) tienen
   `Debug` manual con `access_token`/`apikey` redactados, cubierto por pruebas.
+- [ ] **`cerrar_ingreso_remoto` manda `hora_salida` sin corregir desfase de
+  reloj.** A diferencia de otros caminos, calcula la hora con
+  `chrono::Utc::now()` crudo del dispositivo, no con el reloj corregido
+  contra el servidor. Encontrado en vivo (2026-09-08): una PC con el reloj
+  atrasado no llegó a mandar una hora mala a la nube porque el guardia
+  local (`RelojRetrocedido`) frenó antes, comparando contra el último
+  movimiento local -- pero ese guardia es local, no protege este camino
+  remoto. Sin reproducir todavía; anotado para revisar si vale la pena
+  aplicar la misma corrección de desfase acá.
 - [ ] **Mitigar timing attack en login local.** Si la cédula no existe,
   `AutenticacionService::buscar_candidato` rechaza sin correr Argon2; usar un hash dummy
   reduciría la diferencia de tiempo. Riesgo bajo, pero confirmado.
@@ -95,8 +104,32 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 Revisado contra código el 2026-09-08. Evidencia principal:
 `MrzParser.kt`, `LectorDocumentosIdentidad.kt`, `EstabilizadorLectura.kt`,
 `PantallaEscanearCedula.kt` y pruebas unitarias dirigidas en verde para parser,
-estabilizador, clasificador y región de interés.
+estabilizador y clasificador.
 
+- [ ] **Extracción de DIMEX/licencia sin confirmar contra texto OCR real.**
+  Las regex de `extraerDimex`/`extraerLicencia` están probadas contra texto
+  sintético inventado, no contra una lectura real de ML Kit -- el usuario
+  reportó que la clasificación anda al toque pero la extracción del número
+  casi nunca calza salvo en un ángulo casi perfecto. Falta una foto real de
+  cada documento para ajustar las regex contra el formato real (espaciado,
+  símbolos como "N°", saltos de línea) en vez de seguir adivinando.
+- [x] **Carnet de inducción PRAIND agregado al lector.** Dos variantes de
+  diseño reales verificadas con tests (`LectorDocumentosIdentidadTest`);
+  extrae cédula, nombre y `fecha_vencimiento_praind`. Clasificado antes que
+  cédula nacional porque también trae un número de cédula de 9 dígitos
+  propio.
+- [x] **Recorte del área de análisis al recuadro guía: revertido.** Se
+  probó en dispositivo real y empeoró el escaneo sin dar la velocidad
+  prometida -- ver `docs/plan-ocr-escaneo-documentos.md` sección 9.
+  `analizarCedula` vuelve a procesar el frame completo.
+- [x] **Bug real encontrado y corregido: enfoque de cámara bloqueado.**
+  `disableAutoCancel()` en `FocusMeteringAction` no da "enfoque continuo"
+  -- bloquea el foco para siempre en lo que la cámara vio al arrancar. Era
+  la causa real de que el escaneo pareciera "exigente". Sacado del todo;
+  vuelve al autofocus continuo por defecto de CameraX.
+- [x] **Debounce de `EstabilizadorLectura` tolera reflejos intermitentes.**
+  Pasa de exigir frames consecutivos idénticos a una ventana deslizante
+  (`framesRequeridos` de los últimos `ventana` frames).
 - [x] **Flujo frente/reverso resuelto en una sola cámara.** `EstabilizadorLectura` intenta
   MRZ primero y cae a OCR de frente si no hay MRZ; no se requiere paso manual para voltear
   el documento.
