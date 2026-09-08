@@ -100,9 +100,17 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
     // esa visibilidad entre hilos, y además el `compareAndSet` evita que
     // dos frames en vuelo disparen `onCedulaDetectada` dos veces.
     val detectada = remember { AtomicBoolean(false) }
+    // Guardado acá para poder desatarlo explícitamente al salir -- `bindToLifecycle`
+    // por sí solo no alcanza: en una app de una sola Activity con Compose,
+    // `LocalLifecycleOwner` suele ser la Activity, no esta pantalla, así que la
+    // cámara no se libera sola al navegar fuera de acá, sólo al morir la Activity.
+    // Sin este `unbindAll()` explícito, reabrir el escáner puede encontrar la
+    // cámara todavía atada al ciclo de vida anterior.
+    var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
 
     DisposableEffect(Unit) {
         onDispose {
+            cameraProvider?.unbindAll()
             ejecutor.shutdown()
             recognizer.close()
         }
@@ -122,7 +130,8 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
                 val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
                 cameraProviderFuture.addListener(
                     {
-                        val cameraProvider = cameraProviderFuture.get()
+                        val proveedor = cameraProviderFuture.get()
+                        cameraProvider = proveedor
                         val preview = Preview.Builder().build().also {
                             it.surfaceProvider = previewView.surfaceProvider
                         }
@@ -152,8 +161,8 @@ private fun VistaCamaraCedula(onCedulaDetectada: (String) -> Unit, onCerrar: () 
                                     )
                                 }
                             }
-                        cameraProvider.unbindAll()
-                        cameraProvider.bindToLifecycle(
+                        proveedor.unbindAll()
+                        proveedor.bindToLifecycle(
                             lifecycleOwner,
                             CameraSelector.DEFAULT_BACK_CAMERA,
                             preview,
