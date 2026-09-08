@@ -139,6 +139,8 @@ class ActivosViewModel(
         private set
     var seleccionIngreso by mutableStateOf<SeleccionIngreso>(SeleccionIngreso.Ninguna)
         private set
+    var automatico by mutableStateOf(true)
+        private set
 
     // Cancela la búsqueda anterior si `texto`/`modo` cambiaron antes de que
     // terminara — mismo comportamiento que daba `LaunchedEffect(texto,
@@ -162,6 +164,10 @@ class ActivosViewModel(
         // `trabajoBusqueda?.cancel()` dentro de `buscar` ya mata la espera
         // anterior antes de que llegue a consultar nada.
         buscar(debounce = true)
+    }
+
+    fun cambiarAutomatico(nuevo: Boolean) {
+        automatico = nuevo
     }
 
     fun usarDocumentoEscaneadoIngreso(valor: String) {

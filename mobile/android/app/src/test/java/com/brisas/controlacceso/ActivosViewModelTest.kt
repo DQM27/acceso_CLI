@@ -202,4 +202,19 @@ class ActivosViewModelTest {
         assertEquals(ModoBusqueda.SALIDA_GAFETE, viewModel.modo)
         assertEquals("", viewModel.texto)
     }
+
+    @Test
+    fun `automatico inicia activo y no se pierde al cambiar modo`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(archivo, NucleoDePrueba.sqlUsuarioRoot())
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.automatico)
+
+        viewModel.cambiarAutomatico(false)
+        viewModel.cambiarModo(ModoBusqueda.SALIDA_GAFETE)
+        advanceUntilIdle()
+
+        assertEquals(false, viewModel.automatico)
+    }
 }

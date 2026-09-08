@@ -61,6 +61,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 @Composable
 fun PantallaEscanearCedula(
     modo: ModoEscaneoDocumento = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
+    continuo: Boolean = false,
     onCedulaDetectada: (String) -> Unit,
     onCerrar: () -> Unit,
 ) {
@@ -79,7 +80,12 @@ fun PantallaEscanearCedula(
     }
 
     if (permisoConcedido) {
-        VistaCamaraCedula(modo = modo, onCedulaDetectada = onCedulaDetectada, onCerrar = onCerrar)
+        VistaCamaraCedula(
+            modo = modo,
+            continuo = continuo,
+            onCedulaDetectada = onCedulaDetectada,
+            onCerrar = onCerrar,
+        )
     } else {
         Column(
             modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -102,6 +108,7 @@ fun PantallaEscanearCedula(
 @Composable
 private fun VistaCamaraCedula(
     modo: ModoEscaneoDocumento,
+    continuo: Boolean,
     onCedulaDetectada: (String) -> Unit,
     onCerrar: () -> Unit,
 ) {
@@ -125,6 +132,8 @@ private fun VistaCamaraCedula(
     // consistentes del debounce (ver EstabilizadorLectura), no debe
     // compartirse entre sesiones de escaneo distintas.
     val estabilizador = remember(modo) { EstabilizadorLectura(modo = modo) }
+    var ultimoValorContinuo by remember { mutableStateOf<String?>(null) }
+    var ultimoValorContinuoEnMs by remember { mutableStateOf(0L) }
     // AtomicBoolean, no `mutableStateOf` -- esta bandera se lee en el hilo
     // del analizador de cámara (`ejecutor`) y se escribe desde el hilo
     // principal (callback de ML Kit); un booleano de Compose no garantiza
@@ -188,16 +197,42 @@ private fun VistaCamaraCedula(
                         val documento = resultado.documento
                         if (resultado.estado == EstadoEscaneo.CONFIRMADO && documento != null) {
                             if (detectada.compareAndSet(false, true)) {
-                                haptica.performHapticFeedback(HapticFeedbackType.Confirm)
-                                reproducirVibracionConfirmacion(contexto)
-                                reproducirSonidoConfirmacion()
-                                if (resultado.vencido) {
-                                    Handler(Looper.getMainLooper()).postDelayed(
-                                        { onCedulaDetectada(documento.textoBusqueda ?: documento.numeroDocumento) },
-                                        DEMORA_AVISO_VENCIDO_MS,
-                                    )
+                                val valor = documento.textoBusqueda ?: documento.numeroDocumento
+                                val ahora = System.currentTimeMillis()
+                                val repetidoContinuo = continuo &&
+                                    valor == ultimoValorContinuo &&
+                                    ahora - ultimoValorContinuoEnMs < DEMORA_REPETIDO_ESCANEO_CONTINUO_MS
+                                if (repetidoContinuo) {
+                                    detectada.set(false)
+                                    estabilizador.reiniciar()
                                 } else {
-                                    onCedulaDetectada(documento.textoBusqueda ?: documento.numeroDocumento)
+                                    ultimoValorContinuo = valor
+                                    ultimoValorContinuoEnMs = ahora
+                                    haptica.performHapticFeedback(HapticFeedbackType.Confirm)
+                                    reproducirVibracionConfirmacion(contexto)
+                                    reproducirSonidoConfirmacion()
+                                    if (continuo) {
+                                        onCedulaDetectada(valor)
+                                        ultimoMensaje = mensajeProcesadoContinuo(modo, valor)
+                                        Handler(Looper.getMainLooper()).postDelayed(
+                                            {
+                                                detectada.set(false)
+                                                estabilizador.reiniciar()
+                                                estado = EstadoEscaneo.BUSCANDO
+                                                vencido = false
+                                                areaTexto = null
+                                                ultimoMensaje = mensajeInicialEscaneo(modo)
+                                            },
+                                            DEMORA_REARMAR_ESCANEO_CONTINUO_MS,
+                                        )
+                                    } else if (resultado.vencido) {
+                                        Handler(Looper.getMainLooper()).postDelayed(
+                                            { onCedulaDetectada(valor) },
+                                            DEMORA_AVISO_VENCIDO_MS,
+                                        )
+                                    } else {
+                                        onCedulaDetectada(valor)
+                                    }
                                 }
                             }
                         }
@@ -377,12 +412,20 @@ private fun reproducirSonidoConfirmacion() {
 private const val VOLUMEN_SONIDO_CONFIRMACION = 40 // sobre 100 -- sutil, no un beep de caja registradora
 private const val DURACION_SONIDO_CONFIRMACION_MS = 100
 private const val DEMORA_AVISO_VENCIDO_MS = 1200L
+private const val DEMORA_REARMAR_ESCANEO_CONTINUO_MS = 900L
+private const val DEMORA_REPETIDO_ESCANEO_CONTINUO_MS = 2500L
 private const val DURACION_VIBRACION_CONFIRMACION_MS = 70L
 
 private fun mensajeInicialEscaneo(modo: ModoEscaneoDocumento): String =
     when (modo) {
         ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA -> "Apunte al documento"
         ModoEscaneoDocumento.GAFETE_CONTRATISTA -> "Apunte al gafete"
+    }
+
+private fun mensajeProcesadoContinuo(modo: ModoEscaneoDocumento, valor: String): String =
+    when (modo) {
+        ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA -> "Documento $valor procesado"
+        ModoEscaneoDocumento.GAFETE_CONTRATISTA -> "Gafete $valor procesado"
     }
 
 private fun reproducirVibracionConfirmacion(contexto: android.content.Context) {

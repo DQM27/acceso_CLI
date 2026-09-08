@@ -121,7 +121,7 @@ class EstabilizadorLectura(
         return mensaje to vencido
     }
 
-    private fun reiniciar() {
+    fun reiniciar() {
         candidatosRecientes.clear()
     }
 

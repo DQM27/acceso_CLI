@@ -31,7 +31,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,7 +89,6 @@ fun PantallaActivos(
         viewModel(factory = ActivosViewModel.factory(nucleo, secretoStore))
     var escanerAbierto by remember { mutableStateOf(false) }
     var escanerGafeteSalidaAbierto by remember { mutableStateOf(false) }
-    var automatico by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(refrescarNube) {
         if (refrescarNube > 0) {
             viewModel.refrescar()
@@ -103,8 +101,8 @@ fun PantallaActivos(
                 nucleo = nucleo,
                 secretoStore = secretoStore,
                 preparacion = actual.preparacion,
-                ingresoAutomatico = automatico,
-                onCambiarIngresoAutomatico = { automatico = it },
+                ingresoAutomatico = viewModel.automatico,
+                onCambiarIngresoAutomatico = { viewModel.cambiarAutomatico(it) },
                 onRegistrado = { viewModel.onIngresoRegistrado() },
                 onCambiar = { viewModel.cancelarSeleccionIngreso() },
             )
@@ -139,12 +137,15 @@ fun PantallaActivos(
     if (escanerGafeteSalidaAbierto) {
         PantallaEscanearCedula(
             modo = ModoEscaneoDocumento.GAFETE_CONTRATISTA,
+            continuo = viewModel.automatico,
             onCedulaDetectada = { gafete ->
-                escanerGafeteSalidaAbierto = false
+                if (!viewModel.automatico) {
+                    escanerGafeteSalidaAbierto = false
+                }
                 if (viewModel.modo != ModoBusqueda.SALIDA_GAFETE) {
                     viewModel.cambiarModo(ModoBusqueda.SALIDA_GAFETE)
                 }
-                if (automatico) {
+                if (viewModel.automatico) {
                     viewModel.registrarSalidaPorGafeteEscaneado(gafete)
                 } else {
                     viewModel.cambiarTexto(gafete)
@@ -198,8 +199,8 @@ fun PantallaActivos(
                 texto = viewModel.texto,
                 coincidencias = viewModel.coincidenciasGafete,
                 enviando = viewModel.enviandoGafetes,
-                automatico = automatico,
-                onCambiarAutomatico = { automatico = it },
+                automatico = viewModel.automatico,
+                onCambiarAutomatico = { viewModel.cambiarAutomatico(it) },
                 onRegistrarSalidaGafetes = { viewModel.registrarSalidaPorGafetes() },
             )
         }
