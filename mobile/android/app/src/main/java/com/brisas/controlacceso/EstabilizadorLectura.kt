@@ -27,6 +27,13 @@ data class ResultadoEstabilizacion(
 ///
 /// Con instancia por sesión de escaneo: crear una nueva por cada vez que se
 /// abre la pantalla de cámara, no reusar entre escaneos distintos.
+///
+/// **No es thread-safe** -- `ultimoCandidato`/`repeticiones` se leen y
+/// escriben sin sincronización. Sólo es seguro porque `procesarFrame` se
+/// llama exclusivamente desde el hilo principal (el callback de ML Kit se
+/// entrega ahí explícitamente, ver `PantallaEscanearCedula.analizarCedula`).
+/// Si algún día se llama desde el hilo del analizador de CameraX en vez del
+/// principal, hay que agregar sincronización acá.
 class EstabilizadorLectura(
     private val framesRequeridos: Int = 3,
     // Inyectable para poder fijar la fecha en tests sin depender del reloj

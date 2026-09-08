@@ -121,6 +121,22 @@ fun fechaDeHoy(): FechaDocumento {
     return FechaDocumento(hoy.dayOfMonth, hoy.monthValue, hoy.year)
 }
 
+// Compiladas una sola vez a nivel de archivo, no dentro de la función --
+// `clasificarTipoDocumento` y los extractores de abajo corren en CADA frame
+// mientras la cámara está escaneando (varias veces por segundo). Un `Regex(...)`
+// dentro de una función recompila el patrón en cada llamada; a este ritmo eso
+// es trabajo de CPU/batería desperdiciado sin ninguna razón, ya que el patrón
+// nunca cambia entre llamadas.
+// (Las de cédula nacional -- guiones/espacios, pegada, caracteres a limpiar --
+// viven en PantallaEscanearCedula.kt junto a extraerCedulaDeTexto, que es
+// donde se usan; `private` a nivel de archivo en Kotlin no cruza archivos.)
+private val REGEX_LICENCIA_EXTRANJERO = Regex("""N[º9O]?[:.]?\s*DM[- ]""")
+private val REGEX_DIMEX_NUMERO = Regex("""DOCUMENTO\s*NO\.?:?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
+private val REGEX_DIMEX_NOMBRE = Regex("""Nombre:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
+private val REGEX_DIMEX_APELLIDOS = Regex("""Apellidos:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
+private val REGEX_DIMEX_NACIONALIDAD = Regex("""Nacionalidad:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
+private val REGEX_LICENCIA_NUMERO = Regex("""N[º9O]?[:.]?\s*(?:DM[- ])?(\d{6,15})""", RegexOption.IGNORE_CASE)
+
 /// Clasifica el tipo de documento a partir del texto crudo de ML Kit, antes
 /// de intentar extraer ningún campo -- este orden importa porque DIMEX y
 /// licencia de extranjero comparten el mismo rango de número de documento,
@@ -128,7 +144,7 @@ fun fechaDeHoy(): FechaDocumento {
 fun clasificarTipoDocumento(texto: String): TipoDocumento {
     val mayus = texto.uppercase()
     return when {
-        "LICENCIA DE CONDUCIR" in mayus && Regex("""N[º9O]?[:.]?\s*DM[- ]""").containsMatchIn(mayus) ->
+        "LICENCIA DE CONDUCIR" in mayus && REGEX_LICENCIA_EXTRANJERO.containsMatchIn(mayus) ->
             TipoDocumento.LICENCIA_EXTRANJERO
         "LICENCIA DE CONDUCIR" in mayus ->
             TipoDocumento.LICENCIA_NACIONAL
@@ -167,16 +183,11 @@ fun leerDocumentoDeTexto(texto: String): DocumentoDetectado? {
 /// ambos son números de longitud similar en el mismo bloque de texto, y una
 /// regex genérica sin contexto de etiqueta puede agarrar el equivocado.
 private fun extraerDimex(texto: String): DocumentoDetectado? {
-    val numero = Regex("""DOCUMENTO\s*NO\.?:?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
-        .find(texto)?.groupValues?.get(1)
-        ?: return null
+    val numero = REGEX_DIMEX_NUMERO.find(texto)?.groupValues?.get(1) ?: return null
 
-    val nombre = Regex("""Nombre:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
-        .find(texto)?.groupValues?.get(1)?.trim()
-    val apellidos = Regex("""Apellidos:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
-        .find(texto)?.groupValues?.get(1)?.trim()
-    val nacionalidad = Regex("""Nacionalidad:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
-        .find(texto)?.groupValues?.get(1)?.trim()
+    val nombre = REGEX_DIMEX_NOMBRE.find(texto)?.groupValues?.get(1)?.trim()
+    val apellidos = REGEX_DIMEX_APELLIDOS.find(texto)?.groupValues?.get(1)?.trim()
+    val nacionalidad = REGEX_DIMEX_NACIONALIDAD.find(texto)?.groupValues?.get(1)?.trim()
     val vencimiento = extraerFecha(texto, etiqueta = "Vence")
 
     return DocumentoDetectado(
@@ -193,9 +204,7 @@ private fun extraerDimex(texto: String): DocumentoDetectado? {
 /// plan, sección 3) -- se remueve del número final pero ya se usó para
 /// clasificar, así que `esExtranjero` llega como parámetro ya decidido.
 private fun extraerLicencia(texto: String, esExtranjero: Boolean): DocumentoDetectado? {
-    val numero = Regex("""N[º9O]?[:.]?\s*(?:DM[- ])?(\d{6,15})""", RegexOption.IGNORE_CASE)
-        .find(texto)?.groupValues?.get(1)
-        ?: return null
+    val numero = REGEX_LICENCIA_NUMERO.find(texto)?.groupValues?.get(1) ?: return null
 
     val vencimiento = extraerFecha(texto, etiqueta = "Vencimiento")
 
@@ -207,9 +216,19 @@ private fun extraerLicencia(texto: String, esExtranjero: Boolean): DocumentoDete
     )
 }
 
+// Una entrada por etiqueta usada ("Vence", "Vencimiento"), compilada la
+// primera vez que se pide y reusada después -- mismo motivo que las demás
+// constantes de arriba (esto corre en cada frame). `Regex.escape(etiqueta)`
+// evita que un carácter especial de regex en la etiqueta (ninguna de las
+// actuales lo tiene, pero nada garantiza que una futura no lo tenga) rompa
+// el patrón o cambie su significado en vez de buscarse literal.
+private val regexesPorEtiquetaFecha = mutableMapOf<String, Regex>()
+
 private fun extraerFecha(texto: String, etiqueta: String): FechaDocumento? {
-    val match = Regex("""$etiqueta[:.]?\s*(\d{1,2})[-\s](\d{1,2})[-\s](\d{4})""", RegexOption.IGNORE_CASE)
-        .find(texto) ?: return null
+    val regex = regexesPorEtiquetaFecha.getOrPut(etiqueta) {
+        Regex("""${Regex.escape(etiqueta)}[:.]?\s*(\d{1,2})[-\s](\d{1,2})[-\s](\d{4})""", RegexOption.IGNORE_CASE)
+    }
+    val match = regex.find(texto) ?: return null
     val (dia, mes, anio) = match.destructured
     return FechaDocumento(dia.toInt(), mes.toInt(), anio.toInt())
 }

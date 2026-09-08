@@ -74,9 +74,13 @@ private fun parsearFechaMrz(yymmdd: String, esNacimiento: Boolean): FechaDocumen
     return FechaDocumento(dd, mm, anioCompleto(yy, esNacimiento))
 }
 
+// Compilado una sola vez -- ver nota equivalente en LectorDocumentosIdentidad.kt,
+// esto también corre en cada frame mientras se busca un MRZ.
+private val REGEX_ESPACIOS_MULTIPLES = Regex(" +")
+
 private fun separarNombres(campoNombres: String): Pair<String, String> {
     val partes = campoNombres.split("<<", limit = 2)
-    fun limpiar(s: String) = s.replace('<', ' ').trim().replace(Regex(" +"), " ")
+    fun limpiar(s: String) = s.replace('<', ' ').trim().replace(REGEX_ESPACIOS_MULTIPLES, " ")
     return limpiar(partes.getOrElse(0) { "" }) to limpiar(partes.getOrElse(1) { "" })
 }
 
