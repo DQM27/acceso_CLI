@@ -5,6 +5,7 @@ import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
 import ConfirmacionSensible from "../componentes/ConfirmacionSensible";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
+import { supabase } from "../lib/supabase";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import { mensajeError } from "../mensajeError";
 import {
@@ -26,6 +27,7 @@ const ETIQUETAS_TIPO: Record<TipoDispositivo, string> = {
 
 interface FilaDispositivo extends Dispositivo {
   sitio_nombre: string;
+  conectado: boolean;
 }
 
 function textoFechaHora(iso: string): string {
@@ -124,9 +126,50 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
     recargar();
   }, [recargar]);
 
-  // Cambia rara vez (alta/baja/reasignación de dispositivos) -- mismo
-  // intervalo que usan desktop/mobile para su propio sync periódico.
-  useAutoRefresh(() => recargar({ silencioso: true }), 120_000);
+  // Canal Realtime sobre la tabla `dispositivos` para reflejar altas/bajas/
+  // suspensiones/último uso al instante (antes sólo refrescaba con el pulso
+  // de 2 minutos, o a mano) -- el intervalo queda como respaldo ante una
+  // reconexión de Realtime que tarde.
+  useAutoRefresh(() => recargar({ silencioso: true }), 120_000, "dispositivos");
+
+  // Presencia en tiempo real (docs/plan-sesion-unica-dispositivos.md,
+  // "Panel de presencia en tiempo real"): un canal por unidad operativa,
+  // el mismo `sitio:{id}` que ya usan mobile/escritorio para avisos de
+  // cambios -- acá sólo se escucha, nunca se hace `track()` (el panel no
+  // es un dispositivo). La migración `autoriza_presencia_realtime_por_sitio`
+  // deja entrar a cualquier admin, no sólo al dispositivo dueño del sitio.
+  const [conectadosPorSitio, setConectadosPorSitio] = useState<Record<string, Set<string>>>({});
+  useEffect(() => {
+    if (sitios.length === 0) return;
+    const canales = sitios.map((sitio) => {
+      const canal = supabase.channel(`sitio:${sitio.id}`, { config: { private: true } });
+      canal
+        .on("presence", { event: "sync" }, () => {
+          const estado = canal.presenceState<{ dispositivo_id?: string }>();
+          const ids = new Set<string>();
+          for (const presencias of Object.values(estado)) {
+            for (const presencia of presencias) {
+              if (presencia.dispositivo_id) ids.add(presencia.dispositivo_id);
+            }
+          }
+          setConectadosPorSitio((actual) => ({ ...actual, [sitio.id]: ids }));
+        })
+        .subscribe();
+      return canal;
+    });
+    return () => {
+      canales.forEach((canal) => void supabase.removeChannel(canal));
+      setConectadosPorSitio({});
+    };
+  }, [sitios]);
+
+  const conectados = useMemo(() => {
+    const todos = new Set<string>();
+    for (const ids of Object.values(conectadosPorSitio)) {
+      for (const id of ids) todos.add(id);
+    }
+    return todos;
+  }, [conectadosPorSitio]);
 
   const nombrePorSitio = useMemo(() => {
     const mapa = new Map(sitios.map((s) => [s.id, s.nombre]));
@@ -140,8 +183,12 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
     () =>
       dispositivos
         .filter((d) => !d.oculto_en_panel)
-        .map((d) => ({ ...d, sitio_nombre: nombrePorSitio(d.sitio_id) })),
-    [dispositivos, nombrePorSitio],
+        .map((d) => ({
+          ...d,
+          sitio_nombre: nombrePorSitio(d.sitio_id),
+          conectado: conectados.has(d.id),
+        })),
+    [dispositivos, nombrePorSitio, conectados],
   );
 
   function abrirModal() {
@@ -341,6 +388,26 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
             : data.suspended_at
               ? ["Suspendido", "var(--advertencia)"]
               : ["Activo", "var(--exito)"];
+          return (
+            <span className="chip" style={{ ["--chip-color" as string]: color }}>
+              {texto}
+            </span>
+          );
+        },
+      },
+      {
+        field: "conectado",
+        headerName: "Conexión",
+        flex: 0.9,
+        minWidth: 130,
+        filter: false,
+        // Distinto de "Estado": esto es presencia en vivo (¿tiene la app
+        // abierta ahora mismo?), no si el secreto está habilitado. Un
+        // dispositivo puede estar "Activo" y "Desconectado" a la vez.
+        cellRenderer: ({ data }: { data: FilaDispositivo }) => {
+          const [texto, color] = data.conectado
+            ? ["Conectado", "var(--exito)"]
+            : ["Desconectado", "var(--muted)"];
           return (
             <span className="chip" style={{ ["--chip-color" as string]: color }}>
               {texto}

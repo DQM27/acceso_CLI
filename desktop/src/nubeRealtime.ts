@@ -150,6 +150,12 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
             intentosSeguidos = 0;
             // Recupera cambios ocurridos mientras el cliente estuvo desconectado.
             programarSincronizacion();
+            // Presencia (docs/plan-sesion-unica-dispositivos.md, "Panel de
+            // presencia en tiempo real"): marca este dispositivo como
+            // conectado mientras dure la suscripción -- sin "untrack"
+            // explícito, `limpiarCanal`/el cierre del socket ya lo saca de
+            // la lista de presentes del lado del servidor.
+            void canal?.track({ dispositivo_id: sesion.dispositivo_id });
           } else if (estado === "CHANNEL_ERROR" || estado === "TIMED_OUT" || estado === "CLOSED") {
             if (error) console.info("No se pudo suscribir al canal de nube:", error.message);
             reconectar();

@@ -22,6 +22,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
 
@@ -93,6 +95,16 @@ class NubeRealtime(
                 try {
                     canal.subscribe(blockUntilSubscribed = true)
                     Log.i("SincronizacionNube", "Canal de avisos suscrito")
+                    // Presencia (docs/plan-sesion-unica-dispositivos.md,
+                    // "Panel de presencia en tiempo real"): marca este
+                    // dispositivo como conectado mientras dure la
+                    // suscripción -- no hace falta "untrack" explícito, al
+                    // cerrar el canal/socket (ver el `finally` de más abajo,
+                    // o simplemente `ON_STOP` del ciclo de vida) el propio
+                    // servidor de Realtime lo saca de la lista de
+                    // presentes. Costo de red/batería: cero extra, viaja
+                    // sobre esta misma conexión.
+                    canal.track(buildJsonObject { put("dispositivo_id", sesion.dispositivoId) })
                     onCambio()
                     delay(milisegundosHastaRenovar(sesion.expiresIn))
                 } finally {
