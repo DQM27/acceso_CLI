@@ -217,7 +217,7 @@ class LectorDocumentosIdentidadTest {
 
     @Test
     fun dimexNoConfundeConNumeroDeExpedienteSiApareceAntes() {
-        val texto = "Expediente No.: 135-453544\nDocumento No.: 999888777"
+        val texto = "Cédula de residencia\nExpediente No.: 135-453544\nDocumento No.: 999888777"
         val doc = leerDocumentoDeTexto(texto)
         assertEquals("999888777", doc?.numeroDocumento)
     }
