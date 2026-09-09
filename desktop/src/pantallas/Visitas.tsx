@@ -1,41 +1,26 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
-import {
-  listarVisitasActivas,
-  registrarEntradaVisita,
-  registrarSalidaVisita,
-  verificarCheckInVisita,
-} from "../api";
-import type { MovimientoVisitaActivoResumen, PreparacionVisita } from "../api";
+import { listarVisitasActivas, registrarSalidaVisita } from "../api";
+import type { MovimientoVisitaActivoResumen } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
-type CheckIn =
-  | { tipo: "ninguno" }
-  | { tipo: "verificando"; cedula: string }
-  | { tipo: "encontrada"; cedula: string; preparacion: PreparacionVisita }
-  | { tipo: "sin-cita"; cedula: string; mensaje: string };
+const VisitaCheckInModal = lazy(() => import("./VisitaCheckInModal"));
 
 /**
- * Check-in de visitas por cédula (`docs/plan-control-visitas.md`) --
- * mucho más simple que `NuevoIngresoModal` a propósito: no hay buscador con
- * lista flotante porque no hay nada que buscar por texto parcial, la cédula
- * es exacta. Un solo panel arriba (verificar → confirmar) y la tabla de
- * quienes están adentro ahora mismo debajo, sin modal — el dominio entero es
- * más chico que el de contratistas (ver domain::cita), no hace falta la
- * misma ceremonia.
+ * Lista de visitas activas + botón "+ Visita" que abre el check-in en un
+ * modal -- mismo patrón que Activos/NuevoIngresoModal, sin ningún buscador
+ * suelto sobre la pantalla (el único campo de búsqueda vive dentro del
+ * modal; acá arriba de la grilla sólo va el filtro por columna, igual que
+ * Historial).
  */
 export default function Visitas() {
-  const [cedula, setCedula] = useState("");
-  const [checkIn, setCheckIn] = useState<CheckIn>({ tipo: "ninguno" });
-  const [gafeteTexto, setGafeteTexto] = useState("");
-  const [enviando, setEnviando] = useState(false);
-  const [mensaje, setMensaje] = useState<string | null>(null);
-
   const [filas, setFilas] = useState<MovimientoVisitaActivoResumen[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [modalAbierto, setModalAbierto] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
 
   useBarraEstado(cargando ? "Cargando…" : `${filas.length} visitantes adentro`);
 
@@ -53,45 +38,6 @@ export default function Visitas() {
       vigente = false;
     };
   }, [recargar]);
-
-  async function verificar() {
-    const valor = cedula.trim();
-    if (!valor) return;
-    setMensaje(null);
-    setCheckIn({ tipo: "verificando", cedula: valor });
-    setGafeteTexto("");
-    try {
-      const preparacion = await verificarCheckInVisita(valor);
-      setCheckIn({ tipo: "encontrada", cedula: valor, preparacion });
-    } catch (error) {
-      setCheckIn({ tipo: "sin-cita", cedula: valor, mensaje: String(error) });
-    }
-  }
-
-  function cancelarCheckIn() {
-    setCheckIn({ tipo: "ninguno" });
-    setCedula("");
-  }
-
-  async function confirmarEntrada() {
-    if (checkIn.tipo !== "encontrada") return;
-    const numero = gafeteTexto.trim() ? Number.parseInt(gafeteTexto.trim(), 10) : null;
-    if (gafeteTexto.trim() && Number.isNaN(numero)) {
-      toast.error("Ingrese un número de gafete válido");
-      return;
-    }
-    setEnviando(true);
-    try {
-      await registrarEntradaVisita(checkIn.cedula, numero);
-      setMensaje(`✓ Entrada registrada — ${checkIn.preparacion.visitante.nombre}`);
-      cancelarCheckIn();
-      await recargar();
-    } catch (error) {
-      toast.error(String(error));
-    } finally {
-      setEnviando(false);
-    }
-  }
 
   const salida = useCallback(
     async (fila: MovimientoVisitaActivoResumen) => {
@@ -159,102 +105,39 @@ export default function Visitas() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "0.75rem",
-            padding: "0.85rem",
-            border: "1px solid var(--borde)",
-            borderRadius: "var(--radio-chico)",
-            background: "var(--campo-fondo)",
-          }}
-        >
-          <form
-            onSubmit={(evento) => {
-              evento.preventDefault();
-              verificar();
-            }}
-            style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end" }}
-          >
-            <label className="campo" style={{ flex: "0 1 16rem" }}>
-              Cédula del visitante
-              <input
-                value={cedula}
-                onChange={(evento) => setCedula(evento.target.value)}
-                autoFocus
-                placeholder="Escanee o escriba la cédula…"
-              />
-            </label>
-            <button
-              type="submit"
-              className="boton boton-primario"
-              disabled={checkIn.tipo === "verificando" || !cedula.trim()}
-            >
-              {checkIn.tipo === "verificando" ? "Verificando…" : "Verificar"}
-            </button>
-          </form>
-
-          {mensaje && <p style={{ color: "var(--exito)", margin: 0 }}>{mensaje}</p>}
-
-          {checkIn.tipo === "sin-cita" && (
-            <p className="login-error" role="alert">
-              {checkIn.mensaje}
-            </p>
-          )}
-
-          {checkIn.tipo === "encontrada" && (
-            <form
-              onSubmit={(evento) => {
-                evento.preventDefault();
-                confirmarEntrada();
-              }}
-              style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
-            >
-              <div>
-                <p style={{ margin: 0, fontWeight: 600, color: "var(--texto)" }}>
-                  {checkIn.preparacion.visitante.nombre}
-                </p>
-                <p style={{ margin: "0.15rem 0 0", color: "var(--muted)", fontSize: "0.85rem" }}>
-                  {checkIn.preparacion.visitante.cedula}
-                  {checkIn.preparacion.visitante.empresa && ` · ${checkIn.preparacion.visitante.empresa}`}
-                  {" · Anfitrión: "}
-                  {checkIn.preparacion.cita.anfitrion_nombre}
-                  {checkIn.preparacion.cita.motivo && ` · ${checkIn.preparacion.cita.motivo}`}
-                </p>
-              </div>
-
-              <label className="campo" style={{ flex: "0 1 12rem" }}>
-                Número de gafete (opcional)
-                <input
-                  value={gafeteTexto}
-                  onChange={(evento) => setGafeteTexto(evento.target.value.replace(/\D/g, ""))}
-                  inputMode="numeric"
-                  placeholder="S/G si vacío"
-                />
-              </label>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-                <button type="button" className="boton" onClick={cancelarCheckIn} disabled={enviando}>
-                  Cancelar
-                </button>
-                <button type="submit" className="boton boton-primario" disabled={enviando}>
-                  {enviando ? "Registrando…" : "Registrar entrada"}
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<MovimientoVisitaActivoResumen>
             id="visitas-activas"
             columnas={columnas}
             filas={filas}
-            filtrosPorColumna
+            busqueda={busqueda}
+            controles={
+              <>
+                <button type="button" className="boton" onClick={() => setModalAbierto(true)}>
+                  + Visita
+                </button>
+                <div className="campo" style={{ flex: "0 1 16rem" }}>
+                  <input
+                    placeholder="Cédula, nombre, empresa…"
+                    value={busqueda}
+                    onChange={(evento) => setBusqueda(evento.target.value)}
+                  />
+                </div>
+              </>
+            }
           />
         </div>
       </div>
+
+      <Suspense fallback={null}>
+        {modalAbierto && (
+          <VisitaCheckInModal
+            visitasActivas={filas}
+            onRegistrado={() => recargar()}
+            onCerrar={() => setModalAbierto(false)}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }
