@@ -212,6 +212,35 @@ impl MovimientoVisitaRepository for SqliteMovimientoVisitaRepository<'_> {
     }
 }
 
+const ULTIMO_INSTANTE_MOVIMIENTO_VISITA_SQL: &str = "
+    SELECT MAX(instante)
+    FROM (
+        SELECT MAX(fecha_hora_entrada) AS instante
+        FROM movimientos_visita
+        UNION ALL
+        SELECT MAX(fecha_hora_salida) AS instante
+        FROM movimientos_visita
+        WHERE fecha_hora_salida IS NOT NULL
+    )";
+
+/// Mismo criterio y misma forma que
+/// `database::queries::ingresos::ultimo_instante_movimiento`, pero para
+/// `movimientos_visita` -- `AppCore::validar_reloj` (`application/citas.rs`)
+/// toma el máximo de los dos para que un sitio que sólo tuvo actividad de
+/// visitas (sin ningún contratista todavía) también quede protegido contra
+/// un reloj retrocedido.
+pub fn ultimo_instante_movimiento_visita(
+    connection: &Connection,
+) -> Result<Option<DateTime<Utc>>, DatabaseError> {
+    let ultima: Option<String> =
+        connection.query_row(ULTIMO_INSTANTE_MOVIMIENTO_VISITA_SQL, [], |row| row.get(0))?;
+    ultima
+        .map(|texto| {
+            parsear_utc(&texto).map_err(|error| DatabaseError::FechaCorrupta(error.to_string()))
+        })
+        .transpose()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

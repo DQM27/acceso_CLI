@@ -15,6 +15,7 @@ use crate::tiempo::{Reloj, RelojSistema};
 
 mod accesos;
 mod autenticacion;
+mod citas;
 // Reusa `lenguaje_comandos` (parser+resolver), que no depende de terminal —
 // sin feature gate, a diferencia de `cli/` (el loop real).
 mod catalogos;

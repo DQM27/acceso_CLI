@@ -175,6 +175,16 @@ pub enum CitaServiceError {
     MovimientoNoActivo,
     #[error("La salida no puede ser anterior a la entrada")]
     SalidaAnteriorAEntrada,
+    /// Mismo criterio que `RegistroIngresoServiceError::RelojRetrocedido`:
+    /// comprobación de sanidad de todo el sistema (¿el reloj de la máquina
+    /// retrocedió respecto al último movimiento conocido?), no una regla de
+    /// negocio de una entrada/salida puntual -- la genera `AppCore`, no
+    /// `CitaService`.
+    #[error("El reloj del equipo está atrasado respecto al último movimiento registrado")]
+    RelojRetrocedido,
+    /// Mismo criterio que `RegistroIngresoServiceError::OperadorNoAutorizado`.
+    #[error("La sesión que registra el movimiento no existe o está inactiva")]
+    OperadorNoAutorizado,
     #[error(transparent)]
     Database(#[from] DatabaseError),
 }
