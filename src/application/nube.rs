@@ -658,8 +658,7 @@ impl AppCore {
             }
         }
 
-        let token =
-            crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, secreto, metadata)?;
+        let token = crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, secreto, metadata)?;
         self.aplicar_desfase_reloj(&token);
         *self
             .token_nube_cacheado
