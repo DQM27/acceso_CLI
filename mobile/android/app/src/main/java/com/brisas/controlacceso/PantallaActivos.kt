@@ -122,12 +122,12 @@ fun PantallaActivos(
     if (escanerAbierto) {
         PantallaEscanearCedula(
             modo = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
-            onCedulaDetectada = { cedula ->
+            onDocumentoDetectado = { documento ->
                 escanerAbierto = false
                 if (viewModel.modo != ModoBusqueda.ENTRADA) {
                     viewModel.cambiarModo(ModoBusqueda.ENTRADA)
                 }
-                viewModel.usarDocumentoEscaneadoIngreso(cedula)
+                viewModel.usarDocumentoEscaneadoIngreso(documento)
             },
             onCerrar = { escanerAbierto = false },
         )
@@ -138,7 +138,7 @@ fun PantallaActivos(
         PantallaEscanearCedula(
             modo = ModoEscaneoDocumento.GAFETE_CONTRATISTA,
             continuo = viewModel.automatico,
-            onCedulaDetectada = { gafete ->
+            onDocumentoDetectado = { documento ->
                 if (!viewModel.automatico) {
                     escanerGafeteSalidaAbierto = false
                 }
@@ -146,9 +146,12 @@ fun PantallaActivos(
                     viewModel.cambiarModo(ModoBusqueda.SALIDA_GAFETE)
                 }
                 if (viewModel.automatico) {
-                    viewModel.registrarSalidaPorGafeteEscaneado(gafete)
+                    // Es suspend: el escáner no se rearma hasta que la
+                    // mutación terminó. Así nunca entran dos gafetes en
+                    // paralelo ni se cancela una salida ya iniciada.
+                    viewModel.registrarSalidaPorGafeteEscaneado(documento)
                 } else {
-                    viewModel.cambiarTexto(gafete)
+                    viewModel.cambiarTexto(documento.textoBusqueda ?: documento.numeroDocumento)
                 }
             },
             onCerrar = { escanerGafeteSalidaAbierto = false },

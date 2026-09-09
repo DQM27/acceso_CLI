@@ -11,9 +11,12 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import uniffi.control_acceso_mobile.ContratistaResumen
 import uniffi.control_acceso_mobile.IngresoActivoResumen
 import uniffi.control_acceso_mobile.IngresoRemoto
@@ -148,6 +151,10 @@ class ActivosViewModel(
     // key), ahora explícito porque ya no hay una key de Compose disparando
     // esto solo.
     private var trabajoBusqueda: Job? = null
+    // Las escrituras de entrada/salida no comparten Job con las búsquedas.
+    // Cancelar un debounce jamás debe cancelar una operación SQLite/UniFFI
+    // que ya pudo haber producido un efecto irreversible.
+    private val mutexMutaciones = Mutex()
 
     init {
         buscar()
@@ -170,7 +177,8 @@ class ActivosViewModel(
         automatico = nuevo
     }
 
-    fun usarDocumentoEscaneadoIngreso(valor: String) {
+    fun usarDocumentoEscaneadoIngreso(documento: DocumentoDetectado) {
+        val valor = documento.textoBusqueda ?: documento.numeroDocumento
         modo = ModoBusqueda.ENTRADA
         texto = valor
         mensaje = null
@@ -375,7 +383,8 @@ class ActivosViewModel(
         }
     }
 
-    fun registrarSalidaPorGafeteEscaneado(valor: String) {
+    suspend fun registrarSalidaPorGafeteEscaneado(documento: DocumentoDetectado) {
+        val valor = documento.textoBusqueda ?: documento.numeroDocumento
         val numero = valor.filter(Char::isDigit).toIntOrNull()
         if (numero == null) {
             mensaje = "Gafete no válido"
@@ -386,31 +395,37 @@ class ActivosViewModel(
         texto = numero.toString()
         mensaje = null
         trabajoBusqueda?.cancel()
-        trabajoBusqueda = viewModelScope.launch {
-            enviandoGafetes = true
-            try {
-                val activo = withContext(dispatcherIO) {
-                    nucleo.listarIngresosActivos(numero.toString(), ModoBusquedaActivos.GAFETE).firstOrNull()
-                }
-                coincidenciasGafete = listOf(CoincidenciaGafete(numero, activo))
-                if (activo == null) {
-                    mensaje = "Gafete $numero: sin ingreso activo"
+        // El trabajo pertenece al ViewModel, no a la pantalla de cámara.
+        // Si Android recompone o cierra la cámara mientras Rust está
+        // escribiendo, la mutación concluye y deja un resultado coherente.
+        val mutacion = viewModelScope.async {
+            mutexMutaciones.withLock {
+                enviandoGafetes = true
+                try {
+                    val activo = withContext(dispatcherIO) {
+                        nucleo.listarIngresosActivos(numero.toString(), ModoBusquedaActivos.GAFETE).firstOrNull()
+                    }
+                    coincidenciasGafete = listOf(CoincidenciaGafete(numero, activo))
+                    if (activo == null) {
+                        mensaje = "Gafete $numero: sin ingreso activo"
+                        mensajeEsError = true
+                    } else {
+                        withContext(dispatcherIO) { nucleo.registrarSalida(activo.registroId) }
+                        CambiosNube.solicitar()
+                        mensaje = "Salida registrada: ${activo.contratistaNombre}"
+                        mensajeEsError = false
+                        texto = ""
+                        coincidenciasGafete = emptyList()
+                    }
+                } catch (excepcion: NucleoException) {
+                    mensaje = "Gafete $numero: ${excepcion.message}"
                     mensajeEsError = true
-                    return@launch
+                } finally {
+                    enviandoGafetes = false
                 }
-                withContext(dispatcherIO) { nucleo.registrarSalida(activo.registroId) }
-                CambiosNube.solicitar()
-                mensaje = "Salida registrada: ${activo.contratistaNombre}"
-                mensajeEsError = false
-                texto = ""
-                coincidenciasGafete = emptyList()
-            } catch (excepcion: NucleoException) {
-                mensaje = "Gafete $numero: ${excepcion.message}"
-                mensajeEsError = true
-            } finally {
-                enviandoGafetes = false
             }
         }
+        mutacion.await()
     }
 
     companion object {

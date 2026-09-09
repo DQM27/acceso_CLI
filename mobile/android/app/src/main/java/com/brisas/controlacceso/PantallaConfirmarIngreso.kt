@@ -166,8 +166,8 @@ fun PantallaConfirmarIngreso(
     if (escanerGafeteAbierto) {
         PantallaEscanearCedula(
             modo = ModoEscaneoDocumento.GAFETE_CONTRATISTA,
-            onCedulaDetectada = { numero ->
-                val limpio = numero.filter(Char::isDigit)
+            onDocumentoDetectado = { documento ->
+                val limpio = documento.numeroDocumento.filter(Char::isDigit)
                 gafeteTexto = limpio
                 error = null
                 escanerGafeteAbierto = false

@@ -124,7 +124,9 @@ class ActivosViewModelTest {
         val viewModel = viewModel()
         advanceUntilIdle()
 
-        viewModel.usarDocumentoEscaneadoIngreso("111111111")
+        viewModel.usarDocumentoEscaneadoIngreso(
+            DocumentoDetectado(TipoDocumento.CEDULA_NACIONAL, "111111111"),
+        )
         advanceUntilIdle()
 
         val seleccion = viewModel.seleccionIngreso
@@ -156,7 +158,9 @@ class ActivosViewModelTest {
         val viewModel = viewModel()
         advanceUntilIdle()
 
-        viewModel.registrarSalidaPorGafeteEscaneado("7")
+        viewModel.registrarSalidaPorGafeteEscaneado(
+            DocumentoDetectado(TipoDocumento.GAFETE_CONTRATISTA, "7", textoBusqueda = "7"),
+        )
         advanceUntilIdle()
 
         assertEquals(ModoBusqueda.SALIDA_GAFETE, viewModel.modo)

@@ -2,16 +2,10 @@ package com.brisas.controlacceso
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.content.Context
-import android.graphics.Rect
 import android.media.AudioManager
 import android.media.ToneGenerator
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -41,6 +35,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,12 +53,15 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun PantallaEscanearCedula(
     modo: ModoEscaneoDocumento = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
     continuo: Boolean = false,
-    onCedulaDetectada: (String) -> Unit,
+    onDocumentoDetectado: suspend (DocumentoDetectado) -> Unit,
     onCerrar: () -> Unit,
 ) {
     val contexto = LocalContext.current
@@ -83,7 +82,7 @@ fun PantallaEscanearCedula(
         VistaCamaraCedula(
             modo = modo,
             continuo = continuo,
-            onCedulaDetectada = onCedulaDetectada,
+            onDocumentoDetectado = onDocumentoDetectado,
             onCerrar = onCerrar,
         )
     } else {
@@ -109,11 +108,13 @@ fun PantallaEscanearCedula(
 private fun VistaCamaraCedula(
     modo: ModoEscaneoDocumento,
     continuo: Boolean,
-    onCedulaDetectada: (String) -> Unit,
+    onDocumentoDetectado: suspend (DocumentoDetectado) -> Unit,
     onCerrar: () -> Unit,
 ) {
     val contexto = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val alcance = rememberCoroutineScope()
+    val onDocumentoActual by rememberUpdatedState(onDocumentoDetectado)
     // Háptica semántica de Compose (`HapticFeedbackType.Confirm`), no
     // `Vibrator`/`VibrationEffect` crudo -- la guía oficial de Android
     // desaconseja `createOneShot`/`createWaveform` para feedback de UI
@@ -127,19 +128,22 @@ private fun VistaCamaraCedula(
     var ultimoMensaje by remember { mutableStateOf(mensajeInicialEscaneo(modo)) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
     var vencido by remember { mutableStateOf(false) }
-    var areaTexto by remember { mutableStateOf<AreaTextoOcr?>(null) }
     // Una instancia por apertura de pantalla -- lleva el conteo de frames
     // consistentes del debounce (ver EstabilizadorLectura), no debe
     // compartirse entre sesiones de escaneo distintas.
     val estabilizador = remember(modo) { EstabilizadorLectura(modo = modo) }
     var ultimoValorContinuo by remember { mutableStateOf<String?>(null) }
-    var ultimoValorContinuoEnMs by remember { mutableStateOf(0L) }
+    var framesSinUltimoValor by remember { mutableStateOf(0) }
     // AtomicBoolean, no `mutableStateOf` -- esta bandera se lee en el hilo
     // del analizador de cámara (`ejecutor`) y se escribe desde el hilo
     // principal (callback de ML Kit); un booleano de Compose no garantiza
     // esa visibilidad entre hilos, y además el `compareAndSet` evita que
-    // dos frames en vuelo disparen `onCedulaDetectada` dos veces.
+    // dos frames en vuelo disparen `onDocumentoDetectado` dos veces.
     val detectada = remember { AtomicBoolean(false) }
+    // Invalida callbacks de CameraX/ML Kit que terminen después de salir de
+    // esta composición. Cerrar el recognizer no garantiza que un Task que ya
+    // estaba en vuelo deje de entregar su listener.
+    val sesionActiva = remember { AtomicBoolean(true) }
     // Guardado acá para poder desatarlo explícitamente al salir -- `bindToLifecycle`
     // por sí solo no alcanza: en una app de una sola Activity con Compose,
     // `LocalLifecycleOwner` suele ser la Activity, no esta pantalla, así que la
@@ -147,13 +151,20 @@ private fun VistaCamaraCedula(
     // Sin este `unbindAll()` explícito, reabrir el escáner puede encontrar la
     // cámara todavía atada al ciclo de vida anterior.
     var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
+    var analisisCamara by remember { mutableStateOf<ImageAnalysis?>(null) }
+    var trabajoResultado by remember { mutableStateOf<Job?>(null) }
     // Ver nota en `analizarCedula`: se pasa explícito en vez de dejar que
     // ML Kit use su executor por defecto de forma implícita.
     val ejecutorPrincipal = remember { ContextCompat.getMainExecutor(contexto) }
 
     DisposableEffect(Unit) {
+        sesionActiva.set(true)
         onDispose {
-            cameraProvider?.unbindAll()
+            sesionActiva.set(false)
+            detectada.set(true)
+            trabajoResultado?.cancel()
+            analisisCamara?.clearAnalyzer()
+            analisisCamara?.let { cameraProvider?.unbind(it) }
             ejecutor.shutdown()
             recognizer.close()
         }
@@ -190,7 +201,16 @@ private fun VistaCamaraCedula(
                     recognizer = recognizer,
                     estabilizador = estabilizador,
                     detectada = detectada,
+                    sesionActiva = sesionActiva,
                     onResultado = { resultado ->
+                        if (!sesionActiva.get()) return@construirAnalizadorOcr
+                        if (continuo && resultado.estado != EstadoEscaneo.CONFIRMADO) {
+                            framesSinUltimoValor++
+                            if (framesSinUltimoValor >= FRAMES_AUSENCIA_PARA_REPETIR) {
+                                ultimoValorContinuo = null
+                                framesSinUltimoValor = 0
+                            }
+                        }
                         estado = resultado.estado
                         ultimoMensaje = resultado.mensaje
                         vencido = resultado.vencido
@@ -198,65 +218,66 @@ private fun VistaCamaraCedula(
                         if (resultado.estado == EstadoEscaneo.CONFIRMADO && documento != null) {
                             if (detectada.compareAndSet(false, true)) {
                                 val valor = documento.textoBusqueda ?: documento.numeroDocumento
-                                val ahora = System.currentTimeMillis()
                                 val repetidoContinuo = continuo &&
-                                    valor == ultimoValorContinuo &&
-                                    ahora - ultimoValorContinuoEnMs < DEMORA_REPETIDO_ESCANEO_CONTINUO_MS
+                                    valor == ultimoValorContinuo
                                 if (repetidoContinuo) {
                                     detectada.set(false)
                                     estabilizador.reiniciar()
                                 } else {
                                     ultimoValorContinuo = valor
-                                    ultimoValorContinuoEnMs = ahora
+                                    framesSinUltimoValor = 0
                                     haptica.performHapticFeedback(HapticFeedbackType.Confirm)
-                                    reproducirVibracionConfirmacion(contexto)
                                     reproducirSonidoConfirmacion()
-                                    if (continuo) {
-                                        onCedulaDetectada(valor)
-                                        ultimoMensaje = mensajeProcesadoContinuo(modo, valor)
-                                        Handler(Looper.getMainLooper()).postDelayed(
-                                            {
+                                    trabajoResultado?.cancel()
+                                    trabajoResultado = alcance.launch {
+                                        if (!continuo && resultado.vencido) {
+                                            delay(DEMORA_AVISO_VENCIDO_MS)
+                                        }
+                                        if (!sesionActiva.get()) return@launch
+                                        onDocumentoActual(documento)
+                                        if (continuo && sesionActiva.get()) {
+                                            ultimoMensaje = mensajeProcesadoContinuo(modo, valor)
+                                            delay(DEMORA_REARMAR_ESCANEO_CONTINUO_MS)
+                                            if (sesionActiva.get()) {
                                                 detectada.set(false)
                                                 estabilizador.reiniciar()
                                                 estado = EstadoEscaneo.BUSCANDO
                                                 vencido = false
-                                                areaTexto = null
                                                 ultimoMensaje = mensajeInicialEscaneo(modo)
-                                            },
-                                            DEMORA_REARMAR_ESCANEO_CONTINUO_MS,
-                                        )
-                                    } else if (resultado.vencido) {
-                                        Handler(Looper.getMainLooper()).postDelayed(
-                                            { onCedulaDetectada(valor) },
-                                            DEMORA_AVISO_VENCIDO_MS,
-                                        )
-                                    } else {
-                                        onCedulaDetectada(valor)
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     },
                     onFallo = {
+                        if (!sesionActiva.get()) return@construirAnalizadorOcr
                         estado = EstadoEscaneo.BUSCANDO
                         vencido = false
-                        areaTexto = null
                         ultimoMensaje = "No se pudo leer el texto. Intente acercar."
                     },
-                    onAreaTexto = { areaTexto = it },
                 )
+                analisisCamara = analisis
                 iniciarCamara(
                     ctx = ctx,
                     previewView = previewView,
                     lifecycleOwner = lifecycleOwner,
                     analisis = analisis,
+                    sesionActiva = sesionActiva,
                     onCameraProviderListo = { cameraProvider = it },
+                    onFallo = { mensaje ->
+                        if (sesionActiva.get()) {
+                            estado = EstadoEscaneo.INVALIDO
+                            ultimoMensaje = mensaje
+                        }
+                    },
                 )
                 previewView
             },
             modifier = Modifier.fillMaxSize(),
         )
-        MarcoGuiaCedula(color = colorMarco, estado = estado, areaTexto = areaTexto, modifier = Modifier.fillMaxSize())
+        MarcoGuiaCedula(color = colorMarco, estado = estado, modifier = Modifier.fillMaxSize())
         Column(
             modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -287,9 +308,9 @@ private fun construirAnalizadorOcr(
     recognizer: com.google.mlkit.vision.text.TextRecognizer,
     estabilizador: EstabilizadorLectura,
     detectada: AtomicBoolean,
+    sesionActiva: AtomicBoolean,
     onResultado: (ResultadoEstabilizacion) -> Unit,
     onFallo: () -> Unit,
-    onAreaTexto: (AreaTextoOcr?) -> Unit,
 ): ImageAnalysis =
     ImageAnalysis.Builder()
         .setResolutionSelector(
@@ -310,7 +331,7 @@ private fun construirAnalizadorOcr(
                 // seguir corriendo ML Kit en cada frame mientras la
                 // pantalla termina de cerrarse sólo quema CPU sin ganar
                 // nada (el resultado ya se usó).
-                if (detectada.get()) {
+                if (!sesionActiva.get() || detectada.get()) {
                     imagen.close()
                     return@setAnalyzer
                 }
@@ -318,9 +339,9 @@ private fun construirAnalizadorOcr(
                     imagen = imagen,
                     recognizer = recognizer,
                     ejecutorPrincipal = ejecutorPrincipal,
+                    sesionActiva = sesionActiva,
                     onTexto = { texto -> onResultado(estabilizador.procesarFrame(texto)) },
                     onFallo = onFallo,
-                    onAreaTexto = onAreaTexto,
                 )
             }
         }
@@ -334,17 +355,21 @@ private fun iniciarCamara(
     previewView: PreviewView,
     lifecycleOwner: androidx.lifecycle.LifecycleOwner,
     analisis: ImageAnalysis,
+    sesionActiva: AtomicBoolean,
     onCameraProviderListo: (ProcessCameraProvider) -> Unit,
+    onFallo: (String) -> Unit,
 ) {
     val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
     cameraProviderFuture.addListener(
         {
-            val proveedor = cameraProviderFuture.get()
-            onCameraProviderListo(proveedor)
-            val preview = Preview.Builder().build().also {
-                it.surfaceProvider = previewView.surfaceProvider
-            }
-            proveedor.unbindAll()
+            if (!sesionActiva.get()) return@addListener
+            try {
+                val proveedor = cameraProviderFuture.get()
+                if (!sesionActiva.get()) return@addListener
+                onCameraProviderListo(proveedor)
+                val preview = Preview.Builder().build().also {
+                    it.surfaceProvider = previewView.surfaceProvider
+                }
             // `previewView.viewPort` ata el recorte de `analisis` al mismo
             // rectángulo que en verdad se ve en pantalla (la vista previa
             // usa FILL_CENTER, que recorta/escala el frame del sensor a la
@@ -354,16 +379,19 @@ private fun iniciarCamara(
             // persona realmente ve dentro del recuadro guía: el recuadro en
             // pantalla y la zona que de verdad analiza ML Kit terminan
             // siendo rectángulos físicos distintos.
-            val grupoUseCases = UseCaseGroup.Builder()
-                .addUseCase(preview)
-                .addUseCase(analisis)
-                .apply { previewView.viewPort?.let { setViewPort(it) } }
-                .build()
-            proveedor.bindToLifecycle(
-                lifecycleOwner,
-                CameraSelector.DEFAULT_BACK_CAMERA,
-                grupoUseCases,
-            )
+                val grupoUseCases = UseCaseGroup.Builder()
+                    .addUseCase(preview)
+                    .addUseCase(analisis)
+                    .apply { previewView.viewPort?.let { setViewPort(it) } }
+                    .build()
+                proveedor.bindToLifecycle(
+                    lifecycleOwner,
+                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    grupoUseCases,
+                )
+            } catch (_: Exception) {
+                if (sesionActiva.get()) onFallo("No se pudo iniciar la cámara")
+            }
         },
         ContextCompat.getMainExecutor(ctx),
     )
@@ -413,8 +441,7 @@ private const val VOLUMEN_SONIDO_CONFIRMACION = 40 // sobre 100 -- sutil, no un 
 private const val DURACION_SONIDO_CONFIRMACION_MS = 100
 private const val DEMORA_AVISO_VENCIDO_MS = 1200L
 private const val DEMORA_REARMAR_ESCANEO_CONTINUO_MS = 900L
-private const val DEMORA_REPETIDO_ESCANEO_CONTINUO_MS = 2500L
-private const val DURACION_VIBRACION_CONFIRMACION_MS = 70L
+private const val FRAMES_AUSENCIA_PARA_REPETIR = 3
 
 private fun mensajeInicialEscaneo(modo: ModoEscaneoDocumento): String =
     when (modo) {
@@ -427,35 +454,6 @@ private fun mensajeProcesadoContinuo(modo: ModoEscaneoDocumento, valor: String):
         ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA -> "Documento $valor procesado"
         ModoEscaneoDocumento.GAFETE_CONTRATISTA -> "Gafete $valor procesado"
     }
-
-private fun reproducirVibracionConfirmacion(contexto: android.content.Context) {
-    try {
-        val vibrador = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val manager = contexto.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-            manager.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            contexto.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-        }
-        if (!vibrador.hasVibrator()) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrador.vibrate(
-                VibrationEffect.createOneShot(
-                    DURACION_VIBRACION_CONFIRMACION_MS,
-                    VibrationEffect.DEFAULT_AMPLITUDE,
-                ),
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            vibrador.vibrate(DURACION_VIBRACION_CONFIRMACION_MS)
-        }
-    } catch (e: RuntimeException) {
-        // La vibración confirma, pero nunca debe cortar el escaneo si el
-        // dispositivo o el perfil del sistema la bloquea.
-    } catch (e: SecurityException) {
-        // Igual que arriba: sin permiso efectivo, el flujo continúa normal.
-    }
-}
 
 /// Sólo entrega a ML Kit y devuelve el texto reconocido -- la clasificación
 /// de tipo de documento, extracción de campos y decisión de aceptar o no la
@@ -483,9 +481,9 @@ private fun analizarCedula(
     imagen: ImageProxy,
     recognizer: com.google.mlkit.vision.text.TextRecognizer,
     ejecutorPrincipal: java.util.concurrent.Executor,
+    sesionActiva: AtomicBoolean,
     onTexto: (String) -> Unit,
     onFallo: () -> Unit,
-    onAreaTexto: (AreaTextoOcr?) -> Unit,
 ) {
     val mediaImage = imagen.image
     if (mediaImage == null) {
@@ -493,15 +491,14 @@ private fun analizarCedula(
         return
     }
     val rotacion = imagen.imageInfo.rotationDegrees
-    val anchoAnalisis = if (rotacion == 90 || rotacion == 270) imagen.height else imagen.width
-    val altoAnalisis = if (rotacion == 90 || rotacion == 270) imagen.width else imagen.height
     val input = InputImage.fromMediaImage(mediaImage, rotacion)
     recognizer.process(input)
         .addOnSuccessListener(ejecutorPrincipal) { resultado ->
-            onAreaTexto(calcularAreaTexto(resultado.textBlocks.mapNotNull { it.boundingBox }, anchoAnalisis, altoAnalisis))
-            onTexto(resultado.text)
+            if (sesionActiva.get()) {
+                onTexto(resultado.text)
+            }
         }
-        .addOnFailureListener(ejecutorPrincipal) { onFallo() }
+        .addOnFailureListener(ejecutorPrincipal) { if (sesionActiva.get()) onFallo() }
         .addOnCompleteListener(ejecutorPrincipal) {
             imagen.close()
         }
@@ -538,26 +535,4 @@ fun extraerCedulaDeTexto(texto: String): String? {
     }
 
     return null
-}
-
-data class AreaTextoOcr(
-    val izquierda: Float,
-    val arriba: Float,
-    val derecha: Float,
-    val abajo: Float,
-)
-
-private fun calcularAreaTexto(bloques: List<Rect>, ancho: Int, alto: Int): AreaTextoOcr? {
-    if (bloques.isEmpty() || ancho <= 0 || alto <= 0) return null
-    val izquierda = bloques.minOf { it.left }.coerceIn(0, ancho)
-    val arriba = bloques.minOf { it.top }.coerceIn(0, alto)
-    val derecha = bloques.maxOf { it.right }.coerceIn(0, ancho)
-    val abajo = bloques.maxOf { it.bottom }.coerceIn(0, alto)
-    if (derecha - izquierda < ancho * 0.12f || abajo - arriba < alto * 0.06f) return null
-    return AreaTextoOcr(
-        izquierda = izquierda.toFloat() / ancho.toFloat(),
-        arriba = arriba.toFloat() / alto.toFloat(),
-        derecha = derecha.toFloat() / ancho.toFloat(),
-        abajo = abajo.toFloat() / alto.toFloat(),
-    )
 }
