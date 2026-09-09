@@ -707,15 +707,39 @@ struct FilaCierrePropioRemoto {
 /// que nacieron en esta base local. No usa el repositorio normal de salida:
 /// ese camino siempre encola un cambio nuevo, y acá estamos aplicando un
 /// hecho ya confirmado por el receptor.
+///
+/// El pedido a la nube se acota a lo que localmente sigue abierto
+/// (`registro_ingresos.fecha_hora_salida IS NULL`) -- antes pedía TODO lo
+/// que este dispositivo alguna vez cerró (`dispositivo_entrada_id=eq.<el
+/// mío>&hora_salida=not.is.null`, sin ningún otro filtro), una lista que
+/// sólo crece con la vida entera del dispositivo y se repetía completa cada
+/// ciclo de sync (cada 2 minutos, para siempre) aunque el propio `UPDATE`
+/// de más abajo (`WHERE fecha_hora_salida IS NULL`) ya descartaba en
+/// silencio todo lo que no fuera nuevo. Con nadie abierto ahora mismo (el
+/// caso normal fuera de horas pico) esto ahora ni siquiera pega la llamada.
 pub fn recibir_cierres_de_ingresos_propios(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<u32, SincronizacionError> {
+    let abiertos_localmente: Vec<String> = {
+        let mut statement = connection
+            .prepare("SELECT uuid FROM registro_ingresos WHERE fecha_hora_salida IS NULL")?;
+        statement
+            .query_map([], |row| row.get(0))?
+            .collect::<Result<_, _>>()?
+    };
+    if abiertos_localmente.is_empty() {
+        return Ok(0);
+    }
+
     let cliente = cliente_http();
+    // PostgREST admite `in.(a,b,c)` -- un UUID nunca trae `,`/`)`/espacios,
+    // así que unirlos con coma directo es seguro sin escapar nada.
+    let lista_uuids = abiertos_localmente.join(",");
     let url = format!(
-        "{}/rest/v1/ingresos?sitio_id=eq.{}&dispositivo_entrada_id=eq.{}\
-         &hora_salida=not.is.null&select=id,hora_salida,usuario_salida_nombre",
-        contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
+        "{}/rest/v1/ingresos?id=in.({lista_uuids})&hora_salida=not.is.null\
+         &select=id,hora_salida,usuario_salida_nombre",
+        contexto.base_url,
     );
     let filas: Vec<FilaCierrePropioRemoto> = obtener_json(&cliente, contexto, &url)?;
 
@@ -941,6 +965,101 @@ struct FilaHistorialRemota {
     dispositivo_entrada: Option<DispositivoEmbebido>,
 }
 
+enum FilaHistorialResultado {
+    /// `hora_entrada`/`hora_salida` no se pudo parsear -- la fila no se
+    /// tocó para nada, ni cuenta ni aporta a la marca de agua.
+    Omitida,
+    /// Se insertó/actualizó en `historial_sitio`. `actualizado_en` es
+    /// `None` sólo en el caso (no esperado, ver su comentario) de que
+    /// `updated_at` en sí no haya parseado -- la fila igual se guardó, sólo
+    /// no aporta a la marca de agua.
+    Aplicada {
+        actualizado_en: Option<chrono::DateTime<chrono::Utc>>,
+    },
+}
+
+/// Una sola fila de `recibir_historial_del_sitio` -- separado sólo para no
+/// pasar el límite de líneas del lint `too_many_lines` de esa función (el
+/// corte natural ya existía: todo el parseo/`INSERT` de una fila, después
+/// el resto del lote).
+fn guardar_fila_historial(
+    transaction: &rusqlite::Transaction<'_>,
+    contexto: &ContextoSincronizacion<'_>,
+    fila: &FilaHistorialRemota,
+    ahora: &str,
+) -> Result<FilaHistorialResultado, SincronizacionError> {
+    let Ok(hora_entrada) =
+        crate::tiempo::parsear_utc(&fila.hora_entrada).map(crate::tiempo::serializar_utc)
+    else {
+        return Ok(FilaHistorialResultado::Omitida);
+    };
+    let hora_salida = match fila
+        .hora_salida
+        .as_deref()
+        .map(crate::tiempo::parsear_utc)
+        .transpose()
+    {
+        Ok(valor) => valor.map(crate::tiempo::serializar_utc),
+        Err(_) => return Ok(FilaHistorialResultado::Omitida),
+    };
+
+    transaction.execute(
+        "
+        INSERT INTO historial_sitio (
+            uuid, sitio_id, contratista_cedula, contratista_nombre, empresa_nombre,
+            tipo_ingreso, medio_ingreso, hora_entrada, hora_salida, gafete_numero,
+            usuario_entrada_nombre, usuario_salida_nombre, resultado_acceso,
+            motivo_resultado, reglas_version, empresa_activa_snapshot,
+            dispositivo_entrada_id, dispositivo_salida_id, actualizado_en,
+            dispositivo_entrada_tipo
+        ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20)
+        ON CONFLICT(uuid) DO UPDATE SET
+            hora_salida = excluded.hora_salida,
+            usuario_salida_nombre = excluded.usuario_salida_nombre,
+            dispositivo_salida_id = excluded.dispositivo_salida_id,
+            resultado_acceso = excluded.resultado_acceso,
+            motivo_resultado = excluded.motivo_resultado,
+            reglas_version = excluded.reglas_version,
+            empresa_activa_snapshot = excluded.empresa_activa_snapshot,
+            actualizado_en = excluded.actualizado_en,
+            dispositivo_entrada_tipo = excluded.dispositivo_entrada_tipo
+        ",
+        params![
+            fila.id,
+            contexto.sitio_id,
+            fila.contratista_cedula,
+            fila.contratista_nombre,
+            fila.empresa_nombre,
+            fila.tipo_ingreso,
+            fila.medio_ingreso,
+            hora_entrada,
+            hora_salida,
+            fila.gafete_numero,
+            fila.usuario_entrada_nombre,
+            fila.usuario_salida_nombre,
+            fila.resultado_acceso,
+            fila.motivo_resultado,
+            fila.reglas_version,
+            fila.empresa_activa_snapshot,
+            fila.dispositivo_entrada_id,
+            fila.dispositivo_salida_id,
+            ahora,
+            fila.dispositivo_entrada
+                .as_ref()
+                .and_then(|d| d.tipo.clone()),
+        ],
+    )?;
+
+    // `updated_at` es una columna de servidor (trigger de Postgres), no
+    // texto que alguien tipeó -- a diferencia de `hora_entrada`/
+    // `hora_salida` de arriba, no se espera que falle nunca. Si de todos
+    // modos fallara, la fila ya se insertó (no se pierde): sólo se evita
+    // que esa marca haga avanzar la marca de agua.
+    Ok(FilaHistorialResultado::Aplicada {
+        actualizado_en: crate::tiempo::parsear_utc(&fila.updated_at).ok(),
+    })
+}
+
 /// Trae a `historial_sitio` todo movimiento (abierto o cerrado) del sitio,
 /// de cualquier dispositivo -- decisión explícita del usuario: "es la
 /// misma operación vista desde dos dispositivos distintos", no un espejo
@@ -998,87 +1117,25 @@ pub fn recibir_historial_del_sitio(
     // nuevas, la marca no avanza (se vuelve a pedir el mismo rango la
     // próxima vez, que ya sabemos que no trae nada -- preferible a arriesgar
     // perder una fila).
-    // Una fila con fecha ilegible no puede tumbar el `?` de acá adentro: eso
-    // aborta la transacción entera antes del `commit` (el error se propaga
-    // hasta `sincronizar_con_nube`), y en un dispositivo que necesita traer
-    // el historial completo (recién reinstalado, sin marca de agua todavía)
-    // una sola fila vieja con un formato raro dejaba SIN historial para
-    // siempre -- ni esa fila ni ninguna de las demás, todas las veces que se
-    // reintentara, porque el pedido siempre vuelve a traer el sitio entero
-    // desde cero. Se omite sólo esa fila (no cuenta para `recibidos` ni para
-    // la marca de agua, así que vuelve a pedirse en el próximo sync, pero ya
-    // no bloquea al resto).
+    // Una fila con fecha ilegible no puede tumbar el `?` de `guardar_fila_historial`:
+    // eso aborta la transacción entera antes del `commit` (el error se
+    // propaga hasta `sincronizar_con_nube`), y en un dispositivo que
+    // necesita traer el historial completo (recién reinstalado, sin marca
+    // de agua todavía) una sola fila vieja con un formato raro dejaba SIN
+    // historial para siempre -- ni esa fila ni ninguna de las demás, todas
+    // las veces que se reintentara, porque el pedido siempre vuelve a traer
+    // el sitio entero desde cero. Se omite sólo esa fila (no cuenta para
+    // `recibidos` ni para la marca de agua, así que vuelve a pedirse en el
+    // próximo sync, pero ya no bloquea al resto).
     let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_consulta;
     for fila in &filas {
-        let Ok(hora_entrada) = crate::tiempo::parsear_utc(&fila.hora_entrada)
-            .map(crate::tiempo::serializar_utc)
+        let FilaHistorialResultado::Aplicada { actualizado_en } =
+            guardar_fila_historial(&transaction, contexto, fila, &ahora)?
         else {
             continue;
         };
-        let hora_salida = match fila
-            .hora_salida
-            .as_deref()
-            .map(crate::tiempo::parsear_utc)
-            .transpose()
-        {
-            Ok(valor) => valor.map(crate::tiempo::serializar_utc),
-            Err(_) => continue,
-        };
-
-        transaction.execute(
-            "
-            INSERT INTO historial_sitio (
-                uuid, sitio_id, contratista_cedula, contratista_nombre, empresa_nombre,
-                tipo_ingreso, medio_ingreso, hora_entrada, hora_salida, gafete_numero,
-                usuario_entrada_nombre, usuario_salida_nombre, resultado_acceso,
-                motivo_resultado, reglas_version, empresa_activa_snapshot,
-                dispositivo_entrada_id, dispositivo_salida_id, actualizado_en,
-                dispositivo_entrada_tipo
-            ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20)
-            ON CONFLICT(uuid) DO UPDATE SET
-                hora_salida = excluded.hora_salida,
-                usuario_salida_nombre = excluded.usuario_salida_nombre,
-                dispositivo_salida_id = excluded.dispositivo_salida_id,
-                resultado_acceso = excluded.resultado_acceso,
-                motivo_resultado = excluded.motivo_resultado,
-                reglas_version = excluded.reglas_version,
-                empresa_activa_snapshot = excluded.empresa_activa_snapshot,
-                actualizado_en = excluded.actualizado_en,
-                dispositivo_entrada_tipo = excluded.dispositivo_entrada_tipo
-            ",
-            params![
-                fila.id,
-                contexto.sitio_id,
-                fila.contratista_cedula,
-                fila.contratista_nombre,
-                fila.empresa_nombre,
-                fila.tipo_ingreso,
-                fila.medio_ingreso,
-                hora_entrada,
-                hora_salida,
-                fila.gafete_numero,
-                fila.usuario_entrada_nombre,
-                fila.usuario_salida_nombre,
-                fila.resultado_acceso,
-                fila.motivo_resultado,
-                fila.reglas_version,
-                fila.empresa_activa_snapshot,
-                fila.dispositivo_entrada_id,
-                fila.dispositivo_salida_id,
-                ahora,
-                fila.dispositivo_entrada
-                    .as_ref()
-                    .and_then(|d| d.tipo.clone()),
-            ],
-        )?;
         recibidos += 1;
-
-        // `updated_at` es una columna de servidor (trigger de Postgres), no
-        // texto que alguien tipeó -- a diferencia de `hora_entrada`/
-        // `hora_salida` de arriba, no se espera que falle nunca. Si de
-        // todos modos fallara, la fila ya se insertó (no se pierde): sólo
-        // se evita que esa marca haga avanzar la marca de agua.
-        if let Ok(actualizado_en) = crate::tiempo::parsear_utc(&fila.updated_at)
+        if let Some(actualizado_en) = actualizado_en
             && marca_mas_nueva.is_none_or(|marca| actualizado_en > marca)
         {
             marca_mas_nueva = Some(actualizado_en);
@@ -1160,6 +1217,7 @@ struct FilaGafeteRemota {
     estado: String,
     contratista_deudor_id: Option<String>,
     contratista_deudor_nombre: Option<String>,
+    updated_at: String,
 }
 
 /// Trae de la nube las empresas y contratistas de *este mismo sitio* que
@@ -1192,12 +1250,13 @@ struct CatalogoRemotoDescargado {
     marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-/// Trae empresas/contratistas/usuarios (incremental, filtrados por
-/// `marca_anterior`) y gafetes (completo) -- ver los comentarios que tenían
-/// estas mismas consultas en `recibir_catalogo_del_sitio` antes del corte.
+/// Trae empresas/contratistas/usuarios/gafetes, cada uno incremental según
+/// su propia marca -- ver los comentarios que tenían estas mismas consultas
+/// en `recibir_catalogo_del_sitio` antes del corte.
 fn descargar_catalogo_remoto(
     contexto: &ContextoSincronizacion<'_>,
     marca_anterior: Option<&str>,
+    marca_gafetes_anterior: Option<&str>,
 ) -> Result<CatalogoRemotoDescargado, SincronizacionError> {
     let cliente = cliente_http();
     let filtro_incremental = marca_anterior
@@ -1235,26 +1294,35 @@ fn descargar_catalogo_remoto(
             contexto.base_url
         ),
     )?;
-    // El catálogo de gafetes es pequeño y se descarga completo: el cursor
-    // compartido puede ser anterior a la incorporación de gafetes al pull.
-    // También permite reintentar deudores que todavía no se pudieron resolver.
-    // Con `sitio_id=eq...` a diferencia de las tres de arriba -- ver
-    // comentario de `FilaGafeteRemota`.
+    // Incremental con marca PROPIA (`gafetes_actualizado_hasta`, no la misma
+    // `marca_anterior` de arriba) -- antes se descargaba completo cada vez,
+    // justamente para no depender de un cursor compartido que podía ser
+    // anterior a que gafetes se sumara al pull. Una columna propia (nace en
+    // `NULL`) resuelve eso sin ayuda: el primer sync de cualquier
+    // dispositivo siempre baja todo. La otra razón de bajar todo siempre
+    // -- reintentar gafetes PERDIDOS cuyo deudor todavía no resolvía
+    // localmente -- la resuelve `guardar_gafetes`, capando cuánto puede
+    // avanzar esta marca. Con `sitio_id=eq...` a diferencia de las tres de
+    // arriba -- ver comentario de `FilaGafeteRemota`.
+    let filtro_incremental_gafetes = marca_gafetes_anterior
+        .map(|marca| format!("&updated_at=gt.{marca}"))
+        .unwrap_or_default();
     let gafetes: Vec<FilaGafeteRemota> = obtener_json_paginado(
         &cliente,
         contexto,
         &format!(
             "{}/rest/v1/gafetes?sitio_id=eq.{}&select=id,numero,estado,contratista_deudor_id,\
-             contratista_deudor_nombre",
+             contratista_deudor_nombre,updated_at{filtro_incremental_gafetes}",
             contexto.base_url, contexto.sitio_id
         ),
     )?;
 
-    // Máximo `updated_at` real entre las tres tablas incrementales (gafetes
-    // no participa, se descarga completo cada vez -- ver su comentario más
-    // arriba). Sin filas nuevas, la marca no avanza -- preferible repetir la
-    // misma consulta (ya sabemos que no trae nada) a arriesgar perder una
-    // fila por un reloj local desviado.
+    // Máximo `updated_at` real entre empresas/contratistas/usuarios --
+    // gafetes lleva su propia marca por separado (`guardar_gafetes` la
+    // calcula después, capada por lo que haya quedado pendiente de
+    // resolver, ver su doc-comment). Sin filas nuevas, la marca no avanza
+    // -- preferible repetir la misma consulta (ya sabemos que no trae
+    // nada) a arriesgar perder una fila por un reloj local desviado.
     let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> =
         marca_anterior.and_then(|marca| crate::tiempo::parsear_utc(marca).ok());
     for actualizado_en in empresas
@@ -1397,10 +1465,29 @@ fn guardar_usuarios(
     Ok(recibidos)
 }
 
+/// Devuelve cuántos gafetes se guardaron y hasta qué `updated_at` es seguro
+/// avanzar `gafetes_actualizado_hasta` -- las dos cosas separadas porque no
+/// necesariamente coinciden: un gafete PERDIDO cuyo deudor todavía no
+/// resuelve localmente NO se guarda (violaría el `CHECK` de la tabla,
+/// `estado = 'PERDIDO' AND contratista_deudor_id IS NOT NULL`), pero tiene
+/// que seguir pidiéndose en el próximo sync hasta que resuelva -- si la
+/// marca avanzara igual hasta su `updated_at`, ese gafete quedaría afuera
+/// del filtro incremental (`updated_at=gt.marca`) para siempre y nunca más
+/// se sabría de su deuda. Mientras quede alguno pendiente, la marca
+/// simplemente no avanza nada este ciclo (`None`, el llamador deja
+/// `gafetes_actualizado_hasta` como estaba) -- todo lo demás sí se guarda
+/// igual (no tiene sentido demorar gafetes que sí resuelven sólo porque
+/// otro, sin relación, sigue pendiente), sólo la marca de agua espera. Es
+/// una regla deliberadamente conservadora (podría, en teoría, avanzar
+/// parcialmente hasta el más viejo de los pendientes) a cambio de quedar
+/// simple y obviamente correcta -- con un catálogo de gafetes chico
+/// (acotado al físico de un sitio, no crece con la cantidad de
+/// contratistas) el costo de repetir la consulta un ciclo más mientras algo
+/// sigue pendiente es insignificante.
 fn guardar_gafetes(
     transaction: &rusqlite::Transaction<'_>,
     gafetes: &[FilaGafeteRemota],
-) -> Result<u32, SincronizacionError> {
+) -> Result<(u32, Option<chrono::DateTime<chrono::Utc>>), SincronizacionError> {
     // Mismo motivo que `indice_empresas` en `guardar_contratistas`: un solo
     // `SELECT` de todos los contratistas locales antes del lote, en vez de
     // hasta dos por cada gafete PERDIDO (`resolver_contratista_local`
@@ -1409,18 +1496,24 @@ fn guardar_gafetes(
     // `contratistas`, así que el índice se mantiene válido todo el lote.
     let indice_contratistas = indexar_contratistas(transaction)?;
 
-    let mut recibidos = 0;
+    let mut recibidos = 0_u32;
+    let mut marca_maxima_aplicada: Option<chrono::DateTime<chrono::Utc>> = None;
+    let mut quedo_pendiente = false;
     for gafete in gafetes {
+        let actualizado_en = crate::tiempo::parsear_utc(&gafete.updated_at)
+            .map_err(|_| SincronizacionError::FechaInvalida(gafete.updated_at.clone()))?;
+
         // Un gafete PERDIDO sin deudor resoluble localmente violaría el
-        // `CHECK` de la tabla (`estado = 'PERDIDO' AND contratista_deudor_id
-        // IS NOT NULL`) -- se salta por ahora, mismo criterio que un
+        // `CHECK` de la tabla -- se salta por ahora, mismo criterio que un
         // contratista remoto incompleto: se autorresuelve solo en un sync
-        // posterior, en cuanto ese contratista también llegue acá.
+        // posterior, en cuanto ese contratista también llegue acá (ver el
+        // doc-comment de la función sobre `quedo_pendiente`).
         let deudor_id_local = if gafete.estado == "PERDIDO" {
             let Some(id) = indice_contratistas.resolver(
                 gafete.contratista_deudor_id.as_deref(),
                 gafete.contratista_deudor_nombre.as_deref(),
             ) else {
+                quedo_pendiente = true;
                 continue;
             };
             Some(id)
@@ -1440,8 +1533,17 @@ fn guardar_gafetes(
             params![gafete.numero, gafete.estado, deudor_id_local, gafete.id],
         )?;
         recibidos += 1;
+        if marca_maxima_aplicada.is_none_or(|marca| actualizado_en > marca) {
+            marca_maxima_aplicada = Some(actualizado_en);
+        }
     }
-    Ok(recibidos)
+
+    let marca_segura = if quedo_pendiente {
+        None
+    } else {
+        marca_maxima_aplicada
+    };
+    Ok((recibidos, marca_segura))
 }
 
 pub fn recibir_catalogo_del_sitio(
@@ -1463,19 +1565,46 @@ pub fn recibir_catalogo_del_sitio(
         [],
         |row| row.get(0),
     )?;
-    let descarga = descargar_catalogo_remoto(contexto, marca_anterior.as_deref())?;
+    // Marca propia de gafetes (MIGRACION_27) -- ver el doc-comment de
+    // `guardar_gafetes` sobre por qué no comparte `marca_anterior`.
+    let marca_gafetes_anterior: Option<String> = connection.query_row(
+        "SELECT gafetes_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let descarga = descargar_catalogo_remoto(
+        contexto,
+        marca_anterior.as_deref(),
+        marca_gafetes_anterior.as_deref(),
+    )?;
 
     let transaction = connection.unchecked_transaction()?;
+    // Orden explícito (no evaluación implícita de un literal de struct):
+    // `guardar_contratistas` necesita que `guardar_empresas` ya haya
+    // corrido (resuelve `empresa_id` local), y `guardar_gafetes` necesita
+    // que `guardar_contratistas` ya haya corrido (resuelve
+    // `contratista_deudor_id` local) -- ver sus propios comentarios.
+    let empresas_recibidas = guardar_empresas(&transaction, &descarga.empresas)?;
+    let contratistas_recibidos = guardar_contratistas(&transaction, &descarga.contratistas)?;
+    let usuarios_recibidos = guardar_usuarios(&transaction, &descarga.usuarios)?;
+    let (gafetes_recibidos, marca_gafetes_nueva) =
+        guardar_gafetes(&transaction, &descarga.gafetes)?;
     let resumen = ResumenCatalogo {
-        empresas_recibidas: guardar_empresas(&transaction, &descarga.empresas)?,
-        contratistas_recibidos: guardar_contratistas(&transaction, &descarga.contratistas)?,
-        usuarios_recibidos: guardar_usuarios(&transaction, &descarga.usuarios)?,
-        gafetes_recibidos: guardar_gafetes(&transaction, &descarga.gafetes)?,
+        empresas_recibidas,
+        contratistas_recibidos,
+        usuarios_recibidos,
+        gafetes_recibidos,
     };
 
     if let Some(marca) = descarga.marca_mas_nueva {
         transaction.execute(
             "UPDATE sincronizacion_estado SET catalogo_actualizado_hasta = ?1 WHERE id = 1",
+            params![crate::tiempo::serializar_utc(marca)],
+        )?;
+    }
+    if let Some(marca) = marca_gafetes_nueva {
+        transaction.execute(
+            "UPDATE sincronizacion_estado SET gafetes_actualizado_hasta = ?1 WHERE id = 1",
             params![crate::tiempo::serializar_utc(marca)],
         )?;
     }
@@ -2072,7 +2201,10 @@ mod tests {
 
         let marca = marca_historial_para_consulta(Some("2026-09-09T10:00:00Z"), ahora);
 
-        assert_eq!(marca.as_deref(), Some("2026-09-02T10:00:00Z"));
+        assert_eq!(
+            marca.map(crate::tiempo::serializar_utc).as_deref(),
+            Some("2026-09-02T10:00:00Z")
+        );
     }
 
     #[test]
@@ -2081,7 +2213,10 @@ mod tests {
 
         let marca = marca_historial_para_consulta(Some("2026-12-01T00:00:00Z"), ahora);
 
-        assert_eq!(marca.as_deref(), Some("2026-09-02T12:00:00Z"));
+        assert_eq!(
+            marca.map(crate::tiempo::serializar_utc).as_deref(),
+            Some("2026-09-02T12:00:00Z")
+        );
     }
 
     #[test]
@@ -2199,6 +2334,20 @@ mod tests {
     }
 
     #[test]
+    fn sin_nada_abierto_localmente_no_llama_a_la_nube() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        // Base vacía -- ni una fila en `registro_ingresos`. Puerto sin nada
+        // escuchando: si la función igual intentara pegarle a la red, esto
+        // fallaría con un error de conexión en vez de devolver `Ok(0)`.
+        let contexto = contexto("http://127.0.0.1:1");
+
+        let aplicados = recibir_cierres_de_ingresos_propios(&connection, &contexto).unwrap();
+
+        assert_eq!(aplicados, 0);
+    }
+
+    #[test]
     fn normaliza_la_fecha_de_salida_que_devuelve_postgrest_antes_de_guardarla() {
         let connection = Connection::open_in_memory().unwrap();
         initialize_database(&connection).unwrap();
@@ -2288,6 +2437,95 @@ mod tests {
         assert_eq!(cacheados, 0);
     }
 
+    fn fila_gafete(
+        id: &str,
+        numero: i64,
+        estado: &str,
+        deudor_id: Option<&str>,
+        actualizado: &str,
+    ) -> FilaGafeteRemota {
+        FilaGafeteRemota {
+            id: id.to_string(),
+            numero,
+            estado: estado.to_string(),
+            contratista_deudor_id: deudor_id.map(str::to_string),
+            contratista_deudor_nombre: None,
+            updated_at: actualizado.to_string(),
+        }
+    }
+
+    #[test]
+    fn guardar_gafetes_marca_de_agua_avanza_al_mas_nuevo_cuando_nada_queda_pendiente() {
+        let (connection, uuid_contratista) = conexion_con_contratista();
+        let transaction = connection.unchecked_transaction().unwrap();
+        let gafetes = vec![
+            fila_gafete("g1", 1, "DISPONIBLE", None, "2026-01-01T00:00:00Z"),
+            fila_gafete(
+                "g2",
+                2,
+                "PERDIDO",
+                Some(&uuid_contratista),
+                "2026-01-02T00:00:00Z",
+            ),
+        ];
+
+        let (recibidos, marca) = guardar_gafetes(&transaction, &gafetes).unwrap();
+
+        assert_eq!(recibidos, 2);
+        assert_eq!(
+            marca.map(crate::tiempo::serializar_utc).as_deref(),
+            Some("2026-01-02T00:00:00Z")
+        );
+    }
+
+    #[test]
+    fn guardar_gafetes_perdido_sin_deudor_resoluble_se_omite_y_no_avanza_la_marca() {
+        let (connection, uuid_contratista) = conexion_con_contratista();
+        let transaction = connection.unchecked_transaction().unwrap();
+        let gafetes = vec![
+            // Este sí resuelve y se guarda -- pero no debe hacer avanzar la
+            // marca, porque el de abajo (más nuevo) se queda pendiente.
+            fila_gafete(
+                "g1",
+                1,
+                "PERDIDO",
+                Some(&uuid_contratista),
+                "2026-01-01T00:00:00Z",
+            ),
+            // Deudor que no existe localmente todavía -- se salta (violaría
+            // el CHECK de la tabla) en vez de fallar toda la sincronización.
+            fila_gafete(
+                "g2",
+                2,
+                "PERDIDO",
+                Some("uuid-contratista-que-no-llego-todavia"),
+                "2026-01-02T00:00:00Z",
+            ),
+        ];
+
+        let (recibidos, marca) = guardar_gafetes(&transaction, &gafetes).unwrap();
+
+        // g1 se guardó (violaría el CHECK si no) pero la marca de agua no
+        // avanza nada este ciclo -- si avanzara hasta el `updated_at` de g1
+        // (o más), el próximo sync (`updated_at=gt.marca`) ya no volvería a
+        // pedir g2, y su deuda quedaría sin resolver para siempre aunque el
+        // contratista faltante llegue después.
+        assert_eq!(recibidos, 1);
+        let guardado: i64 = transaction
+            .query_row("SELECT COUNT(*) FROM gafetes WHERE numero = 1", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(guardado, 1);
+        let pendiente: i64 = transaction
+            .query_row("SELECT COUNT(*) FROM gafetes WHERE numero = 2", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(pendiente, 0);
+        assert_eq!(marca, None);
+    }
+
     #[test]
     fn recibe_estado_de_gafete_desde_nube_aunque_el_cursor_local_ya_exista() {
         let (connection, _) = conexion_con_contratista();
@@ -2318,11 +2556,17 @@ mod tests {
                 let cuerpo = if paso == 3 {
                     let pedido = String::from_utf8(pedido).unwrap();
                     assert!(pedido.contains("/gafetes?sitio_id=eq.sitio-1"));
+                    // `updated_at` viaja en el `select=` (se necesita para la
+                    // marca propia de gafetes), pero acá lo que importa es
+                    // que NO haya filtro `updated_at=gt.` -- `gafetes_actualizado_hasta`
+                    // nunca se tocó en este test (sólo `catalogo_actualizado_hasta`,
+                    // la de arriba), así que su propio cursor sigue en NULL y
+                    // pide todo, sin importar qué tan adelantado esté el otro.
                     assert!(
-                        !pedido.contains("updated_at"),
-                        "el cursor no debe omitir gafetes antiguos"
+                        !pedido.contains("updated_at=gt."),
+                        "el cursor de gafetes no debe heredar el de catálogo"
                     );
-                    r#"[{"id":"gafete-remoto","numero":26,"estado":"PERDIDO","contratista_deudor_id":"uuid-contratista","contratista_deudor_nombre":null}]"#
+                    r#"[{"id":"gafete-remoto","numero":26,"estado":"PERDIDO","contratista_deudor_id":"uuid-contratista","contratista_deudor_nombre":null,"updated_at":"2026-01-01T00:00:00Z"}]"#
                 } else {
                     "[]"
                 };
@@ -2340,6 +2584,63 @@ mod tests {
             )
             .unwrap();
         assert_eq!(estado, ("PERDIDO".to_string(), 1));
+    }
+
+    #[test]
+    fn segundo_sync_de_catalogo_pide_gafetes_con_su_propia_marca_guardada() {
+        let (connection, _) = conexion_con_contratista();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            // Dos syncs completos = 8 pedidos (empresas/contratistas/
+            // usuarios/gafetes, dos veces). Sólo el de gafetes trae algo,
+            // para que la marca de agua realmente tenga algo que guardar.
+            for paso in 0..8 {
+                let (mut socket, _) = listener.accept().unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                let mut pedido = Vec::new();
+                let mut buffer = [0; 4096];
+                while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                    let leidos = socket.read(&mut buffer).unwrap();
+                    assert!(leidos > 0);
+                    pedido.extend_from_slice(&buffer[..leidos]);
+                }
+                let cuerpo = if paso == 3 {
+                    let pedido = String::from_utf8(pedido).unwrap();
+                    assert!(
+                        !pedido.contains("updated_at=gt."),
+                        "primer sync: sin marca todavía, tiene que pedir todo"
+                    );
+                    r#"[{"id":"gafete-remoto","numero":26,"estado":"DISPONIBLE","contratista_deudor_id":null,"contratista_deudor_nombre":null,"updated_at":"2026-01-05T00:00:00Z"}]"#
+                } else if paso == 7 {
+                    let pedido = String::from_utf8(pedido).unwrap();
+                    assert!(
+                        pedido.contains("updated_at=gt.2026-01-05T00%3A00%3A00Z")
+                            || pedido.contains("updated_at=gt.2026-01-05T00:00:00Z"),
+                        "segundo sync: tiene que arrastrar la marca que dejó el primero -- pedido real: {pedido}"
+                    );
+                    "[]"
+                } else {
+                    "[]"
+                };
+                write!(socket, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}", cuerpo.len()).unwrap();
+            }
+        });
+
+        recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+        let marca_guardada: Option<String> = connection
+            .query_row(
+                "SELECT gafetes_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(marca_guardada.as_deref(), Some("2026-01-05T00:00:00Z"));
+
+        recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+        servidor.join().unwrap();
     }
 
     #[test]

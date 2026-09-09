@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 26;
+pub const SCHEMA_VERSION: i64 = 27;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -276,6 +276,11 @@ fn aplicar_migraciones_posteriores_a_15(
         *version = 26;
     }
 
+    if *version == 26 {
+        aplicar_migracion_27(connection)?;
+        *version = 27;
+    }
+
     Ok(())
 }
 
@@ -363,6 +368,14 @@ fn aplicar_migracion_26(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_26)?;
     transaction.execute_batch("PRAGMA user_version = 26")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_27(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_27)?;
+    transaction.execute_batch("PRAGMA user_version = 27")?;
     transaction.commit()?;
     Ok(())
 }
@@ -1971,4 +1984,23 @@ CREATE INDEX idx_historial_sitio_hora_entrada ON historial_sitio(hora_entrada);
 // para ese caso, no asumir un valor.
 const MIGRACION_26: &str = r"
 ALTER TABLE historial_sitio ADD COLUMN dispositivo_entrada_tipo TEXT;
+";
+
+// Watermark propio de gafetes, mismo mecanismo que
+// `catalogo_actualizado_hasta`/`historial_actualizado_hasta` (columna
+// separada, no reutiliza la de catálogo) -- antes `recibir_catalogo_del_sitio`
+// bajaba TODOS los gafetes del sitio en cada sync, para siempre, a
+// propósito (ver el doc-comment viejo de `descargar_catalogo_remoto`: el
+// cursor compartido de catálogo podía ser anterior a que gafetes se sumara
+// al pull, y bajar todo de nuevo reintentaba solo deudores que no habían
+// podido resolverse localmente). Una columna propia resuelve el primer
+// motivo sin ayuda (nace en `NULL`, primer sync siempre completo);
+// `descargar_catalogo_remoto` resuelve el segundo sin volver a bajar todo:
+// la marca sólo avanza hasta el `updated_at` más nuevo entre los gafetes
+// que sí se pudieron guardar, nunca más allá de uno que se salteó por
+// deudor no resuelto -- ese sigue pidiéndose en cada sync hasta que
+// resuelva, igual que antes, pero sin arrastrar el resto del catálogo de
+// gafetes que ya no cambió.
+const MIGRACION_27: &str = r"
+ALTER TABLE sincronizacion_estado ADD COLUMN gafetes_actualizado_hasta TEXT;
 ";

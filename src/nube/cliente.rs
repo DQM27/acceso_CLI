@@ -110,13 +110,13 @@ pub fn autenticar_dispositivo(
 ) -> Result<TokenDispositivo, NubeError> {
     let url = format!("{base_url}/functions/v1/device-auth");
     let mut cuerpo = serde_json::json!({ "secret": secreto });
-    if let Some(metadata) = metadata {
-        if let serde_json::Value::Object(mapa) = &mut cuerpo {
-            mapa.insert(
-                "metadata".to_string(),
-                serde_json::to_value(metadata).unwrap_or_default(),
-            );
-        }
+    if let Some(metadata) = metadata
+        && let serde_json::Value::Object(mapa) = &mut cuerpo
+    {
+        mapa.insert(
+            "metadata".to_string(),
+            serde_json::to_value(metadata).unwrap_or_default(),
+        );
     }
     let respuesta = cliente_http().post(url).json(&cuerpo).send()?;
 
