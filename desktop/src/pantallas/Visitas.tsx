@@ -4,43 +4,77 @@ import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import {
+  listarAgendaVisitas,
   listarHistorialVisitasSitio,
   listarVisitasActivas,
   registrarSalidaVisita,
 } from "../api";
-import type { MovimientoHistorialVisitaRemoto, MovimientoVisitaActivoResumen } from "../api";
+import type {
+  AgendaVisitaResumen,
+  MovimientoHistorialVisitaRemoto,
+  MovimientoVisitaActivoResumen,
+} from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
 const VisitaCheckInModal = lazy(() => import("./VisitaCheckInModal"));
 
-type Vista = "activas" | "historial";
+type Vista = "activas" | "historial" | "agenda";
+
+const ETIQUETAS_VISTA: Record<Vista, string> = {
+  activas: "Activas",
+  historial: "Historial",
+  agenda: "Agenda",
+};
+
+function ToggleVista({ vista, onCambiar }: { vista: Vista; onCambiar: (v: Vista) => void }) {
+  return (
+    <div style={{ display: "flex", gap: "0.25rem" }}>
+      {(Object.keys(ETIQUETAS_VISTA) as Vista[]).map((opcion) => (
+        <button
+          key={opcion}
+          type="button"
+          className={opcion === vista ? "boton boton-primario" : "boton"}
+          disabled={opcion === vista}
+          onClick={() => onCambiar(opcion)}
+        >
+          {ETIQUETAS_VISTA[opcion]}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /**
  * Lista de visitas activas + botón "+ Visita" que abre el check-in en un
  * modal -- mismo patrón que Activos/NuevoIngresoModal, sin ningún buscador
  * suelto sobre la pantalla (el único campo de búsqueda vive dentro del
- * modal; acá arriba de la grilla sólo va el filtro por columna, igual que
- * Historial). El toggle "Activas/Historial" cambia sólo qué consulta trae
- * la grilla -- misma pantalla, no una pantalla nueva; "Historial" lee
- * `historial_visitas_sitio` (sólo se llena en PC, ver
- * `mobile/rust-core/src/lib.rs`), así que cierres/entradas de cualquier
- * dispositivo del sitio aparecen ahí, no sólo los de esta PC.
+ * modal; acá arriba de la grilla sólo va el filtro rápido, igual que
+ * Activos). El toggle "Activas/Historial/Agenda" cambia sólo qué consulta
+ * trae la grilla -- misma pantalla, no una pantalla nueva:
+ * - "Activas": `listar_visitas_activas`, quienes están adentro ahora mismo.
+ * - "Historial": `historial_visitas_sitio` (sólo se llena en PC, ver
+ *   `mobile/rust-core/src/lib.rs`) -- movimientos abiertos o cerrados de
+ *   cualquier dispositivo del sitio.
+ * - "Agenda": lectura pura de `citas`/`cita_visitantes` local, ya
+ *   sincronizadas -- quién está programado desde hoy en adelante, sin
+ *   tocar la nube de nuevo. De sólo lectura, no dispara ningún check-in.
  */
 export default function Visitas() {
   const [vista, setVista] = useState<Vista>("activas");
   const [filasActivas, setFilasActivas] = useState<MovimientoVisitaActivoResumen[]>([]);
   const [filasHistorial, setFilasHistorial] = useState<MovimientoHistorialVisitaRemoto[]>([]);
+  const [filasAgenda, setFilasAgenda] = useState<AgendaVisitaResumen[]>([]);
   const [cargando, setCargando] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [busqueda, setBusqueda] = useState("");
 
-  useBarraEstado(
-    cargando
-      ? "Cargando…"
-      : vista === "activas"
-        ? `${filasActivas.length} visitantes adentro`
-        : `${filasHistorial.length} movimientos`,
-  );
+  const total =
+    vista === "activas"
+      ? filasActivas.length
+      : vista === "historial"
+        ? filasHistorial.length
+        : filasAgenda.length;
+  useBarraEstado(cargando ? "Cargando…" : `${total} ${vista === "agenda" ? "programados" : vista === "historial" ? "movimientos" : "visitantes adentro"}`);
 
   const recargarActivas = useCallback(() => {
     setCargando(true);
@@ -56,14 +90,22 @@ export default function Visitas() {
       .finally(() => setCargando(false));
   }, []);
 
+  const recargarAgenda = useCallback(() => {
+    setCargando(true);
+    return listarAgendaVisitas()
+      .then(setFilasAgenda)
+      .finally(() => setCargando(false));
+  }, []);
+
   useEffect(() => {
     let vigente = true;
-    const recargar = vista === "activas" ? recargarActivas : recargarHistorial;
+    const recargar =
+      vista === "activas" ? recargarActivas : vista === "historial" ? recargarHistorial : recargarAgenda;
     recargar().catch((error) => vigente && toast.error(String(error)));
     return () => {
       vigente = false;
     };
-  }, [vista, recargarActivas, recargarHistorial]);
+  }, [vista, recargarActivas, recargarHistorial, recargarAgenda]);
 
   const salida = useCallback(
     async (fila: MovimientoVisitaActivoResumen) => {
@@ -171,11 +213,45 @@ export default function Visitas() {
     [],
   );
 
+  const columnasAgenda: ColDef<AgendaVisitaResumen>[] = useMemo(
+    () => [
+      { field: "cedula", headerName: "Cédula", flex: 1.1, minWidth: 110, cellStyle: { textAlign: "left" } },
+      { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
+      { field: "empresa", headerName: "Empresa", flex: 1.1, minWidth: 130, valueFormatter: (p) => p.value ?? "—" },
+      { field: "anfitrion_nombre", headerName: "Anfitrión", flex: 1.2, minWidth: 130 },
+      { field: "motivo", headerName: "Motivo", flex: 1.2, minWidth: 130, valueFormatter: (p) => p.value ?? "—" },
+      {
+        colId: "fecha_desde",
+        headerName: "Desde",
+        flex: 1,
+        minWidth: 105,
+        valueGetter: (p) => p.data?.fecha_desde ?? "",
+        valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
+      },
+      {
+        colId: "fecha_hasta",
+        headerName: "Hasta",
+        flex: 1,
+        minWidth: 105,
+        valueGetter: (p) => p.data?.fecha_hasta ?? "",
+        valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
+      },
+      {
+        field: "estado",
+        headerName: "Estado",
+        flex: 0.9,
+        minWidth: 100,
+        valueFormatter: (p) => (p.value === "Cancelada" ? "Cancelada" : "Vigente"),
+      },
+    ],
+    [],
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
-          {vista === "activas" ? (
+          {vista === "activas" && (
             <Tabla<MovimientoVisitaActivoResumen>
               id="visitas-activas"
               columnas={columnasActivas}
@@ -195,18 +271,10 @@ export default function Visitas() {
                   </div>
                 </>
               }
-              accionesDerecha={
-                <div style={{ display: "flex", gap: "0.25rem" }}>
-                  <button type="button" className="boton boton-primario" disabled>
-                    Activas
-                  </button>
-                  <button type="button" className="boton" onClick={() => setVista("historial")}>
-                    Historial
-                  </button>
-                </div>
-              }
+              accionesDerecha={<ToggleVista vista={vista} onCambiar={setVista} />}
             />
-          ) : (
+          )}
+          {vista === "historial" && (
             <Tabla<MovimientoHistorialVisitaRemoto>
               id="visitas-historial"
               columnas={columnasHistorial}
@@ -221,16 +289,25 @@ export default function Visitas() {
                   />
                 </div>
               }
-              accionesDerecha={
-                <div style={{ display: "flex", gap: "0.25rem" }}>
-                  <button type="button" className="boton" onClick={() => setVista("activas")}>
-                    Activas
-                  </button>
-                  <button type="button" className="boton boton-primario" disabled>
-                    Historial
-                  </button>
+              accionesDerecha={<ToggleVista vista={vista} onCambiar={setVista} />}
+            />
+          )}
+          {vista === "agenda" && (
+            <Tabla<AgendaVisitaResumen>
+              id="visitas-agenda"
+              columnas={columnasAgenda}
+              filas={filasAgenda}
+              busqueda={busqueda}
+              controles={
+                <div className="campo" style={{ flex: "0 1 16rem" }}>
+                  <input
+                    placeholder="Cédula, nombre, empresa…"
+                    value={busqueda}
+                    onChange={(evento) => setBusqueda(evento.target.value)}
+                  />
                 </div>
               }
+              accionesDerecha={<ToggleVista vista={vista} onCambiar={setVista} />}
             />
           )}
         </div>

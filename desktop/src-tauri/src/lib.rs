@@ -153,6 +153,7 @@ pub fn run() {
             comandos::citas::registrar_salida_visita,
             comandos::citas::listar_visitas_activas,
             comandos::citas::listar_historial_visitas_sitio,
+            comandos::citas::listar_agenda_visitas,
             comandos::historial::listar_historial,
             comandos::historial::listar_historial_sitio,
             comandos::historial::exportar_historial,

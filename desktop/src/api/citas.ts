@@ -95,3 +95,27 @@ export function listarHistorialVisitasSitio(
 ): Promise<MovimientoHistorialVisitaRemoto[]> {
   return invoke("listar_historial_visitas_sitio", { desde: desde ?? null, hasta: hasta ?? null });
 }
+
+/** Espejo de `comandos::citas::AgendaVisitaResumen` -- lectura pura de
+ * `citas`/`cita_visitantes` local (ya sincronizadas, sin viaje a la nube).
+ * Trae toda cita vigente o cancelada cuyo rango no haya terminado todavía
+ * ("hoy en adelante") -- no oculta las canceladas, se muestran con su
+ * `estado` para que el filtro por columna decida qué ver. */
+export interface AgendaVisitaResumen {
+  cita_id: number;
+  cedula: string;
+  nombre: string;
+  empresa: string | null;
+  placa_vehiculo: string | null;
+  motivo: string | null;
+  anfitrion_nombre: string;
+  /** `YYYY-MM-DD`. */
+  fecha_desde: string;
+  /** `YYYY-MM-DD`. */
+  fecha_hasta: string;
+  estado: EstadoCita;
+}
+
+export function listarAgendaVisitas(): Promise<AgendaVisitaResumen[]> {
+  return invoke("listar_agenda_visitas");
+}

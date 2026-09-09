@@ -1,7 +1,8 @@
-use chrono::NaiveDate;
+use chrono::{NaiveDate, Utc};
 use control_acceso::mensajes::mensaje_cita;
-use control_acceso::models::cita::{Cita, CitaVisitante};
+use control_acceso::models::cita::{Cita, CitaVisitante, EstadoCita};
 use control_acceso::models::movimiento_visita::MovimientoVisitaActivoResumen;
+use control_acceso::tiempo::fecha_costa_rica;
 use rusqlite::params;
 
 use crate::comandos::historial::rango_utc;
@@ -132,6 +133,75 @@ pub fn listar_historial_visitas_sitio(
                 })
             },
         )
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+/// Agenda de visitas programadas -- lectura pura de `citas`/`cita_visitantes`
+/// (ya sincronizadas por `nube::recibir_citas_del_sitio`, sin consulta
+/// adicional a la nube). Trae toda cita cuya vigencia no haya terminado
+/// todavía (`fecha_hasta >= hoy`), vigente o cancelada -- se muestra el
+/// estado en vez de ocultar las canceladas, mismo criterio que el filtro
+/// por columna del resto de las grillas: dejar que quien mira decida qué
+/// ver, no decidirlo de antemano acá.
+#[derive(serde::Serialize)]
+pub struct AgendaVisitaResumen {
+    pub cita_id: i64,
+    pub cedula: String,
+    pub nombre: String,
+    pub empresa: Option<String>,
+    pub placa_vehiculo: Option<String>,
+    pub motivo: Option<String>,
+    pub anfitrion_nombre: String,
+    pub fecha_desde: String,
+    pub fecha_hasta: String,
+    pub estado: EstadoCita,
+}
+
+#[tauri::command]
+pub fn listar_agenda_visitas(
+    state: tauri::State<GuiState>,
+) -> Result<Vec<AgendaVisitaResumen>, String> {
+    state.sesion_activa()?;
+    let conexion = state.conexion_secundaria()?;
+    let hoy = fecha_costa_rica(Utc::now());
+    let mut statement = conexion
+        .prepare(
+            "SELECT c.id, cv.cedula, cv.nombre, cv.empresa, cv.placa_vehiculo, c.motivo,
+                    c.anfitrion_nombre, c.fecha_desde, c.fecha_hasta, c.estado
+             FROM cita_visitantes cv
+             JOIN citas c ON c.id = cv.cita_id
+             WHERE c.fecha_hasta >= ?1
+             ORDER BY c.fecha_desde ASC, cv.nombre ASC",
+        )
+        .map_err(|error| error.to_string())?;
+    statement
+        .query_map(params![hoy.to_string()], |row| {
+            let estado_sql: String = row.get(9)?;
+            Ok(AgendaVisitaResumen {
+                cita_id: row.get(0)?,
+                cedula: row.get(1)?,
+                nombre: row.get(2)?,
+                empresa: row.get(3)?,
+                placa_vehiculo: row.get(4)?,
+                motivo: row.get(5)?,
+                anfitrion_nombre: row.get(6)?,
+                fecha_desde: row.get(7)?,
+                fecha_hasta: row.get(8)?,
+                // `citas.estado` tiene un `CHECK` a sólo estos dos valores
+                // (`database::schema`, `MIGRACION_28`) -- si algún día no
+                // matchea, es un bug del esquema, no una entrada de usuario
+                // que haya que tolerar con un valor por defecto silencioso.
+                estado: EstadoCita::from_str_sql(&estado_sql).ok_or_else(|| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        9,
+                        rusqlite::types::Type::Text,
+                        format!("estado de cita desconocido: {estado_sql}").into(),
+                    )
+                })?,
+            })
+        })
         .map_err(|error| error.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())
