@@ -37,6 +37,8 @@ pub struct ResumenSincronizacion {
     pub contratistas_recibidos: u32,
     pub gafetes_recibidos: u32,
     pub movimientos_historial_recibidos: u32,
+    /// Ver `application::nube::ResumenSincronizacion::citas_recibidas`.
+    pub citas_recibidas: u32,
     pub sitio_id: String,
     pub dispositivo_id: String,
     pub tipo: String,
@@ -134,6 +136,8 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
         nube::recibir_catalogo_del_sitio(&conexion, &contexto).map_err(mensaje_sincronizacion)?;
     let movimientos_historial_recibidos =
         nube::recibir_historial_del_sitio(&conexion, &contexto).map_err(mensaje_sincronizacion)?;
+    let citas_recibidas =
+        nube::recibir_citas_del_sitio(&conexion, &contexto).map_err(mensaje_sincronizacion)?;
 
     // Si a quien disparó esto lo desactivaron en otro dispositivo, el
     // catálogo recién recibido ya lo refleja -- lo saca de la sesión acá
@@ -154,6 +158,7 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
         remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
         cierres_recibidos,
         movimientos_historial_recibidos,
+        citas_recibidas,
         empresas_recibidas: catalogo.empresas_recibidas,
         contratistas_recibidos: catalogo.contratistas_recibidos,
         gafetes_recibidos: catalogo.gafetes_recibidos,
@@ -216,6 +221,7 @@ pub async fn configurar_dispositivo_inicial(
             remotos_abiertos: resumen.remotos_abiertos,
             cierres_recibidos: resumen.cierres_recibidos,
             movimientos_historial_recibidos: resumen.movimientos_historial_recibidos,
+            citas_recibidas: resumen.citas_recibidas,
             empresas_recibidas: resumen.empresas_recibidas,
             contratistas_recibidos: resumen.contratistas_recibidos,
             gafetes_recibidos: resumen.gafetes_recibidos,

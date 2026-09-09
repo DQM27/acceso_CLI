@@ -500,6 +500,9 @@ pub struct ResumenSincronizacion {
     pub contratistas_recibidos: u32,
     pub gafetes_recibidos: u32,
     pub movimientos_historial_recibidos: u32,
+    /// Citas nuevas/actualizadas recibidas para el punto de acceso (con sus
+    /// visitantes) -- ver `application::nube::ResumenSincronizacion::citas_recibidas`.
+    pub citas_recibidas: u32,
     pub sitio_id: String,
     pub dispositivo_id: String,
     pub tipo: String,
@@ -520,6 +523,7 @@ impl From<ResumenSincronizacionNucleo> for ResumenSincronizacion {
             contratistas_recibidos: resumen.contratistas_recibidos,
             gafetes_recibidos: resumen.gafetes_recibidos,
             movimientos_historial_recibidos: resumen.movimientos_historial_recibidos,
+            citas_recibidas: resumen.citas_recibidas,
             sitio_id: resumen.sitio_id,
             dispositivo_id: resumen.dispositivo_id,
             tipo: resumen.tipo,
@@ -1218,6 +1222,7 @@ impl Nucleo {
             contratistas_recibidos: catalogo.contratistas_recibidos,
             gafetes_recibidos: catalogo.gafetes_recibidos,
             movimientos_historial_recibidos: 0,
+            citas_recibidas: 0,
             sitio_id: token.sitio_id,
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,
@@ -1347,6 +1352,8 @@ impl Nucleo {
         let movimientos_historial_recibidos =
             control_acceso::nube::recibir_historial_del_sitio(&conexion, &contexto)
                 .map_err(mapear)?;
+        let citas_recibidas = control_acceso::nube::recibir_citas_del_sitio(&conexion, &contexto)
+            .map_err(mapear)?;
 
         // Igual que en escritorio: si esta sincronización trajo la baja de
         // quien la disparó, la sesión de ESTE teléfono se cierra sola acá
@@ -1366,6 +1373,7 @@ impl Nucleo {
             contratistas_recibidos: catalogo.contratistas_recibidos,
             gafetes_recibidos: catalogo.gafetes_recibidos,
             movimientos_historial_recibidos,
+            citas_recibidas,
             sitio_id: token.sitio_id,
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,
@@ -1777,6 +1785,8 @@ impl Nucleo {
         let movimientos_historial_recibidos =
             control_acceso::nube::recibir_historial_del_sitio(&conexion, &contexto)
                 .map_err(mapear)?;
+        let citas_recibidas = control_acceso::nube::recibir_citas_del_sitio(&conexion, &contexto)
+            .map_err(mapear)?;
 
         let sesion_expulsada = !self.core_lock().sesion_sigue_activa(&actor);
         if sesion_expulsada {
@@ -1792,6 +1802,7 @@ impl Nucleo {
             contratistas_recibidos: catalogo.contratistas_recibidos,
             gafetes_recibidos: catalogo.gafetes_recibidos,
             movimientos_historial_recibidos,
+            citas_recibidas,
             sitio_id: token.sitio_id,
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,

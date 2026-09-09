@@ -1161,6 +1161,181 @@ fn marca_historial_para_consulta(
     Some(base - chrono::Duration::days(DIAS_TRASLAPE_HISTORIAL))
 }
 
+/// Nombre del anfitrión, embebido vía `PostgREST`
+/// (`anfitrion:anfitriones!citas_anfitrion_correo_fkey(nombre)`) -- la
+/// política de `anfitriones` que deja leerlo desde un dispositivo del sitio
+/// vive en la migración `autoriza_lectura_anfitrion_por_dispositivo_del_sitio`.
+/// `Option` porque un embed que RLS filtra vuelve `null`, no un error --
+/// nunca debería pasar dado que esa política ya existe, pero no hay forma
+/// de que el tipo lo garantice.
+#[derive(serde::Deserialize)]
+struct AnfitrionEmbebido {
+    nombre: String,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaCitaVisitanteRemota {
+    id: String,
+    cedula: String,
+    nombre: String,
+    empresa: Option<String>,
+    placa_vehiculo: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaCitaRemota {
+    id: String,
+    motivo: Option<String>,
+    // `date` de Postgres, no `timestamptz` -- PostgREST ya lo manda como
+    // "YYYY-MM-DD" sin hora, mismo formato que espera `citas.fecha_desde`/
+    // `fecha_hasta` local -- a diferencia de `hora_entrada`/`updated_at` en
+    // otras filas remotas, esto no necesita reparsear/reformatear.
+    fecha_desde: String,
+    fecha_hasta: String,
+    anfitrion_correo: String,
+    anfitrion: Option<AnfitrionEmbebido>,
+    estado: String,
+    updated_at: String,
+    // Embebido en la misma consulta (`cita_visitantes(...)`) -- un solo
+    // viaje de red trae la cita completa con su grupo, en vez de una
+    // consulta aparte por cada una.
+    cita_visitantes: Vec<FilaCitaVisitanteRemota>,
+}
+
+/// Guarda una cita y su grupo de visitantes; devuelve el `updated_at`
+/// parseado si se aplicó, o `None` si se omitió por una fecha ilegible --
+/// mismo criterio de resiliencia que `guardar_fila_historial`: una fila mala
+/// no puede abortar la transacción entera y dejar sin citas a un
+/// dispositivo que necesita traerlas todas (recién reinstalado, sin marca
+/// de agua todavía).
+fn guardar_cita_remota(
+    transaction: &rusqlite::Transaction<'_>,
+    fila: &FilaCitaRemota,
+) -> Result<Option<chrono::DateTime<chrono::Utc>>, SincronizacionError> {
+    let Ok(actualizado_en) = crate::tiempo::parsear_utc(&fila.updated_at) else {
+        return Ok(None);
+    };
+
+    let anfitrion_nombre = fila
+        .anfitrion
+        .as_ref()
+        .map_or("—", |anfitrion| anfitrion.nombre.as_str());
+
+    transaction.execute(
+        "
+        INSERT INTO citas (
+            uuid, motivo, fecha_desde, fecha_hasta, anfitrion_nombre,
+            anfitrion_correo, estado, creado_en
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+        ON CONFLICT(uuid) DO UPDATE SET
+            motivo = excluded.motivo,
+            fecha_desde = excluded.fecha_desde,
+            fecha_hasta = excluded.fecha_hasta,
+            anfitrion_nombre = excluded.anfitrion_nombre,
+            anfitrion_correo = excluded.anfitrion_correo,
+            estado = excluded.estado
+        ",
+        params![
+            fila.id,
+            fila.motivo,
+            fila.fecha_desde,
+            fila.fecha_hasta,
+            anfitrion_nombre,
+            fila.anfitrion_correo,
+            fila.estado,
+            crate::tiempo::serializar_utc(actualizado_en),
+        ],
+    )?;
+
+    let cita_id_local: i64 = transaction.query_row(
+        "SELECT id FROM citas WHERE uuid = ?1",
+        params![fila.id],
+        |row| row.get(0),
+    )?;
+
+    for visitante in &fila.cita_visitantes {
+        transaction.execute(
+            "
+            INSERT INTO cita_visitantes (uuid, cita_id, cedula, nombre, empresa, placa_vehiculo)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            ON CONFLICT(uuid) DO UPDATE SET
+                cita_id = excluded.cita_id,
+                cedula = excluded.cedula,
+                nombre = excluded.nombre,
+                empresa = excluded.empresa,
+                placa_vehiculo = excluded.placa_vehiculo
+            ",
+            params![
+                visitante.id,
+                cita_id_local,
+                visitante.cedula,
+                visitante.nombre,
+                visitante.empresa,
+                visitante.placa_vehiculo,
+            ],
+        )?;
+    }
+
+    Ok(Some(actualizado_en))
+}
+
+/// Trae a `citas`/`cita_visitantes` las citas que aplican a este sitio --
+/// mismo mecanismo incremental que `recibir_historial_del_sitio`
+/// (`citas_actualizado_hasta`, columna propia, ritmo de sync independiente),
+/// pero sin filtro explícito de `sitio_id` en la URL: a diferencia de
+/// `ingresos`/`gafetes`, una cita no tiene una columna de sitio directa
+/// (vive en `cita_sitios`, el puente muchos-a-muchos) -- la política RLS
+/// "leer citas propias, del sitio, o admin" ya resuelve ese filtro del lado
+/// del servidor, agregarlo acá sería repetir la misma pregunta dos veces.
+pub fn recibir_citas_del_sitio(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<u32, SincronizacionError> {
+    let cliente = cliente_http();
+
+    let marca_anterior: Option<String> = connection.query_row(
+        "SELECT citas_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let filtro_incremental = marca_anterior
+        .as_deref()
+        .map(|marca| format!("&updated_at=gt.{marca}"))
+        .unwrap_or_default();
+
+    let url = format!(
+        "{}/rest/v1/citas?select=id,motivo,fecha_desde,fecha_hasta,anfitrion_correo,estado,\
+         updated_at,anfitrion:anfitriones!citas_anfitrion_correo_fkey(nombre),\
+         cita_visitantes(id,cedula,nombre,empresa,placa_vehiculo){filtro_incremental}",
+        contexto.base_url,
+    );
+    let filas: Vec<FilaCitaRemota> = obtener_json_paginado(&cliente, contexto, &url)?;
+
+    let transaction = connection.unchecked_transaction()?;
+    let mut recibidas = 0_u32;
+    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_anterior
+        .as_deref()
+        .and_then(|marca| crate::tiempo::parsear_utc(marca).ok());
+    for fila in &filas {
+        let Some(actualizado_en) = guardar_cita_remota(&transaction, fila)? else {
+            continue;
+        };
+        recibidas += 1;
+        if marca_mas_nueva.is_none_or(|marca| actualizado_en > marca) {
+            marca_mas_nueva = Some(actualizado_en);
+        }
+    }
+
+    if let Some(marca) = marca_mas_nueva {
+        transaction.execute(
+            "UPDATE sincronizacion_estado SET citas_actualizado_hasta = ?1 WHERE id = 1",
+            params![crate::tiempo::serializar_utc(marca)],
+        )?;
+    }
+    transaction.commit()?;
+    Ok(recibidas)
+}
+
 /// Cuántas filas se aplicaron localmente al traer el catálogo del sitio --
 /// para que la pantalla pueda avisar "3 contratistas nuevos" sin devolver
 /// las filas enteras.
@@ -2242,6 +2417,146 @@ mod tests {
             )
             .unwrap();
         assert_eq!(tipo, None, "sin embed, queda NULL en vez de fallar");
+    }
+
+    #[test]
+    fn recibe_una_cita_con_su_grupo_de_visitantes_y_el_nombre_del_anfitrion_embebido() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"cita-1\",\"motivo\":\"Auditoría\",\
+             \"fecha_desde\":\"2026-09-10\",\"fecha_hasta\":\"2026-09-12\",\
+             \"anfitrion_correo\":\"kof@brisas.com\",\
+             \"anfitrion\":{\"nombre\":\"Persona Anfitriona\"},\
+             \"estado\":\"VIGENTE\",\"updated_at\":\"2026-09-09T08:00:00Z\",\
+             \"cita_visitantes\":[\
+             {\"id\":\"visitante-1\",\"cedula\":\"1-1111\",\"nombre\":\"Visitante Uno\",\
+             \"empresa\":null,\"placa_vehiculo\":null}]}]",
+        );
+
+        let recibidas = recibir_citas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(recibidas, 1);
+        let (anfitrion_nombre, estado): (String, String) = connection
+            .query_row(
+                "SELECT anfitrion_nombre, estado FROM citas WHERE uuid = 'cita-1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(anfitrion_nombre, "Persona Anfitriona");
+        assert_eq!(estado, "VIGENTE");
+        let cedula: String = connection
+            .query_row(
+                "SELECT cedula FROM cita_visitantes WHERE uuid = 'visitante-1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(cedula, "1-1111");
+    }
+
+    #[test]
+    fn recibe_cita_sin_anfitrion_embebido_no_falla() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"cita-2\",\"motivo\":null,\
+             \"fecha_desde\":\"2026-09-10\",\"fecha_hasta\":\"2026-09-10\",\
+             \"anfitrion_correo\":\"kof@brisas.com\",\"anfitrion\":null,\
+             \"estado\":\"VIGENTE\",\"updated_at\":\"2026-09-09T08:00:00Z\",\
+             \"cita_visitantes\":[]}]",
+        );
+
+        let recibidas = recibir_citas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(recibidas, 1);
+        let anfitrion_nombre: String = connection
+            .query_row(
+                "SELECT anfitrion_nombre FROM citas WHERE uuid = 'cita-2'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            anfitrion_nombre, "—",
+            "sin embed (RLS lo filtró o no aplica), queda un placeholder en vez de fallar"
+        );
+    }
+
+    #[test]
+    fn una_fila_de_cita_con_fecha_ilegible_se_omite_sin_abortar_las_demas() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"cita-mala\",\"motivo\":null,\
+             \"fecha_desde\":\"2026-09-10\",\"fecha_hasta\":\"2026-09-10\",\
+             \"anfitrion_correo\":\"kof@brisas.com\",\"anfitrion\":null,\
+             \"estado\":\"VIGENTE\",\"updated_at\":\"no-es-una-fecha\",\
+             \"cita_visitantes\":[]},\
+             {\"id\":\"cita-buena\",\"motivo\":null,\
+             \"fecha_desde\":\"2026-09-10\",\"fecha_hasta\":\"2026-09-10\",\
+             \"anfitrion_correo\":\"kof@brisas.com\",\"anfitrion\":null,\
+             \"estado\":\"VIGENTE\",\"updated_at\":\"2026-09-09T08:00:00Z\",\
+             \"cita_visitantes\":[]}]",
+        );
+
+        let recibidas = recibir_citas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(recibidas, 1, "la fila con updated_at ilegible no cuenta");
+        let total: i64 = connection
+            .query_row("SELECT COUNT(*) FROM citas", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(total, 1, "solo se guardó la fila válida");
+    }
+
+    #[test]
+    fn segunda_sincronizacion_de_citas_pide_solo_lo_actualizado_desde_la_marca_previa() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "UPDATE sincronizacion_estado SET citas_actualizado_hasta = '2026-09-09T08:00:00Z' WHERE id = 1",
+                [],
+            )
+            .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(
+                pedido.contains("updated_at=gt.2026-09-09T08%3A00%3A00Z")
+                    || pedido.contains("updated_at=gt.2026-09-09T08:00:00Z")
+            );
+            assert!(
+                !pedido.contains("sitio_id="),
+                "sin filtro explícito de sitio -- RLS ya lo resuelve del lado del servidor"
+            );
+            let cuerpo = "[]";
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        recibir_citas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+        servidor.join().unwrap();
     }
 
     #[test]
