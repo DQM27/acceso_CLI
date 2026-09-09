@@ -192,6 +192,7 @@ fun clasificarTipoDocumento(texto: String): TipoDocumento {
         "LICENCIA DE CONDUCIR" in mayus ->
             TipoDocumento.LICENCIA_NACIONAL
         "DGME" in mayus || "MIGRACIÓN Y EXTRANJERÍA" in mayus || "MIGRACION Y EXTRANJERIA" in mayus ||
+            "CÉDULA DE RESIDENCIA" in mayus || "CEDULA DE RESIDENCIA" in mayus ||
             "RESIDENTE PERMANENTE" in mayus || "RESIDENTE TEMPORAL" in mayus ||
             "CARNE PROVISIONAL" in mayus || "CARNÉ PROVISIONAL" in mayus || "PERMISO LABORAL" in mayus ->
             TipoDocumento.CEDULA_RESIDENCIA
