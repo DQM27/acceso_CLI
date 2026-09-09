@@ -213,6 +213,7 @@ fn obtener_json<T: serde::de::DeserializeOwned>(
 /// defecto (`db-max-rows`, 1000) para que ninguna página sola pueda
 /// chocar con ese límite y perder el resto en silencio.
 const TAMANO_PAGINA_REMOTA: usize = 500;
+const DIAS_TRASLAPE_HISTORIAL: i64 = 7;
 
 /// Igual que `obtener_json`, pero para listas que pueden superar el tope de
 /// filas por respuesta de `PostgREST` -- sin esto, un catálogo o un
@@ -753,20 +754,31 @@ pub fn recibir_cierres_de_ingresos_propios(
 }
 
 /// Refresca la caché local `ingresos_remotos` con lo que hay abierto ahora
-/// mismo en la nube para este sitio, creado por *otro* dispositivo
-/// (`dispositivo_entrada_id=neq.<el mío>`). Reemplaza el contenido entero
-/// de la tabla en una sola transacción -- más simple que llevar la cuenta
-/// de qué cambió, y la tabla es chica (sólo lo que está abierto ahora).
+/// mismo en la nube para este sitio -- de *cualquier* dispositivo, ya no
+/// sólo "el otro" (`dispositivo_entrada_id=neq.<el mío>` como antes). Ese
+/// filtro asumía que un abierto de este dispositivo siempre vive en su
+/// `registro_ingresos` local, pero eso se rompe al reinstalar Android: la
+/// base local pierde `registro_ingresos` (mismo caso que ya se documentó en
+/// `recibir_historial_del_sitio`), y con el filtro viejo esos ingresos
+/// desaparecían de la pantalla Activos para siempre -- ni locales (se
+/// borraron) ni remotos (el filtro los excluía por ser "propios"). Ahora se
+/// trae todo lo abierto del sitio y se descarta explícitamente lo que ya
+/// vive en `registro_ingresos` (`existe_localmente` más abajo) -- así el
+/// caso normal (nada se perdió) sigue sin duplicar nada, y el caso
+/// reinstalado recupera lo suyo por el mismo camino que ya usa para lo
+/// ajeno. Reemplaza el contenido entero de la tabla en una sola transacción
+/// -- más simple que llevar la cuenta de qué cambió, y la tabla es chica
+/// (sólo lo que está abierto ahora).
 pub fn recibir_ingresos_abiertos(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<Vec<IngresoRemoto>, SincronizacionError> {
     let cliente = cliente_http();
     let url = format!(
-        "{}/rest/v1/ingresos?sitio_id=eq.{}&dispositivo_entrada_id=neq.{}&hora_salida=is.null\
+        "{}/rest/v1/ingresos?sitio_id=eq.{}&hora_salida=is.null\
          &select=id,contratista_nombre,hora_entrada,usuario_entrada_nombre,dispositivo_entrada_id,\
          contratista_cedula,empresa_nombre,tipo_ingreso,medio_ingreso,gafete_numero",
-        contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
+        contexto.base_url, contexto.sitio_id,
     );
     let filas: Vec<FilaIngresoRemoto> = obtener_json(&cliente, contexto, &url)?;
 
@@ -777,6 +789,17 @@ pub fn recibir_ingresos_abiertos(
     )?;
     let mut remotos = Vec::with_capacity(filas.len());
     for fila in filas {
+        // Lo que ya vive en `registro_ingresos` de este dispositivo sigue
+        // siendo la fuente de verdad de ahí -- no se duplica en la caché
+        // remota. Ver el doc-comment de la función.
+        let existe_localmente: bool = transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM registro_ingresos WHERE uuid = ?1)",
+            params![fila.id],
+            |row| row.get(0),
+        )?;
+        if existe_localmente {
+            continue;
+        }
         // Mismo motivo que en `recibir_cierres_de_ingresos_propios`: el
         // receptor no devuelve necesariamente el formato único que usa el
         // resto de la app para persistir fechas.
@@ -938,9 +961,12 @@ pub fn recibir_historial_del_sitio(
         [],
         |row| row.get(0),
     )?;
-    let filtro_incremental = marca_anterior
-        .as_deref()
-        .map(|marca| format!("&updated_at=gt.{marca}"))
+    let ahora_remoto_seguro = chrono::Utc::now();
+    let marca_consulta =
+        marca_historial_para_consulta(marca_anterior.as_deref(), ahora_remoto_seguro);
+    let filtro_incremental = marca_consulta
+        .as_ref()
+        .map(|marca| format!("&updated_at=gt.{}", crate::tiempo::serializar_utc(*marca)))
         .unwrap_or_default();
 
     // No se excluye el dispositivo actual: tras reinstalar Android, la base
@@ -972,22 +998,32 @@ pub fn recibir_historial_del_sitio(
     // nuevas, la marca no avanza (se vuelve a pedir el mismo rango la
     // próxima vez, que ya sabemos que no trae nada -- preferible a arriesgar
     // perder una fila).
-    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_anterior
-        .as_deref()
-        .and_then(|marca| crate::tiempo::parsear_utc(marca).ok());
+    // Una fila con fecha ilegible no puede tumbar el `?` de acá adentro: eso
+    // aborta la transacción entera antes del `commit` (el error se propaga
+    // hasta `sincronizar_con_nube`), y en un dispositivo que necesita traer
+    // el historial completo (recién reinstalado, sin marca de agua todavía)
+    // una sola fila vieja con un formato raro dejaba SIN historial para
+    // siempre -- ni esa fila ni ninguna de las demás, todas las veces que se
+    // reintentara, porque el pedido siempre vuelve a traer el sitio entero
+    // desde cero. Se omite sólo esa fila (no cuenta para `recibidos` ni para
+    // la marca de agua, así que vuelve a pedirse en el próximo sync, pero ya
+    // no bloquea al resto).
+    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_consulta;
     for fila in &filas {
-        let hora_entrada = crate::tiempo::parsear_utc(&fila.hora_entrada)
+        let Ok(hora_entrada) = crate::tiempo::parsear_utc(&fila.hora_entrada)
             .map(crate::tiempo::serializar_utc)
-            .map_err(|_| SincronizacionError::FechaInvalida(fila.hora_entrada.clone()))?;
-        let hora_salida = fila
+        else {
+            continue;
+        };
+        let hora_salida = match fila
             .hora_salida
             .as_deref()
             .map(crate::tiempo::parsear_utc)
             .transpose()
-            .map_err(|_| {
-                SincronizacionError::FechaInvalida(fila.hora_salida.clone().unwrap_or_default())
-            })?
-            .map(crate::tiempo::serializar_utc);
+        {
+            Ok(valor) => valor.map(crate::tiempo::serializar_utc),
+            Err(_) => continue,
+        };
 
         transaction.execute(
             "
@@ -1037,9 +1073,14 @@ pub fn recibir_historial_del_sitio(
         )?;
         recibidos += 1;
 
-        let actualizado_en = crate::tiempo::parsear_utc(&fila.updated_at)
-            .map_err(|_| SincronizacionError::FechaInvalida(fila.updated_at.clone()))?;
-        if marca_mas_nueva.is_none_or(|marca| actualizado_en > marca) {
+        // `updated_at` es una columna de servidor (trigger de Postgres), no
+        // texto que alguien tipeó -- a diferencia de `hora_entrada`/
+        // `hora_salida` de arriba, no se espera que falle nunca. Si de
+        // todos modos fallara, la fila ya se insertó (no se pierde): sólo
+        // se evita que esa marca haga avanzar la marca de agua.
+        if let Ok(actualizado_en) = crate::tiempo::parsear_utc(&fila.updated_at)
+            && marca_mas_nueva.is_none_or(|marca| actualizado_en > marca)
+        {
             marca_mas_nueva = Some(actualizado_en);
         }
     }
@@ -1052,6 +1093,15 @@ pub fn recibir_historial_del_sitio(
     }
     transaction.commit()?;
     Ok(recibidos)
+}
+
+fn marca_historial_para_consulta(
+    marca_anterior: Option<&str>,
+    ahora: chrono::DateTime<chrono::Utc>,
+) -> Option<chrono::DateTime<chrono::Utc>> {
+    let marca = marca_anterior.and_then(|marca| crate::tiempo::parsear_utc(marca).ok())?;
+    let base = if marca > ahora { ahora } else { marca };
+    Some(base - chrono::Duration::days(DIAS_TRASLAPE_HISTORIAL))
 }
 
 /// Cuántas filas se aplicaron localmente al traer el catálogo del sitio --
@@ -2014,6 +2064,24 @@ mod tests {
 
         recibir_historial_del_sitio(&connection, &contexto(&base_url)).unwrap();
         servidor.join().unwrap();
+    }
+
+    #[test]
+    fn marca_historial_para_consulta_retrocede_una_semana() {
+        let ahora = crate::tiempo::parsear_utc("2026-09-09T12:00:00Z").unwrap();
+
+        let marca = marca_historial_para_consulta(Some("2026-09-09T10:00:00Z"), ahora);
+
+        assert_eq!(marca.as_deref(), Some("2026-09-02T10:00:00Z"));
+    }
+
+    #[test]
+    fn marca_historial_para_consulta_sanea_marcas_en_futuro() {
+        let ahora = crate::tiempo::parsear_utc("2026-09-09T12:00:00Z").unwrap();
+
+        let marca = marca_historial_para_consulta(Some("2026-12-01T00:00:00Z"), ahora);
+
+        assert_eq!(marca.as_deref(), Some("2026-09-02T12:00:00Z"));
     }
 
     #[test]

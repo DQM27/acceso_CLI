@@ -2577,9 +2577,9 @@ public object FfiConverterTypeNucleo: FfiConverter<Nucleo, Long> {
  */
 data class ContratistaResumen (
     var `id`: kotlin.Long
-    ,
+    , 
     var `cedula`: kotlin.String
-    ,
+    , 
     var `nombre`: kotlin.String
     , 
     var `empresaNombre`: kotlin.String
@@ -2954,9 +2954,9 @@ public object FfiConverterTypeIngresoRemoto: FfiConverterRustBuffer<IngresoRemot
  */
 data class MovimientoHistorial (
     var `registroId`: kotlin.Long
-    ,
+    , 
     var `uuid`: kotlin.String
-    ,
+    , 
     var `cedula`: kotlin.String
     , 
     var `contratistaNombre`: kotlin.String
@@ -4288,3 +4288,4 @@ public object FfiConverterSequenceTypeUsuarioResumen: FfiConverterRustBuffer<Lis
         }
     }
 }
+
