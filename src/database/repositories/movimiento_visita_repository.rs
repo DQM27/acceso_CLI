@@ -11,7 +11,7 @@ use crate::database::cola_salida;
 use crate::database::error::DatabaseError;
 use crate::database::identificador::generar_uuid_v4;
 use crate::models::movimiento_visita::{
-    MovimientoVisita, NuevoMovimientoVisita, SalidaMovimientoVisita,
+    MovimientoVisita, MovimientoVisitaActivoResumen, NuevoMovimientoVisita, SalidaMovimientoVisita,
 };
 use crate::tiempo::{parsear_utc, serializar_utc};
 
@@ -41,6 +41,14 @@ pub trait MovimientoVisitaRepository {
         fecha_hora_salida: DateTime<Utc>,
         usuario_salida_id: i64,
     ) -> Result<(), DatabaseError>;
+
+    /// Fila aplanada para la pantalla "Visitas activas" -- análoga a
+    /// `IngresosQuery::listar_activos` (contratistas), pero sin filtro:
+    /// el universo de visitas activas en un sitio nunca es lo bastante
+    /// grande como para justificar paginar/filtrar en `SQLite` (mismo
+    /// criterio que hizo que este dominio entero se mantuviera más simple
+    /// que el de contratistas, ver `docs/plan-control-visitas.md`).
+    fn listar_activos(&self) -> Result<Vec<MovimientoVisitaActivoResumen>, DatabaseError>;
 }
 
 pub struct SqliteMovimientoVisitaRepository<'a> {
@@ -210,6 +218,65 @@ impl MovimientoVisitaRepository for SqliteMovimientoVisitaRepository<'_> {
 
         Ok(())
     }
+
+    fn listar_activos(&self) -> Result<Vec<MovimientoVisitaActivoResumen>, DatabaseError> {
+        let mut statement = self.connection.prepare(
+            "
+            SELECT
+                mv.id, cv.cedula, cv.nombre, cv.empresa, mv.gafete_numero,
+                mv.fecha_hora_entrada, c.anfitrion_nombre, c.motivo
+            FROM movimientos_visita mv
+            JOIN cita_visitantes cv ON cv.id = mv.cita_visitante_id
+            JOIN citas c ON c.id = cv.cita_id
+            WHERE mv.fecha_hora_salida IS NULL
+            ORDER BY mv.fecha_hora_entrada ASC
+            ",
+        )?;
+        let filas = statement
+            .query_map([], |row| {
+                let fecha_hora_entrada_texto: String = row.get(5)?;
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<i64>>(4)?,
+                    fecha_hora_entrada_texto,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, Option<String>>(7)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        filas
+            .into_iter()
+            .map(
+                |(
+                    id,
+                    cedula,
+                    nombre,
+                    empresa,
+                    gafete_numero,
+                    fecha_hora_entrada_texto,
+                    anfitrion_nombre,
+                    motivo,
+                )| {
+                    let fecha_hora_entrada = parsear_utc(&fecha_hora_entrada_texto)
+                        .map_err(|error| DatabaseError::FechaCorrupta(error.to_string()))?;
+                    Ok(MovimientoVisitaActivoResumen {
+                        id,
+                        cedula,
+                        nombre,
+                        empresa,
+                        gafete_numero,
+                        fecha_hora_entrada,
+                        anfitrion_nombre,
+                        motivo,
+                    })
+                },
+            )
+            .collect()
+    }
 }
 
 const ULTIMO_INSTANTE_MOVIMIENTO_VISITA_SQL: &str = "
@@ -358,5 +425,31 @@ mod tests {
         repo.crear(&nuevo(visitante_id, Some(5))).unwrap();
 
         assert!(repo.crear(&nuevo(2, Some(5))).is_err());
+    }
+
+    #[test]
+    fn listar_activos_trae_el_grupo_abierto_con_datos_de_la_cita_y_omite_al_que_ya_salio() {
+        let (connection, visitante_id) = conexion_con_visitante();
+        connection
+            .execute(
+                "INSERT INTO cita_visitantes (id, uuid, cita_id, cedula, nombre)
+                 VALUES (2, 'uuid-visitante-2', 1, '6-7890', 'Otro visitante')",
+                [],
+            )
+            .unwrap();
+        let repo = SqliteMovimientoVisitaRepository::new(&connection);
+        let activo_id = repo.crear(&nuevo(visitante_id, Some(3))).unwrap();
+        let cerrado_id = repo.crear(&nuevo(2, None)).unwrap();
+        repo.registrar_salida(cerrado_id, Utc::now(), 1).unwrap();
+
+        let activos = repo.listar_activos().unwrap();
+
+        assert_eq!(activos.len(), 1);
+        let fila = &activos[0];
+        assert_eq!(fila.id, activo_id);
+        assert_eq!(fila.cedula, "1-2345");
+        assert_eq!(fila.nombre, "Visitante");
+        assert_eq!(fila.gafete_numero, Some(3));
+        assert_eq!(fila.anfitrion_nombre, "Anfitrión");
     }
 }

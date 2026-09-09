@@ -7,8 +7,11 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 use crate::database::error::DatabaseError;
 use crate::database::repositories::cita_repository::SqliteCitaRepository;
-use crate::database::repositories::movimiento_visita_repository::SqliteMovimientoVisitaRepository;
+use crate::database::repositories::movimiento_visita_repository::{
+    MovimientoVisitaRepository, SqliteMovimientoVisitaRepository,
+};
 use crate::models::cita::{Cita, CitaVisitante};
+use crate::models::movimiento_visita::MovimientoVisitaActivoResumen;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::cita_service::CitaService;
 use crate::services::error::CitaServiceError;
@@ -88,6 +91,14 @@ impl AppCore {
             let movimientos = SqliteMovimientoVisitaRepository::new(transaction);
             CitaService::new(&citas, &movimientos).registrar_salida(movimiento_id, ahora, actor.id)
         })
+    }
+
+    /// Sin `actor`, mismo criterio que `listar_ingresos_activos`
+    /// (`accesos.rs`): es una lectura, no una operación que autorizar.
+    pub fn listar_visitas_activas(
+        &self,
+    ) -> Result<Vec<MovimientoVisitaActivoResumen>, DatabaseError> {
+        SqliteMovimientoVisitaRepository::new(&self.connection).listar_activos()
     }
 }
 

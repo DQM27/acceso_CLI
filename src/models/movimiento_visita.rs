@@ -32,3 +32,19 @@ pub struct MovimientoVisita {
     /// registrada la salida.
     pub salida: Option<SalidaMovimientoVisita>,
 }
+
+/// Fila ya aplanada (join `movimientos_visita` + `cita_visitantes` + `citas`)
+/// para la pantalla "Visitas activas" -- análoga a `IngresoActivoResumen`
+/// (contratistas), pero sin ningún campo de PRAIND/empresa: no aplica acá.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct MovimientoVisitaActivoResumen {
+    pub id: i64,
+    pub cedula: String,
+    pub nombre: String,
+    pub empresa: Option<String>,
+    pub gafete_numero: Option<i64>,
+    pub fecha_hora_entrada: DateTime<Utc>,
+    pub anfitrion_nombre: String,
+    pub motivo: Option<String>,
+}

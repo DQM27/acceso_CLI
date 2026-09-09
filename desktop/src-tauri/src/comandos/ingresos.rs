@@ -86,12 +86,12 @@ pub fn registrar_ingreso(
     state: tauri::State<GuiState>,
 ) -> Result<ResultadoRegistroEntrada, String> {
     let sesion = state.sesion_activa()?;
-    if let Some(numero) = gafete {
-        if !gafete_libre_en_otro_dispositivo(&state, numero)? {
-            return Err(format!(
-                "El gafete {numero} ya está en uso en otro dispositivo del sitio"
-            ));
-        }
+    if let Some(numero) = gafete
+        && !gafete_libre_en_otro_dispositivo(&state, numero)?
+    {
+        return Err(format!(
+            "El gafete {numero} ya está en uso en otro dispositivo del sitio"
+        ));
     }
     state
         .core()
