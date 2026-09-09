@@ -4,6 +4,8 @@ pub enum DatabaseError {
     Sqlite(#[from] rusqlite::Error),
     #[error("No existe un registro de ingreso activo con ese ID")]
     RegistroNoActivo,
+    #[error("No existe un movimiento de visita activo con ese ID")]
+    MovimientoVisitaNoActivo,
     #[error("La configuración inicial ya fue realizada")]
     ConfiguracionInicialYaRealizada,
     #[error("Usuario no encontrado")]
