@@ -300,79 +300,7 @@ main:focus,
 .portal {
   min-height: 100dvh;
 }
-.lateral {
-  position: fixed;
-  top: 0;
-  bottom: 0;
-  width: 252px;
-  padding: 32px 20px 20px;
-  background: var(--panel-lateral);
-  border-right: 1px solid var(--borde);
-  display: flex;
-  flex-direction: column;
-  z-index: 20;
-}
-.lateral .marca {
-  margin: 0 4px;
-}
-.lateral-grupo {
-  margin-top: 48px;
-}
-.lateral-grupo > p {
-  margin: 0 12px 12px;
-  font-size: 10px;
-}
-.lateral nav {
-  display: grid;
-  gap: 8px;
-}
-.lateral nav a {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-radius: var(--radio-chico);
-  min-height: 44px;
-  padding: 0 12px;
-  font-weight: 550;
-  color: var(--muted);
-}
-.lateral nav a:hover {
-  background: var(--acento-suave);
-  color: var(--acento);
-}
-.lateral nav a.active {
-  background: var(--acento-relleno);
-  color: var(--sobre-acento);
-}
-.lateral-ayuda {
-  margin-top: auto;
-  padding: 24px 12px;
-  color: var(--muted);
-}
-.lateral-ayuda > svg {
-  margin-bottom: 12px;
-}
-.lateral-ayuda strong {
-  font-size: 12px;
-  color: var(--texto);
-  display: block;
-  margin-bottom: 8px;
-}
-.lateral-ayuda p {
-  font-size: 12px;
-}
-.lateral-pie {
-  border-top: 1px solid var(--borde);
-  padding: 20px 12px 0;
-  color: var(--muted);
-  font-size: 11px;
-}
-.lateral-pie span {
-  display: block;
-  margin-top: 4px;
-}
 .portal-cuerpo {
-  margin-left: 252px;
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
@@ -386,14 +314,6 @@ main:focus,
   padding: 16px 32px;
   background: var(--panel);
   border-bottom: 1px solid var(--borde);
-}
-.barra-contexto {
-  color: var(--muted);
-  font-size: 13px;
-}
-.barra-contexto > span {
-  margin: 0 12px;
-  color: var(--borde-fuerte);
 }
 .barra-cuenta {
   display: flex;
@@ -430,9 +350,6 @@ main:focus,
   max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.menu-movil {
-  display: none;
 }
 .contenido {
   padding: 40px 40px 32px;
@@ -1055,12 +972,6 @@ dd {
   overflow: hidden;
 }
 @media (max-width: 1150px) {
-  .lateral {
-    width: 220px;
-  }
-  .portal-cuerpo {
-    margin-left: 220px;
-  }
   .contenido {
     padding: 32px 24px;
   }
@@ -1095,28 +1006,10 @@ dd {
   .acceso-presentacion h1 {
     font-size: 36px;
   }
-  .lateral {
-    display: none;
-    top: 72px;
-    width: 252px;
-    box-shadow: var(--sombra-panel);
-  }
-  .lateral-abierto {
-    display: flex;
-  }
-  .portal-cuerpo {
-    margin-left: 0;
-  }
-  .menu-movil {
-    display: inline-flex;
-  }
   .barra-superior {
     min-height: 72px;
     padding: 12px 20px;
     gap: 12px;
-  }
-  .barra-contexto {
-    margin-right: auto;
   }
   .identidad {
     display: none;
@@ -1209,12 +1102,6 @@ dd {
     font-size: 12px;
     padding-inline: 8px;
   }
-  .barra-contexto {
-    font-size: 12px;
-  }
-  .barra-contexto > span {
-    margin-inline: 4px;
-  }
   .separador,
   .barra-cuenta .avatar {
     display: none;
@@ -1254,8 +1141,7 @@ dd {
 @media (pointer: coarse) {
   .campo input:not([type="checkbox"]),
   .campo textarea,
-  .filtro,
-  .lateral nav a {
+  .filtro {
     min-height: var(--control-tactil);
   }
   .campo input,

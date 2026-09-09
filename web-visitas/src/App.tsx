@@ -8,7 +8,7 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
-import { CalendarDays, CirclePlus, LogOut, Menu, X } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { AuthProvider, useAuth } from "./contexto/AuthContexto";
 import { Aviso, Cargando, SelectorTema } from "./componentes/Comunes";
 import Login from "./pantallas/Login";
@@ -30,11 +30,9 @@ function Contenido() {
 
 function Portal() {
   const { anfitrion, error, verificar, cerrarSesion } = useAuth();
-  const [menu, setMenu] = useState(false);
   const [saliendo, setSaliendo] = useState(false);
   const ruta = useLocation();
   useEffect(() => {
-    setMenu(false);
     document.title = `${ruta.pathname === "/nueva" ? "Nueva cita" : "Mis citas"} · Brisas`;
     document.getElementById("contenido")?.focus();
   }, [ruta.pathname]);
@@ -43,79 +41,41 @@ function Portal() {
       <a className="saltar" href="#contenido">
         Saltar al contenido
       </a>
-      <aside className={`lateral ${menu ? "lateral-abierto" : ""}`}>
+      <header className="barra-superior">
         <NavLink to="/citas" className="marca">
           <img src={marca} alt="" />
           <span>
             Brisas<span className="marca-subtitulo">Agenda de visitas</span>
           </span>
         </NavLink>
-        <div className="lateral-grupo">
-          <p className="antetitulo">MI ESPACIO</p>
-          <nav aria-label="Navegación principal">
-            <NavLink to="/citas">
-              <CalendarDays aria-hidden="true" />
-              Mis citas
-            </NavLink>
-            <NavLink to="/nueva">
-              <CirclePlus aria-hidden="true" />
-              Nueva cita
-            </NavLink>
-          </nav>
-        </div>
-        <div className="lateral-ayuda">
-          <CalendarDays aria-hidden="true" />
-          <strong>Todo listo para recibir</strong>
-          <p>
-            Agendá con anticipación y recordale a cada visitante traer su
-            documento de identidad.
-          </p>
-        </div>
-        <div className="lateral-pie">
-          Control de accesos<span>Portal de anfitriones</span>
-        </div>
-      </aside>
-      <div className="portal-cuerpo">
-        <header className="barra-superior">
-          <button
-            className="boton boton-discreto solo-icono menu-movil"
-            aria-label={menu ? "Cerrar menú" : "Abrir menú"}
-            aria-expanded={menu}
-            onClick={() => setMenu(!menu)}
-          >
-            {menu ? <X /> : <Menu />}
-          </button>
-          <span className="barra-contexto">
-            Visitas <span>/</span>{" "}
-            {ruta.pathname === "/nueva" ? "Nueva cita" : "Mis citas"}
+        <div className="barra-cuenta">
+          <SelectorTema />
+          <span className="separador" />
+          <span className="avatar" aria-hidden="true">
+            {anfitrion!.nombre.charAt(0).toUpperCase()}
           </span>
-          <div className="barra-cuenta">
-            <SelectorTema />
-            <span className="separador" />
-            <span className="avatar" aria-hidden="true">
-              {anfitrion!.nombre.charAt(0).toUpperCase()}
-            </span>
-            <div className="identidad">
-              <strong>{anfitrion!.nombre}</strong>
-              <span>{anfitrion!.correo}</span>
-            </div>
-            <button
-              className="boton boton-discreto solo-icono"
-              disabled={saliendo}
-              aria-label="Cerrar sesión"
-              onClick={async () => {
-                setSaliendo(true);
-                try {
-                  await cerrarSesion();
-                } finally {
-                  setSaliendo(false);
-                }
-              }}
-            >
-              <LogOut aria-hidden="true" />
-            </button>
+          <div className="identidad">
+            <strong>{anfitrion!.nombre}</strong>
+            <span>{anfitrion!.correo}</span>
           </div>
-        </header>
+          <button
+            className="boton boton-discreto solo-icono"
+            disabled={saliendo}
+            aria-label="Cerrar sesión"
+            onClick={async () => {
+              setSaliendo(true);
+              try {
+                await cerrarSesion();
+              } finally {
+                setSaliendo(false);
+              }
+            }}
+          >
+            <LogOut aria-hidden="true" />
+          </button>
+        </div>
+      </header>
+      <div className="portal-cuerpo">
         <main id="contenido" tabIndex={-1} className="contenido">
           {error && (
             <Aviso>
