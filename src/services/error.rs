@@ -160,6 +160,21 @@ pub enum CitaServiceError {
     /// venció").
     #[error("No hay ninguna visita vigente para esta cédula: {0:?}")]
     SinCitaVigente(MotivoDenegacionVisita),
+    /// Este visitante ya tiene un movimiento abierto -- mismo criterio que
+    /// `RegistroIngresoServiceError::IngresoActivo`, no se puede entrar dos
+    /// veces sin salir primero.
+    #[error("Este visitante ya tiene un movimiento activo")]
+    VisitanteYaEnSitio,
+    /// El gafete ya está asignado a otro movimiento de visita abierto --
+    /// mismo criterio que `RegistroIngresoServiceError::GafeteOcupado`. No
+    /// valida contra el catálogo (`gafetes`) todavía -- ver el comentario de
+    /// `CitaService::registrar_entrada`.
+    #[error("El gafete ya está asignado a otra visita")]
+    GafeteOcupado,
+    #[error("El movimiento no está activo")]
+    MovimientoNoActivo,
+    #[error("La salida no puede ser anterior a la entrada")]
+    SalidaAnteriorAEntrada,
     #[error(transparent)]
     Database(#[from] DatabaseError),
 }
