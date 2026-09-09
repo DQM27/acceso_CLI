@@ -132,16 +132,6 @@ export default function MisCitas() {
           </div>
         </Aviso>
       )}
-      <section className="agenda-introduccion">
-        <div className="sello-icono">
-          <CalendarDays aria-hidden="true" />
-        </div>
-        <div>
-          <h2>Una agenda para todas tus visitas</h2>
-          <p>Consultá los detalles o cancelá una cita si los planes cambian.</p>
-        </div>
-        <span className="etiqueta-suave">Solo tus citas</span>
-      </section>
       <section className="tarjeta agenda">
         <div className="agenda-herramientas">
           <div
