@@ -30,12 +30,15 @@ class PrimerArranqueViewModel(
         private set
 
     fun conectar(secreto: String, onListo: () -> Unit) {
-        if (secreto.isBlank()) return
+        if (conectando || secreto.isBlank()) return
         error = null
         conectando = true
         viewModelScope.launch {
             try {
                 withContext(dispatcherIO) {
+                    // Persistir primero permite reintentar/recuperar si la
+                    // operación remota termina y el proceso se interrumpe.
+                    secretoStore.guardar(secreto)
                     nucleo.configurarDispositivoInicialConSecreto(
                         secreto = secreto,
                         identificadorHardware = metadata.identificadorHardware,
@@ -44,7 +47,6 @@ class PrimerArranqueViewModel(
                         versionBuild = metadata.versionBuild,
                         appVersion = metadata.appVersion,
                     )
-                    secretoStore.guardar(secreto)
                 }
                 onListo()
             } catch (excepcion: NucleoException) {

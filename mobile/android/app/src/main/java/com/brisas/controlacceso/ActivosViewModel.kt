@@ -127,6 +127,8 @@ class ActivosViewModel(
         private set
     var error by mutableStateOf<String?>(null)
         private set
+    var cargando by mutableStateOf(false)
+        private set
 
     // Aparte de `error` (fallas de consulta) — lo pone únicamente la
     // confirmación masiva de gafetes, así que no hay riesgo de que la
@@ -151,6 +153,7 @@ class ActivosViewModel(
     // key), ahora explícito porque ya no hay una key de Compose disparando
     // esto solo.
     private var trabajoBusqueda: Job? = null
+    private var versionBusqueda = 0L
     // Las escrituras de entrada/salida no comparten Job con las búsquedas.
     // Cancelar un debounce jamás debe cancelar una operación SQLite/UniFFI
     // que ya pudo haber producido un efecto irreversible.
@@ -229,9 +232,11 @@ class ActivosViewModel(
 
     private fun buscar(debounce: Boolean = false) {
         trabajoBusqueda?.cancel()
+        val version = ++versionBusqueda
+        cargando = true
         trabajoBusqueda = viewModelScope.launch {
-            if (debounce) delay(DEBOUNCE_BUSQUEDA_MS)
             try {
+                if (debounce) delay(DEBOUNCE_BUSQUEDA_MS)
                 when (modo) {
                     ModoBusqueda.ENTRADA -> {
                         if (texto.isBlank()) {
@@ -283,6 +288,8 @@ class ActivosViewModel(
                 error = excepcion.message
             } catch (excepcion: SecretoDispositivoStoreException) {
                 error = excepcion.message
+            } finally {
+                if (version == versionBusqueda) cargando = false
             }
         }
     }
@@ -327,13 +334,15 @@ class ActivosViewModel(
         seleccionSalida = null
         viewModelScope.launch {
             try {
-                withContext(dispatcherIO) {
-                    when (fila) {
-                        is FilaActiva.Local -> nucleo.registrarSalida(fila.activo.registroId)
-                        is FilaActiva.Remota -> {
-                            val secreto = secretoStore.cargar()
-                                ?: throw SecretoDispositivoNoEncontradoException()
-                            nucleo.cerrarIngresoRemotoConSecreto(secreto, fila.remoto.uuid)
+                mutexMutaciones.withLock {
+                    withContext(dispatcherIO) {
+                        when (fila) {
+                            is FilaActiva.Local -> nucleo.registrarSalida(fila.activo.registroId)
+                            is FilaActiva.Remota -> {
+                                val secreto = secretoStore.cargar()
+                                    ?: throw SecretoDispositivoNoEncontradoException()
+                                nucleo.cerrarIngresoRemotoConSecreto(secreto, fila.remoto.uuid)
+                            }
                         }
                     }
                 }
@@ -350,36 +359,39 @@ class ActivosViewModel(
     }
 
     fun registrarSalidaPorGafetes() {
+        if (enviandoGafetes) return
+        enviandoGafetes = true
+        val coincidencias = coincidenciasGafete
         viewModelScope.launch {
-            enviandoGafetes = true
-            val registrados = mutableListOf<String>()
-            val fallidos = mutableListOf<String>()
-            for (coincidencia in coincidenciasGafete) {
-                val activoCoincidente = coincidencia.activo
-                if (activoCoincidente == null) {
-                    fallidos.add("gafete ${coincidencia.numero}: sin ingreso activo")
-                    continue
+            try {
+                mutexMutaciones.withLock {
+                    val registrados = mutableListOf<String>()
+                    val fallidos = mutableListOf<String>()
+                    for (coincidencia in coincidencias) {
+                        val activoCoincidente = coincidencia.activo
+                        if (activoCoincidente == null) {
+                            fallidos.add("gafete ${coincidencia.numero}: sin ingreso activo")
+                            continue
+                        }
+                        try {
+                            withContext(dispatcherIO) { nucleo.registrarSalida(activoCoincidente.registroId) }
+                            CambiosNube.solicitar()
+                            registrados.add(activoCoincidente.contratistaNombre)
+                        } catch (excepcion: NucleoException) {
+                            fallidos.add("gafete ${coincidencia.numero}: ${excepcion.message}")
+                        }
+                    }
+                    val partes = mutableListOf<String>()
+                    if (registrados.isNotEmpty()) partes.add("Salida registrada: ${registrados.joinToString(", ")}")
+                    if (fallidos.isNotEmpty()) partes.add(fallidos.joinToString(" · "))
+                    mensaje = partes.joinToString(" · ").ifEmpty { null }
+                    mensajeEsError = registrados.isEmpty() && fallidos.isNotEmpty()
+                    texto = ""
                 }
-                try {
-                    withContext(dispatcherIO) { nucleo.registrarSalida(activoCoincidente.registroId) }
-                    CambiosNube.solicitar()
-                    registrados.add(activoCoincidente.contratistaNombre)
-                } catch (excepcion: NucleoException) {
-                    fallidos.add("gafete ${coincidencia.numero}: ${excepcion.message}")
-                }
+                buscar()
+            } finally {
+                enviandoGafetes = false
             }
-            val partes = mutableListOf<String>()
-            if (registrados.isNotEmpty()) {
-                partes.add("Salida registrada: ${registrados.joinToString(", ")}")
-            }
-            if (fallidos.isNotEmpty()) {
-                partes.add(fallidos.joinToString(" · "))
-            }
-            mensaje = partes.joinToString(" · ").ifEmpty { null }
-            mensajeEsError = registrados.isEmpty() && fallidos.isNotEmpty()
-            texto = ""
-            enviandoGafetes = false
-            buscar()
         }
     }
 

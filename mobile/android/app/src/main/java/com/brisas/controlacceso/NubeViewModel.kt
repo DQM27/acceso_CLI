@@ -55,6 +55,7 @@ class NubeViewModel(
     /// actualizada por esta misma llamada) se leen y se cierran desde
     /// Activos, no desde acá -- ver `ActivosViewModel.FilaActiva`.
     fun sincronizar() {
+        if (sincronizando) return
         error = null
         sincronizando = true
         viewModelScope.launch {

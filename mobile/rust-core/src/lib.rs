@@ -1716,6 +1716,11 @@ impl Nucleo {
             .map_err(|error| NucleoError::Interno {
                 mensaje: error.to_string(),
             })?;
+        conexion
+            .pragma_update(None, "foreign_keys", "ON")
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })?;
         Ok(conexion)
     }
 

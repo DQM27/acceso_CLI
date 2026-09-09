@@ -175,7 +175,12 @@ fun PantallaActivos(
         // Sólo fuera del modo gafete — ese modo tiene su propio texto de
         // ayuda dentro de ContenidoModoSalidaGafete en vez de esta leyenda.
         if (viewModel.modo != ModoBusqueda.SALIDA_GAFETE) {
-            LeyendaBusqueda(modo = viewModel.modo, texto = viewModel.texto, activos = viewModel.activos)
+            LeyendaBusqueda(
+                modo = viewModel.modo,
+                texto = viewModel.texto,
+                activos = viewModel.activos,
+                cargando = viewModel.cargando,
+            )
         }
 
         MensajesEstado(
@@ -191,6 +196,7 @@ fun PantallaActivos(
                 activos = viewModel.activos,
                 resultadosBusqueda = viewModel.resultadosBusqueda,
                 verificando = verificando,
+                cargando = viewModel.cargando,
                 onElegirActivo = { viewModel.elegirSeleccionSalida(it) },
                 onElegirContratista = { viewModel.elegir(it) },
             )
@@ -311,13 +317,19 @@ private fun CampoBusquedaActivos(
 }
 
 @Composable
-private fun LeyendaBusqueda(modo: ModoBusqueda, texto: String, activos: List<FilaActiva>) {
+private fun LeyendaBusqueda(
+    modo: ModoBusqueda,
+    texto: String,
+    activos: List<FilaActiva>,
+    cargando: Boolean,
+) {
     val leyenda = when {
+        cargando -> "Buscando…"
         texto.isBlank() && modo == ModoBusqueda.ENTRADA ->
             if (activos.isEmpty()) {
                 "Nadie adentro"
             } else {
-                "${activos.size} adentro · toque un nombre para registrar salida"
+                "Primeros ${activos.size} activos · toque un nombre para registrar salida"
             }
         texto.isBlank() -> "Escriba para buscar entre los activos"
         modo == ModoBusqueda.ENTRADA -> "Buscando contratistas · toque un resultado para registrar entrada"
@@ -362,6 +374,7 @@ private fun ContenidoModoEntrada(
     activos: List<FilaActiva>,
     resultadosBusqueda: List<ContratistaResumen>,
     verificando: Boolean,
+    cargando: Boolean,
     onElegirActivo: (FilaActiva) -> Unit,
     onElegirContratista: (ContratistaResumen) -> Unit,
 ) {
@@ -369,7 +382,7 @@ private fun ContenidoModoEntrada(
         ListaActivos(activos, onClick = onElegirActivo)
         return
     }
-    if (resultadosBusqueda.isEmpty() && !verificando) {
+    if (resultadosBusqueda.isEmpty() && !verificando && !cargando) {
         Text(
             "Sin resultados",
             color = MaterialTheme.colorScheme.onSurfaceVariant,

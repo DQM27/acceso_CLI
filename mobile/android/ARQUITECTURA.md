@@ -1,5 +1,7 @@
 # Arquitectura de la app móvil — criterio para mantener en el tiempo
 
+La auditoría transversal, sus reparaciones, límites y pendientes operativos están en [AUDITORIA_INTEGRAL.md](AUDITORIA_INTEGRAL.md).
+
 > Diagnóstico honesto (2026-09-02): la app se armó como MVP/piloto, rápido y
 > funcional, sin capa de presentación separada de la lógica de negocio. Sí
 > hizo bien lo importante — reusar el núcleo de Rust sin duplicar reglas,

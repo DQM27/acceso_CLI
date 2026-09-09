@@ -33,6 +33,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.UsuarioSesion
 
@@ -92,22 +95,36 @@ fun PantallaPrincipal(
     // primer plano.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(sincronizacion, realtime, lifecycleOwner) {
+        var trabajoBloqueo: Job? = null
+        fun iniciarServicios() {
+            trabajoBloqueo?.cancel()
+            trabajoBloqueo = null
+            sincronizacion.iniciar()
+            realtime.iniciar()
+        }
+        fun detenerServiciosYProgramarBloqueo() {
+            realtime.detener()
+            sincronizacion.detener()
+            trabajoBloqueo?.cancel()
+            trabajoBloqueo = scope.launch {
+                delay(DEMORA_BLOQUEO_SESION_MS)
+                onCerrarSesion()
+            }
+        }
         val observador = LifecycleEventObserver { _, evento ->
             when (evento) {
-                Lifecycle.Event.ON_START -> {
-                    sincronizacion.iniciar()
-                    realtime.iniciar()
-                }
-                Lifecycle.Event.ON_STOP -> {
-                    realtime.detener()
-                    sincronizacion.detener()
-                }
+                Lifecycle.Event.ON_START -> iniciarServicios()
+                Lifecycle.Event.ON_STOP -> detenerServiciosYProgramarBloqueo()
                 else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observador)
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            iniciarServicios()
+        }
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observador)
+            trabajoBloqueo?.cancel()
             realtime.detener()
             sincronizacion.detener()
         }
@@ -177,3 +194,5 @@ fun PantallaPrincipal(
         }
     }
 }
+
+private const val DEMORA_BLOQUEO_SESION_MS = 2 * 60_000L

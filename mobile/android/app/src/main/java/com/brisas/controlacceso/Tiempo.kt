@@ -1,5 +1,6 @@
 package com.brisas.controlacceso
 
+import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -11,7 +12,10 @@ import java.time.format.DateTimeFormatter
 /// "...+00:00"; a qué formatea exactamente `to_rfc3339()` del lado de Rust
 /// no hace falta acoplarlo aquí.
 fun textoFechaHora(iso: String): String {
-    val instante = OffsetDateTime.parse(iso).toInstant()
+    val instante = instanteFechaHora(iso) ?: return "Fecha no disponible"
     val local = ZonedDateTime.ofInstant(instante, ZoneId.systemDefault())
     return local.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
 }
+
+fun instanteFechaHora(iso: String): Instant? =
+    runCatching { OffsetDateTime.parse(iso).toInstant() }.getOrNull()

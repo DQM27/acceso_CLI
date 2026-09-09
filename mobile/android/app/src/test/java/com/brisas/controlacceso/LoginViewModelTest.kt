@@ -53,7 +53,9 @@ class LoginViewModelTest {
         advanceUntilIdle()
 
         assertNotNull(viewModel.sesion)
+        assertNotNull(viewModel.propietarioSesion)
         assertEquals("Actor Test", viewModel.sesion?.nombre)
+        assertEquals("", viewModel.password)
         assertNull(viewModel.error)
     }
 
@@ -82,7 +84,22 @@ class LoginViewModelTest {
         viewModel.cerrarSesion()
 
         assertNull(viewModel.sesion)
+        assertNull(viewModel.propietarioSesion)
         assertEquals("", viewModel.cedula)
         assertEquals("", viewModel.password)
+    }
+
+    @Test
+    fun `doble toque durante autenticacion no abre dos intentos`() = runTest(dispatcher) {
+        val viewModel = LoginViewModel(nucleo, SecretoDispositivoStoreDePrueba(), dispatcherIO = dispatcher)
+        viewModel.cambiarCedula("999999999")
+        viewModel.cambiarPassword(NucleoDePrueba.CLAVE_PRUEBA)
+
+        viewModel.autenticar()
+        viewModel.autenticar()
+        advanceUntilIdle()
+
+        assertNotNull(viewModel.sesion)
+        assertNull(viewModel.error)
     }
 }

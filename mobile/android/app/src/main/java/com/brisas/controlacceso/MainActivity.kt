@@ -1,17 +1,21 @@
 package com.brisas.controlacceso
 
-import android.annotation.SuppressLint
 import android.os.Bundle
-import android.provider.Settings
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -19,8 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import java.io.File
-import uniffi.control_acceso_mobile.Nucleo
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 /// Tope de ancho para todo el contenido de la app — sin esto, en horizontal
 /// (o en una tablet) cualquier pantalla se estira de punta a punta porque
@@ -39,41 +42,13 @@ private val ANCHO_MAXIMO_CONTENIDO = 480.dp
 /// (`PantallaPrincipal.kt`) viven en sus propios archivos — este sólo
 /// arranca la Activity.
 class MainActivity : ComponentActivity() {
-    @SuppressLint("HardwareIds")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Identificador estable de este teléfono. Ya no protege el secreto
-        // nuevo (eso vive en Android Keystore), pero permite migrar una
-        // instalación anterior que lo hubiera guardado con el esquema
-        // legado de Rust. Nunca viaja a la nube ni se muestra en ningún
-        // lado. `@SuppressLint("HardwareIds")`: el lint de Android marca
-        // cualquier lectura de ANDROID_ID por su potencial de fingerprinting
-        // entre apps -- acá no aplica, es puramente local.
-        // `getString` es un tipo de plataforma (`String!`) -- en la práctica
-        // nunca es null desde API 26, pero el fallback a "" mantiene el tipo
-        // `String` sin un `!!` que podría tirar en el arranque por un caso
-        // límite de un fabricante raro.
-        val identificadorDispositivo =
-            Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: ""
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         GestorTema.inicializar(this)
         setContent {
-            val archivoBaseDatos = File(filesDir, "control_acceso.db")
-            val rutaBaseDatos = archivoBaseDatos.absolutePath
-            val nucleo = remember { Nucleo.abrir(rutaBaseDatos) }
-            val directorio = filesDir.absolutePath
-            val secretoStore = remember(nucleo, directorio, identificadorDispositivo) {
-                AndroidKeystoreSecretoDispositivoStore(
-                    context = this@MainActivity,
-                    nucleo = nucleo,
-                    directorio = directorio,
-                    identificadorDispositivo = identificadorDispositivo,
-                )
-            }
-            // Base recién instalada, sin ningún usuario todavía -- pegar el
-            // secreto en PantallaPrimerArranque trae el catálogo real desde
-            // la nube (contratistas/empresas/gafetes/usuarios) en vez de
-            // depender de un usuario de prueba instalado de fábrica.
-            var requiereArranque by remember { mutableStateOf(nucleo.requiereConfiguracionInicial()) }
+            val aplicacion: AplicacionViewModel = viewModel()
+            val estado by aplicacion.estado.collectAsState()
             TemaBrisas {
                 // `targetSdk` 36 (Android 15+) obliga a la app a dibujar
                 // "borde a borde": sin este padding, el contenido queda
@@ -90,30 +65,34 @@ class MainActivity : ComponentActivity() {
                 ) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                         Box(modifier = Modifier.widthIn(max = ANCHO_MAXIMO_CONTENIDO).fillMaxHeight()) {
-                            if (requiereArranque) {
-                                PantallaPrimerArranque(
-                                    nucleo,
-                                    secretoStore = secretoStore,
-                                    metadata =
-                                        remember(identificadorDispositivo) {
-                                            MetadatosDispositivoLocal.capturar(
-                                                context = this@MainActivity,
-                                                identificadorHardware = identificadorDispositivo,
-                                            )
-                                        },
-                                    onListo = { requiereArranque = false },
+                            when (val actual = estado) {
+                                EstadoAplicacion.Cargando -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                                is EstadoAplicacion.Fallo -> Text(
+                                    actual.mensaje,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.align(Alignment.Center).padding(24.dp),
                                 )
-                            } else {
-                                PantallaLogin(
-                                    nucleo,
-                                    directorio = directorio,
-                                    secretoStore = secretoStore,
-                                )
+                                is EstadoAplicacion.Lista -> ContenidoAplicacion(actual.entorno)
                             }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ContenidoAplicacion(entorno: EntornoAplicacion) {
+    var requiereArranque by remember(entorno) { mutableStateOf(entorno.requiereConfiguracionInicial) }
+    if (requiereArranque) {
+        PantallaPrimerArranque(
+            entorno.nucleo,
+            secretoStore = entorno.secretoStore,
+            metadata = entorno.metadata,
+            onListo = { requiereArranque = false },
+        )
+    } else {
+        PantallaLogin(entorno.nucleo, entorno.directorio, entorno.secretoStore)
     }
 }

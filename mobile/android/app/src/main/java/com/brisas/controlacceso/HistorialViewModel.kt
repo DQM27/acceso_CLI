@@ -84,10 +84,13 @@ class HistorialViewModel(
         private set
     var error by mutableStateOf<String?>(null)
         private set
+    var cargando by mutableStateOf(false)
+        private set
 
     // Cancela la búsqueda anterior si `texto` cambió antes de que
     // terminara — mismo criterio que `ActivosViewModel.buscar`.
     private var trabajoBusqueda: Job? = null
+    private var versionBusqueda = 0L
 
     init {
         buscar()
@@ -104,9 +107,11 @@ class HistorialViewModel(
 
     private fun buscar(debounce: Boolean = false) {
         trabajoBusqueda?.cancel()
+        val version = ++versionBusqueda
+        cargando = true
         trabajoBusqueda = viewModelScope.launch {
-            if (debounce) delay(DEBOUNCE_BUSQUEDA_MS)
             try {
+                if (debounce) delay(DEBOUNCE_BUSQUEDA_MS)
                 movimientos = withContext(dispatcherIO) {
                     val locales = nucleo.buscarHistorial(texto).map(FilaHistorial::local)
                     val remotos = nucleo.listarHistorialSitio(texto).map(FilaHistorial::remota)
@@ -118,12 +123,17 @@ class HistorialViewModel(
                         // crasheaba la pantalla apenas había algo que
                         // ordenar). `OffsetDateTime.parse` acepta los dos
                         // formatos.
-                        .sortedByDescending { java.time.OffsetDateTime.parse(it.fechaHoraIngreso) }
+                        .sortedWith(
+                            compareByDescending<FilaHistorial> { instanteFechaHora(it.fechaHoraIngreso) != null }
+                                .thenByDescending { instanteFechaHora(it.fechaHoraIngreso) },
+                        )
                         .take(30)
                 }
                 error = null
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
+            } finally {
+                if (version == versionBusqueda) cargando = false
             }
         }
     }

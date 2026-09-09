@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
@@ -64,6 +65,7 @@ fun PantallaEscanearCedula(
     onDocumentoDetectado: suspend (DocumentoDetectado) -> Unit,
     onCerrar: () -> Unit,
 ) {
+    BackHandler(onBack = onCerrar)
     val contexto = LocalContext.current
     var permisoConcedido by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(contexto, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
@@ -151,6 +153,7 @@ private fun VistaCamaraCedula(
     // Sin este `unbindAll()` explícito, reabrir el escáner puede encontrar la
     // cámara todavía atada al ciclo de vida anterior.
     var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
+    var vistaPreviaCamara by remember { mutableStateOf<Preview?>(null) }
     var analisisCamara by remember { mutableStateOf<ImageAnalysis?>(null) }
     var trabajoResultado by remember { mutableStateOf<Job?>(null) }
     // Ver nota en `analizarCedula`: se pasa explícito en vez de dejar que
@@ -164,7 +167,8 @@ private fun VistaCamaraCedula(
             detectada.set(true)
             trabajoResultado?.cancel()
             analisisCamara?.clearAnalyzer()
-            analisisCamara?.let { cameraProvider?.unbind(it) }
+            val casos = listOfNotNull(vistaPreviaCamara, analisisCamara).toTypedArray()
+            if (casos.isNotEmpty()) cameraProvider?.unbind(*casos)
             ejecutor.shutdown()
             recognizer.close()
         }
@@ -265,7 +269,10 @@ private fun VistaCamaraCedula(
                     lifecycleOwner = lifecycleOwner,
                     analisis = analisis,
                     sesionActiva = sesionActiva,
-                    onCameraProviderListo = { cameraProvider = it },
+                    onCameraProviderListo = { proveedor, preview ->
+                        cameraProvider = proveedor
+                        vistaPreviaCamara = preview
+                    },
                     onFallo = { mensaje ->
                         if (sesionActiva.get()) {
                             estado = EstadoEscaneo.INVALIDO
@@ -356,7 +363,7 @@ private fun iniciarCamara(
     lifecycleOwner: androidx.lifecycle.LifecycleOwner,
     analisis: ImageAnalysis,
     sesionActiva: AtomicBoolean,
-    onCameraProviderListo: (ProcessCameraProvider) -> Unit,
+    onCameraProviderListo: (ProcessCameraProvider, Preview) -> Unit,
     onFallo: (String) -> Unit,
 ) {
     val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
@@ -366,10 +373,10 @@ private fun iniciarCamara(
             try {
                 val proveedor = cameraProviderFuture.get()
                 if (!sesionActiva.get()) return@addListener
-                onCameraProviderListo(proveedor)
                 val preview = Preview.Builder().build().also {
                     it.surfaceProvider = previewView.surfaceProvider
                 }
+                onCameraProviderListo(proveedor, preview)
             // `previewView.viewPort` ata el recorte de `analisis` al mismo
             // rectángulo que en verdad se ve en pantalla (la vista previa
             // usa FILL_CENTER, que recorta/escala el frame del sensor a la

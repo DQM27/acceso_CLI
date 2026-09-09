@@ -46,6 +46,14 @@ fun PantallaHistorial(nucleo: Nucleo, refrescarNube: Int = 0) {
             ),
             modifier = Modifier.fillMaxWidth(),
         )
+        if (viewModel.cargando) {
+            Text(
+                "Buscando…",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
 
         val mensajeError = viewModel.error
         if (mensajeError != null) {

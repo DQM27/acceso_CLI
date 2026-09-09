@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -43,6 +45,8 @@ class LoginViewModel(
         private set
     var sesion by mutableStateOf<UsuarioSesion?>(null)
         private set
+    var propietarioSesion by mutableStateOf<PropietarioSesion?>(null)
+        private set
 
     /// Cédula que necesita fijar contraseña en este teléfono por primera
     /// vez (`NucleoException.SinPasswordLocal`) -- `null` es el estado
@@ -60,14 +64,16 @@ class LoginViewModel(
     }
 
     fun autenticar() {
+        if (autenticando || cedula.isBlank() || password.isBlank()) return
         error = null
         autenticando = true
         viewModelScope.launch {
             try {
-                sesion = withContext(dispatcherIO) {
+                val sesionNueva = withContext(dispatcherIO) {
                     val secreto = secretoStore.cargar().orEmpty()
                     nucleo.autenticarConSecreto(cedula, password, secreto)
                 }
+                abrirSesion(sesionNueva)
                 lanzarSincronizacionDeFondo()
             } catch (excepcion: NucleoException.SinPasswordLocal) {
                 cedulaSinPassword = cedula
@@ -107,14 +113,16 @@ class LoginViewModel(
     /// contraseña anterior a propósito, nunca existió una en este
     /// teléfono (ver `Nucleo.fijarPasswordInicial`).
     fun fijarPasswordInicial(nuevaPassword: String) {
+        if (autenticando) return
         val cedulaObjetivo = cedulaSinPassword ?: return
         error = null
         autenticando = true
         viewModelScope.launch {
             try {
-                sesion = withContext(dispatcherIO) {
+                val sesionNueva = withContext(dispatcherIO) {
                     nucleo.fijarPasswordInicial(cedulaObjetivo, nuevaPassword)
                 }
+                abrirSesion(sesionNueva)
                 cedulaSinPassword = null
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
@@ -133,10 +141,24 @@ class LoginViewModel(
     /// teléfono se quedan abiertos (son de la Activity, no de la sesión) —
     /// mismo criterio que `Nucleo::cerrar_sesion` del lado de Rust.
     fun cerrarSesion() {
+        propietarioSesion?.cerrar()
+        propietarioSesion = null
         nucleo.cerrarSesion()
         sesion = null
         cedula = ""
         password = ""
+    }
+
+    private fun abrirSesion(sesionNueva: UsuarioSesion) {
+        propietarioSesion?.cerrar()
+        propietarioSesion = PropietarioSesion()
+        sesion = sesionNueva
+        password = ""
+    }
+
+    override fun onCleared() {
+        propietarioSesion?.cerrar()
+        super.onCleared()
     }
 
     companion object {
@@ -147,4 +169,9 @@ class LoginViewModel(
             initializer { LoginViewModel(nucleo, secretoStore) }
         }
     }
+}
+
+class PropietarioSesion : ViewModelStoreOwner {
+    override val viewModelStore = ViewModelStore()
+    fun cerrar() = viewModelStore.clear()
 }

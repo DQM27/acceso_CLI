@@ -1,12 +1,16 @@
 package com.brisas.controlacceso
 
 import androidx.compose.foundation.layout.Column
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -112,6 +116,7 @@ fun PantallaConfirmarIngreso(
     var error by remember { mutableStateOf<String?>(null) }
     var enviando by remember { mutableStateOf(false) }
     var escanerGafeteAbierto by remember { mutableStateOf(false) }
+    BackHandler(enabled = !escanerGafeteAbierto, onBack = onCambiar)
     val alcance = rememberCoroutineScope()
 
     val focoGafete = remember { FocusRequester() }
@@ -129,6 +134,7 @@ fun PantallaConfirmarIngreso(
     }
 
     fun registrarIngreso(gafete: Long?) {
+        if (enviando) return
         error = null
         enviando = true
         alcance.launch {
@@ -141,10 +147,8 @@ fun PantallaConfirmarIngreso(
                     // `Nucleo.gafeteOcupadoEnSitio`).
                     if (gafete != null) {
                         val secreto = secretoStore.cargar()
-                        if (
-                            secreto != null &&
-                            nucleo.gafeteOcupadoEnSitioConSecreto(secreto, gafete)
-                        ) {
+                            ?: throw SecretoDispositivoNoEncontradoException()
+                        if (nucleo.gafeteOcupadoEnSitioConSecreto(secreto, gafete)) {
                             throw GafeteOcupadoEnSitioException(gafete)
                         }
                     }
@@ -156,6 +160,8 @@ fun PantallaConfirmarIngreso(
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
             } catch (excepcion: SecretoDispositivoStoreException) {
+                error = excepcion.message
+            } catch (excepcion: SecretoDispositivoNoEncontradoException) {
                 error = excepcion.message
             } finally {
                 enviando = false
@@ -181,7 +187,9 @@ fun PantallaConfirmarIngreso(
         return
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(
+        modifier = Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
+    ) {
         Text(preparacion.nombre, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Text(
             "${preparacion.cedula} · ${preparacion.empresaNombre}",

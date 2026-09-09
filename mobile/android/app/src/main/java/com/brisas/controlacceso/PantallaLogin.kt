@@ -5,14 +5,18 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import uniffi.control_acceso_mobile.Nucleo
 
 /// Login real contra `Nucleo.autenticar` (Rust) — todo el estado y la
@@ -34,14 +39,17 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispo
         viewModel(factory = LoginViewModel.factory(nucleo, secretoStore))
 
     val sesionActual = viewModel.sesion
-    if (sesionActual != null) {
-        PantallaPrincipal(
-            nucleo = nucleo,
-            sesion = sesionActual,
-            directorio = directorio,
-            secretoStore = secretoStore,
-            onCerrarSesion = { viewModel.cerrarSesion() },
-        )
+    val propietarioSesion = viewModel.propietarioSesion
+    if (sesionActual != null && propietarioSesion != null) {
+        CompositionLocalProvider(LocalViewModelStoreOwner provides propietarioSesion) {
+            PantallaPrincipal(
+                nucleo = nucleo,
+                sesion = sesionActual,
+                directorio = directorio,
+                secretoStore = secretoStore,
+                onCerrarSesion = { viewModel.cerrarSesion() },
+            )
+        }
         return
     }
 
@@ -58,7 +66,7 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispo
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -105,7 +113,7 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispo
         )
         BotonBrisas(
             onClick = { viewModel.autenticar() },
-            enabled = !viewModel.autenticando,
+            enabled = !viewModel.autenticando && viewModel.cedula.isNotBlank() && viewModel.password.isNotBlank(),
             modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
         ) {
             Text(if (viewModel.autenticando) "Verificando…" else "Ingresar")

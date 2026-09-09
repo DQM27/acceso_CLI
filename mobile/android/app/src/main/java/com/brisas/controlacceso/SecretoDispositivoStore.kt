@@ -4,6 +4,9 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import java.io.File
+import java.io.FileOutputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -40,7 +43,23 @@ class AndroidKeystoreSecretoDispositivoStore(
             val cipher = Cipher.getInstance(TRANSFORMACION)
             cipher.init(Cipher.ENCRYPT_MODE, obtenerClave())
             val cifrado = cipher.doFinal(limpio.toByteArray(Charsets.UTF_8))
-            archivo.writeBytes(MAGIC + byteArrayOf(cipher.iv.size.toByte()) + cipher.iv + cifrado)
+            val contenido = MAGIC + byteArrayOf(cipher.iv.size.toByte()) + cipher.iv + cifrado
+            val temporal = File(archivo.parentFile, "${archivo.name}.tmp")
+            try {
+                FileOutputStream(temporal).use { salida ->
+                    salida.write(contenido)
+                    salida.flush()
+                    salida.fd.sync()
+                }
+                Files.move(
+                    temporal.toPath(),
+                    archivo.toPath(),
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING,
+                )
+            } finally {
+                temporal.delete()
+            }
         } catch (error: Exception) {
             throw SecretoDispositivoStoreException(error)
         }
@@ -70,12 +89,14 @@ class AndroidKeystoreSecretoDispositivoStore(
 
     private fun cargarDesdeKeystore(): String? {
         val contenido = archivo.takeIf { it.exists() }?.readBytes() ?: return null
-        if (contenido.size <= MAGIC.size) return null
-        if (!contenido.copyOfRange(0, MAGIC.size).contentEquals(MAGIC)) return null
+        require(contenido.size > MAGIC.size) { "Archivo de secreto incompleto" }
+        require(contenido.copyOfRange(0, MAGIC.size).contentEquals(MAGIC)) {
+            "Formato de secreto desconocido"
+        }
         val largoIv = contenido[MAGIC.size].toInt() and 0xff
         val inicioIv = MAGIC.size + 1
         val finIv = inicioIv + largoIv
-        if (largoIv <= 0 || contenido.size <= finIv) return null
+        require(largoIv > 0 && contenido.size > finIv) { "Archivo de secreto malformado" }
         val iv = contenido.copyOfRange(inicioIv, finIv)
         val cifrado = contenido.copyOfRange(finIv, contenido.size)
 
