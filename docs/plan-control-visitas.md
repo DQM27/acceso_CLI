@@ -156,6 +156,17 @@ mecanismo:
 - `anfitriones` (nueva) → quien agenda y (a futuro) recibe aviso de sus
   visitas, en el subdominio nuevo.
 
+## Alcance de UI: Tauri (escritorio) y web -- TUI/CLI pausados
+
+Decisión explícita del usuario para no desperdiciar recursos: **la UI
+de terminal (`src/tui/`) y la CLI (`src/cli/`) quedan pausadas para
+visitas** -- se actualizan más adelante, con más tiempo, no ahora. El
+trabajo de UI de este proyecto va directo a **Tauri (`desktop/`,
+check-in en el punto de acceso) y la web** (agendamiento en el
+subdominio nuevo, ver más abajo). `domain`/`services`/`database` siguen
+siendo capas compartidas por todas las interfaces -- esto sólo aplica
+cuando se llegue a la capa de UI de cada una.
+
 ## Cliente: web en subdominio propio, no una app móvil nueva
 
 Recomendación dada y sin objeción del usuario: **no conviene una app
