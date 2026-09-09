@@ -15,6 +15,9 @@ export interface Cita {
   fecha_desde: string;
   /** `YYYY-MM-DD`. */
   fecha_hasta: string;
+  /** Texto libre tipo "HH:MM", puramente informativo -- no bloquea el
+   * check-in si la visita llega antes o después. */
+  hora_estimada: string | null;
   anfitrion_nombre: string;
   anfitrion_correo: string;
   estado: EstadoCita;
@@ -113,6 +116,8 @@ export interface AgendaVisitaResumen {
   fecha_desde: string;
   /** `YYYY-MM-DD`. */
   fecha_hasta: string;
+  /** Texto libre tipo "HH:MM", puramente informativo. */
+  hora_estimada: string | null;
   estado: EstadoCita;
 }
 

@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 32;
+pub const SCHEMA_VERSION: i64 = 33;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -306,6 +306,11 @@ fn aplicar_migraciones_posteriores_a_15(
         *version = 32;
     }
 
+    if *version == 32 {
+        aplicar_migracion_33(connection)?;
+        *version = 33;
+    }
+
     Ok(())
 }
 
@@ -441,6 +446,14 @@ fn aplicar_migracion_32(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_32)?;
     transaction.execute_batch("PRAGMA user_version = 32")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_33(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_33)?;
+    transaction.execute_batch("PRAGMA user_version = 33")?;
     transaction.commit()?;
     Ok(())
 }
@@ -2284,4 +2297,16 @@ CREATE TABLE historial_visitas_sitio (
 ) STRICT;
 
 CREATE INDEX idx_historial_visitas_sitio_hora_entrada ON historial_visitas_sitio(hora_entrada);
+";
+
+// Hora aproximada de llegada -- puramente informativa a propósito
+// (decisión explícita del usuario): "esta visita llega a las 10:00" no
+// significa que a las 11:00 se le niegue el paso, `domain::cita::verificar_cita`
+// no la toca para nada, sólo decide por `fecha_desde`/`fecha_hasta`. Texto
+// libre tipo "HH:MM" (no una hora real de SQLite, que no tiene ese tipo)
+// -- si el día de mañana el cliente pide bloquear por hora de verdad, eso
+// es una regla de negocio nueva, no algo que este campo ya debería estar
+// hoy validando.
+const MIGRACION_33: &str = r"
+ALTER TABLE citas ADD COLUMN hora_estimada TEXT;
 ";

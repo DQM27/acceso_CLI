@@ -45,6 +45,9 @@ pub struct Cita {
     pub motivo: Option<String>,
     pub fecha_desde: NaiveDate,
     pub fecha_hasta: NaiveDate,
+    /// Texto libre tipo "HH:MM" -- puramente informativo, `domain::cita`
+    /// no la usa para decidir nada (ver el doc-comment de `MIGRACION_33`).
+    pub hora_estimada: Option<String>,
     pub anfitrion_nombre: String,
     pub anfitrion_correo: String,
     pub estado: EstadoCita,

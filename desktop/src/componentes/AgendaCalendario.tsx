@@ -85,6 +85,9 @@ export default function AgendaCalendario({ filas }: { filas: AgendaVisitaResumen
               etiqueta="Vigencia"
               valor={`${textoFechaDDMMYYYY(seleccionado.fecha_desde)} — ${textoFechaDDMMYYYY(seleccionado.fecha_hasta)}`}
             />
+            {seleccionado.hora_estimada && (
+              <DetalleFila etiqueta="Hora estimada" valor={seleccionado.hora_estimada.slice(0, 5)} />
+            )}
             <DetalleFila
               etiqueta="Estado"
               valor={seleccionado.estado === "Cancelada" ? "Cancelada" : "Vigente"}

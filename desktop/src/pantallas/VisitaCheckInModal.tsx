@@ -166,6 +166,8 @@ export default function VisitaCheckInModal({
                 {" · Anfitrión: "}
                 {estado.preparacion.cita.anfitrion_nombre}
                 {estado.preparacion.cita.motivo && ` · ${estado.preparacion.cita.motivo}`}
+                {estado.preparacion.cita.hora_estimada &&
+                  ` · Llegada estimada: ${estado.preparacion.cita.hora_estimada.slice(0, 5)}`}
               </p>
             </div>
 

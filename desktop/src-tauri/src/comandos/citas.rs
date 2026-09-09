@@ -156,6 +156,9 @@ pub struct AgendaVisitaResumen {
     pub anfitrion_nombre: String,
     pub fecha_desde: String,
     pub fecha_hasta: String,
+    /// Texto libre tipo "HH:MM", puramente informativo -- ver el
+    /// doc-comment de `MIGRACION_33` del núcleo.
+    pub hora_estimada: Option<String>,
     pub estado: EstadoCita,
 }
 
@@ -169,7 +172,7 @@ pub fn listar_agenda_visitas(
     let mut statement = conexion
         .prepare(
             "SELECT c.id, cv.cedula, cv.nombre, cv.empresa, cv.placa_vehiculo, c.motivo,
-                    c.anfitrion_nombre, c.fecha_desde, c.fecha_hasta, c.estado
+                    c.anfitrion_nombre, c.fecha_desde, c.fecha_hasta, c.estado, c.hora_estimada
              FROM cita_visitantes cv
              JOIN citas c ON c.id = cv.cita_id
              WHERE c.fecha_hasta >= ?1
@@ -200,6 +203,7 @@ pub fn listar_agenda_visitas(
                         format!("estado de cita desconocido: {estado_sql}").into(),
                     )
                 })?,
+                hora_estimada: row.get(10)?,
             })
         })
         .map_err(|error| error.to_string())?

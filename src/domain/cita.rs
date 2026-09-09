@@ -65,6 +65,7 @@ mod tests {
             anfitrion_nombre: "Anfitrión".to_string(),
             anfitrion_correo: "anfitrion@ejemplo.com".to_string(),
             estado,
+            hora_estimada: None,
         }
     }
 

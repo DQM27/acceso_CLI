@@ -1475,6 +1475,9 @@ struct FilaCitaRemota {
     // otras filas remotas, esto no necesita reparsear/reformatear.
     fecha_desde: String,
     fecha_hasta: String,
+    /// Texto libre tipo "HH:MM", puramente informativo -- ver el
+    /// doc-comment de `MIGRACION_33` del lado local.
+    hora_estimada: Option<String>,
     anfitrion_correo: String,
     anfitrion: Option<AnfitrionEmbebido>,
     estado: String,
@@ -1507,13 +1510,14 @@ fn guardar_cita_remota(
     transaction.execute(
         "
         INSERT INTO citas (
-            uuid, motivo, fecha_desde, fecha_hasta, anfitrion_nombre,
+            uuid, motivo, fecha_desde, fecha_hasta, hora_estimada, anfitrion_nombre,
             anfitrion_correo, estado, creado_en
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
         ON CONFLICT(uuid) DO UPDATE SET
             motivo = excluded.motivo,
             fecha_desde = excluded.fecha_desde,
             fecha_hasta = excluded.fecha_hasta,
+            hora_estimada = excluded.hora_estimada,
             anfitrion_nombre = excluded.anfitrion_nombre,
             anfitrion_correo = excluded.anfitrion_correo,
             estado = excluded.estado
@@ -1523,6 +1527,7 @@ fn guardar_cita_remota(
             fila.motivo,
             fila.fecha_desde,
             fila.fecha_hasta,
+            fila.hora_estimada,
             anfitrion_nombre,
             fila.anfitrion_correo,
             fila.estado,
@@ -1587,8 +1592,9 @@ pub fn recibir_citas_del_sitio(
         .unwrap_or_default();
 
     let url = format!(
-        "{}/rest/v1/citas?select=id,motivo,fecha_desde,fecha_hasta,anfitrion_correo,estado,\
-         updated_at,anfitrion:anfitriones!citas_anfitrion_correo_fkey(nombre),\
+        "{}/rest/v1/citas?select=id,motivo,fecha_desde,fecha_hasta,hora_estimada,\
+         anfitrion_correo,estado,updated_at,\
+         anfitrion:anfitriones!citas_anfitrion_correo_fkey(nombre),\
          cita_visitantes(id,cedula,nombre,empresa,placa_vehiculo){filtro_incremental}",
         contexto.base_url,
     );
@@ -2878,6 +2884,49 @@ mod tests {
             )
             .unwrap();
         assert_eq!(cedula, "1-1111");
+    }
+
+    #[test]
+    fn recibe_la_hora_estimada_de_una_cita_y_la_admite_ausente() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"cita-hora\",\"motivo\":null,\
+             \"fecha_desde\":\"2026-09-10\",\"fecha_hasta\":\"2026-09-10\",\
+             \"hora_estimada\":\"10:00:00\",\
+             \"anfitrion_correo\":\"kof@brisas.com\",\"anfitrion\":null,\
+             \"estado\":\"VIGENTE\",\"updated_at\":\"2026-09-09T08:00:00Z\",\
+             \"cita_visitantes\":[]},\
+             {\"id\":\"cita-sin-hora\",\"motivo\":null,\
+             \"fecha_desde\":\"2026-09-10\",\"fecha_hasta\":\"2026-09-10\",\
+             \"anfitrion_correo\":\"kof@brisas.com\",\"anfitrion\":null,\
+             \"estado\":\"VIGENTE\",\"updated_at\":\"2026-09-09T08:00:01Z\",\
+             \"cita_visitantes\":[]}]",
+        );
+
+        let recibidas = recibir_citas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(recibidas, 2);
+        let hora_estimada: Option<String> = connection
+            .query_row(
+                "SELECT hora_estimada FROM citas WHERE uuid = 'cita-hora'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(hora_estimada.as_deref(), Some("10:00:00"));
+        let sin_hora: Option<String> = connection
+            .query_row(
+                "SELECT hora_estimada FROM citas WHERE uuid = 'cita-sin-hora'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            sin_hora, None,
+            "campo ausente en el JSON no debe fallar, sólo queda NULL"
+        );
     }
 
     #[test]

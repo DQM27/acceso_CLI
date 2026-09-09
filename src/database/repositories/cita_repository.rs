@@ -67,21 +67,22 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<(Cita, CitaVisitante)> {
         anfitrion_nombre: row.get(4)?,
         anfitrion_correo: row.get(5)?,
         estado,
+        hora_estimada: row.get(7)?,
     };
     let visitante = CitaVisitante {
-        id: row.get(7)?,
+        id: row.get(8)?,
         cita_id,
-        cedula: row.get(8)?,
-        nombre: row.get(9)?,
-        empresa: row.get(10)?,
-        placa_vehiculo: row.get(11)?,
+        cedula: row.get(9)?,
+        nombre: row.get(10)?,
+        empresa: row.get(11)?,
+        placa_vehiculo: row.get(12)?,
     };
     Ok((cita, visitante))
 }
 
 const SELECT_CITA_VISITANTE: &str = "
     SELECT c.id, c.motivo, c.fecha_desde, c.fecha_hasta, c.anfitrion_nombre,
-           c.anfitrion_correo, c.estado,
+           c.anfitrion_correo, c.estado, c.hora_estimada,
            v.id, v.cedula, v.nombre, v.empresa, v.placa_vehiculo
     FROM cita_visitantes v
     INNER JOIN citas c ON c.id = v.cita_id
