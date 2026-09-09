@@ -2,19 +2,22 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   CalendarDays,
+  CalendarRange,
   ChevronLeft,
   ChevronRight,
   CirclePlus,
+  List,
   MapPin,
   RefreshCw,
   Users,
   X,
 } from "lucide-react";
-import { cancelarCita, listarCitas, mensajeError } from "../api";
+import { cancelarCita, listarCitas, listarCitasCalendario, mensajeError } from "../api";
 import type { Cita, FiltroEstado } from "../dominio";
 import { estadoCita, fechaLegible } from "../fecha";
 import { useAuth } from "../contexto/AuthContexto";
 import { Aviso, Cargando, Modal } from "../componentes/Comunes";
+import CitasCalendario from "../componentes/CitasCalendario";
 
 const FILTROS: { valor: FiltroEstado; nombre: string }[] = [
   { valor: "TODAS", nombre: "Todas" },
@@ -42,6 +45,10 @@ export default function MisCitas() {
   const [cancelando, setCancelando] = useState(false);
   const [errorCancelar, setErrorCancelar] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [vista, setVista] = useState<"lista" | "calendario">("lista");
+  const [citasCalendario, setCitasCalendario] = useState<Cita[]>([]);
+  const [cargandoCalendario, setCargandoCalendario] = useState(true);
+  const [errorCalendario, setErrorCalendario] = useState<string | null>(null);
   const bloqueo = useRef(false);
   const ruta = useLocation();
   const navegar = useNavigate();
@@ -74,6 +81,28 @@ export default function MisCitas() {
       });
     return () => controlador.abort();
   }, [anfitrion!.correo, filtro, pagina, revision]);
+
+  // Sólo se pide cuando la vista Calendario está activa -- evita traer
+  // hasta 500 citas en cada carga de la pantalla cuando la mayoría de las
+  // veces se usa la lista paginada de a 12.
+  useEffect(() => {
+    if (vista !== "calendario") return;
+    const controlador = new AbortController();
+    setCargandoCalendario(true);
+    setErrorCalendario(null);
+    listarCitasCalendario(anfitrion!.correo, filtro, controlador.signal)
+      .then((resultado) => {
+        if (controlador.signal.aborted) return;
+        setCitasCalendario(resultado);
+      })
+      .catch((fallo) => {
+        if (!controlador.signal.aborted) setErrorCalendario(mensajeError(fallo));
+      })
+      .finally(() => {
+        if (!controlador.signal.aborted) setCargandoCalendario(false);
+      });
+    return () => controlador.abort();
+  }, [anfitrion!.correo, filtro, vista, revision]);
 
   useEffect(() => {
     const alVolver = () => {
@@ -153,16 +182,55 @@ export default function MisCitas() {
               </button>
             ))}
           </div>
-          <button
-            className="boton boton-discreto"
-            disabled={cargando}
-            onClick={() => setRevision((v) => v + 1)}
-          >
-            <RefreshCw aria-hidden="true" />
-            Actualizar
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div
+              className="toggle-vista"
+              role="group"
+              aria-label="Cambiar cómo se muestra la agenda"
+            >
+              <button
+                className={vista === "lista" ? "filtro activo" : "filtro"}
+                aria-pressed={vista === "lista"}
+                onClick={() => setVista("lista")}
+              >
+                <List aria-hidden="true" />
+                Lista
+              </button>
+              <button
+                className={vista === "calendario" ? "filtro activo" : "filtro"}
+                aria-pressed={vista === "calendario"}
+                onClick={() => setVista("calendario")}
+              >
+                <CalendarRange aria-hidden="true" />
+                Calendario
+              </button>
+            </div>
+            <button
+              className="boton boton-discreto"
+              disabled={vista === "lista" ? cargando : cargandoCalendario}
+              onClick={() => setRevision((v) => v + 1)}
+            >
+              <RefreshCw aria-hidden="true" />
+              Actualizar
+            </button>
+          </div>
         </div>
-        {cargando ? (
+        {vista === "calendario" ? (
+          cargandoCalendario ? (
+            <Cargando texto="Consultando tu agenda…" />
+          ) : errorCalendario ? (
+            <div className="estado-agenda">
+              <Aviso>{errorCalendario}</Aviso>
+              <button className="boton" onClick={() => setRevision((v) => v + 1)}>
+                Volver a intentar
+              </button>
+            </div>
+          ) : (
+            <div className="agenda-calendario-cuerpo">
+              <CitasCalendario citas={citasCalendario} onSeleccionar={setDetalle} />
+            </div>
+          )
+        ) : cargando ? (
           <Cargando texto="Consultando tus citas…" />
         ) : error ? (
           <div className="estado-agenda">
@@ -261,7 +329,7 @@ export default function MisCitas() {
             })}
           </div>
         )}
-        {!cargando && !error && (citas.length > 0 || pagina > 0) && (
+        {vista === "lista" && !cargando && !error && (citas.length > 0 || pagina > 0) && (
           <div className="paginacion">
             <span>Página {pagina + 1}</span>
             <div>

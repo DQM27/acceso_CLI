@@ -297,13 +297,25 @@ main:focus,
   font-size: 12px;
   color: var(--muted);
 }
+/* Shell fijo, tipo desktop (AG Grid): nada de scroll a nivel de página
+   completa -- la barra superior y la cabecera de cada pantalla quedan
+   quietas, y sólo el contenido de la tarjeta principal scrollea adentro de
+   su propio contenedor. `height` (no `min-height`) + `overflow: hidden` en
+   toda la cadena es lo que fuerza esto: sin un techo real de altura en
+   cada nivel, el navegador vuelve a su comportamiento normal de página
+   larga con scroll global. */
 .portal {
-  min-height: 100dvh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .portal-cuerpo {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 .barra-superior {
   display: flex;
@@ -311,6 +323,7 @@ main:focus,
   justify-content: space-between;
   gap: 16px;
   min-height: 80px;
+  flex-shrink: 0;
   padding: 16px 32px;
   background: var(--panel);
   border-bottom: 1px solid var(--borde);
@@ -352,20 +365,35 @@ main:focus,
   text-overflow: ellipsis;
 }
 .contenido {
-  padding: 40px 40px 32px;
+  padding: 32px 40px;
   flex: 1;
+  min-height: 0;
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  /* `auto`, no `hidden` -- pantallas cortas (Mis citas) nunca llegan a
+     necesitarlo porque su tarjeta ya scrollea sola adentro (`.lista-citas`/
+     `.agenda-calendario-cuerpo`, ambas `flex:1; min-height:0`); esto es el
+     resguardo para pantallas más largas que ese mismo molde (Nueva cita),
+     que no tienen ese scroll interno propio. */
+  overflow-y: auto;
 }
 .pagina {
-  max-width: 1200px;
+  max-width: 1600px;
+  width: 100%;
   margin: 0 auto;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 .encabezado-pagina {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 .encabezado-pagina .antetitulo {
   margin-bottom: 8px;
@@ -379,9 +407,31 @@ main:focus,
   white-space: nowrap;
 }
 .agenda {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
+.lista-citas {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* `.cargando` es compartido con otras pantallas que NO son columnas flex
+   (ej. el spinner de "Cargando sitios…" en Nueva cita) -- acotado acá para
+   no tocar esos otros usos, sólo cuando cuelga directo de la tarjeta. */
+.tarjeta.agenda > .cargando {
+  flex: 1;
+  min-height: 0;
+}
+.agenda-calendario-cuerpo {
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+}
 .agenda-herramientas {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -415,12 +465,16 @@ main:focus,
 }
 .estado-vacio,
 .estado-agenda {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 16px;
   text-align: center;
   padding: 64px 24px;
+  overflow-y: auto;
 }
 .estado-vacio > p {
   color: var(--muted);
@@ -1228,4 +1282,89 @@ dd {
 }
 .selector-fechas .fc-icon-chevron-right::before {
   content: "›";
+}
+
+/* Toggle Lista/Calendario de "Mis citas" -- mismos `.filtro`/`.filtro.activo`
+   que ya usan las pestañas de estado (Todas/Vigentes/...), sólo envueltos
+   en su propio grupo separado con un borde para distinguirlo visualmente
+   de los filtros de estado. */
+.toggle-vista {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+}
+
+/* Calendario de "Mis citas" (componentes/CitasCalendario.tsx) -- mismo
+   theming que `.selector-fechas`, pero a tamaño completo (llena la
+   tarjeta) y con estados de color propios (vigente/vencida/cancelada, no
+   sólo un color de acento único). */
+.citas-calendario {
+  height: 100%;
+}
+.citas-calendario .fc {
+  --fc-border-color: var(--borde);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: var(--panel);
+  --fc-today-bg-color: var(--acento-suave);
+  --fc-highlight-color: var(--acento-suave);
+  --fc-button-bg-color: var(--panel);
+  --fc-button-border-color: var(--borde);
+  --fc-button-text-color: var(--texto);
+  --fc-button-hover-bg-color: var(--panel-suave);
+  --fc-button-hover-border-color: var(--borde-fuerte);
+  --fc-button-active-bg-color: var(--acento-relleno);
+  --fc-button-active-border-color: var(--acento-relleno);
+  height: 100%;
+  color: var(--texto);
+  font-family: inherit;
+}
+.citas-calendario .fc-toolbar-title {
+  color: var(--texto);
+  font-size: 18px;
+  font-weight: 650;
+}
+.citas-calendario .fc-col-header-cell-cushion,
+.citas-calendario .fc-daygrid-day-number,
+.citas-calendario .fc-list-day-text,
+.citas-calendario .fc-list-day-side-text {
+  color: var(--texto);
+}
+.citas-calendario .fc-day-other .fc-daygrid-day-number {
+  color: var(--muted);
+}
+.citas-calendario .fc-button {
+  text-transform: none;
+  box-shadow: none !important;
+}
+.citas-calendario .fc-icon {
+  font-family: inherit !important;
+  font-size: 14px !important;
+}
+.citas-calendario .fc-icon-chevron-left::before {
+  content: "‹";
+}
+.citas-calendario .fc-icon-chevron-right::before {
+  content: "›";
+}
+.citas-calendario .fc-list-empty {
+  background: transparent;
+  color: var(--muted);
+}
+.citas-calendario-evento-vigente {
+  background-color: var(--acento-relleno) !important;
+  border-color: var(--acento-relleno) !important;
+}
+.citas-calendario-evento-vencida {
+  background-color: var(--panel-suave) !important;
+  border-color: var(--borde-fuerte) !important;
+  color: var(--muted) !important;
+}
+.citas-calendario-evento-cancelada {
+  background-color: transparent !important;
+  border-color: var(--error) !important;
+  color: var(--error) !important;
+  text-decoration: line-through;
+  opacity: 0.75;
 }

@@ -78,6 +78,38 @@ export async function listarCitas(
   };
 }
 
+/** Para la vista Calendario de "Mis citas" -- a diferencia de `listarCitas`
+ * (paginada de a `TAMANO_PAGINA`), acá se necesitan TODAS las citas que
+ * apliquen al filtro para que el calendario pueda mostrar cualquier mes al
+ * que el anfitrión navegue sin pedir de nuevo. `limit(500)` es un techo de
+ * sanidad, no una paginación real -- el volumen esperado por anfitrión es
+ * bajo (RLS ya lo acota a sus propias citas). */
+export async function listarCitasCalendario(
+  correo: string,
+  filtro: FiltroEstado,
+  signal?: AbortSignal,
+) {
+  z.email().parse(correo);
+  let consulta = supabase
+    .from("citas")
+    .select(CAMPOS_CITA)
+    .eq("anfitrion_correo", correo);
+  if (filtro === "VIGENTE")
+    consulta = consulta
+      .eq("estado", "VIGENTE")
+      .gte("fecha_hasta", hoyCostaRica());
+  if (filtro === "VENCIDA")
+    consulta = consulta
+      .eq("estado", "VIGENTE")
+      .lt("fecha_hasta", hoyCostaRica());
+  if (filtro === "CANCELADA") consulta = consulta.eq("estado", "CANCELADA");
+  consulta = consulta.order("fecha_desde", { ascending: true }).limit(500);
+  if (signal) consulta = consulta.abortSignal(signal);
+  const { data, error } = await consulta;
+  if (error) throw error;
+  return z.array(citaEsquema).parse(data);
+}
+
 export async function crearCita(
   id: string,
   formulario: FormularioCita,
