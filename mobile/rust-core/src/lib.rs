@@ -384,6 +384,7 @@ impl From<ResultadoIngresoRegistradoNucleo> for ResultadoIngresoRegistrado {
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct MovimientoHistorial {
     pub registro_id: i64,
+    pub uuid: String,
     pub cedula: String,
     pub contratista_nombre: String,
     pub empresa_nombre: String,
@@ -438,6 +439,7 @@ impl From<MovimientoIngresoResumenNucleo> for MovimientoHistorial {
     fn from(movimiento: MovimientoIngresoResumenNucleo) -> Self {
         Self {
             registro_id: movimiento.registro_id,
+            uuid: movimiento.uuid,
             cedula: movimiento.cedula,
             contratista_nombre: movimiento.contratista_nombre,
             empresa_nombre: movimiento.empresa_nombre,
@@ -661,6 +663,8 @@ struct TokenCacheadoNucleo {
     token: control_acceso::nube::TokenDispositivo,
     obtenido_en: std::time::Instant,
 }
+
+const DIAS_HISTORIAL_MOVIL: i64 = 7;
 
 /// Sesión del núcleo: dueña de la única conexión `SQLite` del teléfono. Se
 /// abre una vez al arrancar la app y se reusa en todas las pantallas (login,
@@ -1035,16 +1039,14 @@ impl Nucleo {
         *self.sesion_lock() = None;
     }
 
-    /// Últimos 6 meses por defecto — mismo default que
-    /// `desktop/src/pantallas/Historial.tsx` (`fechaHaceMeses(6)`).
-    /// `registro_ingresos` es append-only y crece sin límite, así que a
-    /// diferencia de los demás buscadores Historial siempre acota por
-    /// fecha, nunca trae "todo".
+    /// Últimos 7 días por defecto: en Android el historial es contexto
+    /// operativo reciente, no auditoría exhaustiva. Para rangos amplios,
+    /// filtros densos y exportación están web/escritorio.
     pub fn buscar_historial(&self, texto: String) -> Result<Vec<MovimientoHistorial>, NucleoError> {
         const LIMITE_MOVIL: usize = 30;
 
         let ahora = chrono::Utc::now();
-        let desde = ahora - chrono::Duration::days(30 * 6);
+        let desde = ahora - chrono::Duration::days(DIAS_HISTORIAL_MOVIL);
         // `hasta` es un límite exclusivo — dejarlo exactamente en "ahora"
         // puede excluir un movimiento creado en el mismo instante (choca
         // con la resolución del reloj). Mismo margen que ya usa
@@ -1075,7 +1077,7 @@ impl Nucleo {
             .core_lock()
             .listar_historial_sitio(
                 &actor,
-                ahora - chrono::Duration::days(180),
+                ahora - chrono::Duration::days(DIAS_HISTORIAL_MOVIL),
                 ahora + chrono::Duration::days(1),
                 &texto,
             )?

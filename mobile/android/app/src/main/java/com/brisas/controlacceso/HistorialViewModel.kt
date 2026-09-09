@@ -23,6 +23,7 @@ import uniffi.control_acceso_mobile.NucleoException
 
 data class FilaHistorial(
     val clave: String,
+    val uuid: String,
     val cedula: String,
     val contratistaNombre: String,
     val empresaNombre: String,
@@ -40,14 +41,14 @@ data class FilaHistorial(
 ) {
     companion object {
         fun local(m: MovimientoHistorial) = FilaHistorial(
-            "local:${m.registroId}", m.cedula, m.contratistaNombre, m.empresaNombre,
+            "local:${m.registroId}", m.uuid, m.cedula, m.contratistaNombre, m.empresaNombre,
             m.fechaHoraIngreso, m.fechaHoraSalida, m.gafeteNumero,
             m.usuarioIngresoNombre, m.usuarioSalidaNombre,
             m.resultadoAcceso is ResultadoIngresoRegistrado.PermitidoConAdvertencia,
             dispositivoTipo = "mobile",
         )
         fun remota(m: MovimientoHistorialSitio) = FilaHistorial(
-            "nube:${m.uuid}", m.cedula ?: "—", m.contratistaNombre, m.empresaNombre ?: "—",
+            "nube:${m.uuid}", m.uuid, m.cedula ?: "—", m.contratistaNombre, m.empresaNombre ?: "—",
             m.fechaHoraIngreso, m.fechaHoraSalida, m.gafeteNumero,
             m.usuarioIngresoNombre ?: "—", m.usuarioSalidaNombre,
             m.motivoResultado == "PRAIND_PROXIMO_VENCER",
@@ -115,7 +116,7 @@ class HistorialViewModel(
                 movimientos = withContext(dispatcherIO) {
                     val locales = nucleo.buscarHistorial(texto).map(FilaHistorial::local)
                     val remotos = nucleo.listarHistorialSitio(texto).map(FilaHistorial::remota)
-                    (locales + remotos)
+                    (locales + remotos.filterNot { remota -> locales.any { it.uuid == remota.uuid } })
                         // `Instant.parse` exige el sufijo "Z" -- las fechas
                         // que llegan de Rust (`to_rfc3339()`, o crudas de
                         // Supabase) usan offset numérico ("+00:00"), que

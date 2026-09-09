@@ -28,6 +28,7 @@ const LIMITE_HISTORIAL_MAXIMO: usize = 200;
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct MovimientoIngresoResumen {
     pub registro_id: i64,
+    pub uuid: String,
     pub contratista_id: i64,
     pub cedula: String,
     pub contratista_nombre: String,
@@ -126,7 +127,7 @@ const HISTORIAL_COLUMNAS: &str = "
     r.medio_ingreso, r.fecha_hora_ingreso, r.fecha_hora_salida,
     r.gafete_numero, r.usuario_ingreso_nombre, r.usuario_salida_nombre,
     r.resultado_acceso, r.motivo_resultado, r.reglas_version,
-    r.empresa_activa_snapshot
+    r.empresa_activa_snapshot, r.uuid
 ";
 
 pub(super) fn buscar_historial(
@@ -297,8 +298,13 @@ fn construir_where_historial(
 
 fn convertir_movimiento(row: &Row<'_>) -> rusqlite::Result<MovimientoIngresoResumen> {
     let motivo_resultado = motivo_desde_fila(row, 13)?;
+    let registro_id = row.get(0)?;
+    let uuid = row
+        .get::<_, Option<String>>(16)?
+        .unwrap_or_else(|| format!("local-{registro_id}"));
     Ok(MovimientoIngresoResumen {
-        registro_id: row.get(0)?,
+        registro_id,
+        uuid,
         contratista_id: row.get(1)?,
         cedula: row.get(2)?,
         contratista_nombre: row.get(3)?,

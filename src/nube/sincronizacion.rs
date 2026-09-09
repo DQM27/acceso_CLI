@@ -943,20 +943,18 @@ pub fn recibir_historial_del_sitio(
         .map(|marca| format!("&updated_at=gt.{marca}"))
         .unwrap_or_default();
 
-    // `dispositivo_entrada_id=neq.<el mío>` -- igual que
-    // `recibir_ingresos_abiertos`: lo que ESTE dispositivo generó ya vive
-    // en `registro_ingresos` (fuente autoritativa), así que `historial_sitio`
-    // sólo necesita lo que nació en otro lado. Evita depender de un `uuid`
-    // en el frontend para deduplicar: local ∪ `historial_sitio` nunca se
-    // superponen por construcción.
+    // No se excluye el dispositivo actual: tras reinstalar Android, la base
+    // local pierde `registro_ingresos`, pero la nube sigue siendo la fuente
+    // común del sitio. La UI móvil deduplica por `uuid` cuando el movimiento
+    // existe en ambas fuentes.
     let url = format!(
-        "{}/rest/v1/ingresos?sitio_id=eq.{}&dispositivo_entrada_id=neq.{}{filtro_incremental}\
+        "{}/rest/v1/ingresos?sitio_id=eq.{}{filtro_incremental}\
          &select=id,contratista_cedula,contratista_nombre,empresa_nombre,tipo_ingreso,\
          medio_ingreso,hora_entrada,hora_salida,gafete_numero,usuario_entrada_nombre,\
          usuario_salida_nombre,resultado_acceso,motivo_resultado,reglas_version,\
          empresa_activa_snapshot,dispositivo_entrada_id,dispositivo_salida_id,updated_at,\
          dispositivo_entrada:dispositivos!ingresos_dispositivo_entrada_id_fkey(tipo)",
-        contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
+        contexto.base_url, contexto.sitio_id,
     );
     let filas: Vec<FilaHistorialRemota> = obtener_json_paginado(&cliente, contexto, &url)?;
 
@@ -1009,7 +1007,8 @@ pub fn recibir_historial_del_sitio(
                 motivo_resultado = excluded.motivo_resultado,
                 reglas_version = excluded.reglas_version,
                 empresa_activa_snapshot = excluded.empresa_activa_snapshot,
-                actualizado_en = excluded.actualizado_en
+                actualizado_en = excluded.actualizado_en,
+                dispositivo_entrada_tipo = excluded.dispositivo_entrada_tipo
             ",
             params![
                 fila.id,
@@ -1978,6 +1977,43 @@ mod tests {
             )
             .unwrap();
         assert_eq!(tipo.as_deref(), Some("mobile"));
+    }
+
+    #[test]
+    fn recibir_historial_del_sitio_incluye_movimientos_del_dispositivo_actual() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.contains("/ingresos?sitio_id=eq.sitio-1"));
+            assert!(
+                !pedido.contains("dispositivo_entrada_id=neq."),
+                "una instalación nueva debe poder repoblar lo que antes generó este mismo dispositivo"
+            );
+            let cuerpo = "[]";
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        recibir_historial_del_sitio(&connection, &contexto(&base_url)).unwrap();
+        servidor.join().unwrap();
     }
 
     #[test]

@@ -21,10 +21,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import uniffi.control_acceso_mobile.Nucleo
 
 /// Sólo lectura, sin acción — a diferencia de Activos no hay nada que
-/// confirmar acá. Últimos 6 meses por defecto (mismo criterio que
-/// desktop/src/pantallas/Historial.tsx): registro_ingresos crece sin
-/// límite, nunca se trae "todo" (el límite de fecha vive del lado de
-/// `Nucleo.buscarHistorial`, no acá). Todo el estado y la llamada a
+/// confirmar acá. Últimos 7 días por defecto: el celular da contexto
+/// operativo reciente; auditoría amplia, filtros densos y exportación viven
+/// mejor en web/escritorio. Todo el estado y la llamada a
 /// [Nucleo] viven en [HistorialViewModel] (ver
 /// mobile/android/ARQUITECTURA.md) — este Composable sólo dibuja.
 @Composable

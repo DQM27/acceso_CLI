@@ -100,6 +100,47 @@ class HistorialViewModelTest {
     }
 
     @Test
+    fun `deduplica el mismo movimiento cuando existe local y tambien en nube`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');",
+            """
+            INSERT INTO contratistas (
+                cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+            ) VALUES ('111111111', 'Contratista Duplicado', 1, 'SWAT', 0, 1);
+            """.trimIndent(),
+            NucleoDePrueba.sqlUsuarioRoot(),
+            """
+            INSERT INTO registro_ingresos(
+                contratista_id, empresa_id, fecha_hora_ingreso, medio_ingreso, tipo_ingreso,
+                usuario_ingreso_id, contratista_cedula, contratista_nombre, empresa_nombre,
+                usuario_ingreso_nombre, es_personal_ruta, tiene_acceso, resultado_acceso,
+                reglas_version, empresa_activa_snapshot, uuid
+            ) VALUES (
+                1, 1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'CAMINANDO', 'SWAT',
+                1, '111111111', 'Contratista Duplicado', 'Empresa Test',
+                'Actor Test', 0, 1, 'PERMITIDO', 1, 1, 'uuid-compartido'
+            );
+            """.trimIndent(),
+            """
+            INSERT INTO historial_sitio (uuid, sitio_id, contratista_cedula, contratista_nombre,
+                hora_entrada, hora_salida, gafete_numero, dispositivo_entrada_id, actualizado_en)
+            VALUES ('uuid-compartido', 'sitio-prueba', '111111111', 'Contratista Duplicado',
+                strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), null, null, 'este-mismo-equipo',
+                strftime('%Y-%m-%dT%H:%M:%SZ', 'now'));
+            """.trimIndent(),
+        )
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "", "")
+
+        val viewModel = HistorialViewModel(nucleo, dispatcherIO = dispatcher)
+        advanceUntilIdle()
+
+        assertNull(viewModel.error)
+        assertEquals(1, viewModel.movimientos.size)
+        assertTrue(viewModel.movimientos.single().clave.startsWith("local:"))
+    }
+
+    @Test
     fun `ordena por fecha sin crashear con offset numerico (formato real de Rust y Supabase)`() =
         runTest(dispatcher) {
             // `to_rfc3339()` del lado Rust (y lo que devuelve Supabase para

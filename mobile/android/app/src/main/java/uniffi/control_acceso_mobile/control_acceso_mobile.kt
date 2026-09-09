@@ -958,7 +958,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas() != 3985) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_historial() != 29388) {
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_historial() != 13812) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cargar_secreto_dispositivo_legado() != 52509) {
@@ -1528,11 +1528,9 @@ public interface NucleoInterface {
     fun `buscarContratistas`(`texto`: kotlin.String): List<ContratistaResumen>
     
     /**
-     * Últimos 6 meses por defecto — mismo default que
-     * `desktop/src/pantallas/Historial.tsx` (`fechaHaceMeses(6)`).
-     * `registro_ingresos` es append-only y crece sin límite, así que a
-     * diferencia de los demás buscadores Historial siempre acota por
-     * fecha, nunca trae "todo".
+     * Últimos 7 días por defecto: en Android el historial es contexto
+     * operativo reciente, no auditoría exhaustiva. Para rangos amplios,
+     * filtros densos y exportación están web/escritorio.
      */
     fun `buscarHistorial`(`texto`: kotlin.String): List<MovimientoHistorial>
     
@@ -1959,11 +1957,9 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Últimos 6 meses por defecto — mismo default que
-     * `desktop/src/pantallas/Historial.tsx` (`fechaHaceMeses(6)`).
-     * `registro_ingresos` es append-only y crece sin límite, así que a
-     * diferencia de los demás buscadores Historial siempre acota por
-     * fecha, nunca trae "todo".
+     * Últimos 7 días por defecto: en Android el historial es contexto
+     * operativo reciente, no auditoría exhaustiva. Para rangos amplios,
+     * filtros densos y exportación están web/escritorio.
      */
     @Throws(NucleoException::class)override fun `buscarHistorial`(`texto`: kotlin.String): List<MovimientoHistorial> {
             return FfiConverterSequenceTypeMovimientoHistorial.lift(
@@ -2581,9 +2577,9 @@ public object FfiConverterTypeNucleo: FfiConverter<Nucleo, Long> {
  */
 data class ContratistaResumen (
     var `id`: kotlin.Long
-    , 
+    ,
     var `cedula`: kotlin.String
-    , 
+    ,
     var `nombre`: kotlin.String
     , 
     var `empresaNombre`: kotlin.String
@@ -2958,7 +2954,9 @@ public object FfiConverterTypeIngresoRemoto: FfiConverterRustBuffer<IngresoRemot
  */
 data class MovimientoHistorial (
     var `registroId`: kotlin.Long
-    , 
+    ,
+    var `uuid`: kotlin.String
+    ,
     var `cedula`: kotlin.String
     , 
     var `contratistaNombre`: kotlin.String
@@ -3000,6 +2998,7 @@ public object FfiConverterTypeMovimientoHistorial: FfiConverterRustBuffer<Movimi
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
             FfiConverterTypeTipoIngreso.read(buf),
             FfiConverterTypeMedioIngreso.read(buf),
             FfiConverterString.read(buf),
@@ -3013,6 +3012,7 @@ public object FfiConverterTypeMovimientoHistorial: FfiConverterRustBuffer<Movimi
 
     override fun allocationSize(value: MovimientoHistorial) = (
             FfiConverterLong.allocationSize(value.`registroId`) +
+            FfiConverterString.allocationSize(value.`uuid`) +
             FfiConverterString.allocationSize(value.`cedula`) +
             FfiConverterString.allocationSize(value.`contratistaNombre`) +
             FfiConverterString.allocationSize(value.`empresaNombre`) +
@@ -3028,6 +3028,7 @@ public object FfiConverterTypeMovimientoHistorial: FfiConverterRustBuffer<Movimi
 
     override fun write(value: MovimientoHistorial, buf: ByteBuffer) {
             FfiConverterLong.write(value.`registroId`, buf)
+            FfiConverterString.write(value.`uuid`, buf)
             FfiConverterString.write(value.`cedula`, buf)
             FfiConverterString.write(value.`contratistaNombre`, buf)
             FfiConverterString.write(value.`empresaNombre`, buf)
@@ -4287,4 +4288,3 @@ public object FfiConverterSequenceTypeUsuarioResumen: FfiConverterRustBuffer<Lis
         }
     }
 }
-
