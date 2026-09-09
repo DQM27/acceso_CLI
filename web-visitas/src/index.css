@@ -1127,3 +1127,65 @@ dd {
     animation: none;
   }
 }
+
+/* Selector de fechas de "Nueva cita" (componentes/SelectorFechas.tsx) --
+   mismo mecanismo de theming que usa el calendario de Agenda del desktop
+   (desktop/src/index.css): FullCalendar expone estas variables `--fc-*`
+   justamente para esto, en vez de pisar sus clases a mano. Ver index.html
+   sobre por qué esta app puede usar FullCalendar bajo una CSP estricta. */
+.selector-fechas {
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  padding: 12px;
+  background: var(--campo-fondo);
+}
+.selector-fechas .fc {
+  --fc-border-color: var(--borde);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: var(--panel);
+  --fc-today-bg-color: var(--acento-suave);
+  --fc-highlight-color: var(--acento-suave);
+  --fc-button-bg-color: var(--panel);
+  --fc-button-border-color: var(--borde);
+  --fc-button-text-color: var(--texto);
+  --fc-button-hover-bg-color: var(--panel-suave);
+  --fc-button-hover-border-color: var(--borde-fuerte);
+  --fc-button-active-bg-color: var(--acento-relleno);
+  --fc-button-active-border-color: var(--acento-relleno);
+  color: var(--texto);
+  font-family: inherit;
+}
+.selector-fechas .fc-toolbar-title {
+  color: var(--texto);
+  font-size: 15px;
+  font-weight: 600;
+}
+.selector-fechas .fc-col-header-cell-cushion,
+.selector-fechas .fc-daygrid-day-number {
+  color: var(--texto);
+  font-size: 12px;
+}
+.selector-fechas .fc-day-other .fc-daygrid-day-number {
+  color: var(--muted);
+}
+.selector-fechas .fc-button {
+  text-transform: none;
+  box-shadow: none !important;
+  font-size: 12px;
+}
+/* El ícono de prev/next de FullCalendar viene de una fuente propia
+   (`fcicons`) embebida como `data:` en su CSS -- la CSP de esta app no
+   permite `data:` en `font-src` (a propósito, no se relaja sólo por esto).
+   Se reemplaza por flechas de texto plano en la fuente heredada: si ningún
+   elemento termina usando `font-family: fcicons`, el navegador nunca llega
+   a pedir/decodificar esa fuente, así que la CSP ni se entera. */
+.selector-fechas .fc-icon {
+  font-family: inherit !important;
+  font-size: 14px !important;
+}
+.selector-fechas .fc-icon-chevron-left::before {
+  content: "‹";
+}
+.selector-fechas .fc-icon-chevron-right::before {
+  content: "›";
+}

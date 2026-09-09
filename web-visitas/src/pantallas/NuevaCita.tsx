@@ -17,6 +17,7 @@ import type { FormularioCita, Sitio } from "../dominio";
 import { fechaLegible, hoyCostaRica } from "../fecha";
 import { useAuth } from "../contexto/AuthContexto";
 import { Aviso, Cargando, Modal } from "../componentes/Comunes";
+import SelectorFechas from "../componentes/SelectorFechas";
 
 export default function NuevaCita() {
   const { verificado } = useAuth();
@@ -262,41 +263,25 @@ export default function NuevaCita() {
                   )}
                   {mensajeCampo("sitios")}
                 </div>
-                <div className="dos-columnas">
-                  <label className="campo">
-                    Desde <span className="sr-only">fecha inicial</span>
-                    <input
-                      type="date"
-                      min={hoyCostaRica()}
-                      value={formulario.fecha_desde}
-                      required
-                      {...atributos("fecha_desde")}
-                      onChange={(e) =>
-                        actualizar({
-                          fecha_desde: e.target.value,
-                          fecha_hasta:
-                            formulario.fecha_hasta < e.target.value
-                              ? e.target.value
-                              : formulario.fecha_hasta,
-                        })
+                <div className="campo">
+                  Fechas de la visita
+                  <span className="ayuda-campo">
+                    Hacé click en un día, o arrastrá para elegir un rango.
+                  </span>
+                  <div
+                    role="group"
+                    aria-label="Fechas de la visita"
+                    aria-invalid={!!(errores.fecha_desde || errores.fecha_hasta)}
+                  >
+                    <SelectorFechas
+                      desde={formulario.fecha_desde}
+                      hasta={formulario.fecha_hasta}
+                      onCambiar={(fecha_desde, fecha_hasta) =>
+                        actualizar({ fecha_desde, fecha_hasta })
                       }
                     />
-                    {mensajeCampo("fecha_desde")}
-                  </label>
-                  <label className="campo">
-                    Hasta <span className="sr-only">fecha final</span>
-                    <input
-                      type="date"
-                      min={formulario.fecha_desde || hoyCostaRica()}
-                      value={formulario.fecha_hasta}
-                      required
-                      {...atributos("fecha_hasta")}
-                      onChange={(e) =>
-                        actualizar({ fecha_hasta: e.target.value })
-                      }
-                    />
-                    {mensajeCampo("fecha_hasta")}
-                  </label>
+                  </div>
+                  {mensajeCampo("fecha_desde") ?? mensajeCampo("fecha_hasta")}
                 </div>
                 <label className="campo">
                   Motivo de la visita <span className="opcional">Opcional</span>
