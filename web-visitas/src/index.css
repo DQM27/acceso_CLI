@@ -728,10 +728,16 @@ main:focus,
   align-items: center;
   gap: 12px;
   padding: 16px;
-  border: 1px solid var(--borde-fuerte);
+  border: 1px solid var(--borde);
   border-radius: var(--radio-chico);
   background: var(--campo-fondo);
   cursor: pointer;
+  transition:
+    border-color var(--duracion),
+    background var(--duracion);
+}
+.sitio-opcion:hover {
+  border-color: var(--borde-fuerte);
 }
 .sitio-opcion.seleccionado {
   border-color: var(--acento);
@@ -740,11 +746,45 @@ main:focus,
 .sitio-opcion > svg {
   color: var(--muted);
 }
+/* El checkbox nativo queda funcional (foco por teclado, lectores de
+   pantalla) pero visualmente oculto -- `.sitio-indicador` es el que se ve,
+   un cuadrito propio en vez del checkbox de fábrica del navegador. */
 .sitio-opcion input {
-  accent-color: var(--acento-relleno);
-  width: 16px;
-  height: 16px;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.sitio-indicador {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
+  border: 1.5px solid var(--borde-fuerte);
+  border-radius: 6px;
+  background: var(--panel);
+  transition:
+    background var(--duracion),
+    border-color var(--duracion);
+}
+.sitio-indicador svg {
+  width: 13px;
+  height: 13px;
+  color: var(--sobre-acento-indicador);
+  opacity: 0;
+  transition: opacity var(--duracion);
+}
+.sitio-opcion.seleccionado .sitio-indicador {
+  background: var(--acento-relleno);
+  border-color: var(--acento-relleno);
+}
+.sitio-opcion.seleccionado .sitio-indicador svg {
+  opacity: 1;
+}
+.sitio-opcion input:focus-visible ~ .sitio-indicador {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
 }
 .sitio-opcion small {
   display: block;

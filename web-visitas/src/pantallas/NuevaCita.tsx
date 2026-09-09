@@ -250,6 +250,9 @@ export default function NuevaCita() {
                               })
                             }
                           />
+                          <span className="sitio-indicador">
+                            <Check aria-hidden="true" />
+                          </span>
                           <MapPin aria-hidden="true" />
                           <span>
                             <strong>{sitio.nombre}</strong>
