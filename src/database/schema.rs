@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 29;
+pub const SCHEMA_VERSION: i64 = 30;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -291,6 +291,11 @@ fn aplicar_migraciones_posteriores_a_15(
         *version = 29;
     }
 
+    if *version == 29 {
+        aplicar_migracion_30(connection)?;
+        *version = 30;
+    }
+
     Ok(())
 }
 
@@ -402,6 +407,14 @@ fn aplicar_migracion_29(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_29)?;
     transaction.execute_batch("PRAGMA user_version = 29")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_30(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_30)?;
+    transaction.execute_batch("PRAGMA user_version = 30")?;
     transaction.commit()?;
     Ok(())
 }
@@ -2188,4 +2201,12 @@ ALTER TABLE cola_salida_nueva RENAME TO cola_salida;
 CREATE INDEX idx_cola_salida_pendientes
 ON cola_salida(creado_en)
 WHERE estado = 'pendiente';
+";
+
+// Watermark propio de citas, mismo mecanismo que
+// `catalogo_actualizado_hasta`/`historial_actualizado_hasta`/
+// `gafetes_actualizado_hasta` (columna separada, ritmo de sync
+// independiente) -- ver `nube::sincronizacion::recibir_citas_del_sitio`.
+const MIGRACION_30: &str = r"
+ALTER TABLE sincronizacion_estado ADD COLUMN citas_actualizado_hasta TEXT;
 ";
