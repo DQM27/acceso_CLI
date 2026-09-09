@@ -1,3 +1,4 @@
+pub mod cita_repository;
 pub mod contratista_repository;
 pub mod empresa_repository;
 pub mod gafete_repository;
