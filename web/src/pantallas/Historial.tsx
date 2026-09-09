@@ -6,10 +6,13 @@ import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
 import AvisoTruncado from "../componentes/AvisoTruncado";
 import SelectorRangoFecha, { textoRangoFecha } from "../componentes/SelectorRangoFecha";
+import SelectorUnidadesOperativas, {
+  textoUnidadesOperativas,
+} from "../componentes/SelectorUnidadesOperativas";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { useAuth } from "../contexto/AuthContexto";
-import { listarHistorial } from "../api/historial";
-import type { MovimientoHistorial } from "../api/historial";
+import { listarHistorial, listarUnidadesOperativas } from "../api/historial";
+import type { MovimientoHistorial, UnidadOperativa } from "../api/historial";
 import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import { mensajeError } from "../mensajeError";
 
@@ -231,12 +234,34 @@ export default function Historial() {
   // meses, `hasta` abierto para no perderse movimientos del día en curso.
   const [desde, setDesde] = useState(() => fechaHaceMeses(6));
   const [hasta, setHasta] = useState("");
+  const [unidades, setUnidades] = useState<UnidadOperativa[]>([]);
+  // Sigue el mismo criterio que `ocultas` en `Tabla.tsx`: guarda lo
+  // DESMARCADO, no lo marcado -- así una unidad que todavía no cargó (o una
+  // nueva que se dio de alta después) nunca queda afuera del filtro por
+  // accidente. Vacío = sin filtro (todas), ver `sitioIdsFiltro` más abajo.
+  const [unidadesExcluidas, setUnidadesExcluidas] = useState<Set<string>>(new Set());
   const tablaRef = useRef<TablaHandle<MovimientoHistorial>>(null);
+
+  useEffect(() => {
+    listarUnidadesOperativas()
+      .then(setUnidades)
+      .catch((error) => toast.error(mensajeError(error)));
+  }, []);
+
+  // `undefined` (sin filtro) cuando nada está excluido -- a propósito
+  // distinto de "mandar la lista completa de ids": así el primer render (con
+  // `unidades` todavía vacío, antes de que responda `listarUnidadesOperativas`)
+  // no le pide a `listarHistorial` un `.in(sitio_id, [])` que traería cero
+  // filas por una carrera de carga, no porque alguien haya filtrado nada.
+  const sitioIdsFiltro =
+    unidadesExcluidas.size === 0
+      ? undefined
+      : unidades.filter((u) => !unidadesExcluidas.has(u.id)).map((u) => u.id);
 
   const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
     const silencioso = opciones?.silencioso ?? false;
     if (!silencioso) setCargando(true);
-    return listarHistorial(desde || undefined, hasta || undefined)
+    return listarHistorial(desde || undefined, hasta || undefined, sitioIdsFiltro)
       .then(({ filas, truncado }) => {
         setFilas(filas);
         setTruncado(truncado);
@@ -247,7 +272,7 @@ export default function Historial() {
       .finally(() => {
         if (!silencioso) setCargando(false);
       });
-  }, [desde, hasta]);
+  }, [desde, hasta, unidadesExcluidas, unidades]);
 
   useEffect(() => {
     recargar();
@@ -320,9 +345,10 @@ export default function Historial() {
       return;
     }
 
+    const filtroUnidades = textoUnidadesOperativas(unidades.length, unidadesExcluidas.size);
     const html = generarHtmlHistorial(visibles, definiciones, {
       generadoPor: sesion?.nombre ?? sesion?.correo ?? "",
-      filtro: `Filtro: ${textoRangoFecha(desde, hasta)}`,
+      filtro: `Filtro: ${textoRangoFecha(desde, hasta)} — ${filtroUnidades}`,
     });
 
     const iframe = document.createElement("iframe");
@@ -457,6 +483,11 @@ export default function Historial() {
             }
             accionesDerecha={
               <>
+                <SelectorUnidadesOperativas
+                  unidades={unidades}
+                  excluidas={unidadesExcluidas}
+                  onCambiar={setUnidadesExcluidas}
+                />
                 <SelectorRangoFecha
                   desde={desde}
                   hasta={hasta}

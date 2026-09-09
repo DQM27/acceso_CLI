@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { listarHistorial } from "./historial";
+import { listarHistorial, listarUnidadesOperativas } from "./historial";
 
 function mockConsulta(resultado: { data: unknown; error: unknown; count: number | null }) {
   const encadenable: Record<string, unknown> = {
@@ -8,6 +8,7 @@ function mockConsulta(resultado: { data: unknown; error: unknown; count: number 
     range: vi.fn(() => encadenable),
     gte: vi.fn(() => encadenable),
     lt: vi.fn(() => encadenable),
+    in: vi.fn(() => encadenable),
     returns: vi.fn(() => encadenable),
     then: (resolver: (valor: typeof resultado) => void) => resolver(resultado),
   };
@@ -114,5 +115,47 @@ describe("listarHistorial", () => {
     await listarHistorial(undefined, "2026-09-30");
 
     expect(encadenable.lt).toHaveBeenCalledWith("hora_entrada", "2026-10-01T00:00:00-06:00");
+  });
+
+  it("sin sitioIds no filtra por sitio", async () => {
+    const encadenable = mockConsulta({ data: [], error: null, count: 0 });
+    mocks.from.mockReturnValue(encadenable);
+
+    await listarHistorial();
+
+    expect(encadenable.in).not.toHaveBeenCalled();
+  });
+
+  it("con sitioIds filtra con .in(sitio_id, ...) -- una lista vacía trae cero filas a propósito (todas las unidades excluidas)", async () => {
+    const encadenable = mockConsulta({ data: [], error: null, count: 0 });
+    mocks.from.mockReturnValue(encadenable);
+
+    await listarHistorial(undefined, undefined, ["s1", "s2"]);
+    expect(encadenable.in).toHaveBeenCalledWith("sitio_id", ["s1", "s2"]);
+
+    await listarHistorial(undefined, undefined, []);
+    expect(encadenable.in).toHaveBeenCalledWith("sitio_id", []);
+  });
+});
+
+describe("listarUnidadesOperativas", () => {
+  it("devuelve id/nombre ordenados como los mandó Supabase", async () => {
+    const sitios = [
+      { id: "s1", nombre: "Brisas" },
+      { id: "s2", nombre: "Otra unidad" },
+    ];
+    mocks.from.mockReturnValue(mockConsulta({ data: sitios, error: null, count: null }));
+
+    const resultado = await listarUnidadesOperativas();
+
+    expect(resultado).toEqual(sitios);
+  });
+
+  it("propaga el error de la consulta como Error real", async () => {
+    mocks.from.mockReturnValue(
+      mockConsulta({ data: null, error: { message: "timeout" }, count: null }),
+    );
+
+    await expect(listarUnidadesOperativas()).rejects.toThrow("timeout");
   });
 });
