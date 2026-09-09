@@ -1,4 +1,5 @@
 use crate::database::error::DatabaseError;
+use crate::domain::cita::MotivoDenegacionVisita;
 use crate::domain::resultado_acceso::MotivoDenegacion;
 use crate::models::gafete::EstadoGafete;
 
@@ -140,6 +141,25 @@ pub enum RegistroIngresoServiceError {
     /// entre la verificación y la escritura.
     #[error("La sesión que registra el movimiento no existe o está inactiva")]
     OperadorNoAutorizado,
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CitaServiceError {
+    /// Esta cédula no aparece en NINGUNA cita conocida por este
+    /// dispositivo -- distinto de `SinCitaVigente`: acá no hay nada que
+    /// mostrarle al guardia (ni anfitrión, ni motivo), la persona
+    /// simplemente no tiene ninguna visita agendada.
+    #[error("No hay ninguna visita agendada para esta cédula")]
+    SinCitaRegistrada,
+    /// Existe al menos una cita para esta cédula, pero ninguna aplica hoy
+    /// -- el motivo viaja en la variante (de la última candidata
+    /// evaluada) para que la interfaz pueda mostrar algo más útil que
+    /// "no se puede" (ej. "esta cita fue cancelada" o "esta cita ya
+    /// venció").
+    #[error("No hay ninguna visita vigente para esta cédula: {0:?}")]
+    SinCitaVigente(MotivoDenegacionVisita),
     #[error(transparent)]
     Database(#[from] DatabaseError),
 }
