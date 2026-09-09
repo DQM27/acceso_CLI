@@ -67,3 +67,31 @@ export async function registrarSalidaVisita(movimientoId: number): Promise<void>
 export function listarVisitasActivas(): Promise<MovimientoVisitaActivoResumen[]> {
   return invoke("listar_visitas_activas");
 }
+
+/** Espejo de `comandos::citas::MovimientoHistorialVisitaRemoto` -- un
+ * movimiento de visita (abierto o cerrado) leído de la caché local
+ * `historial_visitas_sitio`, la misma que sincroniza
+ * `nube::recibir_historial_visitas_del_sitio`. Sólo se llena en PC -- el
+ * celular no trae esto (ver el comentario en `mobile/rust-core/src/lib.rs`),
+ * así que este comando ni siquiera existe del lado móvil. */
+export interface MovimientoHistorialVisitaRemoto {
+  uuid: string;
+  cedula: string;
+  nombre: string;
+  empresa: string | null;
+  anfitrion_nombre: string | null;
+  motivo: string | null;
+  gafete_numero: number | null;
+  /** ISO 8601 (UTC). */
+  fecha_hora_entrada: string;
+  fecha_hora_salida: string | null;
+  usuario_entrada_nombre: string | null;
+  usuario_salida_nombre: string | null;
+}
+
+export function listarHistorialVisitasSitio(
+  desde?: string,
+  hasta?: string,
+): Promise<MovimientoHistorialVisitaRemoto[]> {
+  return invoke("listar_historial_visitas_sitio", { desde: desde ?? null, hasta: hasta ?? null });
+}
