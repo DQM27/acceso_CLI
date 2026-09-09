@@ -21,6 +21,7 @@ export interface ResumenSincronizacion {
   gafetes_recibidos: number;
   movimientos_historial_recibidos: number;
   citas_recibidas: number;
+  historial_visitas_recibidos: number;
   sitio_id: string;
   dispositivo_id: string;
   tipo: string;
