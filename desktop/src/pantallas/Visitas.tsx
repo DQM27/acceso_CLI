@@ -17,6 +17,7 @@ import type {
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
 const VisitaCheckInModal = lazy(() => import("./VisitaCheckInModal"));
+const AgendaCalendario = lazy(() => import("../componentes/AgendaCalendario"));
 
 type Vista = "activas" | "historial" | "agenda";
 
@@ -213,40 +214,6 @@ export default function Visitas() {
     [],
   );
 
-  const columnasAgenda: ColDef<AgendaVisitaResumen>[] = useMemo(
-    () => [
-      { field: "cedula", headerName: "Cédula", flex: 1.1, minWidth: 110, cellStyle: { textAlign: "left" } },
-      { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
-      { field: "empresa", headerName: "Empresa", flex: 1.1, minWidth: 130, valueFormatter: (p) => p.value ?? "—" },
-      { field: "anfitrion_nombre", headerName: "Anfitrión", flex: 1.2, minWidth: 130 },
-      { field: "motivo", headerName: "Motivo", flex: 1.2, minWidth: 130, valueFormatter: (p) => p.value ?? "—" },
-      {
-        colId: "fecha_desde",
-        headerName: "Desde",
-        flex: 1,
-        minWidth: 105,
-        valueGetter: (p) => p.data?.fecha_desde ?? "",
-        valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
-      },
-      {
-        colId: "fecha_hasta",
-        headerName: "Hasta",
-        flex: 1,
-        minWidth: 105,
-        valueGetter: (p) => p.data?.fecha_hasta ?? "",
-        valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
-      },
-      {
-        field: "estado",
-        headerName: "Estado",
-        flex: 0.9,
-        minWidth: 100,
-        valueFormatter: (p) => (p.value === "Cancelada" ? "Cancelada" : "Vigente"),
-      },
-    ],
-    [],
-  );
-
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
@@ -293,22 +260,16 @@ export default function Visitas() {
             />
           )}
           {vista === "agenda" && (
-            <Tabla<AgendaVisitaResumen>
-              id="visitas-agenda"
-              columnas={columnasAgenda}
-              filas={filasAgenda}
-              busqueda={busqueda}
-              controles={
-                <div className="campo" style={{ flex: "0 1 16rem" }}>
-                  <input
-                    placeholder="Cédula, nombre, empresa…"
-                    value={busqueda}
-                    onChange={(evento) => setBusqueda(evento.target.value)}
-                  />
-                </div>
-              }
-              accionesDerecha={<ToggleVista vista={vista} onCambiar={setVista} />}
-            />
+            <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: "0.6rem" }}>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <ToggleVista vista={vista} onCambiar={setVista} />
+              </div>
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <Suspense fallback={null}>
+                  <AgendaCalendario filas={filasAgenda} />
+                </Suspense>
+              </div>
+            </div>
           )}
         </div>
       </div>
