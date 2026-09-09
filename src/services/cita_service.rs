@@ -41,11 +41,20 @@ where
     /// simultáneamente (caso raro: dos agendas que se solapan o se
     /// vencieron juntas) no hay un criterio de prioridad entre motivos
     /// todavía, se informa el de la última que se miró.
+    ///
+    /// Sólo recorta espacios -- `CitaRepository::buscar_por_cedula` compara
+    /// por igualdad exacta (`v.cedula = ?1`, sin `UPPER`/`TRIM` de guiones
+    /// en SQL), y la RPC `crear_cita_anfitrion` que guarda la cédula del
+    /// lado de la web (`docs/contrato-web-visitas.md`) tampoco cambia
+    /// mayúsculas ni quita guiones, sólo hace `btrim` -- si un lado
+    /// normalizara distinto del otro, una cédula agendada dejaría de
+    /// encontrarse acá aunque el guardia la escribiera/escaneara igual.
     pub fn verificar_check_in(
         &self,
         cedula: &str,
         hoy: NaiveDate,
     ) -> Result<(Cita, CitaVisitante), CitaServiceError> {
+        let cedula = cedula.trim();
         let candidatas = self.citas.buscar_por_cedula(cedula)?;
         if candidatas.is_empty() {
             return Err(CitaServiceError::SinCitaRegistrada);
@@ -219,6 +228,22 @@ mod tests {
             .unwrap();
 
         assert_eq!(cita.id, 1);
+        assert_eq!(visitante.cedula, "1-2345");
+    }
+
+    #[test]
+    fn verificar_check_in_recorta_espacios_pero_no_cambia_nada_mas() {
+        let connection = conexion();
+        insertar_cita(&connection, 1, "2026-08-10", "2026-08-15", "VIGENTE");
+        insertar_visitante(&connection, 1, 1, "1-2345");
+        let repo = SqliteCitaRepository::new(&connection);
+        let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos);
+
+        let (_, visitante) = servicio
+            .verificar_check_in("  1-2345  ", fecha("2026-08-12"))
+            .unwrap();
+
         assert_eq!(visitante.cedula, "1-2345");
     }
 
