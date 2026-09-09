@@ -14,7 +14,7 @@ Sesión de planificación (sin tocar código) sobre cómo agregar "visitas"
 (y a futuro "proveedores") al sistema. Contexto de negocio dado por el
 usuario: hoy existe un mecanismo de agendamiento con QR por correo que
 el usuario considera poco idóneo; la alternativa acordada es cédula en
-garita, igual que contratistas.
+el punto de acceso, igual que contratistas.
 
 ## Decisión de fondo: reutilizar el núcleo, no la tabla de contratistas
 
@@ -74,7 +74,7 @@ Cuatro tablas nuevas, no dos:
      Motivo/fecha/anfitrión/sitios son compartidos por todo el grupo
      (viven en `citas`); cédula/nombre/empresa/placa son por persona.
 
-4. **`movimientos_visita`** (el cruce real en garita -- equivalente a
+4. **`movimientos_visita`** (el cruce real en el punto de acceso -- equivalente a
    `registro_ingresos`, pero sin ningún campo de PRAIND/SWAT)
    - referencia a QUÉ `cita_visitante` lo autoriza (no a la cita
      entera -- cada persona del grupo entra y sale por su cuenta)
@@ -86,7 +86,7 @@ Cuatro tablas nuevas, no dos:
      (uuid, dispositivo_entrada_id, etc. -- mismo patrón que
      `registro_ingresos`)
 
-Check-in en garita: guardia escanea cédula → el sistema busca si hay un
+Check-in en el punto de acceso: guardia escanea cédula → el sistema busca si hay un
 `cita_visitante` con esa cédula, cuya `cita` esté VIGENTE hoy y incluya
 este sitio en `cita_sitios` → si existe, se arma el movimiento (gafete,
 etc.) igual que hoy se arma un ingreso de contratista, pero apuntando a
@@ -136,7 +136,7 @@ tabla ya está scopeada a un solo color por diseño, así que un
 El anfitrión (a quién viene a ver la visita, término interno de la
 empresa: "KOF") **no es un `usuario`** de los que ya existen (esos son
 guardias/admins de sitio, login offline, sincronizan completos a cada
-dispositivo de garita). Es un actor nuevo: entra solo por web, con
+dispositivo del punto de acceso). Es un actor nuevo: entra solo por web, con
 conexión, agenda sus propias citas y (más adelante, no prioridad) recibe
 aviso de sus visitantes.
 
@@ -151,7 +151,7 @@ admins.
 
 Tres identidades separadas conviviendo, cada una con su propio
 mecanismo:
-- `usuarios` → guardias/admins de sitio, login offline, apps de garita.
+- `usuarios` → guardias/admins de sitio, login offline, apps del punto de acceso.
 - `administradores_panel` → quien administra el panel web completo.
 - `anfitriones` (nueva) → quien agenda y (a futuro) recibe aviso de sus
   visitas, en el subdominio nuevo.
@@ -162,7 +162,7 @@ Recomendación dada y sin objeción del usuario: **no conviene una app
 móvil nueva para quien agenda**. Agendar es una acción esporádica (no
 un hábito diario que justifique instalar algo), no necesita cámara/OCR
 ni nada nativo, y no necesita funcionar offline -- todo lo contrario
-al motivo de ser de la app de garita. Una web alcanza y sobra.
+al motivo de ser de la app del punto de acceso. Una web alcanza y sobra.
 
 Confirmado técnicamente: Cloudflare Workers soporta dominios/subdominios
 custom sin fricción (mismo mecanismo que ya usa `panel-brisas`, y el

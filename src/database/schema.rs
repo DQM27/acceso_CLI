@@ -2021,8 +2021,8 @@ ALTER TABLE sincronizacion_estado ADD COLUMN gafetes_actualizado_hasta TEXT;
 // Control de visitas (docs/plan-control-visitas.md) -- primer corte: solo
 // esquema local, sin sincronización todavía. Patrón header-detail: `citas`
 // es la autorización con vigencia (puede agendarse para un grupo -- ver
-// `cita_visitantes`), `movimientos_visita` es el cruce real en garita
-// (equivalente a `registro_ingresos`, pero sin ningún campo de PRAIND/SWAT
+// `cita_visitantes`), `movimientos_visita` es el cruce real en el punto de
+// acceso (equivalente a `registro_ingresos`, pero sin ningún campo de PRAIND/SWAT
 // que no le pertenece a una visita).
 //
 // A propósito son TRES tablas locales, no las cuatro del documento de

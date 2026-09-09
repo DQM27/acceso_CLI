@@ -980,7 +980,7 @@ fn una_base_ya_al_dia_no_genera_ningun_respaldo_pre_migracion() {
 // MIGRACION_28 -- control de visitas (docs/plan-control-visitas.md), primer
 // corte de esquema: `citas` (autorización con vigencia) → `cita_visitantes`
 // (una fila por persona del grupo) → `movimientos_visita` (el cruce real en
-// garita). Mismas garantías que ya tiene `registro_ingresos`, verificadas acá
+// el punto de acceso). Mismas garantías que ya tiene `registro_ingresos`, verificadas acá
 // con el mismo criterio que `check_de_salida_acepta_pares_coherentes_y_rechaza_incoherentes`/
 // `esquema_actual_solo_admite_fechas_utc_normalizadas` de arriba, pero para
 // las tablas nuevas.
