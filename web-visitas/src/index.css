@@ -322,11 +322,25 @@ main:focus,
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  min-height: 80px;
+  min-height: 56px;
   flex-shrink: 0;
-  padding: 16px 32px;
+  padding: 10px 24px;
   background: var(--panel);
   border-bottom: 1px solid var(--borde);
+}
+/* Marca más chica en la barra superior del portal que en la pantalla de
+   login -- ahí es el elemento hero de la página, acá es sólo el rótulo de
+   una barra de 56px, no tiene sentido que compita en tamaño. */
+.barra-superior .marca {
+  font-size: 16px;
+}
+.barra-superior .marca img {
+  width: 32px;
+  height: 32px;
+}
+.barra-superior .marca-subtitulo {
+  font-size: 11px;
+  margin-top: 0;
 }
 .barra-cuenta {
   display: flex;
@@ -343,12 +357,13 @@ main:focus,
 .avatar {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   border-radius: var(--radio-capsula);
   background: var(--acento-suave);
   color: var(--acento);
   font-weight: 600;
+  font-size: 13px;
   flex-shrink: 0;
 }
 .identidad {
@@ -365,7 +380,7 @@ main:focus,
   text-overflow: ellipsis;
 }
 .contenido {
-  padding: 32px 40px;
+  padding: 24px 32px;
   flex: 1;
   min-height: 0;
   width: 100%;
@@ -393,7 +408,7 @@ main:focus,
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 .encabezado-pagina .antetitulo {
   margin-bottom: 8px;
@@ -406,24 +421,26 @@ main:focus,
   min-height: 40px;
   white-space: nowrap;
 }
+/* A propósito NO `flex: 1` acá -- una tarjeta que siempre se estira al
+   máximo deja un hueco enorme entre el último ítem y la paginación cuando
+   hay pocas citas (encontrado con captura real). La tarjeta mide según su
+   contenido, con techo en el espacio disponible y scroll propio si se
+   pasa (`min-height: 0` + `overflow: hidden` alcanzan para eso en un
+   padre flex-column). `.agenda-llena` es la excepción: la vista
+   Calendario SÍ necesita ocupar todo el alto siempre, un mes chico se ve
+   mal aunque tenga pocos eventos -- ver el toggle en MisCitas.tsx. */
 .agenda {
-  flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-.lista-citas {
+.agenda.agenda-llena {
   flex: 1;
+}
+.lista-citas {
   min-height: 0;
   overflow-y: auto;
-}
-/* `.cargando` es compartido con otras pantallas que NO son columnas flex
-   (ej. el spinner de "Cargando sitios…" en Nueva cita) -- acotado acá para
-   no tocar esos otros usos, sólo cuando cuelga directo de la tarjeta. */
-.tarjeta.agenda > .cargando {
-  flex: 1;
-  min-height: 0;
 }
 .agenda-calendario-cuerpo {
   flex: 1;

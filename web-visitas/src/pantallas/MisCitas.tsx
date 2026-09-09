@@ -161,7 +161,7 @@ export default function MisCitas() {
           </div>
         </Aviso>
       )}
-      <section className="tarjeta agenda">
+      <section className={`tarjeta agenda ${vista === "calendario" ? "agenda-llena" : ""}`}>
         <div className="agenda-herramientas">
           <div
             className="filtros"
