@@ -209,3 +209,10 @@ una pantalla propia. Lo que queda de `NubeViewModel` es sólo
 `sincronizar()` (`Operacion::UsarNube`, cualquier rol) — un ícono en la
 barra superior de `PantallaPrincipal`, no una pestaña, porque ya no hace
 falta que sobreviva cambios de pestaña por su cuenta (no hay pestaña).
+
+## Subsistema OCR
+
+La cámara y ML Kit tienen reglas adicionales porque combinan callbacks de
+CameraX, tareas asíncronas y efectos de Compose. Están documentadas con el
+flujo completo, invariantes y estrategia de pruebas en
+[`docs/ARQUITECTURA_OCR.md`](docs/ARQUITECTURA_OCR.md).

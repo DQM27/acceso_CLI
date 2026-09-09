@@ -2,11 +2,33 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "fix/**"]
   pull_request:
     branches: [main]
 
 jobs:
+  test-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Instalar Rust para el núcleo móvil de pruebas
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: mobile/rust-core
+
+      - name: Tests unitarios Android y compilación Kotlin
+        working-directory: mobile/android
+        run: ./gradlew testDebugUnitTest --stacktrace
+
   test:
     runs-on: windows-latest
     steps:
