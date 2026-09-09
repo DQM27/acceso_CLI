@@ -29,7 +29,7 @@ fn filtro_sin_acotar() -> FiltroHistorial {
 /// `hasta` a medianoche (que dejaría afuera todo ese día). `None` en
 /// cualquiera de los dos extremos reproduce el rango abierto de siempre
 /// (2000-01-01 → mañana), mismo criterio que antes de tener el filtro.
-fn rango_utc(
+pub fn rango_utc(
     desde: Option<NaiveDate>,
     hasta: Option<NaiveDate>,
 ) -> Result<(DateTime<Utc>, DateTime<Utc>), TiempoError> {
