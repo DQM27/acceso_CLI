@@ -37,6 +37,18 @@ class LectorDocumentosIdentidadTest {
         assertEquals(TipoDocumento.DESCONOCIDO, clasificarTipoDocumento(texto))
     }
 
+    @Test
+    fun noClasificaCualquierNumeroDeNueveDigitosComoCedula() {
+        val texto = "Cuenta de referencia 112340567"
+        assertEquals(TipoDocumento.DESCONOCIDO, clasificarTipoDocumento(texto))
+        assertNull(leerDocumentoDeTexto(texto))
+    }
+
+    @Test
+    fun fechaInexistenteNoSeConstruyeComoDocumentoValido() {
+        assertNull(FechaDocumento.crearValida(31, 2, 2030))
+    }
+
     // --- Carnet de inducción PRAIND -- dos variantes de diseño reales ---
 
     @Test

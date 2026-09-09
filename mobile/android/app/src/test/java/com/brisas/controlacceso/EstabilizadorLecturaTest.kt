@@ -34,6 +34,16 @@ class EstabilizadorLecturaTest {
     }
 
     @Test
+    fun numeroDeNueveDigitosSinSenalesNoSeAceptaComoCedula() {
+        val estabilizador = EstabilizadorLectura(framesRequeridos = 2)
+        repeat(3) {
+            val r = estabilizador.procesarFrame("Teléfono de contacto 888888888")
+            assertEquals(EstadoEscaneo.INVALIDO, r.estado)
+            assertNull(r.documento)
+        }
+    }
+
+    @Test
     fun mrzValidoConfirmaEnUnSoloFrame() {
         // Con checksum disponible no hace falta esperar repeticiones -- eso
         // es justo el punto de usar el dígito verificador (plan, sección 5).
@@ -55,6 +65,21 @@ class EstabilizadorLecturaTest {
     }
 
     @Test
+    fun mrzValidoDeTipoNoSoportadoNoSeConfirma() {
+        val td1Extranjero = """
+            C<ARG9998887774<<<<<<<<<<<<<<<
+            9001011F3001019NIC<<<<<<<<<<<8
+            PEREZ<<MARIA<JOSE<<<<<<<<<<<<<
+        """.trimIndent()
+
+        val r = EstabilizadorLectura().procesarFrame(td1Extranjero)
+
+        assertEquals(EstadoEscaneo.INVALIDO, r.estado)
+        assertNull(r.documento)
+        assertEquals("Documento no soportado", r.mensaje)
+    }
+
+    @Test
     fun sinChecksumNoConfirmaEnElPrimerFrame() {
         val estabilizador = EstabilizadorLectura()
         val r1 = estabilizador.procesarFrame(licenciaTexto)
@@ -69,6 +94,18 @@ class EstabilizadorLecturaTest {
         val r2 = estabilizador.procesarFrame(licenciaTexto)
         assertEquals(EstadoEscaneo.CONFIRMADO, r2.estado)
         assertEquals("112340567", r2.documento?.numeroDocumento)
+    }
+
+    @Test
+    fun camposOpcionalesIntermitentesNoRompenLaEstabilizacion() {
+        val estabilizador = EstabilizadorLectura()
+        estabilizador.procesarFrame(licenciaTexto)
+        val sinFecha = "Licencia de Conducir\nNº: 112340567"
+
+        val r = estabilizador.procesarFrame(sinFecha)
+
+        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
+        assertEquals("112340567", r.documento?.numeroDocumento)
     }
 
     @Test

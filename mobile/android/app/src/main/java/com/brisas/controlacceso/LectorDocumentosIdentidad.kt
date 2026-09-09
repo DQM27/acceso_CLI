@@ -108,6 +108,13 @@ data class FechaDocumento(val dia: Int, val mes: Int, val anio: Int) {
         val cumpleañosYaPaso = (hoy.mes > mes) || (hoy.mes == mes && hoy.dia >= dia)
         return hoy.anio - anio - if (cumpleañosYaPaso) 0 else 1
     }
+
+    companion object {
+        fun crearValida(dia: Int, mes: Int, anio: Int): FechaDocumento? =
+            runCatching { java.time.LocalDate.of(anio, mes, dia) }
+                .getOrNull()
+                ?.let { FechaDocumento(it.dayOfMonth, it.monthValue, it.year) }
+    }
 }
 
 private const val EDAD_MAYORIA_DE_EDAD = 18
@@ -202,7 +209,9 @@ fun clasificarTipoDocumento(texto: String): TipoDocumento {
             TipoDocumento.CARNET_IN_HOUSE
         "CONTRATISTA" in mayus && "COSTA RICA" in mayus && extraerNombreInHouseFrente(texto) != null ->
             TipoDocumento.CARNET_IN_HOUSE
-        "TRIBUNAL SUPREMO DE ELECCIONES" in mayus || extraerCedulaDeTexto(texto) != null ->
+        ("TRIBUNAL SUPREMO DE ELECCIONES" in mayus ||
+            "CÉDULA DE IDENTIDAD" in mayus || "CEDULA DE IDENTIDAD" in mayus) &&
+            extraerCedulaDeTexto(texto) != null ->
             TipoDocumento.CEDULA_NACIONAL
         else -> TipoDocumento.DESCONOCIDO
     }
@@ -288,7 +297,7 @@ private fun extraerPraind(texto: String): DocumentoDetectado? {
     val nombre = REGEX_PRAIND_NOMBRE.find(texto)?.groupValues?.get(1)?.trim()
     val vencimiento = REGEX_PRAIND_FECHA_VENCIMIENTO.find(texto)?.let { match ->
         val (dia, mes, anio) = match.destructured
-        FechaDocumento(dia.toInt(), mes.toInt(), anio.toInt())
+        FechaDocumento.crearValida(dia.toInt(), mes.toInt(), anio.toInt())
     }
 
     return DocumentoDetectado(
@@ -374,13 +383,17 @@ private fun extraerNombreInHouseFrente(texto: String): String? {
 // evita que un carácter especial de regex en la etiqueta (ninguna de las
 // actuales lo tiene, pero nada garantiza que una futura no lo tenga) rompa
 // el patrón o cambie su significado en vez de buscarse literal.
-private val regexesPorEtiquetaFecha = mutableMapOf<String, Regex>()
+private val regexesPorEtiquetaFecha = listOf("Vence", "Fecha Vencimiento", "Vencimiento")
+    .associateWith { etiqueta ->
+        Regex(
+            """${Regex.escape(etiqueta)}[:.]?\s*(\d{1,2})[-/\s](\d{1,2})[-/\s](\d{4})""",
+            RegexOption.IGNORE_CASE,
+        )
+    }
 
 private fun extraerFecha(texto: String, etiqueta: String): FechaDocumento? {
-    val regex = regexesPorEtiquetaFecha.getOrPut(etiqueta) {
-        Regex("""${Regex.escape(etiqueta)}[:.]?\s*(\d{1,2})[-/\s](\d{1,2})[-/\s](\d{4})""", RegexOption.IGNORE_CASE)
-    }
+    val regex = regexesPorEtiquetaFecha[etiqueta] ?: return null
     val match = regex.find(texto) ?: return null
     val (dia, mes, anio) = match.destructured
-    return FechaDocumento(dia.toInt(), mes.toInt(), anio.toInt())
+    return FechaDocumento.crearValida(dia.toInt(), mes.toInt(), anio.toInt())
 }

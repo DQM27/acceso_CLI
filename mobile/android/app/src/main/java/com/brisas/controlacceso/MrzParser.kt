@@ -8,7 +8,7 @@ enum class FuenteDatos { OCR_FRENTE, MRZ }
 /// tal cual, letras A-Z = 10-35.
 private fun valorCaracterMrz(c: Char): Int = when {
     c == '<' -> 0
-    c.isDigit() -> c - '0'
+    c in '0'..'9' -> c - '0'
     c in 'A'..'Z' -> c - 'A' + 10
     else -> throw IllegalArgumentException("Carácter fuera de alfabeto MRZ: '$c'")
 }
@@ -24,7 +24,7 @@ fun digitoVerificadorMrz(datos: String): Int {
 }
 
 private fun checksumValido(datos: String, esperado: Char): Boolean =
-    esperado.isDigit() && digitoVerificadorMrz(datos) == esperado - '0'
+    esperado in '0'..'9' && digitoVerificadorMrz(datos) == esperado - '0'
 
 data class ResultadoMrz(
     val formato: String, // "TD1" | "TD3"
@@ -52,26 +52,24 @@ data class ResultadoMrz(
     val numeroDocumentoExtendidoSinSoporte: Boolean = false,
 )
 
-// El estándar ICAO no fija el siglo de una fecha de 2 dígitos -- cada
-// aplicación decide el corte. Para nacimiento asumimos que nadie escaneado
-// nació en el futuro respecto al año corto actual; para vencimiento,
-// siempre 20XX (ningún documento de identidad vigente vence en 19XX).
-// Ajustar `ANIO_CORTO_ACTUAL` si esta heurística empieza a fallar por
-// desactualización.
-private const val ANIO_CORTO_ACTUAL = 26
-
-private fun anioCompleto(yy: Int, esNacimiento: Boolean): Int {
+// El estándar ICAO no fija el siglo. La decisión se calcula contra una fecha
+// inyectable, nunca contra una constante anual que envejezca dentro del APK.
+private fun anioCompleto(yy: Int, esNacimiento: Boolean, hoy: java.time.LocalDate): Int {
     if (!esNacimiento) return 2000 + yy
-    return if (yy > ANIO_CORTO_ACTUAL) 1900 + yy else 2000 + yy
+    return if (2000 + yy <= hoy.year) 2000 + yy else 1900 + yy
 }
 
-private fun parsearFechaMrz(yymmdd: String, esNacimiento: Boolean): FechaDocumento? {
-    if (yymmdd.length != 6 || !yymmdd.all { it.isDigit() }) return null
+private fun parsearFechaMrz(
+    yymmdd: String,
+    esNacimiento: Boolean,
+    hoy: java.time.LocalDate,
+): FechaDocumento? {
+    if (yymmdd.length != 6 || !yymmdd.all { it in '0'..'9' }) return null
     val yy = yymmdd.substring(0, 2).toInt()
     val mm = yymmdd.substring(2, 4).toInt()
     val dd = yymmdd.substring(4, 6).toInt()
-    if (mm !in 1..12 || dd !in 1..31) return null
-    return FechaDocumento(dd, mm, anioCompleto(yy, esNacimiento))
+    val anio = anioCompleto(yy, esNacimiento, hoy)
+    return FechaDocumento.crearValida(dd, mm, anio)
 }
 
 // Compilado una sola vez -- ver nota equivalente en LectorDocumentosIdentidad.kt,
@@ -90,15 +88,19 @@ private fun separarNombres(campoNombres: String): Pair<String, String> {
 /// longitud, nunca dentro de otra línea del documento (esas simplemente no
 /// van a calzar con el alfabeto o la longitud esperada y quedan descartadas).
 private fun buscarLineasMrz(texto: String, longitud: Int, cantidad: Int): List<String>? {
-    val candidatas = texto.lines()
+    val normalizadas = texto.lines()
         .map { it.uppercase().replace(" ", "") }
-        .filter { it.length == longitud && it.all { c -> c in 'A'..'Z' || c.isDigit() || c == '<' } }
-    if (candidatas.size < cantidad) return null
-    return candidatas.take(cantidad)
+    fun esLineaMrz(linea: String): Boolean =
+        linea.length == longitud && linea.all { c -> c in 'A'..'Z' || c in '0'..'9' || c == '<' }
+
+    // Deben ser consecutivas. Filtrar primero y tomar las primeras podía
+    // juntar líneas de regiones distintas del documento y fabricar un MRZ.
+    return normalizadas.windowed(cantidad)
+        .firstOrNull { bloque -> bloque.all(::esLineaMrz) }
 }
 
 /// TD1 (3 líneas x 30): cédula nacional 2025+, cédula de residencia (DIMEX).
-fun parsearMrzTd1(texto: String): ResultadoMrz? {
+fun parsearMrzTd1(texto: String, hoy: java.time.LocalDate = java.time.LocalDate.now()): ResultadoMrz? {
     val lineas = buscarLineasMrz(texto, longitud = 30, cantidad = 3) ?: return null
     val (l1, l2, l3) = Triple(lineas[0], lineas[1], lineas[2])
 
@@ -198,9 +200,9 @@ fun parsearMrzTd1(texto: String): ResultadoMrz? {
         apellidos = apellidos,
         nombres = nombres,
         nacionalidad = nacionalidad,
-        fechaNacimiento = parsearFechaMrz(nacimientoStr, esNacimiento = true),
+        fechaNacimiento = parsearFechaMrz(nacimientoStr, esNacimiento = true, hoy = hoy),
         sexo = sexo,
-        fechaVencimiento = parsearFechaMrz(vencimientoStr, esNacimiento = false),
+        fechaVencimiento = parsearFechaMrz(vencimientoStr, esNacimiento = false, hoy = hoy),
         checksumsValidos = checksumsValidos,
     )
 }
@@ -208,7 +210,7 @@ fun parsearMrzTd1(texto: String): ResultadoMrz? {
 /// TD3 (2 líneas x 44): pasaporte, formato futuro/referencia (sección 0.4
 /// del plan). Los números de pasaporte rara vez exceden 9 caracteres, así
 /// que el problema de número extendido de TD1 no aplica acá.
-fun parsearMrzTd3(texto: String): ResultadoMrz? {
+fun parsearMrzTd3(texto: String, hoy: java.time.LocalDate = java.time.LocalDate.now()): ResultadoMrz? {
     val lineas = buscarLineasMrz(texto, longitud = 44, cantidad = 2) ?: return null
     val (l1, l2) = lineas[0] to lineas[1]
 
@@ -245,9 +247,9 @@ fun parsearMrzTd3(texto: String): ResultadoMrz? {
         apellidos = apellidos,
         nombres = nombres,
         nacionalidad = nacionalidad,
-        fechaNacimiento = parsearFechaMrz(nacimientoStr, esNacimiento = true),
+        fechaNacimiento = parsearFechaMrz(nacimientoStr, esNacimiento = true, hoy = hoy),
         sexo = sexo,
-        fechaVencimiento = parsearFechaMrz(vencimientoStr, esNacimiento = false),
+        fechaVencimiento = parsearFechaMrz(vencimientoStr, esNacimiento = false, hoy = hoy),
         checksumsValidos = checksumsValidos,
     )
 }
@@ -256,5 +258,5 @@ fun parsearMrzTd3(texto: String): ResultadoMrz? {
 /// Devuelve `null` si no hay líneas MRZ reconocibles todavía en el texto --
 /// la pantalla de escaneo debe seguir esperando más frames, no tratarlo
 /// como error (ver sección 5 del plan, estabilidad de lectura).
-fun leerMrzDeTexto(texto: String): ResultadoMrz? =
-    parsearMrzTd1(texto) ?: parsearMrzTd3(texto)
+fun leerMrzDeTexto(texto: String, hoy: java.time.LocalDate = java.time.LocalDate.now()): ResultadoMrz? =
+    parsearMrzTd1(texto, hoy) ?: parsearMrzTd3(texto, hoy)

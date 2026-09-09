@@ -54,24 +54,43 @@ class EstabilizadorLectura(
     // del sistema -- ver `fechaDeHoy()`.
     private val obtenerFechaHoy: () -> FechaDocumento = ::fechaDeHoy,
 ) {
-    private val candidatosRecientes = ArrayDeque<DocumentoDetectado>()
+    // La ventana guarda una clave estable, no el objeto entero. Nombre,
+    // fecha u otros campos opcionales pueden aparecer y desaparecer entre
+    // frames aunque el número reconocido sea el mismo.
+    private val candidatosRecientes = ArrayDeque<String>()
+
+    init {
+        require(framesRequeridos > 0) { "framesRequeridos debe ser mayor que cero" }
+        require(ventana >= framesRequeridos) { "ventana debe cubrir los frames requeridos" }
+    }
 
     fun procesarFrame(texto: String): ResultadoEstabilizacion {
         if (texto.isBlank() || texto.trim().length < 10) {
-            reiniciar()
+            registrarFrameSinCandidato()
             return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = "Acerque el documento")
         }
 
-        val mrz = if (modo == ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA) leerMrzDeTexto(texto) else null
+        val hoy = obtenerFechaHoy()
+        val hoyLocal = java.time.LocalDate.of(hoy.anio, hoy.mes, hoy.dia)
+        val mrz = if (modo == ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA) leerMrzDeTexto(texto, hoyLocal) else null
         if (mrz != null) {
             reiniciar() // el MRZ no depende del debounce por candidato repetido
             return when {
                 mrz.numeroDocumentoExtendidoSinSoporte ->
                     ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no reconocido")
                 mrz.checksumsValidos -> {
-                    val documento = mrz.aDocumentoDetectado().reclasificarPorEdad(obtenerFechaHoy())
-                    val (mensaje, vencido) = mensajeDeConfirmacion(documento)
-                    ResultadoEstabilizacion(EstadoEscaneo.CONFIRMADO, documento = documento, mensaje = mensaje, vencido = vencido)
+                    val documento = mrz.aDocumentoDetectado().reclasificarPorEdad(hoy)
+                    if (!documento.tipo.esValidoParaModo(modo)) {
+                        ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no soportado")
+                    } else {
+                        val (mensaje, vencido) = mensajeDeConfirmacion(documento, hoy)
+                        ResultadoEstabilizacion(
+                            EstadoEscaneo.CONFIRMADO,
+                            documento = documento,
+                            mensaje = mensaje,
+                            vencido = vencido,
+                        )
+                    }
                 }
                 else ->
                     ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no reconocido")
@@ -80,11 +99,11 @@ class EstabilizadorLectura(
 
         val tipo = clasificarTipoDocumento(texto)
         if (tipo == TipoDocumento.DESCONOCIDO) {
-            reiniciar()
+            registrarFrameSinCandidato()
             return ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = mensajeNoReconocido())
         }
         if (!tipo.esValidoParaModo(modo)) {
-            reiniciar()
+            registrarFrameSinCandidato()
             return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = mensajeApuntar())
         }
 
@@ -94,15 +113,16 @@ class EstabilizadorLectura(
             // extraer el número -- lectura parcial (glare, ángulo, foco), no
             // un documento inválido. Ya se sabe qué es: se lo decimos a
             // quien opera en vez de un "mantenga firme" genérico.
+            registrarFrameSinCandidato()
             return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = "${tipo.nombreLegible()} detectado — mantenga firme")
         }
 
-        candidatosRecientes.addLast(documento)
-        while (candidatosRecientes.size > ventana) candidatosRecientes.removeFirst()
-        val repeticiones = candidatosRecientes.count { it == documento }
+        val clave = documento.claveEstabilizacion()
+        registrarClave(clave)
+        val repeticiones = candidatosRecientes.count { it == clave }
 
         return if (repeticiones >= framesRequeridos) {
-            val (mensaje, vencido) = mensajeDeConfirmacion(documento)
+            val (mensaje, vencido) = mensajeDeConfirmacion(documento, hoy)
             ResultadoEstabilizacion(EstadoEscaneo.CONFIRMADO, documento = documento, mensaje = mensaje, vencido = vencido)
         } else {
             ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = "${tipo.nombreLegible()} detectado — mantenga firme")
@@ -113,16 +133,26 @@ class EstabilizadorLectura(
     /// documento vencido igual se identificó correctamente (por eso sigue
     /// siendo CONFIRMADO, no INVALIDO), pero quien opera necesita saberlo de
     /// inmediato sin tener que leer la fecha en la pantalla por su cuenta.
-    private fun mensajeDeConfirmacion(documento: DocumentoDetectado): Pair<String, Boolean> {
+    private fun mensajeDeConfirmacion(
+        documento: DocumentoDetectado,
+        hoy: FechaDocumento,
+    ): Pair<String, Boolean> {
         val nombre = documento.tipo.nombreLegible()
         val vencimiento = documento.vencimiento
-        val vencido = vencimiento != null && vencimiento.estaVencida(obtenerFechaHoy())
+        val vencido = vencimiento != null && vencimiento.estaVencida(hoy)
         val mensaje = if (vencido) "$nombre confirmado — DOCUMENTO VENCIDO" else "$nombre confirmado"
         return mensaje to vencido
     }
 
     fun reiniciar() {
         candidatosRecientes.clear()
+    }
+
+    private fun registrarFrameSinCandidato() = registrarClave(CLAVE_SIN_CANDIDATO)
+
+    private fun registrarClave(clave: String) {
+        candidatosRecientes.addLast(clave)
+        while (candidatosRecientes.size > ventana) candidatosRecientes.removeFirst()
     }
 
     private fun mensajeApuntar(): String =
@@ -137,6 +167,11 @@ class EstabilizadorLectura(
             ModoEscaneoDocumento.GAFETE_CONTRATISTA -> "Gafete no reconocido"
         }
 }
+
+private const val CLAVE_SIN_CANDIDATO = "\u0000"
+
+private fun DocumentoDetectado.claveEstabilizacion(): String =
+    "${tipo.name}:${(textoBusqueda ?: numeroDocumento).trim().uppercase()}"
 
 private fun TipoDocumento.esValidoParaModo(modo: ModoEscaneoDocumento): Boolean =
     when (modo) {

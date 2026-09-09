@@ -4,8 +4,23 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.LocalDate
 
 class MrzParserTest {
+
+    private fun td1ConNacimiento(fechaNacimiento: String): String {
+        val l1 = "IDCRI1011101119<<<<<<<<<<<<<<<"
+        val checkNacimiento = digitoVerificadorMrz(fechaNacimiento)
+        val vencimiento = "300101"
+        val checkVencimiento = digitoVerificadorMrz(vencimiento)
+        val opcional2 = "<<<<<<<<<<<"
+        val compuesto = l1.substring(5) + fechaNacimiento + checkNacimiento +
+            vencimiento + checkVencimiento + opcional2
+        val checkCompuesto = digitoVerificadorMrz(compuesto)
+        val l2 = "$fechaNacimiento${checkNacimiento}F$vencimiento$checkVencimiento" +
+            "CRI$opcional2$checkCompuesto"
+        return listOf(l1, l2, "PEREZ<<MARIA<JOSE<<<<<<<<<<<<<").joinToString("\n")
+    }
 
     // Checksum verificado con script Python (algoritmo ICAO 9303 real) --
     // ver docs/fixtures-ocr-sinteticos.md sección 4. Datos inventados.
@@ -58,6 +73,35 @@ class MrzParserTest {
     @Test
     fun devuelveNullSiNoHayTresLineasMrz() {
         assertNull(parsearMrzTd1("esto no es un MRZ\nsolo texto normal del frente"))
+    }
+
+    @Test
+    fun noCombinaLineasMrzQueNoSonConsecutivas() {
+        val separado = td1Valido.lines().let { lineas ->
+            listOf(lineas[0], "TEXTO INTERMEDIO", lineas[1], lineas[2]).joinToString("\n")
+        }
+        assertNull(parsearMrzTd1(separado))
+    }
+
+    @Test
+    fun sigloDeNacimientoDependeDeLaFechaRealNoDeUnaConstante() {
+        val mrz = td1ConNacimiento("270101")
+
+        assertEquals(
+            FechaDocumento(1, 1, 1927),
+            parsearMrzTd1(mrz, LocalDate.of(2026, 12, 31))?.fechaNacimiento,
+        )
+        assertEquals(
+            FechaDocumento(1, 1, 2027),
+            parsearMrzTd1(mrz, LocalDate.of(2027, 1, 1))?.fechaNacimiento,
+        )
+    }
+
+    @Test
+    fun fechaMrzInexistenteNoSeExponeComoFechaValida() {
+        val resultado = parsearMrzTd1(td1ConNacimiento("900231"))
+        assertTrue(resultado?.checksumsValidos == true)
+        assertNull(resultado?.fechaNacimiento)
     }
 
     @Test
