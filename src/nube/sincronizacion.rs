@@ -84,6 +84,12 @@ pub fn drenar_cola(
                 enviar_cierre_ingreso(&cliente, connection, contexto, &fila.entidad_uuid)
             }
             ("ingreso", _) => enviar_ingreso(&cliente, connection, contexto, &fila.entidad_uuid),
+            ("movimiento_visita", "cerrar") => {
+                enviar_cierre_movimiento_visita(&cliente, connection, contexto, &fila.entidad_uuid)
+            }
+            ("movimiento_visita", _) => {
+                enviar_movimiento_visita(&cliente, connection, contexto, &fila.entidad_uuid)
+            }
             _ => Ok(()),
         };
 
@@ -665,6 +671,133 @@ fn enviar_cierre_ingreso(
     exigir_2xx(respuesta)
 }
 
+/// Movimientos de visita (cola, alta): mismo armazón que `enviar_ingreso`,
+/// pero sin resultado de acceso/PRAIND que mandar. `cita_visitante_id`
+/// local es un `INTEGER` (fila de `cita_visitantes`); lo que viaja al
+/// servidor es su `uuid` (el `id` real allá) -- misma resolución que
+/// `enviar_ingreso` hace con `contratista_id`.
+#[allow(clippy::type_complexity)]
+fn enviar_movimiento_visita(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let (
+        cita_visitante_id_local,
+        gafete_numero,
+        fecha_hora_entrada,
+        usuario_entrada_nombre,
+        visitante_cedula,
+        visitante_nombre,
+        empresa,
+        anfitrion_nombre,
+        motivo,
+    ): (
+        i64,
+        Option<i64>,
+        String,
+        String,
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    ) = connection.query_row(
+        "
+        SELECT cita_visitante_id, gafete_numero, fecha_hora_entrada, usuario_entrada_nombre,
+               visitante_cedula, visitante_nombre, empresa, anfitrion_nombre, motivo
+        FROM movimientos_visita
+        WHERE uuid = ?1
+        ",
+        params![uuid],
+        |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+                row.get(7)?,
+                row.get(8)?,
+            ))
+        },
+    )?;
+    let cita_visitante_uuid: String = connection.query_row(
+        "SELECT uuid FROM cita_visitantes WHERE id = ?1",
+        params![cita_visitante_id_local],
+        |row| row.get(0),
+    )?;
+
+    let cuerpo = json!({
+        "id": uuid,
+        "sitio_id": contexto.sitio_id,
+        "dispositivo_entrada_id": contexto.dispositivo_id,
+        "cita_visitante_id": cita_visitante_uuid,
+        "visitante_cedula": visitante_cedula,
+        "visitante_nombre": visitante_nombre,
+        "empresa": empresa,
+        "anfitrion_nombre": anfitrion_nombre,
+        "motivo": motivo,
+        "gafete_numero": gafete_numero,
+        "hora_entrada": fecha_hora_entrada,
+        "usuario_entrada_nombre": usuario_entrada_nombre,
+    });
+
+    let respuesta = cliente
+        .post(format!("{}/rest/v1/movimientos_visita", contexto.base_url))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Movimientos de visita (cola), cierre: mismo criterio de "primero en
+/// llegar gana" que `enviar_cierre_ingreso` -- el filtro `hora_salida=is.null`
+/// hace que un cierre que llega tarde (el otro dispositivo del sitio ya lo
+/// cerró) no afecte ninguna fila en vez de fallar.
+fn enviar_cierre_movimiento_visita(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let (fecha_hora_salida, usuario_salida_nombre): (Option<String>, Option<String>) = connection
+        .query_row(
+        "SELECT fecha_hora_salida, usuario_salida_nombre FROM movimientos_visita WHERE uuid = ?1",
+        params![uuid],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    let cuerpo = json!({
+        "hora_salida": fecha_hora_salida,
+        "dispositivo_salida_id": contexto.dispositivo_id,
+        "usuario_salida_nombre": usuario_salida_nombre,
+    });
+
+    let url = format!(
+        "{}/rest/v1/movimientos_visita?id=eq.{uuid}&hora_salida=is.null",
+        contexto.base_url
+    );
+
+    let respuesta = cliente
+        .patch(url)
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
 /// Fila cacheada localmente de un ingreso todavía abierto, creado por el
 /// otro dispositivo de este mismo sitio -- ver `ingresos_remotos` en
 /// `database::schema` sobre por qué esto no es una fila de
@@ -1159,6 +1292,156 @@ fn marca_historial_para_consulta(
     let marca = marca_anterior.and_then(|marca| crate::tiempo::parsear_utc(marca).ok())?;
     let base = if marca > ahora { ahora } else { marca };
     Some(base - chrono::Duration::days(DIAS_TRASLAPE_HISTORIAL))
+}
+
+#[derive(serde::Deserialize)]
+struct FilaHistorialVisitaRemota {
+    id: String,
+    visitante_cedula: String,
+    visitante_nombre: String,
+    empresa: Option<String>,
+    anfitrion_nombre: Option<String>,
+    motivo: Option<String>,
+    gafete_numero: Option<i64>,
+    hora_entrada: String,
+    hora_salida: Option<String>,
+    usuario_entrada_nombre: Option<String>,
+    usuario_salida_nombre: Option<String>,
+    dispositivo_entrada_id: String,
+    dispositivo_salida_id: Option<String>,
+    updated_at: String,
+}
+
+/// Análogo a `FilaHistorialResultado` (contratistas) -- misma resiliencia:
+/// una fila con fecha ilegible se omite sin abortar el resto del lote.
+enum FilaHistorialVisitaResultado {
+    Omitida,
+    Aplicada {
+        actualizado_en: Option<chrono::DateTime<chrono::Utc>>,
+    },
+}
+
+/// Análoga a `guardar_fila_historial`, separada por el mismo motivo (no
+/// pasar el límite de líneas del lint `too_many_lines` de
+/// `recibir_historial_visitas_del_sitio`).
+fn guardar_fila_historial_visita(
+    transaction: &rusqlite::Transaction<'_>,
+    contexto: &ContextoSincronizacion<'_>,
+    fila: &FilaHistorialVisitaRemota,
+    ahora: &str,
+) -> Result<FilaHistorialVisitaResultado, SincronizacionError> {
+    let Ok(hora_entrada) =
+        crate::tiempo::parsear_utc(&fila.hora_entrada).map(crate::tiempo::serializar_utc)
+    else {
+        return Ok(FilaHistorialVisitaResultado::Omitida);
+    };
+    let hora_salida = match fila
+        .hora_salida
+        .as_deref()
+        .map(crate::tiempo::parsear_utc)
+        .transpose()
+    {
+        Ok(valor) => valor.map(crate::tiempo::serializar_utc),
+        Err(_) => return Ok(FilaHistorialVisitaResultado::Omitida),
+    };
+
+    transaction.execute(
+        "
+        INSERT INTO historial_visitas_sitio (
+            uuid, sitio_id, visitante_cedula, visitante_nombre, empresa,
+            anfitrion_nombre, motivo, gafete_numero, hora_entrada, hora_salida,
+            usuario_entrada_nombre, usuario_salida_nombre, dispositivo_entrada_id,
+            dispositivo_salida_id, actualizado_en
+        ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)
+        ON CONFLICT(uuid) DO UPDATE SET
+            hora_salida = excluded.hora_salida,
+            usuario_salida_nombre = excluded.usuario_salida_nombre,
+            dispositivo_salida_id = excluded.dispositivo_salida_id,
+            actualizado_en = excluded.actualizado_en
+        ",
+        params![
+            fila.id,
+            contexto.sitio_id,
+            fila.visitante_cedula,
+            fila.visitante_nombre,
+            fila.empresa,
+            fila.anfitrion_nombre,
+            fila.motivo,
+            fila.gafete_numero,
+            hora_entrada,
+            hora_salida,
+            fila.usuario_entrada_nombre,
+            fila.usuario_salida_nombre,
+            fila.dispositivo_entrada_id,
+            fila.dispositivo_salida_id,
+            ahora,
+        ],
+    )?;
+
+    Ok(FilaHistorialVisitaResultado::Aplicada {
+        actualizado_en: crate::tiempo::parsear_utc(&fila.updated_at).ok(),
+    })
+}
+
+/// Trae a `historial_visitas_sitio` todo movimiento de visita (abierto o
+/// cerrado) del sitio, de cualquier dispositivo -- mismo mecanismo
+/// incremental que `recibir_historial_del_sitio` (marca de agua propia,
+/// `historial_visitas_actualizado_hasta`, mismo traslape de
+/// `DIAS_TRASLAPE_HISTORIAL` días).
+pub fn recibir_historial_visitas_del_sitio(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<u32, SincronizacionError> {
+    let cliente = cliente_http();
+
+    let marca_anterior: Option<String> = connection.query_row(
+        "SELECT historial_visitas_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let ahora_remoto_seguro = chrono::Utc::now();
+    let marca_consulta =
+        marca_historial_para_consulta(marca_anterior.as_deref(), ahora_remoto_seguro);
+    let filtro_incremental = marca_consulta
+        .as_ref()
+        .map(|marca| format!("&updated_at=gt.{}", crate::tiempo::serializar_utc(*marca)))
+        .unwrap_or_default();
+
+    let url = format!(
+        "{}/rest/v1/movimientos_visita?sitio_id=eq.{}{filtro_incremental}\
+         &select=id,visitante_cedula,visitante_nombre,empresa,anfitrion_nombre,motivo,\
+         gafete_numero,hora_entrada,hora_salida,usuario_entrada_nombre,usuario_salida_nombre,\
+         dispositivo_entrada_id,dispositivo_salida_id,updated_at",
+        contexto.base_url, contexto.sitio_id,
+    );
+    let filas: Vec<FilaHistorialVisitaRemota> = obtener_json_paginado(&cliente, contexto, &url)?;
+
+    let transaction = connection.unchecked_transaction()?;
+    let mut recibidos = 0_u32;
+    let ahora = crate::tiempo::serializar_utc(chrono::Utc::now());
+    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_consulta;
+    for fila in &filas {
+        let FilaHistorialVisitaResultado::Aplicada { actualizado_en } =
+            guardar_fila_historial_visita(&transaction, contexto, fila, &ahora)?
+        else {
+            continue;
+        };
+        recibidos += 1;
+        if let Some(actualizado_en) = actualizado_en
+            && marca_mas_nueva.is_none_or(|marca| actualizado_en > marca)
+        {
+            marca_mas_nueva = Some(actualizado_en);
+        }
+    }
+
+    if let Some(marca) = marca_mas_nueva {
+        transaction.execute(
+            "UPDATE sincronizacion_estado SET historial_visitas_actualizado_hasta = ?1 WHERE id = 1",
+            params![crate::tiempo::serializar_utc(marca)],
+        )?;
+    }
+    transaction.commit()?;
+    Ok(recibidos)
 }
 
 /// Nombre del anfitrión, embebido vía `PostgREST`
@@ -2204,6 +2487,146 @@ mod tests {
         assert_eq!(contar_fallos_permanentes(&connection).unwrap(), 1);
     }
 
+    /// Cita + visitante + movimiento de visita completo (con snapshot),
+    /// listo para encolar -- devuelve el `uuid` del movimiento.
+    fn conexion_con_movimiento_de_visita(fecha_hora_salida: Option<&str>) -> (Connection, String) {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo)
+                 VALUES ('1', 'Guardia', 'h', 'OPERADOR', 1)",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO citas (uuid, fecha_desde, fecha_hasta, anfitrion_nombre,
+                    anfitrion_correo, estado, creado_en)
+                 VALUES ('uuid-cita', '2026-01-01', '2026-01-02', 'Anfitrión',
+                    'anfitrion@ejemplo.com', 'VIGENTE', '2026-01-01T00:00:00Z')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cita_visitantes (uuid, cita_id, cedula, nombre)
+                 VALUES ('uuid-visitante', 1, '1-2345', 'Persona Visitante')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO movimientos_visita (
+                    uuid, cita_visitante_id, gafete_numero, fecha_hora_entrada,
+                    fecha_hora_salida, usuario_entrada_id, usuario_entrada_nombre,
+                    visitante_cedula, visitante_nombre, empresa, anfitrion_nombre, motivo
+                ) VALUES (
+                    'uuid-movimiento', 1, 12, '2026-01-01T08:00:00Z',
+                    ?1, 1, 'Guardia',
+                    '1-2345', 'Persona Visitante', 'Brisas', 'Anfitrión', 'Auditoría'
+                )",
+                params![fecha_hora_salida],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, creado_en, actualizado_en
+                ) VALUES (
+                    'movimiento_visita', 'uuid-movimiento', ?1,
+                    '2026-01-01T08:00:00Z', '2026-01-01T08:00:00Z'
+                )",
+                params![if fecha_hora_salida.is_some() {
+                    "cerrar"
+                } else {
+                    "crear"
+                }],
+            )
+            .unwrap();
+        (connection, "uuid-movimiento".to_string())
+    }
+
+    #[test]
+    fn envia_la_apertura_de_un_movimiento_de_visita() {
+        let (connection, _) = conexion_con_movimiento_de_visita(None);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.starts_with("POST /rest/v1/movimientos_visita "));
+            let cuerpo = "[]";
+            write!(
+                socket,
+                "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn envia_el_cierre_de_un_movimiento_de_visita() {
+        let (connection, _) = conexion_con_movimiento_de_visita(Some("2026-01-01T09:00:00Z"));
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.starts_with(
+                "PATCH /rest/v1/movimientos_visita?id=eq.uuid-movimiento&hora_salida=is.null "
+            ));
+            write!(
+                socket,
+                "HTTP/1.1 204 No Content\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
+            )
+            .unwrap();
+        });
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        servidor.join().unwrap();
+    }
+
     #[test]
     fn envia_la_apertura_de_un_ingreso() {
         let (connection, contratista_uuid) = conexion_con_contratista();
@@ -2556,6 +2979,112 @@ mod tests {
         });
 
         recibir_citas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn recibe_el_historial_de_visitas_del_sitio_y_lo_guarda_local() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"mov-visita-1\",\"visitante_cedula\":\"1-1111\",\
+             \"visitante_nombre\":\"Visitante Remoto\",\"empresa\":\"Brisas\",\
+             \"anfitrion_nombre\":\"Anfitrión\",\"motivo\":\"Auditoría\",\
+             \"gafete_numero\":9,\"hora_entrada\":\"2026-01-01T08:00:00Z\",\
+             \"hora_salida\":null,\"usuario_entrada_nombre\":\"Guardia\",\
+             \"usuario_salida_nombre\":null,\"dispositivo_entrada_id\":\"otro-dispositivo\",\
+             \"dispositivo_salida_id\":null,\"updated_at\":\"2026-01-01T08:00:05Z\"}]",
+        );
+
+        let recibidos =
+            recibir_historial_visitas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(recibidos, 1);
+        let (cedula, nombre, empresa, anfitrion): (String, String, Option<String>, Option<String>) =
+            connection
+                .query_row(
+                    "SELECT visitante_cedula, visitante_nombre, empresa, anfitrion_nombre
+                 FROM historial_visitas_sitio WHERE uuid = 'mov-visita-1'",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                )
+                .unwrap();
+        assert_eq!(cedula, "1-1111");
+        assert_eq!(nombre, "Visitante Remoto");
+        assert_eq!(empresa.as_deref(), Some("Brisas"));
+        assert_eq!(anfitrion.as_deref(), Some("Anfitrión"));
+    }
+
+    #[test]
+    fn una_fila_de_historial_de_visitas_con_fecha_ilegible_se_omite_sin_abortar_las_demas() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"mov-mala\",\"visitante_cedula\":\"1-1111\",\"visitante_nombre\":\"X\",\
+             \"empresa\":null,\"anfitrion_nombre\":null,\"motivo\":null,\"gafete_numero\":null,\
+             \"hora_entrada\":\"no-es-una-fecha\",\"hora_salida\":null,\
+             \"usuario_entrada_nombre\":null,\"usuario_salida_nombre\":null,\
+             \"dispositivo_entrada_id\":\"otro-dispositivo\",\"dispositivo_salida_id\":null,\
+             \"updated_at\":\"2026-01-01T08:00:00Z\"},\
+             {\"id\":\"mov-buena\",\"visitante_cedula\":\"1-2222\",\"visitante_nombre\":\"Y\",\
+             \"empresa\":null,\"anfitrion_nombre\":null,\"motivo\":null,\"gafete_numero\":null,\
+             \"hora_entrada\":\"2026-01-01T08:00:00Z\",\"hora_salida\":null,\
+             \"usuario_entrada_nombre\":null,\"usuario_salida_nombre\":null,\
+             \"dispositivo_entrada_id\":\"otro-dispositivo\",\"dispositivo_salida_id\":null,\
+             \"updated_at\":\"2026-01-01T08:00:05Z\"}]",
+        );
+
+        let recibidos =
+            recibir_historial_visitas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(recibidos, 1, "la fila con hora_entrada ilegible no cuenta");
+        let total: i64 = connection
+            .query_row("SELECT COUNT(*) FROM historial_visitas_sitio", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(total, 1, "solo se guardó la fila válida");
+    }
+
+    #[test]
+    fn segunda_sincronizacion_de_historial_de_visitas_pide_solo_lo_actualizado_desde_la_marca_previa()
+     {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "UPDATE sincronizacion_estado SET historial_visitas_actualizado_hasta = '2026-09-09T08:00:00Z' WHERE id = 1",
+                [],
+            )
+            .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.contains("/movimientos_visita?sitio_id=eq.sitio-1"));
+            let cuerpo = "[]";
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        recibir_historial_visitas_del_sitio(&connection, &contexto(&base_url)).unwrap();
         servidor.join().unwrap();
     }
 
