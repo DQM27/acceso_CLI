@@ -115,10 +115,12 @@ impl MovimientoVisitaRepository for SqliteMovimientoVisitaRepository<'_> {
             "
             INSERT INTO movimientos_visita (
                 cita_visitante_id, gafete_numero, fecha_hora_entrada,
-                usuario_entrada_id, usuario_entrada_nombre, uuid
+                usuario_entrada_id, usuario_entrada_nombre, uuid,
+                visitante_cedula, visitante_nombre, empresa, anfitrion_nombre, motivo
             )
             SELECT :cita_visitante_id, :gafete_numero, :fecha_hora_entrada,
-                   :usuario_entrada_id, u.nombre, :uuid
+                   :usuario_entrada_id, u.nombre, :uuid,
+                   :visitante_cedula, :visitante_nombre, :empresa, :anfitrion_nombre, :motivo
             FROM usuarios AS u
             WHERE u.id = :usuario_entrada_id
             ",
@@ -128,6 +130,11 @@ impl MovimientoVisitaRepository for SqliteMovimientoVisitaRepository<'_> {
                 ":fecha_hora_entrada": fecha_hora_entrada,
                 ":usuario_entrada_id": movimiento.usuario_entrada_id,
                 ":uuid": uuid,
+                ":visitante_cedula": movimiento.visitante_cedula,
+                ":visitante_nombre": movimiento.visitante_nombre,
+                ":empresa": movimiento.empresa,
+                ":anfitrion_nombre": movimiento.anfitrion_nombre,
+                ":motivo": movimiento.motivo,
             },
         )?;
 
@@ -337,6 +344,11 @@ mod tests {
             gafete_numero,
             fecha_hora_entrada: Utc::now(),
             usuario_entrada_id: 1,
+            visitante_cedula: "1-2345".to_string(),
+            visitante_nombre: "Visitante".to_string(),
+            empresa: None,
+            anfitrion_nombre: "Anfitrión".to_string(),
+            motivo: None,
         }
     }
 
@@ -351,6 +363,49 @@ mod tests {
         assert_eq!(movimiento.cita_visitante_id, visitante_id);
         assert_eq!(movimiento.gafete_numero, Some(7));
         assert!(movimiento.salida.is_none());
+    }
+
+    #[test]
+    fn crear_guarda_el_snapshot_de_visitante_empresa_anfitrion_y_motivo() {
+        let (connection, visitante_id) = conexion_con_visitante();
+        let repo = SqliteMovimientoVisitaRepository::new(&connection);
+
+        let id = repo
+            .crear(&NuevoMovimientoVisita {
+                empresa: Some("Brisas SCH".to_string()),
+                motivo: Some("Auditoría".to_string()),
+                ..nuevo(visitante_id, None)
+            })
+            .unwrap();
+
+        let (cedula, nombre, empresa, anfitrion, motivo): (
+            String,
+            String,
+            Option<String>,
+            String,
+            Option<String>,
+        ) = connection
+            .query_row(
+                "SELECT visitante_cedula, visitante_nombre, empresa, anfitrion_nombre, motivo
+                 FROM movimientos_visita WHERE id = ?1",
+                params![id],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                    ))
+                },
+            )
+            .unwrap();
+
+        assert_eq!(cedula, "1-2345");
+        assert_eq!(nombre, "Visitante");
+        assert_eq!(empresa.as_deref(), Some("Brisas SCH"));
+        assert_eq!(anfitrion, "Anfitrión");
+        assert_eq!(motivo.as_deref(), Some("Auditoría"));
     }
 
     #[test]

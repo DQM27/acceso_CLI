@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 30;
+pub const SCHEMA_VERSION: i64 = 32;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -296,6 +296,16 @@ fn aplicar_migraciones_posteriores_a_15(
         *version = 30;
     }
 
+    if *version == 30 {
+        aplicar_migracion_31(connection)?;
+        *version = 31;
+    }
+
+    if *version == 31 {
+        aplicar_migracion_32(connection)?;
+        *version = 32;
+    }
+
     Ok(())
 }
 
@@ -415,6 +425,22 @@ fn aplicar_migracion_30(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_30)?;
     transaction.execute_batch("PRAGMA user_version = 30")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_31(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_31)?;
+    transaction.execute_batch("PRAGMA user_version = 31")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_32(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_32)?;
+    transaction.execute_batch("PRAGMA user_version = 32")?;
     transaction.commit()?;
     Ok(())
 }
@@ -2209,4 +2235,53 @@ WHERE estado = 'pendiente';
 // independiente) -- ver `nube::sincronizacion::recibir_citas_del_sitio`.
 const MIGRACION_30: &str = r"
 ALTER TABLE sincronizacion_estado ADD COLUMN citas_actualizado_hasta TEXT;
+";
+
+// Snapshot al momento del check-in -- mismo criterio que
+// `registro_ingresos` (que ya guarda `contratista_nombre`/`empresa_nombre`
+// propios, no un JOIN en cada lectura): la trazabilidad para auditoría
+// (docs/plan-control-visitas.md) necesita mostrar quién era el visitante,
+// de qué empresa y quién lo recibía TAL COMO ERAN al momento del cruce, sin
+// depender de que `cita_visitantes`/`citas` todavía existan sin cambios
+// más adelante. Nullable a propósito (igual que `dispositivo_entrada_tipo`
+// en MIGRACION_26): filas creadas antes de esta migración quedan sin estos
+// datos, no hay forma de reconstruirlos retroactivamente.
+const MIGRACION_31: &str = r"
+ALTER TABLE movimientos_visita ADD COLUMN visitante_cedula TEXT;
+ALTER TABLE movimientos_visita ADD COLUMN visitante_nombre TEXT;
+ALTER TABLE movimientos_visita ADD COLUMN empresa TEXT;
+ALTER TABLE movimientos_visita ADD COLUMN anfitrion_nombre TEXT;
+ALTER TABLE movimientos_visita ADD COLUMN motivo TEXT;
+";
+
+// Caché de lectura del historial de visitas del sitio -- mismo rol que
+// `historial_sitio` para contratistas (MIGRACION_25): trae TODO movimiento
+// (abierto o cerrado) del sitio, de cualquier dispositivo, vía sync
+// incremental con su propia marca de agua (`historial_visitas_actualizado_hasta`,
+// ritmo independiente del resto). Sin esto, un movimiento de visita
+// registrado en un dispositivo era invisible para cualquier otro (y para
+// el admin que audita todos los sitios) -- vivía y moría sólo en el
+// `movimientos_visita` local de quien hizo el check-in/check-out.
+const MIGRACION_32: &str = r"
+ALTER TABLE sincronizacion_estado ADD COLUMN historial_visitas_actualizado_hasta TEXT;
+
+CREATE TABLE historial_visitas_sitio (
+    uuid TEXT PRIMARY KEY,
+    sitio_id TEXT NOT NULL,
+    visitante_cedula TEXT NOT NULL,
+    visitante_nombre TEXT NOT NULL,
+    empresa TEXT,
+    anfitrion_nombre TEXT,
+    motivo TEXT,
+    gafete_numero INTEGER,
+    hora_entrada TEXT NOT NULL,
+    hora_salida TEXT,
+    usuario_entrada_nombre TEXT,
+    usuario_salida_nombre TEXT,
+    dispositivo_entrada_id TEXT NOT NULL,
+    dispositivo_salida_id TEXT,
+    actualizado_en TEXT NOT NULL
+) STRICT;
+
+CREATE INDEX idx_historial_visitas_sitio_hora_entrada ON historial_visitas_sitio(hora_entrada);
 ";

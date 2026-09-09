@@ -265,6 +265,9 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
              -- MIGRACION_25 (que corre al final al rebobinar) crea
              -- `historial_sitio` desde cero -- mismo motivo.
              DROP TABLE historial_sitio;
+             -- MIGRACION_32 (que corre al final al rebobinar) crea
+             -- `historial_visitas_sitio` desde cero -- mismo motivo.
+             DROP TABLE historial_visitas_sitio;
              -- MIGRACION_28 (que corre al final al rebobinar) crea
              -- citas/cita_visitantes/movimientos_visita desde cero -- mismo
              -- motivo que historial_sitio arriba. Orden de FK: el hijo
@@ -366,6 +369,9 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
              -- MIGRACION_25 (que corre al final al rebobinar) crea
              -- `historial_sitio` desde cero -- mismo motivo.
              DROP TABLE historial_sitio;
+             -- MIGRACION_32 (que corre al final al rebobinar) crea
+             -- `historial_visitas_sitio` desde cero -- mismo motivo.
+             DROP TABLE historial_visitas_sitio;
              -- MIGRACION_28 (que corre al final al rebobinar) crea
              -- citas/cita_visitantes/movimientos_visita desde cero -- mismo
              -- motivo que historial_sitio arriba. Orden de FK: el hijo
@@ -476,6 +482,9 @@ fn migracion_12_habilita_cambio_de_cedula() {
              -- MIGRACION_25 (que corre al final al rebobinar) crea
              -- `historial_sitio` desde cero -- mismo motivo.
              DROP TABLE historial_sitio;
+             -- MIGRACION_32 (que corre al final al rebobinar) crea
+             -- `historial_visitas_sitio` desde cero -- mismo motivo.
+             DROP TABLE historial_visitas_sitio;
              -- MIGRACION_28 (que corre al final al rebobinar) crea
              -- citas/cita_visitantes/movimientos_visita desde cero -- mismo
              -- motivo que historial_sitio arriba. Orden de FK: el hijo

@@ -103,7 +103,7 @@ where
         fecha_hora_entrada: DateTime<Utc>,
         hoy: NaiveDate,
     ) -> Result<i64, CitaServiceError> {
-        let (_, visitante) = self.verificar_check_in(cedula, hoy)?;
+        let (cita, visitante) = self.verificar_check_in(cedula, hoy)?;
 
         if self
             .movimientos
@@ -124,6 +124,11 @@ where
             gafete_numero,
             fecha_hora_entrada,
             usuario_entrada_id,
+            visitante_cedula: visitante.cedula,
+            visitante_nombre: visitante.nombre,
+            empresa: visitante.empresa,
+            anfitrion_nombre: cita.anfitrion_nombre,
+            motivo: cita.motivo,
         })?)
     }
 
@@ -321,6 +326,33 @@ mod tests {
         let movimiento = movimientos.buscar_por_id(id).unwrap().unwrap();
         assert_eq!(movimiento.gafete_numero, Some(7));
         assert!(movimiento.salida.is_none());
+    }
+
+    #[test]
+    fn registrar_entrada_guarda_el_snapshot_de_la_cita_y_el_visitante_reales() {
+        let connection = conexion();
+        insertar_cita(&connection, 1, "2026-08-10", "2026-08-15", "VIGENTE");
+        insertar_visitante(&connection, 1, 1, "1-2345");
+        let repo = SqliteCitaRepository::new(&connection);
+        let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos);
+
+        let id = servicio
+            .registrar_entrada("1-2345", None, 1, Utc::now(), fecha("2026-08-12"))
+            .unwrap();
+
+        let (cedula, nombre, anfitrion): (String, String, String) = connection
+            .query_row(
+                "SELECT visitante_cedula, visitante_nombre, anfitrion_nombre
+                 FROM movimientos_visita WHERE id = ?1",
+                rusqlite::params![id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+
+        assert_eq!(cedula, "1-2345");
+        assert_eq!(nombre, "Visitante");
+        assert_eq!(anfitrion, "Anfitrión");
     }
 
     #[test]

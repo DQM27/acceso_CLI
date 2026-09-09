@@ -1,5 +1,14 @@
 use chrono::{DateTime, Utc};
 
+/// `visitante_cedula`/`visitante_nombre`/`empresa`/`anfitrion_nombre`/`motivo`
+/// son un snapshot al momento del check-in -- mismo criterio que
+/// `NuevoRegistroIngreso` (que ya guarda `contratista_nombre`/`empresa_nombre`
+/// propios en vez de un JOIN en cada lectura): la trazabilidad para
+/// auditoría necesita mostrar cómo ERA el visitante en ese momento, sin
+/// depender de que `cita_visitantes`/`citas` sigan sin cambios más
+/// adelante. Quien llama ya tiene esta info a mano (la misma `Cita`/
+/// `CitaVisitante` que `verificar_check_in` acaba de confirmar), así que
+/// no hace falta otra consulta acá para juntarla.
 #[derive(Debug, Clone)]
 pub struct NuevoMovimientoVisita {
     pub cita_visitante_id: i64,
@@ -8,6 +17,11 @@ pub struct NuevoMovimientoVisita {
     pub gafete_numero: Option<i64>,
     pub fecha_hora_entrada: DateTime<Utc>,
     pub usuario_entrada_id: i64,
+    pub visitante_cedula: String,
+    pub visitante_nombre: String,
+    pub empresa: Option<String>,
+    pub anfitrion_nombre: String,
+    pub motivo: Option<String>,
 }
 
 /// Fecha y usuario van juntos a propósito, en vez de ser 2 `Option`
