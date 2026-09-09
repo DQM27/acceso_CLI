@@ -36,7 +36,6 @@ export default function Visitas() {
 
   const [filas, setFilas] = useState<MovimientoVisitaActivoResumen[]>([]);
   const [cargando, setCargando] = useState(true);
-  const [busqueda, setBusqueda] = useState("");
 
   useBarraEstado(cargando ? "Cargando…" : `${filas.length} visitantes adentro`);
 
@@ -252,16 +251,7 @@ export default function Visitas() {
             id="visitas-activas"
             columnas={columnas}
             filas={filas}
-            busqueda={busqueda}
-            controles={
-              <div className="campo" style={{ flex: "0 1 16rem" }}>
-                <input
-                  placeholder="Cédula, nombre, empresa…"
-                  value={busqueda}
-                  onChange={(evento) => setBusqueda(evento.target.value)}
-                />
-              </div>
-            }
+            filtrosPorColumna
           />
         </div>
       </div>
