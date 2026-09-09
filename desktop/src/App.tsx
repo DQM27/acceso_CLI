@@ -240,8 +240,9 @@ function Shell({
 
   const [modalNuevoIngreso, setModalNuevoIngreso] = useState(false);
   const [modalSalida, setModalSalida] = useState(false);
-  // Sube en cada registro/salida exitosa — Activos lo usa para refrescar su
-  // grilla aunque haya salido desde otra pantalla.
+  // Sube en cada registro/salida/sincronización — Activos y Visitas lo usan
+  // para refrescar su grilla/calendario aunque el cambio haya salido de
+  // otra pantalla o de otro dispositivo (Realtime/pulso periódico).
   const [refrescarActivos, setRefrescarActivos] = useState(0);
   const [sincronizandoManual, setSincronizandoManual] = useState(false);
   // `null` hasta que `iniciarRealtimeNube` intenta conectar la primera vez.
@@ -418,7 +419,7 @@ function Shell({
                             onAbrirSalida={() => setModalSalida(true)}
                           />
                         ) : id === "visitas" ? (
-                          <Visitas />
+                          <Visitas refrescarSenal={refrescarActivos} />
                         ) : id === "historial" ? (
                           <Historial />
                         ) : id === "contratistas" ? (

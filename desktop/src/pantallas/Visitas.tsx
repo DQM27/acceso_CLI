@@ -59,8 +59,13 @@ function ToggleVista({ vista, onCambiar }: { vista: Vista; onCambiar: (v: Vista)
  * - "Agenda": lectura pura de `citas`/`cita_visitantes` local, ya
  *   sincronizadas -- quién está programado desde hoy en adelante, sin
  *   tocar la nube de nuevo. De sólo lectura, no dispara ningún check-in.
+ *
+ * `refrescarSenal` (de `Shell`, mismo contador que ya usa Activos) hace que
+ * la vista activa se recargue sola cuando llega cualquier sincronización
+ * -- Realtime, pulso periódico o manual -- sin depender de que alguien
+ * cambie de pestaña y vuelva.
  */
-export default function Visitas() {
+export default function Visitas({ refrescarSenal }: { refrescarSenal?: number }) {
   const [vista, setVista] = useState<Vista>("activas");
   const [filasActivas, setFilasActivas] = useState<MovimientoVisitaActivoResumen[]>([]);
   const [filasHistorial, setFilasHistorial] = useState<MovimientoHistorialVisitaRemoto[]>([]);
@@ -106,7 +111,12 @@ export default function Visitas() {
     return () => {
       vigente = false;
     };
-  }, [vista, recargarActivas, recargarHistorial, recargarAgenda]);
+    // `refrescarSenal` sube en cada sincronización (Realtime, pulso
+    // periódico o manual) -- ver `App.tsx`/`Shell`. Sin esto, una visita
+    // registrada desde otro dispositivo del sitio sólo aparecía acá
+    // después de cambiar de pestaña y volver, aunque el resto de la app
+    // (Activos) ya reaccionaba sola.
+  }, [vista, refrescarSenal, recargarActivas, recargarHistorial, recargarAgenda]);
 
   const salida = useCallback(
     async (fila: MovimientoVisitaActivoResumen) => {
