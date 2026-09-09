@@ -7,7 +7,7 @@ function mockConsulta(resultado: { data: unknown; error: unknown; count: number 
     order: vi.fn(() => encadenable),
     range: vi.fn(() => encadenable),
     gte: vi.fn(() => encadenable),
-    lte: vi.fn(() => encadenable),
+    lt: vi.fn(() => encadenable),
     returns: vi.fn(() => encadenable),
     then: (resolver: (valor: typeof resultado) => void) => resolver(resultado),
   };
@@ -90,5 +90,29 @@ describe("listarHistorial", () => {
     mocks.from.mockReturnValue(mockConsulta({ data: filas, error: null, count: 1 }));
 
     await expect(listarHistorial()).rejects.toThrow();
+  });
+
+  it("convierte desde/hasta (YMD) a límites UTC de Costa Rica -- hasta es el inicio del día SIGUIENTE, exclusivo", async () => {
+    const encadenable = mockConsulta({ data: [], error: null, count: 0 });
+    mocks.from.mockReturnValue(encadenable);
+
+    await listarHistorial("2026-09-09", "2026-09-09");
+
+    // Antes se mandaba el YMD crudo: `lte("hora_entrada", "2026-09-09")` sólo
+    // calificaba el instante exacto de esa medianoche UTC, dejando "Hoy"
+    // prácticamente siempre vacío. Ahora "hasta" es exclusivo contra el
+    // inicio del día siguiente en Costa Rica (UTC-6), así que el 9 de
+    // septiembre completo (hasta las 23:59:59 hora local) queda adentro.
+    expect(encadenable.gte).toHaveBeenCalledWith("hora_entrada", "2026-09-09T00:00:00-06:00");
+    expect(encadenable.lt).toHaveBeenCalledWith("hora_entrada", "2026-09-10T00:00:00-06:00");
+  });
+
+  it("cruza el fin de mes al calcular el día siguiente para 'hasta'", async () => {
+    const encadenable = mockConsulta({ data: [], error: null, count: 0 });
+    mocks.from.mockReturnValue(encadenable);
+
+    await listarHistorial(undefined, "2026-09-30");
+
+    expect(encadenable.lt).toHaveBeenCalledWith("hora_entrada", "2026-10-01T00:00:00-06:00");
   });
 });

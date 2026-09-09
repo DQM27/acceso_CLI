@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { supabase } from "../lib/supabase";
+import { inicioDiaCostaRicaUtc, inicioDiaSiguienteCostaRicaUtc } from "../tiempo";
 
 /**
  * Espejo de `ingresos` en Supabase -- ver migración
@@ -86,8 +87,18 @@ export async function listarHistorial(desde?: string, hasta?: string): Promise<R
     .order("hora_entrada", { ascending: false })
     .range(0, LIMITE_HISTORIAL - 1);
 
-  if (desde) consulta = consulta.gte("hora_entrada", desde);
-  if (hasta) consulta = consulta.lte("hora_entrada", hasta);
+  // `desde`/`hasta` llegan como YMD del selector (día calendario en Costa
+  // Rica, ver `SelectorRangoFecha`), pero `hora_entrada` es un `timestamptz`
+  // en UTC -- compararlo contra el string crudo lo interpreta a medianoche
+  // UTC (no Costa Rica) y, para `hasta`, deja afuera casi todo ese día (sólo
+  // calificaría el instante exacto de esa medianoche). Con un rango amplio
+  // el corte pasaba desapercibido; con "Hoy"/"Ayer" (mismo día en desde y
+  // hasta) el rango resultante quedaba prácticamente vacío siempre. Mismo
+  // criterio que `rango_utc` en
+  // `desktop/src-tauri/src/comandos/historial.rs`: `hasta` es el inicio del
+  // día SIGUIENTE, límite exclusivo.
+  if (desde) consulta = consulta.gte("hora_entrada", inicioDiaCostaRicaUtc(desde));
+  if (hasta) consulta = consulta.lt("hora_entrada", inicioDiaSiguienteCostaRicaUtc(hasta));
 
   const { data: crudo, error, count } = await consulta;
   if (error) throw new Error(error.message);
