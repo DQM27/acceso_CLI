@@ -140,7 +140,6 @@ export default function MisCitas() {
         <div>
           <p className="antetitulo">TU AGENDA</p>
           <h1>Mis citas</h1>
-          <p>Organizá las visitas que vas a recibir.</p>
         </div>
         <Link className="boton boton-primario" to="/nueva">
           <CirclePlus aria-hidden="true" />

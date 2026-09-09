@@ -317,39 +317,36 @@ main:focus,
   min-height: 0;
   overflow: hidden;
 }
+/* Barra superior reducida a sólo el logo -- todo lo demás que tenía antes
+   (nombre de marca, subtítulo, cuenta, cerrar sesión) era ruido repetido
+   con el pie de página; ahora esa información vive sólo en `.portal-pie`,
+   igual que el status bar de la app de escritorio. */
 .barra-superior {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 56px;
+  min-height: 44px;
   flex-shrink: 0;
-  padding: 10px 24px;
+  padding: 6px 16px;
   background: var(--panel);
   border-bottom: 1px solid var(--borde);
 }
-/* Marca más chica en la barra superior del portal que en la pantalla de
-   login -- ahí es el elemento hero de la página, acá es sólo el rótulo de
-   una barra de 56px, no tiene sentido que compita en tamaño. */
-.barra-superior .marca {
-  font-size: 16px;
+.marca-icono {
+  display: inline-flex;
 }
-.barra-superior .marca img {
-  width: 32px;
-  height: 32px;
-}
-.barra-superior .marca-subtitulo {
-  font-size: 11px;
-  margin-top: 0;
+.marca-icono img {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radio-chico);
+  display: block;
 }
 .barra-cuenta {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
 }
 .separador {
-  height: 24px;
+  height: 16px;
   width: 1px;
   background: var(--borde);
   margin-inline: 4px;
@@ -380,7 +377,7 @@ main:focus,
   text-overflow: ellipsis;
 }
 .contenido {
-  padding: 24px 32px;
+  padding: 20px 28px;
   flex: 1;
   min-height: 0;
   width: 100%;
@@ -408,14 +405,10 @@ main:focus,
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 .encabezado-pagina .antetitulo {
-  margin-bottom: 8px;
-}
-.encabezado-pagina p:not(.antetitulo) {
-  margin-top: 8px;
-  color: var(--muted);
+  margin-bottom: 6px;
 }
 .encabezado-pagina > .boton {
   min-height: 40px;
@@ -453,7 +446,7 @@ main:focus,
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 24px;
+  padding: 12px 20px;
   border-bottom: 1px solid var(--borde);
 }
 .filtros {
@@ -519,8 +512,8 @@ main:focus,
 .cita {
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 24px;
+  gap: 16px;
+  padding: 18px 20px;
   border-bottom: 1px solid var(--borde);
 }
 .cita:last-child {
@@ -628,7 +621,7 @@ main:focus,
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin-top: 24px;
+  margin-top: 12px;
   font-size: 12px;
   color: var(--muted);
 }
@@ -640,7 +633,7 @@ main:focus,
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 24px;
+  padding: 12px 20px;
   background: var(--campo-fondo);
   border-top: 1px solid var(--borde);
   font-size: 12px;
@@ -652,11 +645,25 @@ main:focus,
 }
 .portal-pie {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 40px 24px;
+  padding: 8px 24px;
   font-size: 11px;
   color: var(--muted);
+  flex-shrink: 0;
+}
+.portal-pie .avatar {
+  width: 22px;
+  height: 22px;
+  font-size: 10px;
+}
+.portal-pie .identidad {
+  font-size: 11px;
+}
+.portal-pie .identidad span {
+  font-size: 10px;
+  max-width: 200px;
 }
 .volver {
   display: inline-flex;
@@ -1057,7 +1064,7 @@ dd {
 }
 @media (max-width: 1150px) {
   .contenido {
-    padding: 32px 24px;
+    padding: 20px 20px;
   }
   .formulario-layout {
     grid-template-columns: minmax(0, 1fr);
@@ -1067,7 +1074,7 @@ dd {
   }
   .cita {
     gap: 16px;
-    padding: 20px;
+    padding: 16px;
   }
 }
 @media (max-width: 800px) {
@@ -1087,19 +1094,11 @@ dd {
   .acceso-presentacion h1 {
     font-size: 36px;
   }
-  .barra-superior {
-    min-height: 72px;
-    padding: 12px 20px;
-    gap: 12px;
-  }
   .identidad {
     display: none;
   }
   .barra-cuenta {
     gap: 8px;
-  }
-  .portal-pie {
-    padding-inline: 24px;
   }
 }
 @media (max-width: 540px) {
@@ -1110,7 +1109,7 @@ dd {
     font-size: 10px;
   }
   .contenido {
-    padding: 24px 16px;
+    padding: 16px;
   }
   h1 {
     font-size: 26px;
@@ -1118,20 +1117,7 @@ dd {
   .encabezado-pagina {
     flex-wrap: wrap;
     gap: 16px;
-    margin-bottom: 24px;
-  }
-  .encabezado-pagina p:not(.antetitulo) {
-    font-size: 13px;
-  }
-  .agenda-introduccion {
-    padding: 16px;
-    gap: 12px;
-  }
-  .agenda-introduccion .sello-icono {
-    display: none;
-  }
-  .agenda-introduccion h2 {
-    font-size: 14px;
+    margin-bottom: 16px;
   }
   .agenda-herramientas {
     flex-wrap: wrap;

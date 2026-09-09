@@ -167,11 +167,6 @@ export default function NuevaCita() {
           <h1 ref={titulo} tabIndex={-1}>
             {paso === "datos" ? "Nueva cita" : "Revisá tu cita"}
           </h1>
-          <p>
-            {paso === "datos"
-              ? "Los detalles de hoy, una llegada más sencilla mañana."
-              : "Confirmá los detalles antes de agendar la visita."}
-          </p>
         </div>
         <span className="indicador-paso">
           {paso === "datos" ? "1. Datos de la visita" : "2. Confirmación"}

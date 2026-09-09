@@ -42,38 +42,9 @@ function Portal() {
         Saltar al contenido
       </a>
       <header className="barra-superior">
-        <NavLink to="/citas" className="marca">
+        <NavLink to="/citas" className="marca-icono" aria-label="Brisas · Agenda de visitas">
           <img src={marca} alt="" />
-          <span>
-            Brisas<span className="marca-subtitulo">Agenda de visitas</span>
-          </span>
         </NavLink>
-        <div className="barra-cuenta">
-          <SelectorTema />
-          <span className="separador" />
-          <span className="avatar" aria-hidden="true">
-            {anfitrion!.nombre.charAt(0).toUpperCase()}
-          </span>
-          <div className="identidad">
-            <strong>{anfitrion!.nombre}</strong>
-            <span>{anfitrion!.correo}</span>
-          </div>
-          <button
-            className="boton boton-discreto solo-icono"
-            disabled={saliendo}
-            aria-label="Cerrar sesión"
-            onClick={async () => {
-              setSaliendo(true);
-              try {
-                await cerrarSesion();
-              } finally {
-                setSaliendo(false);
-              }
-            }}
-          >
-            <LogOut aria-hidden="true" />
-          </button>
-        </div>
       </header>
       <div className="portal-cuerpo">
         <main id="contenido" tabIndex={-1} className="contenido">
@@ -94,8 +65,33 @@ function Portal() {
           </Suspense>
         </main>
         <footer className="portal-pie">
-          <span>Brisas · Agenda de visitas</span>
-          <span>Hora de Costa Rica</span>
+          <span>Brisas · Agenda de visitas · Hora de Costa Rica</span>
+          <div className="barra-cuenta">
+            <SelectorTema />
+            <span className="separador" />
+            <span className="avatar" aria-hidden="true">
+              {anfitrion!.nombre.charAt(0).toUpperCase()}
+            </span>
+            <div className="identidad">
+              <strong>{anfitrion!.nombre}</strong>
+              <span>{anfitrion!.correo}</span>
+            </div>
+            <button
+              className="boton boton-discreto solo-icono"
+              disabled={saliendo}
+              aria-label="Cerrar sesión"
+              onClick={async () => {
+                setSaliendo(true);
+                try {
+                  await cerrarSesion();
+                } finally {
+                  setSaliendo(false);
+                }
+              }}
+            >
+              <LogOut aria-hidden="true" />
+            </button>
+          </div>
         </footer>
       </div>
     </div>
