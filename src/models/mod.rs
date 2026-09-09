@@ -1,3 +1,4 @@
+pub mod cita;
 pub mod contratista;
 pub mod empresa;
 pub mod gafete;
