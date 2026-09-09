@@ -264,7 +264,14 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
              DROP TABLE sincronizacion_estado;
              -- MIGRACION_25 (que corre al final al rebobinar) crea
              -- `historial_sitio` desde cero -- mismo motivo.
-             DROP TABLE historial_sitio;",
+             DROP TABLE historial_sitio;
+             -- MIGRACION_28 (que corre al final al rebobinar) crea
+             -- citas/cita_visitantes/movimientos_visita desde cero -- mismo
+             -- motivo que historial_sitio arriba. Orden de FK: el hijo
+             -- primero.
+             DROP TABLE movimientos_visita;
+             DROP TABLE cita_visitantes;
+             DROP TABLE citas;",
         )
         .unwrap();
     rebobinar_trigger_entrada_inmutable_sin_uuid(&connection);
@@ -294,6 +301,10 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
 }
 
 #[test]
+// Rebobina el esquema a v10 a mano, SQL por SQL -- crece por diseño con
+// cada migración nueva que haya que deshacer (mismo criterio que
+// `#[allow(clippy::too_many_lines)]` en `tests/contratista_queries.rs`).
+#[allow(clippy::too_many_lines)]
 fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
@@ -354,7 +365,14 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
              DROP TABLE sincronizacion_estado;
              -- MIGRACION_25 (que corre al final al rebobinar) crea
              -- `historial_sitio` desde cero -- mismo motivo.
-             DROP TABLE historial_sitio;",
+             DROP TABLE historial_sitio;
+             -- MIGRACION_28 (que corre al final al rebobinar) crea
+             -- citas/cita_visitantes/movimientos_visita desde cero -- mismo
+             -- motivo que historial_sitio arriba. Orden de FK: el hijo
+             -- primero.
+             DROP TABLE movimientos_visita;
+             DROP TABLE cita_visitantes;
+             DROP TABLE citas;",
         )
         .unwrap();
     rebobinar_trigger_entrada_inmutable_sin_uuid(&connection);
@@ -457,7 +475,14 @@ fn migracion_12_habilita_cambio_de_cedula() {
              DROP TABLE sincronizacion_estado;
              -- MIGRACION_25 (que corre al final al rebobinar) crea
              -- `historial_sitio` desde cero -- mismo motivo.
-             DROP TABLE historial_sitio;",
+             DROP TABLE historial_sitio;
+             -- MIGRACION_28 (que corre al final al rebobinar) crea
+             -- citas/cita_visitantes/movimientos_visita desde cero -- mismo
+             -- motivo que historial_sitio arriba. Orden de FK: el hijo
+             -- primero.
+             DROP TABLE movimientos_visita;
+             DROP TABLE cita_visitantes;
+             DROP TABLE citas;",
         )
         .unwrap();
     rebobinar_trigger_entrada_inmutable_sin_uuid(&connection);
@@ -950,4 +975,246 @@ fn una_base_ya_al_dia_no_genera_ningun_respaldo_pre_migracion() {
     assert!(listar_respaldos(&directorio_respaldos).unwrap().is_empty());
 
     let _ = fs::remove_dir_all(ruta.parent().unwrap());
+}
+
+// MIGRACION_28 -- control de visitas (docs/plan-control-visitas.md), primer
+// corte de esquema: `citas` (autorización con vigencia) → `cita_visitantes`
+// (una fila por persona del grupo) → `movimientos_visita` (el cruce real en
+// garita). Mismas garantías que ya tiene `registro_ingresos`, verificadas acá
+// con el mismo criterio que `check_de_salida_acepta_pares_coherentes_y_rechaza_incoherentes`/
+// `esquema_actual_solo_admite_fechas_utc_normalizadas` de arriba, pero para
+// las tablas nuevas.
+
+fn insertar_cita(connection: &Connection, id: i64, desde: &str, hasta: &str) {
+    connection
+        .execute(
+            "INSERT INTO citas (id, uuid, fecha_desde, fecha_hasta, anfitrion_nombre,
+                anfitrion_correo, estado, creado_en)
+             VALUES (?1, ?2, ?3, ?4, 'Anfitrión de prueba', 'anfitrion@ejemplo.com',
+                'VIGENTE', '2026-08-01T00:00:00Z')",
+            rusqlite::params![id, format!("uuid-cita-{id}"), desde, hasta],
+        )
+        .unwrap();
+}
+
+fn insertar_cita_visitante(connection: &Connection, id: i64, cita_id: i64, cedula: &str) {
+    connection
+        .execute(
+            "INSERT INTO cita_visitantes (id, uuid, cita_id, cedula, nombre)
+             VALUES (?1, ?2, ?3, ?4, 'Visitante de prueba')",
+            rusqlite::params![id, format!("uuid-visitante-{id}"), cita_id, cedula],
+        )
+        .unwrap();
+}
+
+#[test]
+fn citas_exige_fecha_hasta_no_anterior_a_fecha_desde() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+
+    insertar_cita(&connection, 1, "2026-08-10", "2026-08-15");
+    let resultado = connection.execute(
+        "INSERT INTO citas (id, uuid, fecha_desde, fecha_hasta, anfitrion_nombre,
+            anfitrion_correo, estado, creado_en)
+         VALUES (2, 'uuid-cita-2', '2026-08-15', '2026-08-10', 'A', 'a@a.com', 'VIGENTE',
+            '2026-08-01T00:00:00Z')",
+        [],
+    );
+    assert!(resultado.is_err());
+}
+
+#[test]
+fn cita_visitantes_exige_una_cita_existente() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+
+    let resultado = connection.execute(
+        "INSERT INTO cita_visitantes (id, uuid, cita_id, cedula, nombre)
+         VALUES (1, 'uuid-v1', 999, '1-2345', 'Alguien')",
+        [],
+    );
+    assert!(resultado.is_err());
+
+    insertar_cita(&connection, 1, "2026-08-10", "2026-08-15");
+    insertar_cita_visitante(&connection, 1, 1, "1-2345");
+    let visitantes: i64 = connection
+        .query_row("SELECT COUNT(*) FROM cita_visitantes", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(visitantes, 1);
+}
+
+#[test]
+fn movimientos_visita_exige_visitante_y_usuario_existentes() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    insertar_referencias(&connection);
+    insertar_cita(&connection, 1, "2026-08-10", "2026-08-15");
+    insertar_cita_visitante(&connection, 1, 1, "1-2345");
+
+    // Usuario inexistente.
+    assert!(
+        connection
+            .execute(
+                "INSERT INTO movimientos_visita
+                    (id, uuid, cita_visitante_id, fecha_hora_entrada, usuario_entrada_id,
+                     usuario_entrada_nombre)
+                 VALUES (1, 'uuid-m1', 1, '2026-08-11T14:00:00Z', 999, 'Nadie')",
+                [],
+            )
+            .is_err()
+    );
+    // Visitante inexistente.
+    assert!(
+        connection
+            .execute(
+                "INSERT INTO movimientos_visita
+                    (id, uuid, cita_visitante_id, fecha_hora_entrada, usuario_entrada_id,
+                     usuario_entrada_nombre)
+                 VALUES (1, 'uuid-m1', 999, '2026-08-11T14:00:00Z', 1, 'Operador')",
+                [],
+            )
+            .is_err()
+    );
+
+    connection
+        .execute(
+            "INSERT INTO movimientos_visita
+                (id, uuid, cita_visitante_id, fecha_hora_entrada, usuario_entrada_id,
+                 usuario_entrada_nombre)
+             VALUES (1, 'uuid-m1', 1, '2026-08-11T14:00:00Z', 1, 'Operador')",
+            [],
+        )
+        .unwrap();
+}
+
+#[test]
+fn movimientos_visita_no_admite_dos_abiertos_para_el_mismo_visitante() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    insertar_referencias(&connection);
+    insertar_cita(&connection, 1, "2026-08-10", "2026-08-15");
+    insertar_cita_visitante(&connection, 1, 1, "1-2345");
+
+    connection
+        .execute(
+            "INSERT INTO movimientos_visita
+                (id, uuid, cita_visitante_id, fecha_hora_entrada, usuario_entrada_id,
+                 usuario_entrada_nombre)
+             VALUES (1, 'uuid-m1', 1, '2026-08-11T14:00:00Z', 1, 'Operador')",
+            [],
+        )
+        .unwrap();
+    let resultado = connection.execute(
+        "INSERT INTO movimientos_visita
+            (id, uuid, cita_visitante_id, fecha_hora_entrada, usuario_entrada_id,
+             usuario_entrada_nombre)
+         VALUES (2, 'uuid-m2', 1, '2026-08-11T15:00:00Z', 1, 'Operador')",
+        [],
+    );
+    assert!(resultado.is_err());
+}
+
+#[test]
+fn movimientos_visita_no_admite_el_mismo_gafete_activo_dos_veces() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    insertar_referencias(&connection);
+    insertar_cita(&connection, 1, "2026-08-10", "2026-08-15");
+    insertar_cita_visitante(&connection, 1, 1, "1-2345");
+    insertar_cita_visitante(&connection, 2, 1, "6-7890");
+
+    connection
+        .execute(
+            "INSERT INTO movimientos_visita
+                (id, uuid, cita_visitante_id, gafete_numero, fecha_hora_entrada,
+                 usuario_entrada_id, usuario_entrada_nombre)
+             VALUES (1, 'uuid-m1', 1, 5, '2026-08-11T14:00:00Z', 1, 'Operador')",
+            [],
+        )
+        .unwrap();
+    let resultado = connection.execute(
+        "INSERT INTO movimientos_visita
+            (id, uuid, cita_visitante_id, gafete_numero, fecha_hora_entrada,
+             usuario_entrada_id, usuario_entrada_nombre)
+         VALUES (2, 'uuid-m2', 2, 5, '2026-08-11T15:00:00Z', 1, 'Operador')",
+        [],
+    );
+    assert!(resultado.is_err());
+}
+
+#[test]
+fn movimientos_visita_solo_admite_fechas_utc_normalizadas() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    insertar_referencias(&connection);
+    insertar_cita(&connection, 1, "2026-08-10", "2026-08-15");
+    insertar_cita_visitante(&connection, 1, 1, "1-2345");
+
+    assert!(
+        connection
+            .execute(
+                "INSERT INTO movimientos_visita
+                    (id, uuid, cita_visitante_id, fecha_hora_entrada, usuario_entrada_id,
+                     usuario_entrada_nombre)
+                 VALUES (1, 'uuid-m1', 1, '2026-08-11 14:00:00', 1, 'Operador')",
+                [],
+            )
+            .is_err()
+    );
+}
+
+#[test]
+fn movimientos_visita_entrada_es_inmutable_y_salida_se_registra_una_sola_vez() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    insertar_referencias(&connection);
+    insertar_cita(&connection, 1, "2026-08-10", "2026-08-15");
+    insertar_cita_visitante(&connection, 1, 1, "1-2345");
+    connection
+        .execute(
+            "INSERT INTO movimientos_visita
+                (id, uuid, cita_visitante_id, fecha_hora_entrada, usuario_entrada_id,
+                 usuario_entrada_nombre)
+             VALUES (1, 'uuid-m1', 1, '2026-08-11T14:00:00Z', 1, 'Operador')",
+            [],
+        )
+        .unwrap();
+
+    assert!(
+        connection
+            .execute(
+                "UPDATE movimientos_visita SET fecha_hora_entrada = '2026-08-12T14:00:00Z'
+                 WHERE id = 1",
+                [],
+            )
+            .is_err(),
+        "los datos de entrada no deberían poder editarse"
+    );
+
+    connection
+        .execute(
+            "UPDATE movimientos_visita
+             SET fecha_hora_salida = '2026-08-11T18:00:00Z', usuario_salida_id = 1,
+                 usuario_salida_nombre = 'Operador'
+             WHERE id = 1",
+            [],
+        )
+        .unwrap();
+    assert!(
+        connection
+            .execute(
+                "UPDATE movimientos_visita SET fecha_hora_salida = '2026-08-11T19:00:00Z'
+                 WHERE id = 1",
+                [],
+            )
+            .is_err(),
+        "la salida no debería poder registrarse dos veces"
+    );
+
+    assert!(
+        connection
+            .execute("DELETE FROM movimientos_visita WHERE id = 1", [])
+            .is_err(),
+        "un movimiento de visita no debería poder eliminarse"
+    );
 }
