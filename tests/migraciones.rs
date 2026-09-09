@@ -1218,3 +1218,38 @@ fn movimientos_visita_entrada_es_inmutable_y_salida_se_registra_una_sola_vez() {
         "un movimiento de visita no debería poder eliminarse"
     );
 }
+
+// MIGRACION_29 -- suma 'movimiento_visita' al CHECK de `cola_salida.entidad`.
+#[test]
+fn cola_salida_acepta_movimiento_visita_y_conserva_los_valores_viejos() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+
+    for (entidad, operacion) in [
+        ("contratista", "crear"),
+        ("ingreso", "crear"),
+        ("empresa", "crear"),
+        ("gafete", "crear"),
+        ("usuario", "crear"),
+        ("movimiento_visita", "crear"),
+    ] {
+        connection
+            .execute(
+                "INSERT INTO cola_salida (entidad, entidad_uuid, operacion, creado_en, actualizado_en)
+                 VALUES (?1, 'uuid-x', ?2, '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z')",
+                rusqlite::params![entidad, operacion],
+            )
+            .unwrap_or_else(|error| panic!("{entidad} debería seguir siendo válido: {error}"));
+    }
+
+    assert!(
+        connection
+            .execute(
+                "INSERT INTO cola_salida (entidad, entidad_uuid, operacion, creado_en, actualizado_en)
+                 VALUES ('inventado', 'uuid-x', 'crear', '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z')",
+                [],
+            )
+            .is_err(),
+        "un valor de entidad fuera del CHECK debería seguir rechazándose"
+    );
+}

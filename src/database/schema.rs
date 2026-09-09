@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 28;
+pub const SCHEMA_VERSION: i64 = 29;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -286,6 +286,11 @@ fn aplicar_migraciones_posteriores_a_15(
         *version = 28;
     }
 
+    if *version == 28 {
+        aplicar_migracion_29(connection)?;
+        *version = 29;
+    }
+
     Ok(())
 }
 
@@ -389,6 +394,14 @@ fn aplicar_migracion_28(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_28)?;
     transaction.execute_batch("PRAGMA user_version = 28")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_29(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_29)?;
+    transaction.execute_batch("PRAGMA user_version = 29")?;
     transaction.commit()?;
     Ok(())
 }
@@ -2147,4 +2160,32 @@ WHEN
 BEGIN
     SELECT RAISE(ABORT, 'La fecha de salida debe estar normalizada en UTC');
 END;
+";
+
+// Suma 'movimiento_visita' al CHECK de `cola_salida.entidad` -- mismo
+// patrón que MIGRACION_20/22 para gafetes/usuarios: SQLite no permite
+// `ALTER TABLE ... CHECK`, así que la tabla se recrea entera. Sin esto,
+// `MovimientoVisitaRepository` (siguiente corte) no puede encolar sus
+// propios `crear`/`cerrar` -- el `INSERT` violaría el `CHECK` viejo.
+const MIGRACION_29: &str = r"
+CREATE TABLE cola_salida_nueva (
+    id INTEGER PRIMARY KEY,
+    entidad TEXT NOT NULL CHECK (
+        entidad IN ('contratista', 'ingreso', 'empresa', 'gafete', 'usuario', 'movimiento_visita')
+    ),
+    entidad_uuid TEXT NOT NULL,
+    operacion TEXT NOT NULL CHECK (operacion IN ('crear', 'actualizar', 'cerrar')),
+    estado TEXT NOT NULL DEFAULT 'pendiente'
+        CHECK (estado IN ('pendiente', 'enviado', 'fallido')),
+    intentos INTEGER NOT NULL DEFAULT 0 CHECK (intentos >= 0),
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    ultimo_error TEXT
+) STRICT;
+INSERT INTO cola_salida_nueva SELECT * FROM cola_salida;
+DROP TABLE cola_salida;
+ALTER TABLE cola_salida_nueva RENAME TO cola_salida;
+CREATE INDEX idx_cola_salida_pendientes
+ON cola_salida(creado_en)
+WHERE estado = 'pendiente';
 ";
