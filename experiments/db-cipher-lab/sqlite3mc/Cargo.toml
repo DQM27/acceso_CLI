@@ -1,0 +1,9 @@
+[package]
+name = "brisas_sqlite3mc_smoke"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+publish = false
+
+[dependencies]
+rusqlite = { version = "0.40.2", default-features = false }

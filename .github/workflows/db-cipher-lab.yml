@@ -1,0 +1,63 @@
+name: DB Cipher Lab
+
+on:
+  push:
+    branches: ["fix/experimento-cifrado-db-2026-09-10"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sqlcipher-windows:
+    name: SQLCipher bundled + vendored OpenSSL (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: experiments/db-cipher-lab/sqlcipher
+      - name: Compilar y verificar cifrado SQLCipher
+        run: cargo run --release --manifest-path experiments/db-cipher-lab/sqlcipher/Cargo.toml
+
+  sqlite3mc-windows:
+    name: SQLite3MC 2.5.1 + ChaCha20-Poly1305 (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Descargar y verificar SQLite3MC oficial
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://github.com/utelle/SQLite3MultipleCiphers/releases/download/v2.5.1/sqlite3mc-2.5.1-sqlite-3.53.4-win64.zip'
+          $zip = Join-Path $env:RUNNER_TEMP 'sqlite3mc.zip'
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = '858c4f2e9e262caca06e6c4fafee62d13dd90c21b649b047f17992bf0402981e'
+          if ($hash -ne $expected) { throw "SHA-256 inesperado para SQLite3MC: $hash" }
+
+          $extract = Join-Path $env:RUNNER_TEMP 'sqlite3mc'
+          Expand-Archive -Path $zip -DestinationPath $extract -Force
+          $lib = Get-ChildItem $extract -Recurse -File | Where-Object { $_.Name -match '^sqlite3mc.*x64.*\.lib$' } | Select-Object -First 1
+          $dll = Get-ChildItem $extract -Recurse -File | Where-Object { $_.Name -match '^sqlite3mc.*x64.*\.dll$' } | Select-Object -First 1
+          if (-not $lib) { throw 'No se encontró la import library x64 de SQLite3MC' }
+          if (-not $dll) { throw 'No se encontró la DLL x64 de SQLite3MC' }
+
+          $stage = Join-Path $env:RUNNER_TEMP 'sqlite3mc-link'
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          Copy-Item $lib.FullName (Join-Path $stage 'sqlite3.lib') -Force
+          Copy-Item $dll.FullName (Join-Path $stage $dll.Name) -Force
+          "SQLITE3_LIB_DIR=$stage" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $stage | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          Write-Host "Import library: $($lib.FullName)"
+          Write-Host "Runtime DLL: $($dll.FullName)"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: experiments/db-cipher-lab/sqlite3mc
+
+      - name: Compilar y verificar cifrado SQLite3MC
+        run: cargo run --release --manifest-path experiments/db-cipher-lab/sqlite3mc/Cargo.toml
