@@ -1,0 +1,23 @@
+name: DB Cipher E2E SQLCipher
+
+on:
+  push:
+    branches: ["fix/e2e-sqlcipher-no-backup-2026-09-10"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            experiments/db-cipher-e2e
+      - name: Ejecutar E2E cifrado con AppCore real
+        run: cargo run --release --manifest-path experiments/db-cipher-e2e/Cargo.toml
