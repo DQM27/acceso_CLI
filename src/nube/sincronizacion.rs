@@ -3,11 +3,25 @@
 //! pendiente, arma el pedido HTTP correspondiente y la marca `enviado` o
 //! `fallido` según la respuesta. Una fila fallida no detiene a las demás --
 //! se reintenta en la próxima llamada, no bloquea el resto de la cola.
+//!
+//! Las filas de un mismo tipo (`empresa`, `contratista`, `gafete`,
+//! `usuario`, apertura de `ingreso`) se agrupan y se intentan mandar en un
+//! solo `POST` con un array -- `PostgREST` hace `upsert` de un array igual
+//! que de un objeto suelto. Si el lote entero falla, se cae a mandar esas
+//! mismas filas una por una: un `INSERT`/`upsert` de varias filas es
+//! atómico en Postgres, así que una sola fila inválida (por ejemplo, un
+//! contratista cuya empresa todavía no llegó) tumbaría a todo el lote junto
+//! si no se aislara así -- ver hallazgo R-02 de
+//! `docs/auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md`. El
+//! cierre de un ingreso (`PATCH .../ingresos?...&hora_salida=is.null`)
+//! queda afuera del lote a propósito: es un `UPDATE` condicional
+//! ("primero en llegar gana"), no un `upsert`, y un `PATCH` con array no
+//! aplica una condición distinta por fila.
 
 use std::collections::HashMap;
 
 use rusqlite::{Connection, params};
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::cliente::{NubeError, cliente_http};
 
@@ -72,42 +86,200 @@ pub fn drenar_cola(
     let cliente = cliente_http();
     let mut resumen = ResumenDrenado::default();
 
-    for fila in pendientes(connection, limite)? {
-        let resultado = match (fila.entidad.as_str(), fila.operacion.as_str()) {
-            ("empresa", _) => enviar_empresa(&cliente, connection, contexto, &fila.entidad_uuid),
-            ("contratista", _) => {
-                enviar_contratista(&cliente, connection, contexto, &fila.entidad_uuid)
-            }
-            ("gafete", _) => enviar_gafete(&cliente, connection, contexto, &fila.entidad_uuid),
-            ("usuario", _) => enviar_usuario(&cliente, connection, contexto, &fila.entidad_uuid),
-            ("ingreso", "cerrar") => {
-                enviar_cierre_ingreso(&cliente, connection, contexto, &fila.entidad_uuid)
-            }
-            ("ingreso", _) => enviar_ingreso(&cliente, connection, contexto, &fila.entidad_uuid),
-            _ => Ok(()),
-        };
-
-        match resultado {
-            Ok(()) => {
-                marcar(connection, fila.id, "enviado", None)?;
-                resumen.enviados += 1;
-            }
-            Err(error) => {
-                // "pendiente" de nuevo -- no "fallido" -- para que
-                // `pendientes()` la vuelva a considerar más adelante, sujeta
-                // al backoff según cuántas veces ya falló.
-                let estado = if fila.intentos + 1 >= INTENTOS_ANTES_DE_FALLO_PERMANENTE {
-                    "fallido"
-                } else {
-                    "pendiente"
-                };
-                marcar(connection, fila.id, estado, Some(&error.to_string()))?;
-                resumen.fallidos += 1;
-            }
-        }
+    for grupo in agrupar_por_entidad_y_operacion(pendientes(connection, limite)?) {
+        drenar_grupo(&cliente, connection, contexto, grupo, &mut resumen)?;
     }
 
     Ok(resumen)
+}
+
+/// Junta las filas pendientes por `(entidad, operacion)`, preservando el
+/// orden en que aparece cada combinación por primera vez -- no hace falta
+/// más que eso: como anota el doc-comment de `enviar_empresa`, una fila que
+/// depende de otra que todavía no llegó (por ejemplo, un contratista antes
+/// que su empresa) simplemente falla por la FK real y el backoff la
+/// reintenta sola, sin importar en qué orden se hayan drenado los tipos
+/// dentro de esta llamada.
+fn agrupar_por_entidad_y_operacion(filas: Vec<FilaCola>) -> Vec<Vec<FilaCola>> {
+    let mut grupos: Vec<(String, String, Vec<FilaCola>)> = Vec::new();
+    for fila in filas {
+        let existente = grupos
+            .iter_mut()
+            .find(|(entidad, operacion, _)| *entidad == fila.entidad && *operacion == fila.operacion);
+        if let Some((_, _, filas_del_grupo)) = existente {
+            filas_del_grupo.push(fila);
+        } else {
+            let entidad = fila.entidad.clone();
+            let operacion = fila.operacion.clone();
+            grupos.push((entidad, operacion, vec![fila]));
+        }
+    }
+    grupos.into_iter().map(|(_, _, filas)| filas).collect()
+}
+
+/// Tabla y parámetro `on_conflict` para mandar un grupo entero en un solo
+/// `POST` (array) -- `None` si ese `(entidad, operacion)` no admite lote
+/// (ver el doc-comment del módulo: el cierre de ingreso es un `PATCH`
+/// condicional, no un `upsert`).
+fn destino_lote(entidad: &str, operacion: &str) -> Option<(&'static str, Option<&'static str>)> {
+    match (entidad, operacion) {
+        ("empresa", _) => Some(("empresas", Some("nombre"))),
+        ("contratista", _) => Some(("contratistas", Some("identificacion"))),
+        ("gafete", _) => Some(("gafetes", Some("sitio_id,numero"))),
+        ("usuario", _) => Some(("usuarios", Some("cedula"))),
+        ("ingreso", "cerrar") => None,
+        ("ingreso", _) => Some(("ingresos", None)),
+        _ => None,
+    }
+}
+
+/// Arma el cuerpo local de una fila según su `entidad` -- dispatch que sólo
+/// usa [`enviar_lote`] para construir varios cuerpos y mandarlos en un
+/// array. El camino de una fila sola (`enviar_contratista` y compañía) no
+/// pasa por acá: cada uno ya llama directo a su propio
+/// `construir_cuerpo_*`.
+fn construir_cuerpo(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    entidad: &str,
+    uuid: &str,
+) -> Result<Value, SincronizacionError> {
+    match entidad {
+        "empresa" => construir_cuerpo_empresa(connection, contexto, uuid),
+        "contratista" => construir_cuerpo_contratista(connection, contexto, uuid),
+        "gafete" => construir_cuerpo_gafete(connection, contexto, uuid),
+        "usuario" => construir_cuerpo_usuario(connection, contexto, uuid),
+        "ingreso" => construir_cuerpo_ingreso(connection, contexto, uuid),
+        otra => unreachable!("destino_lote ya filtró entidades sin lote (recibido: {otra})"),
+    }
+}
+
+/// Manda un grupo entero -- todas la misma `(entidad, operacion)` -- en un
+/// único `POST` con un array de cuerpos. `destino_lote` decide la tabla y el
+/// `on_conflict`; si alguna fila del grupo ni siquiera se puede leer de la
+/// base local (por ejemplo, se borró mientras esperaba en la cola), el error
+/// sube tal cual y el llamador cae al camino fila por fila, donde esa fila
+/// puntual va a fallar de nuevo con el mismo error y quedar registrada sola.
+fn enviar_lote(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    tabla: &str,
+    on_conflict: Option<&str>,
+    entidad: &str,
+    grupo: &[FilaCola],
+) -> Result<(), SincronizacionError> {
+    let mut cuerpos = Vec::with_capacity(grupo.len());
+    for fila in grupo {
+        cuerpos.push(construir_cuerpo(connection, contexto, entidad, &fila.entidad_uuid)?);
+    }
+
+    let url = on_conflict.map_or_else(
+        || format!("{}/rest/v1/{tabla}", contexto.base_url),
+        |on_conflict| format!("{}/rest/v1/{tabla}?on_conflict={on_conflict}", contexto.base_url),
+    );
+
+    let respuesta = cliente
+        .post(url)
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpos)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Intenta mandar `grupo` (todas del mismo `(entidad, operacion)`) en un
+/// solo lote cuando corresponde; si el lote falla -- de red, o porque
+/// Postgres rechazó el `INSERT`/`upsert` completo por una sola fila mala --
+/// cae a mandar cada fila por separado, exactamente como si el lote nunca
+/// se hubiera intentado. Un grupo de una sola fila nunca pasa por el lote:
+/// no hay nada que ahorrar y así ese caso (el más común) queda idéntico al
+/// comportamiento de antes.
+fn drenar_grupo(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    grupo: Vec<FilaCola>,
+    resumen: &mut ResumenDrenado,
+) -> Result<(), SincronizacionError> {
+    if grupo.len() > 1
+        && let Some((tabla, on_conflict)) = destino_lote(&grupo[0].entidad, &grupo[0].operacion)
+    {
+        let intento_lote = enviar_lote(
+            cliente,
+            connection,
+            contexto,
+            tabla,
+            on_conflict,
+            &grupo[0].entidad,
+            &grupo,
+        );
+        if intento_lote.is_ok() {
+            for fila in &grupo {
+                marcar(connection, fila.id, "enviado", None)?;
+            }
+            resumen.enviados += u32::try_from(grupo.len()).unwrap_or(u32::MAX);
+            return Ok(());
+        }
+        // El lote entero falló -- se cae a fila por fila para aislar cuál
+        // es la mala en vez de reintentar a todo el grupo junto (ver el
+        // doc-comment del módulo).
+    }
+
+    for fila in grupo {
+        procesar_fila_individual(cliente, connection, contexto, fila, resumen)?;
+    }
+    Ok(())
+}
+
+/// Camino de una fila a la vez -- el único que existía antes del lote, y el
+/// que sigue manejando el cierre de ingreso y el fallback tras un lote
+/// fallido. Nunca devuelve error por una fila individual fallida -- eso
+/// queda registrado en la propia fila (`ultimo_error`, y
+/// `estado = 'fallido'` sólo tras [`INTENTOS_ANTES_DE_FALLO_PERMANENTE`]
+/// intentos); sólo devuelve error si no se pudo ni siquiera
+/// leer/actualizar la cola local.
+fn procesar_fila_individual(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    fila: FilaCola,
+    resumen: &mut ResumenDrenado,
+) -> Result<(), SincronizacionError> {
+    let resultado = match (fila.entidad.as_str(), fila.operacion.as_str()) {
+        ("empresa", _) => enviar_empresa(cliente, connection, contexto, &fila.entidad_uuid),
+        ("contratista", _) => enviar_contratista(cliente, connection, contexto, &fila.entidad_uuid),
+        ("gafete", _) => enviar_gafete(cliente, connection, contexto, &fila.entidad_uuid),
+        ("usuario", _) => enviar_usuario(cliente, connection, contexto, &fila.entidad_uuid),
+        ("ingreso", "cerrar") => {
+            enviar_cierre_ingreso(cliente, connection, contexto, &fila.entidad_uuid)
+        }
+        ("ingreso", _) => enviar_ingreso(cliente, connection, contexto, &fila.entidad_uuid),
+        _ => Ok(()),
+    };
+
+    match resultado {
+        Ok(()) => {
+            marcar(connection, fila.id, "enviado", None)?;
+            resumen.enviados += 1;
+        }
+        Err(error) => {
+            // "pendiente" de nuevo -- no "fallido" -- para que
+            // `pendientes()` la vuelva a considerar más adelante, sujeta
+            // al backoff según cuántas veces ya falló.
+            let estado = if fila.intentos + 1 >= INTENTOS_ANTES_DE_FALLO_PERMANENTE {
+                "fallido"
+            } else {
+                "pendiente"
+            };
+            marcar(connection, fila.id, estado, Some(&error.to_string()))?;
+            resumen.fallidos += 1;
+        }
+    }
+    Ok(())
 }
 
 /// Filas listas para reintentarse ahora: nunca tocadas (`intentos = 0`), o
@@ -288,12 +460,15 @@ fn obtener_json_paginado<T: serde::de::DeserializeOwned>(
 /// (pantalla Activos), pero no para que el otro dispositivo del mismo
 /// sitio pudiera registrar un ingreso nuevo de este contratista con las
 /// reglas de acceso correctas (ver `recibir_catalogo_del_sitio`).
-fn enviar_contratista(
-    cliente: &reqwest::blocking::Client,
+/// Sólo la parte local -- lee `contratistas`/`empresas` y arma el cuerpo que
+/// espera el receptor -- sin tocar la red. Separada de [`enviar_contratista`]
+/// para que [`enviar_lote`] pueda construir varios cuerpos y mandarlos juntos
+/// en un solo `POST` (array), sin duplicar esta consulta.
+fn construir_cuerpo_contratista(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
     uuid: &str,
-) -> Result<(), SincronizacionError> {
+) -> Result<Value, SincronizacionError> {
     let (
         cedula,
         nombre,
@@ -335,7 +510,7 @@ fn enviar_contratista(
         },
     )?;
 
-    let cuerpo = json!({
+    Ok(json!({
         "id": uuid,
         "sitio_id": contexto.sitio_id,
         "dispositivo_origen_id": contexto.dispositivo_id,
@@ -347,7 +522,16 @@ fn enviar_contratista(
         "tipo_ingreso": tipo_ingreso,
         "fecha_vencimiento_praind": fecha_vencimiento_praind,
         "es_personal_ruta": es_personal_ruta != 0,
-    });
+    }))
+}
+
+fn enviar_contratista(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let cuerpo = construir_cuerpo_contratista(connection, contexto, uuid)?;
 
     // `on_conflict=identificacion`, no el default (la PK `id`) -- sin esto,
     // dos bases locales que nunca compartieron el mismo `uuid` para el
@@ -377,25 +561,34 @@ fn enviar_contratista(
 /// la nube, esa fila falla por la FK real (`contratistas.empresa_id
 /// references empresas`) y el backoff la reintenta sola -- no hace falta
 /// forzar el orden acá.
-fn enviar_empresa(
-    cliente: &reqwest::blocking::Client,
+/// Ver el doc-comment de [`construir_cuerpo_contratista`] -- misma idea.
+fn construir_cuerpo_empresa(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
     uuid: &str,
-) -> Result<(), SincronizacionError> {
+) -> Result<Value, SincronizacionError> {
     let (nombre, activo): (String, i64) = connection.query_row(
         "SELECT nombre, activo FROM empresas WHERE uuid = ?1",
         params![uuid],
         |row| Ok((row.get(0)?, row.get(1)?)),
     )?;
 
-    let cuerpo = json!({
+    Ok(json!({
         "id": uuid,
         "sitio_id": contexto.sitio_id,
         "dispositivo_origen_id": contexto.dispositivo_id,
         "nombre": nombre,
         "activa": activo != 0,
-    });
+    }))
+}
+
+fn enviar_empresa(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let cuerpo = construir_cuerpo_empresa(connection, contexto, uuid)?;
 
     // `on_conflict=nombre` -- mismo motivo que `enviar_contratista`: sin
     // esto, dos bases locales sin el mismo `uuid` para la misma empresa
@@ -424,12 +617,12 @@ fn enviar_empresa(
 /// del contratista deudor (`NULL` si el gafete no está `PERDIDO`, o si esa
 /// fila del contratista todavía no se drenó -- mismo caso que
 /// `empresa_id` en `enviar_contratista`).
-fn enviar_gafete(
-    cliente: &reqwest::blocking::Client,
+/// Ver el doc-comment de [`construir_cuerpo_contratista`] -- misma idea.
+fn construir_cuerpo_gafete(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
     uuid: &str,
-) -> Result<(), SincronizacionError> {
+) -> Result<Value, SincronizacionError> {
     let (numero, estado, deudor_uuid, deudor_nombre): (
         i64,
         String,
@@ -446,7 +639,7 @@ fn enviar_gafete(
         |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
     )?;
 
-    let cuerpo = json!({
+    Ok(json!({
         "id": uuid,
         "sitio_id": contexto.sitio_id,
         "dispositivo_origen_id": contexto.dispositivo_id,
@@ -454,7 +647,16 @@ fn enviar_gafete(
         "estado": estado,
         "contratista_deudor_id": deudor_uuid,
         "contratista_deudor_nombre": deudor_nombre,
-    });
+    }))
+}
+
+fn enviar_gafete(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let cuerpo = construir_cuerpo_gafete(connection, contexto, uuid)?;
 
     // `on_conflict=sitio_id,numero` -- mismo motivo que
     // `enviar_contratista`/`enviar_empresa`: el número de gafete es único
@@ -480,19 +682,19 @@ fn enviar_gafete(
 /// `services/password.rs`): distribuye quién existe y su rol/estado, cada
 /// dispositivo fija su propia contraseña local la primera vez que ese
 /// operador inicia sesión ahí.
-fn enviar_usuario(
-    cliente: &reqwest::blocking::Client,
+/// Ver el doc-comment de [`construir_cuerpo_contratista`] -- misma idea.
+fn construir_cuerpo_usuario(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
     uuid: &str,
-) -> Result<(), SincronizacionError> {
+) -> Result<Value, SincronizacionError> {
     let (cedula, nombre, rol, activo): (String, String, String, i64) = connection.query_row(
         "SELECT cedula, nombre, rol, activo FROM usuarios WHERE uuid = ?1",
         params![uuid],
         |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
     )?;
 
-    let cuerpo = json!({
+    Ok(json!({
         "id": uuid,
         "sitio_id": contexto.sitio_id,
         "dispositivo_origen_id": contexto.dispositivo_id,
@@ -500,7 +702,16 @@ fn enviar_usuario(
         "nombre": nombre,
         "rol": rol,
         "activo": activo != 0,
-    });
+    }))
+}
+
+fn enviar_usuario(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let cuerpo = construir_cuerpo_usuario(connection, contexto, uuid)?;
 
     // `on_conflict=cedula` -- la tabla remota ya tiene `UNIQUE(cedula)`, pero
     // sin decirlo acá el upsert infiere la PK (`id`) como blanco del
@@ -522,15 +733,13 @@ fn enviar_usuario(
     exigir_2xx(respuesta)
 }
 
-/// Ingresos (cola), apertura: mismo criterio de `upsert` que contratistas
-/// -- reintentar un envío ya recibido no duplica nada.
+/// Ver el doc-comment de [`construir_cuerpo_contratista`] -- misma idea.
 #[allow(clippy::type_complexity)]
-fn enviar_ingreso(
-    cliente: &reqwest::blocking::Client,
+fn construir_cuerpo_ingreso(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
     uuid: &str,
-) -> Result<(), SincronizacionError> {
+) -> Result<Value, SincronizacionError> {
     let (
         contratista_id_local,
         contratista_nombre,
@@ -592,7 +801,7 @@ fn enviar_ingreso(
         |row| row.get(0),
     )?;
 
-    let cuerpo = json!({
+    Ok(json!({
         "id": uuid,
         "sitio_id": contexto.sitio_id,
         "dispositivo_entrada_id": contexto.dispositivo_id,
@@ -609,7 +818,18 @@ fn enviar_ingreso(
         "motivo_resultado": motivo_resultado,
         "reglas_version": reglas_version,
         "empresa_activa_snapshot": empresa_activa_snapshot,
-    });
+    }))
+}
+
+/// Ingresos (cola), apertura: mismo criterio de `upsert` que contratistas
+/// -- reintentar un envío ya recibido no duplica nada.
+fn enviar_ingreso(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let cuerpo = construir_cuerpo_ingreso(connection, contexto, uuid)?;
 
     let respuesta = cliente
         .post(format!("{}/rest/v1/ingresos", contexto.base_url))
@@ -1801,6 +2021,99 @@ mod tests {
             .query_row("SELECT estado FROM cola_salida", [], |row| row.get(0))
             .unwrap();
         assert_eq!(estado, "enviado");
+    }
+
+    /// Tres empresas nuevas -- sin relación entre sí, así que ninguna
+    /// depende de que otra fila del lote se haya aplicado antes.
+    fn conexion_con_tres_empresas() -> Connection {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        for n in 1..=3 {
+            connection
+                .execute(
+                    &format!(
+                        "INSERT INTO empresas (nombre, activo, uuid)
+                         VALUES ('Empresa {n}', 1, 'uuid-empresa-{n}')"
+                    ),
+                    [],
+                )
+                .unwrap();
+            connection
+                .execute(
+                    &format!(
+                        "INSERT INTO cola_salida (
+                            entidad, entidad_uuid, operacion, creado_en, actualizado_en
+                        ) VALUES ('empresa', 'uuid-empresa-{n}', 'crear', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+                    ),
+                    [],
+                )
+                .unwrap();
+        }
+        connection
+    }
+
+    #[test]
+    fn agrupa_varias_filas_del_mismo_tipo_y_las_manda_en_un_solo_lote() {
+        let connection = conexion_con_tres_empresas();
+        // Una sola respuesta -- si `drenar_cola` mandara una petición por
+        // fila (comportamiento viejo), la segunda y tercera empresa se
+        // quedarían sin servidor que les conteste y la prueba fallaría por
+        // timeout/error de red en vez de pasar.
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 3,
+                fallidos: 0
+            }
+        );
+        let enviadas: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM cola_salida WHERE estado = 'enviado'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(enviadas, 3);
+    }
+
+    #[test]
+    fn si_el_lote_completo_falla_cae_a_mandar_cada_fila_por_separado() {
+        let connection = conexion_con_tres_empresas();
+        // Primera respuesta (al intento de lote): error -- simula que
+        // Postgres rechazó el array entero por una sola fila mala. El
+        // fallback reintenta las tres filas por separado, pero acá sólo se
+        // preparan dos respuestas más a propósito: la prueba verifica que
+        // esas dos se marcan `enviado` igual, y que a la tercera (sin
+        // respuesta esperándola, como un error de red real) no se la
+        // pierde ni se la cuenta como enviada -- queda `pendiente` para el
+        // próximo intento.
+        let base_url = servidor_de_respuestas(vec![
+            "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"fila invalida\"}",
+            "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        ]);
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        // El lote falló una vez (no cuenta como fallo por fila), y las tres
+        // filas individuales se reintentaron dentro de la misma llamada:
+        // dos con éxito. La tercera no tiene respuesta preparada -- se
+        // queda pendiente, igual que pasaría con un error de red real.
+        assert_eq!(resumen.enviados, 2);
+        let pendientes: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM cola_salida WHERE estado = 'pendiente'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(pendientes, 1, "la tercera fila queda para reintentar, no perdida ni duplicada");
     }
 
     #[test]
