@@ -369,7 +369,7 @@ Cada optimización debe tener:
 
 9. Benchmark `synchronous=EXTRA` vs alternativas sólo si aparece como cuello de botella.
 10. Micro-optimizaciones después de resolver los objetivos anteriores.
-11. Perfil `production` (fat LTO, `panic=abort`) para el build final -- ver sección 18. PGO/BOLT quedan para cuando el núcleo esté estable.
+11. ✅ Perfil `production` (fat LTO, `panic=abort`) para el build final -- ver sección 18 (implementado y verificado, ~20% más chico que `release`). PGO/BOLT quedan para cuando el núcleo esté estable.
 
 ---
 
@@ -460,7 +460,7 @@ máquina que va a correr ese binario.
   apto para un `.exe` que se distribuye a hardware desconocido, porque
   puede generar instrucciones que un procesador más viejo no soporte.
 
-### Perfiles propuestos (no implementados todavía)
+### Perfiles propuestos -- `production` ya implementado y verificado (2026-09-10)
 
 ```text
 DEV               cargo run / cargo build -- iteración rápida, SQLite normal
@@ -470,7 +470,7 @@ PRODUCTION        opt-level 3, fat LTO, codegen-units 1, panic="abort",
                   strip -- SQLCipher + DPAPI, E2E obligatorio antes de firmar
 ```
 
-Ejemplo de perfil `production` (agregar a `Cargo.toml`, no implementado):
+Perfil agregado a `Cargo.toml`:
 
 ```toml
 [profile.production]
@@ -478,6 +478,45 @@ inherits = "release"
 lto = "fat"
 panic = "abort"
 ```
+
+**Verificación real (Windows, `cargo build --profile production --features nube`
+vs. `cargo build --release --features nube` con las mismas flags, mismo
+commit):**
+
+| Perfil | Tamaño de `control_acceso.exe` | Tiempo de build |
+|---|---|---|
+| `release` (thin LTO) | 11 064 320 bytes (~10.6 MiB) | ~8 min |
+| `production` (fat LTO + `panic=abort`) | 8 805 888 bytes (~8.4 MiB) | ~8 min |
+
+`production` da un binario **~20% más chico** (2 258 432 bytes menos) que
+`release` con el mismo `strip=true` en ambos -- la diferencia es
+`panic=abort` (elimina tablas de unwind/landing pads que este crate nunca
+usa, ver el análisis de `unwrap`/`expect`/`panic!` más abajo) más lo que
+logra `fat` LTO de más agresivo sobre `thin`. Tiempo de compilación
+similar en esta corrida -- no se notó el costo extra de `fat` LTO que
+suele documentarse, probablemente por el tamaño todavía moderado del
+crate. Los 531 tests de la suite completa (`cargo test --lib --features
+nube`, que corre bajo el perfil `dev`/`test`, no bajo `production`) siguen
+en verde sin cambios.
+
+**Gotcha de entorno para quien compile en Windows sin haberlo hecho antes:**
+`rusqlite` usa `bundled-sqlcipher-vendored-openssl`, que compila OpenSSL
+desde código fuente en cualquier build fresco (`dev`, `release` o
+`production` -- no es específico de este perfil). Eso requiere un Perl
+completo con el módulo `Locale::Maketext::Simple`; si el `perl` que
+resuelve el PATH es uno recortado (por ejemplo el de Git Bash/MSYS2), la
+build falla en el paso `Configure` de OpenSSL con "Can't locate
+Locale/Maketext/Simple.pm". Con Strawberry Perl instalado (trae ese
+módulo), antepone su `bin` al PATH antes de compilar:
+
+```powershell
+$env:PATH = "C:\Strawberry\perl\bin;C:\Strawberry\c\bin;$env:PATH"
+cargo build --profile production --features nube
+```
+
+Strawberry Perl también existe en versión "portable" (zip sin instalador,
+sitio oficial `strawberryperl.com`) para máquinas donde no se quiera
+instalar nada -- se descomprime y se antepone al PATH igual que arriba.
 
 ### PGO (Profile-Guided Optimization) -- más adelante, no ahora
 

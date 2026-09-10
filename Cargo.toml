@@ -115,3 +115,19 @@ strip = true
 
 [profile.release-native]
 inherits = "release"
+
+# Build final de distribucion -- ver docs/auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md
+# seccion 18. `fat` LTO optimiza todos los crates juntos en vez de por separado
+# (mas lento de compilar/linkear que `thin`, tiempo que no importa para un build
+# final poco frecuente). `panic = "abort"` es seguro acá: el codigo de produccion
+# de este crate no depende de unwind para nada -- los unicos `expect()`/`unwrap()`
+# fuera de `#[cfg(test)]` (credenciales.rs, formulario.rs) protegen invariantes
+# matematicamente verdaderos (tamanos fijos de SHA-256/nonce, una rama de
+# validacion ya cerrada), no fallas esperables; si alguno disparara, ya seria un
+# bug de invariante roto, no un caso a recuperar con unwind. No incluye
+# `target-cpu=native` -- ese sigue siendo `release-native`/`build-native`, sólo
+# para compilar en la misma maquina que va a correr el binario.
+[profile.production]
+inherits = "release"
+lto = "fat"
+panic = "abort"
