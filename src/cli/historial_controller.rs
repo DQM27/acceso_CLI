@@ -5,10 +5,8 @@
 
 use std::path::PathBuf;
 use std::sync::mpsc;
-use std::time::Duration;
 
 use crossterm::event::{Event, KeyCode, KeyEvent};
-use rusqlite::Connection;
 use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
 
@@ -226,9 +224,7 @@ fn exportar_en_hilo(
     let (emisor, receptor) = mpsc::channel();
     std::thread::spawn(move || {
         let resultado: Result<usize, String> = (|| {
-            let conexion = Connection::open(&ruta_base_datos).map_err(|error| error.to_string())?;
-            conexion
-                .busy_timeout(Duration::from_secs(5))
+            let conexion = crate::database::connection::abrir_conexion_secundaria(&ruta_base_datos, None)
                 .map_err(|error| error.to_string())?;
             exportar_historial_seleccion_con_conexion(
                 &conexion,

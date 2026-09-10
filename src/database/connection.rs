@@ -127,6 +127,51 @@ fn abrir_conexion(path: impl AsRef<Path>, clave: Option<&[u8; 32]>) -> Result<Co
     Ok(connection)
 }
 
+/// Pragmas por-conexión que `initialize_database` ya fija en la conexión
+/// principal (`fijar_pragmas_iniciales`, ver `schema.rs`) -- salvo
+/// `journal_mode`, que es una propiedad del archivo (no de la conexión) y
+/// ya queda heredada por cualquier conexión nueva una vez que la principal
+/// la activó una sola vez. `foreign_keys`, `synchronous`, `trusted_schema`
+/// y `secure_delete` sí son por-conexión: una conexión que sólo hace
+/// `Connection::open()` sin repetir esto arranca con los valores por
+/// defecto de `SQLite` (`foreign_keys` OFF, entre otros), no con la
+/// configuración real de la app.
+const PRAGMAS_CONEXION_SECUNDARIA: &str = "
+    PRAGMA foreign_keys = ON;
+    PRAGMA busy_timeout = 5000;
+    PRAGMA synchronous = EXTRA;
+    PRAGMA trusted_schema = OFF;
+    PRAGMA secure_delete = FAST;
+    ";
+
+/// Abre una conexión adicional al mismo archivo que ya inicializó
+/// [`open_database`]/[`open_database_cifrada`] -- pensada para trabajo en
+/// un hilo aparte (exportar, sincronizar) que no debe competir por el
+/// candado de escritura de la conexión principal
+/// (`docs/pendientes.md` sobre el hilo de exportación en TUI/CLI, mismo
+/// patrón que `GuiState::conexion_secundaria` en escritorio). A diferencia
+/// de `open_database`/`open_database_cifrada`, NO corre
+/// `initialize_database` (la conexión principal ya migró el archivo) ni
+/// vuelve a validarlo -- sólo aplica la clave si corresponde y los mismos
+/// pragmas por-conexión que la principal, para que el comportamiento
+/// (integridad referencial, durabilidad, timeout de lock) sea el mismo en
+/// las dos. `clave` en `None` para una base sin cifrar -- hoy el único caso
+/// real de TUI/CLI, que nunca abren una base cifrada (ver
+/// `docs/auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md`,
+/// hallazgo R-07); se deja el parámetro para no tener que tocar a los
+/// llamadores otra vez si eso cambia.
+pub fn abrir_conexion_secundaria(
+    path: impl AsRef<Path>,
+    clave: Option<&[u8; 32]>,
+) -> Result<Connection, SchemaError> {
+    let connection = Connection::open(path)?;
+    if let Some(clave) = clave {
+        aplicar_clave(&connection, clave)?;
+    }
+    connection.execute_batch(PRAGMAS_CONEXION_SECUNDARIA)?;
+    Ok(connection)
+}
+
 fn clave_a_hex(clave: &[u8; 32]) -> String {
     use std::fmt::Write;
     clave.iter().fold(String::with_capacity(64), |mut hex, byte| {

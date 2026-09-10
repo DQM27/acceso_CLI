@@ -14,9 +14,6 @@
 
 use std::path::PathBuf;
 use std::sync::mpsc;
-use std::time::Duration;
-
-use rusqlite::Connection;
 
 use crate::application::{AppCore, exportar_historial_seleccion_con_conexion};
 use crate::database::queries::ingresos::FiltroHistorial;
@@ -38,9 +35,7 @@ fn exportar_historial_en_hilo(
     let (emisor, receptor) = mpsc::channel();
     std::thread::spawn(move || {
         let resultado: Result<usize, String> = (|| {
-            let conexion = Connection::open(&ruta_base_datos).map_err(|error| error.to_string())?;
-            conexion
-                .busy_timeout(Duration::from_secs(5))
+            let conexion = crate::database::connection::abrir_conexion_secundaria(&ruta_base_datos, None)
                 .map_err(|error| error.to_string())?;
             exportar_historial_seleccion_con_conexion(&conexion, &filtro, None, &columnas, &destino)
                 .map_err(|error| error.to_string())
