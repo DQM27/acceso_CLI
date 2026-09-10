@@ -23,17 +23,27 @@ pub enum NubeError {
 /// "best effort".
 const TIMEOUT_HTTP: std::time::Duration = std::time::Duration::from_secs(10);
 
-/// Único punto de construcción del cliente HTTP bloqueante -- ver
-/// `TIMEOUT_HTTP`. `unwrap_or_else` en vez de `expect`: si el backend TLS
-/// del sistema fallara al construirlo con el timeout (no debería, es la
-/// misma config con la que ya se usaba `Client::new()` en todo el crate),
-/// cae al cliente sin timeout en vez de entrar en pánico mitad de una
+/// Único cliente HTTP bloqueante del crate -- construido una sola vez (ver
+/// `TIMEOUT_HTTP`) y reutilizado desde entonces. Antes cada llamada a
+/// `cliente_http()` levantaba un `Client` nuevo, tirando el pool de
+/// conexiones/TLS de la llamada anterior; con `LazyLock` todas comparten el
+/// mismo pool. `unwrap_or_else` en vez de `expect`: si el backend TLS del
+/// sistema fallara al construirlo con el timeout (no debería, es la misma
+/// config con la que ya se usaba `Client::new()` en todo el crate), cae al
+/// cliente sin timeout en vez de entrar en pánico mitad de una
 /// sincronización.
-pub(crate) fn cliente_http() -> reqwest::blocking::Client {
+static CLIENTE_HTTP: std::sync::LazyLock<reqwest::blocking::Client> = std::sync::LazyLock::new(|| {
     reqwest::blocking::Client::builder()
         .timeout(TIMEOUT_HTTP)
         .build()
         .unwrap_or_else(|_| reqwest::blocking::Client::new())
+});
+
+/// Clon barato del cliente compartido -- `reqwest::blocking::Client` envuelve
+/// su estado (pool de conexiones, config TLS) en un `Arc` por dentro, así que
+/// clonarlo no repite ninguno de los dos trabajos.
+pub(crate) fn cliente_http() -> reqwest::blocking::Client {
+    CLIENTE_HTTP.clone()
 }
 
 /// Token que autoriza a este dispositivo a leer/escribir únicamente los
