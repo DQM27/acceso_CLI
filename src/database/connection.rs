@@ -6,8 +6,7 @@ use std::{
 
 use rusqlite::Connection;
 
-use super::backup::TipoRespaldo;
-use super::schema::{SCHEMA_VERSION, SchemaError, initialize_database, verificar_archivo_propio};
+use super::schema::{SchemaError, initialize_database, verificar_archivo_propio};
 
 pub const DATABASE_PATH_ENV: &str = "CONTROL_ACCESO_DB";
 pub const LOCAL_APP_DATA_ENV: &str = "LOCALAPPDATA";
@@ -88,51 +87,15 @@ fn preparar_directorio(ruta_base_datos: &Path) -> Result<(), RutaBaseDatosError>
 }
 
 /// Abre la base productiva y aplica toda su inicialización en una única ruta.
+///
+/// Rama experimental de cifrado: los respaldos locales previos a migración se
+/// eliminaron deliberadamente. La recuperación se delega a la nube y evitamos
+/// crear copias SQLite en claro alrededor de una base cifrada.
 pub fn open_database(path: impl AsRef<Path>) -> Result<Connection, SchemaError> {
-    let path = path.as_ref();
     let connection = Connection::open(path)?;
     verificar_archivo_propio(&connection)?;
-    respaldar_antes_de_migrar(&connection, path)?;
     initialize_database(&connection)?;
     Ok(connection)
-}
-
-/// Si hay una migración de esquema pendiente, crea un respaldo
-/// `TipoRespaldo::PreMigracion` antes de que `initialize_database` la
-/// aplique — es obligatorio: si el respaldo falla, esta función devuelve
-/// error y la migración nunca corre. No hace nada en una base nueva
-/// (`version == 0`, nada que proteger) ni en una ya al día (el caso normal
-/// en cada arranque).
-fn respaldar_antes_de_migrar(connection: &Connection, path: &Path) -> Result<(), SchemaError> {
-    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-    if version == 0 || version >= SCHEMA_VERSION {
-        return Ok(());
-    }
-    // No se salta en silencio si falta el directorio padre: el respaldo es
-    // obligatorio, así que sin dónde ponerlo es un fallo, no un "nada que
-    // hacer" — contradecía el propio comentario de esta función.
-    let directorio_base = path.parent().ok_or_else(|| {
-        SchemaError::RespaldoPreMigracionFallido(
-            "no se pudo determinar el directorio de la base de datos".to_owned(),
-        )
-    })?;
-    let directorio_respaldos = directorio_base.join("backups");
-
-    super::backup::crear_respaldo(
-        connection,
-        &directorio_respaldos,
-        TipoRespaldo::PreMigracion,
-    )
-    .map_err(|error| SchemaError::RespaldoPreMigracionFallido(error.to_string()))?;
-
-    // Best-effort: si la limpieza de respaldos viejos falla, no se bloquea el
-    // arranque por eso — sólo el respaldo obligatorio en sí es bloqueante.
-    let _ = super::backup::aplicar_retencion(
-        &directorio_respaldos,
-        TipoRespaldo::PreMigracion,
-        super::backup::RETENCION_PRE_MIGRACION,
-    );
-    Ok(())
 }
 
 #[cfg(test)]
@@ -154,9 +117,7 @@ mod tests {
     #[test]
     fn usa_local_app_data_por_defecto() {
         let local = directorio_temporal("local");
-
         let ruta = resolver_ruta_base_datos(None, Some(local.clone().into_os_string())).unwrap();
-
         assert_eq!(
             ruta,
             local.join(APP_DATA_DIRECTORY).join(DATABASE_FILE_NAME)
@@ -167,13 +128,11 @@ mod tests {
     fn ruta_configurada_absoluta_tiene_prioridad() {
         let configurada = directorio_temporal("configurada").join("personalizada.db");
         let local = directorio_temporal("ignorada");
-
         let ruta = resolver_ruta_base_datos(
             Some(configurada.clone().into_os_string()),
             Some(local.into_os_string()),
         )
         .unwrap();
-
         assert_eq!(ruta, configurada);
     }
 
@@ -183,7 +142,6 @@ mod tests {
             Some(OsString::from("otra.db")),
             Some(directorio_temporal("local").into_os_string()),
         );
-
         assert!(matches!(
             resultado,
             Err(RutaBaseDatosError::RutaNoAbsoluta {
@@ -196,7 +154,6 @@ mod tests {
     #[test]
     fn falla_si_local_app_data_no_esta_disponible() {
         let resultado = resolver_ruta_base_datos(None, None);
-
         assert!(matches!(
             resultado,
             Err(RutaBaseDatosError::VariableNoDisponible {
@@ -209,9 +166,7 @@ mod tests {
     fn crea_el_directorio_padre_antes_de_abrir_sqlite() {
         let raiz = directorio_temporal("crear");
         let ruta = raiz.join("datos").join(DATABASE_FILE_NAME);
-
         preparar_directorio(&ruta).unwrap();
-
         assert!(ruta.parent().unwrap().is_dir());
         fs::remove_dir_all(&raiz).unwrap();
     }
