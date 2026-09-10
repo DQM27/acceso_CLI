@@ -90,25 +90,37 @@ fn preparar_directorio(ruta_base_datos: &Path) -> Result<(), RutaBaseDatosError>
 ///
 /// Rama experimental de cifrado: los respaldos locales previos a migración se
 /// eliminaron deliberadamente. La recuperación se delega a la nube y evitamos
-/// crear copias SQLite en claro alrededor de una base cifrada.
+/// crear copias `SQLite` en claro alrededor de una base cifrada.
 pub fn open_database(path: impl AsRef<Path>) -> Result<Connection, SchemaError> {
     abrir_conexion(path, None)
 }
 
-/// Igual que [`open_database`], pero cifrada con SQLCipher usando `clave`
-/// como clave binaria cruda (no una passphrase -- SQLCipher se salta la
+/// Igual que [`open_database`], pero cifrada con `SQLCipher` usando `clave`
+/// como clave binaria cruda (no una passphrase -- `SQLCipher` se salta la
 /// derivación PBKDF2 de una vez, ver `PRAGMA key = "x'...'"` en su
 /// documentación). Quien llama resuelve y protege esa clave (ver
 /// `desktop/src-tauri/src/clave_cifrado.rs` para el esquema con DPAPI en
 /// escritorio) -- este módulo sólo la aplica.
-pub fn open_database_cifrada(path: impl AsRef<Path>, clave: &[u8; 32]) -> Result<Connection, SchemaError> {
+pub fn open_database_cifrada(
+    path: impl AsRef<Path>,
+    clave: &[u8; 32],
+) -> Result<Connection, SchemaError> {
     abrir_conexion(path, Some(clave))
+}
+
+/// Aplica la clave de `SQLCipher` a una conexión recién abierta con
+/// `Connection::open` -- para conexiones secundarias al mismo archivo que no
+/// deben repetir `initialize_database` (ya migrada por la conexión
+/// principal). Debe llamarse antes de cualquier otra operación sobre la
+/// conexión: sin la clave, `SQLCipher` ni siquiera puede leer el schema.
+pub fn aplicar_clave(connection: &Connection, clave: &[u8; 32]) -> rusqlite::Result<()> {
+    connection.pragma_update(None, "key", format!("x'{}'", clave_a_hex(clave)))
 }
 
 fn abrir_conexion(path: impl AsRef<Path>, clave: Option<&[u8; 32]>) -> Result<Connection, SchemaError> {
     let connection = Connection::open(path)?;
     if let Some(clave) = clave {
-        connection.pragma_update(None, "key", format!("x'{}'", clave_a_hex(clave)))?;
+        aplicar_clave(&connection, clave)?;
     }
     verificar_archivo_propio(&connection)?;
     initialize_database(&connection)?;
@@ -116,7 +128,11 @@ fn abrir_conexion(path: impl AsRef<Path>, clave: Option<&[u8; 32]>) -> Result<Co
 }
 
 fn clave_a_hex(clave: &[u8; 32]) -> String {
-    clave.iter().map(|byte| format!("{byte:02x}")).collect()
+    use std::fmt::Write;
+    clave.iter().fold(String::with_capacity(64), |mut hex, byte| {
+        let _ = write!(hex, "{byte:02x}");
+        hex
+    })
 }
 
 #[cfg(test)]

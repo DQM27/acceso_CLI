@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use rusqlite::Connection;
 
-use crate::database::connection::open_database;
+use crate::database::connection::{open_database, open_database_cifrada};
 use crate::database::error::DatabaseError;
 use crate::database::repositories::usuario_repository::{
     SqliteUsuarioRepository, UsuarioRepository,
@@ -57,7 +57,7 @@ pub enum BootstrapError {
     Database(#[from] SchemaError),
 }
 
-/// Fachada de aplicación y propietario único de la conexión SQLite.
+/// Fachada de aplicación y propietario único de la conexión `SQLite`.
 pub struct AppCore {
     connection: Connection,
     reloj: Arc<dyn Reloj>,
@@ -88,6 +88,18 @@ impl AppCore {
         reloj: Arc<dyn Reloj>,
     ) -> Result<Self, BootstrapError> {
         Ok(Self::con_reloj(open_database(path)?, reloj))
+    }
+
+    /// Igual que [`Self::abrir_con_reloj`], pero cifrada con `SQLCipher`.
+    /// `clave` es responsabilidad de quien llama: en escritorio sale de un
+    /// blob protegido con DPAPI (ver `desktop/src-tauri/src/clave_cifrado.rs`);
+    /// en Android, del Keystore.
+    pub fn abrir_con_reloj_cifrado(
+        path: impl AsRef<Path>,
+        clave: &[u8; 32],
+        reloj: Arc<dyn Reloj>,
+    ) -> Result<Self, BootstrapError> {
+        Ok(Self::con_reloj(open_database_cifrada(path, clave)?, reloj))
     }
 }
 

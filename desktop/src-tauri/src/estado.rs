@@ -3,10 +3,12 @@ use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use control_acceso::application::AppCore;
+use control_acceso::database::connection::aplicar_clave;
 use control_acceso::instancia::InstanciaGuard;
 use control_acceso::nube::{self, NubeError, TokenDispositivo};
 use control_acceso::services::autenticacion_service::UsuarioSesion;
 use rusqlite::Connection;
+use zeroize::Zeroizing;
 
 /// Ver `GuiState::autenticar_con_cache` -- último `TokenDispositivo`
 /// obtenido mientras siga vigente, para no autenticar de cero en cada
@@ -41,19 +43,30 @@ pub struct GuiState {
     token_nube_cacheado: Mutex<Option<TokenCacheado>>,
     /// Ruta del archivo de base de datos, resuelta una sola vez al arrancar
     /// (ver `lib.rs::run`) — el núcleo ya no expone `ruta_base_datos()`
-    /// (rama SQLCipher sin respaldo local), así que `conexion_secundaria`
+    /// (rama `SQLCipher` sin respaldo local), así que `conexion_secundaria`
     /// la necesita guardada acá.
     ruta_base_datos: PathBuf,
+    /// Clave de `SQLCipher` ya resuelta al arrancar (ver
+    /// `lib.rs::run`/`clave_cifrado.rs`) — `conexion_secundaria` la necesita
+    /// para poder leer el mismo archivo cifrado. `Zeroizing` la borra de
+    /// memoria cuando la app cierra.
+    clave_base_datos: Zeroizing<[u8; 32]>,
 }
 
 impl GuiState {
-    pub fn new(core: AppCore, instancia: InstanciaGuard, ruta_base_datos: PathBuf) -> Self {
+    pub fn new(
+        core: AppCore,
+        instancia: InstanciaGuard,
+        ruta_base_datos: PathBuf,
+        clave_base_datos: Zeroizing<[u8; 32]>,
+    ) -> Self {
         Self {
             core: Mutex::new(core),
             sesion: Mutex::new(None),
             _instancia: instancia,
             token_nube_cacheado: Mutex::new(None),
             ruta_base_datos,
+            clave_base_datos,
         }
     }
 
@@ -120,6 +133,7 @@ impl GuiState {
     pub fn conexion_secundaria(&self) -> Result<Connection, String> {
         let conexion =
             Connection::open(&self.ruta_base_datos).map_err(|error| error.to_string())?;
+        aplicar_clave(&conexion, &self.clave_base_datos).map_err(|error| error.to_string())?;
         conexion
             .busy_timeout(Duration::from_secs(5))
             .map_err(|error| error.to_string())?;

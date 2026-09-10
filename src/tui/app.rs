@@ -137,7 +137,7 @@ pub struct App {
     /// Ruta del archivo de base de datos, resuelta una sola vez al arrancar
     /// (ver `main.rs`) — la usa `historial_jobs.rs` para abrir su propia
     /// conexión de exportación; el núcleo ya no expone
-    /// `AppCore::ruta_base_datos()` (rama SQLCipher sin respaldo local).
+    /// `AppCore::ruta_base_datos()` (rama `SQLCipher` sin respaldo local).
     ruta_base_datos: std::path::PathBuf,
 }
 

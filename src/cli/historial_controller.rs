@@ -443,7 +443,7 @@ mod tests {
         let actor = core.autenticar("ROOT-1", "password1").unwrap();
 
         let mut app = AppState::con_sesion(actor);
-        app.ruta_base_datos = ruta_base_datos.clone();
+        app.ruta_base_datos = ruta_base_datos;
         let mut historial = HistorialState::nuevo(Vec::new());
         historial.filtro = FiltroHistorial::nuevo(
             Utc.with_ymd_and_hms(2000, 1, 1, 0, 0, 0).unwrap(),

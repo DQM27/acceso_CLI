@@ -481,6 +481,7 @@ dependencies = [
  "chrono",
  "control_acceso",
  "log",
+ "rand_core 0.6.4",
  "rusqlite",
  "serde",
  "serde_json",
@@ -490,10 +491,12 @@ dependencies = [
  "tauri-plugin-log",
  "tauri-plugin-process",
  "tauri-plugin-updater",
+ "thiserror 2.0.20",
  "tokio",
  "url",
  "webview2-com",
  "windows",
+ "zeroize",
 ]
 
 [[package]]

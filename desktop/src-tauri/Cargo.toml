@@ -31,6 +31,7 @@ control_acceso = { path = "../..", default-features = false, features = ["serde"
 # features propias: la unificación de dependencias ya trae "bundled" desde
 # el crate raíz.
 rusqlite = "0.40.2"
+thiserror = "2"
 chrono = { version = "0.4.45", features = ["serde"] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -117,7 +118,19 @@ missing_panics_doc = "deny"
 # fijadas a lo que `wry` ya trae transitivamente (ver Cargo.lock) — dos
 # copias de estas crates en el árbol sería un dolor de cabeza innecesario.
 webview2-com = "=0.38.2"
-windows = { version = "=0.61.3", features = ["Win32_UI_WindowsAndMessaging"] }
+# "Win32_Security_Cryptography"/"Win32_Foundation": DPAPI (CryptProtectData/
+# CryptUnprotectData) para proteger la clave de SQLCipher en disco -- ver
+# clave_cifrado.rs.
+windows = { version = "=0.61.3", features = [
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Security_Cryptography",
+    "Win32_Foundation",
+] }
+# Generar la clave de 256 bits de SQLCipher (rand_core, misma versión que fija
+# el crate raíz para que Cargo unifique una sola copia) y borrarla de memoria
+# apenas se usa (zeroize) -- ver clave_cifrado.rs.
+rand_core = { version = "0.6", features = ["getrandom"] }
+zeroize = "1"
 
 [profile.release]
 opt-level = 3

@@ -7,6 +7,8 @@ use control_acceso::instancia::InstanciaGuard;
 use control_acceso::tiempo::RelojCorregido;
 use tauri::{Emitter, Manager};
 
+#[cfg(windows)]
+mod clave_cifrado;
 mod comandos;
 mod dto;
 mod estado;
@@ -91,6 +93,17 @@ pub fn run() {
              misma base de datos?): {error}"
         ))
     });
+    // Clave de SQLCipher: nunca hardcodeada ni derivada de un identificador
+    // adivinable (Machine GUID, usuario, MAC...) -- 32 bytes aleatorios,
+    // generados una sola vez y protegidos en disco con DPAPI (scope del
+    // usuario actual de Windows). Ver `clave_cifrado.rs` para el porqué.
+    let directorio_base_datos = ruta_base_datos.parent().unwrap_or_else(|| {
+        mostrar_error_fatal_y_salir("No se pudo resolver el directorio de la base de datos")
+    });
+    let clave_base_datos =
+        clave_cifrado::resolver_clave(directorio_base_datos, &ruta_base_datos).unwrap_or_else(
+            |error| mostrar_error_fatal_y_salir(&format!("No se pudo resolver la clave de cifrado de la base de datos: {error}")),
+        );
     // `RelojCorregido`, no `RelojSistema`: en equipos cuyo reloj de Windows
     // no se puede corregir (visto en producción, ~11 min adelantado y sin
     // sincronizar), cada autenticación contra la nube mide el desfase real
@@ -98,15 +111,24 @@ pub fn run() {
     // `application::nube::AppCore::actualizar_desfase_reloj`. Sin nube
     // configurada nunca se mide nada y este reloj se comporta igual que
     // `RelojSistema`.
-    let core = AppCore::abrir_con_reloj(&ruta_base_datos, Arc::new(RelojCorregido::nuevo()))
-        .unwrap_or_else(|error| {
-            mostrar_error_fatal_y_salir(&format!("No se pudo abrir la base de datos: {error}"))
-        });
+    let core = AppCore::abrir_con_reloj_cifrado(
+        &ruta_base_datos,
+        &clave_base_datos,
+        Arc::new(RelojCorregido::nuevo()),
+    )
+    .unwrap_or_else(|error| {
+        mostrar_error_fatal_y_salir(&format!("No se pudo abrir la base de datos: {error}"))
+    });
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
-        .manage(GuiState::new(core, instancia, ruta_base_datos))
+        .manage(GuiState::new(
+            core,
+            instancia,
+            ruta_base_datos,
+            clave_base_datos,
+        ))
         .setup(|app| {
             // El updater no existe en móvil — esta app es 100% escritorio (ver
             // el comentario de crate-type arriba), pero se guarda el gate
