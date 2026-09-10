@@ -369,6 +369,7 @@ Cada optimización debe tener:
 
 9. Benchmark `synchronous=EXTRA` vs alternativas sólo si aparece como cuello de botella.
 10. Micro-optimizaciones después de resolver los objetivos anteriores.
+11. Perfil `production` (fat LTO, `panic=abort`) para el build final -- ver sección 18. PGO/BOLT quedan para cuando el núcleo esté estable.
 
 ---
 
@@ -388,3 +389,114 @@ El núcleo puede considerarse sano desde rendimiento cuando:
 ## 17. Conclusión
 
 El núcleo no necesita una arquitectura más pesada para ser rápido. Los mayores beneficios vendrán de reducir transferencias masivas, round trips y duplicación de datos. SQLite sigue siendo apropiado; el cifrado debe tratarse como una variante de backend probada continuamente, no como una implementación separada del dominio.
+
+---
+
+## 18. Perfiles de compilación de Cargo (P3 -- después de arquitectura/queries/HTTP)
+
+Nivel distinto al resto del documento: esto no cambia código, cambia cómo
+se compila el binario ya escrito. Mismo orden de prioridad que el resto —
+"arquitectura → SQLite/queries → cantidad de requests → serialización →
+asignaciones → perfil de release → PGO → microoptimizaciones" — reducir
+100 requests HTTP a un lote de 2 (R-02, ya resuelto en el código) es una
+mejora de orden de magnitud; pasar de `lto = "thin"` a `lto = "fat"` no lo
+es. No vale la pena tocar esto antes de agotar P1/P2.
+
+### Estado real verificado (2026-09-10)
+
+`Cargo.toml` ya tiene:
+
+```toml
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+
+[profile.release-native]
+inherits = "release"
+```
+
+Y `.cargo/config.toml` ya define un alias para compilar con
+`target-cpu=native`:
+
+```toml
+[alias]
+build-native = ["--config", "build.rustflags=['-C','target-cpu=native']", "build", "--profile", "release-native"]
+```
+
+Es decir: la base (`opt-level=3`, `lto=thin`, `codegen-units=1`, `strip`) y
+el andamiaje para un build nativo ya existen. Lo que falta es un perfil
+`production` separado del `release`/CI genérico, y la decisión consciente
+de no usar `target-cpu=native` para binarios que se distribuyen a hardware
+desconocido (instrucciones AVX/AVX2 que el procesador de destino podría no
+soportar) -- `build-native` queda reservado para compilar en la propia
+máquina que va a correr ese binario.
+
+### Qué significa cada flag
+
+- `opt-level = 3`: optimización agresiva para velocidad (vs. tamaño).
+- `lto = "thin"`: Link-Time Optimization entre crates, buen equilibrio
+  entre rendimiento y tiempo de compilación.
+- `lto = "fat"`: LLVM optimiza prácticamente todo el programa junto en vez
+  de por crate -- puede sacar algo más de rendimiento que `thin`, a costa
+  de compilar y linkear bastante más lento. Con tiempo de compilación fuera
+  de la ecuación (según indicó el usuario), es razonable probarlo sólo en
+  el perfil de producción final, no en el de desarrollo/CI.
+- `codegen-units = 1`: LLVM optimiza el programa como un bloque más grande
+  en vez de paralelizar la codegen por unidades -- compila más lento,
+  suele producir mejor código.
+- `strip = true`: quita símbolos de depuración del binario final. Reduce
+  tamaño de distribución; no mejora velocidad de ejecución.
+- `panic = "abort"`: reemplaza el unwinding normal de panics por aborto
+  inmediato del proceso. Reduce tamaño y algo de overhead, pero un
+  `panic!()` termina el proceso en el acto en vez de poder recuperarse.
+  Aceptable para un perfil de producción *si* los errores esperables ya
+  se manejan con `Result` (que es el patrón que ya sigue este crate) y
+  `panic!`/`unwrap()` quedan reservados para invariantes rotos de verdad.
+- `-C target-cpu=native`: compila para las instrucciones específicas del
+  CPU de la máquina que compila (AVX/AVX2/SSE según corresponda). Correcto
+  para un build que corre en la misma máquina que lo compiló; **no**
+  apto para un `.exe` que se distribuye a hardware desconocido, porque
+  puede generar instrucciones que un procesador más viejo no soporte.
+
+### Perfiles propuestos (no implementados todavía)
+
+```text
+DEV               cargo run / cargo build -- iteración rápida, SQLite normal
+RELEASE-CI        release actual (opt-level 3, thin LTO, codegen-units 1)
+                  -- corre la suite completa contra SQLite/SQLCipher/SQLite3MC
+PRODUCTION        opt-level 3, fat LTO, codegen-units 1, panic="abort",
+                  strip -- SQLCipher + DPAPI, E2E obligatorio antes de firmar
+```
+
+Ejemplo de perfil `production` (agregar a `Cargo.toml`, no implementado):
+
+```toml
+[profile.production]
+inherits = "release"
+lto = "fat"
+panic = "abort"
+```
+
+### PGO (Profile-Guided Optimization) -- más adelante, no ahora
+
+Nivel por encima de los flags de arriba: en vez de que LLVM adivine qué
+rutas son calientes, se compila una build instrumentada, se corre bajo
+uso real (login, búsquedas, ingresos, salidas, sync, historial), se
+recolecta un perfil de ejecución, y se recompila usando ese perfil
+(`-C profile-generate` / `-C profile-use`). Puede valer más que
+microoptimizaciones manuales para un programa real, pero exige benchmark
+antes/después -- PGO no garantiza mejora en toda carga. Candidato para
+cuando el núcleo esté estable y ya no cambiando de forma frecuente
+(agregar PGO a un binario que todavía se reescribe seguido obliga a
+re-perfilar constantemente).
+
+### BOLT -- descartado por ahora
+
+Un paso más allá de PGO: reordena el código máquina ya compilado según
+perfiles reales de ejecución para mejorar la localidad de instrucciones y
+el uso de caché de CPU. Para el estado actual de Brisas es prematuro --
+hay ganancias de arquitectura mucho más grandes sin explotar todavía (ver
+secciones 4-9 de este documento). No se descarta para el futuro, pero no
+es una prioridad mientras el P1/P2 de este documento siga abierto.
