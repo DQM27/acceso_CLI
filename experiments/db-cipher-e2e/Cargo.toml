@@ -1,0 +1,10 @@
+[package]
+name = "brisas_db_cipher_e2e"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+publish = false
+
+[dependencies]
+control_acceso = { path = "../..", default-features = false }
+rusqlite = { version = "0.40.2", default-features = false, features = ["bundled-sqlcipher-vendored-openssl", "functions"] }
