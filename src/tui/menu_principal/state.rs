@@ -21,7 +21,6 @@ pub enum OpcionMenu {
     Empresas,
     Usuarios,
     Auditoria,
-    Respaldos,
     CambiarPassword,
     GestionGafetes,
     Cli,
@@ -30,7 +29,7 @@ pub enum OpcionMenu {
 }
 
 impl OpcionMenu {
-    pub const TODAS: [Self; 13] = [
+    pub const TODAS: [Self; 12] = [
         Self::NuevoIngreso,
         Self::IngresosActivos,
         Self::Historial,
@@ -38,7 +37,6 @@ impl OpcionMenu {
         Self::Empresas,
         Self::Usuarios,
         Self::Auditoria,
-        Self::Respaldos,
         Self::CambiarPassword,
         Self::GestionGafetes,
         Self::Cli,
@@ -55,7 +53,6 @@ impl OpcionMenu {
             Self::Empresas => "5   Empresas",
             Self::Usuarios => "6   Usuarios",
             Self::Auditoria => "7   Auditoría",
-            Self::Respaldos => "8   Respaldos",
             Self::CambiarPassword => "9   Cambiar mi contraseña",
             Self::GestionGafetes => "G   Gestión de gafetes",
             Self::Cli => "M   Modo CLI",
@@ -74,7 +71,6 @@ impl OpcionMenu {
             Self::Usuarios => "Administrar usuarios del sistema.",
             Self::CambiarPassword => "Actualizar la contraseña de la sesión actual.",
             Self::Auditoria => "Consultar cambios en campos críticos de contratistas.",
-            Self::Respaldos => "Crear, validar, exportar y restaurar respaldos.",
             Self::GestionGafetes => "Catálogo de gafetes: alta, baja, pérdidas y deudas.",
             Self::Cli => "Reiniciar en la interfaz CLI y dejarla como default.",
             Self::CerrarSesion => "Volver a la pantalla de autenticación.",
@@ -87,7 +83,6 @@ impl OpcionMenu {
     fn visible_para(self, rol: RolUsuario) -> bool {
         match self {
             Self::Usuarios | Self::Auditoria => rol != RolUsuario::Operador,
-            Self::Respaldos => rol == RolUsuario::Root,
             _ => true,
         }
     }
@@ -125,7 +120,6 @@ impl OpcionMenu {
             '5' => Some(Self::Empresas),
             '6' => Some(Self::Usuarios),
             '7' => Some(Self::Auditoria),
-            '8' => Some(Self::Respaldos),
             '9' => Some(Self::CambiarPassword),
             _ => None,
         }
@@ -140,7 +134,6 @@ impl OpcionMenu {
             Self::Empresas => Some(4),
             Self::Usuarios => Some(5),
             Self::Auditoria => Some(6),
-            Self::Respaldos => Some(7),
             Self::CambiarPassword => Some(8),
             Self::GestionGafetes | Self::Cli | Self::CerrarSesion | Self::Salir => None,
         }
@@ -159,7 +152,6 @@ impl OpcionMenu {
             Self::Empresas => TabItem::new("5", "Empresas", "Emp."),
             Self::Usuarios => TabItem::new("6", "Usuarios", "Usr."),
             Self::Auditoria => TabItem::new("7", "Auditoría", "Aud."),
-            Self::Respaldos => TabItem::new("8", "Respaldos", "Resp."),
             Self::CambiarPassword => TabItem::new("9", "Mi contraseña", "Clave"),
             Self::GestionGafetes | Self::Cli | Self::CerrarSesion | Self::Salir => {
                 return None;
@@ -190,11 +182,6 @@ pub struct MenuPrincipalState {
     pub seleccion: OpcionMenu,
     pub confirmacion: Option<ConfirmacionMenu>,
     pub ayuda_expandida: bool,
-    /// Mensaje de por qué falló el último intento de respaldo automático —
-    /// `None` si el más reciente tuvo éxito (o aún no hubo ninguno). Sólo se
-    /// usa para decidir si mostrar el aviso genérico; el detalle vive en la
-    /// pantalla Respaldos, no aquí.
-    pub fallo_respaldo_automatico: Option<String>,
 }
 
 impl Default for MenuPrincipalState {
@@ -203,7 +190,6 @@ impl Default for MenuPrincipalState {
             seleccion: OpcionMenu::NuevoIngreso,
             confirmacion: None,
             ayuda_expandida: false,
-            fallo_respaldo_automatico: None,
         }
     }
 }
@@ -251,9 +237,6 @@ impl MenuPrincipalState {
             }
             KeyCode::Char('7') if visibles.contains(&OpcionMenu::Auditoria) => {
                 return AccionMenu::Abrir(OpcionMenu::Auditoria);
-            }
-            KeyCode::Char('8') if visibles.contains(&OpcionMenu::Respaldos) => {
-                return AccionMenu::Abrir(OpcionMenu::Respaldos);
             }
             KeyCode::Char('9') => {
                 return AccionMenu::Abrir(OpcionMenu::CambiarPassword);

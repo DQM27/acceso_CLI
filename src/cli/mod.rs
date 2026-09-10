@@ -133,7 +133,11 @@ type HistorialExportacionPendiente =
 /// interfaz ya quedó guardada en disco (`interfaz_preferida::guardar`,
 /// llamado desde `operando.rs` al confirmar) — el `bool` sólo le dice a
 /// `main.rs` que además tiene que relanzar el ejecutable en la TUI clásica.
-pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<bool, CliError> {
+pub fn run(
+    core: AppCore,
+    sesion_inicial: Option<UsuarioSesion>,
+    ruta_base_datos: std::path::PathBuf,
+) -> Result<bool, CliError> {
     let requiere_configuracion_inicial = core.requiere_configuracion_inicial()?;
 
     let _guard = TerminalGuard::acquire()?;
@@ -148,6 +152,7 @@ pub fn run(core: AppCore, sesion_inicial: Option<UsuarioSesion>) -> Result<bool,
         None if requiere_configuracion_inicial => AppState::nueva_configuracion_inicial(),
         None => AppState::new(),
     };
+    app.ruta_base_datos = ruta_base_datos;
     // Preferencias propias de --cli (hoy sólo columnas visibles),
     // archivo independiente del de la TUI clásica (DEC-002/DEC-014). Un
     // disco sin permiso de escritura o sin %LOCALAPPDATA% nunca impide

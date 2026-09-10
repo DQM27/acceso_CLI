@@ -2,7 +2,6 @@ pub mod activos;
 pub mod app;
 pub mod auditoria;
 pub mod cambio_password;
-pub mod configuracion;
 pub mod configuracion_inicial;
 pub mod contratistas;
 pub mod empresas;

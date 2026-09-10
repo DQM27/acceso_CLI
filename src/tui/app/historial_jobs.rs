@@ -8,7 +8,7 @@
 //! del bucle — que nunca llegaba hasta que la exportación (síncrona)
 //! terminaba.
 //!
-//! Mismo patrón que `backup_jobs.rs`: hilo + `mpsc::Receiver` sondeado en el
+//! Mismo patrón que `auth_jobs.rs`: hilo + `mpsc::Receiver` sondeado en el
 //! bucle, con su propia conexión de sólo lectura al archivo en vez de
 //! compartir la de `AppCore` entre hilos.
 
@@ -60,13 +60,13 @@ impl App {
         destino: PathBuf,
         core: Option<&AppCore>,
     ) {
-        let Some(core) = core else {
+        if core.is_none() {
             self.historial
                 .completar_exportacion(Err("No se pudo exportar el historial".into()), &destino);
             return;
-        };
+        }
         self.historial_exportacion_pendiente = Some(exportar_historial_en_hilo(
-            core.ruta_base_datos().to_path_buf(),
+            self.ruta_base_datos.clone(),
             filtro,
             columnas,
             destino,

@@ -98,7 +98,6 @@ fn enter_y_accesos_numericos_emiten_apertura_correcta() {
         ('5', OpcionMenu::Empresas),
         ('6', OpcionMenu::Usuarios),
         ('7', OpcionMenu::Auditoria),
-        ('8', OpcionMenu::Respaldos),
         ('9', OpcionMenu::CambiarPassword),
     ] {
         assert_eq!(
@@ -110,7 +109,7 @@ fn enter_y_accesos_numericos_emiten_apertura_correcta() {
 
 #[test]
 fn pestanas_excluyen_acciones_y_reusan_permisos_del_rol() {
-    assert_eq!(OpcionMenu::pestanas_para(RolUsuario::Root).len(), 9);
+    assert_eq!(OpcionMenu::pestanas_para(RolUsuario::Root).len(), 8);
 
     let operador = OpcionMenu::pestanas_para(RolUsuario::Operador);
     assert_eq!(
@@ -176,30 +175,6 @@ fn salida_confirma_o_cancela_y_escape_raiz_no_hace_nada() {
     assert_eq!(
         s.handle_key(k(KeyCode::Enter), RolUsuario::Root),
         AccionMenu::Salir
-    );
-}
-
-#[test]
-fn un_operador_no_ve_ni_puede_abrir_respaldos() {
-    let visibles = OpcionMenu::visibles_para(RolUsuario::Operador);
-    assert!(!visibles.contains(&OpcionMenu::Respaldos));
-
-    let mut s = MenuPrincipalState::default();
-    assert_eq!(
-        s.handle_key(k(KeyCode::Char('8')), RolUsuario::Operador),
-        AccionMenu::Ninguna
-    );
-}
-
-#[test]
-fn un_administrador_no_ve_ni_puede_abrir_respaldos() {
-    let visibles = OpcionMenu::visibles_para(RolUsuario::Administrador);
-    assert!(!visibles.contains(&OpcionMenu::Respaldos));
-
-    let mut s = MenuPrincipalState::default();
-    assert_eq!(
-        s.handle_key(k(KeyCode::Char('8')), RolUsuario::Administrador),
-        AccionMenu::Ninguna
     );
 }
 
@@ -274,7 +249,6 @@ fn el_menu_root_muestra_todas_las_opciones_en_orden_sin_recortarlas() {
         "5   Empresas",
         "6   Usuarios",
         "7   Auditoría",
-        "8   Respaldos",
         "9   Cambiar mi contraseña",
         "L   Cerrar sesión",
         "Q   Salir",
@@ -302,56 +276,6 @@ fn un_operador_no_ve_ni_puede_abrir_usuarios() {
         s.handle_key(k(KeyCode::Char('6')), RolUsuario::Operador),
         AccionMenu::Ninguna
     );
-}
-
-/// El aviso es genérico a propósito (sin el detalle técnico, que vive en
-/// Respaldos) y visible para cualquier rol, incluido Operador, que ni
-/// siquiera puede abrir la pantalla Respaldos — cualquiera puede ser quien
-/// note el problema y avise al administrador.
-#[test]
-fn el_menu_avisa_si_el_respaldo_automatico_fallo_sin_importar_el_rol() {
-    use crate::services::autenticacion_service::UsuarioSesion;
-    use ratatui::{Terminal, backend::TestBackend};
-
-    let state = MenuPrincipalState {
-        fallo_respaldo_automatico: Some("Error de archivo: disco lleno".into()),
-        ..Default::default()
-    };
-    let sesion = UsuarioSesion {
-        id: 1,
-        cedula: "1".into(),
-        nombre: "Operador".into(),
-        rol: RolUsuario::Operador,
-    };
-    let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
-    terminal
-        .draw(|frame| {
-            render::render(
-                frame,
-                frame.area(),
-                &state,
-                &sesion,
-                crate::tui::ui_kit::ThemePreset::Brisas.theme(),
-            );
-        })
-        .unwrap();
-
-    let buffer = terminal.backend().buffer();
-    let texto = (0..buffer.area.height)
-        .map(|y| {
-            (0..buffer.area.width)
-                .map(|x| buffer[(x, y)].symbol())
-                .collect::<String>()
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert!(
-        texto.contains("Fallo en el sistema de respaldo de la base de datos"),
-        "{texto}"
-    );
-    // El mensaje es a propósito genérico: el detalle técnico no debe
-    // filtrarse a una pantalla que ve cualquier rol.
-    assert!(!texto.contains("disco lleno"), "{texto}");
 }
 
 #[test]

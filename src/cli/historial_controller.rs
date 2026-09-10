@@ -62,7 +62,7 @@ pub(super) fn manejar_historial(
         .as_ref()
         .is_some_and(|h| h.exportacion_destino.is_some());
     if editando_destino {
-        manejar_exportacion(core, app, key, pendiente);
+        manejar_exportacion(app, key, pendiente);
         return;
     }
     let mostrando_resultado = app
@@ -156,7 +156,6 @@ fn abrir_exportacion(app: &mut AppState) {
 }
 
 fn manejar_exportacion(
-    core: &AppCore,
     app: &mut AppState,
     key: KeyEvent,
     pendiente: &mut HistorialExportacionPendiente,
@@ -169,7 +168,7 @@ fn manejar_exportacion(
                 historial.exportacion_destino = None;
             }
         }
-        KeyCode::Enter => confirmar_exportacion(core, app, pendiente),
+        KeyCode::Enter => confirmar_exportacion(app, pendiente),
         _ => {
             if let Some(historial) = &mut app.historial
                 && let Some(destino) = &mut historial.exportacion_destino
@@ -191,11 +190,7 @@ fn manejar_exportacion(
 /// exportador (`ColumnaExportacion::ALL`) — elegir un subconjunto de
 /// columnas para exportar queda deliberadamente fuera de esta primera
 /// versión; hoy es todo o nada.
-fn confirmar_exportacion(
-    core: &AppCore,
-    app: &mut AppState,
-    pendiente: &mut HistorialExportacionPendiente,
-) {
+fn confirmar_exportacion(app: &mut AppState, pendiente: &mut HistorialExportacionPendiente) {
     let Some(historial) = &app.historial else {
         return;
     };
@@ -217,7 +212,7 @@ fn confirmar_exportacion(
         historial.exportando = true;
     }
     *pendiente = Some(exportar_en_hilo(
-        core.ruta_base_datos().to_path_buf(),
+        app.ruta_base_datos.clone(),
         filtro,
         destino,
     ));
@@ -448,6 +443,7 @@ mod tests {
         let actor = core.autenticar("ROOT-1", "password1").unwrap();
 
         let mut app = AppState::con_sesion(actor);
+        app.ruta_base_datos = ruta_base_datos.clone();
         let mut historial = HistorialState::nuevo(Vec::new());
         historial.filtro = FiltroHistorial::nuevo(
             Utc.with_ymd_and_hms(2000, 1, 1, 0, 0, 0).unwrap(),
@@ -458,7 +454,7 @@ mod tests {
         app.historial = Some(historial);
 
         let mut pendiente: HistorialExportacionPendiente = None;
-        confirmar_exportacion(&core, &mut app, &mut pendiente);
+        confirmar_exportacion(&mut app, &mut pendiente);
         assert!(app.historial.as_ref().unwrap().exportando);
         assert!(pendiente.is_some());
 

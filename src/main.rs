@@ -80,8 +80,6 @@ enum StartupError {
     Usuario(control_acceso::services::error::UsuarioServiceError),
     #[error("No se pudo leer la entrada: {0}")]
     Entrada(#[source] std::io::Error),
-    #[error("No se pudo crear el respaldo previo: {0}")]
-    Respaldo(#[source] control_acceso::database::backup::RespaldoError),
     #[error(transparent)]
     Cli(#[from] control_acceso::cli::CliError),
 }
@@ -146,8 +144,9 @@ fn relanzar_en_interfaz(interfaz: Interfaz) {
 /// preferencia ya quedó guardada, sólo falta que `run()` relance el proceso.
 fn run_cli(ruta_base_datos: &std::path::Path) -> Result<Option<Interfaz>, StartupError> {
     let core = AppCore::abrir(ruta_base_datos).map_err(StartupError::Bootstrap)?;
-    let _ = core.respaldo_automatico_diario_si_hace_falta();
-    let reiniciar_en_clasica = control_acceso::cli::run(core, None).map_err(StartupError::Cli)?;
+    let reiniciar_en_clasica =
+        control_acceso::cli::run(core, None, ruta_base_datos.to_path_buf())
+            .map_err(StartupError::Cli)?;
     Ok(reiniciar_en_clasica.then_some(Interfaz::Clasica))
 }
 
@@ -157,54 +156,38 @@ fn run_cli(ruta_base_datos: &std::path::Path) -> Result<Option<Interfaz>, Startu
 /// preferencia ya queda guardada y `run()` relanza el proceso con
 /// `--cli`.
 fn run_tui_clasica(ruta_base_datos: &std::path::Path) -> Result<Option<Interfaz>, StartupError> {
-    let mut mensaje_inicial = None;
-    loop {
-        let core = match AppCore::abrir(ruta_base_datos) {
-            Ok(core) => core,
-            Err(error) => {
-                // Muestra el error en la TUI (mismo mecanismo que usa un fallo de
-                // restauración) en vez de matar el proceso con un eprintln crudo.
-                let _ = control_acceso::tui::terminal::run_sin_core(Some(format!(
-                    "No se pudo abrir la base de datos: {error}"
-                )));
-                return Err(StartupError::Bootstrap(error));
-            }
-        };
-        // El resultado real se recoge dentro de la TUI (`App::run_internal`
-        // vuelve a revisar en su primera vuelta de todos modos) para poder
-        // avisarle al operador si falla; acá sólo hace falta que se intente.
-        let _ = core.respaldo_automatico_diario_si_hace_falta();
-        let requiere_configuracion_inicial = core
-            .requiere_configuracion_inicial()
-            .map_err(StartupError::Usuario)?;
-        let salida = control_acceso::tui::terminal::run(
-            &core,
-            requiere_configuracion_inicial,
-            mensaje_inicial.take(),
-        )
-        .map_err(StartupError::Terminal)?;
+    let core = match AppCore::abrir(ruta_base_datos) {
+        Ok(core) => core,
+        Err(error) => {
+            // Muestra el error en la TUI en vez de matar el proceso con un
+            // eprintln crudo.
+            let _ = control_acceso::tui::terminal::run_sin_core(
+                Some(format!("No se pudo abrir la base de datos: {error}")),
+                ruta_base_datos.to_path_buf(),
+            );
+            return Err(StartupError::Bootstrap(error));
+        }
+    };
+    let requiere_configuracion_inicial = core
+        .requiere_configuracion_inicial()
+        .map_err(StartupError::Usuario)?;
+    let salida = control_acceso::tui::terminal::run(
+        &core,
+        requiere_configuracion_inicial,
+        None,
+        ruta_base_datos.to_path_buf(),
+    )
+    .map_err(StartupError::Terminal)?;
 
-        match salida {
-            SalidaApp::Cerrar => return Ok(None),
-            // "Modo CLI" del Menú Principal: la preferencia ya se
-            // guardó al confirmar (`AccionMenu::Cli` en
-            // `tui::app`) — acá sólo hace falta cerrar esta conexión y
-            // avisarle a `run()` que relance en la CLI.
-            SalidaApp::ReiniciarEnCli => {
-                drop(core);
-                return Ok(Some(Interfaz::Cli));
-            }
-            SalidaApp::Restaurar { candidata } => {
-                drop(core); // cierra la conexión SQLite antes de tocar el archivo activo
-                if let Err(error) = control_acceso::database::backup::restaurar_respaldo(
-                    &candidata,
-                    ruta_base_datos,
-                ) {
-                    mensaje_inicial = Some(format!(
-                        "No se pudo restaurar: {error}. Se conservó la base anterior."
-                    ));
-                }
-            }
+    match salida {
+        SalidaApp::Cerrar => Ok(None),
+        // "Modo CLI" del Menú Principal: la preferencia ya se
+        // guardó al confirmar (`AccionMenu::Cli` en
+        // `tui::app`) — acá sólo hace falta cerrar esta conexión y
+        // avisarle a `run()` que relance en la CLI.
+        SalidaApp::ReiniciarEnCli => {
+            drop(core);
+            Ok(Some(Interfaz::Cli))
         }
     }
 }
@@ -266,19 +249,6 @@ fn ejecutar_reset_root() -> Result<(), StartupError> {
         eprintln!("Las contraseñas no coinciden. No se hizo ningún cambio.");
         std::process::exit(1);
     }
-
-    let respuesta = leer_linea(
-        "Se creará un respaldo de la base antes de aplicar el cambio. Escriba SI para continuar: ",
-    )?;
-    if respuesta != "SI" {
-        eprintln!("Operación cancelada. No se hizo ningún cambio.");
-        std::process::exit(1);
-    }
-
-    let respaldo = core
-        .crear_respaldo_por_flag()
-        .map_err(StartupError::Respaldo)?;
-    println!("Respaldo creado en {}.", respaldo.ruta.display());
 
     core.resetear_password_root(root.id, &nueva)
         .map_err(StartupError::Usuario)?;

@@ -297,6 +297,12 @@ pub struct AppState {
     /// parpadeo sigue su propio ritmo constante en vez de "reaparecer" fijo
     /// cada vez que se abre una Surface distinta.
     pub instante_inicio: Instant,
+    /// Ruta del archivo de base de datos, resuelta una sola vez al arrancar
+    /// (ver `main.rs`) y propagada por `cli::run` — el núcleo ya no expone
+    /// `AppCore::ruta_base_datos()` (rama SQLCipher sin respaldo local), y
+    /// `historial_controller.rs` la necesita para su propia conexión de
+    /// exportación.
+    pub ruta_base_datos: std::path::PathBuf,
 }
 
 impl AppState {
@@ -328,6 +334,7 @@ impl AppState {
             firma_contexto_previa: None,
             prompt_glifo_previo: false,
             instante_inicio: Instant::now(),
+            ruta_base_datos: std::path::PathBuf::new(),
         }
     }
 

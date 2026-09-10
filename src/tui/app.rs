@@ -8,11 +8,9 @@ use ratatui::{Frame, Terminal, backend::Backend};
 
 mod actions;
 mod auth_jobs;
-mod backup_jobs;
 mod historial_jobs;
 
 use auth_jobs::{HiloUsuarioPendiente, ReceptorAutenticacion, ReceptorCambioPropio, ReceptorHash};
-use backup_jobs::ReceptorRespaldo;
 use historial_jobs::ReceptorExportacion;
 
 use crate::application::AppCore;
@@ -23,7 +21,6 @@ use super::{
     activos::{self, AccionActivos, ActivosState},
     auditoria::{self, AuditoriaState},
     cambio_password::{self, AccionCambioPassword, CambioPasswordState},
-    configuracion::{self, ConfiguracionState},
     configuracion_inicial::{self, AccionConfiguracion, ConfiguracionInicialState, SolicitudRoot},
     contratistas::{self, AccionContratistas, ContratistasState},
     empresas::{self, AccionEmpresas, EmpresasState},
@@ -43,12 +40,6 @@ const EVENT_POLL: Duration = Duration::from_millis(50);
 /// deja margen de sobra para el cambio de minuto sin volver a construir toda la TUI
 /// veinte veces por segundo cuando el operador no está haciendo nada.
 const CLOCK_REFRESH: Duration = Duration::from_secs(1);
-/// `AppCore::respaldo_automatico_diario_si_hace_falta` sólo hace algo una vez
-/// por día (después de la 01:00 Costa Rica), así que revisarla una vez por
-/// minuto —no en cada vuelta del bucle— alcanza de sobra; evita golpear el
-/// directorio de respaldos veinte veces por segundo mientras la app se queda
-/// abierta varios días seguidos sin reiniciar.
-const REVISION_RESPALDO_AUTOMATICO: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Vista {
@@ -62,7 +53,6 @@ pub enum Vista {
     Usuarios,
     CambiarPassword,
     Auditoria,
-    Respaldos,
     NuevoIngreso,
     GestionGafetes,
 }
@@ -77,7 +67,6 @@ impl Vista {
             Self::Empresas => Some(OpcionMenu::Empresas),
             Self::Usuarios => Some(OpcionMenu::Usuarios),
             Self::Auditoria => Some(OpcionMenu::Auditoria),
-            Self::Respaldos => Some(OpcionMenu::Respaldos),
             Self::CambiarPassword => Some(OpcionMenu::CambiarPassword),
             // `GestionGafetes` no es pestaña (acceso por letra, no
             // numérico) — mismo grupo sin `OpcionMenu` de pestaña que el
@@ -90,15 +79,11 @@ impl Vista {
     }
 }
 
-/// Cómo terminó el bucle principal: cierre normal, o una restauración de
-/// respaldo confirmada que exige que `main.rs` cierre la conexión `SQLite`,
-/// aplique el reemplazo de archivo y vuelva a arrancar la TUI desde cero.
+/// Cómo terminó el bucle principal: cierre normal, o pedido de reiniciar en
+/// la interfaz CLI clásica.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SalidaApp {
     Cerrar,
-    Restaurar {
-        candidata: std::path::PathBuf,
-    },
     /// "Modo CLI" del Menú Principal (`OpcionMenu::Cli`): a
     /// el operador pidió dejar `--cli` como interfaz por defecto; la
     /// preferencia ya se guardó (`interfaz_preferida::guardar`) antes de
@@ -124,7 +109,6 @@ pub struct App {
     usuarios: UsuariosState,
     cambio_password: CambioPasswordState,
     auditoria: AuditoriaState,
-    configuracion: ConfiguracionState,
     nuevo_ingreso: NuevoIngresoState,
     salida_rapida: SalidaRapidaState,
     gafetes: GafetesState,
@@ -147,17 +131,14 @@ pub struct App {
     cambio_password_pendiente: Option<ReceptorCambioPropio>,
     /// Hash de Argon2 en camino para crear el usuario ROOT inicial.
     root_inicial_pendiente: Option<(ReceptorHash, SolicitudRoot)>,
-    /// Respaldo manual (Respaldos → Crear) corriendo en un hilo aparte —
-    /// ver `backup_jobs.rs`.
-    respaldo_manual_pendiente: Option<ReceptorRespaldo>,
-    /// Respaldo automático diario corriendo en un hilo aparte. Nunca
-    /// coincide con `respaldo_manual_pendiente` a la vez —
-    /// `revisar_respaldo_automatico` no dispara uno si ya hay otro en
-    /// vuelo, sea manual o automático.
-    respaldo_automatico_pendiente: Option<ReceptorRespaldo>,
     /// Exportación de Historial a XLSX corriendo en un hilo aparte — ver
     /// `historial_jobs.rs`.
     historial_exportacion_pendiente: Option<ReceptorExportacion>,
+    /// Ruta del archivo de base de datos, resuelta una sola vez al arrancar
+    /// (ver `main.rs`) — la usa `historial_jobs.rs` para abrir su propia
+    /// conexión de exportación; el núcleo ya no expone
+    /// `AppCore::ruta_base_datos()` (rama SQLCipher sin respaldo local).
+    ruta_base_datos: std::path::PathBuf,
 }
 
 impl Default for App {
@@ -174,7 +155,6 @@ impl Default for App {
             usuarios: UsuariosState::default(),
             cambio_password: CambioPasswordState::default(),
             auditoria: AuditoriaState::default(),
-            configuracion: ConfiguracionState::default(),
             nuevo_ingreso: NuevoIngresoState::default(),
             salida_rapida: SalidaRapidaState::default(),
             gafetes: GafetesState::default(),
@@ -188,21 +168,25 @@ impl Default for App {
             hilo_usuario_pendiente: None,
             cambio_password_pendiente: None,
             root_inicial_pendiente: None,
-            respaldo_manual_pendiente: None,
-            respaldo_automatico_pendiente: None,
             historial_exportacion_pendiente: None,
+            ruta_base_datos: std::path::PathBuf::new(),
         }
     }
 }
 
 impl App {
-    pub fn new(requiere_configuracion_inicial: bool, mensaje_inicial: Option<String>) -> Self {
+    pub fn new(
+        requiere_configuracion_inicial: bool,
+        mensaje_inicial: Option<String>,
+        ruta_base_datos: std::path::PathBuf,
+    ) -> Self {
         let mut app = Self {
             vista: if requiere_configuracion_inicial {
                 Vista::ConfiguracionInicial
             } else {
                 Vista::Login
             },
+            ruta_base_datos,
             ..Self::default()
         };
         if let Some(mensaje) = mensaje_inicial {
@@ -291,9 +275,6 @@ impl App {
                 cambio_password::render(frame, area, &self.cambio_password, sesion, theme);
             }
             Vista::Auditoria => auditoria::render(frame, area, &self.auditoria, sesion, theme),
-            Vista::Respaldos => {
-                configuracion::render(frame, area, &self.configuracion, sesion, theme);
-            }
             Vista::NuevoIngreso => {
                 nuevo_ingreso::render(frame, area, &self.nuevo_ingreso, sesion, theme);
             }
@@ -311,34 +292,21 @@ impl App {
         )
     }
 
-    fn actualizar_tareas(
-        &mut self,
-        ahora: Instant,
-        core: Option<&AppCore>,
-        ultima_revision_respaldo: &mut Instant,
-    ) -> bool {
+    fn actualizar_tareas(&mut self, ahora: Instant, core: Option<&AppCore>) -> bool {
         self.configuracion_inicial.tick(ahora);
         self.login.tick(ahora);
         let trabajos_antes = self.trabajos_argon_pendientes();
 
         self.recibir_autenticacion_si_lista(core);
-        let mut cambio_visible = if let Some(core) = core {
+        if let Some(core) = core {
             self.procesar_configuracion_pendiente(core);
             self.recibir_root_inicial_si_lista(core);
-            if ahora.saturating_duration_since(*ultima_revision_respaldo)
-                >= REVISION_RESPALDO_AUTOMATICO
-            {
-                *ultima_revision_respaldo = ahora;
-                self.revisar_respaldo_automatico(core);
-            }
-            self.recibir_respaldo_automatico_si_listo(core)
         } else {
             self.abortar_configuracion_inicial_sin_core();
-            false
-        };
+        }
+        let mut cambio_visible = false;
         self.recibir_hilo_usuario_si_lista(core);
         self.recibir_cambio_password_propio(core);
-        cambio_visible |= self.recibir_respaldo_manual_si_listo();
         cambio_visible |= self.recibir_exportacion_historial_si_lista();
         cambio_visible |= trabajos_antes != self.trabajos_argon_pendientes();
 
@@ -395,16 +363,6 @@ impl App {
     ) -> io::Result<SalidaApp> {
         let mut redibujar = true;
         let mut ultimo_refresco_reloj = Instant::now();
-        // Arranca vencido a propósito: la primera vuelta del bucle ya debe
-        // revisar el respaldo automático, no esperar un minuto entero.
-        // `checked_sub` en vez de `-` directo: si la máquina lleva menos de
-        // `REVISION_RESPALDO_AUTOMATICO` encendida (arranque en frío muy
-        // reciente), restar entraría en pánico — en ese caso extremo, la
-        // primera revisión simplemente espera el minuto completo en vez de
-        // ser inmediata, degradación aceptable frente a un crash real.
-        let mut ultima_revision_respaldo = Instant::now()
-            .checked_sub(REVISION_RESPALDO_AUTOMATICO)
-            .unwrap_or_else(Instant::now);
         while !self.salir {
             if redibujar {
                 terminal.draw(|frame| self.renderizar_frame(frame))?;
@@ -426,7 +384,7 @@ impl App {
             }
 
             let ahora = Instant::now();
-            cambio_visible |= self.actualizar_tareas(ahora, core, &mut ultima_revision_respaldo);
+            cambio_visible |= self.actualizar_tareas(ahora, core);
 
             // Login y configuración inicial sí tienen animación (spinner/cursor).
             // El resto sólo se invalida por una entrada, un resultado, un resize o
@@ -610,10 +568,6 @@ impl App {
                 let accion = self.auditoria.handle_key(key);
                 self.procesar_accion_auditoria(accion, core);
             }
-            Vista::Respaldos => {
-                let accion = self.configuracion.handle_key(key);
-                self.procesar_accion_configuracion(accion, core);
-            }
             Vista::NuevoIngreso => {
                 let accion = self.nuevo_ingreso.handle_key(key);
                 self.procesar_accion_nuevo_ingreso(accion, core);
@@ -770,10 +724,6 @@ impl App {
                 let accion = self.auditoria.reiniciar();
                 self.procesar_accion_auditoria(accion, core);
             }
-            OpcionMenu::Respaldos => {
-                let accion = self.configuracion.reiniciar();
-                self.procesar_accion_configuracion(accion, core);
-            }
             OpcionMenu::GestionGafetes => {
                 if core.is_some() {
                     self.procesar_accion_gafetes(self.gafetes.solicitar_carga(), core);
@@ -796,7 +746,6 @@ impl App {
             OpcionMenu::Usuarios => Vista::Usuarios,
             OpcionMenu::CambiarPassword => Vista::CambiarPassword,
             OpcionMenu::Auditoria => Vista::Auditoria,
-            OpcionMenu::Respaldos => Vista::Respaldos,
             OpcionMenu::GestionGafetes => Vista::GestionGafetes,
             OpcionMenu::Cli | OpcionMenu::CerrarSesion | OpcionMenu::Salir => Vista::MenuPrincipal,
         }

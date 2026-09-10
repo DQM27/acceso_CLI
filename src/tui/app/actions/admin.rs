@@ -1,10 +1,9 @@
-//! Despachadores de administración: Usuarios, Auditoría y Respaldos.
+//! Despachadores de administración: Usuarios y Auditoría.
 
 use crate::application::AppCore;
 use crate::mensajes::mensaje_usuario;
 use crate::tui::app::{App, Vista};
 use crate::tui::auditoria::AccionAuditoria;
-use crate::tui::configuracion::{AccionAjustes, AccionRespaldos};
 use crate::tui::usuarios::AccionUsuarios;
 
 impl App {
@@ -147,81 +146,4 @@ impl App {
         }
     }
 
-    pub(in crate::tui::app) fn procesar_accion_configuracion(
-        &mut self,
-        accion: AccionAjustes,
-        core: Option<&AppCore>,
-    ) {
-        match accion {
-            AccionAjustes::Ninguna => {}
-            AccionAjustes::Volver => self.vista = Vista::MenuPrincipal,
-            AccionAjustes::Respaldos(accion) => self.procesar_accion_respaldos(accion, core),
-        }
-    }
-
-    fn procesar_accion_respaldos(&mut self, accion: AccionRespaldos, core: Option<&AppCore>) {
-        let actor = self.sesion.clone();
-        match accion {
-            AccionRespaldos::Ninguna | AccionRespaldos::Volver => {}
-            AccionRespaldos::Cargar => {
-                let resultado = core
-                    .ok_or_else(|| "No se pudieron listar los respaldos".to_owned())
-                    .and_then(|core| {
-                        let actor = actor
-                            .as_ref()
-                            .ok_or_else(|| "No hay una sesión activa".to_owned())?;
-                        core.listar_respaldos(actor)
-                            .map_err(|error| error.to_string())
-                    });
-                self.configuracion.completar_listado(resultado);
-            }
-            AccionRespaldos::Crear => self.iniciar_creacion_respaldo_manual(core),
-            AccionRespaldos::Revalidar { ruta } => {
-                let resultado = core
-                    .ok_or_else(|| "No se pudo validar el respaldo".to_owned())
-                    .and_then(|core| {
-                        let actor = actor
-                            .as_ref()
-                            .ok_or_else(|| "No hay una sesión activa".to_owned())?;
-                        core.validar_respaldo(actor, &ruta)
-                            .map_err(|error| error.to_string())
-                    });
-                self.configuracion.completar_validacion(&ruta, resultado);
-            }
-            AccionRespaldos::Exportar { ruta, destino } => {
-                let resultado = core
-                    .ok_or_else(|| "No se pudo exportar el respaldo".to_owned())
-                    .and_then(|core| {
-                        let actor = actor
-                            .as_ref()
-                            .ok_or_else(|| "No hay una sesión activa".to_owned())?;
-                        core.exportar_respaldo(actor, &ruta, &destino)
-                            .map_err(|error| error.to_string())
-                    });
-                self.configuracion
-                    .completar_exportacion(resultado, &destino);
-            }
-            AccionRespaldos::Restaurar { ruta } => {
-                let resultado = core
-                    .ok_or_else(|| "No se pudo respaldar la base antes de restaurar".to_owned())
-                    .and_then(|core| {
-                        let actor = actor
-                            .as_ref()
-                            .ok_or_else(|| "No hay una sesión activa".to_owned())?;
-                        core.crear_respaldo(
-                            actor,
-                            crate::database::backup::TipoRespaldo::PreRestauracion,
-                        )
-                        .map_err(|error| error.to_string())
-                    });
-                match resultado {
-                    Ok(_) => {
-                        self.salida = crate::tui::app::SalidaApp::Restaurar { candidata: ruta };
-                        self.salir = true;
-                    }
-                    Err(error) => self.configuracion.completar_creacion(Err(error)),
-                }
-            }
-        }
-    }
 }

@@ -15,10 +15,7 @@ use std::{
 };
 
 use control_acceso::{
-    database::{
-        backup::{TipoRespaldo, crear_respaldo},
-        connection::{open_database, ruta_base_datos},
-    },
+    database::connection::{open_database, ruta_base_datos},
     instancia::InstanciaGuard,
 };
 use rusqlite::{Connection, Transaction, TransactionBehavior};
@@ -52,17 +49,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     preparar_directorio(&db_path)?;
     let _instancia = InstanciaGuard::adquirir(&db_path)?;
     if recrear {
-        respaldar_y_retirar_base(&db_path)?;
+        retirar_base_anterior(&db_path)?;
     }
     let connection = open_database(&db_path)?;
-    if !recrear {
-        let respaldo = crear_respaldo(
-            &connection,
-            &directorio_respaldos(&db_path),
-            TipoRespaldo::PorFlag,
-        )?;
-        println!("Respaldo:      {}", respaldo.ruta.display());
-    }
 
     let sql = fs::read_to_string(&sql_path)?;
     println!(
@@ -157,13 +146,6 @@ fn contar(connection: &Connection, sql: &str) -> rusqlite::Result<i64> {
     connection.query_row(sql, [], |row| row.get(0))
 }
 
-fn directorio_respaldos(db_path: &Path) -> PathBuf {
-    db_path
-        .parent()
-        .unwrap_or_else(|| Path::new("."))
-        .join("backups")
-}
-
 fn preparar_directorio(db_path: &Path) -> std::io::Result<()> {
     if let Some(directorio) = db_path.parent() {
         fs::create_dir_all(directorio)?;
@@ -171,19 +153,10 @@ fn preparar_directorio(db_path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-fn respaldar_y_retirar_base(db_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+fn retirar_base_anterior(db_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     if !db_path.exists() {
         return Ok(());
     }
-
-    let connection = open_database(db_path)?;
-    let respaldo = crear_respaldo(
-        &connection,
-        &directorio_respaldos(db_path),
-        TipoRespaldo::PorFlag,
-    )?;
-    println!("Respaldo:      {}", respaldo.ruta.display());
-    drop(connection);
 
     for ruta in rutas_sqlite(db_path) {
         if ruta.exists() {

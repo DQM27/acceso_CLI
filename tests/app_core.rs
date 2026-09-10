@@ -325,35 +325,6 @@ fn resetear_password_root_rechaza_usuario_que_no_es_root_activo() {
 }
 
 #[test]
-fn crear_respaldo_por_flag_no_requiere_actor_y_queda_marcado_como_tal() {
-    // Directorio propio (no sólo un archivo en temp_dir): "backups" se crea
-    // junto a la base, y un directorio compartido entre tests colisionaría.
-    let unico = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let directorio = std::env::temp_dir().join(format!(
-        "control_acceso_core_respaldo_por_flag_{}_{unico}",
-        std::process::id()
-    ));
-    std::fs::create_dir_all(&directorio).unwrap();
-    let ruta = directorio.join("control_acceso.sqlite");
-    let core = AppCore::abrir(&ruta).unwrap();
-    core.crear_root_inicial(root()).unwrap();
-
-    let respaldo = core.crear_respaldo_por_flag().unwrap();
-
-    assert_eq!(
-        respaldo.tipo,
-        control_acceso::database::backup::TipoRespaldo::PorFlag
-    );
-    assert!(respaldo.ruta.exists());
-
-    drop(core);
-    std::fs::remove_dir_all(&directorio).unwrap();
-}
-
-#[test]
 fn apertura_productiva_lleva_base_nueva_a_version_actual() {
     let ruta = archivo_temporal("version");
     let core = AppCore::abrir(&ruta).unwrap();

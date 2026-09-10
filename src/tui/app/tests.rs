@@ -21,7 +21,7 @@ fn configuracion_exitosa_transiciona_a_login_sin_autenticar() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
     let core = AppCore::new(connection);
-    let mut app = App::new(true, None);
+    let mut app = App::new(true, None, std::path::PathBuf::new());
     escribir(&mut app.configuracion_inicial, "ROOT1");
     app.configuracion_inicial
         .handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
@@ -1333,59 +1333,6 @@ fn f2_no_abre_sin_sesion_iniciada() {
     assert!(!app.salida_rapida.abierto());
 }
 
-#[test]
-fn confirmar_restauracion_deja_la_app_lista_para_salir_sin_tocar_archivos() {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    let unico = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let directorio = std::env::temp_dir().join(format!(
-        "control_acceso_app_restaurar_{}_{unico}",
-        std::process::id()
-    ));
-    std::fs::create_dir_all(&directorio).unwrap();
-    let ruta_base_datos = directorio.join("control_acceso.sqlite");
-    let core = AppCore::abrir(&ruta_base_datos).unwrap();
-    core.crear_root_inicial(CrearRootInicialInput {
-        cedula: "ROOT-1".into(),
-        nombre: "Ana".into(),
-        password: "password1".into(),
-    })
-    .unwrap();
-    let actor = core.autenticar("ROOT-1", "password1").unwrap();
-    let respaldo = core
-        .crear_respaldo(&actor, crate::database::backup::TipoRespaldo::Manual)
-        .unwrap();
-
-    let mut app = App {
-        vista: Vista::Respaldos,
-        sesion: Some(actor),
-        ..App::default()
-    };
-    // Carga la lista real desde el AppCore de archivo.
-    let accion = app.configuracion.reiniciar();
-    app.procesar_accion_configuracion(accion, Some(&core));
-    // Selecciona la única fila, pide restaurar y confirma.
-    app.configuracion.handle_key(tecla(KeyCode::Char('r')));
-    let accion = app.configuracion.handle_key(tecla(KeyCode::Enter));
-    app.procesar_accion_configuracion(accion, Some(&core));
-
-    assert!(app.salir);
-    assert_eq!(
-        app.salida,
-        SalidaApp::Restaurar {
-            candidata: respaldo.ruta
-        }
-    );
-    // Restaurar el archivo de verdad es responsabilidad de main.rs, una vez
-    // cerrada la conexión — App nunca debe tocar el archivo activo.
-    assert!(ruta_base_datos.exists());
-
-    std::fs::remove_dir_all(&directorio).ok();
-}
-
 fn core_temporal(nombre: &str) -> (AppCore, std::path::PathBuf, UsuarioSesion) {
     use std::time::{SystemTime, UNIX_EPOCH};
     let unico = SystemTime::now()
@@ -1501,38 +1448,6 @@ fn cambiar_password_en_hilo_aparte_actualiza_la_autenticacion_real() {
 }
 
 #[test]
-fn crear_respaldo_manual_en_hilo_aparte_termina_creado_en_disco() {
-    let (core, directorio, actor) = core_temporal("crear_respaldo_manual");
-    let mut app = App {
-        sesion: Some(actor.clone()),
-        vista: Vista::Respaldos,
-        ..App::default()
-    };
-
-    app.iniciar_creacion_respaldo_manual(Some(&core));
-    assert!(app.configuracion.creando_respaldo());
-
-    for _ in 0..200 {
-        app.recibir_respaldo_manual_si_listo();
-        if !app.configuracion.creando_respaldo() {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(20));
-    }
-
-    assert!(!app.configuracion.creando_respaldo());
-    let listado = core.listar_respaldos(&actor).unwrap();
-    assert_eq!(listado.len(), 1);
-    assert_eq!(
-        listado[0].tipo,
-        crate::database::backup::TipoRespaldo::Manual
-    );
-    assert!(listado[0].ruta.exists());
-
-    std::fs::remove_dir_all(&directorio).ok();
-}
-
-#[test]
 fn exportar_historial_en_hilo_aparte_termina_con_el_archivo_real_en_disco() {
     use crate::database::queries::ingresos::FiltroHistorial;
     use crate::historial::ColumnaHistorial;
@@ -1542,6 +1457,7 @@ fn exportar_historial_en_hilo_aparte_termina_con_el_archivo_real_en_disco() {
     let mut app = App {
         sesion: Some(actor),
         vista: Vista::Historial,
+        ruta_base_datos: directorio.join("control_acceso.sqlite"),
         ..App::default()
     };
     let destino = directorio.join("export.xlsx");
