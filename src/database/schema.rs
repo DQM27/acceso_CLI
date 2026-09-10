@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 26;
+pub const SCHEMA_VERSION: i64 = 27;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -276,6 +276,11 @@ fn aplicar_migraciones_posteriores_a_15(
         *version = 26;
     }
 
+    if *version == 26 {
+        aplicar_migracion_27(connection)?;
+        *version = 27;
+    }
+
     Ok(())
 }
 
@@ -363,6 +368,14 @@ fn aplicar_migracion_26(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_26)?;
     transaction.execute_batch("PRAGMA user_version = 26")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_27(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_27)?;
+    transaction.execute_batch("PRAGMA user_version = 27")?;
     transaction.commit()?;
     Ok(())
 }
@@ -1971,4 +1984,56 @@ CREATE INDEX idx_historial_sitio_hora_entrada ON historial_sitio(hora_entrada);
 // para ese caso, no asumir un valor.
 const MIGRACION_26: &str = r"
 ALTER TABLE historial_sitio ADD COLUMN dispositivo_entrada_tipo TEXT;
+";
+
+// `nube::sincronizacion::pendientes()` decidía si una fila ya podía
+// reintentarse con `datetime(actualizado_en, '+' || MIN(intentos * 15,
+// 1440) || ' minutes') <= datetime('now')`, calculado en cada consulta --
+// SQLite no puede usar ningún índice para eso (es una expresión, no una
+// columna), así que cada `drenar_cola` escaneaba TODA `cola_salida`
+// pendiente para evaluarla fila por fila. Hallazgo R-06 de
+// `docs/auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md`.
+//
+// `proximo_intento_en` es la misma fórmula, pero como columna generada
+// (`GENERATED ALWAYS AS (...) STORED`): SQLite la recalcula sola cada vez
+// que `actualizado_en`/`intentos` cambian, así que ni `cola_salida.rs`
+// (al encolar) ni `marcar()` (al reintentar) necesitan tocarla a mano --
+// no hay forma de que se desincronice de la fórmula real. Al ser una
+// columna de verdad (no una expresión ad-hoc en el `WHERE`), sí admite un
+// índice.
+//
+// `cola_salida` se recrea una vez más (ya pasó con MIGRACION_19/20/22)
+// porque SQLite no permite agregar una columna `STORED` a una tabla que ya
+// tiene filas vía `ALTER TABLE ADD COLUMN` -- sólo `VIRTUAL`, y acá
+// conviene `STORED` para que el índice no tenga que recalcularla en cada
+// consulta.
+const MIGRACION_27: &str = r"
+CREATE TABLE cola_salida_nueva (
+    id INTEGER PRIMARY KEY,
+    entidad TEXT NOT NULL CHECK (entidad IN ('contratista', 'ingreso', 'empresa', 'gafete', 'usuario')),
+    entidad_uuid TEXT NOT NULL,
+    operacion TEXT NOT NULL CHECK (operacion IN ('crear', 'actualizar', 'cerrar')),
+    estado TEXT NOT NULL DEFAULT 'pendiente'
+        CHECK (estado IN ('pendiente', 'enviado', 'fallido')),
+    intentos INTEGER NOT NULL DEFAULT 0 CHECK (intentos >= 0),
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    ultimo_error TEXT,
+    proximo_intento_en TEXT GENERATED ALWAYS AS (
+        datetime(actualizado_en, '+' || MIN(intentos * 15, 1440) || ' minutes')
+    ) STORED
+) STRICT;
+INSERT INTO cola_salida_nueva (
+    id, entidad, entidad_uuid, operacion, estado, intentos,
+    creado_en, actualizado_en, ultimo_error
+)
+SELECT
+    id, entidad, entidad_uuid, operacion, estado, intentos,
+    creado_en, actualizado_en, ultimo_error
+FROM cola_salida;
+DROP TABLE cola_salida;
+ALTER TABLE cola_salida_nueva RENAME TO cola_salida;
+CREATE INDEX idx_cola_salida_pendientes
+ON cola_salida(proximo_intento_en)
+WHERE estado = 'pendiente';
 ";

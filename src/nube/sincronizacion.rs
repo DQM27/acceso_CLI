@@ -286,17 +286,17 @@ fn procesar_fila_individual(
 /// que ya esperaron lo suficiente desde el último intento. La espera crece
 /// con cada fallo (15 min, 30 min, 45 min...), tope de un día -- para no
 /// mendigar el mismo pedido roto cada 5 minutos para siempre, pero tampoco
-/// dejarlo esperando una semana entera.
+/// dejarlo esperando una semana entera. `proximo_intento_en` (columna
+/// generada, ver `MIGRACION_27` en `database::schema`) ya trae esa fórmula
+/// calculada -- antes era una expresión repetida acá mismo en cada
+/// consulta, que `SQLite` no podía resolver con un índice (hallazgo R-06 de
+/// `docs/auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md`); ahora
+/// es una columna de verdad, con `idx_cola_salida_pendientes` sobre ella.
 fn pendientes(connection: &Connection, limite: u32) -> Result<Vec<FilaCola>, SincronizacionError> {
     let mut statement = connection.prepare(
         "
         SELECT id, entidad, entidad_uuid, operacion, intentos FROM cola_salida
-        WHERE estado = 'pendiente'
-          AND (
-            intentos = 0
-            OR datetime(actualizado_en, '+' || MIN(intentos * 15, 1440) || ' minutes')
-               <= datetime('now')
-          )
+        WHERE estado = 'pendiente' AND proximo_intento_en <= datetime('now')
         ORDER BY creado_en
         LIMIT ?1
         ",
@@ -1954,6 +1954,40 @@ mod tests {
             }
         });
         format!("http://{direccion}")
+    }
+
+    /// Prueba directa del hallazgo R-06: antes, `pendientes()` filtraba con
+    /// una expresión (`datetime(actualizado_en, ...)`) que SQLite no podía
+    /// resolver con ningún índice -- cada `drenar_cola` escaneaba toda
+    /// `cola_salida` pendiente. Con `proximo_intento_en` como columna
+    /// generada e indexada (`MIGRACION_27`), el plan de consulta real de
+    /// `pendientes()` debe usar `idx_cola_salida_pendientes` en vez de un
+    /// `SCAN cola_salida`.
+    #[test]
+    fn la_consulta_de_pendientes_usa_el_indice_no_un_escaneo_completo() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+
+        let plan: String = connection
+            .query_row(
+                "EXPLAIN QUERY PLAN
+                 SELECT id, entidad, entidad_uuid, operacion, intentos FROM cola_salida
+                 WHERE estado = 'pendiente' AND proximo_intento_en <= datetime('now')
+                 ORDER BY creado_en
+                 LIMIT 200",
+                [],
+                |row| row.get::<_, String>(3),
+            )
+            .unwrap();
+
+        assert!(
+            plan.contains("idx_cola_salida_pendientes"),
+            "esperaba que el plan usara el índice, se obtuvo: {plan}"
+        );
+        assert!(
+            !plan.to_uppercase().contains("SCAN"),
+            "esperaba una búsqueda por índice, no un escaneo completo: {plan}"
+        );
     }
 
     fn conexion_con_contratista() -> (Connection, String) {
