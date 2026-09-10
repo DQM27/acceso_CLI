@@ -2,8 +2,8 @@
 //! (misma idea que `src/application/*.rs` en el núcleo). Cada uno es una
 //! función fina que llama a `AppCore`; la lógica real nunca vive acá.
 //!
-//! Convención para comandos nuevos (accesos/ingresos, historial, respaldos,
-//! etc. — ver `docs/plan-tauri.md`):
+//! Convención para comandos nuevos (accesos/ingresos, historial, etc. — ver
+//! `docs/plan-tauri.md`):
 //!
 //! 1. Sesión: si el método de `AppCore` que se llama recibe `actor: &UsuarioSesion`,
 //!    el comando arranca con `let sesion = state.sesion_activa()?;`. Si es una
@@ -30,5 +30,4 @@ pub mod gafetes;
 pub mod historial;
 pub mod ingresos;
 pub mod nube;
-pub mod respaldos;
 pub mod usuarios;

@@ -27,7 +27,6 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { listen } from "@tauri-apps/api/event";
 import { Toaster, toast } from "sonner";
 import {
-  Archive,
   Building2,
   ClipboardList,
   History,
@@ -65,7 +64,6 @@ const Usuarios = lazy(() => import("./pantallas/Usuarios"));
 const Historial = lazy(() => import("./pantallas/Historial"));
 const Auditoria = lazy(() => import("./pantallas/Auditoria"));
 const Gafetes = lazy(() => import("./pantallas/Gafetes"));
-const Respaldos = lazy(() => import("./pantallas/Respaldos"));
 const NuevoIngresoModal = lazy(() => import("./pantallas/NuevoIngresoModal"));
 const SalidaModal = lazy(() => import("./pantallas/SalidaModal"));
 
@@ -131,7 +129,6 @@ export default function App() {
       onCerrarSesion={() => {
         cerrarSesion().finally(() => setPantalla({ tipo: "login" }));
       }}
-      onVolverALogin={() => setPantalla({ tipo: "login" })}
     />
   );
 }
@@ -143,8 +140,7 @@ export type Seccion =
   | "auditoria"
   | "empresas"
   | "usuarios"
-  | "gafetes"
-  | "respaldos";
+  | "gafetes";
 
 /** `rolesPermitidos` ausente = visible para cualquier rol logueado.
  * Auditoría lo restringe — espejo de `RolUsuario::puede(VerAuditoria)` en
@@ -181,14 +177,6 @@ const SECCIONES: {
     rolesPermitidos: ["Root", "Administrador"],
   },
   { id: "gafetes", etiqueta: "Gafetes", Icono: IdCard },
-  {
-    id: "respaldos",
-    etiqueta: "Respaldos",
-    Icono: Archive,
-    // Espejo de `Operacion::GestionarRespaldos` (`src/domain/autorizacion.rs`):
-    // sólo Root puede gestionar respaldos, ni siquiera Administrador.
-    rolesPermitidos: ["Root"],
-  },
 ];
 
 /**
@@ -199,11 +187,9 @@ const SECCIONES: {
 function Shell({
   sesion,
   onCerrarSesion,
-  onVolverALogin,
 }: {
   sesion: UsuarioSesion;
   onCerrarSesion: () => void;
-  onVolverALogin: () => void;
 }) {
   const [seccion, setSeccion] = useState<Seccion>("activos");
   // Cada sección visitada se queda MONTADA (oculta con CSS) en vez de
@@ -423,10 +409,8 @@ function Shell({
                           <Empresas />
                         ) : id === "usuarios" ? (
                           <Usuarios actorRol={sesion.rol} />
-                        ) : id === "gafetes" ? (
-                          <Gafetes />
                         ) : (
-                          <Respaldos onRestaurado={onVolverALogin} />
+                          <Gafetes />
                         )}
                       </SeccionActivaProvider>
                     </Suspense>

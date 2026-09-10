@@ -201,6 +201,7 @@ mod tests {
     fn movimiento() -> MovimientoIngresoResumen {
         MovimientoIngresoResumen {
             registro_id: 1,
+            uuid: "00000000-0000-0000-0000-000000000001".into(),
             contratista_id: 2,
             cedula: "001010101".into(),
             contratista_nombre: "María <Pérez> & \"Ruiz\"".into(),

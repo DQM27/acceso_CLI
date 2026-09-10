@@ -106,7 +106,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
-        .manage(GuiState::new(core, instancia))
+        .manage(GuiState::new(core, instancia, ruta_base_datos))
         .setup(|app| {
             // El updater no existe en móvil — esta app es 100% escritorio (ver
             // el comentario de crate-type arriba), pero se guarda el gate
@@ -161,11 +161,6 @@ pub fn run() {
             comandos::gafetes::dar_de_baja_gafete,
             comandos::gafetes::marcar_gafete_perdido,
             comandos::gafetes::resolver_gafete,
-            comandos::respaldos::crear_respaldo,
-            comandos::respaldos::listar_respaldos,
-            comandos::respaldos::validar_respaldo,
-            comandos::respaldos::exportar_respaldo,
-            comandos::respaldos::restaurar_respaldo,
             comandos::nube::configurar_dispositivo_inicial,
             comandos::nube::guardar_secreto_dispositivo,
             comandos::nube::secreto_dispositivo_guardado,

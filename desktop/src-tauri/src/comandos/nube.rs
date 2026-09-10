@@ -105,9 +105,9 @@ fn autenticar(state: &GuiState) -> Result<nube::TokenDispositivo, String> {
 /// lo que el otro dispositivo del mismo sitio tiene abierto ahora mismo.
 /// Compartida por el comando manual (`sincronizar_con_nube`) y el
 /// disparador automático (`crate::run`) -- misma lógica, dos formas de
-/// dispararla. Igual que `crear_respaldo`: autoriza rápido con el candado
-/// compartido (dentro de `autenticar`), lo suelta, y hace la parte lenta
-/// (red) sobre una conexión propia -- ver `GuiState::conexion_secundaria`.
+/// dispararla. Autoriza rápido con el candado compartido (dentro de
+/// `autenticar`), lo suelta, y hace la parte lenta (red) sobre una conexión
+/// propia -- ver `GuiState::conexion_secundaria`.
 pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, String> {
     // El timer, los avisos remotos y el botón manual comparten la misma cola.
     // Sólo una ejecución puede drenarla a la vez; el núcleo queda libre.

@@ -1,6 +1,10 @@
 # Rust
 /target/
 
+# Experimentos: cancha de pruebas, no código de producción — el que se usa de
+# verdad vive integrado en el proyecto (ver desktop/src-tauri, núcleo raíz).
+/experiments/
+
 # Bases de datos locales
 *.db
 *.sqlite
