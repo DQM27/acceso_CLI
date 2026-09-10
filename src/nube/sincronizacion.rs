@@ -404,10 +404,43 @@ fn obtener_json_paginado<T: serde::de::DeserializeOwned>(
     contexto: &ContextoSincronizacion<'_>,
     url_base: &str,
 ) -> Result<Vec<T>, SincronizacionError> {
+    let mut resultado = Vec::new();
+    obtener_json_paginado_con(cliente, contexto, url_base, |pagina: Vec<T>| {
+        resultado.extend(pagina);
+        Ok(())
+    })?;
+    Ok(resultado)
+}
+
+/// Igual que [`obtener_json_paginado`], pero en vez de acumular todas las
+/// páginas en un `Vec` antes de volver, le entrega cada página a
+/// `por_pagina` a medida que llega -- pensada para `recibir_historial_del_sitio`,
+/// el único llamador cuyo resultado puede llegar a ser grande de verdad (el
+/// catálogo de un sitio -- contratistas, gafetes -- está acotado por la
+/// plantilla física del sitio; el historial, no). Hallazgo R-03 de
+/// `docs/auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md`: sin
+/// esto, el primer sync de un sitio con historial grande junta todas las
+/// páginas en memoria antes de persistir ninguna. `por_pagina` puede abrir
+/// su propia transacción corta y comitearla por página -- eso además
+/// acorta cuánto tiempo se retiene el candado de escritura comparado con
+/// una única transacción gigante al final, y dos ventajas más: si la red
+/// se corta a mitad de la descarga, las páginas ya comiteadas no se pierden
+/// (a diferencia de una transacción única, que revierte todo); y las
+/// lecturas concurrentes (`GuiState::conexion_secundaria`) sólo se bloquean
+/// durante cada transacción corta, no durante toda la descarga.
+fn obtener_json_paginado_con<T, F>(
+    cliente: &reqwest::blocking::Client,
+    contexto: &ContextoSincronizacion<'_>,
+    url_base: &str,
+    mut por_pagina: F,
+) -> Result<(), SincronizacionError>
+where
+    T: serde::de::DeserializeOwned,
+    F: FnMut(Vec<T>) -> Result<(), SincronizacionError>,
+{
     let separador = if url_base.contains('?') { '&' } else { '?' };
     let url = format!("{url_base}{separador}order=id.asc");
 
-    let mut resultado = Vec::new();
     let mut desde = 0_usize;
     loop {
         let respuesta = cliente
@@ -433,13 +466,14 @@ fn obtener_json_paginado<T: serde::de::DeserializeOwned>(
         }
         let pagina: Vec<T> = respuesta.json().map_err(NubeError::Red)?;
         let recibidas_en_esta_pagina = pagina.len();
-        resultado.extend(pagina);
-        if recibidas_en_esta_pagina < TAMANO_PAGINA_REMOTA {
+        let hay_mas = recibidas_en_esta_pagina == TAMANO_PAGINA_REMOTA;
+        por_pagina(pagina)?;
+        if !hay_mas {
             break;
         }
         desde += TAMANO_PAGINA_REMOTA;
     }
-    Ok(resultado)
+    Ok(())
 }
 
 /// Contratistas (espejo): crear y actualizar se resuelven igual -- un
@@ -1202,8 +1236,41 @@ pub fn recibir_historial_del_sitio(
          dispositivo_entrada:dispositivos!ingresos_dispositivo_entrada_id_fkey(tipo)",
         contexto.base_url, contexto.sitio_id,
     );
-    let filas: Vec<FilaHistorialRemota> = obtener_json_paginado(&cliente, contexto, &url)?;
 
+    // Página por página en vez de acumular todo el historial remoto en un
+    // `Vec` antes de tocar la base -- ver el doc-comment de
+    // `obtener_json_paginado_con` (hallazgo R-03). `marca_mas_nueva` viaja
+    // de página en página: el orden entre páginas es por `id`, no por
+    // `updated_at`, así que la marca final tiene que ser el máximo visto en
+    // todas, no sólo en la última.
+    let mut recibidos_total = 0_u32;
+    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_consulta;
+    obtener_json_paginado_con(&cliente, contexto, &url, |pagina: Vec<FilaHistorialRemota>| {
+        let (recibidos, marca_actualizada) =
+            aplicar_pagina_historial(connection, contexto, &pagina, marca_mas_nueva)?;
+        recibidos_total += recibidos;
+        marca_mas_nueva = marca_actualizada;
+        Ok(())
+    })?;
+
+    Ok(recibidos_total)
+}
+
+/// Persiste una página de historial remoto en su propia transacción corta,
+/// incluida la marca de agua -- así, si la red se corta a mitad de una
+/// descarga de varias páginas, las páginas ya procesadas quedan guardadas
+/// de verdad (no dependen de que las últimas también lleguen).
+///
+/// Devuelve cuántas filas de esta página se aplicaron y la marca de agua
+/// resultante (el máximo entre `marca_previa` y los `updated_at` de esta
+/// página) -- el llamador se la pasa de vuelta como `marca_previa` de la
+/// siguiente página.
+fn aplicar_pagina_historial(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    pagina: &[FilaHistorialRemota],
+    marca_previa: Option<chrono::DateTime<chrono::Utc>>,
+) -> Result<(u32, Option<chrono::DateTime<chrono::Utc>>), SincronizacionError> {
     let transaction = connection.unchecked_transaction()?;
     let mut recibidos = 0_u32;
     let ahora = crate::tiempo::serializar_utc(chrono::Utc::now());
@@ -1219,17 +1286,17 @@ pub fn recibir_historial_del_sitio(
     // próxima vez, que ya sabemos que no trae nada -- preferible a arriesgar
     // perder una fila).
     // Una fila con fecha ilegible no puede tumbar el `?` de acá adentro: eso
-    // aborta la transacción entera antes del `commit` (el error se propaga
-    // hasta `sincronizar_con_nube`), y en un dispositivo que necesita traer
-    // el historial completo (recién reinstalado, sin marca de agua todavía)
+    // aborta esta transacción (de una sola página, no de todo el historial)
+    // antes del `commit`, y en un dispositivo que necesita traer el
+    // historial completo (recién reinstalado, sin marca de agua todavía)
     // una sola fila vieja con un formato raro dejaba SIN historial para
     // siempre -- ni esa fila ni ninguna de las demás, todas las veces que se
     // reintentara, porque el pedido siempre vuelve a traer el sitio entero
     // desde cero. Se omite sólo esa fila (no cuenta para `recibidos` ni para
     // la marca de agua, así que vuelve a pedirse en el próximo sync, pero ya
     // no bloquea al resto).
-    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_consulta;
-    for fila in &filas {
+    let mut marca_mas_nueva = marca_previa;
+    for fila in pagina {
         let Ok(hora_entrada) = crate::tiempo::parsear_utc(&fila.hora_entrada)
             .map(crate::tiempo::serializar_utc)
         else {
@@ -1312,7 +1379,7 @@ pub fn recibir_historial_del_sitio(
         )?;
     }
     transaction.commit()?;
-    Ok(recibidos)
+    Ok((recibidos, marca_mas_nueva))
 }
 
 fn marca_historial_para_consulta(
@@ -2377,6 +2444,84 @@ mod tests {
 
         recibir_historial_del_sitio(&connection, &contexto(&base_url)).unwrap();
         servidor.join().unwrap();
+    }
+
+    #[test]
+    fn recibir_historial_paginado_persiste_todas_las_paginas_y_la_marca_de_agua_es_el_maximo_global() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+
+        // Página 1: exactamente TAMANO_PAGINA_REMOTA filas -- señal de que
+        // hay una página más. `updated_at` sube con cada fila, hasta
+        // 2026-01-01T00:08:19Z en la última (fila 499, +499 segundos).
+        let mut filas_pagina_1 = String::new();
+        for i in 0..TAMANO_PAGINA_REMOTA {
+            if i > 0 {
+                filas_pagina_1.push(',');
+            }
+            let minutos = i / 60;
+            let segundos = i % 60;
+            filas_pagina_1.push_str(&format!(
+                "{{\"id\":\"mov-{i:04}\",\"contratista_nombre\":\"Persona {i}\",\
+                 \"hora_entrada\":\"2026-01-01T00:00:00Z\",\
+                 \"dispositivo_entrada_id\":\"dispositivo-1\",\
+                 \"updated_at\":\"2026-01-01T00:{minutos:02}:{segundos:02}Z\"}}"
+            ));
+        }
+        let cuerpo_pagina_1 = format!("[{filas_pagina_1}]");
+
+        // Página 2: una sola fila (menos que TAMANO_PAGINA_REMOTA, así que
+        // es la última) con un `updated_at` MÁS VIEJO que el máximo de la
+        // página 1 -- las páginas vienen ordenadas por `id`, no por
+        // `updated_at`, así que esto puede pasar en la práctica. Si la
+        // marca de agua final quedara en el valor de la última página en
+        // vez del máximo global, esta prueba lo detecta.
+        let cuerpo_pagina_2 =
+            "[{\"id\":\"mov-pagina-2\",\"contratista_nombre\":\"Persona tardía\",\
+             \"hora_entrada\":\"2026-01-01T00:00:00Z\",\
+             \"dispositivo_entrada_id\":\"dispositivo-1\",\
+             \"updated_at\":\"2026-01-01T00:00:01Z\"}]"
+                .to_string();
+
+        let respuesta_pagina_1 = Box::leak(
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo_pagina_1}",
+                cuerpo_pagina_1.len()
+            )
+            .into_boxed_str(),
+        ) as &'static str;
+        let respuesta_pagina_2 = Box::leak(
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo_pagina_2}",
+                cuerpo_pagina_2.len()
+            )
+            .into_boxed_str(),
+        ) as &'static str;
+        let base_url =
+            servidor_de_respuestas(vec![respuesta_pagina_1, respuesta_pagina_2]);
+
+        let recibidos = recibir_historial_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(recibidos, TAMANO_PAGINA_REMOTA as u32 + 1);
+        let guardadas: i64 = connection
+            .query_row("SELECT COUNT(*) FROM historial_sitio", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(
+            guardadas,
+            TAMANO_PAGINA_REMOTA as i64 + 1,
+            "las filas de ambas páginas quedan persistidas, no sólo la última"
+        );
+        let marca: String = connection
+            .query_row(
+                "SELECT historial_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            marca, "2026-01-01T00:08:19Z",
+            "la marca de agua es el máximo de TODAS las páginas, no el de la última"
+        );
     }
 
     #[test]
