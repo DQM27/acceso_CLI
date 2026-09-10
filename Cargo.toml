@@ -12,7 +12,11 @@ dev-auth = []
 serde = ["dep:serde", "chrono/serde"]
 nube = ["dep:reqwest", "dep:serde_json", "serde"]
 cifrado-secreto-dispositivo-portable = ["dep:aes-gcm", "dep:sha2"]
-cifrado-secreto-dispositivo = ["dep:machine-uid", "cifrado-secreto-dispositivo-portable"]
+# `machine-uid` queda sólo para la metadata forense de activación (ver
+# `identificador_de_esta_maquina`, usada por `desktop-tauri`) -- ya NO
+# deriva la clave de cifrado del secreto: eso es DPAPI (`dep:windows`,
+# ligado al usuario de Windows, no a un identificador público adivinable).
+cifrado-secreto-dispositivo = ["dep:machine-uid", "dep:windows", "cifrado-secreto-dispositivo-portable"]
 
 [dependencies]
 chrono = "0.4.45"
@@ -36,6 +40,15 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 machine-uid = { version = "0.6", optional = true }
 aes-gcm = { version = "0.11", default-features = false, features = ["aes", "alloc"], optional = true }
 sha2 = { version = "0.11", default-features = false, optional = true }
+
+[target.'cfg(windows)'.dependencies]
+# DPAPI (`CryptProtectData`/`CryptUnprotectData`) para proteger el secreto
+# de dispositivo en disco -- ver `cifrado-secreto-dispositivo` arriba y
+# `nube::credenciales`. Misma versión que ya fija `desktop/src-tauri`.
+windows = { version = "=0.61.3", features = [
+    "Win32_Security_Cryptography",
+    "Win32_Foundation",
+], optional = true }
 
 [build-dependencies]
 winresource = "0.1"

@@ -2072,7 +2072,10 @@ mod tests {
 
         let marca = marca_historial_para_consulta(Some("2026-09-09T10:00:00Z"), ahora);
 
-        assert_eq!(marca.as_deref(), Some("2026-09-02T10:00:00Z"));
+        assert_eq!(
+            marca,
+            Some(crate::tiempo::parsear_utc("2026-09-02T10:00:00Z").unwrap())
+        );
     }
 
     #[test]
@@ -2081,7 +2084,10 @@ mod tests {
 
         let marca = marca_historial_para_consulta(Some("2026-12-01T00:00:00Z"), ahora);
 
-        assert_eq!(marca.as_deref(), Some("2026-09-02T12:00:00Z"));
+        assert_eq!(
+            marca,
+            Some(crate::tiempo::parsear_utc("2026-09-02T12:00:00Z").unwrap())
+        );
     }
 
     #[test]

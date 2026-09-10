@@ -1,18 +1,24 @@
 //! Almacenamiento local del secreto de este dispositivo (ver
 //! `docs/plan-persistencia-nube.md`).
 //!
-//! Sin el feature `cifrado-secreto-dispositivo-portable` sigue en texto
-//! plano a propósito, mismo criterio que ya rige el resto de la base local
-//! (ver memoria del proyecto "Cifrado en reposo" — `SQLCipher` se descartó,
-//! esa decisión general sigue pendiente y es aparte de esta). Con el feature
-//! activo el archivo se cifra con una clave derivada de un identificador de
-//! dispositivo -- ver `docs/plan-panel-administrativo-web.md`, "Protección
-//! del secreto del dispositivo en reposo". Cada plataforma resuelve ese
-//! identificador a su manera: escritorio solo, vía el Machine GUID de
-//! Windows (feature `cifrado-secreto-dispositivo`, ver [`guardar_secreto`]);
-//! móvil lo recibe de Kotlin (`Settings.Secure.ANDROID_ID`, ver
-//! [`guardar_secreto_en_con_identificador`]) porque Android no tiene un
-//! equivalente al registro de Windows.
+//! Sin ningún feature de cifrado sigue en texto plano a propósito, mismo
+//! criterio que ya rige el resto de la base local. Dos esquemas de cifrado
+//! separados, uno por plataforma:
+//!
+//! - **Escritorio** (feature `cifrado-secreto-dispositivo`, ver
+//!   [`guardar_secreto`]/[`guardar_secreto_en`]): protegido con DPAPI de
+//!   Windows (`CryptProtectData`/`CryptUnprotectData`, scope del usuario
+//!   actual). No deriva de ningún identificador -- DPAPI liga el blob al
+//!   material que gestiona Windows para esa cuenta, no a algo que cualquiera
+//!   con acceso al código y a la máquina pueda recalcular (a diferencia del
+//!   Machine GUID, que es público). Ver `mod dpapi` más abajo.
+//! - **Móvil** (feature `cifrado-secreto-dispositivo-portable`, ver
+//!   [`guardar_secreto_en_con_identificador`]): Android ya migró a su
+//!   propio Keystore (`SecretoDispositivoStore.kt`) para todo secreto
+//!   nuevo -- estas funciones sólo quedan para leer un archivo legado de
+//!   antes de esa migración, cifrado con una clave derivada de
+//!   `Settings.Secure.ANDROID_ID` (Kotlin se lo pasa, Android no tiene
+//!   equivalente al registro de Windows para resolverlo del lado Rust).
 
 use std::{
     fs, io,
@@ -82,6 +88,140 @@ mod cifrado {
     }
 }
 
+/// Cifrado real del secreto en escritorio: DPAPI de Windows, no una clave
+/// derivada de un identificador público. Ver el doc-comment del módulo.
+#[cfg(all(windows, feature = "cifrado-secreto-dispositivo"))]
+mod dpapi {
+    use windows::Win32::Foundation::{HLOCAL, LocalFree};
+    use windows::Win32::Security::Cryptography::{
+        CRYPT_INTEGER_BLOB, CRYPTPROTECT_UI_FORBIDDEN, CryptProtectData, CryptUnprotectData,
+    };
+
+    /// Antepuesto al blob protegido -- distingue esto de un archivo en texto
+    /// plano legado o del esquema portable (`BAE1`) sin necesitar
+    /// intento-y-error.
+    const MAGIC: &[u8; 4] = b"DPA1";
+
+    pub(super) fn es_protegido(contenido: &[u8]) -> bool {
+        contenido.starts_with(MAGIC)
+    }
+
+    /// `None` sólo si `CryptProtectData` en sí falla -- quien llama cae a
+    /// texto plano antes que perder el secreto.
+    pub(super) fn proteger(secreto: &str) -> Option<Vec<u8>> {
+        let blob = proteger_bytes(secreto.as_bytes())?;
+        let mut salida = Vec::with_capacity(MAGIC.len() + blob.len());
+        salida.extend_from_slice(MAGIC);
+        salida.extend_from_slice(&blob);
+        Some(salida)
+    }
+
+    /// `None` si el archivo está corrupto o quedó de otro usuario/máquina --
+    /// DPAPI simplemente no puede desprotegerlo, sin distinción posible ni
+    /// falta que hace.
+    pub(super) fn desproteger(contenido: &[u8]) -> Option<String> {
+        let blob = contenido.strip_prefix(MAGIC)?;
+        let plano = desproteger_bytes(blob)?;
+        String::from_utf8(plano).ok()
+    }
+
+    /// Nunca `CRYPTPROTECT_LOCAL_MACHINE`: ese flag dejaría que cualquier
+    /// usuario de este mismo Windows desprotegiera el blob. Con el scope por
+    /// defecto (usuario actual), sólo esta cuenta puede recuperarlo.
+    fn proteger_bytes(datos: &[u8]) -> Option<Vec<u8>> {
+        let mut entrada = CRYPT_INTEGER_BLOB {
+            cbData: u32::try_from(datos.len()).ok()?,
+            pbData: datos.as_ptr().cast_mut(),
+        };
+        let mut salida = CRYPT_INTEGER_BLOB::default();
+
+        // SAFETY: `entrada` apunta a `datos`, vivo durante toda la llamada;
+        // el buffer de `salida` lo reserva la propia API y se libera con
+        // LocalFree apenas se copia a un `Vec` nuestro.
+        let resultado = unsafe {
+            CryptProtectData(
+                std::ptr::addr_of_mut!(entrada),
+                None,
+                None,
+                None,
+                None,
+                CRYPTPROTECT_UI_FORBIDDEN,
+                std::ptr::addr_of_mut!(salida),
+            )
+        };
+        resultado.ok()?;
+        Some(copiar_y_liberar(salida))
+    }
+
+    fn desproteger_bytes(blob: &[u8]) -> Option<Vec<u8>> {
+        let mut entrada = CRYPT_INTEGER_BLOB {
+            cbData: u32::try_from(blob.len()).ok()?,
+            pbData: blob.as_ptr().cast_mut(),
+        };
+        let mut salida = CRYPT_INTEGER_BLOB::default();
+
+        // SAFETY: mismo criterio que en `proteger_bytes`;
+        // `CRYPTPROTECT_UI_FORBIDDEN` evita que un blob corrupto/ajeno
+        // dispare un diálogo nativo de Windows.
+        let resultado = unsafe {
+            CryptUnprotectData(
+                std::ptr::addr_of_mut!(entrada),
+                None,
+                None,
+                None,
+                None,
+                CRYPTPROTECT_UI_FORBIDDEN,
+                std::ptr::addr_of_mut!(salida),
+            )
+        };
+        resultado.ok()?;
+        Some(copiar_y_liberar(salida))
+    }
+
+    fn copiar_y_liberar(blob: CRYPT_INTEGER_BLOB) -> Vec<u8> {
+        if blob.pbData.is_null() || blob.cbData == 0 {
+            return Vec::new();
+        }
+        // SAFETY: `blob.pbData` apunta a `blob.cbData` bytes válidos,
+        // escritos por CryptProtectData/CryptUnprotectData justo antes.
+        let copia =
+            unsafe { std::slice::from_raw_parts(blob.pbData, blob.cbData as usize) }.to_vec();
+        // SAFETY: `blob.pbData` la reservó DPAPI con LocalAlloc -- LocalFree
+        // es la contraparte documentada para liberarla.
+        unsafe {
+            let _ = LocalFree(Some(HLOCAL(blob.pbData.cast::<std::ffi::c_void>())));
+        }
+        copia
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn proteger_y_desproteger_devuelve_el_mismo_secreto() {
+            let protegido = proteger("s3cr3t0-dpapi").unwrap();
+            assert!(es_protegido(&protegido));
+            assert_eq!(desproteger(&protegido).as_deref(), Some("s3cr3t0-dpapi"));
+        }
+
+        #[test]
+        fn el_blob_protegido_no_contiene_el_secreto_en_claro() {
+            let protegido = proteger("s3cr3t0-visible-si-esto-fallara").unwrap();
+            assert!(
+                !protegido
+                    .windows(b"s3cr3t0-visible-si-esto-fallara".len())
+                    .any(|v| v == b"s3cr3t0-visible-si-esto-fallara")
+            );
+        }
+
+        #[test]
+        fn un_blob_corrupto_no_desprotege() {
+            assert_eq!(desproteger(b"DPA1basura-no-es-un-blob-dpapi-valido"), None);
+        }
+    }
+}
+
 /// Resuelve `%LOCALAPPDATA%\ControlAcceso`. `None` si la variable de
 /// entorno no está definida o no es una ruta absoluta — mismo criterio de
 /// `PreferencesStore::load_default`.
@@ -94,14 +234,11 @@ fn directorio_default() -> Option<PathBuf> {
     Some(root.join("ControlAcceso"))
 }
 
-/// `None` si no se pudo leer el Machine GUID de Windows (registro
-/// inaccesible, permisos) -- [`guardar_secreto_en`]/[`cargar_secreto_en`]
-/// caen a texto plano en ese caso antes que perder el secreto; un
-/// dispositivo real con Windows corrupto al punto de no poder leer su
-/// propio registro ya tiene problemas más grandes que éste. `pub` (no sólo
-/// de uso interno de este módulo) porque `desktop-tauri` también la usa
-/// para armar la metadata forense de la activación inicial -- ver
-/// `comandos::nube::configurar_dispositivo_inicial`.
+/// Machine GUID de Windows -- ya NO se usa para derivar ninguna clave de
+/// cifrado (ver el doc-comment del módulo, DPAPI no lo necesita). Queda
+/// exclusivamente para la metadata forense de la activación inicial --
+/// `desktop-tauri` la usa ahí, ver `comandos::nube::configurar_dispositivo_inicial`.
+/// `None` si no se pudo leer (registro inaccesible, permisos).
 #[cfg(feature = "cifrado-secreto-dispositivo")]
 pub fn identificador_de_esta_maquina() -> Option<String> {
     machine_uid::get().ok()
@@ -125,27 +262,29 @@ pub fn cargar_secreto() -> Option<String> {
     cargar_secreto_en(&directorio_default()?)
 }
 
-/// Guarda el secreto en `<directorio>/dispositivo-nube.secret`, cifrado con
-/// una clave derivada del Machine GUID de esta máquina (feature
-/// `cifrado-secreto-dispositivo`, sólo escritorio -- ver
+/// Guarda el secreto en `<directorio>/dispositivo-nube.secret`, protegido
+/// con DPAPI (feature `cifrado-secreto-dispositivo`, sólo escritorio -- ver
 /// [`guardar_secreto_en_con_identificador`] para el equivalente móvil).
 pub fn guardar_secreto_en(directorio: &Path, secreto: &str) -> io::Result<()> {
-    #[cfg(feature = "cifrado-secreto-dispositivo")]
-    if let Some(identificador) = identificador_de_esta_maquina() {
-        return guardar_secreto_en_con_identificador(directorio, secreto, &identificador);
+    fs::create_dir_all(directorio)?;
+    let secreto = secreto.trim();
+    #[cfg(all(windows, feature = "cifrado-secreto-dispositivo"))]
+    if let Some(protegido) = dpapi::proteger(secreto) {
+        return fs::write(directorio.join(FILE_NAME), protegido);
     }
-    guardar_secreto_sin_cifrar(directorio, secreto)
+    fs::write(directorio.join(FILE_NAME), secreto)
 }
 
-/// Ver [`guardar_secreto_en`]. Lee tanto un archivo cifrado por esta misma
-/// máquina (feature activo) como uno en texto plano legado.
+/// Ver [`guardar_secreto_en`]. Lee tanto un archivo protegido con DPAPI por
+/// esta misma cuenta de Windows como uno en texto plano legado.
 #[must_use]
 pub fn cargar_secreto_en(directorio: &Path) -> Option<String> {
-    #[cfg(feature = "cifrado-secreto-dispositivo")]
-    if let Some(identificador) = identificador_de_esta_maquina() {
-        return cargar_secreto_en_con_identificador(directorio, &identificador);
+    let contenido = fs::read(directorio.join(FILE_NAME)).ok()?;
+    #[cfg(all(windows, feature = "cifrado-secreto-dispositivo"))]
+    if dpapi::es_protegido(&contenido) {
+        return dpapi::desproteger(&contenido);
     }
-    cargar_secreto_sin_cifrar(directorio)
+    secreto_de_texto_plano(contenido)
 }
 
 /// Igual que [`guardar_secreto_en`], pero con un identificador de
@@ -204,17 +343,6 @@ pub fn borrar_secreto_en(directorio: &Path) -> io::Result<()> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error),
     }
-}
-
-/// Sin ningún feature de cifrado activo -- texto plano, como siempre.
-fn guardar_secreto_sin_cifrar(directorio: &Path, secreto: &str) -> io::Result<()> {
-    fs::create_dir_all(directorio)?;
-    fs::write(directorio.join(FILE_NAME), secreto.trim())
-}
-
-/// Ver [`guardar_secreto_sin_cifrar`].
-fn cargar_secreto_sin_cifrar(directorio: &Path) -> Option<String> {
-    secreto_de_texto_plano(fs::read(directorio.join(FILE_NAME)).ok()?)
 }
 
 fn secreto_de_texto_plano(contenido: Vec<u8>) -> Option<String> {
@@ -290,7 +418,7 @@ mod tests {
         let _ = fs::remove_dir_all(directorio);
     }
 
-    #[cfg(feature = "cifrado-secreto-dispositivo")]
+    #[cfg(all(windows, feature = "cifrado-secreto-dispositivo"))]
     #[test]
     fn con_el_feature_activo_el_archivo_en_disco_no_queda_en_texto_plano() {
         let directorio = directorio_temporal();
@@ -298,7 +426,7 @@ mod tests {
         guardar_secreto_en(&directorio, "s3cr3t0-de-prueba").expect("se guarda");
         let crudo = fs::read(directorio.join(FILE_NAME)).expect("se lee el archivo crudo");
 
-        assert!(cifrado::es_cifrado(&crudo));
+        assert!(dpapi::es_protegido(&crudo));
         assert!(
             !crudo
                 .windows(b"s3cr3t0-de-prueba".len())
