@@ -5,15 +5,9 @@ use std::time::Instant;
 
 use control_acceso::application::AppCore;
 use control_acceso::database::queries::ingresos::FiltroIngresosActivos;
-use control_acceso::database::repositories::contratista_repository::{
-    ContratistaRepository, SqliteContratistaRepository,
-};
-use control_acceso::database::repositories::empresa_repository::{
-    EmpresaRepository, SqliteEmpresaRepository,
-};
-use control_acceso::database::repositories::usuario_repository::{
-    SqliteUsuarioRepository, UsuarioRepository,
-};
+use control_acceso::database::repositories::contratista_repository::{ContratistaRepository, SqliteContratistaRepository};
+use control_acceso::database::repositories::empresa_repository::{EmpresaRepository, SqliteEmpresaRepository};
+use control_acceso::database::repositories::usuario_repository::{SqliteUsuarioRepository, UsuarioRepository};
 use control_acceso::database::schema::initialize_database;
 use control_acceso::models::contratista::Contratista;
 use control_acceso::models::empresa::Empresa;
@@ -39,16 +33,12 @@ fn configurar(conn: &Connection, clave: &str) -> rusqlite::Result<()> {
     conn.pragma_update(None, "key", clave)
 }
 
-fn sembrar(conn: &Connection) -> Result<(i64, i64), Box<dyn Error>> {
+fn sembrar(conn: &Connection) -> Result<i64, Box<dyn Error>> {
     let empresas = SqliteEmpresaRepository::new(conn);
-    let empresa_id = empresas.crear(&Empresa {
-        id: 0,
-        nombre: "E2E CIPHER".to_owned(),
-        activo: true,
-    })?;
+    let empresa_id = empresas.crear(&Empresa { id: 0, nombre: "E2E CIPHER".to_owned(), activo: true })?;
 
     let usuarios = SqliteUsuarioRepository::new(conn);
-    let usuario_id = usuarios.crear(&Usuario {
+    usuarios.crear(&Usuario {
         id: 0,
         cedula: "E2EROOT".to_owned(),
         nombre: "Root E2E".to_owned(),
@@ -63,21 +53,17 @@ fn sembrar(conn: &Connection) -> Result<(i64, i64), Box<dyn Error>> {
         "E2E1001".to_owned(),
         "Contratista E2E".to_owned(),
         empresa_id,
-        TipoIngreso::PorCorreo,
+        TipoIngreso::Swat,
         None,
         false,
         true,
         true,
     ))?;
-
-    Ok((usuario_id, contratista_id))
+    Ok(contratista_id)
 }
 
 fn ejecutar_ronda(indice: usize) -> Result<f64, Box<dyn Error>> {
-    let path = std::env::temp_dir().join(format!(
-        "brisas-e2e-sqlcipher-{}-{indice}.db",
-        std::process::id()
-    ));
+    let path = std::env::temp_dir().join(format!("brisas-e2e-sqlcipher-{}-{indice}.db", std::process::id()));
     limpiar(&path);
 
     let conn = Connection::open(&path)?;
@@ -86,87 +72,53 @@ fn ejecutar_ronda(indice: usize) -> Result<f64, Box<dyn Error>> {
     initialize_database(&conn)?;
 
     let journal: String = conn.pragma_query_value(None, "journal_mode", |row| row.get(0))?;
-    if !journal.eq_ignore_ascii_case("wal") {
-        return Err(format!("journal_mode inesperado: {journal}").into());
-    }
+    if !journal.eq_ignore_ascii_case("wal") { return Err(format!("journal_mode inesperado: {journal}").into()); }
 
-    let (_usuario_id, contratista_id) = sembrar(&conn)?;
+    let contratista_id = sembrar(&conn)?;
     let core = AppCore::new(conn);
     let actor = core.autenticar("E2EROOT", "password-e2e")?;
 
-    // Warm-up: ejercita exactamente el camino de negocio antes de medir.
     let warm = core.registrar_ingreso(&actor, contratista_id, MedioIngreso::Caminando, None)?;
     core.registrar_salida(&actor, warm.registro_id)?;
 
     let inicio = Instant::now();
     for _ in 0..ITERACIONES {
-        let entrada = core.registrar_ingreso(
-            &actor,
-            contratista_id,
-            MedioIngreso::Caminando,
-            None,
-        )?;
+        let entrada = core.registrar_ingreso(&actor, contratista_id, MedioIngreso::Caminando, None)?;
         core.registrar_salida(&actor, entrada.registro_id)?;
     }
     let elapsed = inicio.elapsed();
 
     let activos = core.listar_ingresos_activos(&FiltroIngresosActivos::default())?;
-    if activos.total != 0 || !activos.items.is_empty() {
-        return Err("quedó un ingreso activo después del ciclo E2E".into());
-    }
+    if activos.total != 0 || !activos.items.is_empty() { return Err("quedó un ingreso activo después del ciclo E2E".into()); }
     drop(core);
 
     let bytes = fs::read(&path)?;
-    if bytes.starts_with(CABECERA_SQLITE) {
-        return Err("la base final conserva la cabecera SQLite en claro".into());
-    }
+    if bytes.starts_with(CABECERA_SQLITE) { return Err("la base final conserva la cabecera SQLite en claro".into()); }
 
     let conn = Connection::open(&path)?;
     configurar(&conn, CLAVE)?;
     let movimientos: i64 = conn.query_row("SELECT COUNT(*) FROM registro_ingresos", [], |r| r.get(0))?;
-    if movimientos != (ITERACIONES as i64 + 1) {
-        return Err(format!("conteo inesperado de movimientos: {movimientos}").into());
-    }
+    if movimientos != ITERACIONES as i64 + 1 { return Err(format!("conteo inesperado de movimientos: {movimientos}").into()); }
     drop(conn);
 
     let conn_mala = Connection::open(&path)?;
     configurar(&conn_mala, CLAVE_MALA)?;
-    if conn_mala
-        .query_row("SELECT COUNT(*) FROM sqlite_master", [], |r| r.get::<_, i64>(0))
-        .is_ok()
-    {
+    if conn_mala.query_row("SELECT COUNT(*) FROM sqlite_master", [], |r| r.get::<_, i64>(0)).is_ok() {
         return Err("una clave incorrecta pudo leer sqlite_master".into());
     }
     drop(conn_mala);
 
     let ms = elapsed.as_secs_f64() * 1_000.0;
-    println!(
-        "ROUND engine=sqlcipher cipher_version={} round={} cycles={} total_ms={:.3} us_per_cycle={:.3} db_bytes={}",
-        version.trim(),
-        indice + 1,
-        ITERACIONES,
-        ms,
-        elapsed.as_secs_f64() * 1_000_000.0 / ITERACIONES as f64,
-        bytes.len()
-    );
-
+    println!("ROUND engine=sqlcipher cipher_version={} round={} cycles={} total_ms={:.3} us_per_cycle={:.3} db_bytes={}", version.trim(), indice + 1, ITERACIONES, ms, elapsed.as_secs_f64() * 1_000_000.0 / ITERACIONES as f64, bytes.len());
     limpiar(&path);
     Ok(ms)
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut muestras = Vec::with_capacity(RONDAS);
-    for ronda in 0..RONDAS {
-        muestras.push(ejecutar_ronda(ronda)?);
-    }
+    for ronda in 0..RONDAS { muestras.push(ejecutar_ronda(ronda)?); }
     muestras.sort_by(f64::total_cmp);
     let mediana = muestras[RONDAS / 2];
-    println!(
-        "RESULT engine=sqlcipher rounds={} cycles_per_round={} median_ms={:.3} median_us_per_cycle={:.3}",
-        RONDAS,
-        ITERACIONES,
-        mediana,
-        mediana * 1_000.0 / ITERACIONES as f64
-    );
+    println!("RESULT engine=sqlcipher rounds={} cycles_per_round={} median_ms={:.3} median_us_per_cycle={:.3}", RONDAS, ITERACIONES, mediana, mediana * 1_000.0 / ITERACIONES as f64);
     Ok(())
 }
