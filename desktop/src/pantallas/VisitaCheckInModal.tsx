@@ -10,6 +10,28 @@ type Estado =
   | { tipo: "ya-adentro"; nombre: string }
   | { tipo: "sin-cita"; mensaje: string };
 
+/** El gafete es opcional acá (a diferencia de `NuevoIngresoModal`, donde
+ * puede ser requerido) -- vacío siempre es válido con `numero: null`. */
+export function validarGafeteOpcional(
+  texto: string,
+): { valido: true; numero: number | null } | { valido: false; mensaje: string } {
+  const recortado = texto.trim();
+  if (!recortado) return { valido: true, numero: null };
+  const numero = Number.parseInt(recortado, 10);
+  if (Number.isNaN(numero)) return { valido: false, mensaje: "Ingrese un número de gafete válido" };
+  return { valido: true, numero };
+}
+
+/** `verificar_check_in_visita` sólo confirma que la cita es válida hoy, no
+ * si el visitante ya entró (ver el doc-comment de `visitasActivas` más
+ * abajo) -- este es el filtro de UI que sí lo revisa. */
+export function estaYaAdentro(
+  visitasActivas: MovimientoVisitaActivoResumen[],
+  cedula: string,
+): boolean {
+  return visitasActivas.some((fila) => fila.cedula === cedula);
+}
+
 /**
  * Check-in de visitas por cédula -- mismo armazón que `NuevoIngresoModal`
  * (buscador arriba, panel de confirmación que se expande debajo, no se
@@ -63,8 +85,7 @@ export default function VisitaCheckInModal({
     setEstado({ tipo: "verificando" });
     try {
       const preparacion = await verificarCheckInVisita(valor);
-      const yaAdentro = visitasActivas.some((fila) => fila.cedula === preparacion.visitante.cedula);
-      if (yaAdentro) {
+      if (estaYaAdentro(visitasActivas, preparacion.visitante.cedula)) {
         setEstado({ tipo: "ya-adentro", nombre: preparacion.visitante.nombre });
         return;
       }
@@ -76,15 +97,15 @@ export default function VisitaCheckInModal({
 
   async function confirmarEntrada() {
     if (estado.tipo !== "encontrada") return;
-    const numero = gafeteTexto.trim() ? Number.parseInt(gafeteTexto.trim(), 10) : null;
-    if (gafeteTexto.trim() && Number.isNaN(numero)) {
-      setError("Ingrese un número de gafete válido");
+    const resultado = validarGafeteOpcional(gafeteTexto);
+    if (!resultado.valido) {
+      setError(resultado.mensaje);
       return;
     }
     setError(null);
     setEnviando(true);
     try {
-      await registrarEntradaVisita(estado.preparacion.visitante.cedula, numero);
+      await registrarEntradaVisita(estado.preparacion.visitante.cedula, resultado.numero);
       setMensaje(`✓ Entrada registrada — ${estado.preparacion.visitante.nombre}`);
       setEstado({ tipo: "buscando" });
       setCedula("");

@@ -7,7 +7,7 @@ import { esErrorLogin, login } from "../api";
 import type { UsuarioSesion } from "../api";
 import FijarPasswordInicial from "./FijarPasswordInicial";
 
-const esquemaLogin = z.object({
+export const esquemaLogin = z.object({
   cedula: z.string().min(1, "La cédula es obligatoria"),
   password: z.string().min(1, "La contraseña es obligatoria"),
 });

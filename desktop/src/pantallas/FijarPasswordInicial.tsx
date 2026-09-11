@@ -5,7 +5,7 @@ import marca from "../assets/marca.png";
 import { esErrorLogin, fijarPasswordInicial } from "../api";
 import type { UsuarioSesion } from "../api";
 
-const esquema = z
+export const esquema = z
   .object({
     password: z.string().min(8, "Al menos 8 caracteres"),
     confirmar: z.string().min(1, "Confirmá la contraseña"),

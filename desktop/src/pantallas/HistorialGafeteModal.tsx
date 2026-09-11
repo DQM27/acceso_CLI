@@ -81,7 +81,7 @@ export default function HistorialGafeteModal({
   );
 }
 
-function textoMotivo(motivo: IncidenteGafete["motivo_resolucion"]): string {
+export function textoMotivo(motivo: IncidenteGafete["motivo_resolucion"]): string {
   switch (motivo) {
     case "Pagado":
       return "Pagado";
