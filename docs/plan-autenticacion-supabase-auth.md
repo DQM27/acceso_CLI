@@ -118,3 +118,68 @@ en vez de indefinido.
   (`LoginViewModel.kt`, `PantallaFijarPasswordInicial.kt`) -- ya estaba señalado como
   trabajo de auth pendiente en el núcleo mobile; se espeja después con el mismo patrón una
   vez validado en desktop.
+
+## Progreso (para quien retome esto)
+
+**Hecho y verificado:**
+
+- **Supabase**: migración `20260911030000_enlaza_usuarios_con_supabase_auth.sql`
+  (`auth_user_id` en `usuarios`) aplicada. Edge Functions `admin-create-usuario` y
+  `admin-reset-password-usuario` desplegados y probados.
+- **Panel web** (`web/src/api/usuarios.ts`, `Usuarios.tsx`): `crearUsuario` llama al Edge
+  Function, muestra la contraseña temporal una sola vez, botón "Resetear contraseña" por
+  fila. `tsc`/Vitest limpios.
+- **Bloqueo de ROOT** (relacionado, no parte de este plan en sí pero cierra un hueco
+  parecido): nadie puede crear/promover un ROOT nuevo desde ningún formulario -- ver
+  commit `289dd40`.
+- **Núcleo Rust -- login contra Supabase Auth** (`src/nube/auth_supabase.rs`, nuevo):
+  - `login(base_url, apikey, cedula, password)` -- `POST /auth/v1/token?grant_type=password`
+    con email sintético `<cedula>@brisas.local`.
+  - `refrescar(base_url, apikey, refresh_token)` -- `grant_type=refresh_token`, para la
+    renovación silenciosa en segundo plano.
+  - `cambiar_password(...)` -- revalida la actual con un login real antes de aceptar la
+    nueva (no confía en que la sesión siga abierta).
+  - `obtener_jwks(base_url)` / `verificar_token_offline(claves, access_token)` --
+    **separadas a propósito** (una hace red, la otra es pura) para poder testear la
+    verificación de firma ES256 sin levantar nada. Confirmado con `curl` que el proyecto
+    real (`xidaepyaljzkpbsxrqsm`) ya expone 3 claves EC en
+    `/auth/v1/.well-known/jwks.json` -- no hace falta ningún cambio de configuración en
+    Supabase para esto.
+  - Dependencia nueva: `jsonwebtoken` (backend `ring`, sin OpenSSL -- no suma al costo de
+    compilación ya documentado de SQLCipher).
+  - **14 tests, todos pasando** (`cargo test --no-default-features --features
+    terminal-ui,nube,sqlite-plano --lib auth_supabase`), incluida una firma real ES256
+    contra un par de claves de prueba generado con `openssl ecparam` (ver el
+    doc-comment en el archivo si hay que regenerarlo).
+  - **Todavía NO está conectado a nada** -- es el módulo de bajo nivel solo. `services/`,
+    `application/autenticacion.rs`, `SIN_PASSWORD_LOCAL`, `FijarPasswordInicial.tsx`, y el
+    login de desktop siguen exactamente como antes.
+
+**Lo que falta (el grueso del trabajo que queda):**
+
+1. **Sesión en memoria** -- diseñar dónde vive el `access_token`/`refresh_token` mientras
+   la app corre (en desktop, candidato natural: un campo nuevo en `GuiState`, junto a
+   `sesion`/`token_nube_cacheado`). Nunca a disco. Se pierde al cerrar la app (arranque
+   siempre pide login real).
+2. **Renovación en segundo plano**: enganchar `refrescar()` al mismo pulso de sync que ya
+   existe (`comandos/nube.rs::ejecutar_sincronizacion`, o un timer aparte) antes de que el
+   token venza, y aplicar el tope duro de 12h de presencia (contado desde la última
+   renovación exitosa, no desde el login).
+3. **Reemplazar el camino de login actual** (`AutenticacionService::autenticar`/
+   `buscar_candidato_autenticacion` en `src/services/autenticacion_service.rs`,
+   `AppCore::fijar_password_inicial` en `src/application/autenticacion.rs`) -- OJO acá
+   con la salvedad de ROOT: sólo el camino de usuarios SINCRONIZADOS (los que hoy llegan
+   con `SIN_PASSWORD_LOCAL`) pasa a Supabase Auth. `crear_root_inicial` (arranque de un
+   sitio nuevo, CLI/TUI, exige base vacía) queda intacto, 100% local, sin tocar -- es el
+   único camino de rescate sin red. Un ROOT que SÍ llegó por sync a un dispositivo nuevo
+   (con `SIN_PASSWORD_LOCAL`) sí pasa por el nuevo camino, igual que Administrador/Operador.
+4. **Desktop**: `Login.tsx` pasa a ser una sola pantalla siempre (elimina
+   `FijarPasswordInicial.tsx` como pantalla de "reclamo"); agregar el flujo de "cambiar
+   contraseña obligatoria" cuando `debe_cambiar_password` viene en `true`; comandos Tauri
+   nuevos para login/logout/cambiar-password que hablen con
+   `nube::auth_supabase` en vez de con el núcleo local.
+5. **Android**: fuera de alcance explícito por ahora (ver arriba), pero quedará
+   desalineado del resto una vez desktop migre -- anotarlo cuando llegue el momento.
+
+No hay decisión tomada todavía sobre el orden exacto de 1-4 -- son interdependientes
+(la sesión en memoria la necesitan tanto el reemplazo del login como la renovación).

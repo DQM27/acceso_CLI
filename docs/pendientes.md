@@ -137,6 +137,18 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   Fuera de alcance todavía: TUI (`PreparacionIngreso::activo_en_otro_sitio` existe en el
   núcleo y `src/tui/nuevo_ingreso/state.rs` ya respeta el campo si algún día se completa,
   pero nadie se lo llena ahí -- la TUI no tiene su propio chequeo remoto conectado).
+- [ ] **Reagregar el alta de contratista en mobile, con OCR opcional (pedido
+  2026-09-11).** El menú "+" de altas (contratista/empresa/usuario) se sacó de mobile el
+  2026-09-06 al limitar la app a "sólo registros rápidos + historial" (ver
+  `PantallaPrincipal.kt`, comentario de cabecera, y `mobile/android/ARQUITECTURA.md`).
+  Ahora se pide devolver puntualmente la de contratista -- con la cédula/DIMEX
+  completable por OCR de forma OPCIONAL (ya existe `PantallaEscanearCedula`/
+  `ModoEscaneoDocumento` para el escaneo de cédula/gafete en el flujo de ingreso, y todo
+  `docs/plan-ocr-escaneo-documentos.md`/`docs/fixtures-ocr-sinteticos.md` como base -- no
+  hay que empezar de cero), pero la carga manual sigue siendo el camino principal, no el
+  OCR obligatorio. Sin empezar -- decidir primero si esto revive la pantalla vieja
+  (¿sigue existiendo en el historial de git?) o si conviene rehacerla contra el
+  `Nucleo`/ViewModels actuales, que cambiaron bastante desde el recorte del 2026-09-06.
 - [x] **Scoping futuro de administradores del panel omitido por ahora.** Hoy estar en
   `administradores_panel` da acceso completo; limitar admins por sitio queda fuera hasta
   que exista un caso real.
