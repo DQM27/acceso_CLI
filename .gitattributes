@@ -1,0 +1,5 @@
+# Normaliza los finales de línea de archivos de texto a LF en el repo,
+# independiente de core.autocrlf de cada máquina -- evita que Git marque
+# un archivo como modificado sin cambios reales por mezcla CRLF/LF
+# (ver desktop/src-tauri/Cargo.toml, que quedó commiteado en CRLF).
+* text=auto eol=lf
