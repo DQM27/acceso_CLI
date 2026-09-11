@@ -67,13 +67,13 @@ type FilaHistorial = FilaLocal | FilaRemota;
  * visualmente (una palabra bastante más larga que la otra). Cualquier otro
  * valor (o `null`) se muestra tal cual / como "—", nunca se inventa un tipo
  * que no vino. */
-function textoDispositivo(tipo: string | null): string {
+export function textoDispositivo(tipo: string | null): string {
   if (tipo === "pc") return "💻";
   if (tipo === "mobile") return "📱";
   return tipo ?? "—";
 }
 
-function filaDesdeRemoto(remoto: MovimientoHistorialRemoto): FilaHistorial {
+export function filaDesdeRemoto(remoto: MovimientoHistorialRemoto): FilaHistorial {
   return {
     origen: "remoto",
     registro_id: null,

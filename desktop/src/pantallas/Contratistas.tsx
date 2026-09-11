@@ -29,7 +29,7 @@ import { textoFechaDDMMYYYY } from "../tiempo";
 // sólo generaba confusión. El núcleo todavía no lo exige (cualquier rol
 // autenticado puede llamar `actualizarContratista` igual) -- esto es sólo
 // la UI, no un candado de permisos nuevo.
-function columnasPara(actorRol: RolUsuario): ColDef<ContratistaResumen>[] {
+export function columnasPara(actorRol: RolUsuario): ColDef<ContratistaResumen>[] {
   const columnas: ColDef<ContratistaResumen>[] = [
     { field: "cedula", headerName: "Cédula", flex: 1.4, minWidth: 140, cellStyle: { textAlign: "left" } },
     { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
