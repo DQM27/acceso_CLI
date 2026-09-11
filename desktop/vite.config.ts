@@ -7,6 +7,13 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
+    // AG Grid Community (~870 KB, ver el grupo "ag-grid-vendor" abajo) ya
+    // está deliberadamente aislado en su propio chunk cacheable -- no es
+    // bloat sin partir, es el tamaño real de la librería. Subir el límite
+    // reconoce ese caso conocido en vez de que el build avise sobre él en
+    // cada build; sigue avisando si aparece un chunk nuevo grande de
+    // verdad por accidente (cualquiera por encima de este número).
+    chunkSizeWarningLimit: 900,
     rolldownOptions: {
       output: {
         codeSplitting: {
