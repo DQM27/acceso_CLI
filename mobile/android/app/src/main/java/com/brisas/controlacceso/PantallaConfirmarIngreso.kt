@@ -57,11 +57,16 @@ class GafeteOcupadoEnSitioException(numero: Long) :
 /// mensajeBloqueo): `preparar_ingreso` no rechaza estos casos, ya vienen
 /// calculados por Rust (`verificar_acceso`) — esto solo lee el resultado.
 fun puedeContinuar(preparacion: PreparacionIngreso): Boolean =
-    !preparacion.tieneIngresoActivo && preparacion.resultadoAcceso !is ResultadoAcceso.Denegado
+    !preparacion.tieneIngresoActivo &&
+        preparacion.activoEnOtroSitio == null &&
+        preparacion.resultadoAcceso !is ResultadoAcceso.Denegado
 
 fun mensajeBloqueo(preparacion: PreparacionIngreso): String {
     if (preparacion.tieneIngresoActivo) {
         return "El contratista ya tiene un ingreso activo."
+    }
+    preparacion.activoEnOtroSitio?.let { sitio ->
+        return "El contratista ya tiene un ingreso activo en $sitio."
     }
     val resultado = preparacion.resultadoAcceso
     if (resultado is ResultadoAcceso.Denegado) {

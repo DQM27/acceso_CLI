@@ -92,15 +92,51 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 - [x] **Reportes globales decididos: historial completo en Supabase.** `web/src/api/historial.ts`
   lee la tabla `ingresos` como historial multi-sitio y la migración
   `agrega_auditoria_completa_a_ingresos` agregó el detalle de auditoría que faltaba.
-- [x] **Chequeo cruzado de ingresos abiertos entre sitios (desktop).** Con conexión,
-  bloquea el segundo ingreso abierto del mismo contratista en otro sitio (mejor esfuerzo,
-  tope de 5s, ver `nube::contratista_activo_en_otro_sitio` y
-  `comandos/ingresos.rs::preparar_ingreso`); sin conexión el registro sigue local, sin
-  bloquear al operador -- "alertar luego al sincronizar" (el otro sitio detectando el
-  conflicto retroactivamente) queda sin implementar, es una pieza aparte. TUI y Android
-  todavía no tienen el chequeo remoto -- `PreparacionIngreso::activo_en_otro_sitio` existe
-  en el núcleo y la TUI ya respeta el campo si algún día se completa, pero nadie se lo llena
-  todavía ahí.
+- [x] **Chequeo cruzado de ingresos abiertos entre sitios -- bloqueo Y aviso simétrico
+  (2026-09-11).** Dos piezas, `docs/pendientes.md` original pedía ambas:
+
+  **1. Bloqueo en vivo** (`nube::contratista_activo_en_otro_sitio`, mejor esfuerzo, tope
+  5s): al preparar un ingreso, si la cédula ya está activa en OTRO sitio, no deja
+  continuar y nombra el sitio. Sin red, no bloquea -- sigue local (así lo pedía el
+  pendiente original).
+
+  **2. "Alertar luego al sincronizar"** (`nube::contratistas_con_conflicto_activo`):
+  corre después de cada sync exitoso, revisa TODOS los ingresos activos locales contra
+  el estado remoto. Deliberadamente simétrico -- cada sitio en conflicto corre la MISMA
+  consulta mirando sus propios activos, así ambos se enteran solos sin necesitar una
+  tabla de "notificaciones pendientes" ni un canal de mensajería entre sitios. Cubre el
+  caso "se registró offline y nadie lo bloqueó a tiempo".
+
+  **Estado de verificación por plataforma (para quien retome esto) --**
+
+  - **Núcleo Rust** (`src/nube/sincronizacion.rs`): las dos funciones de arriba, con
+    tests (`cargo test --no-default-features --features terminal-ui,nube,sqlite-plano`).
+    **Verificado, 581+ tests pasando.**
+  - **Desktop** (`comandos/ingresos.rs::preparar_ingreso`, `comandos/nube.rs::ejecutar_sincronizacion`,
+    `App.tsx::manejarResumenSincronizacion`, `api/ingresos.ts`, `api/nube.ts`): ambas
+    piezas conectadas de punta a punta. **Verificado** -- `cargo check` del crate
+    `control-acceso-desktop` limpio, `tsc --noEmit` limpio, 204/204 tests de Vitest.
+  - **`mobile/rust-core`** (`Nucleo::contratista_activo_en_otro_sitio_con_secreto`,
+    campo `conflictos_ingreso` en `sincronizar_con_secreto`): escrito espejando
+    `gafete_ocupado_en_sitio_con_secreto` (mismo patrón ya existente en este archivo).
+    **`cargo check` lanzado pero sin confirmar terminado en la sesión que escribió esto**
+    -- el crate tiene su propio `target/` y build de SQLCipher en frío, puede tardar. Si
+    quien retome esto lo ve fallar, revisar primero los dos `From`/construcciones de
+    `ResumenSincronizacion`/`PreparacionIngreso` en `mobile/rust-core/src/lib.rs` (son
+    dos structs UniFFI propias, DISTINTAS de las del núcleo -- fácil olvidar un campo
+    nuevo en alguno de los dos sitios que las construyen).
+  - **Android Kotlin** (`ActivosViewModel.kt::elegir`, `PantallaConfirmarIngreso.kt`
+    (`puedeContinuar`/`mensajeBloqueo`), `PantallaPrincipal.kt` (aviso de conflicto,
+    mismo patrón inline que ya usa `nubeViewModel.error`, esta app no tiene Snackbar/Toast
+    todavía)): escrito a mano espejando el patrón de `gafeteOcupadoEnSitioConSecreto` ya
+    existente, **pero NUNCA COMPILADO NI CORRIDO** -- no hay entorno de build de Android
+    en la sesión que escribió esto. Antes de dar esto por bueno: `./gradlew build` (o
+    abrir en Android Studio), y probar a mano el flujo de bloqueo (un contratista con
+    ingreso activo en otro sitio) y el aviso tras sincronizar.
+
+  Fuera de alcance todavía: TUI (`PreparacionIngreso::activo_en_otro_sitio` existe en el
+  núcleo y `src/tui/nuevo_ingreso/state.rs` ya respeta el campo si algún día se completa,
+  pero nadie se lo llena ahí -- la TUI no tiene su propio chequeo remoto conectado).
 - [x] **Scoping futuro de administradores del panel omitido por ahora.** Hoy estar en
   `administradores_panel` da acceso completo; limitar admins por sitio queda fuera hasta
   que exista un caso real.

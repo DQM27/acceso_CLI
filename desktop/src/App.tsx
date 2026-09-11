@@ -273,6 +273,20 @@ function Shell({
       onCerrarSesion();
       return true;
     }
+    // `docs/pendientes.md`, "alertar luego al sincronizar": un ingreso que
+    // se registró en este dispositivo mientras estaba offline y que la
+    // nube dice que TAMBIÉN sigue activo en otro sitio ahora mismo. El
+    // otro sitio ve esta misma alerta desde su propio lado -- cada
+    // dispositivo revisa sus propios ingresos activos contra el mismo
+    // estado remoto (ver `nube::contratistas_con_conflicto_activo`), sin
+    // necesitar un canal de aviso aparte entre sitios. Sigue avisando en
+    // cada sync mientras el conflicto no se resuelva (cerrando uno de los
+    // dos ingresos) -- no es un error transitorio que convenga silenciar.
+    for (const conflicto of resumen.conflictos_ingreso) {
+      toast.warning(
+        `${conflicto.contratista_nombre} tiene un ingreso activo acá Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
+      );
+    }
     return false;
   }
 

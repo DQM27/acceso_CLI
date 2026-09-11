@@ -24,6 +24,7 @@ import uniffi.control_acceso_mobile.ModoBusquedaActivos
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.PreparacionIngreso
+import uniffi.control_acceso_mobile.ResultadoAcceso
 
 /// Mismo árbol de estados que `Seleccion` en NuevoIngresoModal.tsx: sin
 /// selección (buscador visible), verificando (prepararIngreso en vuelo),
@@ -298,7 +299,22 @@ class ActivosViewModel(
         viewModelScope.launch {
             seleccionIngreso = SeleccionIngreso.Cargando(contratista)
             try {
-                val preparacion = withContext(dispatcherIO) { nucleo.prepararIngreso(contratista.id) }
+                var preparacion = withContext(dispatcherIO) { nucleo.prepararIngreso(contratista.id) }
+                // Chequeo cruzado entre sitios (`docs/pendientes.md`) -- sólo
+                // si los chequeos locales ya dejaron pasar, mejor esfuerzo:
+                // sin secreto guardado o sin red, sigue sin bloquear (mismo
+                // criterio que desktop, `comandos/ingresos.rs`). Nunca lanza
+                // -- `contratistaActivoEnOtroSitioConSecreto` ya devuelve
+                // `null` ante cualquier falla de red.
+                if (!preparacion.tieneIngresoActivo && preparacion.resultadoAcceso !is ResultadoAcceso.Denegado) {
+                    val secreto = withContext(dispatcherIO) { secretoStore.cargar() }
+                    if (secreto != null) {
+                        val sitio = withContext(dispatcherIO) {
+                            nucleo.contratistaActivoEnOtroSitioConSecreto(secreto, preparacion.cedula)
+                        }
+                        preparacion = preparacion.copy(activoEnOtroSitio = sitio)
+                    }
+                }
                 seleccionIngreso = if (puedeContinuar(preparacion)) {
                     SeleccionIngreso.Formulario(preparacion)
                 } else {

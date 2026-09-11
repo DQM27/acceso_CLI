@@ -241,6 +241,12 @@ pub struct PreparacionIngreso {
     pub resultado_acceso: ResultadoAcceso,
     pub requiere_gafete: bool,
     pub tiene_ingreso_activo: bool,
+    /// Siempre `None` al volver de `preparar_ingreso` -- ese método no toca
+    /// la red (mismo motivo que en el núcleo). Kotlin lo completa llamando
+    /// a `contratista_activo_en_otro_sitio_con_secreto` (mejor esfuerzo,
+    /// igual que `gafete_ocupado_en_sitio_con_secreto`) antes de dejar
+    /// continuar, ver `docs/pendientes.md`.
+    pub activo_en_otro_sitio: Option<String>,
     pub gafetes_deuda: Vec<i64>,
 }
 
@@ -255,6 +261,7 @@ impl From<PreparacionIngresoNucleo> for PreparacionIngreso {
             resultado_acceso: preparacion.resultado_acceso.into(),
             requiere_gafete: preparacion.requiere_gafete,
             tiene_ingreso_activo: preparacion.tiene_ingreso_activo,
+            activo_en_otro_sitio: preparacion.activo_en_otro_sitio,
             gafetes_deuda: preparacion.gafetes_deuda,
         }
     }
@@ -512,6 +519,32 @@ pub struct ResumenSincronizacion {
     /// la disparó -- ver `application::nube::ResumenSincronizacion::sesion_expulsada`.
     /// Kotlin debe cerrar la sesión local y volver al login apenas vea esto.
     pub sesion_expulsada: bool,
+    /// `docs/pendientes.md`, "alertar luego al sincronizar" -- ingresos que
+    /// quedaron activos en este teléfono pero que la nube dice que TAMBIÉN
+    /// están activos en otro sitio (colados mientras este dispositivo
+    /// estaba offline). Mejor esfuerzo, vacío si el chequeo falla. Siempre
+    /// vacío en la activación inicial (`From<ResumenSincronizacionNucleo>`,
+    /// base recién configurada, sin ingresos locales todavía) -- sólo
+    /// `sincronizar_con_secreto` lo completa de verdad.
+    pub conflictos_ingreso: Vec<ConflictoIngresoActivo>,
+}
+
+/// Espejo de `control_acceso::nube::ConflictoIngresoActivo`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ConflictoIngresoActivo {
+    pub cedula: String,
+    pub contratista_nombre: String,
+    pub sitio_conflicto: String,
+}
+
+impl From<control_acceso::nube::ConflictoIngresoActivo> for ConflictoIngresoActivo {
+    fn from(conflicto: control_acceso::nube::ConflictoIngresoActivo) -> Self {
+        Self {
+            cedula: conflicto.cedula,
+            contratista_nombre: conflicto.contratista_nombre,
+            sitio_conflicto: conflicto.sitio_conflicto,
+        }
+    }
 }
 
 impl From<ResumenSincronizacionNucleo> for ResumenSincronizacion {
@@ -531,6 +564,7 @@ impl From<ResumenSincronizacionNucleo> for ResumenSincronizacion {
             dispositivo_id: resumen.dispositivo_id,
             tipo: resumen.tipo,
             sesion_expulsada: resumen.sesion_expulsada,
+            conflictos_ingreso: Vec::new(),
         }
     }
 }
@@ -1540,6 +1574,36 @@ impl Nucleo {
         )
     }
 
+    /// Chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo cruzado
+    /// de ingresos abiertos entre sitios") -- mismo patrón que
+    /// `gafete_ocupado_en_sitio_con_secreto`, pero de mejor esfuerzo: sin
+    /// secreto, o si la red falla, `Ok(None)` en vez de propagar el error
+    /// (acá SÍ hay con qué chocar sin red -- un ingreso registrado offline
+    /// queda local igual, y el conflicto se detecta después al sincronizar,
+    /// ver `sincronizar_con_secreto`/`ResumenSincronizacion::conflictos_ingreso`).
+    /// Kotlin la llama después de `preparar_ingreso`, sólo si los chequeos
+    /// locales ya dejaron pasar.
+    pub fn contratista_activo_en_otro_sitio_con_secreto(
+        &self,
+        secreto: String,
+        cedula: String,
+    ) -> Option<String> {
+        if secreto.trim().is_empty() {
+            return None;
+        }
+        let token = self.autenticar_con_cache(&secreto).ok()?;
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::BASE_URL,
+            apikey: control_acceso::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        control_acceso::nube::contratista_activo_en_otro_sitio(&contexto, &cedula)
+            .ok()
+            .flatten()
+    }
+
     /// Cierra, contra la nube, un ingreso abierto por el otro dispositivo
     /// del mismo sitio -- nunca toca el historial local de este teléfono.
     pub fn cerrar_ingreso_remoto(
@@ -1799,6 +1863,15 @@ impl Nucleo {
         // Ver el comentario del otro método de sync en este mismo archivo:
         // el celular no trae historial de visitas a propósito.
         let historial_visitas_recibidos = 0;
+        // Mejor esfuerzo -- ya se llegó hasta acá con la nube respondiendo
+        // bien, pero si este chequeo puntual falla no tiene sentido tumbar
+        // un sync que por lo demás anduvo.
+        let conflictos_ingreso =
+            control_acceso::nube::contratistas_con_conflicto_activo(&conexion, &contexto)
+                .unwrap_or_default()
+                .into_iter()
+                .map(Into::into)
+                .collect();
 
         let sesion_expulsada = !self.core_lock().sesion_sigue_activa(&actor);
         if sesion_expulsada {
@@ -1820,6 +1893,7 @@ impl Nucleo {
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,
             sesion_expulsada,
+            conflictos_ingreso,
         })
     }
 }

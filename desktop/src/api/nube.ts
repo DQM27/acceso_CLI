@@ -30,6 +30,17 @@ export interface ResumenSincronizacion {
    * (ver `App.tsx`, donde ya se cerró del lado de Rust; esto es sólo para
    * que la UI reaccione). */
   sesion_expulsada: boolean;
+  /** Ingresos que quedaron activos en este dispositivo pero que la nube
+   * dice que TAMBIÉN están activos en otro sitio (`docs/pendientes.md`,
+   * "alertar luego al sincronizar") -- mejor esfuerzo, vacío si el chequeo
+   * falla. */
+  conflictos_ingreso: ConflictoIngresoActivo[];
+}
+
+export interface ConflictoIngresoActivo {
+  cedula: string;
+  contratista_nombre: string;
+  sitio_conflicto: string;
 }
 
 export interface SesionRealtimeNube {

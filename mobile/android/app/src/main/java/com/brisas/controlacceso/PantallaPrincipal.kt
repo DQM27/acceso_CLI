@@ -25,6 +25,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -36,6 +37,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import uniffi.control_acceso_mobile.ConflictoIngresoActivo
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.UsuarioSesion
 
@@ -57,6 +59,11 @@ fun PantallaPrincipal(
     onCerrarSesion: () -> Unit,
 ) {
     var refrescarNube by remember { mutableIntStateOf(0) }
+    // `docs/pendientes.md`, "alertar luego al sincronizar" -- ver el mismo
+    // campo en `desktop/src/App.tsx` (`manejarResumenSincronizacion`).
+    // Alimentado desde los dos caminos de sync (pulso periódico y botón
+    // manual), igual que `refrescarNube`.
+    var conflictosIngreso by remember { mutableStateOf<List<ConflictoIngresoActivo>>(emptyList()) }
     val nubeViewModel: NubeViewModel =
         viewModel(
             factory = NubeViewModel.factory(nucleo, secretoStore, onCerrarSesion),
@@ -81,7 +88,12 @@ fun PantallaPrincipal(
                 // pulso periódico (o Realtime, que dispara por el mismo
                 // camino) ya trajo la baja -- cerrar sesión acá, no sólo
                 // refrescar pantallas que ya no deberían verse.
-                if (resumen.sesionExpulsada) onCerrarSesion() else refrescarNube += 1
+                if (resumen.sesionExpulsada) {
+                    onCerrarSesion()
+                } else {
+                    refrescarNube += 1
+                    conflictosIngreso = resumen.conflictosIngreso
+                }
             },
         )
     }
@@ -135,7 +147,11 @@ fun PantallaPrincipal(
     // arriba), para que tocar "Sincronizar" se sienta instantáneo en vez
     // de esperar al próximo ciclo de 2 minutos.
     LaunchedEffect(nubeViewModel.ultimoResumen) {
-        if (nubeViewModel.ultimoResumen != null) refrescarNube += 1
+        val resumen = nubeViewModel.ultimoResumen
+        if (resumen != null) {
+            refrescarNube += 1
+            conflictosIngreso = resumen.conflictosIngreso
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -177,6 +193,19 @@ fun PantallaPrincipal(
         if (errorSincronizacion != null) {
             Text(
                 errorSincronizacion,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            )
+        }
+
+        // `docs/pendientes.md`, "alertar luego al sincronizar" -- sigue
+        // mostrándose en cada sync mientras el conflicto no se resuelva
+        // (cerrando uno de los dos ingresos), no es un error transitorio
+        // que convenga ocultar solo.
+        for (conflicto in conflictosIngreso) {
+            Text(
+                "${conflicto.contratistaNombre} tiene un ingreso activo acá Y en ${conflicto.sitioConflicto} — hay que resolverlo.",
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),

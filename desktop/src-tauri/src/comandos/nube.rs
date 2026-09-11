@@ -48,6 +48,13 @@ pub struct ResumenSincronizacion {
     /// el frontend debe cerrar la sesión local y volver al login apenas
     /// vea esto en `true`.
     pub sesion_expulsada: bool,
+    /// `docs/pendientes.md`, "alertar luego al sincronizar": ingresos que
+    /// quedaron activos en este dispositivo pero que la nube dice que
+    /// TAMBIÉN están activos en otro sitio (colado mientras este
+    /// dispositivo estaba offline, ver `nube::contratistas_con_conflicto_activo`).
+    /// Mejor esfuerzo -- vacío si el chequeo falla, nunca tumba el resto de
+    /// la sincronización por esto.
+    pub conflictos_ingreso: Vec<nube::ConflictoIngresoActivo>,
 }
 
 /// Datos temporales para que el frontend abra un canal Realtime privado.
@@ -142,6 +149,12 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
         nube::recibir_citas_del_sitio(&conexion, &contexto).map_err(mensaje_sincronizacion)?;
     let historial_visitas_recibidos = nube::recibir_historial_visitas_del_sitio(&conexion, &contexto)
         .map_err(mensaje_sincronizacion)?;
+    // Mejor esfuerzo a propósito -- ya se llegó hasta acá con la nube
+    // respondiendo bien, pero si este chequeo puntual falla no tiene
+    // sentido tumbar un sync que por lo demás anduvo. Vacío en ese caso, no
+    // error.
+    let conflictos_ingreso =
+        nube::contratistas_con_conflicto_activo(&conexion, &contexto).unwrap_or_default();
 
     // Si a quien disparó esto lo desactivaron en otro dispositivo, el
     // catálogo recién recibido ya lo refleja -- lo saca de la sesión acá
@@ -171,6 +184,7 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
         dispositivo_id: token.dispositivo_id,
         tipo: token.tipo,
         sesion_expulsada,
+        conflictos_ingreso,
     })
 }
 
@@ -235,6 +249,10 @@ pub async fn configurar_dispositivo_inicial(
             dispositivo_id: resumen.dispositivo_id,
             tipo: resumen.tipo,
             sesion_expulsada: resumen.sesion_expulsada,
+            // Base recién configurada, sin ningún ingreso local todavía --
+            // no hay nada que pudiera chocar con otro sitio en este
+            // momento.
+            conflictos_ingreso: Vec::new(),
         })
     })
     .await
