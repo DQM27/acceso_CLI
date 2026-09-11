@@ -43,6 +43,12 @@ export default function Sidebar({
             onClick={onNavegar}
             title={colapsado ? etiqueta : undefined}
             className={({ isActive }) => `nav-item ${isActive ? "nav-item-activo" : ""}`}
+            // React Router v7 dispara la View Transitions API nativa del
+            // navegador en esta navegación -- react-router (no un
+            // `<ViewTransition>` de React) porque acá, a diferencia de
+            // desktop, el cambio de sección lo decide la URL, no un
+            // `useState` local que se pueda envolver en `startTransition`.
+            viewTransition
           >
             <Icono size={18} strokeWidth={2} aria-hidden="true" />
             <span className="nav-item-etiqueta">{etiqueta}</span>
