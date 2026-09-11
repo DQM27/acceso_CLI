@@ -109,12 +109,35 @@ configuración del editor, no afecta ningún build real.
 
 ---
 
-## Pendiente conocido (no resuelto en esta entrada)
+## 2026-09-11 — `mobile/rust-core` desactualizado tras el merge de conflictos de ingreso
 
-`mobile/rust-core/src/lib.rs` no compila contra el `AppCore` actual del
-crate raíz (`ResumenSincronizacion` le falta el campo `conflictos_ingreso`,
-`ruta_base_datos()` ya no existe donde se lo llama) -- probablemente quedó
-desactualizado tras el merge grande que trajo control de visitas a `main`.
-No es un problema del switch de motores; hace falta actualizar el puente
-de `mobile/rust-core` a la API actual antes de poder compilar ese crate en
-ningún modo.
+Lo que en la entrada anterior quedó anotado como "pendiente" se resolvió
+en la misma sesión. Causa real: el commit `72355da` (*"avisa
+simétricamente cuando un conflicto de sitios se cuela offline"*) agregó
+`conflictos_ingreso` a `ResumenSincronizacion` y migró la apertura de la
+conexión secundaria a la fábrica central
+(`database::connection::abrir_conexion_secundaria_escritura`), y lo hizo
+en desktop (`desktop/src-tauri/src/comandos/nube.rs`) pero no en
+`mobile/rust-core/src/lib.rs` -- quedó desincronizado, no relacionado al
+switch de motores de esta rama.
+
+Dos fixes, espejando exactamente el patrón ya usado en desktop:
+
+1. **`conflictos_ingreso`**: en `sincronizar_con_secreto` (sync real), se
+   calcula con `nube::contratistas_con_conflicto_activo(&conexion,
+   &contexto).unwrap_or_default()` -- mejor esfuerzo, igual que desktop, no
+   tumba el resto del sync si falla. En
+   `configurar_dispositivo_inicial_con_secreto` (activación inicial, base
+   recién configurada) queda `Vec::new()`, mismo criterio que desktop y que
+   el `From<ResumenSincronizacionNucleo>` ya existente.
+2. **`ruta_base_datos()`**: el núcleo (`AppCore`) ya no expone ese método
+   (el free-function equivalente en `database::connection` es para el path
+   *por defecto*, no el de una instancia abierta). `Nucleo::abrir` en
+   mobile YA recibe el path como parámetro del constructor -- el fix fue
+   simplemente guardarlo en un campo (`ruta_base_datos: PathBuf`, mismo
+   patrón que `GuiState::ruta_base_datos` en escritorio) en vez de intentar
+   leerlo de vuelta desde `AppCore`.
+
+Verificado: `cargo build-mobile-plano --lib` compila limpio y
+`cargo test-mobile-plano --lib` -- los 12 tests existentes del crate mobile
+pasan sin cambios.

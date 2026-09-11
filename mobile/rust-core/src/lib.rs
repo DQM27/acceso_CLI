@@ -2,6 +2,7 @@
 //! sólo lo puntual que cada pantalla necesita, sin tocar la lógica del
 //! crate raíz. Ver docs/plan-app-movil.md.
 
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 use control_acceso::application::AppCore;
@@ -740,6 +741,11 @@ pub struct Nucleo {
     /// sincronización espera acá (o corre su red), cualquier búsqueda o
     /// registro sigue andando con total normalidad.
     sincronizacion_en_curso: Mutex<()>,
+    /// Capturada una sola vez en `abrir` -- el núcleo ya no expone
+    /// `ruta_base_datos()` como método (ver `database::connection::ruta_base_datos`,
+    /// que resuelve el path por defecto; acá ya llega como parámetro del
+    /// constructor). Misma idea que `GuiState::ruta_base_datos` en escritorio.
+    ruta_base_datos: PathBuf,
 }
 
 #[uniffi::export]
@@ -763,6 +769,7 @@ impl Nucleo {
             sesion: Mutex::new(None),
             token_nube_cacheado: Mutex::new(None),
             sincronizacion_en_curso: Mutex::new(()),
+            ruta_base_datos: PathBuf::from(&ruta_base_datos),
         })
     }
 
@@ -1265,6 +1272,11 @@ impl Nucleo {
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,
             sesion_expulsada: false,
+            // Activación inicial: base recién configurada, sin ingresos
+            // locales todavía -- mismo criterio que
+            // `From<ResumenSincronizacionNucleo>` arriba y que el equivalente
+            // en desktop/src-tauri/src/comandos/nube.rs.
+            conflictos_ingreso: Vec::new(),
         })
     }
 
@@ -1400,6 +1412,18 @@ impl Nucleo {
         // plataformas, no porque el celular lo necesite.
         let historial_visitas_recibidos = 0;
 
+        // Mejor esfuerzo a propósito, igual que en escritorio -- ya se llegó
+        // hasta acá con la nube respondiendo bien, pero si este chequeo
+        // puntual falla no tiene sentido tumbar un sync que por lo demás
+        // anduvo. Vacío en ese caso, no error (ver
+        // `ConflictoIngresoActivo`/`nube::contratistas_con_conflicto_activo`).
+        let conflictos_ingreso =
+            control_acceso::nube::contratistas_con_conflicto_activo(&conexion, &contexto)
+                .unwrap_or_default()
+                .into_iter()
+                .map(ConflictoIngresoActivo::from)
+                .collect();
+
         // Igual que en escritorio: si esta sincronización trajo la baja de
         // quien la disparó, la sesión de ESTE teléfono se cierra sola acá
         // mismo, no sólo se avisa -- cualquier llamada siguiente que
@@ -1424,6 +1448,7 @@ impl Nucleo {
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,
             sesion_expulsada,
+            conflictos_ingreso,
         })
     }
 
@@ -1800,8 +1825,10 @@ impl Nucleo {
     /// el día que se active acá, pasa a la vez por la conexión principal y
     /// por ésta.
     fn conexion_secundaria(&self) -> Result<rusqlite::Connection, NucleoError> {
-        let ruta = self.core_lock().ruta_base_datos().to_path_buf();
-        control_acceso::database::connection::abrir_conexion_secundaria_escritura(&ruta, None)
+        control_acceso::database::connection::abrir_conexion_secundaria_escritura(
+            &self.ruta_base_datos,
+            None,
+        )
             .map_err(|error| NucleoError::Interno {
                 mensaje: error.to_string(),
             })
