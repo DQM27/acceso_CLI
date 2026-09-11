@@ -16,6 +16,23 @@ crate-type = ["cdylib", "staticlib", "lib"]
 # Sólo para generar los bindings Kotlin desde el host — no se activa al
 # compilar para Android, evita arrastrar `clap` (vía `uniffi/cli`) al `.so`.
 bindgen = ["uniffi/cli"]
+# Espejo del switch de motor SQLite del crate raíz (ver el mismo patrón en
+# desktop/src-tauri/Cargo.toml y el compile_error! en ../../src/lib.rs) --
+# antes `cifrado-sqlcipher` venía hardcodeado acá, forzando siempre el
+# motor real (OpenSSL vendorizado desde fuente) sin forma de pedir el
+# plano para iterar rápido. A diferencia de desktop, `cargo ndk`/`cargo
+# build`/`cargo test` sí soportan `--no-default-features` nativamente (no
+# hay limitación de CLI como con `tauri dev`), así que el default se queda
+# en el motor real -- nadie tiene que acordarse de nada para un build
+# normal -- y alcanza con
+# `--no-default-features --features sqlite-plano` para el plano (ver
+# alias `build-mobile-plano`/`test-mobile-plano` en
+# ../../.cargo/config.toml). NUNCA usar `sqlite-plano` para un build que se
+# distribuye o toca datos reales -- el archivo queda sin cifrar.
+default = ["cifrado-sqlcipher"]
+cifrado-sqlcipher = ["control_acceso/cifrado-sqlcipher"]
+sqlite-plano = ["control_acceso/sqlite-plano"]
+cifrado-sqlite3mc = ["control_acceso/cifrado-sqlite3mc"]
 
 [[bin]]
 name = "uniffi-bindgen"
@@ -23,7 +40,7 @@ path = "uniffi-bindgen.rs"
 required-features = ["bindgen"]
 
 [dependencies]
-control_acceso = { path = "../..", default-features = false, features = ["nube", "cifrado-sqlcipher"] }
+control_acceso = { path = "../..", default-features = false, features = ["nube"] }
 uniffi = "0.32.0"
 thiserror = "2"
 chrono = "0.4.45"

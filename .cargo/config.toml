@@ -14,3 +14,14 @@ test-plano = ["test", "--no-default-features", "--features", "terminal-ui,nube,s
 # son para verificación puntual del motor, no iteración de UI.
 build-desktop-cipher = ["build", "--manifest-path", "desktop/src-tauri/Cargo.toml", "--no-default-features", "--features", "cifrado-sqlcipher"]
 build-desktop-3mc = ["build", "--manifest-path", "desktop/src-tauri/Cargo.toml", "--no-default-features", "--features", "cifrado-sqlite3mc"]
+# Alias para `mobile/rust-core` (ver el comentario sobre `[features]` en su
+# Cargo.toml). Acá sí funcionan con `--no-default-features` normal porque
+# ni `cargo build`/`test` ni `cargo ndk` tienen la limitación de CLI de
+# Tauri -- default se queda en el motor real, estos alias son sólo para
+# iterar rápido. Compilan para el host (no Android/NDK); para el `.so` de
+# dispositivo agregar las mismas flags a `cargo ndk -t <target> build
+# --release` a mano (cargo-ndk reenvía argumentos desconocidos a `cargo
+# build`, ver mobile/README.md).
+build-mobile-plano = ["build", "--manifest-path", "mobile/rust-core/Cargo.toml", "--no-default-features", "--features", "sqlite-plano"]
+test-mobile-plano = ["test", "--manifest-path", "mobile/rust-core/Cargo.toml", "--no-default-features", "--features", "sqlite-plano"]
+build-mobile-3mc = ["build", "--manifest-path", "mobile/rust-core/Cargo.toml", "--no-default-features", "--features", "cifrado-sqlite3mc"]
