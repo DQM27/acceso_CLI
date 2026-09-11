@@ -5,7 +5,7 @@ const CLAVE_TEMA = "escritorio:tema";
 
 type Tema = "light" | "dark";
 
-function temaDelSistema(): Tema {
+export function temaDelSistema(): Tema {
   try {
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   } catch {
@@ -13,7 +13,7 @@ function temaDelSistema(): Tema {
   }
 }
 
-function leerTema(): Tema {
+export function leerTema(): Tema {
   try {
     const guardado = localStorage.getItem(CLAVE_TEMA);
     return guardado === "dark" || guardado === "light" ? guardado : temaDelSistema();

@@ -12,13 +12,13 @@ import { textoFechaDDMMYYYY } from "../tiempo";
  * necesita `end: "13"` para que el día 12 completo quede pintado. Sumar un
  * día a `fecha_hasta` acá, no tocar el dato real que sigue siendo inclusive
  * en todos lados (SQLite, Supabase, la RPC). */
-function finExclusivo(fechaHastaYMD: string): string {
+export function finExclusivo(fechaHastaYMD: string): string {
   const fecha = new Date(`${fechaHastaYMD}T00:00:00`);
   fecha.setDate(fecha.getDate() + 1);
   return fecha.toISOString().slice(0, 10);
 }
 
-function tituloEvento(fila: AgendaVisitaResumen): string {
+export function tituloEvento(fila: AgendaVisitaResumen): string {
   return fila.empresa ? `${fila.nombre} · ${fila.empresa}` : fila.nombre;
 }
 

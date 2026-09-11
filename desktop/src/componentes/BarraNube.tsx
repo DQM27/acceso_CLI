@@ -43,7 +43,10 @@ function useEnLinea(): boolean {
   return enLinea;
 }
 
-function descripcion(estado: EstadoConexionNube, enLinea: boolean): { texto: string; color: string } {
+export function descripcion(
+  estado: EstadoConexionNube,
+  enLinea: boolean,
+): { texto: string; color: string } {
   if (!enLinea) return { texto: "Sin conexión — modo offline", color: "var(--error)" };
   switch (estado) {
     case "SUBSCRIBED":
