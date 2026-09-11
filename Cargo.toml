@@ -6,7 +6,7 @@ rust-version = "1.89"
 license = "MIT"
 
 [features]
-default = ["terminal-ui"]
+default = ["terminal-ui", "cifrado-sqlcipher"]
 terminal-ui = ["dep:ratatui", "dep:crossterm", "dep:tui-input", "dep:query-parser", "dep:rpassword"]
 dev-auth = []
 serde = ["dep:serde", "chrono/serde"]
@@ -17,13 +17,28 @@ cifrado-secreto-dispositivo-portable = ["dep:aes-gcm", "dep:sha2"]
 # deriva la clave de cifrado del secreto: eso es DPAPI (`dep:windows`,
 # ligado al usuario de Windows, no a un identificador público adivinable).
 cifrado-secreto-dispositivo = ["dep:machine-uid", "dep:windows", "cifrado-secreto-dispositivo-portable"]
+# SQLCipher real (motor de producción) -- compila OpenSSL vendorizado desde
+# fuente, lento en frío y depende de un Perl completo (ver
+# docs/auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md, sección de
+# cifrado). Parte del `default` a propósito: nadie debe tener que acordarse
+# de pedirlo para que un build "normal" siga siendo el motor real.
+cifrado-sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
+# SQLite sin cifrar, para iterar local rápido sin pagar el costo de compilar
+# OpenSSL -- NUNCA usar para nada que toque una base de producción real (el
+# archivo queda legible por cualquiera). Mutuamente excluyente con
+# `cifrado-sqlcipher` (ver el `compile_error!` en `lib.rs`); alias
+# `cargo build-plano`/`cargo test-plano` en `.cargo/config.toml`.
+sqlite-plano = ["rusqlite/bundled"]
 
 [dependencies]
 chrono = "0.4.45"
 chrono-tz = "0.10.4"
-# Rama E2E SQLCipher: el propio núcleo Brisas enlaza SQLCipher; no se mezcla
-# con `bundled` de SQLite estándar. Se elimina `backup` deliberadamente.
-rusqlite = { version = "0.40.2", default-features = false, features = ["bundled-sqlcipher-vendored-openssl", "functions"] }
+# La feature de cifrado real (`bundled-sqlcipher-vendored-openssl` vs
+# `bundled` sin cifrar) se decide en `[features]` de arriba
+# (`cifrado-sqlcipher`/`sqlite-plano`), no acá -- así un build sin ninguna
+# de las dos no arrastra ningún motor por accidente. Se elimina `backup` de
+# rusqlite deliberadamente (Brisas no usa el mecanismo propio de la crate).
+rusqlite = { version = "0.40.2", default-features = false, features = ["functions"] }
 argon2 = "0.5"
 rand_core = { version = "0.6", features = ["getrandom"] }
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"], optional = true }

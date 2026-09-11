@@ -18,6 +18,22 @@ pub mod services;
 pub mod texto;
 pub mod tiempo;
 
+// `cifrado-sqlcipher` y `sqlite-plano` compilan versiones incompatibles de
+// `libsqlite3-sys` (vendorizado con o sin OpenSSL) -- las dos a la vez no
+// tiene sentido y probablemente ni compile limpio. Ninguna de las dos
+// tampoco es un error silencioso más grave: sin alguna, `rusqlite` no tiene
+// ningún motor SQLite vendorizado para enlazar.
+#[cfg(all(feature = "cifrado-sqlcipher", feature = "sqlite-plano"))]
+compile_error!(
+    "cifrado-sqlcipher y sqlite-plano son mutuamente excluyentes -- elegí una sola \
+     (ver Cargo.toml)"
+);
+#[cfg(not(any(feature = "cifrado-sqlcipher", feature = "sqlite-plano")))]
+compile_error!(
+    "falta elegir un motor SQLite: activá la feature cifrado-sqlcipher (real, default) o \
+     sqlite-plano (rápido para iterar local, sin cifrar -- ver Cargo.toml)"
+);
+
 #[cfg(feature = "terminal-ui")]
 pub mod cli;
 #[cfg(feature = "terminal-ui")]
