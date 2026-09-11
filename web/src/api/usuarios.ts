@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { supabase } from "../lib/supabase";
+import { invocar, esObjeto } from "./_invocar";
 
 /**
  * Usuarios globales (ver docs/plan-panel-administrativo-web.md, punto 4):
@@ -71,23 +72,50 @@ export async function listarSitios(): Promise<{ id: string; nombre: string }[]> 
   return data;
 }
 
+export interface UsuarioCreado {
+  usuario_id: string;
+  cedula: string;
+  /** Se muestra una sola vez -- el Edge Function no la vuelve a devolver
+   * después de esta respuesta (ver docs/plan-autenticacion-supabase-auth.md). */
+  password_temporal: string;
+}
+
+function esUsuarioCreado(valor: unknown): valor is UsuarioCreado {
+  return (
+    esObjeto(valor) &&
+    typeof valor.usuario_id === "string" &&
+    typeof valor.cedula === "string" &&
+    typeof valor.password_temporal === "string"
+  );
+}
+
+function esPasswordReseteado(valor: unknown): valor is { usuario_id: string; password_temporal: string } {
+  return esObjeto(valor) && typeof valor.password_temporal === "string";
+}
+
 /**
- * Sin contraseña a propósito -- entra con el centinela `SIN_PASSWORD_LOCAL`
- * (ver `src/services/password.rs`), el primer dispositivo donde esta
- * cédula inicia sesión es el que la fija de verdad. `rol` se limita a
- * ADMINISTRADOR/OPERADOR desde acá -- dar de alta un ROOT nuevo sigue
- * siendo una decisión aparte, no algo que se banalice desde un formulario
- * web (sigue disponible por CLI/TUI: `crear_root_inicial`).
+ * Da de alta al usuario global Y su cuenta de Supabase Auth con una
+ * contraseña temporal de un solo uso (Edge Function `admin-create-usuario`
+ * -- el hash vive en Auth, nunca en la tabla `usuarios`, ver
+ * docs/plan-autenticacion-supabase-auth.md). La persona entra con esa
+ * temporal y la app la obliga a cambiarla antes de dejarla operar. `rol` se
+ * limita a ADMINISTRADOR/OPERADOR desde acá -- dar de alta un ROOT nuevo
+ * sigue siendo una decisión aparte, no algo que se banalice desde un
+ * formulario web (sigue disponible por CLI/TUI: `crear_root_inicial`).
  */
-export async function crearUsuario(datos: {
+export function crearUsuario(datos: {
   sitio_id: string;
   cedula: string;
   nombre: string;
   rol: "ADMINISTRADOR" | "OPERADOR";
-}): Promise<void> {
-  const { error } = await supabase.from("usuarios").insert(datos);
-  if (error) {
-    if (error.code === "23505") throw new Error("Ya existe un usuario con esa cédula.");
-    throw new Error(error.message);
-  }
+}): Promise<UsuarioCreado> {
+  return invocar("admin-create-usuario", esUsuarioCreado, datos);
+}
+
+/** "Olvidó la contraseña" -- genera una temporal nueva de un solo uso para
+ * un usuario ya existente (Edge Function `admin-reset-password-usuario`). */
+export function resetearPasswordUsuario(
+  usuarioId: string,
+): Promise<{ usuario_id: string; password_temporal: string }> {
+  return invocar("admin-reset-password-usuario", esPasswordReseteado, { usuario_id: usuarioId });
 }

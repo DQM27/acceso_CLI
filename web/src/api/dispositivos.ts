@@ -1,4 +1,4 @@
-import { supabase } from "../lib/supabase";
+import { invocar, esObjeto, loQueSea } from "./_invocar";
 
 /**
  * Alta/baja/suspensión de dispositivos -- llama a las Edge Functions
@@ -46,44 +46,6 @@ export interface DispositivoProvisionado {
   secret: string;
 }
 
-/** `data as T` (sin validar) hacía que un cambio de contrato del lado de
- * la Edge Function (backend y frontend viven en el mismo repo, pero se
- * despliegan por separado -- un deploy de función sin el del panel es
- * perfectamente posible) fallara silenciosamente más abajo, en cualquier
- * `.algo` sobre `undefined`, lejos de esta función y sin ningún mensaje
- * claro. `esperado` es un chequeo mínimo de forma (no un schema completo
- * tipo zod -- no vale la pena esa dependencia nueva para esto), sólo lo
- * suficiente para fallar acá, con un mensaje que diga qué función y qué
- * se esperaba. */
-async function invocar<T>(
-  nombre: string,
-  esperado: (data: unknown) => data is T,
-  body?: Record<string, unknown>,
-): Promise<T> {
-  const { data, error } = await supabase.functions.invoke<T>(nombre, { body });
-  if (error) {
-    let detalle: string | undefined;
-    const contexto = (error as { context?: Response }).context;
-    if (contexto instanceof Response) {
-      try {
-        const cuerpo = await contexto.clone().json();
-        detalle = cuerpo?.detail ?? cuerpo?.error;
-      } catch {
-        // Sin cuerpo JSON legible -- se usa error.message más abajo.
-      }
-    }
-    throw new Error(detalle ?? error.message);
-  }
-  if (!esperado(data)) {
-    throw new Error(`${nombre} devolvió una respuesta con forma inesperada.`);
-  }
-  return data;
-}
-
-function esObjeto(valor: unknown): valor is Record<string, unknown> {
-  return typeof valor === "object" && valor !== null;
-}
-
 function esSitio(valor: unknown): valor is Sitio {
   return esObjeto(valor) && typeof valor.id === "string" && typeof valor.nombre === "string";
 }
@@ -112,12 +74,6 @@ function esDispositivoProvisionado(valor: unknown): valor is DispositivoProvisio
 
 function esResultadoEliminar(valor: unknown): valor is { borrado: boolean } {
   return esObjeto(valor) && typeof valor.borrado === "boolean";
-}
-
-/** Las Edge Functions de acción (revocar/suspender) no devuelven body --
- * cualquier respuesta sin error ya vale como "anduvo". */
-function loQueSea(_valor: unknown): _valor is void {
-  return true;
 }
 
 export function listarDispositivosYSitios(): Promise<{ sitios: Sitio[]; dispositivos: Dispositivo[] }> {

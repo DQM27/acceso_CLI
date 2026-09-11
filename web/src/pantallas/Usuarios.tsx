@@ -6,7 +6,13 @@ import Modal from "../componentes/Modal";
 import InterruptorCelda from "../componentes/InterruptorCelda";
 import AvisoTruncado from "../componentes/AvisoTruncado";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
-import { actualizarActivoUsuario, crearUsuario, listarSitios, listarUsuarios } from "../api/usuarios";
+import {
+  actualizarActivoUsuario,
+  crearUsuario,
+  listarSitios,
+  listarUsuarios,
+  resetearPasswordUsuario,
+} from "../api/usuarios";
 import type { Usuario } from "../api/usuarios";
 import { listarDispositivosYSitios } from "../api/dispositivos";
 import { usePresenciaPorSitio } from "../presenciaSitios";
@@ -17,14 +23,13 @@ import { mensajeError } from "../mensajeError";
  * Vista + baja + alta de operadores/administradores globales (ver
  * docs/plan-panel-administrativo-web.md, punto 4). El toggle "Activo" ES
  * la baja (y la reactivación) -- global, no por sitio, ver `api/usuarios.ts`.
- * El alta no pide contraseña -- el usuario nuevo entra con el centinela
- * `SIN_PASSWORD_LOCAL`, el primer dispositivo donde esa cédula inicia
- * sesión es el que la fija de verdad (mismo mecanismo que ya existía para
- * operadores creados localmente, ver `FormularioUsuario.tsx` de desktop --
- * mismos campos cédula/nombre/rol, sin contraseña porque acá no hace
- * falta). ROOT puede aparecer en la grilla (viaja por la nube desde
- * 2026-09-06) pero no se da de alta desde acá a propósito -- eso sigue
- * siendo CLI/TUI (`crear_root_inicial`).
+ * El alta genera una contraseña temporal de un solo uso (Supabase Auth,
+ * ver docs/plan-autenticacion-supabase-auth.md) -- se muestra una sola vez
+ * acá para copiar/mandar a la persona; la app la obliga a cambiarla en su
+ * primer login, en cualquier sitio. "Resetear contraseña" hace lo mismo
+ * para alguien que ya existe (olvidó la suya). ROOT puede aparecer en la
+ * grilla (viaja por la nube desde 2026-09-06) pero no se da de alta desde
+ * acá a propósito -- eso sigue siendo CLI/TUI (`crear_root_inicial`).
  *
  * Sin selector de sitio a propósito, igual que el formulario de escritorio
  * no lo tiene -- hoy existe un solo sitio ("Brisas"); se resuelve solo al
@@ -49,6 +54,13 @@ export default function Usuarios() {
   const [rol, setRol] = useState<"ADMINISTRADOR" | "OPERADOR">("OPERADOR");
   const [creando, setCreando] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
+  // Se muestra una sola vez, apenas vuelve del Edge Function -- ver el
+  // doc-comment de arriba. `null` = no hay nada para mostrar.
+  const [credencialGenerada, setCredencialGenerada] = useState<{
+    cedula: string;
+    password_temporal: string;
+  } | null>(null);
+  const [reseteando, setReseteando] = useState<string | null>(null);
   // Guarda de vigencia para `abrirModal` -- ver ese comentario. Mismo
   // patrón que `vigente` en AuthContexto/useAutoRefresh, pero como
   // contador (no booleano) porque acá puede haber más de una apertura en
@@ -175,14 +187,31 @@ export default function Usuarios() {
     setCreando(true);
     setErrorForm(null);
     try {
-      await crearUsuario({ sitio_id: sitioId, cedula: cedula.trim(), nombre: nombre.trim(), rol });
-      toast.success(`${nombre.trim()} creado -- fija su contraseña al iniciar sesión por primera vez.`);
+      const creado = await crearUsuario({
+        sitio_id: sitioId,
+        cedula: cedula.trim(),
+        nombre: nombre.trim(),
+        rol,
+      });
       cerrarModal();
       recargar();
+      setCredencialGenerada({ cedula: creado.cedula, password_temporal: creado.password_temporal });
     } catch (error) {
       setErrorForm(mensajeError(error));
     } finally {
       setCreando(false);
+    }
+  }
+
+  async function manejarResetPassword(fila: Usuario) {
+    setReseteando(fila.id);
+    try {
+      const { password_temporal } = await resetearPasswordUsuario(fila.id);
+      setCredencialGenerada({ cedula: fila.cedula, password_temporal });
+    } catch (error) {
+      toast.error(mensajeError(error));
+    } finally {
+      setReseteando(null);
     }
   }
 
@@ -241,8 +270,27 @@ export default function Usuarios() {
         cellRendererParams: { critico: true },
         filter: false,
       },
+      {
+        colId: "resetPassword",
+        headerName: "",
+        flex: 0.9,
+        minWidth: 130,
+        filter: false,
+        sortable: false,
+        cellRenderer: ({ data }: { data: FilaUsuario }) => (
+          <button
+            type="button"
+            className="boton"
+            style={{ fontSize: "0.78rem", padding: "0.2rem 0.5rem" }}
+            disabled={reseteando === data.id}
+            onClick={() => manejarResetPassword(data)}
+          >
+            {reseteando === data.id ? "Reseteando…" : "Resetear contraseña"}
+          </button>
+        ),
+      },
     ],
-    [],
+    [reseteando],
   );
 
   return (
@@ -318,8 +366,9 @@ export default function Usuarios() {
             </label>
 
             <p style={{ margin: 0, color: "var(--muted)", fontSize: "0.8rem" }}>
-              Sin contraseña -- la persona la fija sola al iniciar sesión por primera vez en
-              cualquier dispositivo.
+              Se genera una contraseña temporal de un solo uso -- se muestra acá apenas se
+              cree, para copiar y mandarle a la persona. La va a tener que cambiar en su
+              primer inicio de sesión.
             </p>
 
             {errorForm && (
@@ -337,6 +386,55 @@ export default function Usuarios() {
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {credencialGenerada && (
+        <Modal
+          titulo="Contraseña temporal generada"
+          onCerrar={() => setCredencialGenerada(null)}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <p style={{ margin: 0, color: "var(--muted)", fontSize: "0.85rem" }}>
+              Cédula <strong>{credencialGenerada.cedula}</strong> -- copiá esto y mandáselo a
+              la persona (WhatsApp, en persona, lo que sea). No se vuelve a mostrar después de
+              cerrar esta ventana.
+            </p>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                padding: "0.6rem 0.8rem",
+                border: "1px solid var(--borde)",
+                borderRadius: "0.4rem",
+                fontFamily: "monospace",
+                fontSize: "1.1rem",
+                letterSpacing: "0.05em",
+              }}
+            >
+              <span style={{ flex: 1 }}>{credencialGenerada.password_temporal}</span>
+              <button
+                type="button"
+                className="boton"
+                onClick={() => {
+                  navigator.clipboard.writeText(credencialGenerada.password_temporal);
+                  toast.success("Copiada.");
+                }}
+              >
+                Copiar
+              </button>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                className="boton boton-primario"
+                onClick={() => setCredencialGenerada(null)}
+              >
+                Ya la copié
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
     </div>
