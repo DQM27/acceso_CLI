@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState, ViewTransition } from "react";
 import {
   createBrowserRouter,
   RouterProvider,
@@ -117,11 +117,20 @@ function Portal() {
               </Aviso>
             )}
             <Suspense fallback={<Cargando />}>
-              <Routes>
-                <Route path="/citas" element={<MisCitas />} />
-                <Route path="/nueva" element={<NuevaCita />} />
-                <Route path="*" element={<Navigate to="/citas" replace />} />
-              </Routes>
+              {/* React 19.3: cross-fade nativo entre Mis citas y Nueva cita
+                  -- `createBrowserRouter` ya envuelve la navegación en
+                  `startTransition` desde v6.4+, así que `ViewTransition`
+                  detecta el cambio de ruta sin nada más que envolver el
+                  contenido rutado. Nombre por defecto ("auto"): alcanza
+                  para el cross-fade simple, sin animar elementos
+                  individuales entre pantallas. */}
+              <ViewTransition>
+                <Routes>
+                  <Route path="/citas" element={<MisCitas />} />
+                  <Route path="/nueva" element={<NuevaCita />} />
+                  <Route path="*" element={<Navigate to="/citas" replace />} />
+                </Routes>
+              </ViewTransition>
             </Suspense>
           </div>
         </main>
