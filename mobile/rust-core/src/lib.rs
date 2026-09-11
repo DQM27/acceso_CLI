@@ -1727,23 +1727,20 @@ impl Nucleo {
     /// porque la base está en `journal_mode=WAL` (ver `database::schema`):
     /// con el rollback journal clásico, la primera escritura de cualquiera
     /// de las dos conexiones bloquearía a la otra igual que si compartieran
-    /// el mismo candado.
+    /// el mismo candado. Reusa la fábrica central de escritura (mismos
+    /// pragmas que `GuiState::conexion_secundaria` en escritorio: antes
+    /// esta sólo aplicaba `busy_timeout`/`foreign_keys`, le faltaban
+    /// `synchronous`/`trusted_schema`/`secure_delete`). `clave` en `None`
+    /// -- Android todavía no aplica ninguna clave de SQLCipher a la base
+    /// (pendiente aparte, ver `docs/auditorias/AUDITORIA_INTEGRAL_ANDROID_2026-09-09.md`);
+    /// el día que se active acá, pasa a la vez por la conexión principal y
+    /// por ésta.
     fn conexion_secundaria(&self) -> Result<rusqlite::Connection, NucleoError> {
         let ruta = self.core_lock().ruta_base_datos().to_path_buf();
-        let conexion = rusqlite::Connection::open(&ruta).map_err(|error| NucleoError::Interno {
-            mensaje: error.to_string(),
-        })?;
-        conexion
-            .busy_timeout(std::time::Duration::from_secs(5))
+        control_acceso::database::connection::abrir_conexion_secundaria_escritura(&ruta, None)
             .map_err(|error| NucleoError::Interno {
                 mensaje: error.to_string(),
-            })?;
-        conexion
-            .pragma_update(None, "foreign_keys", "ON")
-            .map_err(|error| NucleoError::Interno {
-                mensaje: error.to_string(),
-            })?;
-        Ok(conexion)
+            })
     }
 
     fn sesion_lock(&self) -> std::sync::MutexGuard<'_, Option<UsuarioSesionNucleo>> {
