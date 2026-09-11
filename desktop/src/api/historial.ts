@@ -17,6 +17,11 @@ export type MotivoResultadoIngreso = "PraindProximoVencer" | "DatosReconstruidos
 
 export interface MovimientoIngresoResumen {
   registro_id: number;
+  /** Compartido con `historial_sitio`/`MovimientoHistorialRemoto` -- es lo
+   * que permite reconocer que un movimiento "remoto" es en realidad este
+   * mismo dispositivo visto de vuelta desde la nube (ver `Historial.tsx`,
+   * `recargar`). */
+  uuid: string;
   contratista_id: number;
   cedula: string;
   contratista_nombre: string;

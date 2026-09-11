@@ -39,6 +39,7 @@ interface FilaLocal extends MovimientoIngresoResumen {
 
 interface FilaRemota {
   origen: "remoto";
+  uuid: string;
   registro_id: null;
   contratista_id: null;
   cedula: string | null;
@@ -73,9 +74,25 @@ export function textoDispositivo(tipo: string | null): string {
   return tipo ?? "—";
 }
 
+/** `historial_sitio` incluye a propósito los movimientos de ESTE mismo
+ * dispositivo (respaldo ante una reinstalación que pierda
+ * `registro_ingresos` local, ver `src/nube/sincronizacion.rs`,
+ * `recibir_historial_del_sitio`) -- sin este filtro, cada movimiento que ya
+ * se sincronizó aparece dos veces: una vez como local y otra como remoto
+ * (bug real en producción, 2026-09-11). Mismo criterio que ya aplica la UI
+ * de Android (`HistorialViewModel.kt`). */
+export function remotosSinDuplicarLocales(
+  locales: readonly { uuid: string }[],
+  remotos: readonly MovimientoHistorialRemoto[],
+): MovimientoHistorialRemoto[] {
+  const localesUuids = new Set(locales.map((fila) => fila.uuid));
+  return remotos.filter((remoto) => !localesUuids.has(remoto.uuid));
+}
+
 export function filaDesdeRemoto(remoto: MovimientoHistorialRemoto): FilaHistorial {
   return {
     origen: "remoto",
+    uuid: remoto.uuid,
     registro_id: null,
     contratista_id: null,
     cedula: remoto.cedula,
@@ -160,7 +177,8 @@ export default function Historial() {
           origen: "local",
           dispositivo_tipo: "pc",
         }));
-        setFilas([...locales, ...remotos.map(filaDesdeRemoto)]);
+        const remotosFiltrados = remotosSinDuplicarLocales(locales, remotos);
+        setFilas([...locales, ...remotosFiltrados.map(filaDesdeRemoto)]);
         setTruncado(truncado);
       } finally {
         if (estaVigente()) setCargando(false);

@@ -7,6 +7,7 @@ function movimiento(
 ): MovimientoIngresoResumen {
   return {
     registro_id: 1,
+    uuid: "uuid-1",
     contratista_id: 1,
     cedula: "1-0847-0293",
     contratista_nombre: "Marlon Quesada",

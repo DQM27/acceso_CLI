@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filaDesdeRemoto, textoDispositivo } from "./Historial";
+import { filaDesdeRemoto, remotosSinDuplicarLocales, textoDispositivo } from "./Historial";
 import type { MovimientoHistorialRemoto } from "../api";
 
 function remoto(overrides: Partial<MovimientoHistorialRemoto> = {}): MovimientoHistorialRemoto {
@@ -52,5 +52,30 @@ describe("filaDesdeRemoto", () => {
     const fila = filaDesdeRemoto(remoto({ cedula: "2-1111-2222", gafete_numero: 7 }));
     expect(fila.cedula).toBe("2-1111-2222");
     expect(fila.gafete_numero).toBe(7);
+  });
+});
+
+describe("remotosSinDuplicarLocales", () => {
+  // Bug real en producción (2026-09-11): `historial_sitio` incluye a
+  // propósito las entradas de este mismo dispositivo (respaldo ante una
+  // reinstalación) -- sin este filtro, cada movimiento ya sincronizado
+  // aparecía dos veces en la grilla: una vez como local y otra como remoto.
+  it("descarta un remoto cuyo uuid ya existe entre los locales", () => {
+    const locales = [{ uuid: "uuid-1" }, { uuid: "uuid-2" }];
+    const remotos = [remoto({ uuid: "uuid-1" }), remoto({ uuid: "uuid-3" })];
+    const resultado = remotosSinDuplicarLocales(locales, remotos);
+    expect(resultado.map((r) => r.uuid)).toEqual(["uuid-3"]);
+  });
+
+  it("sin coincidencias, deja todos los remotos intactos", () => {
+    const locales = [{ uuid: "uuid-1" }];
+    const remotos = [remoto({ uuid: "uuid-2" }), remoto({ uuid: "uuid-3" })];
+    const resultado = remotosSinDuplicarLocales(locales, remotos);
+    expect(resultado).toHaveLength(2);
+  });
+
+  it("sin locales, no descarta nada", () => {
+    const remotos = [remoto({ uuid: "uuid-1" })];
+    expect(remotosSinDuplicarLocales([], remotos)).toEqual(remotos);
   });
 });
