@@ -103,8 +103,15 @@ pub struct FormularioUsuario {
     pub confirmar_password: String,
     pub modo: ModoFormularioUsuario,
     /// Rol de quien está creando — determina qué roles puede asignar
-    /// (`puede_gestionar_usuario`: nadie salvo Root puede crear otro Root).
+    /// (`puede_gestionar_usuario`).
     rol_actor: RolUsuario,
+    /// Rol que YA tenía esta fila antes de abrir el formulario (`None` en
+    /// alta). Root nunca es una opción para asignar salvo que la fila ya
+    /// fuera Root de entrada -- ver `alternar`, mismo criterio que
+    /// `verificar_creacion_usuario`/`actualizar_usuario`
+    /// (`src/application/usuarios.rs`): Root no nace de un alta/edición
+    /// normal, sólo de `crear_root_inicial`.
+    rol_original: Option<RolUsuario>,
     pub errores: Vec<(CampoUsuario, String)>,
 }
 
@@ -122,6 +129,7 @@ impl FormularioUsuario {
             confirmar_password: String::new(),
             modo: ModoFormularioUsuario::Nuevo,
             rol_actor,
+            rol_original: None,
             errores: Vec::new(),
         }
     }
@@ -142,6 +150,7 @@ impl FormularioUsuario {
                 activo: resumen.activo,
             },
             rol_actor,
+            rol_original: Some(resumen.rol),
             errores: Vec::new(),
         }
     }
@@ -176,7 +185,10 @@ impl FormularioUsuario {
         }
         let permitidos: Vec<RolUsuario> = ROLES
             .into_iter()
-            .filter(|r| puede_gestionar_usuario(self.rol_actor, *r))
+            .filter(|r| {
+                (*r != RolUsuario::Root || self.rol_original == Some(RolUsuario::Root))
+                    && puede_gestionar_usuario(self.rol_actor, *r)
+            })
             .collect();
         if permitidos.is_empty() {
             return;
@@ -336,10 +348,29 @@ mod tests {
         assert_ne!(f.rol, RolUsuario::Root);
     }
 
+    /// Root nunca nace de una alta normal -- ni Root ni ningún otro actor
+    /// pueden asignarlo acá, ver `verificar_creacion_usuario`
+    /// (`src/application/usuarios.rs`) y docs/plan-autenticacion-supabase-auth.md.
     #[test]
-    fn root_puede_ciclar_los_tres_roles() {
+    fn root_no_puede_asignar_root_en_una_alta_nueva() {
         let mut f = FormularioUsuario::nuevo(RolUsuario::Root);
         f.campo = CampoUsuario::Rol;
+        f.alternar();
+        assert_eq!(f.rol, RolUsuario::Administrador);
+        f.alternar();
+        assert_ne!(f.rol, RolUsuario::Root);
+        assert_eq!(f.rol, RolUsuario::Operador);
+    }
+
+    /// Editar una fila que YA era Root sigue dejando a Root como opción --
+    /// no es una promoción, es la misma fila (ver `rol_original`).
+    #[test]
+    fn root_mantiene_la_opcion_root_al_editar_una_fila_que_ya_era_root() {
+        let resumen = UsuarioResumen { rol: RolUsuario::Root, ..resumen_usuario() };
+        let mut f = FormularioUsuario::editar(&resumen, RolUsuario::Root);
+        f.campo = CampoUsuario::Rol;
+        f.alternar();
+        assert_eq!(f.rol, RolUsuario::Operador);
         f.alternar();
         assert_eq!(f.rol, RolUsuario::Administrador);
         f.alternar();

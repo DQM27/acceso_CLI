@@ -831,18 +831,6 @@ fn usuarios_self_edit_actualiza_sesion_segura_desde_sqlite() {
             password: "password1".into(),
         })
         .unwrap();
-    let actor = core.autenticar("ROOT-1", "password1").unwrap();
-    core.crear_usuario(
-        &actor,
-        crate::services::usuario_service::CrearUsuarioInput {
-            cedula: "ROOT-2".into(),
-            nombre: "Respaldo".into(),
-            password: "password2".into(),
-            rol: RolUsuario::Root,
-            activo: true,
-        },
-    )
-    .unwrap();
     let mut app = App {
         vista: Vista::Usuarios,
         sesion: Some(UsuarioSesion {
@@ -854,13 +842,20 @@ fn usuarios_self_edit_actualiza_sesion_segura_desde_sqlite() {
         ..App::default()
     };
     app.procesar_accion_usuarios(app.usuarios.solicitud_carga(), Some(&core));
+    // `rol` se mantiene en Root a propósito -- ya no existe forma de tener
+    // un segundo Root activo para poder degradar a este sin violar "último
+    // Root activo" (ver `verificar_creacion_usuario`,
+    // docs/plan-autenticacion-supabase-auth.md: Root nunca nace de una
+    // edición/alta normal). Lo que este test cubre sigue intacto: la
+    // sesión se actualiza desde lo que de verdad quedó en SQLite tras la
+    // auto-edición, acá para cédula/nombre.
     app.procesar_accion_usuarios(
         AccionUsuarios::Actualizar {
             id,
             input: crate::services::usuario_service::ActualizarUsuarioInput {
                 cedula: "ROOT-NUEVO".into(),
                 nombre: "Ana María".into(),
-                rol: RolUsuario::Administrador,
+                rol: RolUsuario::Root,
             },
             activo: true,
             nombre: "Ana María".into(),
@@ -870,7 +865,7 @@ fn usuarios_self_edit_actualiza_sesion_segura_desde_sqlite() {
     let sesion = app.sesion().unwrap();
     assert_eq!(sesion.cedula, "ROOT-NUEVO");
     assert_eq!(sesion.nombre, "Ana María");
-    assert_eq!(sesion.rol, RolUsuario::Administrador);
+    assert_eq!(sesion.rol, RolUsuario::Root);
 }
 
 #[test]

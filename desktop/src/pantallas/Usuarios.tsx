@@ -8,7 +8,7 @@ import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import FormularioUsuario from "./FormularioUsuario";
 import { actualizarUsuario, buscarUsuarios } from "../api";
-import type { RolUsuario, UsuarioResumen } from "../api";
+import type { UsuarioResumen } from "../api";
 
 const columnas: ColDef<UsuarioResumen>[] = [
   { field: "cedula", headerName: "Cédula", flex: 1.4, minWidth: 140, cellStyle: { textAlign: "left" } },
@@ -24,7 +24,7 @@ const columnas: ColDef<UsuarioResumen>[] = [
   },
 ];
 
-export default function Usuarios({ actorRol }: { actorRol: RolUsuario }) {
+export default function Usuarios() {
   const [texto, setTexto] = useState("");
   const [filas, setFilas] = useState<UsuarioResumen[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -104,7 +104,6 @@ export default function Usuarios({ actorRol }: { actorRol: RolUsuario }) {
 
       {formularioAbierto && (
         <FormularioUsuario
-          actorRol={actorRol}
           usuario={formularioAbierto === "crear" ? undefined : formularioAbierto}
           onCerrar={() => setFormularioAbierto(null)}
           onGuardado={() => {

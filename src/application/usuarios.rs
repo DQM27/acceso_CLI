@@ -137,6 +137,17 @@ impl AppCore {
         if !puede_gestionar_usuario(actor_actual.rol, input.rol) {
             return Err(UsuarioServiceError::OperacionNoAutorizada);
         }
+        // Root nunca se asigna desde una edición -- sólo se permite si la
+        // fila YA era Root (edición de su propio registro, no una
+        // promoción). Ver el mismo criterio en `verificar_creacion_usuario`.
+        if input.rol == RolUsuario::Root {
+            let objetivo_actual = SqliteUsuarioRepository::new(&transaction)
+                .buscar_por_id(id)?
+                .ok_or(UsuarioServiceError::UsuarioNoEncontrado)?;
+            if objetivo_actual.rol != RolUsuario::Root {
+                return Err(UsuarioServiceError::OperacionNoAutorizada);
+            }
+        }
         UsuarioService::new(&SqliteUsuarioRepository::new(&transaction))
             .actualizar_administracion_auditada(
                 id,
@@ -349,6 +360,12 @@ impl AppCore {
     }
 }
 
+/// Root nunca nace acá, ni siquiera para otro Root -- ver
+/// docs/plan-autenticacion-supabase-auth.md. La única fila con rol Root que
+/// puede existir es la del arranque inicial de un sitio
+/// (`crear_root_inicial`, CLI/TUI, exige la base completamente vacía); todo
+/// lo que pase por el alta normal de usuarios queda afuera sin excepción,
+/// aunque quien la pida ya sea Root.
 fn verificar_creacion_usuario(
     connection: &Connection,
     actor: &UsuarioSesion,
@@ -356,7 +373,7 @@ fn verificar_creacion_usuario(
 ) -> Result<Usuario, UsuarioServiceError> {
     let actor_actual = verificar_actor_activo(connection, actor)?
         .ok_or(UsuarioServiceError::OperacionNoAutorizada)?;
-    if !puede_gestionar_usuario(actor_actual.rol, objetivo) {
+    if objetivo == RolUsuario::Root || !puede_gestionar_usuario(actor_actual.rol, objetivo) {
         return Err(UsuarioServiceError::OperacionNoAutorizada);
     }
     Ok(actor_actual)

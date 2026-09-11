@@ -436,7 +436,7 @@ function Shell({
                         ) : id === "empresas" ? (
                           <Empresas />
                         ) : id === "usuarios" ? (
-                          <Usuarios actorRol={sesion.rol} />
+                          <Usuarios />
                         ) : (
                           <Gafetes />
                         )}

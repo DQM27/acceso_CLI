@@ -8,13 +8,20 @@ import { cedulaSchema, nombreSchema, sanearSoloDigitos, sanearSoloLetras } from 
 
 const ROLES = ["Root", "Administrador", "Operador"] as const;
 
-/** Espejo de `puede_gestionar_usuario` (`src/domain/autorizacion.rs`): nadie
- * asigna Root salvo otro Root. Mismo criterio que ya aplica la TUI en
- * `FormularioUsuario::roles_disponibles` (`src/cli/formulario_usuario.rs`)
- * — acá sólo hace falta la mitad de la regla (quien abre este formulario ya
- * tiene `GestionarUsuarios`, si no, ni llega a la pantalla). */
-function rolesAsignables(actorRol: RolUsuario): readonly RolUsuario[] {
-  return actorRol === "Root" ? ROLES : ROLES.filter((rol) => rol !== "Root");
+/** Root ya no se puede asignar desde ningún formulario -- ni para crear a
+ * alguien nuevo ni para promover a alguien existente (ver
+ * docs/plan-autenticacion-supabase-auth.md: sólo hay un Root, y sólo nace
+ * del arranque inicial de un sitio -- `crear_root_inicial`, CLI/TUI, nunca
+ * desde acá). `rolActual` es el rol que YA tiene la fila que se está
+ * editando (`undefined` en alta) -- si ya era Root, se deja la opción para
+ * no romper la edición de su propio registro (nombre/cédula), pero nunca
+ * aparece para promover a alguien que hoy no lo es. Espejo del mismo
+ * criterio en el núcleo (`src/domain/autorizacion.rs`,
+ * `src/application/usuarios.rs`) y en la TUI
+ * (`src/cli/formulario_usuario.rs`). */
+function rolesAsignables(rolActual?: RolUsuario): readonly RolUsuario[] {
+  if (rolActual === "Root") return ROLES;
+  return ROLES.filter((rol) => rol !== "Root");
 }
 
 interface ValoresFormulario {
@@ -46,20 +53,17 @@ export function construirEsquema(esCreacion: boolean) {
 }
 
 export default function FormularioUsuario({
-  actorRol,
   usuario,
   onGuardado,
   onCerrar,
 }: {
-  /** Rol de quien tiene la sesión abierta — filtra qué roles puede asignar. */
-  actorRol: RolUsuario;
   /** Si viene, es edición; si no, alta. */
   usuario?: UsuarioResumen;
   onGuardado: () => void;
   onCerrar: () => void;
 }) {
   const esCreacion = !usuario;
-  const roles = rolesAsignables(actorRol);
+  const roles = rolesAsignables(usuario?.rol);
   const {
     register,
     handleSubmit,
