@@ -298,46 +298,26 @@ main:focus,
   color: var(--muted);
 }
 /* Shell fijo, tipo desktop (AG Grid): nada de scroll a nivel de página
-   completa -- la barra superior y la cabecera de cada pantalla quedan
-   quietas, y sólo el contenido de la tarjeta principal scrollea adentro de
-   su propio contenedor. `height` (no `min-height`) + `overflow: hidden` en
-   toda la cadena es lo que fuerza esto: sin un techo real de altura en
-   cada nivel, el navegador vuelve a su comportamiento normal de página
-   larga con scroll global. */
+   completa -- el sidebar y la cabecera de cada pantalla quedan quietos, y
+   sólo el contenido de la tarjeta principal scrollea adentro de su propio
+   contenedor. `height` (no `min-height`) + `overflow: hidden` en toda la
+   cadena es lo que fuerza esto: sin un techo real de altura en cada nivel,
+   el navegador vuelve a su comportamiento normal de página larga con
+   scroll global. */
 .portal {
   height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-.portal-cuerpo {
+/* Columna a la derecha del sidebar -- botón de menú móvil + contenido
+   scrolleable, mismo rol que el `<main>` de `Shell` en desktop/web. */
+.contenido-shell {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
   overflow: hidden;
-}
-/* Barra superior reducida a sólo el logo -- todo lo demás que tenía antes
-   (nombre de marca, subtítulo, cuenta, cerrar sesión) era ruido repetido
-   con el pie de página; ahora esa información vive sólo en `.portal-pie`,
-   igual que el status bar de la app de escritorio. */
-.barra-superior {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  flex-shrink: 0;
-  padding: 6px 16px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--borde);
-}
-.marca-icono {
-  display: inline-flex;
-}
-.marca-icono img {
-  width: 26px;
-  height: 26px;
-  border-radius: var(--radio-chico);
-  display: block;
 }
 .barra-cuenta {
   display: flex;
@@ -643,7 +623,10 @@ main:focus,
   display: flex;
   gap: 8px;
 }
-.portal-pie {
+/* Barra de estado -- de lado a lado, debajo de sidebar + contenido, mismo
+   lugar (y mismo nombre de clase) que la de desktop/web. Sin fondo/borde
+   propio a propósito: vive directo sobre `--fondo`. */
+.barra-estado {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -653,17 +636,150 @@ main:focus,
   color: var(--muted);
   flex-shrink: 0;
 }
-.portal-pie .avatar {
+.barra-estado .avatar {
   width: 22px;
   height: 22px;
   font-size: 10px;
 }
-.portal-pie .identidad {
+.barra-estado .identidad {
   font-size: 11px;
 }
-.portal-pie .identidad span {
+.barra-estado .identidad span {
   font-size: 10px;
   max-width: 200px;
+}
+
+/* Sidebar de navegación (componentes/Sidebar.tsx) -- copiado tal cual del
+   lenguaje visual de desktop/web (mismo nombre de clases), sólo con las dos
+   secciones de este portal (Mis citas / Nueva cita). */
+.shell-sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 11.5rem;
+  flex-shrink: 0;
+  margin: 6px 0 6px 6px;
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  transition: width 0.15s ease;
+}
+.shell-sidebar-colapsada {
+  width: 3.75rem;
+}
+.shell-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 6px 0;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  color: var(--texto);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.nav-item svg {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+.shell-sidebar-colapsada .nav-item {
+  justify-content: center;
+  padding: 10px 0;
+}
+.shell-sidebar-colapsada .nav-item-etiqueta {
+  display: none;
+}
+.nav-item:hover:not(.nav-item-activo) {
+  background: color-mix(in srgb, var(--campo-fondo) 60%, transparent);
+}
+.nav-item:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--acento);
+}
+.nav-item-activo {
+  background: var(--acento-relleno);
+  color: var(--sobre-acento);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--acento);
+}
+
+/* Botón de menú (hamburguesa) que abre el cajón del sidebar en pantallas
+   angostas -- oculto en escritorio, donde el sidebar ya convive con el
+   contenido sin taparlo. */
+.boton-menu-movil {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  width: var(--control-tactil);
+  height: var(--control-tactil);
+  flex-shrink: 0;
+  margin: 6px 6px 0;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  background: var(--panel);
+  color: var(--texto);
+  cursor: pointer;
+}
+.boton-menu-movil:hover {
+  background: var(--acento-suave);
+  border-color: var(--acento);
+}
+
+/* Por debajo de este ancho el sidebar no comparte espacio con el
+   contenido -- se sale del flujo (`position: fixed`) y vive encima como un
+   cajón, oculto por defecto, con un velo detrás que lo cierra al tocar
+   afuera. */
+@media (max-width: 768px) {
+  .boton-menu-movil {
+    display: flex;
+  }
+  .shell-sidebar,
+  .shell-sidebar.shell-sidebar-colapsada {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 40;
+    width: 15rem;
+    margin: 0;
+    border-radius: 0;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+  .shell-sidebar.shell-sidebar-abierta {
+    transform: translateX(0);
+  }
+  .shell-sidebar-colapsada .nav-item-etiqueta {
+    display: inline;
+  }
+  .shell-sidebar-colapsada .nav-item {
+    justify-content: flex-start;
+    padding: 10px 14px;
+  }
+  .shell-sidebar-velo {
+    position: fixed;
+    inset: 0;
+    z-index: 39;
+    background: var(--velo);
+  }
 }
 .volver {
   display: inline-flex;
@@ -1173,10 +1289,7 @@ dd {
   .barra-cuenta .avatar {
     display: none;
   }
-  .barra-superior {
-    padding-inline: 12px;
-  }
-  .portal-pie {
+  .barra-estado {
     padding-inline: 16px;
     font-size: 10px;
   }
