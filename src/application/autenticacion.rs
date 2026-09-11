@@ -71,6 +71,14 @@ impl AppCore {
         AutenticacionService::new(&repository).buscar_candidato(cedula)
     }
 
+    /// Ver `AutenticacionService::resolver_identidad_local` -- para cuando
+    /// la contraseña ya se verificó contra Supabase Auth
+    /// (`nube::auth_supabase::login`), no localmente.
+    pub fn resolver_identidad_local(&self, cedula: &str) -> Result<UsuarioSesion, AutenticacionError> {
+        let repository = SqliteUsuarioRepository::new(&self.connection);
+        AutenticacionService::new(&repository).resolver_identidad_local(cedula)
+    }
+
     /// Completa el alta de contraseña de un usuario global (Administrador/Operador,
     /// sincronizado por catálogo -- ver `nube::sincronizacion::recibir_catalogo_del_sitio`)
     /// que todavía no inició sesión EN ESTE dispositivo (`AutenticacionError::SinPasswordLocal`).

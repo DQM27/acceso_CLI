@@ -135,6 +135,19 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
         sitio_id: &token.sitio_id,
     };
 
+    // Renovación silenciosa de la sesión de Supabase Auth del usuario
+    // (distinta del token de DISPOSITIVO de arriba) -- ver
+    // docs/plan-autenticacion-supabase-auth.md, "renovación en segundo
+    // plano". Mejor esfuerzo: sin sesión de Supabase (login local, ROOT
+    // del arranque inicial) o sin red, simplemente no hace nada -- el
+    // tope de 12h en `GuiState::access_token_supabase_vigente` sigue
+    // aplicando igual si esto no logra renovar a tiempo.
+    if let Some(refresh_token) = state.refresh_token_supabase()
+        && let Ok(sesion) = nube::refrescar(nube::BASE_URL, nube::APIKEY, &refresh_token)
+    {
+        state.iniciar_sesion_supabase(sesion);
+    }
+
     let conexion = state.conexion_secundaria()?;
     let resumen = nube::drenar_cola(&conexion, &contexto, 200).map_err(mensaje_sincronizacion)?;
     let cierres_recibidos = nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)

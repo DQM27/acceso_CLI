@@ -91,6 +91,35 @@ where
             password_hash: usuario.password_hash,
         })
     }
+
+    /// Resuelve identidad/rol/estado local de `cedula` SIN verificar
+    /// contraseña -- para cuando esa verificación ya pasó por otro lado
+    /// (Supabase Auth, ver `nube::auth_supabase::login` y
+    /// docs/plan-autenticacion-supabase-auth.md). A diferencia de
+    /// `buscar_candidato`, acá `SIN_PASSWORD_LOCAL` NO es un error: es
+    /// justo el estado esperado de cualquier usuario sincronizado, que ya
+    /// no fija contraseña local nunca (ese camino queda reservado sólo
+    /// para ROOT del arranque inicial).
+    pub fn resolver_identidad_local(
+        &self,
+        cedula: &str,
+    ) -> Result<UsuarioSesion, AutenticacionError> {
+        let usuario = self
+            .usuarios
+            .buscar_por_cedula(cedula.trim())?
+            .ok_or(AutenticacionError::CredencialesInvalidas)?;
+
+        if !usuario.activo {
+            return Err(AutenticacionError::UsuarioInactivo);
+        }
+
+        Ok(UsuarioSesion {
+            id: usuario.id,
+            cedula: usuario.cedula,
+            nombre: usuario.nombre,
+            rol: usuario.rol,
+        })
+    }
 }
 
 /// Verifica `password` contra un candidato ya resuelto por `buscar_candidato`.

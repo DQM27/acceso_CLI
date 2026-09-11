@@ -24,6 +24,32 @@ struct TokenCacheado {
     obtenido_en: Instant,
 }
 
+/// Sesión de un usuario global contra Supabase Auth (Administrador/Operador,
+/// o un ROOT ya sincronizado a otro sitio) -- ver
+/// docs/plan-autenticacion-supabase-auth.md. Distinta de `TokenCacheado`
+/// (identidad del DISPOSITIVO ante el receptor): esto es la identidad de
+/// la PERSONA. Vive sólo en memoria -- nunca se persiste a disco, así que
+/// cerrar la app siempre la pierde y el próximo arranque exige un login
+/// real de nuevo contra Supabase, sin importar cuánto quedara del tope de
+/// 12h.
+struct SesionSupabaseCacheada {
+    access_token: String,
+    refresh_token: String,
+    expires_in: u64,
+    /// Última vez que se confirmó de verdad contra Supabase (login inicial
+    /// o una renovación exitosa) -- la base del tope duro de 12h. Una
+    /// renovación en segundo plano la corre para adelante; el login
+    /// inicial no es el único momento que cuenta.
+    confirmada_en: Instant,
+}
+
+/// Tope duro de presencia (ver el plan): aunque el token técnico siga sin
+/// vencer, si pasaron 12h desde la última confirmación real contra
+/// Supabase, la sesión se da por vencida. Lo aplica el cliente -- no
+/// depende de la configuración de expiración del proyecto de Supabase
+/// (que es global y afecta también al panel web).
+const TOPE_PRESENCIA_SUPABASE: Duration = Duration::from_secs(12 * 60 * 60);
+
 /// Estado administrado por Tauri. Dos mutexes separados porque ningún flujo
 /// necesita actualizar sesión y base de datos como una sola operación atómica
 /// (ver docs/plan-tauri.md, sección "Estado y sesión").
@@ -41,6 +67,7 @@ pub struct GuiState {
     /// que `main.rs` con `_instancia`).
     _instancia: InstanciaGuard,
     token_nube_cacheado: Mutex<Option<TokenCacheado>>,
+    sesion_supabase: Mutex<Option<SesionSupabaseCacheada>>,
     /// Ruta del archivo de base de datos, resuelta una sola vez al arrancar
     /// (ver `lib.rs::run`) — el núcleo ya no expone `ruta_base_datos()`
     /// (rama `SQLCipher` sin respaldo local), así que `conexion_secundaria`
@@ -65,6 +92,7 @@ impl GuiState {
             sesion: Mutex::new(None),
             _instancia: instancia,
             token_nube_cacheado: Mutex::new(None),
+            sesion_supabase: Mutex::new(None),
             ruta_base_datos,
             clave_base_datos,
         }
@@ -152,10 +180,54 @@ impl GuiState {
 
     pub fn cerrar_sesion(&self) {
         *self.lock_sesion() = None;
+        *self.lock_sesion_supabase() = None;
     }
 
     fn lock_sesion(&self) -> MutexGuard<'_, Option<UsuarioSesion>> {
         self.sesion
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Guarda (o reemplaza) la sesión de Supabase Auth -- se llama tanto
+    /// en el login inicial como en cada renovación exitosa en segundo
+    /// plano, siempre con una marca de tiempo nueva (`confirmada_en`).
+    pub fn iniciar_sesion_supabase(&self, sesion: nube::SesionSupabase) {
+        *self.lock_sesion_supabase() = Some(SesionSupabaseCacheada {
+            access_token: sesion.access_token,
+            refresh_token: sesion.refresh_token,
+            expires_in: sesion.expires_in,
+            confirmada_en: Instant::now(),
+        });
+    }
+
+    /// Token de acceso vigente para usar como `Authorization: Bearer`, si
+    /// lo hay -- `None` si nunca hubo sesión, si el token técnico ya
+    /// venció, o si pasó `TOPE_PRESENCIA_SUPABASE` desde la última
+    /// confirmación real (aunque el token en sí siga sin vencer).
+    pub fn access_token_supabase_vigente(&self) -> Option<String> {
+        let guard = self.lock_sesion_supabase();
+        let entrada = guard.as_ref()?;
+        let vigente_por = Duration::from_secs(entrada.expires_in);
+        if entrada.confirmada_en.elapsed() >= vigente_por
+            || entrada.confirmada_en.elapsed() >= TOPE_PRESENCIA_SUPABASE
+        {
+            return None;
+        }
+        Some(entrada.access_token.clone())
+    }
+
+    /// `refresh_token` actual, para la renovación en segundo plano -- `None`
+    /// si nunca hubo sesión de Supabase (usuario logueado localmente, p.
+    /// ej. ROOT del arranque inicial) o si ya se cerró sesión.
+    pub fn refresh_token_supabase(&self) -> Option<String> {
+        self.lock_sesion_supabase()
+            .as_ref()
+            .map(|entrada| entrada.refresh_token.clone())
+    }
+
+    fn lock_sesion_supabase(&self) -> MutexGuard<'_, Option<SesionSupabaseCacheada>> {
+        self.sesion_supabase
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }

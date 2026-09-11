@@ -21,25 +21,41 @@ pub fn requiere_configuracion_inicial(state: tauri::State<GuiState>) -> Result<b
         .map_err(|error| error.to_string())
 }
 
-/// Distinto de un `String` plano a propósito: la pantalla de login necesita
-/// diferenciar "cédula/contraseña incorrecta" (error de verdad) de "este
-/// usuario global todavía no fijó contraseña en este dispositivo" (no es un
-/// error del usuario, hay que mostrarle el formulario para fijarla) sin
-/// depender de comparar el texto exacto del mensaje.
+/// Ya no distingue `sin_password_local` -- `login` resuelve las dos ramas
+/// (local y Supabase Auth) del todo lado del backend, la pantalla de login
+/// ya no necesita saber cuál de las dos corrió. Ver
+/// docs/plan-autenticacion-supabase-auth.md.
 #[derive(serde::Serialize)]
 pub struct ErrorLogin {
     pub mensaje: String,
-    pub sin_password_local: bool,
 }
 
 impl From<AutenticacionError> for ErrorLogin {
     fn from(error: AutenticacionError) -> Self {
-        let sin_password_local = matches!(error, AutenticacionError::SinPasswordLocal);
         Self {
             mensaje: control_acceso::mensajes::mensaje_autenticacion(error),
-            sin_password_local,
         }
     }
+}
+
+impl From<nube::AuthSupabaseError> for ErrorLogin {
+    fn from(error: nube::AuthSupabaseError) -> Self {
+        Self {
+            mensaje: error.to_string(),
+        }
+    }
+}
+
+/// Éxito de `login` -- separado de `UsuarioSesion` (compartido con
+/// TUI/mobile) a propósito, sólo desktop necesita decirle a la pantalla
+/// que fuerce el cambio de contraseña antes de dejar operar. `false`
+/// siempre en la rama local (ROOT del arranque inicial, o cualquier cuenta
+/// que ya tenía password local de antes de esta migración) -- esa
+/// contraseña ya es la real, no una temporal de un solo uso.
+#[derive(serde::Serialize)]
+pub struct ResultadoLogin {
+    pub sesion: UsuarioSesion,
+    pub debe_cambiar_password: bool,
 }
 
 fn intentar_login_local(
@@ -140,7 +156,7 @@ pub async fn login(
     cedula: String,
     password: String,
     app: tauri::AppHandle,
-) -> Result<UsuarioSesion, ErrorLogin> {
+) -> Result<ResultadoLogin, ErrorLogin> {
     let state = app.state::<GuiState>();
 
     let sesion = match intentar_login_local(&state, &cedula, &password) {
@@ -155,6 +171,16 @@ pub async fn login(
             )
             .await;
             intentar_login_local(&state, &cedula, &password)?
+        }
+        // El centinela `SIN_PASSWORD_LOCAL` ya no significa "mostrar el
+        // formulario de alta" -- significa "este usuario global se
+        // autentica contra Supabase Auth, no localmente" (ver
+        // docs/plan-autenticacion-supabase-auth.md). El único camino que
+        // sigue siendo 100% local es el ROOT del arranque inicial
+        // (`crear_root_inicial`), que nunca cae acá porque nace con un
+        // hash real desde el principio.
+        Err(AutenticacionError::SinPasswordLocal) => {
+            return login_supabase(&app, &cedula, &password).await;
         }
         Err(otro) => return Err(otro.into()),
     };
@@ -174,7 +200,6 @@ pub async fn login(
     if matches!(chequeo, Ok(Ok(Ok(false)))) {
         return Err(ErrorLogin {
             mensaje: "Este usuario fue desactivado".to_string(),
-            sin_password_local: false,
         });
     }
 
@@ -195,25 +220,107 @@ pub async fn login(
         .await;
     });
 
-    Ok(sesion)
+    Ok(ResultadoLogin {
+        sesion,
+        debe_cambiar_password: false,
+    })
 }
 
-/// Completa el alta de contraseña de un usuario global que la pantalla de
-/// login detectó vía `ErrorLogin::sin_password_local` -- ver
-/// `AppCore::fijar_password_inicial`. Deja la sesión iniciada directo,
-/// como si hubiera sido un login exitoso (que en los hechos, lo es).
+/// Login contra Supabase Auth (`nube::auth_supabase::login`) -- ver el
+/// comentario de `login` de más arriba y
+/// docs/plan-autenticacion-supabase-auth.md. A diferencia del camino local,
+/// necesita red sí o sí: sin ella, no hay forma de verificar la
+/// contraseña de un usuario que nunca la fijó en este dispositivo, así
+/// que el registro también queda bloqueado hasta que haya conexión (no es
+/// el caso "mejor esfuerzo" de otros chequeos remotos de esta app).
+async fn login_supabase(
+    app: &tauri::AppHandle,
+    cedula: &str,
+    password: &str,
+) -> Result<ResultadoLogin, ErrorLogin> {
+    let state = app.state::<GuiState>();
+    let cedula = cedula.to_string();
+    let password = password.to_string();
+    let cedula_supabase = cedula.clone();
+
+    let sesion_supabase = tauri::async_runtime::spawn_blocking(move || {
+        nube::login(nube::BASE_URL, nube::APIKEY, &cedula_supabase, &password)
+    })
+    .await
+    .map_err(|_| ErrorLogin {
+        mensaje: "No se pudo completar el login".to_string(),
+    })??;
+
+    // La identidad (nombre/rol/activo) ya está local -- llegó por el
+    // catálogo sincronizado (`recibir_catalogo_del_sitio`), Supabase Auth
+    // sólo confirmó que la contraseña era correcta. Si por algún motivo
+    // esta cédula todavía no está en el catálogo local (sitio recién
+    // conectado, o esta persona se dio de alta hace apenas un instante),
+    // se intenta refrescar el catálogo una vez antes de rendirse -- mismo
+    // criterio que la reactivación del camino local, arriba.
+    let intento_identidad = state.core().resolver_identidad_local(&cedula);
+    let identidad = match intento_identidad {
+        Ok(identidad) => identidad,
+        Err(AutenticacionError::CredencialesInvalidas | AutenticacionError::UsuarioInactivo) => {
+            let manejador = app.clone();
+            let _ = tokio::time::timeout(
+                ESPERA_MAXIMA_SYNC_LOGIN,
+                tauri::async_runtime::spawn_blocking(move || {
+                    refrescar_catalogo_sin_sesion(&manejador.state::<GuiState>())
+                }),
+            )
+            .await;
+            state.core().resolver_identidad_local(&cedula)?
+        }
+        Err(otro) => return Err(otro.into()),
+    };
+
+    state.iniciar_sesion(identidad.clone());
+    state.iniciar_sesion_supabase(sesion_supabase.clone());
+
+    let manejador = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let _ = tauri::async_runtime::spawn_blocking(move || {
+            crate::comandos::nube::ejecutar_sincronizacion(&manejador.state::<GuiState>())
+        })
+        .await;
+    });
+
+    Ok(ResultadoLogin {
+        sesion: identidad,
+        debe_cambiar_password: sesion_supabase.debe_cambiar_password,
+    })
+}
+
+/// Cambio de contraseña obligatorio (`debe_cambiar_password` en `true`
+/// tras `login`) o rutinario -- misma llamada, `nube::auth_supabase::cambiar_password`
+/// ya revalida `password_actual` con un login real antes de aceptar la
+/// nueva, no confía en que la sesión siga abierta.
 #[tauri::command]
-pub fn fijar_password_inicial(
-    cedula: String,
-    nueva_password: String,
-    state: tauri::State<GuiState>,
-) -> Result<UsuarioSesion, String> {
-    let sesion = state
-        .core()
-        .fijar_password_inicial(&cedula, &nueva_password)
-        .map_err(control_acceso::mensajes::mensaje_usuario)?;
-    state.iniciar_sesion(sesion.clone());
-    Ok(sesion)
+pub async fn cambiar_password_supabase(
+    password_actual: String,
+    password_nueva: String,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let state = app.state::<GuiState>();
+    let sesion = state.sesion_activa()?;
+    let access_token = state
+        .access_token_supabase_vigente()
+        .ok_or_else(|| "La sesión venció -- iniciá sesión de nuevo".to_string())?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        nube::cambiar_password(
+            nube::BASE_URL,
+            nube::APIKEY,
+            &access_token,
+            &sesion.cedula,
+            &password_actual,
+            &password_nueva,
+        )
+    })
+    .await
+    .map_err(|error| error.to_string())?
+    .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

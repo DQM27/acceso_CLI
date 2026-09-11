@@ -11,41 +11,43 @@ export interface UsuarioSesion {
   rol: RolUsuario;
 }
 
-/// Espejo de `comandos::autenticacion::ErrorLogin` -- distinto de un string
-/// plano para que la pantalla de login pueda mostrar el formulario de
-/// "fijar contraseña" sin comparar el texto exacto del mensaje. `login`
-/// rechaza la promesa con esto (no con un `Error` de JS), ver su uso en
-/// `Login.tsx`.
+/// Espejo de `comandos::autenticacion::ErrorLogin` -- `login` rechaza la
+/// promesa con esto (no con un `Error` de JS), ver su uso en `Login.tsx`.
 export interface ErrorLogin {
   mensaje: string;
-  sin_password_local: boolean;
 }
 
 export function esErrorLogin(error: unknown): error is ErrorLogin {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "sin_password_local" in error &&
-    "mensaje" in error
-  );
+  return typeof error === "object" && error !== null && "mensaje" in error;
+}
+
+/// Espejo de `comandos::autenticacion::ResultadoLogin` --
+/// `debe_cambiar_password` fuerza el paso de cambio de contraseña antes de
+/// dejar operar (usuario global recién creado en el panel, con la
+/// temporal de un solo uso -- ver docs/plan-autenticacion-supabase-auth.md).
+/// Siempre `false` para un login local (ROOT del arranque inicial).
+export interface ResultadoLogin {
+  sesion: UsuarioSesion;
+  debe_cambiar_password: boolean;
 }
 
 export function requiereConfiguracionInicial(): Promise<boolean> {
   return invoke("requiere_configuracion_inicial");
 }
 
-export function login(cedula: string, password: string): Promise<UsuarioSesion> {
+export function login(cedula: string, password: string): Promise<ResultadoLogin> {
   return invoke("login", { cedula, password });
 }
 
-/// Completa el alta de contraseña de un usuario global que `login` marcó
-/// con `sin_password_local` -- deja la sesión iniciada directo, igual que
-/// un login exitoso.
-export function fijarPasswordInicial(
-  cedula: string,
-  nuevaPassword: string,
-): Promise<UsuarioSesion> {
-  return invoke("fijar_password_inicial", { cedula, nuevaPassword });
+/// Cambio de contraseña contra Supabase Auth -- tanto el obligatorio tras
+/// un primer login con temporal (`debe_cambiar_password`) como el
+/// rutinario. Revalida `passwordActual` del lado del backend antes de
+/// aceptar la nueva, no alcanza con tener la sesión abierta.
+export function cambiarPasswordSupabase(
+  passwordActual: string,
+  passwordNueva: string,
+): Promise<void> {
+  return invoke("cambiar_password_supabase", { passwordActual, passwordNueva });
 }
 
 export function cerrarSesion(): Promise<void> {
