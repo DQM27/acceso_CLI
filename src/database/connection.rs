@@ -135,31 +135,39 @@ fn abrir_conexion(path: impl AsRef<Path>, clave: Option<&[u8; 32]>) -> Result<Co
 /// y `secure_delete` sí son por-conexión: una conexión que sólo hace
 /// `Connection::open()` sin repetir esto arranca con los valores por
 /// defecto de `SQLite` (`foreign_keys` OFF, entre otros), no con la
-/// configuración real de la app.
+/// configuración real de la app. `query_only` no lo fija la conexión
+/// principal (necesita poder escribir) -- es específico de esta función,
+/// ver el doc-comment de [`abrir_conexion_secundaria`].
 const PRAGMAS_CONEXION_SECUNDARIA: &str = "
     PRAGMA foreign_keys = ON;
     PRAGMA busy_timeout = 5000;
     PRAGMA synchronous = EXTRA;
     PRAGMA trusted_schema = OFF;
     PRAGMA secure_delete = FAST;
+    PRAGMA query_only = ON;
     ";
 
-/// Abre una conexión adicional al mismo archivo que ya inicializó
-/// [`open_database`]/[`open_database_cifrada`] -- pensada para trabajo en
-/// un hilo aparte (exportar, sincronizar) que no debe competir por el
+/// Abre una conexión adicional de **sólo lectura** al mismo archivo que ya
+/// inicializó [`open_database`]/[`open_database_cifrada`] -- pensada para
+/// trabajo en un hilo aparte (exportar) que no debe competir por el
 /// candado de escritura de la conexión principal
-/// (`docs/pendientes.md` sobre el hilo de exportación en TUI/CLI, mismo
-/// patrón que `GuiState::conexion_secundaria` en escritorio). A diferencia
-/// de `open_database`/`open_database_cifrada`, NO corre
-/// `initialize_database` (la conexión principal ya migró el archivo) ni
-/// vuelve a validarlo -- sólo aplica la clave si corresponde y los mismos
-/// pragmas por-conexión que la principal, para que el comportamiento
-/// (integridad referencial, durabilidad, timeout de lock) sea el mismo en
-/// las dos. `clave` en `None` para una base sin cifrar -- hoy el único caso
-/// real de TUI/CLI, que nunca abren una base cifrada (ver
+/// (`docs/pendientes.md` sobre el hilo de exportación en TUI/CLI).
+/// `PRAGMAS_CONEXION_SECUNDARIA` incluye `PRAGMA query_only = ON`: SQLite
+/// rechaza cualquier escritura en esta conexión, incluso dentro de una
+/// transacción -- si algún llamador futuro necesita escribir (ej. un hilo
+/// de sincronización), no debe usar esta función; ver
+/// `GuiState::conexion_secundaria` en `desktop/src-tauri/src/estado.rs`
+/// para el caso de escritorio, que sí escribe (sincronización con la nube)
+/// y por eso NO reusa esta función ni su pragma de sólo lectura (pendiente
+/// aparte: esa función duplica esta lógica con pragmas incompletos, ver
 /// `docs/auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md`,
-/// hallazgo R-07); se deja el parámetro para no tener que tocar a los
-/// llamadores otra vez si eso cambia.
+/// hallazgo R-07). A diferencia de `open_database`/`open_database_cifrada`,
+/// NO corre `initialize_database` (la conexión principal ya migró el
+/// archivo) ni vuelve a validarlo -- sólo aplica la clave si corresponde y
+/// los mismos pragmas por-conexión que la principal (más `query_only`).
+/// `clave` en `None` para una base sin cifrar -- hoy el único caso real de
+/// TUI/CLI, que nunca abren una base cifrada; se deja el parámetro para no
+/// tener que tocar a los llamadores otra vez si eso cambia.
 pub fn abrir_conexion_secundaria(
     path: impl AsRef<Path>,
     clave: Option<&[u8; 32]>,
