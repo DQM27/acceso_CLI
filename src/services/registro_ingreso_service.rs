@@ -43,6 +43,15 @@ pub struct PreparacionIngreso {
     pub resultado_acceso: ResultadoAcceso,
     pub requiere_gafete: bool,
     pub tiene_ingreso_activo: bool,
+    /// Nombre del sitio donde este contratista tiene un ingreso abierto
+    /// AHORA MISMO, si es otro distinto de este (`docs/pendientes.md`,
+    /// "Chequeo cruzado de ingresos abiertos entre sitios"). Siempre `None`
+    /// acá -- este servicio no toca la red (ver el doc-comment de
+    /// `registrar_entrada`); lo completa la capa de aplicación
+    /// (`comandos/ingresos.rs` en desktop) con un chequeo remoto de mejor
+    /// esfuerzo, nunca bloqueante si no hay conexión: sin red, el registro
+    /// sigue local y el conflicto se detecta después, al sincronizar.
+    pub activo_en_otro_sitio: Option<String>,
     /// Números de gafete que este contratista debe actualmente
     /// (`docs/plan-gafetes.md`) — puramente informativo, no bloquea el
     /// ingreso. `Vec` y no `Option<i64>`: nada impide más de una deuda
@@ -211,6 +220,7 @@ where
             resultado_acceso,
             requiere_gafete,
             tiene_ingreso_activo,
+            activo_en_otro_sitio: None,
             gafetes_deuda,
         })
     }

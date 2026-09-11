@@ -424,12 +424,22 @@ fn byte_index(s: &str, indice_char: usize) -> usize {
         .nth(indice_char)
         .map_or(s.len(), |(i, _)| i)
 }
+// `activo_en_otro_sitio` siempre es `None` acá -- la TUI todavía no tiene
+// el chequeo remoto de mejor esfuerzo que sí tiene desktop
+// (`comandos/ingresos.rs::chequear_activo_en_otro_sitio`), sólo mantiene el
+// mismo criterio de bloqueo por si el campo llega a completarse en el
+// futuro (ver docs/pendientes.md).
 fn puede_continuar(p: &PreparacionIngreso) -> bool {
-    !p.tiene_ingreso_activo && !matches!(p.resultado_acceso, ResultadoAcceso::Denegado(_))
+    !p.tiene_ingreso_activo
+        && p.activo_en_otro_sitio.is_none()
+        && !matches!(p.resultado_acceso, ResultadoAcceso::Denegado(_))
 }
 fn mensaje_bloqueo(p: &PreparacionIngreso) -> String {
     if p.tiene_ingreso_activo {
         return "El contratista ya tiene un ingreso activo.".into();
+    }
+    if let Some(sitio) = &p.activo_en_otro_sitio {
+        return format!("El contratista ya tiene un ingreso activo en {sitio}.");
     }
     match &p.resultado_acceso {
         ResultadoAcceso::Denegado(motivo) => mensaje_motivo_denegacion(motivo),

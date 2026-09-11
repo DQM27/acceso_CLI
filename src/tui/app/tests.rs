@@ -564,6 +564,7 @@ fn escape_raiz_regresa_al_menu_y_estados_internos_se_cierran_primero() {
             resultado_acceso: crate::domain::resultado_acceso::ResultadoAcceso::Permitido,
             requiere_gafete: false,
             tiene_ingreso_activo: false,
+            activo_en_otro_sitio: None,
             gafetes_deuda: Vec::new(),
         },
     ));

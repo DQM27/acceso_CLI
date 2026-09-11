@@ -38,6 +38,13 @@ export interface PreparacionIngreso {
   resultado_acceso: ResultadoAcceso;
   requiere_gafete: boolean;
   tiene_ingreso_activo: boolean;
+  /** Nombre del sitio donde este contratista tiene un ingreso abierto AHORA
+   * MISMO, si es otro distinto de este (`docs/pendientes.md`, "Chequeo
+   * cruzado de ingresos abiertos entre sitios"). Chequeo remoto de mejor
+   * esfuerzo — `null` también cuando no hubo forma de verificar (sin
+   * conexión, tardó demasiado), no sólo cuando de verdad no hay conflicto;
+   * en ese caso el registro sigue local, tal como offline. */
+  activo_en_otro_sitio: string | null;
   /** Números de gafete que este contratista debe actualmente
    * (`docs/plan-gafetes.md`) — puramente informativo, no bloquea el
    * ingreso. */
@@ -81,12 +88,17 @@ export interface ListaIngresosActivosResumen {
 /// decide si deja continuar. La validación real y definitiva la vuelve a
 /// hacer el backend en `registrar_ingreso` de todos modos.
 export function puedeContinuar(p: PreparacionIngreso): boolean {
-  return !p.tiene_ingreso_activo && typeof p.resultado_acceso !== "object";
+  return (
+    !p.tiene_ingreso_activo && p.activo_en_otro_sitio === null && typeof p.resultado_acceso !== "object"
+  );
 }
 
 export function mensajeBloqueo(p: PreparacionIngreso): string {
   if (p.tiene_ingreso_activo) {
     return "El contratista ya tiene un ingreso activo.";
+  }
+  if (p.activo_en_otro_sitio !== null) {
+    return `El contratista ya tiene un ingreso activo en ${p.activo_en_otro_sitio}.`;
   }
   if (typeof p.resultado_acceso === "object") {
     return mensajeMotivoDenegacion(p.resultado_acceso.Denegado);

@@ -92,9 +92,15 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 - [x] **Reportes globales decididos: historial completo en Supabase.** `web/src/api/historial.ts`
   lee la tabla `ingresos` como historial multi-sitio y la migración
   `agrega_auditoria_completa_a_ingresos` agregó el detalle de auditoría que faltaba.
-- [ ] **Chequeo cruzado de ingresos abiertos entre sitios.** Con conexión, bloquear el
-  segundo ingreso abierto del mismo contratista en otro sitio; offline, registrar y
-  alertar luego al sincronizar.
+- [x] **Chequeo cruzado de ingresos abiertos entre sitios (desktop).** Con conexión,
+  bloquea el segundo ingreso abierto del mismo contratista en otro sitio (mejor esfuerzo,
+  tope de 5s, ver `nube::contratista_activo_en_otro_sitio` y
+  `comandos/ingresos.rs::preparar_ingreso`); sin conexión el registro sigue local, sin
+  bloquear al operador -- "alertar luego al sincronizar" (el otro sitio detectando el
+  conflicto retroactivamente) queda sin implementar, es una pieza aparte. TUI y Android
+  todavía no tienen el chequeo remoto -- `PreparacionIngreso::activo_en_otro_sitio` existe
+  en el núcleo y la TUI ya respeta el campo si algún día se completa, pero nadie se lo llena
+  todavía ahí.
 - [x] **Scoping futuro de administradores del panel omitido por ahora.** Hoy estar en
   `administradores_panel` da acceso completo; limitar admins por sitio queda fuera hasta
   que exista un caso real.

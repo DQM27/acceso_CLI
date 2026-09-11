@@ -1319,6 +1319,41 @@ pub fn gafete_ocupado_en_otro_dispositivo(
 }
 
 #[derive(serde::Deserialize)]
+struct SitioEmbebido {
+    nombre: String,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaIngresoActivoOtroSitio {
+    sitios: Option<SitioEmbebido>,
+}
+
+/// `docs/pendientes.md`, "Chequeo cruzado de ingresos abiertos entre
+/// sitios": a diferencia de `gafete_ocupado_en_otro_dispositivo` (mismo
+/// sitio, otro dispositivo), esto excluye el sitio ACTUAL en vez del
+/// dispositivo actual -- lo que se busca es si esta cédula tiene un ingreso
+/// abierto en cualquier OTRA unidad operativa. Devuelve el nombre del sitio
+/// donde está activo (para el mensaje al operador), o `None` si no hay
+/// conflicto. Pensada para llamarse desde `preparar_ingreso`, con el mismo
+/// criterio de "mejor esfuerzo, nunca bloqueante si no hay red" que ya usa
+/// `usuario_sigue_activo_remoto` en el login -- sin conexión, el registro
+/// sigue local (`docs/pendientes.md`: "offline, registrar y alertar luego
+/// al sincronizar").
+pub fn contratista_activo_en_otro_sitio(
+    contexto: &ContextoSincronizacion<'_>,
+    cedula: &str,
+) -> Result<Option<String>, SincronizacionError> {
+    let cliente = cliente_http();
+    let url = format!(
+        "{}/rest/v1/ingresos?contratista_cedula=eq.{cedula}&sitio_id=neq.{}&hora_salida=is.null\
+         &select=sitios(nombre)&limit=1",
+        contexto.base_url, contexto.sitio_id,
+    );
+    let filas: Vec<FilaIngresoActivoOtroSitio> = obtener_json(&cliente, contexto, &url)?;
+    Ok(filas.into_iter().next().and_then(|fila| fila.sitios).map(|sitio| sitio.nombre))
+}
+
+#[derive(serde::Deserialize)]
 struct DispositivoEmbebido {
     tipo: Option<String>,
 }
@@ -3623,6 +3658,50 @@ mod tests {
         let activo = usuario_sigue_activo_remoto(&contexto(&base_url), "ROOT1").unwrap();
 
         assert!(activo);
+    }
+
+    #[test]
+    fn contratista_activo_en_otro_sitio_excluye_el_sitio_actual_en_la_url() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.contains("contratista_cedula=eq.2001"));
+            assert!(pedido.contains("sitio_id=neq.sitio-1"));
+            assert!(pedido.contains("hora_salida=is.null"));
+            let cuerpo = "[{\"sitios\":{\"nombre\":\"Cartago\"}}]";
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        let sitio = contratista_activo_en_otro_sitio(&contexto(&base_url), "2001").unwrap();
+
+        assert_eq!(sitio, Some("Cartago".to_string()));
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn contratista_activo_en_otro_sitio_sin_conflicto_devuelve_none() {
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let sitio = contratista_activo_en_otro_sitio(&contexto(&base_url), "2001").unwrap();
+
+        assert_eq!(sitio, None);
     }
 
     #[test]

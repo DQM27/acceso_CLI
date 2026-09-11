@@ -26,6 +26,7 @@ function preparacion(overrides: Partial<PreparacionIngreso> = {}): PreparacionIn
     resultado_acceso: "Permitido",
     requiere_gafete: false,
     tiene_ingreso_activo: false,
+    activo_en_otro_sitio: null,
     gafetes_deuda: [],
     ...overrides,
   };
@@ -51,6 +52,10 @@ describe("puedeContinuar", () => {
       puedeContinuar(preparacion({ resultado_acceso: { Denegado: "PraindVencido" } })),
     ).toBe(false);
   });
+
+  it("no permite continuar si ya está activo en otro sitio", () => {
+    expect(puedeContinuar(preparacion({ activo_en_otro_sitio: "Cartago" }))).toBe(false);
+  });
 });
 
 describe("mensajeBloqueo", () => {
@@ -69,6 +74,20 @@ describe("mensajeBloqueo", () => {
     expect(
       mensajeBloqueo(preparacion({ resultado_acceso: { Denegado: "PraindVencido" } })),
     ).toBe("Acceso denegado · PRAIND vencido");
+  });
+
+  it("nombra el sitio cuando el conflicto es cruzado", () => {
+    expect(mensajeBloqueo(preparacion({ activo_en_otro_sitio: "Cartago" }))).toBe(
+      "El contratista ya tiene un ingreso activo en Cartago.",
+    );
+  });
+
+  it("prioriza el ingreso activo local sobre el conflicto cruzado", () => {
+    expect(
+      mensajeBloqueo(
+        preparacion({ tiene_ingreso_activo: true, activo_en_otro_sitio: "Cartago" }),
+      ),
+    ).toBe("El contratista ya tiene un ingreso activo.");
   });
 });
 

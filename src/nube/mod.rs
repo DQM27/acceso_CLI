@@ -13,8 +13,8 @@ pub mod sincronizacion;
 pub use cliente::{MetadatosDispositivo, NubeError, TokenDispositivo, autenticar_dispositivo};
 pub use sincronizacion::{
     ContextoSincronizacion, IngresoRemoto, ResumenCatalogo, ResumenDrenado, SincronizacionError,
-    cerrar_ingreso_remoto, contar_fallos_permanentes, drenar_cola,
-    gafete_ocupado_en_otro_dispositivo, recibir_catalogo_del_sitio,
+    cerrar_ingreso_remoto, contar_fallos_permanentes, contratista_activo_en_otro_sitio,
+    drenar_cola, gafete_ocupado_en_otro_dispositivo, recibir_catalogo_del_sitio,
     recibir_cierres_de_ingresos_propios, recibir_citas_del_sitio, recibir_historial_del_sitio,
     recibir_historial_visitas_del_sitio, recibir_ingresos_abiertos, usuario_sigue_activo_remoto,
 };

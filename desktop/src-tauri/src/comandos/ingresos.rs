@@ -1,4 +1,5 @@
 use control_acceso::database::queries::ingresos::FiltroIngresosActivos;
+use control_acceso::domain::resultado_acceso::ResultadoAcceso;
 use control_acceso::mensajes::{
     mensaje_gestion_nube, mensaje_ingreso, mensaje_nube, mensaje_salida, mensaje_sincronizacion,
 };
@@ -7,8 +8,39 @@ use control_acceso::nube;
 use control_acceso::services::registro_ingreso_service::{
     ListaIngresosActivosResumen, PreparacionIngreso, ResultadoRegistroEntrada,
 };
+use tauri::Manager;
 
 use crate::estado::GuiState;
+
+/// Tope para el chequeo cruzado de "¿esta cédula ya está activa en otro
+/// sitio?" (`docs/pendientes.md`) -- mismo criterio de mejor esfuerzo que
+/// `ESPERA_MAXIMA_SYNC_LOGIN` en `comandos/autenticacion.rs`: con conexión
+/// bloquea, sin conexión (o si tarda más de esto) el registro sigue local
+/// sin frenar al operador -- el conflicto, si lo hay, se detecta después al
+/// sincronizar.
+const ESPERA_MAXIMA_CHEQUEO_OTRO_SITIO: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Best-effort: sin secreto de dispositivo guardado no hay con qué
+/// consultar, no bloquea nada. Sólo se llama cuando los chequeos locales de
+/// `preparar_ingreso` ya dejaron pasar (sin sentido gastar una vuelta de
+/// red para algo que de todos modos ya está bloqueado).
+fn chequear_activo_en_otro_sitio(state: &GuiState, cedula: &str) -> Option<String> {
+    let secreto = nube::credenciales::cargar_secreto()?;
+    let token = state.autenticar_con_cache(&secreto).ok()?;
+    if let Some(desfase_ms) = token.desfase_reloj_ms {
+        state.core().actualizar_desfase_reloj(desfase_ms);
+    }
+    let contexto = nube::ContextoSincronizacion {
+        base_url: nube::BASE_URL,
+        apikey: nube::APIKEY,
+        token: &token.access_token,
+        dispositivo_id: &token.dispositivo_id,
+        sitio_id: &token.sitio_id,
+    };
+    nube::contratista_activo_en_otro_sitio(&contexto, cedula)
+        .ok()
+        .flatten()
+}
 
 /// Chequeo en vivo -- no la caché local `ingresos_remotos`, que sólo se
 /// refresca en cada sync y podría estar desactualizada -- de si `numero` ya
@@ -66,16 +98,41 @@ pub fn listar_ingresos_activos(
         .map_err(mensaje_ingreso)
 }
 
+/// Dos chequeos de "ya está adentro", uno local (`tiene_ingreso_activo`,
+/// instantáneo, siempre corre) y uno remoto (`activo_en_otro_sitio`, mejor
+/// esfuerzo, ver `chequear_activo_en_otro_sitio`) -- sólo el segundo
+/// necesita `async`/tope de tiempo, por eso el comando entero lo es (mismo
+/// motivo que `login` en `comandos/autenticacion.rs`).
 #[tauri::command]
-pub fn preparar_ingreso(
+pub async fn preparar_ingreso(
     contratista_id: i64,
-    state: tauri::State<GuiState>,
+    app: tauri::AppHandle,
 ) -> Result<PreparacionIngreso, String> {
+    let state = app.state::<GuiState>();
     state.sesion_activa()?;
-    state
+    let mut preparacion = state
         .core()
         .preparar_ingreso(contratista_id)
-        .map_err(mensaje_ingreso)
+        .map_err(mensaje_ingreso)?;
+
+    if !preparacion.tiene_ingreso_activo
+        && !matches!(preparacion.resultado_acceso, ResultadoAcceso::Denegado(_))
+    {
+        let cedula = preparacion.cedula.clone();
+        let manejador = app.clone();
+        let chequeo = tokio::time::timeout(
+            ESPERA_MAXIMA_CHEQUEO_OTRO_SITIO,
+            tauri::async_runtime::spawn_blocking(move || {
+                chequear_activo_en_otro_sitio(&manejador.state::<GuiState>(), &cedula)
+            }),
+        )
+        .await;
+        if let Ok(Ok(sitio)) = chequeo {
+            preparacion.activo_en_otro_sitio = sitio;
+        }
+    }
+
+    Ok(preparacion)
 }
 
 #[tauri::command]
