@@ -1,10 +1,16 @@
-import { useEffect, useRef } from "react";
+import { startTransition, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 
 /**
  * Las tablas publicadas disparan la recarga vía Postgres Changes, con la
  * sesión y las políticas RLS del panel. El intervalo y la vuelta a una
  * pestaña visible recuperan cambios que ocurrieron sin conexión.
+ *
+ * `recargarRef.current()` corre dentro de `startTransition` (React 19.3):
+ * este refresco "silencioso" puede llegar en cualquier momento mientras el
+ * usuario está filtrando/escribiendo en la pantalla -- sin la transición,
+ * el refetch/rerender que dispara compite en prioridad con eso. Mismo
+ * criterio que `setRefrescarActivos` en `desktop/src/App.tsx`.
  */
 export function useAutoRefresh(recargar: () => void, intervaloMs: number, tablas = "") {
   const recargarRef = useRef(recargar);
@@ -17,7 +23,7 @@ export function useAutoRefresh(recargar: () => void, intervaloMs: number, tablas
       if (!vigente || document.hidden || temporizador) return;
       temporizador = setTimeout(() => {
         temporizador = undefined;
-        if (!document.hidden) recargarRef.current();
+        if (!document.hidden) startTransition(() => recargarRef.current());
       }, 300);
     };
     const canal = tablas ? supabase.channel(`panel:${tablas}:${crypto.randomUUID()}`) : null;
@@ -30,7 +36,7 @@ export function useAutoRefresh(recargar: () => void, intervaloMs: number, tablas
     });
     document.addEventListener("visibilitychange", programar);
     const id = setInterval(() => {
-      if (!document.hidden) recargarRef.current();
+      if (!document.hidden) startTransition(() => recargarRef.current());
     }, intervaloMs);
     return () => {
       vigente = false;
