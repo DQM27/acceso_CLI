@@ -258,6 +258,12 @@ fn procesar_fila_individual(
             enviar_cierre_ingreso(cliente, connection, contexto, &fila.entidad_uuid)
         }
         ("ingreso", _) => enviar_ingreso(cliente, connection, contexto, &fila.entidad_uuid),
+        ("movimiento_visita", "cerrar") => {
+            enviar_cierre_movimiento_visita(cliente, connection, contexto, &fila.entidad_uuid)
+        }
+        ("movimiento_visita", _) => {
+            enviar_movimiento_visita(cliente, connection, contexto, &fila.entidad_uuid)
+        }
         _ => Ok(()),
     };
 
@@ -919,6 +925,133 @@ fn enviar_cierre_ingreso(
     exigir_2xx(respuesta)
 }
 
+/// Movimientos de visita (cola, alta): mismo armazón que `enviar_ingreso`,
+/// pero sin resultado de acceso/PRAIND que mandar. `cita_visitante_id`
+/// local es un `INTEGER` (fila de `cita_visitantes`); lo que viaja al
+/// servidor es su `uuid` (el `id` real allá) -- misma resolución que
+/// `enviar_ingreso` hace con `contratista_id`.
+#[allow(clippy::type_complexity)]
+fn enviar_movimiento_visita(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let (
+        cita_visitante_id_local,
+        gafete_numero,
+        fecha_hora_entrada,
+        usuario_entrada_nombre,
+        visitante_cedula,
+        visitante_nombre,
+        empresa,
+        anfitrion_nombre,
+        motivo,
+    ): (
+        i64,
+        Option<i64>,
+        String,
+        String,
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    ) = connection.query_row(
+        "
+        SELECT cita_visitante_id, gafete_numero, fecha_hora_entrada, usuario_entrada_nombre,
+               visitante_cedula, visitante_nombre, empresa, anfitrion_nombre, motivo
+        FROM movimientos_visita
+        WHERE uuid = ?1
+        ",
+        params![uuid],
+        |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+                row.get(7)?,
+                row.get(8)?,
+            ))
+        },
+    )?;
+    let cita_visitante_uuid: String = connection.query_row(
+        "SELECT uuid FROM cita_visitantes WHERE id = ?1",
+        params![cita_visitante_id_local],
+        |row| row.get(0),
+    )?;
+
+    let cuerpo = json!({
+        "id": uuid,
+        "sitio_id": contexto.sitio_id,
+        "dispositivo_entrada_id": contexto.dispositivo_id,
+        "cita_visitante_id": cita_visitante_uuid,
+        "visitante_cedula": visitante_cedula,
+        "visitante_nombre": visitante_nombre,
+        "empresa": empresa,
+        "anfitrion_nombre": anfitrion_nombre,
+        "motivo": motivo,
+        "gafete_numero": gafete_numero,
+        "hora_entrada": fecha_hora_entrada,
+        "usuario_entrada_nombre": usuario_entrada_nombre,
+    });
+
+    let respuesta = cliente
+        .post(format!("{}/rest/v1/movimientos_visita", contexto.base_url))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Movimientos de visita (cola), cierre: mismo criterio de "primero en
+/// llegar gana" que `enviar_cierre_ingreso` -- el filtro `hora_salida=is.null`
+/// hace que un cierre que llega tarde (el otro dispositivo del sitio ya lo
+/// cerró) no afecte ninguna fila en vez de fallar.
+fn enviar_cierre_movimiento_visita(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let (fecha_hora_salida, usuario_salida_nombre): (Option<String>, Option<String>) = connection
+        .query_row(
+        "SELECT fecha_hora_salida, usuario_salida_nombre FROM movimientos_visita WHERE uuid = ?1",
+        params![uuid],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    let cuerpo = json!({
+        "hora_salida": fecha_hora_salida,
+        "dispositivo_salida_id": contexto.dispositivo_id,
+        "usuario_salida_nombre": usuario_salida_nombre,
+    });
+
+    let url = format!(
+        "{}/rest/v1/movimientos_visita?id=eq.{uuid}&hora_salida=is.null",
+        contexto.base_url
+    );
+
+    let respuesta = cliente
+        .patch(url)
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
 /// Fila cacheada localmente de un ingreso todavía abierto, creado por el
 /// otro dispositivo de este mismo sitio -- ver `ingresos_remotos` en
 /// `database::schema` sobre por qué esto no es una fila de
@@ -961,15 +1094,39 @@ struct FilaCierrePropioRemoto {
 /// que nacieron en esta base local. No usa el repositorio normal de salida:
 /// ese camino siempre encola un cambio nuevo, y acá estamos aplicando un
 /// hecho ya confirmado por el receptor.
+///
+/// El pedido a la nube se acota a lo que localmente sigue abierto
+/// (`registro_ingresos.fecha_hora_salida IS NULL`) -- antes pedía TODO lo
+/// que este dispositivo alguna vez cerró (`dispositivo_entrada_id=eq.<el
+/// mío>&hora_salida=not.is.null`, sin ningún otro filtro), una lista que
+/// sólo crece con la vida entera del dispositivo y se repetía completa cada
+/// ciclo de sync (cada 2 minutos, para siempre) aunque el propio `UPDATE`
+/// de más abajo (`WHERE fecha_hora_salida IS NULL`) ya descartaba en
+/// silencio todo lo que no fuera nuevo. Con nadie abierto ahora mismo (el
+/// caso normal fuera de horas pico) esto ahora ni siquiera pega la llamada.
 pub fn recibir_cierres_de_ingresos_propios(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<u32, SincronizacionError> {
+    let abiertos_localmente: Vec<String> = {
+        let mut statement = connection
+            .prepare("SELECT uuid FROM registro_ingresos WHERE fecha_hora_salida IS NULL")?;
+        statement
+            .query_map([], |row| row.get(0))?
+            .collect::<Result<_, _>>()?
+    };
+    if abiertos_localmente.is_empty() {
+        return Ok(0);
+    }
+
     let cliente = cliente_http();
+    // PostgREST admite `in.(a,b,c)` -- un UUID nunca trae `,`/`)`/espacios,
+    // así que unirlos con coma directo es seguro sin escapar nada.
+    let lista_uuids = abiertos_localmente.join(",");
     let url = format!(
-        "{}/rest/v1/ingresos?sitio_id=eq.{}&dispositivo_entrada_id=eq.{}\
-         &hora_salida=not.is.null&select=id,hora_salida,usuario_salida_nombre",
-        contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
+        "{}/rest/v1/ingresos?id=in.({lista_uuids})&hora_salida=not.is.null\
+         &select=id,hora_salida,usuario_salida_nombre",
+        contexto.base_url,
     );
     let filas: Vec<FilaCierrePropioRemoto> = obtener_json(&cliente, contexto, &url)?;
 
@@ -1391,6 +1548,339 @@ fn marca_historial_para_consulta(
     Some(base - chrono::Duration::days(DIAS_TRASLAPE_HISTORIAL))
 }
 
+#[derive(serde::Deserialize)]
+struct FilaHistorialVisitaRemota {
+    id: String,
+    visitante_cedula: String,
+    visitante_nombre: String,
+    empresa: Option<String>,
+    anfitrion_nombre: Option<String>,
+    motivo: Option<String>,
+    gafete_numero: Option<i64>,
+    hora_entrada: String,
+    hora_salida: Option<String>,
+    usuario_entrada_nombre: Option<String>,
+    usuario_salida_nombre: Option<String>,
+    dispositivo_entrada_id: String,
+    dispositivo_salida_id: Option<String>,
+    updated_at: String,
+}
+
+/// Análogo a `FilaHistorialResultado` (contratistas) -- misma resiliencia:
+/// una fila con fecha ilegible se omite sin abortar el resto del lote.
+enum FilaHistorialVisitaResultado {
+    Omitida,
+    Aplicada {
+        actualizado_en: Option<chrono::DateTime<chrono::Utc>>,
+    },
+}
+
+/// Una sola fila de `recibir_historial_visitas_del_sitio` -- separada sólo
+/// para no pasar el límite de líneas del lint `too_many_lines` de esa
+/// función (mismo corte que usa `aplicar_pagina_historial` para
+/// contratistas: todo el parseo/`INSERT` de una fila, después el resto del
+/// lote).
+fn guardar_fila_historial_visita(
+    transaction: &rusqlite::Transaction<'_>,
+    contexto: &ContextoSincronizacion<'_>,
+    fila: &FilaHistorialVisitaRemota,
+    ahora: &str,
+) -> Result<FilaHistorialVisitaResultado, SincronizacionError> {
+    let Ok(hora_entrada) =
+        crate::tiempo::parsear_utc(&fila.hora_entrada).map(crate::tiempo::serializar_utc)
+    else {
+        return Ok(FilaHistorialVisitaResultado::Omitida);
+    };
+    let hora_salida = match fila
+        .hora_salida
+        .as_deref()
+        .map(crate::tiempo::parsear_utc)
+        .transpose()
+    {
+        Ok(valor) => valor.map(crate::tiempo::serializar_utc),
+        Err(_) => return Ok(FilaHistorialVisitaResultado::Omitida),
+    };
+
+    transaction.execute(
+        "
+        INSERT INTO historial_visitas_sitio (
+            uuid, sitio_id, visitante_cedula, visitante_nombre, empresa,
+            anfitrion_nombre, motivo, gafete_numero, hora_entrada, hora_salida,
+            usuario_entrada_nombre, usuario_salida_nombre, dispositivo_entrada_id,
+            dispositivo_salida_id, actualizado_en
+        ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)
+        ON CONFLICT(uuid) DO UPDATE SET
+            hora_salida = excluded.hora_salida,
+            usuario_salida_nombre = excluded.usuario_salida_nombre,
+            dispositivo_salida_id = excluded.dispositivo_salida_id,
+            actualizado_en = excluded.actualizado_en
+        ",
+        params![
+            fila.id,
+            contexto.sitio_id,
+            fila.visitante_cedula,
+            fila.visitante_nombre,
+            fila.empresa,
+            fila.anfitrion_nombre,
+            fila.motivo,
+            fila.gafete_numero,
+            hora_entrada,
+            hora_salida,
+            fila.usuario_entrada_nombre,
+            fila.usuario_salida_nombre,
+            fila.dispositivo_entrada_id,
+            fila.dispositivo_salida_id,
+            ahora,
+        ],
+    )?;
+
+    Ok(FilaHistorialVisitaResultado::Aplicada {
+        actualizado_en: crate::tiempo::parsear_utc(&fila.updated_at).ok(),
+    })
+}
+
+/// Trae a `historial_visitas_sitio` todo movimiento de visita (abierto o
+/// cerrado) del sitio, de cualquier dispositivo -- mismo mecanismo
+/// incremental que `recibir_historial_del_sitio` (marca de agua propia,
+/// `historial_visitas_actualizado_hasta`, mismo traslape de
+/// `DIAS_TRASLAPE_HISTORIAL` días).
+pub fn recibir_historial_visitas_del_sitio(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<u32, SincronizacionError> {
+    let cliente = cliente_http();
+
+    let marca_anterior: Option<String> = connection.query_row(
+        "SELECT historial_visitas_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let ahora_remoto_seguro = chrono::Utc::now();
+    let marca_consulta =
+        marca_historial_para_consulta(marca_anterior.as_deref(), ahora_remoto_seguro);
+    let filtro_incremental = marca_consulta
+        .as_ref()
+        .map(|marca| format!("&updated_at=gt.{}", crate::tiempo::serializar_utc(*marca)))
+        .unwrap_or_default();
+
+    let url = format!(
+        "{}/rest/v1/movimientos_visita?sitio_id=eq.{}{filtro_incremental}\
+         &select=id,visitante_cedula,visitante_nombre,empresa,anfitrion_nombre,motivo,\
+         gafete_numero,hora_entrada,hora_salida,usuario_entrada_nombre,usuario_salida_nombre,\
+         dispositivo_entrada_id,dispositivo_salida_id,updated_at",
+        contexto.base_url, contexto.sitio_id,
+    );
+    let filas: Vec<FilaHistorialVisitaRemota> = obtener_json_paginado(&cliente, contexto, &url)?;
+
+    let transaction = connection.unchecked_transaction()?;
+    let mut recibidos = 0_u32;
+    let ahora = crate::tiempo::serializar_utc(chrono::Utc::now());
+    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_consulta;
+    for fila in &filas {
+        let FilaHistorialVisitaResultado::Aplicada { actualizado_en } =
+            guardar_fila_historial_visita(&transaction, contexto, fila, &ahora)?
+        else {
+            continue;
+        };
+        recibidos += 1;
+        if let Some(actualizado_en) = actualizado_en
+            && marca_mas_nueva.is_none_or(|marca| actualizado_en > marca)
+        {
+            marca_mas_nueva = Some(actualizado_en);
+        }
+    }
+
+    if let Some(marca) = marca_mas_nueva {
+        transaction.execute(
+            "UPDATE sincronizacion_estado SET historial_visitas_actualizado_hasta = ?1 WHERE id = 1",
+            params![crate::tiempo::serializar_utc(marca)],
+        )?;
+    }
+    transaction.commit()?;
+    Ok(recibidos)
+}
+
+/// Nombre del anfitrión, embebido vía `PostgREST`
+/// (`anfitrion:anfitriones!citas_anfitrion_correo_fkey(nombre)`) -- la
+/// política de `anfitriones` que deja leerlo desde un dispositivo del sitio
+/// vive en la migración `autoriza_lectura_anfitrion_por_dispositivo_del_sitio`.
+/// `Option` porque un embed que RLS filtra vuelve `null`, no un error --
+/// nunca debería pasar dado que esa política ya existe, pero no hay forma
+/// de que el tipo lo garantice.
+#[derive(serde::Deserialize)]
+struct AnfitrionEmbebido {
+    nombre: String,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaCitaVisitanteRemota {
+    id: String,
+    cedula: String,
+    nombre: String,
+    empresa: Option<String>,
+    placa_vehiculo: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaCitaRemota {
+    id: String,
+    motivo: Option<String>,
+    // `date` de Postgres, no `timestamptz` -- PostgREST ya lo manda como
+    // "YYYY-MM-DD" sin hora, mismo formato que espera `citas.fecha_desde`/
+    // `fecha_hasta` local -- a diferencia de `hora_entrada`/`updated_at` en
+    // otras filas remotas, esto no necesita reparsear/reformatear.
+    fecha_desde: String,
+    fecha_hasta: String,
+    /// Texto libre tipo "HH:MM", puramente informativo -- ver el
+    /// doc-comment de `MIGRACION_33` del lado local.
+    hora_estimada: Option<String>,
+    anfitrion_correo: String,
+    anfitrion: Option<AnfitrionEmbebido>,
+    estado: String,
+    updated_at: String,
+    // Embebido en la misma consulta (`cita_visitantes(...)`) -- un solo
+    // viaje de red trae la cita completa con su grupo, en vez de una
+    // consulta aparte por cada una.
+    cita_visitantes: Vec<FilaCitaVisitanteRemota>,
+}
+
+/// Guarda una cita y su grupo de visitantes; devuelve el `updated_at`
+/// parseado si se aplicó, o `None` si se omitió por una fecha ilegible --
+/// mismo criterio de resiliencia que `aplicar_pagina_historial`: una fila mala
+/// no puede abortar la transacción entera y dejar sin citas a un
+/// dispositivo que necesita traerlas todas (recién reinstalado, sin marca
+/// de agua todavía).
+fn guardar_cita_remota(
+    transaction: &rusqlite::Transaction<'_>,
+    fila: &FilaCitaRemota,
+) -> Result<Option<chrono::DateTime<chrono::Utc>>, SincronizacionError> {
+    let Ok(actualizado_en) = crate::tiempo::parsear_utc(&fila.updated_at) else {
+        return Ok(None);
+    };
+
+    let anfitrion_nombre = fila
+        .anfitrion
+        .as_ref()
+        .map_or("—", |anfitrion| anfitrion.nombre.as_str());
+
+    transaction.execute(
+        "
+        INSERT INTO citas (
+            uuid, motivo, fecha_desde, fecha_hasta, hora_estimada, anfitrion_nombre,
+            anfitrion_correo, estado, creado_en
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+        ON CONFLICT(uuid) DO UPDATE SET
+            motivo = excluded.motivo,
+            fecha_desde = excluded.fecha_desde,
+            fecha_hasta = excluded.fecha_hasta,
+            hora_estimada = excluded.hora_estimada,
+            anfitrion_nombre = excluded.anfitrion_nombre,
+            anfitrion_correo = excluded.anfitrion_correo,
+            estado = excluded.estado
+        ",
+        params![
+            fila.id,
+            fila.motivo,
+            fila.fecha_desde,
+            fila.fecha_hasta,
+            fila.hora_estimada,
+            anfitrion_nombre,
+            fila.anfitrion_correo,
+            fila.estado,
+            crate::tiempo::serializar_utc(actualizado_en),
+        ],
+    )?;
+
+    let cita_id_local: i64 = transaction.query_row(
+        "SELECT id FROM citas WHERE uuid = ?1",
+        params![fila.id],
+        |row| row.get(0),
+    )?;
+
+    for visitante in &fila.cita_visitantes {
+        transaction.execute(
+            "
+            INSERT INTO cita_visitantes (uuid, cita_id, cedula, nombre, empresa, placa_vehiculo)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            ON CONFLICT(uuid) DO UPDATE SET
+                cita_id = excluded.cita_id,
+                cedula = excluded.cedula,
+                nombre = excluded.nombre,
+                empresa = excluded.empresa,
+                placa_vehiculo = excluded.placa_vehiculo
+            ",
+            params![
+                visitante.id,
+                cita_id_local,
+                visitante.cedula,
+                visitante.nombre,
+                visitante.empresa,
+                visitante.placa_vehiculo,
+            ],
+        )?;
+    }
+
+    Ok(Some(actualizado_en))
+}
+
+/// Trae a `citas`/`cita_visitantes` las citas que aplican a este sitio --
+/// mismo mecanismo incremental que `recibir_historial_del_sitio`
+/// (`citas_actualizado_hasta`, columna propia, ritmo de sync independiente),
+/// pero sin filtro explícito de `sitio_id` en la URL: a diferencia de
+/// `ingresos`/`gafetes`, una cita no tiene una columna de sitio directa
+/// (vive en `cita_sitios`, el puente muchos-a-muchos) -- la política RLS
+/// "leer citas propias, del sitio, o admin" ya resuelve ese filtro del lado
+/// del servidor, agregarlo acá sería repetir la misma pregunta dos veces.
+pub fn recibir_citas_del_sitio(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<u32, SincronizacionError> {
+    let cliente = cliente_http();
+
+    let marca_anterior: Option<String> = connection.query_row(
+        "SELECT citas_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let filtro_incremental = marca_anterior
+        .as_deref()
+        .map(|marca| format!("&updated_at=gt.{marca}"))
+        .unwrap_or_default();
+
+    let url = format!(
+        "{}/rest/v1/citas?select=id,motivo,fecha_desde,fecha_hasta,hora_estimada,\
+         anfitrion_correo,estado,updated_at,\
+         anfitrion:anfitriones!citas_anfitrion_correo_fkey(nombre),\
+         cita_visitantes(id,cedula,nombre,empresa,placa_vehiculo){filtro_incremental}",
+        contexto.base_url,
+    );
+    let filas: Vec<FilaCitaRemota> = obtener_json_paginado(&cliente, contexto, &url)?;
+
+    let transaction = connection.unchecked_transaction()?;
+    let mut recibidas = 0_u32;
+    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_anterior
+        .as_deref()
+        .and_then(|marca| crate::tiempo::parsear_utc(marca).ok());
+    for fila in &filas {
+        let Some(actualizado_en) = guardar_cita_remota(&transaction, fila)? else {
+            continue;
+        };
+        recibidas += 1;
+        if marca_mas_nueva.is_none_or(|marca| actualizado_en > marca) {
+            marca_mas_nueva = Some(actualizado_en);
+        }
+    }
+
+    if let Some(marca) = marca_mas_nueva {
+        transaction.execute(
+            "UPDATE sincronizacion_estado SET citas_actualizado_hasta = ?1 WHERE id = 1",
+            params![crate::tiempo::serializar_utc(marca)],
+        )?;
+    }
+    transaction.commit()?;
+    Ok(recibidas)
+}
+
 /// Cuántas filas se aplicaron localmente al traer el catálogo del sitio --
 /// para que la pantalla pueda avisar "3 contratistas nuevos" sin devolver
 /// las filas enteras.
@@ -1447,6 +1937,7 @@ struct FilaGafeteRemota {
     estado: String,
     contratista_deudor_id: Option<String>,
     contratista_deudor_nombre: Option<String>,
+    updated_at: String,
 }
 
 /// Trae de la nube las empresas y contratistas de *este mismo sitio* que
@@ -1479,12 +1970,13 @@ struct CatalogoRemotoDescargado {
     marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-/// Trae empresas/contratistas/usuarios (incremental, filtrados por
-/// `marca_anterior`) y gafetes (completo) -- ver los comentarios que tenían
-/// estas mismas consultas en `recibir_catalogo_del_sitio` antes del corte.
+/// Trae empresas/contratistas/usuarios/gafetes, cada uno incremental según
+/// su propia marca -- ver los comentarios que tenían estas mismas consultas
+/// en `recibir_catalogo_del_sitio` antes del corte.
 fn descargar_catalogo_remoto(
     contexto: &ContextoSincronizacion<'_>,
     marca_anterior: Option<&str>,
+    marca_gafetes_anterior: Option<&str>,
 ) -> Result<CatalogoRemotoDescargado, SincronizacionError> {
     let cliente = cliente_http();
     let filtro_incremental = marca_anterior
@@ -1522,26 +2014,35 @@ fn descargar_catalogo_remoto(
             contexto.base_url
         ),
     )?;
-    // El catálogo de gafetes es pequeño y se descarga completo: el cursor
-    // compartido puede ser anterior a la incorporación de gafetes al pull.
-    // También permite reintentar deudores que todavía no se pudieron resolver.
-    // Con `sitio_id=eq...` a diferencia de las tres de arriba -- ver
-    // comentario de `FilaGafeteRemota`.
+    // Incremental con marca PROPIA (`gafetes_actualizado_hasta`, no la misma
+    // `marca_anterior` de arriba) -- antes se descargaba completo cada vez,
+    // justamente para no depender de un cursor compartido que podía ser
+    // anterior a que gafetes se sumara al pull. Una columna propia (nace en
+    // `NULL`) resuelve eso sin ayuda: el primer sync de cualquier
+    // dispositivo siempre baja todo. La otra razón de bajar todo siempre
+    // -- reintentar gafetes PERDIDOS cuyo deudor todavía no resolvía
+    // localmente -- la resuelve `guardar_gafetes`, capando cuánto puede
+    // avanzar esta marca. Con `sitio_id=eq...` a diferencia de las tres de
+    // arriba -- ver comentario de `FilaGafeteRemota`.
+    let filtro_incremental_gafetes = marca_gafetes_anterior
+        .map(|marca| format!("&updated_at=gt.{marca}"))
+        .unwrap_or_default();
     let gafetes: Vec<FilaGafeteRemota> = obtener_json_paginado(
         &cliente,
         contexto,
         &format!(
             "{}/rest/v1/gafetes?sitio_id=eq.{}&select=id,numero,estado,contratista_deudor_id,\
-             contratista_deudor_nombre",
+             contratista_deudor_nombre,updated_at{filtro_incremental_gafetes}",
             contexto.base_url, contexto.sitio_id
         ),
     )?;
 
-    // Máximo `updated_at` real entre las tres tablas incrementales (gafetes
-    // no participa, se descarga completo cada vez -- ver su comentario más
-    // arriba). Sin filas nuevas, la marca no avanza -- preferible repetir la
-    // misma consulta (ya sabemos que no trae nada) a arriesgar perder una
-    // fila por un reloj local desviado.
+    // Máximo `updated_at` real entre empresas/contratistas/usuarios --
+    // gafetes lleva su propia marca por separado (`guardar_gafetes` la
+    // calcula después, capada por lo que haya quedado pendiente de
+    // resolver, ver su doc-comment). Sin filas nuevas, la marca no avanza
+    // -- preferible repetir la misma consulta (ya sabemos que no trae
+    // nada) a arriesgar perder una fila por un reloj local desviado.
     let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> =
         marca_anterior.and_then(|marca| crate::tiempo::parsear_utc(marca).ok());
     for actualizado_en in empresas
@@ -1684,10 +2185,29 @@ fn guardar_usuarios(
     Ok(recibidos)
 }
 
+/// Devuelve cuántos gafetes se guardaron y hasta qué `updated_at` es seguro
+/// avanzar `gafetes_actualizado_hasta` -- las dos cosas separadas porque no
+/// necesariamente coinciden: un gafete PERDIDO cuyo deudor todavía no
+/// resuelve localmente NO se guarda (violaría el `CHECK` de la tabla,
+/// `estado = 'PERDIDO' AND contratista_deudor_id IS NOT NULL`), pero tiene
+/// que seguir pidiéndose en el próximo sync hasta que resuelva -- si la
+/// marca avanzara igual hasta su `updated_at`, ese gafete quedaría afuera
+/// del filtro incremental (`updated_at=gt.marca`) para siempre y nunca más
+/// se sabría de su deuda. Mientras quede alguno pendiente, la marca
+/// simplemente no avanza nada este ciclo (`None`, el llamador deja
+/// `gafetes_actualizado_hasta` como estaba) -- todo lo demás sí se guarda
+/// igual (no tiene sentido demorar gafetes que sí resuelven sólo porque
+/// otro, sin relación, sigue pendiente), sólo la marca de agua espera. Es
+/// una regla deliberadamente conservadora (podría, en teoría, avanzar
+/// parcialmente hasta el más viejo de los pendientes) a cambio de quedar
+/// simple y obviamente correcta -- con un catálogo de gafetes chico
+/// (acotado al físico de un sitio, no crece con la cantidad de
+/// contratistas) el costo de repetir la consulta un ciclo más mientras algo
+/// sigue pendiente es insignificante.
 fn guardar_gafetes(
     transaction: &rusqlite::Transaction<'_>,
     gafetes: &[FilaGafeteRemota],
-) -> Result<u32, SincronizacionError> {
+) -> Result<(u32, Option<chrono::DateTime<chrono::Utc>>), SincronizacionError> {
     // Mismo motivo que `indice_empresas` en `guardar_contratistas`: un solo
     // `SELECT` de todos los contratistas locales antes del lote, en vez de
     // hasta dos por cada gafete PERDIDO (`resolver_contratista_local`
@@ -1696,18 +2216,24 @@ fn guardar_gafetes(
     // `contratistas`, así que el índice se mantiene válido todo el lote.
     let indice_contratistas = indexar_contratistas(transaction)?;
 
-    let mut recibidos = 0;
+    let mut recibidos = 0_u32;
+    let mut marca_maxima_aplicada: Option<chrono::DateTime<chrono::Utc>> = None;
+    let mut quedo_pendiente = false;
     for gafete in gafetes {
+        let actualizado_en = crate::tiempo::parsear_utc(&gafete.updated_at)
+            .map_err(|_| SincronizacionError::FechaInvalida(gafete.updated_at.clone()))?;
+
         // Un gafete PERDIDO sin deudor resoluble localmente violaría el
-        // `CHECK` de la tabla (`estado = 'PERDIDO' AND contratista_deudor_id
-        // IS NOT NULL`) -- se salta por ahora, mismo criterio que un
+        // `CHECK` de la tabla -- se salta por ahora, mismo criterio que un
         // contratista remoto incompleto: se autorresuelve solo en un sync
-        // posterior, en cuanto ese contratista también llegue acá.
+        // posterior, en cuanto ese contratista también llegue acá (ver el
+        // doc-comment de la función sobre `quedo_pendiente`).
         let deudor_id_local = if gafete.estado == "PERDIDO" {
             let Some(id) = indice_contratistas.resolver(
                 gafete.contratista_deudor_id.as_deref(),
                 gafete.contratista_deudor_nombre.as_deref(),
             ) else {
+                quedo_pendiente = true;
                 continue;
             };
             Some(id)
@@ -1727,8 +2253,17 @@ fn guardar_gafetes(
             params![gafete.numero, gafete.estado, deudor_id_local, gafete.id],
         )?;
         recibidos += 1;
+        if marca_maxima_aplicada.is_none_or(|marca| actualizado_en > marca) {
+            marca_maxima_aplicada = Some(actualizado_en);
+        }
     }
-    Ok(recibidos)
+
+    let marca_segura = if quedo_pendiente {
+        None
+    } else {
+        marca_maxima_aplicada
+    };
+    Ok((recibidos, marca_segura))
 }
 
 pub fn recibir_catalogo_del_sitio(
@@ -1750,19 +2285,46 @@ pub fn recibir_catalogo_del_sitio(
         [],
         |row| row.get(0),
     )?;
-    let descarga = descargar_catalogo_remoto(contexto, marca_anterior.as_deref())?;
+    // Marca propia de gafetes (MIGRACION_27) -- ver el doc-comment de
+    // `guardar_gafetes` sobre por qué no comparte `marca_anterior`.
+    let marca_gafetes_anterior: Option<String> = connection.query_row(
+        "SELECT gafetes_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let descarga = descargar_catalogo_remoto(
+        contexto,
+        marca_anterior.as_deref(),
+        marca_gafetes_anterior.as_deref(),
+    )?;
 
     let transaction = connection.unchecked_transaction()?;
+    // Orden explícito (no evaluación implícita de un literal de struct):
+    // `guardar_contratistas` necesita que `guardar_empresas` ya haya
+    // corrido (resuelve `empresa_id` local), y `guardar_gafetes` necesita
+    // que `guardar_contratistas` ya haya corrido (resuelve
+    // `contratista_deudor_id` local) -- ver sus propios comentarios.
+    let empresas_recibidas = guardar_empresas(&transaction, &descarga.empresas)?;
+    let contratistas_recibidos = guardar_contratistas(&transaction, &descarga.contratistas)?;
+    let usuarios_recibidos = guardar_usuarios(&transaction, &descarga.usuarios)?;
+    let (gafetes_recibidos, marca_gafetes_nueva) =
+        guardar_gafetes(&transaction, &descarga.gafetes)?;
     let resumen = ResumenCatalogo {
-        empresas_recibidas: guardar_empresas(&transaction, &descarga.empresas)?,
-        contratistas_recibidos: guardar_contratistas(&transaction, &descarga.contratistas)?,
-        usuarios_recibidos: guardar_usuarios(&transaction, &descarga.usuarios)?,
-        gafetes_recibidos: guardar_gafetes(&transaction, &descarga.gafetes)?,
+        empresas_recibidas,
+        contratistas_recibidos,
+        usuarios_recibidos,
+        gafetes_recibidos,
     };
 
     if let Some(marca) = descarga.marca_mas_nueva {
         transaction.execute(
             "UPDATE sincronizacion_estado SET catalogo_actualizado_hasta = ?1 WHERE id = 1",
+            params![crate::tiempo::serializar_utc(marca)],
+        )?;
+    }
+    if let Some(marca) = marca_gafetes_nueva {
+        transaction.execute(
+            "UPDATE sincronizacion_estado SET gafetes_actualizado_hasta = ?1 WHERE id = 1",
             params![crate::tiempo::serializar_utc(marca)],
         )?;
     }
@@ -2314,6 +2876,146 @@ mod tests {
         assert_eq!(contar_fallos_permanentes(&connection).unwrap(), 1);
     }
 
+    /// Cita + visitante + movimiento de visita completo (con snapshot),
+    /// listo para encolar -- devuelve el `uuid` del movimiento.
+    fn conexion_con_movimiento_de_visita(fecha_hora_salida: Option<&str>) -> (Connection, String) {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo)
+                 VALUES ('1', 'Guardia', 'h', 'OPERADOR', 1)",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO citas (uuid, fecha_desde, fecha_hasta, anfitrion_nombre,
+                    anfitrion_correo, estado, creado_en)
+                 VALUES ('uuid-cita', '2026-01-01', '2026-01-02', 'Anfitrión',
+                    'anfitrion@ejemplo.com', 'VIGENTE', '2026-01-01T00:00:00Z')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cita_visitantes (uuid, cita_id, cedula, nombre)
+                 VALUES ('uuid-visitante', 1, '1-2345', 'Persona Visitante')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO movimientos_visita (
+                    uuid, cita_visitante_id, gafete_numero, fecha_hora_entrada,
+                    fecha_hora_salida, usuario_entrada_id, usuario_entrada_nombre,
+                    visitante_cedula, visitante_nombre, empresa, anfitrion_nombre, motivo
+                ) VALUES (
+                    'uuid-movimiento', 1, 12, '2026-01-01T08:00:00Z',
+                    ?1, 1, 'Guardia',
+                    '1-2345', 'Persona Visitante', 'Brisas', 'Anfitrión', 'Auditoría'
+                )",
+                params![fecha_hora_salida],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, creado_en, actualizado_en
+                ) VALUES (
+                    'movimiento_visita', 'uuid-movimiento', ?1,
+                    '2026-01-01T08:00:00Z', '2026-01-01T08:00:00Z'
+                )",
+                params![if fecha_hora_salida.is_some() {
+                    "cerrar"
+                } else {
+                    "crear"
+                }],
+            )
+            .unwrap();
+        (connection, "uuid-movimiento".to_string())
+    }
+
+    #[test]
+    fn envia_la_apertura_de_un_movimiento_de_visita() {
+        let (connection, _) = conexion_con_movimiento_de_visita(None);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.starts_with("POST /rest/v1/movimientos_visita "));
+            let cuerpo = "[]";
+            write!(
+                socket,
+                "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn envia_el_cierre_de_un_movimiento_de_visita() {
+        let (connection, _) = conexion_con_movimiento_de_visita(Some("2026-01-01T09:00:00Z"));
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.starts_with(
+                "PATCH /rest/v1/movimientos_visita?id=eq.uuid-movimiento&hora_salida=is.null "
+            ));
+            write!(
+                socket,
+                "HTTP/1.1 204 No Content\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
+            )
+            .unwrap();
+        });
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        servidor.join().unwrap();
+    }
+
     #[test]
     fn envia_la_apertura_de_un_ingreso() {
         let (connection, contratista_uuid) = conexion_con_contratista();
@@ -2608,6 +3310,295 @@ mod tests {
     }
 
     #[test]
+    fn recibe_una_cita_con_su_grupo_de_visitantes_y_el_nombre_del_anfitrion_embebido() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"cita-1\",\"motivo\":\"Auditoría\",\
+             \"fecha_desde\":\"2026-09-10\",\"fecha_hasta\":\"2026-09-12\",\
+             \"anfitrion_correo\":\"kof@brisas.com\",\
+             \"anfitrion\":{\"nombre\":\"Persona Anfitriona\"},\
+             \"estado\":\"VIGENTE\",\"updated_at\":\"2026-09-09T08:00:00Z\",\
+             \"cita_visitantes\":[\
+             {\"id\":\"visitante-1\",\"cedula\":\"1-1111\",\"nombre\":\"Visitante Uno\",\
+             \"empresa\":null,\"placa_vehiculo\":null}]}]",
+        );
+
+        let recibidas = recibir_citas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(recibidas, 1);
+        let (anfitrion_nombre, estado): (String, String) = connection
+            .query_row(
+                "SELECT anfitrion_nombre, estado FROM citas WHERE uuid = 'cita-1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(anfitrion_nombre, "Persona Anfitriona");
+        assert_eq!(estado, "VIGENTE");
+        let cedula: String = connection
+            .query_row(
+                "SELECT cedula FROM cita_visitantes WHERE uuid = 'visitante-1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(cedula, "1-1111");
+    }
+
+    #[test]
+    fn recibe_la_hora_estimada_de_una_cita_y_la_admite_ausente() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"cita-hora\",\"motivo\":null,\
+             \"fecha_desde\":\"2026-09-10\",\"fecha_hasta\":\"2026-09-10\",\
+             \"hora_estimada\":\"10:00:00\",\
+             \"anfitrion_correo\":\"kof@brisas.com\",\"anfitrion\":null,\
+             \"estado\":\"VIGENTE\",\"updated_at\":\"2026-09-09T08:00:00Z\",\
+             \"cita_visitantes\":[]},\
+             {\"id\":\"cita-sin-hora\",\"motivo\":null,\
+             \"fecha_desde\":\"2026-09-10\",\"fecha_hasta\":\"2026-09-10\",\
+             \"anfitrion_correo\":\"kof@brisas.com\",\"anfitrion\":null,\
+             \"estado\":\"VIGENTE\",\"updated_at\":\"2026-09-09T08:00:01Z\",\
+             \"cita_visitantes\":[]}]",
+        );
+
+        let recibidas = recibir_citas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(recibidas, 2);
+        let hora_estimada: Option<String> = connection
+            .query_row(
+                "SELECT hora_estimada FROM citas WHERE uuid = 'cita-hora'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(hora_estimada.as_deref(), Some("10:00:00"));
+        let sin_hora: Option<String> = connection
+            .query_row(
+                "SELECT hora_estimada FROM citas WHERE uuid = 'cita-sin-hora'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            sin_hora, None,
+            "campo ausente en el JSON no debe fallar, sólo queda NULL"
+        );
+    }
+
+    #[test]
+    fn recibe_cita_sin_anfitrion_embebido_no_falla() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"cita-2\",\"motivo\":null,\
+             \"fecha_desde\":\"2026-09-10\",\"fecha_hasta\":\"2026-09-10\",\
+             \"anfitrion_correo\":\"kof@brisas.com\",\"anfitrion\":null,\
+             \"estado\":\"VIGENTE\",\"updated_at\":\"2026-09-09T08:00:00Z\",\
+             \"cita_visitantes\":[]}]",
+        );
+
+        let recibidas = recibir_citas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(recibidas, 1);
+        let anfitrion_nombre: String = connection
+            .query_row(
+                "SELECT anfitrion_nombre FROM citas WHERE uuid = 'cita-2'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            anfitrion_nombre, "—",
+            "sin embed (RLS lo filtró o no aplica), queda un placeholder en vez de fallar"
+        );
+    }
+
+    #[test]
+    fn una_fila_de_cita_con_fecha_ilegible_se_omite_sin_abortar_las_demas() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"cita-mala\",\"motivo\":null,\
+             \"fecha_desde\":\"2026-09-10\",\"fecha_hasta\":\"2026-09-10\",\
+             \"anfitrion_correo\":\"kof@brisas.com\",\"anfitrion\":null,\
+             \"estado\":\"VIGENTE\",\"updated_at\":\"no-es-una-fecha\",\
+             \"cita_visitantes\":[]},\
+             {\"id\":\"cita-buena\",\"motivo\":null,\
+             \"fecha_desde\":\"2026-09-10\",\"fecha_hasta\":\"2026-09-10\",\
+             \"anfitrion_correo\":\"kof@brisas.com\",\"anfitrion\":null,\
+             \"estado\":\"VIGENTE\",\"updated_at\":\"2026-09-09T08:00:00Z\",\
+             \"cita_visitantes\":[]}]",
+        );
+
+        let recibidas = recibir_citas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(recibidas, 1, "la fila con updated_at ilegible no cuenta");
+        let total: i64 = connection
+            .query_row("SELECT COUNT(*) FROM citas", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(total, 1, "solo se guardó la fila válida");
+    }
+
+    #[test]
+    fn segunda_sincronizacion_de_citas_pide_solo_lo_actualizado_desde_la_marca_previa() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "UPDATE sincronizacion_estado SET citas_actualizado_hasta = '2026-09-09T08:00:00Z' WHERE id = 1",
+                [],
+            )
+            .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(
+                pedido.contains("updated_at=gt.2026-09-09T08%3A00%3A00Z")
+                    || pedido.contains("updated_at=gt.2026-09-09T08:00:00Z")
+            );
+            assert!(
+                !pedido.contains("sitio_id="),
+                "sin filtro explícito de sitio -- RLS ya lo resuelve del lado del servidor"
+            );
+            let cuerpo = "[]";
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        recibir_citas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn recibe_el_historial_de_visitas_del_sitio_y_lo_guarda_local() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"mov-visita-1\",\"visitante_cedula\":\"1-1111\",\
+             \"visitante_nombre\":\"Visitante Remoto\",\"empresa\":\"Brisas\",\
+             \"anfitrion_nombre\":\"Anfitrión\",\"motivo\":\"Auditoría\",\
+             \"gafete_numero\":9,\"hora_entrada\":\"2026-01-01T08:00:00Z\",\
+             \"hora_salida\":null,\"usuario_entrada_nombre\":\"Guardia\",\
+             \"usuario_salida_nombre\":null,\"dispositivo_entrada_id\":\"otro-dispositivo\",\
+             \"dispositivo_salida_id\":null,\"updated_at\":\"2026-01-01T08:00:05Z\"}]",
+        );
+
+        let recibidos =
+            recibir_historial_visitas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(recibidos, 1);
+        let (cedula, nombre, empresa, anfitrion): (String, String, Option<String>, Option<String>) =
+            connection
+                .query_row(
+                    "SELECT visitante_cedula, visitante_nombre, empresa, anfitrion_nombre
+                 FROM historial_visitas_sitio WHERE uuid = 'mov-visita-1'",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                )
+                .unwrap();
+        assert_eq!(cedula, "1-1111");
+        assert_eq!(nombre, "Visitante Remoto");
+        assert_eq!(empresa.as_deref(), Some("Brisas"));
+        assert_eq!(anfitrion.as_deref(), Some("Anfitrión"));
+    }
+
+    #[test]
+    fn una_fila_de_historial_de_visitas_con_fecha_ilegible_se_omite_sin_abortar_las_demas() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"mov-mala\",\"visitante_cedula\":\"1-1111\",\"visitante_nombre\":\"X\",\
+             \"empresa\":null,\"anfitrion_nombre\":null,\"motivo\":null,\"gafete_numero\":null,\
+             \"hora_entrada\":\"no-es-una-fecha\",\"hora_salida\":null,\
+             \"usuario_entrada_nombre\":null,\"usuario_salida_nombre\":null,\
+             \"dispositivo_entrada_id\":\"otro-dispositivo\",\"dispositivo_salida_id\":null,\
+             \"updated_at\":\"2026-01-01T08:00:00Z\"},\
+             {\"id\":\"mov-buena\",\"visitante_cedula\":\"1-2222\",\"visitante_nombre\":\"Y\",\
+             \"empresa\":null,\"anfitrion_nombre\":null,\"motivo\":null,\"gafete_numero\":null,\
+             \"hora_entrada\":\"2026-01-01T08:00:00Z\",\"hora_salida\":null,\
+             \"usuario_entrada_nombre\":null,\"usuario_salida_nombre\":null,\
+             \"dispositivo_entrada_id\":\"otro-dispositivo\",\"dispositivo_salida_id\":null,\
+             \"updated_at\":\"2026-01-01T08:00:05Z\"}]",
+        );
+
+        let recibidos =
+            recibir_historial_visitas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(recibidos, 1, "la fila con hora_entrada ilegible no cuenta");
+        let total: i64 = connection
+            .query_row("SELECT COUNT(*) FROM historial_visitas_sitio", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(total, 1, "solo se guardó la fila válida");
+    }
+
+    #[test]
+    fn segunda_sincronizacion_de_historial_de_visitas_pide_solo_lo_actualizado_desde_la_marca_previa()
+     {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "UPDATE sincronizacion_estado SET historial_visitas_actualizado_hasta = '2026-09-09T08:00:00Z' WHERE id = 1",
+                [],
+            )
+            .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.contains("/movimientos_visita?sitio_id=eq.sitio-1"));
+            let cuerpo = "[]";
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        recibir_historial_visitas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+        servidor.join().unwrap();
+    }
+
+    #[test]
     fn usuario_sigue_activo_remoto_lee_el_booleano_de_una_sola_fila() {
         let base_url = servidor_de_una_respuesta(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
@@ -2694,6 +3685,20 @@ mod tests {
             )
             .unwrap();
         assert_eq!(reencolados, 0);
+    }
+
+    #[test]
+    fn sin_nada_abierto_localmente_no_llama_a_la_nube() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        // Base vacía -- ni una fila en `registro_ingresos`. Puerto sin nada
+        // escuchando: si la función igual intentara pegarle a la red, esto
+        // fallaría con un error de conexión en vez de devolver `Ok(0)`.
+        let contexto = contexto("http://127.0.0.1:1");
+
+        let aplicados = recibir_cierres_de_ingresos_propios(&connection, &contexto).unwrap();
+
+        assert_eq!(aplicados, 0);
     }
 
     #[test]
@@ -2786,6 +3791,95 @@ mod tests {
         assert_eq!(cacheados, 0);
     }
 
+    fn fila_gafete(
+        id: &str,
+        numero: i64,
+        estado: &str,
+        deudor_id: Option<&str>,
+        actualizado: &str,
+    ) -> FilaGafeteRemota {
+        FilaGafeteRemota {
+            id: id.to_string(),
+            numero,
+            estado: estado.to_string(),
+            contratista_deudor_id: deudor_id.map(str::to_string),
+            contratista_deudor_nombre: None,
+            updated_at: actualizado.to_string(),
+        }
+    }
+
+    #[test]
+    fn guardar_gafetes_marca_de_agua_avanza_al_mas_nuevo_cuando_nada_queda_pendiente() {
+        let (connection, uuid_contratista) = conexion_con_contratista();
+        let transaction = connection.unchecked_transaction().unwrap();
+        let gafetes = vec![
+            fila_gafete("g1", 1, "DISPONIBLE", None, "2026-01-01T00:00:00Z"),
+            fila_gafete(
+                "g2",
+                2,
+                "PERDIDO",
+                Some(&uuid_contratista),
+                "2026-01-02T00:00:00Z",
+            ),
+        ];
+
+        let (recibidos, marca) = guardar_gafetes(&transaction, &gafetes).unwrap();
+
+        assert_eq!(recibidos, 2);
+        assert_eq!(
+            marca.map(crate::tiempo::serializar_utc).as_deref(),
+            Some("2026-01-02T00:00:00Z")
+        );
+    }
+
+    #[test]
+    fn guardar_gafetes_perdido_sin_deudor_resoluble_se_omite_y_no_avanza_la_marca() {
+        let (connection, uuid_contratista) = conexion_con_contratista();
+        let transaction = connection.unchecked_transaction().unwrap();
+        let gafetes = vec![
+            // Este sí resuelve y se guarda -- pero no debe hacer avanzar la
+            // marca, porque el de abajo (más nuevo) se queda pendiente.
+            fila_gafete(
+                "g1",
+                1,
+                "PERDIDO",
+                Some(&uuid_contratista),
+                "2026-01-01T00:00:00Z",
+            ),
+            // Deudor que no existe localmente todavía -- se salta (violaría
+            // el CHECK de la tabla) en vez de fallar toda la sincronización.
+            fila_gafete(
+                "g2",
+                2,
+                "PERDIDO",
+                Some("uuid-contratista-que-no-llego-todavia"),
+                "2026-01-02T00:00:00Z",
+            ),
+        ];
+
+        let (recibidos, marca) = guardar_gafetes(&transaction, &gafetes).unwrap();
+
+        // g1 se guardó (violaría el CHECK si no) pero la marca de agua no
+        // avanza nada este ciclo -- si avanzara hasta el `updated_at` de g1
+        // (o más), el próximo sync (`updated_at=gt.marca`) ya no volvería a
+        // pedir g2, y su deuda quedaría sin resolver para siempre aunque el
+        // contratista faltante llegue después.
+        assert_eq!(recibidos, 1);
+        let guardado: i64 = transaction
+            .query_row("SELECT COUNT(*) FROM gafetes WHERE numero = 1", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(guardado, 1);
+        let pendiente: i64 = transaction
+            .query_row("SELECT COUNT(*) FROM gafetes WHERE numero = 2", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(pendiente, 0);
+        assert_eq!(marca, None);
+    }
+
     #[test]
     fn recibe_estado_de_gafete_desde_nube_aunque_el_cursor_local_ya_exista() {
         let (connection, _) = conexion_con_contratista();
@@ -2816,11 +3910,17 @@ mod tests {
                 let cuerpo = if paso == 3 {
                     let pedido = String::from_utf8(pedido).unwrap();
                     assert!(pedido.contains("/gafetes?sitio_id=eq.sitio-1"));
+                    // `updated_at` viaja en el `select=` (se necesita para la
+                    // marca propia de gafetes), pero acá lo que importa es
+                    // que NO haya filtro `updated_at=gt.` -- `gafetes_actualizado_hasta`
+                    // nunca se tocó en este test (sólo `catalogo_actualizado_hasta`,
+                    // la de arriba), así que su propio cursor sigue en NULL y
+                    // pide todo, sin importar qué tan adelantado esté el otro.
                     assert!(
-                        !pedido.contains("updated_at"),
-                        "el cursor no debe omitir gafetes antiguos"
+                        !pedido.contains("updated_at=gt."),
+                        "el cursor de gafetes no debe heredar el de catálogo"
                     );
-                    r#"[{"id":"gafete-remoto","numero":26,"estado":"PERDIDO","contratista_deudor_id":"uuid-contratista","contratista_deudor_nombre":null}]"#
+                    r#"[{"id":"gafete-remoto","numero":26,"estado":"PERDIDO","contratista_deudor_id":"uuid-contratista","contratista_deudor_nombre":null,"updated_at":"2026-01-01T00:00:00Z"}]"#
                 } else {
                     "[]"
                 };
@@ -2838,6 +3938,63 @@ mod tests {
             )
             .unwrap();
         assert_eq!(estado, ("PERDIDO".to_string(), 1));
+    }
+
+    #[test]
+    fn segundo_sync_de_catalogo_pide_gafetes_con_su_propia_marca_guardada() {
+        let (connection, _) = conexion_con_contratista();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            // Dos syncs completos = 8 pedidos (empresas/contratistas/
+            // usuarios/gafetes, dos veces). Sólo el de gafetes trae algo,
+            // para que la marca de agua realmente tenga algo que guardar.
+            for paso in 0..8 {
+                let (mut socket, _) = listener.accept().unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                let mut pedido = Vec::new();
+                let mut buffer = [0; 4096];
+                while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                    let leidos = socket.read(&mut buffer).unwrap();
+                    assert!(leidos > 0);
+                    pedido.extend_from_slice(&buffer[..leidos]);
+                }
+                let cuerpo = if paso == 3 {
+                    let pedido = String::from_utf8(pedido).unwrap();
+                    assert!(
+                        !pedido.contains("updated_at=gt."),
+                        "primer sync: sin marca todavía, tiene que pedir todo"
+                    );
+                    r#"[{"id":"gafete-remoto","numero":26,"estado":"DISPONIBLE","contratista_deudor_id":null,"contratista_deudor_nombre":null,"updated_at":"2026-01-05T00:00:00Z"}]"#
+                } else if paso == 7 {
+                    let pedido = String::from_utf8(pedido).unwrap();
+                    assert!(
+                        pedido.contains("updated_at=gt.2026-01-05T00%3A00%3A00Z")
+                            || pedido.contains("updated_at=gt.2026-01-05T00:00:00Z"),
+                        "segundo sync: tiene que arrastrar la marca que dejó el primero -- pedido real: {pedido}"
+                    );
+                    "[]"
+                } else {
+                    "[]"
+                };
+                write!(socket, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}", cuerpo.len()).unwrap();
+            }
+        });
+
+        recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+        let marca_guardada: Option<String> = connection
+            .query_row(
+                "SELECT gafetes_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(marca_guardada.as_deref(), Some("2026-01-05T00:00:00Z"));
+
+        recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+        servidor.join().unwrap();
     }
 
     #[test]

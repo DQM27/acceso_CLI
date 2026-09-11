@@ -481,3 +481,56 @@ input {
   --border-radius: var(--radio-chico) !important;
   font-family: inherit !important;
 }
+
+/* FullCalendar (Visitas → Agenda, ver componentes/AgendaCalendario.tsx) --
+   v6 inyecta su propio CSS por JS al montar, sin hoja de estilos que
+   importar; esto pisa sus variables (`--fc-*`, documentadas oficialmente
+   como el punto de enganche para temas) y algunos selectores puntuales que
+   esas variables no cubren, para que quede con la misma paleta que el
+   resto de la app en vez de su celeste por defecto. */
+.agenda-calendario .fc {
+  --fc-border-color: var(--borde);
+  --fc-page-bg-color: var(--panel);
+  --fc-neutral-bg-color: var(--campo-fondo);
+  --fc-list-event-hover-bg-color: var(--campo-fondo);
+  --fc-today-bg-color: var(--acento-suave);
+  --fc-event-bg-color: var(--acento);
+  --fc-event-border-color: var(--acento);
+  --fc-event-text-color: var(--sobre-acento);
+  --fc-button-bg-color: var(--panel);
+  --fc-button-border-color: var(--borde);
+  --fc-button-text-color: var(--texto);
+  --fc-button-hover-bg-color: var(--campo-fondo);
+  --fc-button-hover-border-color: var(--borde-fuerte);
+  --fc-button-active-bg-color: var(--acento);
+  --fc-button-active-border-color: var(--acento);
+  color: var(--texto);
+}
+.agenda-calendario .fc-toolbar-title {
+  color: var(--texto);
+  font-size: var(--fuente-titulo);
+}
+.agenda-calendario .fc-col-header-cell-cushion,
+.agenda-calendario .fc-daygrid-day-number,
+.agenda-calendario .fc-list-day-text,
+.agenda-calendario .fc-list-day-side-text {
+  color: var(--texto);
+}
+.agenda-calendario .fc-day-other .fc-daygrid-day-number {
+  color: var(--muted);
+}
+.agenda-calendario .fc-button {
+  text-transform: none;
+  box-shadow: none !important;
+}
+.agenda-calendario .fc-list-empty {
+  background: var(--panel);
+  color: var(--muted);
+}
+.agenda-calendario .agenda-evento-cancelada {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.agenda-calendario .agenda-evento-etiqueta {
+  padding: 0 0.2rem;
+}

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "./tiempo";
+import {
+  fechaHaceMeses,
+  fechaLocalYMD,
+  inicioDiaCostaRicaUtc,
+  inicioDiaSiguienteCostaRicaUtc,
+  textoFechaDDMMYYYY,
+  textoHora,
+} from "./tiempo";
 
 // Mismo test, mismos casos, que desktop/src/tiempo.test.ts -- este archivo
 // es una copia textual de ese original (ver el doc-comment de tiempo.ts)
@@ -38,6 +45,28 @@ describe("textoFechaDDMMYYYY", () => {
 
   it("con padding de un solo dígito (mes/día de un dígito ya vienen paddeados)", () => {
     expect(textoFechaDDMMYYYY("2027-01-05")).toBe("05/01/2027");
+  });
+});
+
+describe("inicioDiaCostaRicaUtc / inicioDiaSiguienteCostaRicaUtc", () => {
+  it("medianoche de Costa Rica es las 06:00 UTC (offset fijo -06:00)", () => {
+    expect(inicioDiaCostaRicaUtc("2026-09-09")).toBe("2026-09-09T00:00:00-06:00");
+  });
+
+  it("el día siguiente avanza el YMD en uno", () => {
+    expect(inicioDiaSiguienteCostaRicaUtc("2026-09-09")).toBe("2026-09-10T00:00:00-06:00");
+  });
+
+  it("cruza fin de mes", () => {
+    expect(inicioDiaSiguienteCostaRicaUtc("2026-09-30")).toBe("2026-10-01T00:00:00-06:00");
+  });
+
+  it("cruza fin de año", () => {
+    expect(inicioDiaSiguienteCostaRicaUtc("2026-12-31")).toBe("2027-01-01T00:00:00-06:00");
+  });
+
+  it("respeta año bisiesto (29 de febrero existe)", () => {
+    expect(inicioDiaSiguienteCostaRicaUtc("2028-02-28")).toBe("2028-02-29T00:00:00-06:00");
   });
 });
 

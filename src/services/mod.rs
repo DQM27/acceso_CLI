@@ -1,4 +1,5 @@
 pub mod autenticacion_service;
+pub mod cita_service;
 pub mod contratista_service;
 #[cfg(feature = "dev-auth")]
 pub mod dev_auth;

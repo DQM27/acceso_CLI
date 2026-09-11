@@ -129,6 +129,13 @@ pub struct ResumenSincronizacion {
     pub contratistas_recibidos: u32,
     pub gafetes_recibidos: u32,
     pub movimientos_historial_recibidos: u32,
+    /// Citas nuevas/actualizadas recibidas para el punto de acceso (con sus
+    /// visitantes) -- ver `nube::recibir_citas_del_sitio`.
+    pub citas_recibidas: u32,
+    /// Movimientos de visita (entrada/salida) del sitio recibidos hacia la
+    /// caché local `historial_visitas_sitio` -- ver
+    /// `nube::recibir_historial_visitas_del_sitio`.
+    pub historial_visitas_recibidos: u32,
     pub sitio_id: String,
     pub dispositivo_id: String,
     pub tipo: String,
@@ -321,6 +328,9 @@ impl AppCore {
         let catalogo = crate::nube::recibir_catalogo_del_sitio(&self.connection, &contexto)?;
         let movimientos_historial_recibidos =
             crate::nube::recibir_historial_del_sitio(&self.connection, &contexto)?;
+        let citas_recibidas = crate::nube::recibir_citas_del_sitio(&self.connection, &contexto)?;
+        let historial_visitas_recibidos =
+            crate::nube::recibir_historial_visitas_del_sitio(&self.connection, &contexto)?;
 
         Ok(ResumenSincronizacion {
             enviados: resumen.enviados,
@@ -331,6 +341,8 @@ impl AppCore {
             contratistas_recibidos: catalogo.contratistas_recibidos,
             gafetes_recibidos: catalogo.gafetes_recibidos,
             movimientos_historial_recibidos,
+            citas_recibidas,
+            historial_visitas_recibidos,
             sitio_id: token.sitio_id,
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,
@@ -403,6 +415,8 @@ impl AppCore {
             contratistas_recibidos: catalogo.contratistas_recibidos,
             gafetes_recibidos: catalogo.gafetes_recibidos,
             movimientos_historial_recibidos: 0,
+            citas_recibidas: 0,
+            historial_visitas_recibidos: 0,
             sitio_id: token.sitio_id,
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,

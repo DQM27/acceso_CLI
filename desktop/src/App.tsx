@@ -34,6 +34,7 @@ import {
   UserCheck,
   UserCog,
   Users,
+  UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
@@ -58,6 +59,7 @@ import { BarraEstadoProvider, SeccionActivaProvider } from "./contexto/BarraEsta
 
 // Las pantallas y sus tablas se cargan al entrar a cada sección.
 const Activos = lazy(() => import("./pantallas/Activos"));
+const Visitas = lazy(() => import("./pantallas/Visitas"));
 const Contratistas = lazy(() => import("./pantallas/Contratistas"));
 const Empresas = lazy(() => import("./pantallas/Empresas"));
 const Usuarios = lazy(() => import("./pantallas/Usuarios"));
@@ -135,6 +137,7 @@ export default function App() {
 
 export type Seccion =
   | "activos"
+  | "visitas"
   | "historial"
   | "contratistas"
   | "auditoria"
@@ -161,6 +164,7 @@ const SECCIONES: {
   rolesPermitidos?: RolUsuario[];
 }[] = [
   { id: "activos", etiqueta: "Activos", Icono: UserCheck },
+  { id: "visitas", etiqueta: "Visitas", Icono: UsersRound },
   { id: "historial", etiqueta: "Historial", Icono: History },
   { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
   {
@@ -222,8 +226,9 @@ function Shell({
 
   const [modalNuevoIngreso, setModalNuevoIngreso] = useState(false);
   const [modalSalida, setModalSalida] = useState(false);
-  // Sube en cada registro/salida exitosa — Activos lo usa para refrescar su
-  // grilla aunque haya salido desde otra pantalla.
+  // Sube en cada registro/salida/sincronización — Activos y Visitas lo usan
+  // para refrescar su grilla/calendario aunque el cambio haya salido de
+  // otra pantalla o de otro dispositivo (Realtime/pulso periódico).
   const [refrescarActivos, setRefrescarActivos] = useState(0);
   const [sincronizandoManual, setSincronizandoManual] = useState(false);
   // `null` hasta que `iniciarRealtimeNube` intenta conectar la primera vez.
@@ -399,6 +404,8 @@ function Shell({
                             onAbrirNuevoIngreso={() => setModalNuevoIngreso(true)}
                             onAbrirSalida={() => setModalSalida(true)}
                           />
+                        ) : id === "visitas" ? (
+                          <Visitas refrescarSenal={refrescarActivos} />
                         ) : id === "historial" ? (
                           <Historial />
                         ) : id === "contratistas" ? (

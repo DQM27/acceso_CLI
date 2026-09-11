@@ -2,11 +2,12 @@
 //! clásica, CLI, futura GUI): traducen errores de servicio a texto
 //! accionable sin exponer detalles internos de base de datos.
 
+use crate::domain::cita::MotivoDenegacionVisita;
 use crate::domain::resultado_acceso::MotivoDenegacion;
 use crate::models::gafete::EstadoGafete;
 use crate::services::error::{
-    AutenticacionError, ContratistaServiceError, EmpresaServiceError, GafeteServiceError,
-    RegistroIngresoServiceError, UsuarioServiceError,
+    AutenticacionError, CitaServiceError, ContratistaServiceError, EmpresaServiceError,
+    GafeteServiceError, RegistroIngresoServiceError, UsuarioServiceError,
 };
 
 /// `HashInvalido` va junto con `Database` a propósito: ambos son fallos de
@@ -115,6 +116,30 @@ pub fn mensaje_salida(error: RegistroIngresoServiceError) -> String {
         SalidaAnteriorAIngreso => "La salida no puede ser anterior al ingreso".into(),
         RelojRetrocedido => "Revise la fecha y hora del equipo antes de continuar".into(),
         _ => "No se pudo registrar la salida".into(),
+    }
+}
+
+pub fn mensaje_cita(error: CitaServiceError) -> String {
+    use CitaServiceError::{
+        GafeteOcupado, MovimientoNoActivo, OperadorNoAutorizado, RelojRetrocedido,
+        SalidaAnteriorAEntrada, SinCitaRegistrada, SinCitaVigente, VisitanteYaEnSitio,
+    };
+
+    match error {
+        SinCitaRegistrada => "No hay ninguna visita agendada para esta cédula".into(),
+        SinCitaVigente(MotivoDenegacionVisita::CitaCancelada) => "Esta visita fue cancelada".into(),
+        SinCitaVigente(MotivoDenegacionVisita::FueraDeVigencia) => {
+            "Esta visita no está vigente hoy".into()
+        }
+        VisitanteYaEnSitio => "Este visitante ya tiene un ingreso activo".into(),
+        GafeteOcupado => "El gafete ya está en uso por otra visita".into(),
+        MovimientoNoActivo => "El movimiento ya no está activo".into(),
+        SalidaAnteriorAEntrada => "La salida no puede ser anterior a la entrada".into(),
+        RelojRetrocedido => "Revise la fecha y hora del equipo antes de continuar".into(),
+        OperadorNoAutorizado => {
+            "La sesión que registra el movimiento no existe o está inactiva".into()
+        }
+        _ => "No se pudo registrar el movimiento de la visita".into(),
     }
 }
 

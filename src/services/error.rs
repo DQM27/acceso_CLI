@@ -1,4 +1,5 @@
 use crate::database::error::DatabaseError;
+use crate::domain::cita::MotivoDenegacionVisita;
 use crate::domain::resultado_acceso::MotivoDenegacion;
 use crate::models::gafete::EstadoGafete;
 
@@ -138,6 +139,50 @@ pub enum RegistroIngresoServiceError {
     /// inactivo — revisado dentro de la misma transacción que el
     /// movimiento, así que una desactivación concurrente no puede colarse
     /// entre la verificación y la escritura.
+    #[error("La sesión que registra el movimiento no existe o está inactiva")]
+    OperadorNoAutorizado,
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CitaServiceError {
+    /// Esta cédula no aparece en NINGUNA cita conocida por este
+    /// dispositivo -- distinto de `SinCitaVigente`: acá no hay nada que
+    /// mostrarle al guardia (ni anfitrión, ni motivo), la persona
+    /// simplemente no tiene ninguna visita agendada.
+    #[error("No hay ninguna visita agendada para esta cédula")]
+    SinCitaRegistrada,
+    /// Existe al menos una cita para esta cédula, pero ninguna aplica hoy
+    /// -- el motivo viaja en la variante (de la última candidata
+    /// evaluada) para que la interfaz pueda mostrar algo más útil que
+    /// "no se puede" (ej. "esta cita fue cancelada" o "esta cita ya
+    /// venció").
+    #[error("No hay ninguna visita vigente para esta cédula: {0:?}")]
+    SinCitaVigente(MotivoDenegacionVisita),
+    /// Este visitante ya tiene un movimiento abierto -- mismo criterio que
+    /// `RegistroIngresoServiceError::IngresoActivo`, no se puede entrar dos
+    /// veces sin salir primero.
+    #[error("Este visitante ya tiene un movimiento activo")]
+    VisitanteYaEnSitio,
+    /// El gafete ya está asignado a otro movimiento de visita abierto --
+    /// mismo criterio que `RegistroIngresoServiceError::GafeteOcupado`. No
+    /// valida contra el catálogo (`gafetes`) todavía -- ver el comentario de
+    /// `CitaService::registrar_entrada`.
+    #[error("El gafete ya está asignado a otra visita")]
+    GafeteOcupado,
+    #[error("El movimiento no está activo")]
+    MovimientoNoActivo,
+    #[error("La salida no puede ser anterior a la entrada")]
+    SalidaAnteriorAEntrada,
+    /// Mismo criterio que `RegistroIngresoServiceError::RelojRetrocedido`:
+    /// comprobación de sanidad de todo el sistema (¿el reloj de la máquina
+    /// retrocedió respecto al último movimiento conocido?), no una regla de
+    /// negocio de una entrada/salida puntual -- la genera `AppCore`, no
+    /// `CitaService`.
+    #[error("El reloj del equipo está atrasado respecto al último movimiento registrado")]
+    RelojRetrocedido,
+    /// Mismo criterio que `RegistroIngresoServiceError::OperadorNoAutorizado`.
     #[error("La sesión que registra el movimiento no existe o está inactiva")]
     OperadorNoAutorizado,
     #[error(transparent)]

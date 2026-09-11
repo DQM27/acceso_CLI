@@ -1,5 +1,7 @@
+pub mod cita_repository;
 pub mod contratista_repository;
 pub mod empresa_repository;
 pub mod gafete_repository;
+pub mod movimiento_visita_repository;
 pub mod registro_ingreso_repository;
 pub mod usuario_repository;

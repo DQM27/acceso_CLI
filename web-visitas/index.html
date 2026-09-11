@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <meta
+      name="description"
+      content="Agenda y administra tus visitas a las instalaciones de Brisas."
+    />
+    <link rel="icon" href="/favicon.ico" />
+    <title>Visitas · Brisas</title>
+    <!-- Placeholder vacío para FullCalendar (componentes/SelectorFechas.tsx):
+         la librería busca un <style data-fullcalendar> ya existente antes de
+         crear el suyo (`registerStylesRoot`, @fullcalendar/core) -- si lo
+         encuentra, reusa ESTE elemento en vez de inyectar uno nuevo. Un
+         <style> nuevo creado por JS violaría la CSP (style-src 'self', sin
+         unsafe-inline); este SÍ pasa porque su hash (de contenido vacío) está
+         permitido explícitamente en public/_headers. Debe quedar
+         EXACTAMENTE vacío -- cualquier espacio/salto de línea entre las
+         etiquetas cambia el hash SHA-256 y la CSP volvería a bloquearlo.
+         FullCalendar llena las reglas después vía `sheet.insertRule()`
+         (CSSOM), que no vuelve a chequear contra la CSP -- sólo la
+         CREACIÓN del elemento en sí queda sujeta a style-src. -->
+    <style data-fullcalendar></style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>Activá JavaScript para ingresar a la agenda de visitas.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

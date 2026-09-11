@@ -500,6 +500,11 @@ pub struct ResumenSincronizacion {
     pub contratistas_recibidos: u32,
     pub gafetes_recibidos: u32,
     pub movimientos_historial_recibidos: u32,
+    /// Citas nuevas/actualizadas recibidas para el punto de acceso (con sus
+    /// visitantes) -- ver `application::nube::ResumenSincronizacion::citas_recibidas`.
+    pub citas_recibidas: u32,
+    /// Ver `application::nube::ResumenSincronizacion::historial_visitas_recibidos`.
+    pub historial_visitas_recibidos: u32,
     pub sitio_id: String,
     pub dispositivo_id: String,
     pub tipo: String,
@@ -520,6 +525,8 @@ impl From<ResumenSincronizacionNucleo> for ResumenSincronizacion {
             contratistas_recibidos: resumen.contratistas_recibidos,
             gafetes_recibidos: resumen.gafetes_recibidos,
             movimientos_historial_recibidos: resumen.movimientos_historial_recibidos,
+            citas_recibidas: resumen.citas_recibidas,
+            historial_visitas_recibidos: resumen.historial_visitas_recibidos,
             sitio_id: resumen.sitio_id,
             dispositivo_id: resumen.dispositivo_id,
             tipo: resumen.tipo,
@@ -1218,6 +1225,8 @@ impl Nucleo {
             contratistas_recibidos: catalogo.contratistas_recibidos,
             gafetes_recibidos: catalogo.gafetes_recibidos,
             movimientos_historial_recibidos: 0,
+            citas_recibidas: 0,
+            historial_visitas_recibidos: 0,
             sitio_id: token.sitio_id,
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,
@@ -1347,6 +1356,15 @@ impl Nucleo {
         let movimientos_historial_recibidos =
             control_acceso::nube::recibir_historial_del_sitio(&conexion, &contexto)
                 .map_err(mapear)?;
+        let citas_recibidas = control_acceso::nube::recibir_citas_del_sitio(&conexion, &contexto)
+            .map_err(mapear)?;
+        // Sin `recibir_historial_visitas_del_sitio` a propósito -- decisión
+        // explícita del usuario: el celular es para acciones rápidas del
+        // guardia (check-in/check-out), auditar el historial de visitas es
+        // algo esporádico que le corresponde a la PC. Mismo campo en el
+        // struct compartido (con `0` acá) para no bifurcar el tipo entre
+        // plataformas, no porque el celular lo necesite.
+        let historial_visitas_recibidos = 0;
 
         // Igual que en escritorio: si esta sincronización trajo la baja de
         // quien la disparó, la sesión de ESTE teléfono se cierra sola acá
@@ -1366,6 +1384,8 @@ impl Nucleo {
             contratistas_recibidos: catalogo.contratistas_recibidos,
             gafetes_recibidos: catalogo.gafetes_recibidos,
             movimientos_historial_recibidos,
+            citas_recibidas,
+            historial_visitas_recibidos,
             sitio_id: token.sitio_id,
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,
@@ -1777,6 +1797,11 @@ impl Nucleo {
         let movimientos_historial_recibidos =
             control_acceso::nube::recibir_historial_del_sitio(&conexion, &contexto)
                 .map_err(mapear)?;
+        let citas_recibidas = control_acceso::nube::recibir_citas_del_sitio(&conexion, &contexto)
+            .map_err(mapear)?;
+        // Ver el comentario del otro método de sync en este mismo archivo:
+        // el celular no trae historial de visitas a propósito.
+        let historial_visitas_recibidos = 0;
 
         let sesion_expulsada = !self.core_lock().sesion_sigue_activa(&actor);
         if sesion_expulsada {
@@ -1792,6 +1817,8 @@ impl Nucleo {
             contratistas_recibidos: catalogo.contratistas_recibidos,
             gafetes_recibidos: catalogo.gafetes_recibidos,
             movimientos_historial_recibidos,
+            citas_recibidas,
+            historial_visitas_recibidos,
             sitio_id: token.sitio_id,
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,

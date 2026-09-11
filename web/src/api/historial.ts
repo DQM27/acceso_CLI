@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { supabase } from "../lib/supabase";
+import { inicioDiaCostaRicaUtc, inicioDiaSiguienteCostaRicaUtc } from "../tiempo";
 
 /**
  * Espejo de `ingresos` en Supabase -- ver migración
@@ -52,6 +53,25 @@ const filaCrudaEsquema = z.object({
   dispositivo_entrada: z.object({ tipo: z.string() }).nullable(),
 });
 
+export interface UnidadOperativa {
+  id: string;
+  nombre: string;
+}
+
+const filaSitioEsquema = z.object({ id: z.string(), nombre: z.string() });
+
+/** Sitios visibles para `admin_global` (misma política que ya deja leer
+ * `ingresos` cross-sitio, ver el doc-comment de arriba) -- alimenta el
+ * selector "Unidades operativas" de Historial. Independiente de si un sitio
+ * ya tiene movimientos o no (a diferencia de sacar los nombres de
+ * `ingresos` mismo), para que uno recién creado aparezca en el filtro desde
+ * el día uno. */
+export async function listarUnidadesOperativas(): Promise<UnidadOperativa[]> {
+  const { data, error } = await supabase.from("sitios").select("id, nombre").order("nombre");
+  if (error) throw new Error(error.message);
+  return z.array(filaSitioEsquema).parse(data);
+}
+
 export interface ResultadoHistorial {
   filas: MovimientoHistorial[];
   /** `true` si el rango pedido tiene más filas que `LIMITE_HISTORIAL` -- ver
@@ -73,7 +93,11 @@ export interface ResultadoHistorial {
 // razonable, nadie la nota.
 const LIMITE_HISTORIAL = 20_000;
 
-export async function listarHistorial(desde?: string, hasta?: string): Promise<ResultadoHistorial> {
+export async function listarHistorial(
+  desde?: string,
+  hasta?: string,
+  sitioIds?: string[],
+): Promise<ResultadoHistorial> {
   let consulta = supabase
     .from("ingresos")
     .select(
@@ -86,8 +110,22 @@ export async function listarHistorial(desde?: string, hasta?: string): Promise<R
     .order("hora_entrada", { ascending: false })
     .range(0, LIMITE_HISTORIAL - 1);
 
-  if (desde) consulta = consulta.gte("hora_entrada", desde);
-  if (hasta) consulta = consulta.lte("hora_entrada", hasta);
+  // `desde`/`hasta` llegan como YMD del selector (día calendario en Costa
+  // Rica, ver `SelectorRangoFecha`), pero `hora_entrada` es un `timestamptz`
+  // en UTC -- compararlo contra el string crudo lo interpreta a medianoche
+  // UTC (no Costa Rica) y, para `hasta`, deja afuera casi todo ese día (sólo
+  // calificaría el instante exacto de esa medianoche). Con un rango amplio
+  // el corte pasaba desapercibido; con "Hoy"/"Ayer" (mismo día en desde y
+  // hasta) el rango resultante quedaba prácticamente vacío siempre. Mismo
+  // criterio que `rango_utc` en
+  // `desktop/src-tauri/src/comandos/historial.rs`: `hasta` es el inicio del
+  // día SIGUIENTE, límite exclusivo.
+  if (desde) consulta = consulta.gte("hora_entrada", inicioDiaCostaRicaUtc(desde));
+  if (hasta) consulta = consulta.lt("hora_entrada", inicioDiaSiguienteCostaRicaUtc(hasta));
+  // `undefined`/vacío es "sin filtro" (todas) -- ver `sitioIdsFiltro` en
+  // `Historial.tsx` sobre por qué eso está separado de "excluir todas", que
+  // sí manda una lista (vacía) acá y trae cero filas a propósito.
+  if (sitioIds) consulta = consulta.in("sitio_id", sitioIds);
 
   const { data: crudo, error, count } = await consulta;
   if (error) throw new Error(error.message);

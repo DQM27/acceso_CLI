@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 27;
+pub const SCHEMA_VERSION: i64 = 34;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -281,6 +281,41 @@ fn aplicar_migraciones_posteriores_a_15(
         *version = 27;
     }
 
+    if *version == 27 {
+        aplicar_migracion_28(connection)?;
+        *version = 28;
+    }
+
+    if *version == 28 {
+        aplicar_migracion_29(connection)?;
+        *version = 29;
+    }
+
+    if *version == 29 {
+        aplicar_migracion_30(connection)?;
+        *version = 30;
+    }
+
+    if *version == 30 {
+        aplicar_migracion_31(connection)?;
+        *version = 31;
+    }
+
+    if *version == 31 {
+        aplicar_migracion_32(connection)?;
+        *version = 32;
+    }
+
+    if *version == 32 {
+        aplicar_migracion_33(connection)?;
+        *version = 33;
+    }
+
+    if *version == 33 {
+        aplicar_migracion_34(connection)?;
+        *version = 34;
+    }
+
     Ok(())
 }
 
@@ -376,6 +411,62 @@ fn aplicar_migracion_27(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_27)?;
     transaction.execute_batch("PRAGMA user_version = 27")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_28(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_28)?;
+    transaction.execute_batch("PRAGMA user_version = 28")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_29(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_29)?;
+    transaction.execute_batch("PRAGMA user_version = 29")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_30(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_30)?;
+    transaction.execute_batch("PRAGMA user_version = 30")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_31(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_31)?;
+    transaction.execute_batch("PRAGMA user_version = 31")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_32(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_32)?;
+    transaction.execute_batch("PRAGMA user_version = 32")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_33(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_33)?;
+    transaction.execute_batch("PRAGMA user_version = 33")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_34(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_34)?;
+    transaction.execute_batch("PRAGMA user_version = 34")?;
     transaction.commit()?;
     Ok(())
 }
@@ -2036,4 +2127,266 @@ ALTER TABLE cola_salida_nueva RENAME TO cola_salida;
 CREATE INDEX idx_cola_salida_pendientes
 ON cola_salida(proximo_intento_en)
 WHERE estado = 'pendiente';
+";
+
+// Watermark propio de gafetes, mismo mecanismo que
+// `catalogo_actualizado_hasta`/`historial_actualizado_hasta` (columna
+// separada, no reutiliza la de catálogo) -- antes `recibir_catalogo_del_sitio`
+// bajaba TODOS los gafetes del sitio en cada sync, para siempre, a
+// propósito (ver el doc-comment viejo de `descargar_catalogo_remoto`: el
+// cursor compartido de catálogo podía ser anterior a que gafetes se sumara
+// al pull, y bajar todo de nuevo reintentaba solo deudores que no habían
+// podido resolverse localmente). Una columna propia resuelve el primer
+// motivo sin ayuda (nace en `NULL`, primer sync siempre completo);
+// `descargar_catalogo_remoto` resuelve el segundo sin volver a bajar todo:
+// la marca sólo avanza hasta el `updated_at` más nuevo entre los gafetes
+// que sí se pudieron guardar, nunca más allá de uno que se salteó por
+// deudor no resuelto -- ese sigue pidiéndose en cada sync hasta que
+// resuelva, igual que antes, pero sin arrastrar el resto del catálogo de
+// gafetes que ya no cambió.
+const MIGRACION_28: &str = r"
+ALTER TABLE sincronizacion_estado ADD COLUMN gafetes_actualizado_hasta TEXT;
+";
+
+// Control de visitas (docs/plan-control-visitas.md) -- primer corte: solo
+// esquema local, sin sincronización todavía. Patrón header-detail: `citas`
+// es la autorización con vigencia (puede agendarse para un grupo -- ver
+// `cita_visitantes`), `movimientos_visita` es el cruce real en el punto de
+// acceso (equivalente a `registro_ingresos`, pero sin ningún campo de PRAIND/SWAT
+// que no le pertenece a una visita).
+//
+// A propósito son TRES tablas locales, no las cuatro del documento de
+// plan: `cita_sitios` (el puente muchos-a-muchos que permite una cita
+// "tour" con varios sitios) vive sólo en Supabase. Cada dispositivo ya
+// sabe a qué sitio pertenece (`contexto.sitio_id`, del token, no una fila
+// local -- no existe ninguna tabla `sitios` local, mismo motivo que
+// `registro_ingresos` nunca guarda su propio `sitio_id`: toda la base es
+// de un solo sitio) y el pull desde la nube ya viene filtrado a "citas que
+// incluyen mi sitio" -- replicar el puente acá no aportaría nada que este
+// dispositivo pueda usar, sólo sitios ajenos que nunca le interesan.
+//
+// `estado` no incluye 'VENCIDA' como valor guardado -- si una cita ya
+// pasó su `fecha_hasta` se calcula comparando fechas en el momento de la
+// consulta, no se persiste (evita necesitar un proceso de fondo que vaya
+// actualizando filas sólo para que caduquen solas). Sólo 'VIGENTE'/
+// 'CANCELADA' son estados reales que alguien decide.
+const MIGRACION_29: &str = r"
+CREATE TABLE citas (
+    id INTEGER PRIMARY KEY,
+    uuid TEXT NOT NULL,
+    motivo TEXT,
+    fecha_desde TEXT NOT NULL,
+    fecha_hasta TEXT NOT NULL,
+    anfitrion_nombre TEXT NOT NULL,
+    anfitrion_correo TEXT NOT NULL,
+    estado TEXT NOT NULL CHECK (estado IN ('VIGENTE', 'CANCELADA')),
+    creado_en TEXT NOT NULL,
+    CHECK (fecha_hasta >= fecha_desde)
+) STRICT;
+CREATE UNIQUE INDEX idx_citas_uuid ON citas(uuid);
+CREATE INDEX idx_citas_vigencia ON citas(fecha_desde, fecha_hasta);
+
+CREATE TABLE cita_visitantes (
+    id INTEGER PRIMARY KEY,
+    uuid TEXT NOT NULL,
+    cita_id INTEGER NOT NULL REFERENCES citas(id) ON DELETE RESTRICT,
+    cedula TEXT NOT NULL,
+    nombre TEXT NOT NULL,
+    empresa TEXT,
+    placa_vehiculo TEXT
+) STRICT;
+CREATE UNIQUE INDEX idx_cita_visitantes_uuid ON cita_visitantes(uuid);
+CREATE INDEX idx_cita_visitantes_cita ON cita_visitantes(cita_id);
+CREATE INDEX idx_cita_visitantes_cedula ON cita_visitantes(cedula);
+
+-- `usuario_entrada_id`/`usuario_salida_id` con `ON DELETE RESTRICT`
+-- (mismo criterio que `registro_ingresos`): un usuario nunca se borra de
+-- verdad si tiene movimientos asociados.
+CREATE TABLE movimientos_visita (
+    id INTEGER PRIMARY KEY,
+    uuid TEXT NOT NULL,
+    cita_visitante_id INTEGER NOT NULL REFERENCES cita_visitantes(id) ON DELETE RESTRICT,
+    gafete_numero INTEGER,
+    fecha_hora_entrada TEXT NOT NULL,
+    fecha_hora_salida TEXT,
+    usuario_entrada_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+    usuario_entrada_nombre TEXT NOT NULL,
+    usuario_salida_id INTEGER REFERENCES usuarios(id) ON DELETE RESTRICT,
+    usuario_salida_nombre TEXT
+) STRICT;
+CREATE UNIQUE INDEX idx_movimientos_visita_uuid ON movimientos_visita(uuid);
+CREATE INDEX idx_movimientos_visita_cita_visitante ON movimientos_visita(cita_visitante_id);
+-- Un mismo visitante no puede tener dos movimientos abiertos a la vez
+-- (mismo criterio que `idx_registro_ingresos_contratista_activo`).
+CREATE UNIQUE INDEX idx_movimientos_visita_visitante_activo
+ON movimientos_visita(cita_visitante_id) WHERE fecha_hora_salida IS NULL;
+CREATE INDEX idx_movimientos_visita_gafete ON movimientos_visita(gafete_numero);
+CREATE UNIQUE INDEX idx_movimientos_visita_gafete_activo
+ON movimientos_visita(gafete_numero)
+WHERE gafete_numero IS NOT NULL AND fecha_hora_salida IS NULL;
+
+-- Mismas cuatro garantías que ya tiene `registro_ingresos`: no se borra,
+-- los datos de entrada no se editan después de creados, la salida se
+-- registra una sola vez, y toda fecha queda en UTC normalizado.
+CREATE TRIGGER movimientos_visita_no_eliminar
+BEFORE DELETE ON movimientos_visita
+BEGIN
+    SELECT RAISE(ABORT, 'Los movimientos de visita no se pueden eliminar');
+END;
+CREATE TRIGGER movimientos_visita_entrada_inmutable
+BEFORE UPDATE OF
+    cita_visitante_id, gafete_numero, fecha_hora_entrada,
+    usuario_entrada_id, usuario_entrada_nombre, uuid
+ON movimientos_visita
+WHEN
+    NEW.cita_visitante_id IS NOT OLD.cita_visitante_id
+    OR NEW.gafete_numero IS NOT OLD.gafete_numero
+    OR NEW.fecha_hora_entrada IS NOT OLD.fecha_hora_entrada
+    OR NEW.usuario_entrada_id IS NOT OLD.usuario_entrada_id
+    OR NEW.usuario_entrada_nombre IS NOT OLD.usuario_entrada_nombre
+    OR NEW.uuid IS NOT OLD.uuid
+BEGIN
+    SELECT RAISE(ABORT, 'Los datos de entrada del movimiento son inmutables');
+END;
+CREATE TRIGGER movimientos_visita_salida_unica
+BEFORE UPDATE OF fecha_hora_salida, usuario_salida_id, usuario_salida_nombre
+ON movimientos_visita
+WHEN
+    OLD.fecha_hora_salida IS NOT NULL
+    OR NEW.fecha_hora_salida IS NULL
+    OR NEW.usuario_salida_nombre IS NULL
+BEGIN
+    SELECT RAISE(ABORT, 'La salida solo puede registrarse una vez');
+END;
+CREATE TRIGGER movimientos_visita_fecha_utc_insert
+BEFORE INSERT ON movimientos_visita
+WHEN
+    strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_entrada) IS NOT NEW.fecha_hora_entrada
+    OR (
+        NEW.fecha_hora_salida IS NOT NULL
+        AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_salida) IS NOT NEW.fecha_hora_salida
+    )
+BEGIN
+    SELECT RAISE(ABORT, 'Las fechas de movimientos deben estar normalizadas en UTC');
+END;
+CREATE TRIGGER movimientos_visita_salida_utc
+BEFORE UPDATE OF fecha_hora_salida ON movimientos_visita
+WHEN
+    NEW.fecha_hora_salida IS NOT NULL
+    AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_salida) IS NOT NEW.fecha_hora_salida
+BEGIN
+    SELECT RAISE(ABORT, 'La fecha de salida debe estar normalizada en UTC');
+END;
+";
+
+// Suma 'movimiento_visita' al CHECK de `cola_salida.entidad` -- mismo
+// patrón que MIGRACION_20/22 para gafetes/usuarios: SQLite no permite
+// `ALTER TABLE ... CHECK`, así que la tabla se recrea entera. Sin esto,
+// `MovimientoVisitaRepository` (siguiente corte) no puede encolar sus
+// propios `crear`/`cerrar` -- el `INSERT` violaría el `CHECK` viejo.
+//
+// La tabla ya trae `proximo_intento_en` (columna generada, MIGRACION_27) --
+// se conserva la misma definición acá para no perder el índice de
+// reintentos al recrear la tabla una vez más; sólo cambia el `CHECK` de
+// `entidad`.
+const MIGRACION_30: &str = r"
+CREATE TABLE cola_salida_nueva (
+    id INTEGER PRIMARY KEY,
+    entidad TEXT NOT NULL CHECK (
+        entidad IN ('contratista', 'ingreso', 'empresa', 'gafete', 'usuario', 'movimiento_visita')
+    ),
+    entidad_uuid TEXT NOT NULL,
+    operacion TEXT NOT NULL CHECK (operacion IN ('crear', 'actualizar', 'cerrar')),
+    estado TEXT NOT NULL DEFAULT 'pendiente'
+        CHECK (estado IN ('pendiente', 'enviado', 'fallido')),
+    intentos INTEGER NOT NULL DEFAULT 0 CHECK (intentos >= 0),
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    ultimo_error TEXT,
+    proximo_intento_en TEXT GENERATED ALWAYS AS (
+        datetime(actualizado_en, '+' || MIN(intentos * 15, 1440) || ' minutes')
+    ) STORED
+) STRICT;
+INSERT INTO cola_salida_nueva (
+    id, entidad, entidad_uuid, operacion, estado, intentos,
+    creado_en, actualizado_en, ultimo_error
+)
+SELECT
+    id, entidad, entidad_uuid, operacion, estado, intentos,
+    creado_en, actualizado_en, ultimo_error
+FROM cola_salida;
+DROP TABLE cola_salida;
+ALTER TABLE cola_salida_nueva RENAME TO cola_salida;
+CREATE INDEX idx_cola_salida_pendientes
+ON cola_salida(proximo_intento_en)
+WHERE estado = 'pendiente';
+";
+
+// Watermark propio de citas, mismo mecanismo que
+// `catalogo_actualizado_hasta`/`historial_actualizado_hasta`/
+// `gafetes_actualizado_hasta` (columna separada, ritmo de sync
+// independiente) -- ver `nube::sincronizacion::recibir_citas_del_sitio`.
+const MIGRACION_31: &str = r"
+ALTER TABLE sincronizacion_estado ADD COLUMN citas_actualizado_hasta TEXT;
+";
+
+// Snapshot al momento del check-in -- mismo criterio que
+// `registro_ingresos` (que ya guarda `contratista_nombre`/`empresa_nombre`
+// propios, no un JOIN en cada lectura): la trazabilidad para auditoría
+// (docs/plan-control-visitas.md) necesita mostrar quién era el visitante,
+// de qué empresa y quién lo recibía TAL COMO ERAN al momento del cruce, sin
+// depender de que `cita_visitantes`/`citas` todavía existan sin cambios
+// más adelante. Nullable a propósito (igual que `dispositivo_entrada_tipo`
+// en MIGRACION_26): filas creadas antes de esta migración quedan sin estos
+// datos, no hay forma de reconstruirlos retroactivamente.
+const MIGRACION_32: &str = r"
+ALTER TABLE movimientos_visita ADD COLUMN visitante_cedula TEXT;
+ALTER TABLE movimientos_visita ADD COLUMN visitante_nombre TEXT;
+ALTER TABLE movimientos_visita ADD COLUMN empresa TEXT;
+ALTER TABLE movimientos_visita ADD COLUMN anfitrion_nombre TEXT;
+ALTER TABLE movimientos_visita ADD COLUMN motivo TEXT;
+";
+
+// Caché de lectura del historial de visitas del sitio -- mismo rol que
+// `historial_sitio` para contratistas (MIGRACION_25): trae TODO movimiento
+// (abierto o cerrado) del sitio, de cualquier dispositivo, vía sync
+// incremental con su propia marca de agua (`historial_visitas_actualizado_hasta`,
+// ritmo independiente del resto). Sin esto, un movimiento de visita
+// registrado en un dispositivo era invisible para cualquier otro (y para
+// el admin que audita todos los sitios) -- vivía y moría sólo en el
+// `movimientos_visita` local de quien hizo el check-in/check-out.
+const MIGRACION_33: &str = r"
+ALTER TABLE sincronizacion_estado ADD COLUMN historial_visitas_actualizado_hasta TEXT;
+
+CREATE TABLE historial_visitas_sitio (
+    uuid TEXT PRIMARY KEY,
+    sitio_id TEXT NOT NULL,
+    visitante_cedula TEXT NOT NULL,
+    visitante_nombre TEXT NOT NULL,
+    empresa TEXT,
+    anfitrion_nombre TEXT,
+    motivo TEXT,
+    gafete_numero INTEGER,
+    hora_entrada TEXT NOT NULL,
+    hora_salida TEXT,
+    usuario_entrada_nombre TEXT,
+    usuario_salida_nombre TEXT,
+    dispositivo_entrada_id TEXT NOT NULL,
+    dispositivo_salida_id TEXT,
+    actualizado_en TEXT NOT NULL
+) STRICT;
+
+CREATE INDEX idx_historial_visitas_sitio_hora_entrada ON historial_visitas_sitio(hora_entrada);
+";
+
+// Hora aproximada de llegada -- puramente informativa a propósito
+// (decisión explícita del usuario): "esta visita llega a las 10:00" no
+// significa que a las 11:00 se le niegue el paso, `domain::cita::verificar_cita`
+// no la toca para nada, sólo decide por `fecha_desde`/`fecha_hasta`. Texto
+// libre tipo "HH:MM" (no una hora real de SQLite, que no tiene ese tipo)
+// -- si el día de mañana el cliente pide bloquear por hora de verdad, eso
+// es una regla de negocio nueva, no algo que este campo ya debería estar
+// hoy validando.
+const MIGRACION_34: &str = r"
+ALTER TABLE citas ADD COLUMN hora_estimada TEXT;
 ";

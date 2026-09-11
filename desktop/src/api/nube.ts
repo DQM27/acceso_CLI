@@ -20,6 +20,8 @@ export interface ResumenSincronizacion {
   contratistas_recibidos: number;
   gafetes_recibidos: number;
   movimientos_historial_recibidos: number;
+  citas_recibidas: number;
+  historial_visitas_recibidos: number;
   sitio_id: string;
   dispositivo_id: string;
   tipo: string;

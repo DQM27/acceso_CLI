@@ -1,0 +1,1486 @@
+@import "tailwindcss";
+@import "../../design/brisas.css";
+
+* {
+  box-sizing: border-box;
+}
+:root {
+  font-family: var(--fuente);
+  font-size: var(--fuente-base);
+  color: var(--texto);
+  background: var(--fondo);
+  font-synthesis: none;
+}
+body {
+  margin: 0;
+  min-width: 320px;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  cursor: pointer;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+button:disabled {
+  cursor: default;
+}
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+h1 {
+  font-size: 30px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.7px;
+}
+h2 {
+  font-size: var(--fuente-titulo);
+  font-weight: 600;
+}
+h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+p {
+  line-height: 1.6;
+}
+svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 3px;
+}
+h1:focus,
+main:focus,
+.resumen-errores:focus {
+  outline: none;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.tarjeta {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+}
+.texto-secundario,
+.ayuda-campo {
+  color: var(--muted);
+}
+.antetitulo {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+}
+.marca {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-3);
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.4px;
+}
+.marca img {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radio);
+}
+.marca-subtitulo {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0;
+  margin-top: 2px;
+}
+.solo-icono {
+  width: var(--control-altura);
+  padding: 0;
+}
+.sello-icono {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radio);
+  background: var(--acento-suave);
+  color: var(--acento);
+  flex-shrink: 0;
+}
+.sello-icono svg {
+  width: 24px;
+  height: 24px;
+}
+.aviso {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--espacio-3);
+  padding: var(--espacio-4);
+  border-radius: var(--radio-chico);
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: var(--espacio-4);
+  overflow-wrap: anywhere;
+}
+.aviso > div {
+  flex: 1;
+  min-width: 0;
+}
+.aviso-error {
+  background: var(--error-suave);
+  color: var(--error);
+}
+.aviso-exito {
+  background: var(--exito-suave);
+  color: var(--exito);
+}
+.aviso-info {
+  background: var(--info-suave);
+  color: var(--info);
+}
+.enlace-boton {
+  display: block;
+  text-decoration: underline;
+  background: none;
+  padding: 4px 0;
+  border: 0;
+  color: inherit;
+  font-weight: 600;
+}
+.aviso-con-accion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cargando {
+  display: flex;
+  gap: var(--espacio-3);
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  padding: 64px 24px;
+}
+.giro {
+  animation: giro 1s linear infinite;
+}
+@keyframes giro {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.error-fatal {
+  display: grid;
+  place-content: center;
+  gap: var(--espacio-4);
+  min-height: 100dvh;
+  padding: var(--espacio-6);
+  text-align: center;
+}
+.acceso {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+.acceso-barra,
+.acceso-pie {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 48px;
+}
+.acceso-contenido {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  align-items: center;
+  gap: 96px;
+  width: min(1120px, 100%);
+  padding: 56px 32px 80px;
+  margin: auto;
+}
+.acceso-presentacion h1 {
+  font-size: clamp(36px, 4vw, 52px);
+  letter-spacing: -1.5px;
+  line-height: 1.12;
+  margin: 20px 0;
+}
+.entrada {
+  color: var(--muted);
+  font-size: 16px;
+  max-width: 460px;
+}
+.pasos-acceso {
+  list-style: none;
+  margin: 40px 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--espacio-6);
+}
+.pasos-acceso li {
+  display: flex;
+  gap: var(--espacio-4);
+  align-items: center;
+}
+.pasos-acceso li > svg {
+  color: var(--acento);
+  width: 22px;
+  height: 22px;
+}
+.pasos-acceso strong {
+  display: block;
+  font-size: 14px;
+}
+.pasos-acceso span {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.acceso-tarjeta {
+  padding: 40px;
+  box-shadow: var(--sombra-panel);
+}
+.acceso-tarjeta .sello-icono {
+  margin-bottom: var(--espacio-8);
+}
+.acceso-tarjeta h2 {
+  font-size: 24px;
+  letter-spacing: -0.5px;
+  margin: 12px 0;
+}
+.acceso-tarjeta > p:not(.antetitulo) {
+  color: var(--muted);
+}
+.acceso-tarjeta .aviso {
+  margin-top: 24px;
+}
+.acceso-boton {
+  min-height: 48px;
+  width: 100%;
+  margin-top: 32px;
+  justify-content: space-between;
+  padding-inline: 20px;
+}
+.acceso-tarjeta .nota-acceso {
+  font-size: 12px;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--borde);
+}
+.acceso-pie {
+  font-size: 12px;
+  color: var(--muted);
+}
+/* Shell fijo, tipo desktop (AG Grid): nada de scroll a nivel de página
+   completa -- el sidebar y la cabecera de cada pantalla quedan quietos, y
+   sólo el contenido de la tarjeta principal scrollea adentro de su propio
+   contenedor. `height` (no `min-height`) + `overflow: hidden` en toda la
+   cadena es lo que fuerza esto: sin un techo real de altura en cada nivel,
+   el navegador vuelve a su comportamiento normal de página larga con
+   scroll global. */
+.portal {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* Columna a la derecha del sidebar -- botón de menú móvil + contenido
+   scrolleable, mismo rol que el `<main>` de `Shell` en desktop/web. */
+.contenido-shell {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.barra-cuenta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.separador {
+  height: 16px;
+  width: 1px;
+  background: var(--borde);
+  margin-inline: 4px;
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radio-capsula);
+  background: var(--acento-suave);
+  color: var(--acento);
+  font-weight: 600;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.identidad {
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+  min-width: 0;
+}
+.identidad span {
+  color: var(--muted);
+  font-size: 11px;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.contenido {
+  padding: 20px 28px;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  /* `auto`, no `hidden` -- pantallas cortas (Mis citas) nunca llegan a
+     necesitarlo porque su tarjeta ya scrollea sola adentro (`.lista-citas`/
+     `.agenda-calendario-cuerpo`, ambas `flex:1; min-height:0`); esto es el
+     resguardo para pantallas más largas que ese mismo molde (Nueva cita),
+     que no tienen ese scroll interno propio. */
+  overflow-y: auto;
+}
+.pagina {
+  max-width: 1600px;
+  width: 100%;
+  margin: 0 auto;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.encabezado-pagina {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 12px;
+}
+.encabezado-pagina .antetitulo {
+  margin-bottom: 6px;
+}
+.encabezado-pagina > .boton {
+  min-height: 40px;
+  white-space: nowrap;
+}
+/* A propósito NO `flex: 1` acá -- una tarjeta que siempre se estira al
+   máximo deja un hueco enorme entre el último ítem y la paginación cuando
+   hay pocas citas (encontrado con captura real). La tarjeta mide según su
+   contenido, con techo en el espacio disponible y scroll propio si se
+   pasa (`min-height: 0` + `overflow: hidden` alcanzan para eso en un
+   padre flex-column). `.agenda-llena` es la excepción: la vista
+   Calendario SÍ necesita ocupar todo el alto siempre, un mes chico se ve
+   mal aunque tenga pocos eventos -- ver el toggle en MisCitas.tsx. */
+.agenda {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.agenda.agenda-llena {
+  flex: 1;
+}
+.lista-citas {
+  min-height: 0;
+  overflow-y: auto;
+}
+.agenda-calendario-cuerpo {
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+}
+.agenda-herramientas {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--borde);
+}
+.filtros {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.filtro {
+  padding: 8px 14px;
+  min-height: 36px;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 550;
+}
+.filtro:hover {
+  color: var(--texto);
+  background: var(--campo-fondo);
+}
+.filtro.activo {
+  background: var(--acento-suave);
+  color: var(--acento);
+  border-color: var(--borde);
+}
+.estado-vacio,
+.estado-agenda {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  text-align: center;
+  padding: 64px 24px;
+  overflow-y: auto;
+}
+.estado-vacio > p {
+  color: var(--muted);
+  max-width: 380px;
+  font-size: 14px;
+}
+.estado-vacio > .boton {
+  margin-top: 8px;
+}
+.vacio-icono {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radio);
+  background: var(--campo-fondo);
+  color: var(--muted);
+  margin-bottom: 8px;
+  border: 1px solid var(--borde);
+}
+.vacio-icono svg {
+  width: 30px;
+  height: 30px;
+}
+.cita {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--borde);
+}
+.cita:last-child {
+  border-bottom: 0;
+}
+.cita-fecha {
+  width: 60px;
+  min-height: 68px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  background: var(--campo-fondo);
+}
+.cita-fecha > span {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.cita-fecha small {
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 10px;
+}
+.cita-contenido {
+  flex: 1;
+  min-width: 0;
+}
+.cita-titulo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cita-titulo h3 {
+  overflow-wrap: anywhere;
+}
+.estado {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: var(--radio-capsula);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.estado::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radio-capsula);
+  background: currentColor;
+}
+.estado-vigente {
+  background: var(--exito-suave);
+  color: var(--exito);
+}
+.estado-cancelada {
+  background: var(--error-suave);
+  color: var(--error);
+}
+.estado-vencida {
+  background: var(--panel-suave);
+  color: var(--muted);
+}
+.cita-fechas {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 6px;
+}
+.cita-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 8px;
+}
+.cita-meta > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+.cita-meta svg {
+  width: 14px;
+  height: 14px;
+}
+.cita-acciones {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.cita-acciones .boton {
+  font-size: 12px;
+}
+.nota-agenda {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.nota-agenda svg {
+  width: 15px;
+  height: 15px;
+}
+.paginacion {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  background: var(--campo-fondo);
+  border-top: 1px solid var(--borde);
+  font-size: 12px;
+  color: var(--muted);
+}
+.paginacion > div {
+  display: flex;
+  gap: 8px;
+}
+/* Barra de estado -- de lado a lado, debajo de sidebar + contenido, mismo
+   lugar (y mismo nombre de clase) que la de desktop/web. Sin fondo/borde
+   propio a propósito: vive directo sobre `--fondo`. */
+.barra-estado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 24px;
+  font-size: 11px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.barra-estado .avatar {
+  width: 22px;
+  height: 22px;
+  font-size: 10px;
+}
+.barra-estado .identidad {
+  font-size: 11px;
+}
+.barra-estado .identidad span {
+  font-size: 10px;
+  max-width: 200px;
+}
+
+/* Sidebar de navegación (componentes/Sidebar.tsx) -- copiado tal cual del
+   lenguaje visual de desktop/web (mismo nombre de clases), sólo con las dos
+   secciones de este portal (Mis citas / Nueva cita). */
+.shell-sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 11.5rem;
+  flex-shrink: 0;
+  margin: 6px 0 6px 6px;
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  transition: width 0.15s ease;
+}
+.shell-sidebar-colapsada {
+  width: 3.75rem;
+}
+.shell-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 6px 0;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  color: var(--texto);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.nav-item svg {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+.shell-sidebar-colapsada .nav-item {
+  justify-content: center;
+  padding: 10px 0;
+}
+.shell-sidebar-colapsada .nav-item-etiqueta {
+  display: none;
+}
+.nav-item:hover:not(.nav-item-activo) {
+  background: color-mix(in srgb, var(--campo-fondo) 60%, transparent);
+}
+.nav-item:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--acento);
+}
+.nav-item-activo {
+  background: var(--acento-relleno);
+  color: var(--sobre-acento);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--acento);
+}
+
+/* Botón de menú (hamburguesa) que abre el cajón del sidebar en pantallas
+   angostas -- oculto en escritorio, donde el sidebar ya convive con el
+   contenido sin taparlo. */
+.boton-menu-movil {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  width: var(--control-tactil);
+  height: var(--control-tactil);
+  flex-shrink: 0;
+  margin: 6px 6px 0;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  background: var(--panel);
+  color: var(--texto);
+  cursor: pointer;
+}
+.boton-menu-movil:hover {
+  background: var(--acento-suave);
+  border-color: var(--acento);
+}
+
+/* Por debajo de este ancho el sidebar no comparte espacio con el
+   contenido -- se sale del flujo (`position: fixed`) y vive encima como un
+   cajón, oculto por defecto, con un velo detrás que lo cierra al tocar
+   afuera. */
+@media (max-width: 768px) {
+  .boton-menu-movil {
+    display: flex;
+  }
+  .shell-sidebar,
+  .shell-sidebar.shell-sidebar-colapsada {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 40;
+    width: 15rem;
+    margin: 0;
+    border-radius: 0;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+  .shell-sidebar.shell-sidebar-abierta {
+    transform: translateX(0);
+  }
+  .shell-sidebar-colapsada .nav-item-etiqueta {
+    display: inline;
+  }
+  .shell-sidebar-colapsada .nav-item {
+    justify-content: flex-start;
+    padding: 10px 14px;
+  }
+  .shell-sidebar-velo {
+    position: fixed;
+    inset: 0;
+    z-index: 39;
+    background: var(--velo);
+  }
+}
+.volver {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+.volver svg {
+  width: 14px;
+  height: 14px;
+}
+.indicador-paso {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.formulario-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 24px;
+  align-items: start;
+}
+.bloque-formulario {
+  padding: 0 24px 24px;
+  margin: 0 0 24px;
+  min-width: 0;
+}
+.bloque-formulario legend {
+  float: left;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 24px 0 0;
+}
+.numero-paso {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radio-chico);
+  background: var(--acento-suave);
+  color: var(--acento);
+  font-size: 12px;
+}
+.descripcion-bloque {
+  clear: both;
+  padding-top: 8px;
+  padding-bottom: 24px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 550;
+  margin-bottom: 20px;
+  position: relative;
+}
+.campo:last-child {
+  margin-bottom: 0;
+}
+.campo input:not([type="checkbox"]),
+.campo textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 10px 12px;
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-chico);
+  background: var(--campo-fondo);
+  color: var(--texto);
+  font-weight: 400;
+}
+.campo input:focus,
+.campo textarea:focus {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+.campo textarea {
+  resize: vertical;
+}
+.campo input[aria-invalid="true"],
+.campo textarea[aria-invalid="true"] {
+  border-color: var(--error);
+}
+.campo input::placeholder,
+.campo textarea::placeholder {
+  color: var(--texto-atenuado);
+}
+.dos-columnas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+}
+.dos-columnas .campo {
+  margin-bottom: 20px;
+}
+.opcional {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.obligatorio {
+  color: var(--muted);
+}
+.campo > .obligatorio {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+.ayuda-campo {
+  font-size: 12px;
+  font-weight: 400;
+}
+.contador {
+  text-align: right;
+}
+.error-campo {
+  color: var(--error);
+  font-size: 12px;
+  font-weight: 400;
+}
+.selector-sitios {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+.sitio-opcion {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  background: var(--campo-fondo);
+  cursor: pointer;
+  transition:
+    border-color var(--duracion),
+    background var(--duracion);
+}
+.sitio-opcion:hover {
+  border-color: var(--borde-fuerte);
+}
+.sitio-opcion.seleccionado {
+  border-color: var(--acento);
+  background: var(--acento-suave);
+}
+.sitio-opcion > svg {
+  color: var(--muted);
+}
+/* El checkbox nativo queda funcional (foco por teclado, lectores de
+   pantalla) pero visualmente oculto -- `.sitio-indicador` es el que se ve,
+   un cuadrito propio en vez del checkbox de fábrica del navegador. */
+.sitio-opcion input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.sitio-indicador {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border: 1.5px solid var(--borde-fuerte);
+  border-radius: 6px;
+  background: var(--panel);
+  transition:
+    background var(--duracion),
+    border-color var(--duracion);
+}
+.sitio-indicador svg {
+  width: 13px;
+  height: 13px;
+  color: var(--sobre-acento-indicador);
+  opacity: 0;
+  transition: opacity var(--duracion);
+}
+.sitio-opcion.seleccionado .sitio-indicador {
+  background: var(--acento-relleno);
+  border-color: var(--acento-relleno);
+}
+.sitio-opcion.seleccionado .sitio-indicador svg {
+  opacity: 1;
+}
+.sitio-opcion input:focus-visible ~ .sitio-indicador {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+.sitio-opcion small {
+  display: block;
+  font-weight: 400;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.contador-grupo {
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: auto;
+}
+.visitantes-formulario {
+  display: grid;
+  gap: 16px;
+}
+.visitante-formulario {
+  padding: 16px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  background: var(--campo-fondo);
+}
+.visitante-encabezado {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  margin-bottom: 16px;
+}
+.visitante-encabezado h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.visitante-encabezado h3 svg {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+.visitante-encabezado .boton {
+  font-size: 12px;
+}
+.visitante-formulario .dos-columnas .campo:nth-last-child(-n + 2) {
+  margin-bottom: 0;
+}
+.agregar-visitante {
+  margin: 20px 0 8px;
+}
+.acciones-formulario {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+.acciones-formulario > .ayuda-campo {
+  margin-right: auto;
+}
+.resumen-lateral {
+  position: sticky;
+  top: 24px;
+}
+.resumen-lateral .tarjeta {
+  padding: 24px;
+}
+.resumen-lateral .tarjeta > svg {
+  color: var(--acento);
+  margin-bottom: 16px;
+}
+.resumen-lateral h2 {
+  font-size: 14px;
+}
+.resumen-lateral dl {
+  margin: 24px 0 0;
+}
+.resumen-lateral dl > div {
+  padding-block: 16px;
+  border-top: 1px solid var(--borde);
+}
+dt {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.resumen-lateral dd span {
+  display: block;
+  margin-top: 4px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.consejo {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  padding-inline: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.consejo svg {
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
+}
+.bloque-revision {
+  padding: 24px;
+}
+.titulo-bloque {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.titulo-bloque > svg {
+  color: var(--acento);
+}
+.datos-revision {
+  display: grid;
+  gap: 20px;
+  margin: 24px 0;
+  padding: 24px 0;
+  border-block: 1px solid var(--borde);
+}
+.personas-revision {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+}
+.personas-revision li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--borde);
+  overflow-wrap: anywhere;
+}
+.personas-revision li:last-child {
+  border-bottom: 0;
+}
+.personas-revision strong {
+  display: block;
+  font-size: 13px;
+}
+.personas-revision li > div > span {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.modal {
+  background: var(--elevado);
+  color: var(--texto);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 24px;
+  width: min(600px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  box-shadow: var(--sombra-panel);
+  margin: auto;
+  overflow-y: auto;
+}
+.modal::backdrop {
+  background: var(--velo);
+}
+.modal-encabezado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.modal > p + p {
+  margin-top: 12px;
+}
+.modal > .aviso {
+  margin-top: 16px;
+}
+.saltar {
+  position: fixed;
+  top: 12px;
+  left: 16px;
+  z-index: 100;
+  padding: 12px 16px;
+  background: var(--acento-relleno);
+  color: var(--sobre-acento);
+  border-radius: var(--radio-chico);
+}
+.saltar:not(:focus) {
+  clip-path: inset(50%);
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+@media (max-width: 1150px) {
+  .contenido {
+    padding: 20px 20px;
+  }
+  .formulario-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .resumen-lateral {
+    display: none;
+  }
+  .cita {
+    gap: 16px;
+    padding: 16px;
+  }
+}
+@media (max-width: 800px) {
+  .acceso-barra,
+  .acceso-pie {
+    padding: 24px;
+  }
+  .acceso-contenido {
+    grid-template-columns: 1fr;
+    gap: 32px;
+    padding: 32px 24px;
+    max-width: 560px;
+  }
+  .pasos-acceso {
+    display: none;
+  }
+  .acceso-presentacion h1 {
+    font-size: 36px;
+  }
+  .identidad {
+    display: none;
+  }
+  .barra-cuenta {
+    gap: 8px;
+  }
+}
+@media (max-width: 540px) {
+  .acceso-tarjeta {
+    padding: 24px;
+  }
+  .acceso-pie {
+    font-size: 10px;
+  }
+  .contenido {
+    padding: 16px;
+  }
+  h1 {
+    font-size: 26px;
+  }
+  .encabezado-pagina {
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .agenda-herramientas {
+    flex-wrap: wrap;
+    padding: 12px;
+    gap: 8px;
+  }
+  .agenda-herramientas > .boton {
+    margin-left: auto;
+    font-size: 12px;
+  }
+  .filtro {
+    padding-inline: 12px;
+  }
+  .estado-vacio {
+    padding: 48px 20px;
+  }
+  .estado-vacio h2 {
+    font-size: 18px;
+  }
+  .cita {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 20px 16px;
+  }
+  .cita-fecha {
+    width: 48px;
+  }
+  .cita-acciones {
+    flex-direction: row;
+    width: 100%;
+    margin-top: 4px;
+    justify-content: flex-end;
+  }
+  .cita-titulo {
+    gap: 8px;
+  }
+  .cita-titulo h3 {
+    font-size: 14px;
+  }
+  .nota-agenda {
+    align-items: flex-start;
+    font-size: 11px;
+    padding-inline: 8px;
+  }
+  .paginacion {
+    padding: 16px 12px;
+  }
+  .paginacion .boton {
+    font-size: 12px;
+    padding-inline: 8px;
+  }
+  .separador,
+  .barra-cuenta .avatar {
+    display: none;
+  }
+  .barra-estado {
+    padding-inline: 16px;
+    font-size: 10px;
+  }
+  .bloque-formulario {
+    padding: 0 16px 20px;
+  }
+  .dos-columnas {
+    grid-template-columns: 1fr;
+  }
+  .visitante-formulario {
+    padding: 12px;
+  }
+  .visitante-formulario .dos-columnas .campo:nth-last-child(2) {
+    margin-bottom: 20px;
+  }
+  .indicador-paso {
+    display: none;
+  }
+  .acciones-formulario {
+    flex-wrap: wrap;
+  }
+  .modal {
+    padding: 20px;
+  }
+  .selector-sitios {
+    grid-template-columns: 1fr;
+  }
+}
+@media (pointer: coarse) {
+  .campo input:not([type="checkbox"]),
+  .campo textarea,
+  .filtro {
+    min-height: var(--control-tactil);
+  }
+  .campo input,
+  .campo textarea {
+    font-size: 16px;
+  }
+  .solo-icono {
+    width: var(--control-tactil);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .giro {
+    animation: none;
+  }
+}
+
+/* Selector de fechas de "Nueva cita" (componentes/SelectorFechas.tsx) --
+   mismo mecanismo de theming que usa el calendario de Agenda del desktop
+   (desktop/src/index.css): FullCalendar expone estas variables `--fc-*`
+   justamente para esto, en vez de pisar sus clases a mano. Ver index.html
+   sobre por qué esta app puede usar FullCalendar bajo una CSP estricta. */
+.selector-fechas {
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  padding: 12px;
+  background: var(--campo-fondo);
+}
+.selector-fechas .fc {
+  --fc-border-color: var(--borde);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: var(--panel);
+  --fc-today-bg-color: var(--acento-suave);
+  --fc-highlight-color: var(--acento-suave);
+  --fc-button-bg-color: var(--panel);
+  --fc-button-border-color: var(--borde);
+  --fc-button-text-color: var(--texto);
+  --fc-button-hover-bg-color: var(--panel-suave);
+  --fc-button-hover-border-color: var(--borde-fuerte);
+  --fc-button-active-bg-color: var(--acento-relleno);
+  --fc-button-active-border-color: var(--acento-relleno);
+  color: var(--texto);
+  font-family: inherit;
+}
+.selector-fechas .fc-toolbar-title {
+  color: var(--texto);
+  font-size: 15px;
+  font-weight: 600;
+}
+.selector-fechas .fc-col-header-cell-cushion,
+.selector-fechas .fc-daygrid-day-number {
+  color: var(--texto);
+  font-size: 12px;
+}
+.selector-fechas .fc-day-other .fc-daygrid-day-number {
+  color: var(--muted);
+}
+.selector-fechas .fc-button {
+  text-transform: none;
+  box-shadow: none !important;
+  font-size: 12px;
+}
+/* El ícono de prev/next de FullCalendar viene de una fuente propia
+   (`fcicons`) embebida como `data:` en su CSS -- la CSP de esta app no
+   permite `data:` en `font-src` (a propósito, no se relaja sólo por esto).
+   Se reemplaza por flechas de texto plano en la fuente heredada: si ningún
+   elemento termina usando `font-family: fcicons`, el navegador nunca llega
+   a pedir/decodificar esa fuente, así que la CSP ni se entera. */
+.selector-fechas .fc-icon {
+  font-family: inherit !important;
+  font-size: 14px !important;
+}
+.selector-fechas .fc-icon-chevron-left::before {
+  content: "‹";
+}
+.selector-fechas .fc-icon-chevron-right::before {
+  content: "›";
+}
+
+/* Toggle Lista/Calendario de "Mis citas" -- mismos `.filtro`/`.filtro.activo`
+   que ya usan las pestañas de estado (Todas/Vigentes/...), sólo envueltos
+   en su propio grupo separado con un borde para distinguirlo visualmente
+   de los filtros de estado. */
+.toggle-vista {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+}
+
+/* Calendario de "Mis citas" (componentes/CitasCalendario.tsx) -- mismo
+   theming que `.selector-fechas`, pero a tamaño completo (llena la
+   tarjeta) y con estados de color propios (vigente/vencida/cancelada, no
+   sólo un color de acento único). */
+.citas-calendario {
+  height: 100%;
+}
+.citas-calendario .fc {
+  --fc-border-color: var(--borde);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: var(--panel);
+  --fc-today-bg-color: var(--acento-suave);
+  --fc-highlight-color: var(--acento-suave);
+  --fc-button-bg-color: var(--panel);
+  --fc-button-border-color: var(--borde);
+  --fc-button-text-color: var(--texto);
+  --fc-button-hover-bg-color: var(--panel-suave);
+  --fc-button-hover-border-color: var(--borde-fuerte);
+  --fc-button-active-bg-color: var(--acento-relleno);
+  --fc-button-active-border-color: var(--acento-relleno);
+  height: 100%;
+  color: var(--texto);
+  font-family: inherit;
+}
+.citas-calendario .fc-toolbar-title {
+  color: var(--texto);
+  font-size: 18px;
+  font-weight: 650;
+}
+.citas-calendario .fc-col-header-cell-cushion,
+.citas-calendario .fc-daygrid-day-number,
+.citas-calendario .fc-list-day-text,
+.citas-calendario .fc-list-day-side-text {
+  color: var(--texto);
+}
+.citas-calendario .fc-day-other .fc-daygrid-day-number {
+  color: var(--muted);
+}
+.citas-calendario .fc-button {
+  text-transform: none;
+  box-shadow: none !important;
+}
+.citas-calendario .fc-icon {
+  font-family: inherit !important;
+  font-size: 14px !important;
+}
+.citas-calendario .fc-icon-chevron-left::before {
+  content: "‹";
+}
+.citas-calendario .fc-icon-chevron-right::before {
+  content: "›";
+}
+.citas-calendario .fc-list-empty {
+  background: transparent;
+  color: var(--muted);
+}
+.citas-calendario-evento-vigente {
+  background-color: var(--acento-relleno) !important;
+  border-color: var(--acento-relleno) !important;
+}
+.citas-calendario-evento-vencida {
+  background-color: var(--panel-suave) !important;
+  border-color: var(--borde-fuerte) !important;
+  color: var(--muted) !important;
+}
+.citas-calendario-evento-cancelada {
+  background-color: transparent !important;
+  border-color: var(--error) !important;
+  color: var(--error) !important;
+  text-decoration: line-through;
+  opacity: 0.75;
+}
