@@ -18,20 +18,30 @@ pub mod services;
 pub mod texto;
 pub mod tiempo;
 
-// `cifrado-sqlcipher` y `sqlite-plano` compilan versiones incompatibles de
-// `libsqlite3-sys` (vendorizado con o sin OpenSSL) -- las dos a la vez no
-// tiene sentido y probablemente ni compile limpio. Ninguna de las dos
-// tampoco es un error silencioso más grave: sin alguna, `rusqlite` no tiene
-// ningún motor SQLite vendorizado para enlazar.
-#[cfg(all(feature = "cifrado-sqlcipher", feature = "sqlite-plano"))]
+// `cifrado-sqlcipher`, `sqlite-plano` y `cifrado-sqlite3mc` compilan
+// versiones incompatibles de `libsqlite3-sys` (vendorizado con OpenSSL, sin
+// cifrar, o -- a futuro -- con SQLite3 Multiple Ciphers) -- dos o más a la
+// vez no tiene sentido y probablemente ni compile limpio. Ninguna de las
+// tres tampoco es un error silencioso más grave: sin alguna, `rusqlite` no
+// tiene ningún motor SQLite vendorizado para enlazar.
+#[cfg(any(
+    all(feature = "cifrado-sqlcipher", feature = "sqlite-plano"),
+    all(feature = "cifrado-sqlcipher", feature = "cifrado-sqlite3mc"),
+    all(feature = "sqlite-plano", feature = "cifrado-sqlite3mc"),
+))]
 compile_error!(
-    "cifrado-sqlcipher y sqlite-plano son mutuamente excluyentes -- elegí una sola \
-     (ver Cargo.toml)"
+    "cifrado-sqlcipher, sqlite-plano y cifrado-sqlite3mc son mutuamente excluyentes -- \
+     elegí una sola (ver Cargo.toml)"
 );
-#[cfg(not(any(feature = "cifrado-sqlcipher", feature = "sqlite-plano")))]
+#[cfg(not(any(
+    feature = "cifrado-sqlcipher",
+    feature = "sqlite-plano",
+    feature = "cifrado-sqlite3mc"
+)))]
 compile_error!(
-    "falta elegir un motor SQLite: activá la feature cifrado-sqlcipher (real, default) o \
-     sqlite-plano (rápido para iterar local, sin cifrar -- ver Cargo.toml)"
+    "falta elegir un motor SQLite: activá la feature cifrado-sqlcipher (real, default), \
+     sqlite-plano (rápido para iterar local, sin cifrar) o cifrado-sqlite3mc (en \
+     evaluación, todavía sin motor real enlazado -- ver Cargo.toml)"
 );
 
 #[cfg(feature = "terminal-ui")]

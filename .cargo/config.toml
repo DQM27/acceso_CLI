@@ -5,3 +5,12 @@ build-native = ["--config", "build.rustflags=['-C','target-cpu=native']", "build
 # feature `sqlite-plano`).
 build-plano = ["build", "--no-default-features", "--features", "terminal-ui,nube,sqlite-plano"]
 test-plano = ["test", "--no-default-features", "--features", "terminal-ui,nube,sqlite-plano"]
+# Alias para `desktop/src-tauri` (ver el comentario sobre `[features]` en su
+# Cargo.toml) -- ese crate quedó con `sqlite-plano` como default porque el
+# CLI de Tauri no soporta `--no-default-features`; estos alias, en cambio,
+# usan `cargo build` directo (sí lo soporta) para compilar/verificar los
+# motores reales explícitamente. Funcionan desde cualquier directorio del
+# repo gracias a `--manifest-path`. No hay hot-reload de Tauri con estos --
+# son para verificación puntual del motor, no iteración de UI.
+build-desktop-cipher = ["build", "--manifest-path", "desktop/src-tauri/Cargo.toml", "--no-default-features", "--features", "cifrado-sqlcipher"]
+build-desktop-3mc = ["build", "--manifest-path", "desktop/src-tauri/Cargo.toml", "--no-default-features", "--features", "cifrado-sqlite3mc"]

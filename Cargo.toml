@@ -26,9 +26,21 @@ cifrado-sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
 # SQLite sin cifrar, para iterar local rápido sin pagar el costo de compilar
 # OpenSSL -- NUNCA usar para nada que toque una base de producción real (el
 # archivo queda legible por cualquiera). Mutuamente excluyente con
-# `cifrado-sqlcipher` (ver el `compile_error!` en `lib.rs`); alias
-# `cargo build-plano`/`cargo test-plano` en `.cargo/config.toml`.
+# `cifrado-sqlcipher`/`cifrado-sqlite3mc` (ver el `compile_error!` en
+# `lib.rs`); alias `cargo build-plano`/`cargo test-plano` en
+# `.cargo/config.toml`.
 sqlite-plano = ["rusqlite/bundled"]
+# SQLite3 Multiple Ciphers (ChaCha20-Poly1305) -- tercer motor en evaluación
+# para el benchmark de esta rama (ver
+# docs/auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md, sección 12).
+# TODO(bench/sqlite-3way): reserva el nombre/lugar en el switch de tres vías,
+# pero todavía NO enlaza un motor real -- no existe un crate de bindings en
+# crates.io; falta decidir e implementar la integración (vendorizar el
+# amalgamation vs. link a DLL, ver sección 11 del mismo documento) antes de
+# que esta feature compile algo. Mientras tanto, activarla sola deja a
+# `rusqlite` sin ningún motor vendorizado y el build falla en el link --
+# comportamiento esperado, no un bug.
+cifrado-sqlite3mc = []
 
 [dependencies]
 chrono = "0.4.45"
