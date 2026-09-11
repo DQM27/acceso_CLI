@@ -25,6 +25,23 @@ type Seleccion =
   | { tipo: "bloqueada"; contratista: ContratistaResumen; mensaje: string }
   | { tipo: "formulario"; contratista: ContratistaResumen; preparacion: PreparacionIngreso };
 
+/** Extraída de `confirmarIngreso` para poder testearla sin renderizar el
+ * modal ni mockear la API -- mismo criterio que `esquema` en los
+ * Formulario*. `requiereGafete` en `false` siempre es válido, con `null`
+ * (nunca lee `texto` en ese caso: un texto tipeado y después descartado por
+ * cambiar de contratista no debería poder colarse). */
+export function validarGafete(
+  texto: string,
+  requiereGafete: boolean,
+): { valido: true; numero: number | null } | { valido: false; mensaje: string } {
+  if (!requiereGafete) return { valido: true, numero: null };
+  const recortado = texto.trim();
+  const numero = Number.parseInt(recortado, 10);
+  if (!recortado) return { valido: false, mensaje: "El gafete es requerido" };
+  if (Number.isNaN(numero)) return { valido: false, mensaje: "Ingrese un número de gafete válido" };
+  return { valido: true, numero };
+}
+
 /**
  * El buscador queda siempre visible arriba; al elegir un contratista el
  * panel correspondiente (formulario o motivo de bloqueo) se expande debajo
@@ -122,21 +139,15 @@ export default function NuevoIngresoModal({
   async function confirmarIngreso() {
     if (seleccion.tipo !== "formulario") return;
     const { preparacion } = seleccion;
-    let gafete: number | null = null;
-    if (preparacion.requiere_gafete) {
-      const numero = Number.parseInt(gafeteTexto.trim(), 10);
-      if (!gafeteTexto.trim() || Number.isNaN(numero)) {
-        setError(
-          gafeteTexto.trim() ? "Ingrese un número de gafete válido" : "El gafete es requerido",
-        );
-        return;
-      }
-      gafete = numero;
+    const resultado = validarGafete(gafeteTexto, preparacion.requiere_gafete);
+    if (!resultado.valido) {
+      setError(resultado.mensaje);
+      return;
     }
     setError(null);
     setEnviando(true);
     try {
-      await registrarIngreso(preparacion.contratista_id, medio, gafete);
+      await registrarIngreso(preparacion.contratista_id, medio, resultado.numero);
       setMensaje(`✓ Ingreso registrado — ${preparacion.nombre}`);
       setSeleccion({ tipo: "ninguna" });
       setFiltro("");

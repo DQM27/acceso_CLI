@@ -197,7 +197,7 @@ export default function GestionGafeteModal({
   );
 }
 
-function textoEstado(estado: GafeteResumen["estado"]): string {
+export function textoEstado(estado: GafeteResumen["estado"]): string {
   switch (estado) {
     case "Disponible":
       return "Disponible";
