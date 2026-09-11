@@ -201,33 +201,6 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
     })
 }
 
-/// Guarda el secreto de este dispositivo (pegado una sola vez desde el
-/// panel de administración). Autoriza y escribe en el mismo paso —
-/// escribir un archivo chico es barato, no hace falta soltar el candado
-/// como en `sincronizar_con_nube`.
-#[tauri::command]
-pub fn guardar_secreto_dispositivo(
-    secreto: String,
-    state: tauri::State<GuiState>,
-) -> Result<(), String> {
-    let actor = state.sesion_activa()?;
-    state
-        .core()
-        .guardar_secreto_dispositivo(&actor, None, None, &secreto)
-        .map_err(mensaje_gestion_nube)
-}
-
-/// No revela el secreto -- sólo si ya hay uno guardado, para que la
-/// pantalla sepa si mostrar el campo para pegarlo o el estado "configurado".
-#[tauri::command]
-pub fn secreto_dispositivo_guardado(state: tauri::State<GuiState>) -> Result<bool, String> {
-    let actor = state.sesion_activa()?;
-    state
-        .core()
-        .secreto_dispositivo_guardado(&actor, None, None)
-        .map_err(mensaje_gestion_nube)
-}
-
 /// Arranque de una base vacía (`requiere_configuracion_inicial` en
 /// `comandos::autenticacion`) -- sin `sesion_activa()` a propósito, porque
 /// todavía no existe ningún usuario con quien loguearse. Guarda el secreto

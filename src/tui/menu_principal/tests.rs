@@ -108,21 +108,13 @@ fn enter_y_accesos_numericos_emiten_apertura_correcta() {
 }
 
 #[test]
-fn pestanas_excluyen_acciones_y_reusan_permisos_del_rol() {
-    assert_eq!(OpcionMenu::pestanas_para(RolUsuario::Root).len(), 8);
+fn pestanas_excluyen_acciones_pero_ya_no_por_rol() {
+    let root = OpcionMenu::pestanas_para(RolUsuario::Root);
+    assert_eq!(root.len(), 8);
 
+    // Ningún rol restringe pestañas: Operador ve exactamente las mismas.
     let operador = OpcionMenu::pestanas_para(RolUsuario::Operador);
-    assert_eq!(
-        operador,
-        vec![
-            OpcionMenu::NuevoIngreso,
-            OpcionMenu::IngresosActivos,
-            OpcionMenu::Historial,
-            OpcionMenu::Contratistas,
-            OpcionMenu::Empresas,
-            OpcionMenu::CambiarPassword,
-        ]
-    );
+    assert_eq!(operador, root);
     assert!(!operador.contains(&OpcionMenu::CerrarSesion));
     assert!(!operador.contains(&OpcionMenu::Salir));
 
@@ -195,8 +187,8 @@ fn todos_los_roles_pueden_abrir_cambio_de_password() {
 }
 
 #[test]
-fn auditoria_es_visible_para_administrador_y_root_pero_no_operador() {
-    for rol in [RolUsuario::Root, RolUsuario::Administrador] {
+fn auditoria_es_visible_para_cualquier_rol() {
+    for rol in [RolUsuario::Root, RolUsuario::Administrador, RolUsuario::Operador] {
         assert!(OpcionMenu::visibles_para(rol).contains(&OpcionMenu::Auditoria));
         let mut state = MenuPrincipalState::default();
         assert_eq!(
@@ -204,7 +196,6 @@ fn auditoria_es_visible_para_administrador_y_root_pero_no_operador() {
             AccionMenu::Abrir(OpcionMenu::Auditoria)
         );
     }
-    assert!(!OpcionMenu::visibles_para(RolUsuario::Operador).contains(&OpcionMenu::Auditoria));
 }
 
 #[test]
@@ -266,26 +257,19 @@ fn el_menu_root_muestra_todas_las_opciones_en_orden_sin_recortarlas() {
     }
 }
 
+/// Aplanado de roles (docs/decisiones-tecnicas.md): cualquier sesión ve y
+/// puede abrir Usuarios ahora -- la protección real sigue siendo que nadie
+/// asigna el rol ROOT salvo otro ROOT (`puede_gestionar_usuario`).
 #[test]
-fn un_operador_no_ve_ni_puede_abrir_usuarios() {
-    let visibles = OpcionMenu::visibles_para(RolUsuario::Operador);
-    assert!(!visibles.contains(&OpcionMenu::Usuarios));
+fn cualquier_rol_ve_y_puede_abrir_usuarios() {
+    for rol in [RolUsuario::Root, RolUsuario::Administrador, RolUsuario::Operador] {
+        let visibles = OpcionMenu::visibles_para(rol);
+        assert!(visibles.contains(&OpcionMenu::Usuarios));
 
-    let mut s = MenuPrincipalState::default();
-    assert_eq!(
-        s.handle_key(k(KeyCode::Char('6')), RolUsuario::Operador),
-        AccionMenu::Ninguna
-    );
-}
-
-#[test]
-fn un_administrador_si_ve_y_puede_abrir_usuarios() {
-    let visibles = OpcionMenu::visibles_para(RolUsuario::Administrador);
-    assert!(visibles.contains(&OpcionMenu::Usuarios));
-
-    let mut s = MenuPrincipalState::default();
-    assert_eq!(
-        s.handle_key(k(KeyCode::Char('6')), RolUsuario::Administrador),
-        AccionMenu::Abrir(OpcionMenu::Usuarios)
-    );
+        let mut s = MenuPrincipalState::default();
+        assert_eq!(
+            s.handle_key(k(KeyCode::Char('6')), rol),
+            AccionMenu::Abrir(OpcionMenu::Usuarios)
+        );
+    }
 }

@@ -78,13 +78,14 @@ impl OpcionMenu {
         }
     }
 
-    /// Sólo ROOT y Administrador administran usuarios y ajustes del sistema — un
-    /// Operador con acceso a Usuarios podría autopromoverse a Administrador o Root.
-    fn visible_para(self, rol: RolUsuario) -> bool {
-        match self {
-            Self::Usuarios | Self::Auditoria => rol != RolUsuario::Operador,
-            _ => true,
-        }
+    /// Ya no hay opciones restringidas por rol -- la autorización real vive
+    /// en el panel administrativo (ver docs/decisiones-tecnicas.md,
+    /// "aplanado de roles"); quien tiene sesión puede todo. La protección
+    /// contra autopromoverse a ROOT sigue viva en `puede_gestionar_usuario`
+    /// (nadie asigna el rol ROOT salvo otro ROOT), así que el riesgo que
+    /// esto ocultaba no reaparece.
+    fn visible_para(self, _rol: RolUsuario) -> bool {
+        true
     }
 
     pub fn visibles_para(rol: RolUsuario) -> Vec<Self> {

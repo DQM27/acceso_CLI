@@ -215,7 +215,7 @@ fn ctrl_numero_salta_directo_a_la_pantalla_sin_pasar_por_el_menu() {
 /// Usuarios con Ctrl+6, igual que no puede con un '6' suelto parado en
 /// el menú.
 #[test]
-fn ctrl_numero_respeta_el_rol_igual_que_el_menu() {
+fn ctrl_numero_ya_no_esta_restringido_por_rol() {
     let mut app = App {
         vista: Vista::NuevoIngreso,
         sesion: Some(UsuarioSesion {
@@ -232,7 +232,7 @@ fn ctrl_numero_respeta_el_rol_igual_que_el_menu() {
         KeyEvent::new(KeyCode::Char('6'), KeyModifiers::CONTROL),
         None,
     );
-    assert_eq!(app.vista, Vista::NuevoIngreso);
+    assert_eq!(app.vista, Vista::Usuarios);
 }
 
 #[test]
@@ -292,7 +292,7 @@ fn digito_suelto_sin_ctrl_no_dispara_el_salto() {
 }
 
 #[test]
-fn ctrl_flechas_recorrer_pestanas_envuelve_y_respeta_el_rol() {
+fn ctrl_flechas_recorrer_pestanas_envuelve_igual_para_cualquier_rol() {
     let mut root = App {
         vista: Vista::NuevoIngreso,
         sesion: Some(sesion("Root")),
@@ -316,7 +316,7 @@ fn ctrl_flechas_recorrer_pestanas_envuelve_y_respeta_el_rol() {
         ..App::default()
     };
     operador.procesar_tecla_global(KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL), None);
-    assert_eq!(operador.vista, Vista::CambiarPassword);
+    assert_eq!(operador.vista, Vista::Usuarios);
 }
 
 #[test]

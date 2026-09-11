@@ -1,16 +1,8 @@
-use std::io::{self, Write};
-
 use control_acceso::application::{AppCore, BootstrapError};
 use control_acceso::database::connection::{RutaBaseDatosError, ruta_base_datos};
 use control_acceso::instancia::{InstanciaError, InstanciaGuard};
 use control_acceso::interfaz_preferida::{self, Interfaz};
 use control_acceso::tui::app::SalidaApp;
-
-/// Flag de recuperación: restablece la contraseña del usuario ROOT sin pasar por la
-/// TUI, para cuando lo olvidó y no hay otro admin/root que se la pueda cambiar desde
-/// la app. Sólo sirve para quien tiene acceso al ejecutable y al archivo de la base
-/// de datos (ver comentario en `AppCore::resetear_password_root`).
-const FLAG_RESET_ROOT: &str = "--reset-root";
 
 /// Interfaz clásica (menús y paneles). Sin flags, la ruta por defecto es la
 /// que diga `interfaz_preferida::leer()` (CLI si no hay ninguna
@@ -78,8 +70,6 @@ enum StartupError {
     Terminal(#[source] std::io::Error),
     #[error(transparent)]
     Usuario(control_acceso::services::error::UsuarioServiceError),
-    #[error("No se pudo leer la entrada: {0}")]
-    Entrada(#[source] std::io::Error),
     #[error(transparent)]
     Cli(#[from] control_acceso::cli::CliError),
 }
@@ -136,25 +126,43 @@ fn relanzar_en_interfaz(interfaz: Interfaz) {
     let _ = comando.spawn();
 }
 
+/// El arranque inicial de un sitio (base local vacía) ya no se resuelve acá
+/// -- ni la CLI ni la TUI clásica vuelven a ofrecer "crear un ROOT" a
+/// quien sea que tenga el ejecutable y el archivo de la base: ese camino
+/// fabricaba una identidad sin verificar nada contra la nube (ver
+/// docs/decisiones-tecnicas.md, "cierre del bootstrap local de ROOT"). El
+/// arranque real de un sitio nuevo es la app de escritorio, que exige el
+/// secreto de dispositivo y trae el catálogo (usuarios incluidos) ya
+/// existente en Supabase.
+fn mostrar_mensaje_configuracion_inicial() {
+    eprintln!(
+        "Esta base de datos todavía no tiene usuarios. El arranque inicial de un \
+         sitio se hace desde la app de escritorio (pegando el secreto de \
+         dispositivo), no desde acá."
+    );
+}
+
 /// Ruta por defecto: la CLI. Mismo guard de instancia (lo
 /// adquiere `run` antes de bifurcar) y mismo respaldo diario que la TUI
-/// clásica; la configuración inicial la detecta y la explica la propia
-/// CLI (remite a `--tui-clasica` para crear el ROOT).
+/// clásica.
 /// `Some(Interfaz::Clasica)` cuando el operador confirmó `/clasico`: la
 /// preferencia ya quedó guardada, sólo falta que `run()` relance el proceso.
 fn run_cli(ruta_base_datos: &std::path::Path) -> Result<Option<Interfaz>, StartupError> {
     let core = AppCore::abrir(ruta_base_datos).map_err(StartupError::Bootstrap)?;
+    if core
+        .requiere_configuracion_inicial()
+        .map_err(StartupError::Usuario)?
+    {
+        mostrar_mensaje_configuracion_inicial();
+        return Ok(None);
+    }
     let reiniciar_en_clasica =
         control_acceso::cli::run(core, None, ruta_base_datos.to_path_buf())
             .map_err(StartupError::Cli)?;
     Ok(reiniciar_en_clasica.then_some(Interfaz::Clasica))
 }
 
-/// `--tui-clasica`: la interfaz original de menús y paneles. Sigue siendo la
-/// única que crea el usuario ROOT inicial. Si el operador confirma "Modo
-/// CLI" en el Menú Principal (`SalidaApp::ReiniciarEnCli`), la
-/// preferencia ya queda guardada y `run()` relanza el proceso con
-/// `--cli`.
+/// `--tui-clasica`: la interfaz original de menús y paneles.
 fn run_tui_clasica(ruta_base_datos: &std::path::Path) -> Result<Option<Interfaz>, StartupError> {
     let core = match AppCore::abrir(ruta_base_datos) {
         Ok(core) => core,
@@ -168,16 +176,15 @@ fn run_tui_clasica(ruta_base_datos: &std::path::Path) -> Result<Option<Interfaz>
             return Err(StartupError::Bootstrap(error));
         }
     };
-    let requiere_configuracion_inicial = core
+    if core
         .requiere_configuracion_inicial()
-        .map_err(StartupError::Usuario)?;
-    let salida = control_acceso::tui::terminal::run(
-        &core,
-        requiere_configuracion_inicial,
-        None,
-        ruta_base_datos.to_path_buf(),
-    )
-    .map_err(StartupError::Terminal)?;
+        .map_err(StartupError::Usuario)?
+    {
+        mostrar_mensaje_configuracion_inicial();
+        return Ok(None);
+    }
+    let salida = control_acceso::tui::terminal::run(&core, false, None, ruta_base_datos.to_path_buf())
+        .map_err(StartupError::Terminal)?;
 
     match salida {
         SalidaApp::Cerrar => Ok(None),
@@ -192,83 +199,12 @@ fn run_tui_clasica(ruta_base_datos: &std::path::Path) -> Result<Option<Interfaz>
     }
 }
 
-fn leer_linea(prompt: &str) -> Result<String, StartupError> {
-    print!("{prompt}");
-    io::stdout().flush().map_err(StartupError::Entrada)?;
-    let mut linea = String::new();
-    io::stdin()
-        .read_line(&mut linea)
-        .map_err(StartupError::Entrada)?;
-    Ok(linea.trim().to_string())
-}
-
-/// Flujo de `--reset-root`: adquiere el mismo bloqueo de instancia que la TUI (para no
-/// pisar una sesión abierta), abre la base y restablece la contraseña del ROOT que se
-/// indique, sin necesidad de loguearse.
-fn ejecutar_reset_root() -> Result<(), StartupError> {
-    let ruta_base_datos = ruta_base_datos().map_err(StartupError::RutaBaseDatos)?;
-    let _instancia = InstanciaGuard::adquirir(&ruta_base_datos).map_err(StartupError::Instancia)?;
-    let core = AppCore::abrir(&ruta_base_datos).map_err(StartupError::Bootstrap)?;
-
-    let roots = core.listar_roots_activos().map_err(StartupError::Usuario)?;
-    let root = match roots.as_slice() {
-        [] => {
-            eprintln!("No hay ningún usuario ROOT activo en la base de datos.");
-            std::process::exit(1);
-        }
-        [unico] => unico.clone(),
-        varios => {
-            println!(
-                "Hay varios usuarios ROOT activos. Indique la cédula del que desea restablecer:"
-            );
-            for usuario in varios {
-                println!("  {} - {}", usuario.cedula, usuario.nombre);
-            }
-            let cedula = leer_linea("Cédula: ")?;
-            varios
-                .iter()
-                .find(|usuario| usuario.cedula == cedula)
-                .map_or_else(
-                    || {
-                        eprintln!("Esa cédula no corresponde a ningún ROOT activo.");
-                        std::process::exit(1);
-                    },
-                    Clone::clone,
-                )
-        }
-    };
-
-    println!(
-        "Restableciendo la contraseña de {} ({}).",
-        root.nombre, root.cedula
-    );
-    let nueva = rpassword::prompt_password("Nueva contraseña: ").map_err(StartupError::Entrada)?;
-    let confirmacion =
-        rpassword::prompt_password("Confirme la contraseña: ").map_err(StartupError::Entrada)?;
-    if nueva != confirmacion {
-        eprintln!("Las contraseñas no coinciden. No se hizo ningún cambio.");
-        std::process::exit(1);
-    }
-
-    core.resetear_password_root(root.id, &nueva)
-        .map_err(StartupError::Usuario)?;
-    println!("Contraseña actualizada correctamente.");
-    Ok(())
-}
-
 fn main() {
-    let es_reset_root = std::env::args().any(|arg| arg == FLAG_RESET_ROOT);
-    if !es_reset_root && relanzar_en_alacritty() {
+    if relanzar_en_alacritty() {
         return;
     }
 
-    let resultado = if es_reset_root {
-        ejecutar_reset_root()
-    } else {
-        run()
-    };
-
-    if let Err(error) = resultado {
+    if let Err(error) = run() {
         eprintln!("Error: {error}");
         std::process::exit(1);
     }

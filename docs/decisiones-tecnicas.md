@@ -144,6 +144,124 @@ pasan sin cambios.
 
 ---
 
+## 2026-09-11 — Aplanado de roles: la autorización real vive en el panel
+
+**Contexto:** la app nació como un kiosco 100% local (sin nube ni
+sincronización posible), así que tenía sentido que ROOT/Administrador
+fueran los únicos que podían crear usuarios, ver auditoría o configurar la
+nube -- no había otra autoridad. Con la nube ya como fuente de verdad
+(`administradores_panel`/Supabase Auth deciden quién existe y qué rol
+tiene), esa duplicación de autoridad ya no aporta nada: sólo agrega
+fricción y una superficie extra que mantener sincronizada con el panel.
+
+**Decisión:** las apps (desktop/TUI/CLI) dejan de negarle ninguna acción a
+nadie por su rol -- quien tiene una sesión válida (que ya pasó el filtro
+del panel) puede todo dentro de la app. La única protección que se
+mantiene es que nadie asigna/gestiona el rol ROOT salvo otro ROOT
+(`puede_gestionar_usuario` en `src/domain/autorizacion.rs`) -- no es un
+gate de "quién ve qué pantalla", es específicamente para que nadie se
+autopromueva a la identidad más alta desde un formulario.
+
+`RolUsuario::puede(Operacion)` pasa a devolver `true` siempre. Los ~30
+call-sites que hacían `if !rol.puede(...) { return Err(...) }` quedan
+como código muerto (nunca se disparan) en vez de removerse uno por uno --
+riesgo/beneficio no lo justificaba en esta pasada; queda como limpieza
+futura si se quiere.
+
+**Se encontraron y cerraron dos gates duplicados** que NO pasaban por
+`Operacion`/`puede()` (por eso `cargo test-plano` no los detectó
+automáticamente al cambiar sólo `autorizacion.rs` -- hubo que buscarlos a
+mano y corregir los tests que asumían la restricción vieja):
+- `src/tui/menu_principal/state.rs::visible_para` -- ocultaba
+  Usuarios/Auditoria del menú a un Operador con un `match` hardcodeado,
+  sin tocar `Operacion::VerAuditoria`/`GestionarUsuarios`.
+- `src/tui/contratistas/state.rs` -- `cedula_editable`/`acceso_editable` sí
+  venían de `Operacion::EditarCedulaContratista`/`ActivarDesactivarContratista`
+  (ya aplanados), pero varios tests de navegación de formulario (`campo`,
+  orden de Tab) tenían hardcodeado el índice que resultaba de excluir
+  Cédula -- se actualizaron para reflejar que Cédula es el campo 0 para
+  cualquier rol ahora.
+
+**Auditoría se queda local** (no migra a Supabase, revirtiendo la idea de
+la entrada anterior) -- con roles aplanados no queda ninguna pantalla
+"sólo para admin" que justificar por presencia física en desktop, así que
+mover la tabla es ingeniería sin beneficio real. La transparencia del log
+(quién cambió qué) es el control en sí mismo, no algo que haya que
+restringir a quien lo vea -- no son datos sensibles.
+
+**`GestionarNube` no se aplanó, se eliminó** -- la "pantalla Nube" de
+post-login (repegar/rotar el secreto de dispositivo desde una sesión ya
+abierta) resultó ser código muerto en las tres plataformas: ningún
+componente de desktop ni de Android la llamaba (`guardarSecretoDispositivo`/
+`secretoDispositivoGuardado` existían en `desktop/src/api/nube.ts` y como
+comandos Tauri, pero sin ninguna pantalla que los invocara). Se eliminaron
+esos dos comandos Tauri, su registro en `lib.rs`, y sus wrappers en
+`api/nube.ts`. El secreto de dispositivo se configura una sola vez, en el
+arranque inicial (`configurar_dispositivo_inicial`), y no se vuelve a
+tocar desde adentro de la app corriendo. `AppCore::guardar_secreto_dispositivo`/
+`secreto_dispositivo_guardado` (núcleo) se dejaron intactos porque
+`mobile/rust-core` los sigue exponiendo vía `uniffi` (tampoco los llama
+ninguna pantalla de Android hoy, pero tocar los bindings generados de Kotlin
+sin poder recompilar/verificar el lado Android en este entorno era más
+riesgo que beneficio para esta pasada).
+
+### Cierre del bootstrap local de ROOT
+
+**Problema:** cuando la base local está vacía (`requiere_configuracion_inicial`),
+tanto `--cli` como `--tui-clasica` ofrecían una cadena `RootCedula → RootNombre
+→ RootPassword → RootConfirmarPassword` que fabricaba un usuario ROOT sin
+verificar nada contra la nube -- sólo hacía falta tener el ejecutable y el
+archivo de la base (o ni siquiera eso: bastaba con que el archivo no
+existiera o se borrara). Vestigio directo de la era kiosco-sin-nube;
+con `configurar_dispositivo_inicial` (desktop) ya trayendo el catálogo real
+desde Supabase con el secreto de dispositivo, esa ventana ya no tenía
+ninguna función legítima -- sólo quedaba como una vía de "colarse"
+localmente en cualquier PC del sitio.
+
+**Decisión:** ni `--cli` ni `--tui-clasica` vuelven a ofrecer esa cadena.
+`run_cli`/`run_tui_clasica` (`src/main.rs`) chequean `requiere_configuracion_inicial()`
+apenas abren el `AppCore` y, si es `true`, imprimen un mensaje remitiendo a
+la app de escritorio y salen sin entrar a la terminal -- el arranque real
+de un sitio nuevo es exclusivamente desktop + secreto de dispositivo. El
+código de la cadena `Fase::RootCedula`/`src/cli/root.rs` queda sin tocar
+(no se justificaba la cirugía de sacarlo del enum y sus `match` en esta
+pasada) pero inalcanzable: nada llama a `AppState::nueva_configuracion_inicial()`.
+
+También se eliminó `--reset-root` (resetear la contraseña de un ROOT
+existente sin loguearse, para recuperación). Con ROOT unificado a la misma
+identidad que gestiona el panel (`administradores_panel`/Supabase Auth), el
+reset de contraseña pasa a vivir ahí (`admin-reset-password-usuario`, ya
+desplegado) -- no hace falta un camino de recuperación aparte por CLI.
+
+### Pendiente, sin implementar todavía
+
+- **Backlog (seguridad/UX):** cuando una entrada se deja pasar porque el
+  chequeo de conflicto contra la nube (`nube::contratistas_con_conflicto_activo`)
+  no pudo correr por falta de internet, hoy queda indistinguible de un
+  chequeo limpio en el historial. Falta: registrarlo explícito en auditoría
+  y avisarle al operador al reconectar, para que quede claro que fue una
+  limitación de conectividad, no negligencia.
+- **Backlog (seguridad, mobile):** `mobile/rust-core`/`LoginViewModel.kt`/
+  `PantallaFijarPasswordInicial.kt` siguen con el mismo patrón de "reclamar
+  cuenta con sólo la cédula" que se cerró en desktop
+  (`docs/plan-autenticacion-supabase-auth.md`) -- portar Supabase Auth a
+  mobile es un trabajo aparte y más grande, no incluido en esta pasada.
+- **Delicado, no implementado:** una vez que se decida la unificación de
+  identidad (ROOT = admin del panel) y se termine de migrar todo lo de
+  arriba, hace falta vaciar los datos de prueba/transición actuales en
+  Supabase y repoblar con datos frescos y consistentes con el modelo nuevo
+  -- no alcanza con dejar el esquema andando si los datos que ya existen
+  quedaron a mitad de camino entre el modelo viejo (ROOT local por
+  dispositivo) y el nuevo (ROOT = identidad única del panel). Requiere
+  cuidado -- es la base de producción, no un ambiente de prueba.
+
+Verificado (2026-09-11): `cargo test-plano --lib` (591 tests, núcleo +
+TUI/CLI), `cargo check`/`cargo build-desktop-cipher --lib` (desktop, los
+dos motores), `tsc --noEmit` y `vitest run` (desktop frontend, 203 tests) --
+todo limpio tras el aplanado de roles y el cierre del bootstrap de ROOT.
+
+---
+
 ## 2026-09-12 — Reconciliación de drift de migraciones + GitHub Integration + limpieza de Advisors
 
 **Contexto:** al preparar la conexión de GitHub Integration de Supabase

@@ -146,8 +146,9 @@ fn fecha_praind_permite_mover_el_cursor_y_corregir_un_digito() {
     let mut s = ContratistasState::default();
     cargar(&mut s);
     s.handle_key(k(KeyCode::Enter));
-    // Editar inicia en Nombre; avanza por Empresa y Tipo hasta Fecha PRAIND.
-    for _ in 0..3 {
+    // Editar inicia en Cédula (editable para cualquier rol); avanza por
+    // Nombre, Empresa y Tipo hasta Fecha PRAIND.
+    for _ in 0..4 {
         s.handle_key(k(KeyCode::Tab));
     }
     let ModoContratistas::Formulario(f) = &s.modo else {
@@ -475,7 +476,7 @@ fn enter_edita_directamente_con_ids_y_datos_reales() {
         panic!()
     };
     assert!(matches!(f.modo, ModoFormulario::Editar { id: 7 }));
-    assert_eq!(f.campo, 1);
+    assert_eq!(f.campo, 0);
     assert_eq!(f.cedula.value(), "001-2");
     assert_eq!(f.empresa, 0);
     assert_eq!(f.tipo, TipoIngreso::Praind);
@@ -486,35 +487,12 @@ fn panel_refleja_la_seleccion_resaltada_sin_pasos_extra() {
     cargar(&mut s);
     assert_eq!(s.seleccionado().map(|c| c.id), Some(7));
 }
+/// La restricción de rol sobre editar cédula se eliminó (ver
+/// docs/decisiones-tecnicas.md, "aplanado de roles") -- cualquier sesión
+/// válida, Operador incluido, puede.
 #[test]
-fn operador_no_puede_enfocar_ni_modificar_cedula() {
-    let mut s = ContratistasState::default();
-    cargar(&mut s);
-    s.handle_key_con_rol(k(KeyCode::Enter), RolUsuario::Operador);
-    // Nombre es el primer campo habilitado en modo Editar (Cédula queda
-    // excluida); subir desde ahí da la vuelta al último campo (Acceso) en
-    // vez de quedarse pegado, así que nunca aterriza en Cédula.
-    s.handle_key(k(KeyCode::Up));
-    let ModoContratistas::Formulario(f) = &s.modo else {
-        panic!()
-    };
-    assert!(!f.cedula_editable);
-    assert_eq!(f.campo, 6);
-    assert_ne!(f.campo, 0, "no debe poder enfocar Cédula en modo Editar");
-
-    s.handle_key(k(KeyCode::Down));
-    s.handle_key(k(KeyCode::Char('9')));
-    let ModoContratistas::Formulario(f) = &s.modo else {
-        panic!()
-    };
-    assert_eq!(f.campo, 1);
-    assert_eq!(f.cedula.value(), "001-2");
-    assert_eq!(f.nombre.value(), "José Hernández9");
-}
-
-#[test]
-fn administrador_y_root_pueden_editar_cedula() {
-    for rol in [RolUsuario::Administrador, RolUsuario::Root] {
+fn cualquier_rol_puede_editar_cedula() {
+    for rol in [RolUsuario::Operador, RolUsuario::Administrador, RolUsuario::Root] {
         let mut s = ContratistasState::default();
         cargar(&mut s);
         s.handle_key_con_rol(k(KeyCode::Enter), rol);
@@ -596,7 +574,10 @@ fn espacio_abre_el_desplegable_y_alterna_los_campos_booleanos() {
     cargar(&mut s);
     s.handle_key(k(KeyCode::Enter));
 
-    // Empresa: SPACE abre el desplegable en vez de guardar.
+    // Empresa: SPACE abre el desplegable en vez de guardar. Editar inicia en
+    // Cédula (campo 0, editable para cualquier rol), así que hace falta un
+    // Tab más que antes para llegar a Empresa.
+    s.handle_key(k(KeyCode::Tab));
     s.handle_key(k(KeyCode::Tab));
     s.handle_key(k(KeyCode::Char(' ')));
     let ModoContratistas::Formulario(f) = &s.modo else {

@@ -1,10 +1,13 @@
 //! Gestión de la persistencia en la nube (`docs/plan-persistencia-nube.md`)
-//! desde la fachada de aplicación. Configurar el secreto del dispositivo
-//! (`Operacion::GestionarNube`) es exclusivo de ROOT -- esa credencial es
-//! la identidad de todo el equipo ante el receptor, no una preferencia que
-//! un Administrador deba poder tocar. Sincronizar, leer y cerrar ingresos
-//! remotos (`Operacion::UsarNube`) es de cualquier rol -- ya es uso diario
-//! normal (la pantalla Activos los usa), no administración.
+//! desde la fachada de aplicación. El secreto del dispositivo se configura
+//! una sola vez, en el arranque inicial (`configurar_dispositivo_inicial`)
+//! -- ya no hay una pantalla aparte para tocarlo desde una sesión abierta
+//! (ver docs/decisiones-tecnicas.md, "eliminación de GestionarNube").
+//! `guardar_secreto_dispositivo`/`secreto_dispositivo_guardado` quedan
+//! sólo por la API de `mobile/rust-core`, sin ninguna pantalla que los
+//! llame hoy. Sincronizar, leer y cerrar ingresos remotos
+//! (`Operacion::UsarNube`) es de cualquier rol -- uso diario normal (la
+//! pantalla Activos los usa), no administración.
 //!
 //! `directorio` es `None` en escritorio (resuelve `%LOCALAPPDATA%` solo,
 //! ver `nube::credenciales::guardar_secreto`) y `Some(...)` en el celular
@@ -593,15 +596,12 @@ impl AppCore {
     /// autoriza acá, con el candado, y ejecuta `crate::nube::drenar_cola`
     /// sobre una conexión propia (ver `GuiState::conexion_secundaria`).
     pub fn autorizar_gestion_nube(&self, actor: &UsuarioSesion) -> Result<(), GestionNubeError> {
-        let usuario = verificar_actor_activo(&self.connection, actor)
+        verificar_actor_activo(&self.connection, actor)
             .map_err(|error| match error {
                 DatabaseError::Sqlite(error) => GestionNubeError::Sqlite(error),
                 _ => GestionNubeError::OperacionNoAutorizada,
             })?
             .ok_or(GestionNubeError::OperacionNoAutorizada)?;
-        if !usuario.rol.puede(Operacion::GestionarNube) {
-            return Err(GestionNubeError::OperacionNoAutorizada);
-        }
         Ok(())
     }
 

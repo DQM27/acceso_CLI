@@ -190,8 +190,6 @@ pub fn run() {
             comandos::gafetes::marcar_gafete_perdido,
             comandos::gafetes::resolver_gafete,
             comandos::nube::configurar_dispositivo_inicial,
-            comandos::nube::guardar_secreto_dispositivo,
-            comandos::nube::secreto_dispositivo_guardado,
             comandos::nube::sincronizar_con_nube,
             comandos::nube::sesion_realtime_nube,
             comandos::nube::listar_ingresos_remotos,
