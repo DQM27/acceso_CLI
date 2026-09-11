@@ -3,7 +3,7 @@ use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use control_acceso::application::AppCore;
-use control_acceso::database::connection::aplicar_clave;
+use control_acceso::database::connection::abrir_conexion_secundaria_escritura;
 use control_acceso::instancia::InstanciaGuard;
 use control_acceso::nube::{self, NubeError, TokenDispositivo};
 use control_acceso::services::autenticacion_service::UsuarioSesion;
@@ -129,15 +129,13 @@ impl GuiState {
     /// comando que también lo necesite (mismo hallazgo que motivó el hilo
     /// propio en TUI/CLI para exportar, ver `docs/pendientes.md`). El
     /// candado sólo se toma para leer la ruta del archivo, no durante la
-    /// consulta.
+    /// consulta. Escribe (sincronización con la nube, `cerrar_ingreso_remoto`)
+    /// -- por eso usa la fábrica central de *escritura*
+    /// (`abrir_conexion_secundaria_escritura`), no la de sólo lectura que usan
+    /// los hilos de exportación de TUI/CLI.
     pub fn conexion_secundaria(&self) -> Result<Connection, String> {
-        let conexion =
-            Connection::open(&self.ruta_base_datos).map_err(|error| error.to_string())?;
-        aplicar_clave(&conexion, &self.clave_base_datos).map_err(|error| error.to_string())?;
-        conexion
-            .busy_timeout(Duration::from_secs(5))
-            .map_err(|error| error.to_string())?;
-        Ok(conexion)
+        abrir_conexion_secundaria_escritura(&self.ruta_base_datos, Some(&self.clave_base_datos))
+            .map_err(|error| error.to_string())
     }
 
     /// Sesión actual o el error que ya usan todos los comandos que la
