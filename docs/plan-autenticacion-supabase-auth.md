@@ -151,35 +151,59 @@ en vez de indefinido.
     terminal-ui,nube,sqlite-plano --lib auth_supabase`), incluida una firma real ES256
     contra un par de claves de prueba generado con `openssl ecparam` (ver el
     doc-comment en el archivo si hay que regenerarlo).
-  - **Todavía NO está conectado a nada** -- es el módulo de bajo nivel solo. `services/`,
-    `application/autenticacion.rs`, `SIN_PASSWORD_LOCAL`, `FijarPasswordInicial.tsx`, y el
-    login de desktop siguen exactamente como antes.
+- **Sesión en memoria + login de desktop reemplazado (2026-09-11, commit `dbcadc6`):**
+  - `GuiState` (`estado.rs`) suma `sesion_supabase: Mutex<Option<SesionSupabaseCacheada>>`
+    -- `access_token`/`refresh_token`/`expires_in`/`confirmada_en` (`Instant`), **sólo en
+    memoria, nunca a disco**. `access_token_supabase_vigente()` devuelve `None` si el
+    token técnico venció O si pasó `TOPE_PRESENCIA_SUPABASE` (12h) desde la última
+    confirmación real -- ese tope lo aplica el cliente, no depende de la config de
+    Supabase. `cerrar_sesion()` limpia las dos sesiones (local y Supabase) juntas.
+  - `comandos/autenticacion.rs::login` intenta local primero (`intentar_login_local`,
+    sin cambios -- cubre ROOT del arranque inicial y cualquier cuenta que ya tenía
+    password local de antes de esta migración) y sólo cae a `login_supabase` en
+    `AutenticacionError::SinPasswordLocal`. `login_supabase` autentica contra
+    `nube::auth_supabase::login`, resuelve identidad/rol local con el nuevo
+    `AppCore::resolver_identidad_local` (agregado en `application/autenticacion.rs`,
+    delega a `AutenticacionService::resolver_identidad_local` en
+    `services/autenticacion_service.rs` -- MISMA búsqueda que `buscar_candidato`, pero
+    sin tratar `SIN_PASSWORD_LOCAL` como error, porque acá es el estado esperado), guarda
+    ambas sesiones, y devuelve `ResultadoLogin { sesion, debe_cambiar_password }`.
+  - Renovación en segundo plano: `comandos/nube.rs::ejecutar_sincronizacion` llama
+    `nube::refrescar` al principio de cada corrida (pulso periódico de ~2min, sync manual,
+    o el que dispara Realtime) si hay `refresh_token` cacheado -- mejor esfuerzo, no
+    tumba el sync si falla.
+  - `cambiar_password_supabase` (comando nuevo): revalida `password_actual` con un login
+    real antes de aceptar la nueva, mismo criterio del plan original.
+  - `Login.tsx` reescrito: una sola pantalla siempre, con el paso de cambio de contraseña
+    obligatorio (`debe_cambiar_password`) integrado como un segundo paso inline en vez de
+    una pantalla de "reclamo" aparte. **`FijarPasswordInicial.tsx` borrado.**
+  - **`AppCore::fijar_password_inicial` (núcleo) queda intacto, sin tocar** -- todavía lo
+    usa `mobile/rust-core`, fuera de alcance de esta migración (ver abajo). No se borró
+    nada que mobile necesite.
+  - **Verificación offline del JWT (`verificar_token_offline`/`obtener_jwks`) construida
+    pero NO conectada a `GuiState`** -- decisión consciente, no un olvido: `GuiState` ya
+    confía en su propio `confirmada_en`/`expires_in` (el token se acaba de recibir por
+    HTTPS directo de Supabase momentos antes), no hace falta re-verificar la firma
+    criptográfica para eso. El módulo queda como infraestructura reusable si en el futuro
+    algún otro componente necesita validar un token de forma independiente sin haberlo
+    originado él mismo.
+  - Verificado: suite completa del núcleo (`cargo test --no-default-features --features
+    terminal-ui,nube,sqlite-plano`, lib + TODOS los tests de integración, incluido
+    `tests/bootstrap_password_usuario_global.rs` que confirma que el camino de ROOT sigue
+    intacto), `cargo check` de `control-acceso-desktop` limpio, `tsc --noEmit` limpio,
+    203/203 tests de Vitest.
+  - **NO verificado con la app real corriendo** -- todo lo de arriba es verificación
+    mecánica (tipos, compilación, tests unitarios/integración), no un login de verdad
+    en la ventana de Tauri. Antes de dar esto por definitivo: `cargo tauri dev`, probar
+    login de ROOT (debe seguir andando offline, sin cambios), y crear un usuario de
+    prueba desde el panel para probar el flujo completo de Supabase Auth (temporal →
+    cambio obligatorio → login normal después).
 
-**Lo que falta (el grueso del trabajo que queda):**
+**Lo que falta:**
 
-1. **Sesión en memoria** -- diseñar dónde vive el `access_token`/`refresh_token` mientras
-   la app corre (en desktop, candidato natural: un campo nuevo en `GuiState`, junto a
-   `sesion`/`token_nube_cacheado`). Nunca a disco. Se pierde al cerrar la app (arranque
-   siempre pide login real).
-2. **Renovación en segundo plano**: enganchar `refrescar()` al mismo pulso de sync que ya
-   existe (`comandos/nube.rs::ejecutar_sincronizacion`, o un timer aparte) antes de que el
-   token venza, y aplicar el tope duro de 12h de presencia (contado desde la última
-   renovación exitosa, no desde el login).
-3. **Reemplazar el camino de login actual** (`AutenticacionService::autenticar`/
-   `buscar_candidato_autenticacion` en `src/services/autenticacion_service.rs`,
-   `AppCore::fijar_password_inicial` en `src/application/autenticacion.rs`) -- OJO acá
-   con la salvedad de ROOT: sólo el camino de usuarios SINCRONIZADOS (los que hoy llegan
-   con `SIN_PASSWORD_LOCAL`) pasa a Supabase Auth. `crear_root_inicial` (arranque de un
-   sitio nuevo, CLI/TUI, exige base vacía) queda intacto, 100% local, sin tocar -- es el
-   único camino de rescate sin red. Un ROOT que SÍ llegó por sync a un dispositivo nuevo
-   (con `SIN_PASSWORD_LOCAL`) sí pasa por el nuevo camino, igual que Administrador/Operador.
-4. **Desktop**: `Login.tsx` pasa a ser una sola pantalla siempre (elimina
-   `FijarPasswordInicial.tsx` como pantalla de "reclamo"); agregar el flujo de "cambiar
-   contraseña obligatoria" cuando `debe_cambiar_password` viene en `true`; comandos Tauri
-   nuevos para login/logout/cambiar-password que hablen con
-   `nube::auth_supabase` en vez de con el núcleo local.
-5. **Android**: fuera de alcance explícito por ahora (ver arriba), pero quedará
-   desalineado del resto una vez desktop migre -- anotarlo cuando llegue el momento.
-
-No hay decisión tomada todavía sobre el orden exacto de 1-4 -- son interdependientes
-(la sesión en memoria la necesitan tanto el reemplazo del login como la renovación).
+- **Android**: `mobile/rust-core`/`LoginViewModel.kt`/`PantallaFijarPasswordInicial.kt`
+  siguen con el `SIN_PASSWORD_LOCAL` viejo -- fuera de alcance explícito, va a quedar
+  desalineado del resto hasta que se migre con el mismo patrón que desktop.
+- **TUI**: mismo caso -- sigue con el camino local viejo, no tiene el chequeo de
+  Supabase Auth conectado.
+- Probar en vivo (ver punto de arriba) antes de considerar esto terminado de verdad.
