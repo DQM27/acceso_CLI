@@ -22,7 +22,7 @@
  *    que llevó a sacar `Sidebar.tsx` de `Shell` (que sí hace enrutamiento
  *    y orquesta modales, eso es responsabilidad suya).
  */
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, startTransition, useEffect, useState, ViewTransition } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { listen } from "@tauri-apps/api/event";
 import { Toaster, toast } from "sonner";
@@ -210,6 +210,16 @@ function Shell({
   useEffect(() => {
     setVisitadas((actual) => (actual.includes(seccion) ? actual : [...actual, seccion]));
   }, [seccion]);
+  // React 19.3: `<ViewTransition>` sólo anima un cambio si ocurrió dentro de
+  // una transición -- acá no hay router que la envuelva sola (a diferencia
+  // de web-visitas con createBrowserRouter), así que el cambio de sección
+  // se dispara a mano con startTransition. Las secciones ya están todas
+  // montadas (ver comentario de arriba), el cambio real es sólo un toggle
+  // de `display` -- React igual detecta la mutación dentro del contenedor
+  // envuelto y dispara el cross-fade nativo del navegador.
+  function cambiarSeccion(id: Seccion) {
+    startTransition(() => setSeccion(id));
+  }
   const [colapsado, setColapsado] = useState(leerSidebarColapsado);
   // La pantalla montada publica acá su propio texto (ver `useBarraEstado`) —
   // `null` mientras ninguna lo hizo todavía (primer render) o entre una
@@ -268,10 +278,17 @@ function Shell({
 
   // Los avisos privados refrescan de inmediato; el pulso periódico recupera
   // cambios aunque se pierda el socket o el equipo haya estado sin conexión.
+  // `setRefrescarActivos` dentro de `startTransition` (React 19.3): esto
+  // puede llegar en cualquier momento (Realtime, pulso) mientras el usuario
+  // está haciendo otra cosa -- sin la transición, el refetch/rerender que
+  // dispara en cada sección montada compite por prioridad con lo que el
+  // usuario esté tipeando/clickeando en ese instante.
   useEffect(() => {
     const cancelarRealtime = iniciarRealtimeNube({
       onSincronizado: (resumen) => {
-        if (!manejarResumenSincronizacion(resumen)) setRefrescarActivos((n) => n + 1);
+        if (!manejarResumenSincronizacion(resumen)) {
+          startTransition(() => setRefrescarActivos((n) => n + 1));
+        }
       },
       onEstado: setEstadoConexionNube,
       usuario: { cedula: sesion.cedula, nombre: sesion.nombre },
@@ -280,7 +297,7 @@ function Shell({
       "nube://sincronizado",
       ({ payload }) => {
         if (manejarResumenSincronizacion(payload)) return;
-        setRefrescarActivos((n) => n + 1);
+        startTransition(() => setRefrescarActivos((n) => n + 1));
         emitirActualizacion(payload);
       },
     );
@@ -302,7 +319,7 @@ function Shell({
     try {
       const resumen = await sincronizarConNube();
       if (manejarResumenSincronizacion(resumen)) return;
-      setRefrescarActivos((n) => n + 1);
+      startTransition(() => setRefrescarActivos((n) => n + 1));
       emitirActualizacion(resumen, "manual");
       if (resumen.fallidos === 0) {
         toast.success(`Sincronizado — ${resumen.enviados} enviados.`);
@@ -360,12 +377,16 @@ function Shell({
             <Sidebar
               secciones={seccionesVisibles}
               seccionActual={seccion}
-              onCambiarSeccion={setSeccion}
+              onCambiarSeccion={cambiarSeccion}
               colapsado={colapsado}
               onToggleColapsado={alternarColapsado}
             />
 
             <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+              {/* Ver cambiarSeccion arriba -- las secciones ya están todas
+                  montadas, el cross-fade es sobre el toggle de `display`
+                  dentro de este contenedor, no sobre mount/unmount. */}
+              <ViewTransition>
               {visitadas.map((id) => (
                 <div
                   key={id}
@@ -424,6 +445,7 @@ function Shell({
                   </ErrorBoundary>
                 </div>
               ))}
+              </ViewTransition>
             </main>
           </div>
 
