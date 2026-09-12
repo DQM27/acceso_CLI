@@ -29,7 +29,7 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import uniffi.control_acceso_mobile.Nucleo
 
 /// Login real contra `Nucleo.autenticar` (Rust) — todo el estado y la
-/// llamada viven en [LoginViewModel] (ver mobile/android/ARQUITECTURA.md), este
+/// llamada viven en [LoginViewModel] (ver mobile/android/arquitectura.md), este
 /// Composable sólo dibuja el formulario. Una vez hay sesión, delega a
 /// [PantallaPrincipal] en vez de dibujar nada propio — mismo `Nucleo` para
 /// toda la app, no se reabre la base al loguear.

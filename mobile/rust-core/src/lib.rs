@@ -1911,7 +1911,7 @@ impl Nucleo {
     /// esta sólo aplicaba `busy_timeout`/`foreign_keys`, le faltaban
     /// `synchronous`/`trusted_schema`/`secure_delete`). `clave` en `None`
     /// -- Android todavía no aplica ninguna clave de `SQLCipher` a la base
-    /// (pendiente aparte, ver `docs/auditorias/AUDITORIA_INTEGRAL_ANDROID_2026-09-09.md`);
+    /// (pendiente aparte, ver `docs/auditorias/auditoria-integral-android-2026-09-09.md`);
     /// el día que se active acá, pasa a la vez por la conexión principal y
     /// por ésta.
     fn conexion_secundaria(&self) -> Result<rusqlite::Connection, NucleoError> {

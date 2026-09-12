@@ -114,7 +114,7 @@ escritura que dicen `using (true)` matizado por "sitio_id no nulo en el JWT
 O admin_global" — es decir, **cualquier dispositivo autenticado de
 cualquier sitio puede leer y escribir estas tres tablas para TODOS los
 sitios**, no solo el suyo. Esto está marcado como hallazgo de seguridad
-A-01 en `docs/auditorias/AUDITORIA_SEGURIDAD_WEB_SUPABASE_2026-09-10.md`.
+A-01 en `docs/auditorias/auditoria-seguridad-web-supabase-2026-09-10.md`.
 
 **Decisión 2026-09-12, revisada tabla por tabla (ya no es un bloque único):**
 

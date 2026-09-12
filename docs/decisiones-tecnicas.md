@@ -30,7 +30,7 @@ se guarda en LF en el repo sin importar el `autocrlf` de cada máquina.
 
 **Contexto:** esta rama (`bench/sqlite-3way-*`) existe para comparar tres
 motores SQLite -- ver
-[`docs/auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md`](auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md),
+[`docs/auditorias/auditoria-rendimiento-core-rust-2026-09-10.md`](auditorias/auditoria-rendimiento-core-rust-2026-09-10.md),
 sección 12:
 
 - `cifrado-sqlcipher` -- motor real de producción. Compila OpenSSL

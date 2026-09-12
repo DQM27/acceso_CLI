@@ -17,7 +17,7 @@ import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.ResumenSincronizacion
 
 /// Dueño del estado del botón manual "Sincronizar" (ver
-/// docs/planes-implementados/plan-persistencia-nube.md y mobile/android/ARQUITECTURA.md) — el
+/// docs/planes-implementados/plan-persistencia-nube.md y mobile/android/arquitectura.md) — el
 /// Composable que lo use sólo dibuja lo que expone acá y le reporta
 /// eventos, nunca llama a [Nucleo] directamente.
 ///

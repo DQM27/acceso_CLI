@@ -1,6 +1,6 @@
 # Arquitectura de la app móvil — criterio para mantener en el tiempo
 
-La auditoría transversal, sus reparaciones, límites y pendientes operativos (2026-09-09, mayormente resuelta o absorbida por trabajo posterior -- ver `docs/pendientes.md`) está archivada en [`docs/auditorias/AUDITORIA_INTEGRAL_ANDROID_2026-09-09.md`](../../docs/auditorias/AUDITORIA_INTEGRAL_ANDROID_2026-09-09.md).
+La auditoría transversal, sus reparaciones, límites y pendientes operativos (2026-09-09, mayormente resuelta o absorbida por trabajo posterior -- ver `docs/pendientes.md`) está archivada en [`docs/auditorias/auditoria-integral-android-2026-09-09.md`](../../docs/auditorias/auditoria-integral-android-2026-09-09.md).
 
 > Diagnóstico honesto (2026-09-02): la app se armó como MVP/piloto, rápido y
 > funcional, sin capa de presentación separada de la lógica de negocio. Sí
@@ -208,7 +208,7 @@ que reutiliza `PantallaEscanearCedula` (`modo = DOCUMENTO_CONTRATISTA`,
 la misma cámara/OCR que ya usaba `PantallaConfirmarIngreso`) para
 precargar cédula, nombre, vencimiento y (si calza contra
 `Nucleo.listarEmpresas()`) empresa desde el carnet -- ver
-`LectorDocumentosIdentidad.extraerPraind` y `docs/ARQUITECTURA_OCR.md`. Si
+`LectorDocumentosIdentidad.extraerPraind` y `docs/arquitectura-ocr.md`. Si
 lo escaneado no es un carnet PRAIND (otro tipo de documento válido para
 ese modo) sólo se precargan cédula/nombre y se avisa que el resto queda a
 mano; ninguna decisión de acceso se toma acá, `ContratistaService::crear`
@@ -231,4 +231,4 @@ falta que sobreviva cambios de pestaña por su cuenta (no hay pestaña).
 La cámara y ML Kit tienen reglas adicionales porque combinan callbacks de
 CameraX, tareas asíncronas y efectos de Compose. Están documentadas con el
 flujo completo, invariantes y estrategia de pruebas en
-[`docs/ARQUITECTURA_OCR.md`](docs/ARQUITECTURA_OCR.md).
+[`docs/arquitectura-ocr.md`](docs/arquitectura-ocr.md).

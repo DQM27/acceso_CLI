@@ -2,7 +2,7 @@
 
 > **Estado: implementado.** El motor de lectura (MRZ + OCR de ML Kit) ya
 > existe en `LectorDocumentosIdentidad.kt`, con su arquitectura vigente en
-> `mobile/android/docs/ARQUITECTURA_OCR.md`. Este documento queda como
+> `mobile/android/docs/arquitectura-ocr.md`. Este documento queda como
 > memoria del diseño original -- las "Preguntas abiertas" de la sección 12
 > que sigan sin responder deberían vivir en `docs/pendientes.md`, no acá.
 

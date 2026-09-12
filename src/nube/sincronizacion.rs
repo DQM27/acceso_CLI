@@ -12,7 +12,7 @@
 //! atómico en Postgres, así que una sola fila inválida (por ejemplo, un
 //! contratista cuya empresa todavía no llegó) tumbaría a todo el lote junto
 //! si no se aislara así -- ver hallazgo R-02 de
-//! `docs/auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md`. El
+//! `docs/auditorias/auditoria-rendimiento-core-rust-2026-09-10.md`. El
 //! cierre de un ingreso (`PATCH .../ingresos?...&hora_salida=is.null`)
 //! queda afuera del lote a propósito: es un `UPDATE` condicional
 //! ("primero en llegar gana"), no un `upsert`, y un `PATCH` con array no
@@ -321,7 +321,7 @@ fn procesar_fila_individual(
 /// generada, ver `MIGRACION_27` en `database::schema`) ya trae esa fórmula
 /// calculada -- antes era una expresión repetida acá mismo en cada
 /// consulta, que `SQLite` no podía resolver con un índice (hallazgo R-06 de
-/// `docs/auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md`); ahora
+/// `docs/auditorias/auditoria-rendimiento-core-rust-2026-09-10.md`); ahora
 /// es una columna de verdad, con `idx_cola_salida_pendientes` sobre ella.
 fn pendientes(connection: &Connection, limite: u32) -> Result<Vec<FilaCola>, SincronizacionError> {
     let mut statement = connection.prepare(
@@ -449,7 +449,7 @@ fn obtener_json_paginado<T: serde::de::DeserializeOwned>(
 /// el único llamador cuyo resultado puede llegar a ser grande de verdad (el
 /// catálogo de un sitio -- contratistas, gafetes -- está acotado por la
 /// plantilla física del sitio; el historial, no). Hallazgo R-03 de
-/// `docs/auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md`: sin
+/// `docs/auditorias/auditoria-rendimiento-core-rust-2026-09-10.md`: sin
 /// esto, el primer sync de un sitio con historial grande junta todas las
 /// páginas en memoria antes de persistir ninguna. `por_pagina` puede abrir
 /// su propia transacción corta y comitearla por página -- eso además

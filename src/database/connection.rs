@@ -195,7 +195,7 @@ pub fn abrir_conexion_secundaria(
 /// competir por el candado de la principal. Unifica lo que antes era una
 /// implementación separada en escritorio con pragmas incompletos (le
 /// faltaban `foreign_keys`/`synchronous`/`trusted_schema`/`secure_delete`,
-/// ver `docs/auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md`,
+/// ver `docs/auditorias/auditoria-rendimiento-core-rust-2026-09-10.md`,
 /// hallazgo R-07).
 pub fn abrir_conexion_secundaria_escritura(
     path: impl AsRef<Path>,

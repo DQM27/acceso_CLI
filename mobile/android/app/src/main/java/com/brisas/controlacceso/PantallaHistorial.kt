@@ -25,7 +25,7 @@ import uniffi.control_acceso_mobile.Nucleo
 /// operativo reciente; auditoría amplia, filtros densos y exportación viven
 /// mejor en web/escritorio. Todo el estado y la llamada a
 /// [Nucleo] viven en [HistorialViewModel] (ver
-/// mobile/android/ARQUITECTURA.md) — este Composable sólo dibuja.
+/// mobile/android/arquitectura.md) — este Composable sólo dibuja.
 @Composable
 fun PantallaHistorial(nucleo: Nucleo, refrescarNube: Int = 0) {
     val viewModel: HistorialViewModel = viewModel(factory = HistorialViewModel.factory(nucleo))
