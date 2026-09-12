@@ -71,9 +71,12 @@ ningún método para insertar datos sin autenticarse primero).
 ## Compilar un APK de distribución (release firmado)
 
 Android no deja instalar un `release` sin firmar. La keystore vive en
-`android/keystore/release.keystore.jks` — **no está en git, hay que resguardarla
+`android/app/keystore/release.keystore` — **no está en git, hay que resguardarla
 aparte** (ej. gestor de contraseñas + copia de la carpeta) junto con
-`android/keystore.properties` (contraseñas + alias). Sin ese archivo,
+`android/keystore.properties` (contraseñas + alias). CI usa la misma clave vía
+los secretos `ANDROID_KEYSTORE_BASE64`/`ANDROID_KEYSTORE_PASSWORD`/
+`ANDROID_KEY_ALIAS`/`ANDROID_KEY_PASSWORD` del repo -- ver
+`docs/credenciales.md` para dónde vive cada credencial del proyecto. Sin ese archivo,
 `assembleRelease` genera un APK sin firmar (inservible) — el build sigue
 funcionando igual para `assembleDebug`, que no lo necesita. Si se pierde la
 keystore no hay forma de firmar una actualización compatible con una versión
