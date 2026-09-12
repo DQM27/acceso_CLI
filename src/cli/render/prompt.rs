@@ -11,7 +11,6 @@ use ratatui::widgets::Paragraph;
 use crate::cli::estado::AppState;
 use crate::cli::formulario::{ModoFormulario, Subfase};
 use crate::cli::formulario_empresa::ModoFormularioEmpresa;
-use crate::cli::formulario_usuario::{ModoFormularioUsuario, SubfaseUsuario};
 use crate::cli::parser::{Comando, Entrada};
 
 use super::estilos::{acento, estilo_fundido, estilo_seleccion, glifo_feedback_color, muted};
@@ -435,39 +434,10 @@ fn render_prompt_linea(frame: &mut Frame, area: Rect, app: &AppState) {
             app.input.visual_cursor(),
             None,
         )
-    } else if let Some(fu) = &app.formulario_usuario {
-        // La etiqueta identifica la Surface (mismo nombre en Editando y
-        // Resumen) en vez de cambiar por campo — antes mutaba a "cédula › ",
-        // "nombre › "… en cada campo, duplicando (con retraso, lejos del
-        // foco real) la misma señal que ya da el glifo por fila arriba, y
-        // encima le hacía perder de vista en qué formulario estaba.
-        let etiqueta = match fu.modo {
-            ModoFormularioUsuario::Nuevo => "NUEVO USUARIO › ".to_string(),
-            ModoFormularioUsuario::Editar { .. } => "EDITAR USUARIO › ".to_string(),
-        };
-        let editable = matches!(fu.subfase, SubfaseUsuario::Editando) && fu.campo.es_texto();
-        // Password/Confirmar se enmascaran también acá — no sólo en el
-        // área de contenido — nunca se ve la contraseña en texto plano.
-        let valor = if editable && fu.campo.es_secreto() {
-            "•".repeat(app.input.value().chars().count())
-        } else {
-            app.input.value().to_string()
-        };
-        (
-            etiqueta,
-            valor,
-            editable,
-            if editable {
-                app.input.visual_cursor()
-            } else {
-                app.input.value().chars().count()
-            },
-            None,
-        )
     } else if app.formulario_password.is_some() {
         // Los tres campos (Actual/Nueva/Confirmar) son secretos siempre —
-        // a diferencia de `formulario_usuario` no hace falta mirar cuál
-        // está activo, acá nunca hay un campo de texto plano que mostrar.
+        // nunca hace falta mirar cuál está activo, acá nunca hay un campo de
+        // texto plano que mostrar.
         (
             "CAMBIAR CONTRASEÑA › ".to_string(),
             "•".repeat(app.input.value().chars().count()),

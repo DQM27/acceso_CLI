@@ -6,7 +6,6 @@ use chrono::{DateTime, Utc};
 
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::models::tipo_ingreso::TipoIngreso;
-use crate::models::usuario::RolUsuario;
 use crate::tiempo::a_costa_rica;
 
 pub(super) fn tipo_texto(tipo: TipoIngreso) -> &'static str {
@@ -22,14 +21,6 @@ pub(super) fn medio_texto(medio: MedioIngreso) -> &'static str {
     match medio {
         MedioIngreso::Caminando => "CAMINANDO",
         MedioIngreso::Vehiculo => "VEHICULO",
-    }
-}
-
-pub(super) fn rol_texto(rol: RolUsuario) -> &'static str {
-    match rol {
-        RolUsuario::Root => "ROOT",
-        RolUsuario::Administrador => "ADMINISTRADOR",
-        RolUsuario::Operador => "OPERADOR",
     }
 }
 

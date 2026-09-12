@@ -15,7 +15,7 @@ use super::activos::{
 use super::auditoria::lineas_tabla_auditoria;
 use super::ayuda::lineas_ayuda;
 use super::busqueda::{
-    lineas_coincidencias, lineas_coincidencias_empresas, lineas_coincidencias_usuarios,
+    lineas_coincidencias, lineas_coincidencias_empresas,
 };
 use super::estilos::{acento, estilo_error, muted};
 use super::util::cantidad_personas;
@@ -99,16 +99,6 @@ pub(super) fn lineas_contexto(
             lineas_coincidencias_empresas(consulta, items, *seleccion, *offset, *hay_mas),
             indice_seleccion_lista(!items.is_empty(), *seleccion),
         ),
-        ContextState::CoincidenciasUsuarios {
-            consulta,
-            items,
-            seleccion,
-            offset,
-            hay_mas,
-        } => (
-            lineas_coincidencias_usuarios(consulta, items, *seleccion, *offset, *hay_mas),
-            indice_seleccion_lista(!items.is_empty(), *seleccion),
-        ),
         ContextState::ResumenIngreso { .. } => (lineas_resumen_ingreso(contexto), None),
         ContextState::ResumenSalida { activo } => (lineas_resumen_salida(activo), None),
         ContextState::TablaActivos {
@@ -134,7 +124,6 @@ pub(super) fn lineas_contexto(
         ContextState::ConfirmarModoClasico => (lineas_modo_clasico(), None),
         ContextState::NuevoContratista => (lineas_nuevo_contratista(), None),
         ContextState::NuevoEmpresa => (lineas_nuevo_empresa(), None),
-        ContextState::NuevoUsuario => (lineas_nuevo_usuario(), None),
         ContextState::AbrirHistorial => (lineas_abrir_historial(), None),
         ContextState::AbrirSalidaGafete { texto } => (lineas_abrir_salida_gafete(texto), None),
         ContextState::Ayuda => (lineas_ayuda(), None),
@@ -217,19 +206,6 @@ fn lineas_nuevo_empresa() -> Vec<Line<'static>> {
         Line::from(Span::styled("NUEVA EMPRESA", muted())),
         Line::from(""),
         Line::from("Se abrirá el alta de empresa: sólo el nombre."),
-        Line::from(""),
-        Line::from(Span::styled(
-            "ENTER para abrir el formulario · Esc para cancelar",
-            acento(),
-        )),
-    ]
-}
-
-fn lineas_nuevo_usuario() -> Vec<Line<'static>> {
-    vec![
-        Line::from(Span::styled("NUEVO USUARIO", muted())),
-        Line::from(""),
-        Line::from("Se abrirá el formulario de alta: cédula, nombre, rol y contraseña."),
         Line::from(""),
         Line::from(Span::styled(
             "ENTER para abrir el formulario · Esc para cancelar",

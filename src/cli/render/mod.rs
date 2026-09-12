@@ -10,7 +10,7 @@
 //! controladores en `mod.rs`): [`login`], [`prompt`] (línea de input +
 //! paleta de comandos), [`contexto`] (el despachador del área central),
 //! [`busqueda`]/[`activos`]/[`historial`] (las tablas), [`formulario`]/
-//! [`formulario_empresa`]/[`formulario_usuario`], [`columnas_selector`]
+//! [`formulario_empresa`]/[`formulario_password`], [`columnas_selector`]
 //! (F4) y [`ayuda`]. [`estilos`] y [`util`] son las primitivas compartidas
 //! por todos — este archivo sólo arma el layout y despacha.
 
@@ -24,7 +24,6 @@ mod estilos;
 mod formulario;
 mod formulario_empresa;
 mod formulario_password;
-mod formulario_usuario;
 mod historial;
 mod login;
 mod prompt;
@@ -39,7 +38,6 @@ use ratatui::widgets::Paragraph;
 use crate::cli::estado::{AppState, Fase, PERIODO_BLINK_MS};
 use crate::cli::formulario::Subfase;
 use crate::cli::formulario_password::SubfasePassword;
-use crate::cli::formulario_usuario::SubfaseUsuario;
 
 use contexto::scroll_hacia_seleccion;
 use estilos::{glifo_feedback, muted};
@@ -127,8 +125,6 @@ pub fn render(frame: &mut Frame, app: &AppState) {
         )
     } else if let Some(fe) = &app.formulario_empresa {
         (formulario_empresa::lineas_formulario_empresa(fe), None)
-    } else if let Some(fu) = &app.formulario_usuario {
-        (formulario_usuario::lineas_formulario_usuario(fu), None)
     } else if let Some(fp) = &app.formulario_password {
         (formulario_password::lineas_formulario_password(fp), None)
     } else if let Some(edicion) = &app.edicion_columnas {
@@ -232,15 +228,6 @@ fn contenido_pista(app: &AppState) -> Option<Line<'static>> {
             "Enter guardar · Esc cancelar",
             muted(),
         )));
-    }
-    if let Some(fu) = &app.formulario_usuario {
-        let pista = match fu.subfase {
-            SubfaseUsuario::Editando => {
-                "↑↓ campo · Space/←/→ cambiar rol · Enter guardar · Esc cancelar"
-            }
-            SubfaseUsuario::Resumen => "Enter guardar · Esc volver a editar",
-        };
-        return Some(Line::from(Span::styled(pista, muted())));
     }
     if let Some(fp) = &app.formulario_password {
         let pista = match fp.subfase {

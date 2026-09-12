@@ -27,8 +27,6 @@ mod formulario_empresa;
 mod formulario_empresa_controller;
 mod formulario_password;
 mod formulario_password_controller;
-mod formulario_usuario;
-mod formulario_usuario_controller;
 mod historial;
 mod historial_controller;
 mod login;
@@ -71,7 +69,6 @@ pub use formulario::{
 };
 pub use formulario_empresa::FormularioEmpresa;
 pub use formulario_password::FormularioPassword;
-pub use formulario_usuario::{CampoUsuario, FormularioUsuario, SubfaseUsuario};
 pub use historial::HistorialState;
 pub use salida_gafete::SalidaGafeteState;
 

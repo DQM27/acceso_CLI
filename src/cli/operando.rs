@@ -39,10 +39,6 @@ pub(super) fn manejar_operando(
             super::formulario_empresa_controller::manejar_formulario_empresa(core, app, key);
             return;
         }
-        SurfaceActiva::FormularioUsuario => {
-            super::formulario_usuario_controller::manejar_formulario_usuario(core, app, key);
-            return;
-        }
         SurfaceActiva::FormularioPassword => {
             super::formulario_password_controller::manejar_formulario_password(core, app, key);
             return;
@@ -217,9 +213,6 @@ fn mover_seleccion(app: &mut AppState, delta: isize) {
         ContextState::CoincidenciasEmpresas {
             items, seleccion, ..
         } => ajustar(seleccion, items.len()),
-        ContextState::CoincidenciasUsuarios {
-            items, seleccion, ..
-        } => ajustar(seleccion, items.len()),
         ContextState::TablaAuditoria {
             items, seleccion, ..
         } => ajustar(seleccion, items.len()),
@@ -254,20 +247,6 @@ fn paginar_coincidencias(core: &AppCore, app: &mut AppState, delta: isize) {
             if let Some(nuevo) = super::resolver::nuevo_offset_coincidencias(offset, hay_mas, delta)
             {
                 app.contexto = super::resolver::pagina_empresas(core, &consulta, nuevo);
-            }
-        }
-        ContextState::CoincidenciasUsuarios {
-            consulta,
-            offset,
-            hay_mas,
-            ..
-        } => {
-            let Fase::Operando { sesion } = &app.fase else {
-                return;
-            };
-            if let Some(nuevo) = super::resolver::nuevo_offset_coincidencias(offset, hay_mas, delta)
-            {
-                app.contexto = super::resolver::pagina_usuarios(core, &consulta, nuevo, sesion);
             }
         }
         ContextState::TablaAuditoria {
@@ -445,9 +424,6 @@ fn confirmar(core: &AppCore, app: &mut AppState) {
         ContextState::NuevoEmpresa => {
             super::formulario_empresa_controller::abrir_formulario_nuevo_empresa(app);
         }
-        ContextState::NuevoUsuario => {
-            super::formulario_usuario_controller::abrir_formulario_nuevo_usuario(app);
-        }
         ContextState::AbrirHistorial => super::historial_controller::abrir_historial(core, app),
         ContextState::ConfirmarCambioPassword => {
             super::formulario_password_controller::abrir_formulario_cambio_password(app);
@@ -501,13 +477,6 @@ fn confirmar(core: &AppCore, app: &mut AppState) {
         } => {
             if let Some(item) = items.get(seleccion) {
                 super::formulario_empresa_controller::abrir_formulario_editar_empresa(app, item);
-            }
-        }
-        ContextState::CoincidenciasUsuarios {
-            items, seleccion, ..
-        } => {
-            if let Some(item) = items.get(seleccion) {
-                super::formulario_usuario_controller::abrir_formulario_editar_usuario(app, item);
             }
         }
         _ => {}

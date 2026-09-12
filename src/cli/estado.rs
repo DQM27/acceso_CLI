@@ -23,7 +23,6 @@ use super::formulario::{Campo, FormularioContratista, Subfase};
 pub const PERIODO_BLINK_MS: u64 = 530;
 use super::formulario_empresa::FormularioEmpresa;
 use super::formulario_password::FormularioPassword;
-use super::formulario_usuario::FormularioUsuario;
 use super::historial::HistorialState;
 use super::presentation;
 use super::salida_gafete::SalidaGafeteState;
@@ -55,7 +54,6 @@ pub enum ObjetivoColumnas {
 pub enum SurfaceActiva {
     Formulario,
     FormularioEmpresa,
-    FormularioUsuario,
     FormularioPassword,
     Columnas,
     Historial,
@@ -236,10 +234,7 @@ pub struct AppState {
     /// `/nuevo empresa` (`/n em`) — Surface separada de `formulario` (un
     /// solo campo, sin Resumen; ver `formulario_empresa.rs`).
     pub formulario_empresa: Option<FormularioEmpresa>,
-    /// `/nuevo usuario` (`/n u`) — Surface separada de `formulario`, mismo
-    /// patrón (campos, Resumen) que contratista; ver `formulario_usuario.rs`.
-    pub formulario_usuario: Option<FormularioUsuario>,
-    /// `/clave` — Surface separada de `formulario_usuario`: cambia la
+    /// `/clave` — Surface separada del resto: cambia la
     /// contraseña de quien está logueado, nunca la de otro (ver
     /// `formulario_password.rs`).
     pub formulario_password: Option<FormularioPassword>,
@@ -313,7 +308,6 @@ impl AppState {
             contexto: ContextState::Ayuda,
             formulario: None,
             formulario_empresa: None,
-            formulario_usuario: None,
             formulario_password: None,
             columnas_busqueda: SelectorColumnas::todas_visibles(),
             columnas_activos: SelectorColumnas::todas_visibles(),
@@ -423,8 +417,6 @@ impl AppState {
             SurfaceActiva::Formulario
         } else if self.formulario_empresa.is_some() {
             SurfaceActiva::FormularioEmpresa
-        } else if self.formulario_usuario.is_some() {
-            SurfaceActiva::FormularioUsuario
         } else if self.formulario_password.is_some() {
             SurfaceActiva::FormularioPassword
         } else if self.edicion_columnas.is_some() {

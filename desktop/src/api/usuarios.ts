@@ -1,53 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { RolUsuario } from "./autenticacion";
 
-// Espejo de comandos/usuarios.rs y dto/usuarios.rs. RolUsuario ya lo exporta
-// autenticacion.ts (mismo tipo, un solo lugar de origen vía el barrel).
+// Espejo de comandos/usuarios.rs. Crear/editar/buscar usuarios globales u
+// otorgarles/resetearles la contraseña desde el escritorio ya no existe --
+// esa capacidad quedó exclusiva del panel administrativo web (ver
+// docs/plan-autenticacion-supabase-auth.md). El único comando que sigue
+// vivo acá es el cambio de la propia contraseña.
 
-export interface UsuarioResumen {
-  id: number;
-  cedula: string;
-  nombre: string;
-  rol: RolUsuario;
-  activo: boolean;
-}
-
-export interface FiltroUsuarios {
-  texto?: string;
-}
-
-export interface DatosCrearUsuario {
-  cedula: string;
-  nombre: string;
-  password: string;
-  rol: RolUsuario;
-  activo: boolean;
-}
-
-export interface DatosActualizarUsuario {
-  cedula: string;
-  nombre: string;
-  rol: RolUsuario;
-  activo: boolean;
-}
-
-export function buscarUsuarios(filtro: FiltroUsuarios): Promise<UsuarioResumen[]> {
-  return invoke("buscar_usuarios", { filtro });
-}
-
-export function crearUsuario(datos: DatosCrearUsuario): Promise<number> {
-  return invoke("crear_usuario", { datos });
-}
-
-export function actualizarUsuario(id: number, datos: DatosActualizarUsuario): Promise<void> {
-  return invoke("actualizar_usuario", { id, datos });
-}
-
-export function cambiarPasswordUsuario(id: number, password: string): Promise<void> {
-  return invoke("cambiar_password_usuario", { id, password });
-}
-
-/** `/clave` en la consola — cambia la contraseña de la sesión actual. */
+/** Cambia la contraseña de la sesión actual — revalida `passwordActual`
+ * antes de aceptar la nueva, nunca la de otro usuario. */
 export function cambiarMiPassword(passwordActual: string, nuevaPassword: string): Promise<void> {
   return invoke("cambiar_mi_password", { passwordActual, nuevaPassword });
 }

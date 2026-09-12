@@ -32,7 +32,6 @@ import {
   History,
   IdCard,
   UserCheck,
-  UserCog,
   Users,
   UsersRound,
 } from "lucide-react";
@@ -62,7 +61,6 @@ const Activos = lazy(() => import("./pantallas/Activos"));
 const Visitas = lazy(() => import("./pantallas/Visitas"));
 const Contratistas = lazy(() => import("./pantallas/Contratistas"));
 const Empresas = lazy(() => import("./pantallas/Empresas"));
-const Usuarios = lazy(() => import("./pantallas/Usuarios"));
 const Historial = lazy(() => import("./pantallas/Historial"));
 const Auditoria = lazy(() => import("./pantallas/Auditoria"));
 const Gafetes = lazy(() => import("./pantallas/Gafetes"));
@@ -142,21 +140,23 @@ export type Seccion =
   | "contratistas"
   | "auditoria"
   | "empresas"
-  | "usuarios"
   | "gafetes";
 
 /** `rolesPermitidos` ausente = visible para cualquier rol logueado.
  * Auditoría lo restringe — espejo de `RolUsuario::puede(VerAuditoria)` en
- * `src/domain/autorizacion.rs` (Root y Administrador sí, Operador no).
- * Usuarios también — espejo de `Operacion::GestionarUsuarios`
- * (`AppCore::buscar_usuarios` la exige; un Operador entraba y veía la
- * tabla vacía con un toast de error en vez de no ver la sección). El resto
- * de las pantallas no tiene una operación de sólo-lectura restringida por
- * rol en el núcleo (algunas acciones puntuales adentro sí, ej.
+ * `src/domain/autorizacion.rs` (Root y Administrador sí, Operador no). El
+ * resto de las pantallas no tiene una operación de sólo-lectura restringida
+ * por rol en el núcleo (algunas acciones puntuales adentro sí, ej.
  * activar/desactivar, pero eso ya lo rechaza el comando — no hace falta
  * ocultar la sección entera por eso). Si el núcleo agrega otra operación de
  * rol para "ver X", el mismo patrón (agregar `rolesPermitidos` acá) alcanza
- * — no hace falta un mecanismo más genérico todavía. */
+ * — no hace falta un mecanismo más genérico todavía.
+ *
+ * No hay una sección "Usuarios": administrar usuarios globales (alta,
+ * edición, reset de contraseña de otro usuario) quedó exclusivo del panel
+ * administrativo web (ver docs/plan-autenticacion-supabase-auth.md) — el
+ * escritorio ya no origina cambios contra esa tabla, salvo que la propia
+ * sesión cambie su propia contraseña (`cambiarMiPassword`). */
 const SECCIONES: {
   id: Seccion;
   etiqueta: string;
@@ -174,12 +174,6 @@ const SECCIONES: {
     rolesPermitidos: ["Root", "Administrador"],
   },
   { id: "empresas", etiqueta: "Empresas", Icono: Building2 },
-  {
-    id: "usuarios",
-    etiqueta: "Usuarios",
-    Icono: UserCog,
-    rolesPermitidos: ["Root", "Administrador"],
-  },
   { id: "gafetes", etiqueta: "Gafetes", Icono: IdCard },
 ];
 
@@ -449,8 +443,6 @@ function Shell({
                           <Auditoria />
                         ) : id === "empresas" ? (
                           <Empresas />
-                        ) : id === "usuarios" ? (
-                          <Usuarios />
                         ) : (
                           <Gafetes />
                         )}

@@ -10,7 +10,7 @@ use crate::cli::resolver::{MIN_CONSULTA, es_comodin_todos};
 
 use super::estilos::{acento, estilo_seleccion, muted};
 use super::tabla::{anchos_columnas, columnas_visibles, fila_columnas};
-use super::util::{rol_texto, si_no, tipo_texto};
+use super::util::{si_no, tipo_texto};
 
 fn ancho_fijo_busqueda(columna: ColumnaBusqueda) -> Option<usize> {
     match columna {
@@ -138,53 +138,6 @@ pub(super) fn lineas_coincidencias_empresas(
         let marcador = if indice == seleccion { "› " } else { "  " };
         let estado = if empresa.activo { "" } else { " (inactiva)" };
         let texto = format!("{marcador}{}{estado}", empresa.nombre);
-        lineas.push(if indice == seleccion {
-            Line::from(Span::styled(texto, estilo_seleccion()))
-        } else {
-            Line::from(texto)
-        });
-    }
-    if let Some(linea) = linea_paginacion_aproximada(offset, items.len(), hay_mas) {
-        lineas.push(Line::from(""));
-        lineas.push(linea);
-    }
-    lineas
-}
-
-pub(super) fn lineas_coincidencias_usuarios(
-    consulta: &str,
-    items: &[crate::database::queries::usuarios::UsuarioResumen],
-    seleccion: usize,
-    offset: usize,
-    hay_mas: bool,
-) -> Vec<Line<'static>> {
-    let mut lineas = vec![
-        Line::from(Span::styled("EDITAR USUARIO", muted())),
-        Line::from(""),
-    ];
-    if !es_comodin_todos(consulta) && consulta.chars().count() < MIN_CONSULTA {
-        lineas.push(Line::from(Span::styled(
-            format!("Escriba al menos {MIN_CONSULTA} letras para buscar, o \"*\" para ver todos"),
-            muted(),
-        )));
-        return lineas;
-    }
-    if items.is_empty() {
-        lineas.push(Line::from(Span::styled(
-            format!("Sin usuarios para \"{consulta}\""),
-            muted(),
-        )));
-        return lineas;
-    }
-    for (indice, usuario) in items.iter().enumerate() {
-        let marcador = if indice == seleccion { "› " } else { "  " };
-        let estado = if usuario.activo { "" } else { " (inactivo)" };
-        let texto = format!(
-            "{marcador}{} — {} — {}{estado}",
-            usuario.cedula,
-            usuario.nombre,
-            rol_texto(usuario.rol)
-        );
         lineas.push(if indice == seleccion {
             Line::from(Span::styled(texto, estilo_seleccion()))
         } else {
