@@ -1,6 +1,6 @@
 # Arquitectura de la app móvil — criterio para mantener en el tiempo
 
-La auditoría transversal, sus reparaciones, límites y pendientes operativos están en [AUDITORIA_INTEGRAL.md](AUDITORIA_INTEGRAL.md).
+La auditoría transversal, sus reparaciones, límites y pendientes operativos (2026-09-09, mayormente resuelta o absorbida por trabajo posterior -- ver `docs/pendientes.md`) está archivada en [`docs/auditorias/AUDITORIA_INTEGRAL_ANDROID_2026-09-09.md`](../../docs/auditorias/AUDITORIA_INTEGRAL_ANDROID_2026-09-09.md).
 
 > Diagnóstico honesto (2026-09-02): la app se armó como MVP/piloto, rápido y
 > funcional, sin capa de presentación separada de la lógica de negocio. Sí

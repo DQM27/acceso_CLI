@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "control-acceso-desktop",
-  "version": "1.1.1",
+  "version": "1.5.2",
   "identifier": "com.dqm27.controlaccesobrisas.desktop",
   "build": {
     "frontendDist": "../dist",
@@ -41,7 +41,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhEOEU4OTRBNDVBMjAyOTUKUldTVkFxSkZTb21PamZvUHVHMDBlRnFhY3JWN2N2U0pyemI2VXo3UGs4MEYzWEs4V1QwZzYwd0kK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZEQkZBQTI5NkFEMjI1MgpSV1JTSXEyV292cmJCdjlkOU1pdTNWSFJ2ZDR6R3REVGt3VTVwTmlYNFFUWXpJYlFRR21JTEdHSgo=",
       "endpoints": [
         "https://github.com/DQM27/acceso_CLI/releases/latest/download/latest.json"
       ]

@@ -6,53 +6,6 @@ on:
       - "v*"
 
 jobs:
-  build:
-    permissions:
-      contents: write
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Instalar toolchain de Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Tests
-        run: cargo test --verbose
-
-      - name: Build de release
-        run: cargo build --release --verbose
-
-      # TODO: una vez aprobado el proyecto en SignPath Foundation, agregar acá
-      # el paso que envía target/release/control_acceso.exe a firmar antes de
-      # publicarlo como artefacto de la release. Sin este paso, el .exe que
-      # sube este workflow queda sin firmar (igual que ahora).
-      - name: Publicar el ejecutable como artefacto de Actions
-        uses: actions/upload-artifact@v4
-        with:
-          name: control_acceso-${{ github.ref_name }}
-          path: target/release/control_acceso.exe
-
-      # Además del artifact de Actions (arriba, requiere estar logueado en el
-      # repo para bajarlo), se adjunta también a la Release pública -- mismo
-      # lugar que el instalador de escritorio y el APK, para no obligar a
-      # nadie a buscar el ejecutable de la CLI/TUI en otro sitio. `tag_name`
-      # apunta al mismo tag que usa tauri-action en `build-gui`: GitHub
-      # identifica una Release por su tag, así que este paso encuentra/
-      # completa la MISMA Release en vez de crear una duplicada, sin
-      # importar cuál de los dos jobs termine primero.
-      - name: Preparar el ejecutable para la Release
-        run: Copy-Item target/release/control_acceso.exe ControlAcceso-CLI-${{ github.ref_name }}-windows-x64.exe
-
-      - name: Adjuntar el ejecutable a la Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: "Control de Acceso Brisas ${{ github.ref_name }}"
-          draft: true
-          files: ControlAcceso-CLI-${{ github.ref_name }}-windows-x64.exe
-
   build-gui:
     permissions:
       contents: write

@@ -11,3 +11,13 @@
 /icons/android/
 /icons/ios/
 /icons/64x64.png
+
+# Llave privada de firma del updater (Tauri) -- mismo criterio que
+# mobile/.gitignore para el keystore de Android: el archivo real vive acá
+# en disco, pero nunca en git. Respaldo real: gestor de contraseñas + los
+# secrets TAURI_SIGNING_PRIVATE_KEY/TAURI_SIGNING_PRIVATE_KEY_PASSWORD de
+# GitHub Actions (ver docs/credenciales.md). Si se pierde esta carpeta Y
+# esos dos secrets, no hay forma de firmar una actualización compatible
+# con instalaciones existentes -- hay que generar una llave nueva y todo
+# el mundo que ya instaló el updater queda sin poder actualizar más.
+/keystore/
