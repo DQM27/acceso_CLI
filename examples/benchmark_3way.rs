@@ -1,4 +1,4 @@
-//! Benchmark comparativo de los tres motores SQLite contra `AppCore` real --
+//! Benchmark comparativo de los tres motores `SQLite` contra `AppCore` real --
 //! ver `docs/auditorias/auditoria-rendimiento-core-rust-2026-09-10.md`,
 //! sección 12, y `docs/decisiones-tecnicas.md` (entradas sobre el switch de
 //! tres vías y el enlace real de `cifrado-sqlite3mc`).
@@ -108,11 +108,20 @@ fn sembrar(ruta: &Path) {
         .expect("sembrar datos mínimos");
 }
 
+// Los `usize` que se convierten acá (rondas, ciclos por ronda) son
+// constantes chicas de configuración del benchmark, jamás se acercan a los
+// 52 bits de mantisa de `f64` -- la pérdida de precisión que advierte el
+// lint no aplica en la práctica.
+#[allow(clippy::cast_precision_loss)]
+fn como_f64(valor: usize) -> f64 {
+    valor as f64
+}
+
 fn mediana(valores: &mut [f64]) -> f64 {
-    valores.sort_by(|a, b| a.total_cmp(b));
+    valores.sort_by(f64::total_cmp);
     let mitad = valores.len() / 2;
-    if valores.len() % 2 == 0 {
-        (valores[mitad - 1] + valores[mitad]) / 2.0
+    if valores.len().is_multiple_of(2) {
+        f64::midpoint(valores[mitad - 1], valores[mitad])
     } else {
         valores[mitad]
     }
@@ -165,7 +174,7 @@ fn main() {
 
         println!(
             "  ronda {ronda}/{RONDAS}: {duracion_ms:.1} ms total, {:.4} ms/ciclo",
-            duracion_ms / CICLOS_POR_RONDA as f64
+            duracion_ms / como_f64(CICLOS_POR_RONDA)
         );
     }
 
@@ -179,7 +188,7 @@ fn main() {
         .iter()
         .copied()
         .fold(f64::NEG_INFINITY, f64::max);
-    let promedio = duraciones_ronda_ms.iter().sum::<f64>() / duraciones_ronda_ms.len() as f64;
+    let promedio = duraciones_ronda_ms.iter().sum::<f64>() / como_f64(duraciones_ronda_ms.len());
     let mediana_valor = mediana(&mut duraciones_ronda_ms.clone());
 
     println!(
@@ -193,7 +202,7 @@ fn main() {
     println!("  máximo:   {maximo:.1} ms");
     println!(
         "  por ciclo (sobre la mediana): {:.4} ms",
-        mediana_valor / CICLOS_POR_RONDA as f64
+        mediana_valor / como_f64(CICLOS_POR_RONDA)
     );
     println!("Memoria del proceso (Working Set):");
     println!(
