@@ -12,7 +12,7 @@ use control_acceso::{
     services::{
         autenticacion_service::UsuarioSesion,
         contratista_service::DatosActualizacionContratista,
-        error::{ContratistaServiceError, EmpresaServiceError, UsuarioServiceError},
+        error::{EmpresaServiceError, UsuarioServiceError},
         usuario_service::{ActualizarUsuarioInput, CrearUsuarioInput},
     },
 };

@@ -18,8 +18,9 @@ function finExclusivo(fechaYMD: string): string {
 
 function tituloCita(cita: Cita): string {
   if (cita.motivo) return cita.motivo;
+  const [primero] = cita.cita_visitantes;
   const n = cita.cita_visitantes.length;
-  return n === 1 ? `Visita de ${cita.cita_visitantes[0]!.nombre}` : `Visita de ${n} personas`;
+  return n === 1 && primero ? `Visita de ${primero.nombre}` : `Visita de ${n} personas`;
 }
 
 /**

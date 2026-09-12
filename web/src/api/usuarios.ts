@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "../lib/validacion";
 import { supabase } from "../lib/supabase";
 import { invocar, esObjeto } from "./_invocar";
 

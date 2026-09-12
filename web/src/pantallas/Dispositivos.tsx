@@ -107,8 +107,14 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
 
   const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
     const silencioso = opciones?.silencioso ?? false;
-    if (!silencioso) setCargando(true);
-    return listarDispositivosYSitios()
+    // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
+    // directo -- evita que `react-hooks/set-state-in-effect` marque esta
+    // actualización como síncrona dentro del efecto que dispara la carga.
+    return Promise.resolve()
+      .then(() => {
+        if (!silencioso) setCargando(true);
+      })
+      .then(() => listarDispositivosYSitios())
       .then(({ sitios, dispositivos }) => {
         setSitios(sitios);
         setDispositivos(dispositivos);

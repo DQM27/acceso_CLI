@@ -45,7 +45,7 @@ async function preparar(
     cita?: boolean;
   } = {},
 ) {
-  let guardados: Record<string, unknown>[] = [];
+  const guardados: Record<string, unknown>[] = [];
   let citas: unknown[] = opciones.cita
     ? [
         {
@@ -134,12 +134,13 @@ test("login con CSP real, sin desbordamiento en ambos temas", async ({
   const errores: string[] = [];
   page.on("pageerror", (error) => errores.push(error.message));
   const respuesta = await page.goto("/");
-  const csp = respuesta!.headers()["content-security-policy"];
+  if (!respuesta) throw new Error("La navegación a / no devolvió respuesta");
+  const csp = respuesta.headers()["content-security-policy"];
   expect(csp).toContain("script-src 'self'");
   expect(csp).toContain("style-src 'self'");
   expect(csp).not.toContain("unsafe-");
-  expect(respuesta!.headers()["referrer-policy"]).toBe("no-referrer");
-  expect(respuesta!.headers()["x-frame-options"]).toBe("DENY");
+  expect(respuesta.headers()["referrer-policy"]).toBe("no-referrer");
+  expect(respuesta.headers()["x-frame-options"]).toBe("DENY");
   await expect(
     page.getByRole("button", { name: "Continuar con Google" }),
   ).toBeVisible();

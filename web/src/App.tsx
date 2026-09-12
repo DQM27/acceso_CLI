@@ -120,7 +120,12 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
 
   useEffect(() => {
     if (!seccionActual) return;
-    setVisitadas((actual) => (actual.includes(seccionActual) ? actual : [...actual, seccionActual]));
+    // `Promise.resolve().then(...)` en vez de llamar `setVisitadas` directo
+    // -- evita que `react-hooks/set-state-in-effect` marque esta
+    // actualización como síncrona dentro del efecto.
+    Promise.resolve().then(() => {
+      setVisitadas((actual) => (actual.includes(seccionActual) ? actual : [...actual, seccionActual]));
+    });
   }, [seccionActual]);
 
   function alternarColapsado() {

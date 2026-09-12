@@ -62,7 +62,6 @@ export default function SalidaModal({
 
   useEffect(() => {
     cargarActivos().catch((error) => setError(String(error)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const porGafete = useMemo(() => {

@@ -448,3 +448,62 @@ usando `cerrarFila` para saber si cierra local o contra la nube), pero ya
 no se pinta en ninguna celda.
 
 Verificado: `tsc --noEmit` limpio, 191/191 tests de Vitest (desktop).
+
+---
+
+## 2026-09-12 — CSP real del panel (`web/`), verificada en navegador, no sólo leída
+
+`web/` no tenía ningún test que cargara la app de verdad bajo su propia
+CSP -- `_headers.test.ts` sólo comprobaba el *texto* del archivo, nunca si
+la app cargada realmente respetaba esa política. Se agregó
+`web/e2e/panel.spec.ts` (Playwright + `wrangler dev`, mismo patrón que
+`web-visitas/e2e/`) con sesión de Supabase simulada por interceptación de
+red, cubriendo Contratistas/Usuarios/Dispositivos/Historial + la
+exportación a PDF. Encontró dos problemas reales que la política actual
+(ya en producción) violaba en silencio:
+
+**Zod intentaba compilación dinámica bajo CSP (`script-src: eval`
+real).** Zod v4 prueba `Function("")` para decidir si puede usar su modo
+JIT -- bajo `script-src` sin `unsafe-eval` eso es una violación real (se
+atrapa en un try/catch propio de Zod, así que no rompía nada visible, pero
+sí generaba la violación en cada carga de Contratistas/Usuarios/Historial,
+las tres pantallas que parsean la respuesta de Supabase con Zod).
+`web-visitas` ya lo había resuelto (`z.config({ jitless: true })` en
+`lib/validacion.ts`, ver el comentario ahí) -- se copió el mismo wrapper a
+`web/src/lib/validacion.ts` y los 3 módulos de `api/` que usaban `zod`
+directo pasan a importar de ahí.
+
+**AG Grid necesita `style-src 'unsafe-inline'` e `img-src data:` de
+verdad.** Se probó sacar ambos (apuntando a la config más estricta de
+`web-visitas`) y el navegador real mostró las violaciones: AG Grid
+(`ag-grid-vendor` chunk) inyecta múltiples `<style>` en el documento vía
+su Theming API (`themeQuartz`), y usa íconos como `data:` URI. AG Grid
+documenta un mecanismo real para evitar `unsafe-inline`
+(`gridOptions.styleNonce`, un nonce de CSP), pero un nonce sólo es seguro
+si es distinto en cada carga de página -- generarlo así requiere una
+respuesta dinámica (un Worker que arme el HTML por request), no un
+`_headers` estático como el que sirve hoy este panel (Cloudflare
+Workers/Pages static assets). Meter un nonce fijo hardcodeado en el build
+no sería más seguro que `unsafe-inline` (cualquiera que vea el bundle lo
+ve también) -- así que se dejó `unsafe-inline` para estilos, mantenido
+deliberadamente, no por descuido. Quedó igual `img-src data:` (AG Grid
+también usa `data:` para íconos). Ver `web/e2e/panel.spec.ts` para la
+prueba real que lo confirma; si algún día se arma el Worker dinámico con
+nonce, ese test es el que hay que poner en verde con la política sin
+`unsafe-inline`.
+
+Todo lo demás sí se pudo endurecer al nivel de `web-visitas` y quedó
+confirmado sin violaciones en el navegador real: `default-src 'none'`
+(antes `'self'`), `base-uri 'none'` (antes `'self'`),
+`upgrade-insecure-requests`, `Referrer-Policy: no-referrer` (antes
+`strict-origin-when-cross-origin`), `Permissions-Policy` con
+`browsing-topics=()`, `Cross-Origin-Opener-Policy: same-origin`,
+`X-Robots-Tag: noindex, nofollow, noarchive` y `Cache-Control: no-store`
+(los tres últimos, nuevos, no existían en ninguna de las dos apps antes de
+esto). `Strict-Transport-Security` se dejó con `includeSubDomains` (ya lo
+tenía `web/`, más estricto que `web-visitas` -- no tenía sentido
+aflojarlo para "igualar").
+
+Verificado: 8/8 Playwright (`escritorio`+`movil`, cero violaciones CSP en
+las 4 pantallas + exportación a PDF), 75/75 Vitest, `npm run lint` y
+`npm run build` limpios.

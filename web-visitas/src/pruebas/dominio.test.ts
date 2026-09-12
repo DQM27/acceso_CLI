@@ -29,7 +29,9 @@ describe("validación de citas", () => {
   });
   it("rechaza documentos duplicados aunque se escriban con separadores distintos", () => {
     const entrada = datos();
-    entrada.visitantes.push({ ...entrada.visitantes[0]!, cedula: "123456789" });
+    const [primero] = entrada.visitantes;
+    if (!primero) throw new Error("fixture sin visitantes");
+    entrada.visitantes.push({ ...primero, cedula: "123456789" });
     const resultado = esquemaNuevaCita("2026-09-09").safeParse(entrada);
     expect(resultado.success).toBe(false);
     if (!resultado.success)
@@ -59,8 +61,10 @@ describe("validación de citas", () => {
     expect(esquemaNuevaCita("2026-09-09").safeParse(entrada).success).toBe(
       true,
     );
+    const [primero] = entrada.visitantes;
+    if (!primero) throw new Error("fixture sin visitantes");
     entrada.visitantes = Array.from({ length: 51 }, (_, i) => ({
-      ...entrada.visitantes[0]!,
+      ...primero,
       cedula: `DOC${i}`,
     }));
     expect(esquemaNuevaCita("2026-09-09").safeParse(entrada).success).toBe(

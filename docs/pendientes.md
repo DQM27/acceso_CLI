@@ -214,25 +214,27 @@ aspiracional -- lo que sigue sin marcar todavía no corrió.
   2 de compatibilidad de `react-hook-form` con el compilador de React) -- no
   bloquean nada, se pueden ignorar o limpiar después sin apuro. `tsc --noEmit` y
   `npm run test` (191 tests) en verde tras los cambios.
-- [ ] **`cargo clippy` del crate raíz -- roto, sin arreglar.** Mismo tipo de hallazgo
-  que ya se corrigió en `desktop`/`mobile/rust-core` (comentario de doc sin
-  backticks, `doc_markdown = "deny"`), pero en un archivo del crate raíz todavía sin
-  identificar -- el output completo con archivo:línea nunca llegó a verse (se cortó
-  al filtrar con `Select-String` y no se volvió a pedir). Correr
-  `cargo clippy --lib --bins --tests` en la raíz y arreglar lo que salga (debería ser
-  rápido, mismo patrón mecánico que los otros dos). Ya no debería disparar la
-  recompilación completa de SQLCipher (~35 min) que sí pasó la primera vez -- el
-  `target/` de la raíz ya quedó compilado una vez esta sesión.
-- [ ] **`cargo audit` sin correr de verdad en ningún crate.** Instalado, agregado a
-  CI, pero nunca ejecutado contra los `Cargo.lock` reales de este repo -- no hay
-  garantía todavía de que pase limpio. Correr `cargo audit` en los 3 directorios
-  (raíz, `desktop/src-tauri`, `mobile/rust-core`) antes de confiar en que el step
-  de CI vaya a pasar.
-- [ ] **ESLint en `web/` y `web-visitas/` -- sin empezar.** Mismo criterio que
-  `desktop` (copiar `eslint.config.js`, ajustar `ignores`/`globals` si hace falta),
-  pero ninguno de los dos tiene todavía ni el paquete instalado. Alcance
-  desconocido -- `web-visitas` en particular usa Playwright/FullCalendar, puede
-  sacar hallazgos propios que `desktop` no tenía.
+- [x] **`cargo clippy` del crate raíz -- corregido (2026-09-12).** El archivo era
+  `src/database/connection.rs:171` -- doc comment mencionaba "SQLite" sin backticks
+  (`doc_markdown = "deny"`). Corregido a `` `SQLite` ``; de paso se sacó un import sin
+  usar en `tests/autorizacion_roles.rs` que clippy señalaba como warning.
+  `cargo clippy --all-targets` en la raíz queda 100% limpio, sin errores ni warnings.
+- [x] **`cargo audit` corrido en los 3 crates (2026-09-12).** Raíz, `desktop/src-tauri`
+  y `mobile/rust-core` -- los 3 en verde (exit 0). Sólo salen 7 avisos de
+  "unmaintained"/"unsound" en dependencias transitivas (`proc-macro-error`, 5 crates
+  `unic-*`, `glib` 0.18 vía GTK del lado desktop) -- ninguno es un CVE explotable
+  conocido, son warnings que `cargo audit` deja pasar (`exit 0`) salvo que se pida
+  `--deny warnings` explícito, que el `ci.yml` actual no pide. No requieren acción
+  inmediata, pero quedan documentados por si se quiere reemplazar esas dependencias
+  más adelante.
+- [x] **ESLint en `web/` y `web-visitas/` (2026-09-12).** Mismo `eslint.config.js`
+  que `desktop`. Salieron 13 y 27 errores reales respectivamente -- ya corregidos
+  (principalmente `react-hooks/set-state-in-effect` diferido con
+  `Promise.resolve().then(...)`, `no-non-null-assertion` con chequeos reales, y en
+  `web-visitas/NuevaCita.tsx` un ref mutado a mano que pasó a ser estado real).
+  Los 3 frontends (`desktop`, `web`, `web-visitas`) quedan con `npm run lint` en
+  0 errores y ya está wireado en `ci.yml`/`web.yml`. Detalle en los commits
+  `fix(desktop)`/`feat(web)`/`feat(web-visitas)` del 2026-09-12.
 - [ ] **`cargo-deny` (licencias + dependencias duplicadas/baneadas) -- evaluado y
   descartado por ahora**, no por falta de valor sino por alcance: se optó por
   `cargo-audit` (más simple, sin archivo de configuración) para esta primera

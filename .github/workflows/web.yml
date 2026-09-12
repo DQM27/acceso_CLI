@@ -26,17 +26,16 @@ jobs:
           cache: npm
           cache-dependency-path: ${{ matrix.carpeta }}/package-lock.json
       - run: npm ci --ignore-scripts
+      - run: npm run lint
       - run: npm test
       - run: npm run build
       - run: node ../design/generar.mjs --check
       - run: node ../design/verificar.mjs
-      - if: matrix.carpeta == 'web-visitas'
-        run: npx playwright install --with-deps chromium
-      - if: matrix.carpeta == 'web-visitas'
-        run: npm run test:e2e
-      - if: failure() && matrix.carpeta == 'web-visitas'
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: pruebas-web-visitas
-          path: web-visitas/test-results/
+          name: pruebas-${{ matrix.carpeta }}
+          path: ${{ matrix.carpeta }}/test-results/
           retention-days: 7

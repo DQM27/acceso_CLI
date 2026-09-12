@@ -37,5 +37,8 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./src/vitest.setup.ts"],
+    // Sin esto, vitest también levanta e2e/panel.spec.ts (Playwright, no
+    // vitest) -- mismo ajuste que ya tiene web-visitas/vite.config.ts.
+    include: ["src/**/*.test.{ts,tsx}"],
   },
 });

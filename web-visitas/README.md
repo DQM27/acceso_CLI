@@ -74,16 +74,19 @@ constituyen por sí solos una barrera frente a llamadas directas a la API.
 
 Dominio: **visitas.megabrisas.com**. Worker: **visitas-brisas**.
 
-El frontend está implementado, pero la integración de producción queda pendiente
-de corregir la recursión RLS y crear la RPC atómica descritas en
-[el contrato de backend](../docs/contrato-web-visitas.md). El código falla de forma
-cerrada cuando el servicio no permite comprobar la autorización. No sustituye
-el guardado atómico por varias inserciones.
+El frontend está implementado. El backend (recursión RLS y la RPC atómica
+`crear_cita_anfitrion` descritas en [el contrato de backend](../docs/contrato-web-visitas.md))
+ya está resuelto y probado -- ver
+[la respuesta del backend](../docs/respuesta-contrato-web-visitas.md), 2026-09-09.
+El código sigue fallando de forma cerrada cuando el servicio no permite comprobar
+la autorización, y no sustituye el guardado atómico por varias inserciones.
 
 Antes de publicar:
 
-1. El responsable del backend implementa y prueba el contrato, incluido aislamiento
-   entre usuarios, reintentos, cancelación y baja de anfitriones.
+1. ~~El responsable del backend implementa y prueba el contrato~~ -- hecho, ver
+   la respuesta del backend enlazada arriba. Repetir igual las pruebas de dos
+   anfitriones / cuenta sin alta / dispositivo de otro sitio contra el entorno
+   real antes de anunciar el dominio.
 2. Registrar `https://visitas.megabrisas.com/auth/callback` entre las URLs de retorno
    de Supabase. Mantener la URL principal del panel y evitar comodines amplios.
 3. Configurar Cloudflare Access y las reglas antiabuso para este subdominio;

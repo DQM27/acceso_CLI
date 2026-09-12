@@ -59,7 +59,9 @@ describe("guardado atómico", () => {
         p_visitantes: [expect.objectContaining({ cedula: "AB123" })],
       }),
     );
-    expect(dobles.rpc.mock.calls[0]![1]).not.toHaveProperty("anfitrion_correo");
+    const llamada = dobles.rpc.mock.calls[0];
+    if (!llamada) throw new Error("crear_cita_anfitrion no fue llamado");
+    expect(llamada[1]).not.toHaveProperty("anfitrion_correo");
     expect(dobles.from).not.toHaveBeenCalled();
   });
   it("rechaza datos inválidos antes de hacer peticiones", async () => {

@@ -60,7 +60,15 @@ export default function ConfirmacionSensible({
   // se queda tal cual estaba -- con botones para reintentar o cancelar --
   // en vez de caer en un estado sin ninguno.
   useEffect(() => {
+    // Nota: NO se difiere con `Promise.resolve().then(...)` (el patrón que
+    // sí usan los demás efectos de este repo para esta misma regla) porque
+    // acá el efecto no sólo actualiza estado propio -- también llama
+    // `confirmacion.reiniciar()`, una función externa cuyo llamador espera
+    // que corra en el mismo tick que el cambio de `abierto` (ver
+    // ConfirmacionSensible.test.tsx, "cierra y limpia el estado...").
+    // Diferirla rompe ese contrato observable sin arreglar nada real.
     if (abierto) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPaso("pregunta");
     } else {
       setCodigo("");
