@@ -82,7 +82,8 @@ export function Modal({
   const referencia = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const anterior = document.activeElement as HTMLElement | null;
-    const dialogo = referencia.current!;
+    const dialogo = referencia.current;
+    if (!dialogo) return;
     dialogo.showModal();
     return () => {
       dialogo.close();

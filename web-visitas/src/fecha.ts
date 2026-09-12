@@ -5,8 +5,11 @@ export function hoyCostaRica(instante = new Date()): string {
     month: "2-digit",
     day: "2-digit",
   }).formatToParts(instante);
-  const valor = (tipo: Intl.DateTimeFormatPartTypes) =>
-    partes.find((p) => p.type === tipo)!.value;
+  const valor = (tipo: Intl.DateTimeFormatPartTypes) => {
+    const parte = partes.find((p) => p.type === tipo);
+    if (!parte) throw new Error(`No se pudo formatear la fecha: falta la parte "${tipo}"`);
+    return parte.value;
+  };
   return `${valor("year")}-${valor("month")}-${valor("day")}`;
 }
 

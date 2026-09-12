@@ -72,6 +72,14 @@ function Portal() {
     document.getElementById("contenido")?.focus();
   }, [ruta.pathname]);
 
+  // `Contenido` sólo renderiza `<Portal>` mientras `anfitrion` no sea null
+  // (ver arriba), pero como `Portal` lee el mismo contexto de forma
+  // independiente, esta guarda deja a TypeScript/ESLint confirmarlo en vez
+  // de asumirlo con `!` -- y cubre sin romper nada el caso límite de una
+  // sesión que se invalida entre el chequeo de `Contenido` y este render.
+  // Va después de todos los hooks para no violar las Rules of Hooks.
+  if (!anfitrion) return null;
+
   function alternarColapsado() {
     setColapsado((actual) => {
       const siguiente = !actual;
@@ -142,11 +150,11 @@ function Portal() {
           <SelectorTema />
           <span className="separador" />
           <span className="avatar" aria-hidden="true">
-            {anfitrion!.nombre.charAt(0).toUpperCase()}
+            {anfitrion.nombre.charAt(0).toUpperCase()}
           </span>
           <div className="identidad">
-            <strong>{anfitrion!.nombre}</strong>
-            <span>{anfitrion!.correo}</span>
+            <strong>{anfitrion.nombre}</strong>
+            <span>{anfitrion.correo}</span>
           </div>
           <button
             className="boton boton-discreto solo-icono"

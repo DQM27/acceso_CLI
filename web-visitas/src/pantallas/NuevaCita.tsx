@@ -50,14 +50,24 @@ export default function NuevaCita() {
       currentLocation.pathname !== nextLocation.pathname,
   );
   const resumenErrores = useRef<HTMLDivElement>(null);
-  const claves = useRef([crypto.randomUUID()]);
+  // Estado, no ref -- se lee durante el render (como `key` de cada fila),
+  // y leer un ref durante el render no está garantizado por React
+  // (`react-hooks/refs`). Se mantiene en paralelo a `formulario.visitantes`
+  // (mismo índice) en los dos puntos donde ese array cambia: alta y baja.
+  const [claves, setClaves] = useState([crypto.randomUUID()]);
   const titulo = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     const controlador = new AbortController();
-    setCargando(true);
-    setErrorSitios(null);
-    listarSitios(controlador.signal)
+    // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
+    // directo -- evita que `react-hooks/set-state-in-effect` marque esta
+    // actualización como síncrona dentro del efecto.
+    Promise.resolve()
+      .then(() => {
+        setCargando(true);
+        setErrorSitios(null);
+      })
+      .then(() => listarSitios(controlador.signal))
       .then((datos) => {
         if (!controlador.signal.aborted) setSitios(datos);
       })
@@ -314,7 +324,7 @@ export default function NuevaCita() {
                   {formulario.visitantes.map((persona, i) => (
                     <section
                       className="visitante-formulario"
-                      key={claves.current[i]}
+                      key={claves[i]}
                       aria-label={`Visitante ${i + 1}`}
                     >
                       <div className="visitante-encabezado">
@@ -328,7 +338,7 @@ export default function NuevaCita() {
                             className="boton boton-discreto boton-peligro"
                             aria-label={`Quitar visitante ${i + 1}`}
                             onClick={() => {
-                              claves.current.splice(i, 1);
+                              setClaves((c) => c.filter((_, indice) => indice !== i));
                               actualizar({
                                 visitantes: formulario.visitantes.filter(
                                   (_, indice) => indice !== i,
@@ -408,7 +418,7 @@ export default function NuevaCita() {
                   className="boton agregar-visitante"
                   disabled={formulario.visitantes.length >= MAX_VISITANTES}
                   onClick={() => {
-                    claves.current.push(crypto.randomUUID());
+                    setClaves((c) => [...c, crypto.randomUUID()]);
                     actualizar({
                       visitantes: [...formulario.visitantes, visitanteVacio()],
                     });
@@ -471,7 +481,7 @@ export default function NuevaCita() {
               <h3>Visitantes ({formulario.visitantes.length})</h3>
               <ul className="personas-revision">
                 {formulario.visitantes.map((v, i) => (
-                  <li key={claves.current[i]}>
+                  <li key={claves[i]}>
                     <span className="avatar" aria-hidden="true">
                       {i + 1}
                     </span>

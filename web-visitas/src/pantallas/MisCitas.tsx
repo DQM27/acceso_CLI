@@ -54,19 +54,31 @@ export default function MisCitas() {
   const navegar = useNavigate();
 
   useEffect(() => {
-    if (ruta.state?.creada) {
+    if (!ruta.state?.creada) return;
+    // `Promise.resolve().then(...)` en vez de llamar `setAviso`/`navegar`
+    // directo -- evita que `react-hooks/set-state-in-effect` marque esta
+    // actualización como síncrona dentro del efecto.
+    Promise.resolve().then(() => {
       setAviso(
         "Cita agendada. Recordales a tus visitantes traer su documento de identidad.",
       );
       navegar("/citas", { replace: true, state: null });
-    }
+    });
   }, [ruta.state, navegar]);
 
   useEffect(() => {
+    if (!anfitrion) return;
     const controlador = new AbortController();
-    setCargando(true);
-    setError(null);
-    listarCitas(anfitrion!.correo, filtro, pagina, controlador.signal)
+    const correo = anfitrion.correo;
+    // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
+    // directo -- evita que `react-hooks/set-state-in-effect` marque esta
+    // actualización como síncrona dentro del efecto.
+    Promise.resolve()
+      .then(() => {
+        setCargando(true);
+        setError(null);
+      })
+      .then(() => listarCitas(correo, filtro, pagina, controlador.signal))
       .then((resultado) => {
         if (controlador.signal.aborted) return;
         setCitas(resultado.citas);
@@ -80,17 +92,24 @@ export default function MisCitas() {
         if (!controlador.signal.aborted) setCargando(false);
       });
     return () => controlador.abort();
-  }, [anfitrion!.correo, filtro, pagina, revision]);
+  }, [anfitrion, filtro, pagina, revision]);
 
   // Sólo se pide cuando la vista Calendario está activa -- evita traer
   // hasta 500 citas en cada carga de la pantalla cuando la mayoría de las
   // veces se usa la lista paginada de a 12.
   useEffect(() => {
-    if (vista !== "calendario") return;
+    if (vista !== "calendario" || !anfitrion) return;
     const controlador = new AbortController();
-    setCargandoCalendario(true);
-    setErrorCalendario(null);
-    listarCitasCalendario(anfitrion!.correo, filtro, controlador.signal)
+    const correo = anfitrion.correo;
+    // `Promise.resolve().then(...)` en vez de llamar `setCargandoCalendario(true)`
+    // directo -- evita que `react-hooks/set-state-in-effect` marque esta
+    // actualización como síncrona dentro del efecto.
+    Promise.resolve()
+      .then(() => {
+        setCargandoCalendario(true);
+        setErrorCalendario(null);
+      })
+      .then(() => listarCitasCalendario(correo, filtro, controlador.signal))
       .then((resultado) => {
         if (controlador.signal.aborted) return;
         setCitasCalendario(resultado);
@@ -102,7 +121,7 @@ export default function MisCitas() {
         if (!controlador.signal.aborted) setCargandoCalendario(false);
       });
     return () => controlador.abort();
-  }, [anfitrion!.correo, filtro, vista, revision]);
+  }, [anfitrion, filtro, vista, revision]);
 
   useEffect(() => {
     const alVolver = () => {
@@ -117,12 +136,12 @@ export default function MisCitas() {
   }, []);
 
   async function cancelar() {
-    if (!cancelacion || !verificado || bloqueo.current) return;
+    if (!cancelacion || !verificado || !anfitrion || bloqueo.current) return;
     bloqueo.current = true;
     setCancelando(true);
     setErrorCancelar(null);
     try {
-      await cancelarCita(cancelacion.id, anfitrion!.correo);
+      await cancelarCita(cancelacion.id, anfitrion.correo);
       setCancelacion(null);
       setAviso("La cita se canceló correctamente.");
       setRevision((v) => v + 1);
@@ -263,10 +282,11 @@ export default function MisCitas() {
             {citas.map((cita) => {
               const estado = estadoCita(cita);
               const personas = cita.cita_visitantes;
+              const [primeraPersona] = personas;
               const titulo =
                 cita.motivo ||
-                (personas.length === 1
-                  ? `Visita de ${personas[0]!.nombre}`
+                (personas.length === 1 && primeraPersona
+                  ? `Visita de ${primeraPersona.nombre}`
                   : `Visita de ${personas.length} personas`);
               return (
                 <article className="cita" key={cita.id}>

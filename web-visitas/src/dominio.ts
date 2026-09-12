@@ -3,6 +3,10 @@ import { hoyCostaRica } from "./fecha";
 
 export const MAX_VISITANTES = 50;
 export const MAX_SITIOS = 100;
+// Intencional: valida que NO haya caracteres de control (requisito de
+// seguridad del contrato de backend, ver docs/contrato-web-visitas.md
+// "Rechazar caracteres de control") -- no es una regex mal escrita.
+// eslint-disable-next-line no-control-regex
 const sinControl = /^[^\u0000-\u001f\u007f]*$/u;
 const texto = (maximo: number) =>
   z
