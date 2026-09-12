@@ -1,0 +1,25 @@
+-- Security Advisor: "Signed-In Users Can Execute SECURITY DEFINER Function" --
+-- public.es_admin_global() era invocable directo por PostgREST
+-- (/rest/v1/rpc/es_admin_global) para cualquier `authenticated`, porque
+-- config.toml expone el esquema `public` en la Data API y toda función nueva
+-- ahí hereda EXECUTE de PUBLIC por defecto. La función sólo revela si EL
+-- PROPIO llamador (auth.email()) está en administradores_panel -- no toma
+-- parámetros, no expone el estado de nadie más -- pero igual es una
+-- superficie HTTP que no debería existir: nadie llama a esto por RPC, sólo
+-- lo usan políticas RLS internamente.
+--
+-- Mismo patrón ya usado y probado en este proyecto para
+-- private.sitios_de_cita/private.anfitrion_de_cita (mueve_helpers_de_
+-- recursion_citas_a_esquema_privado): mover la función a `private`, que NO
+-- está en la lista `schemas` de config.toml, la saca de la Data API sin
+-- tocar su lógica.
+--
+-- ALTER FUNCTION ... SET SCHEMA no cambia el OID de la función -- las 16
+-- políticas que ya la usan (contratistas/empresas/usuarios/dispositivos/
+-- ingresos/sitios/administradores_panel/citas/cita_sitios/cita_visitantes/
+-- movimientos_visita/realtime.messages) siguen funcionando sin tocarlas:
+-- Postgres las resuelve por OID, no por nombre calificado. Verificado con
+-- las 9 baterías de diagnóstico de supabase/tests/*_autorizacion.sql (+ un
+-- caso de presencia/admin_global agregado) antes y después de este cambio,
+-- resultado idéntico.
+alter function public.es_admin_global() set schema private;

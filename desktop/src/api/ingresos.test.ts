@@ -1,13 +1,39 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, afterEach } from "vitest";
 import {
   gafetesDe,
   mensajeBloqueo,
   mensajeMotivoDenegacion,
+  mensajeVencimientoPraind,
   puedeContinuar,
   sanearGafetes,
   textoMedio,
 } from "./ingresos";
 import type { PreparacionIngreso } from "./ingresos";
+
+describe("mensajeVencimientoPraind", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("dice 'vence en N días' cuando falta más de un día", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-12T08:00:00"));
+    expect(mensajeVencimientoPraind("2026-09-15")).toBe("vence en 3 días (2026-09-15)");
+  });
+
+  it("dice 'vence mañana' cuando falta exactamente un día", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-12T08:00:00"));
+    expect(mensajeVencimientoPraind("2026-09-13")).toBe("vence mañana (2026-09-13)");
+  });
+
+  it("dice 'vence hoy' cuando la fecha es hoy o ya pasó", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-12T23:00:00"));
+    expect(mensajeVencimientoPraind("2026-09-12")).toBe("vence hoy (2026-09-12)");
+    expect(mensajeVencimientoPraind("2026-09-10")).toBe("vence hoy (2026-09-10)");
+  });
+});
 
 describe("textoMedio", () => {
   it("Vehiculo -> Vehículo, cualquier otro -> Caminando", () => {
@@ -23,6 +49,7 @@ function preparacion(overrides: Partial<PreparacionIngreso> = {}): PreparacionIn
     nombre: "Marlon Quesada",
     empresa_nombre: "Constructora del Valle",
     tipo_ingreso: "Praind",
+    fecha_vencimiento_praind: null,
     resultado_acceso: "Permitido",
     requiere_gafete: false,
     tiene_ingreso_activo: false,

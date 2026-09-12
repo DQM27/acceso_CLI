@@ -70,6 +70,7 @@ class LectorDocumentosIdentidadTest {
         assertEquals(TipoDocumento.CARNET_INDUCCION_PRAIND, doc?.tipo)
         assertEquals("155834532920", doc?.numeroDocumento)
         assertEquals("Marco Anthony Jimenez Reyes", doc?.nombre)
+        assertEquals("Expenic Ing S.A", doc?.empresa)
         assertEquals(FechaDocumento(8, 7, 2028), doc?.vencimiento)
     }
 
@@ -96,6 +97,7 @@ class LectorDocumentosIdentidadTest {
         assertEquals(TipoDocumento.CARNET_INDUCCION_PRAIND, doc?.tipo)
         assertEquals("113850770", doc?.numeroDocumento)
         assertEquals("Mariela Cordero Salazar", doc?.nombre)
+        assertEquals("Expenic Ing S.A", doc?.empresa)
         assertEquals(FechaDocumento(29, 7, 2027), doc?.vencimiento)
     }
 

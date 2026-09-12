@@ -6,7 +6,16 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SIGNING_KEY_JSON = Deno.env.get("DEVICE_SIGNING_KEY")!;
 
-const TOKEN_TTL_SECONDS = 3600;
+// 12h (antes 1h, 2026-09-12) -- un dispositivo real pasa horas sin
+// sincronizar (celular guardado, PC sin uso momentaneo) y el cliente sólo
+// renueva "on demand" antes de cada sync, no en segundo plano solo. Con 1h,
+// cualquier hueco de uso mayor a eso dejaba el token cacheado vencido hasta
+// el proximo intento -- mitigado ademas por el reintento automatico en
+// nube::SincronizacionError::token_dispositivo_vencido (ver
+// docs/decisiones-tecnicas.md), pero subir el TTL reduce cuanto necesita
+// ese reintento en la practica. Mismo tope que ya usa la sesion de persona
+// (TOPE_PRESENCIA_SUPABASE, 12h) para que quede parejo.
+const TOKEN_TTL_SECONDS = 12 * 60 * 60;
 
 // Permite llamadas desde un navegador (la mini web de historial, u otro
 // visor futuro) -- las apps nativas (Rust/Kotlin) nunca pasaron por CORS,

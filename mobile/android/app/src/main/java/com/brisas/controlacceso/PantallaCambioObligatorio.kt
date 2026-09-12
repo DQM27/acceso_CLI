@@ -12,11 +12,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,46 +28,27 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
-import uniffi.control_acceso_mobile.Nucleo
 
-/// Login real contra `Nucleo.autenticar` (Rust) — todo el estado y la
-/// llamada viven en [LoginViewModel] (ver mobile/android/ARQUITECTURA.md), este
-/// Composable sólo dibuja el formulario. Una vez hay sesión, delega a
-/// [PantallaPrincipal] en vez de dibujar nada propio — mismo `Nucleo` para
-/// toda la app, no se reabre la base al loguear.
+/// Reemplaza al formulario de login cuando `Nucleo.autenticarConSecreto`
+/// devuelve `debe_cambiar_password = true` -- usuario global (Administrador/
+/// Operador, o un ROOT ya sincronizado a otro sitio) que todavía tiene la
+/// contraseña temporal de un solo uso generada por el panel (ver
+/// docs/plan-autenticacion-supabase-auth.md). La sesión YA está abierta del
+/// lado de Rust (`autenticar_supabase` la dejó iniciada); esto sólo cambia
+/// la contraseña, no vuelve a autenticar. Reemplaza a
+/// `PantallaFijarPasswordInicial` (el "reclamo por cédula" viejo, cerrado
+/// junto con `SIN_PASSWORD_LOCAL` -- ver `docs/decisiones-tecnicas.md`).
 @Composable
-fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispositivoStore) {
-    val viewModel: LoginViewModel =
-        viewModel(factory = LoginViewModel.factory(nucleo, secretoStore))
-
-    val sesionActual = viewModel.sesion
-    val propietarioSesion = viewModel.propietarioSesion
-    if (sesionActual != null && propietarioSesion != null) {
-        CompositionLocalProvider(LocalViewModelStoreOwner provides propietarioSesion) {
-            PantallaPrincipal(
-                nucleo = nucleo,
-                sesion = sesionActual,
-                directorio = directorio,
-                secretoStore = secretoStore,
-                onCerrarSesion = { viewModel.cerrarSesion() },
-            )
-        }
-        return
-    }
-
-    val cambioObligatorio = viewModel.cambioObligatorio
-    if (cambioObligatorio != null) {
-        PantallaCambioObligatorio(
-            nombre = cambioObligatorio.first.nombre,
-            error = viewModel.error,
-            enviando = viewModel.autenticando,
-            onCambiar = { nueva -> viewModel.completarCambioObligatorio(nueva) },
-            onCancelar = { viewModel.cancelarCambioObligatorio() },
-        )
-        return
-    }
+fun PantallaCambioObligatorio(
+    nombre: String,
+    error: String?,
+    enviando: Boolean,
+    onCambiar: (String) -> Unit,
+    onCancelar: () -> Unit,
+) {
+    var password by remember { mutableStateOf("") }
+    var confirmar by remember { mutableStateOf("") }
+    var errorLocal by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(24.dp),
@@ -77,22 +62,23 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispo
         )
 
         Text(
-            "Control de acceso",
+            "Fijar contraseña",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(top = 16.dp),
         )
         Text(
-            "Brisas",
+            "$nombre · primera vez con esta contraseña temporal",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         OutlinedTextField(
-            value = viewModel.cedula,
-            onValueChange = { viewModel.cambiarCedula(it) },
-            label = { Text("Cédula") },
+            value = password,
+            onValueChange = { password = it },
+            label = { Text("Contraseña nueva") },
             singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
                 focusedLabelColor = MaterialTheme.colorScheme.primary,
@@ -100,9 +86,9 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispo
             modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
         )
         OutlinedTextField(
-            value = viewModel.password,
-            onValueChange = { viewModel.cambiarPassword(it) },
-            label = { Text("Contraseña") },
+            value = confirmar,
+            onValueChange = { confirmar = it },
+            label = { Text("Confirmar contraseña") },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
             colors = OutlinedTextFieldDefaults.colors(
@@ -111,15 +97,31 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispo
             ),
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
         )
+
         BotonBrisas(
-            onClick = { viewModel.autenticar() },
-            enabled = !viewModel.autenticando && viewModel.cedula.isNotBlank() && viewModel.password.isNotBlank(),
+            onClick = {
+                errorLocal = null
+                when {
+                    password.length < 8 -> errorLocal = "Al menos 8 caracteres"
+                    password != confirmar -> errorLocal = "Las contraseñas no coinciden"
+                    else -> onCambiar(password)
+                }
+            },
+            enabled = !enviando,
             modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
         ) {
-            Text(if (viewModel.autenticando) "Verificando…" else "Ingresar")
+            Text(if (enviando) "Guardando…" else "Cambiar y entrar")
         }
 
-        val mensajeError = viewModel.error
+        OutlinedButton(
+            onClick = onCancelar,
+            enabled = !enviando,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        ) {
+            Text("Volver")
+        }
+
+        val mensajeError = errorLocal ?: error
         if (mensajeError != null) {
             Text(
                 mensajeError,

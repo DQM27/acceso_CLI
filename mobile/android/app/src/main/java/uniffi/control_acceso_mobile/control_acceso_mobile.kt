@@ -683,6 +683,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_historial(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cambiar_password_supabase(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cargar_secreto_dispositivo_legado(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_remoto(
@@ -694,6 +696,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial_con_secreto(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_contratista_activo_en_otro_sitio_con_secreto(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista(
     ): Int
@@ -773,6 +777,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_historial(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cambiar_password_supabase(`ptr`: Long,`passwordActual`: RustBuffer.ByValue,`passwordNueva`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cargar_secreto_dispositivo_legado(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_remoto(`ptr`: Long,`directorio`: RustBuffer.ByValue,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -784,6 +790,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`identificadorHardware`: RustBuffer.ByValue,`nombreDispositivo`: RustBuffer.ByValue,`plataforma`: RustBuffer.ByValue,`versionBuild`: RustBuffer.ByValue,`appVersion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_contratista_activo_en_otro_sitio_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_contratista(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
@@ -946,10 +954,10 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
-    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() != 26187) {
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() != 25039) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar_con_secreto() != 52036) {
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar_con_secreto() != 39907) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_borrar_secreto_dispositivo_legado() != 50777) {
@@ -959,6 +967,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_historial() != 13812) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cambiar_password_supabase() != 21021) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cargar_secreto_dispositivo_legado() != 52509) {
@@ -979,6 +990,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial_con_secreto() != 47466) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_contratista_activo_en_otro_sitio_con_secreto() != 8502) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista() != 57741) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -988,7 +1002,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario() != 28771) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_fijar_password_inicial() != 9730) {
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_fijar_password_inicial() != 63784) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio() != 35345) {
@@ -1496,7 +1510,7 @@ public interface NucleoInterface {
      * espere -- acá retener el candado durante una sincronización
      * entera hubiera vuelto a sentirse lento.
      */
-    fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String, `directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): UsuarioSesion
+    fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String, `directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): ResultadoLogin
     
     /**
      * Igual que [`Nucleo::autenticar`], pero con el secreto ya descifrado
@@ -1504,7 +1518,7 @@ public interface NucleoInterface {
      * por un usuario recién creado/reactivado, usa este secreto en memoria
      * sin leer credenciales desde disco.
      */
-    fun `autenticarConSecreto`(`cedula`: kotlin.String, `password`: kotlin.String, `secreto`: kotlin.String): UsuarioSesion
+    fun `autenticarConSecreto`(`cedula`: kotlin.String, `password`: kotlin.String, `secreto`: kotlin.String): ResultadoLogin
     
     /**
      * Borra el archivo legado de `cargar_secreto_dispositivo_legado` --
@@ -1533,6 +1547,15 @@ public interface NucleoInterface {
      * filtros densos y exportación están web/escritorio.
      */
     fun `buscarHistorial`(`texto`: kotlin.String): List<MovimientoHistorial>
+    
+    /**
+     * Cambio de contraseña obligatorio (`debe_cambiar_password` en `true`
+     * tras `autenticar`/`autenticar_con_secreto`) o rutinario --
+     * `nube::cambiar_password` ya revalida `password_actual` con un login
+     * real antes de aceptar la nueva, no confía en que la sesión siga
+     * abierta.
+     */
+    fun `cambiarPasswordSupabase`(`passwordActual`: kotlin.String, `passwordNueva`: kotlin.String)
     
     /**
      * Lee el secreto guardado por versiones móviles anteriores a Android
@@ -1589,6 +1612,19 @@ public interface NucleoInterface {
     fun `configurarDispositivoInicialConSecreto`(`secreto`: kotlin.String, `identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String): ResumenSincronizacion
     
     /**
+     * Chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo cruzado
+     * de ingresos abiertos entre sitios") -- mismo patrón que
+     * `gafete_ocupado_en_sitio_con_secreto`, pero de mejor esfuerzo: sin
+     * secreto, o si la red falla, `Ok(None)` en vez de propagar el error
+     * (acá SÍ hay con qué chocar sin red -- un ingreso registrado offline
+     * queda local igual, y el conflicto se detecta después al sincronizar,
+     * ver `sincronizar_con_secreto`/`ResumenSincronizacion::conflictos_ingreso`).
+     * Kotlin la llama después de `preparar_ingreso`, sólo si los chequeos
+     * locales ya dejaron pasar.
+     */
+    fun `contratistaActivoEnOtroSitioConSecreto`(`secreto`: kotlin.String, `cedula`: kotlin.String): kotlin.String?
+    
+    /**
      * Alta de contratista — mismo formulario que
      * `desktop/src/pantallas/FormularioContratista.tsx`, sólo creación
      * (ver docs/plan-app-movil.md). La validación real y definitiva vuelve
@@ -1612,6 +1648,11 @@ public interface NucleoInterface {
      * Completa el alta de contraseña de un usuario global que `autenticar`
      * rechazó con `NucleoError::SinPasswordLocal` -- ver
      * `AppCore::fijar_password_inicial`. Deja la sesión iniciada directo.
+     *
+     * Legado: `autenticar`/`autenticar_con_secreto` ya no devuelven
+     * `SinPasswordLocal` para un usuario global (ver `autenticar_supabase`)
+     * -- este método queda sólo por si algún llamador viejo lo sigue
+     * invocando, no lo usa ninguna pantalla de Kotlin actual.
      */
     fun `fijarPasswordInicial`(`cedula`: kotlin.String, `nuevaPassword`: kotlin.String): UsuarioSesion
     
@@ -1869,8 +1910,8 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
      * espere -- acá retener el candado durante una sincronización
      * entera hubiera vuelto a sentirse lento.
      */
-    @Throws(NucleoException::class)override fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String, `directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): UsuarioSesion {
-            return FfiConverterTypeUsuarioSesion.lift(
+    @Throws(NucleoException::class)override fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String, `directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): ResultadoLogin {
+            return FfiConverterTypeResultadoLogin.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_autenticar(
@@ -1893,8 +1934,8 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
      * por un usuario recién creado/reactivado, usa este secreto en memoria
      * sin leer credenciales desde disco.
      */
-    @Throws(NucleoException::class)override fun `autenticarConSecreto`(`cedula`: kotlin.String, `password`: kotlin.String, `secreto`: kotlin.String): UsuarioSesion {
-            return FfiConverterTypeUsuarioSesion.lift(
+    @Throws(NucleoException::class)override fun `autenticarConSecreto`(`cedula`: kotlin.String, `password`: kotlin.String, `secreto`: kotlin.String): ResultadoLogin {
+            return FfiConverterTypeResultadoLogin.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_autenticar_con_secreto(
@@ -1973,6 +2014,28 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     }
     )
     }
+    
+
+    
+    /**
+     * Cambio de contraseña obligatorio (`debe_cambiar_password` en `true`
+     * tras `autenticar`/`autenticar_con_secreto`) o rutinario --
+     * `nube::cambiar_password` ya revalida `password_actual` con un login
+     * real antes de aceptar la nueva, no confía en que la sesión siga
+     * abierta.
+     */
+    @Throws(NucleoException::class)override fun `cambiarPasswordSupabase`(`passwordActual`: kotlin.String, `passwordNueva`: kotlin.String)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cambiar_password_supabase(
+        it,
+        
+        FfiConverterString.lower(`passwordActual`),
+        FfiConverterString.lower(`passwordNueva`),_status)
+}
+    }
+    
     
 
     
@@ -2113,6 +2176,32 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo cruzado
+     * de ingresos abiertos entre sitios") -- mismo patrón que
+     * `gafete_ocupado_en_sitio_con_secreto`, pero de mejor esfuerzo: sin
+     * secreto, o si la red falla, `Ok(None)` en vez de propagar el error
+     * (acá SÍ hay con qué chocar sin red -- un ingreso registrado offline
+     * queda local igual, y el conflicto se detecta después al sincronizar,
+     * ver `sincronizar_con_secreto`/`ResumenSincronizacion::conflictos_ingreso`).
+     * Kotlin la llama después de `preparar_ingreso`, sólo si los chequeos
+     * locales ya dejaron pasar.
+     */override fun `contratistaActivoEnOtroSitioConSecreto`(`secreto`: kotlin.String, `cedula`: kotlin.String): kotlin.String? {
+            return FfiConverterOptionalString.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_contratista_activo_en_otro_sitio_con_secreto(
+        it,
+        
+        FfiConverterString.lower(`secreto`),
+        FfiConverterString.lower(`cedula`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Alta de contratista — mismo formulario que
      * `desktop/src/pantallas/FormularioContratista.tsx`, sólo creación
      * (ver docs/plan-app-movil.md). La validación real y definitiva vuelve
@@ -2175,6 +2264,11 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
      * Completa el alta de contraseña de un usuario global que `autenticar`
      * rechazó con `NucleoError::SinPasswordLocal` -- ver
      * `AppCore::fijar_password_inicial`. Deja la sesión iniciada directo.
+     *
+     * Legado: `autenticar`/`autenticar_con_secreto` ya no devuelven
+     * `SinPasswordLocal` para un usuario global (ver `autenticar_supabase`)
+     * -- este método queda sólo por si algún llamador viejo lo sigue
+     * invocando, no lo usa ninguna pantalla de Kotlin actual.
      */
     @Throws(NucleoException::class)override fun `fijarPasswordInicial`(`cedula`: kotlin.String, `nuevaPassword`: kotlin.String): UsuarioSesion {
             return FfiConverterTypeUsuarioSesion.lift(
@@ -2564,6 +2658,52 @@ public object FfiConverterTypeNucleo: FfiConverter<Nucleo, Long> {
 
     override fun write(value: Nucleo, buf: ByteBuffer) {
         buf.putLong(lower(value))
+    }
+}
+
+
+
+/**
+ * Espejo de `control_acceso::nube::ConflictoIngresoActivo`.
+ */
+data class ConflictoIngresoActivo (
+    var `cedula`: kotlin.String
+    , 
+    var `contratistaNombre`: kotlin.String
+    , 
+    var `sitioConflicto`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeConflictoIngresoActivo: FfiConverterRustBuffer<ConflictoIngresoActivo> {
+    override fun read(buf: ByteBuffer): ConflictoIngresoActivo {
+        return ConflictoIngresoActivo(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ConflictoIngresoActivo) = (
+            FfiConverterString.allocationSize(value.`cedula`) +
+            FfiConverterString.allocationSize(value.`contratistaNombre`) +
+            FfiConverterString.allocationSize(value.`sitioConflicto`)
+    )
+
+    override fun write(value: ConflictoIngresoActivo, buf: ByteBuffer) {
+            FfiConverterString.write(value.`cedula`, buf)
+            FfiConverterString.write(value.`contratistaNombre`, buf)
+            FfiConverterString.write(value.`sitioConflicto`, buf)
     }
 }
 
@@ -3155,6 +3295,15 @@ data class PreparacionIngreso (
     , 
     var `tieneIngresoActivo`: kotlin.Boolean
     , 
+    /**
+     * Siempre `None` al volver de `preparar_ingreso` -- ese método no toca
+     * la red (mismo motivo que en el núcleo). Kotlin lo completa llamando
+     * a `contratista_activo_en_otro_sitio_con_secreto` (mejor esfuerzo,
+     * igual que `gafete_ocupado_en_sitio_con_secreto`) antes de dejar
+     * continuar, ver `docs/pendientes.md`.
+     */
+    var `activoEnOtroSitio`: kotlin.String?
+    , 
     var `gafetesDeuda`: List<kotlin.Long>
     
 ){
@@ -3180,6 +3329,7 @@ public object FfiConverterTypePreparacionIngreso: FfiConverterRustBuffer<Prepara
             FfiConverterTypeResultadoAcceso.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterOptionalString.read(buf),
             FfiConverterSequenceLong.read(buf),
         )
     }
@@ -3193,6 +3343,7 @@ public object FfiConverterTypePreparacionIngreso: FfiConverterRustBuffer<Prepara
             FfiConverterTypeResultadoAcceso.allocationSize(value.`resultadoAcceso`) +
             FfiConverterBoolean.allocationSize(value.`requiereGafete`) +
             FfiConverterBoolean.allocationSize(value.`tieneIngresoActivo`) +
+            FfiConverterOptionalString.allocationSize(value.`activoEnOtroSitio`) +
             FfiConverterSequenceLong.allocationSize(value.`gafetesDeuda`)
     )
 
@@ -3205,7 +3356,55 @@ public object FfiConverterTypePreparacionIngreso: FfiConverterRustBuffer<Prepara
             FfiConverterTypeResultadoAcceso.write(value.`resultadoAcceso`, buf)
             FfiConverterBoolean.write(value.`requiereGafete`, buf)
             FfiConverterBoolean.write(value.`tieneIngresoActivo`, buf)
+            FfiConverterOptionalString.write(value.`activoEnOtroSitio`, buf)
             FfiConverterSequenceLong.write(value.`gafetesDeuda`, buf)
+    }
+}
+
+
+
+/**
+ * Éxito de `Nucleo::autenticar`/`autenticar_con_secreto` -- mismo motivo
+ * que `desktop/src-tauri/src/comandos/autenticacion.rs::ResultadoLogin`:
+ * Kotlin necesita saber si tiene que forzar el cambio de contraseña antes
+ * de dejar operar. `false` siempre en la rama local (ROOT del arranque
+ * inicial, o cualquier cuenta que ya tenía password local de antes de esta
+ * migración) -- esa contraseña ya es la real, no una temporal de un solo
+ * uso. Ver docs/plan-autenticacion-supabase-auth.md.
+ */
+data class ResultadoLogin (
+    var `sesion`: UsuarioSesion
+    , 
+    var `debeCambiarPassword`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeResultadoLogin: FfiConverterRustBuffer<ResultadoLogin> {
+    override fun read(buf: ByteBuffer): ResultadoLogin {
+        return ResultadoLogin(
+            FfiConverterTypeUsuarioSesion.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ResultadoLogin) = (
+            FfiConverterTypeUsuarioSesion.allocationSize(value.`sesion`) +
+            FfiConverterBoolean.allocationSize(value.`debeCambiarPassword`)
+    )
+
+    override fun write(value: ResultadoLogin, buf: ByteBuffer) {
+            FfiConverterTypeUsuarioSesion.write(value.`sesion`, buf)
+            FfiConverterBoolean.write(value.`debeCambiarPassword`, buf)
     }
 }
 
@@ -3269,6 +3468,17 @@ data class ResumenSincronizacion (
     , 
     var `movimientosHistorialRecibidos`: kotlin.UInt
     , 
+    /**
+     * Citas nuevas/actualizadas recibidas para el punto de acceso (con sus
+     * visitantes) -- ver `application::nube::ResumenSincronizacion::citas_recibidas`.
+     */
+    var `citasRecibidas`: kotlin.UInt
+    , 
+    /**
+     * Ver `application::nube::ResumenSincronizacion::historial_visitas_recibidos`.
+     */
+    var `historialVisitasRecibidos`: kotlin.UInt
+    , 
     var `sitioId`: kotlin.String
     , 
     var `dispositivoId`: kotlin.String
@@ -3281,6 +3491,17 @@ data class ResumenSincronizacion (
      * Kotlin debe cerrar la sesión local y volver al login apenas vea esto.
      */
     var `sesionExpulsada`: kotlin.Boolean
+    , 
+    /**
+     * `docs/pendientes.md`, "alertar luego al sincronizar" -- ingresos que
+     * quedaron activos en este teléfono pero que la nube dice que TAMBIÉN
+     * están activos en otro sitio (colados mientras este dispositivo
+     * estaba offline). Mejor esfuerzo, vacío si el chequeo falla. Siempre
+     * vacío en la activación inicial (`From<ResumenSincronizacionNucleo>`,
+     * base recién configurada, sin ingresos locales todavía) -- sólo
+     * `sincronizar_con_secreto` lo completa de verdad.
+     */
+    var `conflictosIngreso`: List<ConflictoIngresoActivo>
     
 ){
     
@@ -3305,10 +3526,13 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterSequenceTypeConflictoIngresoActivo.read(buf),
         )
     }
 
@@ -3321,10 +3545,13 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterUInt.allocationSize(value.`contratistasRecibidos`) +
             FfiConverterUInt.allocationSize(value.`gafetesRecibidos`) +
             FfiConverterUInt.allocationSize(value.`movimientosHistorialRecibidos`) +
+            FfiConverterUInt.allocationSize(value.`citasRecibidas`) +
+            FfiConverterUInt.allocationSize(value.`historialVisitasRecibidos`) +
             FfiConverterString.allocationSize(value.`sitioId`) +
             FfiConverterString.allocationSize(value.`dispositivoId`) +
             FfiConverterString.allocationSize(value.`tipo`) +
-            FfiConverterBoolean.allocationSize(value.`sesionExpulsada`)
+            FfiConverterBoolean.allocationSize(value.`sesionExpulsada`) +
+            FfiConverterSequenceTypeConflictoIngresoActivo.allocationSize(value.`conflictosIngreso`)
     )
 
     override fun write(value: ResumenSincronizacion, buf: ByteBuffer) {
@@ -3336,10 +3563,13 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterUInt.write(value.`contratistasRecibidos`, buf)
             FfiConverterUInt.write(value.`gafetesRecibidos`, buf)
             FfiConverterUInt.write(value.`movimientosHistorialRecibidos`, buf)
+            FfiConverterUInt.write(value.`citasRecibidas`, buf)
+            FfiConverterUInt.write(value.`historialVisitasRecibidos`, buf)
             FfiConverterString.write(value.`sitioId`, buf)
             FfiConverterString.write(value.`dispositivoId`, buf)
             FfiConverterString.write(value.`tipo`, buf)
             FfiConverterBoolean.write(value.`sesionExpulsada`, buf)
+            FfiConverterSequenceTypeConflictoIngresoActivo.write(value.`conflictosIngreso`, buf)
     }
 }
 
@@ -3683,6 +3913,13 @@ sealed class NucleoException(message: String): kotlin.Exception(message) {
         
         class NoAutenticado(message: String) : NucleoException(message)
         
+    /**
+     * La sesión de Supabase Auth (la de la PERSONA, distinta del token del
+     * DISPOSITIVO) venció o nunca se abrió -- Kotlin debe mandar de vuelta
+     * al login. Ver `Nucleo::cambiar_password_supabase`.
+     */
+        class SesionSupabaseVencida(message: String) : NucleoException(message)
+        
         class FechaInvalida(message: String) : NucleoException(message)
         
         class Interno(message: String) : NucleoException(message)
@@ -3705,8 +3942,9 @@ public object FfiConverterTypeNucleoError : FfiConverterRustBuffer<NucleoExcepti
             3 -> NucleoException.UsuarioInactivo(FfiConverterString.read(buf))
             4 -> NucleoException.SinPasswordLocal(FfiConverterString.read(buf))
             5 -> NucleoException.NoAutenticado(FfiConverterString.read(buf))
-            6 -> NucleoException.FechaInvalida(FfiConverterString.read(buf))
-            7 -> NucleoException.Interno(FfiConverterString.read(buf))
+            6 -> NucleoException.SesionSupabaseVencida(FfiConverterString.read(buf))
+            7 -> NucleoException.FechaInvalida(FfiConverterString.read(buf))
+            8 -> NucleoException.Interno(FfiConverterString.read(buf))
             else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
         }
         
@@ -3738,12 +3976,16 @@ public object FfiConverterTypeNucleoError : FfiConverterRustBuffer<NucleoExcepti
                 buf.putInt(5)
                 Unit
             }
-            is NucleoException.FechaInvalida -> {
+            is NucleoException.SesionSupabaseVencida -> {
                 buf.putInt(6)
                 Unit
             }
-            is NucleoException.Interno -> {
+            is NucleoException.FechaInvalida -> {
                 buf.putInt(7)
+                Unit
+            }
+            is NucleoException.Interno -> {
+                buf.putInt(8)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -4089,6 +4331,34 @@ public object FfiConverterSequenceLong: FfiConverterRustBuffer<List<kotlin.Long>
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterLong.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeConflictoIngresoActivo: FfiConverterRustBuffer<List<ConflictoIngresoActivo>> {
+    override fun read(buf: ByteBuffer): List<ConflictoIngresoActivo> {
+        val len = buf.getInt()
+        return List<ConflictoIngresoActivo>(len) {
+            FfiConverterTypeConflictoIngresoActivo.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<ConflictoIngresoActivo>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeConflictoIngresoActivo.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<ConflictoIngresoActivo>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeConflictoIngresoActivo.write(it, buf)
         }
     }
 }

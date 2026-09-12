@@ -55,6 +55,21 @@ pub enum SincronizacionError {
     FechaInvalida(String),
 }
 
+impl SincronizacionError {
+    /// El `TokenDispositivo` cacheado (ver `Nucleo::autenticar_con_cache` en
+    /// móvil, `GuiState::autenticar_con_cache` en escritorio) parecía
+    /// vigente del lado del cliente (no pasó su `expires_in` con margen) pero
+    /// el receptor lo rechazó igual -- desfase de reloj, revocación a mitad
+    /// de sesión, o el dispositivo estuvo inactivo más de lo que el caché
+    /// asumía. Quien orquesta la sincronización usa esto para invalidar el
+    /// caché y reintentar UNA vez con un token recién pedido, en vez de
+    /// fallar la sincronización entera por un token que el propio cliente
+    /// creía bueno.
+    pub fn token_dispositivo_vencido(&self) -> bool {
+        matches!(self, Self::RespuestaInesperada { status: 401, .. })
+    }
+}
+
 struct FilaCola {
     id: i64,
     entidad: String,
@@ -2576,6 +2591,25 @@ mod tests {
     use crate::database::schema::initialize_database;
 
     use super::*;
+
+    #[test]
+    fn token_dispositivo_vencido_solo_detecta_401() {
+        assert!(
+            SincronizacionError::RespuestaInesperada {
+                status: 401,
+                cuerpo: "jwt expired".to_string(),
+            }
+            .token_dispositivo_vencido()
+        );
+        assert!(
+            !SincronizacionError::RespuestaInesperada {
+                status: 403,
+                cuerpo: "forbidden".to_string(),
+            }
+            .token_dispositivo_vencido()
+        );
+        assert!(!SincronizacionError::FechaInvalida("x".to_string()).token_dispositivo_vencido());
+    }
 
     fn servidor_de_una_respuesta(respuesta: &'static str) -> String {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind en localhost");

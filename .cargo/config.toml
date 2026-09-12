@@ -3,8 +3,8 @@ build-native = ["--config", "build.rustflags=['-C','target-cpu=native']", "build
 # SQLite sin cifrar, sin OpenSSL vendorizado -- para iterar local rápido.
 # NUNCA usar contra una base de producción real (ver Cargo.toml,
 # feature `sqlite-plano`).
-build-plano = ["build", "--no-default-features", "--features", "terminal-ui,nube,sqlite-plano"]
-test-plano = ["test", "--no-default-features", "--features", "terminal-ui,nube,sqlite-plano"]
+build-plano = ["build", "--no-default-features", "--features", "nube,sqlite-plano"]
+test-plano = ["test", "--no-default-features", "--features", "nube,sqlite-plano"]
 # Alias para `desktop/src-tauri` (ver el comentario sobre `[features]` en su
 # Cargo.toml) -- ese crate quedó con `sqlite-plano` como default porque el
 # CLI de Tauri no soporta `--no-default-features`; estos alias, en cambio,

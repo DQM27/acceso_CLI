@@ -200,6 +200,20 @@ enum generado por uniffi -- `Empresa` (un `data class` de uniffi sin
 `Serializable`) fallaba en tiempo de ejecución al envolverlo en
 `rememberSaveable`, no en compilación.
 
+`PantallaNuevoContratista.kt` volvió el 2026-09-12 -- decisión explícita de
+reabrir sólo esta de las tres (empresa y usuario nuevos siguen sin
+pantalla propia en el celular). Mismo formulario y mismo criterio sin
+ViewModel de siempre, con un agregado: un botón "Escanear carnet PRAIND"
+que reutiliza `PantallaEscanearCedula` (`modo = DOCUMENTO_CONTRATISTA`,
+la misma cámara/OCR que ya usaba `PantallaConfirmarIngreso`) para
+precargar cédula, nombre, vencimiento y (si calza contra
+`Nucleo.listarEmpresas()`) empresa desde el carnet -- ver
+`LectorDocumentosIdentidad.extraerPraind` y `docs/ARQUITECTURA_OCR.md`. Si
+lo escaneado no es un carnet PRAIND (otro tipo de documento válido para
+ese modo) sólo se precargan cédula/nombre y se avisa que el resto queda a
+mano; ninguna decisión de acceso se toma acá, `ContratistaService::crear`
+en Rust vuelve a validar todo igual que en escritorio.
+
 `NubeViewModel.kt` (2026-09-03, recortado 2026-09-06) — en origen tenía
 también una pantalla `PantallaNube.kt` propia (tercera pestaña) con
 `Operacion::GestionarNube` (guardar/leer el secreto, sólo Root) además de

@@ -28,6 +28,24 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 
 ## Seguridad y nube
 
+- [ ] **`cargo tauri dev` deja la base local sin cifrar de verdad, en
+  silencio (hallazgo 2026-09-12).** `desktop/src-tauri` compila con
+  `sqlite-plano` como motor por defecto (a propósito, ver
+  `docs/decisiones-tecnicas.md`, "switch de motor SQLite de tres vías" --
+  así `cargo tauri dev` es rápido sin tener que acordarse de pedir el
+  motor real). El problema: `clave_cifrado::resolver_clave` +
+  `AppCore::abrir_con_reloj_cifrado` corren SIEMPRE en `lib.rs::run()`,
+  sin chequear qué motor está realmente enlazado -- generan y guardan
+  `db_key.dat` con DPAPI igual, y llaman `PRAGMA key` igual, pero con
+  SQLite plano ese `PRAGMA` no hace nada (no es un error, simplemente se
+  ignora). Resultado confirmado en una base local real de esta sesión:
+  `db_key.dat` presente, pero el `.db` empieza con el header de SQLite en
+  texto plano (`SQLite format 3\0`) -- cero cifrado real, aunque toda la
+  maquinaria "parece" estar funcionando. Antes de que un sitio real corra
+  esto en producción con `cargo tauri dev`/un build sin
+  `build-desktop-cipher`: o bien `run()` debe negarse a arrancar con
+  `sqlite-plano` fuera de un build de desarrollo explícito, o al menos
+  avisar fuerte que la base no está cifrada de verdad.
 - [x] **Android: proteger el secreto del dispositivo con Keystore.** El secreto móvil
   se guarda desde Kotlin con Android Keystore (`AES/GCM/NoPadding`) y el núcleo móvil recibe
   el secreto descifrado sólo en memoria para autenticarse/sincronizar. Incluye migración
@@ -60,17 +78,87 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
     Usuarios.tsx muestran en vivo quién/qué está conectado y desde dónde.
   - [ ] El resto (secreto de un solo uso, identidad canónica, desempate offline)
     sigue sin implementar.
-- [ ] **Sesión única por USUARIO (no por dispositivo).** Ver
-  `docs/plan-sesion-unica-dispositivos.md`, sección 7. Evitar que la misma cédula
-  tenga sesión abierta en dos dispositivos a la vez -- política ya decidida
-  (bloquear el login nuevo, no expulsar al viejo), pero el primer diseño (chequear
-  contra la presencia del mismo sitio) se descartó: los usuarios son globales, no
-  por sitio, así que ese chequeo tiene un hueco entre sitios distintos. Falta
-  diseñar un chequeo genuinamente global (probablemente una tabla/lock en Supabase
-  con heartbeat, no presence).
+- [ ] **Sesión única por SITIO, no por dispositivo ni global (decisión
+  refinada 2026-09-12).** Ver `docs/plan-sesion-unica-dispositivos.md`,
+  sección 7 -- reemplaza el planteo anterior de esta entrada. Política
+  aclarada con el usuario: un mismo operador SÍ puede tener sesión abierta
+  en más de un dispositivo del MISMO sitio a la vez (PC + celular en
+  Brisas, uso normal), pero NO en dos sitios distintos al mismo tiempo
+  (logueado en Cartago no debería poder tener sesión viva en Brisas). El
+  primer diseño (chequear presencia del mismo sitio) ya no aplica tal cual
+  porque el disparador es "sitio", no "dispositivo" ni "global puro" --
+  hoy es más plausible que antes porque la identidad ya vive centralizada
+  en Supabase Auth (desktop y mobile migrados, ver
+  `docs/plan-autenticacion-supabase-auth.md`), no repartida por dispositivo.
+
+  **Diseño propuesto, sin implementar:**
+  1. `usuarios` suma `sesion_sitio_id` (uuid, nullable, referencia
+     `sitios`) + `sesion_iniciada_en` (timestamptz).
+  2. Función `security definer` nueva (`marcar_sesion_activa`, mismo
+     patrón que `es_admin_global`/Edge Functions de dispositivos): la
+     llama el dispositivo (con su propio JWT, que ya trae `sitio_id`)
+     justo después de un login de persona exitoso. Si `sesion_sitio_id`
+     está `null` o ya es el mismo sitio, sólo actualiza el timestamp. Si
+     apunta a OTRO sitio, lo pisa con el nuevo (último login gana, mismo
+     criterio ya aceptado en otras partes del sistema para "bloqueo hasta
+     reconectar") y marca que hubo conflicto en la respuesta.
+  3. **Kick en vivo**: si hubo conflicto, broadcast por Realtime al sitio
+     viejo avisando que esa cédula se movió -- mismo mecanismo que ya
+     existe para presencia/expulsión de dispositivos.
+  4. **Red de seguridad sin Realtime**: la sincronización periódica
+     (~2 min, ya existe en desktop y mobile) chequea si `sesion_sitio_id`
+     remoto sigue siendo el propio; si no, cierra sesión local sola --
+     mismo patrón que ya usa `sesion_expulsada` hoy
+     (`ResumenSincronizacion::sesion_expulsada`).
+  5. Aplica a desktop y mobile (los dos con Supabase Auth ya andando). TUI
+     clásica queda fuera por ahora, igual que el resto de lo pendiente ahí.
+
+  No es una tarea chica: migración + función SQL + wiring de Realtime +
+  cambios en Rust core (nube:: nuevo + extender el chequeo de
+  "sigue activo") + desktop + mobile. Retomar en una pasada dedicada.
 - [ ] **Revisar bucket público `historial-web`.** Está documentado como público, vacío y
   sin referencias en código. Confirmar si es vestigio; si no se usa, eliminarlo desde
   Supabase.
+- [ ] **Entrega de la clave de SQLCipher vía Supabase Vault, con envelope
+  encryption (discutido 2026-09-12, sin implementar).** Sigue abierto el
+  problema de `docs/decisiones-tecnicas.md` ("DPAPI insuficiente contra IT
+  del cliente" -- ver memoria de sesión "Cifrado en reposo"): un admin con
+  control total de la PC física siempre puede, en teoría, sacarle la clave
+  al proceso corriendo (debugger/dump de memoria) -- ningún esquema local
+  (DPAPI, Vault, TPM) elimina ese límite de fondo, solo cambia qué tan fácil
+  es y cuánto daño limita si se filtra una clave. Además, la clave de
+  SQLCipher no rota como un JWT -- cambiarla de verdad exige `PRAGMA rekey`
+  (reencriptar toda la base con la clave abierta), no es gratis hacerlo
+  seguido.
+
+  **Diseño propuesto para reducir el radio de daño y ganar revocación**
+  (separar "quién puede pedir la clave" de "la clave en sí"):
+  1. Al aprovisionar un dispositivo (`admin-provision-device`), generar una
+     clave de cifrado random **por dispositivo** (no una global) y guardarla
+     en Vault con un nombre ligado a su `dispositivo_id`.
+  2. Edge Function nueva (`device-fetch-db-key` o similar) que exige el
+     mismo JWT que ya valida `device-auth`, y le entrega su clave desde
+     Vault -- chequea `revoked_at`/`suspended_at` igual que `device-auth`.
+  3. La app la pide una sola vez, en `configurar_dispositivo_inicial`, y la
+     usa para abrir/crear la base SQLCipher; se cachea localmente para
+     poder operar offline después (ese caché sigue teniendo la misma
+     debilidad de fondo que DPAPI -- lo que cambia es que revocar el
+     dispositivo en Supabase corta el acceso a pedir la clave de nuevo en
+     una máquina distinta, y una clave filtrada sólo compromete UN
+     dispositivo/sitio, no todos).
+
+  **Por qué todavía no se hizo:** el desarrollo está en fase temprana, las
+  bases locales son desechables y no hay ningún dispositivo real en el
+  campo corriendo con SQLCipher activo -- es terreno limpio, sin necesidad
+  de migrar/reencriptar nada existente. Retomar esto **antes** de que haya
+  dispositivos reales en producción, porque después sí implicaría un
+  `PRAGMA rekey` por dispositivo ya desplegado.
+
+  Estimado de esfuerzo cuando se retome: Edge Function nueva + generar y
+  guardar la clave al aprovisionar, medio día cada una (reutilizan el
+  patrón de validación de JWT ya probado en las demás Edge Functions);
+  enganchar el fetch/cacheo en el arranque de la app es lo más delicado,
+  un par de días bien probados por plataforma que lo necesite.
 - [x] **Edge Functions de dispositivos versionadas.** Se trajo al repo el código remoto y
   se eliminó lo que no tenía llamadores reales.
 - [x] **Políticas y funciones de seguridad del panel endurecidas.** Se cerraron accesos
@@ -166,6 +254,21 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   propio panel para no permitir que la superficie protegida se fabrique acceso.
 
 ## Android y lector de documentos
+
+- [ ] **Mobile muestra errores crudos de nube/sincronización, sin traducir
+  (hallazgo 2026-09-12).** Desktop redacta todo error de `nube`/`sync` a
+  mensajes amigables (`mensaje_nube`/`mensaje_sincronizacion` en
+  `src/mensajes.rs`), pero `mobile/rust-core/src/lib.rs` nunca adoptó ese
+  patrón -- 23 sitios hacen `NucleoError::Interno { mensaje:
+  error.to_string() }` directo, que Kotlin muestra tal cual llega (texto
+  crudo de `reqwest`/HTTP, no una frase en español). Encontrado al ver un
+  error "401 jwt expirado" crudo tras loguear con Supabase Auth y tocar
+  "Sincronizar" -- la causa real de ESE error puntual ya se investigó y
+  cerró (ver `docs/decisiones-tecnicas.md`, "token de dispositivo vencido
+  a mitad de sincronización"); esta entrada sigue abierta sólo por el
+  problema general de mensajes sin traducir en mobile, no por ese caso
+  puntual. Preexistente, no introducido por la migración de login a
+  Supabase Auth de esa misma fecha.
 
 Revisado contra código el 2026-09-08. Evidencia principal:
 `MrzParser.kt`, `LectorDocumentosIdentidad.kt`, `EstabilizadorLectura.kt`,

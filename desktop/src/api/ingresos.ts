@@ -35,6 +35,8 @@ export interface PreparacionIngreso {
   nombre: string;
   empresa_nombre: string;
   tipo_ingreso: TipoIngreso;
+  /** `null` para SWAT (nunca vence). Fecha ISO (`AAAA-MM-DD`). */
+  fecha_vencimiento_praind: string | null;
   resultado_acceso: ResultadoAcceso;
   requiere_gafete: boolean;
   tiene_ingreso_activo: boolean;
@@ -104,6 +106,27 @@ export function mensajeBloqueo(p: PreparacionIngreso): string {
     return mensajeMotivoDenegacion(p.resultado_acceso.Denegado);
   }
   return "No se puede continuar con este contratista.";
+}
+
+/** Días de calendario hasta `fecha` (puede dar negativo si ya venció --
+ * no debería pasar acá, `PermitidoConAdvertencia` sólo se da ANTES del
+ * vencimiento, pero no se asume). Redondea hacia arriba: "vence mañana"
+ * cuenta como 1 día, no 0. */
+function diasHasta(fecha: string): number {
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const objetivo = new Date(`${fecha}T00:00:00`);
+  return Math.ceil((objetivo.getTime() - hoy.getTime()) / 86_400_000);
+}
+
+/** Texto para la advertencia de `PermitidoConAdvertencia` en
+ * `NuevoIngresoModal` -- "vence en 3 días (2026-09-15)" en vez de sólo
+ * "PRAIND próximo a vencer", que no decía cuánto quedaba. */
+export function mensajeVencimientoPraind(fecha: string): string {
+  const dias = diasHasta(fecha);
+  const cuenta =
+    dias <= 0 ? "vence hoy" : dias === 1 ? "vence mañana" : `vence en ${dias} días`;
+  return `${cuenta} (${fecha})`;
 }
 
 export function mensajeMotivoDenegacion(motivo: MotivoDenegacion): string {

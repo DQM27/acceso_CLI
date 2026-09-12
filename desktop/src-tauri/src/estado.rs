@@ -140,6 +140,20 @@ impl GuiState {
         Ok(token)
     }
 
+    /// Descarta el `TokenDispositivo` cacheado -- ver
+    /// `SincronizacionError::token_dispositivo_vencido`: el receptor lo
+    /// rechazó a mitad de una sincronización aunque `autenticar_con_cache`
+    /// lo creía vigente (desfase de reloj, o el dispositivo estuvo inactivo
+    /// más de lo que el margen de 30s contemplaba). La próxima llamada a
+    /// `autenticar_con_cache` pide uno nuevo sin esperar a que este
+    /// "vigente_por" calculado localmente se cumpla solo.
+    pub fn invalidar_token_cacheado(&self) {
+        *self
+            .token_nube_cacheado
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+    }
+
     /// Acceso al núcleo compartido por todos los comandos.
     pub fn core(&self) -> MutexGuard<'_, AppCore> {
         self.core

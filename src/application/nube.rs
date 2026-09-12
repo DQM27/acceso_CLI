@@ -1,10 +1,13 @@
 //! Gestión de la persistencia en la nube (`docs/plan-persistencia-nube.md`)
-//! desde la fachada de aplicación. Configurar el secreto del dispositivo
-//! (`Operacion::GestionarNube`) es exclusivo de ROOT -- esa credencial es
-//! la identidad de todo el equipo ante el receptor, no una preferencia que
-//! un Administrador deba poder tocar. Sincronizar, leer y cerrar ingresos
-//! remotos (`Operacion::UsarNube`) es de cualquier rol -- ya es uso diario
-//! normal (la pantalla Activos los usa), no administración.
+//! desde la fachada de aplicación. El secreto del dispositivo se configura
+//! una sola vez, en el arranque inicial (`configurar_dispositivo_inicial`)
+//! -- ya no hay una pantalla aparte para tocarlo desde una sesión abierta
+//! (ver docs/decisiones-tecnicas.md, "eliminación de `GestionarNube`").
+//! `guardar_secreto_dispositivo`/`secreto_dispositivo_guardado` quedan
+//! sólo por la API de `mobile/rust-core`, sin ninguna pantalla que los
+//! llame hoy. Sincronizar, leer y cerrar ingresos remotos
+//! (`Operacion::UsarNube`) es de cualquier rol -- uso diario normal (la
+//! pantalla Activos los usa), no administración.
 //!
 //! `directorio` es `None` en escritorio (resuelve `%LOCALAPPDATA%` solo,
 //! ver `nube::credenciales::guardar_secreto`) y `Some(...)` en el celular
@@ -585,13 +588,13 @@ impl AppCore {
         Ok(())
     }
 
-    /// Sólo autoriza -- no toca la red ni el archivo del secreto. Separado
-    /// por el mismo motivo que `autorizar_creacion_respaldo`: la
-    /// sincronización hace red (varios cientos de milisegundos, tal vez
-    /// más con conexión lenta) y en escritorio no debe retener el
-    /// `Mutex<AppCore>` compartido mientras tanto -- ahí quien llama
-    /// autoriza acá, con el candado, y ejecuta `crate::nube::drenar_cola`
-    /// sobre una conexión propia (ver `GuiState::conexion_secundaria`).
+    /// Exclusivo de ROOT a propósito (no pasa por `RolUsuario::puede()`, que
+    /// quedó aplanado a `true` siempre en el aplanado de roles -- ver
+    /// `domain::autorizacion`): a diferencia de las operaciones que sí se
+    /// aplanaron, nadie decidió abrir la gestión del secreto de nube a
+    /// cualquier rol, así que se restaura el chequeo directo. Dormido en la
+    /// práctica (ver el doc-comment del módulo), pero sigue siendo la única
+    /// puerta real si algún día algo vuelve a llamarlo.
     pub fn autorizar_gestion_nube(&self, actor: &UsuarioSesion) -> Result<(), GestionNubeError> {
         let usuario = verificar_actor_activo(&self.connection, actor)
             .map_err(|error| match error {
@@ -599,15 +602,13 @@ impl AppCore {
                 _ => GestionNubeError::OperacionNoAutorizada,
             })?
             .ok_or(GestionNubeError::OperacionNoAutorizada)?;
-        if !usuario.rol.puede(Operacion::GestionarNube) {
+        if usuario.rol != crate::models::usuario::RolUsuario::Root {
             return Err(GestionNubeError::OperacionNoAutorizada);
         }
         Ok(())
     }
 
-    /// Sólo autoriza -- mismo motivo que `autorizar_gestion_nube`, pero
-    /// para `Operacion::UsarNube` (sincronizar/leer/cerrar), que cualquier
-    /// rol puede.
+    /// Sólo autoriza -- no toca la red ni el archivo del secreto.
     pub fn autorizar_uso_nube(&self, actor: &UsuarioSesion) -> Result<(), GestionNubeError> {
         let usuario = verificar_actor_activo(&self.connection, actor)
             .map_err(|error| match error {

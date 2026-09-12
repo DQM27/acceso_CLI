@@ -40,6 +40,11 @@ pub struct PreparacionIngreso {
     pub nombre: String,
     pub empresa_nombre: String,
     pub tipo_ingreso: TipoIngreso,
+    /// `None` para SWAT (nunca vence) -- ver `domain::acceso::verificar_acceso`.
+    /// Puramente informativo para la pantalla (mostrar la fecha/días
+    /// restantes junto a la advertencia de `PermitidoConAdvertencia`), no
+    /// participa en la decisión: eso ya lo resolvió `resultado_acceso`.
+    pub fecha_vencimiento_praind: Option<chrono::NaiveDate>,
     pub resultado_acceso: ResultadoAcceso,
     pub requiere_gafete: bool,
     pub tiene_ingreso_activo: bool,
@@ -217,6 +222,7 @@ where
             nombre: contratista.nombre,
             empresa_nombre: empresa.nombre,
             tipo_ingreso: contratista.tipo_ingreso,
+            fecha_vencimiento_praind: contratista.fecha_vencimiento_praind,
             resultado_acceso,
             requiere_gafete,
             tiene_ingreso_activo,

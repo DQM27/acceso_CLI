@@ -15,7 +15,6 @@ import { invocar, esObjeto, loQueSea } from "./_invocar";
 export interface Sitio {
   id: string;
   nombre: string;
-  direccion: string | null;
   created_at: string;
 }
 
@@ -83,13 +82,12 @@ export function listarDispositivosYSitios(): Promise<{ sitios: Sitio[]; disposit
 /** Crea (o reutiliza, si ya existe por nombre) un sitio suelto -- para el
  * desplegable de "Sitio" del alta de dispositivos, sin tener que crear un
  * dispositivo a la vez. */
-export function crearSitio(datos: { nombre: string; direccion?: string }): Promise<Sitio> {
+export function crearSitio(datos: { nombre: string }): Promise<Sitio> {
   return invocar("admin-create-site", esSitio, datos);
 }
 
 export function provisionarDispositivo(datos: {
   sitio_nombre: string;
-  sitio_direccion?: string;
   tipo: TipoDispositivo;
   etiqueta: string;
 }): Promise<DispositivoProvisionado> {

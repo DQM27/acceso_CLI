@@ -1,13 +1,16 @@
 -- Ejecutar en una sola sesión. Todas las filas de prueba se revierten.
 --
--- `dispositivos` tiene dos políticas de SELECT: "leer dispositivos del
--- propio sitio" (dispositivos) y "admin_global lee dispositivos" (migración
--- admin_global_lee_dispositivos, 2026-09-06 -- la necesita el embed
+-- `dispositivos` tiene una sola política de SELECT, "leer dispositivos
+-- (propio sitio o admin_global)" (fusionada 2026-09-12 desde las dos
+-- políticas separadas "leer dispositivos del propio sitio" y "admin_global
+-- lee dispositivos" -- ver fusiona_politicas_permisivas_duplicadas_de_
+-- visitas_y_panel, el advisor de performance las marcaba como "multiple
+-- permissive policies" duplicadas). admin_global la necesita para el embed
 -- `dispositivos!ingresos_dispositivo_entrada_id_fkey(tipo)` del historial
--- multi-sitio en el panel web, ver Historial.tsx/useAutoRefresh). Antes de
--- esa migración NO existía acceso global acá -- si esta tercera
--- comprobación empieza a fallar de nuevo, es que se sacó esa política sin
--- actualizar este test.
+-- multi-sitio en el panel web (ver Historial.tsx/useAutoRefresh). Antes de
+-- admin_global_lee_dispositivos (2026-09-06) NO existía ese acceso global --
+-- si esta tercera comprobación empieza a fallar de nuevo, es que se sacó
+-- esa mitad de la condición sin actualizar este test.
 --
 -- Alta/baja de dispositivos sigue siendo vía Edge Functions con
 -- service_role (no pasa por RLS) -- esto sólo cubre la lectura directa.

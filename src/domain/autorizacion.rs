@@ -1,38 +1,32 @@
 use crate::models::usuario::RolUsuario;
 
+/// La autorización real ya no vive acá -- vive en el panel administrativo
+/// (`administradores_panel`/Supabase Auth): quien tiene una cuenta
+/// concedida ahí es quien puede operar la app, punto. `Root`/`Administrador`/
+/// `Operador` sigue existiendo como etiqueta informativa (de dónde viene
+/// cada `usuarios.rol` sincronizado), pero ninguna acción DENTRO de la app
+/// se le niega a nadie por su rol -- ver docs/decisiones-tecnicas.md,
+/// entrada "aplanado de roles". `Operacion` queda como catálogo de qué se
+/// podía restringir antes, no como gate activo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Operacion {
-    GestionarRespaldos,
     GestionarUsuarios,
     EditarCedulaContratista,
     ActivarDesactivarContratista,
     ActivarDesactivarEmpresa,
     VerAuditoria,
-    /// Persistencia en la nube (`docs/plan-persistencia-nube.md`): guardar
-    /// el secreto de este dispositivo. Exclusivo de ROOT, ni siquiera
-    /// Administrador -- ese secreto es la identidad del dispositivo entero
-    /// ante el receptor, no una preferencia operativa.
-    GestionarNube,
     /// Persistencia en la nube: sincronizar, leer y cerrar ingresos
-    /// abiertos por el otro dispositivo del sitio. A diferencia de
-    /// `GestionarNube`, cualquier rol puede -- estas acciones ya no son
-    /// "administración", son parte del uso diario normal (la pantalla
-    /// Activos las usa para cualquiera que esté registrando ingresos), y el
-    /// disparador automático de fondo tampoco debe depender de que
-    /// justo haya una sesión ROOT abierta en ese momento.
+    /// abiertos por el otro dispositivo del sitio -- uso diario normal (la
+    /// pantalla Activos las usa para cualquiera que esté registrando
+    /// ingresos), y el disparador automático de fondo tampoco debe
+    /// depender de que justo haya una sesión con algún rol particular
+    /// abierta en ese momento.
     UsarNube,
 }
 
 impl RolUsuario {
-    pub fn puede(self, operacion: Operacion) -> bool {
-        match self {
-            Self::Root => true,
-            Self::Administrador => !matches!(
-                operacion,
-                Operacion::GestionarRespaldos | Operacion::GestionarNube
-            ),
-            Self::Operador => matches!(operacion, Operacion::UsarNube),
-        }
+    pub fn puede(self, _operacion: Operacion) -> bool {
+        true
     }
 }
 
@@ -59,50 +53,43 @@ mod tests {
         RolUsuario::Administrador,
         RolUsuario::Operador,
     ];
-    const OPERACIONES: [Operacion; 8] = [
-        Operacion::GestionarRespaldos,
+    const OPERACIONES: [Operacion; 6] = [
         Operacion::GestionarUsuarios,
         Operacion::EditarCedulaContratista,
         Operacion::ActivarDesactivarContratista,
         Operacion::ActivarDesactivarEmpresa,
         Operacion::VerAuditoria,
-        Operacion::GestionarNube,
         Operacion::UsarNube,
     ];
 
     #[test]
-    fn matriz_completa_de_permisos_por_operacion() {
-        let esperados = [
-            [true, true, true, true, true, true, true, true],
-            [false, true, true, true, true, true, false, true],
-            [false, false, false, false, false, false, false, true],
-        ];
-
-        for (indice_rol, rol) in ROLES.into_iter().enumerate() {
-            for (indice_operacion, operacion) in OPERACIONES.into_iter().enumerate() {
-                assert_eq!(
+    fn ningun_rol_esta_restringido_por_operacion() {
+        for rol in ROLES {
+            for operacion in OPERACIONES {
+                assert!(
                     rol.puede(operacion),
-                    esperados[indice_rol][indice_operacion],
-                    "permiso inesperado para {rol:?} y {operacion:?}"
+                    "se esperaba que {rol:?} pudiera {operacion:?}"
                 );
             }
         }
     }
 
+    /// `puede_gestionar_usuario` ya no depende del rol del actor (aplanado),
+    /// pero conserva la única protección real que quedaba acá: nadie
+    /// promueve/gestiona a un ROOT salvo otro ROOT -- ver
+    /// docs/decisiones-tecnicas.md.
     #[test]
-    fn matriz_completa_para_gestionar_usuarios() {
-        let esperados = [
-            [true, true, true],
-            [false, true, true],
-            [false, false, false],
-        ];
-
-        for (indice_actor, actor) in ROLES.into_iter().enumerate() {
-            for (indice_objetivo, objetivo) in ROLES.into_iter().enumerate() {
-                assert_eq!(
+    fn nadie_gestiona_a_un_root_salvo_otro_root() {
+        for actor in ROLES {
+            assert_eq!(
+                puede_gestionar_usuario(actor, RolUsuario::Root),
+                actor == RolUsuario::Root,
+                "gestión de un ROOT inesperada para actor {actor:?}"
+            );
+            for objetivo in [RolUsuario::Administrador, RolUsuario::Operador] {
+                assert!(
                     puede_gestionar_usuario(actor, objetivo),
-                    esperados[indice_actor][indice_objetivo],
-                    "gestión inesperada para actor {actor:?} y objetivo {objetivo:?}"
+                    "se esperaba que {actor:?} pudiera gestionar a {objetivo:?}"
                 );
             }
         }

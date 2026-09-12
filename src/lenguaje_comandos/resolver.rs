@@ -11,7 +11,6 @@ use crate::database::queries::auditoria::FiltroAuditoria;
 use crate::database::queries::contratistas::{ContratistaResumen, FiltroContratistas};
 use crate::database::queries::empresas::FiltroEmpresas;
 use crate::database::queries::ingresos::FiltroIngresosActivos;
-use crate::database::queries::usuarios::FiltroUsuarios;
 use crate::domain::autorizacion::Operacion;
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::services::autenticacion_service::UsuarioSesion;
@@ -54,11 +53,11 @@ fn texto_de_consulta(consulta: &str) -> Option<String> {
     (!es_comodin_todos(consulta) && !consulta.is_empty()).then(|| consulta.to_string())
 }
 
-/// PageUp/PageDown sobre `Coincidencias`/`CoincidenciasEmpresas`/
-/// `CoincidenciasUsuarios` (mismo patrón que `paginar` de
+/// PageUp/PageDown sobre `Coincidencias`/`CoincidenciasEmpresas`
+/// (mismo patrón que `paginar` de
 /// `historial_controller.rs`): `delta > 0` avanza sólo si `hay_mas` (la
 /// página siguiente ya se confirmó al cargar la actual — total real para
-/// contratistas, el truco del elemento de más para empresas/usuarios);
+/// contratistas, el truco del elemento de más para empresas);
 /// `delta < 0` retrocede si no estamos ya en la primera página. `None`
 /// cuando no hay a dónde moverse, para que el llamador no dispare una
 /// consulta idéntica a la que ya está en pantalla.
@@ -83,19 +82,19 @@ pub const GAFETE_SUGERIDO_MAX: i64 = 50;
 enum SujetoNuevo {
     Contratista,
     Empresa,
-    Usuario,
 }
 
 /// Vacío = Contratista (compatibilidad: `/nuevo` a secas seguía creando lo
-/// mismo que antes de que existieran los otros dos sujetos). `em`/`emp` para
+/// mismo que antes de que existiera el otro sujeto). `em`/`emp` para
 /// empresa, nunca `e` a secas — ya es el alias de `/editar` y aunque el
 /// parser no los confunde (son namespaces distintos: nombre de comando vs.
-/// valor de un argumento), el operador sí podría.
+/// valor de un argumento), el operador sí podría. Ya no existe `/nuevo
+/// usuario` -- dar de alta un usuario global quedó exclusivo del panel
+/// administrativo web (ver docs/plan-autenticacion-supabase-auth.md).
 fn sujeto_nuevo(consulta: &str) -> Option<SujetoNuevo> {
     match consulta.trim().to_lowercase().as_str() {
         "" | "contratista" | "c" => Some(SujetoNuevo::Contratista),
         "empresa" | "em" | "emp" => Some(SujetoNuevo::Empresa),
-        "usuario" | "u" => Some(SujetoNuevo::Usuario),
         _ => None,
     }
 }
@@ -143,24 +142,10 @@ pub fn resolver(core: &AppCore, entrada: &Entrada, sesion: &UsuarioSesion) -> Co
                 Comando::Nuevo => match sujeto_nuevo(consulta) {
                     Some(SujetoNuevo::Contratista) => ContextState::NuevoContratista,
                     Some(SujetoNuevo::Empresa) => ContextState::NuevoEmpresa,
-                    // Mismo gate que `pagina_usuarios`/`abrir_formulario_nuevo_usuario`
-                    // (TUI): sin esto, la GUI (que llama a `resolver` directo desde
-                    // `ejecutar_comando`, sin pasar por el controlador de teclado de
-                    // `--cli` que sí repite este chequeo) dejaba a un Operador
-                    // abrir el formulario de alta de usuario sin ningún filtro.
-                    Some(SujetoNuevo::Usuario) => {
-                        if sesion.rol.puede(Operacion::GestionarUsuarios) {
-                            ContextState::NuevoUsuario
-                        } else {
-                            ContextState::MensajeError {
-                                mensaje: "No tiene permiso para gestionar usuarios".to_string(),
-                            }
-                        }
-                    }
                     None => ContextState::MensajeError {
                         mensaje: format!(
-                            "Sujeto no reconocido: /nuevo contratista|empresa|usuario \
-                             (o /n c|em|u) — \"{consulta}\" no es ninguno"
+                            "Sujeto no reconocido: /nuevo contratista|empresa \
+                             (o /n c|em) — \"{consulta}\" no es ninguno"
                         ),
                     },
                 },
@@ -169,9 +154,6 @@ pub fn resolver(core: &AppCore, entrada: &Entrada, sesion: &UsuarioSesion) -> Co
                         resolver_busqueda_contratistas(core, &resto)
                     }
                     (SujetoEditar::Empresa, resto) => resolver_busqueda_empresas(core, &resto),
-                    (SujetoEditar::Usuario, resto) => {
-                        resolver_busqueda_usuarios(core, &resto, sesion)
-                    }
                 },
                 Comando::Historial => {
                     if consulta.is_empty() {
@@ -253,12 +235,13 @@ pub fn ficha_desde_resumen(resumen: ContratistaResumen) -> ContextState {
 enum SujetoEditar {
     Contratista,
     Empresa,
-    Usuario,
 }
 
 /// Separa el primer token de `consulta` y lo interpreta como sujeto si
 /// coincide con un alias reconocido; si no, todo el texto es la búsqueda de
-/// un contratista (comportamiento previo a los sujetos, sin cambios).
+/// un contratista (comportamiento previo a los sujetos, sin cambios). Ya no
+/// existe `/editar usuario` -- editar un usuario global quedó exclusivo del
+/// panel administrativo web.
 fn sujeto_editar(consulta: &str) -> (SujetoEditar, String) {
     let recortado = consulta.trim_start();
     let mut partes = recortado.splitn(2, char::is_whitespace);
@@ -266,10 +249,6 @@ fn sujeto_editar(consulta: &str) -> (SujetoEditar, String) {
     match primero.to_lowercase().as_str() {
         "empresa" | "em" | "emp" => (
             SujetoEditar::Empresa,
-            partes.next().unwrap_or_default().trim().to_string(),
-        ),
-        "usuario" | "u" => (
-            SujetoEditar::Usuario,
             partes.next().unwrap_or_default().trim().to_string(),
         ),
         _ => (SujetoEditar::Contratista, consulta.to_string()),
@@ -311,61 +290,6 @@ pub fn pagina_empresas(core: &AppCore, consulta: &str, offset: usize) -> Context
         (Vec::new(), false)
     };
     ContextState::CoincidenciasEmpresas {
-        consulta: consulta.to_string(),
-        items,
-        seleccion: 0,
-        offset,
-        hay_mas,
-    }
-}
-
-/// A diferencia de contratistas/empresas, buscar usuarios exige permiso
-/// (`Operacion::GestionarUsuarios`) — mismo gate que `abrir_formulario_nuevo_usuario`,
-/// aplicado acá para que el operador sin permiso ni siquiera vea una lista
-/// vacía sospechosa, sino el mensaje explícito.
-fn resolver_busqueda_usuarios(
-    core: &AppCore,
-    consulta: &str,
-    sesion: &UsuarioSesion,
-) -> ContextState {
-    pagina_usuarios(core, consulta, 0, sesion)
-}
-
-pub fn pagina_usuarios(
-    core: &AppCore,
-    consulta: &str,
-    offset: usize,
-    sesion: &UsuarioSesion,
-) -> ContextState {
-    if !sesion.rol.puede(Operacion::GestionarUsuarios) {
-        return ContextState::MensajeError {
-            mensaje: "No tiene permiso para gestionar usuarios".to_string(),
-        };
-    }
-    let (items, hay_mas) = if es_comodin_todos(consulta) || consulta.chars().count() >= MIN_CONSULTA
-    {
-        let filtro = FiltroUsuarios {
-            texto: texto_de_consulta(consulta),
-            // Mismo truco de "un elemento de más" que `pagina_empresas`.
-            limite: LIMITE_COINCIDENCIAS + 1,
-            offset,
-        };
-        match core.buscar_usuarios(sesion, &filtro) {
-            Ok(mut items) => {
-                let hay_mas = items.len() > LIMITE_COINCIDENCIAS;
-                items.truncate(LIMITE_COINCIDENCIAS);
-                (items, hay_mas)
-            }
-            Err(_) => {
-                return ContextState::MensajeError {
-                    mensaje: "No se pudo consultar los usuarios".to_string(),
-                };
-            }
-        }
-    } else {
-        (Vec::new(), false)
-    };
-    ContextState::CoincidenciasUsuarios {
         consulta: consulta.to_string(),
         items,
         seleccion: 0,
@@ -620,9 +544,6 @@ pub fn calcular_sugerencias(core: &AppCore, texto: &str, entrada: &Entrada) -> V
             }
             SujetoEditar::Empresa => {
                 vec!["nombre de la empresa · ↑↓ elegir · Enter abrir edición".into()]
-            }
-            SujetoEditar::Usuario => {
-                vec!["nombre o cédula del usuario · ↑↓ elegir · Enter abrir edición".into()]
             }
         },
         _ => vec!["Enter confirmar · Esc limpiar · Ctrl+C salir".into()],

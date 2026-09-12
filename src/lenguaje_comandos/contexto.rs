@@ -8,7 +8,6 @@
 use crate::database::queries::auditoria::CambioAuditado;
 use crate::database::queries::contratistas::ContratistaResumen;
 use crate::database::queries::empresas::EmpresaResumen;
-use crate::database::queries::usuarios::UsuarioResumen;
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::services::registro_ingreso_service::{IngresoActivoResumen, PreparacionIngreso};
 
@@ -45,17 +44,6 @@ pub enum ContextState {
     CoincidenciasEmpresas {
         consulta: String,
         items: Vec<EmpresaResumen>,
-        seleccion: usize,
-        offset: usize,
-        hay_mas: bool,
-    },
-    /// Coincidencias de usuarios para `/editar usuario <consulta>`
-    /// (DEC-052) — sólo llega acá quien tiene `Operacion::GestionarUsuarios`
-    /// (`resolver_busqueda_usuarios` corta antes con `MensajeError`). Mismo
-    /// truco de `hay_mas` que `CoincidenciasEmpresas`.
-    CoincidenciasUsuarios {
-        consulta: String,
-        items: Vec<UsuarioResumen>,
         seleccion: usize,
         offset: usize,
         hay_mas: bool,
@@ -117,8 +105,6 @@ pub enum ContextState {
     NuevoContratista,
     /// `/nuevo empresa` (`/n em`): tarjeta de entrada al alta de empresa.
     NuevoEmpresa,
-    /// `/nuevo usuario` (`/n u`): tarjeta de entrada al alta de usuario.
-    NuevoUsuario,
     /// `/historial`: tarjeta de entrada — Enter abre la Surface de
     /// Historial (§5.2/DEC-023/024), Esc cancela.
     AbrirHistorial,

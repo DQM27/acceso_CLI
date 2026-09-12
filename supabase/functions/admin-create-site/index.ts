@@ -44,6 +44,10 @@ async function correoAdminAutorizado(
 // esto, el unico camino para crear un sitio era admin-provision-device (que
 // de paso crea un dispositivo); esta funcion existe para separar ambas
 // cosas.
+//
+// `direccion` se elimino de `sitios` (2026-09-12): se pedia opcionalmente
+// al crear pero nunca se mostraba ni editaba despues -- write-only, dato
+// inaccesible una vez guardado.
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS_HEADERS });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -54,7 +58,7 @@ Deno.serve(async (req: Request) => {
     return json({ error: "unauthorized" }, 401);
   }
 
-  let body: { nombre?: string; direccion?: string };
+  let body: { nombre?: string };
   try {
     body = await req.json();
   } catch {
@@ -66,7 +70,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: sitio, error } = await supabase
     .from("sitios")
-    .upsert({ nombre, direccion: body.direccion?.trim() || null }, { onConflict: "nombre" })
+    .upsert({ nombre }, { onConflict: "nombre" })
     .select("id, nombre")
     .single();
 

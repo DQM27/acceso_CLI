@@ -30,11 +30,20 @@ supabase link --project-ref <el-ref-que-te-dio-el-comando-anterior>
 supabase db push
 ```
 
-Esto corre las ~35 migraciones de `supabase/migrations/` en orden --
+Esto corre TODAS las migraciones de `supabase/migrations/` en orden --
 tablas, políticas RLS, triggers de aviso en vivo (`emitir_cambio_nube_sitio`),
-la extensión `pg_net`, todo. Verificá al final con
-`supabase/tests/*.sql` (ver `docs/realtime-verificado.md` para cómo
-correrlos) que las políticas quedaron como se espera.
+el esquema `private` (funciones internas no expuestas por la Data API,
+como `es_admin_global`/`sitios_de_cita`/`anfitrion_de_cita`), la extensión
+`pg_net`, todo. Verificado el 2026-09-12: se comparó 1:1 cada migración
+local contra `supabase_migrations.schema_migrations` de producción, sin
+faltantes -- este runbook es reproducible de verdad, no solo en teoría.
+Verificá al final con `supabase/tests/*.sql` (ver `docs/realtime-verificado.md`
+para cómo correrlos) que las políticas quedaron como se espera.
+
+Desde 2026-09-12 `main` está conectado a GitHub Integration de Supabase
+(deploy automático a producción al mergear) -- para un proyecto nuevo esto
+es aparte, se configura desde el dashboard del proyecto
+(Integrations → GitHub) después de este paso 1, no lo reemplaza.
 
 ## 2. Desplegar las Edge Functions y sus secrets
 
@@ -47,6 +56,8 @@ supabase functions deploy admin-suspend-device
 supabase functions deploy admin-delete-device
 supabase functions deploy admin-create-site
 supabase functions deploy sync-access-policy
+supabase functions deploy admin-create-usuario
+supabase functions deploy admin-reset-password-usuario
 ```
 
 `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` los inyecta Supabase solo en
@@ -65,6 +76,15 @@ contraseñas, nunca en el repo):
 Las cuatro últimas están auto-documentadas en el propio código de
 `supabase/functions/sync-access-policy/index.ts`.
 
+**Aparte, en Vault** (Project Settings → Vault en el dashboard, o
+`select vault.create_secret(...)` -- NO son `supabase secrets set`, son
+secretos de base de datos, distintos de los secrets de Edge Functions de
+arriba): `sync_access_policy_apikey` y `sync_access_policy_webhook_secret`,
+que lee `sync_access_policy()` (el trigger de `administradores_panel`) para
+llamar a la Edge Function del mismo nombre. Sin estos dos, cualquier
+cambio en `administradores_panel` lanza la excepción "Faltan secretos de
+Vault" y el trigger falla.
+
 ## 3. Configuración manual en el dashboard de Supabase
 
 No hay forma de versionar esto -- checklist:
@@ -77,10 +97,13 @@ No hay forma de versionar esto -- checklist:
   use `{{ .Token }}` en vez de `{{ .ConfirmationURL }}` -- sin esto,
   `useVerificacionPorCorreo.ts` (step-up del panel web) manda un link en
   vez del código de 6 dígitos que la UI espera.
-- **Authentication → Policies**: revisar que "Leaked password protection"
-  quede como se decidió (hoy desactivado a propósito -- el panel es sólo
-  Google OAuth, no hay login por contraseña que proteger; ver auditoría de
-  seguridad de esta sesión).
+- **Authentication → Policies**: activar "Leaked password protection".
+  **OJO, esto cambió**: cuando se escribió originalmente esta línea, el
+  panel era sólo Google OAuth y no había login por contraseña que proteger
+  -- eso ya no es cierto desde `docs/plan-autenticacion-supabase-auth.md`
+  (login de desktop): `usuarios.auth_user_id` enlaza a `auth.users` con
+  contraseña real, creada por `admin-create-usuario`. Sí hay contraseñas
+  que proteger hoy -- activarlo, no dejarlo desactivado.
 
 ## 4. Cloudflare Access ("Panel Brisas")
 
@@ -120,3 +143,8 @@ los tres si el `project ref` cambió:
   Postgres no puede resolver solo.
 - Gafetes (sin catálogo real todavía): plantilla de INSERT directo en el
   mismo `supabase/scripts/poblar_catalogo.sql`.
+- **Control de visitas** (`anfitriones`/`citas`/`cita_sitios`/
+  `cita_visitantes`/`movimientos_visita`): sin script de repoblado propio
+  todavía -- gap pendiente, ver `docs/arquitectura-supabase.md`. Alta de
+  anfitriones es manual (mismo criterio que `administradores_panel`: por
+  diseño, no hay pantalla para eso).

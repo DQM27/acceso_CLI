@@ -2,14 +2,13 @@ import { invoke } from "@tauri-apps/api/core";
 import type { MedioIngreso } from "./ingresos";
 import type { TipoIngreso } from "./contratistas";
 
-// Espejo de comandos/nube.rs. `guardarSecretoDispositivo`/
-// `secretoDispositivoGuardado` son exclusivos de ROOT (el secreto identifica
-// al dispositivo entero ante el receptor, ver App.tsx/Nube.tsx). El resto
-// (sincronizar, listar, cerrar) es de cualquier rol activo -- uso diario
-// normal, no administración (ver `Operacion::UsarNube` en
-// `src/domain/autorizacion.rs`) -- por eso el botón "Sincronizar" vive en la
-// barra de estado (`BarraNube.tsx`), visible siempre, no sólo en esta
-// pantalla.
+// Espejo de comandos/nube.rs. El secreto de este dispositivo se configura
+// una sola vez, durante el arranque inicial (`configurarDispositivoInicial`)
+// -- no hay una pantalla aparte para tocarlo desde una sesión ya abierta
+// (ver docs/decisiones-tecnicas.md). El resto (sincronizar, listar, cerrar)
+// es de cualquier sesión activa -- uso diario normal, no administración --
+// por eso el botón "Sincronizar" vive en la barra de estado
+// (`BarraNube.tsx`), visible siempre.
 
 export interface ResumenSincronizacion {
   enviados: number;
@@ -109,14 +108,6 @@ export function medioIngresoDesdeNube(valor: string | null): MedioIngreso | null
  * quién loguearse todavía. */
 export function configurarDispositivoInicial(secreto: string): Promise<ResumenSincronizacion> {
   return invoke("configurar_dispositivo_inicial", { secreto });
-}
-
-export function guardarSecretoDispositivo(secreto: string): Promise<void> {
-  return invoke("guardar_secreto_dispositivo", { secreto });
-}
-
-export function secretoDispositivoGuardado(): Promise<boolean> {
-  return invoke("secreto_dispositivo_guardado");
 }
 
 export function sincronizarConNube(): Promise<ResumenSincronizacion> {
