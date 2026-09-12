@@ -23,27 +23,32 @@ crate-type = ["staticlib", "rlib"]
 tauri-build = { version = "2.6.3", features = [] }
 
 # Espejo del switch de motor SQLite del crate raíz (ver `[features]` en
-# `../../Cargo.toml` y el `compile_error!` en `../../src/lib.rs`) -- antes
-# `cifrado-sqlcipher` venía hardcodeado en la lista de `features` de
-# `control_acceso` más abajo, así que `cargo tauri dev`/`build` siempre
-# compilaba SQLCipher (con su OpenSSL vendorizado, lento en frío) sin forma
-# de pedir otro motor.
+# `../../Cargo.toml` y el `compile_error!` en `../../src/lib.rs`).
 #
-# Default = `sqlite-plano` (motor rápido, sin cifrar) a propósito: el CLI de
-# Tauri (`tauri dev -f <feature>`, `tauri-cli` 2.11.4, verificado acá) sólo
-# agrega features, no tiene `--no-default-features` -- si el default fuera
-# un motor real, pedir otro con `-f` los activaría a los DOS a la vez y
-# dispararía el `compile_error!` de exclusión mutua. Con `sqlite-plano` como
-# default, el día a día (`cargo tauri dev` sin flags, mientras esta rama
-# evalúa los tres motores) es rápido sin que nadie tenga que acordarse de
-# nada. Para compilar/verificar el motor real (`cifrado-sqlcipher`) o el
-# candidato (`cifrado-sqlite3mc`) específicamente, usar `cargo build` directo
-# (sí soporta `--no-default-features`) en vez de `tauri dev`/`-f` -- ver los
-# alias `build-desktop-cipher`/`build-desktop-3mc` en `../../.cargo/config.toml`.
+# Default = `cifrado-sqlite3mc` (2026-09-12, ver `docs/decisiones-tecnicas.md`)
+# -- ANTES fue `sqlite-plano` a propósito, mientras `bench/sqlite-3way-*`
+# evaluaba los tres motores: eso resultó en que `.github/workflows/release.yml`
+# (que corre `tauri-action` SIN ningún `--features`/override) publicara
+# v1.5.0/v1.5.1/v1.5.2 sin cifrado real de la base local -- `PRAGMA key` se
+# llamaba igual, pero con SQLite plano no hace nada. `cifrado-sqlite3mc`
+# reemplaza ese default porque, a diferencia de `cifrado-sqlcipher`, compila
+# en segundos una vez que `sqlite3mc-vendor-lib/` está compilada (ver ese
+# crate) -- mismo objetivo de "rápido sin acordarse de nada" que tenía
+# `sqlite-plano`, pero sin el riesgo de publicar sin cifrar. Requiere, la
+# PRIMERA vez en una máquina nueva:
+#   cargo build --release --manifest-path ../../sqlite3mc-vendor-lib/Cargo.toml
+#
+# El CLI de Tauri (`tauri dev -f <feature>`, `tauri-cli` 2.11.4, verificado
+# acá) sólo agrega features, no tiene `--no-default-features` -- pedir otro
+# motor con `-f` activaría dos a la vez y dispararía el `compile_error!` de
+# exclusión mutua. Para compilar/verificar `cifrado-sqlcipher` (el motor
+# legado) específicamente, usar `cargo build` directo (sí soporta
+# `--no-default-features`) en vez de `tauri dev`/`-f` -- ver el alias
+# `build-desktop-cipher` en `../../.cargo/config.toml`.
 # NUNCA usar `sqlite-plano` para un build que se distribuye o toca datos
 # reales -- el archivo queda sin cifrar.
 [features]
-default = ["sqlite-plano"]
+default = ["cifrado-sqlite3mc"]
 cifrado-sqlcipher = ["control_acceso/cifrado-sqlcipher"]
 sqlite-plano = ["control_acceso/sqlite-plano"]
 cifrado-sqlite3mc = ["control_acceso/cifrado-sqlite3mc"]

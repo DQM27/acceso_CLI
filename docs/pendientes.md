@@ -28,34 +28,37 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 
 ## Seguridad y nube
 
-- [ ] **El pipeline de release real (no sólo `cargo tauri dev`) publica
-  builds sin cifrar de verdad, en silencio (hallazgo 2026-09-12, alcance
-  ampliado 2026-09-12).** `desktop/src-tauri` compila con `sqlite-plano`
-  como motor por defecto (a propósito, ver `docs/decisiones-tecnicas.md`,
-  "switch de motor SQLite de tres vías" -- así `cargo tauri dev` es rápido
-  sin tener que acordarse de pedir el motor real). El problema:
+- [x] **El pipeline de release real (no sólo `cargo tauri dev`) publicaba
+  builds sin cifrar de verdad, en silencio (hallazgo 2026-09-12, resuelto
+  2026-09-12).** `desktop/src-tauri` compilaba con `sqlite-plano` como
+  motor por defecto (a propósito en su momento, mientras
+  `bench/sqlite-3way-*` evaluaba los tres motores). El problema:
   `clave_cifrado::resolver_clave` + `AppCore::abrir_con_reloj_cifrado`
   corren SIEMPRE en `lib.rs::run()`, sin chequear qué motor está realmente
   enlazado -- generan y guardan `db_key.dat` con DPAPI igual, y llaman
   `PRAGMA key` igual, pero con SQLite plano ese `PRAGMA` no hace nada (no
-  es un error, simplemente se ignora). Resultado confirmado en una base
-  local real: `db_key.dat` presente, pero el `.db` empieza con el header
-  de SQLite en texto plano (`SQLite format 3\0`) -- cero cifrado real,
-  aunque toda la maquinaria "parece" estar funcionando.
+  es un error, simplemente se ignora). **No era sólo un riesgo de
+  `cargo tauri dev` local:** `.github/workflows/release.yml` invocaba
+  `tauri-apps/tauri-action` sin ningún `--features`/override -- heredaba el
+  mismo default. Confirmado que **v1.5.0, v1.5.1 y v1.5.2 (los releases
+  reales publicados en GitHub) se compilaron sin cifrado real de la base
+  local**.
 
-  **No es sólo un riesgo de `cargo tauri dev` local:** `.github/workflows/release.yml`
-  invoca `tauri-apps/tauri-action` sin ningún `--features`/override -- hereda
-  el mismo `default = ["sqlite-plano"]` del `Cargo.toml`. Confirmado que
-  **v1.5.0, v1.5.1 y v1.5.2 (los releases reales publicados en GitHub) se
-  compilaron con este default**, es decir, sin cifrado real de la base
-  local en ninguno de los tres instaladores publicados hasta ahora.
+  **Fix:** `desktop/src-tauri/Cargo.toml` cambia su `default` a
+  `cifrado-sqlite3mc` (motor real, compila en segundos con
+  `sqlite3mc-vendor-lib/` ya construida -- ver `docs/decisiones-tecnicas.md`)
+  en vez de `sqlite-plano`. `release.yml` agrega el paso obligatorio que
+  compila `sqlite3mc-vendor-lib/` antes de tests/build. Esto cierra el
+  riesgo de "ejecutable sin `--features` explícito termina sin cifrar" en
+  los dos caminos de entrada (dev local y pipeline de release).
 
-  Antes del próximo release: el workflow debe pedir explícitamente
-  `--features cifrado-sqlcipher` (o el motor que se decida), y además
-  `run()` debería negarse a arrancar con `sqlite-plano` fuera de un build
-  de desarrollo explícito, o al menos avisar fuerte que la base no está
-  cifrada de verdad -- las dos capas hacen falta, una sola no cubre el
-  otro camino de entrada al mismo bug.
+  **Sigue pendiente, más chico:** `run()` no valida en tiempo de ejecución
+  qué motor quedó enlazado -- si alguien pide `sqlite-plano` a propósito
+  (features siguen siendo compile-time, `sqlite-plano` sigue existiendo
+  para iterar rápido) y ese build termina en un sitio real, el silencio se
+  repite. Falta decidir si `run()` debe negarse a arrancar con
+  `sqlite-plano` fuera de un build de desarrollo explícito, o al menos
+  avisar fuerte en la UI que la base no está cifrada de verdad.
 - [x] **Android: proteger el secreto del dispositivo con Keystore.** El secreto móvil
   se guarda desde Kotlin con Android Keystore (`AES/GCM/NoPadding`) y el núcleo móvil recibe
   el secreto descifrado sólo en memoria para autenticarse/sincronizar. Incluye migración
