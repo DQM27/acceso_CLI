@@ -652,9 +652,14 @@ pub enum NucleoError {
     #[error("usuario inactivo")]
     UsuarioInactivo,
     /// Usuario global (sincronizado) que todavía no fijó contraseña en
-    /// este teléfono -- Kotlin la distingue para mostrar la pantalla de
-    /// "fijar contraseña" en vez de un error de login (ver
-    /// `AppCore::fijar_password_inicial`, `PantallaLogin.kt`).
+    /// este teléfono. `Nucleo::autenticar`/`autenticar_con_secreto`
+    /// interceptan esto internamente y redirigen a `autenticar_supabase`
+    /// (ver el comentario ahí) -- Kotlin nunca ve este error para un
+    /// usuario global. La variante sigue existiendo por el contrato FFI;
+    /// no queda claro si algún llamador real (mobile o desktop) todavía
+    /// la deja escapar sin interceptar -- ver `AppCore::fijar_password_inicial`
+    /// en el crate raíz y `tests/bootstrap_password_usuario_global.rs`
+    /// antes de asumir que es alcanzable o no desde acá.
     #[error("todavía no tenés contraseña en este dispositivo")]
     SinPasswordLocal,
     #[error("no hay una sesión iniciada")]
@@ -1085,26 +1090,6 @@ impl Nucleo {
             &password_nueva,
         )?;
         Ok(())
-    }
-
-    /// Completa el alta de contraseña de un usuario global que `autenticar`
-    /// rechazó con `NucleoError::SinPasswordLocal` -- ver
-    /// `AppCore::fijar_password_inicial`. Deja la sesión iniciada directo.
-    ///
-    /// Legado: `autenticar`/`autenticar_con_secreto` ya no devuelven
-    /// `SinPasswordLocal` para un usuario global (ver `autenticar_supabase`)
-    /// -- este método queda sólo por si algún llamador viejo lo sigue
-    /// invocando, no lo usa ninguna pantalla de Kotlin actual.
-    pub fn fijar_password_inicial(
-        &self,
-        cedula: String,
-        nueva_password: String,
-    ) -> Result<UsuarioSesion, NucleoError> {
-        let sesion = self
-            .core_lock()
-            .fijar_password_inicial(&cedula, &nueva_password)?;
-        *self.sesion_lock() = Some(sesion.clone());
-        Ok(sesion.into())
     }
 
     /// Vista previa antes de confirmar — misma decisión que ya toma la GUI

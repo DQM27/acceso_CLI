@@ -7,20 +7,20 @@ import {
   useListaFlotante,
   useNavegacionFlechas,
 } from "../componentes/ListaFlotante";
-import { gafetesDe, listarIngresosActivos, registrarSalida, sanearGafetes } from "../api";
-import type { IngresoActivoResumen } from "../api";
+import { cerrarFilaActiva, claveFilaActiva, gafetesDe, listarTodosLosActivos, sanearGafetes } from "../api";
+import type { FilaActiva } from "../api";
 
 const MAX_RESULTADOS = 4;
 
-export function coincideTexto(activo: IngresoActivoResumen, textoBuscado: string): boolean {
+export function coincideTexto(activo: FilaActiva, textoBuscado: string): boolean {
   const buscado = textoBuscado.toLowerCase();
   return (
     activo.contratista_nombre.toLowerCase().includes(buscado) ||
-    activo.cedula.toLowerCase().includes(buscado)
+    (activo.cedula?.toLowerCase().includes(buscado) ?? false)
   );
 }
 
-type Seleccion = { tipo: "ninguna" } | { tipo: "elegido"; activo: IngresoActivoResumen };
+type Seleccion = { tipo: "ninguna" } | { tipo: "elegido"; activo: FilaActiva };
 
 /**
  * Un solo modal para las dos formas de encontrar a quién dar salida — un
@@ -48,7 +48,7 @@ export default function SalidaModal({
   onRegistrado: () => void;
   onCerrar: () => void;
 }) {
-  const [activos, setActivos] = useState<IngresoActivoResumen[]>([]);
+  const [activos, setActivos] = useState<FilaActiva[]>([]);
   const [modoGafete, setModoGafete] = useState(false);
   const [texto, setTexto] = useState("");
   const [seleccion, setSeleccion] = useState<Seleccion>({ tipo: "ninguna" });
@@ -58,14 +58,19 @@ export default function SalidaModal({
 
   const buscadorRef = useRef<HTMLInputElement>(null);
 
-  const cargarActivos = () => listarIngresosActivos().then((p) => setActivos(p.items));
+  // Incluye lo abierto por el otro dispositivo del mismo sitio, no sólo lo
+  // local -- antes este modal sólo buscaba entre locales, así que una
+  // persona activa en otro dispositivo se podía cerrar desde la grilla de
+  // Activos pero no aparecía acá al buscarla, inconsistencia real entre las
+  // dos vías de dar salida.
+  const cargarActivos = () => listarTodosLosActivos().then(({ filas }) => setActivos(filas));
 
   useEffect(() => {
     cargarActivos().catch((error) => setError(String(error)));
   }, []);
 
   const porGafete = useMemo(() => {
-    const mapa = new Map<number, IngresoActivoResumen>();
+    const mapa = new Map<number, FilaActiva>();
     for (const activo of activos) {
       if (activo.gafete_numero !== null) mapa.set(activo.gafete_numero, activo);
     }
@@ -110,7 +115,7 @@ export default function SalidaModal({
     setError(null);
     setEnviando(true);
     try {
-      await registrarSalida(seleccion.activo.registro_id);
+      await cerrarFilaActiva(seleccion.activo);
       setMensaje(`✓ Salida registrada — ${seleccion.activo.contratista_nombre}`);
       setSeleccion({ tipo: "ninguna" });
       setTexto("");
@@ -137,7 +142,7 @@ export default function SalidaModal({
         continue;
       }
       try {
-        await registrarSalida(activo.registro_id);
+        await cerrarFilaActiva(activo);
         registrados.push(activo.contratista_nombre);
       } catch (error) {
         fallidos.push(`gafete ${numero}: ${String(error)}`);
@@ -204,17 +209,17 @@ export default function SalidaModal({
             {resultadosNombre.length === 0 && <SinResultados />}
             {resultadosNombre.map((activo, indice) => (
               <FilaListaFlotante
-                key={activo.registro_id}
+                key={claveFilaActiva(activo)}
                 resaltada={indice === resaltado}
                 onClick={() => setSeleccion({ tipo: "elegido", activo })}
                 onMouseEnter={() => setResaltado(indice)}
               >
                 <span>
                   {activo.contratista_nombre}{" "}
-                  <span style={{ color: "var(--muted)" }}>· {activo.cedula}</span>
+                  <span style={{ color: "var(--muted)" }}>· {activo.cedula ?? "—"}</span>
                 </span>
                 <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-                  {activo.empresa_nombre}
+                  {activo.empresa_nombre ?? "—"}
                 </span>
               </FilaListaFlotante>
             ))}
@@ -246,7 +251,7 @@ export default function SalidaModal({
                 {seleccion.activo.contratista_nombre}
               </p>
               <p style={{ margin: "0.15rem 0 0", color: "var(--muted)", fontSize: "0.85rem" }}>
-                {seleccion.activo.cedula} · {seleccion.activo.empresa_nombre}
+                {seleccion.activo.cedula ?? "—"} · {seleccion.activo.empresa_nombre ?? "—"}
               </p>
             </div>
             <button type="submit" className="boton boton-primario" disabled={enviando}>

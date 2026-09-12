@@ -705,8 +705,6 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_fijar_password_inicial(
-    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio_con_secreto(
@@ -799,8 +797,6 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_usuario(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_fijar_password_inicial(`ptr`: Long,`cedula`: RustBuffer.ByValue,`nuevaPassword`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio(`ptr`: Long,`directorio`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -987,7 +983,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial() != 9648) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial_con_secreto() != 47466) {
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial_con_secreto() != 12389) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_contratista_activo_en_otro_sitio_con_secreto() != 8502) {
@@ -1000,9 +996,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario() != 28771) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_fijar_password_inicial() != 63784) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio() != 35345) {
@@ -1645,18 +1638,6 @@ public interface NucleoInterface {
     fun `crearUsuario`(`datos`: DatosUsuario): kotlin.Long
     
     /**
-     * Completa el alta de contraseña de un usuario global que `autenticar`
-     * rechazó con `NucleoError::SinPasswordLocal` -- ver
-     * `AppCore::fijar_password_inicial`. Deja la sesión iniciada directo.
-     *
-     * Legado: `autenticar`/`autenticar_con_secreto` ya no devuelven
-     * `SinPasswordLocal` para un usuario global (ver `autenticar_supabase`)
-     * -- este método queda sólo por si algún llamador viejo lo sigue
-     * invocando, no lo usa ninguna pantalla de Kotlin actual.
-     */
-    fun `fijarPasswordInicial`(`cedula`: kotlin.String, `nuevaPassword`: kotlin.String): UsuarioSesion
-    
-    /**
      * Chequeo en vivo (no la caché local) de si `gafete_numero` ya está
      * activo en este sitio del lado de OTRO dispositivo -- llamar justo
      * antes de `registrar_ingreso` cuando el ingreso lleva gafete. Cada
@@ -2261,32 +2242,6 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         it,
         
         FfiConverterTypeDatosUsuario.lower(`datos`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Completa el alta de contraseña de un usuario global que `autenticar`
-     * rechazó con `NucleoError::SinPasswordLocal` -- ver
-     * `AppCore::fijar_password_inicial`. Deja la sesión iniciada directo.
-     *
-     * Legado: `autenticar`/`autenticar_con_secreto` ya no devuelven
-     * `SinPasswordLocal` para un usuario global (ver `autenticar_supabase`)
-     * -- este método queda sólo por si algún llamador viejo lo sigue
-     * invocando, no lo usa ninguna pantalla de Kotlin actual.
-     */
-    @Throws(NucleoException::class)override fun `fijarPasswordInicial`(`cedula`: kotlin.String, `nuevaPassword`: kotlin.String): UsuarioSesion {
-            return FfiConverterTypeUsuarioSesion.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_fijar_password_inicial(
-        it,
-        
-        FfiConverterString.lower(`cedula`),
-        FfiConverterString.lower(`nuevaPassword`),_status)
 }
     }
     )
@@ -3931,9 +3886,14 @@ sealed class NucleoException(message: String): kotlin.Exception(message) {
         
     /**
      * Usuario global (sincronizado) que todavía no fijó contraseña en
-     * este teléfono -- Kotlin la distingue para mostrar la pantalla de
-     * "fijar contraseña" en vez de un error de login (ver
-     * `AppCore::fijar_password_inicial`, `PantallaLogin.kt`).
+     * este teléfono. `Nucleo::autenticar`/`autenticar_con_secreto`
+     * interceptan esto internamente y redirigen a `autenticar_supabase`
+     * (ver el comentario ahí) -- Kotlin nunca ve este error para un
+     * usuario global. La variante sigue existiendo por el contrato FFI;
+     * no queda claro si algún llamador real (mobile o desktop) todavía
+     * la deja escapar sin interceptar -- ver `AppCore::fijar_password_inicial`
+     * en el crate raíz y `tests/bootstrap_password_usuario_global.rs`
+     * antes de asumir que es alcanzable o no desde acá.
      */
         class SinPasswordLocal(message: String) : NucleoException(message)
         
