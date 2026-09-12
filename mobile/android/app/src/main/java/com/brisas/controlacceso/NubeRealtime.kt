@@ -34,7 +34,7 @@ class NubeRealtime(
     // Quién tiene la sesión abierta en este teléfono ahora -- viaja en el
     // mismo `track()` que ya marca el dispositivo como presente, para que
     // el panel pueda mostrar "usuarios en línea y desde dónde" sin abrir
-    // una conexión nueva (ver docs/plan-sesion-unica-dispositivos.md). Se
+    // una conexión nueva (ver docs/features-futuras/plan-sesion-unica-dispositivos.md). Se
     // manda la cédula, no el id local (`UsuarioSesion.id` es el rowid de
     // ESTE SQLite, no el id global de la tabla `usuarios` de Supabase que
     // ve el panel -- la cédula es la única clave que de verdad coincide en
@@ -105,7 +105,7 @@ class NubeRealtime(
                 try {
                     canal.subscribe(blockUntilSubscribed = true)
                     Log.i("SincronizacionNube", "Canal de avisos suscrito")
-                    // Presencia (docs/plan-sesion-unica-dispositivos.md,
+                    // Presencia (docs/features-futuras/plan-sesion-unica-dispositivos.md,
                     // "Panel de presencia en tiempo real"): marca este
                     // dispositivo como conectado mientras dure la
                     // suscripción -- no hace falta "untrack" explícito, al

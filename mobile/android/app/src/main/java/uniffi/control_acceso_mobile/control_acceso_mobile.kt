@@ -1607,7 +1607,7 @@ public interface NucleoInterface {
      * reenviar en cada renovación de token porque casi nunca cambian, y
      * esto ya alcanza para que el panel de administración distinga el
      * teléfono físico detrás de cada secreto (ver
-     * `docs/plan-sesion-unica-dispositivos.md`).
+     * `docs/features-futuras/plan-sesion-unica-dispositivos.md`).
      */
     fun `configurarDispositivoInicialConSecreto`(`secreto`: kotlin.String, `identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String): ResumenSincronizacion
     
@@ -2161,7 +2161,7 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
      * reenviar en cada renovación de token porque casi nunca cambian, y
      * esto ya alcanza para que el panel de administración distinga el
      * teléfono físico detrás de cada secreto (ver
-     * `docs/plan-sesion-unica-dispositivos.md`).
+     * `docs/features-futuras/plan-sesion-unica-dispositivos.md`).
      */
     @Throws(NucleoException::class)override fun `configurarDispositivoInicialConSecreto`(`secreto`: kotlin.String, `identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String): ResumenSincronizacion {
             return FfiConverterTypeResumenSincronizacion.lift(
@@ -3396,7 +3396,7 @@ public object FfiConverterTypePreparacionIngreso: FfiConverterRustBuffer<Prepara
  * de dejar operar. `false` siempre en la rama local (ROOT del arranque
  * inicial, o cualquier cuenta que ya tenía password local de antes de esta
  * migración) -- esa contraseña ya es la real, no una temporal de un solo
- * uso. Ver docs/plan-autenticacion-supabase-auth.md.
+ * uso. Ver docs/planes-implementados/plan-autenticacion-supabase-auth.md.
  */
 data class ResultadoLogin (
     var `sesion`: UsuarioSesion
@@ -3475,7 +3475,7 @@ public object FfiConverterTypeResultadoRegistroEntrada: FfiConverterRustBuffer<R
 
 
 /**
- * Ver `docs/plan-persistencia-nube.md` y `ResumenSincronizacionNucleo`.
+ * Ver `docs/planes-implementados/plan-persistencia-nube.md` y `ResumenSincronizacionNucleo`.
  */
 data class ResumenSincronizacion (
     var `enviados`: kotlin.UInt

@@ -23,7 +23,7 @@ class MrzParserTest {
     }
 
     // Checksum verificado con script Python (algoritmo ICAO 9303 real) --
-    // ver docs/fixtures-ocr-sinteticos.md sección 4. Datos inventados.
+    // ver docs/arquitectura/fixtures-ocr-sinteticos.md sección 4. Datos inventados.
     private val td1Valido = """
         C<CRI9998887774<<<<<<<<<<<<<<<
         9001011F3001019NIC<<<<<<<<<<<8

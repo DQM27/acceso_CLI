@@ -90,7 +90,7 @@ enum SujetoNuevo {
 /// parser no los confunde (son namespaces distintos: nombre de comando vs.
 /// valor de un argumento), el operador sí podría. Ya no existe `/nuevo
 /// usuario` -- dar de alta un usuario global quedó exclusivo del panel
-/// administrativo web (ver docs/plan-autenticacion-supabase-auth.md).
+/// administrativo web (ver docs/planes-implementados/plan-autenticacion-supabase-auth.md).
 fn sujeto_nuevo(consulta: &str) -> Option<SujetoNuevo> {
     match consulta.trim().to_lowercase().as_str() {
         "" | "contratista" | "c" => Some(SujetoNuevo::Contratista),

@@ -24,7 +24,7 @@ pub fn requiere_configuracion_inicial(state: tauri::State<GuiState>) -> Result<b
 /// Ya no distingue `sin_password_local` -- `login` resuelve las dos ramas
 /// (local y Supabase Auth) del todo lado del backend, la pantalla de login
 /// ya no necesita saber cuál de las dos corrió. Ver
-/// docs/plan-autenticacion-supabase-auth.md.
+/// docs/planes-implementados/plan-autenticacion-supabase-auth.md.
 #[derive(serde::Serialize)]
 pub struct ErrorLogin {
     pub mensaje: String,
@@ -175,7 +175,7 @@ pub async fn login(
         // El centinela `SIN_PASSWORD_LOCAL` ya no significa "mostrar el
         // formulario de alta" -- significa "este usuario global se
         // autentica contra Supabase Auth, no localmente" (ver
-        // docs/plan-autenticacion-supabase-auth.md). El único camino que
+        // docs/planes-implementados/plan-autenticacion-supabase-auth.md). El único camino que
         // sigue siendo 100% local es el ROOT del arranque inicial
         // (`crear_root_inicial`), que nunca cae acá porque nace con un
         // hash real desde el principio.
@@ -228,7 +228,7 @@ pub async fn login(
 
 /// Login contra Supabase Auth (`nube::auth_supabase::login`) -- ver el
 /// comentario de `login` de más arriba y
-/// docs/plan-autenticacion-supabase-auth.md. A diferencia del camino local,
+/// docs/planes-implementados/plan-autenticacion-supabase-auth.md. A diferencia del camino local,
 /// necesita red sí o sí: sin ella, no hay forma de verificar la
 /// contraseña de un usuario que nunca la fijó en este dispositivo, así
 /// que el registro también queda bloqueado hasta que haya conexión (no es

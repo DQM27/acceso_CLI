@@ -23,7 +23,7 @@ const AuthContexto = createContext<EstadoAuth | null>(null);
  * en Postgres, consultada acá mismo tras cada cambio de sesión. Alguien con
  * cuenta de Google válida pero sin fila en esa tabla queda deslogueado de
  * inmediato, con `error` explicando por qué -- ver
- * docs/plan-panel-administrativo-web.md, sección "Decisión de auth".
+ * docs/planes-implementados/plan-panel-administrativo-web.md, sección "Decisión de auth".
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [sesion, setSesion] = useState<UsuarioSesion | null>(null);
@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // cambio rápido de cuenta), y sin esto la que responde último gana
     // aunque haya arrancado antes -- una consulta vieja podía restaurar una
     // sesión ya superada por una más nueva (hallazgo P2,
-    // docs/reporte-seguridad-web-2026-09-09.md). Mismo patrón que
+    // docs/auditorias/reporte-seguridad-web-2026-09-09.md). Mismo patrón que
     // `web-visitas/src/contexto/AuthContexto.tsx`.
     let turnoActual = 0;
 

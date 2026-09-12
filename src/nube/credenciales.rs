@@ -1,5 +1,5 @@
 //! Almacenamiento local del secreto de este dispositivo (ver
-//! `docs/plan-persistencia-nube.md`).
+//! `docs/planes-implementados/plan-persistencia-nube.md`).
 //!
 //! Sin ningún feature de cifrado sigue en texto plano a propósito, mismo
 //! criterio que ya rige el resto de la base local. Dos esquemas de cifrado

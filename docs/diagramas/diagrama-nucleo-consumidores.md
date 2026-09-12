@@ -132,7 +132,7 @@ justamente lo que crearía la dependencia cruzada que no debe existir.
 - Consumidor TUI/CLI: `src/main.rs`, `src/tui/`, `src/cli/`.
 - Consumidor escritorio: `desktop/src-tauri/Cargo.toml`, `desktop/src-tauri/src/comandos/`.
 - Consumidor móvil: `mobile/rust-core/Cargo.toml`, `mobile/rust-core/src/lib.rs`.
-- Flujo interno de una acción (dentro del núcleo): `docs/diagramas-arquitectura.md`,
+- Flujo interno de una acción (dentro del núcleo): `docs/diagramas/diagramas-arquitectura.md`,
   sección 5.
 - Plan de sesión única y metadata de dispositivo:
-  `docs/plan-sesion-unica-dispositivos.md`.
+  `docs/features-futuras/plan-sesion-unica-dispositivos.md`.

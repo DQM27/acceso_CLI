@@ -17,7 +17,7 @@ import type { IngresoActivoResumen, IngresoRemoto, MedioIngreso, TipoIngreso } f
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
 /** Fila local (este dispositivo) o remota (abierta por el otro dispositivo
- * del mismo sitio, ver `docs/plan-persistencia-nube.md` — nunca vive en el
+ * del mismo sitio, ver `docs/planes-implementados/plan-persistencia-nube.md` — nunca vive en el
  * historial local, sólo en la caché `ingresos_remotos`). Mismos nombres de
  * campo en los dos casos (los que una remota no tiene van en `null`) para
  * que las columnas de AG Grid no necesiten saber cuál es cuál. `origen` no

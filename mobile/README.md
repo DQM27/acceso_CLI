@@ -1,6 +1,6 @@
 # App móvil
 
-Ver `docs/plan-persistencia-nube.md` en la raíz del repo para las decisiones
+Ver `docs/planes-implementados/plan-persistencia-nube.md` en la raíz del repo para las decisiones
 de diseño (multi-dispositivo, sincronización, roles) que aplican también al
 móvil — el plan original específico de la app móvil quedó superado por ese
 documento y se retiró.

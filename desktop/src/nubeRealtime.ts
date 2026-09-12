@@ -22,7 +22,7 @@ interface OpcionesRealtimeNube {
   // Quién tiene la sesión abierta en esta PC ahora -- viaja en el mismo
   // `track()` que ya marca el dispositivo como presente, para que el panel
   // pueda mostrar "usuarios en línea y desde dónde" (ver
-  // docs/plan-sesion-unica-dispositivos.md). Cédula, no el `id` local (el
+  // docs/features-futuras/plan-sesion-unica-dispositivos.md). Cédula, no el `id` local (el
   // rowid de este SQLite no es el id global de `usuarios` en Supabase que
   // ve el panel -- la cédula es la única clave que coincide en los dos
   // lados).
@@ -158,7 +158,7 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
             intentosSeguidos = 0;
             // Recupera cambios ocurridos mientras el cliente estuvo desconectado.
             programarSincronizacion();
-            // Presencia (docs/plan-sesion-unica-dispositivos.md, "Panel de
+            // Presencia (docs/features-futuras/plan-sesion-unica-dispositivos.md, "Panel de
             // presencia en tiempo real"): marca este dispositivo como
             // conectado mientras dure la suscripción -- sin "untrack"
             // explícito, `limpiarCanal`/el cierre del socket ya lo saca de

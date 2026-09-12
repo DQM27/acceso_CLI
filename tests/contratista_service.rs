@@ -494,7 +494,7 @@ fn actualizar_con_cedula_duplicada_devuelve_error_semantico_y_conserva_registro(
     assert_eq!(conservado.nombre, "Persona Dos");
 }
 
-// Bandeja de salida hacia la nube (`docs/plan-persistencia-nube.md`): crear
+// Bandeja de salida hacia la nube (`docs/planes-implementados/plan-persistencia-nube.md`): crear
 // o actualizar un contratista debe dejar siempre su aviso correspondiente
 // en `cola_salida`, listo para sincronizar más adelante.
 

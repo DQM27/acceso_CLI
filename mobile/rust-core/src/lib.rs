@@ -116,7 +116,7 @@ impl From<UsuarioSesionNucleo> for UsuarioSesion {
 /// de dejar operar. `false` siempre en la rama local (ROOT del arranque
 /// inicial, o cualquier cuenta que ya tenía password local de antes de esta
 /// migración) -- esa contraseña ya es la real, no una temporal de un solo
-/// uso. Ver docs/plan-autenticacion-supabase-auth.md.
+/// uso. Ver docs/planes-implementados/plan-autenticacion-supabase-auth.md.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct ResultadoLogin {
     pub sesion: UsuarioSesion,
@@ -521,7 +521,7 @@ pub struct DatosUsuario {
     pub activo: bool,
 }
 
-/// Ver `docs/plan-persistencia-nube.md` y `ResumenSincronizacionNucleo`.
+/// Ver `docs/planes-implementados/plan-persistencia-nube.md` y `ResumenSincronizacionNucleo`.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ResumenSincronizacion {
     pub enviados: u32,
@@ -797,7 +797,7 @@ struct TokenCacheadoNucleo {
 
 /// Sesión de un usuario global contra Supabase Auth (Administrador/Operador,
 /// o un ROOT ya sincronizado a otro sitio) -- ver
-/// docs/plan-autenticacion-supabase-auth.md. Distinta de `TokenCacheadoNucleo`
+/// docs/planes-implementados/plan-autenticacion-supabase-auth.md. Distinta de `TokenCacheadoNucleo`
 /// (identidad del DISPOSITIVO): esto es la identidad de la PERSONA. Vive
 /// sólo en memoria -- nunca se persiste a disco, mismo criterio que
 /// `desktop/src-tauri/src/estado.rs::SesionSupabaseCacheada`: cerrar la app
@@ -944,7 +944,7 @@ impl Nucleo {
             // Usuario global (sincronizado) sin contraseña local todavía --
             // se autentica contra Supabase Auth en vez de mostrar la
             // pantalla de "fijar contraseña" (ver `autenticar_supabase` y
-            // docs/plan-autenticacion-supabase-auth.md). El ROOT del
+            // docs/planes-implementados/plan-autenticacion-supabase-auth.md). El ROOT del
             // arranque inicial nunca cae acá porque nace con hash real.
             Err(AutenticacionErrorNucleo::SinPasswordLocal) => {
                 return self.autenticar_supabase(&cedula, &password, &|| {
@@ -1385,7 +1385,7 @@ impl Nucleo {
     /// reenviar en cada renovación de token porque casi nunca cambian, y
     /// esto ya alcanza para que el panel de administración distinga el
     /// teléfono físico detrás de cada secreto (ver
-    /// `docs/plan-sesion-unica-dispositivos.md`).
+    /// `docs/features-futuras/plan-sesion-unica-dispositivos.md`).
     #[allow(clippy::too_many_arguments)]
     pub fn configurar_dispositivo_inicial_con_secreto(
         &self,
@@ -1997,7 +1997,7 @@ impl Nucleo {
     /// Login contra Supabase Auth para un usuario global (Administrador/
     /// Operador, o un ROOT ya sincronizado a otro sitio) que todavía no
     /// tiene contraseña local en este teléfono -- ver
-    /// docs/plan-autenticacion-supabase-auth.md y el equivalente en
+    /// docs/planes-implementados/plan-autenticacion-supabase-auth.md y el equivalente en
     /// escritorio (`desktop/src-tauri/src/comandos/autenticacion.rs::login_supabase`).
     /// `refrescar_catalogo` es best-effort, sólo se intenta si la identidad
     /// todavía no está en el catálogo local (sitio recién conectado, o el

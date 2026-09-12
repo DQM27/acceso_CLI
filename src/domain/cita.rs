@@ -1,4 +1,4 @@
-//! Reglas de vigencia de una cita (`docs/plan-control-visitas.md`): sólo se
+//! Reglas de vigencia de una cita (`docs/planes-implementados/plan-control-visitas.md`): sólo se
 //! puede hacer check-in con una cita `Vigente` y dentro de su rango de
 //! fechas. Mucho más simple que `domain::acceso::verificar_acceso`
 //! (contratistas) a propósito -- decisión explícita del usuario: la carga
@@ -38,7 +38,7 @@ pub enum MotivoDenegacionVisita {
 
 /// No recibe `sitio_id` a propósito: el dispositivo sólo llega a evaluar
 /// esto sobre una `Cita` que ya pasó por el filtro de sincronización
-/// (`cita_sitios` en la nube, ver `docs/plan-control-visitas.md`) -- si la
+/// (`cita_sitios` en la nube, ver `docs/planes-implementados/plan-control-visitas.md`) -- si la
 /// cita está en la base local de este sitio es porque ya se confirmó que
 /// aplica acá. Repetir el chequeo de sitio en el dominio sería validar dos
 /// veces la misma cosa contra fuentes que podrían desincronizarse.

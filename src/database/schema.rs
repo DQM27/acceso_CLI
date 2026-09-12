@@ -1620,7 +1620,7 @@ ON auditoria_cambios(entidad, entidad_id, id DESC);
 ";
 
 // Identidad estable para la persistencia en la nube
-// (`docs/plan-persistencia-nube.md`): el `id` local es autoincremental por
+// (`docs/planes-implementados/plan-persistencia-nube.md`): el `id` local es autoincremental por
 // dispositivo, así que el mismo número existe sin relación en cada sitio —
 // no sirve para identificar una fila una vez que conviven datos de varios
 // dispositivos en el receptor. `uuid` es esa segunda identidad, generada al
@@ -1656,7 +1656,7 @@ CREATE UNIQUE INDEX idx_registro_ingresos_uuid ON registro_ingresos(uuid);
 ";
 
 // Bandeja de salida hacia el receptor en la nube
-// (`docs/plan-persistencia-nube.md`): cada fila es "esto hay que mandarlo,
+// (`docs/planes-implementados/plan-persistencia-nube.md`): cada fila es "esto hay que mandarlo,
 // todavía no se mandó". La llena el código Rust de los servicios (no un
 // trigger de SQL -- ver el comentario de MIGRACION_16 sobre por qué SQL no
 // puede generar el UUID de la fila nueva por sí solo), en la misma
@@ -1683,7 +1683,7 @@ WHERE estado = 'pendiente';
 ";
 
 // Espejo de sólo lectura de "lo que está abierto en mi sitio, creado por
-// el otro dispositivo" (`docs/plan-persistencia-nube.md`). A propósito NO
+// el otro dispositivo" (`docs/planes-implementados/plan-persistencia-nube.md`). A propósito NO
 // es una fila de `registro_ingresos`: esa tabla tiene triggers de
 // inmutabilidad y llaves foráneas atadas a `usuarios`/`contratistas` *de
 // este mismo dispositivo* -- un ingreso creado en la PC referencia un
@@ -1958,7 +1958,7 @@ CREATE TRIGGER registro_ingresos_fts_ai AFTER INSERT ON registro_ingresos BEGIN
 END;
 ";
 
-// Usuarios/operadores globales (docs/plan-panel-administrativo-web.md) --
+// Usuarios/operadores globales (docs/planes-implementados/plan-panel-administrativo-web.md) --
 // mismo patrón que MIGRACION_20 para gafetes: agrega `uuid` (identidad
 // estable para el upsert contra Supabase, ver `enviar_usuario`/
 // `recibir_usuarios`) y suma 'usuario' al CHECK de `cola_salida.entidad`.
@@ -2148,7 +2148,7 @@ const MIGRACION_28: &str = r"
 ALTER TABLE sincronizacion_estado ADD COLUMN gafetes_actualizado_hasta TEXT;
 ";
 
-// Control de visitas (docs/plan-control-visitas.md) -- primer corte: solo
+// Control de visitas (docs/planes-implementados/plan-control-visitas.md) -- primer corte: solo
 // esquema local, sin sincronización todavía. Patrón header-detail: `citas`
 // es la autorización con vigencia (puede agendarse para un grupo -- ver
 // `cita_visitantes`), `movimientos_visita` es el cruce real en el punto de
@@ -2333,7 +2333,7 @@ ALTER TABLE sincronizacion_estado ADD COLUMN citas_actualizado_hasta TEXT;
 // Snapshot al momento del check-in -- mismo criterio que
 // `registro_ingresos` (que ya guarda `contratista_nombre`/`empresa_nombre`
 // propios, no un JOIN en cada lectura): la trazabilidad para auditoría
-// (docs/plan-control-visitas.md) necesita mostrar quién era el visitante,
+// (docs/planes-implementados/plan-control-visitas.md) necesita mostrar quién era el visitante,
 // de qué empresa y quién lo recibía TAL COMO ERAN al momento del cruce, sin
 // depender de que `cita_visitantes`/`citas` todavía existan sin cambios
 // más adelante. Nullable a propósito (igual que `dispositivo_entrada_tipo`

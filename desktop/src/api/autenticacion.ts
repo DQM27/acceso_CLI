@@ -24,7 +24,7 @@ export function esErrorLogin(error: unknown): error is ErrorLogin {
 /// Espejo de `comandos::autenticacion::ResultadoLogin` --
 /// `debe_cambiar_password` fuerza el paso de cambio de contraseña antes de
 /// dejar operar (usuario global recién creado en el panel, con la
-/// temporal de un solo uso -- ver docs/plan-autenticacion-supabase-auth.md).
+/// temporal de un solo uso -- ver docs/planes-implementados/plan-autenticacion-supabase-auth.md).
 /// Siempre `false` para un login local (ROOT del arranque inicial).
 export interface ResultadoLogin {
   sesion: UsuarioSesion;

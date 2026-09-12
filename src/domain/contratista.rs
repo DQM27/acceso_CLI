@@ -2,7 +2,7 @@ use crate::models::contratista::Contratista;
 use crate::models::tipo_ingreso::TipoIngreso;
 
 /// Regla de negocio (ver tabla "Reglas para PRAIND y gafete" en
-/// `docs/diagrama-logico.md`): requiere PRAIND el personal de ruta (sin
+/// `docs/diagramas/diagrama-logico.md`): requiere PRAIND el personal de ruta (sin
 /// importar el tipo de ingreso) y, entre los tipos de ingreso, `Praind` e
 /// `InHouse`. `PorCorreo` y `Swat` no lo requieren.
 pub fn requiere_praind(contratista: &Contratista) -> bool {

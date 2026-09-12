@@ -1,4 +1,4 @@
-//! Gestión de la persistencia en la nube (`docs/plan-persistencia-nube.md`)
+//! Gestión de la persistencia en la nube (`docs/planes-implementados/plan-persistencia-nube.md`)
 //! desde la fachada de aplicación. El secreto del dispositivo se configura
 //! una sola vez, en el arranque inicial (`configurar_dispositivo_inicial`)
 //! -- ya no hay una pantalla aparte para tocarlo desde una sesión abierta

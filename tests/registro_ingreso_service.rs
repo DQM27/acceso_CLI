@@ -726,7 +726,7 @@ fn contratista_inexistente_es_rechazado() {
     ));
 }
 
-// Bandeja de salida hacia la nube (`docs/plan-persistencia-nube.md`):
+// Bandeja de salida hacia la nube (`docs/planes-implementados/plan-persistencia-nube.md`):
 // registrar una entrada o su salida debe dejar siempre el aviso
 // correspondiente en `cola_salida`.
 

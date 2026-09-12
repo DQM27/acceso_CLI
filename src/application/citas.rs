@@ -1,4 +1,4 @@
-//! Check-in/check-out de visitas (`docs/plan-control-visitas.md`) --
+//! Check-in/check-out de visitas (`docs/planes-implementados/plan-control-visitas.md`) --
 //! fachada sobre `CitaService`, mismo armazón que `accesos.rs` para
 //! contratistas (transacción `Immediate`, reloj validado, operador activo
 //! confirmado dentro de la misma transacción).

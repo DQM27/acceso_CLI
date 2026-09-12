@@ -1,7 +1,7 @@
 //! Extremo a extremo del alta de contraseña para un operador global en un
 //! dispositivo NUEVO (sin correo de por medio, decisión explícita dado que
 //! el proyecto no tiene SMTP propio configurado todavía -- ver
-//! docs/plan-panel-administrativo-web.md, sección de usuarios/operadores).
+//! docs/planes-implementados/plan-panel-administrativo-web.md, sección de usuarios/operadores).
 //!
 //! El escenario real: `recibir_usuarios` (sync desde Supabase, todavía sin
 //! implementar) inserta localmente un usuario que existe globalmente pero

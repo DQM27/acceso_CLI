@@ -1,4 +1,4 @@
-//! Escritura de movimientos de visita (`docs/plan-control-visitas.md`) --
+//! Escritura de movimientos de visita (`docs/planes-implementados/plan-control-visitas.md`) --
 //! el cruce real en el punto de acceso, análogo a
 //! `RegistroIngresoRepository` pero sin ningún campo de PRAIND/SWAT: no hay
 //! resultado de acceso ni motivo que guardar, `CitaService`/`domain::cita`
@@ -47,7 +47,7 @@ pub trait MovimientoVisitaRepository {
     /// el universo de visitas activas en un sitio nunca es lo bastante
     /// grande como para justificar paginar/filtrar en `SQLite` (mismo
     /// criterio que hizo que este dominio entero se mantuviera más simple
-    /// que el de contratistas, ver `docs/plan-control-visitas.md`).
+    /// que el de contratistas, ver `docs/planes-implementados/plan-control-visitas.md`).
     fn listar_activos(&self) -> Result<Vec<MovimientoVisitaActivoResumen>, DatabaseError>;
 }
 

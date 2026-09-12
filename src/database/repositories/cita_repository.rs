@@ -1,5 +1,5 @@
 //! Lectura de citas para el check-in en el punto de acceso
-//! (`docs/plan-control-visitas.md`). Sólo lectura a propósito: `citas`/
+//! (`docs/planes-implementados/plan-control-visitas.md`). Sólo lectura a propósito: `citas`/
 //! `cita_visitantes` las llena la sincronización (pull desde la nube,
 //! agendadas por el anfitrión -- ver el commit de esquema), nunca el
 //! guardia -- mismo motivo por el que este repositorio no tiene ningún

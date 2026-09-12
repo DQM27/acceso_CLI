@@ -5,7 +5,7 @@ use crate::estado::GuiState;
 /// usuario desde el escritorio ya no existe -- esa capacidad quedó
 /// exclusiva del panel administrativo web (`admin-create-usuario`/
 /// `admin-reset-password-usuario`, ver
-/// docs/plan-autenticacion-supabase-auth.md). `AppCore::cambiar_mi_password`
+/// docs/planes-implementados/plan-autenticacion-supabase-auth.md). `AppCore::cambiar_mi_password`
 /// ya verifica `password_actual` (Argon2) y valida la nueva en un solo
 /// paso.
 #[tauri::command]

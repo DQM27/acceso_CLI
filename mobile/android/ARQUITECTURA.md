@@ -92,7 +92,7 @@ Pantalla (@Composable)  →  ViewModel  →  Nucleo (Rust vía uniffi)
 - No se toca desde Kotlin más que para llamarlo. Ninguna regla de PRAIND,
   exclusividad de gafetes, ni fechas se reimplementa acá — eso ya está
   decidido y probado en `rust-core`/`control_acceso`, y así debe seguir
-  (ver `mobile/README.md` y `docs/plan-persistencia-nube.md`).
+  (ver `mobile/README.md` y `docs/planes-implementados/plan-persistencia-nube.md`).
 
 ## Otras reglas concretas, no sólo la separación en capas
 
@@ -113,7 +113,7 @@ Pantalla (@Composable)  →  ViewModel  →  Nucleo (Rust vía uniffi)
   elegido ya dice qué hace algo; un comentario vale cuando explica una
   decisión no obvia (por qué se descartó una alternativa, una restricción
   real del dominio) — mismo criterio que ya se sigue en `rust-core` y en
-  `docs/plan-persistencia-nube.md`.
+  `docs/planes-implementados/plan-persistencia-nube.md`.
 
 ## Cómo aplicar esto sin parar el piloto
 

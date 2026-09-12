@@ -21,10 +21,10 @@ import { mensajeError } from "../mensajeError";
 
 /**
  * Vista + baja + alta de operadores/administradores globales (ver
- * docs/plan-panel-administrativo-web.md, punto 4). El toggle "Activo" ES
+ * docs/planes-implementados/plan-panel-administrativo-web.md, punto 4). El toggle "Activo" ES
  * la baja (y la reactivación) -- global, no por sitio, ver `api/usuarios.ts`.
  * El alta genera una contraseña temporal de un solo uso (Supabase Auth,
- * ver docs/plan-autenticacion-supabase-auth.md) -- se muestra una sola vez
+ * ver docs/planes-implementados/plan-autenticacion-supabase-auth.md) -- se muestra una sola vez
  * acá para copiar/mandar a la persona; la app la obliga a cambiarla en su
  * primer login, en cualquier sitio. "Resetear contraseña" hace lo mismo
  * para alguien que ya existe (olvidó la suya). ROOT puede aparecer en la
@@ -100,7 +100,7 @@ export default function Usuarios() {
   // Contratistas.tsx antes de sumarle "contratistas,empresas").
   useAutoRefresh(() => recargar({ silencioso: true }), 120_000, "usuarios");
 
-  // Presencia en tiempo real (docs/plan-sesion-unica-dispositivos.md,
+  // Presencia en tiempo real (docs/features-futuras/plan-sesion-unica-dispositivos.md,
   // "Panel de presencia en tiempo real"): mismo mecanismo que
   // Dispositivos.tsx, pero acá lo que importa es el `usuario_cedula` que
   // viaja en el mismo `track()` -- quién tiene sesión abierta ahora y en

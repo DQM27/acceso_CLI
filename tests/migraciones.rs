@@ -922,7 +922,7 @@ fn claves_foraneas_permanecen_activas() {
     ).is_err());
 }
 
-// MIGRACION_29 — control de visitas (docs/plan-control-visitas.md), primer
+// MIGRACION_29 — control de visitas (docs/planes-implementados/plan-control-visitas.md), primer
 // corte de esquema: `citas` (autorización con vigencia) → `cita_visitantes`
 // (una fila por persona del grupo) → `movimientos_visita` (el cruce real en
 // el punto de acceso). Mismas garantías que ya tiene `registro_ingresos`, verificadas acá

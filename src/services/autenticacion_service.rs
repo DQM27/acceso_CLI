@@ -95,7 +95,7 @@ where
     /// Resuelve identidad/rol/estado local de `cedula` SIN verificar
     /// contraseña -- para cuando esa verificación ya pasó por otro lado
     /// (Supabase Auth, ver `nube::auth_supabase::login` y
-    /// docs/plan-autenticacion-supabase-auth.md). A diferencia de
+    /// docs/planes-implementados/plan-autenticacion-supabase-auth.md). A diferencia de
     /// `buscar_candidato`, acá `SIN_PASSWORD_LOCAL` NO es un error: es
     /// justo el estado esperado de cualquier usuario sincronizado, que ya
     /// no fija contraseña local nunca (ese camino queda reservado sólo

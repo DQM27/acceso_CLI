@@ -1,5 +1,11 @@
 # Control de visitas — plan (borrador, sin código todavía)
 
+> **Estado: implementado.** `web-visitas/` existe y funciona (citas,
+> `movimientos_visita`, `cita_sitios`, RPC atómica de creación de citas),
+> ver `docs/pendientes.md` y `src/domain/cita.rs`. Este documento queda
+> como memoria del razonamiento de diseño (por qué reusar el núcleo en
+> vez de duplicar la tabla de contratistas), no como plan abierto.
+
 > Documento de continuidad para retomar esta conversación en otra sesión.
 > Nace de una consulta del usuario sobre un proyecto nuevo (control de
 > acceso para visitas agendadas, distinto de contratistas) y si convenía

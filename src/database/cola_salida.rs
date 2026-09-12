@@ -1,4 +1,4 @@
-//! Encolar hacia la bandeja de salida (`docs/plan-persistencia-nube.md`).
+//! Encolar hacia la bandeja de salida (`docs/planes-implementados/plan-persistencia-nube.md`).
 //! Un solo punto de entrada para que los repositorios que crean/cierran
 //! contratistas e ingresos no repitan el mismo `INSERT`.
 

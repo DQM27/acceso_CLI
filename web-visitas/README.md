@@ -75,9 +75,9 @@ constituyen por sí solos una barrera frente a llamadas directas a la API.
 Dominio: **visitas.megabrisas.com**. Worker: **visitas-brisas**.
 
 El frontend está implementado. El backend (recursión RLS y la RPC atómica
-`crear_cita_anfitrion` descritas en [el contrato de backend](../docs/contrato-web-visitas.md))
+`crear_cita_anfitrion` descritas en [el contrato de backend](../docs/auditorias/contrato-web-visitas.md))
 ya está resuelto y probado -- ver
-[la respuesta del backend](../docs/respuesta-contrato-web-visitas.md), 2026-09-09.
+[la respuesta del backend](../docs/auditorias/respuesta-contrato-web-visitas.md), 2026-09-09.
 El código sigue fallando de forma cerrada cuando el servicio no permite comprobar
 la autorización, y no sustituye el guardado atómico por varias inserciones.
 
@@ -97,4 +97,4 @@ Antes de publicar:
    y la prueba funcional con dos anfitriones de prueba autorizados.
 
 No se cambió el esquema ni se publicaron recursos en producción durante esta
-entrega. [Reporte de seguridad](../docs/reporte-seguridad-web-2026-09-09.md).
+entrega. [Reporte de seguridad](../docs/auditorias/reporte-seguridad-web-2026-09-09.md).

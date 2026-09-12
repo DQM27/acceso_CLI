@@ -34,7 +34,7 @@ impl EstadoCita {
 }
 
 /// Fila de `citas` -- la autorización con vigencia, no un movimiento (ver
-/// `docs/plan-control-visitas.md`). Puede agendarse para varias personas a
+/// `docs/planes-implementados/plan-control-visitas.md`). Puede agendarse para varias personas a
 /// la vez: motivo/vigencia/anfitrión son compartidos por todo el grupo y
 /// viven acá; cédula/nombre/empresa/placa son por persona y viven en
 /// [`CitaVisitante`].

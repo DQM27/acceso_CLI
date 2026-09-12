@@ -137,7 +137,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   // reconexión de Realtime que tarde.
   useAutoRefresh(() => recargar({ silencioso: true }), 120_000, "dispositivos");
 
-  // Presencia en tiempo real (docs/plan-sesion-unica-dispositivos.md,
+  // Presencia en tiempo real (docs/features-futuras/plan-sesion-unica-dispositivos.md,
   // "Panel de presencia en tiempo real") -- suscripción compartida
   // (`usePresenciaPorSitio`, ver ese archivo) porque Usuarios.tsx también
   // la necesita para el mismo `sitio:{id}`, y las secciones del panel

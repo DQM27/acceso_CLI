@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase";
 import { invocar, esObjeto } from "./_invocar";
 
 /**
- * Usuarios globales (ver docs/plan-panel-administrativo-web.md, punto 4):
+ * Usuarios globales (ver docs/planes-implementados/plan-panel-administrativo-web.md, punto 4):
  * un usuario/operador no pertenece a un sitio -- dar de baja desde acá lo
  * deja sin acceso en TODOS a la vez. `sitio_id` en la tabla real queda como
  * dato de procedencia (qué dispositivo lo creó, o a qué sitio quedó
@@ -76,7 +76,7 @@ export interface UsuarioCreado {
   usuario_id: string;
   cedula: string;
   /** Se muestra una sola vez -- el Edge Function no la vuelve a devolver
-   * después de esta respuesta (ver docs/plan-autenticacion-supabase-auth.md). */
+   * después de esta respuesta (ver docs/planes-implementados/plan-autenticacion-supabase-auth.md). */
   password_temporal: string;
 }
 
@@ -97,7 +97,7 @@ function esPasswordReseteado(valor: unknown): valor is { usuario_id: string; pas
  * Da de alta al usuario global Y su cuenta de Supabase Auth con una
  * contraseña temporal de un solo uso (Edge Function `admin-create-usuario`
  * -- el hash vive en Auth, nunca en la tabla `usuarios`, ver
- * docs/plan-autenticacion-supabase-auth.md). La persona entra con esa
+ * docs/planes-implementados/plan-autenticacion-supabase-auth.md). La persona entra con esa
  * temporal y la app la obliga a cambiarla antes de dejarla operar. `rol` se
  * limita a ADMINISTRADOR/OPERADOR desde acá -- dar de alta un ROOT nuevo
  * sigue siendo una decisión aparte, no algo que se banalice desde un

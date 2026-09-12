@@ -2,7 +2,7 @@ import { z } from "../lib/validacion";
 import { supabase } from "../lib/supabase";
 
 /**
- * Contratistas globales (ver docs/plan-panel-administrativo-web.md,
+ * Contratistas globales (ver docs/planes-implementados/plan-panel-administrativo-web.md,
  * "Modelo de datos"): un contratista no pertenece a un sitio -- puede
  * entrar en cualquier unidad operativa salvo que se le niegue el acceso, y
  * esa baja se ve en TODOS los sitios a la vez. `sitio_id` en la tabla real

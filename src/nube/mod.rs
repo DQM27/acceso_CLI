@@ -1,5 +1,5 @@
 //! Integración con el receptor en la nube — solo compilado con la feature
-//! `nube`. Ver `docs/plan-persistencia-nube.md` para el diseño completo.
+//! `nube`. Ver `docs/planes-implementados/plan-persistencia-nube.md` para el diseño completo.
 //!
 //! Cubre: autenticación de dispositivo (secreto → token), el envío
 //! (`drenar_cola`) de la bandeja de salida local hacia el receptor, y la
