@@ -50,16 +50,6 @@ salidas.set('web/src/diseno.css', css);
 salidas.set('web/src/controles.css', leer('design/controles.css'));
 salidas.set('design/brisas.css', css + '\n' + leer('design/controles.css'));
 
-const rgb = hex => hex.slice(1).match(/../g).map(v => parseInt(v, 16)).join(', ');
-const rustRoles = { fondo:'background', texto:'text', muted:'muted', acento:'accent', exito:'success', advertencia:'warning', error:'danger', 'borde-fuerte':'border', 'sobre-acento':'selection_foreground' };
-let rust = `// ${aviso}\nuse crate::tui::ui_kit::Theme;\nuse ratatui::style::Color;\n\n`;
-for (const [nombre, tema] of Object.entries(d.temas)) {
-  rust += `pub const ${nombre.toUpperCase()}: Theme = Theme {\n`;
-  for (const [rol,campo] of Object.entries(rustRoles)) rust += `    ${campo}: Color::Rgb(${rgb(tema[rol])}),\n`;
-  rust += `    selection_background: Color::Rgb(${rgb(tema['acento-relleno'])}),\n    navegacion_pestanas: false,\n};\n\n`;
-}
-salidas.set('src/diseno_generado.rs', rust.trimEnd() + '\n');
-
 const material = { primary:'acento', onPrimary:'sobre-acento-indicador', primaryContainer:'acento-suave', onPrimaryContainer:'acento', inversePrimary:'acento', secondary:'acento', onSecondary:'sobre-acento-indicador', secondaryContainer:'acento-suave', onSecondaryContainer:'acento', tertiary:'info', onTertiary:'sobre-info', tertiaryContainer:'info-suave', onTertiaryContainer:'info', background:'fondo', onBackground:'texto', surface:'panel', onSurface:'texto', surfaceVariant:'panel-suave', onSurfaceVariant:'muted', surfaceTint:'acento', inverseSurface:'texto', inverseOnSurface:'fondo', error:'error', onError:'sobre-error', errorContainer:'error-suave', onErrorContainer:'error', outline:'borde-fuerte', outlineVariant:'borde', scrim:'fondo', surfaceBright:'elevado', surfaceDim:'fondo', surfaceContainer:'panel', surfaceContainerHigh:'panel-suave', surfaceContainerHighest:'elevado', surfaceContainerLow:'campo-fondo', surfaceContainerLowest:'fondo' };
 let kt = `// ${aviso}
 package com.brisas.controlacceso

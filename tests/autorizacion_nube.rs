@@ -1,11 +1,10 @@
-//! `GestionarNube` (configurar el secreto del dispositivo) es exclusivo de
-//! ROOT; `UsarNube` (sincronizar/leer/cerrar ingresos remotos) es de
-//! cualquier rol activo -- ver el doc-comment de
-//! `application::nube::GestionNubeError`. Antes ambos fallos de
-//! autorización compartían la misma variante de error con un mensaje
-//! redactado sólo para el caso ROOT; estas pruebas fijan el comportamiento
-//! correcto: variantes distintas, cada una alcanzable desde el rol que le
-//! corresponde.
+//! `GestionarNube` (configurar el secreto del dispositivo, hoy dormido --
+//! ver el doc-comment de `application::nube`) es exclusivo de ROOT;
+//! `UsarNube` (sincronizar/leer/cerrar ingresos remotos) es de cualquier rol
+//! activo. Este archivo falló el 2026-09-12 porque `autorizar_gestion_nube`
+//! había perdido su chequeo de rol en algún punto sin que nadie lo hubiera
+//! decidido (nadie lo notó por no tener ningún llamador real hoy) -- se
+//! restauró el chequeo en vez de aflojar este test.
 
 #![cfg(feature = "nube")]
 

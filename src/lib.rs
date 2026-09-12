@@ -1,14 +1,12 @@
 pub mod application;
 pub mod database;
-#[cfg(feature = "terminal-ui")]
-mod diseno_generado;
 pub mod domain;
 pub mod historial;
 pub mod instancia;
-pub mod interfaz_preferida;
-// Sin feature gate a propósito: parser+resolver+ContextState no dependen de
-// terminal (ver su doc-comment) — cualquier interfaz puede reusar el mismo
-// lenguaje de comandos sin arrastrar ratatui/crossterm/tui-input.
+// Sin feature gate a propósito: parser+resolver+ContextState no dependían de
+// terminal -- huérfano desde que se retiraron CLI/TUI (2026-09-12, código en
+// la rama `archive/cli-tui-2026-09-12`), se deja por si se retoman en vez de
+// borrarlo junto con ellas.
 pub mod lenguaje_comandos;
 pub mod mensajes;
 pub mod models;
@@ -44,7 +42,3 @@ compile_error!(
      evaluación, todavía sin motor real enlazado -- ver Cargo.toml)"
 );
 
-#[cfg(feature = "terminal-ui")]
-pub mod cli;
-#[cfg(feature = "terminal-ui")]
-pub mod tui;

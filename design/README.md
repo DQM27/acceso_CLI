@@ -64,9 +64,10 @@ La familia es sans serif del sistema: Segoe UI en Windows, Roboto en Android y a
 | Escritorio | `desktop/src/diseno.css` y `controles.css`; `index.css` mantiene estructura y componentes específicos |
 | Android | `DisenoGenerado.kt` define ambos esquemas Material, formas y tipografía; `ControlesBrisas.kt` unifica botones |
 | Panel web | Bloque `brisas-generado` incrustado en el HTML para conservar su distribución como archivo único |
-| TUI | `src/diseno_generado.rs`; preferencias históricas `classic` → claro, `brisas` → oscuro, `negro` → oscuro con pestañas |
-| CLI | Misma paleta RGB; oscuro predeterminado, `BRISAS_THEME=light` antes del arranque para claro |
 
-La variante TUI con pestañas conserva su navegación, no una tercera paleta. La variable de CLI se lee una vez al iniciar su representación. Los colores RGB requieren una terminal con soporte de color verdadero; terminales limitadas pueden aproximarlos.
+CLI y TUI clásica se retiraron del crate raíz (2026-09-12, ver
+`docs/decisiones-tecnicas.md`) -- el código sigue disponible en la rama
+`archive/cli-tui-2026-09-12` por si se retoman, junto con la generación de
+`src/diseno_generado.rs` que `design/generar.mjs` producía para ellas.
 
 Los selectores segmentados e iconos táctiles conservan la interacción de Material. Los botones de acción utilizan los envoltorios Brisas. Al añadir una variante nueva, incorporarla a los componentes compartidos y al catálogo antes de utilizarla en pantallas. No introducir colores hexadecimales ni radios propios en una pantalla nueva.

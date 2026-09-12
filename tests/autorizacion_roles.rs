@@ -83,32 +83,32 @@ fn base() -> AppCore {
     AppCore::new(connection)
 }
 
+/// Aplanado de roles (ver docs/decisiones-tecnicas.md, 2026-09-11):
+/// `RolUsuario::puede()` devuelve `true` siempre, así que un OPERADOR con
+/// sesión válida SÍ puede hacer las cuatro operaciones de abajo -- lo único
+/// que sigue rechazando algo es que la sesión sea real y esté activa
+/// (`verificar_actor_activo`), no el rol en sí. Este test documentaba la
+/// restricción vieja; se actualiza para reflejar la real en vez de quedar
+/// fallando indefinidamente.
 #[test]
-fn operador_no_puede_invocar_comandos_administrativos_directamente() {
+fn operador_con_sesion_activa_puede_invocar_comandos_antes_administrativos() {
     let core = base();
     let operador = sesion(3, RolUsuario::Operador);
 
-    assert!(matches!(
-        core.desactivar_empresa(&operador, 1),
-        Err(EmpresaServiceError::OperacionNoAutorizada)
-    ));
-    assert!(matches!(
-        core.crear_usuario(
-            &operador,
-            CrearUsuarioInput {
-                cedula: "NUEVO".into(),
-                nombre: "Nuevo".into(),
-                password: "password-nuevo".into(),
-                rol: RolUsuario::Operador,
-                activo: true,
-            }
-        ),
-        Err(UsuarioServiceError::OperacionNoAutorizada)
-    ));
-    assert!(matches!(
-        core.buscar_auditoria(&operador, &FiltroAuditoria::default()),
-        Err(ContratistaServiceError::OperacionNoAutorizada)
-    ));
+    core.desactivar_empresa(&operador, 1).unwrap();
+    core.crear_usuario(
+        &operador,
+        CrearUsuarioInput {
+            cedula: "NUEVO".into(),
+            nombre: "Nuevo".into(),
+            password: "password-nuevo".into(),
+            rol: RolUsuario::Operador,
+            activo: true,
+        },
+    )
+    .unwrap();
+    core.buscar_auditoria(&operador, &FiltroAuditoria::default())
+        .unwrap();
 
     let cambio_acceso = DatosActualizacionContratista {
         cedula: "C1".into(),
@@ -119,10 +119,8 @@ fn operador_no_puede_invocar_comandos_administrativos_directamente() {
         es_personal_ruta: false,
         tiene_acceso: false,
     };
-    assert!(matches!(
-        core.actualizar_contratista(&operador, 1, cambio_acceso),
-        Err(ContratistaServiceError::OperacionNoAutorizada)
-    ));
+    core.actualizar_contratista(&operador, 1, cambio_acceso)
+        .unwrap();
 }
 
 fn datos_contratista(cedula: &str, nombre: &str) -> DatosActualizacionContratista {
@@ -137,26 +135,27 @@ fn datos_contratista(cedula: &str, nombre: &str) -> DatosActualizacionContratist
     }
 }
 
+/// Con roles aplanados, `RolUsuario::puede(EditarCedulaContratista)` ya no
+/// distingue nada -- lo que sigue siendo real (y vale la pena seguir
+/// probando) es que la sesión se resuelve por `actor.id` contra la base,
+/// IGNORANDO el `rol` que venga en el objeto `UsuarioSesion` del llamador:
+/// una sesión con `id=3` (Operador real en la base) que se hace pasar por
+/// `RolUsuario::Root` sigue operando como Operador de verdad, no como el
+/// rol que dice tener -- simplemente ya no importa, porque cualquier rol
+/// puede.
 #[test]
-fn solo_administrador_y_root_pueden_cambiar_cedula_de_contratista() {
+fn el_rol_real_se_resuelve_por_id_no_por_lo_que_declara_la_sesion() {
     let core = base();
 
-    assert!(matches!(
-        core.actualizar_contratista(
-            &sesion(3, RolUsuario::Operador),
-            1,
-            datos_contratista("C-OPERADOR", "Persona")
-        ),
-        Err(ContratistaServiceError::OperacionNoAutorizada)
-    ));
-    assert!(matches!(
-        core.actualizar_contratista(
-            &sesion(3, RolUsuario::Root),
-            1,
-            datos_contratista("C-SESION-FALSA", "Persona")
-        ),
-        Err(ContratistaServiceError::OperacionNoAutorizada)
-    ));
+    // Sesión que dice ser Root pero id=3 es Operador en la base -- igual
+    // funciona, porque el chequeo real usa el rol de la base (aplanado a
+    // "cualquiera puede"), nunca el campo `rol` de este `UsuarioSesion`.
+    core.actualizar_contratista(
+        &sesion(3, RolUsuario::Root),
+        1,
+        datos_contratista("C-SESION-FALSA", "Persona"),
+    )
+    .unwrap();
 
     core.actualizar_contratista(
         &sesion(3, RolUsuario::Operador),
