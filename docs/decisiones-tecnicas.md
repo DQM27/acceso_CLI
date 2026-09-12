@@ -141,3 +141,95 @@ Dos fixes, espejando exactamente el patrón ya usado en desktop:
 Verificado: `cargo build-mobile-plano --lib` compila limpio y
 `cargo test-mobile-plano --lib` -- los 12 tests existentes del crate mobile
 pasan sin cambios.
+
+---
+
+## 2026-09-12 — Reconciliación de drift de migraciones + GitHub Integration + limpieza de Advisors
+
+**Contexto:** al preparar la conexión de GitHub Integration de Supabase
+(deploy automático a producción al mergear a `main`), se comparó
+`supabase/migrations/*.sql` contra `supabase_migrations.schema_migrations`
+de producción antes de activarla -- resultado: **drift real**, no solo
+teórico.
+
+**Hallazgo 1 -- 19 migraciones con timestamp de archivo incorrecto:** mismo
+contenido que lo aplicado en producción, pero el nombre del archivo tenía un
+timestamp distinto al que realmente quedó registrado (varios con timestamps
+"redondos" tipo `20260906130000`, sugiriendo renumeración manual en algún
+punto). Si se activaba GitHub Integration con "Deploy to production" así,
+Supabase las iba a tratar como migraciones nuevas y reintentarlas -- al
+menos 3 (`CREATE POLICY`/`ADD COLUMN` sin `IF NOT EXISTS`) habrían fallado a
+mitad de un deploy real. Se renombraron los 19 archivos a su versión real
+(`git mv`, sin cambiar contenido).
+
+**Hallazgo 2 -- 10 migraciones aplicadas en producción, ausentes de git en
+cualquier rama, siempre:** incluye toda la tabla `movimientos_visita`, la
+RPC `crear_cita_anfitrion`, y el fix de recursión infinita de RLS entre
+`citas`/`cita_sitios`. Rescatadas con
+`select statements from supabase_migrations.schema_migrations` (esa tabla
+guarda el SQL real de cada versión aplicada) y versionadas con su número
+real.
+
+**Hallazgo 3 -- el esquema `private` nunca tuvo su propio `CREATE SCHEMA`
+versionado** -- se creó a mano en algún punto antes de la primera migración
+que lo usa. Se agregó `create schema if not exists private` como migración
+nueva (no-op contra producción, donde ya existía) para que una
+reconstrucción desde cero no falle.
+
+Verificado: comparación 1:1 de los 60 (luego 63, tras las migraciones de
+esta misma entrada) timestamps de archivo local contra
+`select version from supabase_migrations.schema_migrations` -- coinciden
+exactamente. GitHub Integration se conectó recién después de esta
+reconciliación, no antes.
+
+### Limpieza de Performance/Security Advisors (misma sesión)
+
+Con GitHub ya conectado y pidiendo "dejar esto fino", se resolvieron los
+hallazgos de bajo riesgo que quedaban:
+
+- **12 políticas RLS de `citas`/`cita_sitios`/`cita_visitantes`/`sitios`/
+  `anfitriones`** reevaluaban `auth.email()` fila por fila (no estaba
+  envuelto en `select`, a diferencia de `auth.jwt()` en esas mismas
+  políticas) -- corregido con `ALTER POLICY`.
+- **3 FKs sin índice** (`cita_sitios.sitio_id`,
+  `movimientos_visita.dispositivo_entrada_id/salida_id`) + **1 índice
+  duplicado** en `gafetes` -- corregidos.
+- **4 tablas con políticas RLS permisivas duplicadas**
+  (`anfitriones`/`dispositivos`/`sitios`/`usuarios`, cada una con dos
+  políticas separadas para el mismo rol+acción) -- fusionadas en una sola
+  con el mismo `OR` explícito. `dispositivos` y `usuarios` están publicadas
+  a Realtime -- fusionar no cambia qué filas ve/escribe cada rol, sólo
+  cuántas veces se evalúa, así que no afecta qué le llega a cada cliente
+  por Postgres Changes.
+- **`public.es_admin_global()` invocable por HTTP** (cualquier
+  `authenticated` podía pedir `/rest/v1/rpc/es_admin_global`, aunque solo
+  revela el estado del propio llamador) -- movida a `private` con
+  `ALTER FUNCTION ... SET SCHEMA`, que preserva el OID de la función: las
+  16 políticas que ya la usaban (incluida una de `realtime.messages`,
+  presencia) siguieron funcionando sin tocarlas una por una, porque
+  Postgres resuelve la llamada por OID, no por nombre calificado.
+
+**Verificación exhaustiva antes/después de cada cambio de RLS:** se corrieron
+las 8 baterías de diagnóstico de `supabase/tests/*_autorizacion.sql` a mano
+contra producción (transacción con `rollback`, cero riesgo de dejar datos
+de prueba) más un caso nuevo de presencia+admin_global (el único camino que
+ejercitaba `es_admin_global()` dentro de Realtime), antes y después de cada
+migración -- resultado idéntico en los 9 casos, las dos veces. Se
+actualizaron los comentarios de `dispositivos_autorizacion.sql`,
+`usuarios_autorizacion.sql` y `sitios_autorizacion.sql` para reflejar los
+nombres de política fusionados, y se agregó cobertura del caso "anfitrión"
+a `sitios_autorizacion.sql` (no estaba cubierto, aunque la política ya
+existía en producción desde el 2026-09-09).
+
+**Pendientes, deliberadamente no tocados:** `pg_net` en esquema `public`
+(mover una extensión con dependencias activas amerita su propia pasada);
+"Leaked password protection" desactivado (toggle de dashboard, no de SQL --
+la razón original para dejarlo desactivado ya no aplica, ver
+`docs/arquitectura-supabase.md` sección 6.4); A-01 (RLS cross-site,
+riesgo aceptado y documentado, no un olvido).
+
+Se escribió `docs/arquitectura-supabase.md` como documento de referencia
+completo (modelo de datos, los dos sistemas de autorización, Realtime en
+detalle, Edge Functions, Vault, flujo de migraciones) -- ese archivo es el
+mapa completo del "cómo funciona hoy"; este archivo sigue siendo el
+registro cronológico del "por qué".

@@ -1,10 +1,15 @@
 -- Ejecutar en una sola sesión. Todas las filas de prueba se revierten.
 --
 -- OJO: este test documenta a propósito un riesgo real y ya conocido, no
--- solo defiende el comportamiento "bueno". Las políticas
--- "leer usuarios (global)" y "actualizar usuarios (global)" (migración
--- crea_usuarios_globales, cerrada parcialmente por
--- cierra_acceso_global_a_cuentas_sin_dispositivo_ni_admin) dan SELECT/
+-- solo defiende el comportamiento "bueno". La política de INSERT es una
+-- sola, "crear usuarios (propio sitio o admin_global)" (fusionada
+-- 2026-09-12 desde "crear usuarios del propio sitio" + "admin_global crea
+-- usuarios" -- ver fusiona_politicas_permisivas_duplicadas_de_visitas_y_
+-- panel). Las políticas de SELECT/UPDATE, "leer usuarios (global)" y
+-- "actualizar usuarios (global)" (migración crea_usuarios_globales,
+-- cerrada parcialmente por cierra_acceso_global_a_cuentas_sin_dispositivo_
+-- ni_admin), siguen separadas -- el advisor nunca las marcó como
+-- duplicadas porque no comparten exactamente la misma condición. Dan SELECT/
 -- UPDATE sin restricción a cualquier sesión autenticada que sea un
 -- DISPOSITIVO (JWT con `sitio_id`) o admin_global -- incluye poder
 -- cambiar el campo `rol` a ADMINISTRADOR de un usuario de otro sitio. Es
