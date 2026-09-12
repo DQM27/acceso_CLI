@@ -252,6 +252,10 @@ pub struct PreparacionIngreso {
     pub nombre: String,
     pub empresa_nombre: String,
     pub tipo_ingreso: TipoIngreso,
+    /// `None` para SWAT (nunca vence). Viaja como texto ISO
+    /// (`AAAA-MM-DD`), mismo criterio que `DatosContratista` en este mismo
+    /// archivo.
+    pub fecha_vencimiento_praind: Option<String>,
     pub resultado_acceso: ResultadoAcceso,
     pub requiere_gafete: bool,
     pub tiene_ingreso_activo: bool,
@@ -272,6 +276,7 @@ impl From<PreparacionIngresoNucleo> for PreparacionIngreso {
             nombre: preparacion.nombre,
             empresa_nombre: preparacion.empresa_nombre,
             tipo_ingreso: preparacion.tipo_ingreso.into(),
+            fecha_vencimiento_praind: preparacion.fecha_vencimiento_praind.map(|f| f.to_string()),
             resultado_acceso: preparacion.resultado_acceso.into(),
             requiere_gafete: preparacion.requiere_gafete,
             tiene_ingreso_activo: preparacion.tiene_ingreso_activo,

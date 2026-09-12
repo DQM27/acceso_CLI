@@ -407,3 +407,44 @@ mobile recompilado con el fix, todavía sin instalar/probar en el teléfono
 real. Tampoco se probó el mismo escenario (más de 12h de inactividad) en
 vivo -- no hay forma práctica de esperar 12h reales para confirmarlo,
 queda como diseño razonado, no observado de nuevo.
+
+---
+
+## 2026-09-12 — Repoblado de contratistas/empresas y ajustes de Activos
+
+**Repoblado del catálogo real:** `contratistas_base_final_limpia_v15.sql`
+(389 contratistas, 44 empresas, ya en la raíz del repo) se importó con
+`examples/importar_catalogo_limpio.rs` contra la base local real de un
+dispositivo ya activado -- desactiva (no borra) todo lo que no esté en el
+SQL nuevo, rellena `uuid`, y encola cada fila en `cola_salida` para que la
+sincronización normal las suba. No hubo que tocar cifrado: se confirmó que
+la base local de ese dispositivo NO estaba realmente cifrada (ver hallazgo
+en `docs/pendientes.md`, "`cargo tauri dev` deja la base local sin cifrar
+de verdad"), así que `open_database()` sin clave funcionó directo. Subida
+confirmada en Supabase (389/44) tras que el dispositivo sincronizó solo.
+
+**Notificación de ingreso ahora dice cuánto falta del PRAIND, no sólo que
+está por vencer:** `PreparacionIngreso` (núcleo, mobile, desktop) suma
+`fecha_vencimiento_praind: Option<NaiveDate>` -- viaja como texto ISO en
+mobile (mismo criterio que `DatosContratista`), como fecha serializada
+normal en desktop. `NuevoIngresoModal` calcula los días restantes en el
+cliente (`mensajeVencimientoPraind`, `desktop/src/api/ingresos.ts`) y
+muestra "PRAIND vence en 3 días (2026-09-15)" en vez de sólo "PRAIND
+próximo a vencer". Cálculo en el cliente a propósito: es sólo un aviso
+para el operador, no una decisión de seguridad (esa la sigue tomando
+`resultado_acceso`, ya resuelto por el backend).
+
+**Columna "Estado" de Activos eliminada:** mezclaba dos cosas sin
+relación bajo un solo encabezado -- cumplimiento de PRAIND ("Al día"/"PRAIND
+próximo a vencer"/motivo de denegado) para filas locales, y "Otro
+dispositivo" para filas espejadas desde el otro equipo del mismo sitio,
+que no es un estado de la persona sino del origen del registro. Decisión
+del usuario: sacarla del todo -- el aviso de PRAIND ya se resuelve en el
+momento del ingreso (ver arriba), Historial ya distingue visualmente lo
+que hace falta, y la distinción "de qué dispositivo vino" no aporta nada
+en el día a día de Activos. `textoEstado`/`colorEstado`/`EstadoAcceso` se
+borraron junto con la columna; `origen` en `FilaActiva` se queda (lo sigue
+usando `cerrarFila` para saber si cierra local o contra la nube), pero ya
+no se pinta en ninguna celda.
+
+Verificado: `tsc --noEmit` limpio, 191/191 tests de Vitest (desktop).

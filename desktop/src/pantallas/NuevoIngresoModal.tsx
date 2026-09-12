@@ -10,6 +10,7 @@ import {
 import {
   buscarContratistas,
   mensajeBloqueo,
+  mensajeVencimientoPraind,
   prepararIngreso,
   puedeContinuar,
   registrarIngreso,
@@ -255,11 +256,13 @@ export default function NuevoIngresoModal({
                 }}
                 style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}
               >
-                {seleccion.preparacion.resultado_acceso === "PermitidoConAdvertencia" && (
-                  <p style={{ margin: 0, color: "var(--advertencia)", fontSize: "0.85rem" }}>
-                    ⚠ PRAIND próximo a vencer
-                  </p>
-                )}
+                {seleccion.preparacion.resultado_acceso === "PermitidoConAdvertencia" &&
+                  seleccion.preparacion.fecha_vencimiento_praind && (
+                    <p style={{ margin: 0, color: "var(--advertencia)", fontSize: "0.85rem" }}>
+                      ⚠ PRAIND{" "}
+                      {mensajeVencimientoPraind(seleccion.preparacion.fecha_vencimiento_praind)}
+                    </p>
+                  )}
 
                 {seleccion.preparacion.gafetes_deuda.length > 0 && (
                   <p style={{ margin: 0, color: "var(--advertencia)", fontSize: "0.85rem" }}>

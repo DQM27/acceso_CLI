@@ -9,7 +9,6 @@ import {
   listarIngresosActivos,
   listarIngresosRemotos,
   medioIngresoDesdeNube,
-  mensajeMotivoDenegacion,
   registrarSalida,
   textoMedio,
   tipoIngresoDesdeNube,
@@ -17,33 +16,17 @@ import {
 import type { IngresoActivoResumen, IngresoRemoto, MedioIngreso, TipoIngreso } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
-/** Texto plano del estado — separado del componente visual `EstadoAcceso`
- * para que la columna tenga un `field` real: sin eso no aparece en el
- * selector "Columnas ▾" (que sólo lista columnas con `field`) ni el filtro
- * por columna puede buscar sobre ella. */
-export function textoEstado(fila: IngresoActivoResumen): string {
-  const r = fila.resultado_acceso;
-  if (r === "Permitido") return "Al día";
-  if (r === "PermitidoConAdvertencia") return "PRAIND próximo a vencer";
-  return mensajeMotivoDenegacion(r.Denegado);
-}
-
-export function colorEstado(fila: IngresoActivoResumen): string {
-  const r = fila.resultado_acceso;
-  if (r === "Permitido") return "var(--exito)";
-  if (r === "PermitidoConAdvertencia") return "var(--advertencia)";
-  return "var(--error)";
-}
-
 /** Fila local (este dispositivo) o remota (abierta por el otro dispositivo
  * del mismo sitio, ver `docs/plan-persistencia-nube.md` — nunca vive en el
  * historial local, sólo en la caché `ingresos_remotos`). Mismos nombres de
  * campo en los dos casos (los que una remota no tiene van en `null`) para
- * que las columnas de AG Grid no necesiten saber cuál es cuál salvo donde
- * de verdad importa (estado, acción). */
+ * que las columnas de AG Grid no necesiten saber cuál es cuál. `origen` no
+ * se muestra en ninguna columna (se sacó la columna "Estado" que lo hacía,
+ * mezclaba cumplimiento de PRAIND con "de qué dispositivo vino" y confundía
+ * más de lo que ayudaba -- ver docs/decisiones-tecnicas.md) -- sólo decide
+ * internamente cómo cerrar la fila (`cerrarFila`). */
 interface FilaLocal extends IngresoActivoResumen {
   origen: "local";
-  estado_texto: string;
 }
 
 interface FilaRemota {
@@ -61,13 +44,12 @@ interface FilaRemota {
   usuario_ingreso_nombre: string;
   resultado_registrado: null;
   resultado_acceso: null;
-  estado_texto: string;
 }
 
 type FilaActiva = FilaLocal | FilaRemota;
 
 export function filaDesdeLocal(item: IngresoActivoResumen): FilaActiva {
-  return { ...item, origen: "local", estado_texto: textoEstado(item) };
+  return { ...item, origen: "local" };
 }
 
 export function filaDesdeRemoto(remoto: IngresoRemoto): FilaActiva {
@@ -86,24 +68,7 @@ export function filaDesdeRemoto(remoto: IngresoRemoto): FilaActiva {
     usuario_ingreso_nombre: remoto.usuario_entrada_nombre ?? "—",
     resultado_registrado: null,
     resultado_acceso: null,
-    estado_texto: "Otro dispositivo",
   };
-}
-
-function textoEstadoFila(fila: FilaActiva): string {
-  return fila.origen === "remoto" ? fila.estado_texto : textoEstado(fila);
-}
-
-function colorEstadoFila(fila: FilaActiva): string {
-  return fila.origen === "remoto" ? "var(--acento)" : colorEstado(fila);
-}
-
-function EstadoAcceso({ fila }: { fila: FilaActiva }) {
-  return (
-    <span className="chip" style={{ ["--chip-color" as string]: colorEstadoFila(fila) }}>
-      {textoEstadoFila(fila)}
-    </span>
-  );
 }
 
 export default function Activos({
@@ -255,14 +220,6 @@ export default function Activos({
         valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora_ingreso) : ""),
       },
       { field: "usuario_ingreso_nombre", headerName: "Dio ingreso", flex: 1.3, minWidth: 130 },
-      {
-        field: "estado_texto",
-        headerName: "Estado",
-        flex: 1.7,
-        minWidth: 170,
-        cellRenderer: (p: ICellRendererParams<FilaActiva>) =>
-          p.data ? <EstadoAcceso fila={p.data} /> : null,
-      },
       {
         headerName: "Acción",
         flex: 0.9,

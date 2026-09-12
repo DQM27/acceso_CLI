@@ -28,6 +28,24 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 
 ## Seguridad y nube
 
+- [ ] **`cargo tauri dev` deja la base local sin cifrar de verdad, en
+  silencio (hallazgo 2026-09-12).** `desktop/src-tauri` compila con
+  `sqlite-plano` como motor por defecto (a propósito, ver
+  `docs/decisiones-tecnicas.md`, "switch de motor SQLite de tres vías" --
+  así `cargo tauri dev` es rápido sin tener que acordarse de pedir el
+  motor real). El problema: `clave_cifrado::resolver_clave` +
+  `AppCore::abrir_con_reloj_cifrado` corren SIEMPRE en `lib.rs::run()`,
+  sin chequear qué motor está realmente enlazado -- generan y guardan
+  `db_key.dat` con DPAPI igual, y llaman `PRAGMA key` igual, pero con
+  SQLite plano ese `PRAGMA` no hace nada (no es un error, simplemente se
+  ignora). Resultado confirmado en una base local real de esta sesión:
+  `db_key.dat` presente, pero el `.db` empieza con el header de SQLite en
+  texto plano (`SQLite format 3\0`) -- cero cifrado real, aunque toda la
+  maquinaria "parece" estar funcionando. Antes de que un sitio real corra
+  esto en producción con `cargo tauri dev`/un build sin
+  `build-desktop-cipher`: o bien `run()` debe negarse a arrancar con
+  `sqlite-plano` fuera de un build de desarrollo explícito, o al menos
+  avisar fuerte que la base no está cifrada de verdad.
 - [x] **Android: proteger el secreto del dispositivo con Keystore.** El secreto móvil
   se guarda desde Kotlin con Android Keystore (`AES/GCM/NoPadding`) y el núcleo móvil recibe
   el secreto descifrado sólo en memoria para autenticarse/sincronizar. Incluye migración
