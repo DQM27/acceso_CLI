@@ -51,7 +51,6 @@ export default function Usuarios() {
   const [sitioId, setSitioId] = useState<string | null>(null);
   const [cedula, setCedula] = useState("");
   const [nombre, setNombre] = useState("");
-  const [rol, setRol] = useState<"ADMINISTRADOR" | "OPERADOR">("OPERADOR");
   const [creando, setCreando] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
   // Se muestra una sola vez, apenas vuelve del Edge Function -- ver el
@@ -174,7 +173,6 @@ export default function Usuarios() {
     setModalAbierto(false);
     setCedula("");
     setNombre("");
-    setRol("OPERADOR");
     setErrorForm(null);
   }
 
@@ -191,7 +189,12 @@ export default function Usuarios() {
         sitio_id: sitioId,
         cedula: cedula.trim(),
         nombre: nombre.trim(),
-        rol,
+        // El rol ya no distingue nada dentro de la app (aplanado de
+        // autorización, ver docs/decisiones-tecnicas.md 2026-09-11) -- se
+        // manda fijo para no pedirle a quien crea el usuario una decisión
+        // que no tiene ningún efecto real. ROOT sigue sin darse de alta
+        // desde acá a propósito (ver doc-comment del componente).
+        rol: "OPERADOR",
       });
       cerrarModal();
       recargar();
@@ -351,18 +354,6 @@ export default function Usuarios() {
                 disabled={creando}
                 onChange={(evento) => setNombre(sanearSoloLetras(evento.target.value))}
               />
-            </label>
-
-            <label className="campo">
-              Rol
-              <select
-                value={rol}
-                disabled={creando}
-                onChange={(evento) => setRol(evento.target.value as "ADMINISTRADOR" | "OPERADOR")}
-              >
-                <option value="OPERADOR">Operador</option>
-                <option value="ADMINISTRADOR">Administrador</option>
-              </select>
             </label>
 
             <p style={{ margin: 0, color: "var(--muted)", fontSize: "0.8rem" }}>
