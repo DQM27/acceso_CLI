@@ -331,7 +331,7 @@ por ronda de 1.000 ciclos ingreso+salida):**
 |---|---|---|---|---|---|---|---|
 | `sqlite-plano` (baseline) | 1295.4 | 1307.6 | 1283.0 | 1354.6 | 1.2954 | -- | 12.3 MB |
 | `cifrado-sqlite3mc` (ChaCha20-Poly1305) | 1520.2 | 1525.7 | 1498.8 | 1550.2 | 1.5202 | +17.3% | 10.1 MB |
-| `cifrado-sqlcipher` (motor real) | *pendiente -- build en frío de OpenSSL vendorizado en curso* | | | | | | |
+| `cifrado-sqlcipher` (motor real, default) | 1662.0 | 1678.4 | 1592.9 | 1760.4 | 1.6620 | +28.3% | 13.0 MB |
 
 `cifrado-sqlite3mc` corrió contra una base realmente cifrada (`PRAGMA
 cipher = 'chacha20'` + `PRAGMA key`, ver el fix en
@@ -344,10 +344,24 @@ esta comparación de memoria es aproximada (`Get-Process`/Working Set del
 proceso completo, no heap aislado del motor) y no debe leerse con más
 precisión de la que tiene.
 
-No declarar ganador basándose en builds, KDF diferentes o runners distintos.
-La fila de `cifrado-sqlcipher` se completa cuando termine esa corrida --
-compila OpenSSL vendorizado desde fuente en frío (20-40 min según la
-máquina, ver sección 18 sobre el gotcha de Strawberry Perl).
+**Lectura de esta corrida:** el cifrado tiene costo medible frente a SQLite
+sin cifrar (+17% a +28% por ciclo ingreso+salida), pero en términos
+absolutos ambos motores cifrados siguen en el orden de **1.5-1.8 ms por
+ciclo completo** -- muy por debajo de cualquier umbral perceptible para un
+operador humano registrando entradas/salidas una por una. `SQLite3MC` corrió
+~11 puntos porcentuales más rápido que `SQLCipher` en esta corrida
+(ChaCha20-Poly1305 en software vs. AES-256 con OpenSSL vendorizado), con
+tiempo de build en frío drásticamente menor (segundos contra 20-40 min) --
+suficiente para seguir evaluándolo como candidato, no para reemplazar el
+motor de producción todavía: falta ejercitarlo con datos reales (migración
+de una base `SQLCipher` existente, no sólo bases nuevas) y con la carga
+completa de sincronización, no sólo ingreso/salida local.
+
+No declarar ganador basándose en builds, KDF diferentes o runners
+distintos -- esta corrida usó el mismo runner, el mismo `AppCore` y la misma
+carga para los tres motores, pero UNA sola corrida de 5 rondas; antes de
+tomar cualquier decisión de producción, repetir en al menos otra máquina y
+con una carga que incluya sincronización con la nube, no sólo local.
 
 ---
 
