@@ -65,7 +65,6 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
 
   const [modalSitioAbierto, setModalSitioAbierto] = useState(false);
   const [nuevoSitioNombre, setNuevoSitioNombre] = useState("");
-  const [nuevoSitioDireccion, setNuevoSitioDireccion] = useState("");
   const [creandoSitio, setCreandoSitio] = useState(false);
   const [errorSitio, setErrorSitio] = useState<string | null>(null);
 
@@ -214,7 +213,6 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   function abrirModalSitio() {
     setModalSitioAbierto(true);
     setNuevoSitioNombre("");
-    setNuevoSitioDireccion("");
     setErrorSitio(null);
   }
 
@@ -227,10 +225,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
     setCreandoSitio(true);
     setErrorSitio(null);
     try {
-      const nuevo = await crearSitio({
-        nombre: nuevoSitioNombre.trim(),
-        direccion: nuevoSitioDireccion.trim() || undefined,
-      });
+      const nuevo = await crearSitio({ nombre: nuevoSitioNombre.trim() });
       setSitios((actual) => (actual.some((s) => s.id === nuevo.id) ? actual : [...actual, nuevo]));
       setSitioId(nuevo.id);
       setModalSitioAbierto(false);
@@ -585,16 +580,6 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
                 disabled={creandoSitio}
                 placeholder="ej. Brisas"
                 onChange={(evento) => setNuevoSitioNombre(evento.target.value)}
-              />
-            </label>
-
-            <label className="campo">
-              Dirección (opcional)
-              <input
-                value={nuevoSitioDireccion}
-                disabled={creandoSitio}
-                placeholder="ej. San Rafael"
-                onChange={(evento) => setNuevoSitioDireccion(evento.target.value)}
               />
             </label>
 

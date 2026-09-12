@@ -128,16 +128,24 @@ A-01 en `docs/auditorias/AUDITORIA_SEGURIDAD_WEB_SUPABASE_2026-09-10.md`.
   Sigue habiendo radio de exposición real (un dispositivo comprometido
   puede tocar contratistas/empresas de cualquier sitio), aceptado
   conscientemente.
-- **`usuarios`: se está cerrando.** Ya no tiene sentido que un dispositivo
-  pueda crear/editar usuarios ni reasignarles el `rol` -- esa capacidad
-  queda exclusiva del panel (`admin-create-usuario`/
-  `admin-reset-password-usuario`). En curso: primero se retira la
-  capacidad de crear/editar usuarios de TUI/escritorio (código cliente,
-  para que dejen de depender de escribir esta tabla), y recién después se
-  cierra la política RLS de `usuarios` a sólo `admin_global` -- en ese
-  orden, para no romper la sincronización de una capacidad que el cliente
-  todavía usa. Los tests (`supabase/tests/usuarios_autorizacion.sql`) se
-  actualizan en el mismo cambio para reflejar la política nueva.
+- **`usuarios`: cerrado (2026-09-12).** INSERT/UPDATE quedaron exclusivos de
+  `admin_global` ("crear usuarios (solo admin_global)"/"actualizar usuarios
+  (solo admin_global)", migración
+  `cierra_escritura_de_usuarios_a_admin_global`) -- ningún dispositivo puede
+  ya crear/editar usuarios ni reasignarles el `rol`, esa capacidad es
+  exclusiva del panel (`admin-create-usuario`/
+  `admin-reset-password-usuario`). Se cerró en orden: primero se retiró la
+  capacidad de crear/editar usuarios de desktop y la CLI default (agente en
+  sesión previa), después se retiraron CLI y TUI clásica enteras del crate
+  raíz (código en la rama `archive/cli-tui-2026-09-12`) -- con eso ya no
+  quedaba ningún cliente real que dependiera de escribir esta tabla.
+  `mobile/rust-core` todavía expone `crear_usuario`/`actualizar_usuario` vía
+  uniffi (dormido, sin pantalla de Kotlin que lo llame); si algo lo
+  invocara, el alta local funcionaría pero el envío al outbox fallaría con
+  403 al sincronizar -- comportamiento esperado, no un bug. SELECT sigue
+  sin restricción por sitio (hace falta para sincronizar el catálogo).
+  `supabase/tests/usuarios_autorizacion.sql` actualizado y verificado
+  contra producción (6/6 comprobaciones).
 
 `ingresos`, `dispositivos` y `gafetes`, en cambio, sí están acotados
 estrictamente por sitio para un dispositivo normal (solo `admin_global` ve

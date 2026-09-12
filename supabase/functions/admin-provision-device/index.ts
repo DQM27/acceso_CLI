@@ -59,7 +59,6 @@ Deno.serve(async (req: Request) => {
 
   let body: {
     sitio_nombre?: string;
-    sitio_direccion?: string;
     tipo?: string;
     etiqueta?: string;
   };
@@ -77,12 +76,11 @@ Deno.serve(async (req: Request) => {
     return json({ error: "bad_request", detail: "faltan campos o tipo invalido" }, 400);
   }
 
+  // `direccion` se elimino de `sitios` (2026-09-12) -- ver el mismo
+  // comentario en admin-create-site/index.ts.
   const { data: sitio, error: sitioError } = await supabase
     .from("sitios")
-    .upsert(
-      { nombre: sitioNombre, direccion: body.sitio_direccion?.trim() || null },
-      { onConflict: "nombre" },
-    )
+    .upsert({ nombre: sitioNombre }, { onConflict: "nombre" })
     .select("id, nombre")
     .single();
 
