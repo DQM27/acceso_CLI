@@ -42,4 +42,29 @@ describe("public/_headers", () => {
   it("tiene X-Content-Type-Options: nosniff", () => {
     expect(contenido).toMatch(/X-Content-Type-Options:\s*nosniff/);
   });
+
+  it("default-src y base-uri quedan cerrados -- cada tipo de recurso se permite a propósito, no por default", () => {
+    const linea = contenido.match(/^\s*Content-Security-Policy:\s*(.+)$/m)?.[1];
+    if (!linea) throw new Error("No se encontró la línea Content-Security-Policy en _headers");
+    expect(linea).toContain("default-src 'none'");
+    expect(linea).toContain("base-uri 'none'");
+  });
+
+  it("style-src permite unsafe-inline (AG Grid inyecta <style> dinámicos -- ver docs/decisiones-tecnicas.md) pero nunca unsafe-eval", () => {
+    const linea = contenido.match(/^\s*Content-Security-Policy:\s*(.+)$/m)?.[1];
+    if (!linea) throw new Error("No se encontró la línea Content-Security-Policy en _headers");
+    const styleSrc = linea.match(/style-src ([^;]+)/)?.[1];
+    expect(styleSrc).toBeDefined();
+    expect(styleSrc).not.toContain("unsafe-eval");
+  });
+
+  it("no deja que un buscador indexe el panel ni que el navegador cachee sus datos", () => {
+    expect(contenido).toMatch(/X-Robots-Tag:\s*noindex/);
+    expect(contenido).toMatch(/Cache-Control:\s*no-store/);
+  });
+
+  it("Referrer-Policy y Cross-Origin-Opener-Policy están al máximo (no hay otro origen que necesite el referrer ni una ventana propia)", () => {
+    expect(contenido).toMatch(/Referrer-Policy:\s*no-referrer/);
+    expect(contenido).toMatch(/Cross-Origin-Opener-Policy:\s*same-origin/);
+  });
 });
