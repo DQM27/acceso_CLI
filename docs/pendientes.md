@@ -71,6 +71,46 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 - [ ] **Revisar bucket público `historial-web`.** Está documentado como público, vacío y
   sin referencias en código. Confirmar si es vestigio; si no se usa, eliminarlo desde
   Supabase.
+- [ ] **Entrega de la clave de SQLCipher vía Supabase Vault, con envelope
+  encryption (discutido 2026-09-12, sin implementar).** Sigue abierto el
+  problema de `docs/decisiones-tecnicas.md` ("DPAPI insuficiente contra IT
+  del cliente" -- ver memoria de sesión "Cifrado en reposo"): un admin con
+  control total de la PC física siempre puede, en teoría, sacarle la clave
+  al proceso corriendo (debugger/dump de memoria) -- ningún esquema local
+  (DPAPI, Vault, TPM) elimina ese límite de fondo, solo cambia qué tan fácil
+  es y cuánto daño limita si se filtra una clave. Además, la clave de
+  SQLCipher no rota como un JWT -- cambiarla de verdad exige `PRAGMA rekey`
+  (reencriptar toda la base con la clave abierta), no es gratis hacerlo
+  seguido.
+
+  **Diseño propuesto para reducir el radio de daño y ganar revocación**
+  (separar "quién puede pedir la clave" de "la clave en sí"):
+  1. Al aprovisionar un dispositivo (`admin-provision-device`), generar una
+     clave de cifrado random **por dispositivo** (no una global) y guardarla
+     en Vault con un nombre ligado a su `dispositivo_id`.
+  2. Edge Function nueva (`device-fetch-db-key` o similar) que exige el
+     mismo JWT que ya valida `device-auth`, y le entrega su clave desde
+     Vault -- chequea `revoked_at`/`suspended_at` igual que `device-auth`.
+  3. La app la pide una sola vez, en `configurar_dispositivo_inicial`, y la
+     usa para abrir/crear la base SQLCipher; se cachea localmente para
+     poder operar offline después (ese caché sigue teniendo la misma
+     debilidad de fondo que DPAPI -- lo que cambia es que revocar el
+     dispositivo en Supabase corta el acceso a pedir la clave de nuevo en
+     una máquina distinta, y una clave filtrada sólo compromete UN
+     dispositivo/sitio, no todos).
+
+  **Por qué todavía no se hizo:** el desarrollo está en fase temprana, las
+  bases locales son desechables y no hay ningún dispositivo real en el
+  campo corriendo con SQLCipher activo -- es terreno limpio, sin necesidad
+  de migrar/reencriptar nada existente. Retomar esto **antes** de que haya
+  dispositivos reales en producción, porque después sí implicaría un
+  `PRAGMA rekey` por dispositivo ya desplegado.
+
+  Estimado de esfuerzo cuando se retome: Edge Function nueva + generar y
+  guardar la clave al aprovisionar, medio día cada una (reutilizan el
+  patrón de validación de JWT ya probado en las demás Edge Functions);
+  enganchar el fetch/cacheo en el arranque de la app es lo más delicado,
+  un par de días bien probados por plataforma que lo necesite.
 - [x] **Edge Functions de dispositivos versionadas.** Se trajo al repo el código remoto y
   se eliminó lo que no tenía llamadores reales.
 - [x] **Políticas y funciones de seguridad del panel endurecidas.** Se cerraron accesos
