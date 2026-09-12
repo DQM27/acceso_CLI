@@ -11,18 +11,18 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 
 ## Fuentes consolidadas
 
-- `docs/auditoria-calidad-2026-09.md`
-- `docs/plan-persistencia-nube.md`
-- `docs/plan-panel-administrativo-web.md`
-- `docs/plan-ocr-escaneo-documentos.md`
-- `docs/fixtures-ocr-sinteticos.md`
-- `docs/idea-lector-placas-vehiculares.md`
+- `docs/auditorias/auditoria-calidad-2026-09.md`
+- `docs/planes-implementados/plan-persistencia-nube.md`
+- `docs/planes-implementados/plan-panel-administrativo-web.md`
+- `docs/planes-implementados/plan-ocr-escaneo-documentos.md`
+- `docs/arquitectura/fixtures-ocr-sinteticos.md`
+- `docs/features-futuras/idea-lector-placas-vehiculares.md`
 - `mobile/android/ARQUITECTURA.md`
 - `mobile/README.md`
-- `docs/plan-sesion-unica-dispositivos.md`
+- `docs/features-futuras/plan-sesion-unica-dispositivos.md`
 - tracker anterior de escritorio (absorbido aquí; ya no existe como lista aparte)
 - `README.md`, `packaging/msix/README.md`, `packaging/alacritty/README.md`,
-  `docs/recuperacion-supabase.md`, `docs/realtime-verificado.md`
+  `docs/recuperacion-supabase.md`, `docs/auditorias/realtime-verificado.md`
 
 ---
 
@@ -69,7 +69,7 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   activa el dispositivo. El flujo diseñado agrega un código por correo en la primera
   activación del secreto, con estado intermedio antes de emitir el JWT final.
 - [ ] **Sesión única por dispositivo y presencia en tiempo real.** Ver
-  `docs/plan-sesion-unica-dispositivos.md`. El mismo secreto hoy activa más de un
+  `docs/features-futuras/plan-sesion-unica-dispositivos.md`. El mismo secreto hoy activa más de un
   dispositivo sin límite. Plan: secreto de un solo uso, identidad canónica del
   dispositivo en Supabase, sesión propia desacoplada del secreto, panel de presencia,
   y regla de desempate por fecha de alta + expulsión automática para conflictos
@@ -79,7 +79,7 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   - [ ] El resto (secreto de un solo uso, identidad canónica, desempate offline)
     sigue sin implementar.
 - [ ] **Sesión única por SITIO, no por dispositivo ni global (decisión
-  refinada 2026-09-12).** Ver `docs/plan-sesion-unica-dispositivos.md`,
+  refinada 2026-09-12).** Ver `docs/features-futuras/plan-sesion-unica-dispositivos.md`,
   sección 7 -- reemplaza el planteo anterior de esta entrada. Política
   aclarada con el usuario: un mismo operador SÍ puede tener sesión abierta
   en más de un dispositivo del MISMO sitio a la vez (PC + celular en
@@ -89,7 +89,7 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   porque el disparador es "sitio", no "dispositivo" ni "global puro" --
   hoy es más plausible que antes porque la identidad ya vive centralizada
   en Supabase Auth (desktop y mobile migrados, ver
-  `docs/plan-autenticacion-supabase-auth.md`), no repartida por dispositivo.
+  `docs/planes-implementados/plan-autenticacion-supabase-auth.md`), no repartida por dispositivo.
 
   **Diseño propuesto, sin implementar:**
   1. `usuarios` suma `sesion_sitio_id` (uuid, nullable, referencia
@@ -308,7 +308,7 @@ aspiracional -- lo que sigue sin marcar todavía no corrió.
   Ahora se pide devolver puntualmente la de contratista -- con la cédula/DIMEX
   completable por OCR de forma OPCIONAL (ya existe `PantallaEscanearCedula`/
   `ModoEscaneoDocumento` para el escaneo de cédula/gafete en el flujo de ingreso, y todo
-  `docs/plan-ocr-escaneo-documentos.md`/`docs/fixtures-ocr-sinteticos.md` como base -- no
+  `docs/planes-implementados/plan-ocr-escaneo-documentos.md`/`docs/arquitectura/fixtures-ocr-sinteticos.md` como base -- no
   hay que empezar de cero), pero la carga manual sigue siendo el camino principal, no el
   OCR obligatorio. Sin empezar -- decidir primero si esto revive la pantalla vieja
   (¿sigue existiendo en el historial de git?) o si conviene rehacerla contra el
@@ -365,7 +365,7 @@ estabilizador y clasificador.
   propio.
 - [x] **Recorte del área de análisis al recuadro guía: revertido.** Se
   probó en dispositivo real y empeoró el escaneo sin dar la velocidad
-  prometida -- ver `docs/plan-ocr-escaneo-documentos.md` sección 9.
+  prometida -- ver `docs/planes-implementados/plan-ocr-escaneo-documentos.md` sección 9.
   `analizarCedula` vuelve a procesar el frame completo.
 - [x] **Bug real encontrado y corregido: enfoque de cámara bloqueado.**
   `disableAutoCancel()` en `FocusMeteringAction` no da "enfoque continuo"

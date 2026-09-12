@@ -1,5 +1,5 @@
 //! Drena la bandeja de salida (`cola_salida`, ver
-//! `docs/plan-persistencia-nube.md`) hacia el receptor: por cada fila
+//! `docs/planes-implementados/plan-persistencia-nube.md`) hacia el receptor: por cada fila
 //! pendiente, arma el pedido HTTP correspondiente y la marca `enviado` o
 //! `fallido` según la respuesta. Una fila fallida no detiene a las demás --
 //! se reintenta en la próxima llamada, no bloquea el resto de la cola.
@@ -2091,7 +2091,7 @@ struct FilaGafeteRemota {
 /// faltaba al espejo (hasta ahora sólo empujaba: local → nube, nunca al
 /// revés). Usa la misma política RLS que ya existe, sin tocarla, así que
 /// sólo trae lo del propio sitio -- esto no es el seed global entre
-/// sitios (`docs/plan-persistencia-nube.md`, diferido), sólo lo que el
+/// sitios (`docs/planes-implementados/plan-persistencia-nube.md`, diferido), sólo lo que el
 /// otro dispositivo de este sitio ya empujó.
 ///
 /// Mismo patrón `ON CONFLICT` que usa el archivo de seed
@@ -2130,7 +2130,7 @@ fn descargar_catalogo_remoto(
         .unwrap_or_default();
 
     // Sin `sitio_id=eq...` a propósito -- contratistas y empresas son
-    // globales (ver docs/plan-panel-administrativo-web.md, "Modelo de
+    // globales (ver docs/planes-implementados/plan-panel-administrativo-web.md, "Modelo de
     // datos"): si a un contratista se le niega el acceso en un sitio, tiene
     // que quedar negado en TODOS. El nombre de la función quedó del modelo
     // viejo (un solo sitio por dispositivo); lo que trae ahora es el

@@ -22,7 +22,7 @@ import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "..
 
 /** Local (este dispositivo, con la auditoría completa de la decisión de
  * acceso) o remota (generada por otro dispositivo del mismo sitio, leída
- * de la caché `historial_sitio` -- ver `docs/plan-persistencia-nube.md`).
+ * de la caché `historial_sitio` -- ver `docs/planes-implementados/plan-persistencia-nube.md`).
  * Decisión explícita del usuario: es la misma operación vista desde otro
  * dispositivo, no una versión resumida -- se combinan en una sola grilla
  * con los mismos campos que ya muestra Historial. `registro_id: null` en

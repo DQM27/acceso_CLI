@@ -1,7 +1,10 @@
 # Plan: Motor general de lectura de documentos de identidad (Android)
 
-> Estado: **planificación** — sin cambios de código todavía. Este documento se irá
-> refinando en conversación antes de implementar. Última actualización: 2026-09-08.
+> **Estado: implementado.** El motor de lectura (MRZ + OCR de ML Kit) ya
+> existe en `LectorDocumentosIdentidad.kt`, con su arquitectura vigente en
+> `mobile/android/docs/ARQUITECTURA_OCR.md`. Este documento queda como
+> memoria del diseño original -- las "Preguntas abiertas" de la sección 12
+> que sigan sin responder deberían vivir en `docs/pendientes.md`, no acá.
 
 ## 0. Cambio de alcance: de "lector de cédulas CR" a motor general
 

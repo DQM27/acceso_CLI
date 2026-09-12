@@ -1,6 +1,6 @@
 //! Login de usuarios globales (Administrador/Operador, y un ROOT ya
 //! sincronizado a otro sitio) contra Supabase Auth -- ver
-//! docs/plan-autenticacion-supabase-auth.md. Reemplaza la verificación
+//! docs/planes-implementados/plan-autenticacion-supabase-auth.md. Reemplaza la verificación
 //! local de Argon2 contra el centinela `SIN_PASSWORD_LOCAL`
 //! (`services/password.rs`), que dejaba reclamar una cuenta con sólo saber
 //! la cédula (pública, va en los gafetes).
@@ -129,7 +129,7 @@ pub fn login(
 }
 
 /// Renueva sin volver a pedir contraseña -- ver "renovación silenciosa en
-/// segundo plano" en docs/plan-autenticacion-supabase-auth.md. Sólo se
+/// segundo plano" en docs/planes-implementados/plan-autenticacion-supabase-auth.md. Sólo se
 /// invoca mientras el proceso sigue vivo y hay red; el `refresh_token`
 /// nunca se persiste a disco (vive en memoria, ver `GuiState`).
 pub fn refrescar(
@@ -211,7 +211,7 @@ pub struct Jwk {
 
 /// Pega a la red -- pensada para llamarse UNA vez por proceso y cachear el
 /// resultado del lado de quien la llama (`GuiState` en desktop, ver
-/// `docs/plan-autenticacion-supabase-auth.md`: las claves públicas de
+/// `docs/planes-implementados/plan-autenticacion-supabase-auth.md`: las claves públicas de
 /// firma de Supabase Auth rotan con poca frecuencia, no hace falta
 /// pedirlas de nuevo en cada verificación). Separada de
 /// `verificar_token_offline` a propósito: esa queda pura -- sin red, sin

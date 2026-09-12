@@ -244,7 +244,7 @@ desplegado) -- no hace falta un camino de recuperación aparte por CLI.
 - **Backlog (seguridad, mobile):** `mobile/rust-core`/`LoginViewModel.kt`/
   `PantallaFijarPasswordInicial.kt` siguen con el mismo patrón de "reclamar
   cuenta con sólo la cédula" que se cerró en desktop
-  (`docs/plan-autenticacion-supabase-auth.md`) -- portar Supabase Auth a
+  (`docs/planes-implementados/plan-autenticacion-supabase-auth.md`) -- portar Supabase Auth a
   mobile es un trabajo aparte y más grande, no incluido en esta pasada.
 - **Delicado, no implementado:** una vez que se decida la unificación de
   identidad (ROOT = admin del panel) y se termine de migrar todo lo de
@@ -343,10 +343,10 @@ existía en producción desde el 2026-09-09).
 (mover una extensión con dependencias activas amerita su propia pasada);
 "Leaked password protection" desactivado (toggle de dashboard, no de SQL --
 la razón original para dejarlo desactivado ya no aplica, ver
-`docs/arquitectura-supabase.md` sección 6.4); A-01 (RLS cross-site,
+`docs/arquitectura/arquitectura-supabase.md` sección 6.4); A-01 (RLS cross-site,
 riesgo aceptado y documentado, no un olvido).
 
-Se escribió `docs/arquitectura-supabase.md` como documento de referencia
+Se escribió `docs/arquitectura/arquitectura-supabase.md` como documento de referencia
 completo (modelo de datos, los dos sistemas de autorización, Realtime en
 detalle, Edge Functions, Vault, flujo de migraciones) -- ese archivo es el
 mapa completo del "cómo funciona hoy"; este archivo sigue siendo el

@@ -1,5 +1,11 @@
 # Panel administrativo web — plan (borrador, sin código todavía)
 
+> **Estado: implementado.** El panel vive en `web/` (React + Vite,
+> Cloudflare Pages), con Supabase Auth, Edge Functions versionadas y
+> gestión de dispositivos/usuarios/contratistas ya en producción -- ver
+> `docs/pendientes.md`. Este documento queda como memoria de diseño de
+> las decisiones que llevaron a la forma actual, no como plan abierto.
+
 > Documento de continuidad para retomar esta conversación en otra sesión.
 > Nace de reemplazar `admin-panel/panel-dispositivos.html` (clave única
 > compartida, sin auditoría por persona) por un dashboard real para
@@ -382,7 +388,7 @@ sitio nuevo que no es el suyo**. Hace falta:
 por sitio**: `recibir_catalogo_del_sitio` ya trae el catálogo completo en
 cada sync y sobreescribe `tiene_acceso` desde la nube — dar de baja a un
 contratista desde una fuente externa ya se propaga sola (confirmado
-leyendo el código, ver `docs/plan-persistencia-nube.md`, sesión
+leyendo el código, ver `docs/planes-implementados/plan-persistencia-nube.md`, sesión
 2026-09-04). Hoy sólo llega a los dispositivos **del mismo sitio**
 (`?sitio_id=eq...`); con el modelo global (ver arriba) hay que sacar ese
 filtro para que llegue a todos los sitios, no sólo al de origen.

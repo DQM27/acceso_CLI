@@ -1,5 +1,9 @@
 # Handoff: app web "Agendar visitas" (subdominio nuevo, para anfitriones/KOF)
 
+> **Estado: implementado.** Ver `docs/planes-implementados/plan-control-visitas.md`
+> y `web-visitas/` -- este handoff queda como memoria de los requisitos y
+> convenciones originales del encargo, no como trabajo pendiente.
+
 Este documento es para otra IA/desarrollador que va a construir esta pieza
 en paralelo. Es **trabajo totalmente desacoplado** del núcleo Rust/Tauri
 (que se sigue desarrollando por separado) — no toca ese código, no importa

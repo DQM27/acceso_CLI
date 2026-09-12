@@ -52,7 +52,7 @@ function generarPasswordTemporal(longitud = 10): string {
  * Genera una contraseña temporal nueva para un usuario ya existente --
  * "olvidó la contraseña" o backfill de una cédula creada antes de este
  * cambio (auth_user_id todavía NULL). Mismo actor privilegiado que
- * admin-create-usuario, ver docs/plan-autenticacion-supabase-auth.md.
+ * admin-create-usuario, ver docs/planes-implementados/plan-autenticacion-supabase-auth.md.
  */
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS_HEADERS });

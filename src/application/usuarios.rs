@@ -361,7 +361,7 @@ impl AppCore {
 }
 
 /// Root nunca nace acá, ni siquiera para otro Root -- ver
-/// docs/plan-autenticacion-supabase-auth.md. La única fila con rol Root que
+/// docs/planes-implementados/plan-autenticacion-supabase-auth.md. La única fila con rol Root que
 /// puede existir es la del arranque inicial de un sitio
 /// (`crear_root_inicial`, CLI/TUI, exige la base completamente vacía); todo
 /// lo que pase por el alta normal de usuarios queda afuera sin excepción,

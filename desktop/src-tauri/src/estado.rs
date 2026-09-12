@@ -26,7 +26,7 @@ struct TokenCacheado {
 
 /// Sesión de un usuario global contra Supabase Auth (Administrador/Operador,
 /// o un ROOT ya sincronizado a otro sitio) -- ver
-/// docs/plan-autenticacion-supabase-auth.md. Distinta de `TokenCacheado`
+/// docs/planes-implementados/plan-autenticacion-supabase-auth.md. Distinta de `TokenCacheado`
 /// (identidad del DISPOSITIVO ante el receptor): esto es la identidad de
 /// la PERSONA. Vive sólo en memoria -- nunca se persiste a disco, así que
 /// cerrar la app siempre la pierde y el próximo arranque exige un login

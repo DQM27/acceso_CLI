@@ -1,5 +1,5 @@
 //! Prueba manual contra el receptor real en Supabase (ver
-//! `docs/plan-persistencia-nube.md`). No corre en `cargo test` normal —
+//! `docs/planes-implementados/plan-persistencia-nube.md`). No corre en `cargo test` normal —
 //! depende de red y de un secreto de dispositivo real. Se ejecuta a mano:
 //!
 //! ```text

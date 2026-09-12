@@ -1,4 +1,4 @@
-//! Cliente HTTP del receptor en la nube (ver `docs/plan-persistencia-nube.md`).
+//! Cliente HTTP del receptor en la nube (ver `docs/planes-implementados/plan-persistencia-nube.md`).
 //!
 //! Bloqueante a propósito: el resto del crate es síncrono; traer un runtime
 //! async (tokio) solo para esto no se justifica todavía.
@@ -88,7 +88,7 @@ impl std::fmt::Debug for TokenDispositivo {
 /// viajan una vez, no en cada renovación de token. Sirven para que el panel
 /// de administración distinga "el mismo dispositivo de siempre" de uno
 /// distinto usando el mismo secreto, y como evidencia si hace falta
-/// denunciar un intento de fraude (ver `docs/plan-sesion-unica-dispositivos.md`).
+/// denunciar un intento de fraude (ver `docs/features-futuras/plan-sesion-unica-dispositivos.md`).
 /// Nombres de campo neutrales a propósito -- esto lo usan tanto móvil como
 /// escritorio, cada uno con su propio significado (ver los doc-comments de
 /// cada campo). Ninguno es secreto en sí mismo -- todos observables por

@@ -21,7 +21,7 @@ const ESTILO_CENTRO_FLEX: CellStyle = { display: "flex", justifyContent: "center
 
 /**
  * Vista + baja de contratistas (alcance pedido en
- * docs/plan-panel-administrativo-web.md, punto 3) -- sin alta ni edición
+ * docs/planes-implementados/plan-panel-administrativo-web.md, punto 3) -- sin alta ni edición
  * de los demás campos todavía, a propósito: eso es un formulario aparte
  * que no se pidió todavía (ver Contratistas.tsx de desktop/ si hace falta
  * calcarlo). El toggle "Activo" ES la baja (y la reactivación) -- global,

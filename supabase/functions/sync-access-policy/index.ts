@@ -16,7 +16,7 @@
 // vuelta la lista completa de correos de admins en el body de la
 // respuesta (hallazgo de seguridad, auditoría 2026-09-06). El secreto acá
 // es propio, generado a mano, nunca commiteado -- ver
-// `docs/plan-panel-administrativo-web.md` para el paso manual de
+// `docs/planes-implementados/plan-panel-administrativo-web.md` para el paso manual de
 // configurarlo (Vault del lado de Postgres + `supabase secrets set` del
 // lado de esta función).
 //

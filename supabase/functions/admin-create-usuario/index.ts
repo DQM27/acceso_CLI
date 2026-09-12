@@ -52,7 +52,7 @@ function generarPasswordTemporal(longitud = 10): string {
 
 /** Email sintético interno -- nunca se manda correo real a esto, sólo sirve
  * como identificador de login para Supabase Auth (que exige email/phone).
- * Ver docs/plan-autenticacion-supabase-auth.md. */
+ * Ver docs/planes-implementados/plan-autenticacion-supabase-auth.md. */
 function emailSinteticoParaCedula(cedula: string): string {
   return `${cedula.trim()}@brisas.local`;
 }

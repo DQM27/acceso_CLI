@@ -126,7 +126,7 @@ private const val EDAD_MAYORIA_DE_EDAD = 18
 
 /// La TIM (Tarjeta de Identidad de Menores) usa el mismo código de MRZ que
 /// la cédula nacional de adulto (`IDCRI`, ver sección 4.3 de
-/// docs/fixtures-ocr-sinteticos.md) -- el código de documento por sí solo no
+/// docs/arquitectura/fixtures-ocr-sinteticos.md) -- el código de documento por sí solo no
 /// alcanza para distinguirlas, pero la fecha de nacimiento sí. Sin efecto
 /// sobre otros tipos (DIMEX, licencias, pasaporte) ni si no hay fecha de
 /// nacimiento disponible.

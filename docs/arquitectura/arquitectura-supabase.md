@@ -105,7 +105,7 @@ sitio) decidiendo qué puede hacer esa identidad.
 OPERADOR) **ya no se crean desde las apps de escritorio/móvil** — se crean
 desde el panel web (`admin-create-usuario`, sección 5). Las apps cliente
 consumen esa identidad (login), no la originan. Esto es parte de
-`docs/plan-autenticacion-supabase-auth.md`.
+`docs/planes-implementados/plan-autenticacion-supabase-auth.md`.
 
 ### 3.3 "Global" no significa "sin control" — el modelo cross-site
 
@@ -386,9 +386,9 @@ más cuidado/tiempo del que ameritaba esta pasada):
   `docs/decisiones-tecnicas.md`
 - **Cómo reconstruir el proyecto desde cero** →
   `docs/recuperacion-supabase.md`
-- **El contrato de la web de visitas** → `docs/contrato-web-visitas.md`
+- **El contrato de la web de visitas** → `docs/auditorias/contrato-web-visitas.md`
 - **El plan de autenticación con Supabase Auth** →
-  `docs/plan-autenticacion-supabase-auth.md`
+  `docs/planes-implementados/plan-autenticacion-supabase-auth.md`
 - **Auditorías de seguridad puntuales** → `docs/auditorias/`
 - **Los tests de autorización reales, uno por tabla** → `supabase/tests/`
   (correrlos es la mejor forma de entender qué puede hacer cada rol —

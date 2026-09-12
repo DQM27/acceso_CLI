@@ -10,7 +10,7 @@ import { invocar, esObjeto, loQueSea } from "./_invocar";
  * (mismo criterio que el resto del panel via RLS). `supabase.functions.invoke`
  * manda el JWT de la sesión activa solo -- el panel viejo deja de
  * funcionar a partir de este cambio, a propósito (ver
- * docs/plan-panel-administrativo-web.md).
+ * docs/planes-implementados/plan-panel-administrativo-web.md).
  */
 export interface Sitio {
   id: string;

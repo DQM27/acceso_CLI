@@ -1,5 +1,5 @@
 //! Identificadores estables para sincronizar con el receptor en la nube
-//! (ver `docs/plan-persistencia-nube.md`).
+//! (ver `docs/planes-implementados/plan-persistencia-nube.md`).
 //!
 //! El `id INTEGER PRIMARY KEY` local sigue siendo la clave real de cada
 //! tabla, sin tocarse -- este UUID es una identidad *adicional*, sin

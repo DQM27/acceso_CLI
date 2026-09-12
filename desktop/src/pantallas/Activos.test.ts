@@ -9,7 +9,7 @@ import type { IngresoActivoResumen, IngresoRemoto } from "../api";
 // por confusa -- ver docs/decisiones-tecnicas.md.
 
 // Fusión con lo abierto por el otro dispositivo del mismo sitio
-// (`docs/plan-persistencia-nube.md`) -- ninguna de las dos filas se
+// (`docs/planes-implementados/plan-persistencia-nube.md`) -- ninguna de las dos filas se
 // confunde con la otra a la hora de decidir cómo cerrarla.
 describe("filaDesdeLocal / filaDesdeRemoto", () => {
   it("una fila local conserva sus datos y queda marcada origen: local", () => {

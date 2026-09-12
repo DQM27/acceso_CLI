@@ -5,7 +5,7 @@ import { useAuth } from "../contexto/AuthContexto";
 /**
  * Sin cédula/contraseña a propósito -- este panel es un espacio de actores
  * distinto de Root/Administrador/Operador de cada sitio (ver
- * docs/plan-panel-administrativo-web.md). "Iniciar sesión con Google" es
+ * docs/planes-implementados/plan-panel-administrativo-web.md). "Iniciar sesión con Google" es
  * toda la interacción; la autorización real pasa en `AuthContexto` después
  * de que Google confirma quién es la persona.
  */

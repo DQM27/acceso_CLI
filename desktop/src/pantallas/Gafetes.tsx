@@ -111,7 +111,7 @@ export default function Gafetes() {
 
   useHotkeys("ctrl+n", () => setFormularioAbierto(true), { preventDefault: true });
   // `true`: el catálogo ahora también recibe cambios de OTRO dispositivo
-  // del sitio (`recibir_catalogo_del_sitio`, ver `docs/plan-persistencia-nube.md`)
+  // del sitio (`recibir_catalogo_del_sitio`, ver `docs/planes-implementados/plan-persistencia-nube.md`)
   // -- sin esto, marcar un gafete perdido/resuelto desde otra PC no se
   // reflejaba acá hasta recargar a mano.
   useCargaAlCambiar(recargar, true);

@@ -1,5 +1,11 @@
 # Plan: autenticación de usuarios globales contra Supabase Auth
 
+> **Estado: implementado.** Desktop y móvil ya migraron a Supabase Auth
+> (ver `docs/pendientes.md`, marcado `[x]`, y `PantallaCambioObligatorio.kt`
+> en `mobile/android/`). Este documento queda como memoria de diseño --el
+> problema y el razonamiento que llevó a esta solución-- no como plan
+> abierto.
+
 ## El problema que esto resuelve
 
 Hoy, un usuario global (Administrador/Operador, sincronizado a todos los sitios vía

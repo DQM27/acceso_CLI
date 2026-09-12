@@ -23,7 +23,7 @@ export function tituloEvento(fila: AgendaVisitaResumen): string {
 }
 
 /**
- * Calendario de citas programadas (docs/plan-control-visitas.md, sección
+ * Calendario de citas programadas (docs/planes-implementados/plan-control-visitas.md, sección
  * Agenda) -- de sólo lectura, no dispara ningún check-in. Cada fila de
  * `AgendaVisitaResumen` (una por visitante) es un evento de todo el día que
  * cubre `[fecha_desde, fecha_hasta]`. Click en un evento abre el detalle

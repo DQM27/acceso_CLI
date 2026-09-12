@@ -1,4 +1,4 @@
-//! Orquestación de check-in de visitas (`docs/plan-control-visitas.md`):
+//! Orquestación de check-in de visitas (`docs/planes-implementados/plan-control-visitas.md`):
 //! trae las citas de una cédula (`CitaRepository`, sin filtrar) y aplica
 //! la regla de vigencia (`domain::cita::verificar_cita`) hasta encontrar
 //! la que aplica hoy -- mismo reparto de responsabilidades que
@@ -45,7 +45,7 @@ where
     /// Sólo recorta espacios -- `CitaRepository::buscar_por_cedula` compara
     /// por igualdad exacta (`v.cedula = ?1`, sin `UPPER`/`TRIM` de guiones
     /// en SQL), y la RPC `crear_cita_anfitrion` que guarda la cédula del
-    /// lado de la web (`docs/contrato-web-visitas.md`) tampoco cambia
+    /// lado de la web (`docs/auditorias/contrato-web-visitas.md`) tampoco cambia
     /// mayúsculas ni quita guiones, sólo hace `btrim` -- si un lado
     /// normalizara distinto del otro, una cédula agendada dejaría de
     /// encontrarse acá aunque el guardia la escribiera/escaneara igual.
@@ -91,7 +91,7 @@ where
     /// NO valida `gafete_numero` contra el catálogo (`gafetes`) -- esa tabla
     /// hoy sólo modela el pool de contratistas (verde); falta la migración
     /// que le suma `tipo` para poder distinguir el pool de visitas (rojo,
-    /// ver `docs/plan-control-visitas.md`). Sólo se valida que ese número no
+    /// ver `docs/planes-implementados/plan-control-visitas.md`). Sólo se valida que ese número no
     /// esté YA asignado a otro movimiento de visita abierto -- el `CHECK`
     /// del esquema (`idx_movimientos_visita_gafete_activo`) lo garantiza de
     /// todos modos, esto sólo adelanta el mensaje de error.

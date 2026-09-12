@@ -37,7 +37,7 @@ como `es_admin_global`/`sitios_de_cita`/`anfitrion_de_cita`), la extensión
 `pg_net`, todo. Verificado el 2026-09-12: se comparó 1:1 cada migración
 local contra `supabase_migrations.schema_migrations` de producción, sin
 faltantes -- este runbook es reproducible de verdad, no solo en teoría.
-Verificá al final con `supabase/tests/*.sql` (ver `docs/realtime-verificado.md`
+Verificá al final con `supabase/tests/*.sql` (ver `docs/auditorias/realtime-verificado.md`
 para cómo correrlos) que las políticas quedaron como se espera.
 
 Desde 2026-09-12 `main` está conectado a GitHub Integration de Supabase
@@ -100,7 +100,7 @@ No hay forma de versionar esto -- checklist:
 - **Authentication → Policies**: activar "Leaked password protection".
   **OJO, esto cambió**: cuando se escribió originalmente esta línea, el
   panel era sólo Google OAuth y no había login por contraseña que proteger
-  -- eso ya no es cierto desde `docs/plan-autenticacion-supabase-auth.md`
+  -- eso ya no es cierto desde `docs/planes-implementados/plan-autenticacion-supabase-auth.md`
   (login de desktop): `usuarios.auth_user_id` enlaza a `auth.users` con
   contraseña real, creada por `admin-create-usuario`. Sí hay contraseñas
   que proteger hoy -- activarlo, no dejarlo desactivado.
@@ -145,6 +145,6 @@ los tres si el `project ref` cambió:
   mismo `supabase/scripts/poblar_catalogo.sql`.
 - **Control de visitas** (`anfitriones`/`citas`/`cita_sitios`/
   `cita_visitantes`/`movimientos_visita`): sin script de repoblado propio
-  todavía -- gap pendiente, ver `docs/arquitectura-supabase.md`. Alta de
+  todavía -- gap pendiente, ver `docs/arquitectura/arquitectura-supabase.md`. Alta de
   anfitriones es manual (mismo criterio que `administradores_panel`: por
   diseño, no hay pantalla para eso).

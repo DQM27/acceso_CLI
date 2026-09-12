@@ -153,7 +153,7 @@ export type Seccion =
  *
  * No hay una sección "Usuarios": administrar usuarios globales (alta,
  * edición, reset de contraseña de otro usuario) quedó exclusivo del panel
- * administrativo web (ver docs/plan-autenticacion-supabase-auth.md) — el
+ * administrativo web (ver docs/planes-implementados/plan-autenticacion-supabase-auth.md) — el
  * escritorio ya no origina cambios contra esa tabla, salvo que la propia
  * sesión cambie su propia contraseña (`cambiarMiPassword`). */
 const SECCIONES: {

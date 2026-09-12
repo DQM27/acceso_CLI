@@ -58,7 +58,7 @@ Secuencia real de commits (2026-09-06/07):
    `mobile/rust-core`. Cita textual del commit:
    > "...decisión explícita: no vale la pena la complejidad para lo que
    > protege."
-3. **`2212f0f`** — documenta la reversión en `docs/plan-panel-administrativo-web.md`.
+3. **`2212f0f`** — documenta la reversión en `docs/planes-implementados/plan-panel-administrativo-web.md`.
 4. **`57c24fa`** — registra que una auditoría detectó que el feature sigue
    apagado y lo deja como pendiente de decisión.
 
@@ -67,7 +67,7 @@ Machine GUID de Windows) **nunca tuvo este problema** — sigue activo tal
 cual, sin tocar.
 
 Única pista dejada para el futuro
-(`docs/plan-panel-administrativo-web.md:274-321`):
+(`docs/planes-implementados/plan-panel-administrativo-web.md:274-321`):
 > "...antes de reactivarlo habría que probarlo bien en un dispositivo real
 > desde el principio, no sólo unitarias."
 

@@ -457,4 +457,4 @@ La base local es la fuente de verdad. Las migraciones son secuenciales con
 - Núcleo: `src/application/`, `src/services/`, `src/domain/`.
 - Persistencia: `src/database/schema.rs`, `src/database/repositories/`, `src/database/queries/`.
 - TUI: `src/tui/`.
-- Diagrama lógico detallado: `docs/diagrama-logico.md`.
+- Diagrama lógico detallado: `docs/diagramas/diagrama-logico.md`.

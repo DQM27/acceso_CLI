@@ -3,7 +3,7 @@ import { solicitarSincronizacionNube } from "../eventosNube";
 
 // Espejo de comandos/citas.rs — ver también src/application/citas.rs y
 // src/models/cita.rs del núcleo. Dominio de "Control de visitas"
-// (docs/plan-control-visitas.md), separado a propósito del de contratistas
+// (docs/planes-implementados/plan-control-visitas.md), separado a propósito del de contratistas
 // aunque comparta la misma infraestructura de sync.
 
 export type EstadoCita = "Vigente" | "Cancelada";

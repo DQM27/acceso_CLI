@@ -265,7 +265,7 @@ fn nombre_duplicado_produce_error_semantico_y_conserva_integridad() {
     );
 }
 
-// Bandeja de salida hacia la nube (`docs/plan-persistencia-nube.md`): crear
+// Bandeja de salida hacia la nube (`docs/planes-implementados/plan-persistencia-nube.md`): crear
 // o actualizar una empresa debe dejar siempre su aviso correspondiente en
 // `cola_salida`.
 

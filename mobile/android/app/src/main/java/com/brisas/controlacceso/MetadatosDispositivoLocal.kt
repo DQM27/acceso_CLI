@@ -7,7 +7,7 @@ import android.os.Build
 /// inicial (ver `PrimerArranqueViewModel.conectar` y
 /// `Nucleo.configurarDispositivoInicialConSecreto`). Ninguno es secreto en
 /// sí mismo -- observables por cualquier app en el propio teléfono -- ver
-/// `docs/plan-sesion-unica-dispositivos.md`. Nombres de campo neutrales a
+/// `docs/features-futuras/plan-sesion-unica-dispositivos.md`. Nombres de campo neutrales a
 /// propósito -- el mismo contrato (`MetadatosDispositivo` en Rust) también
 /// lo llena escritorio, con su propio significado.
 data class MetadatosDispositivoLocal(

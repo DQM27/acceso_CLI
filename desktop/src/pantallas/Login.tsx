@@ -27,7 +27,7 @@ type ValoresCambioObligatorio = z.infer<typeof esquemaCambioObligatorio>;
 
 /// Cuando `login` marca `debe_cambiar_password` -- usuario global recién
 /// creado en el panel, todavía con la temporal de un solo uso (ver
-/// docs/plan-autenticacion-supabase-auth.md) -- queda pendiente este paso
+/// docs/planes-implementados/plan-autenticacion-supabase-auth.md) -- queda pendiente este paso
 /// antes de dejarlo operar. La sesión YA está activa del lado de Rust
 /// (`login` la dejó iniciada); esto sólo cambia la contraseña, no vuelve a
 /// autenticar. `passwordActual` es la temporal que recién tipeó -- hace
@@ -127,7 +127,7 @@ function PasoCambioObligatorio({
 /// Una sola pantalla siempre, en cualquier sitio -- ya no existe el camino
 /// de "reclamar" una cuenta con solo la cédula
 /// (`services/password.rs::SIN_PASSWORD_LOCAL`, cerrado en
-/// docs/plan-autenticacion-supabase-auth.md). `login` resuelve del lado
+/// docs/planes-implementados/plan-autenticacion-supabase-auth.md). `login` resuelve del lado
 /// del backend si esta cédula es local (ROOT del arranque inicial) o
 /// global (Supabase Auth) -- acá no hace falta saber cuál de las dos fue.
 export default function Login({

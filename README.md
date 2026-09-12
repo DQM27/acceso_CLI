@@ -127,11 +127,11 @@ caracteres usan el `LIKE` existente, siempre limitado por la consulta correspond
 Si la base está vacía, el núcleo exige crear el ROOT inicial antes del login. La pantalla
 de configuración ejecuta ese caso de uso mediante `AppCore::crear_root_inicial`.
 
-El [mapa de diagramas actualizado](docs/diagramas-arquitectura.md) reúne las vistas de
+El [mapa de diagramas actualizado](docs/diagramas/diagramas-arquitectura.md) reúne las vistas de
 GUI, TUI, núcleo, flujos operativos y persistencia. El
-[diagrama lógico detallado](docs/diagrama-logico.md) conserva una lectura más profunda
+[diagrama lógico detallado](docs/diagramas/diagrama-logico.md) conserva una lectura más profunda
 del flujo interno clásico. El
-[núcleo compartido y sus consumidores](docs/diagrama-nucleo-consumidores.md) explica la
+[núcleo compartido y sus consumidores](docs/diagramas/diagrama-nucleo-consumidores.md) explica la
 separación de crates entre TUI/CLI, escritorio y móvil -- quién depende de quién, y por
 qué ninguno de los dos consumidores de GUI depende del otro.
 

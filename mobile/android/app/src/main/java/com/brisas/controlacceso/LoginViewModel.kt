@@ -51,7 +51,7 @@ class LoginViewModel(
 
     /// Sesión recién autenticada contra Supabase Auth con
     /// `debe_cambiar_password = true` (contraseña temporal de un solo uso,
-    /// ver docs/plan-autenticacion-supabase-auth.md) -- `null` es el estado
+    /// ver docs/planes-implementados/plan-autenticacion-supabase-auth.md) -- `null` es el estado
     /// normal; con esto puesto, [PantallaLogin] muestra el paso de cambio
     /// obligatorio en vez de dejar entrar. `passwordActual` es la temporal
     /// que recién tipeó, hace falta para que `cambiarPasswordSupabase`

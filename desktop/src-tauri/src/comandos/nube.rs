@@ -7,7 +7,7 @@ use crate::estado::GuiState;
 
 /// Metadata de esta PC, capturada una sola vez en la activación inicial --
 /// misma idea que `MetadatosDispositivoLocal.kt` en el lado móvil (ver
-/// `docs/plan-sesion-unica-dispositivos.md`), reusando los mismos nombres
+/// `docs/features-futuras/plan-sesion-unica-dispositivos.md`), reusando los mismos nombres
 /// de campo aunque el significado en escritorio es distinto: `android_id`
 /// pasa a ser el Machine GUID de Windows (el mismo identificador estable
 /// que ya usa `cifrado-secreto-dispositivo` para cifrar el secreto en
@@ -187,7 +187,7 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
 
     // Renovación silenciosa de la sesión de Supabase Auth del usuario
     // (distinta del token de DISPOSITIVO de arriba) -- ver
-    // docs/plan-autenticacion-supabase-auth.md, "renovación en segundo
+    // docs/planes-implementados/plan-autenticacion-supabase-auth.md, "renovación en segundo
     // plano". Mejor esfuerzo: sin sesión de Supabase (login local, ROOT
     // del arranque inicial) o sin red, simplemente no hace nada -- el
     // tope de 12h en `GuiState::access_token_supabase_vigente` sigue

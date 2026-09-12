@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.dp
 /// devuelve `debe_cambiar_password = true` -- usuario global (Administrador/
 /// Operador, o un ROOT ya sincronizado a otro sitio) que todavía tiene la
 /// contraseña temporal de un solo uso generada por el panel (ver
-/// docs/plan-autenticacion-supabase-auth.md). La sesión YA está abierta del
+/// docs/planes-implementados/plan-autenticacion-supabase-auth.md). La sesión YA está abierta del
 /// lado de Rust (`autenticar_supabase` la dejó iniciada); esto sólo cambia
 /// la contraseña, no vuelve a autenticar. Reemplaza a
 /// `PantallaFijarPasswordInicial` (el "reclamo por cédula" viejo, cerrado

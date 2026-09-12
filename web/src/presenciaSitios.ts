@@ -4,7 +4,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 
 /**
  * Un solo canal Realtime por sitio, compartido entre quien lo necesite --
- * ver docs/plan-sesion-unica-dispositivos.md, "Panel de presencia en tiempo
+ * ver docs/features-futuras/plan-sesion-unica-dispositivos.md, "Panel de presencia en tiempo
  * real". Antes Dispositivos.tsx y Usuarios.tsx abrían cada uno su propia
  * suscripción a `sitio:{id}` por separado; como las secciones del panel
  * quedan montadas de fondo una vez visitadas (ver el comentario en
