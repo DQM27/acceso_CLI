@@ -18,7 +18,18 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: desktop/src-tauri
+          workspaces: |
+            desktop/src-tauri
+            sqlite3mc-vendor-lib
+
+      # cifrado-sqlite3mc (default de desktop/src-tauri desde 2026-09-12, ver
+      # docs/decisiones-tecnicas.md) enlaza esta librería estática como paso
+      # PREVIO obligatorio -- libsqlite3-sys la busca al compilarse a sí
+      # misma, antes de que corra el build script de cualquier crate río
+      # abajo (ver sqlite3mc-vendor-lib/build.rs). Sin este paso, tanto los
+      # tests de abajo como el build de Tauri fallan en el link.
+      - name: Compilar SQLite3MC vendorizado (paso previo obligatorio)
+        run: cargo build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
 
       - name: Instalar Node
         uses: actions/setup-node@v4
