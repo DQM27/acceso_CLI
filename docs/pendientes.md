@@ -28,24 +28,34 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 
 ## Seguridad y nube
 
-- [ ] **`cargo tauri dev` deja la base local sin cifrar de verdad, en
-  silencio (hallazgo 2026-09-12).** `desktop/src-tauri` compila con
-  `sqlite-plano` como motor por defecto (a propósito, ver
-  `docs/decisiones-tecnicas.md`, "switch de motor SQLite de tres vías" --
-  así `cargo tauri dev` es rápido sin tener que acordarse de pedir el
-  motor real). El problema: `clave_cifrado::resolver_clave` +
-  `AppCore::abrir_con_reloj_cifrado` corren SIEMPRE en `lib.rs::run()`,
-  sin chequear qué motor está realmente enlazado -- generan y guardan
-  `db_key.dat` con DPAPI igual, y llaman `PRAGMA key` igual, pero con
-  SQLite plano ese `PRAGMA` no hace nada (no es un error, simplemente se
-  ignora). Resultado confirmado en una base local real de esta sesión:
-  `db_key.dat` presente, pero el `.db` empieza con el header de SQLite en
-  texto plano (`SQLite format 3\0`) -- cero cifrado real, aunque toda la
-  maquinaria "parece" estar funcionando. Antes de que un sitio real corra
-  esto en producción con `cargo tauri dev`/un build sin
-  `build-desktop-cipher`: o bien `run()` debe negarse a arrancar con
-  `sqlite-plano` fuera de un build de desarrollo explícito, o al menos
-  avisar fuerte que la base no está cifrada de verdad.
+- [ ] **El pipeline de release real (no sólo `cargo tauri dev`) publica
+  builds sin cifrar de verdad, en silencio (hallazgo 2026-09-12, alcance
+  ampliado 2026-09-12).** `desktop/src-tauri` compila con `sqlite-plano`
+  como motor por defecto (a propósito, ver `docs/decisiones-tecnicas.md`,
+  "switch de motor SQLite de tres vías" -- así `cargo tauri dev` es rápido
+  sin tener que acordarse de pedir el motor real). El problema:
+  `clave_cifrado::resolver_clave` + `AppCore::abrir_con_reloj_cifrado`
+  corren SIEMPRE en `lib.rs::run()`, sin chequear qué motor está realmente
+  enlazado -- generan y guardan `db_key.dat` con DPAPI igual, y llaman
+  `PRAGMA key` igual, pero con SQLite plano ese `PRAGMA` no hace nada (no
+  es un error, simplemente se ignora). Resultado confirmado en una base
+  local real: `db_key.dat` presente, pero el `.db` empieza con el header
+  de SQLite en texto plano (`SQLite format 3\0`) -- cero cifrado real,
+  aunque toda la maquinaria "parece" estar funcionando.
+
+  **No es sólo un riesgo de `cargo tauri dev` local:** `.github/workflows/release.yml`
+  invoca `tauri-apps/tauri-action` sin ningún `--features`/override -- hereda
+  el mismo `default = ["sqlite-plano"]` del `Cargo.toml`. Confirmado que
+  **v1.5.0, v1.5.1 y v1.5.2 (los releases reales publicados en GitHub) se
+  compilaron con este default**, es decir, sin cifrado real de la base
+  local en ninguno de los tres instaladores publicados hasta ahora.
+
+  Antes del próximo release: el workflow debe pedir explícitamente
+  `--features cifrado-sqlcipher` (o el motor que se decida), y además
+  `run()` debería negarse a arrancar con `sqlite-plano` fuera de un build
+  de desarrollo explícito, o al menos avisar fuerte que la base no está
+  cifrada de verdad -- las dos capas hacen falta, una sola no cubre el
+  otro camino de entrada al mismo bug.
 - [x] **Android: proteger el secreto del dispositivo con Keystore.** El secreto móvil
   se guarda desde Kotlin con Android Keystore (`AES/GCM/NoPadding`) y el núcleo móvil recibe
   el secreto descifrado sólo en memoria para autenticarse/sincronizar. Incluye migración
