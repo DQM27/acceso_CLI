@@ -72,7 +72,10 @@ fn working_set_mb() -> Option<f64> {
     if !salida.status.success() {
         return None;
     }
-    let bytes: u64 = String::from_utf8_lossy(&salida.stdout).trim().parse().ok()?;
+    let bytes: u64 = String::from_utf8_lossy(&salida.stdout)
+        .trim()
+        .parse()
+        .ok()?;
     #[allow(clippy::cast_precision_loss)]
     Some(bytes as f64 / (1024.0 * 1024.0))
 }
@@ -116,7 +119,10 @@ fn mediana(valores: &mut [f64]) -> f64 {
 }
 
 fn main() {
-    println!("=== Benchmark 3 vías -- motor activo: {} ===", nombre_motor());
+    println!(
+        "=== Benchmark 3 vías -- motor activo: {} ===",
+        nombre_motor()
+    );
     println!("Rondas: {RONDAS}, ciclos por ronda: {CICLOS_POR_RONDA}\n");
 
     let directorio = tempfile::tempdir().expect("crear directorio temporal");
@@ -138,7 +144,10 @@ fn main() {
             let preparacion = core
                 .preparar_ingreso(1)
                 .expect("preparar_ingreso no debería fallar en el caso feliz sembrado");
-            assert!(!preparacion.requiere_gafete, "el contratista sembrado no debería pedir gafete");
+            assert!(
+                !preparacion.requiere_gafete,
+                "el contratista sembrado no debería pedir gafete"
+            );
 
             let resultado = core
                 .registrar_ingreso(&actor, 1, MedioIngreso::Caminando, None)
@@ -162,12 +171,21 @@ fn main() {
 
     let memoria_final = working_set_mb();
 
-    let minimo = duraciones_ronda_ms.iter().copied().fold(f64::INFINITY, f64::min);
-    let maximo = duraciones_ronda_ms.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let minimo = duraciones_ronda_ms
+        .iter()
+        .copied()
+        .fold(f64::INFINITY, f64::min);
+    let maximo = duraciones_ronda_ms
+        .iter()
+        .copied()
+        .fold(f64::NEG_INFINITY, f64::max);
     let promedio = duraciones_ronda_ms.iter().sum::<f64>() / duraciones_ronda_ms.len() as f64;
     let mediana_valor = mediana(&mut duraciones_ronda_ms.clone());
 
-    println!("\n--- Resumen ({} -- pegar en la sección 12 de la auditoría) ---", nombre_motor());
+    println!(
+        "\n--- Resumen ({} -- pegar en la sección 12 de la auditoría) ---",
+        nombre_motor()
+    );
     println!("Tiempo por ronda (1.000 ciclos ingreso+salida):");
     println!("  mediana:  {mediana_valor:.1} ms");
     println!("  promedio: {promedio:.1} ms");
