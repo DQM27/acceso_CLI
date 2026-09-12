@@ -1,0 +1,24 @@
+[package]
+name = "brisas_sqlite3mc_vendor_lib"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+publish = false
+build = "build.rs"
+
+# Crate sin código real -- su único trabajo es que `build.rs` compile
+# `vendor/sqlite3mc_amalgamation.c` a una librería estática y la deje en
+# `dist/` (ruta fija, NO el OUT_DIR con hash de Cargo) para que
+# `sqlite3mc/.cargo/config.toml` pueda apuntarle vía `SQLITE3_LIB_DIR`.
+# Se compila como un paso APARTE, antes que `sqlite3mc` -- ver
+# `experiments/db-cipher-lab/README.md` para el porqué de las dos fases:
+# `libsqlite3-sys` resuelve `-lstatic=sqlite3` cuando SE COMPILA A SÍ MISMO
+# (antes de que el build script de cualquier crate río abajo llegue a
+# correr), así que la ruta de búsqueda tiene que existir en disco desde
+# ANTES de que arranque ese `cargo build/run`, no puede llegar por un
+# build script hermano dentro de la misma invocación.
+[lib]
+path = "src/lib.rs"
+
+[build-dependencies]
+cc = "1"

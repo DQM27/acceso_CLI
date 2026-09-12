@@ -1,0 +1,15 @@
+[package]
+name = "brisas_sqlite3mc_smoke"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+publish = false
+
+# `default-features = false` -- no "bundled": el `sqlite3` real lo compila
+# y enlaza estático el crate hermano `sqlite3mc-vendor-lib` (ver
+# `.cargo/config.toml` de este mismo directorio y
+# `experiments/db-cipher-lab/README.md`). Este crate sólo trae los
+# bindings FFI contra los símbolos `sqlite3_*` que ese amalgamation ya
+# provee -- mismo API, drop-in replacement de SQLite normal.
+[dependencies]
+rusqlite = { version = "0.40.2", default-features = false }
