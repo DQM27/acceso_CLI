@@ -326,8 +326,18 @@ más cuidado/tiempo del que ameritaba esta pasada):
   activarlo.
 - A-01 (RLS cross-site en contratistas/empresas/usuarios, sección 3.3) —
   riesgo aceptado y documentado, no un olvido.
-- 7 índices "sin uso" — normal en un proyecto con pocos días de tráfico
-  real, no acota nada todavía.
+- **7 índices "sin uso" — revisados, decisión: dejarlos todos.** 4 de los 7
+  (`usuarios_dispositivo_origen_id_idx`, `usuarios_sitio_id_idx`,
+  `idx_cita_visitantes_cedula`, `idx_movimientos_visita_cita_visitante`)
+  cubren Foreign Keys -- se agregaron a propósito para resolver el hallazgo
+  "unindexed foreign keys"; borrarlos por este WARN reabriría ese problema
+  justo cuando haya tráfico real. Los otros 3 son los agregados en la
+  limpieza de esta misma sesión (`idx_cita_sitios_sitio` y los dos de
+  `movimientos_visita`), con minutos de vida. El linter de índices está
+  pensado para bases maduras con patrones de consulta reales -- acá el
+  volumen (392 contratistas, 74 ingresos, tráfico de desarrollo) no alcanza
+  para que "sin uso" signifique algo todavía. Re-evaluar cuando haya
+  tráfico real de producción, no antes.
 
 ---
 
