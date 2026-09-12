@@ -20,8 +20,8 @@ reemplazarlo (`gh secret set NOMBRE`). Usados por `.github/workflows/release.yml
 | `ANDROID_KEYSTORE_PASSWORD` | Contraseña de ese keystore | `mobile/android/keystore.properties` (gitignored) |
 | `ANDROID_KEY_ALIAS` | Alias de la llave dentro del keystore | ídem |
 | `ANDROID_KEY_PASSWORD` | Contraseña de esa llave | ídem |
-| `TAURI_SIGNING_PRIVATE_KEY` | Firma los instaladores de escritorio (`build-gui`) -- el updater verifica contra `plugins.updater.pubkey` en `desktop/src-tauri/tauri.conf.json` | **Ninguno encontrado** -- ver "Riesgos" abajo |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Contraseña de esa llave | **Ninguno encontrado** |
+| `TAURI_SIGNING_PRIVATE_KEY` | Firma los instaladores de escritorio (`build-gui`) -- el updater verifica contra `plugins.updater.pubkey` en `desktop/src-tauri/tauri.conf.json` | `desktop/src-tauri/keystore/tauri-signing.key` (gitignored) |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Contraseña de esa llave | `desktop/src-tauri/keystore/keystore.properties` (gitignored) |
 
 Verificado el 2026-09-12: la huella SHA-256 del certificado que firmó el
 APK de la release `v1.5.0` (`a2c5e4a4...`) coincide exactamente con
@@ -64,14 +64,17 @@ instalación de Windows/ese dispositivo, no exportable ni recuperable si se
 pierde el perfil de usuario o se resetea el teléfono. Ver
 `docs/decisiones-tecnicas.md` para el detalle de diseño.
 
-## Riesgos abiertos (a la fecha de este documento)
+## Historial relevante
 
-- **Sin respaldo local de la clave de firma de Tauri**: si se pierde el
-  secreto `TAURI_SIGNING_PRIVATE_KEY` de GitHub, no hay forma de firmar una
-  actualización compatible con instalaciones de escritorio existentes
-  (mismo problema que perder el keystore de Android, documentado en
-  `mobile/README.md`) -- **falta decidir dónde respaldarla** (gestor de
-  contraseñas, ej.) y documentarlo acá.
+- **2026-09-12**: se regeneró la llave de firma de Tauri (la vieja no
+  tenía ningún respaldo local conocido, sólo el secret de GitHub) y se
+  reemplazaron `TAURI_SIGNING_PRIVATE_KEY`/`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+  por la nueva. Se actualizó `plugins.updater.pubkey` en
+  `desktop/src-tauri/tauri.conf.json` a juego. Confirmado con el usuario
+  antes de rotar: ninguna instalación real de escritorio dependía de la
+  llave vieja (todo lo publicado hasta `v1.5.1` fue de prueba) -- si
+  hubiera existido una, esta rotación la habría dejado sin poder recibir
+  más actualizaciones automáticas.
 - Se eliminó el 2026-09-12 un keystore de Android viejo y sin usar
   (`mobile/android/keystore/release.keystore.jks`, contraseña distinta a
   la actual) que la documentación vieja de `mobile/README.md` marcaba
