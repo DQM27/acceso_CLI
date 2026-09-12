@@ -507,3 +507,60 @@ aflojarlo para "igualar").
 Verificado: 8/8 Playwright (`escritorio`+`movil`, cero violaciones CSP en
 las 4 pantallas + exportación a PDF), 75/75 Vitest, `npm run lint` y
 `npm run build` limpios.
+
+---
+
+## 2026-09-12 — `cifrado-sqlite3mc` ya enlaza un motor real
+
+**Contexto:** la entrada del 2026-09-11 ("Switch de motor SQLite de tres
+vías") dejaba anotado que `cifrado-sqlite3mc` era sólo un lugar reservado
+en el switch -- activarla sola hacía fallar el link porque no existe un
+crate de bindings en crates.io y la feature no traía ningún
+`rusqlite/bundled*`. En paralelo, en `bench/sqlite-3way-2026-09-12` se
+había resuelto exactamente ese problema para un laboratorio aislado
+(`benchmarks/sqlite-3way/sqlite3mc-vendor-lib/`): compilar el amalgamation
+SQLite3 Multiple Ciphers 2.5.1 vendorizado como librería estática, sin
+DLL/import library en runtime.
+
+**Decisión:** en vez de mantener dos copias del amalgamation (14MB) --
+una para el laboratorio, otra para producción -- se movió
+`sqlite3mc-vendor-lib/` de `benchmarks/sqlite-3way/` a la raíz del repo
+(`/sqlite3mc-vendor-lib/`, `git mv` preservando historia) y se conectó
+como motor real del crate raíz:
+
+1. `/.cargo/config.toml` gana un bloque `[env]` con `SQLITE3_STATIC=1` y
+   `SQLITE3_LIB_DIR` apuntando a `sqlite3mc-vendor-lib/dist` (ruta
+   relativa a la raíz del repo). Estas variables sólo las consulta
+   `libsqlite3-sys` cuando NINGUNA feature `bundled`/
+   `bundled-sqlcipher-vendored-openssl` está activa -- inofensivas para
+   `cifrado-sqlcipher`/`sqlite-plano`, que ya traen su propio motor
+   vendorizado y nunca las leen.
+2. `cifrado-sqlite3mc = []` en el `Cargo.toml` raíz **no cambió** -- ya
+   era correcto que se quedara vacía (el modo "link externo" de
+   `libsqlite3-sys` se activa por AUSENCIA de las otras dos features, no
+   por presencia de ninguna feature propia). El fix real era proveer el
+   `.lib` externo que faltaba, no tocar esta línea.
+3. Se agregaron los alias `test-3mc` (raíz) y `test-mobile-3mc` (mobile)
+   a `/.cargo/config.toml`, mismo patrón que los `*-plano` existentes.
+
+**Requiere un paso previo manual, siempre**: compilar el vendor-lib antes
+de cualquier build/test con `cifrado-sqlite3mc` (no es una
+`build-dependency` normal -- ver el porqué de las dos fases en
+`sqlite3mc-vendor-lib/build.rs` y en la entrada de arriba):
+
+```sh
+cargo build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
+cargo test-3mc --lib          # crate raíz
+cargo build-desktop-3mc       # desktop
+cargo build-mobile-3mc        # mobile (host)
+cargo test-mobile-3mc --lib   # mobile (host)
+```
+
+`benchmarks/sqlite-3way/sqlite3mc/` se queda como smoke test aislado de
+cifrado (más rápido, no arrastra `AppCore`) -- su `.cargo/config.toml`
+ahora apunta a la ruta relativa nueva (`../../../sqlite3mc-vendor-lib/dist`).
+
+Verificado: `cargo test-3mc --lib` (200/200, núcleo raíz),
+`cargo test-mobile-3mc --lib` (12/12), `cargo build-desktop-3mc` limpio,
+smoke test aislado de `benchmarks/sqlite-3way/sqlite3mc/` sigue en verde
+tras el `git mv`.
