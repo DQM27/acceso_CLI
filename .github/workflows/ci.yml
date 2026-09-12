@@ -107,6 +107,10 @@ jobs:
         working-directory: desktop
         run: npm ci
 
+      - name: Lint (frontend)
+        working-directory: desktop
+        run: npm run lint
+
       - name: Tests (frontend)
         working-directory: desktop
         run: npm run test

@@ -26,6 +26,7 @@ jobs:
           cache: npm
           cache-dependency-path: ${{ matrix.carpeta }}/package-lock.json
       - run: npm ci --ignore-scripts
+      - run: npm run lint
       - run: npm test
       - run: npm run build
       - run: node ../design/generar.mjs --check

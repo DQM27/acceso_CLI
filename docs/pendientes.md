@@ -227,11 +227,14 @@ aspiracional -- lo que sigue sin marcar todavía no corrió.
   `--deny warnings` explícito, que el `ci.yml` actual no pide. No requieren acción
   inmediata, pero quedan documentados por si se quiere reemplazar esas dependencias
   más adelante.
-- [ ] **ESLint en `web/` y `web-visitas/` -- sin empezar.** Mismo criterio que
-  `desktop` (copiar `eslint.config.js`, ajustar `ignores`/`globals` si hace falta),
-  pero ninguno de los dos tiene todavía ni el paquete instalado. Alcance
-  desconocido -- `web-visitas` en particular usa Playwright/FullCalendar, puede
-  sacar hallazgos propios que `desktop` no tenía.
+- [x] **ESLint en `web/` y `web-visitas/` (2026-09-12).** Mismo `eslint.config.js`
+  que `desktop`. Salieron 13 y 27 errores reales respectivamente -- ya corregidos
+  (principalmente `react-hooks/set-state-in-effect` diferido con
+  `Promise.resolve().then(...)`, `no-non-null-assertion` con chequeos reales, y en
+  `web-visitas/NuevaCita.tsx` un ref mutado a mano que pasó a ser estado real).
+  Los 3 frontends (`desktop`, `web`, `web-visitas`) quedan con `npm run lint` en
+  0 errores y ya está wireado en `ci.yml`/`web.yml`. Detalle en los commits
+  `fix(desktop)`/`feat(web)`/`feat(web-visitas)` del 2026-09-12.
 - [ ] **`cargo-deny` (licencias + dependencias duplicadas/baneadas) -- evaluado y
   descartado por ahora**, no por falta de valor sino por alcance: se optó por
   `cargo-audit` (más simple, sin archivo de configuración) para esta primera
