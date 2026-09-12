@@ -1,0 +1,11 @@
+-- El esquema `private` se usa desde 20260906044549_avisa_cambio_nube_segun_quien_escribe_no_quien_creo_la_fila.sql
+-- (private.emitir_cambio_nube_sitio) y desde mueve_helpers_de_recursion_citas_a_esquema_privado.sql
+-- (private.sitios_de_cita / private.anfitrion_de_cita), pero nunca existió una migración versionada
+-- que lo creara -- se creó a mano en algún punto (dashboard/SQL editor) antes de la primera migración
+-- que lo usa. Auditoría de drift 2026-09-11: se reconstruyeron y versionaron 10 migraciones que existían
+-- en producción pero no en git (autoriza_anfitrion_a_leer_sitios en adelante), y se corrigió el número
+-- de versión de otras 10 que sí estaban en git pero con un timestamp de archivo distinto al realmente
+-- aplicado. Este `create schema if not exists` es un no-op contra la base real (el esquema ya existe) --
+-- existe sólo para que una reconstrucción desde cero (`supabase db push` contra un proyecto nuevo) no
+-- falle en la primera migración que hace `create or replace function private....`.
+create schema if not exists private;
