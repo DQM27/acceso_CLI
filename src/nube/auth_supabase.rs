@@ -246,9 +246,12 @@ struct ClaimsToken {
 /// "Verificación offline del token" en el plan. Devuelve el `sub` (mismo
 /// `usuario_id` que ya trae `SesionSupabase`) si la firma y la expiración
 /// son válidas.
-pub fn verificar_token_offline(claves: &[Jwk], access_token: &str) -> Result<String, AuthSupabaseError> {
-    let cabecera = jsonwebtoken::decode_header(access_token)
-        .map_err(|_| AuthSupabaseError::TokenInvalido)?;
+pub fn verificar_token_offline(
+    claves: &[Jwk],
+    access_token: &str,
+) -> Result<String, AuthSupabaseError> {
+    let cabecera =
+        jsonwebtoken::decode_header(access_token).map_err(|_| AuthSupabaseError::TokenInvalido)?;
     let kid = cabecera.kid.ok_or(AuthSupabaseError::TokenInvalido)?;
 
     let clave = claves
@@ -321,10 +324,7 @@ mod tests {
 
     #[test]
     fn login_401_es_credenciales_invalidas() {
-        let base_url = servidor_con_respuesta(
-            "{\"error\":\"invalid_grant\"}",
-            "400 Bad Request",
-        );
+        let base_url = servidor_con_respuesta("{\"error\":\"invalid_grant\"}", "400 Bad Request");
 
         let error = login(&base_url, "apikey-test", "1-0847-0293", "clave").unwrap_err();
 
@@ -379,10 +379,19 @@ PnUgQ3hxgOU/ss9vt0d+pRtbxc6xPUI9kgyjGL+AOVg/1noujkf1Gxjo
     }
 
     fn firmar_token_de_prueba(sub: &str, exp: usize) -> String {
-        let encoding_key = jsonwebtoken::EncodingKey::from_ec_pem(CLAVE_PRIVADA_PRUEBA_PEM).unwrap();
+        let encoding_key =
+            jsonwebtoken::EncodingKey::from_ec_pem(CLAVE_PRIVADA_PRUEBA_PEM).unwrap();
         let mut header = jsonwebtoken::Header::new(Algorithm::ES256);
         header.kid = Some(CLAVE_PRUEBA_KID.to_string());
-        jsonwebtoken::encode(&header, &ClaimsToken { sub: sub.to_string(), exp }, &encoding_key).unwrap()
+        jsonwebtoken::encode(
+            &header,
+            &ClaimsToken {
+                sub: sub.to_string(),
+                exp,
+            },
+            &encoding_key,
+        )
+        .unwrap()
     }
 
     #[test]

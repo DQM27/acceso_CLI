@@ -74,7 +74,10 @@ impl AppCore {
     /// Ver `AutenticacionService::resolver_identidad_local` -- para cuando
     /// la contraseña ya se verificó contra Supabase Auth
     /// (`nube::auth_supabase::login`), no localmente.
-    pub fn resolver_identidad_local(&self, cedula: &str) -> Result<UsuarioSesion, AutenticacionError> {
+    pub fn resolver_identidad_local(
+        &self,
+        cedula: &str,
+    ) -> Result<UsuarioSesion, AutenticacionError> {
         let repository = SqliteUsuarioRepository::new(&self.connection);
         AutenticacionService::new(&repository).resolver_identidad_local(cedula)
     }

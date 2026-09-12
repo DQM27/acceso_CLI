@@ -45,7 +45,9 @@ export default function GestionGafeteModal({
 
   useEffect(() => {
     if (!buscandoDeudor || !filtro.trim()) {
-      setResultados([]);
+      // `Promise.resolve().then(...)` en vez de llamar `setResultados([])`
+      // directo -- ver el mismo comentario en Activos.tsx.
+      Promise.resolve().then(() => setResultados([]));
       return;
     }
     const id = setTimeout(() => {

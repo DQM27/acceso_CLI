@@ -64,6 +64,9 @@ fn mostrar_error_fatal_y_salir(mensaje: &str) -> ! {
         use windows::core::HSTRING;
         let texto = HSTRING::from(mensaje);
         let titulo = HSTRING::from("Control de Acceso — Error al iniciar");
+        // SAFETY: `texto`/`titulo` son `HSTRING` válidas y viven hasta el
+        // final de este bloque; `None` como `hwnd` es válido según la
+        // documentación de `MessageBoxW` (sin ventana padre).
         unsafe {
             MessageBoxW(None, &texto, &titulo, MB_OK | MB_ICONERROR);
         }
@@ -100,10 +103,12 @@ pub fn run() {
     let directorio_base_datos = ruta_base_datos.parent().unwrap_or_else(|| {
         mostrar_error_fatal_y_salir("No se pudo resolver el directorio de la base de datos")
     });
-    let clave_base_datos =
-        clave_cifrado::resolver_clave(directorio_base_datos, &ruta_base_datos).unwrap_or_else(
-            |error| mostrar_error_fatal_y_salir(&format!("No se pudo resolver la clave de cifrado de la base de datos: {error}")),
-        );
+    let clave_base_datos = clave_cifrado::resolver_clave(directorio_base_datos, &ruta_base_datos)
+        .unwrap_or_else(|error| {
+            mostrar_error_fatal_y_salir(&format!(
+                "No se pudo resolver la clave de cifrado de la base de datos: {error}"
+            ))
+        });
     // `RelojCorregido`, no `RelojSistema`: en equipos cuyo reloj de Windows
     // no se puede corregir (visto en producción, ~11 min adelantado y sin
     // sincronizar), cada autenticación contra la nube mide el desfase real

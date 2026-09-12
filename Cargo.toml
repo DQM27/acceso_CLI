@@ -131,6 +131,14 @@ unreadable_literal = "deny"
 unused_self = "deny"
 useless_let_if_seq = "deny"
 struct_field_names = "deny"
+# Exige un comentario `// SAFETY:` en cada bloque `unsafe` explicando el
+# invariante que lo hace correcto -- este crate tiene `unsafe` real (DPAPI de
+# Windows en `nube/credenciales.rs`), y un auditor de seguridad revisa esos
+# bloques primero. `multiple_unsafe_ops_per_block` obliga a separar cada
+# operación insegura en su propio bloque para que el comentario de arriba
+# quede inequívoco sobre a cuál llamada aplica.
+undocumented_unsafe_blocks = "deny"
+multiple_unsafe_ops_per_block = "deny"
 
 [profile.release]
 opt-level = 3

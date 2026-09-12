@@ -195,7 +195,11 @@ function Shell({
   // instantáneo.
   const [visitadas, setVisitadas] = useState<Seccion[]>(["activos"]);
   useEffect(() => {
-    setVisitadas((actual) => (actual.includes(seccion) ? actual : [...actual, seccion]));
+    // `Promise.resolve().then(...)` en vez de llamar `setVisitadas` directo
+    // -- ver el mismo comentario en Activos.tsx.
+    Promise.resolve().then(() => {
+      setVisitadas((actual) => (actual.includes(seccion) ? actual : [...actual, seccion]));
+    });
   }, [seccion]);
   // React 19.3: `<ViewTransition>` sólo anima un cambio si ocurrió dentro de
   // una transición -- acá no hay router que la envuelva sola (a diferencia

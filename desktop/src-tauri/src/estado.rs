@@ -146,7 +146,7 @@ impl GuiState {
     /// lo creía vigente (desfase de reloj, o el dispositivo estuvo inactivo
     /// más de lo que el margen de 30s contemplaba). La próxima llamada a
     /// `autenticar_con_cache` pide uno nuevo sin esperar a que este
-    /// "vigente_por" calculado localmente se cumpla solo.
+    /// "`vigente_por`" calculado localmente se cumpla solo.
     pub fn invalidar_token_cacheado(&self) {
         *self
             .token_nube_cacheado

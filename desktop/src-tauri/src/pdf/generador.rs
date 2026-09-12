@@ -175,6 +175,11 @@ fn lanzar_print_to_pdf(webview: &tauri::WebviewWindow, destino: &Path) -> Result
         .with_webview(move |plataforma| {
             let resultado = (|| -> Result<(), String> {
                 let controller = plataforma.controller();
+                // SAFETY: llamada COM autogenerada por `webview2-com`;
+                // `controller` es el `ICoreWebView2Controller` real que
+                // Tauri entrega dentro del closure de `with_webview`, que
+                // corre de forma síncrona en el hilo dueño del WebView2 --
+                // el requisito de apartment threading de COM queda cubierto.
                 let core = unsafe { controller.CoreWebView2() }.map_err(|e| e.to_string())?;
                 let core7: ICoreWebView2_7 = core.cast().map_err(|e| e.to_string())?;
                 let ruta = HSTRING::from(destino.to_string_lossy().to_string());
@@ -184,6 +189,10 @@ fn lanzar_print_to_pdf(webview: &tauri::WebviewWindow, destino: &Path) -> Result
                 let handler = webview2_com::PrintToPdfCompletedHandler::create(Box::new(
                     |_resultado, _mostrar_dialogo| Ok(()),
                 ));
+                // SAFETY: mismo criterio que la llamada a `CoreWebView2()` de
+                // arriba -- `core7` es un puntero COM válido recién obtenido
+                // en este mismo hilo, `ruta`/`handler` viven durante toda la
+                // llamada.
                 unsafe { core7.PrintToPdf(&ruta, None, &handler) }.map_err(|e| e.to_string())
             })();
             *resultado_interno_closure.lock().unwrap() = Some(resultado);

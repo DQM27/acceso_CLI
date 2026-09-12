@@ -81,7 +81,7 @@ describe("useNavegacionFlechas", () => {
     expect(onSeleccionar).not.toHaveBeenCalled();
   });
 
-  it("reinicia el resaltado a 0 cuando cambia la lista de ítems", () => {
+  it("reinicia el resaltado a 0 cuando cambia la lista de ítems", async () => {
     const { result, rerender } = renderHook(
       ({ items }: { items: string[] }) => useNavegacionFlechas(items, true, vi.fn()),
       { initialProps: { items: ["a", "b", "c"] } },
@@ -91,8 +91,14 @@ describe("useNavegacionFlechas", () => {
     expect(result.current.resaltado).toBe(1);
 
     // Una búsqueda nueva con menos resultados — si no se reiniciara, el
-    // resaltado podría apuntar a un índice que ya no existe.
-    rerender({ items: ["x"] });
+    // resaltado podría apuntar a un índice que ya no existe. El reinicio
+    // ahora corre en un microtask (ver el comentario en ListaFlotante.tsx
+    // sobre `react-hooks/set-state-in-effect`), por eso hay que darle un
+    // tick antes de comprobarlo.
+    await act(async () => {
+      rerender({ items: ["x"] });
+      await Promise.resolve();
+    });
     expect(result.current.resaltado).toBe(0);
   });
 

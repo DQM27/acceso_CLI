@@ -107,10 +107,7 @@ fn generar_y_guardar(ruta_clave: &Path) -> Result<Zeroizing<[u8; 32]>, ErrorClav
     Ok(clave)
 }
 
-fn desproteger(
-    blob: &[u8],
-    ruta_clave: &Path,
-) -> Result<Zeroizing<[u8; 32]>, ErrorClaveBaseDatos> {
+fn desproteger(blob: &[u8], ruta_clave: &Path) -> Result<Zeroizing<[u8; 32]>, ErrorClaveBaseDatos> {
     let plano = descifrar_dpapi(blob).ok_or_else(|| ErrorClaveBaseDatos::DesprotegerFallo {
         ruta: ruta_clave.to_path_buf(),
     })?;

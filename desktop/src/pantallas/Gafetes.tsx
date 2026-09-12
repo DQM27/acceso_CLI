@@ -56,17 +56,19 @@ export default function Gafetes() {
         minWidth: 110,
         filter: false,
         sortable: false,
-        cellRenderer: (p: ICellRendererParams<GafeteResumen>) =>
-          p.data && p.data.estado === "Perdido" ? (
+        cellRenderer: (p: ICellRendererParams<GafeteResumen>) => {
+          const gafete = p.data;
+          return gafete && gafete.estado === "Perdido" ? (
             <button
               type="button"
               className="boton"
               style={{ padding: "0.15rem 0.55rem", fontSize: "0.78rem" }}
-              onClick={() => setGestionAbierta(p.data!)}
+              onClick={() => setGestionAbierta(gafete)}
             >
               Resolver
             </button>
-          ) : null,
+          ) : null;
+        },
       },
       {
         headerName: "Historial",
@@ -74,17 +76,19 @@ export default function Gafetes() {
         minWidth: 110,
         filter: false,
         sortable: false,
-        cellRenderer: (p: ICellRendererParams<GafeteResumen>) =>
-          p.data ? (
+        cellRenderer: (p: ICellRendererParams<GafeteResumen>) => {
+          const gafete = p.data;
+          return gafete ? (
             <button
               type="button"
               className="boton"
               style={{ padding: "0.15rem 0.55rem", fontSize: "0.78rem" }}
-              onClick={() => setDetalleAbierto(p.data!)}
+              onClick={() => setDetalleAbierto(gafete)}
             >
               Detalles
             </button>
-          ) : null,
+          ) : null;
+        },
       },
     ],
     [],

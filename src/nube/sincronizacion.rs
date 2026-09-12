@@ -118,9 +118,9 @@ pub fn drenar_cola(
 fn agrupar_por_entidad_y_operacion(filas: Vec<FilaCola>) -> Vec<Vec<FilaCola>> {
     let mut grupos: Vec<(String, String, Vec<FilaCola>)> = Vec::new();
     for fila in filas {
-        let existente = grupos
-            .iter_mut()
-            .find(|(entidad, operacion, _)| *entidad == fila.entidad && *operacion == fila.operacion);
+        let existente = grupos.iter_mut().find(|(entidad, operacion, _)| {
+            *entidad == fila.entidad && *operacion == fila.operacion
+        });
         if let Some((_, _, filas_del_grupo)) = existente {
             filas_del_grupo.push(fila);
         } else {
@@ -186,12 +186,22 @@ fn enviar_lote(
 ) -> Result<(), SincronizacionError> {
     let mut cuerpos = Vec::with_capacity(grupo.len());
     for fila in grupo {
-        cuerpos.push(construir_cuerpo(connection, contexto, entidad, &fila.entidad_uuid)?);
+        cuerpos.push(construir_cuerpo(
+            connection,
+            contexto,
+            entidad,
+            &fila.entidad_uuid,
+        )?);
     }
 
     let url = on_conflict.map_or_else(
         || format!("{}/rest/v1/{tabla}", contexto.base_url),
-        |on_conflict| format!("{}/rest/v1/{tabla}?on_conflict={on_conflict}", contexto.base_url),
+        |on_conflict| {
+            format!(
+                "{}/rest/v1/{tabla}?on_conflict={on_conflict}",
+                contexto.base_url
+            )
+        },
     );
 
     let respuesta = cliente
@@ -1365,7 +1375,11 @@ pub fn contratista_activo_en_otro_sitio(
         contexto.base_url, contexto.sitio_id,
     );
     let filas: Vec<FilaIngresoActivoOtroSitio> = obtener_json(&cliente, contexto, &url)?;
-    Ok(filas.into_iter().next().and_then(|fila| fila.sitios).map(|sitio| sitio.nombre))
+    Ok(filas
+        .into_iter()
+        .next()
+        .and_then(|fila| fila.sitios)
+        .map(|sitio| sitio.nombre))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1529,13 +1543,18 @@ pub fn recibir_historial_del_sitio(
     // todas, no sólo en la última.
     let mut recibidos_total = 0_u32;
     let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_consulta;
-    obtener_json_paginado_con(&cliente, contexto, &url, |pagina: Vec<FilaHistorialRemota>| {
-        let (recibidos, marca_actualizada) =
-            aplicar_pagina_historial(connection, contexto, &pagina, marca_mas_nueva)?;
-        recibidos_total += recibidos;
-        marca_mas_nueva = marca_actualizada;
-        Ok(())
-    })?;
+    obtener_json_paginado_con(
+        &cliente,
+        contexto,
+        &url,
+        |pagina: Vec<FilaHistorialRemota>| {
+            let (recibidos, marca_actualizada) =
+                aplicar_pagina_historial(connection, contexto, &pagina, marca_mas_nueva)?;
+            recibidos_total += recibidos;
+            marca_mas_nueva = marca_actualizada;
+            Ok(())
+        },
+    )?;
 
     Ok(recibidos_total)
 }
@@ -1581,8 +1600,8 @@ fn aplicar_pagina_historial(
     // no bloquea al resto).
     let mut marca_mas_nueva = marca_previa;
     for fila in pagina {
-        let Ok(hora_entrada) = crate::tiempo::parsear_utc(&fila.hora_entrada)
-            .map(crate::tiempo::serializar_utc)
+        let Ok(hora_entrada) =
+            crate::tiempo::parsear_utc(&fila.hora_entrada).map(crate::tiempo::serializar_utc)
         else {
             continue;
         };
@@ -2922,7 +2941,10 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(pendientes, 1, "la tercera fila queda para reintentar, no perdida ni duplicada");
+        assert_eq!(
+            pendientes, 1,
+            "la tercera fila queda para reintentar, no perdida ni duplicada"
+        );
     }
 
     #[test]
@@ -3329,7 +3351,8 @@ mod tests {
     }
 
     #[test]
-    fn recibir_historial_paginado_persiste_todas_las_paginas_y_la_marca_de_agua_es_el_maximo_global() {
+    fn recibir_historial_paginado_persiste_todas_las_paginas_y_la_marca_de_agua_es_el_maximo_global()
+     {
         let connection = Connection::open_in_memory().unwrap();
         initialize_database(&connection).unwrap();
 
@@ -3379,8 +3402,7 @@ mod tests {
             )
             .into_boxed_str(),
         ) as &'static str;
-        let base_url =
-            servidor_de_respuestas(vec![respuesta_pagina_1, respuesta_pagina_2]);
+        let base_url = servidor_de_respuestas(vec![respuesta_pagina_1, respuesta_pagina_2]);
 
         let recibidos = recibir_historial_del_sitio(&connection, &contexto(&base_url)).unwrap();
 
@@ -3777,7 +3799,9 @@ mod tests {
         let base_url = format!("http://{}", listener.local_addr().unwrap());
         let servidor = thread::spawn(move || {
             let (mut socket, _) = listener.accept().unwrap();
-            socket.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
             let mut pedido = Vec::new();
             let mut buffer = [0; 4096];
             while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {

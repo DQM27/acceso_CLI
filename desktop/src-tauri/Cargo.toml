@@ -137,6 +137,12 @@ format_collect = "deny"
 single_char_pattern = "deny"
 missing_panics_doc = "deny"
 
+# Este crate sí tiene `unsafe` real (DPAPI en clave_cifrado.rs, MessageBoxW
+# en lib.rs, COM de WebView2 en pdf/generador.rs) -- ver el mismo agregado
+# en el Cargo.toml de la raíz para la razón completa.
+undocumented_unsafe_blocks = "deny"
+multiple_unsafe_ops_per_block = "deny"
+
 [target.'cfg(windows)'.dependencies]
 # Exportar Historial a PDF: WebView2 (ya viene con Tauri en Windows) sabe
 # imprimir a PDF nativamente (`ICoreWebView2_7::PrintToPdf`), evita meter un

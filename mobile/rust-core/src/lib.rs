@@ -2,6 +2,12 @@
 //! sólo lo puntual que cada pantalla necesita, sin tocar la lógica del
 //! crate raíz. Ver docs/plan-app-movil.md.
 
+// Frontera FFI hacia Kotlin -- no hay ninguna razón legítima para que este
+// crate en particular (a diferencia de la raíz o `desktop/src-tauri`, que sí
+// llaman DPAPI/COM de Windows) necesite `unsafe`. `forbid`, no `deny`: ni
+// siquiera un `#[allow(unsafe_code)]` local puede reabrirlo por accidente.
+#![forbid(unsafe_code)]
+
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -729,8 +735,9 @@ impl From<GestionNubeErrorNucleo> for FalloSincronizacion {
 fn convertir_fallo_sincronizacion(fallo: FalloSincronizacion) -> NucleoError {
     match fallo {
         FalloSincronizacion::TokenVencido => NucleoError::Interno {
-            mensaje: "El token de este dispositivo venció y no se pudo renovar -- revisá la conexión"
-                .to_string(),
+            mensaje:
+                "El token de este dispositivo venció y no se pudo renovar -- revisá la conexión"
+                    .to_string(),
         },
         FalloSincronizacion::Nucleo(error) => error,
     }
@@ -1903,7 +1910,7 @@ impl Nucleo {
     /// pragmas que `GuiState::conexion_secundaria` en escritorio: antes
     /// esta sólo aplicaba `busy_timeout`/`foreign_keys`, le faltaban
     /// `synchronous`/`trusted_schema`/`secure_delete`). `clave` en `None`
-    /// -- Android todavía no aplica ninguna clave de SQLCipher a la base
+    /// -- Android todavía no aplica ninguna clave de `SQLCipher` a la base
     /// (pendiente aparte, ver `docs/auditorias/AUDITORIA_INTEGRAL_ANDROID_2026-09-09.md`);
     /// el día que se active acá, pasa a la vez por la conexión principal y
     /// por ésta.
@@ -1912,9 +1919,9 @@ impl Nucleo {
             &self.ruta_base_datos,
             None,
         )
-            .map_err(|error| NucleoError::Interno {
-                mensaje: error.to_string(),
-            })
+        .map_err(|error| NucleoError::Interno {
+            mensaje: error.to_string(),
+        })
     }
 
     fn sesion_lock(&self) -> std::sync::MutexGuard<'_, Option<UsuarioSesionNucleo>> {
@@ -1976,7 +1983,7 @@ impl Nucleo {
     /// `desktop/src-tauri/src/estado.rs::GuiState`: el receptor lo rechazó a
     /// mitad de una sincronización aunque `autenticar_con_cache` lo creía
     /// vigente. La próxima llamada pide uno nuevo sin esperar a que el
-    /// "vigente_por" calculado localmente se cumpla solo.
+    /// "`vigente_por`" calculado localmente se cumpla solo.
     fn invalidar_token_cacheado(&self) {
         *self
             .token_nube_cacheado
@@ -2016,7 +2023,10 @@ impl Nucleo {
         let intento_identidad = self.core_lock().resolver_identidad_local(cedula);
         let identidad = match intento_identidad {
             Ok(identidad) => identidad,
-            Err(AutenticacionErrorNucleo::CredencialesInvalidas | AutenticacionErrorNucleo::UsuarioInactivo) => {
+            Err(
+                AutenticacionErrorNucleo::CredencialesInvalidas
+                | AutenticacionErrorNucleo::UsuarioInactivo,
+            ) => {
                 let _ = refrescar_catalogo();
                 self.core_lock().resolver_identidad_local(cedula)?
             }
@@ -2087,11 +2097,11 @@ impl Nucleo {
                 mensaje: "Todavía no se guardó el secreto de este dispositivo".to_string(),
             })
         })?;
-        let token = self
-            .autenticar_con_cache(&secreto)
-            .map_err(|error| FalloSincronizacion::Nucleo(NucleoError::Interno {
+        let token = self.autenticar_con_cache(&secreto).map_err(|error| {
+            FalloSincronizacion::Nucleo(NucleoError::Interno {
                 mensaje: error.to_string(),
-            }))?;
+            })
+        })?;
         if let Some(desfase_ms) = token.desfase_reloj_ms {
             self.core_lock().actualizar_desfase_reloj(desfase_ms);
         }
@@ -2182,11 +2192,11 @@ impl Nucleo {
             self.iniciar_sesion_supabase(sesion);
         }
 
-        let token = self
-            .autenticar_con_cache(secreto)
-            .map_err(|error| FalloSincronizacion::Nucleo(NucleoError::Interno {
+        let token = self.autenticar_con_cache(secreto).map_err(|error| {
+            FalloSincronizacion::Nucleo(NucleoError::Interno {
                 mensaje: error.to_string(),
-            }))?;
+            })
+        })?;
         if let Some(desfase_ms) = token.desfase_reloj_ms {
             self.core_lock().actualizar_desfase_reloj(desfase_ms);
         }
@@ -2667,7 +2677,11 @@ mod tests {
             .unwrap();
 
         let usuarios_como_operador = nucleo.listar_usuarios(String::new()).unwrap();
-        assert!(usuarios_como_operador.iter().any(|u| u.cedula == "777777777"));
+        assert!(
+            usuarios_como_operador
+                .iter()
+                .any(|u| u.cedula == "777777777")
+        );
 
         let id_creado_por_operador = nucleo
             .crear_usuario(DatosUsuario {

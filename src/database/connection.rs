@@ -117,7 +117,10 @@ pub fn aplicar_clave(connection: &Connection, clave: &[u8; 32]) -> rusqlite::Res
     connection.pragma_update(None, "key", format!("x'{}'", clave_a_hex(clave)))
 }
 
-fn abrir_conexion(path: impl AsRef<Path>, clave: Option<&[u8; 32]>) -> Result<Connection, SchemaError> {
+fn abrir_conexion(
+    path: impl AsRef<Path>,
+    clave: Option<&[u8; 32]>,
+) -> Result<Connection, SchemaError> {
     let connection = Connection::open(path)?;
     if let Some(clave) = clave {
         aplicar_clave(&connection, clave)?;
@@ -203,10 +206,12 @@ pub fn abrir_conexion_secundaria_escritura(
 
 fn clave_a_hex(clave: &[u8; 32]) -> String {
     use std::fmt::Write;
-    clave.iter().fold(String::with_capacity(64), |mut hex, byte| {
-        let _ = write!(hex, "{byte:02x}");
-        hex
-    })
+    clave
+        .iter()
+        .fold(String::with_capacity(64), |mut hex, byte| {
+            let _ = write!(hex, "{byte:02x}");
+            hex
+        })
 }
 
 #[cfg(test)]

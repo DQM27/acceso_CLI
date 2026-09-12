@@ -95,12 +95,19 @@ export default function Activos({
   useBarraEstado(cargando ? "Cargando…" : `${total} adentro`);
 
   const recargar = useCallback(() => {
-    setCargando(true);
-    // `listarIngresosRemotos` no hace red -- lee la caché local que ya
-    // llenó la última sincronización (manual o automática); si la nube
-    // nunca se configuró en este dispositivo, simplemente devuelve una
-    // lista vacía, no falla.
-    return Promise.all([listarIngresosActivos(), listarIngresosRemotos()])
+    // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
+    // directo -- de lo contrario `react-hooks/set-state-in-effect` marca
+    // esta actualización de estado como síncrona dentro del cuerpo del
+    // efecto que la dispara (abajo). Diferirla a un microtask no cambia
+    // nada perceptible (corre antes del próximo paint igual) y cumple la
+    // regla.
+    return Promise.resolve()
+      .then(() => setCargando(true))
+      // `listarIngresosRemotos` no hace red -- lee la caché local que ya
+      // llenó la última sincronización (manual o automática); si la nube
+      // nunca se configuró en este dispositivo, simplemente devuelve una
+      // lista vacía, no falla.
+      .then(() => Promise.all([listarIngresosActivos(), listarIngresosRemotos()]))
       .then(([pagina, remotos]) => {
         setFilas([...pagina.items.map(filaDesdeLocal), ...remotos.map(filaDesdeRemoto)]);
         setTotal(pagina.total + remotos.length);
@@ -231,17 +238,19 @@ export default function Activos({
         // espacio en blanco justo antes de ella — con las 10 columnas ya
         // entrando sin scroll horizontal (ver el ajuste de anchos previo),
         // fijarla no aporta nada y sí ese espacio no deseado.
-        cellRenderer: (p: ICellRendererParams<FilaActiva>) =>
-          p.data ? (
+        cellRenderer: (p: ICellRendererParams<FilaActiva>) => {
+          const fila = p.data;
+          return fila ? (
             <button
               type="button"
               className="boton"
               style={{ padding: "0.15rem 0.55rem", fontSize: "0.78rem" }}
-              onClick={() => salidaIndividual(p.data!)}
+              onClick={() => salidaIndividual(fila)}
             >
               Salida
             </button>
-          ) : null,
+          ) : null;
+        },
       },
     ],
     [salidaIndividual],

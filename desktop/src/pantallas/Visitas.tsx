@@ -165,17 +165,19 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
         minWidth: 90,
         filter: false,
         sortable: false,
-        cellRenderer: (p: ICellRendererParams<MovimientoVisitaActivoResumen>) =>
-          p.data ? (
+        cellRenderer: (p: ICellRendererParams<MovimientoVisitaActivoResumen>) => {
+          const fila = p.data;
+          return fila ? (
             <button
               type="button"
               className="boton"
               style={{ padding: "0.15rem 0.55rem", fontSize: "0.78rem" }}
-              onClick={() => salida(p.data!)}
+              onClick={() => salida(fila)}
             >
               Salida
             </button>
-          ) : null,
+          ) : null;
+        },
       },
     ],
     [salida],

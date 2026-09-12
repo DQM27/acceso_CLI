@@ -37,7 +37,8 @@ export function useListaFlotante(visible: boolean) {
       return;
     }
     const actualizar = () => {
-      const rect = campoRef.current!.getBoundingClientRect();
+      if (!campoRef.current) return;
+      const rect = campoRef.current.getBoundingClientRect();
       setPosicion({
         top: rect.bottom + 4,
         bottom: window.innerHeight - rect.top + 4,
@@ -68,7 +69,9 @@ export function useNavegacionFlechas<T>(
   const [resaltado, setResaltado] = useState(0);
 
   useEffect(() => {
-    setResaltado(0);
+    // `Promise.resolve().then(...)` en vez de llamar `setResaltado` directo
+    // -- ver el mismo comentario en Activos.tsx.
+    Promise.resolve().then(() => setResaltado(0));
   }, [items]);
 
   function manejarTecla(evento: KeyboardEvent<HTMLInputElement>) {

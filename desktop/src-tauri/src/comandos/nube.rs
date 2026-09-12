@@ -20,7 +20,11 @@ fn metadata_de_esta_maquina() -> nube::MetadatosDispositivo {
         identificador_hardware: control_acceso::nube::credenciales::identificador_de_esta_maquina(),
         nombre_dispositivo: std::env::var("COMPUTERNAME").ok(),
         plataforma: Some("Windows".to_string()),
-        version_build: Some(format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)),
+        version_build: Some(format!(
+            "{}-{}",
+            std::env::consts::OS,
+            std::env::consts::ARCH
+        )),
         app_version: Some(env!("CARGO_PKG_VERSION").to_string()),
     }
 }
@@ -201,8 +205,7 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
     let cierres_recibidos = nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)?;
     let remotos = nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
     let catalogo = nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
-    let movimientos_historial_recibidos =
-        nube::recibir_historial_del_sitio(&conexion, &contexto)?;
+    let movimientos_historial_recibidos = nube::recibir_historial_del_sitio(&conexion, &contexto)?;
     let citas_recibidas = nube::recibir_citas_del_sitio(&conexion, &contexto)?;
     let historial_visitas_recibidos =
         nube::recibir_historial_visitas_del_sitio(&conexion, &contexto)?;

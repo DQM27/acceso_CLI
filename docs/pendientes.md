@@ -171,6 +171,80 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 - [x] **Reloj corregido por servidor.** Las marcas de sincronización ya no dependen del
   reloj local del dispositivo.
 
+## Auditoría de seguridad -- endurecimiento (2026-09-12)
+
+Arrancado a pedido explícito ("lo van a auditar expertos en seguridad"). Objetivo:
+que el propio CI atrape lo mecánico (CVEs conocidos, `unsafe` sin documentar, código
+sin formatear/lintear) antes de que llegue a revisión humana. Estado real, no
+aspiracional -- lo que sigue sin marcar todavía no corrió.
+
+- [x] **`cargo fmt` en verde en los 3 crates Rust** (raíz, `desktop/src-tauri`,
+  `mobile/rust-core`). 12 archivos preexistentes nunca se habían formateado con el
+  rustfmt actual (`1.9.0`, dic-2026) -- nada tocado por una feature en curso, era
+  deuda ya acumulada. `ci.yml` ya corría `cargo fmt --check` en el job `test`, así que
+  probablemente estaba rojo en `main` sin que nadie lo notara (no hay alerta de CI
+  fallando configurada en ningún lado).
+- [x] **`cargo clippy` agregado a los 3 jobs de `ci.yml`** (`test-android`, `test`,
+  `test-gui`) -- sin flags extra, reusa los niveles (`pedantic`/`nursery` como
+  aviso, denies curados) que ya vivían en cada `Cargo.toml` desde antes.
+- [x] **`unsafe` documentado + acotado.** `undocumented_unsafe_blocks` y
+  `multiple_unsafe_ops_per_block` ahora `deny` en los 3 `Cargo.toml`. Se agregó el
+  comentario `SAFETY:` que faltaba en 3 bloques (`desktop/src-tauri/src/lib.rs`
+  `MessageBoxW`, dos llamadas COM de WebView2 en `pdf/generador.rs`) -- el resto
+  (DPAPI en `src/nube/credenciales.rs` y su espejo en
+  `desktop/src-tauri/src/clave_cifrado.rs`) ya lo tenía. `mobile/rust-core` no tenía
+  ningún `unsafe` -- se le agregó `#![forbid(unsafe_code)]` en `src/lib.rs` para que
+  no pueda aparecer uno sin querer (es la frontera FFI hacia Kotlin).
+- [x] **`cargo-audit` instalado y agregado a `ci.yml`** (los 3 jobs, vía
+  `taiki-e/install-action`) -- CVEs conocidos en dependencias contra la base de
+  RustSec. **Sin correr todavía contra el crate raíz de verdad** (ver pendiente de
+  abajo) ni contra `desktop/src-tauri`/`mobile/rust-core` -- sólo se instaló el
+  binario localmente, falta el `cargo audit` real de cada uno.
+- [x] **`desktop/tsconfig.json` con `"strict": true`** -- ya empareja con
+  `web`/`web-visitas`, que lo tenían y `desktop` no. Compiló limpio al primer
+  intento, cero errores nuevos.
+- [x] **ESLint en `desktop`** (`eslint.config.js` nuevo, flat config: `@eslint/js` +
+  `typescript-eslint` + `react-hooks` + `react-refresh` + `react` con
+  `no-danger`/`jsx-no-target-blank` como las dos reglas realmente "de seguridad").
+  Los 15 errores que salieron ya se arreglaron (5 `no-non-null-assertion` con
+  chequeos reales, 4 `set-state-in-effect` diferidos vía
+  `Promise.resolve().then(...)`, 3 `no-unused-vars` resueltos con
+  `argsIgnorePattern: "^_"` en vez de tocar la convención ya establecida del
+  código). Quedan 36 warnings cosméticos (`react-refresh/only-export-components`,
+  2 de compatibilidad de `react-hook-form` con el compilador de React) -- no
+  bloquean nada, se pueden ignorar o limpiar después sin apuro. `tsc --noEmit` y
+  `npm run test` (191 tests) en verde tras los cambios.
+- [ ] **`cargo clippy` del crate raíz -- roto, sin arreglar.** Mismo tipo de hallazgo
+  que ya se corrigió en `desktop`/`mobile/rust-core` (comentario de doc sin
+  backticks, `doc_markdown = "deny"`), pero en un archivo del crate raíz todavía sin
+  identificar -- el output completo con archivo:línea nunca llegó a verse (se cortó
+  al filtrar con `Select-String` y no se volvió a pedir). Correr
+  `cargo clippy --lib --bins --tests` en la raíz y arreglar lo que salga (debería ser
+  rápido, mismo patrón mecánico que los otros dos). Ya no debería disparar la
+  recompilación completa de SQLCipher (~35 min) que sí pasó la primera vez -- el
+  `target/` de la raíz ya quedó compilado una vez esta sesión.
+- [ ] **`cargo audit` sin correr de verdad en ningún crate.** Instalado, agregado a
+  CI, pero nunca ejecutado contra los `Cargo.lock` reales de este repo -- no hay
+  garantía todavía de que pase limpio. Correr `cargo audit` en los 3 directorios
+  (raíz, `desktop/src-tauri`, `mobile/rust-core`) antes de confiar en que el step
+  de CI vaya a pasar.
+- [ ] **ESLint en `web/` y `web-visitas/` -- sin empezar.** Mismo criterio que
+  `desktop` (copiar `eslint.config.js`, ajustar `ignores`/`globals` si hace falta),
+  pero ninguno de los dos tiene todavía ni el paquete instalado. Alcance
+  desconocido -- `web-visitas` en particular usa Playwright/FullCalendar, puede
+  sacar hallazgos propios que `desktop` no tenía.
+- [ ] **`cargo-deny` (licencias + dependencias duplicadas/baneadas) -- evaluado y
+  descartado por ahora**, no por falta de valor sino por alcance: se optó por
+  `cargo-audit` (más simple, sin archivo de configuración) para esta primera
+  pasada. Si más adelante se quiere el chequeo de licencias también, agregar
+  `cargo-deny` es el paso natural siguiente.
+- [ ] **Dependabot -- no agregado.** No hay `.github/dependabot.yml` -- hoy nadie se
+  entera si una dependencia ya instalada saca un CVE nuevo *después* de este commit
+  (`cargo audit` en CI sólo protege código nuevo que se pushee).
+- [ ] **CodeQL (SAST) -- no agregado.** Análisis estático más profundo que
+  clippy/ESLint (patrones de inyección, etc.), gratis vía GitHub Actions. Ni
+  evaluado en detalle todavía, sólo mencionado como opción.
+
 ## Panel web y modelo multi-sitio
 
 - [ ] **Pulir paneles web existentes.** Mejorar historial y administración del panel

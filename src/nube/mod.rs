@@ -11,11 +11,14 @@ pub mod cliente;
 pub mod credenciales;
 pub mod sincronizacion;
 
-pub use auth_supabase::{AuthSupabaseError, Jwk, SesionSupabase, cambiar_password, login, obtener_jwks, refrescar, verificar_token_offline};
+pub use auth_supabase::{
+    AuthSupabaseError, Jwk, SesionSupabase, cambiar_password, login, obtener_jwks, refrescar,
+    verificar_token_offline,
+};
 pub use cliente::{MetadatosDispositivo, NubeError, TokenDispositivo, autenticar_dispositivo};
 pub use sincronizacion::{
-    ConflictoIngresoActivo, ContextoSincronizacion, IngresoRemoto, ResumenCatalogo,
-    ResumenDrenado, SincronizacionError, cerrar_ingreso_remoto, contar_fallos_permanentes,
+    ConflictoIngresoActivo, ContextoSincronizacion, IngresoRemoto, ResumenCatalogo, ResumenDrenado,
+    SincronizacionError, cerrar_ingreso_remoto, contar_fallos_permanentes,
     contratista_activo_en_otro_sitio, contratistas_con_conflicto_activo, drenar_cola,
     gafete_ocupado_en_otro_dispositivo, recibir_catalogo_del_sitio,
     recibir_cierres_de_ingresos_propios, recibir_citas_del_sitio, recibir_historial_del_sitio,

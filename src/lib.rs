@@ -41,4 +41,3 @@ compile_error!(
      sqlite-plano (rápido para iterar local, sin cifrar) o cifrado-sqlite3mc (en \
      evaluación, todavía sin motor real enlazado -- ver Cargo.toml)"
 );
-

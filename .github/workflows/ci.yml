@@ -20,10 +20,25 @@ jobs:
 
       - name: Instalar Rust para el núcleo móvil de pruebas
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: mobile/rust-core
+
+      - name: Instalar cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: Vulnerabilidades conocidas en dependencias (mobile/rust-core)
+        working-directory: mobile/rust-core
+        run: cargo audit
+
+      - name: Clippy (mobile/rust-core)
+        working-directory: mobile/rust-core
+        run: cargo clippy --all-targets
 
       - name: Tests unitarios Android y compilación Kotlin
         working-directory: mobile/android
@@ -37,12 +52,23 @@ jobs:
       - name: Instalar toolchain de Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
+          components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
 
       - name: Formato (rustfmt)
         run: cargo fmt --check
+
+      - name: Instalar cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: Vulnerabilidades conocidas en dependencias
+        run: cargo audit
+
+      - name: Clippy
+        run: cargo clippy --all-targets
 
       - name: Build
         run: cargo build --verbose
@@ -57,6 +83,8 @@ jobs:
 
       - name: Instalar toolchain de Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -82,6 +110,19 @@ jobs:
       - name: Tests (frontend)
         working-directory: desktop
         run: npm run test
+
+      - name: Instalar cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: Vulnerabilidades conocidas en dependencias (Rust del lado Tauri)
+        working-directory: desktop/src-tauri
+        run: cargo audit
+
+      - name: Clippy (Rust del lado Tauri)
+        working-directory: desktop/src-tauri
+        run: cargo clippy --all-targets
 
       - name: Tests (Rust del lado Tauri)
         working-directory: desktop/src-tauri

@@ -111,3 +111,10 @@ missing_const_for_fn = "allow"
 too_long_first_doc_paragraph = "allow"
 needless_pass_by_value = "allow"
 suboptimal_flops = "allow"
+
+# Ver el mismo agregado en el Cargo.toml de la raíz. Este crate en particular
+# no tiene ningún `unsafe` hoy -- `#![forbid(unsafe_code)]` en `src/lib.rs`
+# lo deja imposible de introducir sin querer, algo valioso justo por ser la
+# frontera FFI que expone la app móvil.
+undocumented_unsafe_blocks = "deny"
+multiple_unsafe_ops_per_block = "deny"

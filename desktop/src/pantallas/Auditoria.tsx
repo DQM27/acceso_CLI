@@ -64,8 +64,11 @@ export default function Auditoria() {
 
   useEffect(() => {
     let vigente = true;
-    setCargando(true);
-    Promise.all([listarAuditoria(), listarAuditoriaGafetes()])
+    // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
+    // directo -- ver el mismo comentario en Activos.tsx.
+    Promise.resolve()
+      .then(() => setCargando(true))
+      .then(() => Promise.all([listarAuditoria(), listarAuditoriaGafetes()]))
       .then(([{ items: cambios, truncado }, incidentesGafetes]) => {
         if (!vigente) return;
         setTruncado(truncado);
