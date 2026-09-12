@@ -1955,12 +1955,15 @@ impl Nucleo {
         let guard = self.lock_sesion_supabase();
         let entrada = guard.as_ref()?;
         let vigente_por = std::time::Duration::from_secs(entrada.expires_in);
-        if entrada.confirmada_en.elapsed() >= vigente_por
-            || entrada.confirmada_en.elapsed() >= TOPE_PRESENCIA_SUPABASE
-        {
-            return None;
+        let vencido = entrada.confirmada_en.elapsed() >= vigente_por
+            || entrada.confirmada_en.elapsed() >= TOPE_PRESENCIA_SUPABASE;
+        let token = entrada.access_token.clone();
+        drop(guard);
+        if vencido {
+            None
+        } else {
+            Some(token)
         }
-        Some(entrada.access_token.clone())
     }
 
     /// `refresh_token` actual, para la renovación en segundo plano -- `None`

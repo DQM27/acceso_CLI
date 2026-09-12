@@ -168,7 +168,7 @@ fn abrir_conexion_secundaria_base(
 /// trabajo en un hilo aparte (exportar) que no debe competir por el
 /// candado de escritura de la conexión principal
 /// (`docs/pendientes.md` sobre el hilo de exportación en TUI/CLI). Agrega
-/// `PRAGMA query_only = ON` sobre la base común: SQLite rechaza cualquier
+/// `PRAGMA query_only = ON` sobre la base común: `SQLite` rechaza cualquier
 /// escritura en esta conexión, incluso dentro de una transacción -- si
 /// algún llamador necesita escribir (ej. un hilo de sincronización), debe
 /// usar [`abrir_conexion_secundaria_escritura`] en su lugar. A diferencia
