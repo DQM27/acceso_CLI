@@ -113,17 +113,31 @@ consumen esa identidad (login), no la originan. Esto es parte de
 escritura que dicen `using (true)` matizado por "sitio_id no nulo en el JWT
 O admin_global" — es decir, **cualquier dispositivo autenticado de
 cualquier sitio puede leer y escribir estas tres tablas para TODOS los
-sitios**, no solo el suyo. Es intencional (una baja de contratista tiene
-que verse en todos los sitios a la vez, ver `docs/decisiones-tecnicas.md`,
-entrada "globaliza_contratistas_y_empresas"), pero es un radio de exposición
-real y documentado: un dispositivo comprometido de un sitio puede, hoy,
-tocar datos de todos los demás sitios, incluido reasignarle el `rol` a un
-usuario ajeno. Esto está marcado como hallazgo de seguridad A-01, abierto,
-en `docs/auditorias/AUDITORIA_SEGURIDAD_WEB_SUPABASE_2026-09-10.md`, y los
-propios tests (`supabase/tests/usuarios_autorizacion.sql`,
-`contratistas_autorizacion.sql`) lo verifican a propósito — si algún día se
-cierra esa política, esos tests van a fallar, y esa falla es la señal de
-que hay que revisar el hallazgo, no un bug del test.
+sitios**, no solo el suyo. Esto está marcado como hallazgo de seguridad
+A-01 en `docs/auditorias/AUDITORIA_SEGURIDAD_WEB_SUPABASE_2026-09-10.md`.
+
+**Decisión 2026-09-12, revisada tabla por tabla (ya no es un bloque único):**
+
+- **`contratistas`/`empresas`: se queda como está, a propósito.** El acceso
+  global de escritura es comportamiento deseado, no un descuido -- una baja
+  de contratista tiene que verse en todos los sitios a la vez (ver
+  `docs/decisiones-tecnicas.md`, entrada "globaliza_contratistas_y_
+  empresas"), y el alta de contratistas se va a habilitar también desde
+  mobile (ver `docs/pendientes.md`, "Reagregar el alta de contratista en
+  mobile"), reforzando que el acceso cross-site sigue siendo necesario acá.
+  Sigue habiendo radio de exposición real (un dispositivo comprometido
+  puede tocar contratistas/empresas de cualquier sitio), aceptado
+  conscientemente.
+- **`usuarios`: se está cerrando.** Ya no tiene sentido que un dispositivo
+  pueda crear/editar usuarios ni reasignarles el `rol` -- esa capacidad
+  queda exclusiva del panel (`admin-create-usuario`/
+  `admin-reset-password-usuario`). En curso: primero se retira la
+  capacidad de crear/editar usuarios de TUI/escritorio (código cliente,
+  para que dejen de depender de escribir esta tabla), y recién después se
+  cierra la política RLS de `usuarios` a sólo `admin_global` -- en ese
+  orden, para no romper la sincronización de una capacidad que el cliente
+  todavía usa. Los tests (`supabase/tests/usuarios_autorizacion.sql`) se
+  actualizan en el mismo cambio para reflejar la política nueva.
 
 `ingresos`, `dispositivos` y `gafetes`, en cambio, sí están acotados
 estrictamente por sitio para un dispositivo normal (solo `admin_global` ve
@@ -324,8 +338,10 @@ más cuidado/tiempo del que ameritaba esta pasada):
   Ya no aplica la razón original ("no hay contraseñas que proteger") desde
   que existe login por contraseña real vía Supabase Auth — se recomienda
   activarlo.
-- A-01 (RLS cross-site en contratistas/empresas/usuarios, sección 3.3) —
-  riesgo aceptado y documentado, no un olvido.
+- A-01 (RLS cross-site, sección 3.3) — ya no es un bloque único: para
+  `contratistas`/`empresas` es riesgo aceptado y documentado a propósito
+  (queda así); para `usuarios` se está cerrando (retirar la UI de
+  crear/editar del lado cliente primero, cerrar la política RLS después).
 - **7 índices "sin uso" — revisados, decisión: dejarlos todos.** 4 de los 7
   (`usuarios_dispositivo_origen_id_idx`, `usuarios_sitio_id_idx`,
   `idx_cita_visitantes_cedula`, `idx_movimientos_visita_cita_visitante`)
