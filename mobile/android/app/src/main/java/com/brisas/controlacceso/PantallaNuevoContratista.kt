@@ -66,7 +66,22 @@ private fun etiquetaTipo(tipo: TipoIngreso): String =
         TipoIngreso.SWAT -> "SWAT"
     }
 
-private fun FechaDocumento.aTextoIso(): String = "%04d-%02d-%02d".format(anio, mes, dia)
+/// Misma convención día-mes-año que el resto de la app (`Tiempo.kt`,
+/// `desktop/src/tiempo.ts`) -- Rust exige ISO (`AAAA-MM-DD`) para parsear la
+/// fecha, pero mostrarla así en el formulario rompía la convención que la
+/// persona ya espera en cualquier otra pantalla.
+private fun FechaDocumento.aTextoDDMMYYYY(): String = "%02d-%02d-%04d".format(dia, mes, anio)
+
+/// Inverso de [aTextoDDMMYYYY] -- convierte lo que la persona tipeó
+/// (día-mes-año) al formato ISO que espera `DatosContratista.fechaVencimientoPraind`
+/// en Rust. Si el texto no tiene la forma esperada se devuelve tal cual: Rust
+/// igual la rechaza con un error legible que cita el texto original.
+private fun textoDDMMYYYYaIso(texto: String): String {
+    val partes = texto.split("-")
+    if (partes.size != 3) return texto
+    val (dia, mes, anio) = partes
+    return "%s-%s-%s".format(anio.padStart(4, '0'), mes.padStart(2, '0'), dia.padStart(2, '0'))
+}
 
 /// Compara texto libre del carnet contra los nombres reales de
 /// `Nucleo.listarEmpresas()` -- ninguna de las dos fuentes garantiza
@@ -135,7 +150,7 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
                 documento.nombre?.let { nombre = it }
                 if (documento.tipo == TipoDocumento.CARNET_INDUCCION_PRAIND) {
                     tipoIngreso = TipoIngreso.PRAIND
-                    documento.vencimiento?.let { fechaPraind = it.aTextoIso() }
+                    documento.vencimiento?.let { fechaPraind = it.aTextoDDMMYYYY() }
                     val textoEmpresa = documento.empresa?.trim()
                     when {
                         textoEmpresa.isNullOrBlank() -> Unit
@@ -289,7 +304,7 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
             OutlinedTextField(
                 value = fechaPraind,
                 onValueChange = { fechaPraind = it.filter { c -> c.isDigit() || c == '-' } },
-                label = { Text("Vencimiento PRAIND (AAAA-MM-DD)") },
+                label = { Text("Vencimiento PRAIND (DD-MM-AAAA)") },
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -327,7 +342,7 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
                                     nombre = nombre,
                                     empresaId = empresa.id,
                                     tipoIngreso = tipoIngreso,
-                                    fechaVencimientoPraind = fechaPraind.ifBlank { null },
+                                    fechaVencimientoPraind = fechaPraind.ifBlank { null }?.let(::textoDDMMYYYYaIso),
                                     esPersonalRuta = personalRuta,
                                     tieneAcceso = tieneAcceso,
                                 ),

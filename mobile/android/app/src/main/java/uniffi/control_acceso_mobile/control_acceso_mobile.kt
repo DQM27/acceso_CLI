@@ -1050,7 +1050,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube_con_secreto() != 45842) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube() != 55855) {
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube() != 44131) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube_con_secreto() != 16587) {
@@ -1749,6 +1749,14 @@ public interface NucleoInterface {
      * Autentica este dispositivo, drena la bandeja de salida pendiente y
      * refresca la caché de lo que el otro dispositivo del mismo sitio
      * tiene abierto ahora mismo.
+     * Reintenta UNA vez si el intento falla porque el token de dispositivo
+     * cacheado, que `autenticar_con_cache` creía vigente, resultó
+     * rechazado por el receptor a mitad de camino -- ver
+     * `SincronizacionError::token_dispositivo_vencido` y el mismo patrón en
+     * `desktop/src-tauri/src/comandos/nube.rs::ejecutar_sincronizacion`.
+     * El candado de `sincronizacion_en_curso` se toma acá, envolviendo los
+     * DOS intentos -- así ninguna otra sincronización se cuela entre el
+     * primer fallo y el reintento.
      */
     fun `sincronizarConNube`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): ResumenSincronizacion
     
@@ -2577,6 +2585,14 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
      * Autentica este dispositivo, drena la bandeja de salida pendiente y
      * refresca la caché de lo que el otro dispositivo del mismo sitio
      * tiene abierto ahora mismo.
+     * Reintenta UNA vez si el intento falla porque el token de dispositivo
+     * cacheado, que `autenticar_con_cache` creía vigente, resultó
+     * rechazado por el receptor a mitad de camino -- ver
+     * `SincronizacionError::token_dispositivo_vencido` y el mismo patrón en
+     * `desktop/src-tauri/src/comandos/nube.rs::ejecutar_sincronizacion`.
+     * El candado de `sincronizacion_en_curso` se toma acá, envolviendo los
+     * DOS intentos -- así ninguna otra sincronización se cuela entre el
+     * primer fallo y el reintento.
      */
     @Throws(NucleoException::class)override fun `sincronizarConNube`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): ResumenSincronizacion {
             return FfiConverterTypeResumenSincronizacion.lift(
@@ -3289,6 +3305,13 @@ data class PreparacionIngreso (
     , 
     var `tipoIngreso`: TipoIngreso
     , 
+    /**
+     * `None` para SWAT (nunca vence). Viaja como texto ISO
+     * (`AAAA-MM-DD`), mismo criterio que `DatosContratista` en este mismo
+     * archivo.
+     */
+    var `fechaVencimientoPraind`: kotlin.String?
+    , 
     var `resultadoAcceso`: ResultadoAcceso
     , 
     var `requiereGafete`: kotlin.Boolean
@@ -3326,6 +3349,7 @@ public object FfiConverterTypePreparacionIngreso: FfiConverterRustBuffer<Prepara
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterTypeTipoIngreso.read(buf),
+            FfiConverterOptionalString.read(buf),
             FfiConverterTypeResultadoAcceso.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
@@ -3340,6 +3364,7 @@ public object FfiConverterTypePreparacionIngreso: FfiConverterRustBuffer<Prepara
             FfiConverterString.allocationSize(value.`nombre`) +
             FfiConverterString.allocationSize(value.`empresaNombre`) +
             FfiConverterTypeTipoIngreso.allocationSize(value.`tipoIngreso`) +
+            FfiConverterOptionalString.allocationSize(value.`fechaVencimientoPraind`) +
             FfiConverterTypeResultadoAcceso.allocationSize(value.`resultadoAcceso`) +
             FfiConverterBoolean.allocationSize(value.`requiereGafete`) +
             FfiConverterBoolean.allocationSize(value.`tieneIngresoActivo`) +
@@ -3353,6 +3378,7 @@ public object FfiConverterTypePreparacionIngreso: FfiConverterRustBuffer<Prepara
             FfiConverterString.write(value.`nombre`, buf)
             FfiConverterString.write(value.`empresaNombre`, buf)
             FfiConverterTypeTipoIngreso.write(value.`tipoIngreso`, buf)
+            FfiConverterOptionalString.write(value.`fechaVencimientoPraind`, buf)
             FfiConverterTypeResultadoAcceso.write(value.`resultadoAcceso`, buf)
             FfiConverterBoolean.write(value.`requiereGafete`, buf)
             FfiConverterBoolean.write(value.`tieneIngresoActivo`, buf)
