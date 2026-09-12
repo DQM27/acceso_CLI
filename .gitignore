@@ -1,5 +1,10 @@
 # Rust
 /target/
+# Vendor-lib de SQLite3MC (ver sqlite3mc-vendor-lib/build.rs): la lib estática
+# compilada es artefacto de build, no fuente -- el amalgamation vendorizado sí
+# se commitea.
+/sqlite3mc-vendor-lib/target/
+/sqlite3mc-vendor-lib/dist/
 
 # Experimentos: cancha de pruebas, no código de producción — el que se usa de
 # verdad vive integrado en el proyecto (ver desktop/src-tauri, núcleo raíz).

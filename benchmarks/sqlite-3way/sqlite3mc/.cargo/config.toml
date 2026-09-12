@@ -9,8 +9,14 @@
 # ninguna DLL de verdad).
 #
 # Requiere haber compilado antes ese crate hermano (produce `dist/sqlite3.lib`):
-#   cargo build --release --manifest-path ../sqlite3mc-vendor-lib/Cargo.toml
+#   cargo build --release --manifest-path ../../../sqlite3mc-vendor-lib/Cargo.toml
 # Ver experiments/db-cipher-lab/README.md para el porqué de las dos fases.
+#
+# `sqlite3mc-vendor-lib` vive en la raíz del repo (no acá al lado) desde que
+# el motor real (`cifrado-sqlite3mc` del crate raíz `control_acceso`) también
+# lo usa -- un solo amalgamation vendorizado de 14MB, no uno duplicado por
+# consumidor. Este smoke test sigue siendo útil aparte: verifica el enlace
+# estático sin arrastrar todo `AppCore`.
 [env]
 SQLITE3_STATIC = "1"
-SQLITE3_LIB_DIR = { value = "../sqlite3mc-vendor-lib/dist", relative = true }
+SQLITE3_LIB_DIR = { value = "../../../sqlite3mc-vendor-lib/dist", relative = true }

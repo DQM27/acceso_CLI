@@ -25,3 +25,23 @@ build-desktop-3mc = ["build", "--manifest-path", "desktop/src-tauri/Cargo.toml",
 build-mobile-plano = ["build", "--manifest-path", "mobile/rust-core/Cargo.toml", "--no-default-features", "--features", "sqlite-plano"]
 test-mobile-plano = ["test", "--manifest-path", "mobile/rust-core/Cargo.toml", "--no-default-features", "--features", "sqlite-plano"]
 build-mobile-3mc = ["build", "--manifest-path", "mobile/rust-core/Cargo.toml", "--no-default-features", "--features", "cifrado-sqlite3mc"]
+test-mobile-3mc = ["test", "--manifest-path", "mobile/rust-core/Cargo.toml", "--no-default-features", "--features", "cifrado-sqlite3mc"]
+# Motor candidato para el crate raíz -- sin esto no hay forma de correr los
+# tests del núcleo bajo SQLite3MC (`test-plano`/default sólo cubren los otros
+# dos). Requiere haber compilado antes `sqlite3mc-vendor-lib` (ver [env]
+# abajo): `cargo build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml`.
+test-3mc = ["test", "--no-default-features", "--features", "nube,cifrado-sqlite3mc"]
+
+[env]
+# SQLite3 Multiple Ciphers (ChaCha20-Poly1305) -- el amalgamation vendorizado
+# se compila aparte, ANTES de cualquier build que use `cifrado-sqlite3mc`, en
+# `sqlite3mc-vendor-lib/` (ver ese crate y su build.rs para el porqué de las
+# dos fases: `libsqlite3-sys` resuelve `-lstatic=sqlite3` al compilarse a sí
+# mismo, antes de que corra el build script de cualquier crate río abajo).
+# Sin ninguna de las features `bundled`/`bundled-sqlcipher-vendored-openssl`
+# activas (o sea, con sólo `cifrado-sqlite3mc` prendida), `libsqlite3-sys` cae
+# a su modo de link externo y lee estas dos variables -- inofensivas para
+# `cifrado-sqlcipher`/`sqlite-plano`, que ya traen su propio motor vendorizado
+# y nunca las consultan.
+SQLITE3_STATIC = "1"
+SQLITE3_LIB_DIR = { value = "sqlite3mc-vendor-lib/dist", relative = true }

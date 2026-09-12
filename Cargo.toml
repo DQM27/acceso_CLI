@@ -18,7 +18,7 @@ cifrado-secreto-dispositivo-portable = ["dep:aes-gcm", "dep:sha2"]
 cifrado-secreto-dispositivo = ["dep:machine-uid", "dep:windows", "cifrado-secreto-dispositivo-portable"]
 # SQLCipher real (motor de producción) -- compila OpenSSL vendorizado desde
 # fuente, lento en frío y depende de un Perl completo (ver
-# docs/auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md, sección de
+# docs/auditorias/auditoria-rendimiento-core-rust-2026-09-10.md, sección de
 # cifrado). Parte del `default` a propósito: nadie debe tener que acordarse
 # de pedirlo para que un build "normal" siga siendo el motor real.
 cifrado-sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
@@ -30,15 +30,15 @@ cifrado-sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
 # `.cargo/config.toml`.
 sqlite-plano = ["rusqlite/bundled"]
 # SQLite3 Multiple Ciphers (ChaCha20-Poly1305) -- tercer motor en evaluación
-# para el benchmark de esta rama (ver
-# docs/auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md, sección 12).
-# TODO(bench/sqlite-3way): reserva el nombre/lugar en el switch de tres vías,
-# pero todavía NO enlaza un motor real -- no existe un crate de bindings en
-# crates.io; falta decidir e implementar la integración (vendorizar el
-# amalgamation vs. link a DLL, ver sección 11 del mismo documento) antes de
-# que esta feature compile algo. Mientras tanto, activarla sola deja a
-# `rusqlite` sin ningún motor vendorizado y el build falla en el link --
-# comportamiento esperado, no un bug.
+# (ver docs/auditorias/auditoria-rendimiento-core-rust-2026-09-10.md, sección
+# 12, y docs/decisiones-tecnicas.md entrada 2026-09-12). No existe un crate de
+# bindings en crates.io, así que esta feature no trae ningún `rusqlite/bundled*`
+# -- deja a `libsqlite3-sys` en su modo de link externo, que resuelve contra
+# `/sqlite3mc-vendor-lib/` (amalgamation vendorizado, compilado APARTE como
+# paso previo obligatorio -- ver ese crate). Sin haber corrido antes
+# `cargo build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml`,
+# activar esta feature sola falla en el link -- comportamiento esperado, no
+# un bug.
 cifrado-sqlite3mc = []
 
 [dependencies]
@@ -149,7 +149,7 @@ strip = true
 [profile.release-native]
 inherits = "release"
 
-# Build final de distribucion -- ver docs/auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md
+# Build final de distribucion -- ver docs/auditorias/auditoria-rendimiento-core-rust-2026-09-10.md
 # seccion 18. `fat` LTO optimiza todos los crates juntos en vez de por separado
 # (mas lento de compilar/linkear que `thin`, tiempo que no importa para un build
 # final poco frecuente). `panic = "abort"` es seguro acá: el codigo de produccion
