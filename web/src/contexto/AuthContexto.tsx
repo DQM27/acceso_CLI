@@ -32,10 +32,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let vigente = true;
+    // Cada llamada a `autorizar` (una por cada evento de auth -- login,
+    // refresh de token, cambio de foco de pestaña) toma su propio "turno".
+    // `vigente` sólo protege contra el desmontaje del componente; dos
+    // llamadas pueden estar en vuelo a la vez mientras sigue montado (ej.
+    // cambio rápido de cuenta), y sin esto la que responde último gana
+    // aunque haya arrancado antes -- una consulta vieja podía restaurar una
+    // sesión ya superada por una más nueva (hallazgo P2,
+    // docs/reporte-seguridad-web-2026-09-09.md). Mismo patrón que
+    // `web-visitas/src/contexto/AuthContexto.tsx`.
+    let turnoActual = 0;
 
     async function autorizar(usuario: User | null) {
+      const turno = ++turnoActual;
+      const vigenteYActual = () => vigente && turno === turnoActual;
+
       if (!usuario?.email) {
-        if (vigente) {
+        if (vigenteYActual()) {
           setSesion(null);
           setCargando(false);
         }
@@ -48,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("correo", usuario.email)
         .maybeSingle();
 
-      if (!vigente) return;
+      if (!vigenteYActual()) return;
 
       // Error de red/consulta (timeout, Postgres caído un instante) NO es
       // lo mismo que "no está en administradores_panel" -- antes los dos

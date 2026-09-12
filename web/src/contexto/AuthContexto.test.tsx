@@ -118,6 +118,44 @@ describe("AuthContexto", () => {
     expect(screen.getByTestId("sesion").textContent).toBe("null");
   });
 
+  it("no restaura una cuenta vieja si su consulta de autorización responde después que la de una cuenta más nueva", async () => {
+    mocks.getSession.mockResolvedValue({ data: { session: null } });
+
+    render(
+      <AuthProvider>
+        <Sonda />
+      </AuthProvider>,
+    );
+    await screen.findByText("false", { selector: "[data-testid=cargando]" });
+
+    let resolverVieja!: (valor: unknown) => void;
+    mocks.maybeSingle.mockReturnValueOnce(
+      new Promise((resolver) => {
+        resolverVieja = resolver;
+      }),
+    );
+    await act(async () => {
+      escuchador?.("SIGNED_IN", { user: usuario("vieja@example.com") });
+    });
+
+    mocks.maybeSingle.mockResolvedValueOnce({
+      data: { correo: "nueva@example.com" },
+      error: null,
+    });
+    await act(async () => {
+      escuchador?.("SIGNED_IN", { user: usuario("nueva@example.com") });
+    });
+    await screen.findByText("nueva@example.com");
+
+    // La consulta de la cuenta vieja llega tarde -- no debe pisar la sesión
+    // ya vigente de la cuenta nueva (hallazgo P2).
+    await act(async () => {
+      resolverVieja({ data: { correo: "vieja@example.com" }, error: null });
+    });
+
+    expect(screen.getByTestId("sesion").textContent).toBe("nueva@example.com");
+  });
+
   it("no deja la app en blanco para siempre si getSession() rechaza", async () => {
     mocks.getSession.mockRejectedValue(new Error("fallo interno de supabase-js"));
 
