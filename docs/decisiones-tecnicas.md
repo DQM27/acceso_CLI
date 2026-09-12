@@ -351,3 +351,59 @@ completo (modelo de datos, los dos sistemas de autorización, Realtime en
 detalle, Edge Functions, Vault, flujo de migraciones) -- ese archivo es el
 mapa completo del "cómo funciona hoy"; este archivo sigue siendo el
 registro cronológico del "por qué".
+
+---
+
+## 2026-09-12 — Token de dispositivo vencido a mitad de sincronización
+
+**Síntoma real, en un teléfono de prueba:** login con Supabase Auth
+exitoso, pero al tocar "Sincronizar" apareció un error crudo "401 jwt
+expirado" -- funcionó al reintentar minutos después, sin explicación
+visible de la causa.
+
+**Diagnóstico (logs de Supabase, `edge_logs`/`function_edge_logs`):** el
+último `device-auth` exitoso fue mucho antes de la falla -- el
+`TokenDispositivo` cacheado (`Nucleo::autenticar_con_cache` en móvil,
+`GuiState::autenticar_con_cache` en escritorio, idéntico patrón en las dos
+plataformas) tiene un TTL de 1h y sólo se renueva "on demand", justo antes
+de la próxima llamada de red -- nada lo refresca en segundo plano mientras
+la app está inactiva (pantalla apagada, celular guardado). Con el
+dispositivo más de una hora sin sincronizar, el caché quedó apuntando a un
+token ya vencido para el receptor, y **no había ningún plan B**: cualquier
+llamada de la cadena de sync (`drenar_cola`, `recibir_catalogo_del_sitio`,
+etc.) que topara con eso fallaba con `SincronizacionError::
+RespuestaInesperada{status: 401}`, y ese error se propagaba tal cual hasta
+el usuario -- la sincronización entera fallaba en vez de auto-corregirse.
+
+**Fix (mismo patrón en `src/nube/sincronizacion.rs` + escritorio + móvil):**
+
+1. `SincronizacionError::token_dispositivo_vencido()` -- distingue este
+   caso puntual (`RespuestaInesperada{status: 401, ..}`) de cualquier otro
+   fallo de sincronización.
+2. `ejecutar_sincronizacion` (escritorio) y `sincronizar_con_nube`/
+   `sincronizar_con_secreto` (móvil) ahora reintentan la sincronización
+   completa UNA vez si el primer intento falla así: invalidan el
+   `TokenDispositivo` cacheado (`invalidar_token_cacheado`, nuevo en
+   `GuiState`/`Nucleo`) y vuelven a intentar con un token recién pedido.
+   El candado de "una sincronización a la vez" (`SINCRONIZACION`/
+   `sincronizacion_en_curso`) envuelve los DOS intentos, no sólo uno, para
+   que nada se cuele entre medio.
+3. **Mitigación adicional:** `device-auth` sube su TTL de 1h a 12h (mismo
+   tope que ya usa la sesión de persona, `TOPE_PRESENCIA_SUPABASE`) --
+   reduce cuánto necesita este reintento en la práctica, no lo reemplaza
+   (la ventana de inactividad siempre puede superar cualquier TTL fijo).
+
+**Por qué no se tocó la sesión de Supabase Auth (persona):** esa parte ya
+se renueva sola en cada sync (`nube::refrescar` con el `refresh_token`,
+agregado a móvil el mismo día que su login -- ver la entrada de migración
+a Supabase Auth) y confirmó éxito en los logs (`POST /auth/v1/token?
+grant_type=refresh_token`, 200) durante la misma ventana de la falla -- el
+síntoma era exclusivamente del token de DISPOSITIVO, no del de persona.
+
+Verificado: `cargo test-plano` (toda la suite en verde, incluido un test
+nuevo para `token_dispositivo_vencido`), `cargo test-mobile-plano` (12/12),
+`cargo check` de `desktop/src-tauri`, `gradlew compileDebugKotlin`. APK de
+mobile recompilado con el fix, todavía sin instalar/probar en el teléfono
+real. Tampoco se probó el mismo escenario (más de 12h de inactividad) en
+vivo -- no hay forma práctica de esperar 12h reales para confirmarlo,
+queda como diseño razonado, no observado de nuevo.

@@ -112,6 +112,25 @@ fn autenticar(state: &GuiState) -> Result<nube::TokenDispositivo, String> {
     Ok(token)
 }
 
+/// Distingue "el token de dispositivo cacheado quedó vencido a mitad de
+/// camino" (ver `SincronizacionError::token_dispositivo_vencido`) de
+/// cualquier otro fallo -- sólo el primero amerita invalidar el caché y
+/// reintentar, el resto se propaga tal cual con su mensaje ya traducido.
+enum FalloSincronizacion {
+    TokenVencido,
+    Mensaje(String),
+}
+
+impl From<nube::SincronizacionError> for FalloSincronizacion {
+    fn from(error: nube::SincronizacionError) -> Self {
+        if error.token_dispositivo_vencido() {
+            Self::TokenVencido
+        } else {
+            Self::Mensaje(mensaje_sincronizacion(error))
+        }
+    }
+}
+
 /// Autentica, drena la bandeja de salida pendiente y refresca la caché de
 /// lo que el otro dispositivo del mismo sitio tiene abierto ahora mismo.
 /// Compartida por el comando manual (`sincronizar_con_nube`) y el
@@ -119,6 +138,15 @@ fn autenticar(state: &GuiState) -> Result<nube::TokenDispositivo, String> {
 /// dispararla. Autoriza rápido con el candado compartido (dentro de
 /// `autenticar`), lo suelta, y hace la parte lenta (red) sobre una conexión
 /// propia -- ver `GuiState::conexion_secundaria`.
+///
+/// Reintenta UNA vez si `intentar_sincronizacion` falla porque el token
+/// cacheado, que `autenticar_con_cache` creía vigente, resultó rechazado
+/// por el receptor a mitad de camino (desfase de reloj, o el dispositivo
+/// estuvo inactivo más tiempo del que el margen de 30s contemplaba --
+/// visto en vivo: más de una hora sin sincronizar, con el token ya vencido
+/// hacía rato). Sin este reintento, la sincronización entera fallaba y
+/// quien usa la app tenía que notarlo y volver a apretar "Sincronizar" a
+/// mano -- ahora se recupera sola.
 pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, String> {
     // El timer, los avisos remotos y el botón manual comparten la misma cola.
     // Sólo una ejecución puede drenarla a la vez; el núcleo queda libre.
@@ -126,7 +154,25 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
     let _sincronizacion = SINCRONIZACION
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let token = autenticar(state)?;
+
+    match intentar_sincronizacion(state) {
+        Err(FalloSincronizacion::TokenVencido) => {
+            state.invalidar_token_cacheado();
+            intentar_sincronizacion(state).map_err(|fallo| match fallo {
+                FalloSincronizacion::TokenVencido => {
+                    "El token de este dispositivo venció y no se pudo renovar -- revisá la conexión"
+                        .to_string()
+                }
+                FalloSincronizacion::Mensaje(mensaje) => mensaje,
+            })
+        }
+        Err(FalloSincronizacion::Mensaje(mensaje)) => Err(mensaje),
+        Ok(resumen) => Ok(resumen),
+    }
+}
+
+fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, FalloSincronizacion> {
+    let token = autenticar(state).map_err(FalloSincronizacion::Mensaje)?;
     let contexto = nube::ContextoSincronizacion {
         base_url: nube::BASE_URL,
         apikey: nube::APIKEY,
@@ -148,20 +194,18 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
         state.iniciar_sesion_supabase(sesion);
     }
 
-    let conexion = state.conexion_secundaria()?;
-    let resumen = nube::drenar_cola(&conexion, &contexto, 200).map_err(mensaje_sincronizacion)?;
-    let cierres_recibidos = nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)
-        .map_err(mensaje_sincronizacion)?;
-    let remotos =
-        nube::recibir_ingresos_abiertos(&conexion, &contexto).map_err(mensaje_sincronizacion)?;
-    let catalogo =
-        nube::recibir_catalogo_del_sitio(&conexion, &contexto).map_err(mensaje_sincronizacion)?;
+    let conexion = state
+        .conexion_secundaria()
+        .map_err(FalloSincronizacion::Mensaje)?;
+    let resumen = nube::drenar_cola(&conexion, &contexto, 200)?;
+    let cierres_recibidos = nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)?;
+    let remotos = nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
+    let catalogo = nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
     let movimientos_historial_recibidos =
-        nube::recibir_historial_del_sitio(&conexion, &contexto).map_err(mensaje_sincronizacion)?;
-    let citas_recibidas =
-        nube::recibir_citas_del_sitio(&conexion, &contexto).map_err(mensaje_sincronizacion)?;
-    let historial_visitas_recibidos = nube::recibir_historial_visitas_del_sitio(&conexion, &contexto)
-        .map_err(mensaje_sincronizacion)?;
+        nube::recibir_historial_del_sitio(&conexion, &contexto)?;
+    let citas_recibidas = nube::recibir_citas_del_sitio(&conexion, &contexto)?;
+    let historial_visitas_recibidos =
+        nube::recibir_historial_visitas_del_sitio(&conexion, &contexto)?;
     // Mejor esfuerzo a propósito -- ya se llegó hasta acá con la nube
     // respondiendo bien, pero si este chequeo puntual falla no tiene
     // sentido tumbar un sync que por lo demás anduvo. Vacío en ese caso, no

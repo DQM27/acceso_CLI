@@ -237,6 +237,21 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 
 ## Android y lector de documentos
 
+- [ ] **Mobile muestra errores crudos de nube/sincronización, sin traducir
+  (hallazgo 2026-09-12).** Desktop redacta todo error de `nube`/`sync` a
+  mensajes amigables (`mensaje_nube`/`mensaje_sincronizacion` en
+  `src/mensajes.rs`), pero `mobile/rust-core/src/lib.rs` nunca adoptó ese
+  patrón -- 23 sitios hacen `NucleoError::Interno { mensaje:
+  error.to_string() }` directo, que Kotlin muestra tal cual llega (texto
+  crudo de `reqwest`/HTTP, no una frase en español). Encontrado al ver un
+  error "401 jwt expirado" crudo tras loguear con Supabase Auth y tocar
+  "Sincronizar" -- la causa real de ESE error puntual ya se investigó y
+  cerró (ver `docs/decisiones-tecnicas.md`, "token de dispositivo vencido
+  a mitad de sincronización"); esta entrada sigue abierta sólo por el
+  problema general de mensajes sin traducir en mobile, no por ese caso
+  puntual. Preexistente, no introducido por la migración de login a
+  Supabase Auth de esa misma fecha.
+
 Revisado contra código el 2026-09-08. Evidencia principal:
 `MrzParser.kt`, `LectorDocumentosIdentidad.kt`, `EstabilizadorLectura.kt`,
 `PantallaEscanearCedula.kt` y pruebas unitarias dirigidas en verde para parser,
