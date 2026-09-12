@@ -29,17 +29,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 
-/// Reemplaza al formulario de login cuando `NucleoException.SinPasswordLocal`
-/// avisa que esta cédula existe (sincronizada de otro dispositivo) pero
-/// nunca fijó contraseña en este teléfono -- ver el doc-comment de
-/// [LoginViewModel.autenticar]. No pide contraseña anterior a propósito:
-/// nunca existió una acá.
+/// Reemplaza al formulario de login cuando `Nucleo.autenticarConSecreto`
+/// devuelve `debe_cambiar_password = true` -- usuario global (Administrador/
+/// Operador, o un ROOT ya sincronizado a otro sitio) que todavía tiene la
+/// contraseña temporal de un solo uso generada por el panel (ver
+/// docs/plan-autenticacion-supabase-auth.md). La sesión YA está abierta del
+/// lado de Rust (`autenticar_supabase` la dejó iniciada); esto sólo cambia
+/// la contraseña, no vuelve a autenticar. Reemplaza a
+/// `PantallaFijarPasswordInicial` (el "reclamo por cédula" viejo, cerrado
+/// junto con `SIN_PASSWORD_LOCAL` -- ver `docs/decisiones-tecnicas.md`).
 @Composable
-fun PantallaFijarPasswordInicial(
-    cedula: String,
+fun PantallaCambioObligatorio(
+    nombre: String,
     error: String?,
     enviando: Boolean,
-    onFijar: (String) -> Unit,
+    onCambiar: (String) -> Unit,
     onCancelar: () -> Unit,
 ) {
     var password by remember { mutableStateOf("") }
@@ -64,7 +68,7 @@ fun PantallaFijarPasswordInicial(
             modifier = Modifier.padding(top = 16.dp),
         )
         Text(
-            "Cédula $cedula · primera vez en este dispositivo",
+            "$nombre · primera vez con esta contraseña temporal",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -100,13 +104,13 @@ fun PantallaFijarPasswordInicial(
                 when {
                     password.length < 8 -> errorLocal = "Al menos 8 caracteres"
                     password != confirmar -> errorLocal = "Las contraseñas no coinciden"
-                    else -> onFijar(password)
+                    else -> onCambiar(password)
                 }
             },
             enabled = !enviando,
             modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
         ) {
-            Text(if (enviando) "Guardando…" else "Fijar y entrar")
+            Text(if (enviando) "Guardando…" else "Cambiar y entrar")
         }
 
         OutlinedButton(

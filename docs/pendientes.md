@@ -60,14 +60,44 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
     Usuarios.tsx muestran en vivo quién/qué está conectado y desde dónde.
   - [ ] El resto (secreto de un solo uso, identidad canónica, desempate offline)
     sigue sin implementar.
-- [ ] **Sesión única por USUARIO (no por dispositivo).** Ver
-  `docs/plan-sesion-unica-dispositivos.md`, sección 7. Evitar que la misma cédula
-  tenga sesión abierta en dos dispositivos a la vez -- política ya decidida
-  (bloquear el login nuevo, no expulsar al viejo), pero el primer diseño (chequear
-  contra la presencia del mismo sitio) se descartó: los usuarios son globales, no
-  por sitio, así que ese chequeo tiene un hueco entre sitios distintos. Falta
-  diseñar un chequeo genuinamente global (probablemente una tabla/lock en Supabase
-  con heartbeat, no presence).
+- [ ] **Sesión única por SITIO, no por dispositivo ni global (decisión
+  refinada 2026-09-12).** Ver `docs/plan-sesion-unica-dispositivos.md`,
+  sección 7 -- reemplaza el planteo anterior de esta entrada. Política
+  aclarada con el usuario: un mismo operador SÍ puede tener sesión abierta
+  en más de un dispositivo del MISMO sitio a la vez (PC + celular en
+  Brisas, uso normal), pero NO en dos sitios distintos al mismo tiempo
+  (logueado en Cartago no debería poder tener sesión viva en Brisas). El
+  primer diseño (chequear presencia del mismo sitio) ya no aplica tal cual
+  porque el disparador es "sitio", no "dispositivo" ni "global puro" --
+  hoy es más plausible que antes porque la identidad ya vive centralizada
+  en Supabase Auth (desktop y mobile migrados, ver
+  `docs/plan-autenticacion-supabase-auth.md`), no repartida por dispositivo.
+
+  **Diseño propuesto, sin implementar:**
+  1. `usuarios` suma `sesion_sitio_id` (uuid, nullable, referencia
+     `sitios`) + `sesion_iniciada_en` (timestamptz).
+  2. Función `security definer` nueva (`marcar_sesion_activa`, mismo
+     patrón que `es_admin_global`/Edge Functions de dispositivos): la
+     llama el dispositivo (con su propio JWT, que ya trae `sitio_id`)
+     justo después de un login de persona exitoso. Si `sesion_sitio_id`
+     está `null` o ya es el mismo sitio, sólo actualiza el timestamp. Si
+     apunta a OTRO sitio, lo pisa con el nuevo (último login gana, mismo
+     criterio ya aceptado en otras partes del sistema para "bloqueo hasta
+     reconectar") y marca que hubo conflicto en la respuesta.
+  3. **Kick en vivo**: si hubo conflicto, broadcast por Realtime al sitio
+     viejo avisando que esa cédula se movió -- mismo mecanismo que ya
+     existe para presencia/expulsión de dispositivos.
+  4. **Red de seguridad sin Realtime**: la sincronización periódica
+     (~2 min, ya existe en desktop y mobile) chequea si `sesion_sitio_id`
+     remoto sigue siendo el propio; si no, cierra sesión local sola --
+     mismo patrón que ya usa `sesion_expulsada` hoy
+     (`ResumenSincronizacion::sesion_expulsada`).
+  5. Aplica a desktop y mobile (los dos con Supabase Auth ya andando). TUI
+     clásica queda fuera por ahora, igual que el resto de lo pendiente ahí.
+
+  No es una tarea chica: migración + función SQL + wiring de Realtime +
+  cambios en Rust core (nube:: nuevo + extender el chequeo de
+  "sigue activo") + desktop + mobile. Retomar en una pasada dedicada.
 - [ ] **Revisar bucket público `historial-web`.** Está documentado como público, vacío y
   sin referencias en código. Confirmar si es vestigio; si no se usa, eliminarlo desde
   Supabase.

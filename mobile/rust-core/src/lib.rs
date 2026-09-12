@@ -104,6 +104,19 @@ impl From<UsuarioSesionNucleo> for UsuarioSesion {
     }
 }
 
+/// Éxito de `Nucleo::autenticar`/`autenticar_con_secreto` -- mismo motivo
+/// que `desktop/src-tauri/src/comandos/autenticacion.rs::ResultadoLogin`:
+/// Kotlin necesita saber si tiene que forzar el cambio de contraseña antes
+/// de dejar operar. `false` siempre en la rama local (ROOT del arranque
+/// inicial, o cualquier cuenta que ya tenía password local de antes de esta
+/// migración) -- esa contraseña ya es la real, no una temporal de un solo
+/// uso. Ver docs/plan-autenticacion-supabase-auth.md.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ResultadoLogin {
+    pub sesion: UsuarioSesion,
+    pub debe_cambiar_password: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum TipoIngreso {
     Praind,
@@ -635,6 +648,11 @@ pub enum NucleoError {
     SinPasswordLocal,
     #[error("no hay una sesión iniciada")]
     NoAutenticado,
+    /// La sesión de Supabase Auth (la de la PERSONA, distinta del token del
+    /// DISPOSITIVO) venció o nunca se abrió -- Kotlin debe mandar de vuelta
+    /// al login. Ver `Nucleo::cambiar_password_supabase`.
+    #[error("la sesión de nube venció -- iniciá sesión de nuevo")]
+    SesionSupabaseVencida,
     #[error("fecha de PRAIND inválida: {mensaje}")]
     FechaInvalida { mensaje: String },
     #[error("error interno: {mensaje}")]
@@ -647,6 +665,19 @@ impl From<AutenticacionErrorNucleo> for NucleoError {
             AutenticacionErrorNucleo::CredencialesInvalidas => Self::CredencialesInvalidas,
             AutenticacionErrorNucleo::UsuarioInactivo => Self::UsuarioInactivo,
             AutenticacionErrorNucleo::SinPasswordLocal => Self::SinPasswordLocal,
+            otro => Self::Interno {
+                mensaje: otro.to_string(),
+            },
+        }
+    }
+}
+
+impl From<control_acceso::nube::AuthSupabaseError> for NucleoError {
+    fn from(error: control_acceso::nube::AuthSupabaseError) -> Self {
+        match error {
+            control_acceso::nube::AuthSupabaseError::CredencialesInvalidas => {
+                Self::CredencialesInvalidas
+            }
             otro => Self::Interno {
                 mensaje: otro.to_string(),
             },
@@ -706,6 +737,26 @@ struct TokenCacheadoNucleo {
     obtenido_en: std::time::Instant,
 }
 
+/// Sesión de un usuario global contra Supabase Auth (Administrador/Operador,
+/// o un ROOT ya sincronizado a otro sitio) -- ver
+/// docs/plan-autenticacion-supabase-auth.md. Distinta de `TokenCacheadoNucleo`
+/// (identidad del DISPOSITIVO): esto es la identidad de la PERSONA. Vive
+/// sólo en memoria -- nunca se persiste a disco, mismo criterio que
+/// `desktop/src-tauri/src/estado.rs::SesionSupabaseCacheada`: cerrar la app
+/// siempre la pierde y el próximo arranque exige un login real de nuevo.
+struct SesionSupabaseCacheada {
+    access_token: String,
+    refresh_token: String,
+    expires_in: u64,
+    /// Última vez que se confirmó de verdad contra Supabase -- la base del
+    /// tope duro de `TOPE_PRESENCIA_SUPABASE`.
+    confirmada_en: std::time::Instant,
+}
+
+/// Mismo tope que escritorio (ver `estado.rs`) -- aplicado por el cliente,
+/// no depende de la configuración de expiración del proyecto de Supabase.
+const TOPE_PRESENCIA_SUPABASE: std::time::Duration = std::time::Duration::from_secs(12 * 60 * 60);
+
 const DIAS_HISTORIAL_MOVIL: i64 = 7;
 
 /// Sesión del núcleo: dueña de la única conexión `SQLite` del teléfono. Se
@@ -746,6 +797,8 @@ pub struct Nucleo {
     /// que resuelve el path por defecto; acá ya llega como parámetro del
     /// constructor). Misma idea que `GuiState::ruta_base_datos` en escritorio.
     ruta_base_datos: PathBuf,
+    /// Ver `SesionSupabaseCacheada`.
+    sesion_supabase: Mutex<Option<SesionSupabaseCacheada>>,
 }
 
 #[uniffi::export]
@@ -770,6 +823,7 @@ impl Nucleo {
             token_nube_cacheado: Mutex::new(None),
             sincronizacion_en_curso: Mutex::new(()),
             ruta_base_datos: PathBuf::from(&ruta_base_datos),
+            sesion_supabase: Mutex::new(None),
         })
     }
 
@@ -818,7 +872,7 @@ impl Nucleo {
         password: String,
         directorio: String,
         identificador_dispositivo: String,
-    ) -> Result<UsuarioSesion, NucleoError> {
+    ) -> Result<ResultadoLogin, NucleoError> {
         let intento = self.core_lock().autenticar(&cedula, &password);
         let sesion = match intento {
             Ok(sesion) => sesion,
@@ -828,6 +882,16 @@ impl Nucleo {
             ) => {
                 let _ = self.refrescar_catalogo_sin_sesion(&directorio, &identificador_dispositivo);
                 self.core_lock().autenticar(&cedula, &password)?
+            }
+            // Usuario global (sincronizado) sin contraseña local todavía --
+            // se autentica contra Supabase Auth en vez de mostrar la
+            // pantalla de "fijar contraseña" (ver `autenticar_supabase` y
+            // docs/plan-autenticacion-supabase-auth.md). El ROOT del
+            // arranque inicial nunca cae acá porque nace con hash real.
+            Err(AutenticacionErrorNucleo::SinPasswordLocal) => {
+                return self.autenticar_supabase(&cedula, &password, &|| {
+                    self.refrescar_catalogo_sin_sesion(&directorio, &identificador_dispositivo)
+                });
             }
             Err(otro) => return Err(otro.into()),
         };
@@ -865,7 +929,10 @@ impl Nucleo {
         }
 
         *self.sesion_lock() = Some(sesion.clone());
-        Ok(sesion.into())
+        Ok(ResultadoLogin {
+            sesion: sesion.into(),
+            debe_cambiar_password: false,
+        })
     }
 
     /// Igual que [`Nucleo::autenticar`], pero con el secreto ya descifrado
@@ -877,7 +944,7 @@ impl Nucleo {
         cedula: String,
         password: String,
         secreto: String,
-    ) -> Result<UsuarioSesion, NucleoError> {
+    ) -> Result<ResultadoLogin, NucleoError> {
         let intento = self.core_lock().autenticar(&cedula, &password);
         let sesion = match intento {
             Ok(sesion) => sesion,
@@ -889,6 +956,19 @@ impl Nucleo {
                     let _ = self.refrescar_catalogo_sin_sesion_con_secreto(&secreto);
                 }
                 self.core_lock().autenticar(&cedula, &password)?
+            }
+            // Ver el comentario de `autenticar` (arriba) -- mismo criterio,
+            // con el secreto ya en memoria en vez de leerlo de disco.
+            Err(AutenticacionErrorNucleo::SinPasswordLocal) => {
+                return self.autenticar_supabase(&cedula, &password, &|| {
+                    if secreto.trim().is_empty() {
+                        return Err(NucleoError::Interno {
+                            mensaje: "Todavía no se guardó el secreto de este dispositivo"
+                                .to_string(),
+                        });
+                    }
+                    self.refrescar_catalogo_sin_sesion_con_secreto(&secreto)
+                });
             }
             Err(otro) => return Err(otro.into()),
         };
@@ -917,12 +997,46 @@ impl Nucleo {
         }
 
         *self.sesion_lock() = Some(sesion.clone());
-        Ok(sesion.into())
+        Ok(ResultadoLogin {
+            sesion: sesion.into(),
+            debe_cambiar_password: false,
+        })
+    }
+
+    /// Cambio de contraseña obligatorio (`debe_cambiar_password` en `true`
+    /// tras `autenticar`/`autenticar_con_secreto`) o rutinario --
+    /// `nube::cambiar_password` ya revalida `password_actual` con un login
+    /// real antes de aceptar la nueva, no confía en que la sesión siga
+    /// abierta.
+    pub fn cambiar_password_supabase(
+        &self,
+        password_actual: String,
+        password_nueva: String,
+    ) -> Result<(), NucleoError> {
+        let sesion = self.actor_autenticado()?;
+        let access_token = self
+            .access_token_supabase_vigente()
+            .ok_or(NucleoError::SesionSupabaseVencida)?;
+
+        control_acceso::nube::cambiar_password(
+            control_acceso::nube::BASE_URL,
+            control_acceso::nube::APIKEY,
+            &access_token,
+            &sesion.cedula,
+            &password_actual,
+            &password_nueva,
+        )?;
+        Ok(())
     }
 
     /// Completa el alta de contraseña de un usuario global que `autenticar`
     /// rechazó con `NucleoError::SinPasswordLocal` -- ver
     /// `AppCore::fijar_password_inicial`. Deja la sesión iniciada directo.
+    ///
+    /// Legado: `autenticar`/`autenticar_con_secreto` ya no devuelven
+    /// `SinPasswordLocal` para un usuario global (ver `autenticar_supabase`)
+    /// -- este método queda sólo por si algún llamador viejo lo sigue
+    /// invocando, no lo usa ninguna pantalla de Kotlin actual.
     pub fn fijar_password_inicial(
         &self,
         cedula: String,
@@ -1085,6 +1199,7 @@ impl Nucleo {
     /// reabrir la base.
     pub fn cerrar_sesion(&self) {
         *self.sesion_lock() = None;
+        *self.lock_sesion_supabase() = None;
     }
 
     /// Últimos 7 días por defecto: en Android el historial es contexto
@@ -1358,6 +1473,20 @@ impl Nucleo {
 
         let actor = self.actor_autenticado()?;
         self.core_lock().autorizar_uso_nube(&actor)?;
+
+        // Renovación silenciosa de la sesión de Supabase Auth del usuario
+        // (distinta del token del DISPOSITIVO de abajo) -- mejor esfuerzo,
+        // igual que en escritorio (`ejecutar_sincronizacion`): sin sesión de
+        // Supabase o sin red, no hace nada.
+        if let Some(refresh_token) = self.refresh_token_supabase()
+            && let Ok(sesion) = control_acceso::nube::refrescar(
+                control_acceso::nube::BASE_URL,
+                control_acceso::nube::APIKEY,
+                &refresh_token,
+            )
+        {
+            self.iniciar_sesion_supabase(sesion);
+        }
 
         let secreto = control_acceso::nube::credenciales::cargar_secreto_en_con_identificador(
             std::path::Path::new(&directorio),
@@ -1844,6 +1973,98 @@ impl Nucleo {
         self.sesion_lock().clone().ok_or(NucleoError::NoAutenticado)
     }
 
+    /// Guarda (o reemplaza) la sesión de Supabase Auth -- se llama tanto en
+    /// el login inicial (`autenticar_supabase`) como en cada renovación
+    /// exitosa en segundo plano (`sincronizar_con_nube`/`_con_secreto`),
+    /// siempre con una marca de tiempo nueva.
+    fn iniciar_sesion_supabase(&self, sesion: control_acceso::nube::SesionSupabase) {
+        *self.lock_sesion_supabase() = Some(SesionSupabaseCacheada {
+            access_token: sesion.access_token,
+            refresh_token: sesion.refresh_token,
+            expires_in: sesion.expires_in,
+            confirmada_en: std::time::Instant::now(),
+        });
+    }
+
+    /// Token de acceso vigente para usar como `Authorization: Bearer`, si lo
+    /// hay -- `None` si nunca hubo sesión de Supabase, si el token técnico
+    /// ya venció, o si pasó `TOPE_PRESENCIA_SUPABASE` desde la última
+    /// confirmación real (aunque el token en sí siga sin vencer).
+    fn access_token_supabase_vigente(&self) -> Option<String> {
+        let guard = self.lock_sesion_supabase();
+        let entrada = guard.as_ref()?;
+        let vigente_por = std::time::Duration::from_secs(entrada.expires_in);
+        if entrada.confirmada_en.elapsed() >= vigente_por
+            || entrada.confirmada_en.elapsed() >= TOPE_PRESENCIA_SUPABASE
+        {
+            return None;
+        }
+        Some(entrada.access_token.clone())
+    }
+
+    /// `refresh_token` actual, para la renovación en segundo plano -- `None`
+    /// si nunca hubo sesión de Supabase (usuario logueado localmente) o si
+    /// ya se cerró sesión.
+    fn refresh_token_supabase(&self) -> Option<String> {
+        self.lock_sesion_supabase()
+            .as_ref()
+            .map(|entrada| entrada.refresh_token.clone())
+    }
+
+    fn lock_sesion_supabase(&self) -> std::sync::MutexGuard<'_, Option<SesionSupabaseCacheada>> {
+        self.sesion_supabase
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Login contra Supabase Auth para un usuario global (Administrador/
+    /// Operador, o un ROOT ya sincronizado a otro sitio) que todavía no
+    /// tiene contraseña local en este teléfono -- ver
+    /// docs/plan-autenticacion-supabase-auth.md y el equivalente en
+    /// escritorio (`desktop/src-tauri/src/comandos/autenticacion.rs::login_supabase`).
+    /// `refrescar_catalogo` es best-effort, sólo se intenta si la identidad
+    /// todavía no está en el catálogo local (sitio recién conectado, o el
+    /// alta acaba de ocurrir) -- mismo criterio en los dos llamadores
+    /// (`autenticar`/`autenticar_con_secreto`), que sólo difieren en de
+    /// dónde sale el secreto para ese refresco. No exportado a `uniffi`
+    /// (vive en este `impl Nucleo` plano) -- una firma con `&dyn Fn` no es
+    /// representable en la frontera FFI.
+    fn autenticar_supabase(
+        &self,
+        cedula: &str,
+        password: &str,
+        refrescar_catalogo: &dyn Fn() -> Result<(), NucleoError>,
+    ) -> Result<ResultadoLogin, NucleoError> {
+        let sesion_supabase = control_acceso::nube::login(
+            control_acceso::nube::BASE_URL,
+            control_acceso::nube::APIKEY,
+            cedula,
+            password,
+        )?;
+
+        // La identidad (nombre/rol/activo) ya está local -- llegó por el
+        // catálogo sincronizado, Supabase Auth sólo confirmó que la
+        // contraseña era correcta. Si esta cédula todavía no está en el
+        // catálogo local, se intenta refrescar una vez antes de rendirse.
+        let intento_identidad = self.core_lock().resolver_identidad_local(cedula);
+        let identidad = match intento_identidad {
+            Ok(identidad) => identidad,
+            Err(AutenticacionErrorNucleo::CredencialesInvalidas | AutenticacionErrorNucleo::UsuarioInactivo) => {
+                let _ = refrescar_catalogo();
+                self.core_lock().resolver_identidad_local(cedula)?
+            }
+            Err(otro) => return Err(otro.into()),
+        };
+
+        *self.sesion_lock() = Some(identidad.clone());
+        self.iniciar_sesion_supabase(sesion_supabase.clone());
+
+        Ok(ResultadoLogin {
+            sesion: identidad.into(),
+            debe_cambiar_password: sesion_supabase.debe_cambiar_password,
+        })
+    }
+
     fn sincronizar_con_secreto(&self, secreto: &str) -> Result<ResumenSincronizacion, NucleoError> {
         let _sincronizacion = self
             .sincronizacion_en_curso
@@ -1852,6 +2073,17 @@ impl Nucleo {
 
         let actor = self.actor_autenticado()?;
         self.core_lock().autorizar_uso_nube(&actor)?;
+
+        // Ver el comentario del otro método de sync en este mismo archivo.
+        if let Some(refresh_token) = self.refresh_token_supabase()
+            && let Ok(sesion) = control_acceso::nube::refrescar(
+                control_acceso::nube::BASE_URL,
+                control_acceso::nube::APIKEY,
+                &refresh_token,
+            )
+        {
+            self.iniciar_sesion_supabase(sesion);
+        }
 
         let token = self
             .autenticar_con_cache(secreto)
@@ -2283,8 +2515,16 @@ mod tests {
         assert!(movimientos[0].fecha_hora_salida.is_none());
     }
 
+    /// Antes del aplanado de autorización (ver
+    /// docs/decisiones-tecnicas.md, 2026-09-11), un OPERADOR no podía
+    /// listar/crear usuarios -- hoy cualquier sesión válida puede,
+    /// `RolUsuario::puede()` ya devuelve `true` siempre en el núcleo
+    /// compartido. Este test quedó desactualizado (mobile nunca se tocó en
+    /// esa pasada, sólo TUI/desktop) y falló apenas se corrió después de
+    /// esta migración -- se actualiza acá para reflejar el comportamiento
+    /// real en vez de reintroducir una restricción que ya no existe.
     #[test]
-    fn listar_usuarios_y_crear_usuario_solo_root_o_administrador() {
+    fn listar_usuarios_y_crear_usuario_no_depende_del_rol() {
         let archivo = tempfile::NamedTempFile::new().unwrap();
         let ruta = archivo.path().to_str().unwrap().to_string();
         let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
@@ -2338,17 +2578,19 @@ mod tests {
             )
             .unwrap();
 
-        let resultado = nucleo.listar_usuarios(String::new());
-        assert!(matches!(resultado, Err(NucleoError::Interno { .. })));
+        let usuarios_como_operador = nucleo.listar_usuarios(String::new()).unwrap();
+        assert!(usuarios_como_operador.iter().any(|u| u.cedula == "777777777"));
 
-        let resultado_crear = nucleo.crear_usuario(DatosUsuario {
-            cedula: "666666666".to_string(),
-            nombre: "Otro Usuario".to_string(),
-            password: "unaPassword123".to_string(),
-            rol: RolUsuario::Operador,
-            activo: true,
-        });
-        assert!(matches!(resultado_crear, Err(NucleoError::Interno { .. })));
+        let id_creado_por_operador = nucleo
+            .crear_usuario(DatosUsuario {
+                cedula: "666666666".to_string(),
+                nombre: "Otro Usuario".to_string(),
+                password: "unaPassword123".to_string(),
+                rol: RolUsuario::Operador,
+                activo: true,
+            })
+            .unwrap();
+        assert!(id_creado_por_operador > 0);
     }
 
     #[test]

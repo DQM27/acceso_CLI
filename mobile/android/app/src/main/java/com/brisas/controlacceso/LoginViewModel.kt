@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
+import uniffi.control_acceso_mobile.ResultadoLogin
 import uniffi.control_acceso_mobile.UsuarioSesion
 
 /// Dueño del estado de [PantallaLogin] y de las llamadas a [Nucleo] para
@@ -48,11 +49,14 @@ class LoginViewModel(
     var propietarioSesion by mutableStateOf<PropietarioSesion?>(null)
         private set
 
-    /// Cédula que necesita fijar contraseña en este teléfono por primera
-    /// vez (`NucleoException.SinPasswordLocal`) -- `null` es el estado
-    /// normal (formulario de login); con esto puesto, [PantallaLogin]
-    /// muestra el formulario de "fijar contraseña" en su lugar.
-    var cedulaSinPassword by mutableStateOf<String?>(null)
+    /// Sesión recién autenticada contra Supabase Auth con
+    /// `debe_cambiar_password = true` (contraseña temporal de un solo uso,
+    /// ver docs/plan-autenticacion-supabase-auth.md) -- `null` es el estado
+    /// normal; con esto puesto, [PantallaLogin] muestra el paso de cambio
+    /// obligatorio en vez de dejar entrar. `passwordActual` es la temporal
+    /// que recién tipeó, hace falta para que `cambiarPasswordSupabase`
+    /// revalide del lado del backend antes de aceptar la nueva.
+    var cambioObligatorio by mutableStateOf<Pair<UsuarioSesion, String>?>(null)
         private set
 
     fun cambiarCedula(nueva: String) {
@@ -67,16 +71,19 @@ class LoginViewModel(
         if (autenticando || cedula.isBlank() || password.isBlank()) return
         error = null
         autenticando = true
+        val passwordTipeada = password
         viewModelScope.launch {
             try {
-                val sesionNueva = withContext(dispatcherIO) {
+                val resultado: ResultadoLogin = withContext(dispatcherIO) {
                     val secreto = secretoStore.cargar().orEmpty()
-                    nucleo.autenticarConSecreto(cedula, password, secreto)
+                    nucleo.autenticarConSecreto(cedula, passwordTipeada, secreto)
                 }
-                abrirSesion(sesionNueva)
+                if (resultado.debeCambiarPassword) {
+                    cambioObligatorio = resultado.sesion to passwordTipeada
+                    return@launch
+                }
+                abrirSesion(resultado.sesion)
                 lanzarSincronizacionDeFondo()
-            } catch (excepcion: NucleoException.SinPasswordLocal) {
-                cedulaSinPassword = cedula
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
             } catch (excepcion: SecretoDispositivoStoreException) {
@@ -109,21 +116,24 @@ class LoginViewModel(
         }
     }
 
-    /// Completa el alta de contraseña tras `cedulaSinPassword` -- sin
-    /// contraseña anterior a propósito, nunca existió una en este
-    /// teléfono (ver `Nucleo.fijarPasswordInicial`).
-    fun fijarPasswordInicial(nuevaPassword: String) {
+    /// Completa el cambio obligatorio tras `cambioObligatorio` --
+    /// `cambiarPasswordSupabase` ya revalida la temporal contra Supabase
+    /// antes de aceptar la nueva, la sesión local ya está abierta desde
+    /// `autenticar()` (esto no vuelve a autenticar, sólo cambia la
+    /// contraseña).
+    fun completarCambioObligatorio(passwordNueva: String) {
         if (autenticando) return
-        val cedulaObjetivo = cedulaSinPassword ?: return
+        val (sesionPendiente, passwordActual) = cambioObligatorio ?: return
         error = null
         autenticando = true
         viewModelScope.launch {
             try {
-                val sesionNueva = withContext(dispatcherIO) {
-                    nucleo.fijarPasswordInicial(cedulaObjetivo, nuevaPassword)
+                withContext(dispatcherIO) {
+                    nucleo.cambiarPasswordSupabase(passwordActual, passwordNueva)
                 }
-                abrirSesion(sesionNueva)
-                cedulaSinPassword = null
+                abrirSesion(sesionPendiente)
+                cambioObligatorio = null
+                lanzarSincronizacionDeFondo()
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
             } finally {
@@ -132,8 +142,8 @@ class LoginViewModel(
         }
     }
 
-    fun cancelarFijarPassword() {
-        cedulaSinPassword = null
+    fun cancelarCambioObligatorio() {
+        cambioObligatorio = null
         error = null
     }
 

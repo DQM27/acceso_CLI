@@ -53,14 +53,14 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispo
         return
     }
 
-    val cedulaSinPassword = viewModel.cedulaSinPassword
-    if (cedulaSinPassword != null) {
-        PantallaFijarPasswordInicial(
-            cedula = cedulaSinPassword,
+    val cambioObligatorio = viewModel.cambioObligatorio
+    if (cambioObligatorio != null) {
+        PantallaCambioObligatorio(
+            nombre = cambioObligatorio.first.nombre,
             error = viewModel.error,
             enviando = viewModel.autenticando,
-            onFijar = { nueva -> viewModel.fijarPasswordInicial(nueva) },
-            onCancelar = { viewModel.cancelarFijarPassword() },
+            onCambiar = { nueva -> viewModel.completarCambioObligatorio(nueva) },
+            onCancelar = { viewModel.cancelarCambioObligatorio() },
         )
         return
     }
