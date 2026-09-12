@@ -73,7 +73,7 @@ import uniffi.control_acceso_mobile.TipoIngreso
 ///   nombres hace las veces de confirmación.
 ///
 /// Todo el estado y las llamadas a [Nucleo] viven en [ActivosViewModel]
-/// (ver mobile/android/ARQUITECTURA.md) — este archivo sólo dibuja lo que el
+/// (ver mobile/android/arquitectura.md) — este archivo sólo dibuja lo que el
 /// ViewModel expone y le reporta eventos. Esta función orquesta: delega el
 /// selector, el campo, los mensajes y el contenido (uno por modo, ver
 /// [ContenidoModoEntrada]/[ContenidoModoSalidaNombre]/[ContenidoModoSalidaGafete]

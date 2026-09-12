@@ -17,7 +17,7 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 - `docs/planes-implementados/plan-ocr-escaneo-documentos.md`
 - `docs/arquitectura/fixtures-ocr-sinteticos.md`
 - `docs/features-futuras/idea-lector-placas-vehiculares.md`
-- `mobile/android/ARQUITECTURA.md`
+- `mobile/android/arquitectura.md`
 - `mobile/README.md`
 - `docs/features-futuras/plan-sesion-unica-dispositivos.md`
 - tracker anterior de escritorio (absorbido aquí; ya no existe como lista aparte)
@@ -304,7 +304,7 @@ aspiracional -- lo que sigue sin marcar todavía no corrió.
 - [ ] **Reagregar el alta de contratista en mobile, con OCR opcional (pedido
   2026-09-11).** El menú "+" de altas (contratista/empresa/usuario) se sacó de mobile el
   2026-09-06 al limitar la app a "sólo registros rápidos + historial" (ver
-  `PantallaPrincipal.kt`, comentario de cabecera, y `mobile/android/ARQUITECTURA.md`).
+  `PantallaPrincipal.kt`, comentario de cabecera, y `mobile/android/arquitectura.md`).
   Ahora se pide devolver puntualmente la de contratista -- con la cédula/DIMEX
   completable por OCR de forma OPCIONAL (ya existe `PantallaEscanearCedula`/
   `ModoEscaneoDocumento` para el escaneo de cédula/gafete en el flujo de ingreso, y todo
@@ -393,7 +393,7 @@ estabilizador y clasificador.
 - [x] **PDF417 de cédula anterior omitido.** El plan documenta que el contenido viene
   cifrado; no se implementa sin acceso legítimo al esquema de descifrado.
 - [x] **Refactor móvil a ViewModels convertido en criterio, no pendiente abierto.**
-  `mobile/android/ARQUITECTURA.md` fija la regla incremental y ya hay ViewModels reales
+  `mobile/android/arquitectura.md` fija la regla incremental y ya hay ViewModels reales
   para pantallas clave.
 - [x] **Clasificador y extractores por tipo de documento.**
 - [x] **Parser MRZ TD1/TD3 y checksums.**

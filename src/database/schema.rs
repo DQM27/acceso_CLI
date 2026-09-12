@@ -2083,7 +2083,7 @@ ALTER TABLE historial_sitio ADD COLUMN dispositivo_entrada_tipo TEXT;
 // SQLite no puede usar ningún índice para eso (es una expresión, no una
 // columna), así que cada `drenar_cola` escaneaba TODA `cola_salida`
 // pendiente para evaluarla fila por fila. Hallazgo R-06 de
-// `docs/auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md`.
+// `docs/auditorias/auditoria-rendimiento-core-rust-2026-09-10.md`.
 //
 // `proximo_intento_en` es la misma fórmula, pero como columna generada
 // (`GENERATED ALWAYS AS (...) STORED`): SQLite la recalcula sola cada vez
