@@ -290,7 +290,7 @@ SQLCipher tiene integración directa vía features de `rusqlite`, pero la versi�
 
 Rama de laboratorio:
 
-`benchmark/sqlite-3way-windows-2026-09-10`
+`bench/sqlite-3way-2026-09-12`
 
 Objetivo:
 
@@ -305,7 +305,63 @@ Objetivo:
 
 El tiempo de compilación se excluye del benchmark de runtime.
 
-Los resultados deben incorporarse a este documento cuando la corrida comparativa final sea válida y completa. No declarar ganador basándose en builds, KDF diferentes o runners distintos.
+**Harness:** `examples/benchmark_3way.rs` (crate raíz) -- abre `AppCore` real
+contra una base temporal, siembra una empresa/contratista/usuario mínimos
+(caso feliz sin gafete/PRAIND, para medir el motor, no las reglas de
+negocio) y corre las 5 rondas × 1.000 ciclos de
+`preparar_ingreso`+`registrar_ingreso`+`registrar_salida`. Cada motor es una
+feature mutuamente excluyente decidida en compilación (ver
+`compile_error!` en `src/lib.rs`), así que el binario se compila y corre una
+vez por motor; los tres bloques de resultados se pegan a mano acá. Requiere,
+para `cifrado-sqlite3mc`, haber compilado antes
+`sqlite3mc-vendor-lib/` (ver `docs/decisiones-tecnicas.md`, entrada
+2026-09-12):
+
+```sh
+cargo run --release --example benchmark_3way --no-default-features --features nube,sqlite-plano
+cargo build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
+cargo run --release --example benchmark_3way --no-default-features --features nube,cifrado-sqlite3mc
+cargo run --release --example benchmark_3way --features nube   # cifrado-sqlcipher, el default
+```
+
+**Resultados (2026-09-12, mismo runner Windows, `--release`, tiempos en ms
+por ronda de 1.000 ciclos ingreso+salida):**
+
+| Motor | Mediana | Promedio | Mínimo | Máximo | ms/ciclo | Overhead vs. baseline | Working Set pico |
+|---|---|---|---|---|---|---|---|
+| `sqlite-plano` (baseline) | 1295.4 | 1307.6 | 1283.0 | 1354.6 | 1.2954 | -- | 12.3 MB |
+| `cifrado-sqlite3mc` (ChaCha20-Poly1305) | 1520.2 | 1525.7 | 1498.8 | 1550.2 | 1.5202 | +17.3% | 10.1 MB |
+| `cifrado-sqlcipher` (motor real, default) | 1662.0 | 1678.4 | 1592.9 | 1760.4 | 1.6620 | +28.3% | 13.0 MB |
+
+`cifrado-sqlite3mc` corrió contra una base realmente cifrada (`PRAGMA
+cipher = 'chacha20'` + `PRAGMA key`, ver el fix en
+`docs/decisiones-tecnicas.md` -- antes de ese fix el motor compilaba y
+pasaba la suite pero dejaba el archivo sin cifrar, así que un benchmark
+corrido antes de esa fecha no sería comparable). El Working Set más bajo de
+`cifrado-sqlite3mc` frente al baseline sin cifrar es ruido del proceso (caché
+de página del OS, GC de PowerShell entre muestras), no una conclusión real --
+esta comparación de memoria es aproximada (`Get-Process`/Working Set del
+proceso completo, no heap aislado del motor) y no debe leerse con más
+precisión de la que tiene.
+
+**Lectura de esta corrida:** el cifrado tiene costo medible frente a SQLite
+sin cifrar (+17% a +28% por ciclo ingreso+salida), pero en términos
+absolutos ambos motores cifrados siguen en el orden de **1.5-1.8 ms por
+ciclo completo** -- muy por debajo de cualquier umbral perceptible para un
+operador humano registrando entradas/salidas una por una. `SQLite3MC` corrió
+~11 puntos porcentuales más rápido que `SQLCipher` en esta corrida
+(ChaCha20-Poly1305 en software vs. AES-256 con OpenSSL vendorizado), con
+tiempo de build en frío drásticamente menor (segundos contra 20-40 min) --
+suficiente para seguir evaluándolo como candidato, no para reemplazar el
+motor de producción todavía: falta ejercitarlo con datos reales (migración
+de una base `SQLCipher` existente, no sólo bases nuevas) y con la carga
+completa de sincronización, no sólo ingreso/salida local.
+
+No declarar ganador basándose en builds, KDF diferentes o runners
+distintos -- esta corrida usó el mismo runner, el mismo `AppCore` y la misma
+carga para los tres motores, pero UNA sola corrida de 5 rondas; antes de
+tomar cualquier decisión de producción, repetir en al menos otra máquina y
+con una carga que incluya sincronización con la nube, no sólo local.
 
 ---
 

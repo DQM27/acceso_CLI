@@ -114,6 +114,13 @@ pub fn open_database_cifrada(
 /// principal). Debe llamarse antes de cualquier otra operación sobre la
 /// conexión: sin la clave, `SQLCipher` ni siquiera puede leer el schema.
 pub fn aplicar_clave(connection: &Connection, clave: &[u8; 32]) -> rusqlite::Result<()> {
+    // SQLite3MC necesita elegir el cipher ANTES de aplicar la clave -- sin
+    // esto, `PRAGMA key` sola deja el archivo sin cifrar de verdad (ver
+    // benchmarks/sqlite-3way/sqlite3mc/src/main.rs, `configurar()`, el smoke
+    // test aislado que confirmó este orden). `SQLCipher`/`sqlite-plano` no
+    // tienen este pragma -- por eso va gated a la feature, no genérico.
+    #[cfg(feature = "cifrado-sqlite3mc")]
+    connection.pragma_update(None, "cipher", "chacha20")?;
     connection.pragma_update(None, "key", format!("x'{}'", clave_a_hex(clave)))
 }
 
@@ -285,5 +292,50 @@ mod tests {
         preparar_directorio(&ruta).unwrap();
         assert!(ruta.parent().unwrap().is_dir());
         fs::remove_dir_all(&raiz).unwrap();
+    }
+
+    // Sólo corre bajo `cifrado-sqlite3mc` -- mismo criterio de aprobación que
+    // el smoke test aislado de `benchmarks/sqlite-3way/sqlite3mc/` (cabecera
+    // no queda en claro, clave incorrecta no lee, clave correcta reabre),
+    // pero contra `open_database_cifrada`/`aplicar_clave` REALES en vez de
+    // una conexión de laboratorio -- lo que confirma que `AppCore` con este
+    // motor cifra de verdad, no que sólo compila y enlaza.
+    #[cfg(feature = "cifrado-sqlite3mc")]
+    #[test]
+    fn sqlite3mc_cifra_de_verdad_a_traves_de_open_database_cifrada() {
+        let ruta = directorio_temporal("sqlite3mc_cifrado").with_extension("db");
+        let clave = [7u8; 32];
+        let otra_clave = [9u8; 32];
+
+        {
+            let connection = open_database_cifrada(&ruta, &clave).unwrap();
+            connection
+                .execute("CREATE TABLE t(v TEXT)", [])
+                .and_then(|_| connection.execute("INSERT INTO t VALUES ('ok')", []))
+                .unwrap();
+        }
+
+        let bytes = fs::read(&ruta).unwrap();
+        assert!(
+            !bytes.starts_with(b"SQLite format 3\0"),
+            "la base quedo sin cifrar de verdad bajo cifrado-sqlite3mc"
+        );
+
+        {
+            let connection = Connection::open(&ruta).unwrap();
+            aplicar_clave(&connection, &otra_clave).unwrap();
+            let resultado: rusqlite::Result<i64> =
+                connection.query_row("SELECT count(*) FROM sqlite_master", [], |row| row.get(0));
+            assert!(resultado.is_err(), "una clave incorrecta pudo leer la base");
+        }
+
+        let connection = Connection::open(&ruta).unwrap();
+        aplicar_clave(&connection, &clave).unwrap();
+        let valor: String = connection
+            .query_row("SELECT v FROM t", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(valor, "ok");
+
+        fs::remove_file(&ruta).ok();
     }
 }

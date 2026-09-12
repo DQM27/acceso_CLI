@@ -18,10 +18,10 @@ pub mod tiempo;
 
 // `cifrado-sqlcipher`, `sqlite-plano` y `cifrado-sqlite3mc` compilan
 // versiones incompatibles de `libsqlite3-sys` (vendorizado con OpenSSL, sin
-// cifrar, o -- a futuro -- con SQLite3 Multiple Ciphers) -- dos o más a la
-// vez no tiene sentido y probablemente ni compile limpio. Ninguna de las
-// tres tampoco es un error silencioso más grave: sin alguna, `rusqlite` no
-// tiene ningún motor SQLite vendorizado para enlazar.
+// cifrar, o enlazado externo contra `/sqlite3mc-vendor-lib/`, ver ese crate)
+// -- dos o más a la vez no tiene sentido y probablemente ni compile limpio.
+// Ninguna de las tres tampoco es un error silencioso más grave: sin alguna,
+// `rusqlite` no tiene ningún motor SQLite vendorizado para enlazar.
 #[cfg(any(
     all(feature = "cifrado-sqlcipher", feature = "sqlite-plano"),
     all(feature = "cifrado-sqlcipher", feature = "cifrado-sqlite3mc"),
@@ -38,6 +38,6 @@ compile_error!(
 )))]
 compile_error!(
     "falta elegir un motor SQLite: activá la feature cifrado-sqlcipher (real, default), \
-     sqlite-plano (rápido para iterar local, sin cifrar) o cifrado-sqlite3mc (en \
-     evaluación, todavía sin motor real enlazado -- ver Cargo.toml)"
+     sqlite-plano (rápido para iterar local, sin cifrar) o cifrado-sqlite3mc (candidato en \
+     evaluación -- requiere compilar antes sqlite3mc-vendor-lib/, ver ese crate)"
 );
