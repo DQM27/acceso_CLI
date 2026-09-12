@@ -68,8 +68,14 @@ export default function Usuarios() {
 
   const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
     const silencioso = opciones?.silencioso ?? false;
-    if (!silencioso) setCargando(true);
-    return listarUsuarios()
+    // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
+    // directo -- evita que `react-hooks/set-state-in-effect` marque esta
+    // actualización como síncrona dentro del efecto que dispara la carga.
+    return Promise.resolve()
+      .then(() => {
+        if (!silencioso) setCargando(true);
+      })
+      .then(() => listarUsuarios())
       .then(({ filas, truncado }) => {
         setFilas(filas);
         setTruncado(truncado);

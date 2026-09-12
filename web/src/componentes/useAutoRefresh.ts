@@ -14,7 +14,9 @@ import { supabase } from "../lib/supabase";
  */
 export function useAutoRefresh(recargar: () => void, intervaloMs: number, tablas = "") {
   const recargarRef = useRef(recargar);
-  recargarRef.current = recargar;
+  useEffect(() => {
+    recargarRef.current = recargar;
+  });
 
   useEffect(() => {
     let vigente = true;

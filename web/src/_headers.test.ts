@@ -18,8 +18,8 @@ import contenido from "../public/_headers?raw";
 describe("public/_headers", () => {
   it("define una Content-Security-Policy sin 'unsafe-inline' ni 'unsafe-eval' en script-src", () => {
     const linea = contenido.match(/^\s*Content-Security-Policy:\s*(.+)$/m)?.[1];
-    expect(linea).toBeDefined();
-    const scriptSrc = linea!.match(/script-src ([^;]+)/)?.[1];
+    if (!linea) throw new Error("No se encontró la línea Content-Security-Policy en _headers");
+    const scriptSrc = linea.match(/script-src ([^;]+)/)?.[1];
     expect(scriptSrc).toBeDefined();
     expect(scriptSrc).not.toContain("unsafe-inline");
     expect(scriptSrc).not.toContain("unsafe-eval");
@@ -27,7 +27,8 @@ describe("public/_headers", () => {
   });
 
   it("connect-src incluye el proyecto real de Supabase (REST/Auth y Realtime por wss)", () => {
-    const linea = contenido.match(/^\s*Content-Security-Policy:\s*(.+)$/m)?.[1]!;
+    const linea = contenido.match(/^\s*Content-Security-Policy:\s*(.+)$/m)?.[1];
+    if (!linea) throw new Error("No se encontró la línea Content-Security-Policy en _headers");
     const connectSrc = linea.match(/connect-src ([^;]+)/)?.[1] ?? "";
     expect(connectSrc).toContain("https://xidaepyaljzkpbsxrqsm.supabase.co");
     expect(connectSrc).toContain("wss://xidaepyaljzkpbsxrqsm.supabase.co");
