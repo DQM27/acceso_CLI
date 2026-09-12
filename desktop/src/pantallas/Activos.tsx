@@ -4,72 +4,9 @@ import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
-import {
-  cerrarIngresoRemoto,
-  listarIngresosActivos,
-  listarIngresosRemotos,
-  medioIngresoDesdeNube,
-  registrarSalida,
-  textoMedio,
-  tipoIngresoDesdeNube,
-} from "../api";
-import type { IngresoActivoResumen, IngresoRemoto, MedioIngreso, TipoIngreso } from "../api";
+import { cerrarFilaActiva, claveFilaActiva, listarTodosLosActivos, textoMedio } from "../api";
+import type { FilaActiva } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
-
-/** Fila local (este dispositivo) o remota (abierta por el otro dispositivo
- * del mismo sitio, ver `docs/planes-implementados/plan-persistencia-nube.md` — nunca vive en el
- * historial local, sólo en la caché `ingresos_remotos`). Mismos nombres de
- * campo en los dos casos (los que una remota no tiene van en `null`) para
- * que las columnas de AG Grid no necesiten saber cuál es cuál. `origen` no
- * se muestra en ninguna columna (se sacó la columna "Estado" que lo hacía,
- * mezclaba cumplimiento de PRAIND con "de qué dispositivo vino" y confundía
- * más de lo que ayudaba -- ver docs/decisiones-tecnicas.md) -- sólo decide
- * internamente cómo cerrar la fila (`cerrarFila`). */
-interface FilaLocal extends IngresoActivoResumen {
-  origen: "local";
-}
-
-interface FilaRemota {
-  origen: "remoto";
-  uuid_remoto: string;
-  registro_id: null;
-  contratista_id: null;
-  cedula: string | null;
-  contratista_nombre: string;
-  empresa_nombre: string | null;
-  tipo_ingreso: TipoIngreso | null;
-  medio_ingreso: MedioIngreso | null;
-  fecha_hora_ingreso: string;
-  gafete_numero: number | null;
-  usuario_ingreso_nombre: string;
-  resultado_registrado: null;
-  resultado_acceso: null;
-}
-
-type FilaActiva = FilaLocal | FilaRemota;
-
-export function filaDesdeLocal(item: IngresoActivoResumen): FilaActiva {
-  return { ...item, origen: "local" };
-}
-
-export function filaDesdeRemoto(remoto: IngresoRemoto): FilaActiva {
-  return {
-    origen: "remoto",
-    uuid_remoto: remoto.uuid,
-    registro_id: null,
-    contratista_id: null,
-    cedula: remoto.contratista_cedula,
-    contratista_nombre: remoto.contratista_nombre,
-    empresa_nombre: remoto.empresa_nombre,
-    tipo_ingreso: tipoIngresoDesdeNube(remoto.tipo_ingreso),
-    medio_ingreso: medioIngresoDesdeNube(remoto.medio_ingreso),
-    fecha_hora_ingreso: remoto.hora_entrada,
-    gafete_numero: remoto.gafete_numero,
-    usuario_ingreso_nombre: remoto.usuario_entrada_nombre ?? "—",
-    resultado_registrado: null,
-    resultado_acceso: null,
-  };
-}
 
 export default function Activos({
   refrescarSenal,
@@ -103,14 +40,10 @@ export default function Activos({
     // regla.
     return Promise.resolve()
       .then(() => setCargando(true))
-      // `listarIngresosRemotos` no hace red -- lee la caché local que ya
-      // llenó la última sincronización (manual o automática); si la nube
-      // nunca se configuró en este dispositivo, simplemente devuelve una
-      // lista vacía, no falla.
-      .then(() => Promise.all([listarIngresosActivos(), listarIngresosRemotos()]))
-      .then(([pagina, remotos]) => {
-        setFilas([...pagina.items.map(filaDesdeLocal), ...remotos.map(filaDesdeRemoto)]);
-        setTotal(pagina.total + remotos.length);
+      .then(() => listarTodosLosActivos())
+      .then(({ filas, total }) => {
+        setFilas(filas);
+        setTotal(total);
         setSeleccionadas([]);
       })
       .finally(() => setCargando(false));
@@ -124,17 +57,6 @@ export default function Activos({
     };
   }, [recargar, refrescarSenal]);
 
-  /** Local: cierra en `registro_ingresos` (este dispositivo). Remota: cierra
-   * directo contra la nube (`nube::cerrar_ingreso_remoto`) -- nunca toca el
-   * historial local, esa fila no es -- ni fue -- de este dispositivo. */
-  async function cerrarFila(fila: FilaActiva) {
-    if (fila.origen === "local") {
-      await registrarSalida(fila.registro_id);
-    } else {
-      await cerrarIngresoRemoto(fila.uuid_remoto);
-    }
-  }
-
   // useCallback a propósito: esta función se cierra dentro de una celda de
   // `columnas` — sin identidad estable, `columnas` (memoizado más abajo)
   // se recrearía en cada render igual, y con eso AG Grid reasignaría el
@@ -143,7 +65,7 @@ export default function Activos({
   const salidaIndividual = useCallback(
     async (fila: FilaActiva) => {
       try {
-        await cerrarFila(fila);
+        await cerrarFilaActiva(fila);
         recargar();
       } catch (error) {
         toast.error(String(error));
@@ -156,7 +78,7 @@ export default function Activos({
     setProcesando(true);
     try {
       for (const fila of seleccionadas) {
-        await cerrarFila(fila);
+        await cerrarFilaActiva(fila);
       }
       setConfirmarSalidaMasiva(false);
       await recargar();
@@ -320,7 +242,7 @@ export default function Activos({
           </p>
           <ul style={{ margin: "0 0 1rem", paddingLeft: "1.2rem", color: "var(--muted)" }}>
             {seleccionadas.map((fila) => (
-              <li key={fila.origen === "local" ? `local-${fila.registro_id}` : `remoto-${fila.uuid_remoto}`}>
+              <li key={claveFilaActiva(fila)}>
                 {fila.contratista_nombre}
               </li>
             ))}
