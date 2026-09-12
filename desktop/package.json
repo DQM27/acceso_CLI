@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "lint": "eslint .",
     "tauri": "tauri",
     "design:generate": "node ../design/generar.mjs",
     "design:check": "node ../design/generar.mjs --check"
