@@ -1,16 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { filaDesdeLocal, filaDesdeRemoto } from "./Activos";
-import type { IngresoActivoResumen, IngresoRemoto } from "../api";
-
-// fechaLocalYMD/textoHora/textoFechaDDMMYYYY se probaron en
-// src/tiempo.test.ts, y textoMedio en api/ingresos.test.ts — Activos las
-// importa de ahí, no las define más. La columna "Estado" (cumplimiento de
-// PRAIND mezclado con "de qué dispositivo vino") se sacó de esta pantalla
-// por confusa -- ver docs/decisiones-tecnicas.md.
+import { filaDesdeLocal, filaDesdeRemoto } from "./activos";
+import type { IngresoActivoResumen } from "./ingresos";
+import type { IngresoRemoto } from "./nube";
 
 // Fusión con lo abierto por el otro dispositivo del mismo sitio
 // (`docs/planes-implementados/plan-persistencia-nube.md`) -- ninguna de las dos filas se
-// confunde con la otra a la hora de decidir cómo cerrarla.
+// confunde con la otra a la hora de decidir cómo cerrarla. Compartido por
+// `Activos.tsx` (la grilla) y `SalidaModal.tsx` (la búsqueda) -- antes sólo
+// vivía acá y `SalidaModal` no veía activos remotos.
 describe("filaDesdeLocal / filaDesdeRemoto", () => {
   it("una fila local conserva sus datos y queda marcada origen: local", () => {
     const item: IngresoActivoResumen = {

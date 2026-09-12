@@ -37,6 +37,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -73,6 +75,20 @@ fun mensajeBloqueo(preparacion: PreparacionIngreso): String {
         return mensajeMotivoDenegacion(resultado.motivo)
     }
     return "No se puede continuar con este contratista."
+}
+
+/// Espejo de `mensajeVencimientoPraind` (`desktop/src/api/ingresos.ts`) --
+/// antes esta pantalla sólo mostraba "PRAIND próximo a vencer" sin decir
+/// cuánto quedaba, mientras desktop ya avisaba "vence en N días (fecha)".
+/// `fecha` en ISO (`AAAA-MM-DD`), igual que la manda `PreparacionIngreso`.
+fun mensajeVencimientoPraind(fecha: String): String {
+    val dias = ChronoUnit.DAYS.between(LocalDate.now(), LocalDate.parse(fecha))
+    val cuenta = when {
+        dias <= 0 -> "vence hoy"
+        dias == 1L -> "vence mañana"
+        else -> "vence en $dias días"
+    }
+    return "$cuenta ($fecha)"
 }
 
 fun mensajeMotivoDenegacion(motivo: MotivoDenegacion): String =
@@ -204,8 +220,9 @@ fun PantallaConfirmarIngreso(
         )
 
         if (preparacion.resultadoAcceso == ResultadoAcceso.PermitidoConAdvertencia) {
+            val fecha = preparacion.fechaVencimientoPraind
             Text(
-                "⚠ PRAIND próximo a vencer",
+                "⚠ PRAIND " + (fecha?.let { mensajeVencimientoPraind(it) } ?: "próximo a vencer"),
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(bottom = 12.dp),
             )
