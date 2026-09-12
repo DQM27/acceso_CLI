@@ -306,9 +306,19 @@ está resuelto y no haga falta re-auditarlo:
 **Pendientes, deliberadamente no tocados hoy** (bajo riesgo pero requieren
 más cuidado/tiempo del que ameritaba esta pasada):
 
-- `pg_net` instalada en el esquema `public` en vez de uno dedicado — cambio
-  de esquema de una extensión con dependencias (`sync_access_policy()` la
-  usa) requiere más prueba antes de tocarla.
+- **`pg_net` "instalada en `public`" — investigado y descartado a
+  propósito, no es un pendiente real.** `pg_net` tiene
+  `extrelocatable = false`: Postgres rechaza `ALTER EXTENSION ... SET
+  SCHEMA` directo. La única forma de mover su registro de catálogo sería
+  `DROP EXTENSION pg_net CASCADE` + recrearla -- pero sus objetos
+  funcionales reales (`net.http_post`, que usa
+  `sync_access_policy()`/`trg_sync_access_policy`) **ya viven aislados en
+  su propio esquema `net`**, no en `public`. Lo único que está en `public`
+  es el registro de catálogo de la extensión en sí (qué extensión es, qué
+  versión) -- prácticamente decorativo. Recrearla no cambiaría dónde vive
+  nada funcional, sólo arriesgaría el webhook hacia Cloudflare Access (vía
+  el trigger de `administradores_panel`) a cambio de silenciar un WARN
+  cosmético del linter. **Decisión: dejarlo así.**
 - "Leaked password protection" desactivado en Auth — no se puede activar
   por SQL/migración, es un toggle de dashboard (Authentication → Policies).
   Ya no aplica la razón original ("no hay contraseñas que proteger") desde
