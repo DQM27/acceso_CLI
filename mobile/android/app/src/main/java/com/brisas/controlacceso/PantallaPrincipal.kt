@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -41,15 +42,19 @@ import uniffi.control_acceso_mobile.ConflictoIngresoActivo
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.UsuarioSesion
 
-/// App limitada a registros rápidos + historial (decisión 2026-09-06) --
-/// ya no hay menú "+" de altas (contratista/empresa/usuario nuevos, sacado
-/// junto con la pestaña "Nube", ver `ARQUITECTURA.md`) ni una tercera
-/// pestaña de nube. Sólo quedan las dos pantallas de uso frecuente
-/// (Activos, Historial) y el ícono "Sincronizar" de la barra superior.
+/// App limitada a registros rápidos + historial (decisión 2026-09-06),
+/// con una única excepción reincorporada el 2026-09-12: el alta de
+/// contratista (`PantallaNuevoContratista`, ícono "+" de la barra
+/// superior), ahora con OCR de carnet PRAIND además del formulario manual
+/// original. El resto de la decisión sigue en pie -- empresa y usuario
+/// nuevos siguen sin pantalla propia acá (escritorio/web/CLI), y tampoco
+/// volvió la pestaña de nube.
 ///
-/// Sin `Pantalla`/navegación propia a propósito: con una sola superficie
-/// posible (las dos pestañas) no hace falta esa indirección -- el `pestana`
-/// local alcanza.
+/// `mostrarNuevoContratista` es toda la navegación que hace falta -- con
+/// una sola pantalla adicional posible (además de las dos pestañas) no
+/// se justifica un enum `Pantalla` como el que existió antes: cuando está
+/// en `true` reemplaza por completo la Column de pestañas, igual que hacía
+/// aquel enum, sin la indirección de más.
 @Composable
 fun PantallaPrincipal(
     nucleo: Nucleo,
@@ -59,6 +64,7 @@ fun PantallaPrincipal(
     onCerrarSesion: () -> Unit,
 ) {
     var refrescarNube by remember { mutableIntStateOf(0) }
+    var mostrarNuevoContratista by remember { mutableStateOf(false) }
     // `docs/pendientes.md`, "alertar luego al sincronizar" -- ver el mismo
     // campo en `desktop/src/App.tsx` (`manejarResumenSincronizacion`).
     // Alimentado desde los dos caminos de sync (pulso periódico y botón
@@ -166,6 +172,9 @@ fun PantallaPrincipal(
                 modifier = Modifier.padding(top = 8.dp),
             )
             Row {
+                IconButton(onClick = { mostrarNuevoContratista = true }) {
+                    Icon(Icons.Default.PersonAdd, contentDescription = "Nuevo contratista")
+                }
                 val oscuroActual = GestorTema.oscuroForzado ?: isSystemInDarkTheme()
                 IconButton(onClick = { GestorTema.alternar(oscuroActual) }) {
                     Icon(
@@ -212,14 +221,18 @@ fun PantallaPrincipal(
             )
         }
 
-        var pestana by remember { mutableIntStateOf(0) }
-        PrimaryTabRow(selectedTabIndex = pestana) {
-            Tab(selected = pestana == 0, onClick = { pestana = 0 }, text = { Text("Activos") })
-            Tab(selected = pestana == 1, onClick = { pestana = 1 }, text = { Text("Historial") })
-        }
-        when (pestana) {
-            0 -> PantallaActivos(nucleo, secretoStore, refrescarNube)
-            else -> PantallaHistorial(nucleo, refrescarNube)
+        if (mostrarNuevoContratista) {
+            PantallaNuevoContratista(nucleo, onVolver = { mostrarNuevoContratista = false })
+        } else {
+            var pestana by remember { mutableIntStateOf(0) }
+            PrimaryTabRow(selectedTabIndex = pestana) {
+                Tab(selected = pestana == 0, onClick = { pestana = 0 }, text = { Text("Activos") })
+                Tab(selected = pestana == 1, onClick = { pestana = 1 }, text = { Text("Historial") })
+            }
+            when (pestana) {
+                0 -> PantallaActivos(nucleo, secretoStore, refrescarNube)
+                else -> PantallaHistorial(nucleo, refrescarNube)
+            }
         }
     }
 }

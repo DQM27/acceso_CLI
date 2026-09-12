@@ -39,6 +39,11 @@ data class DocumentoDetectado(
     val nombre: String? = null,
     val apellidos: String? = null,
     val nacionalidad: String? = null,
+    // Sólo la trae el carnet PRAIND (`extraerPraind`) -- texto crudo tal
+    // cual lo imprime el carnet, no un `empresa_id`: quien consume esto
+    // (`PantallaNuevoContratista`) decide cómo emparejarlo contra
+    // `Nucleo.listarEmpresas()`.
+    val empresa: String? = null,
     val esExtranjero: Boolean = false,
     val vencimiento: FechaDocumento? = null,
     val fechaNacimiento: FechaDocumento? = null,
@@ -163,6 +168,7 @@ private val REGEX_DIMEX_NACIONALIDAD = Regex("""Nacionalidad:\s*\n?\s*([A-ZÁÉ�
 private val REGEX_LICENCIA_NUMERO = Regex("""N[º°9O]?[:.]?\s*(?:DM|CI)?[- ]?(\d{6,15})""", RegexOption.IGNORE_CASE)
 private val REGEX_PRAIND_CEDULA = Regex("""No\.?\s*de\s*c[ée]dula:?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
 private val REGEX_PRAIND_NOMBRE = Regex("""Nombre:?[ \t]*\n?[ \t]*([^\n]+)""", RegexOption.IGNORE_CASE)
+private val REGEX_PRAIND_EMPRESA = Regex("""Empresa:?[ \t]*\n?[ \t]*([^\n]+)""", RegexOption.IGNORE_CASE)
 // `vencimiento` va antes que `induccion` en el orden de declaración
 // solamente por legibilidad -- lo que importa es que la frase completa de
 // cada regex es literal, así que "Fecha de inducción" nunca matchea dentro
@@ -289,13 +295,17 @@ private fun extraerLicencia(texto: String, esExtranjero: Boolean): DocumentoDete
 /// El carnet PRAIND identifica a la persona por cédula (`numeroDocumento`),
 /// no es un documento de identidad en sí mismo -- lo que de verdad importa
 /// leer es `vencimiento`, que corresponde 1:1 al campo
-/// `fecha_vencimiento_praind` que ya existe en `Contratista`. Se probó
+/// `fecha_vencimiento_praind` que ya existe en `Contratista`. `empresa` es
+/// texto libre tal cual lo imprime el carnet -- no hay forma de saber acá
+/// si calza con alguna fila de `Nucleo.listarEmpresas()`, eso lo resuelve
+/// quien consuma este resultado (alta de contratista con OCR). Se probó
 /// contra las dos variantes de diseño reales (encabezado/pie de página
 /// distintos, mismas etiquetas de campo) -- ver `LectorDocumentosIdentidadTest`.
 private fun extraerPraind(texto: String): DocumentoDetectado? {
     val numero = REGEX_PRAIND_CEDULA.find(texto)?.groupValues?.get(1) ?: return null
 
     val nombre = REGEX_PRAIND_NOMBRE.find(texto)?.groupValues?.get(1)?.trim()
+    val empresa = REGEX_PRAIND_EMPRESA.find(texto)?.groupValues?.get(1)?.trim()
     val vencimiento = REGEX_PRAIND_FECHA_VENCIMIENTO.find(texto)?.let { match ->
         val (dia, mes, anio) = match.destructured
         FechaDocumento.crearValida(dia.toInt(), mes.toInt(), anio.toInt())
@@ -305,6 +315,7 @@ private fun extraerPraind(texto: String): DocumentoDetectado? {
         tipo = TipoDocumento.CARNET_INDUCCION_PRAIND,
         numeroDocumento = numero,
         nombre = nombre,
+        empresa = empresa,
         vencimiento = vencimiento,
     )
 }
