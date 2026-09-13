@@ -1,8 +1,7 @@
-use chrono::{NaiveDate, Utc};
+use chrono::NaiveDate;
 use control_acceso::mensajes::mensaje_cita;
 use control_acceso::models::cita::{Cita, CitaVisitante, EstadoCita};
 use control_acceso::models::movimiento_visita::MovimientoVisitaActivoResumen;
-use control_acceso::tiempo::fecha_costa_rica;
 use rusqlite::params;
 
 use crate::comandos::historial::rango_utc;
@@ -167,46 +166,28 @@ pub fn listar_agenda_visitas(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<AgendaVisitaResumen>, String> {
     state.sesion_activa()?;
-    let conexion = state.conexion_secundaria()?;
-    let hoy = fecha_costa_rica(Utc::now());
-    let mut statement = conexion
-        .prepare(
-            "SELECT c.id, cv.cedula, cv.nombre, cv.empresa, cv.placa_vehiculo, c.motivo,
-                    c.anfitrion_nombre, c.fecha_desde, c.fecha_hasta, c.estado, c.hora_estimada
-             FROM cita_visitantes cv
-             JOIN citas c ON c.id = cv.cita_id
-             WHERE c.fecha_hasta >= ?1
-             ORDER BY c.fecha_desde ASC, cv.nombre ASC",
-        )
-        .map_err(|error| error.to_string())?;
-    statement
-        .query_map(params![hoy.to_string()], |row| {
-            let estado_sql: String = row.get(9)?;
-            Ok(AgendaVisitaResumen {
-                cita_id: row.get(0)?,
-                cedula: row.get(1)?,
-                nombre: row.get(2)?,
-                empresa: row.get(3)?,
-                placa_vehiculo: row.get(4)?,
-                motivo: row.get(5)?,
-                anfitrion_nombre: row.get(6)?,
-                fecha_desde: row.get(7)?,
-                fecha_hasta: row.get(8)?,
-                // `citas.estado` tiene un `CHECK` a sólo estos dos valores
-                // (`database::schema`, `MIGRACION_28`) -- si algún día no
-                // matchea, es un bug del esquema, no una entrada de usuario
-                // que haya que tolerar con un valor por defecto silencioso.
-                estado: EstadoCita::from_str_sql(&estado_sql).ok_or_else(|| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        9,
-                        rusqlite::types::Type::Text,
-                        format!("estado de cita desconocido: {estado_sql}").into(),
-                    )
-                })?,
-                hora_estimada: row.get(10)?,
-            })
+    // Sin `mensaje_*` propio, mismo criterio que `listar_visitas_activas`:
+    // `AppCore::listar_agenda_visitas` devuelve `DatabaseError` directo, no
+    // un `*ServiceError` de negocio -- no exponer su `Display` (interpola el
+    // error crudo de `SQLite`).
+    let filas = state
+        .core()
+        .listar_agenda_visitas()
+        .map_err(|_| "No se pudo cargar la agenda de visitas".to_string())?;
+    Ok(filas
+        .into_iter()
+        .map(|(cita, visitante)| AgendaVisitaResumen {
+            cita_id: cita.id,
+            cedula: visitante.cedula,
+            nombre: visitante.nombre,
+            empresa: visitante.empresa,
+            placa_vehiculo: visitante.placa_vehiculo,
+            motivo: cita.motivo,
+            anfitrion_nombre: cita.anfitrion_nombre,
+            fecha_desde: cita.fecha_desde.to_string(),
+            fecha_hasta: cita.fecha_hasta.to_string(),
+            hora_estimada: cita.hora_estimada,
+            estado: cita.estado,
         })
-        .map_err(|error| error.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| error.to_string())
+        .collect())
 }

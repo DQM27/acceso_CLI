@@ -6,7 +6,7 @@
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 use crate::database::error::DatabaseError;
-use crate::database::repositories::cita_repository::SqliteCitaRepository;
+use crate::database::repositories::cita_repository::{CitaRepository, SqliteCitaRepository};
 use crate::database::repositories::movimiento_visita_repository::{
     MovimientoVisitaRepository, SqliteMovimientoVisitaRepository,
 };
@@ -99,6 +99,18 @@ impl AppCore {
         &self,
     ) -> Result<Vec<MovimientoVisitaActivoResumen>, DatabaseError> {
         SqliteMovimientoVisitaRepository::new(&self.connection).listar_activos()
+    }
+
+    /// Agenda de visitas del sitio -- lectura pura de `citas`/
+    /// `cita_visitantes` ya sincronizadas (`nube::recibir_citas_del_sitio`),
+    /// sin consulta adicional a la nube. Sin `actor`, mismo criterio que
+    /// `listar_visitas_activas`. `hoy` se calcula acá con el reloj validado
+    /// del núcleo (`self.reloj`), no con la hora cruda del sistema -- mismo
+    /// criterio que `verificar_check_in_visita`, para que quien llama no
+    /// pueda pasar una fecha distinta a la que el resto del check-in usa.
+    pub fn listar_agenda_visitas(&self) -> Result<Vec<(Cita, CitaVisitante)>, DatabaseError> {
+        let hoy = fecha_costa_rica(self.reloj.ahora_utc());
+        SqliteCitaRepository::new(&self.connection).listar_agenda(hoy)
     }
 }
 
