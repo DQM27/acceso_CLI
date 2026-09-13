@@ -41,6 +41,15 @@ cargo run --features bindgen --bin uniffi-bindgen -- generate \
 
 find "$GENERATED_DIR" \( -name "*.h" -o -name "module.modulemap" \) -exec cp {} "$HEADERS_DIR" \;
 
+# Sin esto, `cc` (usado por openssl-sys) deja que clang use el default del
+# SDK del runner para compilar su C (en Xcode recientes, un minimo muy alto,
+# p. ej. 26.x) mientras el resto del link usa el minimo bajo por defecto de
+# Rust para estos targets (10.0) -- el desajuste de minimo deja sin resolver
+# simbolos de compiler-rt como `___chkstk_darwin` y el link falla. Mismo
+# valor que `deploymentTarget` en mobile/ios/project.yml para que todo el
+# binario final quede consistente con un solo minimo real.
+export IPHONEOS_DEPLOYMENT_TARGET=17.0
+
 cargo build --release --target aarch64-apple-ios
 cargo build --release --target aarch64-apple-ios-sim
 cargo build --release --target x86_64-apple-ios
