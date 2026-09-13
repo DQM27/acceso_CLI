@@ -21,6 +21,12 @@ use crate::models::cita::{Cita, CitaVisitante, EstadoCita};
 
 pub trait CitaRepository {
     fn buscar_por_cedula(&self, cedula: &str) -> Result<Vec<(Cita, CitaVisitante)>, DatabaseError>;
+
+    /// Agenda de un sitio -- toda cita cuya vigencia no haya terminado
+    /// todavía (`fecha_hasta >= hoy`), vigente o cancelada; quien llama
+    /// decide si oculta las canceladas (mismo criterio que el resto de las
+    /// grillas: dejar que quien mira filtre, no decidirlo acá).
+    fn listar_agenda(&self, hoy: NaiveDate) -> Result<Vec<(Cita, CitaVisitante)>, DatabaseError>;
 }
 
 pub struct SqliteCitaRepository<'a> {
@@ -95,6 +101,17 @@ impl CitaRepository for SqliteCitaRepository<'_> {
             .prepare(&format!("{SELECT_CITA_VISITANTE} WHERE v.cedula = ?1"))?;
         let filas = statement
             .query_map(params![cedula], convertir_fila)?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(filas)
+    }
+
+    fn listar_agenda(&self, hoy: NaiveDate) -> Result<Vec<(Cita, CitaVisitante)>, DatabaseError> {
+        let mut statement = self.connection.prepare(&format!(
+            "{SELECT_CITA_VISITANTE} WHERE c.fecha_hasta >= ?1 \
+             ORDER BY c.fecha_desde ASC, v.nombre ASC"
+        ))?;
+        let filas = statement
+            .query_map(params![hoy.to_string()], convertir_fila)?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(filas)
     }
@@ -173,6 +190,29 @@ mod tests {
         let resultado = repo.buscar_por_cedula("1-2345").unwrap();
 
         assert_eq!(resultado.len(), 2);
+    }
+
+    #[test]
+    fn listar_agenda_omite_citas_ya_vencidas_pero_incluye_canceladas_vigentes() {
+        let connection = conexion();
+        insertar_cita(&connection, 1, "2026-01-01", "2026-01-05", "VIGENTE");
+        insertar_visitante(&connection, 1, 1, "1-1111");
+        insertar_cita(&connection, 2, "2026-08-10", "2026-08-15", "CANCELADA");
+        insertar_visitante(&connection, 2, 2, "2-2222");
+        insertar_cita(&connection, 3, "2026-08-20", "2026-08-25", "VIGENTE");
+        insertar_visitante(&connection, 3, 3, "3-3333");
+        let repo = SqliteCitaRepository::new(&connection);
+
+        let resultado = repo
+            .listar_agenda(NaiveDate::from_ymd_opt(2026, 8, 12).unwrap())
+            .unwrap();
+
+        // La cita 1 ya venció (fecha_hasta < hoy) -- no aparece. Las citas 2
+        // y 3 siguen dentro de su rango de vigencia (fecha_hasta >= hoy) y
+        // aparecen ambas, cancelada incluida -- quien llama decide si la
+        // oculta, no esta consulta.
+        let cedulas: Vec<&str> = resultado.iter().map(|(_, v)| v.cedula.as_str()).collect();
+        assert_eq!(cedulas, vec!["2-2222", "3-3333"]);
     }
 
     #[test]
