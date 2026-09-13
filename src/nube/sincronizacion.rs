@@ -1816,13 +1816,41 @@ pub fn recibir_historial_visitas_del_sitio(
          dispositivo_entrada_id,dispositivo_salida_id,updated_at",
         contexto.base_url, contexto.sitio_id,
     );
-    let filas: Vec<FilaHistorialVisitaRemota> = obtener_json_paginado(&cliente, contexto, &url)?;
+    // Página por página en vez de acumular todo el historial de visitas
+    // remoto en un `Vec` antes de tocar la base -- mismo criterio que
+    // `recibir_historial_del_sitio` (hallazgo R-03).
+    let mut recibidos_total = 0_u32;
+    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_consulta;
+    obtener_json_paginado_con(
+        &cliente,
+        contexto,
+        &url,
+        |pagina: Vec<FilaHistorialVisitaRemota>| {
+            let (recibidos, marca_actualizada) =
+                aplicar_pagina_historial_visitas(connection, contexto, &pagina, marca_mas_nueva)?;
+            recibidos_total += recibidos;
+            marca_mas_nueva = marca_actualizada;
+            Ok(())
+        },
+    )?;
 
+    Ok(recibidos_total)
+}
+
+/// Persiste una página de historial de visitas remoto en su propia
+/// transacción corta, incluida la marca de agua -- ver el doc-comment de
+/// `aplicar_pagina_historial`, mismo criterio.
+fn aplicar_pagina_historial_visitas(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    pagina: &[FilaHistorialVisitaRemota],
+    marca_previa: Option<chrono::DateTime<chrono::Utc>>,
+) -> Result<(u32, Option<chrono::DateTime<chrono::Utc>>), SincronizacionError> {
     let transaction = connection.unchecked_transaction()?;
     let mut recibidos = 0_u32;
     let ahora = crate::tiempo::serializar_utc(chrono::Utc::now());
-    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_consulta;
-    for fila in &filas {
+    let mut marca_mas_nueva = marca_previa;
+    for fila in pagina {
         let FilaHistorialVisitaResultado::Aplicada { actualizado_en } =
             guardar_fila_historial_visita(&transaction, contexto, fila, &ahora)?
         else {
@@ -1843,7 +1871,7 @@ pub fn recibir_historial_visitas_del_sitio(
         )?;
     }
     transaction.commit()?;
-    Ok(recibidos)
+    Ok((recibidos, marca_mas_nueva))
 }
 
 /// Nombre del anfitrión, embebido vía `PostgREST`
@@ -2000,14 +2028,40 @@ pub fn recibir_citas_del_sitio(
          cita_visitantes(id,cedula,nombre,empresa,placa_vehiculo){filtro_incremental}",
         contexto.base_url,
     );
-    let filas: Vec<FilaCitaRemota> = obtener_json_paginado(&cliente, contexto, &url)?;
-
-    let transaction = connection.unchecked_transaction()?;
-    let mut recibidas = 0_u32;
+    // Página por página en vez de acumular todas las citas remotas en un
+    // `Vec` antes de tocar la base -- mismo criterio que
+    // `recibir_historial_del_sitio` (hallazgo R-03 de
+    // `docs/auditorias/AUDITORIA_RENDIMIENTO_CORE_RUST_2026-09-10.md`): a
+    // diferencia del catálogo (contratistas/gafetes, acotado por la
+    // plantilla física del sitio), las citas se acumulan con el tiempo sin
+    // un tope natural.
+    let mut recibidas_total = 0_u32;
     let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_anterior
         .as_deref()
         .and_then(|marca| crate::tiempo::parsear_utc(marca).ok());
-    for fila in &filas {
+    obtener_json_paginado_con(&cliente, contexto, &url, |pagina: Vec<FilaCitaRemota>| {
+        let (recibidas, marca_actualizada) =
+            aplicar_pagina_citas(connection, &pagina, marca_mas_nueva)?;
+        recibidas_total += recibidas;
+        marca_mas_nueva = marca_actualizada;
+        Ok(())
+    })?;
+
+    Ok(recibidas_total)
+}
+
+/// Persiste una página de citas remotas en su propia transacción corta,
+/// incluida la marca de agua -- ver el doc-comment de
+/// `aplicar_pagina_historial`, mismo criterio.
+fn aplicar_pagina_citas(
+    connection: &Connection,
+    pagina: &[FilaCitaRemota],
+    marca_previa: Option<chrono::DateTime<chrono::Utc>>,
+) -> Result<(u32, Option<chrono::DateTime<chrono::Utc>>), SincronizacionError> {
+    let transaction = connection.unchecked_transaction()?;
+    let mut recibidas = 0_u32;
+    let mut marca_mas_nueva = marca_previa;
+    for fila in pagina {
         let Some(actualizado_en) = guardar_cita_remota(&transaction, fila)? else {
             continue;
         };
@@ -2024,7 +2078,7 @@ pub fn recibir_citas_del_sitio(
         )?;
     }
     transaction.commit()?;
-    Ok(recibidas)
+    Ok((recibidas, marca_mas_nueva))
 }
 
 /// Cuántas filas se aplicaron localmente al traer el catálogo del sitio --
