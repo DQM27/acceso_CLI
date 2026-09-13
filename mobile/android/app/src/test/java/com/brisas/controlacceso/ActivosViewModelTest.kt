@@ -145,7 +145,7 @@ class ActivosViewModelTest {
                 fecha_vencimiento_praind
             ) VALUES ('111111117', 'Con Gafete Siete', 1, 'PRAIND', 0, 1, '2099-12-31');
             """.trimIndent(),
-            "INSERT INTO gafetes (numero, estado) VALUES (7, 'DISPONIBLE');",
+            "INSERT INTO gafetes (numero, tipo, estado) VALUES (7, 'CONTRATISTA', 'DISPONIBLE');",
             NucleoDePrueba.sqlUsuarioRoot(),
         )
         nucleo.autenticar(
