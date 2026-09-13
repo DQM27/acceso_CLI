@@ -436,16 +436,32 @@ estabilizador y clasificador.
 
 ## Respaldo, base local y dominio
 
-- [ ] **Eliminar respaldos no usados con confirmación.** Acción menor, mismo patrón que
-  exportar/restaurar.
-- [x] **Importar respaldo cuando no existe base local omitido a propósito.** La base ya es
-  portátil y la restauración técnica existe; no se construye UX previa al primer arranque
-  hasta que se pida.
-- [x] **Agregados de dominio con constructores privados diferidos a V3.** Los campos
-  públicos no violan el flujo actual; reabrir con concurrencia multi-terminal.
-- [x] **Respaldo automático a la 01:00 hora Costa Rica.**
-- [x] **Retención automática queda en 7 respaldos.**
-- [x] **Respaldo previo a migraciones y rollback.**
+- [x] **Todo el subsistema de respaldo local (AppCore, TUI, desktop) eliminado
+  (2026-09-10/12, commits `e643fe8`/`a98d7d9`) -- las tres entradas de abajo que hablaban
+  de él ("automático a la 01:00", "retención de 7 respaldos", "eliminar respaldos no
+  usados", "importar respaldo") quedan obsoletas de golpe, no descartadas una por una.**
+  Motivo real: el respaldo de archivo era incompatible con SQLCipher (cifrado real);
+  se reemplazó por depender de la sincronización con la nube como respaldo efectivo.
+  `database::backup`, los métodos de respaldo de `AppCore`, la pantalla "Respaldos" del
+  TUI y el flujo de restaurar-respaldo de `main.rs` ya no existen -- no hay reemplazo
+  pendiente, es la decisión final. Hallazgo 2026-09-13: las 5 entradas de abajo seguían
+  marcadas como si el subsistema existiera, sin ninguna nota -- violaba la propia regla
+  de este archivo. Corregido acá.
+- [x] ~~Eliminar respaldos no usados con confirmación.~~ Obsoleto -- no hay respaldos locales.
+- [x] ~~Importar respaldo cuando no existe base local omitido a propósito.~~ Obsoleto -- no
+  hay respaldos locales que importar.
+- [x] ~~Respaldo automático a la 01:00 hora Costa Rica.~~ Obsoleto -- ver arriba.
+- [x] ~~Retención automática queda en 7 respaldos.~~ Obsoleto -- ver arriba.
+- [x] ~~Respaldo previo a migraciones y rollback.~~ El respaldo GENERAL se eliminó; el
+  respaldo puntual pre-migración de esquema (distinto, más chico) sigue vivo en
+  `src/database/schema.rs` -- no verificado de nuevo en este pase, sólo se corrige la nota.
+- [ ] **Agregados de dominio con constructores privados diferidos a V3.** Reabrir con
+  concurrencia multi-terminal -- **sigue sin hacer** (revertido de `[x]` a `[ ]`,
+  2026-09-13: no hay evidencia de que este ítem específico -- reforzar invariantes de
+  dominio para más de un terminal escribiendo a la vez -- se haya hecho. No confundir con
+  la sincronización multi-dispositivo actual (cada dispositivo con su propia base +
+  detección de conflictos entre sitios, eso sí existe y funciona, ver
+  `src/nube/sincronizacion.rs`) -- son cosas distintas.
 - [x] **SQLite STRICT aplicado donde corresponde.**
 - [x] **Historial y auditoría usan conexiones secundarias para cargas/exportaciones.**
 
