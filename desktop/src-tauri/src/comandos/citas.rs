@@ -2,10 +2,73 @@ use chrono::NaiveDate;
 use control_acceso::mensajes::mensaje_cita;
 use control_acceso::models::cita::{Cita, CitaVisitante, EstadoCita};
 use control_acceso::models::movimiento_visita::MovimientoVisitaActivoResumen;
+use control_acceso::nube;
 use rusqlite::params;
+use tauri::Manager;
 
 use crate::comandos::historial::rango_utc;
 use crate::estado::GuiState;
+
+/// Mismo tope y mismo criterio de mejor esfuerzo que
+/// `ESPERA_MAXIMA_CHEQUEO_OTRO_SITIO` en `comandos/ingresos.rs` -- duplicada
+/// a propósito, no generalizada (mismo motivo que el resto de este archivo
+/// duplica en vez de compartir con el dominio de contratistas).
+const ESPERA_MAXIMA_CHEQUEO_OTRO_SITIO: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Espejo de `comandos::ingresos::chequear_activo_en_otro_sitio`, pero para
+/// visitas -- misma idea: un visitante no puede estar activo en dos sitios
+/// a la vez, mismo criterio que un contratista.
+fn chequear_visitante_activo_en_otro_sitio(state: &GuiState, cedula: &str) -> Option<String> {
+    let secreto = nube::credenciales::cargar_secreto()?;
+    let token = state.autenticar_con_cache(&secreto).ok()?;
+    if let Some(desfase_ms) = token.desfase_reloj_ms {
+        state.core().actualizar_desfase_reloj(desfase_ms);
+    }
+    let contexto = nube::ContextoSincronizacion {
+        base_url: nube::BASE_URL,
+        apikey: nube::APIKEY,
+        token: &token.access_token,
+        dispositivo_id: &token.dispositivo_id,
+        sitio_id: &token.sitio_id,
+    };
+    nube::visitante_activo_en_otro_sitio(&contexto, cedula)
+        .ok()
+        .flatten()
+}
+
+/// Espejo de `comandos::ingresos::gafete_libre_en_otro_dispositivo`, pero
+/// contra `movimientos_visita` -- mismo criterio: dos dispositivos del
+/// mismo sitio comparten el mismo rango de gafetes físicos de visita, cada
+/// uno sólo valida contra su propia base `SQLite`. Sin secreto guardado
+/// (dispositivo sin nube configurada) no hay con quién chocar, se salta sin
+/// tocar la red -- `Ok(true)` ("libre") directo.
+fn gafete_de_visita_libre_en_otro_dispositivo(state: &GuiState, numero: i64) -> Result<bool, String> {
+    let Some(secreto) = nube::credenciales::cargar_secreto() else {
+        return Ok(true);
+    };
+    let actor = state.sesion_activa()?;
+    state
+        .core()
+        .autorizar_uso_nube(&actor)
+        .map_err(control_acceso::mensajes::mensaje_gestion_nube)?;
+
+    let token = state
+        .autenticar_con_cache(&secreto)
+        .map_err(control_acceso::mensajes::mensaje_nube)?;
+    if let Some(desfase_ms) = token.desfase_reloj_ms {
+        state.core().actualizar_desfase_reloj(desfase_ms);
+    }
+    let contexto = nube::ContextoSincronizacion {
+        base_url: nube::BASE_URL,
+        apikey: nube::APIKEY,
+        token: &token.access_token,
+        dispositivo_id: &token.dispositivo_id,
+        sitio_id: &token.sitio_id,
+    };
+    let ocupado = nube::gafete_de_visita_ocupado_en_otro_dispositivo(&contexto, numero)
+        .map_err(control_acceso::mensajes::mensaje_sincronizacion)?;
+    Ok(!ocupado)
+}
 
 /// DTO de presentación -- `AppCore::verificar_check_in_visita` devuelve una
 /// tupla `(Cita, CitaVisitante)`; acá se nombra para que el lado TypeScript
@@ -14,19 +77,45 @@ use crate::estado::GuiState;
 pub struct PreparacionVisita {
     pub cita: Cita,
     pub visitante: CitaVisitante,
+    /// Ver `chequear_visitante_activo_en_otro_sitio` -- mismo criterio que
+    /// `PreparacionIngreso::activo_en_otro_sitio` (contratistas): mejor
+    /// esfuerzo, `None` también cuando no hubo forma de verificar, no sólo
+    /// cuando de verdad no hay conflicto.
+    pub activo_en_otro_sitio: Option<String>,
 }
 
+/// Async por el mismo motivo que `preparar_ingreso`
+/// (`comandos/ingresos.rs`): el chequeo local (`AppCore::verificar_check_in_visita`)
+/// es instantáneo y siempre corre; el remoto (`activo_en_otro_sitio`, mejor
+/// esfuerzo) es el único que necesita `tokio`/tope de tiempo.
 #[tauri::command]
-pub fn verificar_check_in_visita(
+pub async fn verificar_check_in_visita(
     cedula: String,
-    state: tauri::State<GuiState>,
+    app: tauri::AppHandle,
 ) -> Result<PreparacionVisita, String> {
+    let state = app.state::<GuiState>();
     state.sesion_activa()?;
     let (cita, visitante) = state
         .core()
         .verificar_check_in_visita(&cedula)
         .map_err(mensaje_cita)?;
-    Ok(PreparacionVisita { cita, visitante })
+
+    let visitante_cedula = visitante.cedula.clone();
+    let manejador = app.clone();
+    let chequeo = tokio::time::timeout(
+        ESPERA_MAXIMA_CHEQUEO_OTRO_SITIO,
+        tauri::async_runtime::spawn_blocking(move || {
+            chequear_visitante_activo_en_otro_sitio(&manejador.state::<GuiState>(), &visitante_cedula)
+        }),
+    )
+    .await;
+    let activo_en_otro_sitio = chequeo.ok().and_then(Result::ok).flatten();
+
+    Ok(PreparacionVisita {
+        cita,
+        visitante,
+        activo_en_otro_sitio,
+    })
 }
 
 #[tauri::command]
@@ -36,6 +125,13 @@ pub fn registrar_entrada_visita(
     state: tauri::State<GuiState>,
 ) -> Result<i64, String> {
     let sesion = state.sesion_activa()?;
+    if let Some(numero) = gafete
+        && !gafete_de_visita_libre_en_otro_dispositivo(&state, numero)?
+    {
+        return Err(format!(
+            "El gafete {numero} ya está en uso en otro dispositivo del sitio"
+        ));
+    }
     state
         .core()
         .registrar_entrada_visita(&sesion, &cedula, gafete)

@@ -198,6 +198,96 @@ se retome, sin decidir todavía:
   Realtime por sitio para la sincronización -- se podría enganchar ahí
   para que aparezca sin recargar).
 
+## Edición de una cita por el anfitrión, antes o durante el evento
+
+Sí, ya soportado -- confirmado releyendo las políticas RLS de
+`supabase/migrations/20260909181150_crea_control_de_visitas.sql`: el
+anfitrión puede actualizar sus propias citas ("anfitrion actualiza sus
+propias citas"), agregar/quitar sitios ("anfitrion agrega/quita sitios
+de sus propias citas") y agregar/editar/quitar visitantes
+("anfitrion agrega/edita/quita visitantes de sus propias citas") en
+cualquier momento -- no hay restricción por fecha (antes, durante o
+después del rango de vigencia). El único estado terminal real es
+`CANCELADA`: `citas_bloquea_reactivacion`
+(`20260909192655_endurece_esquema_de_citas_para_la_rpc_atomica.sql`)
+impide reactivarla con un PATCH directo, aunque la web nunca ofrezca ese
+botón. Responde una de las "Preguntas abiertas" de abajo.
+
+Un cambio de sitios (`cita_sitios`) llega al dispositivo casi al
+instante vía el aviso en vivo (`private.emitir_cambio_nube_sitio`, ver
+más abajo); un cambio de fecha/motivo/visitantes llega en el próximo
+pulso periódico de sync (~2 min) -- `cita_visitantes_toca_cita` ya
+actualiza `citas.updated_at` para que el filtro incremental lo capture.
+
+## Aviso en vivo de citas (cerrado 2026-09-13)
+
+Hueco encontrado y cerrado: una cita nueva sólo llegaba a los
+dispositivos por el pulso periódico (~2 min), nunca en vivo, porque
+`cita_sitios` nunca se enganchó al mecanismo de aviso ya existente
+(`private.emitir_cambio_nube_sitio`, usado por `usuarios`/
+`movimientos_visita`). Se agregó el trigger
+`cita_sitios_emitir_cambio_nube` (migración
+`avisa_cambio_nube_en_cita_sitios`) -- sin cambios de cliente, ni
+desktop ni mobile filtran por tabla en el payload del broadcast. Ver
+`docs/features-futuras/plan-gafetes-compartido-y-realtime-citas.md`
+para el diseño completo (incluye el rediseño de `gafetes` como catálogo
+compartido contratista/visita, hecho en la misma sesión).
+
+## Reglas de negocio de visita -- auditoría completa (2026-09-13)
+
+Repaso de todo `domain::cita`/`CitaService`/`MovimientoVisitaRepository`
+para confirmar qué está cubierto. Ya implementado: vigencia de la cita
+(estado + rango de fechas, `domain::cita::verificar_cita`), matching de
+cédula contra todas las citas de esa persona, un visitante no puede
+tener dos movimientos abiertos a la vez, catálogo+ocupación de gafete de
+visita (ver plan de gafetes), salida nunca anterior a la entrada, las
+cuatro garantías de integridad histórica (no se borra, entrada
+inmutable, salida única, fechas UTC), y reloj retrocedido (compartido
+con contratista). Dos huecos reales encontrados y cerrados en esta
+misma sesión, **mismo patrón que ya existía para contratista**:
+
+- **Un visitante activo en dos sitios distintos a la vez.** Para
+  contratista ya existía (`nube::contratista_activo_en_otro_sitio`,
+  chequeo en vivo al preparar; `nube::contratistas_con_conflicto_activo`,
+  reconciliación post-sync); para visita no había nada. Se agregó el
+  espejo exacto: `nube::visitante_activo_en_otro_sitio` (consulta
+  `movimientos_visita` remoto, excluye el sitio propio) llamado desde
+  `verificar_check_in_visita` (ahora `async`, mismo criterio de tope de
+  5s que `preparar_ingreso`) y expuesto en `PreparacionVisita.activo_en_otro_sitio`;
+  la UI (`VisitaCheckInModal.tsx`, `puedeContinuarVisita`/
+  `mensajeBloqueoVisita`) bloquea continuar si hay conflicto, igual que
+  `NuevoIngresoModal`. `nube::visitantes_con_conflicto_activo` hace la
+  reconciliación post-sync -- si el conflicto ya se coló (offline),
+  ambos sitios se enteran por su cuenta al sincronizar y ven un
+  `toast.warning` en `App.tsx` ("Fulano tiene una visita activa acá Y
+  en Cartago"), sin canal de aviso aparte entre sitios (misma consulta
+  simétrica que ya usa contratista).
+- **Mismo gafete de visita asignado por dos dispositivos del mismo
+  sitio.** Para contratista ya existía
+  (`nube::gafete_ocupado_en_otro_dispositivo`, chequeo bloqueante -- no
+  sólo advertencia -- antes de confirmar); para visita no había nada
+  (cada dispositivo sólo valida contra su propia `SQLite`,
+  `idx_movimientos_visita_gafete_activo`, que nunca ve lo que hizo el
+  otro hasta sincronizar). Se agregó el espejo exacto:
+  `nube::gafete_de_visita_ocupado_en_otro_dispositivo`, llamado desde
+  `registrar_entrada_visita` -- si nube está configurada, exige estar en
+  línea y bloquea con un error si el número ya está en uso en otro
+  dispositivo del sitio (mismo criterio: prefiere bloquear a arriesgar
+  el mismo número físico duplicado).
+
+Ambos son duplicación deliberada de la función de contratista, no
+generalización -- mismo criterio que el resto de este dominio (ver
+`en_transaccion_con_reloj_validado_visita`): los dos dominios quedan sin
+conocerse entre sí, al costo de tener que tocar dos lugares si la regla
+cambia.
+
+**Sigue sin existir** (no se pidió en esta sesión, anotado para
+consistencia): un contratista tiene `tiene_acceso` global (sin
+restricción por sitio, a propósito -- `sincronizacion.rs`); no hay
+concepto equivalente para visita porque `cita_sitios` ya resuelve esa
+dimensión (qué sitios cubre la cita) del lado de la nube/RLS, no del
+dominio local.
+
 ## Pendiente, fuera de alcance de esta sesión
 
 - **Proveedores**: el otro actor mencionado como faltante. Se espera
@@ -210,8 +300,11 @@ se retome, sin decidir todavía:
 ## Preguntas abiertas
 
 - ¿El campo `motivo` de la cita es obligatorio u opcional?
-- ¿Quién puede cancelar una cita ya creada -- sólo el anfitrión que la
-  creó, o también un administrador del sitio?
+- ~~¿Quién puede cancelar una cita ya creada -- sólo el anfitrión que la
+  creó, o también un administrador del sitio?~~ Respondida
+  (2026-09-13): hoy sólo el anfitrión, vía RLS ("anfitrion actualiza sus
+  propias citas") -- no hay política que le dé ese permiso a un admin
+  de sitio todavía; ver "Edición de una cita por el anfitrión" arriba.
 - Detalle de la mecánica de "vigencia": ¿una cita vencida se oculta
   sola, o hace falta un estado explícito que alguien setee (más allá
   de comparar fechas en la consulta)?

@@ -684,20 +684,24 @@ fn enviar_empresa(
 /// drenó -- mismo caso que `empresa_id` en `enviar_contratista`); a lo sumo
 /// una de las dos tiene valor, igual que localmente.
 /// Ver el doc-comment de [`construir_cuerpo_contratista`] -- misma idea.
+/// Fila cruda para armar el cuerpo remoto de un gafete -- struct en vez de
+/// una tupla de 7 elementos (`clippy::type_complexity`).
+struct FilaGafeteLocal {
+    numero: i64,
+    tipo: String,
+    estado: String,
+    contratista_portador_uuid: Option<String>,
+    contratista_portador_nombre: Option<String>,
+    visita_portador_uuid: Option<String>,
+    visita_portador_nombre: Option<String>,
+}
+
 fn construir_cuerpo_gafete(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
     uuid: &str,
 ) -> Result<Value, SincronizacionError> {
-    let (numero, tipo, estado, contratista_portador_uuid, contratista_portador_nombre, visita_portador_uuid, visita_portador_nombre): (
-        i64,
-        String,
-        String,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-    ) = connection.query_row(
+    let fila: FilaGafeteLocal = connection.query_row(
         "
         SELECT g.numero, g.tipo, g.estado, c.uuid, c.nombre, cv.uuid, cv.nombre
         FROM gafetes g
@@ -707,15 +711,15 @@ fn construir_cuerpo_gafete(
         ",
         params![uuid],
         |row| {
-            Ok((
-                row.get(0)?,
-                row.get(1)?,
-                row.get(2)?,
-                row.get(3)?,
-                row.get(4)?,
-                row.get(5)?,
-                row.get(6)?,
-            ))
+            Ok(FilaGafeteLocal {
+                numero: row.get(0)?,
+                tipo: row.get(1)?,
+                estado: row.get(2)?,
+                contratista_portador_uuid: row.get(3)?,
+                contratista_portador_nombre: row.get(4)?,
+                visita_portador_uuid: row.get(5)?,
+                visita_portador_nombre: row.get(6)?,
+            })
         },
     )?;
 
@@ -723,13 +727,13 @@ fn construir_cuerpo_gafete(
         "id": uuid,
         "sitio_id": contexto.sitio_id,
         "dispositivo_origen_id": contexto.dispositivo_id,
-        "numero": numero,
-        "tipo": tipo,
-        "estado": estado,
-        "contratista_portador_id": contratista_portador_uuid,
-        "contratista_portador_nombre": contratista_portador_nombre,
-        "visita_portador_id": visita_portador_uuid,
-        "visita_portador_nombre": visita_portador_nombre,
+        "numero": fila.numero,
+        "tipo": fila.tipo,
+        "estado": fila.estado,
+        "contratista_portador_id": fila.contratista_portador_uuid,
+        "contratista_portador_nombre": fila.contratista_portador_nombre,
+        "visita_portador_id": fila.visita_portador_uuid,
+        "visita_portador_nombre": fila.visita_portador_nombre,
     }))
 }
 
@@ -1362,6 +1366,27 @@ pub fn gafete_ocupado_en_otro_dispositivo(
     Ok(!filas.is_empty())
 }
 
+/// Mismo criterio y misma forma que `gafete_ocupado_en_otro_dispositivo`,
+/// pero contra `movimientos_visita`: dos dispositivos del mismo sitio
+/// comparten el mismo rango de gafetes físicos de visita, y cada uno sólo
+/// valida contra su propia base `SQLite`
+/// (`idx_movimientos_visita_gafete_activo`), que nunca ve lo que hizo el
+/// otro hasta sincronizar. Pensada para llamarse justo antes de confirmar
+/// una entrada de visita con gafete.
+pub fn gafete_de_visita_ocupado_en_otro_dispositivo(
+    contexto: &ContextoSincronizacion<'_>,
+    numero: i64,
+) -> Result<bool, SincronizacionError> {
+    let cliente = cliente_http();
+    let url = format!(
+        "{}/rest/v1/movimientos_visita?sitio_id=eq.{}&dispositivo_entrada_id=neq.{}\
+         &hora_salida=is.null&gafete_numero=eq.{numero}&select=id&limit=1",
+        contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
+    );
+    let filas: Vec<FilaGafeteOcupado> = obtener_json(&cliente, contexto, &url)?;
+    Ok(!filas.is_empty())
+}
+
 #[derive(serde::Deserialize)]
 struct SitioEmbebido {
     nombre: String,
@@ -1391,6 +1416,30 @@ pub fn contratista_activo_en_otro_sitio(
     let url = format!(
         "{}/rest/v1/ingresos?contratista_cedula=eq.{cedula}&sitio_id=neq.{}&hora_salida=is.null\
          &select=sitios(nombre)&limit=1",
+        contexto.base_url, contexto.sitio_id,
+    );
+    let filas: Vec<FilaIngresoActivoOtroSitio> = obtener_json(&cliente, contexto, &url)?;
+    Ok(filas
+        .into_iter()
+        .next()
+        .and_then(|fila| fila.sitios)
+        .map(|sitio| sitio.nombre))
+}
+
+/// Mismo criterio y misma forma que `contratista_activo_en_otro_sitio`,
+/// pero contra `movimientos_visita` -- la regla es idéntica (un mismo
+/// visitante no puede estar activo en dos sitios a la vez, mismo criterio
+/// que un contratista), sólo cambia la tabla remota. Pensada para llamarse
+/// desde `verificar_check_in_visita` (desktop), mejor esfuerzo, nunca
+/// bloqueante si no hay red.
+pub fn visitante_activo_en_otro_sitio(
+    contexto: &ContextoSincronizacion<'_>,
+    cedula: &str,
+) -> Result<Option<String>, SincronizacionError> {
+    let cliente = cliente_http();
+    let url = format!(
+        "{}/rest/v1/movimientos_visita?visitante_cedula=eq.{cedula}&sitio_id=neq.{}\
+         &hora_salida=is.null&select=sitios(nombre)&limit=1",
         contexto.base_url, contexto.sitio_id,
     );
     let filas: Vec<FilaIngresoActivoOtroSitio> = obtener_json(&cliente, contexto, &url)?;
@@ -1472,6 +1521,75 @@ pub fn contratistas_con_conflicto_activo(
             Some(ConflictoIngresoActivo {
                 cedula,
                 contratista_nombre: nombre,
+                sitio_conflicto: sitio,
+            })
+        })
+        .collect())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct ConflictoMovimientoVisitaActivo {
+    pub cedula: String,
+    pub visitante_nombre: String,
+    /// Sitio donde ESTE mismo dispositivo también lo tiene activo ahora
+    /// mismo -- no necesariamente el único conflicto que existe.
+    pub sitio_conflicto: String,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaConflictoVisitaActivo {
+    visitante_cedula: Option<String>,
+    sitios: Option<SitioEmbebido>,
+}
+
+/// Mismo criterio y misma forma que `contratistas_con_conflicto_activo`,
+/// pero para `movimientos_visita`: corre después de un sync exitoso y
+/// revisa todos los movimientos de visita que quedaron activos localmente
+/// para encontrar los que igual se colaron en otro sitio (ej. registrados
+/// mientras este dispositivo estaba offline). Deliberadamente simétrica --
+/// ambos sitios en conflicto corren esta misma consulta.
+pub fn visitantes_con_conflicto_activo(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<Vec<ConflictoMovimientoVisitaActivo>, SincronizacionError> {
+    let mut statement = connection.prepare(
+        "SELECT visitante_cedula, visitante_nombre FROM movimientos_visita
+         WHERE fecha_hora_salida IS NULL",
+    )?;
+    let activos_locales: Vec<(String, String)> = statement
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<Result<_, _>>()?;
+    drop(statement);
+    if activos_locales.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let cedulas = activos_locales
+        .iter()
+        .map(|(cedula, _)| cedula.as_str())
+        .collect::<Vec<_>>()
+        .join(",");
+    let cliente = cliente_http();
+    let url = format!(
+        "{}/rest/v1/movimientos_visita?visitante_cedula=in.({cedulas})&sitio_id=neq.{}\
+         &hora_salida=is.null&select=visitante_cedula,sitios(nombre)",
+        contexto.base_url, contexto.sitio_id,
+    );
+    let filas: Vec<FilaConflictoVisitaActivo> = obtener_json(&cliente, contexto, &url)?;
+
+    Ok(filas
+        .into_iter()
+        .filter_map(|fila| {
+            let cedula = fila.visitante_cedula?;
+            let sitio = fila.sitios?.nombre;
+            let nombre = activos_locales
+                .iter()
+                .find(|(c, _)| *c == cedula)
+                .map(|(_, nombre)| nombre.clone())?;
+            Some(ConflictoMovimientoVisitaActivo {
+                cedula,
+                visitante_nombre: nombre,
                 sitio_conflicto: sitio,
             })
         })
@@ -4038,6 +4156,160 @@ mod tests {
         // fallaría con un error de conexión en vez de devolver `Ok(vec![])`.
         let conflictos =
             contratistas_con_conflicto_activo(&connection, &contexto("http://127.0.0.1:1"))
+                .unwrap();
+
+        assert_eq!(conflictos, Vec::new());
+    }
+
+    #[test]
+    fn gafete_de_visita_ocupado_en_otro_dispositivo_excluye_este_dispositivo() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.contains("sitio_id=eq.sitio-1"));
+            assert!(pedido.contains("dispositivo_entrada_id=neq.dispositivo-1"));
+            assert!(pedido.contains("gafete_numero=eq.9"));
+            let cuerpo = "[{\"id\":\"uuid-movimiento\"}]";
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        let ocupado = gafete_de_visita_ocupado_en_otro_dispositivo(&contexto(&base_url), 9).unwrap();
+
+        assert!(ocupado);
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn gafete_de_visita_ocupado_en_otro_dispositivo_sin_conflicto_devuelve_false() {
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let ocupado = gafete_de_visita_ocupado_en_otro_dispositivo(&contexto(&base_url), 9).unwrap();
+
+        assert!(!ocupado);
+    }
+
+    #[test]
+    fn visitante_activo_en_otro_sitio_excluye_el_sitio_actual_en_la_url() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.contains("visitante_cedula=eq.1-2345"));
+            assert!(pedido.contains("sitio_id=neq.sitio-1"));
+            assert!(pedido.contains("hora_salida=is.null"));
+            let cuerpo = "[{\"sitios\":{\"nombre\":\"Cartago\"}}]";
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        let sitio = visitante_activo_en_otro_sitio(&contexto(&base_url), "1-2345").unwrap();
+
+        assert_eq!(sitio, Some("Cartago".to_string()));
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn visitante_activo_en_otro_sitio_sin_conflicto_devuelve_none() {
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let sitio = visitante_activo_en_otro_sitio(&contexto(&base_url), "1-2345").unwrap();
+
+        assert_eq!(sitio, None);
+    }
+
+    fn conexion_con_dos_movimientos_visita_activos() -> Connection {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute_batch(
+                "
+                INSERT INTO usuarios (id, cedula, nombre, password_hash, rol, activo)
+                VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1);
+                INSERT INTO citas (id, uuid, fecha_desde, fecha_hasta, anfitrion_nombre,
+                    anfitrion_correo, estado, creado_en)
+                VALUES (1, 'uuid-cita-1', '2026-08-01', '2026-08-08', 'Ana',
+                    'ana@acme.com', 'VIGENTE', '2026-08-01T00:00:00Z');
+                INSERT INTO cita_visitantes (id, uuid, cita_id, cedula, nombre) VALUES
+                    (1, 'uuid-v1', 1, '1-2345', 'Visitante Uno'),
+                    (2, 'uuid-v2', 1, '6-7890', 'Visitante Dos');
+                INSERT INTO movimientos_visita (
+                    id, uuid, cita_visitante_id, gafete_numero, fecha_hora_entrada,
+                    usuario_entrada_id, usuario_entrada_nombre,
+                    visitante_cedula, visitante_nombre, anfitrion_nombre
+                ) VALUES
+                    (1, 'uuid-m1', 1, NULL, '2026-08-01T08:00:00Z', 1, 'Operador',
+                     '1-2345', 'Visitante Uno', 'Ana'),
+                    (2, 'uuid-m2', 2, NULL, '2026-08-01T08:00:00Z', 1, 'Operador',
+                     '6-7890', 'Visitante Dos', 'Ana');
+                ",
+            )
+            .unwrap();
+        connection
+    }
+
+    #[test]
+    fn visitantes_con_conflicto_activo_solo_incluye_a_quien_de_verdad_choca() {
+        let connection = conexion_con_dos_movimientos_visita_activos();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"visitante_cedula\":\"1-2345\",\"sitios\":{\"nombre\":\"Cartago\"}}]",
+        );
+
+        let conflictos =
+            visitantes_con_conflicto_activo(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(
+            conflictos,
+            vec![ConflictoMovimientoVisitaActivo {
+                cedula: "1-2345".to_string(),
+                visitante_nombre: "Visitante Uno".to_string(),
+                sitio_conflicto: "Cartago".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn visitantes_con_conflicto_activo_sin_nada_local_no_llama_a_la_nube() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let conflictos =
+            visitantes_con_conflicto_activo(&connection, &contexto("http://127.0.0.1:1"))
                 .unwrap();
 
         assert_eq!(conflictos, Vec::new());

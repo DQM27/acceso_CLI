@@ -1,13 +1,19 @@
-# Gafetes como catálogo compartido (contratista + visita) y aviso en vivo de citas — plan (borrador, sin código todavía)
+# Gafetes como catálogo compartido (contratista + visita) y aviso en vivo de citas — implementado 2026-09-13
 
-> Documento de continuidad para retomar esta conversación en otra sesión.
-> Nace de una sesión de diseño (sin tocar código) sobre por qué `gafetes`
-> hoy solo modela el pool de contratistas y qué hacía falta para que
-> visitas empiece a usar el mismo catálogo sin que ambos módulos se
-> conozcan entre sí. De paso se encontró y se planificó un segundo hueco,
-> más chico y sin relación de código: las citas creadas en la web no
-> avisan en vivo a los dispositivos, solo llegan por el pulso periódico de
-> sync (~2 min). Nada de esto está implementado — es la base para decidir,
+> Implementado y aplicado (código, tests, migraciones locales y de
+> Supabase ya corridas contra `control-acceso-nube`). Nace de una sesión
+> de diseño sobre por qué `gafetes` hoy solo modela el pool de
+> contratistas y qué hacía falta para que visitas empiece a usar el
+> mismo catálogo sin que ambos módulos se conozcan entre sí. De paso se
+> encontró y se cerró un segundo hueco, más chico y sin relación de
+> código: las citas creadas en la web no avisaban en vivo a los
+> dispositivos, solo llegaban por el pulso periódico de sync (~2 min).
+> La UI del desktop (`Gafetes.tsx` y compañía) también se actualizó al
+> contrato nuevo en la misma rama. Ver `docs/planes-implementados/plan-control-visitas.md`
+> ("Reglas de negocio de visita -- auditoría completa") para el trabajo
+> de seguimiento de la sesión siguiente: los mismos dos chequeos
+> cruzados entre sitios/dispositivos que ya tenía contratista, ahora
+> espejados para visita. Queda de referencia -- es la base para decidir,
 > sesión por sesión, igual que `plan-control-visitas.md` y
 > `plan-sesion-unica-dispositivos.md`.
 

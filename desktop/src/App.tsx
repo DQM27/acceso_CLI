@@ -278,6 +278,13 @@ function Shell({
         `${conflicto.contratista_nombre} tiene un ingreso activo acá Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
       );
     }
+    // Mismo criterio que `conflictos_ingreso`, pero para visitas (ver
+    // `nube::visitantes_con_conflicto_activo`).
+    for (const conflicto of resumen.conflictos_movimiento_visita) {
+      toast.warning(
+        `${conflicto.visitante_nombre} tiene una visita activa acá Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
+      );
+    }
     return false;
   }
 
