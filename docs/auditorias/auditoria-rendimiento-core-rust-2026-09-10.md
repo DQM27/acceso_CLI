@@ -163,6 +163,28 @@ siguiente página
 
 Esto estabiliza el pico de memoria y permite progreso incremental.
 
+### Estado (verificado contra código, 2026-09-13)
+
+Parcialmente resuelto. `obtener_json_paginado_con` (streaming real, página a página con
+su propia transacción corta) ya existe y cubre `recibir_historial_del_sitio` (desde
+antes) y ahora también `recibir_citas_del_sitio`/`recibir_historial_visitas_del_sitio` --
+los tres crecen sin tope natural con el tiempo, mismo riesgo real. El catálogo
+(`descargar_catalogo_remoto`: empresas/contratistas/usuarios/gafetes) sigue usando la
+versión que acumula todo en memoria (`obtener_json_paginado`) -- deliberadamente sin
+tocar: a diferencia de historial/citas, el catálogo tiene una dependencia de orden entre
+tipos de entidad (contratistas necesita que TODAS las empresas ya estén guardadas;
+gafetes necesita que TODOS los contratistas ya estén guardados) resuelta hoy con una
+única transacción atómica para las cuatro tablas. Convertirlo a streaming cambiaría esa
+garantía (una falla a mitad de camino dejaría el catálogo parcialmente aplicado en vez de
+revertido por completo) -- un cambio de semántica real, no mecánico, y el catálogo está
+acotado por la plantilla física del sitio (cientos de filas, no decenas de miles), así
+que el riesgo de memoria que motivó R-03 no aplica ahí con la misma urgencia. Queda
+pendiente si algún día se decide que vale la pena esa reducción de atomicidad.
+
+Verificado: 47/47 tests de `nube::sincronizacion` (incluye los de paginación y marca de
+agua de citas/historial de visitas), 200+ tests de la suite completa con `--features
+nube`, clippy limpio en el perfil default.
+
 ---
 
 ## 7. R-04/R-05 — Cliente HTTP compartido
