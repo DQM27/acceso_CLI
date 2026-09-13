@@ -1944,11 +1944,7 @@ impl Nucleo {
             || entrada.confirmada_en.elapsed() >= TOPE_PRESENCIA_SUPABASE;
         let token = entrada.access_token.clone();
         drop(guard);
-        if vencido {
-            None
-        } else {
-            Some(token)
-        }
+        if vencido { None } else { Some(token) }
     }
 
     /// `refresh_token` actual, para la renovación en segundo plano -- `None`

@@ -321,7 +321,10 @@ mod tests {
 
         let historial = writer.historial(gafete_id).unwrap();
         assert_eq!(historial.len(), 1);
-        assert_eq!(historial[0].visita_portador_nombre, Some("Jenna".to_string()));
+        assert_eq!(
+            historial[0].visita_portador_nombre,
+            Some("Jenna".to_string())
+        );
         assert_eq!(historial[0].contratista_nombre, None);
     }
 }

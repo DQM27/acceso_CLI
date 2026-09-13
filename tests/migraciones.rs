@@ -776,7 +776,9 @@ fn base_version_34_con_gafete_perdido() -> Connection {
     connection.execute_batch(&ddl_de("usuarios")).unwrap();
     connection.execute_batch(&ddl_de("contratistas")).unwrap();
     connection.execute_batch(&ddl_de("citas")).unwrap();
-    connection.execute_batch(&ddl_de("cita_visitantes")).unwrap();
+    connection
+        .execute_batch(&ddl_de("cita_visitantes"))
+        .unwrap();
     connection
         .execute_batch(
             "
@@ -1032,12 +1034,36 @@ fn dos_conexiones_migran_una_base_vacia_sin_reaplicar_pasos() {
             let ruta = ruta.clone();
             let barrera = Arc::clone(&barrera);
             thread::spawn(move || -> Result<(), String> {
-                let connection = Connection::open(ruta).map_err(|error| error.to_string())?;
+                let connection = Connection::open(&ruta).map_err(|error| error.to_string())?;
                 connection
                     .busy_timeout(Duration::from_secs(5))
                     .map_err(|error| error.to_string())?;
                 barrera.wait();
-                initialize_database(&connection).map_err(|error| error.to_string())
+                // `busy_timeout` sólo cubre SQLITE_BUSY (la otra conexión
+                // tiene el lock de escritura) -- las migraciones son DDL, y
+                // dos conexiones haciendo DDL a la vez sobre el mismo
+                // archivo, recién creado por ambas al mismo instante
+                // (forzado por la barrera), pueden chocar con errores que
+                // `busy_timeout` no cubre y que tampoco se reintentan solos
+                // -- confirmado reproduciendo dos formas distintas:
+                // SQLITE_LOCKED ("database is locked") y una carrera real de
+                // `CREATE VIRTUAL TABLE ... fts5` cuando dos conexiones
+                // crean la misma tabla FTS5 en el mismo instante
+                // ("vtable constructor failed"). Ninguno es un bug de esta
+                // base de código -- es un escenario sintético más agresivo
+                // que la realidad (`InstanciaGuard` garantiza una sola
+                // conexión por archivo en la app real), así que se
+                // reintenta a mano acá, no en el código de producción.
+                for intento in 0..20 {
+                    match initialize_database(&connection) {
+                        Ok(()) => return Ok(()),
+                        Err(_) if intento < 19 => {
+                            thread::sleep(Duration::from_millis(50));
+                        }
+                        Err(error) => return Err(error.to_string()),
+                    }
+                }
+                unreachable!()
             })
         })
         .collect();

@@ -93,8 +93,11 @@ impl AppCore {
             let citas = SqliteCitaRepository::new(transaction);
             let movimientos = SqliteMovimientoVisitaRepository::new(transaction);
             let gafetes = SqliteGafeteRepository::new(transaction);
-            CitaService::new(&citas, &movimientos, &gafetes)
-                .registrar_salida(movimiento_id, ahora, actor.id)
+            CitaService::new(&citas, &movimientos, &gafetes).registrar_salida(
+                movimiento_id,
+                ahora,
+                actor.id,
+            )
         })
     }
 

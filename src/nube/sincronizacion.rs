@@ -2598,39 +2598,38 @@ fn guardar_gafetes(
         // el doc-comment de la función sobre `quedo_pendiente`). Un gafete
         // `PROVEEDOR` todavía no tiene columna de portador local -- no se
         // guarda hasta que exista esa categoría de verdad.
-        let (contratista_portador_id_local, visita_portador_id_local) = if gafete.estado
-            == "PERDIDO"
-        {
-            match gafete.tipo.as_str() {
-                "CONTRATISTA" => {
-                    let Some(id) = indice_contratistas.resolver(
-                        gafete.contratista_portador_id.as_deref(),
-                        gafete.contratista_portador_nombre.as_deref(),
-                    ) else {
+        let (contratista_portador_id_local, visita_portador_id_local) =
+            if gafete.estado == "PERDIDO" {
+                match gafete.tipo.as_str() {
+                    "CONTRATISTA" => {
+                        let Some(id) = indice_contratistas.resolver(
+                            gafete.contratista_portador_id.as_deref(),
+                            gafete.contratista_portador_nombre.as_deref(),
+                        ) else {
+                            quedo_pendiente = true;
+                            continue;
+                        };
+                        (Some(id), None)
+                    }
+                    "VISITA" => {
+                        let Some(uuid) = gafete.visita_portador_id.as_deref() else {
+                            quedo_pendiente = true;
+                            continue;
+                        };
+                        let Some(id) = indice_cita_visitantes.get(uuid).copied() else {
+                            quedo_pendiente = true;
+                            continue;
+                        };
+                        (None, Some(id))
+                    }
+                    _ => {
                         quedo_pendiente = true;
                         continue;
-                    };
-                    (Some(id), None)
+                    }
                 }
-                "VISITA" => {
-                    let Some(uuid) = gafete.visita_portador_id.as_deref() else {
-                        quedo_pendiente = true;
-                        continue;
-                    };
-                    let Some(id) = indice_cita_visitantes.get(uuid).copied() else {
-                        quedo_pendiente = true;
-                        continue;
-                    };
-                    (None, Some(id))
-                }
-                _ => {
-                    quedo_pendiente = true;
-                    continue;
-                }
-            }
-        } else {
-            (None, None)
-        };
+            } else {
+                (None, None)
+            };
 
         transaction.execute(
             "
@@ -4194,7 +4193,8 @@ mod tests {
             .unwrap();
         });
 
-        let ocupado = gafete_de_visita_ocupado_en_otro_dispositivo(&contexto(&base_url), 9).unwrap();
+        let ocupado =
+            gafete_de_visita_ocupado_en_otro_dispositivo(&contexto(&base_url), 9).unwrap();
 
         assert!(ocupado);
         servidor.join().unwrap();
@@ -4206,7 +4206,8 @@ mod tests {
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         );
 
-        let ocupado = gafete_de_visita_ocupado_en_otro_dispositivo(&contexto(&base_url), 9).unwrap();
+        let ocupado =
+            gafete_de_visita_ocupado_en_otro_dispositivo(&contexto(&base_url), 9).unwrap();
 
         assert!(!ocupado);
     }
@@ -4313,8 +4314,7 @@ mod tests {
         let connection = Connection::open_in_memory().unwrap();
         initialize_database(&connection).unwrap();
         let conflictos =
-            visitantes_con_conflicto_activo(&connection, &contexto("http://127.0.0.1:1"))
-                .unwrap();
+            visitantes_con_conflicto_activo(&connection, &contexto("http://127.0.0.1:1")).unwrap();
 
         assert_eq!(conflictos, Vec::new());
     }

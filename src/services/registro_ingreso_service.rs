@@ -267,7 +267,9 @@ where
         let gafete_numero = if contratista.requiere_gafete() {
             let numero = gafete_numero.ok_or(RegistroIngresoServiceError::GafeteRequerido)?;
 
-            let gafete_encontrado = self.gafetes.buscar_por_numero(numero, TipoGafete::Contratista)?;
+            let gafete_encontrado = self
+                .gafetes
+                .buscar_por_numero(numero, TipoGafete::Contratista)?;
             match crate::domain::gafete::validar_para_asignar(gafete_encontrado.as_ref()) {
                 crate::domain::gafete::ValidacionAsignacion::NoRegistrado => {
                     return Err(RegistroIngresoServiceError::GafeteNoRegistrado);

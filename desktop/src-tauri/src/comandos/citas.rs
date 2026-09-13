@@ -42,7 +42,10 @@ fn chequear_visitante_activo_en_otro_sitio(state: &GuiState, cedula: &str) -> Op
 /// uno sólo valida contra su propia base `SQLite`. Sin secreto guardado
 /// (dispositivo sin nube configurada) no hay con quién chocar, se salta sin
 /// tocar la red -- `Ok(true)` ("libre") directo.
-fn gafete_de_visita_libre_en_otro_dispositivo(state: &GuiState, numero: i64) -> Result<bool, String> {
+fn gafete_de_visita_libre_en_otro_dispositivo(
+    state: &GuiState,
+    numero: i64,
+) -> Result<bool, String> {
     let Some(secreto) = nube::credenciales::cargar_secreto() else {
         return Ok(true);
     };
@@ -105,7 +108,10 @@ pub async fn verificar_check_in_visita(
     let chequeo = tokio::time::timeout(
         ESPERA_MAXIMA_CHEQUEO_OTRO_SITIO,
         tauri::async_runtime::spawn_blocking(move || {
-            chequear_visitante_activo_en_otro_sitio(&manejador.state::<GuiState>(), &visitante_cedula)
+            chequear_visitante_activo_en_otro_sitio(
+                &manejador.state::<GuiState>(),
+                &visitante_cedula,
+            )
         }),
     )
     .await;

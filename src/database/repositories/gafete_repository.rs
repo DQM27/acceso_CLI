@@ -17,7 +17,11 @@ pub trait GafeteRepository {
 
     fn buscar_por_id(&self, id: i64) -> Result<Option<Gafete>, DatabaseError>;
 
-    fn buscar_por_numero(&self, numero: i64, tipo: TipoGafete) -> Result<Option<Gafete>, DatabaseError>;
+    fn buscar_por_numero(
+        &self,
+        numero: i64,
+        tipo: TipoGafete,
+    ) -> Result<Option<Gafete>, DatabaseError>;
 
     fn dar_de_baja(&self, id: i64) -> Result<(), DatabaseError>;
 
@@ -111,7 +115,11 @@ impl GafeteRepository for SqliteGafeteRepository<'_> {
         }
     }
 
-    fn buscar_por_numero(&self, numero: i64, tipo: TipoGafete) -> Result<Option<Gafete>, DatabaseError> {
+    fn buscar_por_numero(
+        &self,
+        numero: i64,
+        tipo: TipoGafete,
+    ) -> Result<Option<Gafete>, DatabaseError> {
         let mut statement = self
             .connection
             .prepare(&format!("{SELECT_GAFETE} WHERE numero = ?1 AND tipo = ?2"))?;
@@ -211,7 +219,8 @@ mod tests {
         let repo = SqliteGafeteRepository::new(&connection);
         let id = repo.crear(1, TipoGafete::Contratista).unwrap();
 
-        repo.marcar_perdido(id, PortadorGafete::Contratista(1)).unwrap();
+        repo.marcar_perdido(id, PortadorGafete::Contratista(1))
+            .unwrap();
         let perdido = repo.buscar_por_id(id).unwrap().unwrap();
         assert_eq!(perdido.estado, EstadoGafete::Perdido);
         assert_eq!(perdido.contratista_portador_id, Some(1));

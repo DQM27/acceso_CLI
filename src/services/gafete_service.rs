@@ -235,7 +235,10 @@ mod tests {
 
         let resultado = servicio.crear_rango(1, 5, TipoGafete::Contratista);
 
-        assert!(matches!(resultado, Err(GafeteServiceError::NumeroDuplicado)));
+        assert!(matches!(
+            resultado,
+            Err(GafeteServiceError::NumeroDuplicado)
+        ));
     }
 
     #[test]
