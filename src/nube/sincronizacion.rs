@@ -2937,7 +2937,7 @@ mod tests {
     }
 
     /// Prueba directa del hallazgo R-06: antes, `pendientes()` filtraba con
-    /// una expresión (`datetime(actualizado_en, ...)`) que SQLite no podía
+    /// una expresión (`datetime(actualizado_en, ...)`) que `SQLite` no podía
     /// resolver con ningún índice -- cada `drenar_cola` escaneaba toda
     /// `cola_salida` pendiente. Con `proximo_intento_en` como columna
     /// generada e indexada (`MIGRACION_27`), el plan de consulta real de
@@ -3606,6 +3606,8 @@ mod tests {
     #[test]
     fn recibir_historial_paginado_persiste_todas_las_paginas_y_la_marca_de_agua_es_el_maximo_global()
      {
+        use std::fmt::Write as _;
+
         let connection = Connection::open_in_memory().unwrap();
         initialize_database(&connection).unwrap();
 
@@ -3619,12 +3621,14 @@ mod tests {
             }
             let minutos = i / 60;
             let segundos = i % 60;
-            filas_pagina_1.push_str(&format!(
+            write!(
+                filas_pagina_1,
                 "{{\"id\":\"mov-{i:04}\",\"contratista_nombre\":\"Persona {i}\",\
                  \"hora_entrada\":\"2026-01-01T00:00:00Z\",\
                  \"dispositivo_entrada_id\":\"dispositivo-1\",\
                  \"updated_at\":\"2026-01-01T00:{minutos:02}:{segundos:02}Z\"}}"
-            ));
+            )
+            .unwrap();
         }
         let cuerpo_pagina_1 = format!("[{filas_pagina_1}]");
 
@@ -3659,13 +3663,13 @@ mod tests {
 
         let recibidos = recibir_historial_del_sitio(&connection, &contexto(&base_url)).unwrap();
 
-        assert_eq!(recibidos, TAMANO_PAGINA_REMOTA as u32 + 1);
+        assert_eq!(recibidos, u32::try_from(TAMANO_PAGINA_REMOTA).unwrap() + 1);
         let guardadas: i64 = connection
             .query_row("SELECT COUNT(*) FROM historial_sitio", [], |row| row.get(0))
             .unwrap();
         assert_eq!(
             guardadas,
-            TAMANO_PAGINA_REMOTA as i64 + 1,
+            i64::try_from(TAMANO_PAGINA_REMOTA).unwrap() + 1,
             "las filas de ambas páginas quedan persistidas, no sólo la última"
         );
         let marca: String = connection
