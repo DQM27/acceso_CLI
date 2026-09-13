@@ -209,7 +209,8 @@ function textoEstadoAnterior(incidente: IncidenteGafete): string {
 
 function textoEstadoNuevo(incidente: IncidenteGafete): string {
   if (incidente.tipo === "Perdido") {
-    return `Perdido — asignado a ${incidente.contratista_nombre ?? "—"}`;
+    const portador = incidente.contratista_nombre ?? incidente.visita_portador_nombre ?? "—";
+    return `Perdido — asignado a ${portador}`;
   }
   const motivo = incidente.motivo_resolucion === "Pagado" ? "pagado" : "apareció";
   return `Disponible — ${motivo}`;

@@ -7,7 +7,15 @@ import {
   useListaFlotante,
   useNavegacionFlechas,
 } from "../componentes/ListaFlotante";
-import { buscarContratistas, darDeBajaGafete, marcarGafetePerdido, resolverGafete } from "../api";
+import {
+  buscarContratistas,
+  darDeBajaGafete,
+  marcarGafetePerdidoContratista,
+  marcarGafetePerdidoVisita,
+  nombrePortador,
+  resolverGafete,
+  verificarCheckInVisita,
+} from "../api";
 import type { ContratistaResumen, GafeteResumen, MotivoResolucionGafete } from "../api";
 
 const DEBOUNCE_MS = 120;
@@ -16,9 +24,12 @@ const MAX_RESULTADOS = 4;
 /**
  * Acciones de un gafete puntual, según su estado actual — mismo criterio
  * que la TUI (B/P/R en `src/tui/gafetes/`): Disponible ofrece dar de baja o
- * marcar perdido (con búsqueda de contratista deudor, mismo mecanismo de
- * `NuevoIngresoModal`); Perdido ofrece resolver la deuda (pagado/apareció).
- * De baja no ofrece ninguna acción — es un estado final.
+ * marcar perdido (búsqueda del portador, ramificada por `gafete.tipo`:
+ * contratista busca por texto libre, mismo mecanismo de `NuevoIngresoModal`;
+ * visita busca por cédula exacta, mismo mecanismo del check-in); Perdido
+ * ofrece resolver (pagado/apareció, sólo tiene sentido para contratista,
+ * pero el backend no lo restringe por tipo). De baja no ofrece ninguna
+ * acción — es un estado final.
  */
 export default function GestionGafeteModal({
   gafete,
@@ -29,22 +40,24 @@ export default function GestionGafeteModal({
   onCambiado: () => void;
   onCerrar: () => void;
 }) {
-  const [buscandoDeudor, setBuscandoDeudor] = useState(false);
+  const [buscandoPortador, setBuscandoPortador] = useState(false);
   const [filtro, setFiltro] = useState("");
   const [resultados, setResultados] = useState<ContratistaResumen[]>([]);
+  const [cedulaVisita, setCedulaVisita] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
-  const listaVisible = buscandoDeudor && filtro.trim().length > 0;
+  const esVisita = gafete.tipo === "Visita";
+  const listaVisible = !esVisita && buscandoPortador && filtro.trim().length > 0;
   const { campoRef, posicion: posicionLista } = useListaFlotante(listaVisible);
   const { resaltado, setResaltado, manejarTecla } = useNavegacionFlechas(
     resultados,
     listaVisible,
-    elegirDeudor,
+    elegirPortadorContratista,
   );
 
   useEffect(() => {
-    if (!buscandoDeudor || !filtro.trim()) {
+    if (esVisita || !buscandoPortador || !filtro.trim()) {
       // `Promise.resolve().then(...)` en vez de llamar `setResultados([])`
       // directo -- ver el mismo comentario en Activos.tsx.
       Promise.resolve().then(() => setResultados([]));
@@ -56,7 +69,7 @@ export default function GestionGafeteModal({
         .catch((error) => setError(String(error)));
     }, DEBOUNCE_MS);
     return () => clearTimeout(id);
-  }, [filtro, buscandoDeudor]);
+  }, [filtro, buscandoPortador, esVisita]);
 
   async function confirmarBaja() {
     setError(null);
@@ -71,11 +84,28 @@ export default function GestionGafeteModal({
     }
   }
 
-  async function elegirDeudor(contratista: ContratistaResumen) {
+  async function elegirPortadorContratista(contratista: ContratistaResumen) {
     setError(null);
     setEnviando(true);
     try {
-      await marcarGafetePerdido(gafete.id, contratista.id);
+      await marcarGafetePerdidoContratista(gafete.id, contratista.id);
+      onCambiado();
+    } catch (error) {
+      setError(String(error));
+      setEnviando(false);
+    }
+  }
+
+  /** Sin búsqueda por texto libre para visitantes (a diferencia de
+   * contratista) -- `cita_visitantes` sólo se resuelve por cédula exacta,
+   * mismo mecanismo que ya usa el check-in (`verificarCheckInVisita`); no
+   * hace falta un endpoint de búsqueda nuevo para este flujo puntual. */
+  async function confirmarPortadorVisita() {
+    setError(null);
+    setEnviando(true);
+    try {
+      const { visitante } = await verificarCheckInVisita(cedulaVisita.trim());
+      await marcarGafetePerdidoVisita(gafete.id, visitante.id);
       onCambiado();
     } catch (error) {
       setError(String(error));
@@ -100,11 +130,13 @@ export default function GestionGafeteModal({
     <Modal titulo={`Gafete ${String(gafete.numero).padStart(2, "0")}`} onCerrar={onCerrar}>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
         <p style={{ margin: 0, color: "var(--muted)" }}>
+          Tipo: <strong style={{ color: "var(--texto)" }}>{gafete.tipo}</strong>
+          {" · "}
           Estado: <strong style={{ color: "var(--texto)" }}>{textoEstado(gafete.estado)}</strong>
         </p>
-        {gafete.contratista_deudor_nombre && (
+        {nombrePortador(gafete) && (
           <p style={{ margin: 0, color: "var(--muted)" }}>
-            Asignado a: <strong style={{ color: "var(--texto)" }}>{gafete.contratista_deudor_nombre}</strong>
+            Asignado a: <strong style={{ color: "var(--texto)" }}>{nombrePortador(gafete)}</strong>
           </p>
         )}
 
@@ -114,7 +146,7 @@ export default function GestionGafeteModal({
           </p>
         )}
 
-        {gafete.estado === "Disponible" && !buscandoDeudor && (
+        {gafete.estado === "Disponible" && !buscandoPortador && (
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <button
               type="button"
@@ -128,14 +160,37 @@ export default function GestionGafeteModal({
               type="button"
               className="boton"
               disabled={enviando}
-              onClick={() => setBuscandoDeudor(true)}
+              onClick={() => setBuscandoPortador(true)}
             >
               Marcar perdido…
             </button>
           </div>
         )}
 
-        {gafete.estado === "Disponible" && buscandoDeudor && (
+        {gafete.estado === "Disponible" && buscandoPortador && esVisita && (
+          <form
+            style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}
+            onSubmit={(evento) => {
+              evento.preventDefault();
+              confirmarPortadorVisita();
+            }}
+          >
+            <label className="campo" style={{ flex: 1 }}>
+              Asignado a · cédula del visitante
+              <input
+                value={cedulaVisita}
+                onChange={(evento) => setCedulaVisita(evento.target.value)}
+                autoFocus
+                placeholder="Cédula…"
+              />
+            </label>
+            <button type="submit" className="boton" disabled={enviando || !cedulaVisita.trim()}>
+              Confirmar
+            </button>
+          </form>
+        )}
+
+        {gafete.estado === "Disponible" && buscandoPortador && !esVisita && (
           <div ref={campoRef}>
             <label className="campo">
               Asignado a · cédula o nombre
@@ -154,7 +209,7 @@ export default function GestionGafeteModal({
                   <FilaListaFlotante
                     key={contratista.id}
                     resaltada={indice === resaltado}
-                    onClick={() => elegirDeudor(contratista)}
+                    onClick={() => elegirPortadorContratista(contratista)}
                     onMouseEnter={() => setResaltado(indice)}
                   >
                     <span>

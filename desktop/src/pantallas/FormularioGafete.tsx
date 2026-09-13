@@ -3,9 +3,11 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Modal from "../componentes/Modal";
 import { crearGafete, crearGafetesRango } from "../api";
+import type { TipoGafeteEntrada } from "../api";
 
 interface ValoresFormulario {
   modo: "individual" | "rango";
+  tipo: TipoGafeteEntrada;
   numero: string;
   desde: string;
   hasta: string;
@@ -23,6 +25,7 @@ const numeroValido = (valor: string) => {
 export const esquema = z
   .object({
     modo: z.enum(["individual", "rango"]),
+    tipo: z.enum(["contratista", "visita"]),
     numero: z.string(),
     desde: z.string(),
     hasta: z.string(),
@@ -70,16 +73,16 @@ export default function FormularioGafete({
     formState: { errors, isSubmitting },
   } = useForm<ValoresFormulario>({
     resolver: zodResolver(esquema),
-    defaultValues: { modo: "individual", numero: "", desde: "", hasta: "" },
+    defaultValues: { modo: "individual", tipo: "contratista", numero: "", desde: "", hasta: "" },
   });
   const modo = watch("modo");
 
   async function alGuardar(valores: ValoresFormulario) {
     try {
       if (valores.modo === "individual") {
-        await crearGafete(Number(valores.numero));
+        await crearGafete(Number(valores.numero), valores.tipo);
       } else {
-        await crearGafetesRango(Number(valores.desde), Number(valores.hasta));
+        await crearGafetesRango(Number(valores.desde), Number(valores.hasta), valores.tipo);
       }
       onGuardado();
     } catch (error) {
@@ -104,6 +107,14 @@ export default function FormularioGafete({
             </label>
           ))}
         </div>
+
+        <label className="campo">
+          Tipo
+          <select {...register("tipo")}>
+            <option value="contratista">Contratista</option>
+            <option value="visita">Visita</option>
+          </select>
+        </label>
 
         {modo === "individual" ? (
           <label className="campo">
