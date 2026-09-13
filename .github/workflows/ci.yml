@@ -76,6 +76,20 @@ jobs:
       - name: Tests
         run: cargo test --verbose
 
+      # `nube` (módulo de sincronización con Supabase, `src/nube/`) y
+      # `cifrado-secreto-dispositivo` son las features reales que usa
+      # desktop/mobile (ver sus Cargo.toml) -- sin este paso, ninguno de los
+      # tres jobs de este workflow compila/lintea/testea ese módulo, porque
+      # desktop-tauri/mobile lo traen como dependencia de PATH (no
+      # workspace), y Clippy no lintea dependencias externas. Hallazgo real:
+      # 4 problemas de Clippy vivían sin detectar en `src/nube/sincronizacion.rs`
+      # hasta que alguien corrió esta combinación a mano.
+      - name: Clippy (features nube + cifrado-secreto-dispositivo)
+        run: cargo clippy --all-targets --features "nube,cifrado-secreto-dispositivo"
+
+      - name: Tests (features nube + cifrado-secreto-dispositivo)
+        run: cargo test --verbose --features "nube,cifrado-secreto-dispositivo"
+
   test-gui:
     runs-on: windows-latest
     steps:

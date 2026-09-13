@@ -40,9 +40,9 @@ fn preparar_base() -> (Connection, i64, i64) {
 
     connection
         .execute_batch(
-            "INSERT INTO gafetes (numero, estado) VALUES
-                (10, 'DISPONIBLE'), (11, 'DISPONIBLE'), (15, 'DISPONIBLE'),
-                (20, 'DISPONIBLE'), (30, 'DISPONIBLE'), (40, 'DISPONIBLE')",
+            "INSERT INTO gafetes (numero, tipo, estado) VALUES
+                (10, 'CONTRATISTA', 'DISPONIBLE'), (11, 'CONTRATISTA', 'DISPONIBLE'), (15, 'CONTRATISTA', 'DISPONIBLE'),
+                (20, 'CONTRATISTA', 'DISPONIBLE'), (30, 'CONTRATISTA', 'DISPONIBLE'), (40, 'CONTRATISTA', 'DISPONIBLE')",
         )
         .unwrap();
 

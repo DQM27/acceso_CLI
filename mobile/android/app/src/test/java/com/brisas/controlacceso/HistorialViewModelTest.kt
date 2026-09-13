@@ -149,7 +149,11 @@ class HistorialViewModelTest {
             // dos filas, `sortedByDescending` ni siquiera llega a comparar
             // fechas, así que hacen falta DOS filas para reproducir el
             // `DateTimeParseException` real (`Instant.parse` lo rechaza,
-            // `OffsetDateTime.parse` no).
+            // `OffsetDateTime.parse` no). Relativas a 'now' (no fechas fijas):
+            // `listar_historial_sitio` sólo trae los últimos
+            // `DIAS_HISTORIAL_MOVIL` (7) días, así que una fecha absoluta
+            // caduca sola con el paso del tiempo y el test empieza a fallar
+            // aunque nada del código haya cambiado.
             nucleo = NucleoDePrueba.abrir(
                 archivo,
                 NucleoDePrueba.sqlUsuarioRoot(),
@@ -158,9 +162,11 @@ class HistorialViewModelTest {
                     hora_entrada, hora_salida, gafete_numero, dispositivo_entrada_id, actualizado_en)
                 VALUES
                     ('movimiento-viejo', 'sitio-prueba', '222222222', 'Persona vieja',
-                        '2026-09-06T20:00:00+00:00', null, null, 'otro-equipo', '2026-09-06T20:00:00+00:00'),
+                        strftime('%Y-%m-%dT%H:%M:%S', 'now', '-2 days') || '+00:00', null, null,
+                        'otro-equipo', strftime('%Y-%m-%dT%H:%M:%S', 'now', '-2 days') || '+00:00'),
                     ('movimiento-nuevo', 'sitio-prueba', '333333333', 'Persona nueva',
-                        '2026-09-06T21:00:00+00:00', null, null, 'otro-equipo', '2026-09-06T21:00:00+00:00');
+                        strftime('%Y-%m-%dT%H:%M:%S', 'now', '-1 days') || '+00:00', null, null,
+                        'otro-equipo', strftime('%Y-%m-%dT%H:%M:%S', 'now', '-1 days') || '+00:00');
                 """.trimIndent(),
             )
             nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "", "")

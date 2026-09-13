@@ -59,6 +59,11 @@ pub struct ResumenSincronizacion {
     /// Mejor esfuerzo -- vacío si el chequeo falla, nunca tumba el resto de
     /// la sincronización por esto.
     pub conflictos_ingreso: Vec<nube::ConflictoIngresoActivo>,
+    /// Mismo criterio que `conflictos_ingreso`, pero para movimientos de
+    /// visita (`nube::visitantes_con_conflicto_activo`) -- un visitante que
+    /// quedó activo en este dispositivo mientras estaba offline y que
+    /// también terminó activo en otro sitio.
+    pub conflictos_movimiento_visita: Vec<nube::ConflictoMovimientoVisitaActivo>,
 }
 
 /// Datos temporales para que el frontend abra un canal Realtime privado.
@@ -215,6 +220,8 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
     // error.
     let conflictos_ingreso =
         nube::contratistas_con_conflicto_activo(&conexion, &contexto).unwrap_or_default();
+    let conflictos_movimiento_visita =
+        nube::visitantes_con_conflicto_activo(&conexion, &contexto).unwrap_or_default();
 
     // Si a quien disparó esto lo desactivaron en otro dispositivo, el
     // catálogo recién recibido ya lo refleja -- lo saca de la sesión acá
@@ -245,6 +252,7 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
         tipo: token.tipo,
         sesion_expulsada,
         conflictos_ingreso,
+        conflictos_movimiento_visita,
     })
 }
 
@@ -282,10 +290,11 @@ pub async fn configurar_dispositivo_inicial(
             dispositivo_id: resumen.dispositivo_id,
             tipo: resumen.tipo,
             sesion_expulsada: resumen.sesion_expulsada,
-            // Base recién configurada, sin ningún ingreso local todavía --
-            // no hay nada que pudiera chocar con otro sitio en este
-            // momento.
+            // Base recién configurada, sin ningún ingreso ni movimiento de
+            // visita local todavía -- no hay nada que pudiera chocar con
+            // otro sitio en este momento.
             conflictos_ingreso: Vec::new(),
+            conflictos_movimiento_visita: Vec::new(),
         })
     })
     .await

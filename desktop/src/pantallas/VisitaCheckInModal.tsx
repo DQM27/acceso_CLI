@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import Modal from "../componentes/Modal";
-import { registrarEntradaVisita, verificarCheckInVisita } from "../api";
+import {
+  mensajeBloqueoVisita,
+  puedeContinuarVisita,
+  registrarEntradaVisita,
+  verificarCheckInVisita,
+} from "../api";
 import type { MovimientoVisitaActivoResumen, PreparacionVisita } from "../api";
 
 type Estado =
@@ -8,6 +13,7 @@ type Estado =
   | { tipo: "verificando" }
   | { tipo: "encontrada"; preparacion: PreparacionVisita }
   | { tipo: "ya-adentro"; nombre: string }
+  | { tipo: "bloqueada"; mensaje: string }
   | { tipo: "sin-cita"; mensaje: string };
 
 /** El gafete es opcional acá (a diferencia de `NuevoIngresoModal`, donde
@@ -89,6 +95,10 @@ export default function VisitaCheckInModal({
         setEstado({ tipo: "ya-adentro", nombre: preparacion.visitante.nombre });
         return;
       }
+      if (!puedeContinuarVisita(preparacion)) {
+        setEstado({ tipo: "bloqueada", mensaje: mensajeBloqueoVisita(preparacion) });
+        return;
+      }
       setEstado({ tipo: "encontrada", preparacion });
     } catch (error) {
       setEstado({ tipo: "sin-cita", mensaje: String(error) });
@@ -158,6 +168,12 @@ export default function VisitaCheckInModal({
         {estado.tipo === "ya-adentro" && (
           <p className="login-error" role="alert">
             {estado.nombre} ya tiene un ingreso activo — registre la salida antes de volver a entrar.
+          </p>
+        )}
+
+        {estado.tipo === "bloqueada" && (
+          <p className="login-error" role="alert">
+            {estado.mensaje}
           </p>
         )}
 

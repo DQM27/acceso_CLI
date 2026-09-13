@@ -11,6 +11,7 @@ use crate::database::repositories::registro_ingreso_repository::RegistroIngresoR
 use crate::domain::acceso::verificar_acceso;
 use crate::domain::registro_ingreso::salida_es_cronologicamente_valida;
 use crate::domain::resultado_acceso::ResultadoAcceso;
+use crate::models::gafete::TipoGafete;
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::models::registro_ingreso::{
     DatosHistoricosEntrada, MotivoResultadoIngreso, NuevoRegistroIngreso, RegistroIngreso,
@@ -266,7 +267,9 @@ where
         let gafete_numero = if contratista.requiere_gafete() {
             let numero = gafete_numero.ok_or(RegistroIngresoServiceError::GafeteRequerido)?;
 
-            let gafete_encontrado = self.gafetes.buscar_por_numero(numero)?;
+            let gafete_encontrado = self
+                .gafetes
+                .buscar_por_numero(numero, TipoGafete::Contratista)?;
             match crate::domain::gafete::validar_para_asignar(gafete_encontrado.as_ref()) {
                 crate::domain::gafete::ValidacionAsignacion::NoRegistrado => {
                     return Err(RegistroIngresoServiceError::GafeteNoRegistrado);

@@ -7,8 +7,8 @@ import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import FormularioGafete from "./FormularioGafete";
 import GestionGafeteModal from "./GestionGafeteModal";
 import HistorialGafeteModal from "./HistorialGafeteModal";
-import { buscarGafetes } from "../api";
-import type { GafeteResumen } from "../api";
+import { buscarGafetes, nombrePortador } from "../api";
+import type { FiltroGafetes, GafeteResumen, TipoGafeteEntrada } from "../api";
 
 /**
  * Catálogo de gafetes (`docs/plan-gafetes.md`) — sin restricción de rol a
@@ -25,6 +25,7 @@ import type { GafeteResumen } from "../api";
  */
 export default function Gafetes() {
   const [texto, setTexto] = useState("");
+  const [tipo, setTipo] = useState<TipoGafeteEntrada | "">("");
   const [filas, setFilas] = useState<GafeteResumen[]>([]);
   const [cargando, setCargando] = useState(true);
   const [formularioAbierto, setFormularioAbierto] = useState(false);
@@ -42,13 +43,14 @@ export default function Gafetes() {
         minWidth: 110,
         valueFormatter: ({ value }) => String(value).padStart(2, "0"),
       },
+      { field: "tipo", headerName: "Tipo", flex: 1, minWidth: 110 },
       { field: "estado", headerName: "Estado", flex: 1.3, minWidth: 130 },
       {
-        field: "contratista_deudor_nombre",
         headerName: "Asignado a",
         flex: 1.6,
         minWidth: 170,
         cellStyle: { textAlign: "left" },
+        valueGetter: ({ data }) => (data ? nombrePortador(data) : null),
       },
       {
         headerName: "Resolver",
@@ -98,7 +100,8 @@ export default function Gafetes() {
     (estaVigente: () => boolean = () => true) => {
       setCargando(true);
       const numero = /^\d+$/.test(texto.trim()) ? Number(texto.trim()) : undefined;
-      return buscarGafetes({ numero })
+      const filtro: FiltroGafetes = { numero, tipo: tipo || undefined };
+      return buscarGafetes(filtro)
         .then((datos) => {
           if (estaVigente()) setFilas(datos);
         })
@@ -106,7 +109,7 @@ export default function Gafetes() {
           if (estaVigente()) setCargando(false);
         });
     },
-    [texto],
+    [texto, tipo],
   );
 
   useHotkeys("ctrl+n", () => setFormularioAbierto(true), { preventDefault: true });
@@ -137,6 +140,16 @@ export default function Gafetes() {
                     onChange={(evento) => setTexto(evento.target.value.replace(/\D/g, ""))}
                     inputMode="numeric"
                   />
+                </div>
+                <div className="campo" style={{ flex: "0 1 12rem" }}>
+                  <select
+                    value={tipo}
+                    onChange={(evento) => setTipo(evento.target.value as TipoGafeteEntrada | "")}
+                  >
+                    <option value="">Todos los tipos</option>
+                    <option value="contratista">Contratista</option>
+                    <option value="visita">Visita</option>
+                  </select>
                 </div>
               </>
             }

@@ -35,6 +35,25 @@ export interface CitaVisitante {
 export interface PreparacionVisita {
   cita: Cita;
   visitante: CitaVisitante;
+  /** Nombre del sitio donde este visitante tiene un movimiento abierto
+   * AHORA MISMO, si es otro distinto de este -- mismo criterio que
+   * `PreparacionIngreso.activo_en_otro_sitio` (contratistas). Chequeo
+   * remoto de mejor esfuerzo -- `null` también cuando no hubo forma de
+   * verificar, no sólo cuando de verdad no hay conflicto. */
+  activo_en_otro_sitio: string | null;
+}
+
+/** Espejo de `ingresos.ts::puedeContinuar`/`mensajeBloqueo`, mismo criterio
+ * para visitas: bloquea en la UI si el visitante ya está activo en otro
+ * sitio, aunque el backend no lo rechace (`registrar_entrada_visita`
+ * vuelve a decidir por su cuenta, esto es sólo para no dejar avanzar un
+ * formulario que de todos modos convendría frenar). */
+export function puedeContinuarVisita(p: PreparacionVisita): boolean {
+  return p.activo_en_otro_sitio === null;
+}
+
+export function mensajeBloqueoVisita(p: PreparacionVisita): string {
+  return `${p.visitante.nombre} ya tiene un movimiento activo en ${p.activo_en_otro_sitio}.`;
 }
 
 export interface MovimientoVisitaActivoResumen {

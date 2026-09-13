@@ -7,6 +7,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 use crate::database::error::DatabaseError;
 use crate::database::repositories::cita_repository::{CitaRepository, SqliteCitaRepository};
+use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
 use crate::database::repositories::movimiento_visita_repository::{
     MovimientoVisitaRepository, SqliteMovimientoVisitaRepository,
 };
@@ -30,7 +31,8 @@ impl AppCore {
     ) -> Result<(Cita, CitaVisitante), CitaServiceError> {
         let citas = SqliteCitaRepository::new(&self.connection);
         let movimientos = SqliteMovimientoVisitaRepository::new(&self.connection);
-        CitaService::new(&citas, &movimientos)
+        let gafetes = SqliteGafeteRepository::new(&self.connection);
+        CitaService::new(&citas, &movimientos, &gafetes)
             .verificar_check_in(cedula, fecha_costa_rica(self.reloj.ahora_utc()))
     }
 
@@ -71,7 +73,8 @@ impl AppCore {
         self.en_transaccion_con_reloj_validado_visita(actor, |transaction, ahora| {
             let citas = SqliteCitaRepository::new(transaction);
             let movimientos = SqliteMovimientoVisitaRepository::new(transaction);
-            CitaService::new(&citas, &movimientos).registrar_entrada(
+            let gafetes = SqliteGafeteRepository::new(transaction);
+            CitaService::new(&citas, &movimientos, &gafetes).registrar_entrada(
                 cedula,
                 gafete_numero,
                 actor.id,
@@ -89,7 +92,12 @@ impl AppCore {
         self.en_transaccion_con_reloj_validado_visita(actor, |transaction, ahora| {
             let citas = SqliteCitaRepository::new(transaction);
             let movimientos = SqliteMovimientoVisitaRepository::new(transaction);
-            CitaService::new(&citas, &movimientos).registrar_salida(movimiento_id, ahora, actor.id)
+            let gafetes = SqliteGafeteRepository::new(transaction);
+            CitaService::new(&citas, &movimientos, &gafetes).registrar_salida(
+                movimiento_id,
+                ahora,
+                actor.id,
+            )
         })
     }
 

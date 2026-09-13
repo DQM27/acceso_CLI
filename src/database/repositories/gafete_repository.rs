@@ -10,23 +10,27 @@ use rusqlite::{Connection, Row, params};
 use crate::database::cola_salida;
 use crate::database::error::DatabaseError;
 use crate::database::identificador::generar_uuid_v4;
-use crate::models::gafete::{EstadoGafete, Gafete};
+use crate::models::gafete::{EstadoGafete, Gafete, PortadorGafete, TipoGafete};
 
 pub trait GafeteRepository {
-    fn crear(&self, numero: i64) -> Result<i64, DatabaseError>;
+    fn crear(&self, numero: i64, tipo: TipoGafete) -> Result<i64, DatabaseError>;
 
     fn buscar_por_id(&self, id: i64) -> Result<Option<Gafete>, DatabaseError>;
 
-    fn buscar_por_numero(&self, numero: i64) -> Result<Option<Gafete>, DatabaseError>;
+    fn buscar_por_numero(
+        &self,
+        numero: i64,
+        tipo: TipoGafete,
+    ) -> Result<Option<Gafete>, DatabaseError>;
 
     fn dar_de_baja(&self, id: i64) -> Result<(), DatabaseError>;
 
-    fn marcar_perdido(&self, id: i64, contratista_deudor_id: i64) -> Result<(), DatabaseError>;
+    fn marcar_perdido(&self, id: i64, portador: PortadorGafete) -> Result<(), DatabaseError>;
 
     fn resolver(&self, id: i64) -> Result<(), DatabaseError>;
 
     /// Números de los gafetes que un contratista debe actualmente
-    /// (`estado = 'PERDIDO'` con `contratista_deudor_id` apuntándolo). Un
+    /// (`estado = 'PERDIDO'` con `contratista_portador_id` apuntándolo). Un
     /// `Vec` y no `Option<i64>`: nada impide más de una deuda simultánea.
     fn deuda_de_contratista(&self, contratista_id: i64) -> Result<Vec<i64>, DatabaseError>;
 }
@@ -42,10 +46,18 @@ impl<'a> SqliteGafeteRepository<'a> {
 }
 
 fn convertir_fila(row: &Row) -> rusqlite::Result<Gafete> {
-    let estado_texto: String = row.get(2)?;
-    let Some(estado) = EstadoGafete::from_str_sql(&estado_texto) else {
+    let tipo_texto: String = row.get(2)?;
+    let Some(tipo) = TipoGafete::from_str_sql(&tipo_texto) else {
         return Err(rusqlite::Error::InvalidColumnType(
             2,
+            "tipo".to_string(),
+            rusqlite::types::Type::Text,
+        ));
+    };
+    let estado_texto: String = row.get(3)?;
+    let Some(estado) = EstadoGafete::from_str_sql(&estado_texto) else {
+        return Err(rusqlite::Error::InvalidColumnType(
+            3,
             "estado".to_string(),
             rusqlite::types::Type::Text,
         ));
@@ -54,12 +66,15 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<Gafete> {
     Ok(Gafete {
         id: row.get(0)?,
         numero: row.get(1)?,
+        tipo,
         estado,
-        contratista_deudor_id: row.get(3)?,
+        contratista_portador_id: row.get(4)?,
+        visita_portador_id: row.get(5)?,
     })
 }
 
-const SELECT_GAFETE: &str = "SELECT id, numero, estado, contratista_deudor_id FROM gafetes";
+const SELECT_GAFETE: &str =
+    "SELECT id, numero, tipo, estado, contratista_portador_id, visita_portador_id FROM gafetes";
 
 fn encolar_actualizacion(connection: &Connection, id: i64) -> Result<(), DatabaseError> {
     let uuid: Option<String> = connection.query_row(
@@ -74,11 +89,11 @@ fn encolar_actualizacion(connection: &Connection, id: i64) -> Result<(), Databas
 }
 
 impl GafeteRepository for SqliteGafeteRepository<'_> {
-    fn crear(&self, numero: i64) -> Result<i64, DatabaseError> {
+    fn crear(&self, numero: i64, tipo: TipoGafete) -> Result<i64, DatabaseError> {
         let uuid = generar_uuid_v4();
         self.connection.execute(
-            "INSERT INTO gafetes (numero, estado, uuid) VALUES (?1, 'DISPONIBLE', ?2)",
-            params![numero, uuid],
+            "INSERT INTO gafetes (numero, tipo, estado, uuid) VALUES (?1, ?2, 'DISPONIBLE', ?3)",
+            params![numero, tipo.as_str_sql(), uuid],
         )?;
 
         // Capturado antes de encolar: `last_insert_rowid()` refleja el
@@ -100,11 +115,15 @@ impl GafeteRepository for SqliteGafeteRepository<'_> {
         }
     }
 
-    fn buscar_por_numero(&self, numero: i64) -> Result<Option<Gafete>, DatabaseError> {
+    fn buscar_por_numero(
+        &self,
+        numero: i64,
+        tipo: TipoGafete,
+    ) -> Result<Option<Gafete>, DatabaseError> {
         let mut statement = self
             .connection
-            .prepare(&format!("{SELECT_GAFETE} WHERE numero = ?1"))?;
-        match statement.query_row(params![numero], convertir_fila) {
+            .prepare(&format!("{SELECT_GAFETE} WHERE numero = ?1 AND tipo = ?2"))?;
+        match statement.query_row(params![numero, tipo.as_str_sql()], convertir_fila) {
             Ok(gafete) => Ok(Some(gafete)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(error) => Err(DatabaseError::from(error)),
@@ -119,17 +138,24 @@ impl GafeteRepository for SqliteGafeteRepository<'_> {
         encolar_actualizacion(self.connection, id)
     }
 
-    fn marcar_perdido(&self, id: i64, contratista_deudor_id: i64) -> Result<(), DatabaseError> {
-        self.connection.execute(
-            "UPDATE gafetes SET estado = 'PERDIDO', contratista_deudor_id = ?1 WHERE id = ?2",
-            params![contratista_deudor_id, id],
-        )?;
+    fn marcar_perdido(&self, id: i64, portador: PortadorGafete) -> Result<(), DatabaseError> {
+        match portador {
+            PortadorGafete::Contratista(contratista_id) => self.connection.execute(
+                "UPDATE gafetes SET estado = 'PERDIDO', contratista_portador_id = ?1 WHERE id = ?2",
+                params![contratista_id, id],
+            ),
+            PortadorGafete::Visita(cita_visitante_id) => self.connection.execute(
+                "UPDATE gafetes SET estado = 'PERDIDO', visita_portador_id = ?1 WHERE id = ?2",
+                params![cita_visitante_id, id],
+            ),
+        }?;
         encolar_actualizacion(self.connection, id)
     }
 
     fn resolver(&self, id: i64) -> Result<(), DatabaseError> {
         self.connection.execute(
-            "UPDATE gafetes SET estado = 'DISPONIBLE', contratista_deudor_id = NULL WHERE id = ?1",
+            "UPDATE gafetes SET estado = 'DISPONIBLE',
+                contratista_portador_id = NULL, visita_portador_id = NULL WHERE id = ?1",
             params![id],
         )?;
         encolar_actualizacion(self.connection, id)
@@ -138,7 +164,7 @@ impl GafeteRepository for SqliteGafeteRepository<'_> {
     fn deuda_de_contratista(&self, contratista_id: i64) -> Result<Vec<i64>, DatabaseError> {
         let mut statement = self.connection.prepare(
             "SELECT numero FROM gafetes
-             WHERE contratista_deudor_id = ?1 AND estado = 'PERDIDO'
+             WHERE contratista_portador_id = ?1 AND estado = 'PERDIDO'
              ORDER BY numero",
         )?;
         let numeros = statement
@@ -164,16 +190,21 @@ mod tests {
         let connection = conexion();
         let repo = SqliteGafeteRepository::new(&connection);
 
-        let id = repo.crear(5).unwrap();
-        let gafete = repo.buscar_por_numero(5).unwrap().unwrap();
+        let id = repo.crear(5, TipoGafete::Contratista).unwrap();
+        let gafete = repo
+            .buscar_por_numero(5, TipoGafete::Contratista)
+            .unwrap()
+            .unwrap();
 
         assert_eq!(gafete.id, id);
+        assert_eq!(gafete.tipo, TipoGafete::Contratista);
         assert_eq!(gafete.estado, EstadoGafete::Disponible);
-        assert_eq!(gafete.contratista_deudor_id, None);
+        assert_eq!(gafete.contratista_portador_id, None);
+        assert_eq!(gafete.visita_portador_id, None);
     }
 
     #[test]
-    fn marcar_perdido_y_resolver_limpian_al_deudor() {
+    fn marcar_perdido_y_resolver_limpian_al_portador() {
         let connection = conexion();
         connection
             .execute("INSERT INTO empresas (nombre) VALUES ('Acme')", params![])
@@ -186,28 +217,88 @@ mod tests {
             )
             .unwrap();
         let repo = SqliteGafeteRepository::new(&connection);
-        let id = repo.crear(1).unwrap();
+        let id = repo.crear(1, TipoGafete::Contratista).unwrap();
 
-        repo.marcar_perdido(id, 1).unwrap();
+        repo.marcar_perdido(id, PortadorGafete::Contratista(1))
+            .unwrap();
         let perdido = repo.buscar_por_id(id).unwrap().unwrap();
         assert_eq!(perdido.estado, EstadoGafete::Perdido);
-        assert_eq!(perdido.contratista_deudor_id, Some(1));
+        assert_eq!(perdido.contratista_portador_id, Some(1));
+        assert_eq!(perdido.portador(), Some(PortadorGafete::Contratista(1)));
         assert_eq!(repo.deuda_de_contratista(1).unwrap(), vec![1]);
 
         repo.resolver(id).unwrap();
         let resuelto = repo.buscar_por_id(id).unwrap().unwrap();
         assert_eq!(resuelto.estado, EstadoGafete::Disponible);
-        assert_eq!(resuelto.contratista_deudor_id, None);
+        assert_eq!(resuelto.contratista_portador_id, None);
+        assert_eq!(resuelto.portador(), None);
         assert!(repo.deuda_de_contratista(1).unwrap().is_empty());
     }
 
     #[test]
-    fn numero_duplicado_viola_unique() {
+    fn numero_duplicado_viola_unique_dentro_del_mismo_tipo() {
         let connection = conexion();
         let repo = SqliteGafeteRepository::new(&connection);
-        repo.crear(1).unwrap();
+        repo.crear(1, TipoGafete::Contratista).unwrap();
 
-        let error = repo.crear(1).unwrap_err();
+        let error = repo.crear(1, TipoGafete::Contratista).unwrap_err();
         assert!(error.es_constraint_unique());
+    }
+
+    #[test]
+    fn mismo_numero_coexiste_entre_tipos_distintos() {
+        let connection = conexion();
+        let repo = SqliteGafeteRepository::new(&connection);
+
+        let id_contratista = repo.crear(7, TipoGafete::Contratista).unwrap();
+        let id_visita = repo.crear(7, TipoGafete::Visita).unwrap();
+
+        assert_ne!(id_contratista, id_visita);
+        assert_eq!(
+            repo.buscar_por_numero(7, TipoGafete::Contratista)
+                .unwrap()
+                .unwrap()
+                .tipo,
+            TipoGafete::Contratista
+        );
+        assert_eq!(
+            repo.buscar_por_numero(7, TipoGafete::Visita)
+                .unwrap()
+                .unwrap()
+                .tipo,
+            TipoGafete::Visita
+        );
+    }
+
+    #[test]
+    fn marcar_perdido_de_gafete_de_visita_setea_el_portador_correcto() {
+        let connection = conexion();
+        connection
+            .execute(
+                "INSERT INTO citas (uuid, fecha_desde, fecha_hasta, anfitrion_nombre, anfitrion_correo, estado, creado_en)
+                 VALUES ('c1', '2026-08-01', '2026-08-08', 'Ana', 'ana@acme.com', 'VIGENTE', '2026-08-01T00:00:00Z')",
+                params![],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cita_visitantes (uuid, cita_id, cedula, nombre) VALUES ('v1', 1, '1-2345', 'Jenna')",
+                params![],
+            )
+            .unwrap();
+        let cita_visitante_id = connection.last_insert_rowid();
+        let repo = SqliteGafeteRepository::new(&connection);
+        let id = repo.crear(9, TipoGafete::Visita).unwrap();
+
+        repo.marcar_perdido(id, PortadorGafete::Visita(cita_visitante_id))
+            .unwrap();
+
+        let perdido = repo.buscar_por_id(id).unwrap().unwrap();
+        assert_eq!(perdido.visita_portador_id, Some(cita_visitante_id));
+        assert_eq!(perdido.contratista_portador_id, None);
+        assert_eq!(
+            perdido.portador(),
+            Some(PortadorGafete::Visita(cita_visitante_id))
+        );
     }
 }

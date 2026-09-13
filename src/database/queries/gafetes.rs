@@ -7,16 +7,19 @@ use rusqlite::{Connection, Row, params_from_iter};
 
 use crate::database::error::DatabaseError;
 use crate::database::queries::Igualdad;
-use crate::models::gafete::EstadoGafete;
+use crate::models::gafete::{EstadoGafete, TipoGafete};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct GafeteResumen {
     pub id: i64,
     pub numero: i64,
+    pub tipo: TipoGafete,
     pub estado: EstadoGafete,
-    pub contratista_deudor_id: Option<i64>,
-    pub contratista_deudor_nombre: Option<String>,
+    pub contratista_portador_id: Option<i64>,
+    pub contratista_portador_nombre: Option<String>,
+    pub visita_portador_id: Option<i64>,
+    pub visita_portador_nombre: Option<String>,
     /// Fecha del incidente `PERDIDO` más reciente — sólo tiene sentido
     /// mostrarla cuando `estado == Perdido` (mientras el gafete esté
     /// disponible o de baja, el incidente que la generó ya fue resuelto).
@@ -26,6 +29,7 @@ pub struct GafeteResumen {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct FiltroGafetes {
     pub numero: Option<i64>,
+    pub tipo: Option<Igualdad<TipoGafete>>,
     pub estado: Option<Igualdad<EstadoGafete>>,
 }
 
@@ -52,6 +56,10 @@ impl GafetesQuery for SqliteGafetesQuery<'_> {
             condiciones.push("g.numero = ?".into());
             parametros.push(numero.into());
         }
+        if let Some(tipo) = filtro.tipo {
+            condiciones.push(format!("g.tipo {} ?", tipo.operador_sql()));
+            parametros.push(tipo.valor().as_str_sql().to_string().into());
+        }
         if let Some(estado) = filtro.estado {
             condiciones.push(format!("g.estado {} ?", estado.operador_sql()));
             parametros.push(estado.valor().as_str_sql().to_string().into());
@@ -64,12 +72,15 @@ impl GafetesQuery for SqliteGafetesQuery<'_> {
 
         let sql = format!(
             "SELECT
-                g.id, g.numero, g.estado, g.contratista_deudor_id, c.nombre,
+                g.id, g.numero, g.tipo, g.estado,
+                g.contratista_portador_id, c.nombre,
+                g.visita_portador_id, cv.nombre,
                 (SELECT gi.fecha_hora FROM gafetes_incidentes gi
                  WHERE gi.gafete_id = g.id AND gi.tipo = 'PERDIDO'
                  ORDER BY gi.id DESC LIMIT 1)
              FROM gafetes g
-             LEFT JOIN contratistas c ON c.id = g.contratista_deudor_id
+             LEFT JOIN contratistas c ON c.id = g.contratista_portador_id
+             LEFT JOIN cita_visitantes cv ON cv.id = g.visita_portador_id
              {where_sql}
              ORDER BY g.numero"
         );
@@ -81,10 +92,18 @@ impl GafetesQuery for SqliteGafetesQuery<'_> {
 }
 
 fn convertir_fila(row: &Row<'_>) -> rusqlite::Result<GafeteResumen> {
-    let estado_texto: String = row.get(2)?;
-    let Some(estado) = EstadoGafete::from_str_sql(&estado_texto) else {
+    let tipo_texto: String = row.get(2)?;
+    let Some(tipo) = TipoGafete::from_str_sql(&tipo_texto) else {
         return Err(rusqlite::Error::InvalidColumnType(
             2,
+            "tipo".to_string(),
+            rusqlite::types::Type::Text,
+        ));
+    };
+    let estado_texto: String = row.get(3)?;
+    let Some(estado) = EstadoGafete::from_str_sql(&estado_texto) else {
+        return Err(rusqlite::Error::InvalidColumnType(
+            3,
             "estado".to_string(),
             rusqlite::types::Type::Text,
         ));
@@ -93,10 +112,13 @@ fn convertir_fila(row: &Row<'_>) -> rusqlite::Result<GafeteResumen> {
     Ok(GafeteResumen {
         id: row.get(0)?,
         numero: row.get(1)?,
+        tipo,
         estado,
-        contratista_deudor_id: row.get(3)?,
-        contratista_deudor_nombre: row.get(4)?,
-        fecha_marcado_perdido: row.get(5)?,
+        contratista_portador_id: row.get(4)?,
+        contratista_portador_nombre: row.get(5)?,
+        visita_portador_id: row.get(6)?,
+        visita_portador_nombre: row.get(7)?,
+        fecha_marcado_perdido: row.get(8)?,
     })
 }
 
@@ -111,7 +133,8 @@ mod tests {
         initialize_database(&connection).unwrap();
         connection
             .execute_batch(
-                "INSERT INTO gafetes (numero, estado) VALUES (2, 'DISPONIBLE'), (1, 'DISPONIBLE')",
+                "INSERT INTO gafetes (numero, tipo, estado) VALUES
+                 (2, 'CONTRATISTA', 'DISPONIBLE'), (1, 'CONTRATISTA', 'DISPONIBLE')",
             )
             .unwrap();
 
@@ -130,7 +153,8 @@ mod tests {
         initialize_database(&connection).unwrap();
         connection
             .execute_batch(
-                "INSERT INTO gafetes (numero, estado) VALUES (1, 'DISPONIBLE'), (2, 'DE_BAJA')",
+                "INSERT INTO gafetes (numero, tipo, estado) VALUES
+                 (1, 'CONTRATISTA', 'DISPONIBLE'), (2, 'CONTRATISTA', 'DE_BAJA')",
             )
             .unwrap();
 
@@ -143,5 +167,27 @@ mod tests {
 
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].numero, 1);
+    }
+
+    #[test]
+    fn filtra_por_tipo_y_no_mezcla_numeros_repetidos_entre_tipos() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute_batch(
+                "INSERT INTO gafetes (numero, tipo, estado) VALUES
+                 (7, 'CONTRATISTA', 'DISPONIBLE'), (7, 'VISITA', 'DISPONIBLE')",
+            )
+            .unwrap();
+
+        let query = SqliteGafetesQuery::new(&connection);
+        let filtro = FiltroGafetes {
+            tipo: Some(Igualdad::Incluye(TipoGafete::Visita)),
+            ..FiltroGafetes::default()
+        };
+        let items = query.buscar(&filtro).unwrap();
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].tipo, TipoGafete::Visita);
     }
 }

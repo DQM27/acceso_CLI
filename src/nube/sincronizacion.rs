@@ -676,42 +676,64 @@ fn enviar_empresa(
 }
 
 /// Gafetes (espejo): mismo criterio de `upsert` que contratistas/empresas.
-/// Sólo el estado actual (número, estado, a quién se lo debe) -- el
-/// historial de incidentes (`gafetes_incidentes`) sigue siendo puramente
-/// local, no viaja a la nube. `contratista_deudor_id` manda el UUID real
-/// del contratista deudor (`NULL` si el gafete no está `PERDIDO`, o si esa
-/// fila del contratista todavía no se drenó -- mismo caso que
-/// `empresa_id` en `enviar_contratista`).
+/// Sólo el estado actual (número, tipo, estado, a quién se le asignó la
+/// última vez) -- el historial de incidentes (`gafetes_incidentes`) sigue
+/// siendo puramente local, no viaja a la nube. `contratista_portador_id`/
+/// `visita_portador_id` mandan el UUID real de la fila correspondiente
+/// (`NULL` si el gafete no está `PERDIDO`, o si esa fila todavía no se
+/// drenó -- mismo caso que `empresa_id` en `enviar_contratista`); a lo sumo
+/// una de las dos tiene valor, igual que localmente.
 /// Ver el doc-comment de [`construir_cuerpo_contratista`] -- misma idea.
+/// Fila cruda para armar el cuerpo remoto de un gafete -- struct en vez de
+/// una tupla de 7 elementos (`clippy::type_complexity`).
+struct FilaGafeteLocal {
+    numero: i64,
+    tipo: String,
+    estado: String,
+    contratista_portador_uuid: Option<String>,
+    contratista_portador_nombre: Option<String>,
+    visita_portador_uuid: Option<String>,
+    visita_portador_nombre: Option<String>,
+}
+
 fn construir_cuerpo_gafete(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
     uuid: &str,
 ) -> Result<Value, SincronizacionError> {
-    let (numero, estado, deudor_uuid, deudor_nombre): (
-        i64,
-        String,
-        Option<String>,
-        Option<String>,
-    ) = connection.query_row(
+    let fila: FilaGafeteLocal = connection.query_row(
         "
-        SELECT g.numero, g.estado, c.uuid, c.nombre
+        SELECT g.numero, g.tipo, g.estado, c.uuid, c.nombre, cv.uuid, cv.nombre
         FROM gafetes g
-        LEFT JOIN contratistas c ON c.id = g.contratista_deudor_id
+        LEFT JOIN contratistas c ON c.id = g.contratista_portador_id
+        LEFT JOIN cita_visitantes cv ON cv.id = g.visita_portador_id
         WHERE g.uuid = ?1
         ",
         params![uuid],
-        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        |row| {
+            Ok(FilaGafeteLocal {
+                numero: row.get(0)?,
+                tipo: row.get(1)?,
+                estado: row.get(2)?,
+                contratista_portador_uuid: row.get(3)?,
+                contratista_portador_nombre: row.get(4)?,
+                visita_portador_uuid: row.get(5)?,
+                visita_portador_nombre: row.get(6)?,
+            })
+        },
     )?;
 
     Ok(json!({
         "id": uuid,
         "sitio_id": contexto.sitio_id,
         "dispositivo_origen_id": contexto.dispositivo_id,
-        "numero": numero,
-        "estado": estado,
-        "contratista_deudor_id": deudor_uuid,
-        "contratista_deudor_nombre": deudor_nombre,
+        "numero": fila.numero,
+        "tipo": fila.tipo,
+        "estado": fila.estado,
+        "contratista_portador_id": fila.contratista_portador_uuid,
+        "contratista_portador_nombre": fila.contratista_portador_nombre,
+        "visita_portador_id": fila.visita_portador_uuid,
+        "visita_portador_nombre": fila.visita_portador_nombre,
     }))
 }
 
@@ -723,12 +745,13 @@ fn enviar_gafete(
 ) -> Result<(), SincronizacionError> {
     let cuerpo = construir_cuerpo_gafete(connection, contexto, uuid)?;
 
-    // `on_conflict=sitio_id,numero` -- mismo motivo que
+    // `on_conflict=sitio_id,numero,tipo` -- mismo motivo que
     // `enviar_contratista`/`enviar_empresa`: el número de gafete es único
-    // dentro de un sitio aunque el `id` remoto no coincida entre bases.
+    // dentro de un sitio y un tipo (contratista/visita) aunque el `id`
+    // remoto no coincida entre bases.
     let respuesta = cliente
         .post(format!(
-            "{}/rest/v1/gafetes?on_conflict=sitio_id,numero",
+            "{}/rest/v1/gafetes?on_conflict=sitio_id,numero,tipo",
             contexto.base_url
         ))
         .header("apikey", contexto.apikey)
@@ -1343,6 +1366,27 @@ pub fn gafete_ocupado_en_otro_dispositivo(
     Ok(!filas.is_empty())
 }
 
+/// Mismo criterio y misma forma que `gafete_ocupado_en_otro_dispositivo`,
+/// pero contra `movimientos_visita`: dos dispositivos del mismo sitio
+/// comparten el mismo rango de gafetes físicos de visita, y cada uno sólo
+/// valida contra su propia base `SQLite`
+/// (`idx_movimientos_visita_gafete_activo`), que nunca ve lo que hizo el
+/// otro hasta sincronizar. Pensada para llamarse justo antes de confirmar
+/// una entrada de visita con gafete.
+pub fn gafete_de_visita_ocupado_en_otro_dispositivo(
+    contexto: &ContextoSincronizacion<'_>,
+    numero: i64,
+) -> Result<bool, SincronizacionError> {
+    let cliente = cliente_http();
+    let url = format!(
+        "{}/rest/v1/movimientos_visita?sitio_id=eq.{}&dispositivo_entrada_id=neq.{}\
+         &hora_salida=is.null&gafete_numero=eq.{numero}&select=id&limit=1",
+        contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
+    );
+    let filas: Vec<FilaGafeteOcupado> = obtener_json(&cliente, contexto, &url)?;
+    Ok(!filas.is_empty())
+}
+
 #[derive(serde::Deserialize)]
 struct SitioEmbebido {
     nombre: String,
@@ -1372,6 +1416,30 @@ pub fn contratista_activo_en_otro_sitio(
     let url = format!(
         "{}/rest/v1/ingresos?contratista_cedula=eq.{cedula}&sitio_id=neq.{}&hora_salida=is.null\
          &select=sitios(nombre)&limit=1",
+        contexto.base_url, contexto.sitio_id,
+    );
+    let filas: Vec<FilaIngresoActivoOtroSitio> = obtener_json(&cliente, contexto, &url)?;
+    Ok(filas
+        .into_iter()
+        .next()
+        .and_then(|fila| fila.sitios)
+        .map(|sitio| sitio.nombre))
+}
+
+/// Mismo criterio y misma forma que `contratista_activo_en_otro_sitio`,
+/// pero contra `movimientos_visita` -- la regla es idéntica (un mismo
+/// visitante no puede estar activo en dos sitios a la vez, mismo criterio
+/// que un contratista), sólo cambia la tabla remota. Pensada para llamarse
+/// desde `verificar_check_in_visita` (desktop), mejor esfuerzo, nunca
+/// bloqueante si no hay red.
+pub fn visitante_activo_en_otro_sitio(
+    contexto: &ContextoSincronizacion<'_>,
+    cedula: &str,
+) -> Result<Option<String>, SincronizacionError> {
+    let cliente = cliente_http();
+    let url = format!(
+        "{}/rest/v1/movimientos_visita?visitante_cedula=eq.{cedula}&sitio_id=neq.{}\
+         &hora_salida=is.null&select=sitios(nombre)&limit=1",
         contexto.base_url, contexto.sitio_id,
     );
     let filas: Vec<FilaIngresoActivoOtroSitio> = obtener_json(&cliente, contexto, &url)?;
@@ -1453,6 +1521,75 @@ pub fn contratistas_con_conflicto_activo(
             Some(ConflictoIngresoActivo {
                 cedula,
                 contratista_nombre: nombre,
+                sitio_conflicto: sitio,
+            })
+        })
+        .collect())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct ConflictoMovimientoVisitaActivo {
+    pub cedula: String,
+    pub visitante_nombre: String,
+    /// Sitio donde ESTE mismo dispositivo también lo tiene activo ahora
+    /// mismo -- no necesariamente el único conflicto que existe.
+    pub sitio_conflicto: String,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaConflictoVisitaActivo {
+    visitante_cedula: Option<String>,
+    sitios: Option<SitioEmbebido>,
+}
+
+/// Mismo criterio y misma forma que `contratistas_con_conflicto_activo`,
+/// pero para `movimientos_visita`: corre después de un sync exitoso y
+/// revisa todos los movimientos de visita que quedaron activos localmente
+/// para encontrar los que igual se colaron en otro sitio (ej. registrados
+/// mientras este dispositivo estaba offline). Deliberadamente simétrica --
+/// ambos sitios en conflicto corren esta misma consulta.
+pub fn visitantes_con_conflicto_activo(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<Vec<ConflictoMovimientoVisitaActivo>, SincronizacionError> {
+    let mut statement = connection.prepare(
+        "SELECT visitante_cedula, visitante_nombre FROM movimientos_visita
+         WHERE fecha_hora_salida IS NULL",
+    )?;
+    let activos_locales: Vec<(String, String)> = statement
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<Result<_, _>>()?;
+    drop(statement);
+    if activos_locales.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let cedulas = activos_locales
+        .iter()
+        .map(|(cedula, _)| cedula.as_str())
+        .collect::<Vec<_>>()
+        .join(",");
+    let cliente = cliente_http();
+    let url = format!(
+        "{}/rest/v1/movimientos_visita?visitante_cedula=in.({cedulas})&sitio_id=neq.{}\
+         &hora_salida=is.null&select=visitante_cedula,sitios(nombre)",
+        contexto.base_url, contexto.sitio_id,
+    );
+    let filas: Vec<FilaConflictoVisitaActivo> = obtener_json(&cliente, contexto, &url)?;
+
+    Ok(filas
+        .into_iter()
+        .filter_map(|fila| {
+            let cedula = fila.visitante_cedula?;
+            let sitio = fila.sitios?.nombre;
+            let nombre = activos_locales
+                .iter()
+                .find(|(c, _)| *c == cedula)
+                .map(|(_, nombre)| nombre.clone())?;
+            Some(ConflictoMovimientoVisitaActivo {
+                cedula,
+                visitante_nombre: nombre,
                 sitio_conflicto: sitio,
             })
         })
@@ -2134,9 +2271,17 @@ struct FilaContratistaRemota {
 struct FilaGafeteRemota {
     id: String,
     numero: i64,
+    tipo: String,
     estado: String,
-    contratista_deudor_id: Option<String>,
-    contratista_deudor_nombre: Option<String>,
+    contratista_portador_id: Option<String>,
+    contratista_portador_nombre: Option<String>,
+    // Sin `visita_portador_nombre` a propósito -- a diferencia de
+    // contratistas (cuya resolución local puede caer a buscar por nombre,
+    // `IndiceLocal::resolver`), `cita_visitantes` sólo se resuelve por
+    // `uuid` (ver `indexar_cita_visitantes`), así que el nombre nunca se
+    // usa acá -- sí viaja en el `push` (`construir_cuerpo_gafete`) para que
+    // el panel/otro consumidor remoto lo pueda mostrar sin un join.
+    visita_portador_id: Option<String>,
     updated_at: String,
 }
 
@@ -2231,8 +2376,9 @@ fn descargar_catalogo_remoto(
         &cliente,
         contexto,
         &format!(
-            "{}/rest/v1/gafetes?sitio_id=eq.{}&select=id,numero,estado,contratista_deudor_id,\
-             contratista_deudor_nombre,updated_at{filtro_incremental_gafetes}",
+            "{}/rest/v1/gafetes?sitio_id=eq.{}&select=id,numero,tipo,estado,\
+             contratista_portador_id,contratista_portador_nombre,\
+             visita_portador_id,updated_at{filtro_incremental_gafetes}",
             contexto.base_url, contexto.sitio_id
         ),
     )?;
@@ -2404,17 +2550,39 @@ fn guardar_usuarios(
 /// (acotado al físico de un sitio, no crece con la cantidad de
 /// contratistas) el costo de repetir la consulta un ciclo más mientras algo
 /// sigue pendiente es insignificante.
+/// Índice de `cita_visitantes` sólo por `uuid` -- a diferencia de
+/// `IndiceLocal` (empresas/contratistas), esta tabla es puramente de
+/// sincronización (`CitaRepository`, doc-comment: "la llena la
+/// sincronización"), sin creación local previa que compita, así que no
+/// hace falta el respaldo por nombre.
+fn indexar_cita_visitantes(
+    transaction: &rusqlite::Transaction<'_>,
+) -> Result<HashMap<String, i64>, SincronizacionError> {
+    let mut statement = transaction.prepare("SELECT id, uuid FROM cita_visitantes")?;
+    let filas = statement.query_map([], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+    })?;
+    let mut indice = HashMap::new();
+    for fila in filas {
+        let (id, uuid) = fila?;
+        indice.insert(uuid, id);
+    }
+    Ok(indice)
+}
+
 fn guardar_gafetes(
     transaction: &rusqlite::Transaction<'_>,
     gafetes: &[FilaGafeteRemota],
 ) -> Result<(u32, Option<chrono::DateTime<chrono::Utc>>), SincronizacionError> {
     // Mismo motivo que `indice_empresas` en `guardar_contratistas`: un solo
-    // `SELECT` de todos los contratistas locales antes del lote, en vez de
-    // hasta dos por cada gafete PERDIDO (`resolver_contratista_local`
-    // anterior). `guardar_contratistas` ya corrió antes en el mismo
-    // `recibir_catalogo_del_sitio` y esta función no modifica
-    // `contratistas`, así que el índice se mantiene válido todo el lote.
+    // `SELECT` de todos los contratistas/`cita_visitantes` locales antes
+    // del lote, en vez de hasta dos por cada gafete PERDIDO
+    // (`resolver_contratista_local` anterior). `guardar_contratistas` ya
+    // corrió antes en el mismo `recibir_catalogo_del_sitio` y esta función
+    // no modifica ninguna de las dos tablas, así que ambos índices se
+    // mantienen válidos todo el lote.
     let indice_contratistas = indexar_contratistas(transaction)?;
+    let indice_cita_visitantes = indexar_cita_visitantes(transaction)?;
 
     let mut recibidos = 0_u32;
     let mut marca_maxima_aplicada: Option<chrono::DateTime<chrono::Utc>> = None;
@@ -2423,34 +2591,64 @@ fn guardar_gafetes(
         let actualizado_en = crate::tiempo::parsear_utc(&gafete.updated_at)
             .map_err(|_| SincronizacionError::FechaInvalida(gafete.updated_at.clone()))?;
 
-        // Un gafete PERDIDO sin deudor resoluble localmente violaría el
+        // Un gafete PERDIDO sin portador resoluble localmente violaría el
         // `CHECK` de la tabla -- se salta por ahora, mismo criterio que un
         // contratista remoto incompleto: se autorresuelve solo en un sync
-        // posterior, en cuanto ese contratista también llegue acá (ver el
-        // doc-comment de la función sobre `quedo_pendiente`).
-        let deudor_id_local = if gafete.estado == "PERDIDO" {
-            let Some(id) = indice_contratistas.resolver(
-                gafete.contratista_deudor_id.as_deref(),
-                gafete.contratista_deudor_nombre.as_deref(),
-            ) else {
-                quedo_pendiente = true;
-                continue;
+        // posterior, en cuanto la fila que le falta también llegue acá (ver
+        // el doc-comment de la función sobre `quedo_pendiente`). Un gafete
+        // `PROVEEDOR` todavía no tiene columna de portador local -- no se
+        // guarda hasta que exista esa categoría de verdad.
+        let (contratista_portador_id_local, visita_portador_id_local) =
+            if gafete.estado == "PERDIDO" {
+                match gafete.tipo.as_str() {
+                    "CONTRATISTA" => {
+                        let Some(id) = indice_contratistas.resolver(
+                            gafete.contratista_portador_id.as_deref(),
+                            gafete.contratista_portador_nombre.as_deref(),
+                        ) else {
+                            quedo_pendiente = true;
+                            continue;
+                        };
+                        (Some(id), None)
+                    }
+                    "VISITA" => {
+                        let Some(uuid) = gafete.visita_portador_id.as_deref() else {
+                            quedo_pendiente = true;
+                            continue;
+                        };
+                        let Some(id) = indice_cita_visitantes.get(uuid).copied() else {
+                            quedo_pendiente = true;
+                            continue;
+                        };
+                        (None, Some(id))
+                    }
+                    _ => {
+                        quedo_pendiente = true;
+                        continue;
+                    }
+                }
+            } else {
+                (None, None)
             };
-            Some(id)
-        } else {
-            None
-        };
 
         transaction.execute(
             "
-            INSERT INTO gafetes (numero, estado, contratista_deudor_id, uuid)
-            VALUES (?1, ?2, ?3, ?4)
-            ON CONFLICT(numero) DO UPDATE SET
+            INSERT INTO gafetes (numero, tipo, estado, contratista_portador_id, visita_portador_id, uuid)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            ON CONFLICT(numero, tipo) DO UPDATE SET
                 estado = excluded.estado,
-                contratista_deudor_id = excluded.contratista_deudor_id,
+                contratista_portador_id = excluded.contratista_portador_id,
+                visita_portador_id = excluded.visita_portador_id,
                 uuid = COALESCE(gafetes.uuid, excluded.uuid)
             ",
-            params![gafete.numero, gafete.estado, deudor_id_local, gafete.id],
+            params![
+                gafete.numero,
+                gafete.tipo,
+                gafete.estado,
+                contratista_portador_id_local,
+                visita_portador_id_local,
+                gafete.id
+            ],
         )?;
         recibidos += 1;
         if marca_maxima_aplicada.is_none_or(|marca| actualizado_en > marca) {
@@ -2738,7 +2936,7 @@ mod tests {
     }
 
     /// Prueba directa del hallazgo R-06: antes, `pendientes()` filtraba con
-    /// una expresión (`datetime(actualizado_en, ...)`) que SQLite no podía
+    /// una expresión (`datetime(actualizado_en, ...)`) que `SQLite` no podía
     /// resolver con ningún índice -- cada `drenar_cola` escaneaba toda
     /// `cola_salida` pendiente. Con `proximo_intento_en` como columna
     /// generada e indexada (`MIGRACION_27`), el plan de consulta real de
@@ -2851,8 +3049,8 @@ mod tests {
         initialize_database(&connection).unwrap();
         connection
             .execute(
-                "INSERT INTO gafetes (numero, estado, uuid)
-                 VALUES (5, 'DISPONIBLE', 'uuid-gafete')",
+                "INSERT INTO gafetes (numero, tipo, estado, uuid)
+                 VALUES (5, 'CONTRATISTA', 'DISPONIBLE', 'uuid-gafete')",
                 [],
             )
             .unwrap();
@@ -3407,6 +3605,8 @@ mod tests {
     #[test]
     fn recibir_historial_paginado_persiste_todas_las_paginas_y_la_marca_de_agua_es_el_maximo_global()
      {
+        use std::fmt::Write as _;
+
         let connection = Connection::open_in_memory().unwrap();
         initialize_database(&connection).unwrap();
 
@@ -3420,12 +3620,14 @@ mod tests {
             }
             let minutos = i / 60;
             let segundos = i % 60;
-            filas_pagina_1.push_str(&format!(
+            write!(
+                filas_pagina_1,
                 "{{\"id\":\"mov-{i:04}\",\"contratista_nombre\":\"Persona {i}\",\
                  \"hora_entrada\":\"2026-01-01T00:00:00Z\",\
                  \"dispositivo_entrada_id\":\"dispositivo-1\",\
                  \"updated_at\":\"2026-01-01T00:{minutos:02}:{segundos:02}Z\"}}"
-            ));
+            )
+            .unwrap();
         }
         let cuerpo_pagina_1 = format!("[{filas_pagina_1}]");
 
@@ -3460,13 +3662,13 @@ mod tests {
 
         let recibidos = recibir_historial_del_sitio(&connection, &contexto(&base_url)).unwrap();
 
-        assert_eq!(recibidos, TAMANO_PAGINA_REMOTA as u32 + 1);
+        assert_eq!(recibidos, u32::try_from(TAMANO_PAGINA_REMOTA).unwrap() + 1);
         let guardadas: i64 = connection
             .query_row("SELECT COUNT(*) FROM historial_sitio", [], |row| row.get(0))
             .unwrap();
         assert_eq!(
             guardadas,
-            TAMANO_PAGINA_REMOTA as i64 + 1,
+            i64::try_from(TAMANO_PAGINA_REMOTA).unwrap() + 1,
             "las filas de ambas páginas quedan persistidas, no sólo la última"
         );
         let marca: String = connection
@@ -3963,6 +4165,161 @@ mod tests {
     }
 
     #[test]
+    fn gafete_de_visita_ocupado_en_otro_dispositivo_excluye_este_dispositivo() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.contains("sitio_id=eq.sitio-1"));
+            assert!(pedido.contains("dispositivo_entrada_id=neq.dispositivo-1"));
+            assert!(pedido.contains("gafete_numero=eq.9"));
+            let cuerpo = "[{\"id\":\"uuid-movimiento\"}]";
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        let ocupado =
+            gafete_de_visita_ocupado_en_otro_dispositivo(&contexto(&base_url), 9).unwrap();
+
+        assert!(ocupado);
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn gafete_de_visita_ocupado_en_otro_dispositivo_sin_conflicto_devuelve_false() {
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let ocupado =
+            gafete_de_visita_ocupado_en_otro_dispositivo(&contexto(&base_url), 9).unwrap();
+
+        assert!(!ocupado);
+    }
+
+    #[test]
+    fn visitante_activo_en_otro_sitio_excluye_el_sitio_actual_en_la_url() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.contains("visitante_cedula=eq.1-2345"));
+            assert!(pedido.contains("sitio_id=neq.sitio-1"));
+            assert!(pedido.contains("hora_salida=is.null"));
+            let cuerpo = "[{\"sitios\":{\"nombre\":\"Cartago\"}}]";
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        let sitio = visitante_activo_en_otro_sitio(&contexto(&base_url), "1-2345").unwrap();
+
+        assert_eq!(sitio, Some("Cartago".to_string()));
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn visitante_activo_en_otro_sitio_sin_conflicto_devuelve_none() {
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let sitio = visitante_activo_en_otro_sitio(&contexto(&base_url), "1-2345").unwrap();
+
+        assert_eq!(sitio, None);
+    }
+
+    fn conexion_con_dos_movimientos_visita_activos() -> Connection {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute_batch(
+                "
+                INSERT INTO usuarios (id, cedula, nombre, password_hash, rol, activo)
+                VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1);
+                INSERT INTO citas (id, uuid, fecha_desde, fecha_hasta, anfitrion_nombre,
+                    anfitrion_correo, estado, creado_en)
+                VALUES (1, 'uuid-cita-1', '2026-08-01', '2026-08-08', 'Ana',
+                    'ana@acme.com', 'VIGENTE', '2026-08-01T00:00:00Z');
+                INSERT INTO cita_visitantes (id, uuid, cita_id, cedula, nombre) VALUES
+                    (1, 'uuid-v1', 1, '1-2345', 'Visitante Uno'),
+                    (2, 'uuid-v2', 1, '6-7890', 'Visitante Dos');
+                INSERT INTO movimientos_visita (
+                    id, uuid, cita_visitante_id, gafete_numero, fecha_hora_entrada,
+                    usuario_entrada_id, usuario_entrada_nombre,
+                    visitante_cedula, visitante_nombre, anfitrion_nombre
+                ) VALUES
+                    (1, 'uuid-m1', 1, NULL, '2026-08-01T08:00:00Z', 1, 'Operador',
+                     '1-2345', 'Visitante Uno', 'Ana'),
+                    (2, 'uuid-m2', 2, NULL, '2026-08-01T08:00:00Z', 1, 'Operador',
+                     '6-7890', 'Visitante Dos', 'Ana');
+                ",
+            )
+            .unwrap();
+        connection
+    }
+
+    #[test]
+    fn visitantes_con_conflicto_activo_solo_incluye_a_quien_de_verdad_choca() {
+        let connection = conexion_con_dos_movimientos_visita_activos();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"visitante_cedula\":\"1-2345\",\"sitios\":{\"nombre\":\"Cartago\"}}]",
+        );
+
+        let conflictos =
+            visitantes_con_conflicto_activo(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(
+            conflictos,
+            vec![ConflictoMovimientoVisitaActivo {
+                cedula: "1-2345".to_string(),
+                visitante_nombre: "Visitante Uno".to_string(),
+                sitio_conflicto: "Cartago".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn visitantes_con_conflicto_activo_sin_nada_local_no_llama_a_la_nube() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let conflictos =
+            visitantes_con_conflicto_activo(&connection, &contexto("http://127.0.0.1:1")).unwrap();
+
+        assert_eq!(conflictos, Vec::new());
+    }
+
+    #[test]
     fn recibe_cierres_de_ingresos_propios_sin_reencolar() {
         let connection = Connection::open_in_memory().unwrap();
         initialize_database(&connection).unwrap();
@@ -4138,9 +4495,30 @@ mod tests {
         FilaGafeteRemota {
             id: id.to_string(),
             numero,
+            tipo: "CONTRATISTA".to_string(),
             estado: estado.to_string(),
-            contratista_deudor_id: deudor_id.map(str::to_string),
-            contratista_deudor_nombre: None,
+            contratista_portador_id: deudor_id.map(str::to_string),
+            contratista_portador_nombre: None,
+            visita_portador_id: None,
+            updated_at: actualizado.to_string(),
+        }
+    }
+
+    fn fila_gafete_visita(
+        id: &str,
+        numero: i64,
+        estado: &str,
+        visita_portador_id: Option<&str>,
+        actualizado: &str,
+    ) -> FilaGafeteRemota {
+        FilaGafeteRemota {
+            id: id.to_string(),
+            numero,
+            tipo: "VISITA".to_string(),
+            estado: estado.to_string(),
+            contratista_portador_id: None,
+            contratista_portador_nombre: None,
+            visita_portador_id: visita_portador_id.map(str::to_string),
             updated_at: actualizado.to_string(),
         }
     }
@@ -4218,11 +4596,70 @@ mod tests {
     }
 
     #[test]
+    fn gafete_de_visita_perdido_sin_visitante_local_queda_pendiente_y_resuelve_despues() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+
+        // Primer intento: el `cita_visitante` todavía no llegó localmente
+        // (mismo escenario que un contratista pendiente) -- `recibir_catalogo_del_sitio`
+        // corre antes que `recibir_citas_del_sitio` en todos los call sites
+        // actuales, así que esto es el caso normal, no uno raro.
+        let transaction = connection.unchecked_transaction().unwrap();
+        let gafetes_pendientes = vec![fila_gafete_visita(
+            "g1",
+            9,
+            "PERDIDO",
+            Some("uuid-visitante-1"),
+            "2026-01-01T00:00:00Z",
+        )];
+        let (recibidos, marca) = guardar_gafetes(&transaction, &gafetes_pendientes).unwrap();
+        assert_eq!(recibidos, 0);
+        assert_eq!(marca, None);
+        transaction.commit().unwrap();
+
+        // Ahora sí llegó la cita/visitante (simulando que corrió
+        // `recibir_citas_del_sitio` en el ciclo siguiente).
+        connection
+            .execute(
+                "INSERT INTO citas (uuid, fecha_desde, fecha_hasta, anfitrion_nombre,
+                    anfitrion_correo, estado, creado_en)
+                 VALUES ('uuid-cita-1', '2026-08-01', '2026-08-08', 'Ana', 'ana@acme.com',
+                    'VIGENTE', '2026-08-01T00:00:00Z')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cita_visitantes (uuid, cita_id, cedula, nombre)
+                 VALUES ('uuid-visitante-1', 1, '1-2345', 'Jenna')",
+                [],
+            )
+            .unwrap();
+
+        let transaction = connection.unchecked_transaction().unwrap();
+        let (recibidos, marca) = guardar_gafetes(&transaction, &gafetes_pendientes).unwrap();
+
+        assert_eq!(recibidos, 1);
+        assert_eq!(
+            marca.map(crate::tiempo::serializar_utc).as_deref(),
+            Some("2026-01-01T00:00:00Z")
+        );
+        let visita_portador_id: i64 = transaction
+            .query_row(
+                "SELECT visita_portador_id FROM gafetes WHERE numero = 9",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(visita_portador_id, 1);
+    }
+
+    #[test]
     fn recibe_estado_de_gafete_desde_nube_aunque_el_cursor_local_ya_exista() {
         let (connection, _) = conexion_con_contratista();
         connection
             .execute(
-                "INSERT INTO gafetes (numero, estado) VALUES (26, 'DISPONIBLE')",
+                "INSERT INTO gafetes (numero, tipo, estado) VALUES (26, 'CONTRATISTA', 'DISPONIBLE')",
                 [],
             )
             .unwrap();
@@ -4257,7 +4694,7 @@ mod tests {
                         !pedido.contains("updated_at=gt."),
                         "el cursor de gafetes no debe heredar el de catálogo"
                     );
-                    r#"[{"id":"gafete-remoto","numero":26,"estado":"PERDIDO","contratista_deudor_id":"uuid-contratista","contratista_deudor_nombre":null,"updated_at":"2026-01-01T00:00:00Z"}]"#
+                    r#"[{"id":"gafete-remoto","numero":26,"tipo":"CONTRATISTA","estado":"PERDIDO","contratista_portador_id":"uuid-contratista","contratista_portador_nombre":null,"visita_portador_id":null,"visita_portador_nombre":null,"updated_at":"2026-01-01T00:00:00Z"}]"#
                 } else {
                     "[]"
                 };
@@ -4269,7 +4706,7 @@ mod tests {
         assert_eq!(resumen.gafetes_recibidos, 1);
         let estado: (String, i64) = connection
             .query_row(
-                "SELECT estado, contratista_deudor_id FROM gafetes WHERE numero=26",
+                "SELECT estado, contratista_portador_id FROM gafetes WHERE numero=26",
                 [],
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
@@ -4304,7 +4741,7 @@ mod tests {
                         !pedido.contains("updated_at=gt."),
                         "primer sync: sin marca todavía, tiene que pedir todo"
                     );
-                    r#"[{"id":"gafete-remoto","numero":26,"estado":"DISPONIBLE","contratista_deudor_id":null,"contratista_deudor_nombre":null,"updated_at":"2026-01-05T00:00:00Z"}]"#
+                    r#"[{"id":"gafete-remoto","numero":26,"tipo":"CONTRATISTA","estado":"DISPONIBLE","contratista_portador_id":null,"contratista_portador_nombre":null,"visita_portador_id":null,"visita_portador_nombre":null,"updated_at":"2026-01-05T00:00:00Z"}]"#
                 } else if paso == 7 {
                     let pedido = String::from_utf8(pedido).unwrap();
                     assert!(

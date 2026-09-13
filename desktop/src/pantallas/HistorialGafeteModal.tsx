@@ -63,7 +63,7 @@ export default function HistorialGafeteModal({
                   <Celda>{textoHora(incidente.fecha_hora)}</Celda>
                   <Celda>{incidente.tipo === "Perdido" ? "Marcado perdido" : "Resuelto"}</Celda>
                   <Celda>{incidente.usuario_nombre}</Celda>
-                  <Celda>{incidente.contratista_nombre ?? "—"}</Celda>
+                  <Celda>{incidente.contratista_nombre ?? incidente.visita_portador_nombre ?? "—"}</Celda>
                   <Celda>{textoMotivo(incidente.motivo_resolucion)}</Celda>
                 </tr>
               ))}

@@ -30,7 +30,8 @@ fn base() -> Connection {
              VALUES (1, 'uuid-cita-1', '2026-08-10', '2026-08-15', 'Anfitrión',
                 'anfitrion@ejemplo.com', 'VIGENTE', '2026-08-01T00:00:00Z');
              INSERT INTO cita_visitantes (id, uuid, cita_id, cedula, nombre)
-             VALUES (1, 'uuid-visitante-1', 1, '1-2345', 'Visitante');",
+             VALUES (1, 'uuid-visitante-1', 1, '1-2345', 'Visitante');
+             INSERT INTO gafetes (numero, tipo, estado) VALUES (7, 'VISITA', 'DISPONIBLE');",
         )
         .unwrap();
     connection

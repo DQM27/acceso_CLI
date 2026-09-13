@@ -34,11 +34,21 @@ export interface ResumenSincronizacion {
    * "alertar luego al sincronizar") -- mejor esfuerzo, vacío si el chequeo
    * falla. */
   conflictos_ingreso: ConflictoIngresoActivo[];
+  /** Mismo criterio que `conflictos_ingreso`, pero para movimientos de
+   * visita -- un visitante que quedó activo en este dispositivo pero que
+   * la nube dice que también está activo en otro sitio. */
+  conflictos_movimiento_visita: ConflictoMovimientoVisitaActivo[];
 }
 
 export interface ConflictoIngresoActivo {
   cedula: string;
   contratista_nombre: string;
+  sitio_conflicto: string;
+}
+
+export interface ConflictoMovimientoVisitaActivo {
+  cedula: string;
+  visitante_nombre: string;
   sitio_conflicto: string;
 }
 

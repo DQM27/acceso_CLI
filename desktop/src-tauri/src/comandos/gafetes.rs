@@ -2,7 +2,7 @@ use control_acceso::database::queries::gafetes::GafeteResumen;
 use control_acceso::database::queries::gafetes_incidentes::IncidenteGafete;
 use control_acceso::models::gafete::MotivoResolucionGafete;
 
-use crate::dto::gafetes::FiltroGafetesEntrada;
+use crate::dto::gafetes::{FiltroGafetesEntrada, TipoGafeteEntrada};
 use crate::estado::GuiState;
 
 /// Catálogo completo de gafetes, sin restricción de rol a propósito (mismo
@@ -36,11 +36,15 @@ pub fn historial_gafete(
 }
 
 #[tauri::command]
-pub fn crear_gafete(numero: i64, state: tauri::State<GuiState>) -> Result<i64, String> {
+pub fn crear_gafete(
+    numero: i64,
+    tipo: TipoGafeteEntrada,
+    state: tauri::State<GuiState>,
+) -> Result<i64, String> {
     let sesion = state.sesion_activa()?;
     state
         .core()
-        .crear_gafete(&sesion, numero)
+        .crear_gafete(&sesion, numero, tipo.into())
         .map_err(control_acceso::mensajes::mensaje_gafete)
 }
 
@@ -48,12 +52,13 @@ pub fn crear_gafete(numero: i64, state: tauri::State<GuiState>) -> Result<i64, S
 pub fn crear_gafetes_rango(
     desde: i64,
     hasta: i64,
+    tipo: TipoGafeteEntrada,
     state: tauri::State<GuiState>,
 ) -> Result<Vec<i64>, String> {
     let sesion = state.sesion_activa()?;
     state
         .core()
-        .crear_gafetes_rango(&sesion, desde, hasta)
+        .crear_gafetes_rango(&sesion, desde, hasta, tipo.into())
         .map_err(control_acceso::mensajes::mensaje_gafete)
 }
 
@@ -67,7 +72,7 @@ pub fn dar_de_baja_gafete(id: i64, state: tauri::State<GuiState>) -> Result<(), 
 }
 
 #[tauri::command]
-pub fn marcar_gafete_perdido(
+pub fn marcar_gafete_perdido_contratista(
     id: i64,
     contratista_id: i64,
     state: tauri::State<GuiState>,
@@ -75,7 +80,20 @@ pub fn marcar_gafete_perdido(
     let sesion = state.sesion_activa()?;
     state
         .core()
-        .marcar_gafete_perdido(&sesion, id, contratista_id)
+        .marcar_gafete_perdido_contratista(&sesion, id, contratista_id)
+        .map_err(control_acceso::mensajes::mensaje_gafete)
+}
+
+#[tauri::command]
+pub fn marcar_gafete_perdido_visita(
+    id: i64,
+    cita_visitante_id: i64,
+    state: tauri::State<GuiState>,
+) -> Result<(), String> {
+    let sesion = state.sesion_activa()?;
+    state
+        .core()
+        .marcar_gafete_perdido_visita(&sesion, id, cita_visitante_id)
         .map_err(control_acceso::mensajes::mensaje_gafete)
 }
 

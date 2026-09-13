@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 34;
+pub const SCHEMA_VERSION: i64 = 35;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -316,6 +316,11 @@ fn aplicar_migraciones_posteriores_a_15(
         *version = 34;
     }
 
+    if *version == 34 {
+        aplicar_migracion_35(connection)?;
+        *version = 35;
+    }
+
     Ok(())
 }
 
@@ -468,6 +473,29 @@ fn aplicar_migracion_34(connection: &Connection) -> Result<(), SchemaError> {
     transaction.execute_batch(MIGRACION_34)?;
     transaction.execute_batch("PRAGMA user_version = 34")?;
     transaction.commit()?;
+    Ok(())
+}
+
+/// Mismo criterio que `aplicar_migracion_15`: `gafetes` y
+/// `gafetes_incidentes` se recrean juntas (la segunda es hija de la
+/// primera vía `ON DELETE RESTRICT`) para poder cambiar la unicidad de
+/// `gafetes` de `numero` a `(numero, tipo)` -- `SQLite` no permite alterar
+/// un `UNIQUE`/`CHECK` existente.
+fn aplicar_migracion_35(connection: &Connection) -> Result<(), SchemaError> {
+    connection.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    let resultado = ejecutar_migracion_35(connection);
+    connection.execute_batch("PRAGMA foreign_keys = ON;")?;
+    resultado
+}
+
+fn ejecutar_migracion_35(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_35)?;
+    transaction.execute_batch("PRAGMA user_version = 35")?;
+    transaction.commit()?;
+    if connection.prepare("PRAGMA foreign_key_check")?.exists([])? {
+        return Err(SchemaError::MigracionStrictReferenciasInvalidas);
+    }
     Ok(())
 }
 
@@ -2377,6 +2405,75 @@ CREATE TABLE historial_visitas_sitio (
 ) STRICT;
 
 CREATE INDEX idx_historial_visitas_sitio_hora_entrada ON historial_visitas_sitio(hora_entrada);
+";
+
+// Gafetes de contratista y de visita son objetos físicos distintos que
+// repiten la misma numeración (docs/planes-implementados/plan-control-visitas.md) --
+// hasta acá el catálogo sólo modelaba el pool de contratistas
+// ("contratista_deudor_id" a secas). Se agrega `tipo` (con `PROVEEDOR`
+// aceptado a futuro, sin columna de portador propia todavía porque no
+// existe tabla `proveedores`) y la unicidad pasa de `numero` a
+// `(numero, tipo)`. El campo "deudor" se renombra a "portador" -- esta
+// app no lleva control de dinero, es sólo trazabilidad de a quién se le
+// asignó el objeto físico la última vez. `gafetes_incidentes` gana el
+// mismo segundo portador porque es tabla hija y porque un mismo servicio
+// compartido tiene que poder registrar la pérdida de cualquier fila del
+// catálogo, sea del tipo que sea.
+const MIGRACION_35: &str = r"
+CREATE TABLE gafetes_nueva (
+    id INTEGER PRIMARY KEY,
+    numero INTEGER NOT NULL,
+    tipo TEXT NOT NULL CHECK (tipo IN ('CONTRATISTA', 'VISITA', 'PROVEEDOR')),
+    estado TEXT NOT NULL CHECK (estado IN ('DISPONIBLE', 'PERDIDO', 'DE_BAJA')),
+    contratista_portador_id INTEGER REFERENCES contratistas(id) ON DELETE RESTRICT,
+    visita_portador_id INTEGER REFERENCES cita_visitantes(id) ON DELETE RESTRICT,
+    uuid TEXT,
+    CHECK (
+        (tipo = 'CONTRATISTA' AND visita_portador_id IS NULL)
+        OR (tipo = 'VISITA' AND contratista_portador_id IS NULL)
+        OR (tipo = 'PROVEEDOR' AND contratista_portador_id IS NULL AND visita_portador_id IS NULL)
+    ),
+    CHECK (
+        (estado = 'PERDIDO' AND (contratista_portador_id IS NOT NULL OR visita_portador_id IS NOT NULL))
+        OR (estado <> 'PERDIDO' AND contratista_portador_id IS NULL AND visita_portador_id IS NULL)
+    )
+) STRICT;
+INSERT INTO gafetes_nueva (id, numero, tipo, estado, contratista_portador_id, visita_portador_id, uuid)
+SELECT id, numero, 'CONTRATISTA', estado, contratista_deudor_id, NULL, uuid FROM gafetes;
+DROP TABLE gafetes;
+ALTER TABLE gafetes_nueva RENAME TO gafetes;
+CREATE UNIQUE INDEX idx_gafetes_numero_tipo ON gafetes(numero, tipo);
+CREATE UNIQUE INDEX idx_gafetes_uuid ON gafetes(uuid);
+CREATE INDEX idx_gafetes_estado ON gafetes(estado);
+CREATE INDEX idx_gafetes_contratista_portador
+ON gafetes(contratista_portador_id) WHERE contratista_portador_id IS NOT NULL;
+CREATE INDEX idx_gafetes_visita_portador
+ON gafetes(visita_portador_id) WHERE visita_portador_id IS NOT NULL;
+
+CREATE TABLE gafetes_incidentes_nueva (
+    id INTEGER PRIMARY KEY,
+    gafete_id INTEGER NOT NULL REFERENCES gafetes(id) ON DELETE RESTRICT,
+    tipo TEXT NOT NULL CHECK (tipo IN ('PERDIDO', 'RESUELTO')),
+    fecha_hora TEXT NOT NULL,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+    contratista_id INTEGER REFERENCES contratistas(id) ON DELETE RESTRICT,
+    visita_portador_id INTEGER REFERENCES cita_visitantes(id) ON DELETE RESTRICT,
+    motivo_resolucion TEXT CHECK (
+        motivo_resolucion IS NULL OR motivo_resolucion IN ('PAGADO', 'APARECIDO')
+    ),
+    CHECK (
+        (tipo = 'PERDIDO' AND (contratista_id IS NOT NULL OR visita_portador_id IS NOT NULL)
+            AND motivo_resolucion IS NULL)
+        OR (tipo = 'RESUELTO' AND contratista_id IS NULL AND visita_portador_id IS NULL
+            AND motivo_resolucion IS NOT NULL)
+    )
+) STRICT;
+INSERT INTO gafetes_incidentes_nueva (id, gafete_id, tipo, fecha_hora, usuario_id, contratista_id, visita_portador_id, motivo_resolucion)
+SELECT id, gafete_id, tipo, fecha_hora, usuario_id, contratista_id, NULL, motivo_resolucion FROM gafetes_incidentes;
+DROP TABLE gafetes_incidentes;
+ALTER TABLE gafetes_incidentes_nueva RENAME TO gafetes_incidentes;
+CREATE INDEX idx_gafetes_incidentes_gafete ON gafetes_incidentes(gafete_id, id DESC);
+CREATE INDEX idx_gafetes_incidentes_fecha ON gafetes_incidentes(fecha_hora DESC, id DESC);
 ";
 
 // Hora aproximada de llegada -- puramente informativa a propósito

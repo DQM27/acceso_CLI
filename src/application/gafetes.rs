@@ -12,10 +12,13 @@ use crate::database::queries::gafetes::{FiltroGafetes, GafeteResumen, SqliteGafe
 use crate::database::queries::gafetes_incidentes::{
     GafetesIncidentesQuery, IncidenteGafete, SqliteGafetesIncidentes,
 };
-use crate::database::repositories::contratista_repository::SqliteContratistaRepository;
+use crate::database::repositories::cita_repository::{CitaRepository, SqliteCitaRepository};
+use crate::database::repositories::contratista_repository::{
+    ContratistaRepository, SqliteContratistaRepository,
+};
 use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
 use crate::database::repositories::registro_ingreso_repository::SqliteRegistroIngresoRepository;
-use crate::models::gafete::MotivoResolucionGafete;
+use crate::models::gafete::{MotivoResolucionGafete, PortadorGafete, TipoGafete};
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::error::GafeteServiceError;
 use crate::services::gafete_service::{GafeteConsultaService, GafeteService};
@@ -46,6 +49,7 @@ impl AppCore {
         &self,
         actor: &UsuarioSesion,
         numero: i64,
+        tipo: TipoGafete,
     ) -> Result<i64, GafeteServiceError> {
         let transaction =
             Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
@@ -54,8 +58,7 @@ impl AppCore {
             .map_err(GafeteServiceError::Database)?
             .ok_or(GafeteServiceError::OperacionNoAutorizada)?;
         let gafetes = SqliteGafeteRepository::new(&transaction);
-        let contratistas = SqliteContratistaRepository::new(&transaction);
-        let id = GafeteService::new(&gafetes, &contratistas).crear_uno(numero)?;
+        let id = GafeteService::new(&gafetes).crear_uno(numero, tipo)?;
         transaction.commit().map_err(DatabaseError::from)?;
         Ok(id)
     }
@@ -68,6 +71,7 @@ impl AppCore {
         actor: &UsuarioSesion,
         desde: i64,
         hasta: i64,
+        tipo: TipoGafete,
     ) -> Result<Vec<i64>, GafeteServiceError> {
         let transaction =
             Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
@@ -76,8 +80,7 @@ impl AppCore {
             .map_err(GafeteServiceError::Database)?
             .ok_or(GafeteServiceError::OperacionNoAutorizada)?;
         let gafetes = SqliteGafeteRepository::new(&transaction);
-        let contratistas = SqliteContratistaRepository::new(&transaction);
-        let ids = GafeteService::new(&gafetes, &contratistas).crear_rango(desde, hasta)?;
+        let ids = GafeteService::new(&gafetes).crear_rango(desde, hasta, tipo)?;
         transaction.commit().map_err(DatabaseError::from)?;
         Ok(ids)
     }
@@ -94,18 +97,20 @@ impl AppCore {
             .map_err(GafeteServiceError::Database)?
             .ok_or(GafeteServiceError::OperacionNoAutorizada)?;
         let gafetes = SqliteGafeteRepository::new(&transaction);
-        let contratistas = SqliteContratistaRepository::new(&transaction);
         let registros = SqliteRegistroIngresoRepository::new(&transaction);
-        GafeteService::new(&gafetes, &contratistas).dar_de_baja(&registros, id)?;
+        GafeteService::new(&gafetes).dar_de_baja(&registros, id)?;
         transaction.commit().map_err(DatabaseError::from)?;
         Ok(())
     }
 
-    pub fn marcar_gafete_perdido(
+    /// Valida que el contratista exista (responsabilidad que ya no vive en
+    /// `GafeteService`, que se mantiene genérico -- ver el doc-comment del
+    /// servicio) antes de armar el `PortadorGafete::Contratista`.
+    pub fn marcar_gafete_perdido_contratista(
         &self,
         actor: &UsuarioSesion,
         id: i64,
-        contratista_deudor_id: i64,
+        contratista_id: i64,
     ) -> Result<(), GafeteServiceError> {
         let transaction =
             Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
@@ -113,15 +118,53 @@ impl AppCore {
         let actor_actual = verificar_actor_activo(&transaction, actor)
             .map_err(GafeteServiceError::Database)?
             .ok_or(GafeteServiceError::OperacionNoAutorizada)?;
-        let gafetes = SqliteGafeteRepository::new(&transaction);
         let contratistas = SqliteContratistaRepository::new(&transaction);
+        if contratistas.buscar_por_id(contratista_id)?.is_none() {
+            return Err(GafeteServiceError::ContratistaNoEncontrado);
+        }
+        let gafetes = SqliteGafeteRepository::new(&transaction);
         let incidentes = SqliteGafetesIncidentes::new(&transaction);
         let registros = SqliteRegistroIngresoRepository::new(&transaction);
-        GafeteService::new(&gafetes, &contratistas).marcar_perdido(
+        GafeteService::new(&gafetes).marcar_perdido(
             &incidentes,
             &registros,
             id,
-            contratista_deudor_id,
+            PortadorGafete::Contratista(contratista_id),
+            actor_actual.id,
+            self.reloj.ahora_utc(),
+        )?;
+        transaction.commit().map_err(DatabaseError::from)?;
+        Ok(())
+    }
+
+    /// Misma idea que `marcar_gafete_perdido_contratista`, pero valida
+    /// existencia contra `CitaRepository` en vez de `ContratistaRepository`
+    /// -- `GafeteService` no distingue, sólo recibe el `PortadorGafete` ya
+    /// armado.
+    pub fn marcar_gafete_perdido_visita(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+        cita_visitante_id: i64,
+    ) -> Result<(), GafeteServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        let actor_actual = verificar_actor_activo(&transaction, actor)
+            .map_err(GafeteServiceError::Database)?
+            .ok_or(GafeteServiceError::OperacionNoAutorizada)?;
+        let citas = SqliteCitaRepository::new(&transaction);
+        if citas.buscar_visitante_por_id(cita_visitante_id)?.is_none() {
+            return Err(GafeteServiceError::VisitaNoEncontrada);
+        }
+        let gafetes = SqliteGafeteRepository::new(&transaction);
+        let incidentes = SqliteGafetesIncidentes::new(&transaction);
+        let registros = SqliteRegistroIngresoRepository::new(&transaction);
+        GafeteService::new(&gafetes).marcar_perdido(
+            &incidentes,
+            &registros,
+            id,
+            PortadorGafete::Visita(cita_visitante_id),
             actor_actual.id,
             self.reloj.ahora_utc(),
         )?;
@@ -142,9 +185,8 @@ impl AppCore {
             .map_err(GafeteServiceError::Database)?
             .ok_or(GafeteServiceError::OperacionNoAutorizada)?;
         let gafetes = SqliteGafeteRepository::new(&transaction);
-        let contratistas = SqliteContratistaRepository::new(&transaction);
         let incidentes = SqliteGafetesIncidentes::new(&transaction);
-        GafeteService::new(&gafetes, &contratistas).resolver(
+        GafeteService::new(&gafetes).resolver(
             &incidentes,
             id,
             motivo,

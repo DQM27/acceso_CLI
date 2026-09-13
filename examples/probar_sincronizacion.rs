@@ -17,7 +17,43 @@ use control_acceso::database::repositories::gafete_repository::{
     GafeteRepository, SqliteGafeteRepository,
 };
 use control_acceso::instancia::InstanciaGuard;
+use control_acceso::models::gafete::TipoGafete;
 use control_acceso::nube;
+
+/// Toca (o crea, si no hay ninguno) un gafete para probar el espejo nuevo
+/// -- mismo camino que tocaría un cambio real hecho desde la GUI.
+fn tocar_gafete_de_prueba(connection: &rusqlite::Connection) {
+    let gafetes = SqliteGafeteRepository::new(connection);
+    let gafete_numero: Option<i64> = connection
+        .query_row(
+            "SELECT numero FROM gafetes WHERE tipo = 'CONTRATISTA' LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .ok();
+    let gafete_id = gafete_numero.map_or_else(
+        || {
+            println!("No hay gafetes locales, creando uno de prueba (#999999)");
+            gafetes
+                .crear(999_999, TipoGafete::Contratista)
+                .expect("crear gafete de prueba")
+        },
+        |numero| {
+            println!("Tocando gafete #{numero}");
+            gafetes
+                .buscar_por_numero(numero, TipoGafete::Contratista)
+                .expect("buscar gafete")
+                .expect("el gafete debe existir")
+                .id
+        },
+    );
+    gafetes
+        .dar_de_baja(gafete_id)
+        .expect("tocar gafete (dar de baja)");
+    gafetes
+        .resolver(gafete_id)
+        .expect("tocar gafete (resolver)");
+}
 
 fn main() {
     let db_path = ruta_base_datos().expect("no se pudo resolver la ruta de la base de datos");
@@ -57,32 +93,7 @@ fn main() {
     repo.actualizar(&contratista)
         .expect("actualizar contratista");
 
-    // Toca (o crea, si no hay ninguno) un gafete para probar el espejo
-    // nuevo -- mismo camino que tocaría un cambio real hecho desde la GUI.
-    let gafetes = SqliteGafeteRepository::new(&connection);
-    let gafete_numero: Option<i64> = connection
-        .query_row("SELECT numero FROM gafetes LIMIT 1", [], |row| row.get(0))
-        .ok();
-    let gafete_id = gafete_numero.map_or_else(
-        || {
-            println!("No hay gafetes locales, creando uno de prueba (#999999)");
-            gafetes.crear(999_999).expect("crear gafete de prueba")
-        },
-        |numero| {
-            println!("Tocando gafete #{numero}");
-            gafetes
-                .buscar_por_numero(numero)
-                .expect("buscar gafete")
-                .expect("el gafete debe existir")
-                .id
-        },
-    );
-    gafetes
-        .dar_de_baja(gafete_id)
-        .expect("tocar gafete (dar de baja)");
-    gafetes
-        .resolver(gafete_id)
-        .expect("tocar gafete (resolver)");
+    tocar_gafete_de_prueba(&connection);
 
     let pendientes: i64 = connection
         .query_row(

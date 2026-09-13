@@ -37,7 +37,7 @@ fn base() -> Base {
     let usuario_id = connection.last_insert_rowid();
     connection
         .execute(
-            "INSERT INTO gafetes (numero, estado) VALUES (10, 'DISPONIBLE')",
+            "INSERT INTO gafetes (numero, tipo, estado) VALUES (10, 'CONTRATISTA', 'DISPONIBLE')",
             [],
         )
         .unwrap();

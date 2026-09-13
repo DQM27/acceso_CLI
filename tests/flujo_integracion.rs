@@ -33,8 +33,8 @@ fn preparar_base() -> (Connection, i64) {
     let usuario_id = connection.last_insert_rowid();
     connection
         .execute_batch(
-            "INSERT INTO gafetes (numero, estado) VALUES
-                (5, 'DISPONIBLE'), (6, 'DISPONIBLE'), (8, 'DISPONIBLE')",
+            "INSERT INTO gafetes (numero, tipo, estado) VALUES
+                (5, 'CONTRATISTA', 'DISPONIBLE'), (6, 'CONTRATISTA', 'DISPONIBLE'), (8, 'CONTRATISTA', 'DISPONIBLE')",
         )
         .unwrap();
     (connection, usuario_id)
