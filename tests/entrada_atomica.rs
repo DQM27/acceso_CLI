@@ -82,7 +82,7 @@ fn preparar_base(ruta: &Path) -> (i64, i64) {
     let usuario_id = connection.last_insert_rowid();
     connection
         .execute(
-            "INSERT INTO gafetes (numero, estado) VALUES (25, 'DISPONIBLE')",
+            "INSERT INTO gafetes (numero, tipo, estado) VALUES (25, 'CONTRATISTA', 'DISPONIBLE')",
             [],
         )
         .unwrap();

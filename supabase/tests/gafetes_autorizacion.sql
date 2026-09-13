@@ -74,5 +74,28 @@ begin
   end if;
 end $$;
 
-select '4 comprobaciones de autorización correctas' as resultado;
+-- Mismo número, tipo distinto -- ya no colisiona (unicidad real es
+-- (sitio_id, numero, tipo), no (sitio_id, numero) -- ver migración
+-- agrega_tipo_y_portador_visita_a_gafetes).
+select set_config('request.jwt.claims',
+  json_build_object('role', 'authenticated', 'sitio_id', current_setting('diagnostico.sitio_a'))::text,
+  true);
+do $$
+begin
+  insert into public.gafetes (id, sitio_id, dispositivo_origen_id, numero, tipo, estado)
+  values (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, current_setting('diagnostico.dispositivo_a')::uuid, 999001, 'VISITA', 'DISPONIBLE');
+  if not found then
+    raise exception 'Un gafete de tipo VISITA no pudo coexistir con el mismo número que uno CONTRATISTA';
+  end if;
+
+  begin
+    insert into public.gafetes (id, sitio_id, dispositivo_origen_id, numero, tipo, estado)
+    values (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, current_setting('diagnostico.dispositivo_a')::uuid, 999001, 'CONTRATISTA', 'DISPONIBLE');
+    raise exception 'Un gafete CONTRATISTA duplicado (mismo numero y tipo) no debio poder crearse';
+  exception
+    when unique_violation then null;
+  end;
+end $$;
+
+select '5 comprobaciones de autorización correctas' as resultado;
 rollback;

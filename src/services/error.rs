@@ -166,11 +166,16 @@ pub enum CitaServiceError {
     #[error("Este visitante ya tiene un movimiento activo")]
     VisitanteYaEnSitio,
     /// El gafete ya está asignado a otro movimiento de visita abierto --
-    /// mismo criterio que `RegistroIngresoServiceError::GafeteOcupado`. No
-    /// valida contra el catálogo (`gafetes`) todavía -- ver el comentario de
-    /// `CitaService::registrar_entrada`.
+    /// mismo criterio que `RegistroIngresoServiceError::GafeteOcupado`.
     #[error("El gafete ya está asignado a otra visita")]
     GafeteOcupado,
+    /// El número no existe en el catálogo (`gafetes`, tipo `VISITA`) --
+    /// mismo criterio que `RegistroIngresoServiceError::GafeteNoRegistrado`.
+    #[error("El gafete no está registrado en el catálogo")]
+    GafeteNoRegistrado,
+    /// El gafete existe pero no está `Disponible` (perdido o de baja).
+    #[error("El gafete no está disponible: {0:?}")]
+    GafeteNoDisponible(EstadoGafete),
     #[error("El movimiento no está activo")]
     MovimientoNoActivo,
     #[error("La salida no puede ser anterior a la entrada")]
@@ -203,6 +208,8 @@ pub enum GafeteServiceError {
     ContratistaDeudorRequerido,
     #[error("Contratista no encontrado")]
     ContratistaNoEncontrado,
+    #[error("Visitante no encontrado")]
+    VisitaNoEncontrada,
     /// La transición pedida no aplica al estado actual (ej. dar de baja uno
     /// ya perdido, o resolver uno que no está perdido).
     #[error("El gafete no está en un estado válido para esta operación")]

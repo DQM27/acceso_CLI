@@ -27,6 +27,11 @@ pub trait CitaRepository {
     /// decide si oculta las canceladas (mismo criterio que el resto de las
     /// grillas: dejar que quien mira filtre, no decidirlo acá).
     fn listar_agenda(&self, hoy: NaiveDate) -> Result<Vec<(Cita, CitaVisitante)>, DatabaseError>;
+
+    /// Un solo `cita_visitante` por id -- necesario para validar, al marcar
+    /// un gafete de visita como perdido (`AppCore::marcar_gafete_perdido_visita`),
+    /// que ese id realmente existe antes de asignarlo como portador.
+    fn buscar_visitante_por_id(&self, id: i64) -> Result<Option<CitaVisitante>, DatabaseError>;
 }
 
 pub struct SqliteCitaRepository<'a> {
@@ -114,6 +119,27 @@ impl CitaRepository for SqliteCitaRepository<'_> {
             .query_map(params![hoy.to_string()], convertir_fila)?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(filas)
+    }
+
+    fn buscar_visitante_por_id(&self, id: i64) -> Result<Option<CitaVisitante>, DatabaseError> {
+        let mut statement = self.connection.prepare(
+            "SELECT id, cita_id, cedula, nombre, empresa, placa_vehiculo
+             FROM cita_visitantes WHERE id = ?1",
+        )?;
+        match statement.query_row(params![id], |row| {
+            Ok(CitaVisitante {
+                id: row.get(0)?,
+                cita_id: row.get(1)?,
+                cedula: row.get(2)?,
+                nombre: row.get(3)?,
+                empresa: row.get(4)?,
+                placa_vehiculo: row.get(5)?,
+            })
+        }) {
+            Ok(visitante) => Ok(Some(visitante)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(error) => Err(DatabaseError::from(error)),
+        }
     }
 }
 
@@ -227,5 +253,17 @@ mod tests {
 
         assert_eq!(resultado.len(), 1);
         assert_eq!(resultado[0].1.cedula, "6-7890");
+    }
+
+    #[test]
+    fn buscar_visitante_por_id_encuentra_y_no_encuentra() {
+        let connection = conexion();
+        insertar_cita(&connection, 1, "2026-08-10", "2026-08-15", "VIGENTE");
+        insertar_visitante(&connection, 1, 1, "1-2345");
+        let repo = SqliteCitaRepository::new(&connection);
+
+        let encontrado = repo.buscar_visitante_por_id(1).unwrap().unwrap();
+        assert_eq!(encontrado.cedula, "1-2345");
+        assert!(repo.buscar_visitante_por_id(999).unwrap().is_none());
     }
 }

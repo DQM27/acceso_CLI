@@ -8,30 +8,40 @@
 use chrono::{DateTime, NaiveDate, Utc};
 
 use crate::database::repositories::cita_repository::CitaRepository;
+use crate::database::repositories::gafete_repository::GafeteRepository;
 use crate::database::repositories::movimiento_visita_repository::MovimientoVisitaRepository;
 use crate::domain::cita::{MotivoDenegacionVisita, ResultadoVisita, verificar_cita};
+use crate::domain::gafete::ValidacionAsignacion;
 use crate::domain::registro_ingreso::salida_es_cronologicamente_valida;
 use crate::models::cita::{Cita, CitaVisitante};
+use crate::models::gafete::TipoGafete;
 use crate::models::movimiento_visita::NuevoMovimientoVisita;
 
 use super::error::CitaServiceError;
 
-pub struct CitaService<'a, R, M>
+pub struct CitaService<'a, R, M, G>
 where
     R: CitaRepository + ?Sized,
     M: MovimientoVisitaRepository + ?Sized,
+    G: GafeteRepository + ?Sized,
 {
     citas: &'a R,
     movimientos: &'a M,
+    gafetes: &'a G,
 }
 
-impl<'a, R, M> CitaService<'a, R, M>
+impl<'a, R, M, G> CitaService<'a, R, M, G>
 where
     R: CitaRepository + ?Sized,
     M: MovimientoVisitaRepository + ?Sized,
+    G: GafeteRepository + ?Sized,
 {
-    pub fn new(citas: &'a R, movimientos: &'a M) -> Self {
-        Self { citas, movimientos }
+    pub fn new(citas: &'a R, movimientos: &'a M, gafetes: &'a G) -> Self {
+        Self {
+            citas,
+            movimientos,
+            gafetes,
+        }
     }
 
     /// Recorre TODAS las citas de `cedula` (puede tener más de una a lo
@@ -87,14 +97,12 @@ where
     /// de persistir, para no dejar una ventana donde la cita se cancele
     /// entre que se mostró en pantalla y que el guardia confirma.
     ///
-    /// A diferencia de `RegistroIngresoService::registrar_entrada`, todavía
-    /// NO valida `gafete_numero` contra el catálogo (`gafetes`) -- esa tabla
-    /// hoy sólo modela el pool de contratistas (verde); falta la migración
-    /// que le suma `tipo` para poder distinguir el pool de visitas (rojo,
-    /// ver `docs/planes-implementados/plan-control-visitas.md`). Sólo se valida que ese número no
-    /// esté YA asignado a otro movimiento de visita abierto -- el `CHECK`
-    /// del esquema (`idx_movimientos_visita_gafete_activo`) lo garantiza de
-    /// todos modos, esto sólo adelanta el mensaje de error.
+    /// Mismo patrón de 3 pasos que ya usa
+    /// `RegistroIngresoService::registrar_entrada` para el gafete: catálogo
+    /// primero (`domain::gafete::validar_para_asignar`), ocupación después
+    /// (contra su propia tabla de movimientos). A diferencia de
+    /// contratista, el gafete de visita sigue siendo opcional -- no hay un
+    /// equivalente a `requiere_gafete()` para visitantes.
     pub fn registrar_entrada(
         &self,
         cedula: &str,
@@ -113,10 +121,21 @@ where
             return Err(CitaServiceError::VisitanteYaEnSitio);
         }
 
-        if let Some(numero) = gafete_numero
-            && self.movimientos.buscar_activo_por_gafete(numero)?.is_some()
-        {
-            return Err(CitaServiceError::GafeteOcupado);
+        if let Some(numero) = gafete_numero {
+            let gafete_encontrado = self.gafetes.buscar_por_numero(numero, TipoGafete::Visita)?;
+            match crate::domain::gafete::validar_para_asignar(gafete_encontrado.as_ref()) {
+                ValidacionAsignacion::NoRegistrado => {
+                    return Err(CitaServiceError::GafeteNoRegistrado);
+                }
+                ValidacionAsignacion::NoDisponible(estado) => {
+                    return Err(CitaServiceError::GafeteNoDisponible(estado));
+                }
+                ValidacionAsignacion::Asignable => {}
+            }
+
+            if self.movimientos.buscar_activo_por_gafete(numero)?.is_some() {
+                return Err(CitaServiceError::GafeteOcupado);
+            }
         }
 
         Ok(self.movimientos.crear(&NuevoMovimientoVisita {
@@ -163,8 +182,10 @@ where
 mod tests {
     use super::*;
     use crate::database::repositories::cita_repository::SqliteCitaRepository;
+    use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
     use crate::database::repositories::movimiento_visita_repository::SqliteMovimientoVisitaRepository;
     use crate::database::schema::initialize_database;
+    use crate::models::gafete::EstadoGafete;
     use rusqlite::{Connection, params};
 
     fn conexion() -> Connection {
@@ -178,6 +199,15 @@ mod tests {
             )
             .unwrap();
         connection
+    }
+
+    fn insertar_gafete_visita(connection: &Connection, numero: i64) {
+        connection
+            .execute(
+                "INSERT INTO gafetes (numero, tipo, estado) VALUES (?1, 'VISITA', 'DISPONIBLE')",
+                params![numero],
+            )
+            .unwrap();
     }
 
     fn insertar_cita(connection: &Connection, id: i64, desde: &str, hasta: &str, estado: &str) {
@@ -211,7 +241,8 @@ mod tests {
         let connection = conexion();
         let repo = SqliteCitaRepository::new(&connection);
         let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
-        let servicio = CitaService::new(&repo, &movimientos);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
 
         assert!(matches!(
             servicio.verificar_check_in("1-2345", fecha("2026-08-10")),
@@ -226,7 +257,8 @@ mod tests {
         insertar_visitante(&connection, 1, 1, "1-2345");
         let repo = SqliteCitaRepository::new(&connection);
         let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
-        let servicio = CitaService::new(&repo, &movimientos);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
 
         let (cita, visitante) = servicio
             .verificar_check_in("1-2345", fecha("2026-08-12"))
@@ -243,7 +275,8 @@ mod tests {
         insertar_visitante(&connection, 1, 1, "1-2345");
         let repo = SqliteCitaRepository::new(&connection);
         let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
-        let servicio = CitaService::new(&repo, &movimientos);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
 
         let (_, visitante) = servicio
             .verificar_check_in("  1-2345  ", fecha("2026-08-12"))
@@ -259,7 +292,8 @@ mod tests {
         insertar_visitante(&connection, 1, 1, "1-2345");
         let repo = SqliteCitaRepository::new(&connection);
         let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
-        let servicio = CitaService::new(&repo, &movimientos);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
 
         let error = servicio
             .verificar_check_in("1-2345", fecha("2026-08-12"))
@@ -278,7 +312,8 @@ mod tests {
         insertar_visitante(&connection, 1, 1, "1-2345");
         let repo = SqliteCitaRepository::new(&connection);
         let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
-        let servicio = CitaService::new(&repo, &movimientos);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
 
         let error = servicio
             .verificar_check_in("1-2345", fecha("2026-08-12"))
@@ -301,7 +336,8 @@ mod tests {
         insertar_visitante(&connection, 2, 2, "1-2345");
         let repo = SqliteCitaRepository::new(&connection);
         let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
-        let servicio = CitaService::new(&repo, &movimientos);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
 
         let (cita, _) = servicio
             .verificar_check_in("1-2345", fecha("2026-08-12"))
@@ -315,9 +351,11 @@ mod tests {
         let connection = conexion();
         insertar_cita(&connection, 1, "2026-08-10", "2026-08-15", "VIGENTE");
         insertar_visitante(&connection, 1, 1, "1-2345");
+        insertar_gafete_visita(&connection, 7);
         let repo = SqliteCitaRepository::new(&connection);
         let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
-        let servicio = CitaService::new(&repo, &movimientos);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
 
         let id = servicio
             .registrar_entrada("1-2345", Some(7), 1, Utc::now(), fecha("2026-08-12"))
@@ -335,7 +373,8 @@ mod tests {
         insertar_visitante(&connection, 1, 1, "1-2345");
         let repo = SqliteCitaRepository::new(&connection);
         let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
-        let servicio = CitaService::new(&repo, &movimientos);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
 
         let id = servicio
             .registrar_entrada("1-2345", None, 1, Utc::now(), fecha("2026-08-12"))
@@ -362,7 +401,8 @@ mod tests {
         insertar_visitante(&connection, 1, 1, "1-2345");
         let repo = SqliteCitaRepository::new(&connection);
         let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
-        let servicio = CitaService::new(&repo, &movimientos);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
 
         assert!(matches!(
             servicio.registrar_entrada("1-2345", None, 1, Utc::now(), fecha("2026-08-12")),
@@ -379,7 +419,8 @@ mod tests {
         insertar_visitante(&connection, 1, 1, "1-2345");
         let repo = SqliteCitaRepository::new(&connection);
         let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
-        let servicio = CitaService::new(&repo, &movimientos);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
         servicio
             .registrar_entrada("1-2345", None, 1, Utc::now(), fecha("2026-08-12"))
             .unwrap();
@@ -396,9 +437,11 @@ mod tests {
         insertar_cita(&connection, 1, "2026-08-10", "2026-08-15", "VIGENTE");
         insertar_visitante(&connection, 1, 1, "1-2345");
         insertar_visitante(&connection, 2, 1, "6-7890");
+        insertar_gafete_visita(&connection, 5);
         let repo = SqliteCitaRepository::new(&connection);
         let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
-        let servicio = CitaService::new(&repo, &movimientos);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
         servicio
             .registrar_entrada("1-2345", Some(5), 1, Utc::now(), fecha("2026-08-12"))
             .unwrap();
@@ -410,13 +453,75 @@ mod tests {
     }
 
     #[test]
+    fn registrar_entrada_con_gafete_no_registrado_falla() {
+        let connection = conexion();
+        insertar_cita(&connection, 1, "2026-08-10", "2026-08-15", "VIGENTE");
+        insertar_visitante(&connection, 1, 1, "1-2345");
+        let repo = SqliteCitaRepository::new(&connection);
+        let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
+
+        assert!(matches!(
+            servicio.registrar_entrada("1-2345", Some(99), 1, Utc::now(), fecha("2026-08-12")),
+            Err(CitaServiceError::GafeteNoRegistrado)
+        ));
+    }
+
+    #[test]
+    fn registrar_entrada_con_gafete_perdido_falla() {
+        let connection = conexion();
+        insertar_cita(&connection, 1, "2026-08-10", "2026-08-15", "VIGENTE");
+        insertar_visitante(&connection, 1, 1, "1-2345");
+        connection
+            .execute(
+                "INSERT INTO gafetes (numero, tipo, estado, visita_portador_id)
+                 VALUES (3, 'VISITA', 'PERDIDO', 1)",
+                [],
+            )
+            .unwrap();
+        let repo = SqliteCitaRepository::new(&connection);
+        let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
+
+        assert!(matches!(
+            servicio.registrar_entrada("1-2345", Some(3), 1, Utc::now(), fecha("2026-08-12")),
+            Err(CitaServiceError::GafeteNoDisponible(EstadoGafete::Perdido))
+        ));
+    }
+
+    #[test]
+    fn un_gafete_de_contratista_con_el_mismo_numero_no_sirve_para_visita() {
+        let connection = conexion();
+        insertar_cita(&connection, 1, "2026-08-10", "2026-08-15", "VIGENTE");
+        insertar_visitante(&connection, 1, 1, "1-2345");
+        connection
+            .execute(
+                "INSERT INTO gafetes (numero, tipo, estado) VALUES (7, 'CONTRATISTA', 'DISPONIBLE')",
+                [],
+            )
+            .unwrap();
+        let repo = SqliteCitaRepository::new(&connection);
+        let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
+
+        assert!(matches!(
+            servicio.registrar_entrada("1-2345", Some(7), 1, Utc::now(), fecha("2026-08-12")),
+            Err(CitaServiceError::GafeteNoRegistrado)
+        ));
+    }
+
+    #[test]
     fn registrar_salida_cierra_el_movimiento() {
         let connection = conexion();
         insertar_cita(&connection, 1, "2026-08-10", "2026-08-15", "VIGENTE");
         insertar_visitante(&connection, 1, 1, "1-2345");
         let repo = SqliteCitaRepository::new(&connection);
         let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
-        let servicio = CitaService::new(&repo, &movimientos);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
         let entrada = Utc::now();
         let id = servicio
             .registrar_entrada("1-2345", None, 1, entrada, fecha("2026-08-12"))
@@ -435,7 +540,8 @@ mod tests {
         insertar_visitante(&connection, 1, 1, "1-2345");
         let repo = SqliteCitaRepository::new(&connection);
         let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
-        let servicio = CitaService::new(&repo, &movimientos);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
         let entrada = Utc::now();
         let id = servicio
             .registrar_entrada("1-2345", None, 1, entrada, fecha("2026-08-12"))
@@ -454,7 +560,8 @@ mod tests {
         insertar_visitante(&connection, 1, 1, "1-2345");
         let repo = SqliteCitaRepository::new(&connection);
         let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
-        let servicio = CitaService::new(&repo, &movimientos);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
         let entrada = Utc::now();
         let id = servicio
             .registrar_entrada("1-2345", None, 1, entrada, fecha("2026-08-12"))

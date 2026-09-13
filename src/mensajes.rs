@@ -95,6 +95,7 @@ pub fn mensaje_gafete(error: GafeteServiceError) -> String {
             "Debe indicar el contratista deudor".into()
         }
         GafeteServiceError::ContratistaNoEncontrado => "El contratista ya no existe".into(),
+        GafeteServiceError::VisitaNoEncontrada => "El visitante ya no existe".into(),
         GafeteServiceError::EstadoInvalido => {
             "El gafete no está en un estado válido para esa operación".into()
         }
@@ -121,8 +122,9 @@ pub fn mensaje_salida(error: RegistroIngresoServiceError) -> String {
 
 pub fn mensaje_cita(error: CitaServiceError) -> String {
     use CitaServiceError::{
-        GafeteOcupado, MovimientoNoActivo, OperadorNoAutorizado, RelojRetrocedido,
-        SalidaAnteriorAEntrada, SinCitaRegistrada, SinCitaVigente, VisitanteYaEnSitio,
+        GafeteNoDisponible, GafeteNoRegistrado, GafeteOcupado, MovimientoNoActivo,
+        OperadorNoAutorizado, RelojRetrocedido, SalidaAnteriorAEntrada, SinCitaRegistrada,
+        SinCitaVigente, VisitanteYaEnSitio,
     };
 
     match error {
@@ -133,6 +135,12 @@ pub fn mensaje_cita(error: CitaServiceError) -> String {
         }
         VisitanteYaEnSitio => "Este visitante ya tiene un ingreso activo".into(),
         GafeteOcupado => "El gafete ya está en uso por otra visita".into(),
+        GafeteNoRegistrado => "El número de gafete no existe en el catálogo".into(),
+        GafeteNoDisponible(EstadoGafete::Perdido) => "El gafete está marcado como perdido".into(),
+        GafeteNoDisponible(EstadoGafete::DeBaja) => "El gafete está dado de baja".into(),
+        GafeteNoDisponible(EstadoGafete::Disponible) => {
+            unreachable!("GafeteNoDisponible nunca se genera con estado Disponible")
+        }
         MovimientoNoActivo => "El movimiento ya no está activo".into(),
         SalidaAnteriorAEntrada => "La salida no puede ser anterior a la entrada".into(),
         RelojRetrocedido => "Revise la fecha y hora del equipo antes de continuar".into(),

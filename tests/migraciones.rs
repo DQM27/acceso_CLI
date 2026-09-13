@@ -743,6 +743,166 @@ fn migracion_15_deja_tablas_strict_sin_romper_claves_foraneas() {
     }
 }
 
+/// Regresión de `MIGRACION_35` (`gafetes` gana `tipo` + portador de visita,
+/// la unicidad pasa de `numero` a `(numero, tipo)`): una base congelada en
+/// versión 34 con un gafete `PERDIDO` real (contratista deudor incluido)
+/// migra sin perder ese dato, y la nueva unicidad por tipo queda vigente.
+/// `contratistas`/`usuarios`/`empresas`/`cita_visitantes` se toman del DDL
+/// real de una conexión ya migrada (en vez de reconstruir a mano el
+/// historial de `ALTER TABLE` de esas tres tablas, que esta migración no
+/// toca) -- sólo `gafetes`/`gafetes_incidentes` se rebobinan a su forma
+/// anterior a esta migración.
+/// Reconstruye una base congelada en versión 34 (`gafetes`/`gafetes_incidentes`
+/// en su forma anterior a `MIGRACION_35`) con un gafete `PERDIDO` real ya
+/// cargado. `contratistas`/`usuarios`/`empresas`/`cita_visitantes` se toman
+/// del DDL real de una conexión ya migrada (en vez de reconstruir a mano el
+/// historial de `ALTER TABLE` de esas tres tablas, que esta migración no
+/// toca).
+fn base_version_34_con_gafete_perdido() -> Connection {
+    let referencia = Connection::open_in_memory().unwrap();
+    initialize_database(&referencia).unwrap();
+    let ddl_de = |tabla: &str| -> String {
+        referencia
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name = ?1",
+                [tabla],
+                |row| row.get(0),
+            )
+            .unwrap()
+    };
+
+    let connection = Connection::open_in_memory().unwrap();
+    connection.execute_batch(&ddl_de("empresas")).unwrap();
+    connection.execute_batch(&ddl_de("usuarios")).unwrap();
+    connection.execute_batch(&ddl_de("contratistas")).unwrap();
+    connection.execute_batch(&ddl_de("citas")).unwrap();
+    connection.execute_batch(&ddl_de("cita_visitantes")).unwrap();
+    connection
+        .execute_batch(
+            "
+            CREATE TABLE gafetes (
+                id INTEGER PRIMARY KEY,
+                numero INTEGER NOT NULL UNIQUE,
+                estado TEXT NOT NULL CHECK (estado IN ('DISPONIBLE', 'PERDIDO', 'DE_BAJA')),
+                contratista_deudor_id INTEGER REFERENCES contratistas(id) ON DELETE RESTRICT,
+                uuid TEXT,
+                CHECK (
+                    (estado = 'PERDIDO' AND contratista_deudor_id IS NOT NULL)
+                    OR (estado <> 'PERDIDO' AND contratista_deudor_id IS NULL)
+                )
+            ) STRICT;
+            CREATE UNIQUE INDEX idx_gafetes_uuid ON gafetes(uuid);
+
+            CREATE TABLE gafetes_incidentes (
+                id INTEGER PRIMARY KEY,
+                gafete_id INTEGER NOT NULL REFERENCES gafetes(id) ON DELETE RESTRICT,
+                tipo TEXT NOT NULL CHECK (tipo IN ('PERDIDO', 'RESUELTO')),
+                fecha_hora TEXT NOT NULL,
+                usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+                contratista_id INTEGER REFERENCES contratistas(id) ON DELETE RESTRICT,
+                motivo_resolucion TEXT CHECK (
+                    motivo_resolucion IS NULL OR motivo_resolucion IN ('PAGADO', 'APARECIDO')
+                ),
+                CHECK (
+                    (tipo = 'PERDIDO' AND contratista_id IS NOT NULL AND motivo_resolucion IS NULL)
+                    OR (tipo = 'RESUELTO' AND contratista_id IS NULL AND motivo_resolucion IS NOT NULL)
+                )
+            ) STRICT;
+
+            PRAGMA user_version = 34;
+            ",
+        )
+        .unwrap();
+    insertar_referencias(&connection);
+    connection
+        .execute(
+            "INSERT INTO gafetes (id, numero, estado, contratista_deudor_id, uuid)
+             VALUES (1, 7, 'PERDIDO', 1, 'uuid-gafete-7')",
+            [],
+        )
+        .unwrap();
+    connection
+        .execute(
+            "INSERT INTO gafetes_incidentes (gafete_id, tipo, fecha_hora, usuario_id, contratista_id)
+             VALUES (1, 'PERDIDO', '2026-08-01T00:00:00Z', 1, 1)",
+            [],
+        )
+        .unwrap();
+    connection
+}
+
+#[test]
+fn migracion_35_agrega_tipo_y_portador_visita_preservando_datos_existentes() {
+    let connection = base_version_34_con_gafete_perdido();
+
+    initialize_database(&connection).unwrap();
+
+    assert_eq!(version(&connection), SCHEMA_VERSION);
+    assert!(
+        !connection
+            .prepare("PRAGMA foreign_key_check")
+            .unwrap()
+            .exists([])
+            .unwrap()
+    );
+
+    let (tipo, estado, contratista_portador_id, visita_portador_id): (
+        String,
+        String,
+        Option<i64>,
+        Option<i64>,
+    ) = connection
+        .query_row(
+            "SELECT tipo, estado, contratista_portador_id, visita_portador_id
+             FROM gafetes WHERE numero = 7",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .unwrap();
+    assert_eq!(tipo, "CONTRATISTA");
+    assert_eq!(estado, "PERDIDO");
+    assert_eq!(contratista_portador_id, Some(1));
+    assert_eq!(visita_portador_id, None);
+
+    let contratista_id_incidente: Option<i64> = connection
+        .query_row(
+            "SELECT contratista_id FROM gafetes_incidentes WHERE gafete_id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(contratista_id_incidente, Some(1));
+
+    // Mismo número, tipo distinto -- ya no colisiona (antes de esta
+    // migración, `UNIQUE(numero)` lo habría rechazado).
+    connection
+        .execute(
+            "INSERT INTO gafetes (numero, tipo, estado) VALUES (7, 'VISITA', 'DISPONIBLE')",
+            [],
+        )
+        .unwrap();
+    // Mismo número Y mismo tipo -- sigue colisionando.
+    let error = connection
+        .execute(
+            "INSERT INTO gafetes (numero, tipo, estado) VALUES (7, 'CONTRATISTA', 'DISPONIBLE')",
+            [],
+        )
+        .unwrap_err();
+    assert!(error.to_string().to_lowercase().contains("unique"));
+
+    // El CHECK tipo<->columna rechaza un gafete VISITA con portador de
+    // contratista.
+    assert!(
+        connection
+            .execute(
+                "INSERT INTO gafetes (numero, tipo, estado, contratista_portador_id, visita_portador_id)
+                 VALUES (8, 'VISITA', 'PERDIDO', 1, NULL)",
+                [],
+            )
+            .is_err()
+    );
+}
+
 #[test]
 fn esquema_actual_solo_admite_fechas_utc_normalizadas() {
     let connection = Connection::open_in_memory().unwrap();

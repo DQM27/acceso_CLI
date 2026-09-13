@@ -2394,7 +2394,7 @@ mod tests {
                  ) VALUES
                      ('111111117', 'Con Gafete Siete', 1, 'PRAIND', 0, 1, '2099-12-31'),
                      ('222222222', 'Sin Gafete', 1, 'SWAT', 0, 1, NULL);
-                 INSERT INTO gafetes (numero, estado) VALUES (7, 'DISPONIBLE');
+                 INSERT INTO gafetes (numero, tipo, estado) VALUES (7, 'CONTRATISTA', 'DISPONIBLE');
                  INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
                      '999999999', 'Actor Test',
                      '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',

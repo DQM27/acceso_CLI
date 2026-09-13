@@ -47,7 +47,7 @@ fn preparar() -> (Connection, i64, i64, i64) {
         .unwrap();
     connection
         .execute(
-            "INSERT INTO gafetes (numero, estado) VALUES (18, 'DISPONIBLE')",
+            "INSERT INTO gafetes (numero, tipo, estado) VALUES (18, 'CONTRATISTA', 'DISPONIBLE')",
             [],
         )
         .unwrap();
