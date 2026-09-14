@@ -13,12 +13,8 @@ const usuario = {
   created_at: "2026-09-09T12:00:00Z",
 };
 const sitios = [
-  { id: uuid, nombre: "Brisas", direccion: "San José, Costa Rica" },
-  {
-    id: "00000000-0000-4000-8000-000000000002",
-    nombre: "Cartago",
-    direccion: "Cartago, Costa Rica",
-  },
+  { id: uuid, nombre: "Brisas" },
+  { id: "00000000-0000-4000-8000-000000000002", nombre: "Cartago" },
 ];
 
 test.beforeEach(async ({ page }) => {

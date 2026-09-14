@@ -120,7 +120,6 @@ export type NuevaCita = z.output<ReturnType<typeof esquemaNuevaCita>>;
 export const sitioEsquema = z.object({
   id: z.uuid(),
   nombre: z.string(),
-  direccion: z.string().nullable(),
 });
 export type Sitio = z.infer<typeof sitioEsquema>;
 export const citaEsquema = z.object({

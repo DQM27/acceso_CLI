@@ -149,6 +149,10 @@ Verificado con un test e2e dedicado ("Activity conserva el mes del calendario al
 
 **Fase 8 (opcional, gated a evidencia real)**: si las pruebas manuales en dispositivo muestran que el teclado en pantalla tapa un input (patrón `100dvh`+`overflow:hidden` en el shell), relajar `overflow` sólo bajo `@media(max-width:800px)`.
 
+**Bug real encontrado tras el primer despliegue a producción (2026-09-13)**: con las 7 fases completas se desplegó `web-visitas` a `visitas.megabrisas.com` vía `wrangler deploy` para verificación en vivo. "Sitios de la visita" falló de entrada con "No pudimos completar la solicitud" (el mensaje genérico de `mensajeError` en `api.ts`, que cubre cualquier error de Postgrest sin código especial). Causa: la migración `20260912060901_elimina_direccion_de_sitios.sql` (de trabajo previo, no de este rediseño) eliminó la columna `sitios.direccion` en la base real, pero `web-visitas` nunca se actualizó para dejar de pedirla -- un desacople preexistente entre dominios (esa migración se hizo pensando en el panel del operador y en `mobile`/`desktop`, sin tocar `web-visitas`) que quedó latente hasta este primer despliegue real. Afectaba tanto `listarSitios()` como el `select` anidado de `CAMPOS_CITA` (`cita_sitios(sitio_id,sitios(id,nombre,direccion))`), es decir tanto "Nueva cita" como "Mis Citas" habrían fallado igual. Corregido quitando `direccion` de ambos `select` en `api.ts`, de `sitioEsquema` en `dominio.ts`, y del `<small>{sitio.direccion}</small>` ya muerto en `NuevaCita.tsx`; fixtures de `e2e/visitas.spec.ts` actualizados a juego. Re-verificado: 20/20 Playwright, 30/30 vitest, 0 errores de eslint, redesplegado.
+
+**Lección**: una auditoría de "desincronización entre dominios" hecha antes de tocar código (como la de este plan) puede quedar desactualizada por migraciones de otro trabajo que se mergean a `main` mientras el rediseño está en curso en una rama aparte -- vale la pena repetir un chequeo rápido de columnas/RPCs usadas justo antes de un despliegue real, no sólo al principio.
+
 ---
 
 ## Riesgos

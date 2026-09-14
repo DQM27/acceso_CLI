@@ -347,9 +347,6 @@ export default function NuevaCita() {
                           <MapPin aria-hidden="true" />
                           <span>
                             <strong>{sitio.nombre}</strong>
-                            {sitio.direccion && (
-                              <small>{sitio.direccion}</small>
-                            )}
                           </span>
                         </label>
                       ))}

@@ -11,7 +11,7 @@ import { hoyCostaRica } from "./fecha";
 
 export const TAMANO_PAGINA = 12;
 export const CAMPOS_CITA =
-  "id,anfitrion_correo,motivo,fecha_desde,fecha_hasta,hora_estimada,estado,created_at,cita_visitantes(id,nombre,cedula,empresa,placa_vehiculo),cita_sitios(sitio_id,sitios(id,nombre,direccion))";
+  "id,anfitrion_correo,motivo,fecha_desde,fecha_hasta,hora_estimada,estado,created_at,cita_visitantes(id,nombre,cedula,empresa,placa_vehiculo),cita_sitios(sitio_id,sitios(id,nombre))";
 
 export function mensajeError(error: unknown): string {
   const codigo =
@@ -30,7 +30,7 @@ export function mensajeError(error: unknown): string {
 export async function listarSitios(signal?: AbortSignal) {
   let consulta = supabase
     .from("sitios")
-    .select("id,nombre,direccion")
+    .select("id,nombre")
     .order("nombre")
     .order("id")
     .limit(MAX_SITIOS + 1);
