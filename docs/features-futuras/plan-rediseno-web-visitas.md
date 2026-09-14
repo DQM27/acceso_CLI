@@ -49,6 +49,13 @@ $font-family-base: "Segoe UI", Roboto, system-ui, sans-serif; // conserva la tip
 
 **Contraste del rojo**: Bootstrap calcula automáticamente texto negro/blanco según el fondo (función Sass `color-contrast()`), pero igual hay que verificar a ojo y con una herramienta de contraste real el `$primary` elegido contra fondo blanco Y en modo oscuro — es una verificación obligatoria antes de dar por cerrada la Fase 1, no algo que se asume porque "Bootstrap ya lo resuelve".
 
+**Clases de Bootstrap a EVITAR por la CSP estricta (`img-src 'self'`, sin `data:`)** — confirmado inspeccionando el CSS compilado (`grep data:image` en el build): varios componentes de Bootstrap pintan su ícono vía `background-image: url("data:image/svg+xml,...")`, lo que la CSP bloquea (mismo tipo de problema ya resuelto antes con el ícono de FullCalendar, ver `parcheCspFullcalendar.ts`). Reglas para todo el resto de la migración:
+- **`.btn-close`**: no usar. El botón de cerrar sigue siendo nuestro propio ícono `<X>` de `lucide-react` sobre `.btn.btn-link` (icono solo).
+- **`.form-check-input`** (apariencia custom de checkbox/radio): no usar su apariencia por defecto. Donde ya existe un indicador hecho a mano (`.sitio-opcion`/`.sitio-indicador` en `NuevaCita.tsx`, ícono `<Check>` propio) se mantiene tal cual -- ya es CSP-safe. Para un checkbox/radio nuevo que no necesite indicador custom, usar el input nativo sin la clase `.form-check-input` y colorearlo con `accent-color: var(--bs-primary)` (una sola propiedad CSS, sin imágenes).
+- **`.form-select`**: si se usa un `<select>` nativo en algún paso futuro, agregar `appearance: auto; background-image: none;` para que el navegador dibuje su propia flecha en vez de la de Bootstrap.
+- **`.is-invalid`/`.is-valid`**: no usar estas clases. El estado de error se sigue marcando con el atributo `aria-invalid="true"` + un selector CSS propio (`[aria-invalid="true"] { border-color: var(--bs-danger); }`), igual que ya hacía `dominio.ts`/`atributos()` antes de Bootstrap.
+- **`.accordion`** (Fase 6, colapsar visitantes): no usar el componente Bootstrap -- seguir con `<details>/<summary>` nativo + ícono propio (`ChevronDown` de lucide), tal como ya preveía el plan por el motivo de evitar `bootstrap.bundle.js`/Popper; ahora hay una segunda razón (el ícono de flecha del acordeón también es `data:image`).
+
 ---
 
 ## Decisiones de UX

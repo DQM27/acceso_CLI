@@ -225,6 +225,16 @@ main:focus,
   width: var(--control-altura);
   padding: 0;
 }
+/* `.btn-link` de Bootstrap hereda el color de link, que es nuestro
+   `$primary` (rojo) -- bien para un enlace de texto, pero un ícono
+   utilitario (cerrar, cambiar tema, cerrar sesión) en rojo le resta peso
+   al rojo como color de acción PRIMARIA. Gris neutro en reposo, acento
+   sólo al pasar el mouse o enfocar. */
+.btn-link.solo-icono {
+  --bs-btn-color: var(--muted);
+  --bs-btn-hover-color: var(--acento);
+  --bs-btn-active-color: var(--acento);
+}
 .sello-icono {
   display: grid;
   place-items: center;
@@ -238,33 +248,6 @@ main:focus,
 .sello-icono svg {
   width: 24px;
   height: 24px;
-}
-.aviso {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--espacio-3);
-  padding: var(--espacio-4);
-  border-radius: var(--radio-chico);
-  font-size: 13px;
-  line-height: 1.6;
-  margin-bottom: var(--espacio-4);
-  overflow-wrap: anywhere;
-}
-.aviso > div {
-  flex: 1;
-  min-width: 0;
-}
-.aviso-error {
-  background: var(--error-suave);
-  color: var(--error);
-}
-.aviso-exito {
-  background: var(--exito-suave);
-  color: var(--exito);
-}
-.aviso-info {
-  background: var(--info-suave);
-  color: var(--info);
 }
 .enlace-boton {
   display: block;
@@ -280,22 +263,6 @@ main:focus,
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-}
-.cargando {
-  display: flex;
-  gap: var(--espacio-3);
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-  padding: 64px 24px;
-}
-.giro {
-  animation: giro 1s linear infinite;
-}
-@keyframes giro {
-  to {
-    transform: rotate(360deg);
-  }
 }
 .error-fatal {
   display: grid;
@@ -815,6 +782,12 @@ main:focus,
   outline: none;
   box-shadow: inset 0 0 0 2px var(--acento);
 }
+.nav-item-colapsar {
+  margin-top: auto;
+  border-top: 1px solid var(--borde);
+  border-radius: 0;
+  color: var(--muted);
+}
 .nav-item-activo {
   background: var(--acento-relleno);
   color: var(--sobre-acento);
@@ -1236,12 +1209,11 @@ dd {
   font-size: 12px;
   color: var(--muted);
 }
+/* `.modal-content` (clases de Bootstrap, ver componentes/Comunes.tsx) trae
+   fondo/borde/radio -- acá sólo el tamaño y posicionamiento del <dialog>
+   nativo, que Bootstrap asume resueltos por su propio wrapper .modal-dialog
+   (que no usamos, ver el plan). */
 .modal {
-  background: var(--elevado);
-  color: var(--texto);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  padding: 24px;
   width: min(600px, calc(100vw - 32px));
   max-height: calc(100dvh - 48px);
   box-shadow: var(--sombra-panel);
@@ -1251,17 +1223,10 @@ dd {
 .modal::backdrop {
   background: var(--velo);
 }
-.modal-encabezado {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-.modal > p + p {
+.modal-body > p + p {
   margin-top: 12px;
 }
-.modal > .aviso {
+.modal-body > .alert {
   margin-top: 16px;
 }
 .saltar {
@@ -1432,11 +1397,6 @@ dd {
   }
   .solo-icono {
     width: var(--control-tactil);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .giro {
-    animation: none;
   }
 }
 
