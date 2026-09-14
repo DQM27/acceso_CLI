@@ -148,9 +148,11 @@ function CampoFechaSegmentada({
  * visitante, no de esta app -- por eso el paso final a 3 campos fijos.
  *
  * La hora aproximada de llegada vive acá también (no en un campo aparte de
- * la pantalla) -- son las 3 preguntas de "¿cuándo?" juntas en una sola
- * fila, sin la separación enorme que dejaba un grid de 2 columnas al 50%
- * en fields que en realidad ocupan mucho menos que eso.
+ * la pantalla) -- son las 3 preguntas de "¿cuándo?" juntas.
+ *
+ * Los campos van al lado del calendario (no apilados arriba) -- eran la
+ * causa principal del scroll vertical de la pantalla: sumaban su alto al
+ * del calendario en vez de compartir el mismo espacio horizontal.
  */
 export default function CampoFechas({
   desde,
@@ -172,8 +174,8 @@ export default function CampoFechas({
   erroresHora?: string;
 }) {
   return (
-    <div>
-      <div className="fila-fechas-hora">
+    <div className="campo-fechas-grid">
+      <div className="campo-fechas-campos">
         <CampoFechaSegmentada
           etiqueta="Desde"
           valor={desde}
@@ -194,7 +196,7 @@ export default function CampoFechas({
             className="form-control"
             value={hora}
             aria-invalid={!!erroresHora}
-            aria-describedby={erroresHora ? "error-hora_estimada" : "ayuda-hora_estimada"}
+            aria-describedby={erroresHora ? "error-hora_estimada" : undefined}
             onChange={(e) => onCambiarHora(e.target.value)}
           />
           {erroresHora && (
@@ -202,21 +204,19 @@ export default function CampoFechas({
               {erroresHora}
             </span>
           )}
-          <span className="ayuda-campo" id="ayuda-hora_estimada">
-            No hace falta llegar puntual ni se bloquea el ingreso a otra
-            hora -- es sólo para orientar al personal del sitio.
-          </span>
         </label>
       </div>
-      <p className="ayuda-campo" style={{ marginTop: "8px" }}>
-        También podés elegir en el calendario: un click selecciona un día, un
-        segundo click en un día posterior arma el rango.
-      </p>
-      <SelectorFechas
-        desde={desde || hoyCostaRica()}
-        hasta={hasta || hoyCostaRica()}
-        onCambiar={onCambiar}
-      />
+      <div className="campo-fechas-calendario">
+        <SelectorFechas
+          desde={desde || hoyCostaRica()}
+          hasta={hasta || hoyCostaRica()}
+          onCambiar={onCambiar}
+        />
+        <p className="ayuda-campo campo-fechas-ayuda">
+          Un clic elige el día de inicio, otro clic en un día posterior arma
+          el rango.
+        </p>
+      </div>
     </div>
   );
 }

@@ -13,7 +13,6 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
-  MapPin,
   Plus,
 } from "lucide-react";
 import { crearCita, listarSitios, mensajeError } from "../api";
@@ -29,6 +28,7 @@ import { useAuth } from "../contexto/AuthContexto";
 import { Aviso, Cargando, Modal } from "../componentes/Comunes";
 import CampoFechas from "../componentes/CampoFechas";
 import PasoWizard from "../componentes/PasoWizard";
+import SelectorSitios from "../componentes/SelectorSitios";
 import VisitanteFormulario from "../componentes/VisitanteFormulario";
 import { useFocoAlCambiar } from "../lib/useFocoAlCambiar";
 
@@ -243,12 +243,9 @@ export default function NuevaCita() {
         Mis citas
       </Link>
       <div className="encabezado-pagina">
-        <div>
-          <p className="antetitulo">PREPARÁ SU LLEGADA</p>
-          <h1 ref={titulo} tabIndex={-1}>
-            {paso === "revision" ? "Revisá tu cita" : "Nueva cita"}
-          </h1>
-        </div>
+        <h1 ref={titulo} tabIndex={-1}>
+          {paso === "revision" ? "Revisá tu cita" : "Nueva cita"}
+        </h1>
         <PasoWizard pasos={ETIQUETAS_PASO} actual={PASOS.indexOf(paso)} />
       </div>
       <div className="formulario-layout">
@@ -287,123 +284,103 @@ export default function NuevaCita() {
                 className="tarjeta bloque-formulario"
                 disabled={cargando || !verificado}
               >
-                <legend>Lugar y fechas</legend>
-                <p className="descripcion-bloque">
-                  ¿Dónde y cuándo vas a recibir a tus visitantes?
-                </p>
-                <div className="campo">
-                  <span id="etiqueta-sitios">
-                    Sitios de la visita <span className="obligatorio">*</span>
-                  </span>
-                  <p className="ayuda-campo">
-                    Podés seleccionar más de un sitio.
-                  </p>
-                  {cargando ? (
-                    <Cargando texto="Cargando sitios…" />
-                  ) : errorSitios ? (
-                    <Aviso>
-                      {errorSitios}
-                      <button
-                        type="button"
-                        className="btn btn-link p-0 align-baseline"
-                        onClick={() => setIntentoSitios((v) => v + 1)}
-                      >
-                        Reintentar
-                      </button>
-                    </Aviso>
-                  ) : sitios.length === 0 ? (
-                    <Aviso tipo="info">
-                      Todavía no hay sitios disponibles. Contactá a
-                      administración.
-                    </Aviso>
-                  ) : (
-                    <div
-                      className="selector-sitios"
-                      role="group"
-                      aria-labelledby="etiqueta-sitios"
-                      {...atributos("sitios")}
-                    >
-                      {sitios.map((sitio) => {
-                        const marcado = formulario.sitios.includes(sitio.id);
-                        const id = `sitio-${sitio.id}`;
-                        return (
-                          <div className="sitio-opcion" key={sitio.id}>
-                            <input
-                              type="checkbox"
-                              className="btn-check"
-                              id={id}
-                              checked={marcado}
-                              onChange={(e) =>
-                                actualizar({
-                                  sitios: e.target.checked
-                                    ? [...formulario.sitios, sitio.id]
-                                    : formulario.sitios.filter(
-                                        (sid) => sid !== sitio.id,
-                                      ),
-                                })
-                              }
-                            />
-                            <label
-                              className={`btn btn-sm ${marcado ? "btn-primary" : "btn-outline-secondary"}`}
-                              htmlFor={id}
+                <legend className="visually-hidden">Lugar y fechas</legend>
+                <div className="grupos-campos">
+                  <div className="grupo-campos">
+                    <p className="antetitulo">DÓNDE</p>
+                    <div className="dos-columnas">
+                      <div className="campo">
+                        <span id="etiqueta-sitios">
+                          Sitios de la visita{" "}
+                          <span className="obligatorio">*</span>
+                        </span>
+                        <p className="ayuda-campo">
+                          Podés seleccionar más de un sitio.
+                        </p>
+                        {cargando ? (
+                          <Cargando texto="Cargando sitios…" />
+                        ) : errorSitios ? (
+                          <Aviso>
+                            {errorSitios}
+                            <button
+                              type="button"
+                              className="btn btn-link p-0 align-baseline"
+                              onClick={() => setIntentoSitios((v) => v + 1)}
                             >
-                              <MapPin aria-hidden="true" />
-                              {sitio.nombre}
-                            </label>
-                          </div>
-                        );
-                      })}
+                              Reintentar
+                            </button>
+                          </Aviso>
+                        ) : sitios.length === 0 ? (
+                          <Aviso tipo="info">
+                            Todavía no hay sitios disponibles. Contactá a
+                            administración.
+                          </Aviso>
+                        ) : (
+                          <SelectorSitios
+                            sitios={sitios}
+                            seleccionados={formulario.sitios}
+                            onCambiar={(sitios) => actualizar({ sitios })}
+                            invalido={!!errores.sitios}
+                            describedBy={
+                              errores.sitios ? "error-sitios" : undefined
+                            }
+                          />
+                        )}
+                        {mensajeCampo("sitios")}
+                      </div>
+                      <label className="campo">
+                        Motivo de la visita{" "}
+                        <span className="opcional">Opcional</span>
+                        <textarea
+                          className="form-control"
+                          rows={3}
+                          maxLength={1000}
+                          placeholder="Por ejemplo: reunión de coordinación"
+                          value={formulario.motivo}
+                          {...atributos("motivo")}
+                          onChange={(e) =>
+                            actualizar({ motivo: e.target.value })
+                          }
+                        />
+                        {mensajeCampo("motivo")}
+                        <span className="ayuda-campo contador">
+                          {formulario.motivo.length}/1000
+                        </span>
+                      </label>
                     </div>
-                  )}
-                  {mensajeCampo("sitios")}
+                  </div>
+                  <div className="grupo-campos">
+                    <p className="antetitulo">CUÁNDO</p>
+                    <CampoFechas
+                      desde={formulario.fecha_desde}
+                      hasta={formulario.fecha_hasta}
+                      erroresDesde={errores.fecha_desde}
+                      erroresHasta={errores.fecha_hasta}
+                      onCambiar={(fecha_desde, fecha_hasta) => {
+                        actualizar({ fecha_desde, fecha_hasta });
+                        const resultado = validarRangoFechas(
+                          fecha_desde,
+                          fecha_hasta,
+                        );
+                        setErrores((previo) => {
+                          const siguiente = { ...previo };
+                          if (resultado.fecha_desde)
+                            siguiente.fecha_desde = resultado.fecha_desde;
+                          else delete siguiente.fecha_desde;
+                          if (resultado.fecha_hasta)
+                            siguiente.fecha_hasta = resultado.fecha_hasta;
+                          else delete siguiente.fecha_hasta;
+                          return siguiente;
+                        });
+                      }}
+                      hora={formulario.hora_estimada}
+                      erroresHora={errores.hora_estimada}
+                      onCambiarHora={(hora_estimada) =>
+                        actualizar({ hora_estimada })
+                      }
+                    />
+                  </div>
                 </div>
-                <div className="campo">
-                  Fechas de la visita
-                  <CampoFechas
-                    desde={formulario.fecha_desde}
-                    hasta={formulario.fecha_hasta}
-                    erroresDesde={errores.fecha_desde}
-                    erroresHasta={errores.fecha_hasta}
-                    onCambiar={(fecha_desde, fecha_hasta) => {
-                      actualizar({ fecha_desde, fecha_hasta });
-                      const resultado = validarRangoFechas(
-                        fecha_desde,
-                        fecha_hasta,
-                      );
-                      setErrores((previo) => {
-                        const siguiente = { ...previo };
-                        if (resultado.fecha_desde)
-                          siguiente.fecha_desde = resultado.fecha_desde;
-                        else delete siguiente.fecha_desde;
-                        if (resultado.fecha_hasta)
-                          siguiente.fecha_hasta = resultado.fecha_hasta;
-                        else delete siguiente.fecha_hasta;
-                        return siguiente;
-                      });
-                    }}
-                    hora={formulario.hora_estimada}
-                    erroresHora={errores.hora_estimada}
-                    onCambiarHora={(hora_estimada) =>
-                      actualizar({ hora_estimada })
-                    }
-                  />
-                </div>
-                <label className="campo">
-                  Motivo de la visita <span className="opcional">Opcional</span>
-                  <textarea
-                    className="form-control"
-                    rows={3}
-                    maxLength={1000}
-                    placeholder="Por ejemplo: reunión de coordinación"
-                    value={formulario.motivo}
-                    {...atributos("motivo")}
-                    onChange={(e) => actualizar({ motivo: e.target.value })}
-                  />
-                  {mensajeCampo("motivo")}
-                  <span className="ayuda-campo contador">
-                    {formulario.motivo.length}/1000
-                  </span>
-                </label>
               </fieldset>
               <div className="acciones-formulario">
                 <button
@@ -664,13 +641,6 @@ export default function NuevaCita() {
                 </div>
               )}
             </dl>
-          </div>
-          <div className="consejo">
-            <MapPin aria-hidden="true" />
-            <p>
-              Al llegar, cada visitante debe presentar su documento en el punto
-              de acceso.
-            </p>
           </div>
         </aside>
       </div>

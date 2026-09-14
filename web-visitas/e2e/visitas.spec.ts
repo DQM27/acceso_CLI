@@ -125,6 +125,18 @@ async function preparar(
   return { guardados };
 }
 
+/** Abre el combobox de "Sitios de la visita" (componentes/SelectorSitios.tsx),
+ * tilda cada nombre y lo cierra -- reemplaza el click directo sobre los
+ * chips que había antes de la Fase de rediseño del selector. */
+async function elegirSitios(page: Page, nombres: string[]) {
+  const selector = page.locator(".selector-sitios");
+  await selector.getByRole("button").click();
+  for (const nombre of nombres) {
+    await selector.getByText(nombre, { exact: true }).click();
+  }
+  await page.keyboard.press("Escape");
+}
+
 test("login con CSP real, sin desbordamiento en ambos temas", async ({
   page,
 }, info) => {
@@ -177,7 +189,7 @@ test("Activity conserva el mes del calendario al ir y volver entre pasos", async
   await expect(page.getByText("septiembre de 2026")).toBeVisible();
   await page.getByRole("button", { name: "Mes siguiente" }).click();
   await expect(page.getByText("octubre de 2026")).toBeVisible();
-  await page.locator(".selector-sitios").getByText("Brisas", { exact: true }).click();
+  await elegirSitios(page, ["Brisas"]);
   await page.getByRole("button", { name: "Continuar" }).click();
   await expect(page.getByLabel("Nombre completo")).toBeVisible();
   await page.getByRole("button", { name: "Atrás" }).click();
@@ -203,7 +215,7 @@ test("las fechas se completan 100% por teclado, sin tocar el calendario", async 
   await expect(
     page.getByText("Paso 1 de 3: ¿Cuándo y dónde?"),
   ).toBeAttached();
-  await page.locator(".selector-sitios").getByText("Brisas", { exact: true }).click();
+  await elegirSitios(page, ["Brisas"]);
   // Día/Mes/Año como 3 campos de texto es la vía de teclado real -- nunca
   // se hace click ni drag sobre el calendario en este test.
   const desde = page.getByRole("group", { name: "Desde" });
@@ -237,7 +249,7 @@ test("grupo grande de visitantes: se colapsan, se pueden reabrir y la validació
 }) => {
   await preparar(page);
   await page.goto("/nueva");
-  await page.locator(".selector-sitios").getByText("Brisas", { exact: true }).click();
+  await elegirSitios(page, ["Brisas"]);
   await page.getByRole("button", { name: "Continuar" }).click();
   // 1 visitante ya existe por defecto -- se agregan 5 más (6 en total,
   // por encima del umbral de colapso).
@@ -289,8 +301,7 @@ test("grupo con dos sitios, validación y reintento idempotente", async ({
   ).toBeVisible();
   await page.getByRole("button", { name: "Continuar" }).click();
   await expect(page.getByText("Seleccioná al menos un sitio.")).toBeVisible();
-  await page.locator(".selector-sitios").getByText("Brisas", { exact: true }).click();
-  await page.locator(".selector-sitios").getByText("Cartago", { exact: true }).click();
+  await elegirSitios(page, ["Brisas", "Cartago"]);
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByLabel("Nombre completo").fill("Persona de prueba Uno");
   await page.getByLabel("Cédula o documento").fill("DOC-123");
@@ -334,7 +345,7 @@ test("hora estimada es opcional, viaja a la RPC y se ve en Mis Citas", async ({
 }) => {
   const { guardados } = await preparar(page);
   await page.goto("/nueva");
-  await page.locator(".selector-sitios").getByText("Brisas", { exact: true }).click();
+  await elegirSitios(page, ["Brisas"]);
   await page.getByLabel(/Hora aproximada de llegada/).fill("14:30");
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByLabel("Nombre completo").fill("Persona de prueba");

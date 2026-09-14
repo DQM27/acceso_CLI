@@ -154,7 +154,6 @@ function Portal() {
       </div>
 
       <div className="barra-estado">
-        <span>Brisas · Agenda de visitas · Hora de Costa Rica</span>
         <div className="barra-cuenta">
           <SelectorTema />
           <span className="separador" />

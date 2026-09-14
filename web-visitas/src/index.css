@@ -202,8 +202,7 @@ main:focus,
   flex-direction: column;
   min-height: 100dvh;
 }
-.acceso-barra,
-.acceso-pie {
+.acceso-barra {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -286,10 +285,6 @@ main:focus,
   margin-top: 24px;
   padding-top: 24px;
   border-top: 1px solid var(--borde);
-}
-.acceso-pie {
-  font-size: 12px;
-  color: var(--muted);
 }
 /* Shell fijo, tipo desktop (AG Grid): nada de scroll a nivel de página
    completa -- el sidebar y la cabecera de cada pantalla quedan quietos, y
@@ -883,9 +878,16 @@ main:focus,
     white-space: normal;
   }
 }
+/* Ancho del formulario acotado a propósito -- `.pagina` permite hasta
+   1600px (útil para grids anchos como Mis Citas), pero un formulario con
+   campos angostos (fechas segmentadas, calendario con max-width:340px)
+   estirado a esa altura deja un hueco vacío enorme entre los campos y
+   `.resumen-lateral`. Con la columna principal en un ancho fijo en vez de
+   `1fr`, el sobrante de espacio pasa a ser margen normal a la derecha del
+   resumen, no un vacío en el medio del formulario. */
 .formulario-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
+  grid-template-columns: minmax(0, 620px) 260px;
   gap: 24px;
   align-items: start;
 }
@@ -910,6 +912,23 @@ main:focus,
   padding-bottom: 24px;
   color: var(--muted);
   font-size: 13px;
+}
+/* Nueva cita, paso "¿Cuándo y dónde?": el fieldset ya no tiene legend
+   visible (era redundante con la etiqueta del paso en `PasoWizard`), así
+   que `.grupos-campos` es quien pone el padding-top que antes ponía el
+   `float` del legend. Cada `.grupo-campos` es una sub-sección (Dónde /
+   Cuándo) con su propio micro-rótulo (reusa `.antetitulo`); un separador
+   sutil entre ambas evita otro bloque de texto explicativo. */
+.grupos-campos {
+  padding-top: 24px;
+}
+.grupo-campos > .antetitulo {
+  margin-bottom: 12px;
+}
+.grupo-campos + .grupo-campos {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--borde);
 }
 .campo {
   display: flex;
@@ -948,7 +967,7 @@ main:focus,
 .campo-fecha-segmentada {
   border: 0;
   padding: 0;
-  margin: 0 0 20px;
+  margin: 0;
 }
 .campo-fecha-segmentada legend {
   font-size: 13px;
@@ -974,25 +993,33 @@ main:focus,
 .campo-fecha-segmentos label:last-child input {
   width: 4.5rem;
 }
-/* Desde/Hasta/Hora en una sola fila -- un grid de 2 columnas al 50% (como
-   era antes) dejaba un hueco enorme entre ambas fechas, porque los 3
-   campos juntos ocupan bastante menos que el ancho del panel. Con flex y
-   ancho de contenido (no `1fr`) quedan pegados, y envuelven a una fila
-   nueva en pantallas angostas. */
-.fila-fechas-hora {
+/* Campos (Desde/Hasta/Hora) al lado del calendario, no apilados arriba --
+   compartir el espacio horizontal en vez de sumar alturas es lo que le
+   quita a esta pantalla la mayor parte del scroll vertical. En pantallas
+   angostas (`flex-wrap`) el calendario cae debajo de los campos. */
+.campo-fechas-grid {
   display: flex;
   flex-wrap: wrap;
+  align-items: stretch;
   gap: 24px;
 }
-.fila-fechas-hora .campo-fecha-segmentada {
-  margin-bottom: 0;
+.campo-fechas-campos {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 20px;
+  flex: 1 1 200px;
+  min-width: 180px;
 }
-/* Ancho fijo, no de contenido -- sin esto, el texto de ayuda de adentro
-   (una oración larga) empuja a `.campo-hora` a estirarse para no
-   envolverse, lo que termina forzando el wrap de toda la fila mucho antes
-   de lo necesario. */
+.campo-fechas-calendario {
+  flex: 0 1 340px;
+  min-width: 260px;
+}
+.campo-fechas-ayuda {
+  margin-top: 8px;
+}
 .campo-hora {
-  flex: 0 0 13rem;
+  max-width: 13rem;
 }
 .campo-hora input {
   max-width: 10rem;
@@ -1035,17 +1062,152 @@ main:focus,
   font-size: 12px;
   font-weight: 400;
 }
-/* Sitios de la visita: chips (`.btn-check` + `.btn`, patrón oficial de
-   Bootstrap para grupos de toggle) en vez de las tarjetas grandes de
-   antes -- mismo lenguaje visual que las píldoras de filtro de "Mis
-   citas", y no reserva una fila entera de alto por cada sitio cuando el
-   catálogo crece. `.btn-check` esconde el checkbox nativo por completo
-   (clip a 0×0, no pinta ningún ícono) -- sigue siendo un checkbox real
-   para teclado y lectores de pantalla, sólo cambia qué se ve. */
+/* Sitios de la visita: combobox con buscador (componentes/SelectorSitios.tsx),
+   mismo patrón que el set-filter de columnas de AG Grid -- reemplaza los
+   chips que había antes (`.btn-check` + `.btn`), que con `MAX_SITIOS = 100`
+   (ver dominio.ts) podían apilar muchas filas y empujar el resto del
+   formulario hacia abajo. El control cerrado queda siempre en una sola
+   fila; el desplegable (`.combo-panel`) es lo único que scrollea, y sólo
+   mientras está abierto. Sin JS de Bootstrap (Popper) -- mismo motivo que
+   el resto de la migración, evita el riesgo de sus íconos `data:image`
+   contra la CSP estricta. */
 .selector-sitios {
+  position: relative;
+}
+.combo-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--control-altura, 36px);
+  padding: 5px 10px;
+  background: var(--campo-fondo);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  color: var(--texto);
+  cursor: pointer;
+  text-align: left;
+}
+.combo-control:focus-visible,
+.combo-control.abierto {
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px var(--acento-suave);
+}
+.combo-control[aria-invalid="true"] {
+  border-color: var(--error);
+}
+.combo-icono {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.combo-tags {
   display: flex;
   flex-wrap: wrap;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+.combo-tags .marcador {
+  color: var(--muted);
+}
+.combo-tag {
+  background: var(--acento-suave);
+  color: var(--acento);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: var(--radio-capsula);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.combo-mas {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 3px 6px;
+}
+.combo-chevron {
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: transform var(--duracion);
+}
+.combo-control.abierto .combo-chevron {
+  transform: rotate(180deg);
+}
+.combo-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  box-shadow: var(--sombra-panel);
+  z-index: 20;
+  overflow: hidden;
+}
+.combo-buscar {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--borde);
+  color: var(--muted);
+}
+.combo-buscar input {
+  border: none;
+  background: transparent;
+  color: var(--texto);
+  font: inherit;
+  width: 100%;
+  outline: none;
+}
+.combo-acciones {
+  display: flex;
+  gap: 16px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--borde);
+  background: var(--campo-fondo);
+}
+.combo-lista {
+  max-height: 236px;
+  overflow-y: auto;
+  padding: 6px;
+}
+.combo-fila {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px;
+  border-radius: var(--radio-chico);
+}
+.combo-fila:hover {
+  background: var(--campo-fondo);
+}
+.combo-fila input[type="checkbox"] {
+  accent-color: var(--acento-relleno);
+  flex-shrink: 0;
+}
+.combo-fila svg {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.combo-fila label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.combo-vacio {
+  padding: 20px 12px;
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12.5px;
 }
 .contador-grupo {
   font-size: 12px;
@@ -1165,19 +1327,6 @@ dd {
   font-weight: 400;
   color: var(--muted);
 }
-.consejo {
-  display: flex;
-  gap: 12px;
-  margin-top: 20px;
-  padding-inline: 4px;
-  color: var(--muted);
-  font-size: 12px;
-}
-.consejo svg {
-  width: 16px;
-  height: 16px;
-  margin-top: 3px;
-}
 .bloque-revision {
   padding: 24px;
 }
@@ -1274,8 +1423,7 @@ dd {
   }
 }
 @media (max-width: 800px) {
-  .acceso-barra,
-  .acceso-pie {
+  .acceso-barra {
     padding: 24px;
   }
   .acceso-contenido {
@@ -1300,9 +1448,6 @@ dd {
 @media (max-width: 540px) {
   .acceso-tarjeta {
     padding: 24px;
-  }
-  .acceso-pie {
-    font-size: 10px;
   }
   .contenido {
     padding: 16px;
@@ -1379,6 +1524,12 @@ dd {
   }
   .dos-columnas {
     grid-template-columns: 1fr;
+  }
+  .campo-fechas-grid {
+    flex-direction: column;
+  }
+  .campo-fechas-calendario {
+    width: 100%;
   }
   .visitante-formulario {
     padding: 12px;

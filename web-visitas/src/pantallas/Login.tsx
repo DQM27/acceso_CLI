@@ -99,10 +99,6 @@ export default function Login() {
           </p>
         </section>
       </main>
-      <footer className="acceso-pie">
-        <span>Brisas · Control de accesos</span>
-        <span>Portal de anfitriones</span>
-      </footer>
     </div>
   );
 }
