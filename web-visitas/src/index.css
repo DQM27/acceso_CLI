@@ -923,33 +923,16 @@ main:focus,
 .campo:last-child {
   margin-bottom: 0;
 }
-.campo input:not([type="checkbox"]),
-.campo textarea {
-  width: 100%;
-  min-width: 0;
-  min-height: 40px;
-  padding: 10px 12px;
-  border: 1px solid var(--borde-fuerte);
-  border-radius: var(--radio-chico);
-  background: var(--campo-fondo);
-  color: var(--texto);
-  font-weight: 400;
-}
-.campo input:focus,
-.campo textarea:focus {
-  outline: 2px solid var(--acento);
-  outline-offset: 2px;
+/* El aspecto del control (borde, fondo, foco) ahora lo da `.form-control`
+   de Bootstrap -- `.campo` sólo aporta el layout de label+ayuda+error. El
+   estado de error sigue marcándose con `aria-invalid`, no con `.is-invalid`
+   de Bootstrap (ver la nota sobre CSP en el plan). */
+.campo input[aria-invalid="true"],
+.campo textarea[aria-invalid="true"] {
+  border-color: var(--bs-danger);
 }
 .campo textarea {
   resize: vertical;
-}
-.campo input[aria-invalid="true"],
-.campo textarea[aria-invalid="true"] {
-  border-color: var(--error);
-}
-.campo input::placeholder,
-.campo textarea::placeholder {
-  color: var(--texto-atenuado);
 }
 .dos-columnas {
   display: grid;

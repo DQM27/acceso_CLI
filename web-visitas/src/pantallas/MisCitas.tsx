@@ -160,7 +160,7 @@ export default function MisCitas() {
           <p className="antetitulo">TU AGENDA</p>
           <h1>Mis citas</h1>
         </div>
-        <Link className="boton boton-primario" to="/nueva">
+        <Link className="btn btn-primary" to="/nueva">
           <CirclePlus aria-hidden="true" />
           Nueva cita
         </Link>
@@ -170,7 +170,8 @@ export default function MisCitas() {
           <div className="aviso-con-accion">
             <span>{aviso}</span>
             <button
-              className="boton boton-discreto solo-icono"
+              type="button"
+              className="btn btn-link solo-icono"
               aria-label="Cerrar aviso"
               onClick={() => setAviso(null)}
             >
@@ -182,14 +183,15 @@ export default function MisCitas() {
       <section className={`tarjeta agenda ${vista === "calendario" ? "agenda-llena" : ""}`}>
         <div className="agenda-herramientas">
           <div
-            className="filtros"
+            className="btn-group filtros"
             role="group"
             aria-label="Filtrar citas por estado"
           >
             {FILTROS.map((item) => (
               <button
+                type="button"
                 key={item.valor}
-                className={filtro === item.valor ? "filtro activo" : "filtro"}
+                className={`btn btn-sm ${filtro === item.valor ? "btn-primary" : "btn-outline-secondary"}`}
                 aria-pressed={filtro === item.valor}
                 onClick={() => {
                   setFiltro(item.valor);
@@ -200,14 +202,15 @@ export default function MisCitas() {
               </button>
             ))}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div className="d-flex align-items-center gap-2">
             <div
-              className="toggle-vista"
+              className="btn-group toggle-vista"
               role="group"
               aria-label="Cambiar cómo se muestra la agenda"
             >
               <button
-                className={vista === "lista" ? "filtro activo" : "filtro"}
+                type="button"
+                className={`btn btn-sm ${vista === "lista" ? "btn-primary" : "btn-outline-secondary"}`}
                 aria-pressed={vista === "lista"}
                 onClick={() => setVista("lista")}
               >
@@ -215,7 +218,8 @@ export default function MisCitas() {
                 Lista
               </button>
               <button
-                className={vista === "calendario" ? "filtro activo" : "filtro"}
+                type="button"
+                className={`btn btn-sm ${vista === "calendario" ? "btn-primary" : "btn-outline-secondary"}`}
                 aria-pressed={vista === "calendario"}
                 onClick={() => setVista("calendario")}
               >
@@ -224,12 +228,14 @@ export default function MisCitas() {
               </button>
             </div>
             <button
-              className="boton boton-discreto"
+              type="button"
+              className="btn btn-link solo-icono"
               disabled={vista === "lista" ? cargando : cargandoCalendario}
+              aria-label="Actualizar"
+              title="Actualizar"
               onClick={() => setRevision((v) => v + 1)}
             >
               <RefreshCw aria-hidden="true" />
-              Actualizar
             </button>
           </div>
         </div>
@@ -239,7 +245,11 @@ export default function MisCitas() {
           ) : errorCalendario ? (
             <div className="estado-agenda">
               <Aviso>{errorCalendario}</Aviso>
-              <button className="boton" onClick={() => setRevision((v) => v + 1)}>
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                onClick={() => setRevision((v) => v + 1)}
+              >
                 Volver a intentar
               </button>
             </div>
@@ -253,7 +263,11 @@ export default function MisCitas() {
         ) : error ? (
           <div className="estado-agenda">
             <Aviso>{error}</Aviso>
-            <button className="boton" onClick={() => setRevision((v) => v + 1)}>
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              onClick={() => setRevision((v) => v + 1)}
+            >
               Volver a intentar
             </button>
           </div>
@@ -272,7 +286,7 @@ export default function MisCitas() {
                 ? "Creá tu primera cita y dejá todo preparado para recibir a tus visitantes."
                 : "Probá con otro filtro para consultar el resto de tu agenda."}
             </p>
-            <Link className="boton boton-primario" to="/nueva">
+            <Link className="btn btn-primary" to="/nueva">
               <CirclePlus aria-hidden="true" />
               Agendar una visita
             </Link>
@@ -326,13 +340,18 @@ export default function MisCitas() {
                     </div>
                   </div>
                   <div className="cita-acciones">
-                    <button className="boton" onClick={() => setDetalle(cita)}>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary"
+                      onClick={() => setDetalle(cita)}
+                    >
                       Ver detalles
                       <ChevronRight aria-hidden="true" />
                     </button>
                     {estado === "VIGENTE" && (
                       <button
-                        className="boton boton-discreto boton-peligro"
+                        type="button"
+                        className="btn btn-sm btn-link text-danger"
                         disabled={!verificado}
                         onClick={() => {
                           setErrorCancelar(null);
@@ -351,9 +370,10 @@ export default function MisCitas() {
         {vista === "lista" && !cargando && !error && (citas.length > 0 || pagina > 0) && (
           <div className="paginacion">
             <span>Página {pagina + 1}</span>
-            <div>
+            <div className="d-flex gap-2">
               <button
-                className="boton"
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
                 disabled={pagina === 0}
                 onClick={() => setPagina((v) => v - 1)}
               >
@@ -361,7 +381,8 @@ export default function MisCitas() {
                 Anterior
               </button>
               <button
-                className="boton"
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
                 disabled={!hayMas}
                 onClick={() => setPagina((v) => v + 1)}
               >
@@ -425,7 +446,11 @@ export default function MisCitas() {
             ))}
           </ul>
           <div className="acciones-formulario">
-            <button className="boton" onClick={() => setDetalle(null)}>
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              onClick={() => setDetalle(null)}
+            >
               Cerrar
             </button>
           </div>
@@ -456,14 +481,16 @@ export default function MisCitas() {
           )}
           <div className="acciones-formulario">
             <button
-              className="boton"
+              type="button"
+              className="btn btn-outline-secondary"
               disabled={cancelando}
               onClick={() => setCancelacion(null)}
             >
               Conservar cita
             </button>
             <button
-              className="boton boton-peligro"
+              type="button"
+              className="btn btn-danger"
               disabled={cancelando || !verificado}
               onClick={() => void cancelar()}
             >

@@ -13,7 +13,10 @@ const texto = (maximo: number) =>
     .string()
     .trim()
     .max(maximo, `Usá hasta ${maximo} caracteres.`)
-    .regex(sinControl, "El texto contiene caracteres no permitidos.");
+    .regex(
+      sinControl,
+      "Ese texto tiene un carácter que no podemos guardar (por ejemplo, pegado desde otro programa). Borralo y escribilo de nuevo.",
+    );
 const opcional = (maximo: number) => texto(maximo).transform((v) => v || null);
 
 export function normalizarDocumento(valor: string) {

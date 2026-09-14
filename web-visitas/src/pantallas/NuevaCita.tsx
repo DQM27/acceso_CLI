@@ -219,7 +219,7 @@ export default function NuevaCita() {
                       {errorSitios}
                       <button
                         type="button"
-                        className="enlace-boton"
+                        className="btn btn-link p-0 align-baseline"
                         onClick={() => setIntentoSitios((v) => v + 1)}
                       >
                         Reintentar
@@ -294,6 +294,7 @@ export default function NuevaCita() {
                 <label className="campo">
                   Motivo de la visita <span className="opcional">Opcional</span>
                   <textarea
+                    className="form-control"
                     rows={3}
                     maxLength={1000}
                     placeholder="Por ejemplo: reunión de coordinación"
@@ -335,7 +336,7 @@ export default function NuevaCita() {
                         {formulario.visitantes.length > 1 && (
                           <button
                             type="button"
-                            className="boton boton-discreto boton-peligro"
+                            className="btn btn-sm btn-link text-danger"
                             aria-label={`Quitar visitante ${i + 1}`}
                             onClick={() => {
                               setClaves((c) => c.filter((_, indice) => indice !== i));
@@ -355,6 +356,7 @@ export default function NuevaCita() {
                         <label className="campo">
                           Nombre completo <span className="obligatorio">*</span>
                           <input
+                            className="form-control"
                             autoComplete="off"
                             value={persona.nombre}
                             maxLength={150}
@@ -370,8 +372,10 @@ export default function NuevaCita() {
                           Cédula o documento{" "}
                           <span className="obligatorio">*</span>
                           <input
+                            className="form-control"
                             autoComplete="off"
                             spellCheck={false}
+                            placeholder="Por ejemplo: 1-2345-6789"
                             value={persona.cedula}
                             maxLength={60}
                             required
@@ -385,6 +389,7 @@ export default function NuevaCita() {
                         <label className="campo">
                           Empresa <span className="opcional">Opcional</span>
                           <input
+                            className="form-control"
                             autoComplete="off"
                             value={persona.empresa}
                             maxLength={150}
@@ -399,6 +404,7 @@ export default function NuevaCita() {
                           Placa del vehículo{" "}
                           <span className="opcional">Opcional</span>
                           <input
+                            className="form-control"
                             autoComplete="off"
                             value={persona.placa_vehiculo}
                             maxLength={20}
@@ -415,7 +421,7 @@ export default function NuevaCita() {
                 </div>
                 <button
                   type="button"
-                  className="boton agregar-visitante"
+                  className="btn btn-outline-secondary agregar-visitante"
                   disabled={formulario.visitantes.length >= MAX_VISITANTES}
                   onClick={() => {
                     setClaves((c) => [...c, crypto.randomUUID()]);
@@ -435,7 +441,7 @@ export default function NuevaCita() {
                 <span className="ayuda-campo">* Campos obligatorios</span>
                 <button
                   type="submit"
-                  className="boton boton-primario"
+                  className="btn btn-primary"
                   disabled={
                     !verificado ||
                     cargando ||
@@ -501,9 +507,9 @@ export default function NuevaCita() {
                   {error}
                   {enviado && (
                     <p>
-                      El resultado del envío no está confirmado. Usá «Reintentar
-                      guardado» para comprobar la misma solicitud sin
-                      duplicarla.
+                      No pudimos confirmar si tu cita quedó guardada. Presioná
+                      «Reintentar guardado» -- es seguro, no se va a crear dos
+                      veces.
                     </p>
                   )}
                 </Aviso>
@@ -511,7 +517,8 @@ export default function NuevaCita() {
               <div className="acciones-formulario">
                 {!enviado && (
                   <button
-                    className="boton"
+                    type="button"
+                    className="btn btn-outline-secondary"
                     disabled={guardando}
                     onClick={() => setPaso("datos")}
                   >
@@ -520,7 +527,8 @@ export default function NuevaCita() {
                   </button>
                 )}
                 <button
-                  className="boton boton-primario"
+                  type="button"
+                  className="btn btn-primary"
                   disabled={guardando || !verificado}
                   onClick={() => void guardar()}
                 >
@@ -592,19 +600,21 @@ export default function NuevaCita() {
         >
           <p>
             {enviado
-              ? "Todavía no confirmamos el resultado del envío. Recomendamos reintentar el guardado antes de salir. Si salís, revisá Mis citas antes de crear otra para evitar duplicados."
+              ? "No sabemos con certeza si tu cita se guardó. Te recomendamos volver y presionar «Reintentar guardado» antes de salir; si igual salís, revisá Mis citas para confirmar antes de crear otra."
               : "Si salís de esta pantalla, perderás los datos que ingresaste."}
           </p>
           <div className="acciones-formulario">
             <button
-              className="boton"
+              type="button"
+              className="btn btn-outline-secondary"
               disabled={guardando}
               onClick={() => salida.reset()}
             >
               Seguir aquí
             </button>
             <button
-              className="boton boton-peligro"
+              type="button"
+              className="btn btn-danger"
               disabled={guardando}
               onClick={() => salida.proceed()}
             >

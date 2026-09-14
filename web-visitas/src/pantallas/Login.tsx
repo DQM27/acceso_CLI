@@ -75,13 +75,18 @@ export default function Login() {
           {error && (
             <Aviso>
               {error}
-              <button className="enlace-boton" onClick={verificar}>
+              <button
+                type="button"
+                className="btn btn-link p-0 align-baseline"
+                onClick={verificar}
+              >
                 Volver a verificar
               </button>
             </Aviso>
           )}
           <button
-            className="boton boton-primario acceso-boton"
+            type="button"
+            className="btn btn-primary acceso-boton"
             disabled={enviando}
             onClick={() => void entrar()}
           >
