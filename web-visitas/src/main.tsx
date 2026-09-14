@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { LimiteErrores } from "./componentes/Comunes";
+import "./estilos/tema.scss";
 import "./index.css";
 
 const raiz = document.getElementById("root");

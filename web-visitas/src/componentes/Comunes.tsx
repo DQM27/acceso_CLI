@@ -42,7 +42,10 @@ export function SelectorTema() {
     }
   });
   useLayoutEffect(() => {
-    document.documentElement.dataset.theme = tema;
+    // `data-bs-theme` es el atributo propio de Bootstrap 5.3 para modo
+    // oscuro -- un solo atributo, sin sistemas de tema paralelos (ver
+    // docs/features-futuras/plan-rediseno-web-visitas.md).
+    document.documentElement.dataset.bsTheme = tema;
   }, [tema]);
   const alternar = () => {
     const siguiente = tema === "light" ? "dark" : "light";
