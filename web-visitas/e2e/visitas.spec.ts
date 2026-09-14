@@ -232,6 +232,53 @@ test("las fechas se completan 100% por teclado, sin tocar el calendario", async 
   });
 });
 
+test("grupo grande de visitantes: se colapsan, se pueden reabrir y la validación de duplicados sigue funcionando", async ({
+  page,
+}) => {
+  await preparar(page);
+  await page.goto("/nueva");
+  await page.getByRole("checkbox", { name: /Brisas/ }).check();
+  await page.getByRole("button", { name: "Continuar" }).click();
+  // 1 visitante ya existe por defecto -- se agregan 5 más (6 en total,
+  // por encima del umbral de colapso).
+  for (let i = 0; i < 5; i++) {
+    await page.getByRole("button", { name: "Agregar visitante" }).click();
+  }
+  for (let i = 0; i < 6; i++) {
+    await page.getByLabel("Nombre completo").nth(i).fill(`Persona ${i + 1}`);
+    await page.getByLabel("Cédula o documento").nth(i).fill(`DOC00${i + 1}`);
+  }
+  // Con 6 visitantes, uno del medio (ni el primero en pantalla ni el
+  // último agregado) queda colapsado por defecto -- su input no está
+  // visible aunque siga en el DOM.
+  await expect(page.getByLabel("Nombre completo").nth(2)).toBeHidden();
+  // Reabrirlo a mano (click en el <summary>) sigue funcionando.
+  await page.getByText("Persona 3 · DOC003").click();
+  await expect(page.getByLabel("Nombre completo").nth(2)).toBeVisible();
+  await page.getByLabel("Nombre completo").nth(2).fill("Persona 3 editada");
+  // Un duplicado entre dos visitantes cualesquiera se sigue detectando
+  // igual, sin importar cuántos haya ni cuáles estén colapsados -- el
+  // último (índice 5) queda abierto por defecto por ser el recién
+  // agregado, sin necesidad de reabrirlo a mano primero.
+  await page.getByLabel("Cédula o documento").nth(5).fill("DOC003");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await expect(
+    page.getByText("Este documento ya está en la lista."),
+  ).toBeVisible();
+  await page.getByLabel("Cédula o documento").nth(5).fill("DOC006");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Revisá tu cita" }),
+  ).toBeVisible();
+  // El paso "Visitantes" sigue montado (oculto por <Activity>), así que su
+  // propio resumen colapsado también contiene este texto -- se acota a la
+  // sección de revisión, igual que ya se hizo para "hora_estimada".
+  await expect(
+    page.locator(".bloque-revision").getByText("Persona 3 editada"),
+  ).toBeVisible();
+  await expect(page.getByText("Visitantes (6)")).toBeVisible();
+});
+
 test("grupo con dos sitios, validación y reintento idempotente", async ({
   page,
 }, info) => {

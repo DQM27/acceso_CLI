@@ -15,8 +15,6 @@ import {
   Check,
   MapPin,
   Plus,
-  Trash2,
-  Users,
 } from "lucide-react";
 import { crearCita, listarSitios, mensajeError } from "../api";
 import {
@@ -31,6 +29,7 @@ import { useAuth } from "../contexto/AuthContexto";
 import { Aviso, Cargando, Modal } from "../componentes/Comunes";
 import CampoFechas from "../componentes/CampoFechas";
 import PasoWizard from "../componentes/PasoWizard";
+import VisitanteFormulario from "../componentes/VisitanteFormulario";
 import { useFocoAlCambiar } from "../lib/useFocoAlCambiar";
 
 type Paso = "cuando-donde" | "visitantes" | "revision";
@@ -469,100 +468,33 @@ export default function NuevaCita() {
                 </p>
                 <div className="visitantes-formulario">
                   {formulario.visitantes.map((persona, i) => (
-                    <section
-                      className="visitante-formulario"
+                    <VisitanteFormulario
                       key={claves[i]}
-                      aria-label={`Visitante ${i + 1}`}
-                    >
-                      <div className="visitante-encabezado">
-                        <h3>
-                          <Users aria-hidden="true" />
-                          Visitante {i + 1}
-                        </h3>
-                        {formulario.visitantes.length > 1 && (
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-link text-danger"
-                            aria-label={`Quitar visitante ${i + 1}`}
-                            onClick={() => {
-                              setClaves((c) => c.filter((_, indice) => indice !== i));
+                      indice={i}
+                      total={formulario.visitantes.length}
+                      persona={persona}
+                      esUltimo={i === formulario.visitantes.length - 1}
+                      tieneError={["nombre", "cedula", "empresa", "placa_vehiculo"].some(
+                        (campo) => errores[`visitantes.${i}.${campo}`],
+                      )}
+                      mensajeCampo={mensajeCampo}
+                      atributos={atributos}
+                      onCambiar={(campo, valor) => visitante(i, campo, valor)}
+                      onQuitar={
+                        formulario.visitantes.length > 1
+                          ? () => {
+                              setClaves((c) =>
+                                c.filter((_, indice) => indice !== i),
+                              );
                               actualizar({
                                 visitantes: formulario.visitantes.filter(
                                   (_, indice) => indice !== i,
                                 ),
                               });
-                            }}
-                          >
-                            <Trash2 aria-hidden="true" />
-                            Quitar
-                          </button>
-                        )}
-                      </div>
-                      <div className="dos-columnas">
-                        <label className="campo">
-                          Nombre completo <span className="obligatorio">*</span>
-                          <input
-                            className="form-control"
-                            autoComplete="off"
-                            value={persona.nombre}
-                            maxLength={150}
-                            required
-                            {...atributos(`visitantes.${i}.nombre`)}
-                            onChange={(e) =>
-                              visitante(i, "nombre", e.target.value)
                             }
-                          />
-                          {mensajeCampo(`visitantes.${i}.nombre`)}
-                        </label>
-                        <label className="campo">
-                          Cédula o documento{" "}
-                          <span className="obligatorio">*</span>
-                          <input
-                            className="form-control"
-                            autoComplete="off"
-                            spellCheck={false}
-                            placeholder="Por ejemplo: 1-2345-6789"
-                            value={persona.cedula}
-                            maxLength={60}
-                            required
-                            {...atributos(`visitantes.${i}.cedula`)}
-                            onChange={(e) =>
-                              visitante(i, "cedula", e.target.value)
-                            }
-                          />
-                          {mensajeCampo(`visitantes.${i}.cedula`)}
-                        </label>
-                        <label className="campo">
-                          Empresa <span className="opcional">Opcional</span>
-                          <input
-                            className="form-control"
-                            autoComplete="off"
-                            value={persona.empresa}
-                            maxLength={150}
-                            {...atributos(`visitantes.${i}.empresa`)}
-                            onChange={(e) =>
-                              visitante(i, "empresa", e.target.value)
-                            }
-                          />
-                          {mensajeCampo(`visitantes.${i}.empresa`)}
-                        </label>
-                        <label className="campo">
-                          Placa del vehículo{" "}
-                          <span className="opcional">Opcional</span>
-                          <input
-                            className="form-control"
-                            autoComplete="off"
-                            value={persona.placa_vehiculo}
-                            maxLength={20}
-                            {...atributos(`visitantes.${i}.placa_vehiculo`)}
-                            onChange={(e) =>
-                              visitante(i, "placa_vehiculo", e.target.value)
-                            }
-                          />
-                          {mensajeCampo(`visitantes.${i}.placa_vehiculo`)}
-                        </label>
-                      </div>
-                    </section>
+                          : null
+                      }
+                    />
                   ))}
                 </div>
                 <button

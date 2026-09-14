@@ -1030,27 +1030,54 @@ main:focus,
   border-radius: var(--radio-chico);
   background: var(--campo-fondo);
 }
-.visitante-encabezado {
+/* `<details>/<summary>` nativo (componentes/VisitanteFormulario.tsx) --
+   colapsa las tarjetas ya completas cuando el grupo es grande, sin JS de
+   Bootstrap ni su `.accordion` (ese componente pinta la flecha con un
+   `background-image: data:` que la CSP de esta app bloquea). */
+.visitante-formulario > summary {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   gap: 8px;
   min-height: 36px;
-  margin-bottom: 16px;
-}
-.visitante-encabezado h3 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  list-style: none;
 }
-.visitante-encabezado h3 svg {
+.visitante-formulario > summary::-webkit-details-marker {
+  display: none;
+}
+.visitante-formulario > summary svg {
   width: 16px;
   height: 16px;
   color: var(--muted);
+  flex-shrink: 0;
 }
-.visitante-encabezado .boton {
-  font-size: 12px;
+.visitante-formulario > summary::after {
+  content: "";
+  margin-left: auto;
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform var(--duracion);
+}
+.visitante-formulario[open] > summary::after {
+  transform: rotate(-135deg);
+}
+.visitante-formulario[open] > summary {
+  margin-bottom: 16px;
+}
+.visitante-resumen .texto-secundario {
+  color: var(--muted);
+  font-weight: 400;
+}
+.visitante-acciones {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
 }
 .visitante-formulario .dos-columnas .campo:nth-last-child(-n + 2) {
   margin-bottom: 0;
