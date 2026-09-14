@@ -4,6 +4,16 @@ on:
   push:
     tags:
       - "v*"
+  # Disparo manual para casos urgentes donde hace falta un build sin cortar
+  # un tag primero (ver discusión que motivó esto: sesión sin acceso para
+  # empujar tags `v*` protegidos). `inputs.version` reemplaza a
+  # `github.ref_name` en todo el archivo -- en un push por tag normal viene
+  # vacío y el `||` cae de vuelta al tag real.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Nombre a usar para el Release/tag (ej. v1.5.4-manual)"
+        required: true
 
 jobs:
   build-gui:
@@ -66,8 +76,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: desktop
-          tagName: ${{ github.ref_name }}
-          releaseName: "Control de Acceso Brisas ${{ github.ref_name }}"
+          tagName: ${{ inputs.version || github.ref_name }}
+          releaseName: "Control de Acceso Brisas ${{ inputs.version || github.ref_name }}"
           releaseBody: "Ver desktop/docs/pendientes.md / CHANGELOG en el repo para el detalle de esta versión."
           # Draft a propósito: alguien revisa y publica a mano en vez de que
           # quede pública apenas termina el build. Pasar a `false` es una
@@ -160,12 +170,12 @@ jobs:
         run: ./gradlew assembleRelease
 
       - name: Preparar el APK para la Release
-        run: cp mobile/android/app/build/outputs/apk/release/app-release.apk ControlAcceso-Brisas-${{ github.ref_name }}.apk
+        run: cp mobile/android/app/build/outputs/apk/release/app-release.apk ControlAcceso-Brisas-${{ inputs.version || github.ref_name }}.apk
 
       - name: Adjuntar el APK a la Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: "Control de Acceso Brisas ${{ github.ref_name }}"
+          tag_name: ${{ inputs.version || github.ref_name }}
+          name: "Control de Acceso Brisas ${{ inputs.version || github.ref_name }}"
           draft: true
-          files: ControlAcceso-Brisas-${{ github.ref_name }}.apk
+          files: ControlAcceso-Brisas-${{ inputs.version || github.ref_name }}.apk
