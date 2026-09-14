@@ -11,7 +11,7 @@ import { hoyCostaRica } from "./fecha";
 
 export const TAMANO_PAGINA = 12;
 export const CAMPOS_CITA =
-  "id,anfitrion_correo,motivo,fecha_desde,fecha_hasta,estado,created_at,cita_visitantes(id,nombre,cedula,empresa,placa_vehiculo),cita_sitios(sitio_id,sitios(id,nombre,direccion))";
+  "id,anfitrion_correo,motivo,fecha_desde,fecha_hasta,hora_estimada,estado,created_at,cita_visitantes(id,nombre,cedula,empresa,placa_vehiculo),cita_sitios(sitio_id,sitios(id,nombre,direccion))";
 
 export function mensajeError(error: unknown): string {
   const codigo =
@@ -126,6 +126,7 @@ export async function crearCita(
     p_motivo: datos.motivo,
     p_sitios: datos.sitios,
     p_visitantes: datos.visitantes,
+    p_hora_estimada: datos.hora_estimada,
   });
   if (error) throw error;
   const confirmado = z.uuid().parse(data);

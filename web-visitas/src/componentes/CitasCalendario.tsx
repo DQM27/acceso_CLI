@@ -6,7 +6,7 @@ import listPlugin from "@fullcalendar/list";
 import type { EventClickArg } from "@fullcalendar/core";
 import esLocale from "@fullcalendar/core/locales/es";
 import type { Cita } from "../dominio";
-import { estadoCita } from "../fecha";
+import { estadoCita, horaLegible } from "../fecha";
 
 /** `FullCalendar` es `end` exclusivo -- una cita del 10 al 12 necesita
  * `end: "13"` para que el día 12 quede pintado como parte del rango. */
@@ -17,10 +17,14 @@ function finExclusivo(fechaYMD: string): string {
 }
 
 function tituloCita(cita: Cita): string {
-  if (cita.motivo) return cita.motivo;
-  const [primero] = cita.cita_visitantes;
-  const n = cita.cita_visitantes.length;
-  return n === 1 && primero ? `Visita de ${primero.nombre}` : `Visita de ${n} personas`;
+  const hora = horaLegible(cita.hora_estimada);
+  const base = (() => {
+    if (cita.motivo) return cita.motivo;
+    const [primero] = cita.cita_visitantes;
+    const n = cita.cita_visitantes.length;
+    return n === 1 && primero ? `Visita de ${primero.nombre}` : `Visita de ${n} personas`;
+  })();
+  return hora ? `${hora} · ${base}` : base;
 }
 
 /**

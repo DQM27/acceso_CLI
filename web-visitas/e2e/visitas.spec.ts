@@ -54,6 +54,7 @@ async function preparar(
           motivo: "Reunión de coordinación",
           fecha_desde: "2099-09-10",
           fecha_hasta: "2099-09-11",
+          hora_estimada: "10:00:00",
           estado: "VIGENTE",
           created_at: "2026-09-09T12:00:00Z",
           cita_sitios: [{ sitio_id: uuid, sitios: sitios[0] }],
@@ -206,7 +207,9 @@ test("grupo con dos sitios, validación y reintento idempotente", async ({
     page.getByRole("heading", { name: "Revisá tu cita" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Confirmar y agendar" }).click();
-  await expect(page.getByRole("alert")).toContainText("no está confirmado");
+  await expect(page.getByRole("alert")).toContainText(
+    "No pudimos confirmar si tu cita quedó guardada",
+  );
   await page.getByRole("button", { name: "Reintentar guardado" }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "Cita agendada" }),
@@ -217,12 +220,35 @@ test("grupo con dos sitios, validación y reintento idempotente", async ({
   expect(guardados[0]?.p_visitantes).toHaveLength(2);
 });
 
+test("hora estimada es opcional, viaja a la RPC y se ve en Mis Citas", async ({
+  page,
+}) => {
+  const { guardados } = await preparar(page);
+  await page.goto("/nueva");
+  await page.getByRole("checkbox", { name: /Brisas/ }).check();
+  await page.getByLabel("Nombre completo").fill("Persona de prueba");
+  await page.getByLabel("Cédula o documento").fill("DOC123");
+  await page.getByLabel(/Hora aproximada de llegada/).fill("14:30");
+  await page.getByRole("button", { name: "Revisar cita" }).click();
+  // Aparece dos veces a propósito (resumen lateral + detalle principal,
+  // mismo patrón que "Fechas"/"Sitios") -- se acota a una sola zona.
+  await expect(
+    page.locator(".bloque-revision").getByText("2:30 p. m."),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Confirmar y agendar" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Cita agendada" }),
+  ).toBeVisible();
+  expect(guardados[0]?.p_hora_estimada).toBe("14:30");
+});
+
 test("detalles, cancelación confirmada y modal por teclado", async ({
   page,
 }, info) => {
   await preparar(page, { cita: true });
   await page.goto("/citas");
   await expect(page.getByText("Reunión de coordinación")).toBeVisible();
+  await expect(page.getByText("10:00 a. m.")).toBeVisible();
   await page.screenshot({
     path: `test-results/agenda-${info.project.name}.png`,
     fullPage: true,

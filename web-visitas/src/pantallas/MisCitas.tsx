@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CirclePlus,
+  Clock,
   List,
   MapPin,
   RefreshCw,
@@ -14,7 +15,7 @@ import {
 } from "lucide-react";
 import { cancelarCita, listarCitas, listarCitasCalendario, mensajeError } from "../api";
 import type { Cita, FiltroEstado } from "../dominio";
-import { estadoCita, fechaLegible } from "../fecha";
+import { estadoCita, fechaLegible, horaLegible } from "../fecha";
 import { useAuth } from "../contexto/AuthContexto";
 import { Aviso, Cargando, Modal } from "../componentes/Comunes";
 import CitasCalendario from "../componentes/CitasCalendario";
@@ -337,6 +338,12 @@ export default function MisCitas() {
                           .map((s) => s.sitios?.nombre ?? "Sitio no disponible")
                           .join(", ") || "Sin sitios"}
                       </span>
+                      {cita.hora_estimada && (
+                        <span>
+                          <Clock aria-hidden="true" />
+                          {horaLegible(cita.hora_estimada)}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="cita-acciones">
@@ -420,6 +427,15 @@ export default function MisCitas() {
                   .join(", ")}
               </dd>
             </div>
+            {detalle.hora_estimada && (
+              <div>
+                <dt>Hora aproximada</dt>
+                <dd>
+                  {horaLegible(detalle.hora_estimada)}
+                  <span>Informativa -- no bloquea el ingreso a otra hora.</span>
+                </dd>
+              </div>
+            )}
             {detalle.motivo && (
               <div>
                 <dt>Motivo</dt>

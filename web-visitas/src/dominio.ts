@@ -18,6 +18,16 @@ const texto = (maximo: number) =>
       "Ese texto tiene un carácter que no podemos guardar (por ejemplo, pegado desde otro programa). Borralo y escribilo de nuevo.",
     );
 const opcional = (maximo: number) => texto(maximo).transform((v) => v || null);
+// "HH:MM" de un <input type="time">. Vacío -> null (es opcional). El tipo de
+// entrada se queda en `string` (no `string | null`) a propósito -- es lo que
+// siempre entrega un <input> controlado, y `FormularioCita` (z.input) lo
+// necesita así para que `value={formulario.hora_estimada}` tipe bien.
+const horaOpcional = z
+  .string()
+  .refine((v) => v === "" || /^([01]\d|2[0-3]):[0-5]\d$/.test(v), {
+    message: "Ingresá una hora válida (HH:MM).",
+  })
+  .transform((v) => (v === "" ? null : v));
 
 export function normalizarDocumento(valor: string) {
   return valor.trim().replace(/[\s-]/g, "").toUpperCase();
@@ -43,6 +53,7 @@ export function esquemaNuevaCita(hoy = hoyCostaRica()) {
     .object({
       fecha_desde: z.iso.date("Seleccioná una fecha válida."),
       fecha_hasta: z.iso.date("Seleccioná una fecha válida."),
+      hora_estimada: horaOpcional,
       motivo: opcional(1000),
       sitios: z
         .array(z.uuid())
@@ -96,6 +107,9 @@ export const citaEsquema = z.object({
   motivo: z.string().nullable(),
   fecha_desde: z.iso.date(),
   fecha_hasta: z.iso.date(),
+  // "HH:MM:SS" tal cual la devuelve Postgres (columna `time`) -- sólo se
+  // muestra, nunca se re-envía, así que no hace falta validar el formato acá.
+  hora_estimada: z.string().nullable(),
   estado: z.enum(["VIGENTE", "CANCELADA"]),
   created_at: z.string(),
   cita_visitantes: z.array(

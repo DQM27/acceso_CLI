@@ -22,6 +22,21 @@ export function fechaLegible(fecha: string): string {
   }).format(new Date(`${fecha}T12:00:00Z`));
 }
 
+/** `hora` viene como "HH:MM" (de nuestro `<input type="time">`) o "HH:MM:SS"
+ * (columna `time` de Postgres) -- sólo se usan las dos primeras partes. `null`
+ * si no hay hora cargada (es opcional, puramente informativa). */
+export function horaLegible(hora: string | null | undefined): string | null {
+  if (!hora) return null;
+  const [horas, minutos] = hora.split(":");
+  const fecha = new Date(Date.UTC(2000, 0, 1, Number(horas), Number(minutos)));
+  return new Intl.DateTimeFormat("es-CR", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "UTC",
+  }).format(fecha);
+}
+
 export function estadoCita(
   cita: { estado: "VIGENTE" | "CANCELADA"; fecha_hasta: string },
   hoy = hoyCostaRica(),

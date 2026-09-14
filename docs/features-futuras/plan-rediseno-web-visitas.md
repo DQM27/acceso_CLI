@@ -123,13 +123,13 @@ Degrada de forma elegante en navegadores sin soporte (React aplica el cambio de 
 
 ## Fases
 
-**Fase 0 — Setup (hecho 2026-09-13)**: `npm install`; falta agregar `bootstrap` + `sass`; quitar `tailwindcss`/`@tailwindcss/vite` del `package.json`/`vite.config.ts`.
+**Fase 0 — Setup (hecho 2026-09-13)**: `npm install`, agrega `bootstrap` + `sass`, quita `tailwindcss`/`@tailwindcss/vite` del `package.json`/`vite.config.ts`.
 
-**Fase 1 — Fundación visual Bootstrap** (bloqueante para todo lo demás): `estilos/tema.scss` con el rojo como `$primary` y overrides mínimos; `index.css` reducido a lo que Bootstrap no cubre; quitar el import de `design/brisas.css`; consolidar dark mode en `data-bs-theme` (`Comunes.tsx`); migrar TODOS los componentes existentes de las clases custom (`.boton`, `.campo`, `.tarjeta`, `.aviso`, `.filtro`) a clases de Bootstrap (`.btn`, `.form-control`/`.form-label`, `.card`, `.alert`, `.nav-pills`) — archivo por archivo: `Comunes.tsx` (Modal reestilado, Aviso→`.alert`, Cargando, SelectorTema), `Login.tsx`, `App.tsx`, `Sidebar.tsx`, `NuevaCita.tsx`, `MisCitas.tsx`, `CitasCalendario.tsx`. **Verificación obligatoria antes de seguir**: contraste real del rojo (claro y oscuro), cero violaciones CSP (`bootstrap.min.css` es un archivo propio servido bajo `'self'`, sin JS de Bootstrap), revisión visual completa en ambos temas.
+**Fase 1 — Fundación visual Bootstrap (hecho 2026-09-13)**: `estilos/tema.scss` con el rojo `$primary` y overrides mínimos; `index.css` reducido a lo que Bootstrap no cubre; quitado el import de `design/brisas.css`; dark mode consolidado en `data-bs-theme` (`Comunes.tsx`); los 7 archivos (`Comunes.tsx`, `Login.tsx`, `App.tsx`, `Sidebar.tsx`, `MisCitas.tsx`, `NuevaCita.tsx`, `CitasCalendario.tsx` -- este último sin cambios, hereda el tema solo) migrados a clases de Bootstrap; puente temporal `.boton*` borrado. Verificado con capturas de Playwright (login, Mis Citas con/sin citas, modal de detalle, Nueva Cita completo incluida la revisión, los 3 en claro/oscuro), `npm run build`/`test`/`lint` en verde.
 
-**Fase 2 — Accesibilidad puntual**: Sidebar, botón menú móvil, copy/mensajes. Sobre la base ya migrada a Bootstrap de la Fase 1.
+**Fase 2 — Accesibilidad puntual (hecho 2026-09-13, resuelta junto con la Fase 1)**: Sidebar (botón real con `aria-expanded`), botón menú móvil (`aria-expanded` + label dinámico + ícono que alterna), placeholder de cédula, mensajes de error/copy reescritos en lenguaje claro.
 
-**Fase 3 — `hora_estimada` end-to-end**: `dominio.ts`, `api.ts`, `fecha.ts`, `NuevaCita.tsx`, `MisCitas.tsx`, `CitasCalendario.tsx`, tests (`pruebas/dominio.test.ts`, `pruebas/api.test.ts`), `e2e/visitas.spec.ts`.
+**Fase 3 — `hora_estimada` end-to-end (hecho 2026-09-13)**: `dominio.ts` (`horaOpcional` en `esquemaNuevaCita`, campo requerido -nullable en `citaEsquema`), `api.ts` (`CAMPOS_CITA` + `p_hora_estimada`), `fecha.ts` (`horaLegible`), `NuevaCita.tsx` (`<input type="time">`, resumen lateral + revisión), `MisCitas.tsx` (fila + modal de detalle), `CitasCalendario.tsx` (prefijo del título). 30 tests de vitest (3 nuevos) y 14 de Playwright (1 nuevo) en verde, incluida la aserción real de CSP.
 
 **Fase 4 — `CampoFechas.tsx` accesible**: nuevo componente, `dominio.ts` (`validarRangoFechas`), reskin de FullCalendar con variables `--bs-*`, test de componente nuevo, test e2e de fechas 100% por teclado.
 

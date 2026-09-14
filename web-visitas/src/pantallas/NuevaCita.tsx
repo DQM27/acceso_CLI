@@ -14,7 +14,7 @@ import {
 import { crearCita, listarSitios, mensajeError } from "../api";
 import { esquemaNuevaCita, MAX_VISITANTES, visitanteVacio } from "../dominio";
 import type { FormularioCita, Sitio } from "../dominio";
-import { fechaLegible, hoyCostaRica } from "../fecha";
+import { fechaLegible, horaLegible, hoyCostaRica } from "../fecha";
 import { useAuth } from "../contexto/AuthContexto";
 import { Aviso, Cargando, Modal } from "../componentes/Comunes";
 import SelectorFechas from "../componentes/SelectorFechas";
@@ -25,6 +25,7 @@ export default function NuevaCita() {
   const [formulario, setFormulario] = useState<FormularioCita>(() => ({
     fecha_desde: hoyCostaRica(),
     fecha_hasta: hoyCostaRica(),
+    hora_estimada: "",
     motivo: "",
     sitios: [],
     visitantes: [visitanteVacio()],
@@ -292,6 +293,25 @@ export default function NuevaCita() {
                   {mensajeCampo("fecha_desde") ?? mensajeCampo("fecha_hasta")}
                 </div>
                 <label className="campo">
+                  Hora aproximada de llegada{" "}
+                  <span className="opcional">Opcional</span>
+                  <input
+                    type="time"
+                    className="form-control"
+                    style={{ maxWidth: "12rem" }}
+                    value={formulario.hora_estimada}
+                    {...atributos("hora_estimada")}
+                    onChange={(e) =>
+                      actualizar({ hora_estimada: e.target.value })
+                    }
+                  />
+                  {mensajeCampo("hora_estimada")}
+                  <span className="ayuda-campo">
+                    Es sólo para orientar al personal del sitio -- no hace
+                    falta llegar puntual ni se bloquea el ingreso a otra hora.
+                  </span>
+                </label>
+                <label className="campo">
                   Motivo de la visita <span className="opcional">Opcional</span>
                   <textarea
                     className="form-control"
@@ -477,6 +497,15 @@ export default function NuevaCita() {
                       .join(", ")}
                   </dd>
                 </div>
+                {formulario.hora_estimada && (
+                  <div>
+                    <dt>Hora aproximada</dt>
+                    <dd>
+                      {horaLegible(formulario.hora_estimada)}
+                      <span>Informativa -- no bloquea el ingreso a otra hora.</span>
+                    </dd>
+                  </div>
+                )}
                 {formulario.motivo.trim() && (
                   <div>
                     <dt>Motivo</dt>
@@ -579,6 +608,12 @@ export default function NuevaCita() {
                   </span>
                 </dd>
               </div>
+              {formulario.hora_estimada && (
+                <div>
+                  <dt>Hora aproximada</dt>
+                  <dd>{horaLegible(formulario.hora_estimada)}</dd>
+                </div>
+              )}
             </dl>
           </div>
           <div className="consejo">
