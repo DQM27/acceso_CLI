@@ -171,6 +171,35 @@ test("una cuenta sin autorización no ve la agenda", async ({ page }) => {
   ).toHaveCount(0);
 });
 
+test("las fechas se completan 100% por teclado, sin tocar el calendario", async ({
+  page,
+}) => {
+  const { guardados } = await preparar(page);
+  await page.goto("/nueva");
+  await page.getByRole("checkbox", { name: /Brisas/ }).check();
+  // `.fill()` en un <input type="date"> es la vía de teclado real -- nunca
+  // se hace click ni drag sobre el calendario FullCalendar en este test.
+  await page.getByLabel("Desde").fill("2099-09-10");
+  await page.keyboard.press("Tab");
+  await page.getByLabel("Hasta").fill("2099-09-12");
+  await page.keyboard.press("Tab");
+  await page.getByLabel("Nombre completo").fill("Persona de prueba");
+  await page.getByLabel("Cédula o documento").fill("DOC123");
+  await page.getByRole("button", { name: "Revisar cita" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Revisá tu cita" }),
+  ).toBeVisible();
+  await expect(page.getByText("10 sept 2099 — 12 sept 2099")).toBeVisible();
+  await page.getByRole("button", { name: "Confirmar y agendar" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Cita agendada" }),
+  ).toBeVisible();
+  expect(guardados[0]).toMatchObject({
+    p_fecha_desde: "2099-09-10",
+    p_fecha_hasta: "2099-09-12",
+  });
+});
+
 test("grupo con dos sitios, validación y reintento idempotente", async ({
   page,
 }, info) => {

@@ -12,12 +12,17 @@ import {
   Users,
 } from "lucide-react";
 import { crearCita, listarSitios, mensajeError } from "../api";
-import { esquemaNuevaCita, MAX_VISITANTES, visitanteVacio } from "../dominio";
+import {
+  esquemaNuevaCita,
+  MAX_VISITANTES,
+  validarRangoFechas,
+  visitanteVacio,
+} from "../dominio";
 import type { FormularioCita, Sitio } from "../dominio";
 import { fechaLegible, horaLegible, hoyCostaRica } from "../fecha";
 import { useAuth } from "../contexto/AuthContexto";
 import { Aviso, Cargando, Modal } from "../componentes/Comunes";
-import SelectorFechas from "../componentes/SelectorFechas";
+import CampoFechas from "../componentes/CampoFechas";
 
 export default function NuevaCita() {
   const { verificado } = useAuth();
@@ -274,23 +279,29 @@ export default function NuevaCita() {
                 </div>
                 <div className="campo">
                   Fechas de la visita
-                  <span className="ayuda-campo">
-                    Hacé click en un día, o arrastrá para elegir un rango.
-                  </span>
-                  <div
-                    role="group"
-                    aria-label="Fechas de la visita"
-                    aria-invalid={!!(errores.fecha_desde || errores.fecha_hasta)}
-                  >
-                    <SelectorFechas
-                      desde={formulario.fecha_desde}
-                      hasta={formulario.fecha_hasta}
-                      onCambiar={(fecha_desde, fecha_hasta) =>
-                        actualizar({ fecha_desde, fecha_hasta })
-                      }
-                    />
-                  </div>
-                  {mensajeCampo("fecha_desde") ?? mensajeCampo("fecha_hasta")}
+                  <CampoFechas
+                    desde={formulario.fecha_desde}
+                    hasta={formulario.fecha_hasta}
+                    erroresDesde={errores.fecha_desde}
+                    erroresHasta={errores.fecha_hasta}
+                    onCambiar={(fecha_desde, fecha_hasta) => {
+                      actualizar({ fecha_desde, fecha_hasta });
+                      const resultado = validarRangoFechas(
+                        fecha_desde,
+                        fecha_hasta,
+                      );
+                      setErrores((previo) => {
+                        const siguiente = { ...previo };
+                        if (resultado.fecha_desde)
+                          siguiente.fecha_desde = resultado.fecha_desde;
+                        else delete siguiente.fecha_desde;
+                        if (resultado.fecha_hasta)
+                          siguiente.fecha_hasta = resultado.fecha_hasta;
+                        else delete siguiente.fecha_hasta;
+                        return siguiente;
+                      });
+                    }}
+                  />
                 </div>
                 <label className="campo">
                   Hora aproximada de llegada{" "}
