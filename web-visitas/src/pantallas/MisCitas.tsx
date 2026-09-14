@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState, ViewTransition } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   CalendarDays,
@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CirclePlus,
+  Clock,
   List,
   MapPin,
   RefreshCw,
@@ -14,7 +15,7 @@ import {
 } from "lucide-react";
 import { cancelarCita, listarCitas, listarCitasCalendario, mensajeError } from "../api";
 import type { Cita, FiltroEstado } from "../dominio";
-import { estadoCita, fechaLegible } from "../fecha";
+import { estadoCita, fechaLegible, horaLegible } from "../fecha";
 import { useAuth } from "../contexto/AuthContexto";
 import { Aviso, Cargando, Modal } from "../componentes/Comunes";
 import CitasCalendario from "../componentes/CitasCalendario";
@@ -49,7 +50,13 @@ export default function MisCitas() {
   const [citasCalendario, setCitasCalendario] = useState<Cita[]>([]);
   const [cargandoCalendario, setCargandoCalendario] = useState(true);
   const [errorCalendario, setErrorCalendario] = useState<string | null>(null);
+  const [actualizando, setActualizando] = useState(false);
+  const [actualizandoCalendario, setActualizandoCalendario] = useState(false);
   const bloqueo = useRef(false);
+  const cargaHecha = useRef(false);
+  const cargaCalendarioHecha = useRef(false);
+  const filtroPaginaAnterior = useRef({ filtro, pagina });
+  const filtroCalendarioAnterior = useRef(filtro);
   const ruta = useLocation();
   const navegar = useNavigate();
 
@@ -68,28 +75,48 @@ export default function MisCitas() {
 
   useEffect(() => {
     if (!anfitrion) return;
+    const cambioFiltroOPagina =
+      filtroPaginaAnterior.current.filtro !== filtro ||
+      filtroPaginaAnterior.current.pagina !== pagina;
+    filtroPaginaAnterior.current = { filtro, pagina };
+    const revalidacionDeFondo = cargaHecha.current && !cambioFiltroOPagina;
     const controlador = new AbortController();
     const correo = anfitrion.correo;
+    // Una revalidación de fondo (poll cada 60s, volver a la pestaña, botón
+    // "Actualizar") no reemplaza la lista ya visible por el estado de
+    // carga -- antes lo hacía, y la pantalla completa "parpadeaba" al
+    // spinner varias veces por minuto. El spinner de página completa
+    // queda sólo para la carga inicial o un cambio real de filtro/página;
+    // una revalidación de fondo únicamente gira el ícono de "Actualizar".
     // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
     // directo -- evita que `react-hooks/set-state-in-effect` marque esta
     // actualización como síncrona dentro del efecto.
     Promise.resolve()
       .then(() => {
-        setCargando(true);
+        if (revalidacionDeFondo) setActualizando(true);
+        else setCargando(true);
         setError(null);
       })
       .then(() => listarCitas(correo, filtro, pagina, controlador.signal))
       .then((resultado) => {
         if (controlador.signal.aborted) return;
+        cargaHecha.current = true;
         setCitas(resultado.citas);
         setHayMas(resultado.hayMas);
         if (!resultado.citas.length && pagina > 0) setPagina((p) => p - 1);
       })
       .catch((fallo) => {
-        if (!controlador.signal.aborted) setError(mensajeError(fallo));
+        if (controlador.signal.aborted) return;
+        // Una revalidación de fondo que falla (ej. un corte de red breve
+        // durante el pulso automático) no debe tapar la lista visible con
+        // un aviso de error -- se reintenta sola en el próximo pulso.
+        if (!revalidacionDeFondo) setError(mensajeError(fallo));
       })
       .finally(() => {
-        if (!controlador.signal.aborted) setCargando(false);
+        if (!controlador.signal.aborted) {
+          setCargando(false);
+          setActualizando(false);
+        }
       });
     return () => controlador.abort();
   }, [anfitrion, filtro, pagina, revision]);
@@ -99,6 +126,12 @@ export default function MisCitas() {
   // veces se usa la lista paginada de a 12.
   useEffect(() => {
     if (vista !== "calendario" || !anfitrion) return;
+    // Mismo criterio que la lista: una revalidación de fondo no reemplaza
+    // el calendario ya visible por el spinner de página completa -- sólo
+    // un cambio real de filtro (o la primera entrada a esta vista) sí.
+    const cambioFiltro = filtroCalendarioAnterior.current !== filtro;
+    filtroCalendarioAnterior.current = filtro;
+    const revalidacionDeFondo = cargaCalendarioHecha.current && !cambioFiltro;
     const controlador = new AbortController();
     const correo = anfitrion.correo;
     // `Promise.resolve().then(...)` en vez de llamar `setCargandoCalendario(true)`
@@ -106,31 +139,42 @@ export default function MisCitas() {
     // actualización como síncrona dentro del efecto.
     Promise.resolve()
       .then(() => {
-        setCargandoCalendario(true);
+        if (revalidacionDeFondo) setActualizandoCalendario(true);
+        else setCargandoCalendario(true);
         setErrorCalendario(null);
       })
       .then(() => listarCitasCalendario(correo, filtro, controlador.signal))
       .then((resultado) => {
         if (controlador.signal.aborted) return;
+        cargaCalendarioHecha.current = true;
         setCitasCalendario(resultado);
       })
       .catch((fallo) => {
-        if (!controlador.signal.aborted) setErrorCalendario(mensajeError(fallo));
+        if (controlador.signal.aborted) return;
+        if (!revalidacionDeFondo) setErrorCalendario(mensajeError(fallo));
       })
       .finally(() => {
-        if (!controlador.signal.aborted) setCargandoCalendario(false);
+        if (!controlador.signal.aborted) {
+          setCargandoCalendario(false);
+          setActualizandoCalendario(false);
+        }
       });
     return () => controlador.abort();
   }, [anfitrion, filtro, vista, revision]);
 
+  // Sin pulso cada 60s a ciegas: estas citas las crea, edita y cancela
+  // únicamente este mismo anfitrión (RLS de `citas` no da permiso de
+  // escritura a nadie más -- ni operador ni dispositivo de sitio), así que
+  // no hay nada externo con lo que "sincronizar en vivo" mientras la
+  // pestaña queda quieta y a la vista. Sí vale la pena revalidar al volver
+  // a la pestaña -- pudo haber pasado algo en otra pestaña/dispositivo
+  // propio (ej. cancelar una cita desde el celular).
   useEffect(() => {
     const alVolver = () => {
       if (document.visibilityState === "visible") setRevision((v) => v + 1);
     };
-    const intervalo = setInterval(alVolver, 60_000);
     document.addEventListener("visibilitychange", alVolver);
     return () => {
-      clearInterval(intervalo);
       document.removeEventListener("visibilitychange", alVolver);
     };
   }, []);
@@ -160,7 +204,7 @@ export default function MisCitas() {
           <p className="antetitulo">TU AGENDA</p>
           <h1>Mis citas</h1>
         </div>
-        <Link className="boton boton-primario" to="/nueva">
+        <Link className="btn btn-primary" to="/nueva">
           <CirclePlus aria-hidden="true" />
           Nueva cita
         </Link>
@@ -170,7 +214,8 @@ export default function MisCitas() {
           <div className="aviso-con-accion">
             <span>{aviso}</span>
             <button
-              className="boton boton-discreto solo-icono"
+              type="button"
+              className="btn btn-link solo-icono"
               aria-label="Cerrar aviso"
               onClick={() => setAviso(null)}
             >
@@ -182,14 +227,15 @@ export default function MisCitas() {
       <section className={`tarjeta agenda ${vista === "calendario" ? "agenda-llena" : ""}`}>
         <div className="agenda-herramientas">
           <div
-            className="filtros"
+            className="btn-group filtros"
             role="group"
             aria-label="Filtrar citas por estado"
           >
             {FILTROS.map((item) => (
               <button
+                type="button"
                 key={item.valor}
-                className={filtro === item.valor ? "filtro activo" : "filtro"}
+                className={`btn btn-sm ${filtro === item.valor ? "btn-primary" : "btn-outline-secondary"}`}
                 aria-pressed={filtro === item.valor}
                 onClick={() => {
                   setFiltro(item.valor);
@@ -200,46 +246,66 @@ export default function MisCitas() {
               </button>
             ))}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div className="d-flex align-items-center gap-2">
             <div
-              className="toggle-vista"
+              className="btn-group toggle-vista"
               role="group"
               aria-label="Cambiar cómo se muestra la agenda"
             >
               <button
-                className={vista === "lista" ? "filtro activo" : "filtro"}
+                type="button"
+                className={`btn btn-sm ${vista === "lista" ? "btn-primary" : "btn-outline-secondary"}`}
                 aria-pressed={vista === "lista"}
-                onClick={() => setVista("lista")}
+                onClick={() => startTransition(() => setVista("lista"))}
               >
                 <List aria-hidden="true" />
                 Lista
               </button>
               <button
-                className={vista === "calendario" ? "filtro activo" : "filtro"}
+                type="button"
+                className={`btn btn-sm ${vista === "calendario" ? "btn-primary" : "btn-outline-secondary"}`}
                 aria-pressed={vista === "calendario"}
-                onClick={() => setVista("calendario")}
+                onClick={() => startTransition(() => setVista("calendario"))}
               >
                 <CalendarRange aria-hidden="true" />
                 Calendario
               </button>
             </div>
             <button
-              className="boton boton-discreto"
-              disabled={vista === "lista" ? cargando : cargandoCalendario}
+              type="button"
+              className="btn btn-link solo-icono"
+              disabled={
+                vista === "lista"
+                  ? cargando || actualizando
+                  : cargandoCalendario || actualizandoCalendario
+              }
+              aria-label="Actualizar"
+              title="Actualizar"
               onClick={() => setRevision((v) => v + 1)}
             >
-              <RefreshCw aria-hidden="true" />
-              Actualizar
+              <RefreshCw
+                aria-hidden="true"
+                className={
+                  (vista === "lista" ? actualizando : actualizandoCalendario)
+                    ? "icono-girando"
+                    : ""
+                }
+              />
             </button>
           </div>
         </div>
+        <ViewTransition>
         {vista === "calendario" ? (
           cargandoCalendario ? (
             <Cargando texto="Consultando tu agenda…" />
           ) : errorCalendario ? (
             <div className="estado-agenda">
               <Aviso>{errorCalendario}</Aviso>
-              <button className="boton" onClick={() => setRevision((v) => v + 1)}>
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                onClick={() => setRevision((v) => v + 1)}
+              >
                 Volver a intentar
               </button>
             </div>
@@ -253,7 +319,11 @@ export default function MisCitas() {
         ) : error ? (
           <div className="estado-agenda">
             <Aviso>{error}</Aviso>
-            <button className="boton" onClick={() => setRevision((v) => v + 1)}>
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              onClick={() => setRevision((v) => v + 1)}
+            >
               Volver a intentar
             </button>
           </div>
@@ -272,7 +342,7 @@ export default function MisCitas() {
                 ? "Creá tu primera cita y dejá todo preparado para recibir a tus visitantes."
                 : "Probá con otro filtro para consultar el resto de tu agenda."}
             </p>
-            <Link className="boton boton-primario" to="/nueva">
+            <Link className="btn btn-primary" to="/nueva">
               <CirclePlus aria-hidden="true" />
               Agendar una visita
             </Link>
@@ -290,49 +360,60 @@ export default function MisCitas() {
                   : `Visita de ${personas.length} personas`);
               return (
                 <article className="cita" key={cita.id}>
-                  <div className="cita-fecha" aria-hidden="true">
-                    <span>{cita.fecha_desde.slice(8)}</span>
-                    <small>
-                      {new Intl.DateTimeFormat("es-CR", {
-                        month: "short",
-                        timeZone: "UTC",
-                      }).format(new Date(`${cita.fecha_desde}T12:00:00Z`))}
-                    </small>
-                  </div>
-                  <div className="cita-contenido">
-                    <div className="cita-titulo">
-                      <h3>{titulo}</h3>
-                      <span className={`estado estado-${estado.toLowerCase()}`}>
-                        {etiquetaEstado[estado]}
-                      </span>
+                  <button
+                    type="button"
+                    className="cita-cuerpo"
+                    aria-label={`Ver detalles de ${titulo}`}
+                    onClick={() => setDetalle(cita)}
+                  >
+                    <div className="cita-fecha" aria-hidden="true">
+                      <span>{cita.fecha_desde.slice(8)}</span>
+                      <small>
+                        {new Intl.DateTimeFormat("es-CR", {
+                          month: "short",
+                          timeZone: "UTC",
+                        }).format(new Date(`${cita.fecha_desde}T12:00:00Z`))}
+                      </small>
                     </div>
-                    <p className="cita-fechas">
-                      {fechaLegible(cita.fecha_desde)}
-                      {cita.fecha_hasta !== cita.fecha_desde &&
-                        ` — ${fechaLegible(cita.fecha_hasta)}`}
-                    </p>
-                    <div className="cita-meta">
-                      <span>
-                        <Users aria-hidden="true" />
-                        {personas.length}{" "}
-                        {personas.length === 1 ? "visitante" : "visitantes"}
-                      </span>
-                      <span>
-                        <MapPin aria-hidden="true" />
-                        {cita.cita_sitios
-                          .map((s) => s.sitios?.nombre ?? "Sitio no disponible")
-                          .join(", ") || "Sin sitios"}
-                      </span>
+                    <div className="cita-contenido">
+                      <div className="cita-titulo">
+                        <h3>{titulo}</h3>
+                        <span className={`estado estado-${estado.toLowerCase()}`}>
+                          {etiquetaEstado[estado]}
+                        </span>
+                      </div>
+                      <p className="cita-fechas">
+                        {fechaLegible(cita.fecha_desde)}
+                        {cita.fecha_hasta !== cita.fecha_desde &&
+                          ` — ${fechaLegible(cita.fecha_hasta)}`}
+                      </p>
+                      <div className="cita-meta">
+                        <span>
+                          <Users aria-hidden="true" />
+                          {personas.length}{" "}
+                          {personas.length === 1 ? "visitante" : "visitantes"}
+                        </span>
+                        <span>
+                          <MapPin aria-hidden="true" />
+                          {cita.cita_sitios
+                            .map((s) => s.sitios?.nombre ?? "Sitio no disponible")
+                            .join(", ") || "Sin sitios"}
+                        </span>
+                        {cita.hora_estimada && (
+                          <span>
+                            <Clock aria-hidden="true" />
+                            {horaLegible(cita.hora_estimada)}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <div className="cita-acciones">
-                    <button className="boton" onClick={() => setDetalle(cita)}>
-                      Ver detalles
-                      <ChevronRight aria-hidden="true" />
-                    </button>
-                    {estado === "VIGENTE" && (
+                    <ChevronRight aria-hidden="true" className="cita-chevron" />
+                  </button>
+                  {estado === "VIGENTE" && (
+                    <div className="cita-acciones">
                       <button
-                        className="boton boton-discreto boton-peligro"
+                        type="button"
+                        className="btn btn-sm btn-link text-danger"
                         disabled={!verificado}
                         onClick={() => {
                           setErrorCancelar(null);
@@ -341,19 +422,21 @@ export default function MisCitas() {
                       >
                         Cancelar cita
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </article>
               );
             })}
           </div>
         )}
+        </ViewTransition>
         {vista === "lista" && !cargando && !error && (citas.length > 0 || pagina > 0) && (
           <div className="paginacion">
             <span>Página {pagina + 1}</span>
-            <div>
+            <div className="d-flex gap-2">
               <button
-                className="boton"
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
                 disabled={pagina === 0}
                 onClick={() => setPagina((v) => v - 1)}
               >
@@ -361,7 +444,8 @@ export default function MisCitas() {
                 Anterior
               </button>
               <button
-                className="boton"
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
                 disabled={!hayMas}
                 onClick={() => setPagina((v) => v + 1)}
               >
@@ -399,6 +483,15 @@ export default function MisCitas() {
                   .join(", ")}
               </dd>
             </div>
+            {detalle.hora_estimada && (
+              <div>
+                <dt>Hora aproximada</dt>
+                <dd>
+                  {horaLegible(detalle.hora_estimada)}
+                  <span>Informativa -- no bloquea el ingreso a otra hora.</span>
+                </dd>
+              </div>
+            )}
             {detalle.motivo && (
               <div>
                 <dt>Motivo</dt>
@@ -425,7 +518,11 @@ export default function MisCitas() {
             ))}
           </ul>
           <div className="acciones-formulario">
-            <button className="boton" onClick={() => setDetalle(null)}>
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              onClick={() => setDetalle(null)}
+            >
               Cerrar
             </button>
           </div>
@@ -456,14 +553,16 @@ export default function MisCitas() {
           )}
           <div className="acciones-formulario">
             <button
-              className="boton"
+              type="button"
+              className="btn btn-outline-secondary"
               disabled={cancelando}
               onClick={() => setCancelacion(null)}
             >
               Conservar cita
             </button>
             <button
-              className="boton boton-peligro"
+              type="button"
+              className="btn btn-danger"
               disabled={cancelando || !verificado}
               onClick={() => void cancelar()}
             >

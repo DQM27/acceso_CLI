@@ -5,6 +5,7 @@ import { estadoCita, hoyCostaRica } from "../fecha";
 const datos = () => ({
   fecha_desde: "2026-09-09",
   fecha_hasta: "2026-09-10",
+  hora_estimada: "",
   motivo: "",
   sitios: ["00000000-0000-4000-8000-000000000001"],
   visitantes: [
@@ -53,6 +54,23 @@ describe("validación de citas", () => {
     expect(
       esquemaNuevaCita("2026-09-09").safeParse({ ...datos(), ...cambio })
         .success,
+    ).toBe(false);
+  });
+  it("hora_estimada: vacía se guarda como null, un formato válido se conserva", () => {
+    const sinHora = esquemaNuevaCita("2026-09-09").parse(datos());
+    expect(sinHora.hora_estimada).toBeNull();
+    const conHora = esquemaNuevaCita("2026-09-09").parse({
+      ...datos(),
+      hora_estimada: "10:00",
+    });
+    expect(conHora.hora_estimada).toBe("10:00");
+  });
+  it("rechaza una hora_estimada con formato inválido", () => {
+    expect(
+      esquemaNuevaCita("2026-09-09").safeParse({
+        ...datos(),
+        hora_estimada: "25:99",
+      }).success,
     ).toBe(false);
   });
   it("acepta una visita de un solo día y rechaza un grupo sin límite", () => {

@@ -7,7 +7,7 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
-import { CalendarDays, CirclePlus, LogOut, Menu } from "lucide-react";
+import { CalendarDays, CirclePlus, LogOut, Menu, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { AuthProvider, useAuth } from "./contexto/AuthContexto";
 import { Aviso, Cargando, SelectorTema } from "./componentes/Comunes";
@@ -111,15 +111,24 @@ function Portal() {
             type="button"
             className="boton-menu-movil"
             onClick={() => setMenuMovilAbierto((a) => !a)}
-            aria-label="Abrir menú"
+            aria-expanded={menuMovilAbierto}
+            aria-label={menuMovilAbierto ? "Cerrar menú" : "Abrir menú"}
           >
-            <Menu aria-hidden="true" />
+            {menuMovilAbierto ? (
+              <X aria-hidden="true" />
+            ) : (
+              <Menu aria-hidden="true" />
+            )}
           </button>
           <div id="contenido" tabIndex={-1} className="contenido">
             {error && (
               <Aviso>
                 {error}
-                <button className="enlace-boton" onClick={verificar}>
+                <button
+                  type="button"
+                  className="btn btn-link p-0 align-baseline"
+                  onClick={verificar}
+                >
                   Volver a verificar
                 </button>
               </Aviso>
@@ -157,7 +166,8 @@ function Portal() {
             <span>{anfitrion.correo}</span>
           </div>
           <button
-            className="boton boton-discreto solo-icono"
+            type="button"
+            className="btn btn-link solo-icono"
             disabled={saliendo}
             aria-label="Cerrar sesión"
             onClick={async () => {

@@ -1,15 +1,27 @@
 import { Component, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ErrorInfo, ReactNode } from "react";
-import { AlertCircle, LoaderCircle, Moon, Sun, X } from "lucide-react";
+import { AlertCircle, Moon, Sun, X } from "lucide-react";
 
 export function Cargando({ texto = "Cargando…" }: { texto?: string }) {
   return (
-    <div className="cargando" role="status">
-      <LoaderCircle className="giro" aria-hidden="true" />
+    <div
+      className="d-flex align-items-center justify-content-center gap-2 text-body-secondary py-5"
+      role="status"
+    >
+      <span
+        className="spinner-border spinner-border-sm"
+        aria-hidden="true"
+      ></span>
       <span>{texto}</span>
     </div>
   );
 }
+
+const CLASE_ALERTA = {
+  error: "alert-danger",
+  exito: "alert-success",
+  info: "alert-info",
+} as const;
 
 export function Aviso({
   children,
@@ -20,11 +32,13 @@ export function Aviso({
 }) {
   return (
     <div
-      className={`aviso aviso-${tipo}`}
+      className={`alert ${CLASE_ALERTA[tipo]} d-flex align-items-start gap-2`}
       role={tipo === "error" ? "alert" : "status"}
     >
-      <AlertCircle aria-hidden="true" />
-      <div>{children}</div>
+      <AlertCircle aria-hidden="true" className="flex-shrink-0" />
+      <div className="flex-grow-1" style={{ minWidth: 0 }}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -42,7 +56,10 @@ export function SelectorTema() {
     }
   });
   useLayoutEffect(() => {
-    document.documentElement.dataset.theme = tema;
+    // `data-bs-theme` es el atributo propio de Bootstrap 5.3 para modo
+    // oscuro -- un solo atributo, sin sistemas de tema paralelos (ver
+    // docs/features-futuras/plan-rediseno-web-visitas.md).
+    document.documentElement.dataset.bsTheme = tema;
   }, [tema]);
   const alternar = () => {
     const siguiente = tema === "light" ? "dark" : "light";
@@ -55,7 +72,8 @@ export function SelectorTema() {
   };
   return (
     <button
-      className="boton boton-discreto solo-icono"
+      type="button"
+      className="btn btn-link solo-icono"
       onClick={alternar}
       aria-label={`Cambiar a tema ${tema === "light" ? "oscuro" : "claro"}`}
     >
@@ -93,17 +111,24 @@ export function Modal({
   return (
     <dialog
       ref={referencia}
-      className="modal"
+      className="modal modal-content"
       aria-labelledby="titulo-modal"
       onCancel={(e) => {
         e.preventDefault();
         if (!ocupado) onCerrar();
       }}
     >
-      <div className="modal-encabezado">
-        <h2 id="titulo-modal">{titulo}</h2>
+      <div className="modal-header">
+        <h2 className="modal-title fs-5" id="titulo-modal">
+          {titulo}
+        </h2>
+        {/* No usamos .btn-close de Bootstrap: pinta su ícono con un
+            background-image data:image/svg+xml, que la CSP estricta de esta
+            app bloquea (img-src 'self', sin data:) -- mismo motivo que ya
+            resolvió parcheCspFullcalendar.ts para otro componente. */}
         <button
-          className="boton boton-discreto solo-icono"
+          type="button"
+          className="btn btn-link solo-icono"
           aria-label="Cerrar diálogo"
           onClick={onCerrar}
           disabled={ocupado}
@@ -111,7 +136,7 @@ export function Modal({
           <X aria-hidden="true" />
         </button>
       </div>
-      {children}
+      <div className="modal-body">{children}</div>
     </dialog>
   );
 }
@@ -134,7 +159,8 @@ export class LimiteErrores extends Component<
           <h1>No pudimos abrir esta pantalla</h1>
           <p>Recargá la página para volver a intentarlo.</p>
           <button
-            className="boton boton-primario"
+            type="button"
+            className="btn btn-primary"
             onClick={() => window.location.reload()}
           >
             Recargar

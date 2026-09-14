@@ -1,5 +1,8 @@
-@import "tailwindcss";
-@import "../../design/brisas.css";
+/* Los tokens de diseño (--acento, --borde, --fuente, etc.) y Bootstrap se
+   cargan desde estilos/tema.scss, importado antes que este archivo en
+   main.tsx. El puente temporal .boton/.btn-* ya no hace falta -- todos
+   los componentes usan las clases de Bootstrap directamente (Fase 1 del
+   plan en docs/features-futuras/plan-rediseno-web-visitas.md). */
 
 * {
   box-sizing: border-box;
@@ -63,6 +66,19 @@ svg {
   height: 20px;
   flex-shrink: 0;
 }
+/* `.btn` de Bootstrap es `inline-block` sin `gap` -- bien para texto solo,
+   pero todos los botones de esta app combinan ícono + texto (o son sólo
+   ícono). Sin esto, el ícono queda pegado al texto. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.btn svg {
+  width: 18px;
+  height: 18px;
+}
 :focus-visible {
   outline: 2px solid var(--acento);
   outline-offset: 3px;
@@ -123,6 +139,27 @@ main:focus,
   width: var(--control-altura);
   padding: 0;
 }
+/* `.btn-link` de Bootstrap hereda el color de link, que es nuestro
+   `$primary` (rojo) -- bien para un enlace de texto, pero un ícono
+   utilitario (cerrar, cambiar tema, cerrar sesión) en rojo le resta peso
+   al rojo como color de acción PRIMARIA. Gris neutro en reposo, acento
+   sólo al pasar el mouse o enfocar. */
+.btn-link.solo-icono {
+  --bs-btn-color: var(--muted);
+  --bs-btn-hover-color: var(--acento);
+  --bs-btn-active-color: var(--acento);
+}
+/* Ícono de "Actualizar" en Mis Citas mientras revalida en segundo plano
+   (poll cada 60s, volver a la pestaña) -- gira en el lugar en vez de
+   reemplazar la lista visible por el spinner de página completa. */
+.icono-girando {
+  animation: girar 1s linear infinite;
+}
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .sello-icono {
   display: grid;
   place-items: center;
@@ -136,33 +173,6 @@ main:focus,
 .sello-icono svg {
   width: 24px;
   height: 24px;
-}
-.aviso {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--espacio-3);
-  padding: var(--espacio-4);
-  border-radius: var(--radio-chico);
-  font-size: 13px;
-  line-height: 1.6;
-  margin-bottom: var(--espacio-4);
-  overflow-wrap: anywhere;
-}
-.aviso > div {
-  flex: 1;
-  min-width: 0;
-}
-.aviso-error {
-  background: var(--error-suave);
-  color: var(--error);
-}
-.aviso-exito {
-  background: var(--exito-suave);
-  color: var(--exito);
-}
-.aviso-info {
-  background: var(--info-suave);
-  color: var(--info);
 }
 .enlace-boton {
   display: block;
@@ -178,22 +188,6 @@ main:focus,
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-}
-.cargando {
-  display: flex;
-  gap: var(--espacio-3);
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-  padding: 64px 24px;
-}
-.giro {
-  animation: giro 1s linear infinite;
-}
-@keyframes giro {
-  to {
-    transform: rotate(360deg);
-  }
 }
 .error-fatal {
   display: grid;
@@ -492,12 +486,39 @@ main:focus,
 .cita {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 18px 20px;
+  gap: 8px;
   border-bottom: 1px solid var(--borde);
 }
 .cita:last-child {
   border-bottom: 0;
+}
+/* Toda la tarjeta (salvo "Cancelar cita") es un solo <button> -- "ver
+   detalles" ya no es una acción explícita más entre varias del mismo peso
+   (la "montaña de botones" que se buscaba evitar), es la tarjeta misma. */
+.cita-cuerpo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+  padding: 18px 20px;
+  background: none;
+  border: 0;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.cita-cuerpo:hover {
+  background: var(--campo-fondo);
+}
+.cita-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.cita-acciones {
+  flex-shrink: 0;
+  padding-right: 20px;
 }
 .cita-fecha {
   width: 60px;
@@ -586,15 +607,6 @@ main:focus,
 .cita-meta svg {
   width: 14px;
   height: 14px;
-}
-.cita-acciones {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex-shrink: 0;
-}
-.cita-acciones .boton {
-  font-size: 12px;
 }
 .nota-agenda {
   display: flex;
@@ -713,6 +725,12 @@ main:focus,
   outline: none;
   box-shadow: inset 0 0 0 2px var(--acento);
 }
+.nav-item-colapsar {
+  margin-top: auto;
+  border-top: 1px solid var(--borde);
+  border-radius: 0;
+  color: var(--muted);
+}
 .nav-item-activo {
   background: var(--acento-relleno);
   color: var(--sobre-acento);
@@ -793,10 +811,77 @@ main:focus,
   width: 14px;
   height: 14px;
 }
-.indicador-paso {
+/* componentes/PasoWizard.tsx -- visible en TODOS los breakpoints a
+   propósito (el viejo .indicador-paso se ocultaba por completo en móvil,
+   justo donde más se usa esta pantalla). */
+.paso-wizard ol {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 4px;
+}
+.paso-wizard-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+.paso-wizard-item:last-child {
+  flex: 0 0 auto;
+}
+.paso-wizard-numero {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radio-capsula);
+  border: 1.5px solid var(--borde-fuerte);
   color: var(--muted);
   font-size: 12px;
+  font-weight: 600;
+}
+.paso-wizard-numero svg {
+  width: 14px;
+  height: 14px;
+}
+.paso-wizard-activo .paso-wizard-numero {
+  border-color: var(--acento);
+  background: var(--acento-relleno);
+  color: var(--sobre-acento);
+}
+.paso-wizard-completado .paso-wizard-numero {
+  border-color: var(--acento);
+  color: var(--acento);
+  background: var(--acento-suave);
+}
+.paso-wizard-etiqueta {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--muted);
   white-space: nowrap;
+}
+.paso-wizard-activo .paso-wizard-etiqueta {
+  color: var(--texto);
+}
+.paso-wizard-linea {
+  flex: 1;
+  height: 1.5px;
+  background: var(--borde);
+  min-width: 16px;
+}
+.paso-wizard-completado .paso-wizard-linea {
+  background: var(--acento);
+}
+@media (max-width: 640px) {
+  .paso-wizard-etiqueta {
+    display: none;
+  }
+  .paso-wizard-activo .paso-wizard-etiqueta {
+    display: inline;
+    white-space: normal;
+  }
 }
 .formulario-layout {
   display: grid;
@@ -819,16 +904,6 @@ main:focus,
   font-weight: 600;
   padding: 24px 0 0;
 }
-.numero-paso {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radio-chico);
-  background: var(--acento-suave);
-  color: var(--acento);
-  font-size: 12px;
-}
 .descripcion-bloque {
   clear: both;
   padding-top: 8px;
@@ -848,33 +923,16 @@ main:focus,
 .campo:last-child {
   margin-bottom: 0;
 }
-.campo input:not([type="checkbox"]),
-.campo textarea {
-  width: 100%;
-  min-width: 0;
-  min-height: 40px;
-  padding: 10px 12px;
-  border: 1px solid var(--borde-fuerte);
-  border-radius: var(--radio-chico);
-  background: var(--campo-fondo);
-  color: var(--texto);
-  font-weight: 400;
-}
-.campo input:focus,
-.campo textarea:focus {
-  outline: 2px solid var(--acento);
-  outline-offset: 2px;
+/* El aspecto del control (borde, fondo, foco) ahora lo da `.form-control`
+   de Bootstrap -- `.campo` sólo aporta el layout de label+ayuda+error. El
+   estado de error sigue marcándose con `aria-invalid`, no con `.is-invalid`
+   de Bootstrap (ver la nota sobre CSP en el plan). */
+.campo input[aria-invalid="true"],
+.campo textarea[aria-invalid="true"] {
+  border-color: var(--bs-danger);
 }
 .campo textarea {
   resize: vertical;
-}
-.campo input[aria-invalid="true"],
-.campo textarea[aria-invalid="true"] {
-  border-color: var(--error);
-}
-.campo input::placeholder,
-.campo textarea::placeholder {
-  color: var(--texto-atenuado);
 }
 .dos-columnas {
   display: grid;
@@ -883,6 +941,71 @@ main:focus,
 }
 .dos-columnas .campo {
   margin-bottom: 20px;
+}
+/* componentes/CampoFechas.tsx -- Día/Mes/Año como 3 campos fijos en vez de
+   un <input type="date"> nativo (su orden depende del navegador de cada
+   visitante, no de esta app). */
+.campo-fecha-segmentada {
+  border: 0;
+  padding: 0;
+  margin: 0 0 20px;
+}
+.campo-fecha-segmentada legend {
+  font-size: 13px;
+  font-weight: 550;
+  padding: 0 0 8px;
+}
+.campo-fecha-segmentos {
+  display: flex;
+  gap: 8px;
+}
+.campo-fecha-segmentos label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.campo-fecha-segmentos input {
+  width: 3.25rem;
+  text-align: center;
+}
+.campo-fecha-segmentos label:last-child input {
+  width: 4.5rem;
+}
+/* Desde/Hasta/Hora en una sola fila -- un grid de 2 columnas al 50% (como
+   era antes) dejaba un hueco enorme entre ambas fechas, porque los 3
+   campos juntos ocupan bastante menos que el ancho del panel. Con flex y
+   ancho de contenido (no `1fr`) quedan pegados, y envuelven a una fila
+   nueva en pantallas angostas. */
+.fila-fechas-hora {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+.fila-fechas-hora .campo-fecha-segmentada {
+  margin-bottom: 0;
+}
+/* Ancho fijo, no de contenido -- sin esto, el texto de ayuda de adentro
+   (una oración larga) empuja a `.campo-hora` a estirarse para no
+   envolverse, lo que termina forzando el wrap de toda la fila mucho antes
+   de lo necesario. */
+.campo-hora {
+  flex: 0 0 13rem;
+}
+.campo-hora input {
+  max-width: 10rem;
+}
+/* `.opcional` normalmente flota en la esquina superior derecha del
+   `.campo` (hay lugar de sobra en un campo a lo ancho de la tarjeta) --
+   acá la etiqueta "Hora aproximada de llegada" ya ocupa las 2 líneas del
+   ancho angosto de esta columna, y esa insignia flotante quedaba pisando
+   el texto. En flujo normal, envuelve junto con la etiqueta en vez de
+   superponerse. */
+.campo-hora .opcional {
+  position: static;
+  display: block;
 }
 .opcional {
   position: absolute;
@@ -912,79 +1035,17 @@ main:focus,
   font-size: 12px;
   font-weight: 400;
 }
+/* Sitios de la visita: chips (`.btn-check` + `.btn`, patrón oficial de
+   Bootstrap para grupos de toggle) en vez de las tarjetas grandes de
+   antes -- mismo lenguaje visual que las píldoras de filtro de "Mis
+   citas", y no reserva una fila entera de alto por cada sitio cuando el
+   catálogo crece. `.btn-check` esconde el checkbox nativo por completo
+   (clip a 0×0, no pinta ningún ícono) -- sigue siendo un checkbox real
+   para teclado y lectores de pantalla, sólo cambia qué se ve. */
 .selector-sitios {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-}
-.sitio-opcion {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid var(--borde);
-  border-radius: var(--radio-chico);
-  background: var(--campo-fondo);
-  cursor: pointer;
-  transition:
-    border-color var(--duracion),
-    background var(--duracion);
-}
-.sitio-opcion:hover {
-  border-color: var(--borde-fuerte);
-}
-.sitio-opcion.seleccionado {
-  border-color: var(--acento);
-  background: var(--acento-suave);
-}
-.sitio-opcion > svg {
-  color: var(--muted);
-}
-/* El checkbox nativo queda funcional (foco por teclado, lectores de
-   pantalla) pero visualmente oculto -- `.sitio-indicador` es el que se ve,
-   un cuadrito propio en vez del checkbox de fábrica del navegador. */
-.sitio-opcion input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-}
-.sitio-indicador {
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  border: 1.5px solid var(--borde-fuerte);
-  border-radius: 6px;
-  background: var(--panel);
-  transition:
-    background var(--duracion),
-    border-color var(--duracion);
-}
-.sitio-indicador svg {
-  width: 13px;
-  height: 13px;
-  color: var(--sobre-acento-indicador);
-  opacity: 0;
-  transition: opacity var(--duracion);
-}
-.sitio-opcion.seleccionado .sitio-indicador {
-  background: var(--acento-relleno);
-  border-color: var(--acento-relleno);
-}
-.sitio-opcion.seleccionado .sitio-indicador svg {
-  opacity: 1;
-}
-.sitio-opcion input:focus-visible ~ .sitio-indicador {
-  outline: 2px solid var(--acento);
-  outline-offset: 2px;
-}
-.sitio-opcion small {
-  display: block;
-  font-weight: 400;
-  color: var(--muted);
-  margin-top: 4px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .contador-grupo {
   font-size: 12px;
@@ -1001,27 +1062,54 @@ main:focus,
   border-radius: var(--radio-chico);
   background: var(--campo-fondo);
 }
-.visitante-encabezado {
+/* `<details>/<summary>` nativo (componentes/VisitanteFormulario.tsx) --
+   colapsa las tarjetas ya completas cuando el grupo es grande, sin JS de
+   Bootstrap ni su `.accordion` (ese componente pinta la flecha con un
+   `background-image: data:` que la CSP de esta app bloquea). */
+.visitante-formulario > summary {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   gap: 8px;
   min-height: 36px;
-  margin-bottom: 16px;
-}
-.visitante-encabezado h3 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  list-style: none;
 }
-.visitante-encabezado h3 svg {
+.visitante-formulario > summary::-webkit-details-marker {
+  display: none;
+}
+.visitante-formulario > summary svg {
   width: 16px;
   height: 16px;
   color: var(--muted);
+  flex-shrink: 0;
 }
-.visitante-encabezado .boton {
-  font-size: 12px;
+.visitante-formulario > summary::after {
+  content: "";
+  margin-left: auto;
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform var(--duracion);
+}
+.visitante-formulario[open] > summary::after {
+  transform: rotate(-135deg);
+}
+.visitante-formulario[open] > summary {
+  margin-bottom: 16px;
+}
+.visitante-resumen .texto-secundario {
+  color: var(--muted);
+  font-weight: 400;
+}
+.visitante-acciones {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
 }
 .visitante-formulario .dos-columnas .campo:nth-last-child(-n + 2) {
   margin-bottom: 0;
@@ -1134,12 +1222,11 @@ dd {
   font-size: 12px;
   color: var(--muted);
 }
+/* `.modal-content` (clases de Bootstrap, ver componentes/Comunes.tsx) trae
+   fondo/borde/radio -- acá sólo el tamaño y posicionamiento del <dialog>
+   nativo, que Bootstrap asume resueltos por su propio wrapper .modal-dialog
+   (que no usamos, ver el plan). */
 .modal {
-  background: var(--elevado);
-  color: var(--texto);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  padding: 24px;
   width: min(600px, calc(100vw - 32px));
   max-height: calc(100dvh - 48px);
   box-shadow: var(--sombra-panel);
@@ -1149,17 +1236,10 @@ dd {
 .modal::backdrop {
   background: var(--velo);
 }
-.modal-encabezado {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-.modal > p + p {
+.modal-body > p + p {
   margin-top: 12px;
 }
-.modal > .aviso {
+.modal-body > .alert {
   margin-top: 16px;
 }
 .saltar {
@@ -1188,7 +1268,7 @@ dd {
   .resumen-lateral {
     display: none;
   }
-  .cita {
+  .cita-cuerpo {
     gap: 16px;
     padding: 16px;
   }
@@ -1255,6 +1335,8 @@ dd {
   }
   .cita {
     flex-wrap: wrap;
+  }
+  .cita-cuerpo {
     gap: 12px;
     padding: 20px 16px;
   }
@@ -1262,10 +1344,9 @@ dd {
     width: 48px;
   }
   .cita-acciones {
-    flex-direction: row;
     width: 100%;
-    margin-top: 4px;
     justify-content: flex-end;
+    padding: 0 16px 12px;
   }
   .cita-titulo {
     gap: 8px;
@@ -1305,17 +1386,11 @@ dd {
   .visitante-formulario .dos-columnas .campo:nth-last-child(2) {
     margin-bottom: 20px;
   }
-  .indicador-paso {
-    display: none;
-  }
   .acciones-formulario {
     flex-wrap: wrap;
   }
   .modal {
     padding: 20px;
-  }
-  .selector-sitios {
-    grid-template-columns: 1fr;
   }
 }
 @media (pointer: coarse) {
@@ -1332,72 +1407,83 @@ dd {
     width: var(--control-tactil);
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .giro {
-    animation: none;
-  }
-}
 
 /* Selector de fechas de "Nueva cita" (componentes/SelectorFechas.tsx) --
-   mismo mecanismo de theming que usa el calendario de Agenda del desktop
-   (desktop/src/index.css): FullCalendar expone estas variables `--fc-*`
-   justamente para esto, en vez de pisar sus clases a mano. Ver index.html
-   sobre por qué esta app puede usar FullCalendar bajo una CSP estricta. */
+   calendario propio, sin librería externa (ver el doc-comment del
+   componente: se reemplazó FullCalendar acá específicamente porque su
+   wrapper no convivía bien con <Activity> en el wizard). */
 .selector-fechas {
+  /* Sin este límite, la grilla de 7 columnas (`1fr` cada una) estira cada
+     celda al ancho completo del panel del wizard -- con `aspect-ratio: 1`
+     eso vuelve cada día un cuadrado gigante. Un selector de fecha no
+     necesita más ancho que el de un calendario de escritorio típico. */
+  max-width: 340px;
   border: 1px solid var(--borde);
   border-radius: var(--radio-chico);
   padding: 12px;
   background: var(--campo-fondo);
 }
-.selector-fechas .fc {
-  --fc-border-color: var(--borde);
-  --fc-page-bg-color: transparent;
-  --fc-neutral-bg-color: var(--panel);
-  --fc-today-bg-color: var(--acento-suave);
-  --fc-highlight-color: var(--acento-suave);
-  --fc-button-bg-color: var(--panel);
-  --fc-button-border-color: var(--borde);
-  --fc-button-text-color: var(--texto);
-  --fc-button-hover-bg-color: var(--panel-suave);
-  --fc-button-hover-border-color: var(--borde-fuerte);
-  --fc-button-active-bg-color: var(--acento-relleno);
-  --fc-button-active-border-color: var(--acento-relleno);
-  color: var(--texto);
-  font-family: inherit;
+.selector-fechas-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
 }
-.selector-fechas .fc-toolbar-title {
-  color: var(--texto);
-  font-size: 15px;
+.selector-fechas-nav {
+  display: flex;
+  gap: 4px;
+}
+.selector-fechas-titulo {
+  font-size: 14px;
   font-weight: 600;
 }
-.selector-fechas .fc-col-header-cell-cushion,
-.selector-fechas .fc-daygrid-day-number {
-  color: var(--texto);
-  font-size: 12px;
+.selector-fechas-grilla {
+  display: grid;
+  gap: 2px;
 }
-.selector-fechas .fc-day-other .fc-daygrid-day-number {
+.selector-fechas-fila {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.selector-fechas-encabezado span {
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  padding-block: 4px;
+  text-transform: uppercase;
+}
+.selector-fechas-dia {
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  color: var(--texto);
+  font-size: 13px;
+  cursor: pointer;
+}
+.selector-fechas-dia:hover:not(:disabled) {
+  border-color: var(--borde-fuerte);
+}
+.selector-fechas-dia:disabled {
+  color: var(--texto-atenuado);
+  cursor: default;
+  opacity: 0.5;
+}
+.selector-fechas-dia-otro-mes {
   color: var(--muted);
 }
-.selector-fechas .fc-button {
-  text-transform: none;
-  box-shadow: none !important;
-  font-size: 12px;
+.selector-fechas-dia-hoy {
+  font-weight: 700;
 }
-/* El ícono de prev/next de FullCalendar viene de una fuente propia
-   (`fcicons`) embebida como `data:` en su CSS -- la CSP de esta app no
-   permite `data:` en `font-src` (a propósito, no se relaja sólo por esto).
-   Se reemplaza por flechas de texto plano en la fuente heredada: si ningún
-   elemento termina usando `font-family: fcicons`, el navegador nunca llega
-   a pedir/decodificar esa fuente, así que la CSP ni se entera. */
-.selector-fechas .fc-icon {
-  font-family: inherit !important;
-  font-size: 14px !important;
+.selector-fechas-dia-rango {
+  background: var(--acento-suave);
 }
-.selector-fechas .fc-icon-chevron-left::before {
-  content: "‹";
-}
-.selector-fechas .fc-icon-chevron-right::before {
-  content: "›";
+.selector-fechas-dia-limite {
+  background: var(--acento-relleno);
+  color: var(--sobre-acento);
+  font-weight: 600;
 }
 
 /* Toggle Lista/Calendario de "Mis citas" -- mismos `.filtro`/`.filtro.activo`

@@ -1,5 +1,12 @@
-import { useEffect, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import {
+  Activity,
+  addTransitionType,
+  startTransition,
+  useEffect,
+  useRef,
+  useState,
+  ViewTransition,
+} from "react";
 import { Link, useBlocker, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -8,16 +15,42 @@ import {
   Check,
   MapPin,
   Plus,
-  Trash2,
-  Users,
 } from "lucide-react";
 import { crearCita, listarSitios, mensajeError } from "../api";
-import { esquemaNuevaCita, MAX_VISITANTES, visitanteVacio } from "../dominio";
+import {
+  esquemaNuevaCita,
+  MAX_VISITANTES,
+  validarRangoFechas,
+  visitanteVacio,
+} from "../dominio";
 import type { FormularioCita, Sitio } from "../dominio";
-import { fechaLegible, hoyCostaRica } from "../fecha";
+import { fechaLegible, horaLegible, hoyCostaRica } from "../fecha";
 import { useAuth } from "../contexto/AuthContexto";
 import { Aviso, Cargando, Modal } from "../componentes/Comunes";
-import SelectorFechas from "../componentes/SelectorFechas";
+import CampoFechas from "../componentes/CampoFechas";
+import PasoWizard from "../componentes/PasoWizard";
+import VisitanteFormulario from "../componentes/VisitanteFormulario";
+import { useFocoAlCambiar } from "../lib/useFocoAlCambiar";
+
+type Paso = "cuando-donde" | "visitantes" | "revision";
+const PASOS: Paso[] = ["cuando-donde", "visitantes", "revision"];
+const ETIQUETAS_PASO = ["¿Cuándo y dónde?", "Visitantes", "Confirmar"];
+// A qué paso pertenece cada clave de `errores` -- para bloquear el avance
+// sólo por errores del paso actual, sin duplicar reglas de validación (el
+// `safeParse` sigue siendo el único lugar que valida de verdad; esto sólo
+// decide qué mostrar/bloquear en cada pantalla).
+const CAMPOS_CUANDO_DONDE = [
+  "sitios",
+  "fecha_desde",
+  "fecha_hasta",
+  "hora_estimada",
+  "motivo",
+];
+function perteneceAlPaso(clave: string, paso: Paso): boolean {
+  if (paso === "revision") return false;
+  const prefijos = paso === "cuando-donde" ? CAMPOS_CUANDO_DONDE : ["visitantes"];
+  return prefijos.some((p) => clave === p || clave.startsWith(`${p}.`));
+}
 
 export default function NuevaCita() {
   const { verificado } = useAuth();
@@ -25,6 +58,7 @@ export default function NuevaCita() {
   const [formulario, setFormulario] = useState<FormularioCita>(() => ({
     fecha_desde: hoyCostaRica(),
     fecha_hasta: hoyCostaRica(),
+    hora_estimada: "",
     motivo: "",
     sitios: [],
     visitantes: [visitanteVacio()],
@@ -35,7 +69,7 @@ export default function NuevaCita() {
   const [intentoSitios, setIntentoSitios] = useState(0);
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
-  const [paso, setPaso] = useState<"datos" | "revision">("datos");
+  const [paso, setPaso] = useState<Paso>("cuando-donde");
   const [guardando, setGuardando] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const [modificado, setModificado] = useState(false);
@@ -88,12 +122,16 @@ export default function NuevaCita() {
     window.addEventListener("beforeunload", antesDeSalir);
     return () => window.removeEventListener("beforeunload", antesDeSalir);
   }, [modificado]);
+  useFocoAlCambiar(titulo, paso);
+  const hayErroresDelPaso = Object.keys(errores).some((clave) =>
+    perteneceAlPaso(clave, paso),
+  );
   useEffect(() => {
-    titulo.current?.focus();
-  }, [paso]);
-  useEffect(() => {
-    if (Object.keys(errores).length) resumenErrores.current?.focus();
-  }, [errores]);
+    if (hayErroresDelPaso) resumenErrores.current?.focus();
+    // Sólo debe re-disparar cuando cambian errores o de paso -- no en cada
+    // render donde `hayErroresDelPaso` da el mismo resultado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [errores, paso]);
 
   function actualizar(cambios: Partial<FormularioCita>) {
     setFormulario((actual) => ({ ...actual, ...cambios }));
@@ -110,28 +148,61 @@ export default function NuevaCita() {
       ),
     });
   }
+  /** Corre SIEMPRE la validación completa (no hay sub-esquemas por paso --
+   * evita duplicar reglas), pero sólo bloquea el avance si el paso ACTUAL
+   * tiene errores propios; errores de un paso que todavía no se visitó
+   * quedan guardados en `errores` para cuando se llegue ahí, sin bloquear
+   * antes de tiempo. */
   function validarFormulario() {
     const resultado = esquemaNuevaCita().safeParse(formulario);
-    if (!resultado.success) {
-      const porCampo: Record<string, string> = {};
+    const porCampo: Record<string, string> = {};
+    if (!resultado.success)
       for (const problema of resultado.error.issues)
         porCampo[problema.path.join(".")] ??= problema.message;
-      setErrores(porCampo);
-      return false;
-    }
-    setErrores({});
-    return true;
+    setErrores(porCampo);
+    return porCampo;
   }
-  function revisar(evento: FormEvent) {
-    evento.preventDefault();
-    if (!validarFormulario()) return;
-    setPaso("revision");
+  /** Cambia de paso dentro de un `startTransition` -- `<ViewTransition>`
+   * (más abajo, en el render) sólo anima actualizaciones marcadas como
+   * Transition; `addTransitionType` deja elegir la animación (desde-derecha
+   * vs. desde-izquierda) según la causa, no sólo el destino. Degrada solo:
+   * en un navegador sin View Transitions, React aplica el cambio de estado
+   * igual, sin animación. */
+  function cambiarPaso(siguiente: Paso, tipo: "adelante" | "atras") {
+    startTransition(() => {
+      addTransitionType(tipo);
+      setPaso(siguiente);
+    });
+  }
+  function continuar(desde: Paso, hacia: Paso) {
+    const erroresActuales = validarFormulario();
+    const bloqueado = Object.keys(erroresActuales).some((clave) =>
+      perteneceAlPaso(clave, desde),
+    );
+    if (bloqueado) return;
+    // Al paso al que se recién se llega no se le muestran de entrada sus
+    // propios errores (son campos que el usuario todavía no tocó) -- sólo
+    // aparecen si más adelante intenta avanzar desde ahí sin completarlos.
+    setErrores((previo) => {
+      const siguiente = { ...previo };
+      for (const clave of Object.keys(siguiente))
+        if (perteneceAlPaso(clave, hacia)) delete siguiente[clave];
+      return siguiente;
+    });
+    cambiarPaso(hacia, "adelante");
   }
   async function guardar() {
     if (bloqueo.current || !verificado) return;
-    if (!enviado && !validarFormulario()) {
-      setPaso("datos");
-      return;
+    if (!enviado) {
+      const erroresActuales = validarFormulario();
+      const claves = Object.keys(erroresActuales);
+      if (claves.length > 0) {
+        const primerPaso = claves.some((c) => perteneceAlPaso(c, "cuando-donde"))
+          ? "cuando-donde"
+          : "visitantes";
+        cambiarPaso(primerPaso, "atras");
+        return;
+      }
     }
     bloqueo.current = true;
     setGuardando(true);
@@ -175,18 +246,35 @@ export default function NuevaCita() {
         <div>
           <p className="antetitulo">PREPARÁ SU LLEGADA</p>
           <h1 ref={titulo} tabIndex={-1}>
-            {paso === "datos" ? "Nueva cita" : "Revisá tu cita"}
+            {paso === "revision" ? "Revisá tu cita" : "Nueva cita"}
           </h1>
         </div>
-        <span className="indicador-paso">
-          {paso === "datos" ? "1. Datos de la visita" : "2. Confirmación"}
-        </span>
+        <PasoWizard pasos={ETIQUETAS_PASO} actual={PASOS.indexOf(paso)} />
       </div>
       <div className="formulario-layout">
-        <div>
-          {paso === "datos" ? (
-            <form onSubmit={revisar} noValidate>
-              {Object.keys(errores).length > 0 && (
+        {/* React 19.3: los 3 pasos quedan siempre montados, cada uno en su
+            propio <Activity> -- al ocultar un paso, React pausa sus efectos
+            pero conserva su DOM y estado (a diferencia del swap condicional,
+            que desmontaba todo). Esto sólo fue viable después de reemplazar
+            FullCalendar por un calendario propio en SelectorFechas.tsx: el
+            wrapper de FullCalendar reinicializaba su vista cada vez que
+            Activity corría de nuevo sus efectos al mostrar un paso oculto
+            (el DOM sobrevivía, pero su efecto de inicialización no), así
+            que perdía el mes navegado -- un componente de estado simple
+            (`useState`) no tiene ese problema. <ViewTransition> anima el
+            cambio con la View Transition API nativa del navegador cuando
+            hay soporte, sin hacer nada (sin errores) si no lo hay. */}
+        <ViewTransition>
+          <div>
+            <Activity mode={paso === "cuando-donde" ? "visible" : "hidden"}>
+            <form
+              onSubmit={(evento) => {
+                evento.preventDefault();
+                continuar("cuando-donde", "visitantes");
+              }}
+              noValidate
+            >
+              {hayErroresDelPaso && (
                 <div
                   ref={resumenErrores}
                   tabIndex={-1}
@@ -199,9 +287,7 @@ export default function NuevaCita() {
                 className="tarjeta bloque-formulario"
                 disabled={cargando || !verificado}
               >
-                <legend>
-                  <span className="numero-paso">1</span> Lugar y fechas
-                </legend>
+                <legend>Lugar y fechas</legend>
                 <p className="descripcion-bloque">
                   ¿Dónde y cuándo vas a recibir a tus visitantes?
                 </p>
@@ -219,7 +305,7 @@ export default function NuevaCita() {
                       {errorSitios}
                       <button
                         type="button"
-                        className="enlace-boton"
+                        className="btn btn-link p-0 align-baseline"
                         onClick={() => setIntentoSitios((v) => v + 1)}
                       >
                         Reintentar
@@ -237,63 +323,75 @@ export default function NuevaCita() {
                       aria-labelledby="etiqueta-sitios"
                       {...atributos("sitios")}
                     >
-                      {sitios.map((sitio) => (
-                        <label
-                          className={`sitio-opcion ${formulario.sitios.includes(sitio.id) ? "seleccionado" : ""}`}
-                          key={sitio.id}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={formulario.sitios.includes(sitio.id)}
-                            onChange={(e) =>
-                              actualizar({
-                                sitios: e.target.checked
-                                  ? [...formulario.sitios, sitio.id]
-                                  : formulario.sitios.filter(
-                                      (id) => id !== sitio.id,
-                                    ),
-                              })
-                            }
-                          />
-                          <span className="sitio-indicador">
-                            <Check aria-hidden="true" />
-                          </span>
-                          <MapPin aria-hidden="true" />
-                          <span>
-                            <strong>{sitio.nombre}</strong>
-                            {sitio.direccion && (
-                              <small>{sitio.direccion}</small>
-                            )}
-                          </span>
-                        </label>
-                      ))}
+                      {sitios.map((sitio) => {
+                        const marcado = formulario.sitios.includes(sitio.id);
+                        const id = `sitio-${sitio.id}`;
+                        return (
+                          <div className="sitio-opcion" key={sitio.id}>
+                            <input
+                              type="checkbox"
+                              className="btn-check"
+                              id={id}
+                              checked={marcado}
+                              onChange={(e) =>
+                                actualizar({
+                                  sitios: e.target.checked
+                                    ? [...formulario.sitios, sitio.id]
+                                    : formulario.sitios.filter(
+                                        (sid) => sid !== sitio.id,
+                                      ),
+                                })
+                              }
+                            />
+                            <label
+                              className={`btn btn-sm ${marcado ? "btn-primary" : "btn-outline-secondary"}`}
+                              htmlFor={id}
+                            >
+                              <MapPin aria-hidden="true" />
+                              {sitio.nombre}
+                            </label>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                   {mensajeCampo("sitios")}
                 </div>
                 <div className="campo">
                   Fechas de la visita
-                  <span className="ayuda-campo">
-                    Hacé click en un día, o arrastrá para elegir un rango.
-                  </span>
-                  <div
-                    role="group"
-                    aria-label="Fechas de la visita"
-                    aria-invalid={!!(errores.fecha_desde || errores.fecha_hasta)}
-                  >
-                    <SelectorFechas
-                      desde={formulario.fecha_desde}
-                      hasta={formulario.fecha_hasta}
-                      onCambiar={(fecha_desde, fecha_hasta) =>
-                        actualizar({ fecha_desde, fecha_hasta })
-                      }
-                    />
-                  </div>
-                  {mensajeCampo("fecha_desde") ?? mensajeCampo("fecha_hasta")}
+                  <CampoFechas
+                    desde={formulario.fecha_desde}
+                    hasta={formulario.fecha_hasta}
+                    erroresDesde={errores.fecha_desde}
+                    erroresHasta={errores.fecha_hasta}
+                    onCambiar={(fecha_desde, fecha_hasta) => {
+                      actualizar({ fecha_desde, fecha_hasta });
+                      const resultado = validarRangoFechas(
+                        fecha_desde,
+                        fecha_hasta,
+                      );
+                      setErrores((previo) => {
+                        const siguiente = { ...previo };
+                        if (resultado.fecha_desde)
+                          siguiente.fecha_desde = resultado.fecha_desde;
+                        else delete siguiente.fecha_desde;
+                        if (resultado.fecha_hasta)
+                          siguiente.fecha_hasta = resultado.fecha_hasta;
+                        else delete siguiente.fecha_hasta;
+                        return siguiente;
+                      });
+                    }}
+                    hora={formulario.hora_estimada}
+                    erroresHora={errores.hora_estimada}
+                    onCambiarHora={(hora_estimada) =>
+                      actualizar({ hora_estimada })
+                    }
+                  />
                 </div>
                 <label className="campo">
                   Motivo de la visita <span className="opcional">Opcional</span>
                   <textarea
+                    className="form-control"
                     rows={3}
                     maxLength={1000}
                     placeholder="Por ejemplo: reunión de coordinación"
@@ -307,12 +405,46 @@ export default function NuevaCita() {
                   </span>
                 </label>
               </fieldset>
+              <div className="acciones-formulario">
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={
+                    !verificado ||
+                    cargando ||
+                    !!errorSitios ||
+                    sitios.length === 0
+                  }
+                >
+                  Continuar
+                  <ArrowRight aria-hidden="true" />
+                </button>
+              </div>
+            </form>
+            </Activity>
+            <Activity mode={paso === "visitantes" ? "visible" : "hidden"}>
+            <form
+              onSubmit={(evento) => {
+                evento.preventDefault();
+                continuar("visitantes", "revision");
+              }}
+              noValidate
+            >
+              {hayErroresDelPaso && (
+                <div
+                  ref={resumenErrores}
+                  tabIndex={-1}
+                  className="resumen-errores"
+                >
+                  <Aviso>Revisá los campos marcados para continuar.</Aviso>
+                </div>
+              )}
               <fieldset
                 className="tarjeta bloque-formulario"
                 disabled={!verificado}
               >
                 <legend>
-                  <span className="numero-paso">2</span> Visitantes{" "}
+                  Visitantes{" "}
                   <span className="contador-grupo">
                     {formulario.visitantes.length}
                   </span>
@@ -322,100 +454,38 @@ export default function NuevaCita() {
                 </p>
                 <div className="visitantes-formulario">
                   {formulario.visitantes.map((persona, i) => (
-                    <section
-                      className="visitante-formulario"
+                    <VisitanteFormulario
                       key={claves[i]}
-                      aria-label={`Visitante ${i + 1}`}
-                    >
-                      <div className="visitante-encabezado">
-                        <h3>
-                          <Users aria-hidden="true" />
-                          Visitante {i + 1}
-                        </h3>
-                        {formulario.visitantes.length > 1 && (
-                          <button
-                            type="button"
-                            className="boton boton-discreto boton-peligro"
-                            aria-label={`Quitar visitante ${i + 1}`}
-                            onClick={() => {
-                              setClaves((c) => c.filter((_, indice) => indice !== i));
+                      indice={i}
+                      total={formulario.visitantes.length}
+                      persona={persona}
+                      esUltimo={i === formulario.visitantes.length - 1}
+                      tieneError={["nombre", "cedula", "empresa", "placa_vehiculo"].some(
+                        (campo) => errores[`visitantes.${i}.${campo}`],
+                      )}
+                      mensajeCampo={mensajeCampo}
+                      atributos={atributos}
+                      onCambiar={(campo, valor) => visitante(i, campo, valor)}
+                      onQuitar={
+                        formulario.visitantes.length > 1
+                          ? () => {
+                              setClaves((c) =>
+                                c.filter((_, indice) => indice !== i),
+                              );
                               actualizar({
                                 visitantes: formulario.visitantes.filter(
                                   (_, indice) => indice !== i,
                                 ),
                               });
-                            }}
-                          >
-                            <Trash2 aria-hidden="true" />
-                            Quitar
-                          </button>
-                        )}
-                      </div>
-                      <div className="dos-columnas">
-                        <label className="campo">
-                          Nombre completo <span className="obligatorio">*</span>
-                          <input
-                            autoComplete="off"
-                            value={persona.nombre}
-                            maxLength={150}
-                            required
-                            {...atributos(`visitantes.${i}.nombre`)}
-                            onChange={(e) =>
-                              visitante(i, "nombre", e.target.value)
                             }
-                          />
-                          {mensajeCampo(`visitantes.${i}.nombre`)}
-                        </label>
-                        <label className="campo">
-                          Cédula o documento{" "}
-                          <span className="obligatorio">*</span>
-                          <input
-                            autoComplete="off"
-                            spellCheck={false}
-                            value={persona.cedula}
-                            maxLength={60}
-                            required
-                            {...atributos(`visitantes.${i}.cedula`)}
-                            onChange={(e) =>
-                              visitante(i, "cedula", e.target.value)
-                            }
-                          />
-                          {mensajeCampo(`visitantes.${i}.cedula`)}
-                        </label>
-                        <label className="campo">
-                          Empresa <span className="opcional">Opcional</span>
-                          <input
-                            autoComplete="off"
-                            value={persona.empresa}
-                            maxLength={150}
-                            {...atributos(`visitantes.${i}.empresa`)}
-                            onChange={(e) =>
-                              visitante(i, "empresa", e.target.value)
-                            }
-                          />
-                          {mensajeCampo(`visitantes.${i}.empresa`)}
-                        </label>
-                        <label className="campo">
-                          Placa del vehículo{" "}
-                          <span className="opcional">Opcional</span>
-                          <input
-                            autoComplete="off"
-                            value={persona.placa_vehiculo}
-                            maxLength={20}
-                            {...atributos(`visitantes.${i}.placa_vehiculo`)}
-                            onChange={(e) =>
-                              visitante(i, "placa_vehiculo", e.target.value)
-                            }
-                          />
-                          {mensajeCampo(`visitantes.${i}.placa_vehiculo`)}
-                        </label>
-                      </div>
-                    </section>
+                          : null
+                      }
+                    />
                   ))}
                 </div>
                 <button
                   type="button"
-                  className="boton agregar-visitante"
+                  className="btn btn-outline-secondary agregar-visitante"
                   disabled={formulario.visitantes.length >= MAX_VISITANTES}
                   onClick={() => {
                     setClaves((c) => [...c, crypto.randomUUID()]);
@@ -434,21 +504,25 @@ export default function NuevaCita() {
               <div className="acciones-formulario">
                 <span className="ayuda-campo">* Campos obligatorios</span>
                 <button
-                  type="submit"
-                  className="boton boton-primario"
-                  disabled={
-                    !verificado ||
-                    cargando ||
-                    !!errorSitios ||
-                    sitios.length === 0
-                  }
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={() => cambiarPaso("cuando-donde", "atras")}
                 >
-                  Revisar cita
+                  <ArrowLeft aria-hidden="true" />
+                  Atrás
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={!verificado}
+                >
+                  Continuar
                   <ArrowRight aria-hidden="true" />
                 </button>
               </div>
             </form>
-          ) : (
+            </Activity>
+            <Activity mode={paso === "revision" ? "visible" : "hidden"}>
             <section className="tarjeta bloque-revision">
               <div className="titulo-bloque">
                 <Check aria-hidden="true" />
@@ -471,6 +545,15 @@ export default function NuevaCita() {
                       .join(", ")}
                   </dd>
                 </div>
+                {formulario.hora_estimada && (
+                  <div>
+                    <dt>Hora aproximada</dt>
+                    <dd>
+                      {horaLegible(formulario.hora_estimada)}
+                      <span>Informativa -- no bloquea el ingreso a otra hora.</span>
+                    </dd>
+                  </div>
+                )}
                 {formulario.motivo.trim() && (
                   <div>
                     <dt>Motivo</dt>
@@ -501,9 +584,9 @@ export default function NuevaCita() {
                   {error}
                   {enviado && (
                     <p>
-                      El resultado del envío no está confirmado. Usá «Reintentar
-                      guardado» para comprobar la misma solicitud sin
-                      duplicarla.
+                      No pudimos confirmar si tu cita quedó guardada. Presioná
+                      «Reintentar guardado» -- es seguro, no se va a crear dos
+                      veces.
                     </p>
                   )}
                 </Aviso>
@@ -511,16 +594,18 @@ export default function NuevaCita() {
               <div className="acciones-formulario">
                 {!enviado && (
                   <button
-                    className="boton"
+                    type="button"
+                    className="btn btn-outline-secondary"
                     disabled={guardando}
-                    onClick={() => setPaso("datos")}
+                    onClick={() => cambiarPaso("visitantes", "atras")}
                   >
                     <ArrowLeft aria-hidden="true" />
                     Editar datos
                   </button>
                 )}
                 <button
-                  className="boton boton-primario"
+                  type="button"
+                  className="btn btn-primary"
                   disabled={guardando || !verificado}
                   onClick={() => void guardar()}
                 >
@@ -533,8 +618,9 @@ export default function NuevaCita() {
                 </button>
               </div>
             </section>
-          )}
-        </div>
+            </Activity>
+          </div>
+        </ViewTransition>
         <aside className="resumen-lateral">
           <div className="tarjeta">
             <CalendarDays aria-hidden="true" />
@@ -571,6 +657,12 @@ export default function NuevaCita() {
                   </span>
                 </dd>
               </div>
+              {formulario.hora_estimada && (
+                <div>
+                  <dt>Hora aproximada</dt>
+                  <dd>{horaLegible(formulario.hora_estimada)}</dd>
+                </div>
+              )}
             </dl>
           </div>
           <div className="consejo">
@@ -592,19 +684,21 @@ export default function NuevaCita() {
         >
           <p>
             {enviado
-              ? "Todavía no confirmamos el resultado del envío. Recomendamos reintentar el guardado antes de salir. Si salís, revisá Mis citas antes de crear otra para evitar duplicados."
+              ? "No sabemos con certeza si tu cita se guardó. Te recomendamos volver y presionar «Reintentar guardado» antes de salir; si igual salís, revisá Mis citas para confirmar antes de crear otra."
               : "Si salís de esta pantalla, perderás los datos que ingresaste."}
           </p>
           <div className="acciones-formulario">
             <button
-              className="boton"
+              type="button"
+              className="btn btn-outline-secondary"
               disabled={guardando}
               onClick={() => salida.reset()}
             >
               Seguir aquí
             </button>
             <button
-              className="boton boton-peligro"
+              type="button"
+              className="btn btn-danger"
               disabled={guardando}
               onClick={() => salida.proceed()}
             >

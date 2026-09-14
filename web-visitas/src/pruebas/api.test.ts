@@ -9,6 +9,7 @@ const correo = "prueba@example.invalid";
 const datos = () => ({
   fecha_desde: hoyCostaRica(),
   fecha_hasta: hoyCostaRica(),
+  hora_estimada: "",
   motivo: "",
   sitios: [id],
   visitantes: [
@@ -63,6 +64,26 @@ describe("guardado atómico", () => {
     if (!llamada) throw new Error("crear_cita_anfitrion no fue llamado");
     expect(llamada[1]).not.toHaveProperty("anfitrion_correo");
     expect(dobles.from).not.toHaveBeenCalled();
+  });
+  it("manda p_hora_estimada en el payload, null si no se cargó", async () => {
+    dobles.rpc.mockResolvedValue({ data: id, error: null });
+    await crearCita(id, datos());
+    expect(dobles.rpc).toHaveBeenCalledWith(
+      "crear_cita_anfitrion",
+      expect.objectContaining({ p_hora_estimada: null }),
+    );
+    dobles.rpc.mockResolvedValue({
+      data: "00000000-0000-4000-8000-000000000003",
+      error: null,
+    });
+    await crearCita("00000000-0000-4000-8000-000000000003", {
+      ...datos(),
+      hora_estimada: "14:30",
+    });
+    expect(dobles.rpc).toHaveBeenCalledWith(
+      "crear_cita_anfitrion",
+      expect.objectContaining({ p_hora_estimada: "14:30" }),
+    );
   });
   it("rechaza datos inválidos antes de hacer peticiones", async () => {
     await expect(crearCita(id, { ...datos(), sitios: [] })).rejects.toThrow();

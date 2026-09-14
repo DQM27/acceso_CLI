@@ -13,12 +13,8 @@ const usuario = {
   created_at: "2026-09-09T12:00:00Z",
 };
 const sitios = [
-  { id: uuid, nombre: "Brisas", direccion: "San José, Costa Rica" },
-  {
-    id: "00000000-0000-4000-8000-000000000002",
-    nombre: "Cartago",
-    direccion: "Cartago, Costa Rica",
-  },
+  { id: uuid, nombre: "Brisas" },
+  { id: "00000000-0000-4000-8000-000000000002", nombre: "Cartago" },
 ];
 
 test.beforeEach(async ({ page }) => {
@@ -54,6 +50,7 @@ async function preparar(
           motivo: "Reunión de coordinación",
           fecha_desde: "2099-09-10",
           fecha_hasta: "2099-09-11",
+          hora_estimada: "10:00:00",
           estado: "VIGENTE",
           created_at: "2026-09-09T12:00:00Z",
           cita_sitios: [{ sitio_id: uuid, sitios: sitios[0] }],
@@ -170,6 +167,118 @@ test("una cuenta sin autorización no ve la agenda", async ({ page }) => {
   ).toHaveCount(0);
 });
 
+test("Activity conserva el mes del calendario al ir y volver entre pasos", async ({
+  page,
+}) => {
+  const errores: string[] = [];
+  page.on("pageerror", (error) => errores.push(error.message));
+  await preparar(page);
+  await page.goto("/nueva");
+  await expect(page.getByText("septiembre de 2026")).toBeVisible();
+  await page.getByRole("button", { name: "Mes siguiente" }).click();
+  await expect(page.getByText("octubre de 2026")).toBeVisible();
+  await page.locator(".selector-sitios").getByText("Brisas", { exact: true }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await expect(page.getByLabel("Nombre completo")).toBeVisible();
+  await page.getByRole("button", { name: "Atrás" }).click();
+  // El calendario (SelectorFechas.tsx) sigue montado -- oculto por
+  // <Activity>, no destruido -- así que conserva el mes al que se había
+  // navegado en vez de volver al mes de "hoy".
+  await expect(page.getByText("octubre de 2026")).toBeVisible();
+  expect(errores).toEqual([]);
+});
+
+test("las fechas se completan 100% por teclado, sin tocar el calendario", async ({
+  page,
+}) => {
+  const { guardados } = await preparar(page);
+  await page.goto("/nueva");
+  // El stepper (componentes/PasoWizard.tsx) debe verse en TODOS los
+  // breakpoints -- este mismo test corre también bajo el proyecto "movil"
+  // (viewport angosto), a diferencia del viejo .indicador-paso que se
+  // ocultaba por completo ahí.
+  await expect(
+    page.getByRole("navigation", { name: "Progreso de la cita" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Paso 1 de 3: ¿Cuándo y dónde?"),
+  ).toBeAttached();
+  await page.locator(".selector-sitios").getByText("Brisas", { exact: true }).click();
+  // Día/Mes/Año como 3 campos de texto es la vía de teclado real -- nunca
+  // se hace click ni drag sobre el calendario en este test.
+  const desde = page.getByRole("group", { name: "Desde" });
+  await desde.getByLabel("Día").fill("10");
+  await desde.getByLabel("Mes").fill("09");
+  await desde.getByLabel("Año").fill("2099");
+  const hasta = page.getByRole("group", { name: "Hasta" });
+  await hasta.getByLabel("Día").fill("12");
+  await hasta.getByLabel("Mes").fill("09");
+  await hasta.getByLabel("Año").fill("2099");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByLabel("Nombre completo").fill("Persona de prueba");
+  await page.getByLabel("Cédula o documento").fill("DOC123");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Revisá tu cita" }),
+  ).toBeVisible();
+  await expect(page.getByText("10 sept 2099 — 12 sept 2099")).toBeVisible();
+  await page.getByRole("button", { name: "Confirmar y agendar" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Cita agendada" }),
+  ).toBeVisible();
+  expect(guardados[0]).toMatchObject({
+    p_fecha_desde: "2099-09-10",
+    p_fecha_hasta: "2099-09-12",
+  });
+});
+
+test("grupo grande de visitantes: se colapsan, se pueden reabrir y la validación de duplicados sigue funcionando", async ({
+  page,
+}) => {
+  await preparar(page);
+  await page.goto("/nueva");
+  await page.locator(".selector-sitios").getByText("Brisas", { exact: true }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
+  // 1 visitante ya existe por defecto -- se agregan 5 más (6 en total,
+  // por encima del umbral de colapso).
+  for (let i = 0; i < 5; i++) {
+    await page.getByRole("button", { name: "Agregar visitante" }).click();
+  }
+  for (let i = 0; i < 6; i++) {
+    await page.getByLabel("Nombre completo").nth(i).fill(`Persona ${i + 1}`);
+    await page.getByLabel("Cédula o documento").nth(i).fill(`DOC00${i + 1}`);
+  }
+  // Con 6 visitantes, uno del medio (ni el primero en pantalla ni el
+  // último agregado) queda colapsado por defecto -- su input no está
+  // visible aunque siga en el DOM.
+  await expect(page.getByLabel("Nombre completo").nth(2)).toBeHidden();
+  // Reabrirlo a mano (click en el <summary>) sigue funcionando.
+  await page.getByText("Persona 3 · DOC003").click();
+  await expect(page.getByLabel("Nombre completo").nth(2)).toBeVisible();
+  await page.getByLabel("Nombre completo").nth(2).fill("Persona 3 editada");
+  // Un duplicado entre dos visitantes cualesquiera se sigue detectando
+  // igual, sin importar cuántos haya ni cuáles estén colapsados -- el
+  // último (índice 5) queda abierto por defecto por ser el recién
+  // agregado, sin necesidad de reabrirlo a mano primero.
+  await page.getByLabel("Cédula o documento").nth(5).fill("DOC003");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await expect(
+    page.getByText("Este documento ya está en la lista."),
+  ).toBeVisible();
+  await page.getByLabel("Cédula o documento").nth(5).fill("DOC006");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Revisá tu cita" }),
+  ).toBeVisible();
+  // El paso "Visitantes" sigue montado (oculto por <Activity>), así que su
+  // propio resumen colapsado también contiene este texto -- se acota a la
+  // sección de revisión, igual que ya se hizo para "hora_estimada".
+  await expect(
+    page.locator(".bloque-revision").getByText("Persona 3 editada"),
+  ).toBeVisible();
+  await expect(page.getByText("Visitantes (6)")).toBeVisible();
+});
+
 test("grupo con dos sitios, validación y reintento idempotente", async ({
   page,
 }, info) => {
@@ -178,16 +287,17 @@ test("grupo con dos sitios, validación y reintento idempotente", async ({
   await expect(
     page.getByRole("heading", { name: "Nueva cita", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Revisar cita" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
   await expect(page.getByText("Seleccioná al menos un sitio.")).toBeVisible();
-  await page.getByRole("checkbox", { name: /Brisas/ }).check();
-  await page.getByRole("checkbox", { name: /Cartago/ }).check();
+  await page.locator(".selector-sitios").getByText("Brisas", { exact: true }).click();
+  await page.locator(".selector-sitios").getByText("Cartago", { exact: true }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByLabel("Nombre completo").fill("Persona de prueba Uno");
   await page.getByLabel("Cédula o documento").fill("DOC-123");
   await page.getByRole("button", { name: "Agregar visitante" }).click();
   await page.getByLabel("Nombre completo").nth(1).fill("Persona de prueba Dos");
   await page.getByLabel("Cédula o documento").nth(1).fill("DOC123");
-  await page.getByRole("button", { name: "Revisar cita" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
   await expect(
     page.getByText("Este documento ya está en la lista."),
   ).toBeVisible();
@@ -201,12 +311,14 @@ test("grupo con dos sitios, validación y reintento idempotente", async ({
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  await page.getByRole("button", { name: "Revisar cita" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
   await expect(
     page.getByRole("heading", { name: "Revisá tu cita" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Confirmar y agendar" }).click();
-  await expect(page.getByRole("alert")).toContainText("no está confirmado");
+  await expect(page.getByRole("alert")).toContainText(
+    "No pudimos confirmar si tu cita quedó guardada",
+  );
   await page.getByRole("button", { name: "Reintentar guardado" }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "Cita agendada" }),
@@ -217,12 +329,36 @@ test("grupo con dos sitios, validación y reintento idempotente", async ({
   expect(guardados[0]?.p_visitantes).toHaveLength(2);
 });
 
+test("hora estimada es opcional, viaja a la RPC y se ve en Mis Citas", async ({
+  page,
+}) => {
+  const { guardados } = await preparar(page);
+  await page.goto("/nueva");
+  await page.locator(".selector-sitios").getByText("Brisas", { exact: true }).click();
+  await page.getByLabel(/Hora aproximada de llegada/).fill("14:30");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByLabel("Nombre completo").fill("Persona de prueba");
+  await page.getByLabel("Cédula o documento").fill("DOC123");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  // Aparece dos veces a propósito (resumen lateral + detalle principal,
+  // mismo patrón que "Fechas"/"Sitios") -- se acota a una sola zona.
+  await expect(
+    page.locator(".bloque-revision").getByText("2:30 p. m."),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Confirmar y agendar" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Cita agendada" }),
+  ).toBeVisible();
+  expect(guardados[0]?.p_hora_estimada).toBe("14:30");
+});
+
 test("detalles, cancelación confirmada y modal por teclado", async ({
   page,
 }, info) => {
   await preparar(page, { cita: true });
   await page.goto("/citas");
   await expect(page.getByText("Reunión de coordinación")).toBeVisible();
+  await expect(page.getByText("10:00 a. m.")).toBeVisible();
   await page.screenshot({
     path: `test-results/agenda-${info.project.name}.png`,
     fullPage: true,
@@ -250,12 +386,12 @@ test("confirma abandonar el formulario y no pierde datos al quedarse", async ({
 }) => {
   await preparar(page);
   await page.goto("/nueva");
-  await page.getByLabel("Nombre completo").fill("Persona de prueba");
+  await page.getByLabel(/Motivo de la visita/).fill("Reunión de prueba");
   await page.locator(".volver").click();
   await expect(page.getByRole("dialog")).toContainText("cambios sin guardar");
   await page.getByRole("button", { name: "Seguir aquí" }).click();
-  await expect(page.getByLabel("Nombre completo")).toHaveValue(
-    "Persona de prueba",
+  await expect(page.getByLabel(/Motivo de la visita/)).toHaveValue(
+    "Reunión de prueba",
   );
 });
 
@@ -265,20 +401,16 @@ test("la pérdida de conexión conserva el formulario y bloquea el envío", asyn
 }) => {
   await preparar(page);
   await page.goto("/nueva");
-  await page.getByLabel("Nombre completo").fill("Persona de prueba");
+  await page.getByLabel(/Motivo de la visita/).fill("Reunión de prueba");
   await context.setOffline(true);
   await expect(page.getByRole("alert")).toContainText("sin conexión");
-  await expect(
-    page.getByRole("button", { name: "Revisar cita" }),
-  ).toBeDisabled();
-  await expect(page.getByLabel("Nombre completo")).toHaveValue(
-    "Persona de prueba",
+  await expect(page.getByRole("button", { name: "Continuar" })).toBeDisabled();
+  await expect(page.getByLabel(/Motivo de la visita/)).toHaveValue(
+    "Reunión de prueba",
   );
   await context.setOffline(false);
-  await expect(
-    page.getByRole("button", { name: "Revisar cita" }),
-  ).toBeEnabled();
-  await expect(page.getByLabel("Nombre completo")).toHaveValue(
-    "Persona de prueba",
+  await expect(page.getByRole("button", { name: "Continuar" })).toBeEnabled();
+  await expect(page.getByLabel(/Motivo de la visita/)).toHaveValue(
+    "Reunión de prueba",
   );
 });

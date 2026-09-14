@@ -1,0 +1,95 @@
+// Tema propio de web-visitas -- Bootstrap 5 + Sass, desacoplado de
+// design/brisas.json (la fuente de tokens compartida con desktop/web
+// operador/mobile). Ver docs/features-futuras/plan-rediseno-web-visitas.md.
+//
+// 1) Overrides ANTES de importar Bootstrap -- así sus propios estilos ya
+//    nacen usando estos valores, en vez de pisarlos después con CSS extra.
+$primary: #e4002b; // rojo tipo Coca-Cola/FEMSA -- sin logo ni tipografía de marca, ver el plan
+$enable-dark-mode: true; // ya es el default en 5.3, se deja explícito
+$border-radius: 0.75rem; // ~12px, el --radio que ya se venía usando
+$border-radius-sm: 0.5rem; // ~8px, el --radio-chico que ya se venía usando
+$border-radius-pill: 999px;
+$font-family-sans-serif: "Segoe UI", Roboto, system-ui, sans-serif; // conserva la tipografía actual, no la de marca de Coca-Cola
+$font-size-base: 0.875rem; // 14px, igual que --fuente-base
+
+@import "bootstrap/scss/bootstrap";
+
+// 2) Tokens propios de esta app, para lo que Bootstrap no cubre (shell,
+//    tarjetas/campos hechos a mano mientras dura la migración de la Fase 1).
+//    Valores portados 1:1 desde design/brisas.json -- ya NO se importan
+//    desde ahí, esta app queda con su propia copia.
+:root {
+  // No varían entre temas -- un solo bloque, no repetidos en light/dark.
+  --fuente: #{$font-family-sans-serif};
+  --fuente-base: 14px;
+  --fuente-titulo: 20px;
+}
+:root,
+[data-bs-theme="light"] {
+  --fondo: #e9edf3;
+  --panel: #ffffff;
+  --panel-suave: #e1e7ef;
+  --elevado: #ffffff;
+  --campo-fondo: #f6f8fb;
+  --borde: #c7d0dd;
+  --borde-fuerte: #78879d;
+  --texto: #202b3a;
+  --muted: #536278;
+  --texto-atenuado: #627087;
+  --acento: #{$primary};
+  --acento-hover: #b8001f;
+  --acento-presionado: #8f0018;
+  --acento-suave: #fbe0e5;
+  --acento-relleno: #{$primary};
+  --sobre-acento: #ffffff;
+  --sobre-acento-indicador: #ffffff;
+  --exito: #35724f;
+  --exito-suave: #e7f1e9;
+  --error: #ad4945;
+  --error-suave: #f7e8e5;
+  --info: #426f93;
+  --info-suave: #e7eff6;
+  --sombra-panel: 0 8px 28px rgba(12, 15, 20, 0.14);
+  --velo: rgba(12, 15, 20, 0.45);
+  --radio: #{$border-radius};
+  --radio-chico: #{$border-radius-sm};
+  --radio-capsula: #{$border-radius-pill};
+  --espacio-1: 0.25rem;
+  --espacio-2: 0.5rem;
+  --espacio-3: 0.75rem;
+  --espacio-4: 1rem;
+  --espacio-6: 1.5rem;
+  --espacio-8: 2rem;
+  --control-altura: 36px;
+  --control-tactil: 48px;
+  --duracion: 150ms;
+  color-scheme: light;
+}
+[data-bs-theme="dark"] {
+  --fondo: #0c0f14;
+  --panel: #181c23;
+  --panel-suave: #303844;
+  --elevado: #343e4d;
+  --campo-fondo: #12161d;
+  --borde: #424c5b;
+  --borde-fuerte: #7c8ba2;
+  --texto: #ecf0f6;
+  --muted: #adb8c8;
+  --texto-atenuado: #96a3b8;
+  --acento: #ff6b7f;
+  --acento-hover: #ff8a9a;
+  --acento-presionado: #ff4d64;
+  --acento-suave: #402029;
+  --acento-relleno: #{$primary};
+  --sobre-acento: #ffffff;
+  --sobre-acento-indicador: #ffffff;
+  --exito: #8bc49b;
+  --exito-suave: #23382b;
+  --error: #de9690;
+  --error-suave: #402b2b;
+  --info: #93b7d4;
+  --info-suave: #263644;
+  --sombra-panel: 0 12px 32px rgba(0, 0, 0, 0.32);
+  --velo: rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}

@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Seccion } from "../App";
 import { rutaSeccion } from "../App";
@@ -45,11 +46,26 @@ export default function Sidebar({
         ))}
       </div>
 
-      <div
-        style={{ flex: 1 }}
-        title="Doble click para colapsar/expandir"
-        onDoubleClick={onToggleColapsado}
-      />
+      <div style={{ flex: 1 }} />
+
+      {/* Antes era un <div> vacío sin rol de botón, sólo alcanzable con
+          doble-click de mouse -- indescubrible y no operable por teclado.
+          Ahora es un botón real, de un solo click, con aria-expanded. */}
+      <button
+        type="button"
+        className="nav-item nav-item-colapsar"
+        onClick={onToggleColapsado}
+        aria-expanded={!colapsado}
+        aria-label={colapsado ? "Expandir panel" : "Colapsar panel"}
+        title={colapsado ? "Expandir panel" : undefined}
+      >
+        {colapsado ? (
+          <PanelLeftOpen aria-hidden="true" />
+        ) : (
+          <PanelLeftClose aria-hidden="true" />
+        )}
+        <span className="nav-item-etiqueta">Colapsar panel</span>
+      </button>
     </nav>
   );
 }
