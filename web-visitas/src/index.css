@@ -1445,6 +1445,11 @@ dd {
    componente: se reemplazó FullCalendar acá específicamente porque su
    wrapper no convivía bien con <Activity> en el wizard). */
 .selector-fechas {
+  /* Sin este límite, la grilla de 7 columnas (`1fr` cada una) estira cada
+     celda al ancho completo del panel del wizard -- con `aspect-ratio: 1`
+     eso vuelve cada día un cuadrado gigante. Un selector de fecha no
+     necesita más ancho que el de un calendario de escritorio típico. */
+  max-width: 340px;
   border: 1px solid var(--borde);
   border-radius: var(--radio-chico);
   padding: 12px;
