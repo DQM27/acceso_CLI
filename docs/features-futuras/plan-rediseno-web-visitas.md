@@ -159,6 +159,16 @@ Al investigar el porqué del polling, surgió una pregunta más de fondo (plante
 
 Corregido separando "carga inicial / cambio real de filtro o página" (sigue mostrando el spinner de página completa, es lo esperable) de "revalidación de fondo" (ya no reemplaza la lista visible -- sólo hace girar el ícono de "Actualizar"; y si la revalidación de fondo falla, se ignora en silencio en vez de tapar la lista con un aviso de error, total se reintenta solo al volver a la pestaña). Mismo tratamiento para la vista Calendario. Re-verificado: 20/20 Playwright, 30/30 vitest, 0 errores de eslint, redesplegado.
 
+**Ajustes de layout tras ver la app en vivo (2026-09-13)**: con las 7 fases ya en producción, feedback visual directo sobre "Nueva cita" -- paso 1 (¿Cuándo y dónde?):
+
+1. *Calendario de `SelectorFechas` gigante*: la grilla de 7 columnas (`1fr` cada una) estiraba cada celda al ancho completo del panel, y `aspect-ratio:1` convertía eso en cuadrados enormes. Se le puso `max-width:340px` a `.selector-fechas` -- celdas de ~43px, tamaño normal de un date-picker de escritorio.
+
+2. *Espacio desperdiciado entre Desde/Hasta, y la hora lejos de las fechas*: `.dos-columnas` (grid `1fr 1fr`) dejaba un hueco enorme entre los dos grupos de campos Día/Mes/Año, porque juntos ocupan mucho menos que la mitad del panel cada uno; además "Hora aproximada de llegada" vivía en un campo aparte, bien debajo de todo el calendario. Se sacó `hora_estimada` de `NuevaCita.tsx` y pasó a ser un prop más de `CampoFechas.tsx` (`hora`/`onCambiarHora`/`erroresHora`), y las 3 preguntas de "¿cuándo?" (Desde, Hasta, Hora) ahora comparten una sola fila flex (`.fila-fechas-hora`, ancho de contenido en vez de `1fr`, con wrap para pantallas angostas) -- quedan pegadas entre sí en vez de separadas por el ancho completo del panel. Detalle no obvio: el texto de ayuda largo dentro de "Hora" empujaba ese campo a estirarse para no envolverse (`flex-basis:auto` usa el ancho de máximo contenido), forzando el wrap de toda la fila antes de lo necesario -- se le dio un `flex-basis` fijo (13rem) para que el texto envuelva adentro en vez de inflar el campo.
+
+3. *Selector de sitios, "no me gusta, ¿podemos usar algo distinto?"*: las tarjetas grandes con checkbox + ícono + nombre (una por fila en móvil, ocupando media pantalla cada una en desktop) se reemplazaron por chips compactos usando el patrón oficial de Bootstrap `.btn-check` + `.btn` (mismo lenguaje visual que las píldoras de filtro de "Mis citas") -- sigue siendo un checkbox real por debajo (foco por teclado, lector de pantalla), sólo cambia lo que se ve: `.btn-check` esconde el input nativo por completo vía `clip`+`pointer-events:none`, sin pintar ningún ícono (nada de `data:image`, sigue limpio de CSP).
+
+**Gotcha de testing**: como `.btn-check` pone `pointer-events:none` en el checkbox real a propósito (se hace click en el `<label>`, no en el input), los tests e2e que hacían `getByRole("checkbox", {name}).check()` directo sobre el input empezaron a fallar ("label intercepts pointer events") -- hubo que cambiarlos a clickear el `<label>` visible (`page.locator(".selector-sitios").getByText(nombre, {exact:true}).click()`), que es además lo que hace de verdad un usuario con mouse. Re-verificado: 20/20 Playwright, 30/30 vitest, 0 errores de eslint, redesplegado.
+
 ---
 
 ## Riesgos

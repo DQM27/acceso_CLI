@@ -974,6 +974,39 @@ main:focus,
 .campo-fecha-segmentos label:last-child input {
   width: 4.5rem;
 }
+/* Desde/Hasta/Hora en una sola fila -- un grid de 2 columnas al 50% (como
+   era antes) dejaba un hueco enorme entre ambas fechas, porque los 3
+   campos juntos ocupan bastante menos que el ancho del panel. Con flex y
+   ancho de contenido (no `1fr`) quedan pegados, y envuelven a una fila
+   nueva en pantallas angostas. */
+.fila-fechas-hora {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+.fila-fechas-hora .campo-fecha-segmentada {
+  margin-bottom: 0;
+}
+/* Ancho fijo, no de contenido -- sin esto, el texto de ayuda de adentro
+   (una oración larga) empuja a `.campo-hora` a estirarse para no
+   envolverse, lo que termina forzando el wrap de toda la fila mucho antes
+   de lo necesario. */
+.campo-hora {
+  flex: 0 0 13rem;
+}
+.campo-hora input {
+  max-width: 10rem;
+}
+/* `.opcional` normalmente flota en la esquina superior derecha del
+   `.campo` (hay lugar de sobra en un campo a lo ancho de la tarjeta) --
+   acá la etiqueta "Hora aproximada de llegada" ya ocupa las 2 líneas del
+   ancho angosto de esta columna, y esa insignia flotante quedaba pisando
+   el texto. En flujo normal, envuelve junto con la etiqueta en vez de
+   superponerse. */
+.campo-hora .opcional {
+  position: static;
+  display: block;
+}
 .opcional {
   position: absolute;
   top: 0;
@@ -1002,79 +1035,17 @@ main:focus,
   font-size: 12px;
   font-weight: 400;
 }
+/* Sitios de la visita: chips (`.btn-check` + `.btn`, patrón oficial de
+   Bootstrap para grupos de toggle) en vez de las tarjetas grandes de
+   antes -- mismo lenguaje visual que las píldoras de filtro de "Mis
+   citas", y no reserva una fila entera de alto por cada sitio cuando el
+   catálogo crece. `.btn-check` esconde el checkbox nativo por completo
+   (clip a 0×0, no pinta ningún ícono) -- sigue siendo un checkbox real
+   para teclado y lectores de pantalla, sólo cambia qué se ve. */
 .selector-sitios {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-}
-.sitio-opcion {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid var(--borde);
-  border-radius: var(--radio-chico);
-  background: var(--campo-fondo);
-  cursor: pointer;
-  transition:
-    border-color var(--duracion),
-    background var(--duracion);
-}
-.sitio-opcion:hover {
-  border-color: var(--borde-fuerte);
-}
-.sitio-opcion.seleccionado {
-  border-color: var(--acento);
-  background: var(--acento-suave);
-}
-.sitio-opcion > svg {
-  color: var(--muted);
-}
-/* El checkbox nativo queda funcional (foco por teclado, lectores de
-   pantalla) pero visualmente oculto -- `.sitio-indicador` es el que se ve,
-   un cuadrito propio en vez del checkbox de fábrica del navegador. */
-.sitio-opcion input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-}
-.sitio-indicador {
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  border: 1.5px solid var(--borde-fuerte);
-  border-radius: 6px;
-  background: var(--panel);
-  transition:
-    background var(--duracion),
-    border-color var(--duracion);
-}
-.sitio-indicador svg {
-  width: 13px;
-  height: 13px;
-  color: var(--sobre-acento-indicador);
-  opacity: 0;
-  transition: opacity var(--duracion);
-}
-.sitio-opcion.seleccionado .sitio-indicador {
-  background: var(--acento-relleno);
-  border-color: var(--acento-relleno);
-}
-.sitio-opcion.seleccionado .sitio-indicador svg {
-  opacity: 1;
-}
-.sitio-opcion input:focus-visible ~ .sitio-indicador {
-  outline: 2px solid var(--acento);
-  outline-offset: 2px;
-}
-.sitio-opcion small {
-  display: block;
-  font-weight: 400;
-  color: var(--muted);
-  margin-top: 4px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .contador-grupo {
   font-size: 12px;
@@ -1420,9 +1391,6 @@ dd {
   }
   .modal {
     padding: 20px;
-  }
-  .selector-sitios {
-    grid-template-columns: 1fr;
   }
 }
 @media (pointer: coarse) {

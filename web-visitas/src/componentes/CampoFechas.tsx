@@ -146,6 +146,11 @@ function CampoFechaSegmentada({
  * `<input type="date">` que reemplazó eso primero tenía a su vez un
  * problema distinto -- su orden día/mes/año depende del navegador de cada
  * visitante, no de esta app -- por eso el paso final a 3 campos fijos.
+ *
+ * La hora aproximada de llegada vive acá también (no en un campo aparte de
+ * la pantalla) -- son las 3 preguntas de "¿cuándo?" juntas en una sola
+ * fila, sin la separación enorme que dejaba un grid de 2 columnas al 50%
+ * en fields que en realidad ocupan mucho menos que eso.
  */
 export default function CampoFechas({
   desde,
@@ -153,16 +158,22 @@ export default function CampoFechas({
   onCambiar,
   erroresDesde,
   erroresHasta,
+  hora,
+  onCambiarHora,
+  erroresHora,
 }: {
   desde: string;
   hasta: string;
   onCambiar: (desde: string, hasta: string) => void;
   erroresDesde?: string;
   erroresHasta?: string;
+  hora: string;
+  onCambiarHora: (hora: string) => void;
+  erroresHora?: string;
 }) {
   return (
     <div>
-      <div className="dos-columnas">
+      <div className="fila-fechas-hora">
         <CampoFechaSegmentada
           etiqueta="Desde"
           valor={desde}
@@ -175,6 +186,27 @@ export default function CampoFechas({
           error={erroresHasta}
           onCambiar={(ymd) => onCambiar(desde, ymd)}
         />
+        <label className="campo campo-hora">
+          Hora aproximada de llegada{" "}
+          <span className="opcional">Opcional</span>
+          <input
+            type="time"
+            className="form-control"
+            value={hora}
+            aria-invalid={!!erroresHora}
+            aria-describedby={erroresHora ? "error-hora_estimada" : "ayuda-hora_estimada"}
+            onChange={(e) => onCambiarHora(e.target.value)}
+          />
+          {erroresHora && (
+            <span className="error-campo" id="error-hora_estimada">
+              {erroresHora}
+            </span>
+          )}
+          <span className="ayuda-campo" id="ayuda-hora_estimada">
+            No hace falta llegar puntual ni se bloquea el ingreso a otra
+            hora -- es sólo para orientar al personal del sitio.
+          </span>
+        </label>
       </div>
       <p className="ayuda-campo" style={{ marginTop: "8px" }}>
         También podés elegir en el calendario: un click selecciona un día, un

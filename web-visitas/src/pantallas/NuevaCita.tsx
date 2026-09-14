@@ -323,33 +323,36 @@ export default function NuevaCita() {
                       aria-labelledby="etiqueta-sitios"
                       {...atributos("sitios")}
                     >
-                      {sitios.map((sitio) => (
-                        <label
-                          className={`sitio-opcion ${formulario.sitios.includes(sitio.id) ? "seleccionado" : ""}`}
-                          key={sitio.id}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={formulario.sitios.includes(sitio.id)}
-                            onChange={(e) =>
-                              actualizar({
-                                sitios: e.target.checked
-                                  ? [...formulario.sitios, sitio.id]
-                                  : formulario.sitios.filter(
-                                      (id) => id !== sitio.id,
-                                    ),
-                              })
-                            }
-                          />
-                          <span className="sitio-indicador">
-                            <Check aria-hidden="true" />
-                          </span>
-                          <MapPin aria-hidden="true" />
-                          <span>
-                            <strong>{sitio.nombre}</strong>
-                          </span>
-                        </label>
-                      ))}
+                      {sitios.map((sitio) => {
+                        const marcado = formulario.sitios.includes(sitio.id);
+                        const id = `sitio-${sitio.id}`;
+                        return (
+                          <div className="sitio-opcion" key={sitio.id}>
+                            <input
+                              type="checkbox"
+                              className="btn-check"
+                              id={id}
+                              checked={marcado}
+                              onChange={(e) =>
+                                actualizar({
+                                  sitios: e.target.checked
+                                    ? [...formulario.sitios, sitio.id]
+                                    : formulario.sitios.filter(
+                                        (sid) => sid !== sitio.id,
+                                      ),
+                                })
+                              }
+                            />
+                            <label
+                              className={`btn btn-sm ${marcado ? "btn-primary" : "btn-outline-secondary"}`}
+                              htmlFor={id}
+                            >
+                              <MapPin aria-hidden="true" />
+                              {sitio.nombre}
+                            </label>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                   {mensajeCampo("sitios")}
@@ -378,27 +381,13 @@ export default function NuevaCita() {
                         return siguiente;
                       });
                     }}
-                  />
-                </div>
-                <label className="campo">
-                  Hora aproximada de llegada{" "}
-                  <span className="opcional">Opcional</span>
-                  <input
-                    type="time"
-                    className="form-control"
-                    style={{ maxWidth: "12rem" }}
-                    value={formulario.hora_estimada}
-                    {...atributos("hora_estimada")}
-                    onChange={(e) =>
-                      actualizar({ hora_estimada: e.target.value })
+                    hora={formulario.hora_estimada}
+                    erroresHora={errores.hora_estimada}
+                    onCambiarHora={(hora_estimada) =>
+                      actualizar({ hora_estimada })
                     }
                   />
-                  {mensajeCampo("hora_estimada")}
-                  <span className="ayuda-campo">
-                    Es sólo para orientar al personal del sitio -- no hace
-                    falta llegar puntual ni se bloquea el ingreso a otra hora.
-                  </span>
-                </label>
+                </div>
                 <label className="campo">
                   Motivo de la visita <span className="opcional">Opcional</span>
                   <textarea
