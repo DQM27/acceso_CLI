@@ -931,6 +931,38 @@ main:focus,
 .dos-columnas .campo {
   margin-bottom: 20px;
 }
+/* componentes/CampoFechas.tsx -- Día/Mes/Año como 3 campos fijos en vez de
+   un <input type="date"> nativo (su orden depende del navegador de cada
+   visitante, no de esta app). */
+.campo-fecha-segmentada {
+  border: 0;
+  padding: 0;
+  margin: 0 0 20px;
+}
+.campo-fecha-segmentada legend {
+  font-size: 13px;
+  font-weight: 550;
+  padding: 0 0 8px;
+}
+.campo-fecha-segmentos {
+  display: flex;
+  gap: 8px;
+}
+.campo-fecha-segmentos label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.campo-fecha-segmentos input {
+  width: 3.25rem;
+  text-align: center;
+}
+.campo-fecha-segmentos label:last-child input {
+  width: 4.5rem;
+}
 .opcional {
   position: absolute;
   top: 0;

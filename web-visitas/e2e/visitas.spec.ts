@@ -208,12 +208,16 @@ test("las fechas se completan 100% por teclado, sin tocar el calendario", async 
     page.getByText("Paso 1 de 3: ¿Cuándo y dónde?"),
   ).toBeAttached();
   await page.getByRole("checkbox", { name: /Brisas/ }).check();
-  // `.fill()` en un <input type="date"> es la vía de teclado real -- nunca
-  // se hace click ni drag sobre el calendario FullCalendar en este test.
-  await page.getByLabel("Desde").fill("2099-09-10");
-  await page.keyboard.press("Tab");
-  await page.getByLabel("Hasta").fill("2099-09-12");
-  await page.keyboard.press("Tab");
+  // Día/Mes/Año como 3 campos de texto es la vía de teclado real -- nunca
+  // se hace click ni drag sobre el calendario en este test.
+  const desde = page.getByRole("group", { name: "Desde" });
+  await desde.getByLabel("Día").fill("10");
+  await desde.getByLabel("Mes").fill("09");
+  await desde.getByLabel("Año").fill("2099");
+  const hasta = page.getByRole("group", { name: "Hasta" });
+  await hasta.getByLabel("Día").fill("12");
+  await hasta.getByLabel("Mes").fill("09");
+  await hasta.getByLabel("Año").fill("2099");
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByLabel("Nombre completo").fill("Persona de prueba");
   await page.getByLabel("Cédula o documento").fill("DOC123");
