@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import type { FormEvent } from "react";
 import { Link, useBlocker, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -23,6 +22,28 @@ import { fechaLegible, horaLegible, hoyCostaRica } from "../fecha";
 import { useAuth } from "../contexto/AuthContexto";
 import { Aviso, Cargando, Modal } from "../componentes/Comunes";
 import CampoFechas from "../componentes/CampoFechas";
+import PasoWizard from "../componentes/PasoWizard";
+import { useFocoAlCambiar } from "../lib/useFocoAlCambiar";
+
+type Paso = "cuando-donde" | "visitantes" | "revision";
+const PASOS: Paso[] = ["cuando-donde", "visitantes", "revision"];
+const ETIQUETAS_PASO = ["¿Cuándo y dónde?", "Visitantes", "Confirmar"];
+// A qué paso pertenece cada clave de `errores` -- para bloquear el avance
+// sólo por errores del paso actual, sin duplicar reglas de validación (el
+// `safeParse` sigue siendo el único lugar que valida de verdad; esto sólo
+// decide qué mostrar/bloquear en cada pantalla).
+const CAMPOS_CUANDO_DONDE = [
+  "sitios",
+  "fecha_desde",
+  "fecha_hasta",
+  "hora_estimada",
+  "motivo",
+];
+function perteneceAlPaso(clave: string, paso: Paso): boolean {
+  if (paso === "revision") return false;
+  const prefijos = paso === "cuando-donde" ? CAMPOS_CUANDO_DONDE : ["visitantes"];
+  return prefijos.some((p) => clave === p || clave.startsWith(`${p}.`));
+}
 
 export default function NuevaCita() {
   const { verificado } = useAuth();
@@ -41,7 +62,7 @@ export default function NuevaCita() {
   const [intentoSitios, setIntentoSitios] = useState(0);
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
-  const [paso, setPaso] = useState<"datos" | "revision">("datos");
+  const [paso, setPaso] = useState<Paso>("cuando-donde");
   const [guardando, setGuardando] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const [modificado, setModificado] = useState(false);
@@ -94,12 +115,16 @@ export default function NuevaCita() {
     window.addEventListener("beforeunload", antesDeSalir);
     return () => window.removeEventListener("beforeunload", antesDeSalir);
   }, [modificado]);
+  useFocoAlCambiar(titulo, paso);
+  const hayErroresDelPaso = Object.keys(errores).some((clave) =>
+    perteneceAlPaso(clave, paso),
+  );
   useEffect(() => {
-    titulo.current?.focus();
-  }, [paso]);
-  useEffect(() => {
-    if (Object.keys(errores).length) resumenErrores.current?.focus();
-  }, [errores]);
+    if (hayErroresDelPaso) resumenErrores.current?.focus();
+    // Sólo debe re-disparar cuando cambian errores o de paso -- no en cada
+    // render donde `hayErroresDelPaso` da el mismo resultado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [errores, paso]);
 
   function actualizar(cambios: Partial<FormularioCita>) {
     setFormulario((actual) => ({ ...actual, ...cambios }));
@@ -116,28 +141,49 @@ export default function NuevaCita() {
       ),
     });
   }
+  /** Corre SIEMPRE la validación completa (no hay sub-esquemas por paso --
+   * evita duplicar reglas), pero sólo bloquea el avance si el paso ACTUAL
+   * tiene errores propios; errores de un paso que todavía no se visitó
+   * quedan guardados en `errores` para cuando se llegue ahí, sin bloquear
+   * antes de tiempo. */
   function validarFormulario() {
     const resultado = esquemaNuevaCita().safeParse(formulario);
-    if (!resultado.success) {
-      const porCampo: Record<string, string> = {};
+    const porCampo: Record<string, string> = {};
+    if (!resultado.success)
       for (const problema of resultado.error.issues)
         porCampo[problema.path.join(".")] ??= problema.message;
-      setErrores(porCampo);
-      return false;
-    }
-    setErrores({});
-    return true;
+    setErrores(porCampo);
+    return porCampo;
   }
-  function revisar(evento: FormEvent) {
-    evento.preventDefault();
-    if (!validarFormulario()) return;
-    setPaso("revision");
+  function continuar(desde: Paso, hacia: Paso) {
+    const erroresActuales = validarFormulario();
+    const bloqueado = Object.keys(erroresActuales).some((clave) =>
+      perteneceAlPaso(clave, desde),
+    );
+    if (bloqueado) return;
+    // Al paso al que se recién se llega no se le muestran de entrada sus
+    // propios errores (son campos que el usuario todavía no tocó) -- sólo
+    // aparecen si más adelante intenta avanzar desde ahí sin completarlos.
+    setErrores((previo) => {
+      const siguiente = { ...previo };
+      for (const clave of Object.keys(siguiente))
+        if (perteneceAlPaso(clave, hacia)) delete siguiente[clave];
+      return siguiente;
+    });
+    setPaso(hacia);
   }
   async function guardar() {
     if (bloqueo.current || !verificado) return;
-    if (!enviado && !validarFormulario()) {
-      setPaso("datos");
-      return;
+    if (!enviado) {
+      const erroresActuales = validarFormulario();
+      const claves = Object.keys(erroresActuales);
+      if (claves.length > 0) {
+        const primerPaso = claves.some((c) => perteneceAlPaso(c, "cuando-donde"))
+          ? "cuando-donde"
+          : "visitantes";
+        setPaso(primerPaso);
+        return;
+      }
     }
     bloqueo.current = true;
     setGuardando(true);
@@ -181,18 +227,22 @@ export default function NuevaCita() {
         <div>
           <p className="antetitulo">PREPARÁ SU LLEGADA</p>
           <h1 ref={titulo} tabIndex={-1}>
-            {paso === "datos" ? "Nueva cita" : "Revisá tu cita"}
+            {paso === "revision" ? "Revisá tu cita" : "Nueva cita"}
           </h1>
         </div>
-        <span className="indicador-paso">
-          {paso === "datos" ? "1. Datos de la visita" : "2. Confirmación"}
-        </span>
+        <PasoWizard pasos={ETIQUETAS_PASO} actual={PASOS.indexOf(paso)} />
       </div>
       <div className="formulario-layout">
         <div>
-          {paso === "datos" ? (
-            <form onSubmit={revisar} noValidate>
-              {Object.keys(errores).length > 0 && (
+          {paso === "cuando-donde" ? (
+            <form
+              onSubmit={(evento) => {
+                evento.preventDefault();
+                continuar("cuando-donde", "visitantes");
+              }}
+              noValidate
+            >
+              {hayErroresDelPaso && (
                 <div
                   ref={resumenErrores}
                   tabIndex={-1}
@@ -205,9 +255,7 @@ export default function NuevaCita() {
                 className="tarjeta bloque-formulario"
                 disabled={cargando || !verificado}
               >
-                <legend>
-                  <span className="numero-paso">1</span> Lugar y fechas
-                </legend>
+                <legend>Lugar y fechas</legend>
                 <p className="descripcion-bloque">
                   ¿Dónde y cuándo vas a recibir a tus visitantes?
                 </p>
@@ -339,12 +387,45 @@ export default function NuevaCita() {
                   </span>
                 </label>
               </fieldset>
+              <div className="acciones-formulario">
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={
+                    !verificado ||
+                    cargando ||
+                    !!errorSitios ||
+                    sitios.length === 0
+                  }
+                >
+                  Continuar
+                  <ArrowRight aria-hidden="true" />
+                </button>
+              </div>
+            </form>
+          ) : paso === "visitantes" ? (
+            <form
+              onSubmit={(evento) => {
+                evento.preventDefault();
+                continuar("visitantes", "revision");
+              }}
+              noValidate
+            >
+              {hayErroresDelPaso && (
+                <div
+                  ref={resumenErrores}
+                  tabIndex={-1}
+                  className="resumen-errores"
+                >
+                  <Aviso>Revisá los campos marcados para continuar.</Aviso>
+                </div>
+              )}
               <fieldset
                 className="tarjeta bloque-formulario"
                 disabled={!verificado}
               >
                 <legend>
-                  <span className="numero-paso">2</span> Visitantes{" "}
+                  Visitantes{" "}
                   <span className="contador-grupo">
                     {formulario.visitantes.length}
                   </span>
@@ -471,16 +552,19 @@ export default function NuevaCita() {
               <div className="acciones-formulario">
                 <span className="ayuda-campo">* Campos obligatorios</span>
                 <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={() => setPaso("cuando-donde")}
+                >
+                  <ArrowLeft aria-hidden="true" />
+                  Atrás
+                </button>
+                <button
                   type="submit"
                   className="btn btn-primary"
-                  disabled={
-                    !verificado ||
-                    cargando ||
-                    !!errorSitios ||
-                    sitios.length === 0
-                  }
+                  disabled={!verificado}
                 >
-                  Revisar cita
+                  Continuar
                   <ArrowRight aria-hidden="true" />
                 </button>
               </div>
@@ -560,7 +644,7 @@ export default function NuevaCita() {
                     type="button"
                     className="btn btn-outline-secondary"
                     disabled={guardando}
-                    onClick={() => setPaso("datos")}
+                    onClick={() => setPaso("visitantes")}
                   >
                     <ArrowLeft aria-hidden="true" />
                     Editar datos

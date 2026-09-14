@@ -176,6 +176,16 @@ test("las fechas se completan 100% por teclado, sin tocar el calendario", async 
 }) => {
   const { guardados } = await preparar(page);
   await page.goto("/nueva");
+  // El stepper (componentes/PasoWizard.tsx) debe verse en TODOS los
+  // breakpoints -- este mismo test corre también bajo el proyecto "movil"
+  // (viewport angosto), a diferencia del viejo .indicador-paso que se
+  // ocultaba por completo ahí.
+  await expect(
+    page.getByRole("navigation", { name: "Progreso de la cita" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Paso 1 de 3: ¿Cuándo y dónde?"),
+  ).toBeAttached();
   await page.getByRole("checkbox", { name: /Brisas/ }).check();
   // `.fill()` en un <input type="date"> es la vía de teclado real -- nunca
   // se hace click ni drag sobre el calendario FullCalendar en este test.
@@ -183,9 +193,10 @@ test("las fechas se completan 100% por teclado, sin tocar el calendario", async 
   await page.keyboard.press("Tab");
   await page.getByLabel("Hasta").fill("2099-09-12");
   await page.keyboard.press("Tab");
+  await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByLabel("Nombre completo").fill("Persona de prueba");
   await page.getByLabel("Cédula o documento").fill("DOC123");
-  await page.getByRole("button", { name: "Revisar cita" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
   await expect(
     page.getByRole("heading", { name: "Revisá tu cita" }),
   ).toBeVisible();
@@ -208,16 +219,17 @@ test("grupo con dos sitios, validación y reintento idempotente", async ({
   await expect(
     page.getByRole("heading", { name: "Nueva cita", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Revisar cita" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
   await expect(page.getByText("Seleccioná al menos un sitio.")).toBeVisible();
   await page.getByRole("checkbox", { name: /Brisas/ }).check();
   await page.getByRole("checkbox", { name: /Cartago/ }).check();
+  await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByLabel("Nombre completo").fill("Persona de prueba Uno");
   await page.getByLabel("Cédula o documento").fill("DOC-123");
   await page.getByRole("button", { name: "Agregar visitante" }).click();
   await page.getByLabel("Nombre completo").nth(1).fill("Persona de prueba Dos");
   await page.getByLabel("Cédula o documento").nth(1).fill("DOC123");
-  await page.getByRole("button", { name: "Revisar cita" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
   await expect(
     page.getByText("Este documento ya está en la lista."),
   ).toBeVisible();
@@ -231,7 +243,7 @@ test("grupo con dos sitios, validación y reintento idempotente", async ({
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  await page.getByRole("button", { name: "Revisar cita" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
   await expect(
     page.getByRole("heading", { name: "Revisá tu cita" }),
   ).toBeVisible();
@@ -255,10 +267,11 @@ test("hora estimada es opcional, viaja a la RPC y se ve en Mis Citas", async ({
   const { guardados } = await preparar(page);
   await page.goto("/nueva");
   await page.getByRole("checkbox", { name: /Brisas/ }).check();
+  await page.getByLabel(/Hora aproximada de llegada/).fill("14:30");
+  await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByLabel("Nombre completo").fill("Persona de prueba");
   await page.getByLabel("Cédula o documento").fill("DOC123");
-  await page.getByLabel(/Hora aproximada de llegada/).fill("14:30");
-  await page.getByRole("button", { name: "Revisar cita" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
   // Aparece dos veces a propósito (resumen lateral + detalle principal,
   // mismo patrón que "Fechas"/"Sitios") -- se acota a una sola zona.
   await expect(
@@ -305,12 +318,12 @@ test("confirma abandonar el formulario y no pierde datos al quedarse", async ({
 }) => {
   await preparar(page);
   await page.goto("/nueva");
-  await page.getByLabel("Nombre completo").fill("Persona de prueba");
+  await page.getByLabel(/Motivo de la visita/).fill("Reunión de prueba");
   await page.locator(".volver").click();
   await expect(page.getByRole("dialog")).toContainText("cambios sin guardar");
   await page.getByRole("button", { name: "Seguir aquí" }).click();
-  await expect(page.getByLabel("Nombre completo")).toHaveValue(
-    "Persona de prueba",
+  await expect(page.getByLabel(/Motivo de la visita/)).toHaveValue(
+    "Reunión de prueba",
   );
 });
 
@@ -320,20 +333,16 @@ test("la pérdida de conexión conserva el formulario y bloquea el envío", asyn
 }) => {
   await preparar(page);
   await page.goto("/nueva");
-  await page.getByLabel("Nombre completo").fill("Persona de prueba");
+  await page.getByLabel(/Motivo de la visita/).fill("Reunión de prueba");
   await context.setOffline(true);
   await expect(page.getByRole("alert")).toContainText("sin conexión");
-  await expect(
-    page.getByRole("button", { name: "Revisar cita" }),
-  ).toBeDisabled();
-  await expect(page.getByLabel("Nombre completo")).toHaveValue(
-    "Persona de prueba",
+  await expect(page.getByRole("button", { name: "Continuar" })).toBeDisabled();
+  await expect(page.getByLabel(/Motivo de la visita/)).toHaveValue(
+    "Reunión de prueba",
   );
   await context.setOffline(false);
-  await expect(
-    page.getByRole("button", { name: "Revisar cita" }),
-  ).toBeEnabled();
-  await expect(page.getByLabel("Nombre completo")).toHaveValue(
-    "Persona de prueba",
+  await expect(page.getByRole("button", { name: "Continuar" })).toBeEnabled();
+  await expect(page.getByLabel(/Motivo de la visita/)).toHaveValue(
+    "Reunión de prueba",
   );
 });

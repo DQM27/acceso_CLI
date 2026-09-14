@@ -782,10 +782,77 @@ main:focus,
   width: 14px;
   height: 14px;
 }
-.indicador-paso {
+/* componentes/PasoWizard.tsx -- visible en TODOS los breakpoints a
+   propósito (el viejo .indicador-paso se ocultaba por completo en móvil,
+   justo donde más se usa esta pantalla). */
+.paso-wizard ol {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 4px;
+}
+.paso-wizard-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+.paso-wizard-item:last-child {
+  flex: 0 0 auto;
+}
+.paso-wizard-numero {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radio-capsula);
+  border: 1.5px solid var(--borde-fuerte);
   color: var(--muted);
   font-size: 12px;
+  font-weight: 600;
+}
+.paso-wizard-numero svg {
+  width: 14px;
+  height: 14px;
+}
+.paso-wizard-activo .paso-wizard-numero {
+  border-color: var(--acento);
+  background: var(--acento-relleno);
+  color: var(--sobre-acento);
+}
+.paso-wizard-completado .paso-wizard-numero {
+  border-color: var(--acento);
+  color: var(--acento);
+  background: var(--acento-suave);
+}
+.paso-wizard-etiqueta {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--muted);
   white-space: nowrap;
+}
+.paso-wizard-activo .paso-wizard-etiqueta {
+  color: var(--texto);
+}
+.paso-wizard-linea {
+  flex: 1;
+  height: 1.5px;
+  background: var(--borde);
+  min-width: 16px;
+}
+.paso-wizard-completado .paso-wizard-linea {
+  background: var(--acento);
+}
+@media (max-width: 640px) {
+  .paso-wizard-etiqueta {
+    display: none;
+  }
+  .paso-wizard-activo .paso-wizard-etiqueta {
+    display: inline;
+    white-space: normal;
+  }
 }
 .formulario-layout {
   display: grid;
@@ -807,16 +874,6 @@ main:focus,
   font-size: 16px;
   font-weight: 600;
   padding: 24px 0 0;
-}
-.numero-paso {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radio-chico);
-  background: var(--acento-suave);
-  color: var(--acento);
-  font-size: 12px;
 }
 .descripcion-bloque {
   clear: both;
@@ -1268,9 +1325,6 @@ dd {
   }
   .visitante-formulario .dos-columnas .campo:nth-last-child(2) {
     margin-bottom: 20px;
-  }
-  .indicador-paso {
-    display: none;
   }
   .acciones-formulario {
     flex-wrap: wrap;
