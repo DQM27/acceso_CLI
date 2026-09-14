@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  Activity,
+  addTransitionType,
+  startTransition,
+  useEffect,
+  useRef,
+  useState,
+  ViewTransition,
+} from "react";
 import { Link, useBlocker, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -155,6 +163,18 @@ export default function NuevaCita() {
     setErrores(porCampo);
     return porCampo;
   }
+  /** Cambia de paso dentro de un `startTransition` -- `<ViewTransition>`
+   * (más abajo, en el render) sólo anima actualizaciones marcadas como
+   * Transition; `addTransitionType` deja elegir la animación (desde-derecha
+   * vs. desde-izquierda) según la causa, no sólo el destino. Degrada solo:
+   * en un navegador sin View Transitions, React aplica el cambio de estado
+   * igual, sin animación. */
+  function cambiarPaso(siguiente: Paso, tipo: "adelante" | "atras") {
+    startTransition(() => {
+      addTransitionType(tipo);
+      setPaso(siguiente);
+    });
+  }
   function continuar(desde: Paso, hacia: Paso) {
     const erroresActuales = validarFormulario();
     const bloqueado = Object.keys(erroresActuales).some((clave) =>
@@ -170,7 +190,7 @@ export default function NuevaCita() {
         if (perteneceAlPaso(clave, hacia)) delete siguiente[clave];
       return siguiente;
     });
-    setPaso(hacia);
+    cambiarPaso(hacia, "adelante");
   }
   async function guardar() {
     if (bloqueo.current || !verificado) return;
@@ -181,7 +201,7 @@ export default function NuevaCita() {
         const primerPaso = claves.some((c) => perteneceAlPaso(c, "cuando-donde"))
           ? "cuando-donde"
           : "visitantes";
-        setPaso(primerPaso);
+        cambiarPaso(primerPaso, "atras");
         return;
       }
     }
@@ -233,8 +253,21 @@ export default function NuevaCita() {
         <PasoWizard pasos={ETIQUETAS_PASO} actual={PASOS.indexOf(paso)} />
       </div>
       <div className="formulario-layout">
-        <div>
-          {paso === "cuando-donde" ? (
+        {/* React 19.3: los 3 pasos quedan siempre montados, cada uno en su
+            propio <Activity> -- al ocultar un paso, React pausa sus efectos
+            pero conserva su DOM y estado (a diferencia del swap condicional,
+            que desmontaba todo). Esto sólo fue viable después de reemplazar
+            FullCalendar por un calendario propio en SelectorFechas.tsx: el
+            wrapper de FullCalendar reinicializaba su vista cada vez que
+            Activity corría de nuevo sus efectos al mostrar un paso oculto
+            (el DOM sobrevivía, pero su efecto de inicialización no), así
+            que perdía el mes navegado -- un componente de estado simple
+            (`useState`) no tiene ese problema. <ViewTransition> anima el
+            cambio con la View Transition API nativa del navegador cuando
+            hay soporte, sin hacer nada (sin errores) si no lo hay. */}
+        <ViewTransition>
+          <div>
+            <Activity mode={paso === "cuando-donde" ? "visible" : "hidden"}>
             <form
               onSubmit={(evento) => {
                 evento.preventDefault();
@@ -403,7 +436,8 @@ export default function NuevaCita() {
                 </button>
               </div>
             </form>
-          ) : paso === "visitantes" ? (
+            </Activity>
+            <Activity mode={paso === "visitantes" ? "visible" : "hidden"}>
             <form
               onSubmit={(evento) => {
                 evento.preventDefault();
@@ -554,7 +588,7 @@ export default function NuevaCita() {
                 <button
                   type="button"
                   className="btn btn-outline-secondary"
-                  onClick={() => setPaso("cuando-donde")}
+                  onClick={() => cambiarPaso("cuando-donde", "atras")}
                 >
                   <ArrowLeft aria-hidden="true" />
                   Atrás
@@ -569,7 +603,8 @@ export default function NuevaCita() {
                 </button>
               </div>
             </form>
-          ) : (
+            </Activity>
+            <Activity mode={paso === "revision" ? "visible" : "hidden"}>
             <section className="tarjeta bloque-revision">
               <div className="titulo-bloque">
                 <Check aria-hidden="true" />
@@ -644,7 +679,7 @@ export default function NuevaCita() {
                     type="button"
                     className="btn btn-outline-secondary"
                     disabled={guardando}
-                    onClick={() => setPaso("visitantes")}
+                    onClick={() => cambiarPaso("visitantes", "atras")}
                   >
                     <ArrowLeft aria-hidden="true" />
                     Editar datos
@@ -665,8 +700,9 @@ export default function NuevaCita() {
                 </button>
               </div>
             </section>
-          )}
-        </div>
+            </Activity>
+          </div>
+        </ViewTransition>
         <aside className="resumen-lateral">
           <div className="tarjeta">
             <CalendarDays aria-hidden="true" />

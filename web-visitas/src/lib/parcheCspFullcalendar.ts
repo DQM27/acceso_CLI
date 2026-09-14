@@ -10,7 +10,9 @@
  *
  * Se filtra específicamente esa regla ANTES de que `@fullcalendar/core`
  * corra su propia inyección -- por eso este módulo se importa primero (sin
- * nada más antes) en `componentes/SelectorFechas.tsx`: los imports ESM se
+ * nada más antes) en `componentes/CitasCalendario.tsx` (el único lugar que
+ * todavía usa FullCalendar -- `SelectorFechas.tsx` tiene su propio
+ * calendario hecho a mano, sin esta dependencia): los imports ESM se
  * evalúan en orden, y este no tiene dependencias propias, así que el parche
  * ya está puesto cuando el import de FullCalendar empieza a evaluarse.
  */

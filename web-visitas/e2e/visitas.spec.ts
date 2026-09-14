@@ -171,6 +171,27 @@ test("una cuenta sin autorización no ve la agenda", async ({ page }) => {
   ).toHaveCount(0);
 });
 
+test("Activity conserva el mes del calendario al ir y volver entre pasos", async ({
+  page,
+}) => {
+  const errores: string[] = [];
+  page.on("pageerror", (error) => errores.push(error.message));
+  await preparar(page);
+  await page.goto("/nueva");
+  await expect(page.getByText("septiembre de 2026")).toBeVisible();
+  await page.getByRole("button", { name: "Mes siguiente" }).click();
+  await expect(page.getByText("octubre de 2026")).toBeVisible();
+  await page.getByRole("checkbox", { name: /Brisas/ }).check();
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await expect(page.getByLabel("Nombre completo")).toBeVisible();
+  await page.getByRole("button", { name: "Atrás" }).click();
+  // El calendario (SelectorFechas.tsx) sigue montado -- oculto por
+  // <Activity>, no destruido -- así que conserva el mes al que se había
+  // navegado en vez de volver al mes de "hoy".
+  await expect(page.getByText("octubre de 2026")).toBeVisible();
+  expect(errores).toEqual([]);
+});
+
 test("las fechas se completan 100% por teclado, sin tocar el calendario", async ({
   page,
 }) => {

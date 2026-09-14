@@ -5,10 +5,10 @@ import SelectorFechas from "./SelectorFechas";
  * Fechas de la visita: dos `<input type="date">` nativos como fuente de
  * verdad primaria -- siempre visibles, 100% operables por teclado, con el
  * selector nativo del sistema en el celular -- más el calendario visual
- * (`SelectorFechas`, FullCalendar) como complemento, sincronizados en
- * ambas direcciones por el mismo `onCambiar`. Antes el único camino era
- * arrastrar sobre el calendario, lo que bloqueaba por completo a quien
- * navega por teclado (hallazgo de la auditoría de accesibilidad).
+ * (`SelectorFechas`) como complemento, sincronizados en ambas direcciones
+ * por el mismo `onCambiar`. Antes el único camino era arrastrar sobre un
+ * calendario de FullCalendar, lo que bloqueaba por completo a quien navega
+ * por teclado (hallazgo de la auditoría de accesibilidad).
  */
 export default function CampoFechas({
   desde,
@@ -63,8 +63,8 @@ export default function CampoFechas({
         </label>
       </div>
       <p className="ayuda-campo" style={{ marginTop: "8px" }}>
-        También podés elegir en el calendario: un click selecciona un día,
-        arrastrar selecciona un rango.
+        También podés elegir en el calendario: un click selecciona un día, un
+        segundo click en un día posterior arma el rango.
       </p>
       <SelectorFechas desde={desde} hasta={hasta} onCambiar={onCambiar} />
     </div>
