@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState, ViewTransition } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   CalendarDays,
@@ -213,7 +213,7 @@ export default function MisCitas() {
                 type="button"
                 className={`btn btn-sm ${vista === "lista" ? "btn-primary" : "btn-outline-secondary"}`}
                 aria-pressed={vista === "lista"}
-                onClick={() => setVista("lista")}
+                onClick={() => startTransition(() => setVista("lista"))}
               >
                 <List aria-hidden="true" />
                 Lista
@@ -222,7 +222,7 @@ export default function MisCitas() {
                 type="button"
                 className={`btn btn-sm ${vista === "calendario" ? "btn-primary" : "btn-outline-secondary"}`}
                 aria-pressed={vista === "calendario"}
-                onClick={() => setVista("calendario")}
+                onClick={() => startTransition(() => setVista("calendario"))}
               >
                 <CalendarRange aria-hidden="true" />
                 Calendario
@@ -240,6 +240,7 @@ export default function MisCitas() {
             </button>
           </div>
         </div>
+        <ViewTransition>
         {vista === "calendario" ? (
           cargandoCalendario ? (
             <Cargando texto="Consultando tu agenda…" />
@@ -305,57 +306,57 @@ export default function MisCitas() {
                   : `Visita de ${personas.length} personas`);
               return (
                 <article className="cita" key={cita.id}>
-                  <div className="cita-fecha" aria-hidden="true">
-                    <span>{cita.fecha_desde.slice(8)}</span>
-                    <small>
-                      {new Intl.DateTimeFormat("es-CR", {
-                        month: "short",
-                        timeZone: "UTC",
-                      }).format(new Date(`${cita.fecha_desde}T12:00:00Z`))}
-                    </small>
-                  </div>
-                  <div className="cita-contenido">
-                    <div className="cita-titulo">
-                      <h3>{titulo}</h3>
-                      <span className={`estado estado-${estado.toLowerCase()}`}>
-                        {etiquetaEstado[estado]}
-                      </span>
+                  <button
+                    type="button"
+                    className="cita-cuerpo"
+                    aria-label={`Ver detalles de ${titulo}`}
+                    onClick={() => setDetalle(cita)}
+                  >
+                    <div className="cita-fecha" aria-hidden="true">
+                      <span>{cita.fecha_desde.slice(8)}</span>
+                      <small>
+                        {new Intl.DateTimeFormat("es-CR", {
+                          month: "short",
+                          timeZone: "UTC",
+                        }).format(new Date(`${cita.fecha_desde}T12:00:00Z`))}
+                      </small>
                     </div>
-                    <p className="cita-fechas">
-                      {fechaLegible(cita.fecha_desde)}
-                      {cita.fecha_hasta !== cita.fecha_desde &&
-                        ` — ${fechaLegible(cita.fecha_hasta)}`}
-                    </p>
-                    <div className="cita-meta">
-                      <span>
-                        <Users aria-hidden="true" />
-                        {personas.length}{" "}
-                        {personas.length === 1 ? "visitante" : "visitantes"}
-                      </span>
-                      <span>
-                        <MapPin aria-hidden="true" />
-                        {cita.cita_sitios
-                          .map((s) => s.sitios?.nombre ?? "Sitio no disponible")
-                          .join(", ") || "Sin sitios"}
-                      </span>
-                      {cita.hora_estimada && (
-                        <span>
-                          <Clock aria-hidden="true" />
-                          {horaLegible(cita.hora_estimada)}
+                    <div className="cita-contenido">
+                      <div className="cita-titulo">
+                        <h3>{titulo}</h3>
+                        <span className={`estado estado-${estado.toLowerCase()}`}>
+                          {etiquetaEstado[estado]}
                         </span>
-                      )}
+                      </div>
+                      <p className="cita-fechas">
+                        {fechaLegible(cita.fecha_desde)}
+                        {cita.fecha_hasta !== cita.fecha_desde &&
+                          ` — ${fechaLegible(cita.fecha_hasta)}`}
+                      </p>
+                      <div className="cita-meta">
+                        <span>
+                          <Users aria-hidden="true" />
+                          {personas.length}{" "}
+                          {personas.length === 1 ? "visitante" : "visitantes"}
+                        </span>
+                        <span>
+                          <MapPin aria-hidden="true" />
+                          {cita.cita_sitios
+                            .map((s) => s.sitios?.nombre ?? "Sitio no disponible")
+                            .join(", ") || "Sin sitios"}
+                        </span>
+                        {cita.hora_estimada && (
+                          <span>
+                            <Clock aria-hidden="true" />
+                            {horaLegible(cita.hora_estimada)}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <div className="cita-acciones">
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-secondary"
-                      onClick={() => setDetalle(cita)}
-                    >
-                      Ver detalles
-                      <ChevronRight aria-hidden="true" />
-                    </button>
-                    {estado === "VIGENTE" && (
+                    <ChevronRight aria-hidden="true" className="cita-chevron" />
+                  </button>
+                  {estado === "VIGENTE" && (
+                    <div className="cita-acciones">
                       <button
                         type="button"
                         className="btn btn-sm btn-link text-danger"
@@ -367,13 +368,14 @@ export default function MisCitas() {
                       >
                         Cancelar cita
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </article>
               );
             })}
           </div>
         )}
+        </ViewTransition>
         {vista === "lista" && !cargando && !error && (citas.length > 0 || pagina > 0) && (
           <div className="paginacion">
             <span>Página {pagina + 1}</span>

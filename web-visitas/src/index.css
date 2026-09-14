@@ -475,12 +475,39 @@ main:focus,
 .cita {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 18px 20px;
+  gap: 8px;
   border-bottom: 1px solid var(--borde);
 }
 .cita:last-child {
   border-bottom: 0;
+}
+/* Toda la tarjeta (salvo "Cancelar cita") es un solo <button> -- "ver
+   detalles" ya no es una acción explícita más entre varias del mismo peso
+   (la "montaña de botones" que se buscaba evitar), es la tarjeta misma. */
+.cita-cuerpo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+  padding: 18px 20px;
+  background: none;
+  border: 0;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.cita-cuerpo:hover {
+  background: var(--campo-fondo);
+}
+.cita-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.cita-acciones {
+  flex-shrink: 0;
+  padding-right: 20px;
 }
 .cita-fecha {
   width: 60px;
@@ -569,15 +596,6 @@ main:focus,
 .cita-meta svg {
   width: 14px;
   height: 14px;
-}
-.cita-acciones {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex-shrink: 0;
-}
-.cita-acciones .boton {
-  font-size: 12px;
 }
 .nota-agenda {
   display: flex;
@@ -1236,7 +1254,7 @@ dd {
   .resumen-lateral {
     display: none;
   }
-  .cita {
+  .cita-cuerpo {
     gap: 16px;
     padding: 16px;
   }
@@ -1303,6 +1321,8 @@ dd {
   }
   .cita {
     flex-wrap: wrap;
+  }
+  .cita-cuerpo {
     gap: 12px;
     padding: 20px 16px;
   }
@@ -1310,10 +1330,9 @@ dd {
     width: 48px;
   }
   .cita-acciones {
-    flex-direction: row;
     width: 100%;
-    margin-top: 4px;
     justify-content: flex-end;
+    padding: 0 16px 12px;
   }
   .cita-titulo {
     gap: 8px;
