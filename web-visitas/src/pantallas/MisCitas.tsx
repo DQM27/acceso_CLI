@@ -50,7 +50,13 @@ export default function MisCitas() {
   const [citasCalendario, setCitasCalendario] = useState<Cita[]>([]);
   const [cargandoCalendario, setCargandoCalendario] = useState(true);
   const [errorCalendario, setErrorCalendario] = useState<string | null>(null);
+  const [actualizando, setActualizando] = useState(false);
+  const [actualizandoCalendario, setActualizandoCalendario] = useState(false);
   const bloqueo = useRef(false);
+  const cargaHecha = useRef(false);
+  const cargaCalendarioHecha = useRef(false);
+  const filtroPaginaAnterior = useRef({ filtro, pagina });
+  const filtroCalendarioAnterior = useRef(filtro);
   const ruta = useLocation();
   const navegar = useNavigate();
 
@@ -69,28 +75,48 @@ export default function MisCitas() {
 
   useEffect(() => {
     if (!anfitrion) return;
+    const cambioFiltroOPagina =
+      filtroPaginaAnterior.current.filtro !== filtro ||
+      filtroPaginaAnterior.current.pagina !== pagina;
+    filtroPaginaAnterior.current = { filtro, pagina };
+    const revalidacionDeFondo = cargaHecha.current && !cambioFiltroOPagina;
     const controlador = new AbortController();
     const correo = anfitrion.correo;
+    // Una revalidación de fondo (poll cada 60s, volver a la pestaña, botón
+    // "Actualizar") no reemplaza la lista ya visible por el estado de
+    // carga -- antes lo hacía, y la pantalla completa "parpadeaba" al
+    // spinner varias veces por minuto. El spinner de página completa
+    // queda sólo para la carga inicial o un cambio real de filtro/página;
+    // una revalidación de fondo únicamente gira el ícono de "Actualizar".
     // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
     // directo -- evita que `react-hooks/set-state-in-effect` marque esta
     // actualización como síncrona dentro del efecto.
     Promise.resolve()
       .then(() => {
-        setCargando(true);
+        if (revalidacionDeFondo) setActualizando(true);
+        else setCargando(true);
         setError(null);
       })
       .then(() => listarCitas(correo, filtro, pagina, controlador.signal))
       .then((resultado) => {
         if (controlador.signal.aborted) return;
+        cargaHecha.current = true;
         setCitas(resultado.citas);
         setHayMas(resultado.hayMas);
         if (!resultado.citas.length && pagina > 0) setPagina((p) => p - 1);
       })
       .catch((fallo) => {
-        if (!controlador.signal.aborted) setError(mensajeError(fallo));
+        if (controlador.signal.aborted) return;
+        // Una revalidación de fondo que falla (ej. un corte de red breve
+        // durante el pulso automático) no debe tapar la lista visible con
+        // un aviso de error -- se reintenta sola en el próximo pulso.
+        if (!revalidacionDeFondo) setError(mensajeError(fallo));
       })
       .finally(() => {
-        if (!controlador.signal.aborted) setCargando(false);
+        if (!controlador.signal.aborted) {
+          setCargando(false);
+          setActualizando(false);
+        }
       });
     return () => controlador.abort();
   }, [anfitrion, filtro, pagina, revision]);
@@ -100,6 +126,12 @@ export default function MisCitas() {
   // veces se usa la lista paginada de a 12.
   useEffect(() => {
     if (vista !== "calendario" || !anfitrion) return;
+    // Mismo criterio que la lista: una revalidación de fondo no reemplaza
+    // el calendario ya visible por el spinner de página completa -- sólo
+    // un cambio real de filtro (o la primera entrada a esta vista) sí.
+    const cambioFiltro = filtroCalendarioAnterior.current !== filtro;
+    filtroCalendarioAnterior.current = filtro;
+    const revalidacionDeFondo = cargaCalendarioHecha.current && !cambioFiltro;
     const controlador = new AbortController();
     const correo = anfitrion.correo;
     // `Promise.resolve().then(...)` en vez de llamar `setCargandoCalendario(true)`
@@ -107,31 +139,42 @@ export default function MisCitas() {
     // actualización como síncrona dentro del efecto.
     Promise.resolve()
       .then(() => {
-        setCargandoCalendario(true);
+        if (revalidacionDeFondo) setActualizandoCalendario(true);
+        else setCargandoCalendario(true);
         setErrorCalendario(null);
       })
       .then(() => listarCitasCalendario(correo, filtro, controlador.signal))
       .then((resultado) => {
         if (controlador.signal.aborted) return;
+        cargaCalendarioHecha.current = true;
         setCitasCalendario(resultado);
       })
       .catch((fallo) => {
-        if (!controlador.signal.aborted) setErrorCalendario(mensajeError(fallo));
+        if (controlador.signal.aborted) return;
+        if (!revalidacionDeFondo) setErrorCalendario(mensajeError(fallo));
       })
       .finally(() => {
-        if (!controlador.signal.aborted) setCargandoCalendario(false);
+        if (!controlador.signal.aborted) {
+          setCargandoCalendario(false);
+          setActualizandoCalendario(false);
+        }
       });
     return () => controlador.abort();
   }, [anfitrion, filtro, vista, revision]);
 
+  // Sin pulso cada 60s a ciegas: estas citas las crea, edita y cancela
+  // únicamente este mismo anfitrión (RLS de `citas` no da permiso de
+  // escritura a nadie más -- ni operador ni dispositivo de sitio), así que
+  // no hay nada externo con lo que "sincronizar en vivo" mientras la
+  // pestaña queda quieta y a la vista. Sí vale la pena revalidar al volver
+  // a la pestaña -- pudo haber pasado algo en otra pestaña/dispositivo
+  // propio (ej. cancelar una cita desde el celular).
   useEffect(() => {
     const alVolver = () => {
       if (document.visibilityState === "visible") setRevision((v) => v + 1);
     };
-    const intervalo = setInterval(alVolver, 60_000);
     document.addEventListener("visibilitychange", alVolver);
     return () => {
-      clearInterval(intervalo);
       document.removeEventListener("visibilitychange", alVolver);
     };
   }, []);
@@ -231,12 +274,23 @@ export default function MisCitas() {
             <button
               type="button"
               className="btn btn-link solo-icono"
-              disabled={vista === "lista" ? cargando : cargandoCalendario}
+              disabled={
+                vista === "lista"
+                  ? cargando || actualizando
+                  : cargandoCalendario || actualizandoCalendario
+              }
               aria-label="Actualizar"
               title="Actualizar"
               onClick={() => setRevision((v) => v + 1)}
             >
-              <RefreshCw aria-hidden="true" />
+              <RefreshCw
+                aria-hidden="true"
+                className={
+                  (vista === "lista" ? actualizando : actualizandoCalendario)
+                    ? "icono-girando"
+                    : ""
+                }
+              />
             </button>
           </div>
         </div>

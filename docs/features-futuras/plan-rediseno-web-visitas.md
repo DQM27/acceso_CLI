@@ -153,6 +153,12 @@ Verificado con un test e2e dedicado ("Activity conserva el mes del calendario al
 
 **Lección**: una auditoría de "desincronización entre dominios" hecha antes de tocar código (como la de este plan) puede quedar desactualizada por migraciones de otro trabajo que se mergean a `main` mientras el rediseño está en curso en una rama aparte -- vale la pena repetir un chequeo rápido de columnas/RPCs usadas justo antes de un despliegue real, no sólo al principio.
 
+**Segundo bug real encontrado en producción, mismo día**: el dueño de producto reportó que "Mis Citas" se "reseteaba a cada rato" y se veía feo. Causa: el `useEffect` de refresco de `MisCitas.tsx` corría con `setCargando(true)` en cada revalidación -- no sólo en la carga inicial, también en el `setInterval` de 60s y en el `visibilitychange` (volver a la pestaña, alt-tab). Eso reemplazaba toda la lista/calendario por el spinner de página completa y disparaba el `ViewTransition` cada vez, así que la pantalla completa "parpadeaba" varias veces por minuto sin que el usuario hiciera nada.
+
+Al investigar el porqué del polling, surgió una pregunta más de fondo (planteada por el dueño de producto): las citas las crea, edita y cancela *sólo* el propio anfitrión que las mira -- confirmado en las políticas RLS de `public.citas` (sólo existe una política de escritura, "anfitrion actualiza sus propias citas"; ni el operador de sitio ni ningún dispositivo tienen permiso de escritura ahí, sólo de lectura). No hay ningún actor externo cambiando estos datos en vivo, a diferencia de `desktop`/`mobile` donde sí hace falta sync en tiempo real con lo que hace el guardia del sitio. Conclusión: el `setInterval(60_000)` a ciegas no tenía ninguna razón real de ser -- se quitó por completo. El refresco al volver a la pestaña (`visibilitychange`) sí se conserva, porque cubre un caso real aunque menos común: el mismo anfitrión con dos pestañas o dispositivos (ej. cancela desde el celular mientras tenía la laptop abierta).
+
+Corregido separando "carga inicial / cambio real de filtro o página" (sigue mostrando el spinner de página completa, es lo esperable) de "revalidación de fondo" (ya no reemplaza la lista visible -- sólo hace girar el ícono de "Actualizar"; y si la revalidación de fondo falla, se ignora en silencio en vez de tapar la lista con un aviso de error, total se reintenta solo al volver a la pestaña). Mismo tratamiento para la vista Calendario. Re-verificado: 20/20 Playwright, 30/30 vitest, 0 errores de eslint, redesplegado.
+
 ---
 
 ## Riesgos

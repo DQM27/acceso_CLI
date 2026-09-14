@@ -149,6 +149,17 @@ main:focus,
   --bs-btn-hover-color: var(--acento);
   --bs-btn-active-color: var(--acento);
 }
+/* Ícono de "Actualizar" en Mis Citas mientras revalida en segundo plano
+   (poll cada 60s, volver a la pestaña) -- gira en el lugar en vez de
+   reemplazar la lista visible por el spinner de página completa. */
+.icono-girando {
+  animation: girar 1s linear infinite;
+}
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .sello-icono {
   display: grid;
   place-items: center;
