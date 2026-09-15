@@ -79,7 +79,7 @@ fun PantallaRutas() {
             modifier = Modifier.padding(bottom = 10.dp),
         )
 
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             PasoChecklist(numero = 1, titulo = "Carnet KOF", completado = paso1Completo) {
                 CampoConEscaneo(
                     valor = encargado,
@@ -226,7 +226,7 @@ private fun PasoChecklist(
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surface)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(
