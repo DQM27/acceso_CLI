@@ -53,7 +53,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 fun PantallaRutas() {
     val viewModel: RutasViewModel = viewModel()
 
-    var numeroRuta by remember { mutableStateOf("CRR079") }
+    var numeroRuta by remember { mutableStateOf("") }
     var encargado by remember { mutableStateOf("") }
     var numeroDocumento by remember { mutableStateOf("") }
     var subNumeroTexto by remember { mutableStateOf("1") }
@@ -65,7 +65,7 @@ fun PantallaRutas() {
     var salidaParaConfirmarRetorno by remember { mutableStateOf<SalidaRutaActiva?>(null) }
 
     val paso1Completo = encargado.isNotBlank()
-    val paso2Completo = numeroDocumento.isNotBlank() && fechaDocumento.isNotBlank()
+    val paso2Completo = numeroRuta.isNotBlank() && numeroDocumento.isNotBlank() && fechaDocumento.isNotBlank()
     val paso3Completo = vehiculo.isNotBlank()
     val fechaVencida = fechaDocumento.isNotBlank() && fechaDocumento != fechaHoyTexto()
     val bloqueadoPorFecha = fechaVencida && !tieneCorreo
@@ -90,39 +90,52 @@ fun PantallaRutas() {
                 onEscanear = { encargado = "Carlos Balmaceda (demo)" },
             )
             PasoChecklist(numero = 2, titulo = "Documento de ruta", completado = paso2Completo) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextField(
-                        value = numeroRuta,
-                        onValueChange = { numeroRuta = it },
-                        placeholder = { Text("Ruta") },
-                        singleLine = true,
-                        shape = FormaCampoBrisas,
-                        colors = ColoresCampoBrisas(),
-                        modifier = Modifier.weight(1f).height(AlturaBusquedaBrisas),
-                    )
-                    TextField(
-                        value = subNumeroTexto,
-                        onValueChange = { subNumeroTexto = it.filter(Char::isDigit) },
-                        placeholder = { Text("Sub-No.") },
-                        singleLine = true,
-                        shape = FormaCampoBrisas,
-                        colors = ColoresCampoBrisas(),
-                        modifier = Modifier.weight(1f).height(AlturaBusquedaBrisas),
+                // Ruta y documento vienen del mismo comprobante impreso
+                // ("CRR079/ 0001") -- un solo escaneo (el de abajo) carga
+                // los dos, por eso acá arriba no hay cámara propia. Ninguno
+                // de los dos va prellenado: antes de escanear/tipear se ven
+                // como campo vacío (placeholder gris), no como dato ya
+                // confirmado.
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextField(
+                            value = numeroRuta,
+                            onValueChange = { numeroRuta = it },
+                            placeholder = { Text("Ruta") },
+                            singleLine = true,
+                            shape = FormaCampoBrisas,
+                            colors = ColoresCampoBrisas(),
+                            modifier = Modifier.weight(1f).height(AlturaBusquedaBrisas),
+                        )
+                        Box(
+                            modifier = Modifier
+                                .height(AlturaBusquedaBrisas)
+                                .clip(FormaCampoBrisas)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .clickable {
+                                    subNumeroTexto = ((subNumeroTexto.toIntOrNull() ?: 1) % 4 + 1).toString()
+                                }
+                                .padding(horizontal = 14.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(etiquetaSubNumero(subNumeroTexto), style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                    CampoConEscaneo(
+                        valor = numeroDocumento,
+                        onCambiar = { numeroDocumento = it },
+                        placeholder = "No. de transporte / documento",
+                        // La fecha tampoco tiene campo propio -- sólo se
+                        // muestra si difiere de hoy (ver más abajo). El
+                        // escaneo real la va a leer junto al resto; acá el
+                        // mock simula que todo coincide con hoy.
+                        onEscanear = {
+                            numeroRuta = "CRR079 (demo)"
+                            numeroDocumento = "700101452 (demo)"
+                            fechaDocumento = fechaHoyTexto()
+                        },
                     )
                 }
-                CampoConEscaneo(
-                    valor = numeroDocumento,
-                    onCambiar = { numeroDocumento = it },
-                    placeholder = "No. de transporte / documento",
-                    // La fecha viene del mismo documento -- no tiene campo
-                    // propio, sólo se muestra si difiere de hoy (ver más
-                    // abajo). El escaneo real la va a leer junto al número;
-                    // acá el mock simula que coincide con hoy.
-                    onEscanear = {
-                        numeroDocumento = "700101452 (demo)"
-                        fechaDocumento = fechaHoyTexto()
-                    },
-                )
                 if (fechaVencida) {
                     Text(
                         "El documento no es de hoy -- requiere correo de autorización para continuar.",
@@ -211,6 +224,14 @@ fun PantallaRutas() {
             salidaParaConfirmarRetorno = null
         },
     )
+}
+
+/// Mismo cómputo que [DocumentoRuta.etiquetaTipo] -- acá aplica al chip
+/// tocable que reemplaza el campo crudo de sub-número (2026-09-15): el
+/// guardia ve "Principal"/"H2"/"H3"/"H4", no un dígito suelto.
+private fun etiquetaSubNumero(texto: String): String {
+    val n = texto.toIntOrNull() ?: 1
+    return if (n <= 1) "Principal" else "H$n"
 }
 
 @Composable
