@@ -29,15 +29,15 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 
 internal val BrisasClaro = lightColorScheme(
-    primary = Color(0xFF0E8F9E),
+    primary = Color(0xFF0B7EB0),
     onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Color(0xFFD9F0F2),
-    onPrimaryContainer = Color(0xFF0E8F9E),
-    inversePrimary = Color(0xFF6FD3DD),
-    secondary = Color(0xFF0E8F9E),
+    onPrimaryContainer = Color(0xFF0B7EB0),
+    inversePrimary = Color(0xFF6FC3E8),
+    secondary = Color(0xFF0B7EB0),
     onSecondary = Color(0xFFFFFFFF),
     secondaryContainer = Color(0xFFD9F0F2),
-    onSecondaryContainer = Color(0xFF0E8F9E),
+    onSecondaryContainer = Color(0xFF0B7EB0),
     tertiary = Color(0xFF146C94),
     onTertiary = Color(0xFFFFFFFF),
     tertiaryContainer = Color(0xFFE1EEF5),
@@ -48,7 +48,7 @@ internal val BrisasClaro = lightColorScheme(
     onSurface = Color(0xFF1B1B23),
     surfaceVariant = Color(0xFFECEAF6),
     onSurfaceVariant = Color(0xFF6B7280),
-    surfaceTint = Color(0xFF0E8F9E),
+    surfaceTint = Color(0xFF0B7EB0),
     inverseSurface = Color(0xFF1B1B23),
     inverseOnSurface = Color(0xFFF4F3FA),
     error = Color(0xFFDC2626),
@@ -68,15 +68,15 @@ internal val BrisasClaro = lightColorScheme(
 )
 
 internal val BrisasOscuro = darkColorScheme(
-    primary = Color(0xFF6FD3DD),
+    primary = Color(0xFF6FC3E8),
     onPrimary = Color(0xFF06343A),
     primaryContainer = Color(0xFF0B4E56),
-    onPrimaryContainer = Color(0xFF6FD3DD),
-    inversePrimary = Color(0xFF0E8F9E),
-    secondary = Color(0xFF6FD3DD),
+    onPrimaryContainer = Color(0xFF6FC3E8),
+    inversePrimary = Color(0xFF0B7EB0),
+    secondary = Color(0xFF6FC3E8),
     onSecondary = Color(0xFF06343A),
     secondaryContainer = Color(0xFF0B4E56),
-    onSecondaryContainer = Color(0xFF6FD3DD),
+    onSecondaryContainer = Color(0xFF6FC3E8),
     tertiary = Color(0xFF8FC2DC),
     onTertiary = Color(0xFF0B2E3F),
     tertiaryContainer = Color(0xFF17475F),
@@ -87,7 +87,7 @@ internal val BrisasOscuro = darkColorScheme(
     onSurface = Color(0xFFECEAF6),
     surfaceVariant = Color(0xFF2A2D36),
     onSurfaceVariant = Color(0xFFA9AEC0),
-    surfaceTint = Color(0xFF6FD3DD),
+    surfaceTint = Color(0xFF6FC3E8),
     inverseSurface = Color(0xFFECEAF6),
     inverseOnSurface = Color(0xFF0F1115),
     error = Color(0xFFF2A29C),
@@ -115,11 +115,13 @@ internal val FormasBrisas = Shapes(
     extraLarge = RoundedCornerShape(20.dp),
 )
 internal val ColorRellenoBrisas: Color
-    @Composable get() = if (isSystemInDarkTheme()) Color(0xFF0E8F9E) else Color(0xFF0E8F9E)
+    @Composable get() = if (isSystemInDarkTheme()) Color(0xFF0B7EB0) else Color(0xFF0B7EB0)
 internal val ColorSobreRellenoBrisas: Color
     @Composable get() = if (isSystemInDarkTheme()) Color(0xFFFFFFFF) else Color(0xFFFFFFFF)
 internal val EspacioControlBrisas = 12.dp
-internal val AlturaControlBrisas = 48.dp
+// 20% más chico que los 48.dp originales, a pedido explícito (2026-09-15) --
+// no estaba "muy grande", pero se veía mejor un poco más compacto.
+internal val AlturaControlBrisas = 38.dp
 internal val ColorExitoBrisas: Color
     @Composable get() = if (isSystemInDarkTheme()) Color(0xFF8BC49B) else Color(0xFF35724F)
 internal val TipografiaBrisas = Typography(

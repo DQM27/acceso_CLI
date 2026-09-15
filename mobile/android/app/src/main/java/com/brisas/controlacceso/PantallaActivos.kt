@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -160,7 +161,7 @@ fun PantallaActivos(
 
     val verificando = viewModel.seleccionIngreso is SeleccionIngreso.Cargando
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
         SelectorModoBusqueda(modo = viewModel.modo, onCambiar = { viewModel.cambiarModo(it) })
 
         CampoBusquedaActivos(
@@ -170,17 +171,6 @@ fun PantallaActivos(
             onEscanearCedula = { escanerAbierto = true },
             onEscanearGafete = { escanerGafeteSalidaAbierto = true },
         )
-
-        // Sólo fuera del modo gafete — ese modo tiene su propio texto de
-        // ayuda dentro de ContenidoModoSalidaGafete en vez de esta leyenda.
-        if (viewModel.modo != ModoBusqueda.SALIDA_GAFETE) {
-            LeyendaBusqueda(
-                modo = viewModel.modo,
-                texto = viewModel.texto,
-                activos = viewModel.activos,
-                cargando = viewModel.cargando,
-            )
-        }
 
         MensajesEstado(
             error = viewModel.error,
@@ -234,6 +224,12 @@ private fun SelectorModoBusqueda(modo: ModoBusqueda, onCambiar: (ModoBusqueda) -
     )
 }
 
+/// ~10% más bajo que la altura por defecto de un `TextField` sin label
+/// (pedido explícito, 2026-09-15) -- distinto de [AlturaControlBrisas]
+/// (botones) a propósito, ese ya bajó a 38.dp y dejaba este buscador
+/// desalineado con el botón de cámara si compartían el mismo valor.
+private val AlturaBusquedaBrisas = 50.dp
+
 @Composable
 private fun CampoBusquedaActivos(
     modo: ModoBusqueda,
@@ -252,7 +248,7 @@ private fun CampoBusquedaActivos(
     }
 
     Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -269,12 +265,12 @@ private fun CampoBusquedaActivos(
             },
             shape = FormaCampoBrisas,
             colors = ColoresCampoBrisas(),
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).height(AlturaBusquedaBrisas),
         )
         if (modo == ModoBusqueda.ENTRADA || modo == ModoBusqueda.SALIDA_GAFETE) {
             Box(
                 modifier = Modifier
-                    .size(AlturaControlBrisas)
+                    .size(AlturaBusquedaBrisas)
                     .border(1.dp, colorModo, FormaCampoBrisas)
                     .clip(FormaCampoBrisas)
                     .clickable(onClick = if (modo == ModoBusqueda.ENTRADA) onEscanearCedula else onEscanearGafete),
@@ -288,34 +284,6 @@ private fun CampoBusquedaActivos(
             }
         }
     }
-}
-
-@Composable
-private fun LeyendaBusqueda(
-    modo: ModoBusqueda,
-    texto: String,
-    activos: List<FilaActiva>,
-    cargando: Boolean,
-) {
-    val leyenda = when {
-        cargando -> "Buscando…"
-        texto.isBlank() && modo == ModoBusqueda.ENTRADA ->
-            if (activos.isEmpty()) {
-                "Nadie adentro"
-            } else {
-                "Primeros ${activos.size} activos · toque un nombre para registrar salida"
-            }
-        texto.isBlank() -> "Escriba para buscar entre los activos"
-        modo == ModoBusqueda.ENTRADA -> "Buscando contratistas · toque un resultado para registrar entrada"
-        activos.isEmpty() -> "Sin coincidencias entre los activos"
-        else -> "Buscando entre los activos · toque un nombre para registrar salida"
-    }
-    Text(
-        leyenda,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(top = 8.dp),
-    )
 }
 
 @Composable
@@ -364,8 +332,7 @@ private fun ContenidoModoEntrada(
         )
     }
     LazyColumn(
-        modifier = Modifier.padding(top = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         items(resultadosBusqueda, key = { it.id }) { contratista ->
             FilaContratista(contratista, onClick = { onElegirContratista(contratista) })
@@ -456,8 +423,7 @@ private fun ContenidoModoSalidaGafete(
 @Composable
 private fun ListaActivos(activos: List<FilaActiva>, onClick: (FilaActiva) -> Unit) {
     LazyColumn(
-        modifier = Modifier.padding(top = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         items(
             activos,

@@ -30,13 +30,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/** Radio de los campos "filled" (buscadores, login) -- más redondeado que
- * [FormaControlBrisas], estilo cápsula, siguiendo el mockup "estilo Kash". */
-internal val FormaCampoBrisas = RoundedCornerShape(28.dp)
+/** Radio de los campos "filled" (buscadores, login) -- iguala el de
+ * [FormaControlBrisas]; antes era 28.dp (cápsula) y se veía más redondeado
+ * que el mockup, que usa esquinas visibles, no un óvalo completo. */
+internal val FormaCampoBrisas = RoundedCornerShape(16.dp)
 
-/** Forma de las píldoras de selector ([FilaPildoras]) y del cuadradito de
- * los botones de icono del header -- redondeo total, cápsula. */
-internal val FormaPildoraBrisas = RoundedCornerShape(percent = 50)
+/** Forma de las píldoras de selector ([FilaPildoras]) -- antes cápsula
+ * completa (percent=50), se veía más redondeada que el mockup, que usa
+ * esquinas bien marcadas pero no un óvalo. */
+internal val FormaPildoraBrisas = RoundedCornerShape(12.dp)
 
 /** Colores compartidos para un campo de texto "filled" sin borde visible
  * (buscadores, login) -- mismo fondo blanco que las tarjetas, en vez del

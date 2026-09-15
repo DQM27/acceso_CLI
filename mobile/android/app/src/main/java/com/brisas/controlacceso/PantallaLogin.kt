@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -94,7 +95,7 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispo
             singleLine = true,
             shape = FormaCampoBrisas,
             colors = ColoresCampoBrisas(),
-            modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
+            modifier = Modifier.fillMaxWidth().height(56.dp).padding(top = 32.dp),
         )
         TextField(
             value = viewModel.password,
@@ -104,7 +105,7 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispo
             visualTransformation = PasswordVisualTransformation(),
             shape = FormaCampoBrisas,
             colors = ColoresCampoBrisas(),
-            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            modifier = Modifier.fillMaxWidth().height(56.dp).padding(top = 12.dp),
         )
         BotonBrisas(
             onClick = { viewModel.autenticar() },
