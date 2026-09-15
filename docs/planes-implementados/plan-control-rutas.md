@@ -302,15 +302,21 @@ procediera contra producción (no hay ambiente de prueba separado).
 
 **Aplicado a Supabase** (migración `control_de_rutas_vehiculos_encargados_salidas`,
 verificado sin hallazgos nuevos en `get_advisors` security/performance):
-- `vehiculos_ruta`/`encargados_ruta`/`salidas_ruta`, acotadas por
-  `sitio_id` del JWT del dispositivo -- **igual que `ingresos`/
-  `movimientos_visita`, NO global como `contratistas`/`empresas`** (una
-  flota/personal KOF es de un sitio, no compartida). RLS de 3 políticas
-  (leer propio sitio o admin_global; crear/actualizar propio sitio y
-  `tipo <> 'visor'`), triggers de apertura inmutable + cierre único
-  (espejo exacto de `ingresos`/`movimientos_visita`, sólo con
-  "retorno" en vez de "salida" para no chocar con la terminología del
-  núcleo Rust), broadcast (`emitir_cambio_nube_sitio`), `updated_at`.
+- `vehiculos_ruta`/`salidas_ruta`, acotadas por `sitio_id` del JWT del
+  dispositivo -- igual que `ingresos`/`movimientos_visita` (la flota es
+  de un sitio puntual, no compartida). RLS de 3 políticas (leer propio
+  sitio o admin_global; crear/actualizar propio sitio y `tipo <> 'visor'`),
+  triggers de apertura inmutable + cierre único (espejo exacto de
+  `ingresos`/`movimientos_visita`, sólo con "retorno" en vez de "salida"
+  para no chocar con la terminología del núcleo Rust), broadcast
+  (`emitir_cambio_nube_sitio`), `updated_at`.
+- `encargados_ruta` (personal KOF): **corregido a GLOBAL** (migración
+  `encargados_ruta_global_como_contratistas`, 2026-09-15) -- el usuario
+  aclaró que el personal KOF es como los contratistas, no atado a un
+  sitio. Lectura/actualización sin restricción de sitio (mismo `using`
+  que `empresas`); el `INSERT` se queda igual, sigue estampando el sitio
+  del dispositivo que crea la fila (mismo criterio que
+  "crear empresas del propio sitio").
   `vehiculo_id`/`encargado_id` en `salidas_ruta` son nullable (mismo
   criterio ya confirmado del lado local).
 
