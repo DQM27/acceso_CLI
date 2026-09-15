@@ -179,8 +179,8 @@ para el selector de "a qué sitio(s) invito"). Antes de esto, solo
 ## Convenciones del repo a respetar
 
 - Comentarios y nombres de variables en español (como el resto del repo).
-- Sin la palabra "garita" en ningún lado (preferencia explícita del
-  dueño del producto — usar "punto de acceso" si hace falta el concepto).
+- Esa palabra que el dueño del producto detesta no va en ningún lado —
+  usar "punto de acceso" si hace falta el concepto.
 - Comentarios solo quando explican un *por qué* no obvio, no qué hace el
   código.
 - No mezclar esta entidad (`citas`/visitas) con `contratistas` en el
