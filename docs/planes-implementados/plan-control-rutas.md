@@ -144,6 +144,23 @@ Mejoras que esto sugirió, ya aplicadas al primer corte mobile
   complementar `REGEX_TRANSPORTE`. Camino de producción (release) no
   cambia -- sigue usando sólo el reconocedor de texto, sin el costo extra
   de correr dos detectores por frame.
+- **Comparación automática texto vs. barcode (2026-09-15):** el usuario
+  probó el APK debug contra el papel real y el barcode "aparentemente
+  dice lo mismo" que "Transporte:". En vez de comparar a ojo dos bloques
+  de texto crudo, se agregó en `VistaCamaraComprobanteRuta` una
+  comparación automática entre el `numeroDocumento` ya parseado del texto
+  y el `rawValue` del barcode: apenas hay un valor de cada lado, se
+  muestra un aviso claro de una sola línea (✓ coincide / ✗ no coincide,
+  con ambos valores si difieren) y se dispara un `Toast` una sola vez (no
+  por frame). Sigue siendo sólo DEBUG -- no cambia el camino de
+  producción ni reemplaza `REGEX_TRANSPORTE` todavía; falta que el
+  usuario confirme el resultado exacto antes de decidir si el núcleo pasa
+  a usar el barcode como fuente primaria.
+- APK debug regenerado en el escritorio del usuario
+  (`control-acceso-debug.apk`, sideload manual) cada vez que se toca este
+  archivo -- no hay dispositivo conectado en modo debug en esta máquina,
+  así que ésta es la forma de iterar con el usuario probando contra
+  papel real.
 
 ## Contexto
 

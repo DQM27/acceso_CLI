@@ -3,6 +3,7 @@ package com.brisas.controlacceso
 import android.Manifest
 import android.content.pm.PackageManager
 import android.util.Size
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -128,6 +129,15 @@ private fun VistaCamaraComprobanteRuta(
     // los regex de LectorComprobanteRuta.kt sin adivinar a ciegas.
     var textoCrudoDebug by remember { mutableStateOf("") }
     var barcodeCrudoDebug by remember { mutableStateOf("") }
+    // Comparación exploratoria (2026-09-15): el usuario probó el sondeo
+    // contra el papel real y el barcode "aparentemente dice lo mismo" que
+    // "Transporte:" -- en vez de que confíe a ojo comparando dos bloques
+    // de texto crudo, se comparan los valores ya parseados acá mismo y se
+    // muestra un resultado claro (una sola línea, no otro bloque de
+    // debug) + un aviso (Toast) la primera vez que hay par para comparar.
+    var numeroDocumentoTextoDebug by remember { mutableStateOf<String?>(null) }
+    var barcodeValorDebug by remember { mutableStateOf<String?>(null) }
+    var yaAvisoComparacion by remember { mutableStateOf(false) }
     val estabilizador = remember { EstabilizadorComprobanteRuta() }
     val detectada = remember { AtomicBoolean(false) }
     val sesionActiva = remember { AtomicBoolean(true) }
@@ -178,7 +188,10 @@ private fun VistaCamaraComprobanteRuta(
                             }
                             val onTexto: (String) -> Unit = { texto ->
                                 if (sesionActiva.get()) {
-                                    if (BuildConfig.DEBUG) textoCrudoDebug = texto
+                                    if (BuildConfig.DEBUG) {
+                                        textoCrudoDebug = texto
+                                        numeroDocumentoTextoDebug = extraerComprobanteRuta(texto)?.numeroDocumento
+                                    }
                                     val resultado = estabilizador.procesarFrame(texto)
                                     if (resultado != null) {
                                         estado = EstadoEscaneo.CONFIRMADO
@@ -213,9 +226,12 @@ private fun VistaCamaraComprobanteRuta(
                                     ejecutorPrincipal = ejecutorPrincipal,
                                     sesionActiva = sesionActiva,
                                     onTexto = onTexto,
-                                    onBarcodes = { valores ->
-                                        if (sesionActiva.get() && valores.isNotEmpty()) {
-                                            barcodeCrudoDebug = valores.joinToString("\n")
+                                    onBarcodes = { codigos ->
+                                        if (sesionActiva.get() && codigos.isNotEmpty()) {
+                                            barcodeCrudoDebug = codigos.joinToString("\n") {
+                                                "${it.rawValue} (formato ${it.format})"
+                                            }
+                                            barcodeValorDebug = codigos.firstOrNull()?.rawValue?.trim()
                                         }
                                     },
                                     onFallo = onFallo,
@@ -264,6 +280,37 @@ private fun VistaCamaraComprobanteRuta(
                     .padding(12.dp),
             )
             BotonDiscretoBrisas(onClick = onCerrar) { Text("Cancelar") }
+            if (BuildConfig.DEBUG) {
+                val docTexto = numeroDocumentoTextoDebug
+                val docBarcode = barcodeValorDebug
+                if (docTexto != null && docBarcode != null) {
+                    val coincide = docTexto == docBarcode
+                    LaunchedEffect(docTexto, docBarcode) {
+                        if (!yaAvisoComparacion) {
+                            yaAvisoComparacion = true
+                            val mensaje = if (coincide) {
+                                "✓ Barcode coincide con Transporte ($docTexto)"
+                            } else {
+                                "✗ Barcode NO coincide -- texto=$docTexto barcode=$docBarcode"
+                            }
+                            Toast.makeText(contexto, mensaje, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                    Text(
+                        if (coincide) {
+                            "DEBUG -- ✓ código de barras COINCIDE con Transporte ($docTexto)"
+                        } else {
+                            "DEBUG -- ✗ código de barras NO coincide (texto=$docTexto, barcode=$docBarcode)"
+                        },
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background((if (coincide) colorConfirmado else Color(0xFFC62828)).copy(alpha = 0.9f))
+                            .padding(12.dp),
+                    )
+                }
+            }
         }
         if (BuildConfig.DEBUG && (textoCrudoDebug.isNotBlank() || barcodeCrudoDebug.isNotBlank())) {
             val textoDebug = buildString {
@@ -302,7 +349,7 @@ private fun analizarComprobanteConBarcodeDebug(
     ejecutorPrincipal: java.util.concurrent.Executor,
     sesionActiva: AtomicBoolean,
     onTexto: (String) -> Unit,
-    onBarcodes: (List<String>) -> Unit,
+    onBarcodes: (List<Barcode>) -> Unit,
     onFallo: () -> Unit,
 ) {
     val mediaImage = imagen.image
@@ -320,12 +367,7 @@ private fun analizarComprobanteConBarcodeDebug(
         .addOnCompleteListener(ejecutorPrincipal) {
             barcodeScanner.process(input)
                 .addOnSuccessListener(ejecutorPrincipal) { codigos ->
-                    if (sesionActiva.get()) {
-                        val valores = codigos.mapNotNull { codigo: Barcode ->
-                            codigo.rawValue?.let { valor -> "$valor (formato ${codigo.format})" }
-                        }
-                        onBarcodes(valores)
-                    }
+                    if (sesionActiva.get()) onBarcodes(codigos.filter { it.rawValue != null })
                 }
                 .addOnCompleteListener(ejecutorPrincipal) {
                     imagen.close()
