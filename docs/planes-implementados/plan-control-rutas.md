@@ -210,6 +210,83 @@ Se activaron los dos perfiles de OCR que quedaban simulados:
   el papel real), estos dos perfiles son el primer corte y muy
   probablemente necesiten ronda de ajuste igual que el comprobante
   cuando el usuario los pruebe con la cámara.
+- **Corrección de largo del código de empleado (2026-09-15):** el usuario
+  compartió la base real de empleados (`empleados_costa_rica.sql`, 1438
+  filas, sociedad TICA) -- reveló que `numero_empleado` NO es fijo en 7
+  dígitos (la única muestra de carnet vista), varía 5-7 (23 casos de 5,
+  61 de 6, 1354 de 7). Corregido en `LectorCarnetKof.kt`. El archivo
+  SQL quedó guardado en la raíz del repo pero **sin commitear** -- el
+  harness lo bloqueó por política de datos personales; el usuario lo
+  confirmó a propósito ("obvio que no puede subir a git... irá a la DB
+  más tarde").
+
+## Núcleo: primer corte (2026-09-15) -- vuelta de orden explícita
+
+El usuario pidió parar el trabajo de mobile y pasar al núcleo ("me cansé
+de estar peleando con la app mobil, vamos a trabajar al núcleo... más
+técnico, más organizado") -- ya no aplica el orden invertido del inicio
+de este documento para lo que sigue. Antes de escribir nada se le
+preguntó explícitamente por 2 decisiones (pedido suyo: "no asumas sin
+consultar"):
+
+1. **`vehiculo_id`/`encargado_id` en `salidas_ruta`: opcionales**
+   (confirmado) -- a diferencia de `contratista_id` en `registro_ingresos`
+   (obligatorio, bloquea si no está en el catálogo), acá el snapshot de
+   texto (`vehiculo_placa`, `encargado_nombre`) es la fuente real; el
+   link al catálogo es sólo un enriquecimiento si hay match.
+2. **`tipo_ruta`/H2-H4: pospuesto** (confirmado, "primero dejemos las
+   rutas principales montadas") -- `salidas_ruta` es UNA fila por salida
+   (un solo documento, ruta PRINCIPAL), no header+detalle todavía. El
+   atajo "+ Documento (H)" que ya existe en el mock de `PantallaRutas.kt`
+   no tiene tabla propia hasta que se decida esto -- migración aparte
+   cuando se retome.
+
+Modelo de referencia pedido explícitamente por el usuario:
+`registro_ingresos`/`RegistroIngresoService` ("el que está más fino y
+mejor ajustado"), no `movimientos_visita` (primer borrador que se probó
+antes de pedir el cambio).
+
+**Implementado y verificado (`cargo test-plano`, 248/248 -- incluye
+`nube` y todo lo demás del núcleo, no sólo lo nuevo; también
+`cargo test-mobile-plano`, 12/12; `cargo clippy --all-targets` limpio;
+`cargo fmt` aplicado):**
+
+- `MIGRACION_36` (`src/database/schema.rs`, `SCHEMA_VERSION = 36`):
+  - `vehiculos_ruta` / `encargados_ruta`: catálogos livianos, mismo
+    molde que `empresas` (sin FTS).
+  - `salidas_ruta`: espejo de `registro_ingresos` -- apertura/cierre con
+    un trío nullable todo-o-nada (`fecha_hora_retorno`/
+    `usuario_retorno_id`/nombre), `CHECK` cronológico, `resultado`
+    (`PERMITIDO`/`PERMITIDO_CON_AUTORIZACION`) + `motivo_resultado`
+    correlacionado (`DOCUMENTO_FECHA_DISTINTA` -- renombrado desde
+    `DOCUMENTO_FECHA_ANTERIOR` durante la implementación: la regla real
+    es "no coincide con hoy", no sólo "es anterior"), 4 triggers
+    (no-eliminar, apertura inmutable, cierre único, fechas UTC),
+    `numero_documento` único, índice único de "un vehículo no puede
+    tener dos salidas abiertas a la vez" por placa (no por id, para que
+    aplique aunque no haya match de catálogo).
+  - `cola_salida.entidad` CHECK ampliado con `vehiculo_ruta`,
+    `encargado_ruta`, `salida_ruta` (mismo patrón que `MIGRACION_30`).
+- `domain::resultado_salida_ruta`: `ResultadoSalidaRuta` (mismo molde
+  que `resultado_acceso.rs`) + `verificar_fecha_documento` (la regla de
+  negocio central: fecha del documento vs. hoy, con o sin correo de
+  autorización) + `salida_es_cronologicamente_valida`.
+- Modelos (`vehiculo_ruta.rs`, `encargado_ruta.rs`, `salida_ruta.rs`) y
+  repositorios (`VehiculoRutaRepository`, `EncargadoRutaRepository`,
+  `SalidaRutaRepository`, cada uno con su implementación `Sqlite*` y
+  tests).
+- `RutaService` (`services/ruta_service.rs`): `registrar_salida`
+  (valida campos obligatorios, vehículo no duplicado en ruta activa,
+  documento no duplicado, regla de fecha; hace match de catálogo por
+  placa/código de empleado -- **nunca por nombre**, para no confundir
+  personas homónimas), `registrar_retorno`, `listar_activas`.
+
+**Pendiente (siguiente corte):** capa UniFFI (`mobile/rust-core/src/lib.rs`),
+conectar `PantallaRutas.kt` al núcleo real (hoy sigue en memoria/mock),
+sincronización con Supabase (`nube::sincronizacion`, siguiendo el patrón
+ya usado para `movimiento_visita`), reporte PDF, y todo lo que quedó
+explícitamente pospuesto arriba (`tipo_ruta`/H2-H4, catálogo desde
+`empleados_costa_rica.sql`).
 
 ## Contexto
 
@@ -319,7 +396,7 @@ importa):
   nombre, `tipo_ruta` (`PRINCIPAL`/`RECARGA`, `CHECK`), `numero_ruta`,
   `numero_documento` (único), `fecha_documento`, `resultado` (`CHECK`:
   `PERMITIDO` / `PERMITIDO_CON_AUTORIZACION`) + `motivo` correlacionado
-  (`DOCUMENTO_FECHA_ANTERIOR`) cuando aplique, `fecha_hora_salida` +
+  (`DOCUMENTO_FECHA_DISTINTA`) cuando aplique, `fecha_hora_salida` +
   `usuario_salida_id`/`nombre`, `fecha_hora_retorno` +
   `usuario_retorno_id`/`nombre` (trío nullable, mismo `CHECK` todo-o-nada
   y cronológico que `registro_ingresos`), `uuid`. Índice único parcial

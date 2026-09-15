@@ -195,6 +195,38 @@ pub enum CitaServiceError {
 }
 
 #[derive(Debug, thiserror::Error)]
+pub enum RutaServiceError {
+    #[error("La placa del vehículo es obligatoria")]
+    PlacaVacia,
+    #[error("El nombre del encargado es obligatorio")]
+    EncargadoVacio,
+    #[error("El número de documento es obligatorio")]
+    NumeroDocumentoVacio,
+    /// Mismo criterio que `RegistroIngresoServiceError::IngresoActivo`, pero
+    /// por placa (texto), no por catálogo -- un vehículo sin match en
+    /// `vehiculos_ruta` igual puede quedar "ya en ruta".
+    #[error("Este vehículo ya tiene una salida de ruta activa")]
+    VehiculoYaEnRuta,
+    #[error("Ya existe una salida registrada con ese número de documento")]
+    DocumentoYaRegistrado,
+    /// La fecha del documento no coincide con hoy y no se marcó tener el
+    /// correo de autorización -- la UI ya debería haber bloqueado el botón
+    /// de confirmar antes de llegar acá (ver
+    /// `docs/planes-implementados/plan-control-rutas.md`, "Bloqueo
+    /// transitorio por documento vencido"); esto es el resguardo del lado
+    /// del servicio, mismo espíritu que `RegistroIngresoService` no confía
+    /// en una verificación previa de la pantalla.
+    #[error("El documento no es de hoy y no se indicó tener el correo de autorización")]
+    DocumentoRequiereAutorizacion,
+    #[error("La salida de ruta no está activa")]
+    SalidaNoActiva,
+    #[error("El retorno no puede ser anterior a la salida")]
+    RetornoAnteriorASalida,
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+}
+
+#[derive(Debug, thiserror::Error)]
 pub enum GafeteServiceError {
     #[error("El número de gafete debe ser mayor a cero")]
     NumeroInvalido,

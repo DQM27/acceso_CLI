@@ -8,4 +8,5 @@ pub mod error;
 pub mod gafete_service;
 pub mod password;
 pub mod registro_ingreso_service;
+pub mod ruta_service;
 pub mod usuario_service;

@@ -6,6 +6,8 @@ pub enum DatabaseError {
     RegistroNoActivo,
     #[error("No existe un movimiento de visita activo con ese ID")]
     MovimientoVisitaNoActivo,
+    #[error("No existe una salida de ruta activa con ese ID")]
+    SalidaRutaNoActiva,
     #[error("La configuración inicial ya fue realizada")]
     ConfiguracionInicialYaRealizada,
     #[error("Usuario no encontrado")]
