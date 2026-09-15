@@ -344,6 +344,22 @@ aspiracional -- lo que sigue sin marcar todavía no corrió.
 
 ## Android y lector de documentos
 
+- [ ] **`cargo ndk` para `mobile/rust-core` no compila localmente en Windows
+  con el motor real (`cifrado-sqlite3mc`, default) -- hallazgo 2026-09-15.**
+  El cross-compile de OpenSSL vendorizado (que arrastra `sqlite3mc` vía
+  `openssl-sys`) para `aarch64-linux-android` falla en esta máquina: primero
+  por el Perl recortado de Git Bash (sin `ExtUtils::MakeMaker`, ver
+  [[feedback_path_duplicado_rompe_cache_openssl]] -- usar PowerShell
+  esquiva ESTO), y después, ya con PowerShell, por un problema de
+  MSYS/`make`/rutas de Windows que rompe las barras del `CC` del NDK al
+  pasar por `sh` (`C:\Users\...\clang.exe` termina sin separadores). Sin
+  resolver todavía -- el camino que sí funciona hoy es CI
+  (`build-android`/`build-test-mobile.yml`, Ubuntu, sin este problema de
+  Windows). **`cargo ndk -t aarch64-linux-android build --release
+  --no-default-features --features sqlite-plano` sí compila local sin
+  problema** (23s, sin tocar OpenSSL) -- sirve para probar UI/diseño rápido
+  en el dispositivo real, pero esa base queda SIN CIFRAR: nunca usar ese
+  `.so` para un APK que vaya a manejar datos reales.
 - [ ] **Mobile muestra errores crudos de nube/sincronización, sin traducir
   (hallazgo 2026-09-12).** Desktop redacta todo error de `nube`/`sync` a
   mensajes amigables (`mensaje_nube`/`mensaje_sincronizacion` en
