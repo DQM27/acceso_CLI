@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -108,13 +109,15 @@ fun PantallaRutas() {
                             singleLine = true,
                             shape = FormaCampoBrisas,
                             colors = ColoresCampoBrisas(),
-                            modifier = Modifier.weight(1f).height(AlturaBusquedaBrisas),
+                            modifier = Modifier.width(140.dp).height(AlturaBusquedaBrisas),
                         )
                         // Texto plano, sin caja/fondo -- una caja acá se
                         // veía como un segundo botón compitiendo con el de
-                        // la cámara de abajo (pedido explícito 2026-09-15).
+                        // la cámara de abajo. Sin peso -- así el campo de
+                        // ruta no se estira, deja libre el resto de la fila
+                        // (pedido explícito 2026-09-15).
                         Text(
-                            "Ruta " + etiquetaSubNumero(subNumeroTexto),
+                            etiquetaSubNumero(subNumeroTexto),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.clickable {
