@@ -787,3 +787,71 @@ clippy limpio (núcleo y `desktop/src-tauri`), `tsc` sin errores.
 Corregir con "Sincronizar" en la pantalla, o reiniciando la app (dispara
 sync automático a los 10s) trae ahora las 1438 filas KOF a cualquier
 dispositivo que configure la nube.
+
+## Catálogo de números de ruta (2026-09-15)
+
+Al ver el modal, el usuario notó un hueco real: `numero_ruta` era texto
+libre ("CRR079"), sin ningún límite -- se podía escribir cualquier cosa,
+incluido un número de ruta que no existe. Pedido explícito: "hay que
+hacer un catálogo de rutas igual que como con los gafetes... al final
+importa el número más que eso [el prefijo]".
+
+Aclarado con el usuario antes de modelar:
+- **Formato**: entero simple (79), sin prefijo "CRR" ni ceros a la
+  izquierda.
+- **Alta**: por rango (como gafetes, `crear_uno`/`crear_rango`), pero con
+  huecos -- "hay unas que se saltan o no aplican" -- y con flexibilidad
+  para deshabilitar una ruta puntual (dar de baja, puro catálogo, sin
+  "perdido" como gafetes).
+- **Alcance**: por sitio (como gafetes, no global como vehículos/
+  encargados) -- "a cada lugar se le asignan" -- pero el número es
+  **único en toda la operación**, no por sitio: "en cartago no saquen
+  una ruta de brisas". Reasignar una ruta a otro sitio es un caso raro
+  ("no es lo normal") que queda como operación administrativa manual
+  (`UPDATE sitio_id` directo en Supabase), sin UI propia todavía.
+- **Restricción**: a diferencia de vehículo/encargado (consultivos, nunca
+  bloquean), el número de ruta SÍ es bloqueante -- debe existir y estar
+  activo en el catálogo, mismo criterio que `contratista_id` en
+  `RegistroIngresoService`.
+
+Implementado en todas las capas:
+
+- **Núcleo**: `MIGRACION_38` -- tabla `rutas` (id/numero único/activo/uuid,
+  sin `sitio_id` local, mismo criterio que `gafetes`) + recreación completa
+  de `salidas_ruta` (`numero_ruta` pasa de `TEXT` a `INTEGER`, gana
+  `ruta_id INTEGER NOT NULL REFERENCES rutas(id)`). Sin datos que
+  preservar (0 filas reales, la tabla nació esta misma sesión).
+  `RutaCatalogoService` (nuevo, `src/services/ruta_service.rs`) --
+  `crear_uno`/`crear_rango`/`dar_de_baja` (bloqueado si hay una salida
+  activa con esa ruta)/`reactivar`, mismo molde que `GafeteService`.
+  `RutaService::registrar_salida` ahora resuelve y valida el número contra
+  el catálogo antes de crear la salida (`RutaServiceError::RutaNoEncontrada`/
+  `RutaInactiva`, nuevos). `AppCore` gana `listar_rutas`/`crear_ruta`/
+  `crear_rutas_rango`/`dar_de_baja_ruta`/`reactivar_ruta`.
+- **Supabase**: tabla `rutas` nueva (RLS por sitio como `gafetes` --
+  select/insert/update acotados a `sitio_id` propio -- pero
+  `UNIQUE(numero)` SIN `sitio_id`, para que dos sitios nunca compartan
+  número). `salidas_ruta.numero_ruta` migrado de `text` a `bigint`. Push
+  (`enviar_ruta`, `on_conflict=numero`) y pull (sumado al
+  `recibir_catalogo_del_sitio` existente, con `sitio_id=eq...` como
+  gafetes, comparte la marca general -- sin la complejidad de "portador
+  pendiente" que sí tiene gafetes).
+- **Escritorio**: tercera pestaña "Números de ruta" en la pantalla de
+  catálogo (`CatalogoRutas.tsx`), con `FormularioRuta.tsx` (alta
+  individual/por rango, calcado de `FormularioGafete.tsx`) y el toggle
+  "Activo" de la grilla llamando `dar_de_baja`/`reactivar` (no un
+  `actualizar` genérico, porque tiene reglas de negocio propias).
+  `SalidaRutaModal.tsx`: el campo de número de ruta pasó de texto libre a
+  un `<select>` poblado sólo con rutas activas -- a diferencia de
+  vehículo/encargado (autocompletar libre, el catálogo es consultivo),
+  acá tiene que ser imposible escribir un número inválido desde la UI.
+
+Verificado: núcleo (286 tests en `--lib`, suite completo, clippy limpio
+en núcleo y `desktop/src-tauri`), advisories de seguridad de Supabase
+limpios tras la migración (se encontró y corrigió un `search_path`
+mutable en la función de trigger nueva), `tsc`/`eslint`/`vitest`
+(197 tests)/`npm run build` sin regresiones en el frontend.
+
+Pendiente: el catálogo de rutas arranca vacío en cualquier base nueva
+(local y Supabase) -- hay que cargar los números reales de Brisas antes
+de poder probar el flujo de salida completo en la app.

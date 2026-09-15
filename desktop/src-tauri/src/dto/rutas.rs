@@ -61,7 +61,7 @@ pub struct SolicitudSalidaRutaEntrada {
     pub vehiculo_numero_unidad: Option<String>,
     pub encargado_nombre: String,
     pub encargado_codigo_empleado: Option<String>,
-    pub numero_ruta: String,
+    pub numero_ruta: i64,
     pub sub_numero: i64,
     pub numero_documento: String,
     pub fecha_documento: NaiveDate,

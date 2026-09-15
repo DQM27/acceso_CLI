@@ -5,6 +5,7 @@ pub mod encargado_ruta_repository;
 pub mod gafete_repository;
 pub mod movimiento_visita_repository;
 pub mod registro_ingreso_repository;
+pub mod ruta_repository;
 pub mod salida_ruta_repository;
 pub mod usuario_repository;
 pub mod vehiculo_ruta_repository;

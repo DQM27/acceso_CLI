@@ -12,6 +12,7 @@ use crate::database::error::DatabaseError;
 use crate::database::repositories::encargado_ruta_repository::{
     EncargadoRutaRepository, SqliteEncargadoRutaRepository,
 };
+use crate::database::repositories::ruta_repository::{RutaRepository, SqliteRutaRepository};
 use crate::database::repositories::salida_ruta_repository::{
     SqliteSalidaRutaRepository, ultimo_instante_salida_ruta,
 };
@@ -19,14 +20,15 @@ use crate::database::repositories::vehiculo_ruta_repository::{
     SqliteVehiculoRutaRepository, VehiculoRutaRepository,
 };
 use crate::models::encargado_ruta::EncargadoRuta;
+use crate::models::ruta::Ruta;
 use crate::models::salida_ruta::{SalidaRuta, SalidaRutaActivaResumen};
 use crate::models::vehiculo_ruta::VehiculoRuta;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::error::{
-    EncargadoRutaServiceError, RutaServiceError, VehiculoRutaServiceError,
+    EncargadoRutaServiceError, RutaCatalogoServiceError, RutaServiceError, VehiculoRutaServiceError,
 };
 use crate::services::ruta_service::{
-    ResultadoRegistroSalidaRuta, RutaService, SolicitudSalidaRuta,
+    ResultadoRegistroSalidaRuta, RutaCatalogoService, RutaService, SolicitudSalidaRuta,
 };
 
 use super::{AppCore, verificar_actor_activo};
@@ -120,6 +122,92 @@ impl AppCore {
             .map_err(EncargadoRutaServiceError::Database)
     }
 
+    // ---- Catálogo: números de ruta (bloqueante, ver ruta_service.rs) ----
+
+    pub fn listar_rutas(&self) -> Result<Vec<Ruta>, DatabaseError> {
+        SqliteRutaRepository::new(&self.connection).listar()
+    }
+
+    pub fn crear_ruta(
+        &self,
+        actor: &UsuarioSesion,
+        numero: i64,
+    ) -> Result<i64, RutaCatalogoServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        verificar_actor_activo(&transaction, actor)
+            .map_err(RutaCatalogoServiceError::Database)?
+            .ok_or(RutaCatalogoServiceError::OperacionNoAutorizada)?;
+        let rutas = SqliteRutaRepository::new(&transaction);
+        let id = RutaCatalogoService::new(&rutas).crear_uno(numero)?;
+        transaction
+            .commit()
+            .map_err(DatabaseError::from)
+            .map_err(RutaCatalogoServiceError::Database)?;
+        Ok(id)
+    }
+
+    pub fn crear_rutas_rango(
+        &self,
+        actor: &UsuarioSesion,
+        desde: i64,
+        hasta: i64,
+    ) -> Result<Vec<i64>, RutaCatalogoServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        verificar_actor_activo(&transaction, actor)
+            .map_err(RutaCatalogoServiceError::Database)?
+            .ok_or(RutaCatalogoServiceError::OperacionNoAutorizada)?;
+        let rutas = SqliteRutaRepository::new(&transaction);
+        let ids = RutaCatalogoService::new(&rutas).crear_rango(desde, hasta)?;
+        transaction
+            .commit()
+            .map_err(DatabaseError::from)
+            .map_err(RutaCatalogoServiceError::Database)?;
+        Ok(ids)
+    }
+
+    pub fn dar_de_baja_ruta(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+    ) -> Result<(), RutaCatalogoServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        verificar_actor_activo(&transaction, actor)
+            .map_err(RutaCatalogoServiceError::Database)?
+            .ok_or(RutaCatalogoServiceError::OperacionNoAutorizada)?;
+        let rutas = SqliteRutaRepository::new(&transaction);
+        let salidas = SqliteSalidaRutaRepository::new(&transaction);
+        RutaCatalogoService::new(&rutas).dar_de_baja(&salidas, id)?;
+        transaction
+            .commit()
+            .map_err(DatabaseError::from)
+            .map_err(RutaCatalogoServiceError::Database)
+    }
+
+    pub fn reactivar_ruta(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+    ) -> Result<(), RutaCatalogoServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        verificar_actor_activo(&transaction, actor)
+            .map_err(RutaCatalogoServiceError::Database)?
+            .ok_or(RutaCatalogoServiceError::OperacionNoAutorizada)?;
+        let rutas = SqliteRutaRepository::new(&transaction);
+        RutaCatalogoService::new(&rutas).reactivar(id)?;
+        transaction
+            .commit()
+            .map_err(DatabaseError::from)
+            .map_err(RutaCatalogoServiceError::Database)
+    }
+
     // ---- Operación: salida / retorno ----
 
     /// Mismo armazón que `AppCore::en_transaccion_con_reloj_validado_visita`
@@ -165,7 +253,8 @@ impl AppCore {
             let salidas = SqliteSalidaRutaRepository::new(transaction);
             let vehiculos = SqliteVehiculoRutaRepository::new(transaction);
             let encargados = SqliteEncargadoRutaRepository::new(transaction);
-            RutaService::new(&salidas, &vehiculos, &encargados).registrar_salida(&solicitud)
+            let rutas = SqliteRutaRepository::new(transaction);
+            RutaService::new(&salidas, &vehiculos, &encargados, &rutas).registrar_salida(&solicitud)
         })
     }
 
@@ -178,7 +267,8 @@ impl AppCore {
             let salidas = SqliteSalidaRutaRepository::new(transaction);
             let vehiculos = SqliteVehiculoRutaRepository::new(transaction);
             let encargados = SqliteEncargadoRutaRepository::new(transaction);
-            RutaService::new(&salidas, &vehiculos, &encargados)
+            let rutas = SqliteRutaRepository::new(transaction);
+            RutaService::new(&salidas, &vehiculos, &encargados, &rutas)
                 .registrar_retorno(salida_id, ahora, actor.id)
         })
     }
@@ -189,14 +279,16 @@ impl AppCore {
         let salidas = SqliteSalidaRutaRepository::new(&self.connection);
         let vehiculos = SqliteVehiculoRutaRepository::new(&self.connection);
         let encargados = SqliteEncargadoRutaRepository::new(&self.connection);
-        RutaService::new(&salidas, &vehiculos, &encargados).listar_activas()
+        let rutas = SqliteRutaRepository::new(&self.connection);
+        RutaService::new(&salidas, &vehiculos, &encargados, &rutas).listar_activas()
     }
 
     pub fn buscar_salida_ruta(&self, id: i64) -> Result<Option<SalidaRuta>, RutaServiceError> {
         let salidas = SqliteSalidaRutaRepository::new(&self.connection);
         let vehiculos = SqliteVehiculoRutaRepository::new(&self.connection);
         let encargados = SqliteEncargadoRutaRepository::new(&self.connection);
-        RutaService::new(&salidas, &vehiculos, &encargados).buscar_por_id(id)
+        let rutas = SqliteRutaRepository::new(&self.connection);
+        RutaService::new(&salidas, &vehiculos, &encargados, &rutas).buscar_por_id(id)
     }
 }
 
@@ -258,6 +350,7 @@ mod tests {
                 [],
             )
             .unwrap();
+        SqliteRutaRepository::new(&connection).crear(79).unwrap();
         let reloj = Arc::new(RelojFijo::new(
             Utc.with_ymd_and_hms(2026, 9, 15, 12, 0, 0).unwrap(),
         ));
@@ -277,7 +370,7 @@ mod tests {
             vehiculo_numero_unidad: Some("22906".to_string()),
             encargado_nombre: "Carlos Balmaceda".to_string(),
             encargado_codigo_empleado: None,
-            numero_ruta: "CRR079".to_string(),
+            numero_ruta: 79,
             sub_numero: 1,
             numero_documento: numero_documento.to_string(),
             fecha_documento: "2026-09-15".parse().unwrap(),
@@ -383,5 +476,81 @@ mod tests {
         .unwrap_err();
 
         assert!(matches!(error, RutaServiceError::RelojRetrocedido));
+    }
+
+    #[test]
+    fn crear_y_listar_ruta_redondea_el_viaje() {
+        let (core, actor) = nucleo_con_usuario();
+
+        core.crear_ruta(&actor, 120).unwrap();
+
+        let rutas = core.listar_rutas().unwrap();
+        assert_eq!(rutas.len(), 2, "79 (del fixture) + 120");
+        assert!(rutas.iter().any(|r| r.numero == 120));
+    }
+
+    #[test]
+    fn crear_rutas_rango_revierte_todo_si_una_falla() {
+        let (core, actor) = nucleo_con_usuario();
+
+        // La 79 ya existe (fixture) -- el rango 78..=80 choca con ella. A
+        // diferencia del servicio puro sin transacción
+        // (`ruta_service::tests::crear_rango_con_un_numero_ya_existente_falla_en_esa_posicion`),
+        // acá SÍ hay una transacción real (`AppCore::crear_rutas_rango`):
+        // como la función nunca llega a `transaction.commit()` cuando
+        // devuelve `Err`, el `Drop` de `Transaction` revierte todo --
+        // tampoco queda la 78.
+        let error = core.crear_rutas_rango(&actor, 78, 80).unwrap_err();
+
+        assert!(matches!(error, RutaCatalogoServiceError::NumeroDuplicado));
+        let rutas = core.listar_rutas().unwrap();
+        assert_eq!(
+            rutas.iter().map(|r| r.numero).collect::<Vec<_>>(),
+            vec![79],
+            "el rollback deja sólo la ruta del fixture, ni la 78 queda creada"
+        );
+    }
+
+    #[test]
+    fn crear_rutas_rango_sin_conflicto_crea_todas() {
+        let (core, actor) = nucleo_con_usuario();
+
+        let ids = core.crear_rutas_rango(&actor, 100, 102).unwrap();
+
+        assert_eq!(ids.len(), 3);
+        assert_eq!(core.listar_rutas().unwrap().len(), 4, "79 (fixture) + 3");
+    }
+
+    #[test]
+    fn dar_de_baja_y_reactivar_ruta_redondean_el_viaje() {
+        let (core, actor) = nucleo_con_usuario();
+        let ruta_id = core
+            .listar_rutas()
+            .unwrap()
+            .into_iter()
+            .find(|r| r.numero == 79)
+            .unwrap()
+            .id;
+
+        core.dar_de_baja_ruta(&actor, ruta_id).unwrap();
+        assert!(!core.listar_rutas().unwrap()[0].activo);
+
+        core.reactivar_ruta(&actor, ruta_id).unwrap();
+        assert!(core.listar_rutas().unwrap()[0].activo);
+    }
+
+    #[test]
+    fn dar_de_baja_una_ruta_con_salida_activa_se_bloquea() {
+        let (core, actor) = nucleo_con_usuario();
+        core.registrar_salida_ruta(&actor, solicitud("C12345", "700101452"))
+            .unwrap();
+        let ruta_id = core.listar_rutas().unwrap()[0].id;
+
+        let error = core.dar_de_baja_ruta(&actor, ruta_id).unwrap_err();
+
+        assert!(matches!(
+            error,
+            RutaCatalogoServiceError::RutaConSalidaActiva
+        ));
     }
 }

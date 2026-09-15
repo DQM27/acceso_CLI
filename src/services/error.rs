@@ -218,6 +218,14 @@ pub enum RutaServiceError {
     /// en una verificación previa de la pantalla.
     #[error("El documento no es de hoy y no se indicó tener el correo de autorización")]
     DocumentoRequiereAutorizacion,
+    /// Bloqueante a propósito (pedido explícito del usuario, 2026-09-15):
+    /// a diferencia de vehículo/encargado, el número de ruta debe existir
+    /// en el catálogo (`rutas`) -- mismo criterio que
+    /// `RegistroIngresoServiceError::ContratistaNoEncontrado`.
+    #[error("El número de ruta no existe en el catálogo")]
+    RutaNoEncontrada,
+    #[error("El número de ruta está dado de baja")]
+    RutaInactiva,
     #[error("La salida de ruta no está activa")]
     SalidaNoActiva,
     #[error("El retorno no puede ser anterior a la salida")]
@@ -255,6 +263,31 @@ pub enum VehiculoRutaServiceError {
 #[derive(Debug, thiserror::Error)]
 pub enum EncargadoRutaServiceError {
     #[error("Su sesión no está autorizada para esta operación")]
+    OperacionNoAutorizada,
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+}
+
+/// Catálogo de números de ruta -- mismo molde que `GafeteServiceError`
+/// (alta individual/por rango, dar de baja con resguardo si está en uso),
+/// pero sin los estados de "portador" que sí tiene un gafete (una ruta no
+/// se pierde, sólo se habilita/deshabilita).
+#[derive(Debug, thiserror::Error)]
+pub enum RutaCatalogoServiceError {
+    #[error("El número de ruta debe ser mayor a cero")]
+    NumeroInvalido,
+    #[error("Ya existe una ruta con ese número")]
+    NumeroDuplicado,
+    #[error("El rango de números no es válido")]
+    RangoInvalido,
+    #[error("La ruta ya no existe")]
+    RutaNoEncontrada,
+    /// Dar de baja una ruta con una salida activa dejaría el catálogo
+    /// contradiciendo un movimiento en curso -- mismo criterio que
+    /// `GafeteServiceError::GafeteConIngresoActivo`.
+    #[error("La ruta tiene una salida activa en este momento")]
+    RutaConSalidaActiva,
+    #[error("La sesión actual no está autorizada para realizar esta operación")]
     OperacionNoAutorizada,
     #[error(transparent)]
     Database(#[from] DatabaseError),

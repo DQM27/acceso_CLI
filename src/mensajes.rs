@@ -7,8 +7,8 @@ use crate::domain::resultado_acceso::MotivoDenegacion;
 use crate::models::gafete::EstadoGafete;
 use crate::services::error::{
     AutenticacionError, CitaServiceError, ContratistaServiceError, EmpresaServiceError,
-    EncargadoRutaServiceError, GafeteServiceError, RegistroIngresoServiceError, RutaServiceError,
-    UsuarioServiceError, VehiculoRutaServiceError,
+    EncargadoRutaServiceError, GafeteServiceError, RegistroIngresoServiceError,
+    RutaCatalogoServiceError, RutaServiceError, UsuarioServiceError, VehiculoRutaServiceError,
 };
 
 /// `HashInvalido` va junto con `Database` a propósito: ambos son fallos de
@@ -200,8 +200,8 @@ pub fn mensaje_encargado_ruta(error: EncargadoRutaServiceError) -> String {
 pub fn mensaje_ruta(error: RutaServiceError) -> String {
     use RutaServiceError::{
         DocumentoRequiereAutorizacion, DocumentoYaRegistrado, EncargadoVacio, NumeroDocumentoVacio,
-        OperadorNoAutorizado, PlacaVacia, RelojRetrocedido, RetornoAnteriorASalida, SalidaNoActiva,
-        VehiculoYaEnRuta,
+        OperadorNoAutorizado, PlacaVacia, RelojRetrocedido, RetornoAnteriorASalida, RutaInactiva,
+        RutaNoEncontrada, SalidaNoActiva, VehiculoYaEnRuta,
     };
 
     match error {
@@ -215,6 +215,8 @@ pub fn mensaje_ruta(error: RutaServiceError) -> String {
         DocumentoRequiereAutorizacion => {
             "El documento no es de hoy -- confirme que cuenta con el correo de autorización".into()
         }
+        RutaNoEncontrada => "El número de ruta no existe en el catálogo".into(),
+        RutaInactiva => "El número de ruta está dado de baja".into(),
         SalidaNoActiva => "La salida de ruta ya no está activa".into(),
         RetornoAnteriorASalida => "El retorno no puede ser anterior a la salida".into(),
         RelojRetrocedido => "Revise la fecha y hora del equipo antes de continuar".into(),
@@ -222,6 +224,23 @@ pub fn mensaje_ruta(error: RutaServiceError) -> String {
             "La sesión que registra el movimiento no existe o está inactiva".into()
         }
         RutaServiceError::Database(_) => "No se pudo registrar el movimiento de la ruta".into(),
+    }
+}
+
+pub fn mensaje_ruta_catalogo(error: RutaCatalogoServiceError) -> String {
+    use RutaCatalogoServiceError::{
+        NumeroDuplicado, NumeroInvalido, OperacionNoAutorizada, RangoInvalido, RutaConSalidaActiva,
+        RutaNoEncontrada,
+    };
+
+    match error {
+        NumeroInvalido => "El número de ruta debe ser mayor a cero".into(),
+        NumeroDuplicado => "Ya existe una ruta con ese número".into(),
+        RangoInvalido => "El rango de números no es válido".into(),
+        RutaNoEncontrada => "La ruta ya no existe".into(),
+        RutaConSalidaActiva => "La ruta tiene una salida activa en este momento".into(),
+        OperacionNoAutorizada => "Su sesión no está autorizada para esta operación".into(),
+        RutaCatalogoServiceError::Database(_) => "No se pudo guardar la ruta".into(),
     }
 }
 

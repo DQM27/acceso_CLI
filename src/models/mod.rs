@@ -6,6 +6,7 @@ pub mod gafete;
 pub mod medio_ingreso;
 pub mod movimiento_visita;
 pub mod registro_ingreso;
+pub mod ruta;
 pub mod salida_ruta;
 pub mod tipo_ingreso;
 pub mod usuario;

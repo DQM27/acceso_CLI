@@ -1,5 +1,8 @@
-use control_acceso::mensajes::{mensaje_encargado_ruta, mensaje_ruta, mensaje_vehiculo_ruta};
+use control_acceso::mensajes::{
+    mensaje_encargado_ruta, mensaje_ruta, mensaje_ruta_catalogo, mensaje_vehiculo_ruta,
+};
 use control_acceso::models::encargado_ruta::EncargadoRuta;
+use control_acceso::models::ruta::Ruta;
 use control_acceso::models::salida_ruta::{SalidaRuta, SalidaRutaActivaResumen};
 use control_acceso::models::vehiculo_ruta::VehiculoRuta;
 
@@ -81,6 +84,57 @@ pub fn actualizar_encargado_ruta(
         .core()
         .actualizar_encargado_ruta(&sesion, &datos.construir(id))
         .map_err(mensaje_encargado_ruta)
+}
+
+// ---- Catálogo: números de ruta ----
+
+#[tauri::command]
+pub fn listar_rutas(state: tauri::State<GuiState>) -> Result<Vec<Ruta>, String> {
+    state.sesion_activa()?;
+    state
+        .core()
+        .listar_rutas()
+        .map_err(|_| "No se pudo cargar la lista de rutas".to_string())
+}
+
+#[tauri::command]
+pub fn crear_ruta(numero: i64, state: tauri::State<GuiState>) -> Result<i64, String> {
+    let sesion = state.sesion_activa()?;
+    state
+        .core()
+        .crear_ruta(&sesion, numero)
+        .map_err(mensaje_ruta_catalogo)
+}
+
+#[tauri::command]
+pub fn crear_rutas_rango(
+    desde: i64,
+    hasta: i64,
+    state: tauri::State<GuiState>,
+) -> Result<Vec<i64>, String> {
+    let sesion = state.sesion_activa()?;
+    state
+        .core()
+        .crear_rutas_rango(&sesion, desde, hasta)
+        .map_err(mensaje_ruta_catalogo)
+}
+
+#[tauri::command]
+pub fn dar_de_baja_ruta(id: i64, state: tauri::State<GuiState>) -> Result<(), String> {
+    let sesion = state.sesion_activa()?;
+    state
+        .core()
+        .dar_de_baja_ruta(&sesion, id)
+        .map_err(mensaje_ruta_catalogo)
+}
+
+#[tauri::command]
+pub fn reactivar_ruta(id: i64, state: tauri::State<GuiState>) -> Result<(), String> {
+    let sesion = state.sesion_activa()?;
+    state
+        .core()
+        .reactivar_ruta(&sesion, id)
+        .map_err(mensaje_ruta_catalogo)
 }
 
 // ---- Operación: salida / retorno ----

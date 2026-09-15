@@ -244,10 +244,12 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
              DROP TABLE cola_salida;
              DROP TABLE ingresos_remotos;
              -- MIGRACION_36 (que corre al final al rebobinar) crea
-             -- `salidas_ruta`/`vehiculos_ruta`/`encargados_ruta` desde cero --
-             -- mismo motivo que cola_salida/ingresos_remotos/gafetes arriba.
-             -- Orden de FK: el hijo primero.
+             -- `salidas_ruta`/`vehiculos_ruta`/`encargados_ruta` desde cero,
+             -- y MIGRACION_38 suma `rutas` -- mismo motivo que
+             -- cola_salida/ingresos_remotos/gafetes arriba. Orden de FK: el
+             -- hijo primero.
              DROP TABLE salidas_ruta;
+             DROP TABLE rutas;
              DROP TABLE vehiculos_ruta;
              DROP TABLE encargados_ruta;
              -- MIGRACION_16/19 (que corren después de ésta al rebobinar) le
@@ -362,6 +364,7 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
              -- MIGRACION_36 ya creó antes de simular v10. Orden de FK: el
              -- hijo primero.
              DROP TABLE salidas_ruta;
+             DROP TABLE rutas;
              DROP TABLE vehiculos_ruta;
              DROP TABLE encargados_ruta;
              -- Mismo motivo que en `migracion_10_...`: soltar `uuid` de
@@ -481,6 +484,7 @@ fn migracion_12_habilita_cambio_de_cedula() {
              -- MIGRACION_36 ya creó antes de simular v11. Orden de FK: el
              -- hijo primero.
              DROP TABLE salidas_ruta;
+             DROP TABLE rutas;
              DROP TABLE vehiculos_ruta;
              DROP TABLE encargados_ruta;
              -- Mismo motivo que en `migracion_10_...`: soltar `uuid` de

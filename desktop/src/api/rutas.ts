@@ -36,6 +36,15 @@ export interface DatosEncargadoRuta {
   activo: boolean;
 }
 
+/** Catálogo de números de ruta válidos -- a diferencia de
+ * vehículos/encargados (consultivos), éste SÍ restringe: `registrarSalidaRuta`
+ * rechaza cualquier número que no exista o esté dado de baja acá. */
+export interface Ruta {
+  id: number;
+  numero: number;
+  activo: boolean;
+}
+
 export function listarVehiculosRuta(): Promise<VehiculoRuta[]> {
   return invoke("listar_vehiculos_ruta");
 }
@@ -69,6 +78,32 @@ export async function actualizarEncargadoRuta(
   solicitarSincronizacionNube();
 }
 
+export function listarRutas(): Promise<Ruta[]> {
+  return invoke("listar_rutas");
+}
+
+export async function crearRuta(numero: number): Promise<number> {
+  const id = await invoke<number>("crear_ruta", { numero });
+  solicitarSincronizacionNube();
+  return id;
+}
+
+export async function crearRutasRango(desde: number, hasta: number): Promise<number[]> {
+  const ids = await invoke<number[]>("crear_rutas_rango", { desde, hasta });
+  solicitarSincronizacionNube();
+  return ids;
+}
+
+export async function darDeBajaRuta(id: number): Promise<void> {
+  await invoke("dar_de_baja_ruta", { id });
+  solicitarSincronizacionNube();
+}
+
+export async function reactivarRuta(id: number): Promise<void> {
+  await invoke("reactivar_ruta", { id });
+  solicitarSincronizacionNube();
+}
+
 /** Fila para la pantalla "Rutas activas" -- análoga a
  * `MovimientoVisitaActivoResumen`. */
 export interface SalidaRutaActivaResumen {
@@ -76,7 +111,7 @@ export interface SalidaRutaActivaResumen {
   vehiculo_placa: string;
   vehiculo_numero_unidad: string | null;
   encargado_nombre: string;
-  numero_ruta: string;
+  numero_ruta: number;
   sub_numero: number;
   numero_documento: string;
   /** `YYYY-MM-DD`. */
@@ -96,7 +131,7 @@ export interface SolicitudSalidaRuta {
   vehiculo_numero_unidad: string | null;
   encargado_nombre: string;
   encargado_codigo_empleado: string | null;
-  numero_ruta: string;
+  numero_ruta: number;
   sub_numero: number;
   numero_documento: string;
   /** `YYYY-MM-DD`. */
@@ -119,7 +154,7 @@ export interface SalidaRuta {
   vehiculo_numero_unidad: string | null;
   encargado_id: number | null;
   encargado_nombre: string;
-  numero_ruta: string;
+  numero_ruta: number;
   sub_numero: number;
   numero_documento: string;
   /** `YYYY-MM-DD`. */

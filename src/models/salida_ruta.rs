@@ -11,6 +11,14 @@ use crate::domain::resultado_salida_ruta::ResultadoSalidaRuta;
 /// catálogo de vehículos/encargados todavía no tiene dueño confirmado
 /// (mobile/desktop/ambos, ver plan) y el OCR/entrada manual nunca es
 /// obligatorio.
+///
+/// `ruta_id` es lo opuesto a propósito (`MIGRACION_38`, pedido explícito
+/// del usuario, 2026-09-15): "sin restricción podrías poner la ruta 222 y
+/// no existe" -- el catálogo de números de ruta (`crate::models::ruta`)
+/// SÍ es obligatorio y bloqueante, mismo criterio que
+/// `contratista_id`/`GafeteRepository`. `numero_ruta` sigue viajando como
+/// snapshot (evita un `JOIN` para mostrar/exportar), pero ya no es la
+/// fuente de la verdad -- `ruta_id` lo es.
 #[derive(Debug, Clone)]
 pub struct NuevaSalidaRuta {
     pub vehiculo_id: Option<i64>,
@@ -18,7 +26,8 @@ pub struct NuevaSalidaRuta {
     pub vehiculo_numero_unidad: Option<String>,
     pub encargado_id: Option<i64>,
     pub encargado_nombre: String,
-    pub numero_ruta: String,
+    pub ruta_id: i64,
+    pub numero_ruta: i64,
     pub sub_numero: i64,
     pub numero_documento: String,
     pub fecha_documento: NaiveDate,
@@ -48,7 +57,8 @@ pub struct SalidaRuta {
     pub vehiculo_numero_unidad: Option<String>,
     pub encargado_id: Option<i64>,
     pub encargado_nombre: String,
-    pub numero_ruta: String,
+    pub ruta_id: i64,
+    pub numero_ruta: i64,
     pub sub_numero: i64,
     pub numero_documento: String,
     pub fecha_documento: NaiveDate,
@@ -70,7 +80,7 @@ pub struct SalidaRutaActivaResumen {
     pub vehiculo_placa: String,
     pub vehiculo_numero_unidad: Option<String>,
     pub encargado_nombre: String,
-    pub numero_ruta: String,
+    pub numero_ruta: i64,
     pub sub_numero: i64,
     pub numero_documento: String,
     pub fecha_documento: NaiveDate,

@@ -144,6 +144,7 @@ fn destino_lote(entidad: &str, operacion: &str) -> Option<(&'static str, Option<
         ("usuario", _) => Some(("usuarios", Some("cedula"))),
         ("ingreso" | "salida_ruta", "cerrar") => None,
         ("ingreso", _) => Some(("ingresos", None)),
+        ("ruta", _) => Some(("rutas", Some("numero"))),
         ("vehiculo_ruta", _) => Some(("vehiculos_ruta", Some("placa"))),
         ("encargado_ruta", _) => Some(("encargados_ruta", Some("codigo_empleado"))),
         ("salida_ruta", _) => Some(("salidas_ruta", None)),
@@ -168,6 +169,7 @@ fn construir_cuerpo(
         "gafete" => construir_cuerpo_gafete(connection, contexto, uuid),
         "usuario" => construir_cuerpo_usuario(connection, contexto, uuid),
         "ingreso" => construir_cuerpo_ingreso(connection, contexto, uuid),
+        "ruta" => construir_cuerpo_ruta(connection, contexto, uuid),
         "vehiculo_ruta" => construir_cuerpo_vehiculo_ruta(connection, contexto, uuid),
         "encargado_ruta" => construir_cuerpo_encargado_ruta(connection, contexto, uuid),
         otra => unreachable!("destino_lote ya filtró entidades sin lote (recibido: {otra})"),
@@ -288,6 +290,7 @@ fn procesar_fila_individual(
             enviar_cierre_ingreso(cliente, connection, contexto, &fila.entidad_uuid)
         }
         ("ingreso", _) => enviar_ingreso(cliente, connection, contexto, &fila.entidad_uuid),
+        ("ruta", _) => enviar_ruta(cliente, connection, contexto, &fila.entidad_uuid),
         ("movimiento_visita", "cerrar") => {
             enviar_cierre_movimiento_visita(cliente, connection, contexto, &fila.entidad_uuid)
         }
@@ -1115,6 +1118,60 @@ fn enviar_cierre_movimiento_visita(
     exigir_2xx(respuesta)
 }
 
+/// Catálogo de números de ruta (`docs/planes-implementados/plan-control-rutas.md`,
+/// pedido explícito del usuario, 2026-09-15) -- a diferencia de
+/// vehículos/encargados (globales, `upsert` por clave natural sin
+/// `sitio_id`), este catálogo SÍ es por sitio (como `gafetes`): cada fila
+/// remota lleva `sitio_id`/`dispositivo_origen_id` y el `on_conflict` es
+/// sólo `numero` (la migración de Supabase declara `UNIQUE(numero)` SIN
+/// `sitio_id` a propósito -- dos sitios nunca comparten el mismo número
+/// de ruta, ver la migración `catalogo_rutas_numeros_validos`).
+fn construir_cuerpo_ruta(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<Value, SincronizacionError> {
+    let (numero, activo): (i64, i64) = connection.query_row(
+        "SELECT numero, activo FROM rutas WHERE uuid = ?1",
+        params![uuid],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    Ok(json!({
+        "id": uuid,
+        "sitio_id": contexto.sitio_id,
+        "dispositivo_origen_id": contexto.dispositivo_id,
+        "numero": numero,
+        "activo": activo != 0,
+    }))
+}
+
+/// `on_conflict=numero` -- ver el doc-comment de `construir_cuerpo_ruta`:
+/// la unicidad remota real es sólo por número, no por `(sitio_id, numero)`
+/// como `gafetes`.
+fn enviar_ruta(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let cuerpo = construir_cuerpo_ruta(connection, contexto, uuid)?;
+
+    let respuesta = cliente
+        .post(format!(
+            "{}/rest/v1/rutas?on_conflict=numero",
+            contexto.base_url
+        ))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
 /// Control de rutas (`docs/planes-implementados/plan-control-rutas.md`) --
 /// mismo espíritu que empresas (catálogo simple, `upsert` por clave
 /// natural) para vehículos/encargados, y que
@@ -1223,7 +1280,7 @@ struct FilaSalidaRutaLocal {
     vehiculo_numero_unidad: Option<String>,
     encargado_id: Option<i64>,
     encargado_nombre: String,
-    numero_ruta: String,
+    numero_ruta: i64,
     sub_numero: i64,
     numero_documento: String,
     fecha_documento: String,
@@ -2497,6 +2554,7 @@ pub struct ResumenCatalogo {
     pub contratistas_recibidos: u32,
     pub usuarios_recibidos: u32,
     pub gafetes_recibidos: u32,
+    pub rutas_recibidas: u32,
 }
 
 #[derive(serde::Deserialize)]
@@ -2555,6 +2613,18 @@ struct FilaGafeteRemota {
     updated_at: String,
 }
 
+/// Catálogo de rutas -- por sitio, como gafetes (ver
+/// `construir_cuerpo_ruta`), pero sin la complejidad de "portador
+/// pendiente" -- comparte la marca general (`filtro_incremental`), no una
+/// propia.
+#[derive(serde::Deserialize)]
+struct FilaRutaRemota {
+    id: String,
+    numero: i64,
+    activo: bool,
+    updated_at: String,
+}
+
 /// Trae de la nube las empresas y contratistas de *este mismo sitio* que
 /// este dispositivo todavía no tiene localmente -- el "pull" que le
 /// faltaba al espejo (hasta ahora sólo empujaba: local → nube, nunca al
@@ -2582,6 +2652,7 @@ struct CatalogoRemotoDescargado {
     contratistas: Vec<FilaContratistaRemota>,
     usuarios: Vec<FilaUsuarioRemota>,
     gafetes: Vec<FilaGafeteRemota>,
+    rutas: Vec<FilaRutaRemota>,
     marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>>,
 }
 
@@ -2652,9 +2723,20 @@ fn descargar_catalogo_remoto(
             contexto.base_url, contexto.sitio_id
         ),
     )?;
+    // Comparte `filtro_incremental` (marca general), no una propia -- ver
+    // el doc-comment de `FilaRutaRemota`. Con `sitio_id=eq...`, mismo
+    // motivo que gafetes: catálogo por sitio.
+    let rutas: Vec<FilaRutaRemota> = obtener_json_paginado(
+        &cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/rutas?sitio_id=eq.{}&select=id,numero,activo,updated_at{filtro_incremental}",
+            contexto.base_url, contexto.sitio_id
+        ),
+    )?;
 
-    // Máximo `updated_at` real entre empresas/contratistas/usuarios --
-    // gafetes lleva su propia marca por separado (`guardar_gafetes` la
+    // Máximo `updated_at` real entre empresas/contratistas/usuarios/rutas
+    // -- gafetes lleva su propia marca por separado (`guardar_gafetes` la
     // calcula después, capada por lo que haya quedado pendiente de
     // resolver, ver su doc-comment). Sin filas nuevas, la marca no avanza
     // -- preferible repetir la misma consulta (ya sabemos que no trae
@@ -2666,6 +2748,7 @@ fn descargar_catalogo_remoto(
         .map(|f| &f.updated_at)
         .chain(contratistas.iter().map(|f| &f.updated_at))
         .chain(usuarios.iter().map(|f| &f.updated_at))
+        .chain(rutas.iter().map(|f| &f.updated_at))
     {
         let actualizado_en = crate::tiempo::parsear_utc(actualizado_en)
             .map_err(|_| SincronizacionError::FechaInvalida(actualizado_en.clone()))?;
@@ -2679,8 +2762,29 @@ fn descargar_catalogo_remoto(
         contratistas,
         usuarios,
         gafetes,
+        rutas,
         marca_mas_nueva,
     })
+}
+
+fn guardar_rutas(
+    transaction: &rusqlite::Transaction<'_>,
+    rutas: &[FilaRutaRemota],
+) -> Result<u32, SincronizacionError> {
+    let mut recibidas = 0;
+    for ruta in rutas {
+        transaction.execute(
+            "
+            INSERT INTO rutas (numero, activo, uuid) VALUES (?1, ?2, ?3)
+            ON CONFLICT(numero) DO UPDATE SET
+                activo = excluded.activo,
+                uuid = COALESCE(rutas.uuid, excluded.uuid)
+            ",
+            params![ruta.numero, ruta.activo, ruta.id],
+        )?;
+        recibidas += 1;
+    }
+    Ok(recibidas)
 }
 
 fn guardar_empresas(
@@ -2977,11 +3081,13 @@ pub fn recibir_catalogo_del_sitio(
     let usuarios_recibidos = guardar_usuarios(&transaction, &descarga.usuarios)?;
     let (gafetes_recibidos, marca_gafetes_nueva) =
         guardar_gafetes(&transaction, &descarga.gafetes)?;
+    let rutas_recibidas = guardar_rutas(&transaction, &descarga.rutas)?;
     let resumen = ResumenCatalogo {
         empresas_recibidas,
         contratistas_recibidos,
         usuarios_recibidos,
         gafetes_recibidos,
+        rutas_recibidas,
     };
 
     if let Some(marca) = descarga.marca_mas_nueva {
@@ -3885,6 +3991,43 @@ mod tests {
     }
 
     #[test]
+    fn envia_una_ruta_pendiente_y_la_marca_enviada() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO rutas (numero, activo, uuid) VALUES (79, 1, 'uuid-ruta-79')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, creado_en, actualizado_en
+                ) VALUES ('ruta', 'uuid-ruta-79', 'crear', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        let estado: String = connection
+            .query_row("SELECT estado FROM cola_salida", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(estado, "enviado");
+    }
+
+    #[test]
     fn envia_un_vehiculo_ruta_pendiente_y_lo_marca_enviado() {
         let connection = Connection::open_in_memory().unwrap();
         initialize_database(&connection).unwrap();
@@ -3976,14 +4119,20 @@ mod tests {
             .unwrap();
         connection
             .execute(
+                "INSERT INTO rutas (id, numero, uuid) VALUES (1, 79, 'uuid-ruta-79')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
                 "INSERT INTO salidas_ruta (
                     uuid, vehiculo_placa, vehiculo_numero_unidad, encargado_nombre,
-                    numero_ruta, sub_numero, numero_documento, fecha_documento,
+                    ruta_id, numero_ruta, sub_numero, numero_documento, fecha_documento,
                     resultado, fecha_hora_salida, usuario_salida_id, usuario_salida_nombre,
                     fecha_hora_retorno, usuario_retorno_id, usuario_retorno_nombre
                 ) VALUES (
                     'uuid-salida', 'C12345', '22906', 'Carlos Balmaceda',
-                    'CRR079', 1, '700101452', '2026-09-15',
+                    1, 79, 1, '700101452', '2026-09-15',
                     'PERMITIDO', '2026-09-15T12:00:00Z', 1, 'Guardia',
                     ?1, ?2, ?3
                 )",
@@ -5325,7 +5474,8 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let base_url = format!("http://{}", listener.local_addr().unwrap());
         let servidor = thread::spawn(move || {
-            for paso in 0..4 {
+            // 5 pedidos por sync: empresas/contratistas/usuarios/gafetes/rutas.
+            for paso in 0..5 {
                 let (mut socket, _) = listener.accept().unwrap();
                 socket
                     .set_read_timeout(Some(Duration::from_secs(3)))
@@ -5376,10 +5526,11 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let base_url = format!("http://{}", listener.local_addr().unwrap());
         let servidor = thread::spawn(move || {
-            // Dos syncs completos = 8 pedidos (empresas/contratistas/
-            // usuarios/gafetes, dos veces). Sólo el de gafetes trae algo,
-            // para que la marca de agua realmente tenga algo que guardar.
-            for paso in 0..8 {
+            // Dos syncs completos = 10 pedidos (empresas/contratistas/
+            // usuarios/gafetes/rutas, dos veces). Sólo el de gafetes trae
+            // algo, para que la marca de agua realmente tenga algo que
+            // guardar.
+            for paso in 0..10 {
                 let (mut socket, _) = listener.accept().unwrap();
                 socket
                     .set_read_timeout(Some(Duration::from_secs(3)))
@@ -5398,7 +5549,7 @@ mod tests {
                         "primer sync: sin marca todavía, tiene que pedir todo"
                     );
                     r#"[{"id":"gafete-remoto","numero":26,"tipo":"CONTRATISTA","estado":"DISPONIBLE","contratista_portador_id":null,"contratista_portador_nombre":null,"visita_portador_id":null,"visita_portador_nombre":null,"updated_at":"2026-01-05T00:00:00Z"}]"#
-                } else if paso == 7 {
+                } else if paso == 8 {
                     let pedido = String::from_utf8(pedido).unwrap();
                     assert!(
                         pedido.contains("updated_at=gt.2026-01-05T00%3A00%3A00Z")
@@ -5443,6 +5594,7 @@ mod tests {
              \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         ]);
 
         let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
@@ -5454,6 +5606,7 @@ mod tests {
                 contratistas_recibidos: 1,
                 usuarios_recibidos: 0,
                 gafetes_recibidos: 0,
+                rutas_recibidas: 0,
             }
         );
         let (nombre_empresa, uuid_empresa): (String, Option<String>) = connection
@@ -5474,6 +5627,33 @@ mod tests {
         assert_eq!(cedula, "1-1111");
         assert_eq!(tipo_ingreso, "SWAT");
         assert_eq!(uuid_contratista.as_deref(), Some("uuid-contratista-remoto"));
+    }
+
+    #[test]
+    fn recibe_numeros_de_ruta_del_sitio_dentro_del_catalogo_general() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_respuestas(vec![
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-ruta-remota\",\"numero\":79,\"activo\":true,\
+             \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+        ]);
+
+        let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(resumen.rutas_recibidas, 1);
+        let (numero, activo, uuid): (i64, i64, Option<String>) = connection
+            .query_row("SELECT numero, activo, uuid FROM rutas", [], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            })
+            .unwrap();
+        assert_eq!(numero, 79);
+        assert_eq!(activo, 1);
+        assert_eq!(uuid.as_deref(), Some("uuid-ruta-remota"));
     }
 
     #[test]
@@ -5657,6 +5837,7 @@ mod tests {
              \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         ]);
 
         recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
@@ -5702,6 +5883,7 @@ mod tests {
              \"identificacion\":null,\"empresa_id\":null,\"empresa_nombre\":null,\
              \"activo\":true,\"tipo_ingreso\":null,\"fecha_vencimiento_praind\":null,\
              \"es_personal_ruta\":null,\"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         ]);

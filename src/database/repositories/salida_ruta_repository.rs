@@ -22,6 +22,11 @@ pub trait SalidaRutaRepository {
     /// match de catálogo.
     fn buscar_activa_por_placa(&self, placa: &str) -> Result<Option<SalidaRuta>, DatabaseError>;
 
+    /// Usada por `RutaCatalogoService::dar_de_baja` -- una ruta con una
+    /// salida abierta no puede darse de baja, mismo criterio que
+    /// `GafeteRepository`/`buscar_ingreso_activo_por_gafete`.
+    fn buscar_activa_por_ruta(&self, ruta_id: i64) -> Result<Option<SalidaRuta>, DatabaseError>;
+
     fn buscar_por_numero_documento(
         &self,
         numero_documento: &str,
@@ -60,47 +65,47 @@ impl<'a> SqliteSalidaRutaRepository<'a> {
 }
 
 fn convertir_fila(row: &Row) -> rusqlite::Result<SalidaRuta> {
-    let fecha_documento_texto: String = row.get(9)?;
+    let fecha_documento_texto: String = row.get(10)?;
     let fecha_documento =
         NaiveDate::parse_from_str(&fecha_documento_texto, "%Y-%m-%d").map_err(|error| {
             rusqlite::Error::FromSqlConversionFailure(
-                9,
+                10,
                 rusqlite::types::Type::Text,
                 Box::new(error),
             )
         })?;
 
-    let resultado_texto: String = row.get(10)?;
+    let resultado_texto: String = row.get(11)?;
     let resultado = match resultado_texto.as_str() {
         "PERMITIDO" => ResultadoSalidaRuta::Permitido,
         "PERMITIDO_CON_AUTORIZACION" => ResultadoSalidaRuta::PermitidoConAutorizacion,
         _ => {
             return Err(rusqlite::Error::InvalidColumnType(
-                10,
+                11,
                 "resultado".to_string(),
                 rusqlite::types::Type::Text,
             ));
         }
     };
 
-    let fecha_hora_salida_texto: String = row.get(11)?;
+    let fecha_hora_salida_texto: String = row.get(12)?;
     let fecha_hora_salida = parsear_utc(&fecha_hora_salida_texto).map_err(|error| {
-        rusqlite::Error::FromSqlConversionFailure(11, rusqlite::types::Type::Text, Box::new(error))
+        rusqlite::Error::FromSqlConversionFailure(12, rusqlite::types::Type::Text, Box::new(error))
     })?;
 
-    let fecha_hora_retorno_texto: Option<String> = row.get(13)?;
+    let fecha_hora_retorno_texto: Option<String> = row.get(14)?;
     let fecha_hora_retorno = fecha_hora_retorno_texto
         .map(|fecha| {
             parsear_utc(&fecha).map_err(|error| {
                 rusqlite::Error::FromSqlConversionFailure(
-                    13,
+                    14,
                     rusqlite::types::Type::Text,
                     Box::new(error),
                 )
             })
         })
         .transpose()?;
-    let usuario_retorno_id: Option<i64> = row.get(14)?;
+    let usuario_retorno_id: Option<i64> = row.get(15)?;
     // `CHECK (fecha_hora_retorno IS NULL) = (usuario_retorno_id IS NULL)` en
     // el esquema (MIGRACION_36) garantiza que ambos vienen juntos o ninguno.
     let retorno = fecha_hora_retorno
@@ -117,20 +122,21 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<SalidaRuta> {
         vehiculo_numero_unidad: row.get(3)?,
         encargado_id: row.get(4)?,
         encargado_nombre: row.get(5)?,
-        numero_ruta: row.get(6)?,
-        sub_numero: row.get(7)?,
-        numero_documento: row.get(8)?,
+        ruta_id: row.get(6)?,
+        numero_ruta: row.get(7)?,
+        sub_numero: row.get(8)?,
+        numero_documento: row.get(9)?,
         fecha_documento,
         resultado,
         fecha_hora_salida,
-        usuario_salida_id: row.get(12)?,
+        usuario_salida_id: row.get(13)?,
         retorno,
     })
 }
 
 const SELECT_SALIDA: &str = "
     SELECT id, vehiculo_id, vehiculo_placa, vehiculo_numero_unidad,
-           encargado_id, encargado_nombre, numero_ruta, sub_numero,
+           encargado_id, encargado_nombre, ruta_id, numero_ruta, sub_numero,
            numero_documento, fecha_documento, resultado,
            fecha_hora_salida, usuario_salida_id,
            fecha_hora_retorno, usuario_retorno_id
@@ -149,7 +155,7 @@ impl SalidaRutaRepository for SqliteSalidaRutaRepository<'_> {
             INSERT INTO salidas_ruta (
                 vehiculo_id, vehiculo_placa, vehiculo_numero_unidad,
                 encargado_id, encargado_nombre,
-                numero_ruta, sub_numero, numero_documento, fecha_documento,
+                ruta_id, numero_ruta, sub_numero, numero_documento, fecha_documento,
                 resultado, motivo_resultado,
                 fecha_hora_salida, usuario_salida_id, usuario_salida_nombre,
                 uuid
@@ -157,7 +163,7 @@ impl SalidaRutaRepository for SqliteSalidaRutaRepository<'_> {
             SELECT
                 :vehiculo_id, :vehiculo_placa, :vehiculo_numero_unidad,
                 :encargado_id, :encargado_nombre,
-                :numero_ruta, :sub_numero, :numero_documento, :fecha_documento,
+                :ruta_id, :numero_ruta, :sub_numero, :numero_documento, :fecha_documento,
                 :resultado, :motivo_resultado,
                 :fecha_hora_salida, :usuario_salida_id, u.nombre,
                 :uuid
@@ -170,6 +176,7 @@ impl SalidaRutaRepository for SqliteSalidaRutaRepository<'_> {
                 ":vehiculo_numero_unidad": salida.vehiculo_numero_unidad,
                 ":encargado_id": salida.encargado_id,
                 ":encargado_nombre": salida.encargado_nombre,
+                ":ruta_id": salida.ruta_id,
                 ":numero_ruta": salida.numero_ruta,
                 ":sub_numero": salida.sub_numero,
                 ":numero_documento": salida.numero_documento,
@@ -211,6 +218,18 @@ impl SalidaRutaRepository for SqliteSalidaRutaRepository<'_> {
              ORDER BY fecha_hora_salida DESC LIMIT 1"
         ))?;
         match statement.query_row(params![placa], convertir_fila) {
+            Ok(salida) => Ok(Some(salida)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(error) => Err(DatabaseError::from(error)),
+        }
+    }
+
+    fn buscar_activa_por_ruta(&self, ruta_id: i64) -> Result<Option<SalidaRuta>, DatabaseError> {
+        let mut statement = self.connection.prepare(&format!(
+            "{SELECT_SALIDA} WHERE ruta_id = ?1 AND fecha_hora_retorno IS NULL
+             ORDER BY fecha_hora_salida DESC LIMIT 1"
+        ))?;
+        match statement.query_row(params![ruta_id], convertir_fila) {
             Ok(salida) => Ok(Some(salida)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(error) => Err(DatabaseError::from(error)),
@@ -285,7 +304,7 @@ impl SalidaRutaRepository for SqliteSalidaRutaRepository<'_> {
                     row.get::<_, String>(1)?,
                     row.get::<_, Option<String>>(2)?,
                     row.get::<_, String>(3)?,
-                    row.get::<_, String>(4)?,
+                    row.get::<_, i64>(4)?,
                     row.get::<_, i64>(5)?,
                     row.get::<_, String>(6)?,
                     row.get::<_, String>(7)?,
@@ -393,6 +412,12 @@ mod tests {
             )
             .unwrap();
         connection
+            .execute(
+                "INSERT INTO rutas (id, numero, uuid) VALUES (1, 79, 'uuid-ruta-79')",
+                [],
+            )
+            .unwrap();
+        connection
     }
 
     fn fecha(texto: &str) -> NaiveDate {
@@ -406,7 +431,8 @@ mod tests {
             vehiculo_numero_unidad: Some("22906".to_string()),
             encargado_id: None,
             encargado_nombre: "Carlos Balmaceda".to_string(),
-            numero_ruta: "CRR079".to_string(),
+            ruta_id: 1,
+            numero_ruta: 79,
             sub_numero: 1,
             numero_documento: numero_documento.to_string(),
             fecha_documento: fecha("2026-09-15"),
@@ -460,6 +486,19 @@ mod tests {
         repo.crear(&nueva("C12345", "700101452")).unwrap();
 
         assert!(repo.crear(&nueva("C12345", "700101453")).is_err());
+    }
+
+    #[test]
+    fn buscar_activa_por_ruta_ignora_las_ya_retornadas() {
+        let connection = conexion();
+        let repo = SqliteSalidaRutaRepository::new(&connection);
+        let id = repo.crear(&nueva("C12345", "700101452")).unwrap();
+
+        assert!(repo.buscar_activa_por_ruta(1).unwrap().is_some());
+
+        repo.registrar_retorno(id, Utc::now(), 1).unwrap();
+
+        assert!(repo.buscar_activa_por_ruta(1).unwrap().is_none());
     }
 
     #[test]
