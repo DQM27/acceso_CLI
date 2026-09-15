@@ -1,11 +1,117 @@
 # Control de rutas — plan (borrador, sin código todavía)
 
-> **Estado: planeado, sin implementar.** Sesión de planificación pura
-> (2026-09-15), sin tocar código a pedido explícito del usuario -- "núcleo
-> primero, UI después", ejecución programada para otra sesión una vez
-> lleguen las fotos de los documentos reales. Este documento es la base
-> para retomar la conversación, igual que `plan-control-visitas.md`,
-> `plan-persistencia-nube.md` y `plan-sesion-unica-dispositivos.md`.
+> **Estado: planeado, en ejecución (mobile primero).** Sesión de
+> planificación (2026-09-15) seguida, en la misma fecha, de la primera
+> etapa de implementación -- **orden invertido a pedido explícito del
+> usuario**: esta vez la app (mobile) va primero, y el núcleo real
+> (schema/dominio/servicios/UniFFI) queda para el final, con la pantalla
+> corriendo sobre datos mock mientras tanto, para poder mostrar un MVP
+> navegable al jefe cuanto antes. No usar este orden como precedente para
+> otros módulos -- es la excepción, no la regla.
+
+## Documento real: "Comprobante de Carga de Ruta" (fotos 2026-09-15)
+
+El usuario compartió 4 fotos de comprobantes reales (Coca-Cola FEMSA) y
+aclaró exactamente qué campos importan capturar acá:
+
+- **Ruta / No. de Carga** (ej. `CRR079/ 00001`): el número antes de la
+  barra es la ruta (`CRR079`). El sub-número después de la barra indica el
+  tipo -- `0001` = ruta **PRINCIPAL**; `0002`, `0003`, `0004`... son
+  **H2, H3, H4** (recargas) -- cada sub-número trae su propio documento.
+- **Repartidor**: se ignora como fuente de identidad -- el dato impreso no
+  es confiable (lo puede retirar una persona distinta a la impresa). El
+  encargado real sale del carnet KOF escaneado en persona, no de este
+  comprobante.
+- **Usuario**: se ignora por completo, no aporta nada acá.
+- **Transporte** (código que cambia por página, ej. `700101452`-`455`):
+  este es el dato clave -- es el número de documento de cada ruta/carga
+  (mapea a `numero_documento` en el plan de esquema).
+- **Centro, Camión (impreso), Estatus, tabla de productos**: se omiten,
+  no se capturan en el flujo de registro.
+- **Fecha de Entrega**: clave -- si no coincide con la fecha actual, se
+  activa el bloqueo transitorio salvo correo de autorización (ya estaba
+  contemplado en el diseño de abajo).
+
+### Procedimiento real de registro (aclarado con el usuario)
+
+1. Llega la unidad → se solicita el carnet KOF → se escanea → ahí sale el
+   **encargado**.
+2. Se piden los documentos de carga → ahí están **ruta/sub-número
+   (tipo)**, **transporte (número de documento)** y **fecha**.
+3. Se pide la **placa** (o el número de unidad) → cierra los datos del
+   vehículo.
+
+Idea del usuario a explorar en la UI: una especie de **checklist guiado
+en cámara** -- 3 pasos numerados (carnet KOF → documento → placa), cada
+uno con su propio campo + botón de escaneo, en vez de un único formulario
+plano. Implementado como primer corte de la pantalla mobile (ver más
+abajo), con captura simulada (mock) mientras no hay OCR real conectado.
+
+### Investigación de referencias (2026-09-15) y mejoras aplicadas al MVP
+
+Búsqueda de patrones de UX ya probados en check-in de patio/yard
+management, KYC onboarding y escaneo guiado de documentos/placas, para
+enriquecer la idea del checklist:
+
+- Los sistemas de yard/gate management apuntan a un check-in supervisado
+  "medido en segundos, no minutos" combinando OCR + entrada manual, y
+  reportan bajar el tiempo de gate de 15-20 min a menos de 8 con
+  check-in por app + reconocimiento de placa.
+  ([GPX -- yard management software 2026](https://gpx.co/blog/yard-management-software/),
+  [Route4Me -- plate scanner](https://support.route4me.com/route4trucks-license-plate-scanner/))
+- Los flujos de onboarding KYC insisten en: **secuenciar** los pasos,
+  mostrar el dato leído **editable** antes de aceptar (nunca confiar
+  ciegamente en el OCR), guía visual clara y manejo de error/reintento --
+  y que **70% abandona flujos que se sienten complejos**, así que menos
+  pasos y menos pantallas es mejor que más precisión con más fricción.
+  ([Anyline -- KYC mobile OCR](https://anyline.com/news/kyc-mobile-ocr),
+  [The Skins Factory -- KYC drop-off](https://www.theskinsfactory.com/uiux-design-blog/kyc-onboarding-drop-off),
+  [Maskwel -- KYC UX 2026](https://maskwelholdingsltd.com/latest-news/master-the-essentials-with-kyc-onboarding-ux-best-practices-2026-for-a-frictionless-user-experience/))
+- Escaneo de carnet/placa desde el celular del guardia (sin hardware
+  dedicado) es un patrón ya establecido en visitor/yard management.
+  ([EvTrack Guard](https://evtrack.com/evtrack-guard-n/),
+  [Lobbytrack -- scan driver license](https://www.lobbytrack.com/visitor-management/scan-driver-license))
+
+Mejoras que esto sugirió, ya aplicadas al primer corte mobile
+(`PantallaRutas.kt`):
+
+1. **Un solo checklist en una tarjeta, no 3 pantallas** -- 3 "pasos"
+   apilados con círculo numerado que se marca ✓ al completarse, todo
+   visible de un vistazo.
+2. **El dato "escaneado" queda editable** antes de confirmar la salida --
+   el botón de cámara simulado rellena un valor de ejemplo, nunca se
+   acepta a ciegas (igual patrón que ya usa el alta de contratista con
+   OCR de carnet PRAIND).
+3. **El bloqueo por fecha vencida vive dentro del paso 2** (no aparte):
+   si la fecha no es hoy, aparece ahí mismo el aviso + checkbox "Tengo el
+   correo de autorización" -- sin eso, "Confirmar salida" queda
+   deshabilitado.
+4. **Atajo para H2/H3/H4**: en vez de repetir los 3 pasos completos para
+   cada documento adicional de una unidad que ya salió hoy, la fila de
+   "rutas activas" tiene un botón "+ Documento (H)" que sólo pide
+   sub-número + número de documento + fecha, y lo anexa a la salida ya
+   abierta -- evita re-escanear carnet y placa, que no cambian entre
+   H2/H3/H4 de una misma salida.
+5. **"Confirmar retorno" de un toque** con diálogo mínimo (mismo patrón
+   que `DialogoConfirmarSalida` de `PantallaActivos.kt`), lista de rutas
+   activas con el mismo desvanecido superior (`ListaConDesvanecido`) que
+   ya usan Activos e Historial.
+
+## Estado de implementación (mobile, 2026-09-15)
+
+- `mobile/android/app/.../RutasViewModel.kt`: estado en memoria (mock),
+  sin `Nucleo` todavía -- `SalidaRutaActiva`/`DocumentoRuta`,
+  `registrarSalida`/`agregarDocumento`/`confirmarRetorno`.
+- `mobile/android/app/.../PantallaRutas.kt`: checklist de 3 pasos +
+  lista de rutas activas + diálogos de agregar documento y confirmar
+  retorno.
+- `PantallaPrincipal.kt`: nueva pestaña **"Rutas"**, entre "Activos" e
+  "Historial" (orden pedido explícitamente por el usuario: Activos →
+  Rutas → Historial).
+- Pendiente: todo lo de la sección "Diseño del núcleo" de este documento
+  sigue sin tocar (a propósito, va al final); el OCR real (carnet KOF,
+  documento, placa) tampoco está conectado -- el checklist funciona hoy
+  con captura simulada y entrada manual.
 
 ## Contexto
 
