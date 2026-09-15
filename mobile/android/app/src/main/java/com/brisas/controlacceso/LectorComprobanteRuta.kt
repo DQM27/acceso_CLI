@@ -49,8 +49,20 @@ private val REGEX_RUTA_NUMERO_CARGA = Regex(
 // el caso real observado sin llegar tan lejos como la tabla, que queda
 // varias líneas después (pasando primero por "Fecha de Entrega:" y
 // "Camión:").
+//
+// El mínimo de dígitos subió de 6 a 7 (2026-09-15, tercera ronda): en las
+// 4 fotos reales, el código de material (columna "Material" de la tabla,
+// ej. `164145`, `167251`, `163966`) es *siempre* de exactamente 6 dígitos,
+// mientras que "Transporte:" es *siempre* de 9 (`700101452`-`455`). Con
+// mínimo 6 el regex seguía pudiendo confirmar un SKU como transporte
+// cuando ML Kit entregaba el salto de línea real justo antes de la tabla
+// en vez de antes de "Fecha de Entrega:" (layout de foto de celular, no
+// de escaneo plano -- el orden de líneas que arma ML Kit no es fijo).
+// Subir a 7 excluye estructuralmente todo código de material observado
+// sin dejar de aceptar variantes de transporte más cortas que las 4
+// vistas hasta ahora.
 private val REGEX_TRANSPORTE = Regex(
-    """Transporte:?[ \t]*\r?\n?[ \t]*(\d{6,15})""",
+    """Transporte:?[ \t]*\r?\n?[ \t]*(\d{7,15})""",
     RegexOption.IGNORE_CASE,
 )
 // El comprobante real usa puntos como separador ("15.09.2026"), pero se

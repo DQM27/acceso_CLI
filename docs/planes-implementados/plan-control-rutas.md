@@ -112,6 +112,22 @@ Mejoras que esto sugirió, ya aplicadas al primer corte mobile
   sigue sin tocar (a propósito, va al final); el OCR real (carnet KOF,
   documento, placa) tampoco está conectado -- el checklist funciona hoy
   con captura simulada y entrada manual.
+- **Refinado del parser de "Transporte" (2026-09-15, tercera ronda):** el
+  usuario reportó que seguía confundiendo el número de transporte con un
+  código de material de la tabla. Causa: el regex aceptaba 6-15 dígitos, y
+  los códigos de material de las 4 fotos reales son *siempre* de 6 dígitos
+  (mismo mínimo admitido) mientras que "Transporte:" es *siempre* de 9
+  (`700101452`-`455`) -- subido el mínimo a 7 dígitos, lo que excluye
+  estructuralmente cualquier SKU observado. El usuario confirmó además que
+  en el papel real el valor de "Transporte:" siempre queda pegado a su
+  etiqueta (mismo renglón o el siguiente) y por encima del código de
+  barras -- consistente con el diseño ya vigente (regex tolera como máximo
+  un salto de línea entre etiqueta y valor). Fixtures de test ampliadas
+  con la tabla de materiales real de las otras 3 fotos (no sólo la
+  principal reutilizada por sustitución) + caso explícito de SKU pegado
+  directo a "Transporte:" sin valor real (debe rechazar, no adivinar). Ver
+  `LectorComprobanteRuta.kt` y `LectorComprobanteRutaTest.kt` (14 tests,
+  todos verdes vía `gradlew testDebugUnitTest`).
 
 ## Contexto
 
