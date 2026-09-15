@@ -283,10 +283,53 @@ antes de pedir el cambio).
 
 **Pendiente (siguiente corte):** capa UniFFI (`mobile/rust-core/src/lib.rs`),
 conectar `PantallaRutas.kt` al núcleo real (hoy sigue en memoria/mock),
-sincronización con Supabase (`nube::sincronizacion`, siguiendo el patrón
-ya usado para `movimiento_visita`), reporte PDF, y todo lo que quedó
-explícitamente pospuesto arriba (`tipo_ruta`/H2-H4, catálogo desde
-`empleados_costa_rica.sql`).
+reporte PDF, y todo lo que quedó explícitamente pospuesto arriba
+(`tipo_ruta`/H2-H4, catálogo desde `empleados_costa_rica.sql`).
+
+## Sync con Supabase -- primer corte (2026-09-15)
+
+El usuario notó que sin sync mobile y escritorio no comparten datos
+("nos falta la sync del backend, sino como conectamos mobile y
+computadora") y preguntó si el cliente siquiera quiere estos datos en
+internet -- **sin decisión del cliente todavía**, pero el usuario
+confirmó explícitamente seguir el mismo patrón que el resto de la app
+(contratistas/ingresos/citas-visitas ya sincronizan hoy), reversible si
+el cliente después dice que no.
+
+Antes de tocar la base real (`control-acceso-nube`, project_id
+`xidaepyaljzkpbsxrqsm`) se confirmó explícitamente con el usuario que sí
+procediera contra producción (no hay ambiente de prueba separado).
+
+**Aplicado a Supabase** (migración `control_de_rutas_vehiculos_encargados_salidas`,
+verificado sin hallazgos nuevos en `get_advisors` security/performance):
+- `vehiculos_ruta`/`encargados_ruta`/`salidas_ruta`, acotadas por
+  `sitio_id` del JWT del dispositivo -- **igual que `ingresos`/
+  `movimientos_visita`, NO global como `contratistas`/`empresas`** (una
+  flota/personal KOF es de un sitio, no compartida). RLS de 3 políticas
+  (leer propio sitio o admin_global; crear/actualizar propio sitio y
+  `tipo <> 'visor'`), triggers de apertura inmutable + cierre único
+  (espejo exacto de `ingresos`/`movimientos_visita`, sólo con
+  "retorno" en vez de "salida" para no chocar con la terminología del
+  núcleo Rust), broadcast (`emitir_cambio_nube_sitio`), `updated_at`.
+  `vehiculo_id`/`encargado_id` en `salidas_ruta` son nullable (mismo
+  criterio ya confirmado del lado local).
+
+**Rust (`src/nube/sincronizacion.rs`), con tests (252/252, clippy
+limpio):** push de `vehiculo_ruta`/`encargado_ruta` (upsert simple, mismo
+molde que `enviar_empresa`, `on_conflict=placa`/`codigo_empleado`) y de
+`salida_ruta` (apertura + cierre, mismo molde que
+`enviar_movimiento_visita`/`enviar_cierre_movimiento_visita`, "primero en
+llegar gana" en el cierre). Registrado en el dispatcher de `cola_salida`
+(`destino_lote`, `construir_cuerpo`, `procesar_fila_individual`).
+
+**Pendiente (deliberadamente fuera de este corte):** pull -- todavía no
+hay forma de que un dispositivo vea las rutas activas que registró OTRO
+dispositivo del mismo sitio (mismo patrón que `ingresos_remotos`/
+`recibir_historial_visitas_del_sitio`, pendiente de construir). Se
+priorizó dejar el push funcionando primero porque hoy no existe ninguna
+pantalla de escritorio que consuma el pull todavía -- no había con qué
+probarlo de punta a punta. Retomar cuando exista esa pantalla o cuando
+dos dispositivos mobile necesiten verse entre sí.
 
 ## Contexto
 

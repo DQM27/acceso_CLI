@@ -142,8 +142,11 @@ fn destino_lote(entidad: &str, operacion: &str) -> Option<(&'static str, Option<
         ("contratista", _) => Some(("contratistas", Some("identificacion"))),
         ("gafete", _) => Some(("gafetes", Some("sitio_id,numero"))),
         ("usuario", _) => Some(("usuarios", Some("cedula"))),
-        ("ingreso", "cerrar") => None,
+        ("ingreso" | "salida_ruta", "cerrar") => None,
         ("ingreso", _) => Some(("ingresos", None)),
+        ("vehiculo_ruta", _) => Some(("vehiculos_ruta", Some("placa"))),
+        ("encargado_ruta", _) => Some(("encargados_ruta", Some("codigo_empleado"))),
+        ("salida_ruta", _) => Some(("salidas_ruta", None)),
         _ => None,
     }
 }
@@ -165,6 +168,8 @@ fn construir_cuerpo(
         "gafete" => construir_cuerpo_gafete(connection, contexto, uuid),
         "usuario" => construir_cuerpo_usuario(connection, contexto, uuid),
         "ingreso" => construir_cuerpo_ingreso(connection, contexto, uuid),
+        "vehiculo_ruta" => construir_cuerpo_vehiculo_ruta(connection, contexto, uuid),
+        "encargado_ruta" => construir_cuerpo_encargado_ruta(connection, contexto, uuid),
         otra => unreachable!("destino_lote ya filtró entidades sin lote (recibido: {otra})"),
     }
 }
@@ -289,6 +294,16 @@ fn procesar_fila_individual(
         ("movimiento_visita", _) => {
             enviar_movimiento_visita(cliente, connection, contexto, &fila.entidad_uuid)
         }
+        ("vehiculo_ruta", _) => {
+            enviar_vehiculo_ruta(cliente, connection, contexto, &fila.entidad_uuid)
+        }
+        ("encargado_ruta", _) => {
+            enviar_encargado_ruta(cliente, connection, contexto, &fila.entidad_uuid)
+        }
+        ("salida_ruta", "cerrar") => {
+            enviar_cierre_salida_ruta(cliente, connection, contexto, &fila.entidad_uuid)
+        }
+        ("salida_ruta", _) => enviar_salida_ruta(cliente, connection, contexto, &fila.entidad_uuid),
         _ => Ok(()),
     };
 
@@ -1085,6 +1100,261 @@ fn enviar_cierre_movimiento_visita(
 
     let url = format!(
         "{}/rest/v1/movimientos_visita?id=eq.{uuid}&hora_salida=is.null",
+        contexto.base_url
+    );
+
+    let respuesta = cliente
+        .patch(url)
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Control de rutas (`docs/planes-implementados/plan-control-rutas.md`) --
+/// mismo espíritu que empresas (catálogo simple, `upsert` por clave
+/// natural) para vehículos/encargados, y que
+/// `enviar_movimiento_visita`/`enviar_cierre_movimiento_visita` para el
+/// ciclo salida/retorno.
+fn construir_cuerpo_vehiculo_ruta(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<Value, SincronizacionError> {
+    let (numero_unidad, placa, activo): (Option<String>, String, i64) = connection.query_row(
+        "SELECT numero_unidad, placa, activo FROM vehiculos_ruta WHERE uuid = ?1",
+        params![uuid],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    )?;
+
+    Ok(json!({
+        "id": uuid,
+        "sitio_id": contexto.sitio_id,
+        "dispositivo_origen_id": contexto.dispositivo_id,
+        "numero_unidad": numero_unidad,
+        "placa": placa,
+        "activo": activo != 0,
+    }))
+}
+
+/// `on_conflict=placa` -- mismo motivo que `enviar_empresa`: sin esto, dos
+/// bases locales sin el mismo `uuid` para el mismo vehículo generan cada
+/// una un `id` propio y el upsert por PK las acepta como vehículos
+/// distintos en vez de fusionarlas.
+fn enviar_vehiculo_ruta(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let cuerpo = construir_cuerpo_vehiculo_ruta(connection, contexto, uuid)?;
+
+    let respuesta = cliente
+        .post(format!(
+            "{}/rest/v1/vehiculos_ruta?on_conflict=placa",
+            contexto.base_url
+        ))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+fn construir_cuerpo_encargado_ruta(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<Value, SincronizacionError> {
+    let (codigo_empleado, nombre, cedula, activo): (String, String, Option<String>, i64) =
+        connection.query_row(
+            "SELECT codigo_empleado, nombre, cedula, activo FROM encargados_ruta WHERE uuid = ?1",
+            params![uuid],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )?;
+
+    Ok(json!({
+        "id": uuid,
+        "sitio_id": contexto.sitio_id,
+        "dispositivo_origen_id": contexto.dispositivo_id,
+        "codigo_empleado": codigo_empleado,
+        "nombre": nombre,
+        "cedula": cedula,
+        "activo": activo != 0,
+    }))
+}
+
+/// `on_conflict=codigo_empleado` -- mismo motivo que `enviar_vehiculo_ruta`.
+fn enviar_encargado_ruta(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let cuerpo = construir_cuerpo_encargado_ruta(connection, contexto, uuid)?;
+
+    let respuesta = cliente
+        .post(format!(
+            "{}/rest/v1/encargados_ruta?on_conflict=codigo_empleado",
+            contexto.base_url
+        ))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Fila cruda para armar el cuerpo remoto de una salida de ruta -- struct
+/// en vez de una tupla de 13 elementos (`clippy::type_complexity`).
+struct FilaSalidaRutaLocal {
+    vehiculo_id: Option<i64>,
+    vehiculo_placa: String,
+    vehiculo_numero_unidad: Option<String>,
+    encargado_id: Option<i64>,
+    encargado_nombre: String,
+    numero_ruta: String,
+    sub_numero: i64,
+    numero_documento: String,
+    fecha_documento: String,
+    resultado: String,
+    motivo_resultado: Option<String>,
+    fecha_hora_salida: String,
+    usuario_salida_nombre: String,
+}
+
+fn construir_cuerpo_salida_ruta(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<Value, SincronizacionError> {
+    let fila: FilaSalidaRutaLocal = connection.query_row(
+        "SELECT vehiculo_id, vehiculo_placa, vehiculo_numero_unidad, encargado_id,
+                encargado_nombre, numero_ruta, sub_numero, numero_documento,
+                fecha_documento, resultado, motivo_resultado, fecha_hora_salida,
+                usuario_salida_nombre
+         FROM salidas_ruta WHERE uuid = ?1",
+        params![uuid],
+        |row| {
+            Ok(FilaSalidaRutaLocal {
+                vehiculo_id: row.get(0)?,
+                vehiculo_placa: row.get(1)?,
+                vehiculo_numero_unidad: row.get(2)?,
+                encargado_id: row.get(3)?,
+                encargado_nombre: row.get(4)?,
+                numero_ruta: row.get(5)?,
+                sub_numero: row.get(6)?,
+                numero_documento: row.get(7)?,
+                fecha_documento: row.get(8)?,
+                resultado: row.get(9)?,
+                motivo_resultado: row.get(10)?,
+                fecha_hora_salida: row.get(11)?,
+                usuario_salida_nombre: row.get(12)?,
+            })
+        },
+    )?;
+
+    // El catálogo es consultivo (ver `RutaService`): si hubo match local se
+    // manda el uuid real de esa fila; si no, `None` viaja tal cual -- la
+    // nube no exige que `vehiculo_id`/`encargado_id` existan (mismas
+    // columnas nullable del lado de la migración de Supabase).
+    let vehiculo_uuid: Option<String> = fila
+        .vehiculo_id
+        .map(|id| {
+            connection.query_row(
+                "SELECT uuid FROM vehiculos_ruta WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+        })
+        .transpose()?;
+    let encargado_uuid: Option<String> = fila
+        .encargado_id
+        .map(|id| {
+            connection.query_row(
+                "SELECT uuid FROM encargados_ruta WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+        })
+        .transpose()?;
+
+    Ok(json!({
+        "id": uuid,
+        "sitio_id": contexto.sitio_id,
+        "dispositivo_salida_id": contexto.dispositivo_id,
+        "vehiculo_id": vehiculo_uuid,
+        "vehiculo_placa": fila.vehiculo_placa,
+        "vehiculo_numero_unidad": fila.vehiculo_numero_unidad,
+        "encargado_id": encargado_uuid,
+        "encargado_nombre": fila.encargado_nombre,
+        "numero_ruta": fila.numero_ruta,
+        "sub_numero": fila.sub_numero,
+        "numero_documento": fila.numero_documento,
+        "fecha_documento": fila.fecha_documento,
+        "resultado": fila.resultado,
+        "motivo_resultado": fila.motivo_resultado,
+        "hora_salida": fila.fecha_hora_salida,
+        "usuario_salida_nombre": fila.usuario_salida_nombre,
+    }))
+}
+
+fn enviar_salida_ruta(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let cuerpo = construir_cuerpo_salida_ruta(connection, contexto, uuid)?;
+
+    let respuesta = cliente
+        .post(format!("{}/rest/v1/salidas_ruta", contexto.base_url))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Cierre (cola), mismo criterio "primero en llegar gana" que
+/// `enviar_cierre_ingreso`/`enviar_cierre_movimiento_visita` -- el filtro
+/// `hora_retorno=is.null` hace que un cierre que llega tarde (otro
+/// dispositivo ya cerró esta salida) no afecte ninguna fila en vez de
+/// fallar.
+fn enviar_cierre_salida_ruta(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let (fecha_hora_retorno, usuario_retorno_nombre): (Option<String>, Option<String>) = connection
+        .query_row(
+            "SELECT fecha_hora_retorno, usuario_retorno_nombre FROM salidas_ruta WHERE uuid = ?1",
+            params![uuid],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+
+    let cuerpo = json!({
+        "hora_retorno": fecha_hora_retorno,
+        "dispositivo_retorno_id": contexto.dispositivo_id,
+        "usuario_retorno_nombre": usuario_retorno_nombre,
+    });
+
+    let url = format!(
+        "{}/rest/v1/salidas_ruta?id=eq.{uuid}&hora_retorno=is.null",
         contexto.base_url
     );
 
@@ -3416,6 +3686,214 @@ mod tests {
             let pedido = String::from_utf8(pedido).unwrap();
             assert!(pedido.starts_with(
                 "PATCH /rest/v1/movimientos_visita?id=eq.uuid-movimiento&hora_salida=is.null "
+            ));
+            write!(
+                socket,
+                "HTTP/1.1 204 No Content\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
+            )
+            .unwrap();
+        });
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn envia_un_vehiculo_ruta_pendiente_y_lo_marca_enviado() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO vehiculos_ruta (numero_unidad, placa, activo, uuid)
+                 VALUES ('22906', 'C12345', 1, 'uuid-vehiculo')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, creado_en, actualizado_en
+                ) VALUES ('vehiculo_ruta', 'uuid-vehiculo', 'crear', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        let estado: String = connection
+            .query_row("SELECT estado FROM cola_salida", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(estado, "enviado");
+    }
+
+    #[test]
+    fn envia_un_encargado_ruta_pendiente_y_lo_marca_enviado() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO encargados_ruta (codigo_empleado, nombre, activo, uuid)
+                 VALUES ('5040017', 'Michael Araya Retana', 1, 'uuid-encargado')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, creado_en, actualizado_en
+                ) VALUES ('encargado_ruta', 'uuid-encargado', 'crear', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        let estado: String = connection
+            .query_row("SELECT estado FROM cola_salida", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(estado, "enviado");
+    }
+
+    /// Salida de ruta lista para encolar (sin match de catálogo, mismo
+    /// caso más común según `RutaService`) -- devuelve el `uuid` de la
+    /// salida. `fecha_hora_retorno` en `Some` simula una salida que ya
+    /// está lista para el cierre.
+    fn conexion_con_salida_ruta(fecha_hora_retorno: Option<&str>) -> (Connection, String) {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo)
+                 VALUES ('1', 'Guardia', 'h', 'OPERADOR', 1)",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO salidas_ruta (
+                    uuid, vehiculo_placa, vehiculo_numero_unidad, encargado_nombre,
+                    numero_ruta, sub_numero, numero_documento, fecha_documento,
+                    resultado, fecha_hora_salida, usuario_salida_id, usuario_salida_nombre,
+                    fecha_hora_retorno, usuario_retorno_id, usuario_retorno_nombre
+                ) VALUES (
+                    'uuid-salida', 'C12345', '22906', 'Carlos Balmaceda',
+                    'CRR079', 1, '700101452', '2026-09-15',
+                    'PERMITIDO', '2026-09-15T12:00:00Z', 1, 'Guardia',
+                    ?1, ?2, ?3
+                )",
+                params![
+                    fecha_hora_retorno,
+                    fecha_hora_retorno.map(|_| 1_i64),
+                    fecha_hora_retorno.map(|_| "Guardia"),
+                ],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, creado_en, actualizado_en
+                ) VALUES (
+                    'salida_ruta', 'uuid-salida', ?1,
+                    '2026-09-15T12:00:00Z', '2026-09-15T12:00:00Z'
+                )",
+                params![if fecha_hora_retorno.is_some() {
+                    "cerrar"
+                } else {
+                    "crear"
+                }],
+            )
+            .unwrap();
+        (connection, "uuid-salida".to_string())
+    }
+
+    #[test]
+    fn envia_la_apertura_de_una_salida_ruta() {
+        let (connection, _) = conexion_con_salida_ruta(None);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.starts_with("POST /rest/v1/salidas_ruta "));
+            let cuerpo = "[]";
+            write!(
+                socket,
+                "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn envia_el_cierre_de_una_salida_ruta() {
+        let (connection, _) = conexion_con_salida_ruta(Some("2026-09-15T18:00:00Z"));
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.starts_with(
+                "PATCH /rest/v1/salidas_ruta?id=eq.uuid-salida&hora_retorno=is.null "
             ));
             write!(
                 socket,
