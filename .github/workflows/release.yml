@@ -79,10 +79,11 @@ jobs:
           tagName: ${{ inputs.version || github.ref_name }}
           releaseName: "Control de Acceso Brisas ${{ inputs.version || github.ref_name }}"
           releaseBody: "Ver desktop/docs/pendientes.md / CHANGELOG en el repo para el detalle de esta versión."
-          # Draft a propósito: alguien revisa y publica a mano en vez de que
-          # quede pública apenas termina el build. Pasar a `false` es una
-          # decisión aparte, cuando el pipeline ya generó confianza.
-          releaseDraft: true
+          # Borrador sólo en el disparo manual de emergencia (workflow_dispatch,
+          # puede correr sobre una rama sin mergear/revisar del todo) -- un
+          # push de tag normal es el flujo planeado sobre código ya revisado,
+          # así que publica directo sin paso manual extra.
+          releaseDraft: ${{ github.event_name == 'workflow_dispatch' }}
           prerelease: false
 
   build-android:
@@ -177,5 +178,7 @@ jobs:
         with:
           tag_name: ${{ inputs.version || github.ref_name }}
           name: "Control de Acceso Brisas ${{ inputs.version || github.ref_name }}"
-          draft: true
+          # Mismo criterio que build-gui: borrador sólo en el disparo manual
+          # de emergencia, un push de tag normal publica directo.
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
           files: ControlAcceso-Brisas-${{ inputs.version || github.ref_name }}.apk

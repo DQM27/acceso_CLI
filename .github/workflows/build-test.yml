@@ -1,0 +1,119 @@
+name: Build de prueba (sin Release)
+
+# Sólo manual, a pedido -- para bajar un build de mobile o desktop y
+# probarlo sin publicar nada en la pestaña Releases ni tocar las llaves de
+# firma reales. Mobile queda firmado con el keystore de debug de Gradle
+# (no instala sobre un release firmado con la llave real -- desinstalar
+# antes si hace falta reemplazar uno). El resultado se baja desde la
+# pestaña Actions -> este run -> Artifacts (se borran solos a los 14 días,
+# no hace falta limpiarlos a mano).
+on:
+  workflow_dispatch:
+    inputs:
+      build_mobile:
+        description: "Compilar APK de debug (mobile)"
+        type: boolean
+        default: true
+      build_desktop:
+        description: "Compilar instalador de escritorio (Tauri)"
+        type: boolean
+        default: true
+
+jobs:
+  build-android-test:
+    if: ${{ inputs.build_mobile }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Instalar toolchain de Rust para Android
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: mobile/rust-core
+
+      - name: Instalar NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27
+
+      - name: Instalar cargo-ndk
+        run: cargo install cargo-ndk
+
+      # Sólo arm64-v8a -- es un build de prueba para el dispositivo real
+      # (Samsung A25 5G), no hace falta pagar el tiempo del x86_64 de emulador.
+      - name: Compilar el núcleo Rust para Android (arm64-v8a)
+        working-directory: mobile/rust-core
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          mkdir -p ../android/app/src/main/jniLibs/arm64-v8a
+          cargo ndk -t aarch64-linux-android build --release
+          cp target/aarch64-linux-android/release/libcontrol_acceso_mobile.so ../android/app/src/main/jniLibs/arm64-v8a/
+
+      - name: Compilar el APK de debug
+        working-directory: mobile/android
+        run: ./gradlew assembleDebug
+
+      - name: Subir el APK como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ControlAcceso-Brisas-debug-${{ github.sha }}
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
+  build-desktop-test:
+    if: ${{ inputs.build_desktop }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar toolchain de Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            desktop/src-tauri
+            sqlite3mc-vendor-lib
+
+      # Mismo paso obligatorio que release.yml -- ver ese archivo para el porqué.
+      - name: Compilar SQLite3MC vendorizado (paso previo obligatorio)
+        run: cargo build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
+
+      - name: Instalar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Instalar dependencias del frontend
+        working-directory: desktop
+        run: npm ci
+
+      # Sin firmar (sin TAURI_SIGNING_PRIVATE_KEY) -- el instalador de
+      # prueba no se puede autoactualizar vía el updater real, sólo sirve
+      # para instalar y probar a mano.
+      - name: Build (Tauri, sin firmar)
+        working-directory: desktop
+        run: npm run tauri build
+
+      - name: Subir el instalador como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ControlAcceso-Brisas-desktop-${{ github.sha }}
+          path: |
+            desktop/src-tauri/target/release/bundle/msi/*.msi
+            desktop/src-tauri/target/release/bundle/nsis/*.exe
+          retention-days: 14

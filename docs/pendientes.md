@@ -441,6 +441,16 @@ estabilizador y clasificador.
 - [x] **Error Boundary en React.**
 - [x] **Mensajes de login sin filtrar errores crudos de SQLite.**
 - [x] **PDF de Historial implementado.**
+- [ ] **RBAC de la GUI de escritorio no está realmente aplanado para
+  Operador (hallazgo 2026-09-15).** Tras `feat(auth): aplana autorización
+  por rol -- el panel es la única puerta` (commit `bb6a7cf`), un usuario
+  con rol Operador en desktop: (1) no puede ver la pestaña Auditoría, (2)
+  no puede editar la cédula de un contratista, y (3) sí ve la pestaña
+  Usuarios, que debería ser responsabilidad exclusiva del panel web. Los
+  tres puntos contradicen la intención de "aplanar" permisos en desktop.
+  Sin investigar todavía dónde vive el chequeo de rol que sigue
+  restringiendo/mostrando de más -- revisar `domain::autorizacion` y el
+  render condicional de pestañas en `desktop/src`.
 - [x] **RBAC visual de la GUI corregido.**
 - [x] **Auditoría GUI genérica construida.**
 - [x] **Respaldos en GUI construidos y revisados.**
