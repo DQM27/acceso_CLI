@@ -357,7 +357,7 @@ private fun construirAnalizadorOcr(
 /// `ProcessCameraProvider` está listo, y arranca el enfoque continuo --
 /// todo lo que depende de esa espera asíncrona vive acá, separado de cómo
 /// se arma el analizador ([construirAnalizadorOcr]).
-private fun iniciarCamara(
+fun iniciarCamara(
     ctx: android.content.Context,
     previewView: PreviewView,
     lifecycleOwner: androidx.lifecycle.LifecycleOwner,
@@ -483,8 +483,14 @@ private fun mensajeProcesadoContinuo(modo: ModoEscaneoDocumento, valor: String):
 /// que no es thread-safe y asume ejecución serializada en un único hilo; más
 /// vale que esa garantía sea explícita acá que depender de un comportamiento
 /// por defecto de una librería externa.
+// No `private` -- [analizarCedula] no conoce nada de cédulas ni de
+// documentos de identidad (sólo entrega texto crudo de ML Kit), así que
+// otros perfiles de OCR aislados (ver LectorComprobanteRuta.kt /
+// PantallaEscanearComprobanteRuta.kt) la reusan en vez de duplicar el
+// manejo de `ImageProxy`/`InputImage`/hilos. Mismo motivo para
+// [iniciarCamara] más arriba.
 @androidx.annotation.OptIn(ExperimentalGetImage::class)
-private fun analizarCedula(
+fun analizarCedula(
     imagen: ImageProxy,
     recognizer: com.google.mlkit.vision.text.TextRecognizer,
     ejecutorPrincipal: java.util.concurrent.Executor,

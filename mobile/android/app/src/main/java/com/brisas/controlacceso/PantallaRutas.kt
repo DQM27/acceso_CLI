@@ -43,13 +43,17 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 /// `docs/planes-implementados/plan-control-rutas.md`. Orden de trabajo
 /// invertido a pedido explícito del usuario (mobile primero, núcleo al
 /// final): todo el estado vive en [RutasViewModel], en memoria, sin
-/// [uniffi.control_acceso_mobile.Nucleo] todavía -- por eso el "escaneo"
-/// de cada paso es simulado (rellena un valor de ejemplo editable), no OCR
-/// real. Flujo guiado en una sola tarjeta con 3 pasos (carnet KOF →
-/// documento → placa/unidad), en vez de 3 pantallas separadas -- mismo
-/// criterio que ya usan los flujos de check-in de patio/yard (menos
-/// pantallas, menos toques) y de onboarding KYC (guía + dato editable
-/// antes de aceptar el paso, nunca automático a ciegas).
+/// [uniffi.control_acceso_mobile.Nucleo] todavía. El paso "Documento de
+/// ruta" ya usa OCR real ([PantallaEscanearComprobanteRuta] +
+/// `LectorComprobanteRuta.kt`) -- los pasos "Gafete KOF" y "Placa" siguen
+/// simulados (rellenan un valor de ejemplo editable) porque sus perfiles
+/// de OCR (carnet KOF, placas) todavía no están activados, ver
+/// `docs/arquitectura/muestras-ocr-aisladas.md`. Flujo guiado en una sola
+/// tarjeta con 3 pasos (Gafete KOF → documento → placa/unidad), en vez de
+/// 3 pantallas separadas -- mismo criterio que ya usan los flujos de
+/// check-in de patio/yard (menos pantallas, menos toques) y de onboarding
+/// KYC (guía + dato editable antes de aceptar el paso, nunca automático a
+/// ciegas).
 @Composable
 fun PantallaRutas() {
     val viewModel: RutasViewModel = viewModel()
@@ -64,6 +68,23 @@ fun PantallaRutas() {
 
     var salidaParaAgregarDocumento by remember { mutableStateOf<SalidaRutaActiva?>(null) }
     var salidaParaConfirmarRetorno by remember { mutableStateOf<SalidaRutaActiva?>(null) }
+    var escanerRutaAbierto by remember { mutableStateOf(false) }
+
+    if (escanerRutaAbierto) {
+        PantallaEscanearComprobanteRuta(
+            onComprobanteDetectado = { comprobante ->
+                escanerRutaAbierto = false
+                numeroRuta = comprobante.numeroRuta
+                subNumeroTexto = comprobante.subNumero.toString()
+                numeroDocumento = comprobante.numeroDocumento
+                comprobante.fecha?.let { fecha ->
+                    fechaDocumento = "%02d.%02d.%04d".format(fecha.dia, fecha.mes, fecha.anio)
+                }
+            },
+            onCerrar = { escanerRutaAbierto = false },
+        )
+        return
+    }
 
     val paso1Completo = encargado.isNotBlank()
     val paso2Completo = numeroRuta.isNotBlank() && numeroDocumento.isNotBlank() && fechaDocumento.isNotBlank()
@@ -101,16 +122,12 @@ fun PantallaRutas() {
                 numeroDocumento = numeroDocumento,
                 onCambiarNumeroDocumento = { numeroDocumento = it },
                 // Ruta, tipo y documento vienen del mismo comprobante
-                // impreso ("CRR079/ 0001") -- un solo escaneo carga los
-                // tres, por eso una sola cámara para toda la tarjeta. La
-                // fecha tampoco tiene campo propio -- sólo se muestra si
-                // difiere de hoy (ver más abajo). El mock simula que todo
-                // coincide con hoy.
-                onEscanear = {
-                    numeroRuta = "CRR079 (demo)"
-                    numeroDocumento = "700101452 (demo)"
-                    fechaDocumento = fechaHoyTexto()
-                },
+                // impreso ("CRR079/ 0001") -- un solo escaneo (ver
+                // PantallaEscanearComprobanteRuta / LectorComprobanteRuta.kt)
+                // carga los tres, por eso una sola cámara para toda la
+                // tarjeta. La fecha tampoco tiene campo propio -- sólo se
+                // muestra si difiere de hoy (ver más abajo).
+                onEscanear = { escanerRutaAbierto = true },
                 fechaVencida = fechaVencida,
                 tieneCorreo = tieneCorreo,
                 onCambiarTieneCorreo = { tieneCorreo = it },
