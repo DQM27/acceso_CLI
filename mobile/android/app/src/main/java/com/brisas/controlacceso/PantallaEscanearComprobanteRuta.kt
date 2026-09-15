@@ -19,7 +19,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -110,6 +113,11 @@ private fun VistaCamaraComprobanteRuta(
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     var ultimoMensaje by remember { mutableStateOf(MENSAJE_INICIAL) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
+    // Sólo en debug (mismo criterio que FLAG_SECURE en MainActivity.kt) --
+    // hasta tener el perfil probado a fondo contra el papel real, ver el
+    // texto crudo de ML Kit en pantalla es la forma más rápida de ajustar
+    // los regex de LectorComprobanteRuta.kt sin adivinar a ciegas.
+    var textoCrudoDebug by remember { mutableStateOf("") }
     val estabilizador = remember { EstabilizadorComprobanteRuta() }
     val detectada = remember { AtomicBoolean(false) }
     val sesionActiva = remember { AtomicBoolean(true) }
@@ -164,6 +172,7 @@ private fun VistaCamaraComprobanteRuta(
                                 sesionActiva = sesionActiva,
                                 onTexto = { texto ->
                                     if (sesionActiva.get()) {
+                                        if (BuildConfig.DEBUG) textoCrudoDebug = texto
                                         val resultado = estabilizador.procesarFrame(texto)
                                         if (resultado != null) {
                                             estado = EstadoEscaneo.CONFIRMADO
@@ -219,6 +228,20 @@ private fun VistaCamaraComprobanteRuta(
                     .padding(12.dp),
             )
             BotonDiscretoBrisas(onClick = onCerrar) { Text("Cancelar") }
+        }
+        if (BuildConfig.DEBUG && textoCrudoDebug.isNotBlank()) {
+            Text(
+                "DEBUG -- texto crudo de ML Kit:\n$textoCrudoDebug",
+                color = Color.White,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .heightIn(max = 320.dp)
+                    .verticalScroll(rememberScrollState())
+                    .background(Color.Black.copy(alpha = 0.85f))
+                    .padding(12.dp),
+            )
         }
     }
 }

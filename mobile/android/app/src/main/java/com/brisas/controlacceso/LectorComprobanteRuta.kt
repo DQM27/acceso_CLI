@@ -39,16 +39,20 @@ private val REGEX_RUTA_NUMERO_CARGA = Regex(
     """Ruta\s*/\s*No\.?\s*de\s*Carga:?\s*([A-Z]{2,6}\d{2,6})\s*/\s*0*(\d+)""",
     RegexOption.IGNORE_CASE,
 )
-// `[ \t]*`, no `\s*` -- a propósito NO cruza saltos de línea. El
-// comprobante real trae debajo una tabla de materiales (códigos de SKU de
-// 6 dígitos, ej. `164145`) del mismo largo que un número de transporte
-// real; con `\s*` el regex podía saltar la línea de "Transporte:" (si en
-// esa lectura salía sin número pegado) y agarrar el primer SKU de la
-// tabla más abajo como si fuera el transporte. El número real siempre
-// está en la misma línea que la etiqueta (confirmado con fotos reales,
-// 2026-09-15) -- si no aparece ahí, es mejor no encontrar nada que
-// encontrar el dato equivocado.
-private val REGEX_TRANSPORTE = Regex("""Transporte:?[ \t]*(\d{6,15})""", RegexOption.IGNORE_CASE)
+// Tolera como máximo UN salto de línea entre la etiqueta y el número --
+// ni "cero" (`[ \t]*` a secas resultó demasiado estricto: en el texto que
+// de verdad entrega ML Kit en el A25, "Transporte:" y su valor no siempre
+// caen en la misma línea reconocida, y con esa versión el escáner no
+// reconocía nada) ni "cualquier cantidad" (`\s*` original: saltaba varias
+// líneas hasta la tabla de materiales de abajo y agarraba el primer SKU
+// de 6 dígitos, ej. `164145`, en vez del transporte real). Un salto cubre
+// el caso real observado sin llegar tan lejos como la tabla, que queda
+// varias líneas después (pasando primero por "Fecha de Entrega:" y
+// "Camión:").
+private val REGEX_TRANSPORTE = Regex(
+    """Transporte:?[ \t]*\r?\n?[ \t]*(\d{6,15})""",
+    RegexOption.IGNORE_CASE,
+)
 // El comprobante real usa puntos como separador ("15.09.2026"), pero se
 // toleran también guion/barra por si una foto futura trae otro formato.
 private val REGEX_FECHA_ENTREGA = Regex(

@@ -42,6 +42,17 @@ class LectorComprobanteRutaTest {
     }
 
     @Test
+    fun extraeTransporteAunqueMlKitLoPartaEnDosLineas() {
+        // Bug real reportado en el Samsung A25 (2026-09-15, segunda
+        // ronda): ML Kit no siempre entrega "Transporte:" y su valor en la
+        // misma línea reconocida -- exigir cero saltos de línea (fix de la
+        // primera ronda) dejó de reconocer el comprobante por completo.
+        val texto = comprobantePrincipal.replace("Transporte: 700101452", "Transporte:\n700101452")
+        val resultado = extraerComprobanteRuta(texto)
+        assertEquals("700101452", resultado?.numeroDocumento)
+    }
+
+    @Test
     fun noConfundeElTransporteConUnSkuDeLaTablaDeMateriales() {
         // Bug real reportado en el Samsung A25 (2026-09-15): con `\s*` el
         // regex podía cruzar la línea de "Transporte:" y agarrar el primer
