@@ -302,21 +302,25 @@ procediera contra producción (no hay ambiente de prueba separado).
 
 **Aplicado a Supabase** (migración `control_de_rutas_vehiculos_encargados_salidas`,
 verificado sin hallazgos nuevos en `get_advisors` security/performance):
-- `vehiculos_ruta`/`salidas_ruta`, acotadas por `sitio_id` del JWT del
-  dispositivo -- igual que `ingresos`/`movimientos_visita` (la flota es
-  de un sitio puntual, no compartida). RLS de 3 políticas (leer propio
-  sitio o admin_global; crear/actualizar propio sitio y `tipo <> 'visor'`),
+- `salidas_ruta`, acotada por `sitio_id` del JWT del dispositivo -- igual
+  que `ingresos`/`movimientos_visita` (el registro operativo real sí es
+  de un sitio puntual). RLS de 3 políticas (leer propio sitio o
+  admin_global; crear/actualizar propio sitio y `tipo <> 'visor'`),
   triggers de apertura inmutable + cierre único (espejo exacto de
   `ingresos`/`movimientos_visita`, sólo con "retorno" en vez de "salida"
   para no chocar con la terminología del núcleo Rust), broadcast
   (`emitir_cambio_nube_sitio`), `updated_at`.
-- `encargados_ruta` (personal KOF): **corregido a GLOBAL** (migración
-  `encargados_ruta_global_como_contratistas`, 2026-09-15) -- el usuario
-  aclaró que el personal KOF es como los contratistas, no atado a un
-  sitio. Lectura/actualización sin restricción de sitio (mismo `using`
-  que `empresas`); el `INSERT` se queda igual, sigue estampando el sitio
-  del dispositivo que crea la fila (mismo criterio que
-  "crear empresas del propio sitio").
+- `encargados_ruta`/`vehiculos_ruta`: **ambos GLOBAL** (migraciones
+  `encargados_ruta_global_como_contratistas` y
+  `vehiculos_ruta_global_como_contratistas`, 2026-09-15) -- el usuario
+  aclaró que ni el personal KOF ni las unidades (camiones) están atados a
+  un sitio: una unidad puede prestar servicio en otro sitio ("recurso
+  compartido"), y placa/`numero_unidad`/`codigo_empleado` ya son
+  identificadores únicos de por sí, sin riesgo de choque al hacerlos
+  globales -- mismo espíritu que `contratistas`/`empresas`. Lectura/
+  actualización sin restricción de sitio; el `INSERT` se queda igual,
+  sigue estampando el sitio del dispositivo que crea la fila (mismo
+  criterio que "crear empresas del propio sitio").
   `vehiculo_id`/`encargado_id` en `salidas_ruta` son nullable (mismo
   criterio ya confirmado del lado local).
 
@@ -336,6 +340,14 @@ priorizó dejar el push funcionando primero porque hoy no existe ninguna
 pantalla de escritorio que consuma el pull todavía -- no había con qué
 probarlo de punta a punta. Retomar cuando exista esa pantalla o cuando
 dos dispositivos mobile necesiten verse entre sí.
+
+**Alta de vehículos/encargados (catálogo):** todavía no hay ninguna
+pantalla (mobile ni desktop) para insertar filas en `vehiculos_ruta`/
+`encargados_ruta` -- confirmado con el usuario que se resuelve cuando se
+ataque la parte de UI, no antes. Hasta entonces el catálogo queda vacío
+y el match de `RutaService` (`buscar_por_placa`/`buscar_por_codigo_empleado`)
+simplemente no encuentra nada -- comportamiento esperado, no un bug (el
+catálogo es consultivo, nunca bloquea).
 
 ## Contexto
 
