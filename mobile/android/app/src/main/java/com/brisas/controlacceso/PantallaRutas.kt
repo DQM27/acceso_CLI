@@ -80,14 +80,15 @@ fun PantallaRutas() {
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            PasoChecklist(numero = 1, titulo = "Carnet KOF", completado = paso1Completo) {
-                CampoConEscaneo(
-                    valor = encargado,
-                    onCambiar = { encargado = it },
-                    placeholder = "Nombre del encargado",
-                    onEscanear = { encargado = "Carlos Balmaceda (demo)" },
-                )
-            }
+            PasoChecklistUnCampo(
+                numero = 1,
+                titulo = "Carnet KOF",
+                completado = paso1Completo,
+                valor = encargado,
+                onCambiar = { encargado = it },
+                placeholder = "Nombre del encargado",
+                onEscanear = { encargado = "Carlos Balmaceda (demo)" },
+            )
             PasoChecklist(numero = 2, titulo = "Documento de ruta", completado = paso2Completo) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextField(
@@ -113,16 +114,14 @@ fun PantallaRutas() {
                     valor = numeroDocumento,
                     onCambiar = { numeroDocumento = it },
                     placeholder = "No. de transporte / documento",
-                    onEscanear = { numeroDocumento = "700101452 (demo)" },
-                )
-                TextField(
-                    value = fechaDocumento,
-                    onValueChange = { fechaDocumento = it },
-                    placeholder = { Text("Fecha (dd.MM.yyyy)") },
-                    singleLine = true,
-                    shape = FormaCampoBrisas,
-                    colors = ColoresCampoBrisas(),
-                    modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
+                    // La fecha viene del mismo documento -- no tiene campo
+                    // propio, sólo se muestra si difiere de hoy (ver más
+                    // abajo). El escaneo real la va a leer junto al número;
+                    // acá el mock simula que coincide con hoy.
+                    onEscanear = {
+                        numeroDocumento = "700101452 (demo)"
+                        fechaDocumento = fechaHoyTexto()
+                    },
                 )
                 if (fechaVencida) {
                     Text(
@@ -136,14 +135,15 @@ fun PantallaRutas() {
                     }
                 }
             }
-            PasoChecklist(numero = 3, titulo = "Placa o número de unidad", completado = paso3Completo) {
-                CampoConEscaneo(
-                    valor = vehiculo,
-                    onCambiar = { vehiculo = it },
-                    placeholder = "Placa o número de unidad",
-                    onEscanear = { vehiculo = "SJB-123 (demo)" },
-                )
-            }
+            PasoChecklistUnCampo(
+                numero = 3,
+                titulo = "Placa o número de unidad",
+                completado = paso3Completo,
+                valor = vehiculo,
+                onCambiar = { vehiculo = it },
+                placeholder = "Placa o número de unidad",
+                onEscanear = { vehiculo = "SJB-123 (demo)" },
+            )
         }
 
         BotonBrisas(
@@ -214,6 +214,35 @@ fun PantallaRutas() {
 }
 
 @Composable
+private fun PasoEncabezado(numero: Int, titulo: String, completado: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(if (completado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (completado) {
+                Icon(
+                    Icons.Default.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(16.dp),
+                )
+            } else {
+                Text(
+                    "$numero",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Text(titulo, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
 private fun PasoChecklist(
     numero: Int,
     titulo: String,
@@ -225,35 +254,61 @@ private fun PasoChecklist(
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surface)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(if (completado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (completado) {
-                    Icon(
-                        Icons.Default.Check,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(16.dp),
-                    )
-                } else {
-                    Text(
-                        "$numero",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            Text(titulo, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-        }
+        PasoEncabezado(numero, titulo, completado)
         contenido()
+    }
+}
+
+/// Paso de un solo campo (carnet KOF, placa) -- a diferencia de
+/// [PasoChecklist], acá la cámara no va en su propia fila debajo del
+/// encabezado: se ubica al lado, centrada verticalmente contra el bloque
+/// encabezado+campo completo -- menos alto de tarjeta para el mismo
+/// contenido (pedido explícito 2026-09-15, las tarjetas de un solo campo
+/// se veían con mucho aire vertical).
+@Composable
+private fun PasoChecklistUnCampo(
+    numero: Int,
+    titulo: String,
+    completado: Boolean,
+    valor: String,
+    onCambiar: (String) -> Unit,
+    placeholder: String,
+    onEscanear: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            PasoEncabezado(numero, titulo, completado)
+            TextField(
+                value = valor,
+                onValueChange = onCambiar,
+                placeholder = { Text(placeholder) },
+                singleLine = true,
+                shape = FormaCampoBrisas,
+                colors = ColoresCampoBrisas(),
+                modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(AlturaBusquedaBrisas)
+                .border(1.dp, MaterialTheme.colorScheme.primary, FormaCampoBrisas)
+                .clip(FormaCampoBrisas)
+                .clickable(onClick = onEscanear),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Default.PhotoCamera, contentDescription = "Escanear", tint = MaterialTheme.colorScheme.primary)
+        }
     }
 }
 
