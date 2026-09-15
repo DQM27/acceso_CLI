@@ -76,6 +76,11 @@ dependencies {
     implementation("androidx.camera:camera-view:1.5.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    // Sólo para el sondeo DEBUG del código de barras del comprobante de
+    // ruta (ver PantallaEscanearComprobanteRuta.kt) -- todavía no sabemos
+    // qué dato trae, así que por ahora sólo se lee y se muestra en el
+    // overlay de debug, no se usa para nada en producción.
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
     implementation(platform("io.github.jan-tennert.supabase:bom:3.2.2"))
     implementation("io.github.jan-tennert.supabase:realtime-kt")
     implementation("io.ktor:ktor-client-okhttp:3.2.2")

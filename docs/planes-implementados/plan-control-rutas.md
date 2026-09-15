@@ -128,6 +128,22 @@ Mejoras que esto sugirió, ya aplicadas al primer corte mobile
   directo a "Transporte:" sin valor real (debe rechazar, no adivinar). Ver
   `LectorComprobanteRuta.kt` y `LectorComprobanteRutaTest.kt` (14 tests,
   todos verdes vía `gradlew testDebugUnitTest`).
+- **Sondeo del código de barras (2026-09-15, exploratorio):** el usuario
+  preguntó qué codifica el código de barras que aparece debajo de
+  "Transporte:" en las 4 fotos -- no se puede saber por lectura visual
+  (Code128 necesita un decodificador real, no adivinar mirando las
+  barras). Conectado ML Kit Barcode Scanning (`com.google.mlkit:
+  barcode-scanning:17.3.0`) **sólo en builds DEBUG**, corriendo en
+  paralelo al OCR de texto en `VistaCamaraComprobanteRuta` y mostrando el
+  valor crudo decodificado en el mismo overlay de debug que ya existía
+  para el texto de ML Kit. Todavía no se sabe qué dato trae -- pendiente
+  probarlo contra el papel real; si resulta ser el mismo "Transporte" (lo
+  más probable por convención de este tipo de documento), decodificarlo
+  directo sería más preciso y rápido que el regex sobre texto OCR (sin
+  ambigüedad de dígitos, con checksum), y se podría evaluar reemplazar o
+  complementar `REGEX_TRANSPORTE`. Camino de producción (release) no
+  cambia -- sigue usando sólo el reconocedor de texto, sin el costo extra
+  de correr dos detectores por frame.
 
 ## Contexto
 

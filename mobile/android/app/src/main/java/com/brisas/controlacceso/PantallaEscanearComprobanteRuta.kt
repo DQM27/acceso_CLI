@@ -44,6 +44,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.util.concurrent.Executors
@@ -111,6 +114,12 @@ private fun VistaCamaraComprobanteRuta(
     val haptica = LocalHapticFeedback.current
     val ejecutor = remember { Executors.newSingleThreadExecutor() }
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
+    // Sólo se crea en debug (ver uso más abajo) -- sondeo exploratorio del
+    // código de barras del comprobante: todavía no sabemos qué dato trae
+    // (¿el mismo "Transporte"? ¿otra cosa?), así que por ahora sólo se lee
+    // y se muestra, no reemplaza ni complementa la extracción por texto
+    // hasta confirmar qué dice contra un comprobante real.
+    val barcodeScanner = remember { if (BuildConfig.DEBUG) BarcodeScanning.getClient() else null }
     var ultimoMensaje by remember { mutableStateOf(MENSAJE_INICIAL) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
     // Sólo en debug (mismo criterio que FLAG_SECURE en MainActivity.kt) --
@@ -118,6 +127,7 @@ private fun VistaCamaraComprobanteRuta(
     // texto crudo de ML Kit en pantalla es la forma más rápida de ajustar
     // los regex de LectorComprobanteRuta.kt sin adivinar a ciegas.
     var textoCrudoDebug by remember { mutableStateOf("") }
+    var barcodeCrudoDebug by remember { mutableStateOf("") }
     val estabilizador = remember { EstabilizadorComprobanteRuta() }
     val detectada = remember { AtomicBoolean(false) }
     val sesionActiva = remember { AtomicBoolean(true) }
@@ -138,6 +148,7 @@ private fun VistaCamaraComprobanteRuta(
             if (casos.isNotEmpty()) cameraProvider?.unbind(*casos)
             ejecutor.shutdown()
             recognizer.close()
+            barcodeScanner?.close()
         }
     }
 
@@ -165,35 +176,60 @@ private fun VistaCamaraComprobanteRuta(
                                 imagen.close()
                                 return@setAnalyzer
                             }
-                            analizarCedula(
-                                imagen = imagen,
-                                recognizer = recognizer,
-                                ejecutorPrincipal = ejecutorPrincipal,
-                                sesionActiva = sesionActiva,
-                                onTexto = { texto ->
-                                    if (sesionActiva.get()) {
-                                        if (BuildConfig.DEBUG) textoCrudoDebug = texto
-                                        val resultado = estabilizador.procesarFrame(texto)
-                                        if (resultado != null) {
-                                            estado = EstadoEscaneo.CONFIRMADO
-                                            ultimoMensaje = "Comprobante ${resultado.numeroRuta} confirmado"
-                                            if (detectada.compareAndSet(false, true)) {
-                                                haptica.performHapticFeedback(HapticFeedbackType.Confirm)
-                                                trabajoResultado?.cancel()
-                                                trabajoResultado = alcance.launch {
-                                                    if (sesionActiva.get()) onDetectadoActual(resultado)
-                                                }
+                            val onTexto: (String) -> Unit = { texto ->
+                                if (sesionActiva.get()) {
+                                    if (BuildConfig.DEBUG) textoCrudoDebug = texto
+                                    val resultado = estabilizador.procesarFrame(texto)
+                                    if (resultado != null) {
+                                        estado = EstadoEscaneo.CONFIRMADO
+                                        ultimoMensaje = "Comprobante ${resultado.numeroRuta} confirmado"
+                                        if (detectada.compareAndSet(false, true)) {
+                                            haptica.performHapticFeedback(HapticFeedbackType.Confirm)
+                                            trabajoResultado?.cancel()
+                                            trabajoResultado = alcance.launch {
+                                                if (sesionActiva.get()) onDetectadoActual(resultado)
                                             }
-                                        } else {
-                                            estado = EstadoEscaneo.BUSCANDO
-                                            ultimoMensaje = MENSAJE_INICIAL
                                         }
+                                    } else {
+                                        estado = EstadoEscaneo.BUSCANDO
+                                        ultimoMensaje = MENSAJE_INICIAL
                                     }
-                                },
-                                onFallo = {
-                                    if (sesionActiva.get()) ultimoMensaje = "No se pudo leer el texto. Intente acercar."
-                                },
-                            )
+                                }
+                            }
+                            val onFallo: () -> Unit = {
+                                if (sesionActiva.get()) ultimoMensaje = "No se pudo leer el texto. Intente acercar."
+                            }
+                            val scannerBarcodeActual = barcodeScanner
+                            if (scannerBarcodeActual != null) {
+                                // Sólo el camino debug corre los dos detectores por
+                                // frame (texto + barcode) -- ver comentario de
+                                // `barcodeScanner` más arriba. El camino de
+                                // producción (`else`) sigue usando únicamente
+                                // `analizarCedula`, sin el costo extra.
+                                analizarComprobanteConBarcodeDebug(
+                                    imagen = imagen,
+                                    recognizer = recognizer,
+                                    barcodeScanner = scannerBarcodeActual,
+                                    ejecutorPrincipal = ejecutorPrincipal,
+                                    sesionActiva = sesionActiva,
+                                    onTexto = onTexto,
+                                    onBarcodes = { valores ->
+                                        if (sesionActiva.get() && valores.isNotEmpty()) {
+                                            barcodeCrudoDebug = valores.joinToString("\n")
+                                        }
+                                    },
+                                    onFallo = onFallo,
+                                )
+                            } else {
+                                analizarCedula(
+                                    imagen = imagen,
+                                    recognizer = recognizer,
+                                    ejecutorPrincipal = ejecutorPrincipal,
+                                    sesionActiva = sesionActiva,
+                                    onTexto = onTexto,
+                                    onFallo = onFallo,
+                                )
+                            }
                         }
                     }
                 analisisCamara = analisis
@@ -229,9 +265,13 @@ private fun VistaCamaraComprobanteRuta(
             )
             BotonDiscretoBrisas(onClick = onCerrar) { Text("Cancelar") }
         }
-        if (BuildConfig.DEBUG && textoCrudoDebug.isNotBlank()) {
+        if (BuildConfig.DEBUG && (textoCrudoDebug.isNotBlank() || barcodeCrudoDebug.isNotBlank())) {
+            val textoDebug = buildString {
+                if (barcodeCrudoDebug.isNotBlank()) append("DEBUG -- código de barras:\n$barcodeCrudoDebug\n\n")
+                if (textoCrudoDebug.isNotBlank()) append("DEBUG -- texto crudo de ML Kit:\n$textoCrudoDebug")
+            }
             Text(
-                "DEBUG -- texto crudo de ML Kit:\n$textoCrudoDebug",
+                textoDebug,
                 color = Color.White,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier
@@ -244,6 +284,53 @@ private fun VistaCamaraComprobanteRuta(
             )
         }
     }
+}
+
+/// Variante DEBUG-only de [analizarCedula] que además corre el detector de
+/// códigos de barras de ML Kit sobre el mismo frame -- exploratorio: el
+/// usuario pidió ver qué dato trae el código de barras del comprobante de
+/// ruta (visible justo debajo de "Transporte:" en las 4 fotos reales) para
+/// decidir si conviene usarlo en vez de (o además de) la extracción por
+/// texto. Se ejecuta el reconocedor de texto primero -- que es el que de
+/// verdad importa para [EstabilizadorComprobanteRuta] -- y recién en su
+/// `onComplete` se dispara el de barcode, cerrando el `ImageProxy` sólo
+/// cuando ambos terminan.
+private fun analizarComprobanteConBarcodeDebug(
+    imagen: androidx.camera.core.ImageProxy,
+    recognizer: com.google.mlkit.vision.text.TextRecognizer,
+    barcodeScanner: com.google.mlkit.vision.barcode.BarcodeScanner,
+    ejecutorPrincipal: java.util.concurrent.Executor,
+    sesionActiva: AtomicBoolean,
+    onTexto: (String) -> Unit,
+    onBarcodes: (List<String>) -> Unit,
+    onFallo: () -> Unit,
+) {
+    val mediaImage = imagen.image
+    if (mediaImage == null) {
+        imagen.close()
+        return
+    }
+    val rotacion = imagen.imageInfo.rotationDegrees
+    val input = InputImage.fromMediaImage(mediaImage, rotacion)
+    recognizer.process(input)
+        .addOnSuccessListener(ejecutorPrincipal) { resultado ->
+            if (sesionActiva.get()) onTexto(resultado.text)
+        }
+        .addOnFailureListener(ejecutorPrincipal) { if (sesionActiva.get()) onFallo() }
+        .addOnCompleteListener(ejecutorPrincipal) {
+            barcodeScanner.process(input)
+                .addOnSuccessListener(ejecutorPrincipal) { codigos ->
+                    if (sesionActiva.get()) {
+                        val valores = codigos.mapNotNull { codigo: Barcode ->
+                            codigo.rawValue?.let { valor -> "$valor (formato ${codigo.format})" }
+                        }
+                        onBarcodes(valores)
+                    }
+                }
+                .addOnCompleteListener(ejecutorPrincipal) {
+                    imagen.close()
+                }
+        }
 }
 
 private const val MENSAJE_INICIAL = "Apunte al comprobante de carga de ruta"
