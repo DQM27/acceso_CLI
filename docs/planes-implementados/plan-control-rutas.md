@@ -461,7 +461,15 @@ se define el parser hasta tenerlas.
 4. Confirmar el alcance exacto mobile vs. desktop para la administración
    del catálogo (vehículos/encargados): ¿sólo desktop, o también mobile?
 5. Importar la DB de KOF que ya tiene el usuario como semilla de
-   `encargados_ruta`.
+   `encargados_ruta`. **Insumo entregado (2026-09-15):**
+   `empleados_costa_rica.sql` (raíz del repo) -- 1438 empleados
+   (`numero_empleado` + `nombre`, sociedad TICA, PO países agosto 2026;
+   `cedula` queda `NULL`, no venía en la fuente). Import en sí sigue
+   pendiente para cuando se ataque el núcleo (orden ya decidido: mobile
+   primero). Este archivo ya sirvió para corregir un dato del OCR: reveló
+   que `numero_empleado` NO es fijo en 7 dígitos (varía 5-7 -- ver
+   `LectorCarnetKof.kt`), cosa que la única muestra de carnet vista
+   (`5040017`) no dejaba ver.
 
 ## Verificación (una vez implementado)
 

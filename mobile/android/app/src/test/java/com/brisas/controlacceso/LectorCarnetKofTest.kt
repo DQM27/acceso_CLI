@@ -82,6 +82,19 @@ class LectorCarnetKofTest {
     }
 
     @Test
+    fun aceptaCodigosDeEmpleadoDeCincoYSeisDigitos() {
+        // Segunda corrección (2026-09-15), contra `empleados_costa_rica.sql`
+        // (1438 filas reales): el largo del código NO es fijo en 7 como se
+        // asumió con la única muestra vista -- hay 23 códigos de 5 dígitos
+        // (ej. `77851`) y 61 de 6 (ej. `330002`), ambos reales en esa base.
+        val textoReversoCincoDigitos = textoReverso.replace("5040017", "77851")
+        assertEquals("77851", extraerCarnetKof(textoReversoCincoDigitos)?.codigoEmpleado)
+
+        val textoReversoSeisDigitos = textoReverso.replace("5040017", "330002")
+        assertEquals("330002", extraerCarnetKof(textoReversoSeisDigitos)?.codigoEmpleado)
+    }
+
+    @Test
     fun sinSenalesDeCarnetNoHayResultado() {
         assertNull(extraerCarnetKof("texto cualquiera sin relación"))
     }

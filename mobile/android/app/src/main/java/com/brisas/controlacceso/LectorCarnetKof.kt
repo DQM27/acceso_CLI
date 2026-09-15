@@ -41,10 +41,13 @@ private val REGEX_ANTIGUEDAD = Regex("""\b\d{1,2}\s*A[ÑN]OS\b""", RegexOption.I
 // cambia por persona, sirve como ancla de clasificación del reverso.
 private val REGEX_RESPALDO_KOF = Regex("""ALERTA\s+Y\s+RESPUESTA""", RegexOption.IGNORE_CASE)
 
-// Código de empleado: 7 dígitos exactos en la muestra real (`5040017`).
-// A diferencia del número de transporte del comprobante (9 dígitos) o la
-// cédula (9 dígitos con separadores), acá el largo SÍ viene confirmado
-// por la muestra -- se deja fijo en 7, no un rango.
+// Código de empleado: la muestra aislada mostraba `5040017` (7 dígitos) y
+// en su momento se asumió que el largo era fijo -- **corregido 2026-09-15**
+// contra la base real de empleados que trajo el usuario
+// (`empleados_costa_rica.sql`, 1438 filas): el código NO es fijo en 7,
+// varía 5-7 dígitos (23 casos de 5, 61 de 6, 1354 de 7 -- ej. `77851`,
+// `330002`, `5040017` son todos códigos reales). Se admite ese rango en
+// vez de un largo fijo.
 //
 // Exige la línea COMPLETA (no `\b...\b` suelto en cualquier parte del
 // texto): el reverso también trae un teléfono de emergencia
@@ -53,7 +56,7 @@ private val REGEX_RESPALDO_KOF = Regex("""ALERTA\s+Y\s+RESPUESTA""", RegexOption
 // como si fuera el código de empleado (bug real atrapado por el test de
 // este mismo archivo). El código real aparece solo en su propia línea, el
 // teléfono no.
-private val REGEX_CODIGO_EMPLEADO_LINEA = Regex("""^\d{7}$""")
+private val REGEX_CODIGO_EMPLEADO_LINEA = Regex("""^\d{5,7}$""")
 
 /// Clasificación: ¿este texto viene de un carnet KOF (frente o reverso)?
 /// Excluye explícitamente el comprobante de carga (comparte la marca
