@@ -243,6 +243,13 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
              -- `initialize_database` de arriba.
              DROP TABLE cola_salida;
              DROP TABLE ingresos_remotos;
+             -- MIGRACION_36 (que corre al final al rebobinar) crea
+             -- `salidas_ruta`/`vehiculos_ruta`/`encargados_ruta` desde cero --
+             -- mismo motivo que cola_salida/ingresos_remotos/gafetes arriba.
+             -- Orden de FK: el hijo primero.
+             DROP TABLE salidas_ruta;
+             DROP TABLE vehiculos_ruta;
+             DROP TABLE encargados_ruta;
              -- MIGRACION_16/19 (que corren después de ésta al rebobinar) le
              -- agregan `uuid` a contratistas/registro_ingresos/empresas -- el
              -- `initialize_database` de arriba ya las dejó con esas columnas,
@@ -351,6 +358,12 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
              -- MIGRACION_17/18 ya crearon antes de simular v10.
              DROP TABLE cola_salida;
              DROP TABLE ingresos_remotos;
+             -- Mismo motivo que en `migracion_10_...`: soltar lo que
+             -- MIGRACION_36 ya creó antes de simular v10. Orden de FK: el
+             -- hijo primero.
+             DROP TABLE salidas_ruta;
+             DROP TABLE vehiculos_ruta;
+             DROP TABLE encargados_ruta;
              -- Mismo motivo que en `migracion_10_...`: soltar `uuid` de
              -- contratistas/registro_ingresos/empresas antes de simular v10.
              DROP INDEX idx_empresas_uuid;
@@ -464,6 +477,12 @@ fn migracion_12_habilita_cambio_de_cedula() {
              -- MIGRACION_17/18 ya crearon antes de simular v11.
              DROP TABLE cola_salida;
              DROP TABLE ingresos_remotos;
+             -- Mismo motivo que en `migracion_10_...`: soltar lo que
+             -- MIGRACION_36 ya creó antes de simular v11. Orden de FK: el
+             -- hijo primero.
+             DROP TABLE salidas_ruta;
+             DROP TABLE vehiculos_ruta;
+             DROP TABLE encargados_ruta;
              -- Mismo motivo que en `migracion_10_...`: soltar `uuid` de
              -- contratistas/registro_ingresos/empresas antes de simular v11.
              DROP INDEX idx_empresas_uuid;
@@ -810,6 +829,33 @@ fn base_version_34_con_gafete_perdido() -> Connection {
                     OR (tipo = 'RESUELTO' AND contratista_id IS NULL AND motivo_resolucion IS NOT NULL)
                 )
             ) STRICT;
+
+            -- MIGRACION_36 (que corre al final, después de MIGRACION_35, al
+            -- migrar desde v34) recrea `cola_salida` (le suma 3 entidades
+            -- nuevas al CHECK) -- esta base minimalista nunca la creó, a
+            -- diferencia de una base real que ya la tendría desde
+            -- MIGRACION_17/18. Forma exacta de MIGRACION_30 (la última que
+            -- la tocó antes de v34).
+            CREATE TABLE cola_salida (
+                id INTEGER PRIMARY KEY,
+                entidad TEXT NOT NULL CHECK (
+                    entidad IN ('contratista', 'ingreso', 'empresa', 'gafete', 'usuario', 'movimiento_visita')
+                ),
+                entidad_uuid TEXT NOT NULL,
+                operacion TEXT NOT NULL CHECK (operacion IN ('crear', 'actualizar', 'cerrar')),
+                estado TEXT NOT NULL DEFAULT 'pendiente'
+                    CHECK (estado IN ('pendiente', 'enviado', 'fallido')),
+                intentos INTEGER NOT NULL DEFAULT 0 CHECK (intentos >= 0),
+                creado_en TEXT NOT NULL,
+                actualizado_en TEXT NOT NULL,
+                ultimo_error TEXT,
+                proximo_intento_en TEXT GENERATED ALWAYS AS (
+                    datetime(actualizado_en, '+' || MIN(intentos * 15, 1440) || ' minutes')
+                ) STORED
+            ) STRICT;
+            CREATE INDEX idx_cola_salida_pendientes
+            ON cola_salida(proximo_intento_en)
+            WHERE estado = 'pendiente';
 
             PRAGMA user_version = 34;
             ",
