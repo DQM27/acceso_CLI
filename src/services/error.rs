@@ -222,6 +222,40 @@ pub enum RutaServiceError {
     SalidaNoActiva,
     #[error("El retorno no puede ser anterior a la salida")]
     RetornoAnteriorASalida,
+    /// Comprobación de sanidad de todo el sistema (¿el reloj de la máquina
+    /// retrocedió respecto al último movimiento conocido, de cualquier
+    /// dominio?), no una regla de negocio de una salida puntual -- mismo
+    /// criterio que `RegistroIngresoServiceError::RelojRetrocedido`/
+    /// `CitaServiceError::RelojRetrocedido`. La genera
+    /// `application::rutas`, no `RutaService`.
+    #[error("El reloj del equipo está atrasado respecto al último movimiento registrado")]
+    RelojRetrocedido,
+    /// Mismo criterio que `CitaServiceError::OperadorNoAutorizado`/
+    /// `RegistroIngresoServiceError::OperadorNoAutorizado`.
+    #[error("La sesión que registra el movimiento no existe o está inactiva")]
+    OperadorNoAutorizado,
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+}
+
+/// Catálogo de vehículos de ruta -- mismo molde mínimo que
+/// `EmpresaServiceError`, sin reglas de negocio propias más allá de "el
+/// actor sigue activo" y lo que ya exige el esquema (placa/número de
+/// unidad únicos).
+#[derive(Debug, thiserror::Error)]
+pub enum VehiculoRutaServiceError {
+    #[error("Su sesión no está autorizada para esta operación")]
+    OperacionNoAutorizada,
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+}
+
+/// Catálogo de encargados de ruta (personal KOF) -- mismo criterio que
+/// `VehiculoRutaServiceError`.
+#[derive(Debug, thiserror::Error)]
+pub enum EncargadoRutaServiceError {
+    #[error("Su sesión no está autorizada para esta operación")]
+    OperacionNoAutorizada,
     #[error(transparent)]
     Database(#[from] DatabaseError),
 }

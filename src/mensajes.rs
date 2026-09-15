@@ -7,7 +7,8 @@ use crate::domain::resultado_acceso::MotivoDenegacion;
 use crate::models::gafete::EstadoGafete;
 use crate::services::error::{
     AutenticacionError, CitaServiceError, ContratistaServiceError, EmpresaServiceError,
-    GafeteServiceError, RegistroIngresoServiceError, UsuarioServiceError,
+    EncargadoRutaServiceError, GafeteServiceError, RegistroIngresoServiceError, RutaServiceError,
+    UsuarioServiceError, VehiculoRutaServiceError,
 };
 
 /// `HashInvalido` va junto con `Database` a propósito: ambos son fallos de
@@ -178,6 +179,50 @@ pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
     }
 }
 
+pub fn mensaje_vehiculo_ruta(error: VehiculoRutaServiceError) -> String {
+    match error {
+        VehiculoRutaServiceError::OperacionNoAutorizada => {
+            "Su sesión no está autorizada para esta operación".into()
+        }
+        VehiculoRutaServiceError::Database(_) => "No se pudo guardar el vehículo".into(),
+    }
+}
+
+pub fn mensaje_encargado_ruta(error: EncargadoRutaServiceError) -> String {
+    match error {
+        EncargadoRutaServiceError::OperacionNoAutorizada => {
+            "Su sesión no está autorizada para esta operación".into()
+        }
+        EncargadoRutaServiceError::Database(_) => "No se pudo guardar el encargado".into(),
+    }
+}
+
+pub fn mensaje_ruta(error: RutaServiceError) -> String {
+    use RutaServiceError::{
+        DocumentoRequiereAutorizacion, DocumentoYaRegistrado, EncargadoVacio, NumeroDocumentoVacio,
+        OperadorNoAutorizado, PlacaVacia, RelojRetrocedido, RetornoAnteriorASalida, SalidaNoActiva,
+        VehiculoYaEnRuta,
+    };
+
+    match error {
+        PlacaVacia => "La placa del vehículo es obligatoria".into(),
+        EncargadoVacio => "El nombre del encargado es obligatorio".into(),
+        NumeroDocumentoVacio => "El número de documento es obligatorio".into(),
+        VehiculoYaEnRuta => "Este vehículo ya tiene una salida de ruta activa".into(),
+        DocumentoYaRegistrado => "Ya existe una salida registrada con ese número de documento".into(),
+        DocumentoRequiereAutorizacion => {
+            "El documento no es de hoy -- confirme que cuenta con el correo de autorización".into()
+        }
+        SalidaNoActiva => "La salida de ruta ya no está activa".into(),
+        RetornoAnteriorASalida => "El retorno no puede ser anterior a la salida".into(),
+        RelojRetrocedido => "Revise la fecha y hora del equipo antes de continuar".into(),
+        OperadorNoAutorizado => {
+            "La sesión que registra el movimiento no existe o está inactiva".into()
+        }
+        _ => "No se pudo registrar el movimiento de la ruta".into(),
+    }
+}
+
 /// `RespuestaInesperada` trae el cuerpo crudo de la respuesta del receptor
 /// (puede incluir detalles internos de Postgres/PostgREST) -- nunca pasa a
 /// pantalla, mismo criterio que el resto de este módulo con los errores de
@@ -305,6 +350,41 @@ mod tests {
                 MotivoDenegacion::PraindNoRegistrado,
             )),
             "PRAIND sin fecha registrada"
+        );
+    }
+
+    #[test]
+    fn los_errores_tecnicos_de_rutas_no_exponen_detalles() {
+        let vehiculo = VehiculoRutaServiceError::Database(DatabaseError::FechaCorrupta(
+            "detalle interno".into(),
+        ));
+        let encargado = EncargadoRutaServiceError::Database(DatabaseError::FechaCorrupta(
+            "detalle interno".into(),
+        ));
+
+        assert_eq!(
+            mensaje_vehiculo_ruta(vehiculo),
+            "No se pudo guardar el vehículo"
+        );
+        assert_eq!(
+            mensaje_encargado_ruta(encargado),
+            "No se pudo guardar el encargado"
+        );
+    }
+
+    #[test]
+    fn los_mensajes_de_ruta_conservan_su_motivo() {
+        assert_eq!(
+            mensaje_ruta(RutaServiceError::VehiculoYaEnRuta),
+            "Este vehículo ya tiene una salida de ruta activa"
+        );
+        assert_eq!(
+            mensaje_ruta(RutaServiceError::RelojRetrocedido),
+            "Revise la fecha y hora del equipo antes de continuar"
+        );
+        assert_eq!(
+            mensaje_ruta(RutaServiceError::OperadorNoAutorizado),
+            "La sesión que registra el movimiento no existe o está inactiva"
         );
     }
 

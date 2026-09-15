@@ -23,6 +23,7 @@ mod gafetes;
 mod historial;
 #[cfg(feature = "nube")]
 mod nube;
+mod rutas;
 mod usuarios;
 
 pub use catalogos::{buscar_auditoria_completo_con_conexion, buscar_auditoria_con_conexion};

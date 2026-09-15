@@ -33,12 +33,14 @@ pub struct NuevaSalidaRuta {
 /// "ambos o ninguno" con un `CHECK` (`MIGRACION_36`), este tipo hace esa
 /// regla imposible de romper del lado de Rust.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct RetornoSalidaRuta {
     pub fecha_hora: DateTime<Utc>,
     pub usuario_id: i64,
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct SalidaRuta {
     pub id: i64,
     pub vehiculo_id: Option<i64>,

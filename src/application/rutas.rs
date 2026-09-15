@@ -1,0 +1,387 @@
+//! Control de rutas (`docs/planes-implementados/plan-control-rutas.md`) --
+//! fachada sobre `RutaService` para la parte operativa (salida/retorno),
+//! mismo armazón que `citas.rs` (transacción `Immediate`, reloj validado,
+//! operador activo confirmado dentro de la misma transacción). Los
+//! catálogos (`vehiculos_ruta`/`encargados_ruta`) siguen el molde más
+//! simple de `catalogos.rs` (empresas): sólo actor activo, sin reloj --
+//! son datos de referencia, no un ciclo con apertura/cierre.
+
+use rusqlite::{Connection, Transaction, TransactionBehavior};
+
+use crate::database::error::DatabaseError;
+use crate::database::repositories::encargado_ruta_repository::{
+    EncargadoRutaRepository, SqliteEncargadoRutaRepository,
+};
+use crate::database::repositories::salida_ruta_repository::{
+    SqliteSalidaRutaRepository, ultimo_instante_salida_ruta,
+};
+use crate::database::repositories::vehiculo_ruta_repository::{
+    SqliteVehiculoRutaRepository, VehiculoRutaRepository,
+};
+use crate::models::encargado_ruta::EncargadoRuta;
+use crate::models::salida_ruta::{SalidaRuta, SalidaRutaActivaResumen};
+use crate::models::vehiculo_ruta::VehiculoRuta;
+use crate::services::autenticacion_service::UsuarioSesion;
+use crate::services::error::{
+    EncargadoRutaServiceError, RutaServiceError, VehiculoRutaServiceError,
+};
+use crate::services::ruta_service::{
+    ResultadoRegistroSalidaRuta, RutaService, SolicitudSalidaRuta,
+};
+
+use super::{AppCore, verificar_actor_activo};
+
+impl AppCore {
+    // ---- Catálogo: vehículos ----
+
+    /// Sin `actor`, mismo criterio que `AppCore::listar_empresas`: es una
+    /// lectura, no una operación que autorizar.
+    pub fn listar_vehiculos_ruta(&self) -> Result<Vec<VehiculoRuta>, DatabaseError> {
+        SqliteVehiculoRutaRepository::new(&self.connection).listar()
+    }
+
+    pub fn crear_vehiculo_ruta(
+        &self,
+        actor: &UsuarioSesion,
+        vehiculo: &VehiculoRuta,
+    ) -> Result<i64, VehiculoRutaServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        verificar_actor_activo(&transaction, actor)
+            .map_err(VehiculoRutaServiceError::Database)?
+            .ok_or(VehiculoRutaServiceError::OperacionNoAutorizada)?;
+        let id = SqliteVehiculoRutaRepository::new(&transaction).crear(vehiculo)?;
+        transaction
+            .commit()
+            .map_err(DatabaseError::from)
+            .map_err(VehiculoRutaServiceError::Database)?;
+        Ok(id)
+    }
+
+    pub fn actualizar_vehiculo_ruta(
+        &self,
+        actor: &UsuarioSesion,
+        vehiculo: &VehiculoRuta,
+    ) -> Result<(), VehiculoRutaServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        verificar_actor_activo(&transaction, actor)
+            .map_err(VehiculoRutaServiceError::Database)?
+            .ok_or(VehiculoRutaServiceError::OperacionNoAutorizada)?;
+        SqliteVehiculoRutaRepository::new(&transaction).actualizar(vehiculo)?;
+        transaction
+            .commit()
+            .map_err(DatabaseError::from)
+            .map_err(VehiculoRutaServiceError::Database)
+    }
+
+    // ---- Catálogo: encargados (personal KOF) ----
+
+    pub fn listar_encargados_ruta(&self) -> Result<Vec<EncargadoRuta>, DatabaseError> {
+        SqliteEncargadoRutaRepository::new(&self.connection).listar()
+    }
+
+    pub fn crear_encargado_ruta(
+        &self,
+        actor: &UsuarioSesion,
+        encargado: &EncargadoRuta,
+    ) -> Result<i64, EncargadoRutaServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        verificar_actor_activo(&transaction, actor)
+            .map_err(EncargadoRutaServiceError::Database)?
+            .ok_or(EncargadoRutaServiceError::OperacionNoAutorizada)?;
+        let id = SqliteEncargadoRutaRepository::new(&transaction).crear(encargado)?;
+        transaction
+            .commit()
+            .map_err(DatabaseError::from)
+            .map_err(EncargadoRutaServiceError::Database)?;
+        Ok(id)
+    }
+
+    pub fn actualizar_encargado_ruta(
+        &self,
+        actor: &UsuarioSesion,
+        encargado: &EncargadoRuta,
+    ) -> Result<(), EncargadoRutaServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        verificar_actor_activo(&transaction, actor)
+            .map_err(EncargadoRutaServiceError::Database)?
+            .ok_or(EncargadoRutaServiceError::OperacionNoAutorizada)?;
+        SqliteEncargadoRutaRepository::new(&transaction).actualizar(encargado)?;
+        transaction
+            .commit()
+            .map_err(DatabaseError::from)
+            .map_err(EncargadoRutaServiceError::Database)
+    }
+
+    // ---- Operación: salida / retorno ----
+
+    /// Mismo armazón que `AppCore::en_transaccion_con_reloj_validado_visita`
+    /// (`citas.rs`), duplicado en vez de generalizado a propósito -- mismo
+    /// motivo que ese: los dominios devuelven tipos de error distintos, sin
+    /// un motivo de negocio real para unificarlos.
+    fn en_transaccion_con_reloj_validado_rutas<T>(
+        &self,
+        actor: &UsuarioSesion,
+        operar: impl FnOnce(
+            &Transaction<'_>,
+            chrono::DateTime<chrono::Utc>,
+        ) -> Result<T, RutaServiceError>,
+    ) -> Result<T, RutaServiceError> {
+        let ahora = self.reloj.ahora_utc();
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        validar_reloj(&transaction, ahora)?;
+        verificar_operador_activo(&transaction, actor)?;
+        let resultado = operar(&transaction, ahora)?;
+        transaction.commit().map_err(DatabaseError::from)?;
+        Ok(resultado)
+    }
+
+    /// `solicitud.usuario_salida_id`/`solicitud.fecha_hora_salida` llegan
+    /// ignorados -- se pisan acá con el actor y el reloj ya validados de
+    /// esta transacción, nunca con lo que traiga el llamador (mismo
+    /// criterio que `fecha_hora_entrada` en `registrar_entrada_visita`).
+    /// Reutiliza `SolicitudSalidaRuta` de `RutaService` en vez de un tipo
+    /// paralelo en el núcleo -- el DTO de escritorio
+    /// (`desktop/src-tauri/src/dto/rutas.rs`) es la frontera que de verdad
+    /// necesita una forma sin esos dos campos, mismo criterio que
+    /// `DatosContratistaEntrada`/`DatosContratista`.
+    pub fn registrar_salida_ruta(
+        &self,
+        actor: &UsuarioSesion,
+        mut solicitud: SolicitudSalidaRuta,
+    ) -> Result<ResultadoRegistroSalidaRuta, RutaServiceError> {
+        self.en_transaccion_con_reloj_validado_rutas(actor, |transaction, ahora| {
+            solicitud.usuario_salida_id = actor.id;
+            solicitud.fecha_hora_salida = ahora;
+            let salidas = SqliteSalidaRutaRepository::new(transaction);
+            let vehiculos = SqliteVehiculoRutaRepository::new(transaction);
+            let encargados = SqliteEncargadoRutaRepository::new(transaction);
+            RutaService::new(&salidas, &vehiculos, &encargados).registrar_salida(&solicitud)
+        })
+    }
+
+    pub fn registrar_retorno_ruta(
+        &self,
+        actor: &UsuarioSesion,
+        salida_id: i64,
+    ) -> Result<(), RutaServiceError> {
+        self.en_transaccion_con_reloj_validado_rutas(actor, |transaction, ahora| {
+            let salidas = SqliteSalidaRutaRepository::new(transaction);
+            let vehiculos = SqliteVehiculoRutaRepository::new(transaction);
+            let encargados = SqliteEncargadoRutaRepository::new(transaction);
+            RutaService::new(&salidas, &vehiculos, &encargados)
+                .registrar_retorno(salida_id, ahora, actor.id)
+        })
+    }
+
+    /// Sin `actor`, mismo criterio que `listar_visitas_activas`: es una
+    /// lectura, no una operación que autorizar.
+    pub fn listar_rutas_activas(&self) -> Result<Vec<SalidaRutaActivaResumen>, RutaServiceError> {
+        let salidas = SqliteSalidaRutaRepository::new(&self.connection);
+        let vehiculos = SqliteVehiculoRutaRepository::new(&self.connection);
+        let encargados = SqliteEncargadoRutaRepository::new(&self.connection);
+        RutaService::new(&salidas, &vehiculos, &encargados).listar_activas()
+    }
+
+    pub fn buscar_salida_ruta(&self, id: i64) -> Result<Option<SalidaRuta>, RutaServiceError> {
+        let salidas = SqliteSalidaRutaRepository::new(&self.connection);
+        let vehiculos = SqliteVehiculoRutaRepository::new(&self.connection);
+        let encargados = SqliteEncargadoRutaRepository::new(&self.connection);
+        RutaService::new(&salidas, &vehiculos, &encargados).buscar_por_id(id)
+    }
+}
+
+/// Mismo criterio que `citas::validar_reloj`, pero tomando el máximo entre
+/// los TRES dominios operativos (ingresos, visitas, rutas) -- un sitio que
+/// sólo tuvo actividad de rutas hoy (sin ingresos ni visitas todavía)
+/// también queda protegido contra un reloj retrocedido.
+fn validar_reloj(
+    connection: &Connection,
+    ahora: chrono::DateTime<chrono::Utc>,
+) -> Result<(), RutaServiceError> {
+    let ultimo_ingreso =
+        crate::database::queries::ingresos::ultimo_instante_movimiento(connection)?;
+    let ultima_visita =
+        crate::database::repositories::movimiento_visita_repository::ultimo_instante_movimiento_visita(
+            connection,
+        )?;
+    let ultima_ruta = ultimo_instante_salida_ruta(connection)?;
+    let Some(ultimo) = [ultimo_ingreso, ultima_visita, ultima_ruta]
+        .into_iter()
+        .flatten()
+        .max()
+    else {
+        return Ok(());
+    };
+    if ahora < ultimo {
+        return Err(RutaServiceError::RelojRetrocedido);
+    }
+    Ok(())
+}
+
+fn verificar_operador_activo(
+    connection: &Connection,
+    actor: &UsuarioSesion,
+) -> Result<(), RutaServiceError> {
+    if verificar_actor_activo(connection, actor)?.is_some() {
+        Ok(())
+    } else {
+        Err(RutaServiceError::OperadorNoAutorizado)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::schema::initialize_database;
+    use crate::services::autenticacion_service::UsuarioSesion;
+    use crate::tiempo::RelojFijo;
+    use chrono::{TimeZone, Utc};
+    use std::sync::Arc;
+
+    fn nucleo_con_usuario() -> (AppCore, UsuarioSesion) {
+        let connection = rusqlite::Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO usuarios (id, cedula, nombre, password_hash, rol, activo)
+                 VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1)",
+                [],
+            )
+            .unwrap();
+        let reloj = Arc::new(RelojFijo::new(
+            Utc.with_ymd_and_hms(2026, 9, 15, 12, 0, 0).unwrap(),
+        ));
+        let core = AppCore::con_reloj(connection, reloj);
+        let sesion = UsuarioSesion {
+            id: 1,
+            cedula: "1001".to_string(),
+            nombre: "Operador".to_string(),
+            rol: crate::models::usuario::RolUsuario::Operador,
+        };
+        (core, sesion)
+    }
+
+    fn solicitud(placa: &str, numero_documento: &str) -> SolicitudSalidaRuta {
+        SolicitudSalidaRuta {
+            vehiculo_placa: placa.to_string(),
+            vehiculo_numero_unidad: Some("22906".to_string()),
+            encargado_nombre: "Carlos Balmaceda".to_string(),
+            encargado_codigo_empleado: None,
+            numero_ruta: "CRR079".to_string(),
+            sub_numero: 1,
+            numero_documento: numero_documento.to_string(),
+            fecha_documento: "2026-09-15".parse().unwrap(),
+            tiene_correo_autorizacion: false,
+            // Ignorados por `AppCore::registrar_salida_ruta` -- se pisan
+            // con el actor/reloj reales de la transacción.
+            usuario_salida_id: 0,
+            fecha_hora_salida: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn registrar_salida_y_retorno_de_ruta_redondea_el_viaje() {
+        let (core, actor) = nucleo_con_usuario();
+
+        let resultado = core
+            .registrar_salida_ruta(&actor, solicitud("C12345", "700101452"))
+            .unwrap();
+        core.registrar_retorno_ruta(&actor, resultado.salida_id)
+            .unwrap();
+
+        let salida = core
+            .buscar_salida_ruta(resultado.salida_id)
+            .unwrap()
+            .unwrap();
+        assert!(salida.retorno.is_some());
+    }
+
+    #[test]
+    fn listar_rutas_activas_omite_las_ya_retornadas() {
+        let (core, actor) = nucleo_con_usuario();
+        let resultado = core
+            .registrar_salida_ruta(&actor, solicitud("C12345", "700101452"))
+            .unwrap();
+        core.registrar_salida_ruta(&actor, solicitud("C99999", "700101453"))
+            .unwrap();
+        core.registrar_retorno_ruta(&actor, resultado.salida_id)
+            .unwrap();
+
+        let activas = core.listar_rutas_activas().unwrap();
+
+        assert_eq!(activas.len(), 1);
+        assert_eq!(activas[0].vehiculo_placa, "C99999");
+    }
+
+    #[test]
+    fn crear_y_listar_vehiculo_ruta_redondea_el_viaje() {
+        let (core, actor) = nucleo_con_usuario();
+
+        core.crear_vehiculo_ruta(
+            &actor,
+            &VehiculoRuta {
+                id: 0,
+                numero_unidad: Some("22906".to_string()),
+                placa: "C12345".to_string(),
+                activo: true,
+            },
+        )
+        .unwrap();
+
+        let vehiculos = core.listar_vehiculos_ruta().unwrap();
+        assert_eq!(vehiculos.len(), 1);
+        assert_eq!(vehiculos[0].placa, "C12345");
+    }
+
+    #[test]
+    fn crear_y_listar_encargado_ruta_redondea_el_viaje() {
+        let (core, actor) = nucleo_con_usuario();
+
+        core.crear_encargado_ruta(
+            &actor,
+            &EncargadoRuta {
+                id: 0,
+                codigo_empleado: "5040017".to_string(),
+                nombre: "Michael Araya Retana".to_string(),
+                cedula: None,
+                activo: true,
+            },
+        )
+        .unwrap();
+
+        let encargados = core.listar_encargados_ruta().unwrap();
+        assert_eq!(encargados.len(), 1);
+        assert_eq!(encargados[0].codigo_empleado, "5040017");
+    }
+
+    #[test]
+    fn reloj_retrocedido_bloquea_una_nueva_salida_de_ruta() {
+        let (core, actor) = nucleo_con_usuario();
+        core.registrar_salida_ruta(&actor, solicitud("C12345", "700101452"))
+            .unwrap();
+
+        // Mismo motivo que `validar_reloj` no se prueba reabriendo un
+        // `AppCore` nuevo en `citas.rs`/`accesos.rs` (no hay ese patrón
+        // ahí tampoco): `AppCore` implementa `Drop`, así que no se puede
+        // mover su `Connection` a un núcleo nuevo. Se prueba la función
+        // directamente contra la misma conexión, con un instante anterior
+        // a la salida ya registrada.
+        let error = validar_reloj(
+            &core.connection,
+            Utc.with_ymd_and_hms(2026, 9, 15, 11, 0, 0).unwrap(),
+        )
+        .unwrap_err();
+
+        assert!(matches!(error, RutaServiceError::RelojRetrocedido));
+    }
+}

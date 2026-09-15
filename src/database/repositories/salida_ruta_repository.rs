@@ -347,6 +347,36 @@ impl SalidaRutaRepository for SqliteSalidaRutaRepository<'_> {
     }
 }
 
+const ULTIMO_INSTANTE_SALIDA_RUTA_SQL: &str = "
+    SELECT MAX(instante)
+    FROM (
+        SELECT MAX(fecha_hora_salida) AS instante
+        FROM salidas_ruta
+        UNION ALL
+        SELECT MAX(fecha_hora_retorno) AS instante
+        FROM salidas_ruta
+        WHERE fecha_hora_retorno IS NOT NULL
+    )";
+
+/// Mismo criterio y misma forma que
+/// `movimiento_visita_repository::ultimo_instante_movimiento_visita` --
+/// `AppCore::registrar_salida_ruta`/`registrar_retorno_ruta`
+/// (`application/rutas.rs`) toman el máximo entre esto y los demás
+/// dominios (ingresos, visitas) para que un sitio que sólo tuvo actividad
+/// de rutas (sin ingresos/visitas todavía) también quede protegido contra
+/// un reloj retrocedido.
+pub fn ultimo_instante_salida_ruta(
+    connection: &Connection,
+) -> Result<Option<DateTime<Utc>>, DatabaseError> {
+    let ultima: Option<String> =
+        connection.query_row(ULTIMO_INSTANTE_SALIDA_RUTA_SQL, [], |row| row.get(0))?;
+    ultima
+        .map(|texto| {
+            parsear_utc(&texto).map_err(|error| DatabaseError::FechaCorrupta(error.to_string()))
+        })
+        .transpose()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -489,6 +519,27 @@ mod tests {
         assert_eq!(
             salida.resultado,
             ResultadoSalidaRuta::PermitidoConAutorizacion
+        );
+    }
+
+    #[test]
+    fn ultimo_instante_sin_salidas_es_ninguno() {
+        let connection = conexion();
+        assert_eq!(ultimo_instante_salida_ruta(&connection).unwrap(), None);
+    }
+
+    #[test]
+    fn ultimo_instante_toma_el_retorno_si_es_mas_nuevo_que_la_salida() {
+        let connection = conexion();
+        let repo = SqliteSalidaRutaRepository::new(&connection);
+        let id = repo.crear(&nueva("C12345", "700101452")).unwrap();
+        let salida = repo.buscar_por_id(id).unwrap().unwrap();
+        let retorno = salida.fecha_hora_salida + chrono::Duration::hours(2);
+        repo.registrar_retorno(id, retorno, 1).unwrap();
+
+        assert_eq!(
+            ultimo_instante_salida_ruta(&connection).unwrap(),
+            Some(retorno)
         );
     }
 }

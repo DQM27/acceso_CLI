@@ -31,4 +31,5 @@ pub mod gafetes;
 pub mod historial;
 pub mod ingresos;
 pub mod nube;
+pub mod rutas;
 pub mod usuarios;

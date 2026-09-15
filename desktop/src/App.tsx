@@ -31,6 +31,8 @@ import {
   ClipboardList,
   History,
   IdCard,
+  Route,
+  Truck,
   UserCheck,
   Users,
   UsersRound,
@@ -64,6 +66,8 @@ const Empresas = lazy(() => import("./pantallas/Empresas"));
 const Historial = lazy(() => import("./pantallas/Historial"));
 const Auditoria = lazy(() => import("./pantallas/Auditoria"));
 const Gafetes = lazy(() => import("./pantallas/Gafetes"));
+const Rutas = lazy(() => import("./pantallas/Rutas"));
+const CatalogoRutas = lazy(() => import("./pantallas/CatalogoRutas"));
 const NuevoIngresoModal = lazy(() => import("./pantallas/NuevoIngresoModal"));
 const SalidaModal = lazy(() => import("./pantallas/SalidaModal"));
 
@@ -136,11 +140,13 @@ export default function App() {
 export type Seccion =
   | "activos"
   | "visitas"
+  | "rutas"
   | "historial"
   | "contratistas"
   | "auditoria"
   | "empresas"
-  | "gafetes";
+  | "gafetes"
+  | "catalogoRutas";
 
 /** Aplanado de autorización (ver docs/decisiones-tecnicas.md 2026-09-11):
  * ninguna sección se oculta por rol -- quien tiene una sesión válida puede
@@ -163,11 +169,13 @@ const SECCIONES: {
 }[] = [
   { id: "activos", etiqueta: "Activos", Icono: UserCheck },
   { id: "visitas", etiqueta: "Visitas", Icono: UsersRound },
+  { id: "rutas", etiqueta: "Rutas", Icono: Route },
   { id: "historial", etiqueta: "Historial", Icono: History },
   { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
   { id: "auditoria", etiqueta: "Auditoría", Icono: ClipboardList },
   { id: "empresas", etiqueta: "Empresas", Icono: Building2 },
   { id: "gafetes", etiqueta: "Gafetes", Icono: IdCard },
+  { id: "catalogoRutas", etiqueta: "Catálogo KOF", Icono: Truck },
 ];
 
 /**
@@ -435,6 +443,8 @@ function Shell({
                           />
                         ) : id === "visitas" ? (
                           <Visitas refrescarSenal={refrescarActivos} />
+                        ) : id === "rutas" ? (
+                          <Rutas refrescarSenal={refrescarActivos} />
                         ) : id === "historial" ? (
                           <Historial />
                         ) : id === "contratistas" ? (
@@ -443,8 +453,10 @@ function Shell({
                           <Auditoria />
                         ) : id === "empresas" ? (
                           <Empresas />
-                        ) : (
+                        ) : id === "gafetes" ? (
                           <Gafetes />
+                        ) : (
+                          <CatalogoRutas />
                         )}
                       </SeccionActivaProvider>
                     </Suspense>

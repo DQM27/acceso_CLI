@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -6,6 +7,7 @@ use control_acceso::database::connection::ruta_base_datos;
 use control_acceso::instancia::InstanciaGuard;
 use control_acceso::tiempo::RelojCorregido;
 use tauri::{Emitter, Manager};
+use zeroize::Zeroizing;
 
 #[cfg(windows)]
 mod clave_cifrado;
@@ -78,13 +80,11 @@ fn mostrar_error_fatal_y_salir(mensaje: &str) -> ! {
     std::process::exit(1)
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-/// Inicia la aplicación de escritorio y registra todos los comandos Tauri.
-///
-/// # Panics
-///
-/// Tauri finaliza el arranque si no puede construir o ejecutar su runtime.
-pub fn run() {
+/// Resuelve ruta/candado de instancia/clave de cifrado y abre `AppCore` --
+/// separado de `run()` únicamente para mantenerla bajo el tope de líneas de
+/// Clippy (`too_many_lines`); sin lógica propia, es el mismo arranque que
+/// antes vivía inline.
+fn preparar_nucleo() -> (PathBuf, InstanciaGuard, Zeroizing<[u8; 32]>, AppCore) {
     let ruta_base_datos = ruta_base_datos().unwrap_or_else(|error| {
         mostrar_error_fatal_y_salir(&format!(
             "No se pudo resolver la ruta de la base de datos: {error}"
@@ -124,6 +124,18 @@ pub fn run() {
     .unwrap_or_else(|error| {
         mostrar_error_fatal_y_salir(&format!("No se pudo abrir la base de datos: {error}"))
     });
+
+    (ruta_base_datos, instancia, clave_base_datos, core)
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// Inicia la aplicación de escritorio y registra todos los comandos Tauri.
+///
+/// # Panics
+///
+/// Tauri finaliza el arranque si no puede construir o ejecutar su runtime.
+pub fn run() {
+    let (ruta_base_datos, instancia, clave_base_datos, core) = preparar_nucleo();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -177,6 +189,16 @@ pub fn run() {
             comandos::citas::listar_visitas_activas,
             comandos::citas::listar_historial_visitas_sitio,
             comandos::citas::listar_agenda_visitas,
+            comandos::rutas::listar_vehiculos_ruta,
+            comandos::rutas::crear_vehiculo_ruta,
+            comandos::rutas::actualizar_vehiculo_ruta,
+            comandos::rutas::listar_encargados_ruta,
+            comandos::rutas::crear_encargado_ruta,
+            comandos::rutas::actualizar_encargado_ruta,
+            comandos::rutas::registrar_salida_ruta,
+            comandos::rutas::registrar_retorno_ruta,
+            comandos::rutas::listar_rutas_activas,
+            comandos::rutas::buscar_salida_ruta,
             comandos::historial::listar_historial,
             comandos::historial::listar_historial_sitio,
             comandos::historial::exportar_historial,

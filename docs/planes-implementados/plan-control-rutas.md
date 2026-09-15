@@ -637,3 +637,114 @@ se define el parser hasta tenerlas.
 - Prueba manual del ciclo completo (salida con OCR y con entrada manual,
   bloqueo transitorio con y sin correo, retorno, generación del PDF) en
   desktop y en un APK de prueba.
+
+## Desktop -- diseño (2026-09-15, confirmado por el usuario)
+
+El usuario pidió parar mobile ("no vamos a unir aún la lógica del núcleo
+con mobile porque aún no definimos al 100% el núcleo, vamos primero con
+la parte desktop") y aplicar lo investigado en la sección de referencias
+de arriba. Explorado el esqueleto real (`Contratistas.tsx`/`Empresas.tsx`
+→ `Tabla`/`Modal`/`Formulario` → `api/*.ts` → comando Tauri → `mensaje_*`
+→ `AppCore`/servicio) vía agente, propuesto el diseño, **confirmado**.
+
+Dos pantallas, no una:
+
+1. **Catálogo (Vehículos + Encargados)** -- CRUD estándar, calcado 1:1 de
+   `Contratistas.tsx`/`Empresas.tsx` (tabla + modal + formulario). Sin
+   filtro/paginación del lado del servidor -- mismo criterio que
+   `listar_empresas` ("lista completa, filtra del lado del cliente"), los
+   catálogos son chicos (KOF: 1438 filas, cabe perfecto en AG Grid
+   client-side, ya es el patrón que usa Contratistas con un volumen
+   similar).
+2. **Rutas (operación)** -- acá se aplica lo investigado, con una
+   diferencia clave respecto al mobile: el checklist guiado de 3 pasos
+   tiene sentido en mobile porque hay que secuenciar *cámaras* (KYC:
+   guiar el escaneo). Desktop es el respaldo cuando el celular falla --
+   no hay cámara que secuenciar, es carga manual directa, así que ahí
+   aplica la otra mitad de la misma investigación KYC: menos pasos gana
+   sobre más precisión con más fricción (70% abandona flujos que se
+   sienten complejos) -- **un solo formulario compacto**, no 3 pasos sin
+   razón para tenerlos.
+   - **Confirmar retorno**: a diferencia de los toggles reversibles de
+     Contratistas/Empresas (sin diálogo de confirmación), cerrar una
+     ruta es de un solo sentido -- la base ya lo bloquea con trigger. Modal
+     de confirmación, mismo patrón que `DialogoConfirmarRetornoRuta` en
+     mobile. Doble clic en la fila abre "confirmar retorno", no "editar"
+     (una salida no se edita una vez creada -- coincide con que la base la
+     hace inmutable).
+   - Primer corte: **sólo "Rutas activas"** (lo único que el núcleo
+     expone hoy vía `RutaService::listar_activas`) -- el historial queda
+     para después.
+
+**Aclaración del usuario sobre el futuro historial (2026-09-15):** cuando
+se construya, NO va a ser una lista plana de eventos individuales
+(salida/retorno uno por uno, como el historial de Contratistas/Ingresos)
+-- va a ser **por ciclo/día completo**: se pide un día (ej. "todas las de
+ayer") y trae TODAS las rutas de ese día juntas como una unidad, no una
+grilla con filtro de rango que se arma fila por fila. Coincide con el
+"Reporte 'salida de rutas'" PDF ya planeado (una tabla con todas las
+rutas del día). Tenerlo en cuenta cuando se diseñe esa pantalla --
+probablemente un selector de fecha (no de rango) que trae el día
+completo de una.
+
+**Implementación en curso** (backend Rust: `AppCore` + comandos Tauri +
+`mensaje_ruta`; frontend: pantallas + API client + registro en
+`App.tsx`) -- ver commits siguientes para el detalle final.
+
+## Desktop -- implementación completa (2026-09-15)
+
+Las dos pantallas quedaron construidas de punta a punta:
+
+- **Núcleo** (`src/application/rutas.rs`, nuevo): fachada `AppCore` sobre
+  `RutaService` -- catálogo (`crear_vehiculo_ruta`/`actualizar_vehiculo_ruta`/
+  `crear_encargado_ruta`/`actualizar_encargado_ruta`, sólo actor activo) y
+  operación (`registrar_salida_ruta`/`registrar_retorno_ruta`/
+  `listar_rutas_activas`, transacción `Immediate` + reloj validado tomando
+  el máximo entre ingresos/visitas/rutas -- mismo armazón que `citas.rs`).
+  `RutaServiceError` ganó `OperadorNoAutorizado` (antes faltaba, a
+  diferencia de `CitaServiceError`/`RegistroIngresoServiceError`) tras
+  confirmar con el usuario que no hay restricción de rol en esta app,
+  desktop ni mobile -- ese chequeo es sólo "¿la sesión sigue activa?", no
+  autorización por rol. `mensaje_ruta`/`mensaje_vehiculo_ruta`/
+  `mensaje_encargado_ruta` agregados a `src/mensajes.rs`.
+- **Tauri** (`desktop/src-tauri/src/{dto,comandos}/rutas.rs`, nuevos): DTOs
+  de frontera (`DatosVehiculoRutaEntrada`/`DatosEncargadoRutaEntrada`/
+  `SolicitudSalidaRutaEntrada`) que ocultan `usuario_salida_id`/
+  `fecha_hora_salida` -- el núcleo los pisa siempre con el actor/reloj de
+  la transacción, nunca confía en lo que mande el webview (mismo criterio
+  que `fecha_hora_entrada` en `registrar_entrada_visita`). 10 comandos
+  registrados en `lib.rs`.
+- **Frontend**: `api/rutas.ts` (barrel), `CatalogoRutas.tsx` (toggle
+  Vehículos/Encargados, calcado de `Empresas.tsx` + el toggle de
+  `Visitas.tsx`), `FormularioVehiculoRuta.tsx`/`FormularioEncargadoRuta.tsx`
+  (calcados de `FormularioEmpresa.tsx`), `Rutas.tsx` + `SalidaRutaModal.tsx`
+  (un solo formulario compacto, con el checkbox de autorización apareciendo
+  sólo si `fecha_documento !== hoy`, espejo de `verificar_fecha_documento`
+  del dominio). Registradas en `App.tsx` (secciones "Rutas" y "Catálogo
+  KOF").
+
+**Corrección respecto al diseño de arriba: sin modal de confirmación en el
+retorno.** Al implementar contra el esqueleto real (no contra lo asumido
+del lado mobile) se confirmó que Contratistas/Empresas/Visitas no tienen
+NINGÚN patrón de "confirmar antes de cerrar un registro activo" -- el botón
+"Salida" de `Visitas.tsx` (fila de "Movimientos activos") es un botón
+directo de un clic, sin diálogo intermedio, aunque cerrar un movimiento
+también sea irreversible del lado de la base. Registrar el retorno de una
+ruta sigue ese mismo patrón real: botón "Retorno" directo por fila, sin
+modal (`Rutas.tsx`). El resguardo real contra un click accidental sigue
+siendo el mismo de siempre: la base bloquea un segundo retorno sobre la
+misma salida (`DatabaseError::SalidaRutaNoActiva`), así que un doble click
+no hace daño. `DialogoConfirmarRetornoRuta` queda como un patrón exclusivo
+de mobile (ahí sí tiene sentido: la confirmación llega después de escanear
+tres documentos, es el cierre de un flujo guiado largo, no un click suelto
+sobre una fila de grilla).
+
+Verificado: `cargo test-plano` (259 tests), clippy limpio (núcleo y
+`desktop/src-tauri`, ambos motores por defecto y `sqlite-plano`), `tsc`,
+`eslint` y `vitest run` (197 tests) sin regresiones, `npm run build`
+completo.
+
+Pendiente (sin empezar, fuera de esta ronda): historial por ciclo/día
+completo (ver aclaración de arriba), `tipo_ruta`/H2-H4, Supabase *pull*,
+reporte PDF, decisión de entrega por WhatsApp, wiring mobile↔núcleo
+(UniFFI).

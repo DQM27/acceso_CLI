@@ -15,4 +15,5 @@ export * from "./gafetes";
 export * from "./historial";
 export * from "./ingresos";
 export * from "./nube";
+export * from "./rutas";
 export * from "./usuarios";
