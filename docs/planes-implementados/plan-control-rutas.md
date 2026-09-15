@@ -349,6 +349,22 @@ y el match de `RutaService` (`buscar_por_placa`/`buscar_por_codigo_empleado`)
 simplemente no encuentra nada -- comportamiento esperado, no un bug (el
 catálogo es consultivo, nunca bloquea).
 
+**Import real de `encargados_ruta` (2026-09-15):** el usuario pidió subir
+el catálogo de KOF directo a Supabase, aclarando explícitamente que sólo
+va nombre + código de empleado -- **la cédula NO se carga** (indicación
+externa que ya le habían dado). Cargado vía `execute_sql` directo (mismo
+criterio ya documentado en `supabase/scripts/poblar_catalogo.sql` para
+"datos que todavía no tienen la herramienta de import real" -- a
+diferencia de contratistas/empresas, que sí tienen
+`cargo run --example importar_catalogo_limpio`, acá no existe ese camino
+todavía porque no hay un dispositivo local real desde el que correrlo en
+este entorno). **1438 filas** de `empleados_costa_rica.sql`, `sitio_id`/
+`dispositivo_origen_id` = "Brisas" (cualquier dispositivo real del
+sitio sirve de origen, mismo criterio que gafetes), `on conflict
+(codigo_empleado) do update set nombre` (idempotente, se puede volver a
+correr si la fuente cambia). Verificado: `count(*) = 1438`,
+`count(cedula) = 0`.
+
 ## Contexto
 
 Brisas controla hoy el acceso de contratistas (`registro_ingresos`) y visitas
