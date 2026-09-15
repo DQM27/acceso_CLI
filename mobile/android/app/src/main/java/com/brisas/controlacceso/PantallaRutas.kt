@@ -90,68 +90,31 @@ fun PantallaRutas() {
                 placeholder = "Nombre del encargado",
                 onEscanear = { encargado = "Carlos Balmaceda (demo)" },
             )
-            PasoChecklist(numero = 2, titulo = "Documento de ruta", completado = paso2Completo) {
-                // Ruta y documento vienen del mismo comprobante impreso
-                // ("CRR079/ 0001") -- un solo escaneo (el de abajo) carga
-                // los dos, por eso acá arriba no hay cámara propia. Ninguno
-                // de los dos va prellenado: antes de escanear/tipear se ven
-                // como campo vacío (placeholder gris), no como dato ya
-                // confirmado.
-                Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        TextField(
-                            value = numeroRuta,
-                            onValueChange = { numeroRuta = it },
-                            placeholder = { Text("Ruta") },
-                            singleLine = true,
-                            shape = FormaCampoBrisas,
-                            colors = ColoresCampoBrisas(),
-                            modifier = Modifier.width(140.dp).height(AlturaBusquedaBrisas),
-                        )
-                        // Texto plano, sin caja/fondo -- una caja acá se
-                        // veía como un segundo botón compitiendo con el de
-                        // la cámara de abajo. Sin peso -- así el campo de
-                        // ruta no se estira, deja libre el resto de la fila
-                        // (pedido explícito 2026-09-15).
-                        Text(
-                            etiquetaSubNumero(subNumeroTexto),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.clickable {
-                                subNumeroTexto = ((subNumeroTexto.toIntOrNull() ?: 1) % 4 + 1).toString()
-                            },
-                        )
-                    }
-                    CampoConEscaneo(
-                        valor = numeroDocumento,
-                        onCambiar = { numeroDocumento = it },
-                        placeholder = "No. de transporte / documento",
-                        // La fecha tampoco tiene campo propio -- sólo se
-                        // muestra si difiere de hoy (ver más abajo). El
-                        // escaneo real la va a leer junto al resto; acá el
-                        // mock simula que todo coincide con hoy.
-                        onEscanear = {
-                            numeroRuta = "CRR079 (demo)"
-                            numeroDocumento = "700101452 (demo)"
-                            fechaDocumento = fechaHoyTexto()
-                        },
-                    )
-                }
-                if (fechaVencida) {
-                    Text(
-                        "El documento no es de hoy -- requiere correo de autorización para continuar.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = tieneCorreo, onCheckedChange = { tieneCorreo = it })
-                        Text("Tengo el correo de autorización", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
+            PasoDocumentoRuta(
+                completado = paso2Completo,
+                numeroRuta = numeroRuta,
+                onCambiarNumeroRuta = { numeroRuta = it },
+                etiquetaTipo = etiquetaSubNumero(subNumeroTexto),
+                onTocarTipo = {
+                    subNumeroTexto = ((subNumeroTexto.toIntOrNull() ?: 1) % 4 + 1).toString()
+                },
+                numeroDocumento = numeroDocumento,
+                onCambiarNumeroDocumento = { numeroDocumento = it },
+                // Ruta, tipo y documento vienen del mismo comprobante
+                // impreso ("CRR079/ 0001") -- un solo escaneo carga los
+                // tres, por eso una sola cámara para toda la tarjeta. La
+                // fecha tampoco tiene campo propio -- sólo se muestra si
+                // difiere de hoy (ver más abajo). El mock simula que todo
+                // coincide con hoy.
+                onEscanear = {
+                    numeroRuta = "CRR079 (demo)"
+                    numeroDocumento = "700101452 (demo)"
+                    fechaDocumento = fechaHoyTexto()
+                },
+                fechaVencida = fechaVencida,
+                tieneCorreo = tieneCorreo,
+                onCambiarTieneCorreo = { tieneCorreo = it },
+            )
             PasoChecklistUnCampo(
                 numero = 3,
                 titulo = "Placa o número de unidad",
@@ -323,6 +286,92 @@ private fun PasoChecklistUnCampo(
                 colors = ColoresCampoBrisas(),
                 modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
             )
+        }
+        Box(
+            modifier = Modifier
+                .size(AlturaBusquedaBrisas)
+                .border(1.dp, MaterialTheme.colorScheme.primary, FormaCampoBrisas)
+                .clip(FormaCampoBrisas)
+                .clickable(onClick = onEscanear),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Default.PhotoCamera, contentDescription = "Escanear", tint = MaterialTheme.colorScheme.primary)
+        }
+    }
+}
+
+/// Paso "Documento de ruta" -- mismo criterio que [PasoChecklistUnCampo]:
+/// una sola cámara para toda la tarjeta (ruta, tipo y documento vienen
+/// del mismo comprobante impreso), centrada contra encabezado+campos
+/// juntos, no sólo contra el campo de documento (pedido explícito
+/// 2026-09-15, se había quedado sin centrar en el primer corte). El campo
+/// de ruta y la etiqueta del tipo (Principal/H2/...) van pegados -- son un
+/// solo dato, no dos elementos separados.
+@Composable
+private fun PasoDocumentoRuta(
+    completado: Boolean,
+    numeroRuta: String,
+    onCambiarNumeroRuta: (String) -> Unit,
+    etiquetaTipo: String,
+    onTocarTipo: () -> Unit,
+    numeroDocumento: String,
+    onCambiarNumeroDocumento: (String) -> Unit,
+    onEscanear: () -> Unit,
+    fechaVencida: Boolean,
+    tieneCorreo: Boolean,
+    onCambiarTieneCorreo: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            PasoEncabezado(2, "Documento de ruta", completado)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextField(
+                    value = numeroRuta,
+                    onValueChange = onCambiarNumeroRuta,
+                    placeholder = { Text("Ruta") },
+                    singleLine = true,
+                    shape = FormaCampoBrisas,
+                    colors = ColoresCampoBrisas(),
+                    modifier = Modifier.width(140.dp).height(AlturaBusquedaBrisas),
+                )
+                Text(
+                    etiquetaTipo,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.clickable(onClick = onTocarTipo),
+                )
+            }
+            TextField(
+                value = numeroDocumento,
+                onValueChange = onCambiarNumeroDocumento,
+                placeholder = { Text("No. de transporte / documento") },
+                singleLine = true,
+                shape = FormaCampoBrisas,
+                colors = ColoresCampoBrisas(),
+                modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
+            )
+            if (fechaVencida) {
+                Text(
+                    "El documento no es de hoy -- requiere correo de autorización para continuar.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = tieneCorreo, onCheckedChange = onCambiarTieneCorreo)
+                    Text("Tengo el correo de autorización", style = MaterialTheme.typography.bodySmall)
+                }
+            }
         }
         Box(
             modifier = Modifier
