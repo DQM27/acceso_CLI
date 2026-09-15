@@ -62,7 +62,7 @@ La familia es sans serif del sistema: Segoe UI en Windows, Roboto en Android y a
 | Plataforma | Integración |
 | --- | --- |
 | Escritorio | `desktop/src/diseno.css` y `controles.css`; `index.css` mantiene estructura y componentes específicos |
-| Android | `DisenoGenerado.kt` define ambos esquemas Material, formas y tipografía; `ControlesBrisas.kt` unifica botones |
+| Android | **Ya no sale de este maestro** (2026-09-15) -- tiene su propia identidad visual a propósito ("Kash": acento verde-azulado, fondo lavanda, esquinas más redondeadas), a mano en `DisenoMovil.kt`; `ControlesBrisas.kt` unifica botones |
 | Panel web | Bloque `brisas-generado` incrustado en el HTML para conservar su distribución como archivo único |
 
 CLI y TUI clásica se retiraron del crate raíz (2026-09-12, ver

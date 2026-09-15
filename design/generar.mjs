@@ -50,54 +50,10 @@ salidas.set('web/src/diseno.css', css);
 salidas.set('web/src/controles.css', leer('design/controles.css'));
 salidas.set('design/brisas.css', css + '\n' + leer('design/controles.css'));
 
-const material = { primary:'acento', onPrimary:'sobre-acento-indicador', primaryContainer:'acento-suave', onPrimaryContainer:'acento', inversePrimary:'acento', secondary:'acento', onSecondary:'sobre-acento-indicador', secondaryContainer:'acento-suave', onSecondaryContainer:'acento', tertiary:'info', onTertiary:'sobre-info', tertiaryContainer:'info-suave', onTertiaryContainer:'info', background:'fondo', onBackground:'texto', surface:'panel', onSurface:'texto', surfaceVariant:'panel-suave', onSurfaceVariant:'muted', surfaceTint:'acento', inverseSurface:'texto', inverseOnSurface:'fondo', error:'error', onError:'sobre-error', errorContainer:'error-suave', onErrorContainer:'error', outline:'borde-fuerte', outlineVariant:'borde', scrim:'fondo', surfaceBright:'elevado', surfaceDim:'fondo', surfaceContainer:'panel', surfaceContainerHigh:'panel-suave', surfaceContainerHighest:'elevado', surfaceContainerLow:'campo-fondo', surfaceContainerLowest:'fondo' };
-let kt = `// ${aviso}
-package com.brisas.controlacceso
-
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.runtime.Composable
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Typography
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
-import androidx.compose.material3.Shapes
-import androidx.compose.material3.lightColorScheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-
-`;
-for (const [nombre, tema] of Object.entries(d.temas)) {
-  kt += `internal val Brisas${nombre === 'light' ? 'Claro' : 'Oscuro'} = ${nombre}ColorScheme(\n`;
-  for (const [campo,rol] of Object.entries(material)) kt += `    ${campo} = Color(0xFF${tema[rol].slice(1)}),\n`;
-  kt += ')\n\n';
-}
-kt += `internal val FormaControlBrisas = RoundedCornerShape(${d.formas.control}.dp)
-internal val FormasBrisas = Shapes(
-    extraSmall = FormaControlBrisas,
-    small = FormaControlBrisas,
-    medium = RoundedCornerShape(${d.formas.panel}.dp),
-    large = RoundedCornerShape(${d.formas.panel}.dp),
-    extraLarge = RoundedCornerShape(${d.formas.panel}.dp),
-)
-internal val ColorRellenoBrisas: Color
-    @Composable get() = if (isSystemInDarkTheme()) Color(0xFF${d.temas.dark['acento-relleno'].slice(1)}) else Color(0xFF${d.temas.light['acento-relleno'].slice(1)})
-internal val ColorSobreRellenoBrisas: Color
-    @Composable get() = if (isSystemInDarkTheme()) Color(0xFF${d.temas.dark['sobre-acento'].slice(1)}) else Color(0xFF${d.temas.light['sobre-acento'].slice(1)})
-internal val EspacioControlBrisas = ${d.controles.horizontal}.dp
-internal val AlturaControlBrisas = ${d.controles.tactil}.dp
-internal val ColorExitoBrisas: Color
-    @Composable get() = if (isSystemInDarkTheme()) Color(0xFF${d.temas.dark.exito.slice(1)}) else Color(0xFF${d.temas.light.exito.slice(1)})
-internal val TipografiaBrisas = Typography(
-    bodyLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = ${d.tipografia.base}.sp, lineHeight = ${d.tipografia.base * 1.5}.sp),
-    bodyMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = ${d.tipografia.base}.sp, lineHeight = ${d.tipografia.base * 1.5}.sp),
-    labelLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = ${d.tipografia.control}.sp, fontWeight = FontWeight(${d.tipografia.pesoControl})),
-    titleLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = ${d.tipografia.titulo}.sp, fontWeight = FontWeight(${d.tipografia.pesoControl})),
-)
-`;
-salidas.set('mobile/android/app/src/main/java/com/brisas/controlacceso/DisenoGenerado.kt', kt);
+// Android/mobile YA NO sale de acá (2026-09-15) -- tiene su propia identidad
+// visual (estilo "Kash": acento verde-azulado, fondo lavanda, esquinas más
+// redondeadas), a pedido explícito y a propósito distinta de desktop/web.
+// Ver `mobile/android/.../DisenoMovil.kt`, que ahora se edita a mano.
 
 let errores = 0;
 for (const [ruta, contenido] of salidas) {
