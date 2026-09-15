@@ -681,7 +681,11 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_encargados_ruta(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_historial(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_rutas(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cambiar_password_supabase(
     ): Int
@@ -719,13 +723,19 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_remotos(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_rutas_activas(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_usuarios(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_retorno_ruta(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_ruta(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_configuracion_inicial(
     ): Int
@@ -773,7 +783,11 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_contratistas(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_encargados_ruta(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_historial(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_rutas(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cambiar_password_supabase(`ptr`: Long,`passwordActual`: RustBuffer.ByValue,`passwordNueva`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
@@ -811,14 +825,20 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_remotos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_rutas_activas(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_usuarios(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso(`ptr`: Long,`contratistaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso(`ptr`: Long,`contratistaId`: Long,`medio`: RustBuffer.ByValue,`gafete`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_retorno_ruta(`ptr`: Long,`salidaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida(`ptr`: Long,`registroId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_ruta(`ptr`: Long,`solicitud`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_requiere_configuracion_inicial(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_secreto_dispositivo_guardado(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -962,7 +982,13 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas() != 3985) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_encargados_ruta() != 61462) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_historial() != 13812) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_rutas() != 19377) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cambiar_password_supabase() != 21021) {
@@ -1019,6 +1045,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_remotos() != 40530) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_rutas_activas() != 2190) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_usuarios() != 1455) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1028,7 +1057,13 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso() != 64645) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_retorno_ruta() != 56331) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida() != 34276) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_ruta() != 1461) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_configuracion_inicial() != 516) {
@@ -1535,11 +1570,29 @@ public interface NucleoInterface {
     fun `buscarContratistas`(`texto`: kotlin.String): List<ContratistaResumen>
     
     /**
+     * Buscador del checklist de rutas (paso "Encargado KOF") -- por nombre
+     * o código de empleado, mismo criterio que `buscar_contratistas`
+     * ("busca por nombre o por número de cédula", pedido explícito del
+     * usuario, 2026-09-15). Tope acotado dentro del núcleo
+     * (`EncargadoRutaRepository::buscar`), no hace falta repetirlo acá.
+     */
+    fun `buscarEncargadosRuta`(`texto`: kotlin.String): List<EncargadoRuta>
+    
+    /**
      * Últimos 7 días por defecto: en Android el historial es contexto
      * operativo reciente, no auditoría exhaustiva. Para rangos amplios,
      * filtros densos y exportación están web/escritorio.
      */
     fun `buscarHistorial`(`texto`: kotlin.String): List<MovimientoHistorial>
+    
+    /**
+     * Buscador del checklist de rutas (paso "Documento de ruta") -- el
+     * número de ruta es bloqueante (debe existir en el catálogo, pedido
+     * explícito del usuario, 2026-09-15), así que el checklist confirma
+     * contra este buscador antes de registrar la salida, en vez de
+     * enterarse recién al fallar `registrar_salida_ruta`.
+     */
+    fun `buscarRutas`(`texto`: kotlin.String): List<Ruta>
     
     /**
      * Cambio de contraseña obligatorio (`debe_cambiar_password` en `true`
@@ -1684,6 +1737,12 @@ public interface NucleoInterface {
     fun `listarIngresosRemotos`(): List<IngresoRemoto>
     
     /**
+     * Sin actor -- es una lectura, mismo criterio que
+     * `listar_ingresos_activos`.
+     */
+    fun `listarRutasActivas`(): List<SalidaRutaActivaResumen>
+    
+    /**
      * Sólo Root/Administrador — ver el doc-comment de `UsuarioResumen`.
      */
     fun `listarUsuarios`(`texto`: kotlin.String): List<UsuarioResumen>
@@ -1698,7 +1757,21 @@ public interface NucleoInterface {
     
     fun `registrarIngreso`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?): ResultadoRegistroEntrada
     
+    /**
+     * Registra el retorno (cierre) de una salida de ruta activa --
+     * espejo de `AppCore::registrar_retorno_ruta`.
+     */
+    fun `registrarRetornoRuta`(`salidaId`: kotlin.Long)
+    
     fun `registrarSalida`(`registroId`: kotlin.Long)
+    
+    /**
+     * Registra la salida (apertura) del ciclo de una ruta -- espejo de
+     * `AppCore::registrar_salida_ruta`. `solicitud.fecha_documento` viaja
+     * como texto ISO (`AAAA-MM-DD`), mismo criterio que
+     * `fecha_vencimiento_praind` en `crear_contratista`.
+     */
+    fun `registrarSalidaRuta`(`solicitud`: SolicitudSalidaRuta): ResultadoRegistroSalidaRuta
     
     /**
      * `true` mientras la base no tenga ningún usuario todavía -- Kotlin lo
@@ -1987,6 +2060,28 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Buscador del checklist de rutas (paso "Encargado KOF") -- por nombre
+     * o código de empleado, mismo criterio que `buscar_contratistas`
+     * ("busca por nombre o por número de cédula", pedido explícito del
+     * usuario, 2026-09-15). Tope acotado dentro del núcleo
+     * (`EncargadoRutaRepository::buscar`), no hace falta repetirlo acá.
+     */
+    @Throws(NucleoException::class)override fun `buscarEncargadosRuta`(`texto`: kotlin.String): List<EncargadoRuta> {
+            return FfiConverterSequenceTypeEncargadoRuta.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_buscar_encargados_ruta(
+        it,
+        
+        FfiConverterString.lower(`texto`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Últimos 7 días por defecto: en Android el historial es contexto
      * operativo reciente, no auditoría exhaustiva. Para rangos amplios,
      * filtros densos y exportación están web/escritorio.
@@ -1996,6 +2091,28 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_buscar_historial(
+        it,
+        
+        FfiConverterString.lower(`texto`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Buscador del checklist de rutas (paso "Documento de ruta") -- el
+     * número de ruta es bloqueante (debe existir en el catálogo, pedido
+     * explícito del usuario, 2026-09-15), así que el checklist confirma
+     * contra este buscador antes de registrar la salida, en vez de
+     * enterarse recién al fallar `registrar_salida_ruta`.
+     */
+    @Throws(NucleoException::class)override fun `buscarRutas`(`texto`: kotlin.String): List<Ruta> {
+            return FfiConverterSequenceTypeRuta.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_buscar_rutas(
         it,
         
         FfiConverterString.lower(`texto`),_status)
@@ -2389,6 +2506,24 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Sin actor -- es una lectura, mismo criterio que
+     * `listar_ingresos_activos`.
+     */
+    @Throws(NucleoException::class)override fun `listarRutasActivas`(): List<SalidaRutaActivaResumen> {
+            return FfiConverterSequenceTypeSalidaRutaActivaResumen.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_rutas_activas(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Sólo Root/Administrador — ver el doc-comment de `UsuarioResumen`.
      */
     @Throws(NucleoException::class)override fun `listarUsuarios`(`texto`: kotlin.String): List<UsuarioResumen> {
@@ -2444,6 +2579,24 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     
 
     
+    /**
+     * Registra el retorno (cierre) de una salida de ruta activa --
+     * espejo de `AppCore::registrar_retorno_ruta`.
+     */
+    @Throws(NucleoException::class)override fun `registrarRetornoRuta`(`salidaId`: kotlin.Long)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_retorno_ruta(
+        it,
+        
+        FfiConverterLong.lower(`salidaId`),_status)
+}
+    }
+    
+    
+
+    
     @Throws(NucleoException::class)override fun `registrarSalida`(`registroId`: kotlin.Long)
         = 
     callWithHandle {
@@ -2455,6 +2608,27 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 }
     }
     
+    
+
+    
+    /**
+     * Registra la salida (apertura) del ciclo de una ruta -- espejo de
+     * `AppCore::registrar_salida_ruta`. `solicitud.fecha_documento` viaja
+     * como texto ISO (`AAAA-MM-DD`), mismo criterio que
+     * `fecha_vencimiento_praind` en `crear_contratista`.
+     */
+    @Throws(NucleoException::class)override fun `registrarSalidaRuta`(`solicitud`: SolicitudSalidaRuta): ResultadoRegistroSalidaRuta {
+            return FfiConverterTypeResultadoRegistroSalidaRuta.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_ruta(
+        it,
+        
+        FfiConverterTypeSolicitudSalidaRuta.lower(`solicitud`),_status)
+}
+    }
+    )
+    }
     
 
     
@@ -2912,6 +3086,60 @@ public object FfiConverterTypeEmpresa: FfiConverterRustBuffer<Empresa> {
 
     override fun write(value: Empresa, buf: ByteBuffer) {
             FfiConverterLong.write(value.`id`, buf)
+            FfiConverterString.write(value.`nombre`, buf)
+            FfiConverterBoolean.write(value.`activo`, buf)
+    }
+}
+
+
+
+/**
+ * Espejo de `EncargadoRuta` -- sin `cedula` a propósito: el catálogo KOF
+ * nunca la trae (pedido explícito del usuario, ver el modelo real) y el
+ * checklist mobile no la necesita para nada, sólo confirma nombre +
+ * código de empleado.
+ */
+data class EncargadoRuta (
+    var `id`: kotlin.Long
+    , 
+    var `codigoEmpleado`: kotlin.String
+    , 
+    var `nombre`: kotlin.String
+    , 
+    var `activo`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeEncargadoRuta: FfiConverterRustBuffer<EncargadoRuta> {
+    override fun read(buf: ByteBuffer): EncargadoRuta {
+        return EncargadoRuta(
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: EncargadoRuta) = (
+            FfiConverterLong.allocationSize(value.`id`) +
+            FfiConverterString.allocationSize(value.`codigoEmpleado`) +
+            FfiConverterString.allocationSize(value.`nombre`) +
+            FfiConverterBoolean.allocationSize(value.`activo`)
+    )
+
+    override fun write(value: EncargadoRuta, buf: ByteBuffer) {
+            FfiConverterLong.write(value.`id`, buf)
+            FfiConverterString.write(value.`codigoEmpleado`, buf)
             FfiConverterString.write(value.`nombre`, buf)
             FfiConverterBoolean.write(value.`activo`, buf)
     }
@@ -3429,6 +3657,44 @@ public object FfiConverterTypeResultadoRegistroEntrada: FfiConverterRustBuffer<R
 
 
 
+data class ResultadoRegistroSalidaRuta (
+    var `salidaId`: kotlin.Long
+    , 
+    var `resultado`: ResultadoSalidaRuta
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeResultadoRegistroSalidaRuta: FfiConverterRustBuffer<ResultadoRegistroSalidaRuta> {
+    override fun read(buf: ByteBuffer): ResultadoRegistroSalidaRuta {
+        return ResultadoRegistroSalidaRuta(
+            FfiConverterLong.read(buf),
+            FfiConverterTypeResultadoSalidaRuta.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ResultadoRegistroSalidaRuta) = (
+            FfiConverterLong.allocationSize(value.`salidaId`) +
+            FfiConverterTypeResultadoSalidaRuta.allocationSize(value.`resultado`)
+    )
+
+    override fun write(value: ResultadoRegistroSalidaRuta, buf: ByteBuffer) {
+            FfiConverterLong.write(value.`salidaId`, buf)
+            FfiConverterTypeResultadoSalidaRuta.write(value.`resultado`, buf)
+    }
+}
+
+
+
 /**
  * Ver `docs/planes-implementados/plan-persistencia-nube.md` y `ResumenSincronizacionNucleo`.
  */
@@ -3556,6 +3822,142 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
 
 
 
+/**
+ * Espejo de `Ruta` (catálogo de números válidos) -- el checklist mobile
+ * sólo lo consume vía `Nucleo::buscar_rutas` para confirmar el número
+ * leído por OCR contra el catálogo, nunca lo administra (alta/baja/rango
+ * quedan exclusivas de escritorio, ver `plan-control-rutas.md`).
+ */
+data class Ruta (
+    var `id`: kotlin.Long
+    , 
+    var `numero`: kotlin.Long
+    , 
+    var `activo`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeRuta: FfiConverterRustBuffer<Ruta> {
+    override fun read(buf: ByteBuffer): Ruta {
+        return Ruta(
+            FfiConverterLong.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: Ruta) = (
+            FfiConverterLong.allocationSize(value.`id`) +
+            FfiConverterLong.allocationSize(value.`numero`) +
+            FfiConverterBoolean.allocationSize(value.`activo`)
+    )
+
+    override fun write(value: Ruta, buf: ByteBuffer) {
+            FfiConverterLong.write(value.`id`, buf)
+            FfiConverterLong.write(value.`numero`, buf)
+            FfiConverterBoolean.write(value.`activo`, buf)
+    }
+}
+
+
+
+/**
+ * Espejo de `SalidaRutaActivaResumen` -- fila de "rutas activas" (salidas
+ * sin retorno todavía), análoga a `IngresoActivoResumen`.
+ */
+data class SalidaRutaActivaResumen (
+    var `id`: kotlin.Long
+    , 
+    var `vehiculoPlaca`: kotlin.String
+    , 
+    var `vehiculoNumeroUnidad`: kotlin.String?
+    , 
+    var `encargadoNombre`: kotlin.String
+    , 
+    var `numeroRuta`: kotlin.Long
+    , 
+    var `subNumero`: kotlin.Long
+    , 
+    var `numeroDocumento`: kotlin.String
+    , 
+    var `fechaDocumento`: kotlin.String
+    , 
+    var `resultado`: ResultadoSalidaRuta
+    , 
+    var `fechaHoraSalida`: kotlin.String
+    , 
+    var `usuarioSalidaNombre`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSalidaRutaActivaResumen: FfiConverterRustBuffer<SalidaRutaActivaResumen> {
+    override fun read(buf: ByteBuffer): SalidaRutaActivaResumen {
+        return SalidaRutaActivaResumen(
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterTypeResultadoSalidaRuta.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: SalidaRutaActivaResumen) = (
+            FfiConverterLong.allocationSize(value.`id`) +
+            FfiConverterString.allocationSize(value.`vehiculoPlaca`) +
+            FfiConverterOptionalString.allocationSize(value.`vehiculoNumeroUnidad`) +
+            FfiConverterString.allocationSize(value.`encargadoNombre`) +
+            FfiConverterLong.allocationSize(value.`numeroRuta`) +
+            FfiConverterLong.allocationSize(value.`subNumero`) +
+            FfiConverterString.allocationSize(value.`numeroDocumento`) +
+            FfiConverterString.allocationSize(value.`fechaDocumento`) +
+            FfiConverterTypeResultadoSalidaRuta.allocationSize(value.`resultado`) +
+            FfiConverterString.allocationSize(value.`fechaHoraSalida`) +
+            FfiConverterString.allocationSize(value.`usuarioSalidaNombre`)
+    )
+
+    override fun write(value: SalidaRutaActivaResumen, buf: ByteBuffer) {
+            FfiConverterLong.write(value.`id`, buf)
+            FfiConverterString.write(value.`vehiculoPlaca`, buf)
+            FfiConverterOptionalString.write(value.`vehiculoNumeroUnidad`, buf)
+            FfiConverterString.write(value.`encargadoNombre`, buf)
+            FfiConverterLong.write(value.`numeroRuta`, buf)
+            FfiConverterLong.write(value.`subNumero`, buf)
+            FfiConverterString.write(value.`numeroDocumento`, buf)
+            FfiConverterString.write(value.`fechaDocumento`, buf)
+            FfiConverterTypeResultadoSalidaRuta.write(value.`resultado`, buf)
+            FfiConverterString.write(value.`fechaHoraSalida`, buf)
+            FfiConverterString.write(value.`usuarioSalidaNombre`, buf)
+    }
+}
+
+
+
 data class SesionRealtimeNube (
     var `baseUrl`: kotlin.String
     , 
@@ -3619,6 +4021,86 @@ public object FfiConverterTypeSesionRealtimeNube: FfiConverterRustBuffer<SesionR
             FfiConverterString.write(value.`dispositivoId`, buf)
             FfiConverterString.write(value.`tipo`, buf)
             FfiConverterString.write(value.`topic`, buf)
+    }
+}
+
+
+
+/**
+ * Espejo de `SolicitudSalidaRuta` -- sin `usuario_salida_id`/
+ * `fecha_hora_salida` (el núcleo los pisa siempre con el actor/reloj
+ * reales, igual que `AppCore::registrar_salida_ruta`/`desktop/src-tauri/src/dto/rutas.rs`).
+ * `fecha_documento` viaja como texto ISO (`AAAA-MM-DD`), mismo criterio
+ * que `fecha_vencimiento_praind` en `DatosContratista`.
+ */
+data class SolicitudSalidaRuta (
+    var `vehiculoPlaca`: kotlin.String
+    , 
+    var `vehiculoNumeroUnidad`: kotlin.String?
+    , 
+    var `encargadoNombre`: kotlin.String
+    , 
+    var `encargadoCodigoEmpleado`: kotlin.String?
+    , 
+    var `numeroRuta`: kotlin.Long
+    , 
+    var `subNumero`: kotlin.Long
+    , 
+    var `numeroDocumento`: kotlin.String
+    , 
+    var `fechaDocumento`: kotlin.String
+    , 
+    var `tieneCorreoAutorizacion`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSolicitudSalidaRuta: FfiConverterRustBuffer<SolicitudSalidaRuta> {
+    override fun read(buf: ByteBuffer): SolicitudSalidaRuta {
+        return SolicitudSalidaRuta(
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: SolicitudSalidaRuta) = (
+            FfiConverterString.allocationSize(value.`vehiculoPlaca`) +
+            FfiConverterOptionalString.allocationSize(value.`vehiculoNumeroUnidad`) +
+            FfiConverterString.allocationSize(value.`encargadoNombre`) +
+            FfiConverterOptionalString.allocationSize(value.`encargadoCodigoEmpleado`) +
+            FfiConverterLong.allocationSize(value.`numeroRuta`) +
+            FfiConverterLong.allocationSize(value.`subNumero`) +
+            FfiConverterString.allocationSize(value.`numeroDocumento`) +
+            FfiConverterString.allocationSize(value.`fechaDocumento`) +
+            FfiConverterBoolean.allocationSize(value.`tieneCorreoAutorizacion`)
+    )
+
+    override fun write(value: SolicitudSalidaRuta, buf: ByteBuffer) {
+            FfiConverterString.write(value.`vehiculoPlaca`, buf)
+            FfiConverterOptionalString.write(value.`vehiculoNumeroUnidad`, buf)
+            FfiConverterString.write(value.`encargadoNombre`, buf)
+            FfiConverterOptionalString.write(value.`encargadoCodigoEmpleado`, buf)
+            FfiConverterLong.write(value.`numeroRuta`, buf)
+            FfiConverterLong.write(value.`subNumero`, buf)
+            FfiConverterString.write(value.`numeroDocumento`, buf)
+            FfiConverterString.write(value.`fechaDocumento`, buf)
+            FfiConverterBoolean.write(value.`tieneCorreoAutorizacion`, buf)
     }
 }
 
@@ -4160,6 +4642,45 @@ public object FfiConverterTypeResultadoIngresoRegistrado : FfiConverterRustBuffe
 
 
 
+/**
+ * Espejo de `domain::resultado_salida_ruta::ResultadoSalidaRuta` --
+ * `Permitido`/`PermitidoConAutorizacion` según si el documento de carga
+ * es de hoy (ver `RutaService::registrar_salida`).
+ */
+
+enum class ResultadoSalidaRuta {
+    
+    PERMITIDO,
+    PERMITIDO_CON_AUTORIZACION;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeResultadoSalidaRuta: FfiConverterRustBuffer<ResultadoSalidaRuta> {
+    override fun read(buf: ByteBuffer) = try {
+        ResultadoSalidaRuta.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: ResultadoSalidaRuta) = 4UL
+
+    override fun write(value: ResultadoSalidaRuta, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
 
 enum class RolUsuario {
     
@@ -4411,6 +4932,34 @@ public object FfiConverterSequenceTypeEmpresa: FfiConverterRustBuffer<List<Empre
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeEncargadoRuta: FfiConverterRustBuffer<List<EncargadoRuta>> {
+    override fun read(buf: ByteBuffer): List<EncargadoRuta> {
+        val len = buf.getInt()
+        return List<EncargadoRuta>(len) {
+            FfiConverterTypeEncargadoRuta.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<EncargadoRuta>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeEncargadoRuta.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<EncargadoRuta>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeEncargadoRuta.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeIngresoActivoResumen: FfiConverterRustBuffer<List<IngresoActivoResumen>> {
     override fun read(buf: ByteBuffer): List<IngresoActivoResumen> {
         val len = buf.getInt()
@@ -4513,6 +5062,62 @@ public object FfiConverterSequenceTypeMovimientoHistorialSitio: FfiConverterRust
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMovimientoHistorialSitio.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeRuta: FfiConverterRustBuffer<List<Ruta>> {
+    override fun read(buf: ByteBuffer): List<Ruta> {
+        val len = buf.getInt()
+        return List<Ruta>(len) {
+            FfiConverterTypeRuta.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<Ruta>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeRuta.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<Ruta>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeRuta.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeSalidaRutaActivaResumen: FfiConverterRustBuffer<List<SalidaRutaActivaResumen>> {
+    override fun read(buf: ByteBuffer): List<SalidaRutaActivaResumen> {
+        val len = buf.getInt()
+        return List<SalidaRutaActivaResumen>(len) {
+            FfiConverterTypeSalidaRutaActivaResumen.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<SalidaRutaActivaResumen>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeSalidaRutaActivaResumen.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<SalidaRutaActivaResumen>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeSalidaRutaActivaResumen.write(it, buf)
         }
     }
 }

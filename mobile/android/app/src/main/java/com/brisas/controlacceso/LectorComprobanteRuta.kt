@@ -14,8 +14,9 @@ data class ComprobanteRutaDetectado(
     /// El código antes de la barra en "Ruta / No.de Carga:" (ej. `CRR079`).
     val numeroRuta: String,
     /// El sub-número tras la barra, sin ceros a la izquierda -- `1` es la
-    /// ruta PRINCIPAL, `2`/`3`/`4`... son H2/H3/H4 (recargas). Ver
-    /// `DocumentoRuta.etiquetaTipo` en `RutasViewModel.kt`, mismo cómputo.
+    /// ruta PRINCIPAL, `2`/`3`/`4`... son H2/H3/H4 (recargas). Ver la
+    /// función privada `etiquetaSubNumero` en `PantallaRutas.kt`, mismo
+    /// cómputo.
     val subNumero: Int,
     /// El campo "Transporte:" del comprobante -- es el número de documento
     /// de esa página/carga en particular, no un dato de transporte físico.

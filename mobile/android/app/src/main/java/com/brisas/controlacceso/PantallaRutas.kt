@@ -18,10 +18,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -38,41 +42,39 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
+import uniffi.control_acceso_mobile.EncargadoRuta
+import uniffi.control_acceso_mobile.Nucleo
+import uniffi.control_acceso_mobile.Ruta
+import uniffi.control_acceso_mobile.SalidaRutaActivaResumen
+import uniffi.control_acceso_mobile.SolicitudSalidaRuta
 
-/// MVP mobile del módulo de rutas -- ver
-/// `docs/planes-implementados/plan-control-rutas.md`. Orden de trabajo
-/// invertido a pedido explícito del usuario (mobile primero, núcleo al
-/// final): todo el estado vive en [RutasViewModel], en memoria, sin
-/// [uniffi.control_acceso_mobile.Nucleo] todavía. El paso "Documento de
-/// ruta" ya usa OCR real ([PantallaEscanearComprobanteRuta] +
-/// `LectorComprobanteRuta.kt`) -- los pasos "Gafete KOF" y "Placa" siguen
-/// simulados (rellenan un valor de ejemplo editable) porque sus perfiles
-/// de OCR (carnet KOF, placas) todavía no están activados, ver
-/// `docs/arquitectura/muestras-ocr-aisladas.md`. Actualizado 2026-09-15:
-/// "Gafete KOF" y "Placa/unidad" ya usan OCR real también
-/// ([PantallaEscanearCarnetKof] + `LectorCarnetKof.kt`,
-/// [PantallaEscanearVehiculoRuta] + `LectorVehiculoRuta.kt`) -- los tres
-/// pasos comparten el mismo criterio: el dato queda editable en el campo
-/// de texto, nunca se acepta a ciegas. Flujo guiado en una sola
-/// tarjeta con 3 pasos (Gafete KOF → documento → placa/unidad), en vez de
-/// 3 pantallas separadas -- mismo criterio que ya usan los flujos de
-/// check-in de patio/yard (menos pantallas, menos toques) y de onboarding
-/// KYC (guía + dato editable antes de aceptar el paso, nunca automático a
-/// ciegas).
+/// Checklist real del módulo de rutas -- ver
+/// `docs/planes-implementados/plan-control-rutas.md`. Conectado al núcleo
+/// real desde 2026-09-15 (antes era un mock en memoria, ver
+/// [RutasViewModel]). Orden de la tarjeta sin cambios respecto al primer
+/// corte (encargado → documento de ruta → vehículo) -- fue el desktop el
+/// que se reordenó para igualar este orden, no al revés. Tres cambios de
+/// fondo en esta vuelta, los tres a pedido explícito del usuario
+/// (2026-09-15): (1) "Encargado" ahora es un buscador real por nombre o
+/// código (mismo criterio que el buscador de contratistas), ya no
+/// descarta el código en silencio; (2) "N.º de ruta" ahora es un
+/// buscador BLOQUEANTE contra el catálogo -- el paso no se da por
+/// completo sin elegir una [Ruta] real; (3) se quitó el botón
+/// "Documento (H)" (agregar sub-documentos H2-H4 a una salida ya
+/// registrada) -- no tiene contraparte en el núcleo, así que se retira
+/// del checklist por ahora en vez de dejarlo simulado.
 @Composable
-fun PantallaRutas() {
-    val viewModel: RutasViewModel = viewModel()
+fun PantallaRutas(nucleo: Nucleo) {
+    val viewModel: RutasViewModel = viewModel(factory = RutasViewModel.factory(nucleo))
 
-    var numeroRuta by remember { mutableStateOf("") }
-    var encargado by remember { mutableStateOf("") }
-    var numeroDocumento by remember { mutableStateOf("") }
     var subNumeroTexto by remember { mutableStateOf("1") }
-    var fechaDocumento by remember { mutableStateOf(fechaHoyTexto()) }
+    var numeroDocumento by remember { mutableStateOf("") }
+    var fechaDocumentoTexto by remember { mutableStateOf(fechaHoyTextoRuta()) }
     var tieneCorreo by remember { mutableStateOf(false) }
-    var vehiculo by remember { mutableStateOf("") }
+    var vehiculoPlaca by remember { mutableStateOf("") }
+    var vehiculoNumeroUnidad by remember { mutableStateOf("") }
 
-    var salidaParaAgregarDocumento by remember { mutableStateOf<SalidaRutaActiva?>(null) }
-    var salidaParaConfirmarRetorno by remember { mutableStateOf<SalidaRutaActiva?>(null) }
+    var salidaParaConfirmarRetorno by remember { mutableStateOf<SalidaRutaActivaResumen?>(null) }
     var escanerRutaAbierto by remember { mutableStateOf(false) }
     var escanerCarnetKofAbierto by remember { mutableStateOf(false) }
     var escanerVehiculoAbierto by remember { mutableStateOf(false) }
@@ -81,12 +83,10 @@ fun PantallaRutas() {
         PantallaEscanearComprobanteRuta(
             onComprobanteDetectado = { comprobante ->
                 escanerRutaAbierto = false
-                numeroRuta = comprobante.numeroRuta
+                extraerDigitosRuta(comprobante.numeroRuta)?.let(viewModel::usarNumeroRutaEscaneado)
                 subNumeroTexto = comprobante.subNumero.toString()
                 numeroDocumento = comprobante.numeroDocumento
-                comprobante.fecha?.let { fecha ->
-                    fechaDocumento = "%02d.%02d.%04d".format(fecha.dia, fecha.mes, fecha.anio)
-                }
+                comprobante.fecha?.let { fechaDocumentoTexto = it.aTextoDDMMYYYYRuta() }
             },
             onCerrar = { escanerRutaAbierto = false },
         )
@@ -97,7 +97,13 @@ fun PantallaRutas() {
         PantallaEscanearCarnetKof(
             onCarnetDetectado = { carnet ->
                 escanerCarnetKofAbierto = false
-                carnet.nombre?.let { encargado = it }
+                // El código de empleado identifica sin ambigüedad -- se
+                // prefiere sobre el nombre cuando el carnet trae los dos
+                // (mismo criterio que el buscador de contratistas, que
+                // resuelve por cédula antes que por nombre cuando ambos
+                // vienen del OCR).
+                val texto = carnet.codigoEmpleado ?: carnet.nombre
+                if (texto != null) viewModel.cambiarTextoEncargado(texto)
             },
             onCerrar = { escanerCarnetKofAbierto = false },
         )
@@ -106,21 +112,29 @@ fun PantallaRutas() {
 
     if (escanerVehiculoAbierto) {
         PantallaEscanearVehiculoRuta(
-            onVehiculoDetectado = { vehiculoDetectado ->
+            onVehiculoDetectado = { detectado ->
                 escanerVehiculoAbierto = false
-                vehiculo = vehiculoDetectado.valor
+                when (detectado.tipo) {
+                    TipoVehiculoDetectado.PLACA -> vehiculoPlaca = detectado.valor
+                    TipoVehiculoDetectado.NUMERO_UNIDAD -> vehiculoNumeroUnidad = detectado.valor
+                }
             },
             onCerrar = { escanerVehiculoAbierto = false },
         )
         return
     }
 
-    val paso1Completo = encargado.isNotBlank()
-    val paso2Completo = numeroRuta.isNotBlank() && numeroDocumento.isNotBlank() && fechaDocumento.isNotBlank()
-    val paso3Completo = vehiculo.isNotBlank()
-    val fechaVencida = fechaDocumento.isNotBlank() && fechaDocumento != fechaHoyTexto()
+    val rutaSeleccionada = viewModel.rutaSeleccionada
+    val paso1Completo = viewModel.textoEncargado.isNotBlank()
+    val paso2Completo = rutaSeleccionada != null && numeroDocumento.isNotBlank() && fechaDocumentoTexto.isNotBlank()
+    // La placa es el único dato obligatorio del lado de Rust
+    // (`RutaServiceError::PlacaVacia`) -- el número de unidad es un dato
+    // auxiliar, no alcanza por sí solo para completar el paso.
+    val paso3Completo = vehiculoPlaca.isNotBlank()
+    val fechaVencida = fechaDocumentoTexto.isNotBlank() && fechaDocumentoTexto != fechaHoyTextoRuta()
     val bloqueadoPorFecha = fechaVencida && !tieneCorreo
-    val puedeConfirmar = paso1Completo && paso2Completo && paso3Completo && !bloqueadoPorFecha
+    val puedeConfirmar =
+        paso1Completo && paso2Completo && paso3Completo && !bloqueadoPorFecha && !viewModel.registrando
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
         Text(
@@ -131,65 +145,76 @@ fun PantallaRutas() {
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            PasoChecklistUnCampo(
-                numero = 1,
-                titulo = "Gafete KOF",
+            PasoEncargado(
                 completado = paso1Completo,
-                valor = encargado,
-                onCambiar = { encargado = it },
-                placeholder = "Nombre del encargado",
+                texto = viewModel.textoEncargado,
+                onCambiarTexto = viewModel::cambiarTextoEncargado,
+                resultados = viewModel.resultadosEncargado,
+                onElegir = viewModel::elegirEncargado,
                 onEscanear = { escanerCarnetKofAbierto = true },
             )
             PasoDocumentoRuta(
                 completado = paso2Completo,
-                numeroRuta = numeroRuta,
-                onCambiarNumeroRuta = { numeroRuta = it },
+                textoRuta = viewModel.textoRuta,
+                onCambiarTextoRuta = viewModel::cambiarTextoRuta,
+                resultadosRuta = viewModel.resultadosRuta,
+                onElegirRuta = viewModel::elegirRuta,
+                rutaSinCoincidencias =
+                    viewModel.textoRuta.isNotBlank() && rutaSeleccionada == null && viewModel.resultadosRuta.isEmpty(),
                 etiquetaTipo = etiquetaSubNumero(subNumeroTexto),
                 onTocarTipo = {
                     subNumeroTexto = ((subNumeroTexto.toIntOrNull() ?: 1) % 4 + 1).toString()
                 },
                 numeroDocumento = numeroDocumento,
                 onCambiarNumeroDocumento = { numeroDocumento = it },
-                // Ruta, tipo y documento vienen del mismo comprobante
-                // impreso ("CRR079/ 0001") -- un solo escaneo (ver
-                // PantallaEscanearComprobanteRuta / LectorComprobanteRuta.kt)
-                // carga los tres, por eso una sola cámara para toda la
-                // tarjeta. La fecha tampoco tiene campo propio -- sólo se
-                // muestra si difiere de hoy (ver más abajo).
                 onEscanear = { escanerRutaAbierto = true },
                 fechaVencida = fechaVencida,
                 tieneCorreo = tieneCorreo,
                 onCambiarTieneCorreo = { tieneCorreo = it },
             )
-            PasoChecklistUnCampo(
-                numero = 3,
-                titulo = "Placa o número de unidad",
+            PasoVehiculo(
                 completado = paso3Completo,
-                valor = vehiculo,
-                onCambiar = { vehiculo = it },
-                placeholder = "Placa o número de unidad",
+                placa = vehiculoPlaca,
+                onCambiarPlaca = { vehiculoPlaca = it },
+                numeroUnidad = vehiculoNumeroUnidad,
+                onCambiarNumeroUnidad = { vehiculoNumeroUnidad = it },
                 onEscanear = { escanerVehiculoAbierto = true },
+            )
+        }
+
+        viewModel.error?.let { mensaje ->
+            Text(
+                mensaje,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 8.dp),
             )
         }
 
         BotonBrisas(
             onClick = {
+                val ruta = rutaSeleccionada ?: return@BotonBrisas
                 viewModel.registrarSalida(
-                    numeroRuta = numeroRuta,
-                    encargado = encargado,
-                    vehiculo = vehiculo,
-                    documento = DocumentoRuta(
-                        subNumero = subNumeroTexto.toIntOrNull() ?: 1,
+                    SolicitudSalidaRuta(
+                        vehiculoPlaca = vehiculoPlaca,
+                        vehiculoNumeroUnidad = vehiculoNumeroUnidad.ifBlank { null },
+                        encargadoNombre = viewModel.textoEncargado,
+                        encargadoCodigoEmpleado = viewModel.encargadoSeleccionado?.codigoEmpleado,
+                        numeroRuta = ruta.numero,
+                        subNumero = (subNumeroTexto.toLongOrNull() ?: 1L),
                         numeroDocumento = numeroDocumento,
-                        fechaDocumento = fechaDocumento,
+                        fechaDocumento = textoDDMMYYYYaIsoRuta(fechaDocumentoTexto),
+                        tieneCorreoAutorizacion = tieneCorreo,
                     ),
+                    onExito = {
+                        subNumeroTexto = "1"
+                        numeroDocumento = ""
+                        fechaDocumentoTexto = fechaHoyTextoRuta()
+                        tieneCorreo = false
+                        vehiculoPlaca = ""
+                        vehiculoNumeroUnidad = ""
+                    },
                 )
-                encargado = ""
-                numeroDocumento = ""
-                subNumeroTexto = "1"
-                fechaDocumento = fechaHoyTexto()
-                tieneCorreo = false
-                vehiculo = ""
             },
             enabled = puedeConfirmar,
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
@@ -212,7 +237,6 @@ fun PantallaRutas() {
                 items(viewModel.activas, key = { it.id }) { salida ->
                     FilaSalidaRuta(
                         salida = salida,
-                        onAgregarDocumento = { salidaParaAgregarDocumento = salida },
                         onConfirmarRetorno = { salidaParaConfirmarRetorno = salida },
                     )
                 }
@@ -220,31 +244,49 @@ fun PantallaRutas() {
         }
     }
 
-    DialogoAgregarDocumento(
-        salida = salidaParaAgregarDocumento,
-        onDismiss = { salidaParaAgregarDocumento = null },
-        onConfirmar = { documento ->
-            salidaParaAgregarDocumento?.let { viewModel.agregarDocumento(it.id, documento) }
-            salidaParaAgregarDocumento = null
-        },
-    )
-
     DialogoConfirmarRetornoRuta(
         salida = salidaParaConfirmarRetorno,
         onDismiss = { salidaParaConfirmarRetorno = null },
         onConfirmar = {
-            viewModel.confirmarRetorno(it.id)
+            viewModel.registrarRetorno(it)
             salidaParaConfirmarRetorno = null
         },
     )
 }
 
-/// Mismo cómputo que [DocumentoRuta.etiquetaTipo] -- acá aplica al chip
-/// tocable que reemplaza el campo crudo de sub-número (2026-09-15): el
-/// guardia ve "Principal"/"H2"/"H3"/"H4", no un dígito suelto.
+/// Sólo dígitos -- el comprobante trae el número de ruta con el prefijo
+/// impreso "CRR" (ej. `CRR079`, ver [ComprobanteRutaDetectado.numeroRuta]),
+/// pero el catálogo real (`Nucleo.buscarRutas`) es puramente numérico. Un
+/// texto sin ningún dígito (OCR mal leído) no debería ni intentar la
+/// búsqueda -- de ahí que devuelva `null` en vez de una cadena vacía.
+private fun extraerDigitosRuta(texto: String): Int? = texto.filter(Char::isDigit).toIntOrNull()
+
+/// Mismo cómputo que la vieja `DocumentoRuta.etiquetaTipo` -- el guardia ve
+/// "Principal"/"H2"/"H3"/"H4" en el chip tocable, no un dígito suelto.
 private fun etiquetaSubNumero(texto: String): String {
     val n = texto.toIntOrNull() ?: 1
     return if (n <= 1) "Principal" else "H$n"
+}
+
+private fun fechaHoyTextoRuta(): String {
+    val hoy = fechaDeHoy()
+    return hoy.aTextoDDMMYYYYRuta()
+}
+
+/// Mismo formato que `FechaDocumento.aTextoDDMMYYYY` en
+/// `PantallaNuevoContratista.kt` (día-mes-año con guiones) -- cada pantalla
+/// dueña de su propia conversión de fecha, sin un util compartido, mismo
+/// criterio que ya existe ahí.
+private fun FechaDocumento.aTextoDDMMYYYYRuta(): String = "%02d-%02d-%04d".format(dia, mes, anio)
+
+/// Inverso de [aTextoDDMMYYYYRuta] -- si el texto no tiene la forma
+/// esperada se devuelve tal cual: Rust igual la rechaza con un error
+/// legible que cita el texto original.
+private fun textoDDMMYYYYaIsoRuta(texto: String): String {
+    val partes = texto.split("-")
+    if (partes.size != 3) return texto
+    val (dia, mes, anio) = partes
+    return "%s-%s-%s".format(anio.padStart(4, '0'), mes.padStart(2, '0'), dia.padStart(2, '0'))
 }
 
 @Composable
@@ -277,41 +319,36 @@ private fun PasoEncabezado(numero: Int, titulo: String, completado: Boolean) {
 }
 
 @Composable
-private fun PasoChecklist(
-    numero: Int,
-    titulo: String,
-    completado: Boolean,
-    contenido: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
-) {
-    Column(
+private fun BotonCamaraCuadrado(onEscanear: () -> Unit) {
+    Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .size(AlturaBusquedaBrisas)
+            .border(1.dp, MaterialTheme.colorScheme.primary, FormaCampoBrisas)
+            .clip(FormaCampoBrisas)
+            .clickable(onClick = onEscanear),
+        contentAlignment = Alignment.Center,
     ) {
-        PasoEncabezado(numero, titulo, completado)
-        contenido()
+        Icon(Icons.Default.PhotoCamera, contentDescription = "Escanear", tint = MaterialTheme.colorScheme.primary)
     }
 }
 
-/// Paso de un solo campo (carnet KOF, placa) -- a diferencia de
-/// [PasoChecklist], acá la cámara no va en su propia fila debajo del
-/// encabezado: se ubica al lado, centrada verticalmente contra el bloque
-/// encabezado+campo completo -- menos alto de tarjeta para el mismo
-/// contenido (pedido explícito 2026-09-15, las tarjetas de un solo campo
-/// se veían con mucho aire vertical).
+/// Paso "Encargado" -- buscador real por nombre o código de empleado
+/// (pedido explícito del usuario, 2026-09-15: "que funcione de las dos
+/// formas, como ahora funciona contratista"). No es bloqueante: si nadie
+/// del catálogo coincide, el texto tipeado libremente igual alcanza para
+/// registrar la salida (ver doc-comment de [RutasViewModel.textoEncargado]).
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PasoChecklistUnCampo(
-    numero: Int,
-    titulo: String,
+private fun PasoEncargado(
     completado: Boolean,
-    valor: String,
-    onCambiar: (String) -> Unit,
-    placeholder: String,
+    texto: String,
+    onCambiarTexto: (String) -> Unit,
+    resultados: List<EncargadoRuta>,
+    onElegir: (EncargadoRuta) -> Unit,
     onEscanear: () -> Unit,
 ) {
+    var menuAbierto by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -322,42 +359,62 @@ private fun PasoChecklistUnCampo(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            PasoEncabezado(numero, titulo, completado)
-            TextField(
-                value = valor,
-                onValueChange = onCambiar,
-                placeholder = { Text(placeholder) },
-                singleLine = true,
-                shape = FormaCampoBrisas,
-                colors = ColoresCampoBrisas(),
-                modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
-            )
+            PasoEncabezado(1, "Encargado (gafete KOF)", completado)
+            ExposedDropdownMenuBox(
+                expanded = menuAbierto && resultados.isNotEmpty(),
+                onExpandedChange = { menuAbierto = it },
+            ) {
+                TextField(
+                    value = texto,
+                    onValueChange = {
+                        onCambiarTexto(it)
+                        menuAbierto = true
+                    },
+                    placeholder = { Text("Nombre o código de empleado") },
+                    singleLine = true,
+                    shape = FormaCampoBrisas,
+                    colors = ColoresCampoBrisas(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(AlturaBusquedaBrisas)
+                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
+                )
+                DropdownMenu(
+                    expanded = menuAbierto && resultados.isNotEmpty(),
+                    onDismissRequest = { menuAbierto = false },
+                ) {
+                    resultados.forEach { encargado ->
+                        DropdownMenuItem(
+                            text = { Text("${encargado.nombre} · ${encargado.codigoEmpleado}") },
+                            onClick = {
+                                onElegir(encargado)
+                                menuAbierto = false
+                            },
+                        )
+                    }
+                }
+            }
         }
-        Box(
-            modifier = Modifier
-                .size(AlturaBusquedaBrisas)
-                .border(1.dp, MaterialTheme.colorScheme.primary, FormaCampoBrisas)
-                .clip(FormaCampoBrisas)
-                .clickable(onClick = onEscanear),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Default.PhotoCamera, contentDescription = "Escanear", tint = MaterialTheme.colorScheme.primary)
-        }
+        BotonCamaraCuadrado(onEscanear)
     }
 }
 
-/// Paso "Documento de ruta" -- mismo criterio que [PasoChecklistUnCampo]:
-/// una sola cámara para toda la tarjeta (ruta, tipo y documento vienen
-/// del mismo comprobante impreso), centrada contra encabezado+campos
-/// juntos, no sólo contra el campo de documento (pedido explícito
-/// 2026-09-15, se había quedado sin centrar en el primer corte). El campo
-/// de ruta y la etiqueta del tipo (Principal/H2/...) van pegados -- son un
-/// solo dato, no dos elementos separados.
+/// Paso "Documento de ruta" -- el número de ruta ahora es un buscador
+/// BLOQUEANTE contra el catálogo (pedido explícito del usuario,
+/// 2026-09-15: "sin restricción podrías poner la ruta 222 y no existe" —
+/// mismo motivo que llevó a crear el catálogo de números de ruta en
+/// desktop). El resto de la tarjeta no cambia respecto al primer corte:
+/// una sola cámara para toda la tarjeta (ruta, tipo y documento vienen del
+/// mismo comprobante impreso).
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PasoDocumentoRuta(
     completado: Boolean,
-    numeroRuta: String,
-    onCambiarNumeroRuta: (String) -> Unit,
+    textoRuta: String,
+    onCambiarTextoRuta: (String) -> Unit,
+    resultadosRuta: List<Ruta>,
+    onElegirRuta: (Ruta) -> Unit,
+    rutaSinCoincidencias: Boolean,
     etiquetaTipo: String,
     onTocarTipo: () -> Unit,
     numeroDocumento: String,
@@ -367,6 +424,8 @@ private fun PasoDocumentoRuta(
     tieneCorreo: Boolean,
     onCambiarTieneCorreo: (Boolean) -> Unit,
 ) {
+    var menuRutaAbierto by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -382,29 +441,53 @@ private fun PasoDocumentoRuta(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextField(
-                    value = numeroRuta,
-                    onValueChange = onCambiarNumeroRuta,
-                    placeholder = { Text("Ruta") },
-                    singleLine = true,
-                    shape = FormaCampoBrisas,
-                    // Único campo de la tarjeta con borde visible -- sin
-                    // buscador/ícono al lado que lo delate como campo (a
-                    // diferencia del resto de los campos "filled" de la
-                    // app), quedaba confuso cuál parte de la fila era
-                    // editable y cuál era sólo la etiqueta de tipo (pedido
-                    // explícito 2026-09-15, probado en el A25).
-                    colors = ColoresCampoBrisas(),
-                    modifier = Modifier
-                        .width(110.dp)
-                        .height(AlturaBusquedaBrisas)
-                        .border(1.dp, MaterialTheme.colorScheme.outline, FormaCampoBrisas),
-                )
+                ExposedDropdownMenuBox(
+                    expanded = menuRutaAbierto && resultadosRuta.isNotEmpty(),
+                    onExpandedChange = { menuRutaAbierto = it },
+                ) {
+                    TextField(
+                        value = textoRuta,
+                        onValueChange = {
+                            onCambiarTextoRuta(it.filter(Char::isDigit))
+                            menuRutaAbierto = true
+                        },
+                        placeholder = { Text("Ruta") },
+                        singleLine = true,
+                        shape = FormaCampoBrisas,
+                        colors = ColoresCampoBrisas(),
+                        modifier = Modifier
+                            .width(110.dp)
+                            .height(AlturaBusquedaBrisas)
+                            .border(1.dp, MaterialTheme.colorScheme.outline, FormaCampoBrisas)
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
+                    )
+                    DropdownMenu(
+                        expanded = menuRutaAbierto && resultadosRuta.isNotEmpty(),
+                        onDismissRequest = { menuRutaAbierto = false },
+                    ) {
+                        resultadosRuta.forEach { ruta ->
+                            DropdownMenuItem(
+                                text = { Text("${ruta.numero}") },
+                                onClick = {
+                                    onElegirRuta(ruta)
+                                    menuRutaAbierto = false
+                                },
+                            )
+                        }
+                    }
+                }
                 Text(
                     etiquetaTipo,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.clickable(onClick = onTocarTipo),
+                )
+            }
+            if (rutaSinCoincidencias) {
+                Text(
+                    "Esa ruta no existe en el catálogo.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
                 )
             }
             TextField(
@@ -428,60 +511,63 @@ private fun PasoDocumentoRuta(
                 }
             }
         }
-        Box(
-            modifier = Modifier
-                .size(AlturaBusquedaBrisas)
-                .border(1.dp, MaterialTheme.colorScheme.primary, FormaCampoBrisas)
-                .clip(FormaCampoBrisas)
-                .clickable(onClick = onEscanear),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Default.PhotoCamera, contentDescription = "Escanear", tint = MaterialTheme.colorScheme.primary)
-        }
+        BotonCamaraCuadrado(onEscanear)
     }
 }
 
-/// Mismo patrón que `CampoBusquedaActivos` en `PantallaActivos.kt` -- campo
-/// sin borde + botón de cámara al lado, OCR siempre opcional, nunca
-/// obligatorio.
+/// Paso "Vehículo" -- dos campos separados (placa / número de unidad) en
+/// vez del campo único que había antes: el bug reportado 2026-09-15 era
+/// justamente que ese campo único siempre se mandaba como placa sin
+/// importar qué había leído el OCR (`VehiculoRutaDetectado.tipo`). La
+/// placa es la única obligatoria -- mismo motivo que
+/// `RutaServiceError::PlacaVacia` del núcleo: el número de unidad es un
+/// dato auxiliar, nunca reemplaza a la placa en el registro.
 @Composable
-private fun CampoConEscaneo(
-    valor: String,
-    onCambiar: (String) -> Unit,
-    placeholder: String,
+private fun PasoVehiculo(
+    completado: Boolean,
+    placa: String,
+    onCambiarPlaca: (String) -> Unit,
+    numeroUnidad: String,
+    onCambiarNumeroUnidad: (String) -> Unit,
     onEscanear: () -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        TextField(
-            value = valor,
-            onValueChange = onCambiar,
-            placeholder = { Text(placeholder) },
-            singleLine = true,
-            shape = FormaCampoBrisas,
-            colors = ColoresCampoBrisas(),
-            modifier = Modifier.weight(1f).height(AlturaBusquedaBrisas),
-        )
-        Box(
-            modifier = Modifier
-                .size(AlturaBusquedaBrisas)
-                .border(1.dp, MaterialTheme.colorScheme.primary, FormaCampoBrisas)
-                .clip(FormaCampoBrisas)
-                .clickable(onClick = onEscanear),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Default.PhotoCamera, contentDescription = "Escanear", tint = MaterialTheme.colorScheme.primary)
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            PasoEncabezado(3, "Vehículo", completado)
+            TextField(
+                value = placa,
+                onValueChange = onCambiarPlaca,
+                placeholder = { Text("Placa") },
+                singleLine = true,
+                shape = FormaCampoBrisas,
+                colors = ColoresCampoBrisas(),
+                modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
+            )
+            TextField(
+                value = numeroUnidad,
+                onValueChange = onCambiarNumeroUnidad,
+                placeholder = { Text("N.º de unidad (opcional)") },
+                singleLine = true,
+                shape = FormaCampoBrisas,
+                colors = ColoresCampoBrisas(),
+                modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
+            )
         }
+        BotonCamaraCuadrado(onEscanear)
     }
 }
 
 @Composable
 private fun FilaSalidaRuta(
-    salida: SalidaRutaActiva,
-    onAgregarDocumento: () -> Unit,
+    salida: SalidaRutaActivaResumen,
     onConfirmarRetorno: () -> Unit,
 ) {
     Column(
@@ -493,25 +579,22 @@ private fun FilaSalidaRuta(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(
-            "${salida.numeroRuta} · ${salida.documentos.joinToString(", ") { it.etiquetaTipo }}",
+            "${salida.numeroRuta} · ${etiquetaSubNumero(salida.subNumero.toString())}",
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Medium,
         )
         Text(
-            "${salida.encargadoNombre} · ${salida.vehiculo}",
+            "${salida.encargadoNombre} · ${salida.vehiculoPlaca}" +
+                (salida.vehiculoNumeroUnidad?.let { " ($it)" } ?: ""),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            "Salió ${salida.horaSalidaTexto}",
+            "Salió ${textoFechaHora(salida.fechaHoraSalida)}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Row(modifier = Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            BotonDiscretoBrisas(onClick = onAgregarDocumento) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Text("Documento (H)", modifier = Modifier.padding(start = 4.dp))
-            }
+        Row(modifier = Modifier.padding(top = 8.dp)) {
             BotonBrisas(onClick = onConfirmarRetorno) {
                 Text("Confirmar retorno")
             }
@@ -520,85 +603,10 @@ private fun FilaSalidaRuta(
 }
 
 @Composable
-private fun DialogoAgregarDocumento(
-    salida: SalidaRutaActiva?,
-    onDismiss: () -> Unit,
-    onConfirmar: (DocumentoRuta) -> Unit,
-) {
-    if (salida == null) return
-    var subNumeroTexto by remember(salida.id) { mutableStateOf("${(salida.documentos.maxOf { it.subNumero }) + 1}") }
-    var numeroDocumento by remember(salida.id) { mutableStateOf("") }
-    var fechaDocumento by remember(salida.id) { mutableStateOf(fechaHoyTexto()) }
-
-    Dialog(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface, MaterialTheme.shapes.medium)
-                .padding(24.dp),
-        ) {
-            Text(
-                "Agregar documento adicional",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                "${salida.numeroRuta} · ${salida.encargadoNombre}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 12.dp, top = 4.dp),
-            )
-            TextField(
-                value = subNumeroTexto,
-                onValueChange = { subNumeroTexto = it.filter(Char::isDigit) },
-                placeholder = { Text("Sub-número (H2, H3...)") },
-                singleLine = true,
-                shape = FormaCampoBrisas,
-                colors = ColoresCampoBrisas(),
-                modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas).padding(bottom = 8.dp),
-            )
-            CampoConEscaneo(
-                valor = numeroDocumento,
-                onCambiar = { numeroDocumento = it },
-                placeholder = "No. de transporte / documento",
-                onEscanear = { numeroDocumento = "700101453 (demo)" },
-            )
-            TextField(
-                value = fechaDocumento,
-                onValueChange = { fechaDocumento = it },
-                placeholder = { Text("Fecha (dd.MM.yyyy)") },
-                singleLine = true,
-                shape = FormaCampoBrisas,
-                colors = ColoresCampoBrisas(),
-                modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas).padding(top = 8.dp),
-            )
-            BotonBrisas(
-                onClick = {
-                    onConfirmar(
-                        DocumentoRuta(
-                            subNumero = subNumeroTexto.toIntOrNull() ?: 2,
-                            numeroDocumento = numeroDocumento,
-                            fechaDocumento = fechaDocumento,
-                        ),
-                    )
-                },
-                enabled = numeroDocumento.isNotBlank() && fechaDocumento.isNotBlank(),
-                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-            ) {
-                Text("Agregar")
-            }
-            BotonDiscretoBrisas(onClick = onDismiss, modifier = Modifier.padding(top = 4.dp)) {
-                Text("Cancelar")
-            }
-        }
-    }
-}
-
-@Composable
 private fun DialogoConfirmarRetornoRuta(
-    salida: SalidaRutaActiva?,
+    salida: SalidaRutaActivaResumen?,
     onDismiss: () -> Unit,
-    onConfirmar: (SalidaRutaActiva) -> Unit,
+    onConfirmar: (SalidaRutaActivaResumen) -> Unit,
 ) {
     if (salida == null) return
     Dialog(onDismissRequest = onDismiss) {
@@ -615,7 +623,7 @@ private fun DialogoConfirmarRetornoRuta(
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                "${salida.numeroRuta} · ${salida.encargadoNombre} · ${salida.vehiculo}",
+                "${salida.numeroRuta} · ${salida.encargadoNombre} · ${salida.vehiculoPlaca}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),

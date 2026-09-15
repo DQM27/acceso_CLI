@@ -855,3 +855,81 @@ mutable en la función de trigger nueva), `tsc`/`eslint`/`vitest`
 Pendiente: el catálogo de rutas arranca vacío en cualquier base nueva
 (local y Supabase) -- hay que cargar los números reales de Brisas antes
 de poder probar el flujo de salida completo en la app.
+
+## Puente mobile (UniFFI + Kotlin) (2026-09-15)
+
+Orden explícito del usuario: conectar el núcleo real de rutas a la app
+mobile analizando primero qué usa de verdad el checklist ("no
+minimalista, no cosas de más") -- nada de CRUD de catálogo en mobile, eso
+sigue siendo exclusivo de escritorio.
+
+**`mobile/rust-core/src/lib.rs`** -- 5 métodos nuevos en `Nucleo`, los
+únicos que el checklist necesita:
+`buscar_encargados_ruta`/`buscar_rutas` (lectura, sin actor, mismo
+criterio que `buscar_contratistas`), `registrar_salida_ruta`/
+`registrar_retorno_ruta` (exigen actor autenticado) y
+`listar_rutas_activas` (lectura, sin actor). Nuevos records UniFFI:
+`ResultadoSalidaRuta`, `EncargadoRuta` (sin `cedula` -- a propósito, el
+checklist no la necesita), `Ruta`, `SolicitudSalidaRuta`,
+`ResultadoRegistroSalidaRuta`, `SalidaRutaActivaResumen`. Todos los
+errores de `RutaServiceError` colapsan a `NucleoError::Interno` (mismo
+criterio que el resto de dominios -- Kotlin nunca distingue variantes de
+regla de negocio, sólo muestra el mensaje). Deliberadamente NO expuesto:
+`listar_vehiculos_ruta`/`listar_encargados_ruta` (listado completo),
+`crear_*`/`actualizar_*`/`dar_de_baja_*`/`reactivar_*` de
+vehículos/encargados/rutas -- administración de catálogo, exclusiva de
+escritorio. 5 tests nuevos en el mismo archivo, clippy limpio.
+
+**Aclarado con el usuario antes de tocar Kotlin** (3 preguntas): (1) el
+encargado debe buscarse "de las dos formas como ahora funciona
+contratista, que busca por nombre o por número de cédula" -- ya no se
+descarta el código en silencio; (2) el botón "+Documento (H)" (agregar
+sub-documentos H2-H4 a una salida ya registrada) se quita del checklist
+por ahora -- no tiene contraparte en el núcleo; (3) el número de ruta
+pasa a ser "un buscador igual que contratista, sino se coloca el número
+que no da resultado" -- bloqueante, no sólo validación de fondo.
+
+**`mobile/android`** -- `RutasViewModel.kt` reescrito por completo,
+respaldado por el `Nucleo` real (antes era un mock en memoria): estado de
+texto/resultados/selección independiente para encargado (no bloqueante)
+y ruta (bloqueante), debounce de 300ms igual que `ActivosViewModel`,
+`companion object` con `factory(nucleo)`. `PantallaRutas.kt` reescrito:
+el paso "Encargado" y el paso "N.º de ruta" ahora son buscadores reales
+(`ExposedDropdownMenuBox` editable + `DropdownMenu` con los resultados,
+mismo primitivo que ya usaba `PantallaNuevoContratista.kt` para el
+selector de empresa, pero editable en vez de sólo-lectura); el paso
+"Vehículo" se separó en dos campos (Placa/N.º de unidad) en vez del
+campo único que había antes -- ese campo único era justo el bug
+reportado: `VehiculoRutaDetectado.tipo` (`PLACA`/`NUMERO_UNIDAD`) se
+leía del OCR pero el valor siempre se mandaba como placa, sin importar el
+tipo detectado; con dos campos, cada tipo cae en el campo que le
+corresponde. El botón "Documento (H)" y su diálogo se eliminaron. El
+número de ruta escaneado (`ComprobanteRutaDetectado.numeroRuta`, que
+trae el prefijo impreso "CRR", ej. `CRR079`) se limpia a sólo dígitos
+antes de buscarlo en el catálogo. Orden de la tarjeta sin cambios
+(encargado → documento → vehículo) -- fue el escritorio el que se
+reordenó para igualar este orden ya existente en mobile, no al revés.
+`PantallaPrincipal.kt`: la pestaña de rutas ahora pasa `nucleo`.
+
+Bindings Kotlin de UniFFI regenerados (`cargo run --features bindgen
+--bin uniffi-bindgen -- generate ... --language kotlin`) contra el build
+de host -- el archivo generado (`uniffi/control_acceso_mobile/
+control_acceso_mobile.kt`) va commiteado en el repo, como el resto de la
+capa mobile, y hay que regenerarlo cada vez que cambia la interfaz de
+`Nucleo`.
+
+`RutasViewModelTest.kt` (nuevo, no existía ningún test para este
+ViewModel antes de esta vuelta) -- mismo patrón `NucleoDePrueba` +
+`StandardTestDispatcher` que el resto de tests de ViewModel. 7 tests:
+búsqueda de encargado/ruta, selección, número de ruta escaneado con
+coincidencia única, ciclo completo salida→retorno, y número de ruta
+inexistente falla con error legible.
+
+Verificado: `./gradlew testDebugUnitTest` completo sin fallas (incluye
+los 7 tests nuevos de `RutasViewModelTest` y el resto de la suite
+existente sin regresiones).
+
+Pendiente: regenerar y empaquetar el `.so` de `arm64-v8a` (requiere
+`cargo-ndk`/NDK de Android, no ejercitado en esta vuelta porque los tests
+unitarios sólo corren contra el build de host) antes de poder probar el
+checklist en un dispositivo o emulador real.

@@ -243,7 +243,7 @@ fun PantallaPrincipal(
             )
             when (pestana) {
                 0 -> PantallaActivos(nucleo, secretoStore, refrescarNube)
-                1 -> PantallaRutas()
+                1 -> PantallaRutas(nucleo)
                 else -> PantallaHistorial(nucleo, refrescarNube)
             }
         }
