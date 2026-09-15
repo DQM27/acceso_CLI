@@ -48,7 +48,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 /// `LectorComprobanteRuta.kt`) -- los pasos "Gafete KOF" y "Placa" siguen
 /// simulados (rellenan un valor de ejemplo editable) porque sus perfiles
 /// de OCR (carnet KOF, placas) todavía no están activados, ver
-/// `docs/arquitectura/muestras-ocr-aisladas.md`. Flujo guiado en una sola
+/// `docs/arquitectura/muestras-ocr-aisladas.md`. Actualizado 2026-09-15:
+/// "Gafete KOF" y "Placa/unidad" ya usan OCR real también
+/// ([PantallaEscanearCarnetKof] + `LectorCarnetKof.kt`,
+/// [PantallaEscanearVehiculoRuta] + `LectorVehiculoRuta.kt`) -- los tres
+/// pasos comparten el mismo criterio: el dato queda editable en el campo
+/// de texto, nunca se acepta a ciegas. Flujo guiado en una sola
 /// tarjeta con 3 pasos (Gafete KOF → documento → placa/unidad), en vez de
 /// 3 pantallas separadas -- mismo criterio que ya usan los flujos de
 /// check-in de patio/yard (menos pantallas, menos toques) y de onboarding
@@ -69,6 +74,8 @@ fun PantallaRutas() {
     var salidaParaAgregarDocumento by remember { mutableStateOf<SalidaRutaActiva?>(null) }
     var salidaParaConfirmarRetorno by remember { mutableStateOf<SalidaRutaActiva?>(null) }
     var escanerRutaAbierto by remember { mutableStateOf(false) }
+    var escanerCarnetKofAbierto by remember { mutableStateOf(false) }
+    var escanerVehiculoAbierto by remember { mutableStateOf(false) }
 
     if (escanerRutaAbierto) {
         PantallaEscanearComprobanteRuta(
@@ -82,6 +89,28 @@ fun PantallaRutas() {
                 }
             },
             onCerrar = { escanerRutaAbierto = false },
+        )
+        return
+    }
+
+    if (escanerCarnetKofAbierto) {
+        PantallaEscanearCarnetKof(
+            onCarnetDetectado = { carnet ->
+                escanerCarnetKofAbierto = false
+                carnet.nombre?.let { encargado = it }
+            },
+            onCerrar = { escanerCarnetKofAbierto = false },
+        )
+        return
+    }
+
+    if (escanerVehiculoAbierto) {
+        PantallaEscanearVehiculoRuta(
+            onVehiculoDetectado = { vehiculoDetectado ->
+                escanerVehiculoAbierto = false
+                vehiculo = vehiculoDetectado.valor
+            },
+            onCerrar = { escanerVehiculoAbierto = false },
         )
         return
     }
@@ -109,7 +138,7 @@ fun PantallaRutas() {
                 valor = encargado,
                 onCambiar = { encargado = it },
                 placeholder = "Nombre del encargado",
-                onEscanear = { encargado = "Carlos Balmaceda (demo)" },
+                onEscanear = { escanerCarnetKofAbierto = true },
             )
             PasoDocumentoRuta(
                 completado = paso2Completo,
@@ -139,7 +168,7 @@ fun PantallaRutas() {
                 valor = vehiculo,
                 onCambiar = { vehiculo = it },
                 placeholder = "Placa o número de unidad",
-                onEscanear = { vehiculo = "SJB-123 (demo)" },
+                onEscanear = { escanerVehiculoAbierto = true },
             )
         }
 

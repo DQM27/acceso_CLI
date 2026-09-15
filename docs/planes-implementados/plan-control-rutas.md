@@ -161,6 +161,55 @@ Mejoras que esto sugirió, ya aplicadas al primer corte mobile
   archivo -- no hay dispositivo conectado en modo debug en esta máquina,
   así que ésta es la forma de iterar con el usuario probando contra
   papel real.
+- **Nota metodológica:** el usuario aclaró que había estado probando el
+  sondeo de barcode apuntando la cámara a una foto en pantalla, no al
+  papel físico -- eso mete artefactos (brillo, muaré, aliasing) que no
+  pasan con el documento real, así que esa comparación de precisión no
+  fue representativa. Pendiente repetir contra papel físico.
+
+## Paso 1 (Gafete KOF) y paso 3 (Placa/unidad) -- activados (2026-09-15)
+
+Se activaron los dos perfiles de OCR que quedaban simulados:
+
+- **`LectorVehiculoRuta.kt`** (nuevo) -- un solo perfil cubre los dos
+  casos del paso 3: número de unidad (calcomanía roja/blanca pegada al
+  camión, ej. `22906`, **foto real** 2026-09-15) o placa (camión de
+  apoyo/particular). [extraerVehiculo] prueba placa primero (patrón más
+  específico) y cae a número de unidad si no hay placa reconocible.
+  Formato de placa investigado por web (no de una foto real todavía):
+  carga/comercial usa prefijo `C`/`CL` + dígitos (largo exacto NO
+  confirmado por ninguna fuente oficial consultada -- se admite rango
+  4-6, **pendiente validar contra una placa real** como se hizo con
+  `REGEX_TRANSPORTE`), particular usa 3 letras + 3 dígitos (formato sí
+  documentado). Fuentes: [practicatest.cr](https://practicatest.cr/blog/normativa-vial/cuales-son-las-letras-que-identifican-a-un-vehiculo-por-clase-en-costa-rica),
+  [registronacional.com](https://registronacional.com/costarica/vehiculos_placa_clases.htm),
+  [matriculasdelmundo.com](https://matriculasdelmundo.com/en/costa-rica.html).
+- **`LectorCarnetKof.kt`** (nuevo) -- activa el perfil que estaba
+  aislado a propósito en `docs/arquitectura/muestras-ocr-aisladas.md`
+  ("Carnet KOF rojo" / "Carnet Coca-Cola FEMSA frontal", fotos del
+  2026-09-08): nombre del frente (2 líneas), código de empleado de 7
+  dígitos del reverso. A diferencia del comprobante, estos fixtures NO
+  vienen de una foto fresca transcrita línea por línea -- son una
+  reconstrucción razonable de esas notas guardadas, así que es un primer
+  corte heurístico, más débil que el resto del perfil OCR de este
+  documento. Bug real atrapado por su propio test antes de llegar al
+  usuario: el teléfono de emergencia del reverso (`800-2256327`) esconde
+  una corrida de 7 dígitos que un `\b\d{7}\b` suelto confirmaba como
+  código de empleado -- se corrigió exigiendo que el código ocupe una
+  línea completa por sí solo.
+- **`PantallaEscanearCarnetKof.kt`** y **`PantallaEscanearVehiculoRuta.kt`**
+  (nuevas) -- mismo esqueleto de cámara que
+  `PantallaEscanearComprobanteRuta.kt` (overlay debug de texto crudo
+  incluido). El carnet KOF sólo confirma con **nombre** -- si sólo se ve
+  el reverso (código sin nombre) sigue esperando, porque el campo que
+  llena es "Nombre del encargado" en texto libre.
+- `PantallaRutas.kt`: los pasos 1 y 3 ya abren estas pantallas reales en
+  vez de rellenar un valor de ejemplo.
+- **Todavía sin validar contra el objeto físico real** (carnet KOF real,
+  placa real) -- a diferencia del comprobante (3 rondas de ajuste contra
+  el papel real), estos dos perfiles son el primer corte y muy
+  probablemente necesiten ronda de ajuste igual que el comprobante
+  cuando el usuario los pruebe con la cámara.
 
 ## Contexto
 
