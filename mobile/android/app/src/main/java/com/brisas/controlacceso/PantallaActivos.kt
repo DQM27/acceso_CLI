@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -34,6 +35,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -224,12 +227,6 @@ private fun SelectorModoBusqueda(modo: ModoBusqueda, onCambiar: (ModoBusqueda) -
     )
 }
 
-/// ~10% más bajo que la altura por defecto de un `TextField` sin label
-/// (pedido explícito, 2026-09-15) -- distinto de [AlturaControlBrisas]
-/// (botones) a propósito, ese ya bajó a 38.dp y dejaba este buscador
-/// desalineado con el botón de cámara si compartían el mismo valor.
-private val AlturaBusquedaBrisas = 50.dp
-
 @Composable
 private fun CampoBusquedaActivos(
     modo: ModoBusqueda,
@@ -331,11 +328,14 @@ private fun ContenidoModoEntrada(
             modifier = Modifier.padding(top = 12.dp),
         )
     }
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(5.dp),
-    ) {
-        items(resultadosBusqueda, key = { it.id }) { contratista ->
-            FilaContratista(contratista, onClick = { onElegirContratista(contratista) })
+    ListaConDesvanecido {
+        LazyColumn(
+            contentPadding = PaddingValues(top = 5.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            items(resultadosBusqueda, key = { it.id }) { contratista ->
+                FilaContratista(contratista, onClick = { onElegirContratista(contratista) })
+            }
         }
     }
 }
@@ -422,22 +422,26 @@ private fun ContenidoModoSalidaGafete(
 /// `onClick` según quién la use.
 @Composable
 private fun ListaActivos(activos: List<FilaActiva>, onClick: (FilaActiva) -> Unit) {
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(5.dp),
-    ) {
-        items(
-            activos,
-            key = { fila ->
-                when (fila) {
-                    is FilaActiva.Local -> "local-${fila.activo.registroId}"
-                    is FilaActiva.Remota -> "remota-${fila.remoto.uuid}"
-                }
-            },
-        ) { fila ->
-            FilaActivo(fila, onClick = { onClick(fila) })
+    ListaConDesvanecido {
+        LazyColumn(
+            contentPadding = PaddingValues(top = 5.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            items(
+                activos,
+                key = { fila ->
+                    when (fila) {
+                        is FilaActiva.Local -> "local-${fila.activo.registroId}"
+                        is FilaActiva.Remota -> "remota-${fila.remoto.uuid}"
+                    }
+                },
+            ) { fila ->
+                FilaActivo(fila, onClick = { onClick(fila) })
+            }
         }
     }
 }
+
 
 /// Modal "Registrar salida" a mano en vez de `AlertDialog` -- el mockup pide
 /// un layout que `AlertDialog` no ofrece (icono circular arriba, botón

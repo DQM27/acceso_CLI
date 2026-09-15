@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -34,6 +36,13 @@ import androidx.compose.ui.unit.dp
  * [FormaControlBrisas]; antes era 28.dp (cápsula) y se veía más redondeado
  * que el mockup, que usa esquinas visibles, no un óvalo completo. */
 internal val FormaCampoBrisas = RoundedCornerShape(16.dp)
+
+/** Altura de los campos de búsqueda "filled" (~10% más bajo que la altura
+ * por defecto de un `TextField` sin label, pedido explícito 2026-09-15) --
+ * distinto de [AlturaControlBrisas] (botones) a propósito. Compartido entre
+ * [PantallaActivos] y [PantallaHistorial] para que ambos buscadores luzcan
+ * igual (2026-09-15). */
+internal val AlturaBusquedaBrisas = 50.dp
 
 /** Forma de las píldoras de selector ([FilaPildoras]) -- antes cápsula
  * completa (percent=50), se veía más redondeada que el mockup, que usa
@@ -170,5 +179,33 @@ fun BotonIconoCuadradoBrisas(
         contentAlignment = Alignment.Center,
     ) {
         content()
+    }
+}
+
+/** Envuelve una lista con un degradé del color de fondo a transparente en
+ * el borde superior -- el contenido se "desvanece" suave debajo del
+ * buscador al hacer scroll, en vez de cortar en seco. Un `Modifier.blur()`
+ * real sólo pinta en Android 12+ (API 31) -- con `minSdk 26` de esta app,
+ * en un dispositivo más viejo simplemente no haría nada; el degradé sí
+ * funciona en cualquier versión, y da el mismo efecto visual acá. Usa
+ * `contentPadding` (no un `Modifier.padding` externo) en el `LazyColumn`
+ * de adentro para que el degradé, no el primer ítem, ocupe ese espacio --
+ * si no, el scroll dejaría un hueco sin nada que desvanecer. Compartido
+ * entre [PantallaActivos] y [PantallaHistorial] (2026-09-15). */
+@Composable
+fun ListaConDesvanecido(contenido: @Composable () -> Unit) {
+    Box {
+        contenido()
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(16.dp)
+                .align(Alignment.TopCenter)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(MaterialTheme.colorScheme.background, Color.Transparent),
+                    ),
+                ),
+        )
     }
 }
