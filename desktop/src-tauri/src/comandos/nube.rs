@@ -40,6 +40,9 @@ pub struct ResumenSincronizacion {
     pub empresas_recibidas: u32,
     pub contratistas_recibidos: u32,
     pub gafetes_recibidos: u32,
+    /// Ver `application::nube::ResumenSincronizacion::vehiculos_ruta_recibidos`.
+    pub vehiculos_ruta_recibidos: u32,
+    pub encargados_ruta_recibidos: u32,
     pub movimientos_historial_recibidos: u32,
     /// Ver `application::nube::ResumenSincronizacion::citas_recibidas`.
     pub citas_recibidas: u32,
@@ -210,6 +213,7 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
     let cierres_recibidos = nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)?;
     let remotos = nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
     let catalogo = nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
+    let catalogo_rutas = nube::recibir_catalogo_rutas_del_sitio(&conexion, &contexto)?;
     let movimientos_historial_recibidos = nube::recibir_historial_del_sitio(&conexion, &contexto)?;
     let citas_recibidas = nube::recibir_citas_del_sitio(&conexion, &contexto)?;
     let historial_visitas_recibidos =
@@ -247,6 +251,8 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
         empresas_recibidas: catalogo.empresas_recibidas,
         contratistas_recibidos: catalogo.contratistas_recibidos,
         gafetes_recibidos: catalogo.gafetes_recibidos,
+        vehiculos_ruta_recibidos: catalogo_rutas.vehiculos_recibidos,
+        encargados_ruta_recibidos: catalogo_rutas.encargados_recibidos,
         sitio_id: token.sitio_id,
         dispositivo_id: token.dispositivo_id,
         tipo: token.tipo,
@@ -286,6 +292,8 @@ pub async fn configurar_dispositivo_inicial(
             empresas_recibidas: resumen.empresas_recibidas,
             contratistas_recibidos: resumen.contratistas_recibidos,
             gafetes_recibidos: resumen.gafetes_recibidos,
+            vehiculos_ruta_recibidos: resumen.vehiculos_ruta_recibidos,
+            encargados_ruta_recibidos: resumen.encargados_ruta_recibidos,
             sitio_id: resumen.sitio_id,
             dispositivo_id: resumen.dispositivo_id,
             tipo: resumen.tipo,

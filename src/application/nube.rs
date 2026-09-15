@@ -131,6 +131,10 @@ pub struct ResumenSincronizacion {
     pub empresas_recibidas: u32,
     pub contratistas_recibidos: u32,
     pub gafetes_recibidos: u32,
+    /// Vehículos/encargados KOF del catálogo de rutas recibidos -- ver
+    /// `nube::recibir_catalogo_rutas_del_sitio`.
+    pub vehiculos_ruta_recibidos: u32,
+    pub encargados_ruta_recibidos: u32,
     pub movimientos_historial_recibidos: u32,
     /// Citas nuevas/actualizadas recibidas para el punto de acceso (con sus
     /// visitantes) -- ver `nube::recibir_citas_del_sitio`.
@@ -295,6 +299,7 @@ impl AppCore {
             sitio_id: &token.sitio_id,
         };
         crate::nube::recibir_catalogo_del_sitio(&self.connection, &contexto)?;
+        crate::nube::recibir_catalogo_rutas_del_sitio(&self.connection, &contexto)?;
         Ok(())
     }
 
@@ -329,6 +334,8 @@ impl AppCore {
             crate::nube::recibir_cierres_de_ingresos_propios(&self.connection, &contexto)?;
         let remotos = crate::nube::recibir_ingresos_abiertos(&self.connection, &contexto)?;
         let catalogo = crate::nube::recibir_catalogo_del_sitio(&self.connection, &contexto)?;
+        let catalogo_rutas =
+            crate::nube::recibir_catalogo_rutas_del_sitio(&self.connection, &contexto)?;
         let movimientos_historial_recibidos =
             crate::nube::recibir_historial_del_sitio(&self.connection, &contexto)?;
         let citas_recibidas = crate::nube::recibir_citas_del_sitio(&self.connection, &contexto)?;
@@ -343,6 +350,8 @@ impl AppCore {
             empresas_recibidas: catalogo.empresas_recibidas,
             contratistas_recibidos: catalogo.contratistas_recibidos,
             gafetes_recibidos: catalogo.gafetes_recibidos,
+            vehiculos_ruta_recibidos: catalogo_rutas.vehiculos_recibidos,
+            encargados_ruta_recibidos: catalogo_rutas.encargados_recibidos,
             movimientos_historial_recibidos,
             citas_recibidas,
             historial_visitas_recibidos,
@@ -408,6 +417,8 @@ impl AppCore {
             sitio_id: &token.sitio_id,
         };
         let catalogo = crate::nube::recibir_catalogo_del_sitio(&self.connection, &contexto)?;
+        let catalogo_rutas =
+            crate::nube::recibir_catalogo_rutas_del_sitio(&self.connection, &contexto)?;
 
         Ok(ResumenSincronizacion {
             enviados: 0,
@@ -417,6 +428,8 @@ impl AppCore {
             empresas_recibidas: catalogo.empresas_recibidas,
             contratistas_recibidos: catalogo.contratistas_recibidos,
             gafetes_recibidos: catalogo.gafetes_recibidos,
+            vehiculos_ruta_recibidos: catalogo_rutas.vehiculos_recibidos,
+            encargados_ruta_recibidos: catalogo_rutas.encargados_recibidos,
             movimientos_historial_recibidos: 0,
             citas_recibidas: 0,
             historial_visitas_recibidos: 0,

@@ -762,6 +762,84 @@ fn migracion_15_deja_tablas_strict_sin_romper_claves_foraneas() {
     }
 }
 
+/// DDL de `gafetes`/`gafetes_incidentes` (forma anterior a `MIGRACION_35`) +
+/// `cola_salida`/`sincronizacion_estado` (formas acumuladas hasta v34) --
+/// separado de `base_version_34_con_gafete_perdido` sólo para mantenerla
+/// bajo el tope de líneas de Clippy (`too_many_lines`); sin cambio de
+/// contenido.
+const DDL_GAFETES_Y_COLAS_V34: &str = "
+CREATE TABLE gafetes (
+    id INTEGER PRIMARY KEY,
+    numero INTEGER NOT NULL UNIQUE,
+    estado TEXT NOT NULL CHECK (estado IN ('DISPONIBLE', 'PERDIDO', 'DE_BAJA')),
+    contratista_deudor_id INTEGER REFERENCES contratistas(id) ON DELETE RESTRICT,
+    uuid TEXT,
+    CHECK (
+        (estado = 'PERDIDO' AND contratista_deudor_id IS NOT NULL)
+        OR (estado <> 'PERDIDO' AND contratista_deudor_id IS NULL)
+    )
+) STRICT;
+CREATE UNIQUE INDEX idx_gafetes_uuid ON gafetes(uuid);
+
+CREATE TABLE gafetes_incidentes (
+    id INTEGER PRIMARY KEY,
+    gafete_id INTEGER NOT NULL REFERENCES gafetes(id) ON DELETE RESTRICT,
+    tipo TEXT NOT NULL CHECK (tipo IN ('PERDIDO', 'RESUELTO')),
+    fecha_hora TEXT NOT NULL,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+    contratista_id INTEGER REFERENCES contratistas(id) ON DELETE RESTRICT,
+    motivo_resolucion TEXT CHECK (
+        motivo_resolucion IS NULL OR motivo_resolucion IN ('PAGADO', 'APARECIDO')
+    ),
+    CHECK (
+        (tipo = 'PERDIDO' AND contratista_id IS NOT NULL AND motivo_resolucion IS NULL)
+        OR (tipo = 'RESUELTO' AND contratista_id IS NULL AND motivo_resolucion IS NOT NULL)
+    )
+) STRICT;
+
+-- MIGRACION_36 (que corre al final, después de MIGRACION_35, al migrar
+-- desde v34) recrea `cola_salida` (le suma 3 entidades nuevas al CHECK) --
+-- esta base minimalista nunca la creó, a diferencia de una base real que
+-- ya la tendría desde MIGRACION_17/18. Forma exacta de MIGRACION_30 (la
+-- última que la tocó antes de v34).
+CREATE TABLE cola_salida (
+    id INTEGER PRIMARY KEY,
+    entidad TEXT NOT NULL CHECK (
+        entidad IN ('contratista', 'ingreso', 'empresa', 'gafete', 'usuario', 'movimiento_visita')
+    ),
+    entidad_uuid TEXT NOT NULL,
+    operacion TEXT NOT NULL CHECK (operacion IN ('crear', 'actualizar', 'cerrar')),
+    estado TEXT NOT NULL DEFAULT 'pendiente'
+        CHECK (estado IN ('pendiente', 'enviado', 'fallido')),
+    intentos INTEGER NOT NULL DEFAULT 0 CHECK (intentos >= 0),
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    ultimo_error TEXT,
+    proximo_intento_en TEXT GENERATED ALWAYS AS (
+        datetime(actualizado_en, '+' || MIN(intentos * 15, 1440) || ' minutes')
+    ) STORED
+) STRICT;
+CREATE INDEX idx_cola_salida_pendientes
+ON cola_salida(proximo_intento_en)
+WHERE estado = 'pendiente';
+
+-- MIGRACION_37 (después de MIGRACION_36, al migrar desde v34) agrega una
+-- columna a `sincronizacion_estado` -- esta base minimalista tampoco la
+-- tenía, mismo motivo que `cola_salida` arriba. Forma exacta acumulada
+-- hasta MIGRACION_33 (la última que la tocó antes de v34).
+CREATE TABLE sincronizacion_estado (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    catalogo_actualizado_hasta TEXT,
+    historial_actualizado_hasta TEXT,
+    gafetes_actualizado_hasta TEXT,
+    citas_actualizado_hasta TEXT,
+    historial_visitas_actualizado_hasta TEXT
+) STRICT;
+INSERT INTO sincronizacion_estado (id, catalogo_actualizado_hasta) VALUES (1, NULL);
+
+PRAGMA user_version = 34;
+";
+
 /// Regresión de `MIGRACION_35` (`gafetes` gana `tipo` + portador de visita,
 /// la unicidad pasa de `numero` a `(numero, tipo)`): una base congelada en
 /// versión 34 con un gafete `PERDIDO` real (contratista deudor incluido)
@@ -798,69 +876,7 @@ fn base_version_34_con_gafete_perdido() -> Connection {
     connection
         .execute_batch(&ddl_de("cita_visitantes"))
         .unwrap();
-    connection
-        .execute_batch(
-            "
-            CREATE TABLE gafetes (
-                id INTEGER PRIMARY KEY,
-                numero INTEGER NOT NULL UNIQUE,
-                estado TEXT NOT NULL CHECK (estado IN ('DISPONIBLE', 'PERDIDO', 'DE_BAJA')),
-                contratista_deudor_id INTEGER REFERENCES contratistas(id) ON DELETE RESTRICT,
-                uuid TEXT,
-                CHECK (
-                    (estado = 'PERDIDO' AND contratista_deudor_id IS NOT NULL)
-                    OR (estado <> 'PERDIDO' AND contratista_deudor_id IS NULL)
-                )
-            ) STRICT;
-            CREATE UNIQUE INDEX idx_gafetes_uuid ON gafetes(uuid);
-
-            CREATE TABLE gafetes_incidentes (
-                id INTEGER PRIMARY KEY,
-                gafete_id INTEGER NOT NULL REFERENCES gafetes(id) ON DELETE RESTRICT,
-                tipo TEXT NOT NULL CHECK (tipo IN ('PERDIDO', 'RESUELTO')),
-                fecha_hora TEXT NOT NULL,
-                usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
-                contratista_id INTEGER REFERENCES contratistas(id) ON DELETE RESTRICT,
-                motivo_resolucion TEXT CHECK (
-                    motivo_resolucion IS NULL OR motivo_resolucion IN ('PAGADO', 'APARECIDO')
-                ),
-                CHECK (
-                    (tipo = 'PERDIDO' AND contratista_id IS NOT NULL AND motivo_resolucion IS NULL)
-                    OR (tipo = 'RESUELTO' AND contratista_id IS NULL AND motivo_resolucion IS NOT NULL)
-                )
-            ) STRICT;
-
-            -- MIGRACION_36 (que corre al final, después de MIGRACION_35, al
-            -- migrar desde v34) recrea `cola_salida` (le suma 3 entidades
-            -- nuevas al CHECK) -- esta base minimalista nunca la creó, a
-            -- diferencia de una base real que ya la tendría desde
-            -- MIGRACION_17/18. Forma exacta de MIGRACION_30 (la última que
-            -- la tocó antes de v34).
-            CREATE TABLE cola_salida (
-                id INTEGER PRIMARY KEY,
-                entidad TEXT NOT NULL CHECK (
-                    entidad IN ('contratista', 'ingreso', 'empresa', 'gafete', 'usuario', 'movimiento_visita')
-                ),
-                entidad_uuid TEXT NOT NULL,
-                operacion TEXT NOT NULL CHECK (operacion IN ('crear', 'actualizar', 'cerrar')),
-                estado TEXT NOT NULL DEFAULT 'pendiente'
-                    CHECK (estado IN ('pendiente', 'enviado', 'fallido')),
-                intentos INTEGER NOT NULL DEFAULT 0 CHECK (intentos >= 0),
-                creado_en TEXT NOT NULL,
-                actualizado_en TEXT NOT NULL,
-                ultimo_error TEXT,
-                proximo_intento_en TEXT GENERATED ALWAYS AS (
-                    datetime(actualizado_en, '+' || MIN(intentos * 15, 1440) || ' minutes')
-                ) STORED
-            ) STRICT;
-            CREATE INDEX idx_cola_salida_pendientes
-            ON cola_salida(proximo_intento_en)
-            WHERE estado = 'pendiente';
-
-            PRAGMA user_version = 34;
-            ",
-        )
-        .unwrap();
+    connection.execute_batch(DDL_GAFETES_Y_COLAS_V34).unwrap();
     insertar_referencias(&connection);
     connection
         .execute(

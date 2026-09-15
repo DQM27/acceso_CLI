@@ -3001,6 +3001,184 @@ pub fn recibir_catalogo_del_sitio(
     Ok(resumen)
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct ResumenCatalogoRutas {
+    pub vehiculos_recibidos: u32,
+    pub encargados_recibidos: u32,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaVehiculoRutaRemota {
+    id: String,
+    numero_unidad: Option<String>,
+    placa: String,
+    activo: bool,
+    updated_at: String,
+}
+
+/// Sin `cedula` en el `SELECT` a propósito -- el catálogo remoto la trae
+/// siempre `NULL` (pedido explícito del usuario, 2026-09-15: "es solo
+/// nombre y código de empleado, la cédula ya me indicaron que no va") y el
+/// formulario de escritorio tampoco la captura -- no hay ningún dato real
+/// que este pull pudiera traer para esa columna.
+#[derive(serde::Deserialize)]
+struct FilaEncargadoRutaRemota {
+    id: String,
+    codigo_empleado: String,
+    nombre: String,
+    activo: bool,
+    updated_at: String,
+}
+
+struct CatalogoRutasRemotoDescargado {
+    vehiculos: Vec<FilaVehiculoRutaRemota>,
+    encargados: Vec<FilaEncargadoRutaRemota>,
+    marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// Trae vehículos/encargados de ruta que este dispositivo todavía no tiene
+/// localmente -- mismo motivo que `descargar_catalogo_remoto`
+/// (empresas/contratistas/usuarios): hasta ahora `vehiculos_ruta`/
+/// `encargados_ruta` sólo empujaban (local -> nube), nunca al revés. Sin
+/// `sitio_id=eq...` a propósito -- ambas tablas son globales (ver
+/// `docs/planes-implementados/plan-control-rutas.md`, "Alcance de RLS por tabla"),
+/// mismo criterio que empresas/contratistas.
+fn descargar_catalogo_rutas_remoto(
+    contexto: &ContextoSincronizacion<'_>,
+    marca_anterior: Option<&str>,
+) -> Result<CatalogoRutasRemotoDescargado, SincronizacionError> {
+    let cliente = cliente_http();
+    let filtro_incremental = marca_anterior
+        .map(|marca| format!("&updated_at=gt.{marca}"))
+        .unwrap_or_default();
+
+    let vehiculos: Vec<FilaVehiculoRutaRemota> = obtener_json_paginado(
+        &cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/vehiculos_ruta?select=id,numero_unidad,placa,activo,updated_at{filtro_incremental}",
+            contexto.base_url
+        ),
+    )?;
+    let encargados: Vec<FilaEncargadoRutaRemota> = obtener_json_paginado(
+        &cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/encargados_ruta?select=id,codigo_empleado,nombre,activo,updated_at{filtro_incremental}",
+            contexto.base_url
+        ),
+    )?;
+
+    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> =
+        marca_anterior.and_then(|marca| crate::tiempo::parsear_utc(marca).ok());
+    for actualizado_en in vehiculos
+        .iter()
+        .map(|f| &f.updated_at)
+        .chain(encargados.iter().map(|f| &f.updated_at))
+    {
+        let actualizado_en = crate::tiempo::parsear_utc(actualizado_en)
+            .map_err(|_| SincronizacionError::FechaInvalida(actualizado_en.clone()))?;
+        if marca_mas_nueva.is_none_or(|marca| actualizado_en > marca) {
+            marca_mas_nueva = Some(actualizado_en);
+        }
+    }
+
+    Ok(CatalogoRutasRemotoDescargado {
+        vehiculos,
+        encargados,
+        marca_mas_nueva,
+    })
+}
+
+fn guardar_vehiculos_ruta(
+    transaction: &rusqlite::Transaction<'_>,
+    vehiculos: &[FilaVehiculoRutaRemota],
+) -> Result<u32, SincronizacionError> {
+    let mut recibidos = 0;
+    for vehiculo in vehiculos {
+        transaction.execute(
+            "
+            INSERT INTO vehiculos_ruta (numero_unidad, placa, activo, uuid)
+            VALUES (?1, ?2, ?3, ?4)
+            ON CONFLICT(placa) DO UPDATE SET
+                numero_unidad = excluded.numero_unidad,
+                activo = excluded.activo,
+                uuid = COALESCE(vehiculos_ruta.uuid, excluded.uuid)
+            ",
+            params![
+                vehiculo.numero_unidad,
+                vehiculo.placa,
+                vehiculo.activo,
+                vehiculo.id,
+            ],
+        )?;
+        recibidos += 1;
+    }
+    Ok(recibidos)
+}
+
+fn guardar_encargados_ruta(
+    transaction: &rusqlite::Transaction<'_>,
+    encargados: &[FilaEncargadoRutaRemota],
+) -> Result<u32, SincronizacionError> {
+    let mut recibidos = 0;
+    for encargado in encargados {
+        transaction.execute(
+            "
+            INSERT INTO encargados_ruta (codigo_empleado, nombre, activo, uuid)
+            VALUES (?1, ?2, ?3, ?4)
+            ON CONFLICT(codigo_empleado) DO UPDATE SET
+                nombre = excluded.nombre,
+                activo = excluded.activo,
+                uuid = COALESCE(encargados_ruta.uuid, excluded.uuid)
+            ",
+            params![
+                encargado.codigo_empleado,
+                encargado.nombre,
+                encargado.activo,
+                encargado.id,
+            ],
+        )?;
+        recibidos += 1;
+    }
+    Ok(recibidos)
+}
+
+/// Espejo de `recibir_catalogo_del_sitio`, separado en su propia función
+/// (no sumado a esa) porque nace después y con marca de agua propia
+/// (`catalogo_rutas_actualizado_hasta`, `MIGRACION_37`) -- mismo criterio que
+/// `gafetes_actualizado_hasta`/`historial_visitas_actualizado_hasta`: ritmo
+/// de sync independiente, sin depender de que el cursor del resto del
+/// catálogo ya existiera cuando este dominio se sumó.
+pub fn recibir_catalogo_rutas_del_sitio(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<ResumenCatalogoRutas, SincronizacionError> {
+    let marca_anterior: Option<String> = connection.query_row(
+        "SELECT catalogo_rutas_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let descarga = descargar_catalogo_rutas_remoto(contexto, marca_anterior.as_deref())?;
+
+    let transaction = connection.unchecked_transaction()?;
+    let vehiculos_recibidos = guardar_vehiculos_ruta(&transaction, &descarga.vehiculos)?;
+    let encargados_recibidos = guardar_encargados_ruta(&transaction, &descarga.encargados)?;
+
+    if let Some(marca) = descarga.marca_mas_nueva {
+        transaction.execute(
+            "UPDATE sincronizacion_estado SET catalogo_rutas_actualizado_hasta = ?1 WHERE id = 1",
+            params![crate::tiempo::serializar_utc(marca)],
+        )?;
+    }
+
+    transaction.commit()?;
+    Ok(ResumenCatalogoRutas {
+        vehiculos_recibidos,
+        encargados_recibidos,
+    })
+}
+
 /// Índice en memoria de una tabla local por `uuid` y por `nombre`,
 /// construido con un solo `SELECT` antes de recorrer un lote remoto -- ver
 /// `indexar_empresas`/`indexar_contratistas`. Reemplaza a
@@ -5296,6 +5474,157 @@ mod tests {
         assert_eq!(cedula, "1-1111");
         assert_eq!(tipo_ingreso, "SWAT");
         assert_eq!(uuid_contratista.as_deref(), Some("uuid-contratista-remoto"));
+    }
+
+    #[test]
+    fn recibe_catalogo_rutas_del_sitio_y_lo_guarda_local() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_respuestas(vec![
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-vehiculo-remoto\",\"numero_unidad\":\"22906\",\"placa\":\"C12345\",\
+             \"activo\":true,\"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-encargado-remoto\",\"codigo_empleado\":\"5040017\",\
+             \"nombre\":\"Michael Araya Retana\",\"activo\":true,\
+             \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+        ]);
+
+        let resumen = recibir_catalogo_rutas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenCatalogoRutas {
+                vehiculos_recibidos: 1,
+                encargados_recibidos: 1,
+            }
+        );
+        let (placa, uuid_vehiculo): (String, Option<String>) = connection
+            .query_row("SELECT placa, uuid FROM vehiculos_ruta", [], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(placa, "C12345");
+        assert_eq!(uuid_vehiculo.as_deref(), Some("uuid-vehiculo-remoto"));
+        let (codigo, nombre, cedula): (String, String, Option<String>) = connection
+            .query_row(
+                "SELECT codigo_empleado, nombre, cedula FROM encargados_ruta",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(codigo, "5040017");
+        assert_eq!(nombre, "Michael Araya Retana");
+        assert_eq!(cedula, None, "el catálogo remoto nunca trae cédula");
+        let marca_guardada: Option<String> = connection
+            .query_row(
+                "SELECT catalogo_rutas_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(marca_guardada.as_deref(), Some("2026-01-01T00:00:00Z"));
+    }
+
+    #[test]
+    fn recibir_catalogo_rutas_fusiona_un_vehiculo_local_existente_por_placa_sin_duplicarlo() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO vehiculos_ruta (numero_unidad, placa, uuid)
+                 VALUES (NULL, 'C12345', 'uuid-local-viejo')",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_respuestas(vec![
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-vehiculo-remoto\",\"numero_unidad\":\"22906\",\"placa\":\"C12345\",\
+             \"activo\":true,\"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        ]);
+
+        recibir_catalogo_rutas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        let total: i64 = connection
+            .query_row("SELECT COUNT(*) FROM vehiculos_ruta", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(total, 1, "no duplica el vehículo que ya tenía por placa");
+        let (numero_unidad, uuid): (Option<String>, Option<String>) = connection
+            .query_row(
+                "SELECT numero_unidad, uuid FROM vehiculos_ruta",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            numero_unidad.as_deref(),
+            Some("22906"),
+            "la fila local se actualiza con lo remoto"
+        );
+        assert_eq!(
+            uuid.as_deref(),
+            Some("uuid-local-viejo"),
+            "un uuid local ya existente nunca se pisa"
+        );
+    }
+
+    #[test]
+    fn segundo_sync_de_catalogo_rutas_pide_solo_lo_nuevo_con_la_marca_guardada() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            // Primer sync = 2 pedidos (vehículos/encargados) sin marca;
+            // segundo sync = 2 más, ya con `updated_at=gt.` de la marca que
+            // dejó el primero.
+            for paso in 0..4 {
+                let (mut socket, _) = listener.accept().unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                let mut pedido = Vec::new();
+                let mut buffer = [0; 4096];
+                while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                    let leidos = socket.read(&mut buffer).unwrap();
+                    assert!(leidos > 0);
+                    pedido.extend_from_slice(&buffer[..leidos]);
+                }
+                let cuerpo = if paso == 0 {
+                    let pedido = String::from_utf8(pedido).unwrap();
+                    assert!(
+                        !pedido.contains("updated_at=gt."),
+                        "primer sync: sin marca todavía, tiene que pedir todo"
+                    );
+                    r#"[{"id":"uuid-vehiculo-remoto","numero_unidad":"22906","placa":"C12345","activo":true,"updated_at":"2026-01-05T00:00:00Z"}]"#
+                } else if paso == 2 {
+                    let pedido = String::from_utf8(pedido).unwrap();
+                    assert!(
+                        pedido.contains("updated_at=gt.2026-01-05T00%3A00%3A00Z")
+                            || pedido.contains("updated_at=gt.2026-01-05T00:00:00Z"),
+                        "segundo sync: tiene que arrastrar la marca que dejó el primero -- pedido real: {pedido}"
+                    );
+                    "[]"
+                } else {
+                    "[]"
+                };
+                write!(socket, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}", cuerpo.len()).unwrap();
+            }
+        });
+
+        recibir_catalogo_rutas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+        let marca_guardada: Option<String> = connection
+            .query_row(
+                "SELECT catalogo_rutas_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(marca_guardada.as_deref(), Some("2026-01-05T00:00:00Z"));
+
+        recibir_catalogo_rutas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+        servidor.join().unwrap();
     }
 
     #[test]

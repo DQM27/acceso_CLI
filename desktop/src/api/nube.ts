@@ -18,6 +18,8 @@ export interface ResumenSincronizacion {
   empresas_recibidas: number;
   contratistas_recibidos: number;
   gafetes_recibidos: number;
+  vehiculos_ruta_recibidos: number;
+  encargados_ruta_recibidos: number;
   movimientos_historial_recibidos: number;
   citas_recibidas: number;
   historial_visitas_recibidos: number;

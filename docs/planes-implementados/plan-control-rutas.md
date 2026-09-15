@@ -745,6 +745,45 @@ Verificado: `cargo test-plano` (259 tests), clippy limpio (núcleo y
 completo.
 
 Pendiente (sin empezar, fuera de esta ronda): historial por ciclo/día
-completo (ver aclaración de arriba), `tipo_ruta`/H2-H4, Supabase *pull*,
-reporte PDF, decisión de entrega por WhatsApp, wiring mobile↔núcleo
-(UniFFI).
+completo (ver aclaración de arriba), `tipo_ruta`/H2-H4, reporte PDF,
+decisión de entrega por WhatsApp, wiring mobile↔núcleo (UniFFI).
+
+## Bug encontrado al probar en vivo: catálogo KOF pull faltante (2026-09-15)
+
+Al correr la app de escritorio en modo dev (`sqlite-plano`, primera prueba
+visual real) el usuario reportó que "Catálogo KOF" → Encargados aparecía
+vacío, a pesar del import real de 1438 filas a Supabase (ver arriba). Causa
+raíz: `vehiculos_ruta`/`encargados_ruta` sólo tenían **push** (local →
+nube, `nube::sincronizacion::enviar_vehiculo_ruta`/`enviar_encargado_ruta`)
+-- nunca el **pull** que trae de vuelta lo que otro dispositivo (o, como
+en este caso, un `execute_sql` directo contra Supabase) ya puso ahí. Un
+dispositivo que nunca creó esas filas él mismo las veía siempre vacías,
+mismo bug de fondo que ya se había resuelto para contratistas/empresas/
+gafetes/citas/visitas -- rutas se quedó sin su propio pull cuando se armó
+el push (commit `f58a832`).
+
+Corregido con el mismo patrón que `recibir_catalogo_del_sitio`
+(contratistas/empresas/usuarios) y `recibir_citas_del_sitio`: marca de
+agua incremental propia (`MIGRACION_37`, columna
+`catalogo_rutas_actualizado_hasta` en `sincronizacion_estado`), sin
+`sitio_id=eq...` en el `GET` (ambas tablas son globales, ver más arriba),
+`ON CONFLICT(placa)`/`ON CONFLICT(codigo_empleado)` para fusionar con una
+fila local existente sin duplicar (mismo criterio que `guardar_empresas`).
+Nueva función `nube::recibir_catalogo_rutas_del_sitio`, llamada desde los
+3 mismos puntos que ya llaman `recibir_catalogo_del_sitio`
+(`AppCore::sincronizar_con_nube`/`configurar_dispositivo_inicial`/
+`refrescar_catalogo_sin_sesion`) y desde
+`desktop/src-tauri/src/comandos/nube.rs::intentar_sincronizacion`.
+`ResumenSincronizacion` (núcleo y su espejo en `comandos/nube.rs`) ganó
+`vehiculos_ruta_recibidos`/`encargados_ruta_recibidos`. El crate `mobile`
+no se tocó (sigue pausado, ver arriba) -- su propio struct
+`ResumenSincronizacion` es independiente, no se ve afectado.
+
+3 tests nuevos en `nube::sincronizacion` (camino feliz, fusión sin
+duplicar por placa, marca incremental en el segundo sync). Verificado:
+`cargo test-plano` (267 tests en `--lib`, suite completo sin fallos),
+clippy limpio (núcleo y `desktop/src-tauri`), `tsc` sin errores.
+
+Corregir con "Sincronizar" en la pantalla, o reiniciando la app (dispara
+sync automático a los 10s) trae ahora las 1438 filas KOF a cualquier
+dispositivo que configure la nube.

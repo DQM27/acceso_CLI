@@ -209,7 +209,9 @@ pub fn mensaje_ruta(error: RutaServiceError) -> String {
         EncargadoVacio => "El nombre del encargado es obligatorio".into(),
         NumeroDocumentoVacio => "El número de documento es obligatorio".into(),
         VehiculoYaEnRuta => "Este vehículo ya tiene una salida de ruta activa".into(),
-        DocumentoYaRegistrado => "Ya existe una salida registrada con ese número de documento".into(),
+        DocumentoYaRegistrado => {
+            "Ya existe una salida registrada con ese número de documento".into()
+        }
         DocumentoRequiereAutorizacion => {
             "El documento no es de hoy -- confirme que cuenta con el correo de autorización".into()
         }
@@ -219,7 +221,7 @@ pub fn mensaje_ruta(error: RutaServiceError) -> String {
         OperadorNoAutorizado => {
             "La sesión que registra el movimiento no existe o está inactiva".into()
         }
-        _ => "No se pudo registrar el movimiento de la ruta".into(),
+        RutaServiceError::Database(_) => "No se pudo registrar el movimiento de la ruta".into(),
     }
 }
 

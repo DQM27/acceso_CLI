@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 36;
+pub const SCHEMA_VERSION: i64 = 37;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -326,6 +326,11 @@ fn aplicar_migraciones_posteriores_a_15(
         *version = 36;
     }
 
+    if *version == 36 {
+        aplicar_migracion_37(connection)?;
+        *version = 37;
+    }
+
     Ok(())
 }
 
@@ -532,6 +537,14 @@ fn aplicar_migracion_36(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_36)?;
     transaction.execute_batch("PRAGMA user_version = 36")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn aplicar_migracion_37(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_37)?;
+    transaction.execute_batch("PRAGMA user_version = 37")?;
     transaction.commit()?;
     Ok(())
 }
@@ -2693,4 +2706,15 @@ ALTER TABLE cola_salida_nueva RENAME TO cola_salida;
 CREATE INDEX idx_cola_salida_pendientes
 ON cola_salida(proximo_intento_en)
 WHERE estado = 'pendiente';
+";
+
+// Watermark propio del catálogo de rutas (vehículos + encargados KOF),
+// mismo mecanismo que `catalogo_actualizado_hasta`/`gafetes_actualizado_hasta`
+// -- ver `nube::sincronizacion::recibir_catalogo_rutas_del_sitio`. Faltaba
+// desde MIGRACION_36: esas dos tablas sólo tenían push (local -> nube),
+// nunca el "pull" que las trae de vuelta -- un dispositivo que no las creó
+// él mismo (ej. el catálogo KOF de 1438 filas, importado directo en
+// Supabase) las veía siempre vacías.
+const MIGRACION_37: &str = r"
+ALTER TABLE sincronizacion_estado ADD COLUMN catalogo_rutas_actualizado_hasta TEXT;
 ";
