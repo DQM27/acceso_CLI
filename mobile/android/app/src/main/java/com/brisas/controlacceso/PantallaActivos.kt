@@ -1,7 +1,10 @@
 package com.brisas.controlacceso
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,22 +13,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -34,10 +32,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import uniffi.control_acceso_mobile.ContratistaResumen
 import uniffi.control_acceso_mobile.IngresoActivoResumen
@@ -222,45 +221,17 @@ fun PantallaActivos(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/// Píldoras "Ingreso"/"Salida"/"Gafete" (`FilaPildoras`, ver ControlesBrisas.kt)
+/// en vez del `SegmentedButton` gris de Material3 -- mismos tres modos de
+/// siempre, mismo doc-comment de [PantallaActivos] para el porqué de cada uno.
 @Composable
 private fun SelectorModoBusqueda(modo: ModoBusqueda, onCambiar: (ModoBusqueda) -> Unit) {
-    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-        SegmentedButton(
-            selected = modo == ModoBusqueda.ENTRADA,
-            onClick = { onCambiar(ModoBusqueda.ENTRADA) },
-            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
-        ) {
-            EtiquetaSegmento("Ingreso")
-        }
-        SegmentedButton(
-            selected = modo == ModoBusqueda.SALIDA_NOMBRE,
-            onClick = { onCambiar(ModoBusqueda.SALIDA_NOMBRE) },
-            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
-        ) {
-            EtiquetaSegmento("Salida")
-        }
-        SegmentedButton(
-            selected = modo == ModoBusqueda.SALIDA_GAFETE,
-            onClick = { onCambiar(ModoBusqueda.SALIDA_GAFETE) },
-            shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
-        ) {
-            EtiquetaSegmento("Gafete")
-        }
-    }
-}
-
-/// Antes las etiquetas eran "Entrada"/"Salida: nombre"/"Salida: gafete" --
-/// las dos últimas, casi el doble de largo, se partían en dos líneas
-/// dentro de su tercio del selector mientras la primera quedaba en una, y
-/// el selector completo terminaba con altura despareja (reportado con
-/// foto real: dos botones "enormes" al lado de uno chico). Ya no pasa con
-/// las etiquetas cortas actuales ("Ingreso"/"Salida"/"Gafete"), pero
-/// forzar una sola línea sigue siendo la defensa correcta si el texto
-/// vuelve a crecer (más idioma, tipografía más grande por accesibilidad).
-@Composable
-private fun EtiquetaSegmento(texto: String) {
-    Text(texto, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    val opciones = listOf(ModoBusqueda.ENTRADA, ModoBusqueda.SALIDA_NOMBRE, ModoBusqueda.SALIDA_GAFETE)
+    FilaPildoras(
+        opciones = listOf("Ingreso", "Salida", "Gafete"),
+        seleccionado = opciones.indexOf(modo),
+        onSeleccionar = { onCambiar(opciones[it]) },
+    )
 }
 
 @Composable
@@ -285,7 +256,7 @@ private fun CampoBusquedaActivos(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OutlinedTextField(
+        TextField(
             value = texto,
             onValueChange = onCambiarTexto,
             label = null,
@@ -296,20 +267,23 @@ private fun CampoBusquedaActivos(
             } else {
                 KeyboardOptions.Default
             },
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = colorModo,
-                focusedLabelColor = colorModo,
-            ),
+            shape = FormaCampoBrisas,
+            colors = ColoresCampoBrisas(),
             modifier = Modifier.weight(1f),
         )
         if (modo == ModoBusqueda.ENTRADA || modo == ModoBusqueda.SALIDA_GAFETE) {
-            BotonDiscretoBrisas(
-                onClick = if (modo == ModoBusqueda.ENTRADA) onEscanearCedula else onEscanearGafete,
+            Box(
+                modifier = Modifier
+                    .size(AlturaControlBrisas)
+                    .border(1.dp, colorModo, FormaCampoBrisas)
+                    .clip(FormaCampoBrisas)
+                    .clickable(onClick = if (modo == ModoBusqueda.ENTRADA) onEscanearCedula else onEscanearGafete),
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     Icons.Default.PhotoCamera,
                     contentDescription = if (modo == ModoBusqueda.ENTRADA) "Escanear documento" else "Escanear gafete",
-                    modifier = Modifier.size(32.dp),
+                    tint = colorModo,
                 )
             }
         }
@@ -389,10 +363,12 @@ private fun ContenidoModoEntrada(
             modifier = Modifier.padding(top = 12.dp),
         )
     }
-    LazyColumn(modifier = Modifier.padding(top = 8.dp)) {
+    LazyColumn(
+        modifier = Modifier.padding(top = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         items(resultadosBusqueda, key = { it.id }) { contratista ->
             FilaContratista(contratista, onClick = { onElegirContratista(contratista) })
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
         }
     }
 }
@@ -479,7 +455,10 @@ private fun ContenidoModoSalidaGafete(
 /// `onClick` según quién la use.
 @Composable
 private fun ListaActivos(activos: List<FilaActiva>, onClick: (FilaActiva) -> Unit) {
-    LazyColumn(modifier = Modifier.padding(top = 8.dp)) {
+    LazyColumn(
+        modifier = Modifier.padding(top = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         items(
             activos,
             key = { fila ->
@@ -490,11 +469,14 @@ private fun ListaActivos(activos: List<FilaActiva>, onClick: (FilaActiva) -> Uni
             },
         ) { fila ->
             FilaActivo(fila, onClick = { onClick(fila) })
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
         }
     }
 }
 
+/// Modal "Registrar salida" a mano en vez de `AlertDialog` -- el mockup pide
+/// un layout que `AlertDialog` no ofrece (icono circular arriba, botón
+/// principal de ancho completo, "Cancelar" como link chico debajo, todo
+/// centrado) en vez de los dos botones lado a lado de siempre.
 @Composable
 private fun DialogoConfirmarSalida(
     fila: FilaActiva?,
@@ -503,28 +485,49 @@ private fun DialogoConfirmarSalida(
 ) {
     if (fila == null) return
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Registrar salida") },
-        text = {
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface, MaterialTheme.shapes.medium)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            }
+            Text(
+                "Registrar salida",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 16.dp),
+            )
             Text(
                 when (fila) {
                     is FilaActiva.Local -> "${fila.activo.contratistaNombre} · ${fila.activo.cedula} · ${fila.activo.empresaNombre}"
                     is FilaActiva.Remota -> "${fila.remoto.contratistaNombre} · registrado en otro dispositivo de la unidad operativa"
                 },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
             )
-        },
-        confirmButton = {
-            BotonDiscretoBrisas(onClick = { onConfirmar(fila) }) {
+            BotonBrisas(
+                onClick = { onConfirmar(fila) },
+                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+            ) {
                 Text("Confirmar")
             }
-        },
-        dismissButton = {
-            BotonDiscretoBrisas(onClick = onDismiss) {
+            BotonDiscretoBrisas(onClick = onDismiss, modifier = Modifier.padding(top = 4.dp)) {
                 Text("Cancelar")
             }
-        },
-    )
+        }
+    }
 }
 
 @Composable
@@ -538,7 +541,12 @@ private fun FilaActivo(fila: FilaActiva, onClick: () -> Unit) {
 @Composable
 private fun FilaActivoLocal(activo: IngresoActivoResumen, onClick: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick)
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(activo.contratistaNombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
@@ -568,7 +576,12 @@ private fun FilaActivoLocal(activo: IngresoActivoResumen, onClick: () -> Unit) {
 @Composable
 private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick)
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(remoto.contratistaNombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
@@ -589,7 +602,12 @@ private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit) {
 @Composable
 private fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick)
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(

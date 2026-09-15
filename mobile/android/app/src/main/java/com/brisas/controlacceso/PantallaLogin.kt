@@ -12,9 +12,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
@@ -88,27 +87,23 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispo
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        OutlinedTextField(
+        TextField(
             value = viewModel.cedula,
             onValueChange = { viewModel.cambiarCedula(it) },
             label = { Text("Cédula") },
             singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                focusedLabelColor = MaterialTheme.colorScheme.primary,
-            ),
+            shape = FormaCampoBrisas,
+            colors = ColoresCampoBrisas(),
             modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
         )
-        OutlinedTextField(
+        TextField(
             value = viewModel.password,
             onValueChange = { viewModel.cambiarPassword(it) },
             label = { Text("Contraseña") },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                focusedLabelColor = MaterialTheme.colorScheme.primary,
-            ),
+            shape = FormaCampoBrisas,
+            colors = ColoresCampoBrisas(),
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
         )
         BotonBrisas(

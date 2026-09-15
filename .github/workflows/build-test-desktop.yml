@@ -1,0 +1,54 @@
+name: Build de prueba (desktop)
+
+# Sólo manual, a pedido -- para bajar un instalador de escritorio y
+# probarlo sin publicar nada en la pestaña Releases ni tocar las llaves de
+# firma reales. Sin firmar (sin TAURI_SIGNING_PRIVATE_KEY): el instalador
+# de prueba no se puede autoactualizar vía el updater real, sólo sirve
+# para instalar y probar a mano. El resultado se baja desde la pestaña
+# Actions -> este run -> Artifacts (se borran solos a los 14 días, no hace
+# falta limpiarlos a mano).
+on:
+  workflow_dispatch:
+
+jobs:
+  build-desktop-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar toolchain de Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            desktop/src-tauri
+            sqlite3mc-vendor-lib
+
+      # Mismo paso obligatorio que release.yml -- ver ese archivo para el porqué.
+      - name: Compilar SQLite3MC vendorizado (paso previo obligatorio)
+        run: cargo build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
+
+      - name: Instalar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Instalar dependencias del frontend
+        working-directory: desktop
+        run: npm ci
+
+      - name: Build (Tauri, sin firmar)
+        working-directory: desktop
+        run: npm run tauri build
+
+      - name: Subir el instalador como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ControlAcceso-Brisas-desktop-${{ github.sha }}
+          path: |
+            desktop/src-tauri/target/release/bundle/msi/*.msi
+            desktop/src-tauri/target/release/bundle/nsis/*.exe
+          retention-days: 14

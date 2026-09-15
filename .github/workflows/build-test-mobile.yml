@@ -1,0 +1,63 @@
+name: Build de prueba (mobile)
+
+# Sólo manual, a pedido -- para bajar un APK de debug y probarlo sin
+# publicar nada en la pestaña Releases ni tocar las llaves de firma reales.
+# Queda firmado con el keystore de debug de Gradle (no instala sobre un
+# release firmado con la llave real -- desinstalar antes si hace falta
+# reemplazar uno). El resultado se baja desde la pestaña Actions -> este
+# run -> Artifacts (se borran solos a los 14 días, no hace falta limpiarlos
+# a mano).
+on:
+  workflow_dispatch:
+
+jobs:
+  build-android-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Instalar toolchain de Rust para Android
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: mobile/rust-core
+
+      - name: Instalar NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27
+
+      - name: Instalar cargo-ndk
+        run: cargo install cargo-ndk
+
+      # Sólo arm64-v8a -- es un build de prueba para el dispositivo real
+      # (Samsung A25 5G), no hace falta pagar el tiempo del x86_64 de emulador.
+      - name: Compilar el núcleo Rust para Android (arm64-v8a)
+        working-directory: mobile/rust-core
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          mkdir -p ../android/app/src/main/jniLibs/arm64-v8a
+          cargo ndk -t aarch64-linux-android build --release
+          cp target/aarch64-linux-android/release/libcontrol_acceso_mobile.so ../android/app/src/main/jniLibs/arm64-v8a/
+
+      - name: Compilar el APK de debug
+        working-directory: mobile/android
+        run: ./gradlew assembleDebug
+
+      - name: Subir el APK como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ControlAcceso-Brisas-debug-${{ github.sha }}
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14

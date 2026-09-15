@@ -9,16 +9,14 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.Composable
@@ -30,7 +28,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -162,27 +162,37 @@ fun PantallaPrincipal(
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                sesion.nombre,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            Row {
-                IconButton(onClick = { mostrarNuevoContratista = true }) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                AvatarBrisas(inicial = sesion.nombre.take(1))
+                Column(modifier = Modifier.padding(start = 12.dp)) {
+                    Text(
+                        "Hola, ${sesion.nombre.substringBefore(' ')}",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        "Brisas Control de Acceso",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                BotonIconoCuadradoBrisas(onClick = { mostrarNuevoContratista = true }) {
                     Icon(Icons.Default.PersonAdd, contentDescription = "Nuevo contratista")
                 }
                 val oscuroActual = GestorTema.oscuroForzado ?: isSystemInDarkTheme()
-                IconButton(onClick = { GestorTema.alternar(oscuroActual) }) {
+                BotonIconoCuadradoBrisas(onClick = { GestorTema.alternar(oscuroActual) }) {
                     Icon(
                         if (oscuroActual) Icons.Default.LightMode else Icons.Default.DarkMode,
                         contentDescription = if (oscuroActual) "Cambiar a modo claro" else "Cambiar a modo oscuro",
                     )
                 }
-                IconButton(
+                BotonIconoCuadradoBrisas(
                     onClick = { nubeViewModel.sincronizar() },
                     enabled = !nubeViewModel.sincronizando,
                 ) {
@@ -192,8 +202,8 @@ fun PantallaPrincipal(
                         Icon(Icons.Default.Sync, contentDescription = "Sincronizar")
                     }
                 }
-                BotonDiscretoBrisas(onClick = onCerrarSesion) {
-                    Text("Salir")
+                BotonIconoCuadradoBrisas(onClick = onCerrarSesion) {
+                    Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Salir")
                 }
             }
         }
@@ -225,10 +235,12 @@ fun PantallaPrincipal(
             PantallaNuevoContratista(nucleo, onVolver = { mostrarNuevoContratista = false })
         } else {
             var pestana by remember { mutableIntStateOf(0) }
-            PrimaryTabRow(selectedTabIndex = pestana) {
-                Tab(selected = pestana == 0, onClick = { pestana = 0 }, text = { Text("Activos") })
-                Tab(selected = pestana == 1, onClick = { pestana = 1 }, text = { Text("Historial") })
-            }
+            FilaPildoras(
+                opciones = listOf("Activos", "Historial"),
+                seleccionado = pestana,
+                onSeleccionar = { pestana = it },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
             when (pestana) {
                 0 -> PantallaActivos(nucleo, secretoStore, refrescarNube)
                 else -> PantallaHistorial(nucleo, refrescarNube)
