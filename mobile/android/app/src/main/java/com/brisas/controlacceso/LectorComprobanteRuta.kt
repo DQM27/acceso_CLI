@@ -39,7 +39,16 @@ private val REGEX_RUTA_NUMERO_CARGA = Regex(
     """Ruta\s*/\s*No\.?\s*de\s*Carga:?\s*([A-Z]{2,6}\d{2,6})\s*/\s*0*(\d+)""",
     RegexOption.IGNORE_CASE,
 )
-private val REGEX_TRANSPORTE = Regex("""Transporte:?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
+// `[ \t]*`, no `\s*` -- a propósito NO cruza saltos de línea. El
+// comprobante real trae debajo una tabla de materiales (códigos de SKU de
+// 6 dígitos, ej. `164145`) del mismo largo que un número de transporte
+// real; con `\s*` el regex podía saltar la línea de "Transporte:" (si en
+// esa lectura salía sin número pegado) y agarrar el primer SKU de la
+// tabla más abajo como si fuera el transporte. El número real siempre
+// está en la misma línea que la etiqueta (confirmado con fotos reales,
+// 2026-09-15) -- si no aparece ahí, es mejor no encontrar nada que
+// encontrar el dato equivocado.
+private val REGEX_TRANSPORTE = Regex("""Transporte:?[ \t]*(\d{6,15})""", RegexOption.IGNORE_CASE)
 // El comprobante real usa puntos como separador ("15.09.2026"), pero se
 // toleran también guion/barra por si una foto futura trae otro formato.
 private val REGEX_FECHA_ENTREGA = Regex(

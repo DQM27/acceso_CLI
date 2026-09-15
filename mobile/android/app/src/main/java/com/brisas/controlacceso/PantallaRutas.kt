@@ -350,7 +350,7 @@ private fun PasoDocumentoRuta(
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             PasoEncabezado(2, "Documento de ruta", completado)
             Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TextField(
@@ -359,8 +359,17 @@ private fun PasoDocumentoRuta(
                     placeholder = { Text("Ruta") },
                     singleLine = true,
                     shape = FormaCampoBrisas,
+                    // Único campo de la tarjeta con borde visible -- sin
+                    // buscador/ícono al lado que lo delate como campo (a
+                    // diferencia del resto de los campos "filled" de la
+                    // app), quedaba confuso cuál parte de la fila era
+                    // editable y cuál era sólo la etiqueta de tipo (pedido
+                    // explícito 2026-09-15, probado en el A25).
                     colors = ColoresCampoBrisas(),
-                    modifier = Modifier.width(140.dp).height(AlturaBusquedaBrisas),
+                    modifier = Modifier
+                        .width(110.dp)
+                        .height(AlturaBusquedaBrisas)
+                        .border(1.dp, MaterialTheme.colorScheme.outline, FormaCampoBrisas),
                 )
                 Text(
                     etiquetaTipo,

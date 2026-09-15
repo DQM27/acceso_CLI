@@ -23,6 +23,12 @@ class LectorComprobanteRutaTest {
         Transporte: 700101452
         Fecha de Entrega: 15.09.2026
         Camión: CRDUMMY
+        Material Descripción Cant.Tot Botelleo Descarga BOT / PZA
+        164145 4 Pack Powerade Zero mixto 591 8
+        167251 POWERADE ZERO ION 4 591ML MIXE 3
+        167264 POWERADE ZERO ION 4 591ML UVA 3
+        163966 Powerade ION4 Mountain Blast S 1
+        164079 Powerade Zero Frutas 591ml 12U 2
     """.trimIndent()
 
     @Test
@@ -33,6 +39,17 @@ class LectorComprobanteRutaTest {
     @Test
     fun noClasificaTextoAjeno() {
         assertFalse(esComprobanteCargaRuta("Licencia de Conducir\nNº: 112340567"))
+    }
+
+    @Test
+    fun noConfundeElTransporteConUnSkuDeLaTablaDeMateriales() {
+        // Bug real reportado en el Samsung A25 (2026-09-15): con `\s*` el
+        // regex podía cruzar la línea de "Transporte:" y agarrar el primer
+        // código de material de la tabla de abajo (`164145`, mismo largo
+        // que un número de transporte real) en vez de `700101452`.
+        val resultado = extraerComprobanteRuta(comprobantePrincipal)
+        assertEquals("700101452", resultado?.numeroDocumento)
+        assertTrue("164145" != resultado?.numeroDocumento)
     }
 
     @Test
