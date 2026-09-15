@@ -82,7 +82,7 @@ fun PantallaRutas() {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             PasoChecklistUnCampo(
                 numero = 1,
-                titulo = "Carnet KOF",
+                titulo = "Gafete KOF",
                 completado = paso1Completo,
                 valor = encargado,
                 onCambiar = { encargado = it },
@@ -96,8 +96,11 @@ fun PantallaRutas() {
                 // de los dos va prellenado: antes de escanear/tipear se ven
                 // como campo vacío (placeholder gris), no como dato ya
                 // confirmado.
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         TextField(
                             value = numeroRuta,
                             onValueChange = { numeroRuta = it },
@@ -107,19 +110,17 @@ fun PantallaRutas() {
                             colors = ColoresCampoBrisas(),
                             modifier = Modifier.weight(1f).height(AlturaBusquedaBrisas),
                         )
-                        Box(
-                            modifier = Modifier
-                                .height(AlturaBusquedaBrisas)
-                                .clip(FormaCampoBrisas)
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .clickable {
-                                    subNumeroTexto = ((subNumeroTexto.toIntOrNull() ?: 1) % 4 + 1).toString()
-                                }
-                                .padding(horizontal = 14.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(etiquetaSubNumero(subNumeroTexto), style = MaterialTheme.typography.bodyMedium)
-                        }
+                        // Texto plano, sin caja/fondo -- una caja acá se
+                        // veía como un segundo botón compitiendo con el de
+                        // la cámara de abajo (pedido explícito 2026-09-15).
+                        Text(
+                            "Ruta " + etiquetaSubNumero(subNumeroTexto),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.clickable {
+                                subNumeroTexto = ((subNumeroTexto.toIntOrNull() ?: 1) % 4 + 1).toString()
+                            },
+                        )
                     }
                     CampoConEscaneo(
                         valor = numeroDocumento,
