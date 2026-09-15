@@ -18,6 +18,16 @@ pub trait EncargadoRutaRepository {
     fn actualizar(&self, encargado: &EncargadoRuta) -> Result<(), DatabaseError>;
 
     fn listar(&self) -> Result<Vec<EncargadoRuta>, DatabaseError>;
+
+    /// Por nombre o código de empleado -- pedido explícito del usuario,
+    /// 2026-09-15, mismo criterio que el buscador de contratistas ("busca
+    /// por nombre o por número de cédula"). Sin el sistema de filtros
+    /// completo de `FiltroContratistas` a propósito -- este catálogo no
+    /// necesita paginar ni combinar filtros, sólo un texto corto. `PLEGAR`
+    /// (función SQL registrada en `database::schema`) ignora
+    /// mayúsculas/diacríticos en el nombre; el código de empleado es
+    /// siempre numérico, alcanza con `LIKE` simple.
+    fn buscar(&self, texto: &str) -> Result<Vec<EncargadoRuta>, DatabaseError>;
 }
 
 pub struct SqliteEncargadoRutaRepository<'a> {
@@ -54,6 +64,12 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<EncargadoRuta> {
 
 const SELECT_ENCARGADO: &str =
     "SELECT id, codigo_empleado, nombre, cedula, activo FROM encargados_ruta";
+
+/// Tope de `buscar` -- catálogo de ~1438 filas (KOF), un texto corto o
+/// vacío podría matchear cientos; el buscador de un checklist mobile sólo
+/// necesita ver las primeras coincidencias para elegir, no el listado
+/// completo (para eso está `listar`).
+const LIMITE_BUSQUEDA: usize = 20;
 
 impl EncargadoRutaRepository for SqliteEncargadoRutaRepository<'_> {
     fn crear(&self, encargado: &EncargadoRuta) -> Result<i64, DatabaseError> {
@@ -132,6 +148,20 @@ impl EncargadoRutaRepository for SqliteEncargadoRutaRepository<'_> {
             .collect::<Result<Vec<_>, _>>()?;
         Ok(encargados)
     }
+
+    fn buscar(&self, texto: &str) -> Result<Vec<EncargadoRuta>, DatabaseError> {
+        let mut statement = self.connection.prepare(&format!(
+            "{SELECT_ENCARGADO}
+             WHERE PLEGAR(nombre) LIKE '%' || PLEGAR(?1) || '%'
+                OR codigo_empleado LIKE '%' || ?1 || '%'
+             ORDER BY nombre
+             LIMIT {LIMITE_BUSQUEDA}"
+        ))?;
+        let encargados = statement
+            .query_map(params![texto], convertir_fila)?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(encargados)
+    }
 }
 
 #[cfg(test)]
@@ -179,6 +209,43 @@ mod tests {
 
         let error = repo.crear(&nuevo("5040017", "Otra Persona")).unwrap_err();
         assert!(error.es_constraint_unique());
+    }
+
+    #[test]
+    fn buscar_encuentra_por_nombre_parcial_sin_importar_tildes_ni_mayusculas() {
+        let connection = conexion();
+        let repo = SqliteEncargadoRutaRepository::new(&connection);
+        repo.crear(&nuevo("5040017", "Michael Araya Retana"))
+            .unwrap();
+
+        let resultados = repo.buscar("araya").unwrap();
+
+        assert_eq!(resultados.len(), 1);
+        assert_eq!(resultados[0].nombre, "Michael Araya Retana");
+    }
+
+    #[test]
+    fn buscar_encuentra_por_codigo_de_empleado_parcial() {
+        let connection = conexion();
+        let repo = SqliteEncargadoRutaRepository::new(&connection);
+        repo.crear(&nuevo("5040017", "Michael Araya Retana"))
+            .unwrap();
+        repo.crear(&nuevo("77851", "Ramon Rodriguez")).unwrap();
+
+        let resultados = repo.buscar("5040").unwrap();
+
+        assert_eq!(resultados.len(), 1);
+        assert_eq!(resultados[0].codigo_empleado, "5040017");
+    }
+
+    #[test]
+    fn buscar_sin_coincidencias_devuelve_vacio() {
+        let connection = conexion();
+        let repo = SqliteEncargadoRutaRepository::new(&connection);
+        repo.crear(&nuevo("5040017", "Michael Araya Retana"))
+            .unwrap();
+
+        assert!(repo.buscar("no existe nadie asi").unwrap().is_empty());
     }
 
     #[test]

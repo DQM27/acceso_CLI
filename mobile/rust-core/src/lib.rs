@@ -29,12 +29,16 @@ use control_acceso::database::queries::usuarios::{
 use control_acceso::domain::resultado_acceso::{
     MotivoDenegacion as MotivoDenegacionNucleo, ResultadoAcceso as ResultadoAccesoNucleo,
 };
+use control_acceso::domain::resultado_salida_ruta::ResultadoSalidaRuta as ResultadoSalidaRutaNucleo;
 use control_acceso::models::empresa::Empresa as EmpresaNucleo;
+use control_acceso::models::encargado_ruta::EncargadoRuta as EncargadoRutaNucleo;
 use control_acceso::models::medio_ingreso::MedioIngreso as MedioIngresoNucleo;
 use control_acceso::models::registro_ingreso::{
     MotivoResultadoIngreso as MotivoResultadoIngresoNucleo,
     ResultadoIngresoRegistrado as ResultadoIngresoRegistradoNucleo,
 };
+use control_acceso::models::ruta::Ruta as RutaNucleo;
+use control_acceso::models::salida_ruta::SalidaRutaActivaResumen as SalidaRutaActivaResumenNucleo;
 use control_acceso::models::tipo_ingreso::TipoIngreso as TipoIngresoNucleo;
 use control_acceso::models::usuario::RolUsuario as RolUsuarioNucleo;
 use control_acceso::nube::IngresoRemoto as IngresoRemotoNucleo;
@@ -44,11 +48,16 @@ use control_acceso::services::error::AutenticacionError as AutenticacionErrorNuc
 use control_acceso::services::error::ContratistaServiceError as ContratistaServiceErrorNucleo;
 use control_acceso::services::error::EmpresaServiceError as EmpresaServiceErrorNucleo;
 use control_acceso::services::error::RegistroIngresoServiceError as RegistroIngresoServiceErrorNucleo;
+use control_acceso::services::error::RutaServiceError as RutaServiceErrorNucleo;
 use control_acceso::services::error::UsuarioServiceError as UsuarioServiceErrorNucleo;
 use control_acceso::services::registro_ingreso_service::{
     IngresoActivoResumen as IngresoActivoResumenNucleo,
     PreparacionIngreso as PreparacionIngresoNucleo,
     ResultadoRegistroEntrada as ResultadoRegistroEntradaNucleo,
+};
+use control_acceso::services::ruta_service::{
+    ResultadoRegistroSalidaRuta as ResultadoRegistroSalidaRutaNucleo,
+    SolicitudSalidaRuta as SolicitudSalidaRutaNucleo,
 };
 use control_acceso::services::usuario_service::CrearUsuarioInput as CrearUsuarioInputNucleo;
 use control_acceso::tiempo::RelojCorregido;
@@ -642,6 +651,136 @@ impl From<IngresoRemotoNucleo> for IngresoRemoto {
     }
 }
 
+/// Espejo de `domain::resultado_salida_ruta::ResultadoSalidaRuta` --
+/// `Permitido`/`PermitidoConAutorizacion` según si el documento de carga
+/// es de hoy (ver `RutaService::registrar_salida`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ResultadoSalidaRuta {
+    Permitido,
+    PermitidoConAutorizacion,
+}
+
+impl From<ResultadoSalidaRutaNucleo> for ResultadoSalidaRuta {
+    fn from(resultado: ResultadoSalidaRutaNucleo) -> Self {
+        match resultado {
+            ResultadoSalidaRutaNucleo::Permitido => Self::Permitido,
+            ResultadoSalidaRutaNucleo::PermitidoConAutorizacion => Self::PermitidoConAutorizacion,
+        }
+    }
+}
+
+/// Espejo de `EncargadoRuta` -- sin `cedula` a propósito: el catálogo KOF
+/// nunca la trae (pedido explícito del usuario, ver el modelo real) y el
+/// checklist mobile no la necesita para nada, sólo confirma nombre +
+/// código de empleado.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct EncargadoRuta {
+    pub id: i64,
+    pub codigo_empleado: String,
+    pub nombre: String,
+    pub activo: bool,
+}
+
+impl From<EncargadoRutaNucleo> for EncargadoRuta {
+    fn from(encargado: EncargadoRutaNucleo) -> Self {
+        Self {
+            id: encargado.id,
+            codigo_empleado: encargado.codigo_empleado,
+            nombre: encargado.nombre,
+            activo: encargado.activo,
+        }
+    }
+}
+
+/// Espejo de `Ruta` (catálogo de números válidos) -- el checklist mobile
+/// sólo lo consume vía `Nucleo::buscar_rutas` para confirmar el número
+/// leído por OCR contra el catálogo, nunca lo administra (alta/baja/rango
+/// quedan exclusivas de escritorio, ver `plan-control-rutas.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
+pub struct Ruta {
+    pub id: i64,
+    pub numero: i64,
+    pub activo: bool,
+}
+
+impl From<RutaNucleo> for Ruta {
+    fn from(ruta: RutaNucleo) -> Self {
+        Self {
+            id: ruta.id,
+            numero: ruta.numero,
+            activo: ruta.activo,
+        }
+    }
+}
+
+/// Espejo de `SolicitudSalidaRuta` -- sin `usuario_salida_id`/
+/// `fecha_hora_salida` (el núcleo los pisa siempre con el actor/reloj
+/// reales, igual que `AppCore::registrar_salida_ruta`/`desktop/src-tauri/src/dto/rutas.rs`).
+/// `fecha_documento` viaja como texto ISO (`AAAA-MM-DD`), mismo criterio
+/// que `fecha_vencimiento_praind` en `DatosContratista`.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct SolicitudSalidaRuta {
+    pub vehiculo_placa: String,
+    pub vehiculo_numero_unidad: Option<String>,
+    pub encargado_nombre: String,
+    pub encargado_codigo_empleado: Option<String>,
+    pub numero_ruta: i64,
+    pub sub_numero: i64,
+    pub numero_documento: String,
+    pub fecha_documento: String,
+    pub tiene_correo_autorizacion: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
+pub struct ResultadoRegistroSalidaRuta {
+    pub salida_id: i64,
+    pub resultado: ResultadoSalidaRuta,
+}
+
+impl From<ResultadoRegistroSalidaRutaNucleo> for ResultadoRegistroSalidaRuta {
+    fn from(resultado: ResultadoRegistroSalidaRutaNucleo) -> Self {
+        Self {
+            salida_id: resultado.salida_id,
+            resultado: resultado.resultado.into(),
+        }
+    }
+}
+
+/// Espejo de `SalidaRutaActivaResumen` -- fila de "rutas activas" (salidas
+/// sin retorno todavía), análoga a `IngresoActivoResumen`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct SalidaRutaActivaResumen {
+    pub id: i64,
+    pub vehiculo_placa: String,
+    pub vehiculo_numero_unidad: Option<String>,
+    pub encargado_nombre: String,
+    pub numero_ruta: i64,
+    pub sub_numero: i64,
+    pub numero_documento: String,
+    pub fecha_documento: String,
+    pub resultado: ResultadoSalidaRuta,
+    pub fecha_hora_salida: String,
+    pub usuario_salida_nombre: String,
+}
+
+impl From<SalidaRutaActivaResumenNucleo> for SalidaRutaActivaResumen {
+    fn from(activa: SalidaRutaActivaResumenNucleo) -> Self {
+        Self {
+            id: activa.id,
+            vehiculo_placa: activa.vehiculo_placa,
+            vehiculo_numero_unidad: activa.vehiculo_numero_unidad,
+            encargado_nombre: activa.encargado_nombre,
+            numero_ruta: activa.numero_ruta,
+            sub_numero: activa.sub_numero,
+            numero_documento: activa.numero_documento,
+            fecha_documento: activa.fecha_documento.to_string(),
+            resultado: activa.resultado.into(),
+            fecha_hora_salida: activa.fecha_hora_salida.to_rfc3339(),
+            usuario_salida_nombre: activa.usuario_salida_nombre,
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 #[uniffi(flat_error)]
 pub enum NucleoError {
@@ -774,6 +913,14 @@ impl From<EmpresaServiceErrorNucleo> for NucleoError {
 
 impl From<UsuarioServiceErrorNucleo> for NucleoError {
     fn from(error: UsuarioServiceErrorNucleo) -> Self {
+        Self::Interno {
+            mensaje: error.to_string(),
+        }
+    }
+}
+
+impl From<RutaServiceErrorNucleo> for NucleoError {
+    fn from(error: RutaServiceErrorNucleo) -> Self {
         Self::Interno {
             mensaje: error.to_string(),
         }
@@ -1189,6 +1336,97 @@ impl Nucleo {
     pub fn registrar_salida(&self, registro_id: i64) -> Result<(), NucleoError> {
         let actor = self.actor_autenticado()?;
         Ok(self.core_lock().registrar_salida(&actor, registro_id)?)
+    }
+
+    /// Buscador del checklist de rutas (paso "Encargado KOF") -- por nombre
+    /// o código de empleado, mismo criterio que `buscar_contratistas`
+    /// ("busca por nombre o por número de cédula", pedido explícito del
+    /// usuario, 2026-09-15). Tope acotado dentro del núcleo
+    /// (`EncargadoRutaRepository::buscar`), no hace falta repetirlo acá.
+    pub fn buscar_encargados_ruta(&self, texto: String) -> Result<Vec<EncargadoRuta>, NucleoError> {
+        Ok(self
+            .core_lock()
+            .buscar_encargados_ruta(texto.trim())
+            .map_err(|origen| NucleoError::Interno {
+                mensaje: origen.to_string(),
+            })?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
+    /// Buscador del checklist de rutas (paso "Documento de ruta") -- el
+    /// número de ruta es bloqueante (debe existir en el catálogo, pedido
+    /// explícito del usuario, 2026-09-15), así que el checklist confirma
+    /// contra este buscador antes de registrar la salida, en vez de
+    /// enterarse recién al fallar `registrar_salida_ruta`.
+    pub fn buscar_rutas(&self, texto: String) -> Result<Vec<Ruta>, NucleoError> {
+        Ok(self
+            .core_lock()
+            .buscar_rutas(texto.trim())
+            .map_err(|origen| NucleoError::Interno {
+                mensaje: origen.to_string(),
+            })?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
+    /// Registra la salida (apertura) del ciclo de una ruta -- espejo de
+    /// `AppCore::registrar_salida_ruta`. `solicitud.fecha_documento` viaja
+    /// como texto ISO (`AAAA-MM-DD`), mismo criterio que
+    /// `fecha_vencimiento_praind` en `crear_contratista`.
+    pub fn registrar_salida_ruta(
+        &self,
+        solicitud: SolicitudSalidaRuta,
+    ) -> Result<ResultadoRegistroSalidaRuta, NucleoError> {
+        let actor = self.actor_autenticado()?;
+        let fecha_documento =
+            solicitud
+                .fecha_documento
+                .parse()
+                .map_err(|_| NucleoError::FechaInvalida {
+                    mensaje: solicitud.fecha_documento.clone(),
+                })?;
+        Ok(self
+            .core_lock()
+            .registrar_salida_ruta(
+                &actor,
+                SolicitudSalidaRutaNucleo {
+                    vehiculo_placa: solicitud.vehiculo_placa,
+                    vehiculo_numero_unidad: solicitud.vehiculo_numero_unidad,
+                    encargado_nombre: solicitud.encargado_nombre,
+                    encargado_codigo_empleado: solicitud.encargado_codigo_empleado,
+                    numero_ruta: solicitud.numero_ruta,
+                    sub_numero: solicitud.sub_numero,
+                    numero_documento: solicitud.numero_documento,
+                    fecha_documento,
+                    tiene_correo_autorizacion: solicitud.tiene_correo_autorizacion,
+                    // Ignorados por `AppCore::registrar_salida_ruta` -- se
+                    // pisan con el actor/reloj reales de la transacción.
+                    usuario_salida_id: 0,
+                    fecha_hora_salida: chrono::Utc::now(),
+                },
+            )?
+            .into())
+    }
+
+    /// Registra el retorno (cierre) de una salida de ruta activa --
+    /// espejo de `AppCore::registrar_retorno_ruta`.
+    pub fn registrar_retorno_ruta(&self, salida_id: i64) -> Result<(), NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self.core_lock().registrar_retorno_ruta(&actor, salida_id)?)
+    }
+
+    /// Sin actor -- es una lectura, mismo criterio que
+    /// `listar_ingresos_activos`.
+    pub fn listar_rutas_activas(&self) -> Result<Vec<SalidaRutaActivaResumen>, NucleoError> {
+        Ok(self
+            .core_lock()
+            .listar_rutas_activas()?
+            .into_iter()
+            .map(Into::into)
+            .collect())
     }
 
     pub fn listar_empresas(&self) -> Result<Vec<Empresa>, NucleoError> {
@@ -2688,5 +2926,111 @@ mod tests {
         let resultado = nucleo.registrar_ingreso(1, MedioIngreso::Caminando, None);
 
         assert!(matches!(resultado, Err(NucleoError::NoAutenticado)));
+    }
+
+    fn nucleo_con_actor_y_ruta_79() -> Nucleo {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
+                     'ROOT', 1
+                 );
+                 INSERT INTO rutas (numero, activo, uuid) VALUES (79, 1, 'uuid-ruta-79');
+                 INSERT INTO encargados_ruta (codigo_empleado, nombre, activo, uuid) VALUES (
+                     '5040017', 'Michael Araya Retana', 1, 'uuid-encargado'
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
+            .unwrap();
+        nucleo
+    }
+
+    fn solicitud_salida_ruta(placa: &str, numero_documento: &str) -> SolicitudSalidaRuta {
+        SolicitudSalidaRuta {
+            vehiculo_placa: placa.to_string(),
+            vehiculo_numero_unidad: Some("22906".to_string()),
+            encargado_nombre: "Michael Araya Retana".to_string(),
+            encargado_codigo_empleado: Some("5040017".to_string()),
+            numero_ruta: 79,
+            sub_numero: 1,
+            numero_documento: numero_documento.to_string(),
+            fecha_documento: chrono::Utc::now().format("%Y-%m-%d").to_string(),
+            tiene_correo_autorizacion: false,
+        }
+    }
+
+    #[test]
+    fn buscar_rutas_encuentra_el_numero_del_catalogo() {
+        let nucleo = nucleo_con_actor_y_ruta_79();
+
+        let resultados = nucleo.buscar_rutas("79".to_string()).unwrap();
+
+        assert_eq!(resultados.len(), 1);
+        assert_eq!(resultados[0].numero, 79);
+    }
+
+    #[test]
+    fn buscar_encargados_ruta_encuentra_por_nombre_o_codigo() {
+        let nucleo = nucleo_con_actor_y_ruta_79();
+
+        assert_eq!(
+            nucleo
+                .buscar_encargados_ruta("araya".to_string())
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            nucleo
+                .buscar_encargados_ruta("5040".to_string())
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn registrar_salida_y_retorno_de_ruta_redondea_el_viaje() {
+        let nucleo = nucleo_con_actor_y_ruta_79();
+
+        let resultado = nucleo
+            .registrar_salida_ruta(solicitud_salida_ruta("C12345", "700101452"))
+            .unwrap();
+        assert_eq!(resultado.resultado, ResultadoSalidaRuta::Permitido);
+
+        let activas = nucleo.listar_rutas_activas().unwrap();
+        assert_eq!(activas.len(), 1);
+        assert_eq!(activas[0].id, resultado.salida_id);
+        assert_eq!(activas[0].numero_ruta, 79);
+
+        nucleo.registrar_retorno_ruta(resultado.salida_id).unwrap();
+
+        assert_eq!(nucleo.listar_rutas_activas().unwrap(), Vec::new());
+    }
+
+    #[test]
+    fn registrar_salida_ruta_con_numero_inexistente_falla() {
+        let nucleo = nucleo_con_actor_y_ruta_79();
+        let mut solicitud = solicitud_salida_ruta("C12345", "700101452");
+        solicitud.numero_ruta = 222;
+
+        let resultado = nucleo.registrar_salida_ruta(solicitud);
+
+        assert!(matches!(resultado, Err(NucleoError::Interno { .. })));
     }
 }

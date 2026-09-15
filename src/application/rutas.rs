@@ -85,6 +85,13 @@ impl AppCore {
         SqliteEncargadoRutaRepository::new(&self.connection).listar()
     }
 
+    /// Sin `actor`, mismo criterio que `listar_encargados_ruta` -- lectura,
+    /// no autoriza nada. Pensado para el buscador del checklist mobile
+    /// (nombre o código de empleado), ver el doc-comment del trait.
+    pub fn buscar_encargados_ruta(&self, texto: &str) -> Result<Vec<EncargadoRuta>, DatabaseError> {
+        SqliteEncargadoRutaRepository::new(&self.connection).buscar(texto)
+    }
+
     pub fn crear_encargado_ruta(
         &self,
         actor: &UsuarioSesion,
@@ -126,6 +133,12 @@ impl AppCore {
 
     pub fn listar_rutas(&self) -> Result<Vec<Ruta>, DatabaseError> {
         SqliteRutaRepository::new(&self.connection).listar()
+    }
+
+    /// Sin `actor`, mismo criterio que `listar_rutas` -- lectura. Pensado
+    /// para el buscador del checklist mobile (número parcial).
+    pub fn buscar_rutas(&self, texto: &str) -> Result<Vec<Ruta>, DatabaseError> {
+        SqliteRutaRepository::new(&self.connection).buscar(texto)
     }
 
     pub fn crear_ruta(
@@ -455,6 +468,35 @@ mod tests {
         let encargados = core.listar_encargados_ruta().unwrap();
         assert_eq!(encargados.len(), 1);
         assert_eq!(encargados[0].codigo_empleado, "5040017");
+    }
+
+    #[test]
+    fn buscar_encargados_ruta_encuentra_por_nombre_o_codigo() {
+        let (core, actor) = nucleo_con_usuario();
+        core.crear_encargado_ruta(
+            &actor,
+            &EncargadoRuta {
+                id: 0,
+                codigo_empleado: "5040017".to_string(),
+                nombre: "Michael Araya Retana".to_string(),
+                cedula: None,
+                activo: true,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(core.buscar_encargados_ruta("araya").unwrap().len(), 1);
+        assert_eq!(core.buscar_encargados_ruta("5040").unwrap().len(), 1);
+        assert!(core.buscar_encargados_ruta("nadie").unwrap().is_empty());
+    }
+
+    #[test]
+    fn buscar_rutas_encuentra_coincidencia_parcial() {
+        let (core, _actor) = nucleo_con_usuario();
+
+        // La 79 ya existe (fixture).
+        assert_eq!(core.buscar_rutas("79").unwrap().len(), 1);
+        assert!(core.buscar_rutas("222").unwrap().is_empty());
     }
 
     #[test]

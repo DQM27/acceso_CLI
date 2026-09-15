@@ -15,6 +15,12 @@ pub trait RutaRepository {
     fn actualizar(&self, ruta: &Ruta) -> Result<(), DatabaseError>;
 
     fn listar(&self) -> Result<Vec<Ruta>, DatabaseError>;
+
+    /// Coincidencia parcial del número (ej. "7" encuentra 7, 17, 79...) --
+    /// pedido explícito del usuario, 2026-09-15: el checklist mobile
+    /// necesita un buscador, no sólo la lista completa, para confirmar en
+    /// el momento que el número leído por OCR existe en el catálogo.
+    fn buscar(&self, texto: &str) -> Result<Vec<Ruta>, DatabaseError>;
 }
 
 pub struct SqliteRutaRepository<'a> {
@@ -104,7 +110,23 @@ impl RutaRepository for SqliteRutaRepository<'_> {
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rutas)
     }
+
+    fn buscar(&self, texto: &str) -> Result<Vec<Ruta>, DatabaseError> {
+        let mut statement = self.connection.prepare(&format!(
+            "{SELECT_RUTA}
+             WHERE CAST(numero AS TEXT) LIKE '%' || ?1 || '%'
+             ORDER BY numero
+             LIMIT {LIMITE_BUSQUEDA}"
+        ))?;
+        let rutas = statement
+            .query_map(params![texto], convertir_fila)?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rutas)
+    }
 }
+
+/// Mismo tope y mismo motivo que `encargado_ruta_repository::LIMITE_BUSQUEDA`.
+const LIMITE_BUSQUEDA: usize = 20;
 
 #[cfg(test)]
 mod tests {
@@ -138,6 +160,31 @@ mod tests {
 
         let error = repo.crear(79).unwrap_err();
         assert!(error.es_constraint_unique());
+    }
+
+    #[test]
+    fn buscar_encuentra_coincidencia_parcial_del_numero() {
+        let connection = conexion();
+        let repo = SqliteRutaRepository::new(&connection);
+        repo.crear(79).unwrap();
+        repo.crear(179).unwrap();
+        repo.crear(120).unwrap();
+
+        let resultados = repo.buscar("79").unwrap();
+
+        assert_eq!(
+            resultados.iter().map(|r| r.numero).collect::<Vec<_>>(),
+            vec![79, 179]
+        );
+    }
+
+    #[test]
+    fn buscar_sin_coincidencias_devuelve_vacio() {
+        let connection = conexion();
+        let repo = SqliteRutaRepository::new(&connection);
+        repo.crear(79).unwrap();
+
+        assert!(repo.buscar("222").unwrap().is_empty());
     }
 
     #[test]
