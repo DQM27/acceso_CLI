@@ -318,6 +318,59 @@ pub enum GafeteProvisionalServiceError {
     Database(#[from] DatabaseError),
 }
 
+/// Catálogo de empresas proveedoras
+/// (`docs/features-futuras/plan-control-proveedores.md`) -- mismo molde
+/// mínimo que `EmpresaServiceError`, catálogo separado a propósito.
+#[derive(Debug, thiserror::Error)]
+pub enum EmpresaProveedorServiceError {
+    #[error("Empresa proveedora no encontrada")]
+    EmpresaNoEncontrada,
+    #[error("El nombre de la empresa es obligatorio")]
+    NombreEmpresaVacio,
+    #[error("El nombre de la empresa ya existe")]
+    NombreDuplicado,
+    #[error("La sesión actual no está autorizada para realizar esta operación")]
+    OperacionNoAutorizada,
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+}
+
+/// Ingreso/salida de proveedores
+/// (`docs/features-futuras/plan-control-proveedores.md`) -- mismo espíritu
+/// que `CitaServiceError`: sin PRAIND/bloqueos de contratista, el gafete es
+/// siempre obligatorio (a diferencia de `RegistroIngresoServiceError`, que
+/// lo hace condicional a `requiere_gafete`).
+#[derive(Debug, thiserror::Error)]
+pub enum IngresoProveedorServiceError {
+    #[error("La cédula es obligatoria")]
+    CedulaVacia,
+    #[error("El nombre es obligatorio")]
+    NombreVacio,
+    #[error("Empresa proveedora no encontrada")]
+    EmpresaNoEncontrada,
+    #[error("La empresa proveedora está dada de baja")]
+    EmpresaInactiva,
+    #[error("Esta cédula ya tiene un ingreso de proveedor activo")]
+    IngresoActivo,
+    #[error("El gafete ya está asignado a otro ingreso de proveedor")]
+    GafeteOcupado,
+    /// El número no existe en el catálogo (`gafetes`, tipo `PROVEEDOR`).
+    #[error("El gafete no está registrado en el catálogo")]
+    GafeteNoRegistrado,
+    #[error("El gafete no está disponible: {0:?}")]
+    GafeteNoDisponible(EstadoGafete),
+    #[error("El ingreso de proveedor no está activo")]
+    RegistroNoActivo,
+    #[error("La salida no puede ser anterior al ingreso")]
+    SalidaAnteriorAIngreso,
+    #[error("El reloj del equipo está atrasado respecto al último movimiento registrado")]
+    RelojRetrocedido,
+    #[error("La sesión que registra el movimiento no existe o está inactiva")]
+    OperadorNoAutorizado,
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum GafeteServiceError {
     #[error("El número de gafete debe ser mayor a cero")]

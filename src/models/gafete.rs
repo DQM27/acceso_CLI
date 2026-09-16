@@ -45,12 +45,12 @@ impl EstadoGafete {
 /// distinto tipo son objetos físicos distintos que repiten la misma
 /// numeración (el "7 verde" de contratista y el "7 rojo" de visita
 /// coexisten), por eso la unicidad real es `(numero, tipo)`, no `numero`
-/// solo. Sin `Proveedor` con columna de portador todavía -- no existe
-/// tabla `proveedores`, pero el valor ya se acepta en el `CHECK` de la
-/// base para no tener que volver a tocar el esquema cuando exista.
-/// `ProvisionalKof` sí tiene su columna de portador propia
-/// (`encargado_portador_id`, hacia `encargados_ruta`) desde
-/// `MIGRACION_39` -- ver `docs/features-futuras/plan-gafetes-provisionales-kof.md`.
+/// solo. `ProvisionalKof` tiene su columna de portador propia
+/// (`encargado_portador_id`, hacia `encargados_ruta`) desde `MIGRACION_39`
+/// -- ver `docs/features-futuras/plan-gafetes-provisionales-kof.md`.
+/// `Proveedor` tiene la suya (`proveedor_portador_id`, hacia
+/// `registro_ingresos_proveedor`) desde `MIGRACION_41` -- ver
+/// `docs/features-futuras/plan-control-proveedores.md`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TipoGafete {
@@ -97,16 +97,19 @@ impl TipoGafete {
 /// pierde, no para llevar cuentas de dinero (por eso no se llama
 /// "deudor"). Cada variante corresponde a una de las columnas FK reales de
 /// `gafetes` (`contratista_portador_id`/`visita_portador_id`/
-/// `encargado_portador_id`); sin `Proveedor(i64)` todavía por lo mismo que
-/// [`TipoGafete::Proveedor`]. `ProvisionalKof(i64)` sí apunta a un catálogo
-/// real (`encargados_ruta`), a diferencia de un futuro `Proveedor(i64)` que
-/// tendría que apuntar a un registro transaccional -- la persona KOF sí se
-/// repite.
+/// `encargado_portador_id`/`proveedor_portador_id`). `ProvisionalKof(i64)`
+/// apunta a un catálogo real (`encargados_ruta`, la persona KOF sí se
+/// repite); `Proveedor(i64)` en cambio apunta a un registro TRANSACCIONAL
+/// (`registro_ingresos_proveedor.id`, la visita puntual) y no a un catálogo
+/// de personas -- pedido explícito del usuario: el colaborador de un
+/// proveedor nunca se repite, así que no existe (ni debe existir) una tabla
+/// de personas para este caso.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PortadorGafete {
     Contratista(i64),
     Visita(i64),
     ProvisionalKof(i64),
+    Proveedor(i64),
 }
 
 /// Motivo por el que se cierra un incidente de pérdida (`gafetes_incidentes`,
@@ -180,11 +183,12 @@ pub struct Gafete {
     pub contratista_portador_id: Option<i64>,
     pub visita_portador_id: Option<i64>,
     pub encargado_portador_id: Option<i64>,
+    pub proveedor_portador_id: Option<i64>,
 }
 
 impl Gafete {
     /// A quién se le asignó este gafete la última vez, si a alguien --
-    /// `None` si está `Disponible`/`DeBaja`. Deriva de las tres columnas en
+    /// `None` si está `Disponible`/`DeBaja`. Deriva de las cuatro columnas en
     /// vez de guardarse aparte porque el `CHECK` del esquema ya garantiza
     /// que a lo sumo una está seteada.
     pub fn portador(&self) -> Option<PortadorGafete> {
@@ -194,6 +198,9 @@ impl Gafete {
         if let Some(id) = self.visita_portador_id {
             return Some(PortadorGafete::Visita(id));
         }
-        self.encargado_portador_id.map(PortadorGafete::ProvisionalKof)
+        if let Some(id) = self.encargado_portador_id {
+            return Some(PortadorGafete::ProvisionalKof(id));
+        }
+        self.proveedor_portador_id.map(PortadorGafete::Proveedor)
     }
 }

@@ -55,6 +55,11 @@ export default function GestionGafeteModal({
   // `!esVisita`), que no tiene sentido para este tipo -- se oculta hasta
   // que exista un flujo de entrega/devolución propio en desktop.
   const esProvisionalKof = gafete.tipo === "ProvisionalKof";
+  // Mismo criterio que ProvisionalKof: el ciclo de un gafete de proveedor
+  // es ingreso/salida (`registro_ingresos_proveedor`), no un portador que
+  // se le asigna para marcarlo perdido -- se oculta hasta que exista un
+  // flujo de ingreso/salida propio en desktop.
+  const esProveedor = gafete.tipo === "Proveedor";
   const listaVisible = !esVisita && buscandoPortador && filtro.trim().length > 0;
   const { campoRef, posicion: posicionLista } = useListaFlotante(listaVisible);
   const { resaltado, setResaltado, manejarTecla } = useNavegacionFlechas(
@@ -163,7 +168,7 @@ export default function GestionGafeteModal({
             >
               Dar de baja
             </button>
-            {!esProvisionalKof && (
+            {!esProvisionalKof && !esProveedor && (
               <button
                 type="button"
                 className="boton"

@@ -4,11 +4,8 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type EstadoGafete = "Disponible" | "Perdido" | "DeBaja";
 
-/** Pool físico al que pertenece el gafete — espejo de `TipoGafete` (Rust).
- * Sin "Proveedor" todavía del lado de entrada: el backend ya acepta ese
- * valor en el CHECK de la base a futuro, pero no hay comando de alta para
- * esa categoría hasta que exista la entidad `proveedor`. */
-export type TipoGafete = "Contratista" | "Visita" | "ProvisionalKof";
+/** Pool físico al que pertenece el gafete — espejo de `TipoGafete` (Rust). */
+export type TipoGafete = "Contratista" | "Visita" | "ProvisionalKof" | "Proveedor";
 
 export type MotivoResolucionGafete = "Pagado" | "Aparecido";
 
@@ -40,9 +37,8 @@ export function nombrePortador(
 }
 
 // snake_case a propósito — espejo exacto de `TipoGafeteEntrada` (Rust,
-// `#[serde(rename_all = "snake_case")]`). Sin "proveedor" -- mismo motivo
-// que `TipoGafete` arriba.
-export type TipoGafeteEntrada = "contratista" | "visita" | "provisional_kof";
+// `#[serde(rename_all = "snake_case")]`).
+export type TipoGafeteEntrada = "contratista" | "visita" | "provisional_kof" | "proveedor";
 
 export interface FiltroGafetes {
   numero?: number;

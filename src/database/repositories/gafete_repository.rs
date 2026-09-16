@@ -71,11 +71,12 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<Gafete> {
         contratista_portador_id: row.get(4)?,
         visita_portador_id: row.get(5)?,
         encargado_portador_id: row.get(6)?,
+        proveedor_portador_id: row.get(7)?,
     })
 }
 
 const SELECT_GAFETE: &str = "SELECT id, numero, tipo, estado, contratista_portador_id, \
-     visita_portador_id, encargado_portador_id FROM gafetes";
+     visita_portador_id, encargado_portador_id, proveedor_portador_id FROM gafetes";
 
 fn encolar_actualizacion(connection: &Connection, id: i64) -> Result<(), DatabaseError> {
     let uuid: Option<String> = connection.query_row(
@@ -153,6 +154,10 @@ impl GafeteRepository for SqliteGafeteRepository<'_> {
                 "UPDATE gafetes SET estado = 'PERDIDO', encargado_portador_id = ?1 WHERE id = ?2",
                 params![encargado_id, id],
             ),
+            PortadorGafete::Proveedor(registro_ingreso_proveedor_id) => self.connection.execute(
+                "UPDATE gafetes SET estado = 'PERDIDO', proveedor_portador_id = ?1 WHERE id = ?2",
+                params![registro_ingreso_proveedor_id, id],
+            ),
         }?;
         encolar_actualizacion(self.connection, id)
     }
@@ -161,7 +166,7 @@ impl GafeteRepository for SqliteGafeteRepository<'_> {
         self.connection.execute(
             "UPDATE gafetes SET estado = 'DISPONIBLE',
                 contratista_portador_id = NULL, visita_portador_id = NULL,
-                encargado_portador_id = NULL WHERE id = ?1",
+                encargado_portador_id = NULL, proveedor_portador_id = NULL WHERE id = ?1",
             params![id],
         )?;
         encolar_actualizacion(self.connection, id)

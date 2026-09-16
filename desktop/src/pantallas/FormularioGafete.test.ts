@@ -45,7 +45,7 @@ describe("esquema de FormularioGafete", () => {
 
   it("tipo invalido no pasa", () => {
     expect(
-      esquema.safeParse({ modo: "individual", tipo: "proveedor", numero: "12", desde: "", hasta: "" })
+      esquema.safeParse({ modo: "individual", tipo: "inexistente", numero: "12", desde: "", hasta: "" })
         .success,
     ).toBe(false);
   });
@@ -55,6 +55,18 @@ describe("esquema de FormularioGafete", () => {
       esquema.safeParse({
         modo: "individual",
         tipo: "provisional_kof",
+        numero: "12",
+        desde: "",
+        hasta: "",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("tipo proveedor pasa", () => {
+    expect(
+      esquema.safeParse({
+        modo: "individual",
+        tipo: "proveedor",
         numero: "12",
         desde: "",
         hasta: "",

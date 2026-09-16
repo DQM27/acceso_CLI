@@ -148,6 +148,7 @@ fn destino_lote(entidad: &str, operacion: &str) -> Option<(&'static str, Option<
         ("vehiculo_ruta", _) => Some(("vehiculos_ruta", Some("placa"))),
         ("encargado_ruta", _) => Some(("encargados_ruta", Some("codigo_empleado"))),
         ("salida_ruta", _) => Some(("salidas_ruta", None)),
+        ("empresa_proveedor", _) => Some(("empresas_proveedor", Some("nombre"))),
         _ => None,
     }
 }
@@ -172,6 +173,7 @@ fn construir_cuerpo(
         "ruta" => construir_cuerpo_ruta(connection, contexto, uuid),
         "vehiculo_ruta" => construir_cuerpo_vehiculo_ruta(connection, contexto, uuid),
         "encargado_ruta" => construir_cuerpo_encargado_ruta(connection, contexto, uuid),
+        "empresa_proveedor" => construir_cuerpo_empresa_proveedor(connection, contexto, uuid),
         otra => unreachable!("destino_lote ya filtró entidades sin lote (recibido: {otra})"),
     }
 }
@@ -315,6 +317,15 @@ fn procesar_fila_individual(
         ),
         ("prestamo_gafete_provisional", _) => {
             enviar_prestamo_gafete_provisional(cliente, connection, contexto, &fila.entidad_uuid)
+        }
+        ("empresa_proveedor", _) => {
+            enviar_empresa_proveedor(cliente, connection, contexto, &fila.entidad_uuid)
+        }
+        ("ingreso_proveedor", "cerrar") => {
+            enviar_cierre_ingreso_proveedor(cliente, connection, contexto, &fila.entidad_uuid)
+        }
+        ("ingreso_proveedor", _) => {
+            enviar_ingreso_proveedor(cliente, connection, contexto, &fila.entidad_uuid)
         }
         _ => Ok(()),
     };
@@ -1239,6 +1250,179 @@ fn enviar_cierre_prestamo_gafete_provisional(
     exigir_2xx(respuesta)
 }
 
+/// Empresas proveedoras (`docs/features-futuras/plan-control-proveedores.md`,
+/// espejo): mismo criterio de `upsert` que `enviar_empresa` -- catálogo
+/// separado a propósito, `on_conflict=nombre` por el mismo motivo (sin
+/// constraint de unicidad remota más que el `id`).
+fn construir_cuerpo_empresa_proveedor(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<Value, SincronizacionError> {
+    let (nombre, activo): (String, i64) = connection.query_row(
+        "SELECT nombre, activo FROM empresas_proveedor WHERE uuid = ?1",
+        params![uuid],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    Ok(json!({
+        "id": uuid,
+        "sitio_id": contexto.sitio_id,
+        "dispositivo_origen_id": contexto.dispositivo_id,
+        "nombre": nombre,
+        "activa": activo != 0,
+    }))
+}
+
+fn enviar_empresa_proveedor(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let cuerpo = construir_cuerpo_empresa_proveedor(connection, contexto, uuid)?;
+
+    let respuesta = cliente
+        .post(format!(
+            "{}/rest/v1/empresas_proveedor?on_conflict=nombre",
+            contexto.base_url
+        ))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Ingresos de proveedor (`docs/features-futuras/plan-control-proveedores.md`,
+/// cola, alta): mismo armazón que `enviar_movimiento_visita` -- mismo
+/// vocabulario entrada/salida (no entrega/devolución, eso es exclusivo de
+/// KOF). `empresa_id` local es un `INTEGER` (fila de `empresas_proveedor`);
+/// lo que viaja al servidor es su `uuid` -- misma resolución que
+/// `enviar_movimiento_visita` hace con `cita_visitante_id`.
+#[allow(clippy::type_complexity)]
+fn enviar_ingreso_proveedor(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let (
+        cedula,
+        nombre,
+        empresa_id_local,
+        empresa_nombre,
+        placa,
+        gafete_numero,
+        fecha_hora_ingreso,
+        usuario_ingreso_nombre,
+    ): (
+        String,
+        String,
+        i64,
+        String,
+        Option<String>,
+        i64,
+        String,
+        String,
+    ) = connection.query_row(
+        "
+        SELECT cedula, nombre, empresa_id, empresa_nombre, placa, gafete_numero,
+               fecha_hora_ingreso, usuario_ingreso_nombre
+        FROM registro_ingresos_proveedor
+        WHERE uuid = ?1
+        ",
+        params![uuid],
+        |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+                row.get(7)?,
+            ))
+        },
+    )?;
+    let empresa_uuid: String = connection.query_row(
+        "SELECT uuid FROM empresas_proveedor WHERE id = ?1",
+        params![empresa_id_local],
+        |row| row.get(0),
+    )?;
+
+    let cuerpo = json!({
+        "id": uuid,
+        "sitio_id": contexto.sitio_id,
+        "dispositivo_entrada_id": contexto.dispositivo_id,
+        "cedula": cedula,
+        "nombre": nombre,
+        "empresa_id": empresa_uuid,
+        "empresa_nombre": empresa_nombre,
+        "placa": placa,
+        "gafete_numero": gafete_numero,
+        "hora_entrada": fecha_hora_ingreso,
+        "usuario_entrada_nombre": usuario_ingreso_nombre,
+    });
+
+    let respuesta = cliente
+        .post(format!("{}/rest/v1/ingresos_proveedor", contexto.base_url))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Ingresos de proveedor (cola), cierre: mismo criterio de "primero en
+/// llegar gana" que `enviar_cierre_movimiento_visita` -- el filtro
+/// `hora_salida=is.null` hace que un cierre que llega tarde (el otro
+/// dispositivo del sitio ya lo cerró) no afecte ninguna fila en vez de
+/// fallar.
+fn enviar_cierre_ingreso_proveedor(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let (fecha_hora_salida, usuario_salida_nombre): (Option<String>, Option<String>) = connection
+        .query_row(
+            "SELECT fecha_hora_salida, usuario_salida_nombre
+             FROM registro_ingresos_proveedor WHERE uuid = ?1",
+            params![uuid],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+
+    let cuerpo = json!({
+        "hora_salida": fecha_hora_salida,
+        "dispositivo_salida_id": contexto.dispositivo_id,
+        "usuario_salida_nombre": usuario_salida_nombre,
+    });
+
+    let url = format!(
+        "{}/rest/v1/ingresos_proveedor?id=eq.{uuid}&hora_salida=is.null",
+        contexto.base_url
+    );
+
+    let respuesta = cliente
+        .patch(url)
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
 /// Catálogo de números de ruta (`docs/planes-implementados/plan-control-rutas.md`,
 /// pedido explícito del usuario, 2026-09-15) -- a diferencia de
 /// vehículos/encargados (globales, `upsert` por clave natural sin
@@ -1792,8 +1976,8 @@ pub fn usuario_sigue_activo_remoto(
 /// en este sitio del lado de *otro* dispositivo, para cualquier tabla que
 /// siga el mismo molde (un gafete numerado + una columna que marca cierre +
 /// una columna de dispositivo de apertura). Todas las variantes de
-/// "gafete ocupado" (contratista, visita, provisional KOF) comparten esta
-/// misma regla de negocio -- mismo sitio, no se puede entregar dos veces,
+/// "gafete ocupado" (contratista, visita, provisional KOF, proveedor)
+/// comparten esta misma regla de negocio -- mismo sitio, no se puede entregar dos veces,
 /// hay que vigilar que un dispositivo no dé un gafete que otro ya asignó --
 /// así que comparten esta única consulta parametrizada por tabla/columnas
 /// en vez de tres copias casi idénticas. Pensada para llamarse justo antes
@@ -1861,6 +2045,23 @@ pub fn gafete_provisional_ocupado_en_otro_dispositivo(
         "prestamos_gafete_provisional",
         "dispositivo_entrega_id",
         "hora_devolucion",
+        numero,
+    )
+}
+
+/// Variante contra `ingresos_proveedor` (gafetes de proveedor) -- ver
+/// `docs/features-futuras/plan-control-proveedores.md`. Mismo vocabulario
+/// entrada/salida que `movimientos_visita` (no entrega/devolución, eso es
+/// exclusivo de KOF).
+pub fn gafete_de_proveedor_ocupado_en_otro_dispositivo(
+    contexto: &ContextoSincronizacion<'_>,
+    numero: i64,
+) -> Result<bool, SincronizacionError> {
+    gafete_ocupado_en_otro_dispositivo_en(
+        contexto,
+        "ingresos_proveedor",
+        "dispositivo_entrada_id",
+        "hora_salida",
         numero,
     )
 }
@@ -4252,6 +4453,227 @@ mod tests {
             .query_row("SELECT estado FROM cola_salida", [], |row| row.get(0))
             .unwrap();
         assert_eq!(estado, "enviado");
+    }
+
+    #[test]
+    fn envia_una_empresa_proveedor_pendiente_y_la_marca_enviada() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO empresas_proveedor (nombre, activo, uuid)
+                 VALUES ('Maika', 1, 'uuid-empresa-proveedor')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, creado_en, actualizado_en
+                ) VALUES ('empresa_proveedor', 'uuid-empresa-proveedor', 'crear', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        let estado: String = connection
+            .query_row("SELECT estado FROM cola_salida", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(estado, "enviado");
+    }
+
+    /// Ingreso de proveedor listo para encolar, mismo criterio que
+    /// `conexion_con_movimiento_de_visita` -- `fecha_hora_salida` en `Some`
+    /// simula un ingreso ya cerrado, listo para el cierre.
+    fn conexion_con_ingreso_proveedor(fecha_hora_salida: Option<&str>) -> (Connection, String) {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo)
+                 VALUES ('1', 'Guardia', 'h', 'OPERADOR', 1)",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO empresas_proveedor (id, nombre, activo, uuid)
+                 VALUES (1, 'Maika', 1, 'uuid-empresa-proveedor')",
+                [],
+            )
+            .unwrap();
+        let usuario_salida_id = fecha_hora_salida.is_some().then_some(1_i64);
+        let usuario_salida_nombre = fecha_hora_salida.is_some().then_some("Guardia");
+        connection
+            .execute(
+                "INSERT INTO registro_ingresos_proveedor (
+                    uuid, cedula, nombre, empresa_id, empresa_nombre, placa, gafete_numero,
+                    fecha_hora_ingreso, usuario_ingreso_id, usuario_ingreso_nombre,
+                    fecha_hora_salida, usuario_salida_id, usuario_salida_nombre
+                ) VALUES (
+                    'uuid-ingreso-proveedor', '1-2345', 'Juan Perez', 1, 'Maika', NULL, 12,
+                    '2026-01-01T08:00:00Z', 1, 'Guardia',
+                    ?1, ?2, ?3
+                )",
+                params![fecha_hora_salida, usuario_salida_id, usuario_salida_nombre],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, creado_en, actualizado_en
+                ) VALUES (
+                    'ingreso_proveedor', 'uuid-ingreso-proveedor', ?1,
+                    '2026-01-01T08:00:00Z', '2026-01-01T08:00:00Z'
+                )",
+                params![if fecha_hora_salida.is_some() {
+                    "cerrar"
+                } else {
+                    "crear"
+                }],
+            )
+            .unwrap();
+        (connection, "uuid-ingreso-proveedor".to_string())
+    }
+
+    #[test]
+    fn envia_la_apertura_de_un_ingreso_proveedor() {
+        let (connection, _) = conexion_con_ingreso_proveedor(None);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.starts_with("POST /rest/v1/ingresos_proveedor "));
+            let cuerpo = "[]";
+            write!(
+                socket,
+                "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn envia_el_cierre_de_un_ingreso_proveedor() {
+        let (connection, _) = conexion_con_ingreso_proveedor(Some("2026-01-01T09:00:00Z"));
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.starts_with(
+                "PATCH /rest/v1/ingresos_proveedor?id=eq.uuid-ingreso-proveedor&hora_salida=is.null "
+            ));
+            write!(
+                socket,
+                "HTTP/1.1 204 No Content\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
+            )
+            .unwrap();
+        });
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn gafete_de_proveedor_ocupado_en_otro_dispositivo_excluye_este_dispositivo() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.contains("/rest/v1/ingresos_proveedor?"));
+            assert!(pedido.contains("sitio_id=eq.sitio-1"));
+            assert!(pedido.contains("dispositivo_entrada_id=neq.dispositivo-1"));
+            assert!(pedido.contains("gafete_numero=eq.12"));
+            let cuerpo = "[{\"id\":\"uuid-ingreso-proveedor\"}]";
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        let ocupado =
+            gafete_de_proveedor_ocupado_en_otro_dispositivo(&contexto(&base_url), 12).unwrap();
+
+        assert!(ocupado);
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn gafete_de_proveedor_ocupado_en_otro_dispositivo_sin_conflicto_devuelve_false() {
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let ocupado =
+            gafete_de_proveedor_ocupado_en_otro_dispositivo(&contexto(&base_url), 12).unwrap();
+
+        assert!(!ocupado);
     }
 
     /// Salida de ruta lista para encolar (sin match de catálogo, mismo

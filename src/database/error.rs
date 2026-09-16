@@ -10,6 +10,8 @@ pub enum DatabaseError {
     SalidaRutaNoActiva,
     #[error("No existe un préstamo de gafete provisional activo con ese ID")]
     PrestamoGafeteProvisionalNoActivo,
+    #[error("No existe un ingreso de proveedor activo con ese ID")]
+    RegistroProveedorNoActivo,
     #[error("La configuración inicial ya fue realizada")]
     ConfiguracionInicialYaRealizada,
     #[error("Usuario no encontrado")]

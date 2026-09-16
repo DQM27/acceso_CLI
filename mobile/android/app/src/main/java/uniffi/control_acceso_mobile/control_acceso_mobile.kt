@@ -681,6 +681,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_empresas_proveedor(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_encargados_ruta(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_historial(
@@ -707,9 +709,13 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_empresa(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_empresa_proveedor(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_de_proveedor_ocupado_en_sitio_con_secreto(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio(
     ): Int
@@ -729,6 +735,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_remotos(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_proveedores_activos(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_rutas_activas(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_usuarios(
@@ -739,9 +747,13 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_proveedor(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_retorno_ruta(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_proveedor(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_ruta(
     ): Int
@@ -791,6 +803,8 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_contratistas(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_empresas_proveedor(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_encargados_ruta(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_historial(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -817,10 +831,14 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_empresa(`ptr`: Long,`nombre`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_empresa_proveedor(`ptr`: Long,`nombre`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_usuario(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_entregar_gafete_provisional(`ptr`: Long,`encargadoId`: Long,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_de_proveedor_ocupado_en_sitio_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio(`ptr`: Long,`directorio`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -839,6 +857,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_remotos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_proveedores_activos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_rutas_activas(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_usuarios(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -849,9 +869,13 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso(`ptr`: Long,`contratistaId`: Long,`medio`: RustBuffer.ByValue,`gafete`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_proveedor(`ptr`: Long,`cedula`: RustBuffer.ByValue,`nombre`: RustBuffer.ByValue,`empresaId`: Long,`placa`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_retorno_ruta(`ptr`: Long,`salidaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida(`ptr`: Long,`registroId`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_proveedor(`ptr`: Long,`registroId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_ruta(`ptr`: Long,`solicitud`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -998,6 +1022,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas() != 3985) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_empresas_proveedor() != 7665) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_encargados_ruta() != 61462) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1037,10 +1064,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_empresa() != 5879) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_empresa_proveedor() != 57468) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario() != 28771) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional() != 43280) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_de_proveedor_ocupado_en_sitio_con_secreto() != 42761) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio() != 35345) {
@@ -1070,6 +1103,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_remotos() != 40530) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_proveedores_activos() != 58098) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_rutas_activas() != 2190) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1085,10 +1121,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso() != 64645) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_proveedor() != 65024) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_retorno_ruta() != 56331) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida() != 34276) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_proveedor() != 48053) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_ruta() != 1461) {
@@ -1598,6 +1640,12 @@ public interface NucleoInterface {
     fun `buscarContratistas`(`texto`: kotlin.String): List<ContratistaResumen>
     
     /**
+     * Selector con autocompletado del wizard de proveedores (Paso 2:
+     * empresa) -- espejo de `AppCore::buscar_empresas_proveedor`.
+     */
+    fun `buscarEmpresasProveedor`(`texto`: kotlin.String): List<EmpresaProveedor>
+    
+    /**
      * Buscador del checklist de rutas (paso "Encargado KOF") -- por nombre
      * o código de empleado, mismo criterio que `buscar_contratistas`
      * ("busca por nombre o por número de cédula", pedido explícito del
@@ -1710,6 +1758,12 @@ public interface NucleoInterface {
     fun `crearEmpresa`(`nombre`: kotlin.String): kotlin.Long
     
     /**
+     * Alta inline de empresa proveedora desde el mismo selector -- espejo
+     * de `AppCore::crear_empresa_proveedor`.
+     */
+    fun `crearEmpresaProveedor`(`nombre`: kotlin.String): kotlin.Long
+    
+    /**
      * Sólo Root/Administrador — Rust ya rechaza a un actor sin
      * `Operacion::GestionarUsuarios` con `OperacionNoAutorizada`
      * (`verificar_creacion_usuario`), y sólo Root puede crear otro Root
@@ -1725,6 +1779,14 @@ public interface NucleoInterface {
      * `UniFFI` para eso.
      */
     fun `entregarGafeteProvisional`(`encargadoId`: kotlin.Long, `gafeteNumero`: kotlin.Long): kotlin.Long
+    
+    /**
+     * Mismo criterio que `gafete_ocupado_en_sitio_con_secreto`, pero para
+     * gafetes de proveedor -- llamar justo antes de
+     * `registrar_ingreso_proveedor`. Ver
+     * `docs/features-futuras/plan-control-proveedores.md`.
+     */
+    fun `gafeteDeProveedorOcupadoEnSitioConSecreto`(`secreto`: kotlin.String, `gafeteNumero`: kotlin.Long): kotlin.Boolean
     
     /**
      * Chequeo en vivo (no la caché local) de si `gafete_numero` ya está
@@ -1786,6 +1848,11 @@ public interface NucleoInterface {
     fun `listarIngresosRemotos`(): List<IngresoRemoto>
     
     /**
+     * Sin actor -- es una lectura, mismo criterio que `listar_rutas_activas`.
+     */
+    fun `listarProveedoresActivos`(): List<RegistroIngresoProveedorActivoResumen>
+    
+    /**
      * Sin actor -- es una lectura, mismo criterio que
      * `listar_ingresos_activos`.
      */
@@ -1813,12 +1880,24 @@ public interface NucleoInterface {
     fun `registrarIngreso`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?): ResultadoRegistroEntrada
     
     /**
+     * Registra el ingreso (apertura) del ciclo de un proveedor -- espejo
+     * de `AppCore::registrar_ingreso_proveedor`.
+     */
+    fun `registrarIngresoProveedor`(`cedula`: kotlin.String, `nombre`: kotlin.String, `empresaId`: kotlin.Long, `placa`: kotlin.String?, `gafeteNumero`: kotlin.Long): kotlin.Long
+    
+    /**
      * Registra el retorno (cierre) de una salida de ruta activa --
      * espejo de `AppCore::registrar_retorno_ruta`.
      */
     fun `registrarRetornoRuta`(`salidaId`: kotlin.Long)
     
     fun `registrarSalida`(`registroId`: kotlin.Long)
+    
+    /**
+     * Registra la salida (cierre) de un ingreso de proveedor activo --
+     * espejo de `AppCore::registrar_salida_proveedor`.
+     */
+    fun `registrarSalidaProveedor`(`registroId`: kotlin.Long)
     
     /**
      * Registra la salida (apertura) del ciclo de una ruta -- espejo de
@@ -2115,6 +2194,25 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Selector con autocompletado del wizard de proveedores (Paso 2:
+     * empresa) -- espejo de `AppCore::buscar_empresas_proveedor`.
+     */
+    @Throws(NucleoException::class)override fun `buscarEmpresasProveedor`(`texto`: kotlin.String): List<EmpresaProveedor> {
+            return FfiConverterSequenceTypeEmpresaProveedor.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_buscar_empresas_proveedor(
+        it,
+        
+        FfiConverterString.lower(`texto`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Buscador del checklist de rutas (paso "Encargado KOF") -- por nombre
      * o código de empleado, mismo criterio que `buscar_contratistas`
      * ("busca por nombre o por número de cédula", pedido explícito del
@@ -2400,6 +2498,25 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Alta inline de empresa proveedora desde el mismo selector -- espejo
+     * de `AppCore::crear_empresa_proveedor`.
+     */
+    @Throws(NucleoException::class)override fun `crearEmpresaProveedor`(`nombre`: kotlin.String): kotlin.Long {
+            return FfiConverterLong.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_crear_empresa_proveedor(
+        it,
+        
+        FfiConverterString.lower(`nombre`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Sólo Root/Administrador — Rust ya rechaza a un actor sin
      * `Operacion::GestionarUsuarios` con `OperacionNoAutorizada`
      * (`verificar_creacion_usuario`), y sólo Root puede crear otro Root
@@ -2435,6 +2552,28 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         it,
         
         FfiConverterLong.lower(`encargadoId`),
+        FfiConverterLong.lower(`gafeteNumero`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Mismo criterio que `gafete_ocupado_en_sitio_con_secreto`, pero para
+     * gafetes de proveedor -- llamar justo antes de
+     * `registrar_ingreso_proveedor`. Ver
+     * `docs/features-futuras/plan-control-proveedores.md`.
+     */
+    @Throws(NucleoException::class)override fun `gafeteDeProveedorOcupadoEnSitioConSecreto`(`secreto`: kotlin.String, `gafeteNumero`: kotlin.Long): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_gafete_de_proveedor_ocupado_en_sitio_con_secreto(
+        it,
+        
+        FfiConverterString.lower(`secreto`),
         FfiConverterLong.lower(`gafeteNumero`),_status)
 }
     }
@@ -2622,6 +2761,23 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Sin actor -- es una lectura, mismo criterio que `listar_rutas_activas`.
+     */
+    @Throws(NucleoException::class)override fun `listarProveedoresActivos`(): List<RegistroIngresoProveedorActivoResumen> {
+            return FfiConverterSequenceTypeRegistroIngresoProveedorActivoResumen.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_proveedores_activos(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Sin actor -- es una lectura, mismo criterio que
      * `listar_ingresos_activos`.
      */
@@ -2714,6 +2870,29 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Registra el ingreso (apertura) del ciclo de un proveedor -- espejo
+     * de `AppCore::registrar_ingreso_proveedor`.
+     */
+    @Throws(NucleoException::class)override fun `registrarIngresoProveedor`(`cedula`: kotlin.String, `nombre`: kotlin.String, `empresaId`: kotlin.Long, `placa`: kotlin.String?, `gafeteNumero`: kotlin.Long): kotlin.Long {
+            return FfiConverterLong.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_proveedor(
+        it,
+        
+        FfiConverterString.lower(`cedula`),
+        FfiConverterString.lower(`nombre`),
+        FfiConverterLong.lower(`empresaId`),
+        FfiConverterOptionalString.lower(`placa`),
+        FfiConverterLong.lower(`gafeteNumero`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Registra el retorno (cierre) de una salida de ruta activa --
      * espejo de `AppCore::registrar_retorno_ruta`.
      */
@@ -2736,6 +2915,24 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida(
+        it,
+        
+        FfiConverterLong.lower(`registroId`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Registra la salida (cierre) de un ingreso de proveedor activo --
+     * espejo de `AppCore::registrar_salida_proveedor`.
+     */
+    @Throws(NucleoException::class)override fun `registrarSalidaProveedor`(`registroId`: kotlin.Long)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_proveedor(
         it,
         
         FfiConverterLong.lower(`registroId`),_status)
@@ -3219,6 +3416,53 @@ public object FfiConverterTypeEmpresa: FfiConverterRustBuffer<Empresa> {
     )
 
     override fun write(value: Empresa, buf: ByteBuffer) {
+            FfiConverterLong.write(value.`id`, buf)
+            FfiConverterString.write(value.`nombre`, buf)
+            FfiConverterBoolean.write(value.`activo`, buf)
+    }
+}
+
+
+
+/**
+ * Espejo de `EmpresaProveedor` -- catálogo separado de `Empresa` a
+ * propósito (`docs/features-futuras/plan-control-proveedores.md`).
+ */
+data class EmpresaProveedor (
+    var `id`: kotlin.Long
+    , 
+    var `nombre`: kotlin.String
+    , 
+    var `activo`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeEmpresaProveedor: FfiConverterRustBuffer<EmpresaProveedor> {
+    override fun read(buf: ByteBuffer): EmpresaProveedor {
+        return EmpresaProveedor(
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: EmpresaProveedor) = (
+            FfiConverterLong.allocationSize(value.`id`) +
+            FfiConverterString.allocationSize(value.`nombre`) +
+            FfiConverterBoolean.allocationSize(value.`activo`)
+    )
+
+    override fun write(value: EmpresaProveedor, buf: ByteBuffer) {
             FfiConverterLong.write(value.`id`, buf)
             FfiConverterString.write(value.`nombre`, buf)
             FfiConverterBoolean.write(value.`activo`, buf)
@@ -3758,6 +4002,73 @@ public object FfiConverterTypePrestamoGafeteProvisionalActivoResumen: FfiConvert
             FfiConverterString.write(value.`encargadoCodigoEmpleado`, buf)
             FfiConverterLong.write(value.`gafeteNumero`, buf)
             FfiConverterString.write(value.`fechaHoraEntrega`, buf)
+    }
+}
+
+
+
+/**
+ * Espejo de `RegistroIngresoProveedorActivoResumen` -- fila de "proveedores
+ * activos" (ingresos de proveedor sin salida todavía).
+ */
+data class RegistroIngresoProveedorActivoResumen (
+    var `id`: kotlin.Long
+    , 
+    var `cedula`: kotlin.String
+    , 
+    var `nombre`: kotlin.String
+    , 
+    var `empresaNombre`: kotlin.String
+    , 
+    var `placa`: kotlin.String?
+    , 
+    var `gafeteNumero`: kotlin.Long
+    , 
+    var `fechaHoraIngreso`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeRegistroIngresoProveedorActivoResumen: FfiConverterRustBuffer<RegistroIngresoProveedorActivoResumen> {
+    override fun read(buf: ByteBuffer): RegistroIngresoProveedorActivoResumen {
+        return RegistroIngresoProveedorActivoResumen(
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: RegistroIngresoProveedorActivoResumen) = (
+            FfiConverterLong.allocationSize(value.`id`) +
+            FfiConverterString.allocationSize(value.`cedula`) +
+            FfiConverterString.allocationSize(value.`nombre`) +
+            FfiConverterString.allocationSize(value.`empresaNombre`) +
+            FfiConverterOptionalString.allocationSize(value.`placa`) +
+            FfiConverterLong.allocationSize(value.`gafeteNumero`) +
+            FfiConverterString.allocationSize(value.`fechaHoraIngreso`)
+    )
+
+    override fun write(value: RegistroIngresoProveedorActivoResumen, buf: ByteBuffer) {
+            FfiConverterLong.write(value.`id`, buf)
+            FfiConverterString.write(value.`cedula`, buf)
+            FfiConverterString.write(value.`nombre`, buf)
+            FfiConverterString.write(value.`empresaNombre`, buf)
+            FfiConverterOptionalString.write(value.`placa`, buf)
+            FfiConverterLong.write(value.`gafeteNumero`, buf)
+            FfiConverterString.write(value.`fechaHoraIngreso`, buf)
     }
 }
 
@@ -5123,6 +5434,34 @@ public object FfiConverterSequenceTypeEmpresa: FfiConverterRustBuffer<List<Empre
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeEmpresaProveedor: FfiConverterRustBuffer<List<EmpresaProveedor>> {
+    override fun read(buf: ByteBuffer): List<EmpresaProveedor> {
+        val len = buf.getInt()
+        return List<EmpresaProveedor>(len) {
+            FfiConverterTypeEmpresaProveedor.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<EmpresaProveedor>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeEmpresaProveedor.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<EmpresaProveedor>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeEmpresaProveedor.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeEncargadoRuta: FfiConverterRustBuffer<List<EncargadoRuta>> {
     override fun read(buf: ByteBuffer): List<EncargadoRuta> {
         val len = buf.getInt()
@@ -5281,6 +5620,34 @@ public object FfiConverterSequenceTypePrestamoGafeteProvisionalActivoResumen: Ff
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypePrestamoGafeteProvisionalActivoResumen.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeRegistroIngresoProveedorActivoResumen: FfiConverterRustBuffer<List<RegistroIngresoProveedorActivoResumen>> {
+    override fun read(buf: ByteBuffer): List<RegistroIngresoProveedorActivoResumen> {
+        val len = buf.getInt()
+        return List<RegistroIngresoProveedorActivoResumen>(len) {
+            FfiConverterTypeRegistroIngresoProveedorActivoResumen.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<RegistroIngresoProveedorActivoResumen>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeRegistroIngresoProveedorActivoResumen.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<RegistroIngresoProveedorActivoResumen>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeRegistroIngresoProveedorActivoResumen.write(it, buf)
         }
     }
 }
