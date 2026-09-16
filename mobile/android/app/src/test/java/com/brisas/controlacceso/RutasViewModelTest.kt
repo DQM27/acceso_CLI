@@ -139,7 +139,10 @@ class RutasViewModelTest {
                 numeroRuta = 79L,
                 subNumero = 1L,
                 numeroDocumento = "700101452",
-                fechaDocumento = "2026-09-15",
+                // Debe ser "hoy" para no chocar con el bloqueo transitorio por
+                // documento vencido (`RutaServiceError::DocumentoRequiereAutorizacion`)
+                // -- una fecha fija se vence sola al día siguiente de escribirla.
+                fechaDocumento = java.time.LocalDate.now().toString(),
                 tieneCorreoAutorizacion = false,
             ),
             onExito = { onExitoLlamado = true },
