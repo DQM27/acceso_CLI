@@ -21,7 +21,7 @@ placa opcional → gafete) se opera desde el teléfono; desktop da paridad
 operativa como respaldo y administra el catálogo de empresas proveedoras.
 Este plan cubre **sólo "control de proveedores"** — "gafetes provisionales"
 es un módulo aparte, documentado en
-`plan-gafetes-provisionales-cof.md`.
+`plan-gafetes-provisionales-kof.md`.
 
 **Orden de ejecución, igual que rutas: núcleo primero, UI después.**
 

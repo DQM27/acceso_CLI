@@ -1,4 +1,4 @@
-# Módulo "Gafetes provisionales COF"
+# Módulo "Gafetes provisionales KOF"
 
 > Plan aprobado, sin ejecutar todavía — mismo criterio que otros documentos
 > de esta carpeta (`plan-control-proveedores.md`,
@@ -10,7 +10,7 @@ Problema distinto y mucho más chico que proveedores: un colaborador
 **interno** de KOF (no contratista) a veces olvida o pierde su gafete
 permanente, pero por norma no puede circular sin identificación. Como es
 personal interno, no le corresponde un gafete de contratista — existe una
-categoría física aparte, "gafete provisional COF", con su propia
+categoría física aparte, "gafete provisional KOF", con su propia
 numeración, que se le presta mientras está en el sitio y se le retira al
 salir.
 
@@ -27,7 +27,7 @@ validación.
 ## Hallazgo clave: el catálogo de personal ya existe, se reutiliza tal cual
 
 El usuario fue explícito: "ya tenemos un catálogo de nombres y números de
-empleado de los COF, reutilicemos esa tabla" — es **`encargados_ruta`**,
+empleado de los KOF, reutilicemos esa tabla" — es **`encargados_ruta`**,
 la tabla ya creada e importada (~1000+ filas) para el módulo de rutas
 (`src/database/schema.rs:2565-2572`):
 
@@ -61,7 +61,7 @@ física), el sistema nunca la captura ni la valida.
 
 ### Esquema
 
-1. **`gafetes`**: agregar `'PROVISIONAL_COF'` al `CHECK` de `tipo` (cuarto
+1. **`gafetes`**: agregar `'PROVISIONAL_KOF'` al `CHECK` de `tipo` (cuarto
    valor, junto a `CONTRATISTA`/`VISITA`/`PROVEEDOR`) y una columna
    `encargado_portador_id INTEGER REFERENCES encargados_ruta(id) ON DELETE
    RESTRICT`. Extender el `CHECK` par-exclusivo a cuatro casos (mismo
@@ -98,7 +98,7 @@ física), el sistema nunca la captura ni la valida.
 
 ### Dominio y servicios
 
-- `PortadorGafete::ProvisionalCof(i64)` (id de `encargados_ruta` — a
+- `PortadorGafete::ProvisionalKof(i64)` (id de `encargados_ruta` — a
   diferencia de `Proveedor(i64)` de `plan-control-proveedores.md`, acá sí
   es un id de catálogo real, porque la persona sí es reutilizable).
 - Nuevo `gafete_provisional_service.rs`: `entregar_gafete_provisional`,
@@ -139,7 +139,7 @@ el módulo de rutas, este módulo sólo lo consulta.
 ## Verificación
 
 - `cargo test`: el `CHECK` par-exclusivo de `gafetes` con las cuatro
-  variantes de portador (contratista/visita/proveedor/provisional-cof) es
+  variantes de portador (contratista/visita/proveedor/provisional-kof) es
   el punto más propenso a errores — cubrir explícitamente los cuatro
   casos y sus combinaciones inválidas.
 - `cargo test` en `mobile/rust-core` para los métodos nuevos.
