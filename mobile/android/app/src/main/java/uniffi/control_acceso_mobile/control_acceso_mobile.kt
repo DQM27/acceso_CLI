@@ -709,6 +709,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio_con_secreto(
@@ -716,6 +718,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_guardar_secreto_dispositivo(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_gafetes_provisionales_activos(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_historial_sitio(
     ): Int
@@ -728,6 +732,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_usuarios(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_devolucion_gafete_provisional(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso(
     ): Int
@@ -811,6 +817,8 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_usuario(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_entregar_gafete_provisional(`ptr`: Long,`encargadoId`: Long,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio(`ptr`: Long,`directorio`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -818,6 +826,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_guardar_secreto_dispositivo(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_empresas(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_gafetes_provisionales_activos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_historial_sitio(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -831,6 +841,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso(`ptr`: Long,`contratistaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_devolucion_gafete_provisional(`ptr`: Long,`prestamoId`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso(`ptr`: Long,`contratistaId`: Long,`medio`: RustBuffer.ByValue,`gafete`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_retorno_ruta(`ptr`: Long,`salidaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -1024,6 +1036,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario() != 28771) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional() != 43280) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio() != 35345) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1034,6 +1049,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas() != 65509) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_gafetes_provisionales_activos() != 59488) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_historial_sitio() != 22322) {
@@ -1052,6 +1070,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso() != 60754) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_devolucion_gafete_provisional() != 33923) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso() != 64645) {
@@ -1691,6 +1712,14 @@ public interface NucleoInterface {
     fun `crearUsuario`(`datos`: DatosUsuario): kotlin.Long
     
     /**
+     * Entrega un gafete provisional KOF -- espejo de
+     * `AppCore::entregar_gafete_provisional`. El buscador de encargado
+     * reusa `buscar_encargados_ruta` tal cual, sin nada nuevo del lado de
+     * `UniFFI` para eso.
+     */
+    fun `entregarGafeteProvisional`(`encargadoId`: kotlin.Long, `gafeteNumero`: kotlin.Long): kotlin.Long
+    
+    /**
      * Chequeo en vivo (no la caché local) de si `gafete_numero` ya está
      * activo en este sitio del lado de OTRO dispositivo -- llamar justo
      * antes de `registrar_ingreso` cuando el ingreso lleva gafete. Cada
@@ -1714,6 +1743,11 @@ public interface NucleoInterface {
     fun `guardarSecretoDispositivo`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String, `secreto`: kotlin.String)
     
     fun `listarEmpresas`(): List<Empresa>
+    
+    /**
+     * Sin actor -- es una lectura, mismo criterio que `listar_rutas_activas`.
+     */
+    fun `listarGafetesProvisionalesActivos`(): List<PrestamoGafeteProvisionalActivoResumen>
     
     fun `listarHistorialSitio`(`texto`: kotlin.String): List<MovimientoHistorialSitio>
     
@@ -1754,6 +1788,12 @@ public interface NucleoInterface {
      * (Kotlin) decide si deja continuar mirando los campos ya calculados.
      */
     fun `prepararIngreso`(`contratistaId`: kotlin.Long): PreparacionIngreso
+    
+    /**
+     * Registra la devolución de un préstamo de gafete provisional KOF --
+     * espejo de `AppCore::registrar_devolucion_gafete_provisional`.
+     */
+    fun `registrarDevolucionGafeteProvisional`(`prestamoId`: kotlin.Long)
     
     fun `registrarIngreso`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?): ResultadoRegistroEntrada
     
@@ -2367,6 +2407,28 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Entrega un gafete provisional KOF -- espejo de
+     * `AppCore::entregar_gafete_provisional`. El buscador de encargado
+     * reusa `buscar_encargados_ruta` tal cual, sin nada nuevo del lado de
+     * `UniFFI` para eso.
+     */
+    @Throws(NucleoException::class)override fun `entregarGafeteProvisional`(`encargadoId`: kotlin.Long, `gafeteNumero`: kotlin.Long): kotlin.Long {
+            return FfiConverterLong.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_entregar_gafete_provisional(
+        it,
+        
+        FfiConverterLong.lower(`encargadoId`),
+        FfiConverterLong.lower(`gafeteNumero`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Chequeo en vivo (no la caché local) de si `gafete_numero` ya está
      * activo en este sitio del lado de OTRO dispositivo -- llamar justo
      * antes de `registrar_ingreso` cuando el ingreso lleva gafete. Cada
@@ -2436,6 +2498,23 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_empresas(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Sin actor -- es una lectura, mismo criterio que `listar_rutas_activas`.
+     */
+    @Throws(NucleoException::class)override fun `listarGafetesProvisionalesActivos`(): List<PrestamoGafeteProvisionalActivoResumen> {
+            return FfiConverterSequenceTypePrestamoGafeteProvisionalActivoResumen.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_gafetes_provisionales_activos(
         it,
         _status)
 }
@@ -2559,6 +2638,24 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     }
     )
     }
+    
+
+    
+    /**
+     * Registra la devolución de un préstamo de gafete provisional KOF --
+     * espejo de `AppCore::registrar_devolucion_gafete_provisional`.
+     */
+    @Throws(NucleoException::class)override fun `registrarDevolucionGafeteProvisional`(`prestamoId`: kotlin.Long)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_devolucion_gafete_provisional(
+        it,
+        
+        FfiConverterLong.lower(`prestamoId`),_status)
+}
+    }
+    
     
 
     
@@ -3567,6 +3664,63 @@ public object FfiConverterTypePreparacionIngreso: FfiConverterRustBuffer<Prepara
             FfiConverterBoolean.write(value.`tieneIngresoActivo`, buf)
             FfiConverterOptionalString.write(value.`activoEnOtroSitio`, buf)
             FfiConverterSequenceLong.write(value.`gafetesDeuda`, buf)
+    }
+}
+
+
+
+/**
+ * Espejo de `PrestamoGafeteProvisionalActivoResumen` -- fila de "préstamos
+ * activos" (gafetes provisionales KOF entregados sin devolver todavía).
+ */
+data class PrestamoGafeteProvisionalActivoResumen (
+    var `id`: kotlin.Long
+    , 
+    var `encargadoNombre`: kotlin.String
+    , 
+    var `encargadoCodigoEmpleado`: kotlin.String
+    , 
+    var `gafeteNumero`: kotlin.Long
+    , 
+    var `fechaHoraEntrega`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePrestamoGafeteProvisionalActivoResumen: FfiConverterRustBuffer<PrestamoGafeteProvisionalActivoResumen> {
+    override fun read(buf: ByteBuffer): PrestamoGafeteProvisionalActivoResumen {
+        return PrestamoGafeteProvisionalActivoResumen(
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PrestamoGafeteProvisionalActivoResumen) = (
+            FfiConverterLong.allocationSize(value.`id`) +
+            FfiConverterString.allocationSize(value.`encargadoNombre`) +
+            FfiConverterString.allocationSize(value.`encargadoCodigoEmpleado`) +
+            FfiConverterLong.allocationSize(value.`gafeteNumero`) +
+            FfiConverterString.allocationSize(value.`fechaHoraEntrega`)
+    )
+
+    override fun write(value: PrestamoGafeteProvisionalActivoResumen, buf: ByteBuffer) {
+            FfiConverterLong.write(value.`id`, buf)
+            FfiConverterString.write(value.`encargadoNombre`, buf)
+            FfiConverterString.write(value.`encargadoCodigoEmpleado`, buf)
+            FfiConverterLong.write(value.`gafeteNumero`, buf)
+            FfiConverterString.write(value.`fechaHoraEntrega`, buf)
     }
 }
 
@@ -5062,6 +5216,34 @@ public object FfiConverterSequenceTypeMovimientoHistorialSitio: FfiConverterRust
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMovimientoHistorialSitio.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypePrestamoGafeteProvisionalActivoResumen: FfiConverterRustBuffer<List<PrestamoGafeteProvisionalActivoResumen>> {
+    override fun read(buf: ByteBuffer): List<PrestamoGafeteProvisionalActivoResumen> {
+        val len = buf.getInt()
+        return List<PrestamoGafeteProvisionalActivoResumen>(len) {
+            FfiConverterTypePrestamoGafeteProvisionalActivoResumen.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<PrestamoGafeteProvisionalActivoResumen>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypePrestamoGafeteProvisionalActivoResumen.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<PrestamoGafeteProvisionalActivoResumen>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypePrestamoGafeteProvisionalActivoResumen.write(it, buf)
         }
     }
 }

@@ -236,7 +236,7 @@ fun PantallaPrincipal(
         } else {
             var pestana by remember { mutableIntStateOf(0) }
             FilaPildoras(
-                opciones = listOf("Activos", "Rutas", "Historial"),
+                opciones = listOf("Activos", "Rutas", "Gafetes KOF", "Historial"),
                 seleccionado = pestana,
                 onSeleccionar = { pestana = it },
                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -244,6 +244,7 @@ fun PantallaPrincipal(
             when (pestana) {
                 0 -> PantallaActivos(nucleo, secretoStore, refrescarNube)
                 1 -> PantallaRutas(nucleo)
+                2 -> PantallaGafetesProvisionales(nucleo)
                 else -> PantallaHistorial(nucleo, refrescarNube)
             }
         }

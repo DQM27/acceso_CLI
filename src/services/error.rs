@@ -293,6 +293,31 @@ pub enum RutaCatalogoServiceError {
     Database(#[from] DatabaseError),
 }
 
+/// Entrega/devolución de gafetes provisionales KOF -- mucho más simple que
+/// `RutaServiceError`: sin PRAIND, sin bloqueo por documento, sin reloj
+/// cruzado entre dominios (pedido explícito del usuario: "no hay más
+/// verificación que la humana"). Ver
+/// `docs/features-futuras/plan-gafetes-provisionales-kof.md`.
+#[derive(Debug, thiserror::Error)]
+pub enum GafeteProvisionalServiceError {
+    #[error("El número de gafete debe ser mayor a cero")]
+    NumeroInvalido,
+    #[error("El encargado no existe en el catálogo")]
+    EncargadoNoEncontrado,
+    #[error("El encargado está dado de baja en el catálogo")]
+    EncargadoInactivo,
+    #[error("Este encargado ya tiene un gafete provisional prestado")]
+    EncargadoYaTienePrestamoActivo,
+    #[error("Ese número de gafete ya está prestado a otra persona")]
+    GafeteYaPrestado,
+    #[error("El préstamo no está activo")]
+    PrestamoNoActivo,
+    #[error("La sesión actual no está autorizada para realizar esta operación")]
+    OperacionNoAutorizada,
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum GafeteServiceError {
     #[error("El número de gafete debe ser mayor a cero")]

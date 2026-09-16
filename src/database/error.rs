@@ -8,6 +8,8 @@ pub enum DatabaseError {
     MovimientoVisitaNoActivo,
     #[error("No existe una salida de ruta activa con ese ID")]
     SalidaRutaNoActiva,
+    #[error("No existe un préstamo de gafete provisional activo con ese ID")]
+    PrestamoGafeteProvisionalNoActivo,
     #[error("La configuración inicial ya fue realizada")]
     ConfiguracionInicialYaRealizada,
     #[error("Usuario no encontrado")]

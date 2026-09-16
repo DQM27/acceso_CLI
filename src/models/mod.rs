@@ -5,6 +5,7 @@ pub mod encargado_ruta;
 pub mod gafete;
 pub mod medio_ingreso;
 pub mod movimiento_visita;
+pub mod prestamo_gafete_provisional;
 pub mod registro_ingreso;
 pub mod ruta;
 pub mod salida_ruta;

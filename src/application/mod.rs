@@ -20,6 +20,7 @@ mod citas;
 // sin feature gate, a diferencia de `cli/` (el loop real).
 mod catalogos;
 mod gafetes;
+mod gafetes_provisionales;
 mod historial;
 #[cfg(feature = "nube")]
 mod nube;

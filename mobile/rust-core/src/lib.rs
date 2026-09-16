@@ -33,6 +33,7 @@ use control_acceso::domain::resultado_salida_ruta::ResultadoSalidaRuta as Result
 use control_acceso::models::empresa::Empresa as EmpresaNucleo;
 use control_acceso::models::encargado_ruta::EncargadoRuta as EncargadoRutaNucleo;
 use control_acceso::models::medio_ingreso::MedioIngreso as MedioIngresoNucleo;
+use control_acceso::models::prestamo_gafete_provisional::PrestamoGafeteProvisionalActivoResumen as PrestamoGafeteProvisionalActivoResumenNucleo;
 use control_acceso::models::registro_ingreso::{
     MotivoResultadoIngreso as MotivoResultadoIngresoNucleo,
     ResultadoIngresoRegistrado as ResultadoIngresoRegistradoNucleo,
@@ -47,6 +48,7 @@ use control_acceso::services::contratista_service::DatosContratista as DatosCont
 use control_acceso::services::error::AutenticacionError as AutenticacionErrorNucleo;
 use control_acceso::services::error::ContratistaServiceError as ContratistaServiceErrorNucleo;
 use control_acceso::services::error::EmpresaServiceError as EmpresaServiceErrorNucleo;
+use control_acceso::services::error::GafeteProvisionalServiceError as GafeteProvisionalServiceErrorNucleo;
 use control_acceso::services::error::RegistroIngresoServiceError as RegistroIngresoServiceErrorNucleo;
 use control_acceso::services::error::RutaServiceError as RutaServiceErrorNucleo;
 use control_acceso::services::error::UsuarioServiceError as UsuarioServiceErrorNucleo;
@@ -781,6 +783,29 @@ impl From<SalidaRutaActivaResumenNucleo> for SalidaRutaActivaResumen {
     }
 }
 
+/// Espejo de `PrestamoGafeteProvisionalActivoResumen` -- fila de "préstamos
+/// activos" (gafetes provisionales KOF entregados sin devolver todavía).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PrestamoGafeteProvisionalActivoResumen {
+    pub id: i64,
+    pub encargado_nombre: String,
+    pub encargado_codigo_empleado: String,
+    pub gafete_numero: i64,
+    pub fecha_hora_entrega: String,
+}
+
+impl From<PrestamoGafeteProvisionalActivoResumenNucleo> for PrestamoGafeteProvisionalActivoResumen {
+    fn from(activo: PrestamoGafeteProvisionalActivoResumenNucleo) -> Self {
+        Self {
+            id: activo.id,
+            encargado_nombre: activo.encargado_nombre,
+            encargado_codigo_empleado: activo.encargado_codigo_empleado,
+            gafete_numero: activo.gafete_numero,
+            fecha_hora_entrega: activo.fecha_hora_entrega.to_rfc3339(),
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 #[uniffi(flat_error)]
 pub enum NucleoError {
@@ -921,6 +946,14 @@ impl From<UsuarioServiceErrorNucleo> for NucleoError {
 
 impl From<RutaServiceErrorNucleo> for NucleoError {
     fn from(error: RutaServiceErrorNucleo) -> Self {
+        Self::Interno {
+            mensaje: error.to_string(),
+        }
+    }
+}
+
+impl From<GafeteProvisionalServiceErrorNucleo> for NucleoError {
+    fn from(error: GafeteProvisionalServiceErrorNucleo) -> Self {
         Self::Interno {
             mensaje: error.to_string(),
         }
@@ -1424,6 +1457,42 @@ impl Nucleo {
         Ok(self
             .core_lock()
             .listar_rutas_activas()?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
+    /// Entrega un gafete provisional KOF -- espejo de
+    /// `AppCore::entregar_gafete_provisional`. El buscador de encargado
+    /// reusa `buscar_encargados_ruta` tal cual, sin nada nuevo del lado de
+    /// `UniFFI` para eso.
+    pub fn entregar_gafete_provisional(
+        &self,
+        encargado_id: i64,
+        gafete_numero: i64,
+    ) -> Result<i64, NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self
+            .core_lock()
+            .entregar_gafete_provisional(&actor, encargado_id, gafete_numero)?)
+    }
+
+    /// Registra la devolución de un préstamo de gafete provisional KOF --
+    /// espejo de `AppCore::registrar_devolucion_gafete_provisional`.
+    pub fn registrar_devolucion_gafete_provisional(&self, prestamo_id: i64) -> Result<(), NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self
+            .core_lock()
+            .registrar_devolucion_gafete_provisional(&actor, prestamo_id)?)
+    }
+
+    /// Sin actor -- es una lectura, mismo criterio que `listar_rutas_activas`.
+    pub fn listar_gafetes_provisionales_activos(
+        &self,
+    ) -> Result<Vec<PrestamoGafeteProvisionalActivoResumen>, NucleoError> {
+        Ok(self
+            .core_lock()
+            .listar_gafetes_provisionales_activos()?
             .into_iter()
             .map(Into::into)
             .collect())
@@ -3030,6 +3099,44 @@ mod tests {
         solicitud.numero_ruta = 222;
 
         let resultado = nucleo.registrar_salida_ruta(solicitud);
+
+        assert!(matches!(resultado, Err(NucleoError::Interno { .. })));
+    }
+
+    #[test]
+    fn entregar_y_devolver_gafete_provisional_redondea_el_viaje() {
+        let nucleo = nucleo_con_actor_y_ruta_79();
+        let encargado = nucleo
+            .buscar_encargados_ruta("5040017".to_string())
+            .unwrap()
+            .into_iter()
+            .next()
+            .unwrap();
+
+        let prestamo_id = nucleo
+            .entregar_gafete_provisional(encargado.id, 12)
+            .unwrap();
+
+        let activos = nucleo.listar_gafetes_provisionales_activos().unwrap();
+        assert_eq!(activos.len(), 1);
+        assert_eq!(activos[0].id, prestamo_id);
+        assert_eq!(activos[0].encargado_codigo_empleado, "5040017");
+
+        nucleo
+            .registrar_devolucion_gafete_provisional(prestamo_id)
+            .unwrap();
+
+        assert_eq!(
+            nucleo.listar_gafetes_provisionales_activos().unwrap(),
+            Vec::new()
+        );
+    }
+
+    #[test]
+    fn entregar_gafete_provisional_a_encargado_inexistente_falla() {
+        let nucleo = nucleo_con_actor_y_ruta_79();
+
+        let resultado = nucleo.entregar_gafete_provisional(999, 12);
 
         assert!(matches!(resultado, Err(NucleoError::Interno { .. })));
     }
