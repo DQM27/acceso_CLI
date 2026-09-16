@@ -27,6 +27,7 @@ import uniffi.control_acceso_mobile.PrestamoGafeteProvisionalActivoResumen
 /// `docs/features-futuras/plan-gafetes-provisionales-kof.md`.
 class GafetesProvisionalesViewModel(
     private val nucleo: Nucleo,
+    private val secretoStore: SecretoDispositivoStore,
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     var activos by mutableStateOf<List<PrestamoGafeteProvisionalActivoResumen>>(emptyList())
@@ -102,14 +103,33 @@ class GafetesProvisionalesViewModel(
         registrando = true
         viewModelScope.launch {
             try {
-                withContext(dispatcherIO) { nucleo.entregarGafeteProvisional(encargado.id, gafeteNumero) }
+                withContext(dispatcherIO) {
+                    // Chequeo en vivo: dos dispositivos del mismo sitio sólo
+                    // validan el gafete contra su propia base local, así que
+                    // sin esto ambos podían aceptar el mismo número como
+                    // activo a la vez -- mismo criterio que
+                    // `PantallaConfirmarIngreso.registrarIngreso` para
+                    // gafetes de contratista (`Nucleo.gafeteOcupadoEnSitio`).
+                    val secreto = secretoStore.cargar()
+                        ?: throw SecretoDispositivoNoEncontradoException()
+                    if (nucleo.gafeteProvisionalOcupadoEnSitioConSecreto(secreto, gafeteNumero)) {
+                        throw GafeteOcupadoEnSitioException(gafeteNumero)
+                    }
+                    nucleo.entregarGafeteProvisional(encargado.id, gafeteNumero)
+                }
                 mensaje = "Gafete entregado"
                 error = null
                 textoEncargado = ""
                 encargadoSeleccionado = null
                 refrescarActivos()
                 onExito()
+            } catch (excepcion: GafeteOcupadoEnSitioException) {
+                error = excepcion.message
             } catch (excepcion: NucleoException) {
+                error = excepcion.message
+            } catch (excepcion: SecretoDispositivoStoreException) {
+                error = excepcion.message
+            } catch (excepcion: SecretoDispositivoNoEncontradoException) {
                 error = excepcion.message
             } finally {
                 registrando = false
@@ -132,8 +152,11 @@ class GafetesProvisionalesViewModel(
         // Mismo valor que `RutasViewModel`/`ActivosViewModel`.
         private const val DEBOUNCE_MS = 300L
 
-        fun factory(nucleo: Nucleo): ViewModelProvider.Factory = viewModelFactory {
-            initializer { GafetesProvisionalesViewModel(nucleo) }
+        fun factory(
+            nucleo: Nucleo,
+            secretoStore: SecretoDispositivoStore,
+        ): ViewModelProvider.Factory = viewModelFactory {
+            initializer { GafetesProvisionalesViewModel(nucleo, secretoStore) }
         }
     }
 }

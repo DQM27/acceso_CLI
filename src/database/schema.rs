@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 39;
+pub const SCHEMA_VERSION: i64 = 40;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -291,6 +291,16 @@ fn aplicar_migraciones_posteriores_a_15(
         *version = 29;
     }
 
+    aplicar_migraciones_posteriores_a_29(connection, version)
+}
+
+/// Continuación de `aplicar_migraciones_posteriores_a_15` -- mismo motivo
+/// que esa (no pasar el límite de líneas de una sola función), separada acá
+/// en vez de en `initialize_database` porque ya era esta la que crecía.
+fn aplicar_migraciones_posteriores_a_29(
+    connection: &Connection,
+    version: &mut i64,
+) -> Result<(), SchemaError> {
     if *version == 29 {
         aplicar_migracion_30(connection)?;
         *version = 30;
@@ -339,6 +349,11 @@ fn aplicar_migraciones_posteriores_a_15(
     if *version == 38 {
         aplicar_migracion_39(connection)?;
         *version = 39;
+    }
+
+    if *version == 39 {
+        aplicar_migracion_40(connection)?;
+        *version = 40;
     }
 
     Ok(())
@@ -587,6 +602,19 @@ fn ejecutar_migracion_39(connection: &Connection) -> Result<(), SchemaError> {
     if connection.prepare("PRAGMA foreign_key_check")?.exists([])? {
         return Err(SchemaError::MigracionStrictReferenciasInvalidas);
     }
+    Ok(())
+}
+
+/// Suma `'prestamo_gafete_provisional'` al `CHECK` de `cola_salida.entidad`
+/// -- mismo patrón que `MIGRACION_30`/`36`/`38` (`SQLite` no permite
+/// `ALTER TABLE ... CHECK`, se recrea la tabla entera). Habilita el sync a
+/// la nube del módulo de gafetes provisionales KOF -- ver
+/// `docs/features-futuras/plan-gafetes-provisionales-kof.md`.
+fn aplicar_migracion_40(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_40)?;
+    transaction.execute_batch("PRAGMA user_version = 40")?;
+    transaction.commit()?;
     Ok(())
 }
 
@@ -3112,4 +3140,40 @@ WHEN
 BEGIN
     SELECT RAISE(ABORT, 'La fecha de devolucion debe estar normalizada en UTC');
 END;
+";
+
+const MIGRACION_40: &str = r"
+CREATE TABLE cola_salida_nueva (
+    id INTEGER PRIMARY KEY,
+    entidad TEXT NOT NULL CHECK (
+        entidad IN (
+            'contratista', 'ingreso', 'empresa', 'gafete', 'usuario', 'movimiento_visita',
+            'vehiculo_ruta', 'encargado_ruta', 'salida_ruta', 'ruta', 'prestamo_gafete_provisional'
+        )
+    ),
+    entidad_uuid TEXT NOT NULL,
+    operacion TEXT NOT NULL CHECK (operacion IN ('crear', 'actualizar', 'cerrar')),
+    estado TEXT NOT NULL DEFAULT 'pendiente'
+        CHECK (estado IN ('pendiente', 'enviado', 'fallido')),
+    intentos INTEGER NOT NULL DEFAULT 0 CHECK (intentos >= 0),
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    ultimo_error TEXT,
+    proximo_intento_en TEXT GENERATED ALWAYS AS (
+        datetime(actualizado_en, '+' || MIN(intentos * 15, 1440) || ' minutes')
+    ) STORED
+) STRICT;
+INSERT INTO cola_salida_nueva (
+    id, entidad, entidad_uuid, operacion, estado, intentos,
+    creado_en, actualizado_en, ultimo_error
+)
+SELECT
+    id, entidad, entidad_uuid, operacion, estado, intentos,
+    creado_en, actualizado_en, ultimo_error
+FROM cola_salida;
+DROP TABLE cola_salida;
+ALTER TABLE cola_salida_nueva RENAME TO cola_salida;
+CREATE INDEX idx_cola_salida_pendientes
+ON cola_salida(proximo_intento_en)
+WHERE estado = 'pendiente';
 ";

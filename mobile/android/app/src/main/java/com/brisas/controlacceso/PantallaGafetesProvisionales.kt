@@ -46,9 +46,9 @@ import uniffi.control_acceso_mobile.PrestamoGafeteProvisionalActivoResumen
 /// [PantallaRutas]: un solo campo bloqueante (encargado), sin OCR, sin
 /// wizard de pasos -- un formulario y una lista.
 @Composable
-fun PantallaGafetesProvisionales(nucleo: Nucleo) {
+fun PantallaGafetesProvisionales(nucleo: Nucleo, secretoStore: SecretoDispositivoStore) {
     val viewModel: GafetesProvisionalesViewModel =
-        viewModel(factory = GafetesProvisionalesViewModel.factory(nucleo))
+        viewModel(factory = GafetesProvisionalesViewModel.factory(nucleo, secretoStore))
     var gafeteTexto by remember { mutableStateOf("") }
     var prestamoParaDevolver by remember { mutableStateOf<PrestamoGafeteProvisionalActivoResumen?>(null) }
 

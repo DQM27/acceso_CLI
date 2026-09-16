@@ -715,6 +715,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio_con_secreto(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_provisional_ocupado_en_sitio_con_secreto(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_guardar_secreto_dispositivo(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas(
@@ -822,6 +824,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio(`ptr`: Long,`directorio`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_provisional_ocupado_en_sitio_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_guardar_secreto_dispositivo(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
@@ -1043,6 +1047,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio_con_secreto() != 40319) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_provisional_ocupado_en_sitio_con_secreto() != 37221) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_guardar_secreto_dispositivo() != 28439) {
@@ -1734,6 +1741,14 @@ public interface NucleoInterface {
      * Chequeo remoto usando el secreto ya descifrado por Android Keystore.
      */
     fun `gafeteOcupadoEnSitioConSecreto`(`secreto`: kotlin.String, `gafeteNumero`: kotlin.Long): kotlin.Boolean
+    
+    /**
+     * Mismo criterio que `gafete_ocupado_en_sitio_con_secreto`, pero para
+     * gafetes provisionales KOF -- llamar justo antes de
+     * `entregar_gafete_provisional`. Ver
+     * `docs/features-futuras/plan-gafetes-provisionales-kof.md`.
+     */
+    fun `gafeteProvisionalOcupadoEnSitioConSecreto`(`secreto`: kotlin.String, `gafeteNumero`: kotlin.Long): kotlin.Boolean
     
     /**
      * Guarda el secreto de este dispositivo en el archivo administrado por
@@ -2461,6 +2476,28 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio_con_secreto(
+        it,
+        
+        FfiConverterString.lower(`secreto`),
+        FfiConverterLong.lower(`gafeteNumero`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Mismo criterio que `gafete_ocupado_en_sitio_con_secreto`, pero para
+     * gafetes provisionales KOF -- llamar justo antes de
+     * `entregar_gafete_provisional`. Ver
+     * `docs/features-futuras/plan-gafetes-provisionales-kof.md`.
+     */
+    @Throws(NucleoException::class)override fun `gafeteProvisionalOcupadoEnSitioConSecreto`(`secreto`: kotlin.String, `gafeteNumero`: kotlin.Long): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_gafete_provisional_ocupado_en_sitio_con_secreto(
         it,
         
         FfiConverterString.lower(`secreto`),

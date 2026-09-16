@@ -1981,6 +1981,41 @@ impl Nucleo {
         )
     }
 
+    /// Mismo criterio que `gafete_ocupado_en_sitio_con_secreto`, pero para
+    /// gafetes provisionales KOF -- llamar justo antes de
+    /// `entregar_gafete_provisional`. Ver
+    /// `docs/features-futuras/plan-gafetes-provisionales-kof.md`.
+    pub fn gafete_provisional_ocupado_en_sitio_con_secreto(
+        &self,
+        secreto: String,
+        gafete_numero: i64,
+    ) -> Result<bool, NucleoError> {
+        if secreto.trim().is_empty() {
+            return Ok(false);
+        }
+        let actor = self.actor_autenticado()?;
+        self.core_lock().autorizar_uso_nube(&actor)?;
+        let token = self
+            .autenticar_con_cache(&secreto)
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })?;
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::BASE_URL,
+            apikey: control_acceso::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        control_acceso::nube::gafete_provisional_ocupado_en_otro_dispositivo(
+            &contexto,
+            gafete_numero,
+        )
+        .map_err(|error| NucleoError::Interno {
+            mensaje: error.to_string(),
+        })
+    }
+
     /// Chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo cruzado
     /// de ingresos abiertos entre sitios") -- mismo patrón que
     /// `gafete_ocupado_en_sitio_con_secreto`, pero de mejor esfuerzo: sin

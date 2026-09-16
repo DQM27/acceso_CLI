@@ -307,6 +307,15 @@ fn procesar_fila_individual(
             enviar_cierre_salida_ruta(cliente, connection, contexto, &fila.entidad_uuid)
         }
         ("salida_ruta", _) => enviar_salida_ruta(cliente, connection, contexto, &fila.entidad_uuid),
+        ("prestamo_gafete_provisional", "cerrar") => enviar_cierre_prestamo_gafete_provisional(
+            cliente,
+            connection,
+            contexto,
+            &fila.entidad_uuid,
+        ),
+        ("prestamo_gafete_provisional", _) => {
+            enviar_prestamo_gafete_provisional(cliente, connection, contexto, &fila.entidad_uuid)
+        }
         _ => Ok(()),
     };
 
@@ -1118,6 +1127,118 @@ fn enviar_cierre_movimiento_visita(
     exigir_2xx(respuesta)
 }
 
+/// Préstamos de gafete provisional KOF (cola, alta): mismo armazón que
+/// `enviar_movimiento_visita`. `encargado_id` local es un `INTEGER` (fila
+/// de `encargados_ruta`); lo que viaja al servidor es su `uuid` -- misma
+/// resolución que `enviar_movimiento_visita` hace con `cita_visitante_id`.
+#[allow(clippy::type_complexity)]
+fn enviar_prestamo_gafete_provisional(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let (
+        encargado_id_local,
+        encargado_nombre,
+        encargado_codigo_empleado,
+        gafete_numero,
+        fecha_hora_entrega,
+        usuario_entrega_nombre,
+    ): (i64, String, String, i64, String, String) = connection.query_row(
+        "
+        SELECT encargado_id, encargado_nombre, encargado_codigo_empleado, gafete_numero,
+               fecha_hora_entrega, usuario_entrega_nombre
+        FROM prestamos_gafete_provisional
+        WHERE uuid = ?1
+        ",
+        params![uuid],
+        |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+            ))
+        },
+    )?;
+    let encargado_uuid: String = connection.query_row(
+        "SELECT uuid FROM encargados_ruta WHERE id = ?1",
+        params![encargado_id_local],
+        |row| row.get(0),
+    )?;
+
+    let cuerpo = json!({
+        "id": uuid,
+        "sitio_id": contexto.sitio_id,
+        "dispositivo_entrega_id": contexto.dispositivo_id,
+        "encargado_id": encargado_uuid,
+        "encargado_nombre": encargado_nombre,
+        "encargado_codigo_empleado": encargado_codigo_empleado,
+        "gafete_numero": gafete_numero,
+        "hora_entrega": fecha_hora_entrega,
+        "usuario_entrega_nombre": usuario_entrega_nombre,
+    });
+
+    let respuesta = cliente
+        .post(format!(
+            "{}/rest/v1/prestamos_gafete_provisional",
+            contexto.base_url
+        ))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Préstamos de gafete provisional KOF (cola), cierre: mismo criterio de
+/// "primero en llegar gana" que `enviar_cierre_movimiento_visita` -- el
+/// filtro `hora_devolucion=is.null` hace que un cierre que llega tarde (el
+/// otro dispositivo del sitio ya lo cerró) no afecte ninguna fila en vez de
+/// fallar.
+fn enviar_cierre_prestamo_gafete_provisional(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let (fecha_hora_devolucion, usuario_devolucion_nombre): (Option<String>, Option<String>) =
+        connection.query_row(
+            "SELECT fecha_hora_devolucion, usuario_devolucion_nombre
+             FROM prestamos_gafete_provisional WHERE uuid = ?1",
+            params![uuid],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+
+    let cuerpo = json!({
+        "hora_devolucion": fecha_hora_devolucion,
+        "dispositivo_devolucion_id": contexto.dispositivo_id,
+        "usuario_devolucion_nombre": usuario_devolucion_nombre,
+    });
+
+    let url = format!(
+        "{}/rest/v1/prestamos_gafete_provisional?id=eq.{uuid}&hora_devolucion=is.null",
+        contexto.base_url
+    );
+
+    let respuesta = cliente
+        .patch(url)
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
 /// Catálogo de números de ruta (`docs/planes-implementados/plan-control-rutas.md`,
 /// pedido explícito del usuario, 2026-09-15) -- a diferencia de
 /// vehículos/encargados (globales, `upsert` por clave natural sin
@@ -1666,52 +1787,82 @@ pub fn usuario_sigue_activo_remoto(
     Ok(filas.first().is_none_or(|fila| fila.activo))
 }
 
-/// Consulta en vivo -- no la caché local `ingresos_remotos` (que sólo se
-/// refresca en cada sync y podría estar desactualizada por minutos) -- si
-/// `numero` ya tiene un ingreso abierto en este sitio, creado por *otro*
-/// dispositivo. Pensada para llamarse justo antes de confirmar un ingreso
-/// nuevo con gafete: dos dispositivos del mismo sitio comparten el mismo
-/// rango de gafetes físicos, pero cada uno valida contra su propia base
-/// `SQLite` (`idx_registro_ingresos_gafete_activo`), que nunca ve lo que
-/// hizo el otro hasta sincronizar -- de ahí que ambos pudieran aceptar el
-/// mismo número como activo a la vez. No reserva nada del lado del
-/// receptor: sigue existiendo una ventana muy angosta entre esta consulta
-/// y que el ingreso realmente se drene a la cola de salida (ver
-/// `drenar_cola`), pero cierra el caso normal (no perfectamente
-/// simultáneo) que sí se pudo reproducir.
-pub fn gafete_ocupado_en_otro_dispositivo(
+/// Consulta en vivo -- no una caché local que sólo se refresca en cada sync
+/// y podría estar desactualizada por minutos -- si `numero` ya está activo
+/// en este sitio del lado de *otro* dispositivo, para cualquier tabla que
+/// siga el mismo molde (un gafete numerado + una columna que marca cierre +
+/// una columna de dispositivo de apertura). Todas las variantes de
+/// "gafete ocupado" (contratista, visita, provisional KOF) comparten esta
+/// misma regla de negocio -- mismo sitio, no se puede entregar dos veces,
+/// hay que vigilar que un dispositivo no dé un gafete que otro ya asignó --
+/// así que comparten esta única consulta parametrizada por tabla/columnas
+/// en vez de tres copias casi idénticas. Pensada para llamarse justo antes
+/// de confirmar la apertura de un ciclo con gafete: cada dispositivo sólo
+/// valida contra su propia base `SQLite`, que nunca ve lo que hizo otro
+/// hasta sincronizar -- de ahí que dos pudieran aceptar el mismo número
+/// como activo a la vez. No reserva nada del lado del receptor: sigue
+/// existiendo una ventana muy angosta entre esta consulta y que la
+/// apertura realmente se drene a la cola de salida (ver `drenar_cola`),
+/// pero cierra el caso normal (no perfectamente simultáneo) que sí se pudo
+/// reproducir.
+fn gafete_ocupado_en_otro_dispositivo_en(
     contexto: &ContextoSincronizacion<'_>,
+    tabla: &str,
+    columna_dispositivo_apertura: &str,
+    columna_cierre: &str,
     numero: i64,
 ) -> Result<bool, SincronizacionError> {
     let cliente = cliente_http();
     let url = format!(
-        "{}/rest/v1/ingresos?sitio_id=eq.{}&dispositivo_entrada_id=neq.{}&hora_salida=is.null\
-         &gafete_numero=eq.{numero}&select=id&limit=1",
+        "{}/rest/v1/{tabla}?sitio_id=eq.{}&{columna_dispositivo_apertura}=neq.{}\
+         &{columna_cierre}=is.null&gafete_numero=eq.{numero}&select=id&limit=1",
         contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
     );
     let filas: Vec<FilaGafeteOcupado> = obtener_json(&cliente, contexto, &url)?;
     Ok(!filas.is_empty())
 }
 
-/// Mismo criterio y misma forma que `gafete_ocupado_en_otro_dispositivo`,
-/// pero contra `movimientos_visita`: dos dispositivos del mismo sitio
-/// comparten el mismo rango de gafetes físicos de visita, y cada uno sólo
-/// valida contra su propia base `SQLite`
-/// (`idx_movimientos_visita_gafete_activo`), que nunca ve lo que hizo el
-/// otro hasta sincronizar. Pensada para llamarse justo antes de confirmar
-/// una entrada de visita con gafete.
+/// Variante contra `ingresos` (gafetes de contratista).
+pub fn gafete_ocupado_en_otro_dispositivo(
+    contexto: &ContextoSincronizacion<'_>,
+    numero: i64,
+) -> Result<bool, SincronizacionError> {
+    gafete_ocupado_en_otro_dispositivo_en(
+        contexto,
+        "ingresos",
+        "dispositivo_entrada_id",
+        "hora_salida",
+        numero,
+    )
+}
+
+/// Variante contra `movimientos_visita` (gafetes de visita).
 pub fn gafete_de_visita_ocupado_en_otro_dispositivo(
     contexto: &ContextoSincronizacion<'_>,
     numero: i64,
 ) -> Result<bool, SincronizacionError> {
-    let cliente = cliente_http();
-    let url = format!(
-        "{}/rest/v1/movimientos_visita?sitio_id=eq.{}&dispositivo_entrada_id=neq.{}\
-         &hora_salida=is.null&gafete_numero=eq.{numero}&select=id&limit=1",
-        contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
-    );
-    let filas: Vec<FilaGafeteOcupado> = obtener_json(&cliente, contexto, &url)?;
-    Ok(!filas.is_empty())
+    gafete_ocupado_en_otro_dispositivo_en(
+        contexto,
+        "movimientos_visita",
+        "dispositivo_entrada_id",
+        "hora_salida",
+        numero,
+    )
+}
+
+/// Variante contra `prestamos_gafete_provisional` (gafetes provisionales
+/// KOF) -- ver `docs/features-futuras/plan-gafetes-provisionales-kof.md`.
+pub fn gafete_provisional_ocupado_en_otro_dispositivo(
+    contexto: &ContextoSincronizacion<'_>,
+    numero: i64,
+) -> Result<bool, SincronizacionError> {
+    gafete_ocupado_en_otro_dispositivo_en(
+        contexto,
+        "prestamos_gafete_provisional",
+        "dispositivo_entrega_id",
+        "hora_devolucion",
+        numero,
+    )
 }
 
 #[derive(serde::Deserialize)]
@@ -5013,6 +5164,56 @@ mod tests {
 
         let ocupado =
             gafete_de_visita_ocupado_en_otro_dispositivo(&contexto(&base_url), 9).unwrap();
+
+        assert!(!ocupado);
+    }
+
+    #[test]
+    fn gafete_provisional_ocupado_en_otro_dispositivo_consulta_la_tabla_y_columnas_correctas() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.contains("GET /rest/v1/prestamos_gafete_provisional?"));
+            assert!(pedido.contains("sitio_id=eq.sitio-1"));
+            assert!(pedido.contains("dispositivo_entrega_id=neq.dispositivo-1"));
+            assert!(pedido.contains("hora_devolucion=is.null"));
+            assert!(pedido.contains("gafete_numero=eq.12"));
+            let cuerpo = "[{\"id\":\"uuid-prestamo\"}]";
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        let ocupado =
+            gafete_provisional_ocupado_en_otro_dispositivo(&contexto(&base_url), 12).unwrap();
+
+        assert!(ocupado);
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn gafete_provisional_ocupado_en_otro_dispositivo_sin_conflicto_devuelve_false() {
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let ocupado =
+            gafete_provisional_ocupado_en_otro_dispositivo(&contexto(&base_url), 12).unwrap();
 
         assert!(!ocupado);
     }

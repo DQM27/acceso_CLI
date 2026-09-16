@@ -149,6 +149,7 @@ export default function Gafetes() {
                     <option value="">Todos los tipos</option>
                     <option value="contratista">Contratista</option>
                     <option value="visita">Visita</option>
+                    <option value="provisional_kof">Provisional KOF</option>
                   </select>
                 </div>
               </>

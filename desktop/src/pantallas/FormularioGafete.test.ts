@@ -49,4 +49,16 @@ describe("esquema de FormularioGafete", () => {
         .success,
     ).toBe(false);
   });
+
+  it("tipo provisional_kof pasa", () => {
+    expect(
+      esquema.safeParse({
+        modo: "individual",
+        tipo: "provisional_kof",
+        numero: "12",
+        desde: "",
+        hasta: "",
+      }).success,
+    ).toBe(true);
+  });
 });

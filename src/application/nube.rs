@@ -572,6 +572,39 @@ impl AppCore {
         )?)
     }
 
+    /// Mismo criterio y misma forma que `gafete_ocupado_en_sitio`, pero
+    /// para gafetes provisionales KOF -- ver
+    /// `nube::gafete_provisional_ocupado_en_otro_dispositivo`. Pensada para
+    /// llamarse justo antes de confirmar la entrega de un gafete
+    /// provisional.
+    pub fn gafete_provisional_ocupado_en_sitio(
+        &self,
+        actor: &UsuarioSesion,
+        directorio: Option<&Path>,
+        gafete_numero: i64,
+    ) -> Result<bool, GestionNubeError> {
+        self.autorizar_uso_nube(actor)?;
+        let secreto = directorio.map_or_else(
+            crate::nube::credenciales::cargar_secreto,
+            crate::nube::credenciales::cargar_secreto_en,
+        );
+        let Some(secreto) = secreto else {
+            return Ok(false);
+        };
+        let token = self.autenticar_con_cache(&secreto)?;
+        let contexto = crate::nube::ContextoSincronizacion {
+            base_url: crate::nube::BASE_URL,
+            apikey: crate::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        Ok(crate::nube::gafete_provisional_ocupado_en_otro_dispositivo(
+            &contexto,
+            gafete_numero,
+        )?)
+    }
+
     /// Cierra, contra la nube, un ingreso abierto por el otro dispositivo
     /// del mismo sitio -- ver `nube::cerrar_ingreso_remoto`.
     pub fn cerrar_ingreso_remoto(

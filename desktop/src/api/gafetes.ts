@@ -8,7 +8,7 @@ export type EstadoGafete = "Disponible" | "Perdido" | "DeBaja";
  * Sin "Proveedor" todavía del lado de entrada: el backend ya acepta ese
  * valor en el CHECK de la base a futuro, pero no hay comando de alta para
  * esa categoría hasta que exista la entidad `proveedor`. */
-export type TipoGafete = "Contratista" | "Visita";
+export type TipoGafete = "Contratista" | "Visita" | "ProvisionalKof";
 
 export type MotivoResolucionGafete = "Pagado" | "Aparecido";
 
@@ -26,7 +26,13 @@ export interface GafeteResumen {
 
 /** A quién se le asignó este gafete la última vez, sea cual sea su tipo —
  * a lo sumo uno de los dos campos de `GafeteResumen`/`IncidenteGafete`
- * tiene valor, nunca los dos. */
+ * tiene valor, nunca los dos.
+ *
+ * Nota: `ProvisionalKof` todavía no trae portador acá -- su ciclo es
+ * entrega/devolución (`prestamos_gafete_provisional`), no
+ * marcar-perdido/resolver, y la consulta de este catálogo (`buscar_gafetes`,
+ * `src/database/queries/gafetes.rs`) todavía no hace `JOIN` contra
+ * `encargados_ruta` para traer ese nombre. */
 export function nombrePortador(
   fila: Pick<GafeteResumen, "contratista_portador_nombre" | "visita_portador_nombre">,
 ): string | null {
@@ -36,7 +42,7 @@ export function nombrePortador(
 // snake_case a propósito — espejo exacto de `TipoGafeteEntrada` (Rust,
 // `#[serde(rename_all = "snake_case")]`). Sin "proveedor" -- mismo motivo
 // que `TipoGafete` arriba.
-export type TipoGafeteEntrada = "contratista" | "visita";
+export type TipoGafeteEntrada = "contratista" | "visita" | "provisional_kof";
 
 export interface FiltroGafetes {
   numero?: number;

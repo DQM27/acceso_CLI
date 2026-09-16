@@ -3,15 +3,15 @@
 //! entrega/devolución, mismo armazón que `MovimientoVisitaRepository` pero
 //! sin ningún campo de resultado/validación: pedido explícito del usuario,
 //! no hay más verificación que la humana (cotejar la cédula física contra
-//! el nombre, algo que este sistema no captura ni valida).
-//!
-//! Sin `cola_salida::encolar` a propósito -- `'prestamo_gafete_provisional'`
-//! no está en el `CHECK` de `cola_salida.entidad` todavía (ver el comentario
-//! de `MIGRACION_39`): este primer corte es sólo local, sin sync a la nube.
+//! el nombre, algo que este sistema no captura ni valida). Sincroniza a la
+//! nube igual que `movimiento_visita` -- ciclo abrir/cerrar, `cola_salida`
+//! con `'prestamo_gafete_provisional'` (`MIGRACION_40`), nunca por lote (ver
+//! `nube::sincronizacion::procesar_fila_individual`).
 
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, Row, named_params, params};
 
+use crate::database::cola_salida;
 use crate::database::error::DatabaseError;
 use crate::database::identificador::generar_uuid_v4;
 use crate::models::prestamo_gafete_provisional::{
@@ -140,7 +140,12 @@ impl PrestamoGafeteProvisionalRepository for SqlitePrestamoGafeteProvisionalRepo
             return Err(DatabaseError::Sqlite(rusqlite::Error::QueryReturnedNoRows));
         }
 
-        Ok(self.connection.last_insert_rowid())
+        // Capturado antes de encolar: `last_insert_rowid()` refleja el
+        // último INSERT de la conexión, y encolar hace el suyo propio.
+        let id = self.connection.last_insert_rowid();
+        cola_salida::encolar(self.connection, "prestamo_gafete_provisional", &uuid, "crear")?;
+
+        Ok(id)
     }
 
     fn buscar_por_id(&self, id: i64) -> Result<Option<PrestamoGafeteProvisional>, DatabaseError> {
@@ -208,6 +213,13 @@ impl PrestamoGafeteProvisionalRepository for SqlitePrestamoGafeteProvisionalRepo
         if filas_afectadas == 0 {
             return Err(DatabaseError::PrestamoGafeteProvisionalNoActivo);
         }
+
+        let uuid: String = self.connection.query_row(
+            "SELECT uuid FROM prestamos_gafete_provisional WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        )?;
+        cola_salida::encolar(self.connection, "prestamo_gafete_provisional", &uuid, "cerrar")?;
 
         Ok(())
     }
