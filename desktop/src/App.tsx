@@ -408,6 +408,13 @@ function Shell({
         `${conflicto.visitante_nombre} tiene una visita activa acá Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
       );
     }
+    // Mismo criterio que `conflictos_ingreso`, pero para proveedores (ver
+    // `nube::proveedores_con_conflicto_activo`).
+    for (const conflicto of resumen.conflictos_ingreso_proveedor) {
+      toast.warning(
+        `${conflicto.nombre} tiene un ingreso de proveedor activo acá Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
+      );
+    }
     return false;
   }
 

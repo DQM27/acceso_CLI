@@ -52,6 +52,36 @@ fn gafete_proveedor_libre_en_otro_dispositivo(
     Ok(!ocupado)
 }
 
+/// Chequeo cruzado entre sitios -- misma cédula no puede estar activa
+/// físicamente en dos sitios a la vez. Mismo criterio y misma forma que
+/// `comandos::ingresos::chequear_activo_en_otro_sitio` (contratista):
+/// best-effort de verdad -- sin secreto guardado, o si la consulta falla
+/// por cualquier motivo (sin red, timeout, receptor caído), `None` y no
+/// bloquea nada; el registro sigue local y el conflicto, si existe, se
+/// detecta después al sincronizar (`nube::proveedores_con_conflicto_activo`).
+/// A diferencia del chequeo de gafete de arriba, acá un fallo de red NUNCA
+/// se propaga como error -- es la diferencia deliberada entre "un recurso
+/// físico compartido no puede duplicarse" (gafete, si falla la consulta
+/// mejor frenar) y "esta alerta es una ayuda, no motivo para trabar a
+/// alguien parado en la puerta sin señal".
+fn proveedor_activo_en_otro_sitio(state: &GuiState, cedula: &str) -> Option<String> {
+    let secreto = nube::credenciales::cargar_secreto()?;
+    let token = state.autenticar_con_cache(&secreto).ok()?;
+    if let Some(desfase_ms) = token.desfase_reloj_ms {
+        state.core().actualizar_desfase_reloj(desfase_ms);
+    }
+    let contexto = nube::ContextoSincronizacion {
+        base_url: nube::BASE_URL,
+        apikey: nube::APIKEY,
+        token: &token.access_token,
+        dispositivo_id: &token.dispositivo_id,
+        sitio_id: &token.sitio_id,
+    };
+    nube::proveedor_activo_en_otro_sitio(&contexto, cedula)
+        .ok()
+        .flatten()
+}
+
 // ---- Catálogo: empresas proveedoras ----
 
 #[tauri::command]
@@ -114,6 +144,11 @@ pub fn registrar_ingreso_proveedor(
 ) -> Result<i64, String> {
     let sesion = state.sesion_activa()?;
     let datos = solicitud.construir();
+    if let Some(sitio) = proveedor_activo_en_otro_sitio(&state, &datos.cedula) {
+        return Err(format!(
+            "Esta cédula ya tiene un ingreso de proveedor activo en {sitio}"
+        ));
+    }
     if !gafete_proveedor_libre_en_otro_dispositivo(&state, datos.gafete_numero)? {
         return Err(format!(
             "El gafete {} ya está en uso en otro dispositivo del sitio",

@@ -67,6 +67,9 @@ pub struct ResumenSincronizacion {
     /// quedó activo en este dispositivo mientras estaba offline y que
     /// también terminó activo en otro sitio.
     pub conflictos_movimiento_visita: Vec<nube::ConflictoMovimientoVisitaActivo>,
+    /// Mismo criterio que `conflictos_ingreso`, pero para ingresos de
+    /// proveedor (`nube::proveedores_con_conflicto_activo`).
+    pub conflictos_ingreso_proveedor: Vec<nube::ConflictoIngresoProveedorActivo>,
 }
 
 /// Datos temporales para que el frontend abra un canal Realtime privado.
@@ -241,6 +244,8 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
         nube::contratistas_con_conflicto_activo(&conexion, &contexto).unwrap_or_default();
     let conflictos_movimiento_visita =
         nube::visitantes_con_conflicto_activo(&conexion, &contexto).unwrap_or_default();
+    let conflictos_ingreso_proveedor =
+        nube::proveedores_con_conflicto_activo(&conexion, &contexto).unwrap_or_default();
 
     // Si a quien disparó esto lo desactivaron en otro dispositivo, el
     // catálogo recién recibido ya lo refleja -- lo saca de la sesión acá
@@ -274,6 +279,7 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
         sesion_expulsada,
         conflictos_ingreso,
         conflictos_movimiento_visita,
+        conflictos_ingreso_proveedor,
     })
 }
 
@@ -318,6 +324,7 @@ pub async fn configurar_dispositivo_inicial(
             // otro sitio en este momento.
             conflictos_ingreso: Vec::new(),
             conflictos_movimiento_visita: Vec::new(),
+            conflictos_ingreso_proveedor: Vec::new(),
         })
     })
     .await

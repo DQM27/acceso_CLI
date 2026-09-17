@@ -40,6 +40,10 @@ export interface ResumenSincronizacion {
    * visita -- un visitante que quedó activo en este dispositivo pero que
    * la nube dice que también está activo en otro sitio. */
   conflictos_movimiento_visita: ConflictoMovimientoVisitaActivo[];
+  /** Mismo criterio que `conflictos_ingreso`, pero para ingresos de
+   * proveedor -- una cédula que quedó activa en este dispositivo pero que
+   * la nube dice que también está activa en otro sitio. */
+  conflictos_ingreso_proveedor: ConflictoIngresoProveedorActivo[];
 }
 
 export interface ConflictoIngresoActivo {
@@ -51,6 +55,12 @@ export interface ConflictoIngresoActivo {
 export interface ConflictoMovimientoVisitaActivo {
   cedula: string;
   visitante_nombre: string;
+  sitio_conflicto: string;
+}
+
+export interface ConflictoIngresoProveedorActivo {
+  cedula: string;
+  nombre: string;
   sitio_conflicto: string;
 }
 

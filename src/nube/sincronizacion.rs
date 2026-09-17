@@ -2375,6 +2375,92 @@ pub fn visitantes_con_conflicto_activo(
         .collect())
 }
 
+/// Espejo de [`contratista_activo_en_otro_sitio`]/[`visitante_activo_en_otro_sitio`],
+/// pero contra `ingresos_proveedor` -- misma cédula, no puede estar activa
+/// físicamente en dos sitios a la vez.
+pub fn proveedor_activo_en_otro_sitio(
+    contexto: &ContextoSincronizacion<'_>,
+    cedula: &str,
+) -> Result<Option<String>, SincronizacionError> {
+    let cliente = cliente_http();
+    let url = format!(
+        "{}/rest/v1/ingresos_proveedor?cedula=eq.{cedula}&sitio_id=neq.{}\
+         &hora_salida=is.null&select=sitios(nombre)&limit=1",
+        contexto.base_url, contexto.sitio_id,
+    );
+    let filas: Vec<FilaIngresoActivoOtroSitio> = obtener_json(&cliente, contexto, &url)?;
+    Ok(filas
+        .into_iter()
+        .next()
+        .and_then(|fila| fila.sitios)
+        .map(|sitio| sitio.nombre))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct ConflictoIngresoProveedorActivo {
+    pub cedula: String,
+    pub nombre: String,
+    /// Sitio donde ESTE mismo dispositivo también lo tiene activo ahora
+    /// mismo -- no necesariamente el único conflicto que existe.
+    pub sitio_conflicto: String,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaConflictoProveedorActivo {
+    cedula: Option<String>,
+    sitios: Option<SitioEmbebido>,
+}
+
+/// Espejo de [`contratistas_con_conflicto_activo`]/[`visitantes_con_conflicto_activo`],
+/// pero contra `ingresos_proveedor`.
+pub fn proveedores_con_conflicto_activo(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<Vec<ConflictoIngresoProveedorActivo>, SincronizacionError> {
+    let mut statement = connection.prepare(
+        "SELECT cedula, nombre FROM registro_ingresos_proveedor
+         WHERE fecha_hora_salida IS NULL",
+    )?;
+    let activos_locales: Vec<(String, String)> = statement
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<Result<_, _>>()?;
+    drop(statement);
+    if activos_locales.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let cedulas = activos_locales
+        .iter()
+        .map(|(cedula, _)| cedula.as_str())
+        .collect::<Vec<_>>()
+        .join(",");
+    let cliente = cliente_http();
+    let url = format!(
+        "{}/rest/v1/ingresos_proveedor?cedula=in.({cedulas})&sitio_id=neq.{}\
+         &hora_salida=is.null&select=cedula,sitios(nombre)",
+        contexto.base_url, contexto.sitio_id,
+    );
+    let filas: Vec<FilaConflictoProveedorActivo> = obtener_json(&cliente, contexto, &url)?;
+
+    Ok(filas
+        .into_iter()
+        .filter_map(|fila| {
+            let cedula = fila.cedula?;
+            let sitio = fila.sitios?.nombre;
+            let nombre = activos_locales
+                .iter()
+                .find(|(c, _)| *c == cedula)
+                .map(|(_, nombre)| nombre.clone())?;
+            Some(ConflictoIngresoProveedorActivo {
+                cedula,
+                nombre,
+                sitio_conflicto: sitio,
+            })
+        })
+        .collect())
+}
+
 #[derive(serde::Deserialize)]
 struct DispositivoEmbebido {
     tipo: Option<String>,
@@ -5906,6 +5992,107 @@ mod tests {
         initialize_database(&connection).unwrap();
         let conflictos =
             visitantes_con_conflicto_activo(&connection, &contexto("http://127.0.0.1:1")).unwrap();
+
+        assert_eq!(conflictos, Vec::new());
+    }
+
+    #[test]
+    fn proveedor_activo_en_otro_sitio_excluye_el_sitio_actual_en_la_url() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.contains("cedula=eq.1-2345"));
+            assert!(pedido.contains("sitio_id=neq.sitio-1"));
+            assert!(pedido.contains("hora_salida=is.null"));
+            let cuerpo = "[{\"sitios\":{\"nombre\":\"Cartago\"}}]";
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        let sitio = proveedor_activo_en_otro_sitio(&contexto(&base_url), "1-2345").unwrap();
+
+        assert_eq!(sitio, Some("Cartago".to_string()));
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn proveedor_activo_en_otro_sitio_sin_conflicto_devuelve_none() {
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let sitio = proveedor_activo_en_otro_sitio(&contexto(&base_url), "1-2345").unwrap();
+
+        assert_eq!(sitio, None);
+    }
+
+    fn conexion_con_un_ingreso_proveedor_activo() -> Connection {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute_batch(
+                "
+                INSERT INTO usuarios (id, cedula, nombre, password_hash, rol, activo)
+                VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1);
+                INSERT INTO empresas_proveedor (id, nombre, activo, uuid)
+                VALUES (1, 'Maika', 1, 'uuid-empresa-proveedor');
+                INSERT INTO registro_ingresos_proveedor (
+                    id, cedula, nombre, empresa_id, empresa_nombre, gafete_numero,
+                    fecha_hora_ingreso, usuario_ingreso_id, usuario_ingreso_nombre, uuid
+                ) VALUES (
+                    1, '1-2345', 'Juan Perez', 1, 'Maika', 9,
+                    '2026-08-01T08:00:00Z', 1, 'Operador', 'uuid-ingreso-proveedor'
+                );
+                ",
+            )
+            .unwrap();
+        connection
+    }
+
+    #[test]
+    fn proveedores_con_conflicto_activo_solo_incluye_a_quien_de_verdad_choca() {
+        let connection = conexion_con_un_ingreso_proveedor_activo();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"cedula\":\"1-2345\",\"sitios\":{\"nombre\":\"Cartago\"}}]",
+        );
+
+        let conflictos =
+            proveedores_con_conflicto_activo(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(
+            conflictos,
+            vec![ConflictoIngresoProveedorActivo {
+                cedula: "1-2345".to_string(),
+                nombre: "Juan Perez".to_string(),
+                sitio_conflicto: "Cartago".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn proveedores_con_conflicto_activo_sin_nada_local_no_llama_a_la_nube() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let conflictos =
+            proveedores_con_conflicto_activo(&connection, &contexto("http://127.0.0.1:1"))
+                .unwrap();
 
         assert_eq!(conflictos, Vec::new());
     }
