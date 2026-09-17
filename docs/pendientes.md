@@ -457,6 +457,20 @@ estabilizador y clasificador.
 
 ## Escritorio, Tauri y empaquetado
 
+- [ ] **Marcar perdido/resolver no existe todavía para gafetes de Proveedor
+  (hallazgo 2026-09-17).** `GafeteServiceError`/`AppCore` sólo exponen
+  `marcar_gafete_perdido_contratista`/`marcar_gafete_perdido_visita` -- no
+  hay `marcar_gafete_perdido_proveedor`. Si un gafete tipo Proveedor se
+  pierde hoy, no hay forma de registrarlo desde ninguna interfaz (el
+  `CHECK` par-exclusivo de `gafetes` en `schema.rs` ya soporta el caso,
+  `proveedor_portador_id` incluido -- ver `src/database/queries/gafetes.rs`,
+  que ya trae ese nombre para la columna "Asignado a" desde este mismo
+  commit). Falta: método en `AppCore` (mismo molde que
+  `marcar_gafete_perdido_visita`, eligiendo un `registro_ingresos_proveedor`
+  activo como portador en vez de una cita/contratista), comando Tauri, y
+  UI en `GestionGafeteModal.tsx` para elegir el ingreso de proveedor
+  (buscar por cédula/nombre, no hay catálogo de personas para autocompletar
+  -- mismo criterio que el resto de "control de proveedores").
 - [ ] **Verificar actualización con otra instancia abierta.** El riesgo quizá no aplica
   por cómo `relaunch()` reinicia el proceso, pero falta una prueba real.
 - [x] **Instalador único que incluya CLI y GUI omitido para v1.** Lujo fuera del alcance;
