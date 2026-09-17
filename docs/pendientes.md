@@ -129,6 +129,24 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   No es una tarea chica: migración + función SQL + wiring de Realtime +
   cambios en Rust core (nube:: nuevo + extender el chequeo de
   "sigue activo") + desktop + mobile. Retomar en una pasada dedicada.
+- [ ] **Auditoría (`auditoria_cambios`/`gafetes_incidentes`) no se sincroniza
+  entre dispositivos (hallazgo 2026-09-17, sin implementar).** Hoy las dos
+  tablas son puramente locales -- no aparecen en `src/nube/sincronizacion.rs`
+  ni tienen espejo en `supabase/migrations/` (`gafetes_incidentes` lo dice
+  explícito en el propio código, `src/nube/sincronizacion.rs:716-719`: sólo
+  el estado ACTUAL de un gafete viaja, no su historial de incidentes). Cada
+  PC/dispositivo de un mismo sitio tiene su propio registro de auditoría,
+  sin vista consolidada. No es un bug -- fue así desde que se implementó --
+  pero conviene revisar si conviene centralizarlo el día que un sitio real
+  opere con más de un dispositivo y alguien necesite ver "quién cambió qué"
+  sin pararse frente a cada PC. Diseño no arrancado: probablemente tabla
+  espejo + `cola_salida` sumando `'auditoria_cambio'`/`'incidente_gafete'`
+  a su `CHECK`, mismo patrón que `movimiento_visita`/`ruta` (ver
+  `src/database/schema.rs`, comentarios "Suma ... al CHECK de
+  `cola_salida.entidad`"). Ojo con el volumen -- a diferencia de
+  contratistas/gafetes (catálogos chicos), auditoría crece sin techo, más
+  parecido a `historial` (que sí tiene lógica de carga incremental/límite,
+  ver `Historial.tsx`/`Auditoria.tsx` con su banner de "truncado").
 - [ ] **Revisar bucket público `historial-web`.** Está documentado como público, vacío y
   sin referencias en código. Confirmar si es vestigio; si no se usa, eliminarlo desde
   Supabase.
