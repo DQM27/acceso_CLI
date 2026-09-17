@@ -1,6 +1,7 @@
 package com.brisas.controlacceso
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -235,18 +236,28 @@ fun PantallaPrincipal(
             PantallaNuevoContratista(nucleo, onVolver = { mostrarNuevoContratista = false })
         } else {
             var pestana by remember { mutableIntStateOf(0) }
+            // "Historial" se sacó de acá por espacio (pestañas apiñadas) --
+            // la pantalla y su ViewModel siguen intactos, pendiente decidir
+            // si se reasigna a otro lado o se quita del todo (2026-09-17).
             FilaPildoras(
-                opciones = listOf("Activos", "Rutas", "Historial", "Gafetes KOF", "Proveedores"),
+                opciones = listOf("Activos", "Rutas", "Gafetes KOF", "Proveedores"),
                 seleccionado = pestana,
                 onSeleccionar = { pestana = it },
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
-            when (pestana) {
-                0 -> PantallaActivos(nucleo, secretoStore, refrescarNube)
-                1 -> PantallaRutas(nucleo)
-                2 -> PantallaHistorial(nucleo, refrescarNube)
-                3 -> PantallaGafetesProvisionales(nucleo, secretoStore)
-                else -> PantallaProveedores(nucleo, secretoStore)
+            // `Box`, no `Column` -- un `Column` sin peso mide a sus hijos con
+            // altura MÁXIMA infinita (así reserva espacio a los que sí tienen
+            // `weight`), y un `LazyColumn` (como el de `PantallaActivos`)
+            // revienta con `IllegalStateException` si lo miden así. `Box` en
+            // cambio le pasa a su único hijo las restricciones ya acotadas
+            // que le tocaron acá (el resto de la pantalla, vía `weight(1f)`).
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                when (pestana) {
+                    0 -> PantallaActivos(nucleo, secretoStore, refrescarNube)
+                    1 -> PantallaRutas(nucleo)
+                    2 -> PantallaGafetesProvisionales(nucleo, secretoStore)
+                    else -> PantallaProveedores(nucleo, secretoStore)
+                }
             }
         }
     }
