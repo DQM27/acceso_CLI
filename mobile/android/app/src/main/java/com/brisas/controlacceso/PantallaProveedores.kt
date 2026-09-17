@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -633,6 +634,12 @@ private fun FilaProveedorActivoRemota(remoto: IngresoProveedorRemoto, onConfirma
     }
 }
 
+/// Mismo layout e información que `DialogoConfirmarSalida` de
+/// PantallaActivos.kt (contratista) -- ícono circular, título "Registrar
+/// salida", y nombre · cédula · empresa (o "registrado en otro dispositivo"
+/// para una fila remota) en vez de sólo "Gafete N · nombre". Pedido
+/// explícito del usuario en pruebas reales, 2026-09-17: el modal de
+/// Proveedores quedaba "muy laxo" comparado con el de Contratista.
 @Composable
 private fun DialogoConfirmarSalidaProveedor(
     fila: FilaProveedorActiva?,
@@ -640,14 +647,7 @@ private fun DialogoConfirmarSalidaProveedor(
     onConfirmar: (FilaProveedorActiva) -> Unit,
 ) {
     if (fila == null) return
-    val gafeteNumero = when (fila) {
-        is FilaProveedorActiva.Local -> fila.registro.gafeteNumero
-        is FilaProveedorActiva.Remota -> fila.remoto.gafeteNumero
-    }
-    val nombre = when (fila) {
-        is FilaProveedorActiva.Local -> fila.registro.nombre
-        is FilaProveedorActiva.Remota -> fila.remoto.nombre
-    }
+
     Dialog(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -656,13 +656,28 @@ private fun DialogoConfirmarSalidaProveedor(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            }
             Text(
-                "Confirmar salida",
+                "Registrar salida",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 16.dp),
             )
             Text(
-                "Gafete $gafeteNumero · $nombre",
+                when (fila) {
+                    is FilaProveedorActiva.Local ->
+                        "${fila.registro.nombre} · ${fila.registro.cedula} · ${fila.registro.empresaNombre} · Gafete ${fila.registro.gafeteNumero}"
+                    is FilaProveedorActiva.Remota ->
+                        "${fila.remoto.nombre} · registrado en otro dispositivo de la unidad operativa"
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),

@@ -1906,6 +1906,14 @@ impl Nucleo {
             .map_err(|error| NucleoError::Interno {
                 mensaje: error.to_string(),
             })?;
+        // Mismo motivo que en `sincronizar_con_secreto` -- sin esto, un
+        // dispositivo recién configurado tampoco traía encargados/vehículos
+        // de ruta hasta el próximo pulso de sync.
+        control_acceso::nube::recibir_catalogo_rutas_del_sitio(&conexion, &contexto).map_err(
+            |error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            },
+        )?;
 
         Ok(ResumenSincronizacion {
             enviados: 0,
@@ -2761,6 +2769,14 @@ impl Nucleo {
         let _remotos_proveedor =
             control_acceso::nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;
         let catalogo = control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
+        // Faltaba -- `encargados_ruta`/`vehiculos_ruta` nunca se traían de
+        // vuelta en mobile, así que el buscador de "Gafetes KOF" (que
+        // busca encargados en la tabla local) sólo veía lo que ESTE
+        // dispositivo había creado él mismo, nunca lo sincronizado desde
+        // otro dispositivo o el panel admin -- bug reportado en pruebas
+        // reales, 2026-09-17.
+        let _catalogo_rutas =
+            control_acceso::nube::recibir_catalogo_rutas_del_sitio(&conexion, &contexto)?;
         let movimientos_historial_recibidos =
             control_acceso::nube::recibir_historial_del_sitio(&conexion, &contexto)?;
         let citas_recibidas = control_acceso::nube::recibir_citas_del_sitio(&conexion, &contexto)?;
@@ -2865,6 +2881,11 @@ impl Nucleo {
         let _remotos_proveedor =
             control_acceso::nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;
         let catalogo = control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
+        // Ver el comentario del otro método de sync en este mismo archivo
+        // sobre por qué hacía falta esto (buscador de "Gafetes KOF" sin
+        // encargados sincronizados).
+        let _catalogo_rutas =
+            control_acceso::nube::recibir_catalogo_rutas_del_sitio(&conexion, &contexto)?;
         let movimientos_historial_recibidos =
             control_acceso::nube::recibir_historial_del_sitio(&conexion, &contexto)?;
         let citas_recibidas = control_acceso::nube::recibir_citas_del_sitio(&conexion, &contexto)?;
