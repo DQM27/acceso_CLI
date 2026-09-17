@@ -238,6 +238,17 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
              -- arriba ya las creó, hay que soltarlas antes de simular v9.
              DROP TABLE gafetes_incidentes;
              DROP TABLE gafetes;
+             -- MIGRACION_39/41/42/43/45 (que corren al final al rebobinar)
+             -- crean el módulo de gafetes provisionales KOF y el de
+             -- proveedores desde cero -- mismo motivo que gafetes/
+             -- gafetes_incidentes arriba. Orden de FK: el hijo primero
+             -- (`registro_ingresos_proveedor` referencia `empresas_proveedor`).
+             DROP TABLE prestamos_gafete_provisional;
+             DROP TABLE prestamos_gafete_provisional_remotos;
+             DROP TABLE registro_ingresos_proveedor;
+             DROP TABLE empresas_proveedor;
+             DROP TABLE ingresos_proveedor_remotos;
+             DROP TABLE historial_ingresos_proveedor_sitio;
              -- Mismo motivo con MIGRACION_17/18, que crean `cola_salida` e
              -- `ingresos_remotos` desde cero -- ya existen por el
              -- `initialize_database` de arriba.
@@ -356,6 +367,16 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
              -- MIGRACION_14 ya creó antes de simular v10.
              DROP TABLE gafetes_incidentes;
              DROP TABLE gafetes;
+             -- Mismo motivo que en `migracion_10_...`: soltar lo que
+             -- MIGRACION_39/41/42/43/45 ya crearon antes de simular v10.
+             -- Orden de FK: el hijo primero (`registro_ingresos_proveedor`
+             -- referencia `empresas_proveedor`).
+             DROP TABLE prestamos_gafete_provisional;
+             DROP TABLE prestamos_gafete_provisional_remotos;
+             DROP TABLE registro_ingresos_proveedor;
+             DROP TABLE empresas_proveedor;
+             DROP TABLE ingresos_proveedor_remotos;
+             DROP TABLE historial_ingresos_proveedor_sitio;
              -- Mismo motivo que en `migracion_10_...`: soltar lo que
              -- MIGRACION_17/18 ya crearon antes de simular v10.
              DROP TABLE cola_salida;
@@ -476,6 +497,16 @@ fn migracion_12_habilita_cambio_de_cedula() {
              -- MIGRACION_14 ya creó antes de simular v11.
              DROP TABLE gafetes_incidentes;
              DROP TABLE gafetes;
+             -- Mismo motivo que en `migracion_10_...`: soltar lo que
+             -- MIGRACION_39/41/42/43/45 ya crearon antes de simular v11.
+             -- Orden de FK: el hijo primero (`registro_ingresos_proveedor`
+             -- referencia `empresas_proveedor`).
+             DROP TABLE prestamos_gafete_provisional;
+             DROP TABLE prestamos_gafete_provisional_remotos;
+             DROP TABLE registro_ingresos_proveedor;
+             DROP TABLE empresas_proveedor;
+             DROP TABLE ingresos_proveedor_remotos;
+             DROP TABLE historial_ingresos_proveedor_sitio;
              -- Mismo motivo que en `migracion_10_...`: soltar lo que
              -- MIGRACION_17/18 ya crearon antes de simular v11.
              DROP TABLE cola_salida;

@@ -128,12 +128,19 @@ mod tests {
         let id = core
             .entregar_gafete_provisional(&actor, encargado_id, 12)
             .unwrap();
-        assert_eq!(core.listar_gafetes_provisionales_activos().unwrap().len(), 1);
+        assert_eq!(
+            core.listar_gafetes_provisionales_activos().unwrap().len(),
+            1
+        );
 
         core.registrar_devolucion_gafete_provisional(&actor, id)
             .unwrap();
 
-        assert!(core.listar_gafetes_provisionales_activos().unwrap().is_empty());
+        assert!(
+            core.listar_gafetes_provisionales_activos()
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]
@@ -145,6 +152,10 @@ mod tests {
         core.registrar_devolucion_gafete_provisional(&actor, id)
             .unwrap();
 
-        assert!(core.listar_gafetes_provisionales_activos().unwrap().is_empty());
+        assert!(
+            core.listar_gafetes_provisionales_activos()
+                .unwrap()
+                .is_empty()
+        );
     }
 }

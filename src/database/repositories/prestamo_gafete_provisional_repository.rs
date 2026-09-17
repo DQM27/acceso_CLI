@@ -15,8 +15,8 @@ use crate::database::cola_salida;
 use crate::database::error::DatabaseError;
 use crate::database::identificador::generar_uuid_v4;
 use crate::models::prestamo_gafete_provisional::{
-    DevolucionPrestamoGafeteProvisional, NuevoPrestamoGafeteProvisional,
-    PrestamoGafeteProvisional, PrestamoGafeteProvisionalActivoResumen,
+    DevolucionPrestamoGafeteProvisional, NuevoPrestamoGafeteProvisional, PrestamoGafeteProvisional,
+    PrestamoGafeteProvisionalActivoResumen,
 };
 use crate::tiempo::{parsear_utc, serializar_utc};
 
@@ -83,12 +83,15 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<PrestamoGafeteProvisional> {
     let usuario_devolucion_id: Option<i64> = row.get(7)?;
     // `CHECK (fecha_hora_devolucion IS NULL) = (usuario_devolucion_id IS NULL)`
     // ya lo garantiza el esquema (ver MIGRACION_39).
-    let devolucion = fecha_hora_devolucion.zip(usuario_devolucion_id).map(
-        |(fecha_hora, usuario_id)| DevolucionPrestamoGafeteProvisional {
-            fecha_hora,
-            usuario_id,
-        },
-    );
+    let devolucion =
+        fecha_hora_devolucion
+            .zip(usuario_devolucion_id)
+            .map(
+                |(fecha_hora, usuario_id)| DevolucionPrestamoGafeteProvisional {
+                    fecha_hora,
+                    usuario_id,
+                },
+            );
 
     Ok(PrestamoGafeteProvisional {
         id: row.get(0)?,
@@ -143,7 +146,12 @@ impl PrestamoGafeteProvisionalRepository for SqlitePrestamoGafeteProvisionalRepo
         // Capturado antes de encolar: `last_insert_rowid()` refleja el
         // último INSERT de la conexión, y encolar hace el suyo propio.
         let id = self.connection.last_insert_rowid();
-        cola_salida::encolar(self.connection, "prestamo_gafete_provisional", &uuid, "crear")?;
+        cola_salida::encolar(
+            self.connection,
+            "prestamo_gafete_provisional",
+            &uuid,
+            "crear",
+        )?;
 
         Ok(id)
     }
@@ -219,7 +227,12 @@ impl PrestamoGafeteProvisionalRepository for SqlitePrestamoGafeteProvisionalRepo
             params![id],
             |row| row.get(0),
         )?;
-        cola_salida::encolar(self.connection, "prestamo_gafete_provisional", &uuid, "cerrar")?;
+        cola_salida::encolar(
+            self.connection,
+            "prestamo_gafete_provisional",
+            &uuid,
+            "cerrar",
+        )?;
 
         Ok(())
     }
@@ -248,7 +261,13 @@ impl PrestamoGafeteProvisionalRepository for SqlitePrestamoGafeteProvisionalRepo
         filas
             .into_iter()
             .map(
-                |(id, encargado_nombre, encargado_codigo_empleado, gafete_numero, fecha_hora_texto)| {
+                |(
+                    id,
+                    encargado_nombre,
+                    encargado_codigo_empleado,
+                    gafete_numero,
+                    fecha_hora_texto,
+                )| {
                     let fecha_hora_entrega = parsear_utc(&fecha_hora_texto)
                         .map_err(|error| DatabaseError::FechaCorrupta(error.to_string()))?;
                     Ok(PrestamoGafeteProvisionalActivoResumen {

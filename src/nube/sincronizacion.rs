@@ -1394,11 +1394,11 @@ fn enviar_cierre_ingreso_proveedor(
 ) -> Result<(), SincronizacionError> {
     let (fecha_hora_salida, usuario_salida_nombre): (Option<String>, Option<String>) = connection
         .query_row(
-            "SELECT fecha_hora_salida, usuario_salida_nombre
+        "SELECT fecha_hora_salida, usuario_salida_nombre
              FROM registro_ingresos_proveedor WHERE uuid = ?1",
-            params![uuid],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )?;
+        params![uuid],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
 
     let cuerpo = json!({
         "hora_salida": fecha_hora_salida,
@@ -5621,9 +5621,11 @@ mod tests {
         assert_eq!(recibidos[0].nombre, "Juan Perez");
         assert_eq!(recibidos[0].gafete_numero, 9);
         let cacheados: i64 = connection
-            .query_row("SELECT COUNT(*) FROM ingresos_proveedor_remotos", [], |row| {
-                row.get(0)
-            })
+            .query_row(
+                "SELECT COUNT(*) FROM ingresos_proveedor_remotos",
+                [],
+                |row| row.get(0),
+            )
             .unwrap();
         assert_eq!(cacheados, 1);
     }
@@ -6695,8 +6697,7 @@ mod tests {
         let connection = Connection::open_in_memory().unwrap();
         initialize_database(&connection).unwrap();
         let conflictos =
-            proveedores_con_conflicto_activo(&connection, &contexto("http://127.0.0.1:1"))
-                .unwrap();
+            proveedores_con_conflicto_activo(&connection, &contexto("http://127.0.0.1:1")).unwrap();
 
         assert_eq!(conflictos, Vec::new());
     }
@@ -6772,11 +6773,9 @@ mod tests {
              \"usuario_salida_nombre\":\"Operador remoto\"}]",
         );
 
-        let aplicados = recibir_cierres_de_ingresos_propios_proveedor(
-            &connection,
-            &contexto(&base_url),
-        )
-        .unwrap();
+        let aplicados =
+            recibir_cierres_de_ingresos_propios_proveedor(&connection, &contexto(&base_url))
+                .unwrap();
 
         assert_eq!(aplicados, 1);
         let (salida, usuario_id, usuario_nombre): (String, Option<i64>, String) = connection
@@ -6868,11 +6867,9 @@ mod tests {
              \"usuario_devolucion_nombre\":\"Operador remoto\"}]",
         );
 
-        let aplicados = recibir_devoluciones_propias_gafete_provisional(
-            &connection,
-            &contexto(&base_url),
-        )
-        .unwrap();
+        let aplicados =
+            recibir_devoluciones_propias_gafete_provisional(&connection, &contexto(&base_url))
+                .unwrap();
 
         assert_eq!(aplicados, 1);
         let (devolucion, usuario_id, usuario_nombre): (String, Option<i64>, String) = connection
@@ -7035,9 +7032,11 @@ mod tests {
         .unwrap();
 
         let cacheados: i64 = connection
-            .query_row("SELECT COUNT(*) FROM ingresos_proveedor_remotos", [], |row| {
-                row.get(0)
-            })
+            .query_row(
+                "SELECT COUNT(*) FROM ingresos_proveedor_remotos",
+                [],
+                |row| row.get(0),
+            )
             .unwrap();
         assert_eq!(cacheados, 0);
     }
@@ -7474,7 +7473,9 @@ mod tests {
         recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
 
         let total: i64 = connection
-            .query_row("SELECT COUNT(*) FROM empresas_proveedor", [], |row| row.get(0))
+            .query_row("SELECT COUNT(*) FROM empresas_proveedor", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(total, 1, "no duplica la empresa que ya tenía por nombre");
         let uuid: String = connection

@@ -42,8 +42,13 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
   useBarraEstado(cargando ? "Cargando…" : `${filas.length} gafete(s) prestado(s)`);
 
   const recargar = useCallback(() => {
-    setCargando(true);
-    return listarTodosLosGafetesProvisionalesActivos()
+    // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
+    // directo -- de lo contrario `react-hooks/set-state-in-effect` marca
+    // esta actualización de estado como síncrona dentro del cuerpo del
+    // efecto que la dispara (abajo). Mismo patrón que Rutas.tsx/Activos.tsx.
+    return Promise.resolve()
+      .then(() => setCargando(true))
+      .then(() => listarTodosLosGafetesProvisionalesActivos())
       .then(setFilas)
       .finally(() => setCargando(false));
   }, []);

@@ -88,12 +88,12 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<RegistroIngresoProveedor> {
     let usuario_salida_id: Option<i64> = row.get(10)?;
     // `CHECK (fecha_hora_salida IS NULL) = (usuario_salida_id IS NULL)` en el
     // esquema (MIGRACION_41) garantiza que ambos vienen juntos o ninguno.
-    let salida = fecha_hora_salida.zip(usuario_salida_id).map(
-        |(fecha_hora, usuario_id)| SalidaRegistroIngresoProveedor {
+    let salida = fecha_hora_salida
+        .zip(usuario_salida_id)
+        .map(|(fecha_hora, usuario_id)| SalidaRegistroIngresoProveedor {
             fecha_hora,
             usuario_id,
-        },
-    );
+        });
 
     Ok(RegistroIngresoProveedor {
         id: row.get(0)?,
@@ -233,9 +233,9 @@ impl RegistroIngresoProveedorRepository for SqliteRegistroIngresoProveedorReposi
     }
 
     fn listar(&self) -> Result<Vec<RegistroIngresoProveedor>, DatabaseError> {
-        let mut statement = self
-            .connection
-            .prepare(&format!("{SELECT_REGISTRO} ORDER BY fecha_hora_ingreso DESC"))?;
+        let mut statement = self.connection.prepare(&format!(
+            "{SELECT_REGISTRO} ORDER BY fecha_hora_ingreso DESC"
+        ))?;
         let registros = statement
             .query_map([], convertir_fila)?
             .collect::<Result<Vec<_>, _>>()?;

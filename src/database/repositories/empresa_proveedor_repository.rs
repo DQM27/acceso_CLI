@@ -209,7 +209,10 @@ mod tests {
 
         let empresas = repo.listar().unwrap();
         assert_eq!(
-            empresas.iter().map(|e| e.nombre.as_str()).collect::<Vec<_>>(),
+            empresas
+                .iter()
+                .map(|e| e.nombre.as_str())
+                .collect::<Vec<_>>(),
             vec!["Dos Pinos", "Maika"]
         );
     }

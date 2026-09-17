@@ -30,7 +30,10 @@ where
     E: EncargadoRutaRepository + ?Sized,
 {
     pub fn new(prestamos: &'a P, encargados: &'a E) -> Self {
-        Self { prestamos, encargados }
+        Self {
+            prestamos,
+            encargados,
+        }
     }
 
     /// Valida que el encargado exista y esté activo, y que ni él ni el
@@ -142,9 +145,7 @@ mod tests {
         let encargados = SqliteEncargadoRutaRepository::new(&connection);
         let servicio = GafeteProvisionalService::new(&prestamos, &encargados);
 
-        let id = servicio
-            .entregar(encargado_id, 12, 1, Utc::now())
-            .unwrap();
+        let id = servicio.entregar(encargado_id, 12, 1, Utc::now()).unwrap();
         assert_eq!(servicio.listar_activos().unwrap().len(), 1);
 
         servicio.registrar_devolucion(id, Utc::now(), 1).unwrap();
@@ -188,9 +189,7 @@ mod tests {
         let prestamos = SqlitePrestamoGafeteProvisionalRepository::new(&connection);
         let encargados = SqliteEncargadoRutaRepository::new(&connection);
         let servicio = GafeteProvisionalService::new(&prestamos, &encargados);
-        servicio
-            .entregar(encargado_id, 12, 1, Utc::now())
-            .unwrap();
+        servicio.entregar(encargado_id, 12, 1, Utc::now()).unwrap();
 
         let error = servicio
             .entregar(encargado_id, 13, 1, Utc::now())
@@ -206,17 +205,12 @@ mod tests {
     fn entregar_el_mismo_numero_de_gafete_a_otra_persona_falla() {
         let (connection, encargado_id) = conexion_con_encargado();
         connection
-            .execute(
-                "UPDATE encargados_ruta SET activo = 1 WHERE id = 2",
-                [],
-            )
+            .execute("UPDATE encargados_ruta SET activo = 1 WHERE id = 2", [])
             .unwrap();
         let prestamos = SqlitePrestamoGafeteProvisionalRepository::new(&connection);
         let encargados = SqliteEncargadoRutaRepository::new(&connection);
         let servicio = GafeteProvisionalService::new(&prestamos, &encargados);
-        servicio
-            .entregar(encargado_id, 12, 1, Utc::now())
-            .unwrap();
+        servicio.entregar(encargado_id, 12, 1, Utc::now()).unwrap();
 
         let error = servicio.entregar(2, 12, 1, Utc::now()).unwrap_err();
 
@@ -232,9 +226,7 @@ mod tests {
         let prestamos = SqlitePrestamoGafeteProvisionalRepository::new(&connection);
         let encargados = SqliteEncargadoRutaRepository::new(&connection);
         let servicio = GafeteProvisionalService::new(&prestamos, &encargados);
-        let id = servicio
-            .entregar(encargado_id, 12, 1, Utc::now())
-            .unwrap();
+        let id = servicio.entregar(encargado_id, 12, 1, Utc::now()).unwrap();
         servicio.registrar_devolucion(id, Utc::now(), 1).unwrap();
 
         let error = servicio

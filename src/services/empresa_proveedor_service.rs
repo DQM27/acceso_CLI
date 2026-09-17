@@ -66,7 +66,10 @@ where
         Ok(self.empresas.listar()?)
     }
 
-    pub fn buscar(&self, texto: &str) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
+    pub fn buscar(
+        &self,
+        texto: &str,
+    ) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
         Ok(self.empresas.buscar(texto)?)
     }
 }

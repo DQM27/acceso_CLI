@@ -223,6 +223,9 @@ mod tests {
 
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].proveedor_portador_id, Some(1));
-        assert_eq!(items[0].proveedor_portador_nombre.as_deref(), Some("Juan Perez"));
+        assert_eq!(
+            items[0].proveedor_portador_nombre.as_deref(),
+            Some("Juan Perez")
+        );
     }
 }

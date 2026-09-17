@@ -757,10 +757,7 @@ impl AppCore {
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
         };
-        Ok(crate::nube::gafete_de_proveedor_ocupado_en_otro_dispositivo(
-            &contexto,
-            gafete_numero,
-        )?)
+        Ok(crate::nube::gafete_de_proveedor_ocupado_en_otro_dispositivo(&contexto, gafete_numero)?)
     }
 
     /// Cierra, contra la nube, un ingreso abierto por el otro dispositivo

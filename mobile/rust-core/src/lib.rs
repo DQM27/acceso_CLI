@@ -45,8 +45,8 @@ use control_acceso::models::salida_ruta::SalidaRutaActivaResumen as SalidaRutaAc
 use control_acceso::models::tipo_ingreso::TipoIngreso as TipoIngresoNucleo;
 use control_acceso::models::usuario::RolUsuario as RolUsuarioNucleo;
 use control_acceso::nube::IngresoProveedorRemoto as IngresoProveedorRemotoNucleo;
-use control_acceso::nube::PrestamoGafeteProvisionalRemoto as PrestamoGafeteProvisionalRemotoNucleo;
 use control_acceso::nube::IngresoRemoto as IngresoRemotoNucleo;
+use control_acceso::nube::PrestamoGafeteProvisionalRemoto as PrestamoGafeteProvisionalRemotoNucleo;
 use control_acceso::services::autenticacion_service::UsuarioSesion as UsuarioSesionNucleo;
 use control_acceso::services::contratista_service::DatosContratista as DatosContratistaNucleo;
 use control_acceso::services::error::AutenticacionError as AutenticacionErrorNucleo;
@@ -619,7 +619,9 @@ pub struct ConflictoIngresoProveedorActivo {
     pub sitio_conflicto: String,
 }
 
-impl From<control_acceso::nube::ConflictoIngresoProveedorActivo> for ConflictoIngresoProveedorActivo {
+impl From<control_acceso::nube::ConflictoIngresoProveedorActivo>
+    for ConflictoIngresoProveedorActivo
+{
     fn from(conflicto: control_acceso::nube::ConflictoIngresoProveedorActivo) -> Self {
         Self {
             cedula: conflicto.cedula,
@@ -1624,7 +1626,10 @@ impl Nucleo {
 
     /// Registra la devolución de un préstamo de gafete provisional KOF --
     /// espejo de `AppCore::registrar_devolucion_gafete_provisional`.
-    pub fn registrar_devolucion_gafete_provisional(&self, prestamo_id: i64) -> Result<(), NucleoError> {
+    pub fn registrar_devolucion_gafete_provisional(
+        &self,
+        prestamo_id: i64,
+    ) -> Result<(), NucleoError> {
         let actor = self.actor_autenticado()?;
         Ok(self
             .core_lock()
@@ -2122,7 +2127,9 @@ impl Nucleo {
 
     /// Espejo de [`Self::listar_ingresos_remotos`], pero contra la caché
     /// `ingresos_proveedor_remotos`.
-    pub fn listar_ingresos_proveedor_remotos(&self) -> Result<Vec<IngresoProveedorRemoto>, NucleoError> {
+    pub fn listar_ingresos_proveedor_remotos(
+        &self,
+    ) -> Result<Vec<IngresoProveedorRemoto>, NucleoError> {
         let actor = self.actor_autenticado()?;
         Ok(self
             .core_lock()
@@ -3669,7 +3676,9 @@ mod tests {
     fn buscar_empresas_proveedor_encuentra_por_nombre() {
         let nucleo = nucleo_con_actor_empresa_proveedora_y_gafete();
 
-        let resultados = nucleo.buscar_empresas_proveedor("maika".to_string()).unwrap();
+        let resultados = nucleo
+            .buscar_empresas_proveedor("maika".to_string())
+            .unwrap();
 
         assert_eq!(resultados.len(), 1);
         assert_eq!(resultados[0].nombre, "Maika");

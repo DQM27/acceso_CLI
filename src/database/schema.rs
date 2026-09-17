@@ -713,7 +713,7 @@ fn ejecutar_migracion_44(connection: &Connection) -> Result<(), SchemaError> {
 
 /// Agrega `prestamos_gafete_provisional_remotos` -- tabla nueva, sin
 /// recrear nada existente. Faltaba por completo desde que se creó el
-/// módulo de gafetes provisionales KOF (MIGRACION_39/40): sin esta caché
+/// módulo de gafetes provisionales KOF (`MIGRACION_39/40`): sin esta caché
 /// no había forma de que un dispositivo se enterara de un préstamo que
 /// OTRO entregó -- ver el comentario de `recibir_prestamos_gafete_provisional_abiertos`
 /// en `nube::sincronizacion`. Bug reportado en pruebas reales, 2026-09-17.
@@ -3716,7 +3716,7 @@ END;
 
 /// Caché de préstamos de gafete provisional KOF abiertos por OTRO
 /// dispositivo del sitio -- mismo rol que `ingresos_proveedor_remotos`
-/// (MIGRACION_41). Ver el comentario de
+/// (`MIGRACION_41`). Ver el comentario de
 /// `recibir_prestamos_gafete_provisional_abiertos` en `nube::sincronizacion`.
 const MIGRACION_45: &str = r"
 CREATE TABLE prestamos_gafete_provisional_remotos (
