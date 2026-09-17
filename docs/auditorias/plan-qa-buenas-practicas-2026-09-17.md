@@ -260,17 +260,45 @@ mejor que un error de deserialización críptico. Requiere decidir la
 política de versiones soportadas (¿cuántas versiones atrás?) antes de
 implementar.
 
-### 10. Cifrado del secreto de dispositivo en Android
+### 10. ~~Cifrado del secreto de dispositivo en Android~~ — ya resuelto, este plan tenía la nota vieja
 
-**No es un hallazgo nuevo de hoy** — está completamente documentado en
-`docs/auditorias/auditoria-calidad-2026-09.md`, con la decisión pendiente
-ya planteada ahí (Opción A: Android Keystore + `EncryptedFile`, recomendada
-tanto ahí como acá). Se referencia en este plan porque es, hoy, el hallazgo
-de seguridad real más importante que sigue abierto en todo el proyecto —
-no se repite el análisis completo, ver el documento original.
+**Corrección 2026-09-17:** este punto decía, citando
+`docs/auditorias/auditoria-calidad-2026-09.md`, que el secreto de
+dispositivo en Android seguía sin cifrar y que había una decisión
+pendiente (Keystore + `EncryptedFile`). Es una nota desactualizada — el
+propio documento de auditoría quedó viejo. **Ya está resuelto**, desde
+antes de esta rama: `mobile/android/app/src/main/java/com/brisas/controlacceso/SecretoDispositivoStore.kt`
+(commit `7aed199`, 2026-09-10) implementa Android Keystore directo (no la
+librería Jetpack `EncryptedFile` que recomendaba el doc, pero la misma
+garantía real: la clave AES vive y se genera enteramente dentro del
+Keystore, nunca sale en claro).
 
-**Verificado que sigue vigente hoy:** `mobile/rust-core/Cargo.toml` —
-`features = ["nube"]`, sin `cifrado-secreto-dispositivo`.
+Verificado de punta a punta hoy, no solo el archivo suelto:
+- La clave ya **no depende de `ANDROID_ID`** — eso era justo la causa raíz
+  del incidente original (identificador cambia → clave distinta → ya no
+  descifra). `ANDROID_ID` solo se usa hoy para descifrar, una única vez,
+  el secreto legado de quien no había migrado todavía
+  (`cargar_secreto_dispositivo_legado`, `mobile/rust-core/src/lib.rs:2009`
+  — confirmado que existe y está implementada), y el archivo viejo se
+  borra después de migrar.
+- Conectado de verdad en `AplicacionViewModel.kt:52` (no es código
+  muerto/sin usar).
+
+**El error fue mío, primera vez que se preguntó por esto**: busqué
+específicamente `EncryptedFile`/`androidx.security` (la solución que el
+audit recomendaba) y al no encontrarla asumí que no se había hecho nada
+— sin considerar que el equipo pudo haber implementado la misma garantía
+con el API de Keystore directo, sin esa librería puntual.
+
+**Lo único que sigue siendo un gap real:** no hay ningún test
+automatizado de `AndroidKeystoreSecretoDispositivoStore` — no se puede
+sin Robolectric (simula APIs de Android en tests de JVM), que el proyecto
+no tiene instalado. Es exactamente la advertencia que el propio doc de
+auditoría dejaba ("probarlo bien... no sólo unitarias") — el código
+está bien, pero nadie le puso una prueba automática detrás. Si se decide
+sumar Robolectric, el criterio de aceptación sería: un test que guarde un
+secreto, lo recupere, y otro que confirme la migración+borrado del
+archivo legado — sin tocar un dispositivo real.
 
 ### 11. Configuración por ambiente
 
@@ -338,5 +366,5 @@ justificación (ver el análisis de `AppCore`, sesión previa):
 | 7 | Runbook recuperación base local | 🚧 | Sí (qué se acepta perder) |
 | 8 | CODEOWNERS + branch protection | 🚧 | Sí (cambio de configuración del repo) |
 | 9 | Compatibilidad multi-versión | 🚧 | Sí (política de versiones soportadas) |
-| 10 | Cifrado secreto Android | 🚧 (ya documentado antes) | No — es trabajo, no decisión |
+| 10 | Cifrado secreto Android | ✅ (ya estaba hecho, nota vieja corregida) | Test con Robolectric: sí, si se quiere sumarlo |
 | 11 | Config por ambiente (staging) | 🚧 | Sí (costo de un 2º proyecto Supabase) |

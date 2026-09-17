@@ -5,6 +5,22 @@
 > secreto de dispositivo sin cifrar, incluyendo el diagnóstico externo
 > recibido y su verificación. Nada de lo de la sección 3 está implementado
 > todavía — es la decisión pendiente para retomar en la PC.
+>
+> **Corrección 2026-09-17 -- la sección 3/4 quedó vieja, el problema YA SE
+> RESOLVIÓ:** `mobile/android/app/src/main/java/com/brisas/controlacceso/SecretoDispositivoStore.kt`
+> (commit `7aed199`, 2026-09-10) implementa la opción A recomendada abajo
+> (Android Keystore), con el API directo de Keystore en vez de la librería
+> Jetpack `EncryptedFile` -- misma garantía real (la clave AES se genera y
+> vive enteramente dentro del Keystore, nunca depende de `ANDROID_ID`).
+> Verificado de punta a punta: conectado en `AplicacionViewModel.kt:52`,
+> migra y borra el secreto legado en texto plano
+> (`cargar_secreto_dispositivo_legado`/`borrar_secreto_dispositivo_legado`,
+> `mobile/rust-core/src/lib.rs`). Ver
+> `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto 10, para
+> el detalle completo de la verificación. Lo único que sigue pendiente es
+> agregar un test automatizado (necesita Robolectric, que el proyecto no
+> tiene) -- el resto de esta sección queda como registro histórico de la
+> decisión, no como estado actual.
 
 ## 1. Resumen ejecutivo
 

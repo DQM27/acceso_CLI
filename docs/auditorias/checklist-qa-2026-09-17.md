@@ -14,6 +14,7 @@
 - [x] Logs activados en producción (antes solo en modo debug)
 - [x] Fallo silencioso corregido en la sincronización automática (errores y panics que no dejaban rastro)
 - [x] Código muerto del viejo sistema de respaldo eliminado + nota falsa en `pendientes.md` corregida
+- [x] **Corrección 2026-09-17 (tarde):** el secreto de dispositivo en Android **sí está cifrado** (Android Keystore, `SecretoDispositivoStore.kt`, desde el commit `7aed199` del 2026-09-10) -- la entrada de más abajo, agregada hoy más temprano, estaba mal: busqué solo `androidx.security`/`EncryptedFile` y no encontré el mecanismo real, que usa el API de Keystore directo. Verificado de punta a punta: la clave ya no depende de `ANDROID_ID` (se genera dentro del propio Keystore), `ANDROID_ID` solo se usa para migrar el secreto legado en texto plano una única vez, y el archivo viejo se borra después. Conectado de verdad en `AplicacionViewModel.kt:52`, no es código muerto.
 
 ## Decisiones de negocio pendientes (no es código, es elegir)
 
@@ -29,7 +30,7 @@
 - [ ] Diagnóstico exportable (.zip) — el botón + armar el archivo (espera el ok de Resend de arriba para la parte de "mandarlo solo")
 - [ ] Instrumentar más puntos de fallo con logs (comandos Tauri, cola de sincronización offline — plan punto 5.1/5.2)
 - [ ] Logging del fallo fatal de arranque (base dañada, candado de instancia) — hoy corre antes de que el log exista (plan punto 5.3)
-- [ ] Cifrado del secreto de dispositivo en Android — **verificado de nuevo hoy 2026-09-17: sigue sin hacer**, `ANDROID_ID` en texto plano tal cual documentaba la auditoría de septiembre
+- [ ] ~~Cifrado del secreto de dispositivo en Android~~ **Ya está hecho — ver corrección arriba.** Lo único real que falta: no hay test automatizado de `AndroidKeystoreSecretoDispositivoStore` (no se puede sin Robolectric, que el proyecto no tiene) — decidir si vale la pena sumarlo
 - [ ] Variables de entorno para `web`/`web-visitas` (para poder apuntar a staging sin editar código) — depende de que el proyecto de staging ya exista
 
 ## Descartado a propósito (no reabrir sin una razón nueva)
