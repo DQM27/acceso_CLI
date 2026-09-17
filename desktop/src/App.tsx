@@ -70,7 +70,6 @@ const Gafetes = lazy(() => import("./pantallas/Gafetes"));
 const Rutas = lazy(() => import("./pantallas/Rutas"));
 const CatalogoRutas = lazy(() => import("./pantallas/CatalogoRutas"));
 const Proveedores = lazy(() => import("./pantallas/Proveedores"));
-const PersonalizarSidebarModal = lazy(() => import("./pantallas/PersonalizarSidebarModal"));
 const NuevoIngresoModal = lazy(() => import("./pantallas/NuevoIngresoModal"));
 const SalidaModal = lazy(() => import("./pantallas/SalidaModal"));
 
@@ -291,13 +290,12 @@ function Shell({
 
   // Sidebar "inteligente" (mostrar/ocultar + reordenar, mismo espíritu que
   // la barra de actividad de VS Code) -- `orden` guarda TODOS los ids
-  // (incluidos los ocultos, para poder volver a mostrarlos desde el
-  // modal), `ocultas` es el subconjunto no visible. Ambos persisten aparte
-  // de `colapsado` -- son ejes independientes (una sección puede estar
-  // oculta sin importar si el sidebar está colapsado o no).
+  // (incluidos los ocultos, para poder volver a mostrarlos desde el menú
+  // contextual del sidebar), `ocultas` es el subconjunto no visible. Ambos
+  // persisten aparte de `colapsado` -- son ejes independientes (una sección
+  // puede estar oculta sin importar si el sidebar está colapsado o no).
   const [ordenSidebar, setOrdenSidebar] = useState(leerSidebarOrden);
   const [seccionesOcultas, setSeccionesOcultas] = useState(leerSidebarOcultas);
-  const [personalizarAbierto, setPersonalizarAbierto] = useState(false);
 
   const seccionesOrdenadas = useMemo(() => {
     const porId = new Map(SECCIONES.map((seccion) => [seccion.id, seccion]));
@@ -508,12 +506,15 @@ function Shell({
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
           <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
             <Sidebar
-              secciones={seccionesVisibles}
+              secciones={seccionesOrdenadas}
+              ocultas={seccionesOcultas}
               seccionActual={seccion}
               onCambiarSeccion={cambiarSeccion}
               colapsado={colapsado}
               onToggleColapsado={alternarColapsado}
-              onAbrirPersonalizar={() => setPersonalizarAbierto(true)}
+              onReordenar={reordenarSidebar}
+              onCambiarVisibilidad={alternarVisibilidadSeccion}
+              onRestablecer={restablecerSidebar}
             />
 
             <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
@@ -616,17 +617,6 @@ function Shell({
               <SalidaModal
                 onRegistrado={() => setRefrescarActivos((n) => n + 1)}
                 onCerrar={() => setModalSalida(false)}
-              />
-            )}
-
-            {personalizarAbierto && (
-              <PersonalizarSidebarModal
-                secciones={seccionesOrdenadas}
-                ocultas={seccionesOcultas}
-                onReordenar={reordenarSidebar}
-                onCambiarVisibilidad={alternarVisibilidadSeccion}
-                onRestablecer={restablecerSidebar}
-                onCerrar={() => setPersonalizarAbierto(false)}
               />
             )}
           </Suspense>
