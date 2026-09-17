@@ -27,11 +27,13 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { listen } from "@tauri-apps/api/event";
 import { Toaster, toast } from "sonner";
 import {
+  Boxes,
   Building2,
   ClipboardList,
   History,
   IdCard,
   Route,
+  Store,
   Truck,
   UserCheck,
   Users,
@@ -68,6 +70,8 @@ const Auditoria = lazy(() => import("./pantallas/Auditoria"));
 const Gafetes = lazy(() => import("./pantallas/Gafetes"));
 const Rutas = lazy(() => import("./pantallas/Rutas"));
 const CatalogoRutas = lazy(() => import("./pantallas/CatalogoRutas"));
+const Proveedores = lazy(() => import("./pantallas/Proveedores"));
+const EmpresasProveedor = lazy(() => import("./pantallas/EmpresasProveedor"));
 const NuevoIngresoModal = lazy(() => import("./pantallas/NuevoIngresoModal"));
 const SalidaModal = lazy(() => import("./pantallas/SalidaModal"));
 
@@ -146,7 +150,9 @@ export type Seccion =
   | "auditoria"
   | "empresas"
   | "gafetes"
-  | "catalogoRutas";
+  | "catalogoRutas"
+  | "proveedores"
+  | "empresasProveedor";
 
 /** Aplanado de autorización (ver docs/decisiones-tecnicas.md 2026-09-11):
  * ninguna sección se oculta por rol -- quien tiene una sesión válida puede
@@ -176,6 +182,8 @@ const SECCIONES: {
   { id: "empresas", etiqueta: "Empresas", Icono: Building2 },
   { id: "gafetes", etiqueta: "Gafetes", Icono: IdCard },
   { id: "catalogoRutas", etiqueta: "Catálogo KOF", Icono: Truck },
+  { id: "proveedores", etiqueta: "Proveedores", Icono: Boxes },
+  { id: "empresasProveedor", etiqueta: "Empresas proveedoras", Icono: Store },
 ];
 
 /**
@@ -455,8 +463,12 @@ function Shell({
                           <Empresas />
                         ) : id === "gafetes" ? (
                           <Gafetes />
-                        ) : (
+                        ) : id === "catalogoRutas" ? (
                           <CatalogoRutas />
+                        ) : id === "proveedores" ? (
+                          <Proveedores refrescarSenal={refrescarActivos} />
+                        ) : (
+                          <EmpresasProveedor />
                         )}
                       </SeccionActivaProvider>
                     </Suspense>

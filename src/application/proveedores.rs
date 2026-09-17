@@ -61,6 +61,51 @@ impl AppCore {
         Ok(id)
     }
 
+    /// Sin chequeo de rol, mismo criterio que `crear_empresa_proveedor` --
+    /// catálogo chico, cualquier actor activo administra empresas
+    /// proveedoras (a diferencia de `Empresa`, que sí distingue permisos por
+    /// rol vía `Operacion::ActivarDesactivarEmpresa`).
+    pub fn activar_empresa_proveedor(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+    ) -> Result<(), EmpresaProveedorServiceError> {
+        self.establecer_empresa_proveedor_activa(actor, id, true)
+    }
+
+    pub fn desactivar_empresa_proveedor(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+    ) -> Result<(), EmpresaProveedorServiceError> {
+        self.establecer_empresa_proveedor_activa(actor, id, false)
+    }
+
+    fn establecer_empresa_proveedor_activa(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+        activa: bool,
+    ) -> Result<(), EmpresaProveedorServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        verificar_actor_activo(&transaction, actor)
+            .map_err(EmpresaProveedorServiceError::Database)?
+            .ok_or(EmpresaProveedorServiceError::OperacionNoAutorizada)?;
+        let repositorio = SqliteEmpresaProveedorRepository::new(&transaction);
+        let servicio = EmpresaProveedorService::new(&repositorio);
+        if activa {
+            servicio.activar(id)?;
+        } else {
+            servicio.desactivar(id)?;
+        }
+        transaction
+            .commit()
+            .map_err(DatabaseError::from)
+            .map_err(EmpresaProveedorServiceError::Database)
+    }
+
     // ---- Ingreso/salida de proveedores ----
 
     #[allow(clippy::too_many_arguments)]
@@ -191,6 +236,33 @@ mod tests {
         core.registrar_salida_proveedor(&actor, id).unwrap();
 
         assert!(core.listar_proveedores_activos().unwrap().is_empty());
+    }
+
+    #[test]
+    fn activar_y_desactivar_empresa_proveedor_redondea_el_viaje() {
+        let (core, actor, empresa_id) = nucleo_con_usuario_empresa_y_gafete();
+
+        core.desactivar_empresa_proveedor(&actor, empresa_id)
+            .unwrap();
+        assert!(
+            !core
+                .listar_empresas_proveedor()
+                .unwrap()
+                .iter()
+                .find(|empresa| empresa.id == empresa_id)
+                .unwrap()
+                .activo
+        );
+
+        core.activar_empresa_proveedor(&actor, empresa_id).unwrap();
+        assert!(
+            core.listar_empresas_proveedor()
+                .unwrap()
+                .iter()
+                .find(|empresa| empresa.id == empresa_id)
+                .unwrap()
+                .activo
+        );
     }
 
     #[test]
