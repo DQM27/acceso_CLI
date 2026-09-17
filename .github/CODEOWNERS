@@ -1,0 +1,7 @@
+# Revisor por defecto para cualquier Pull Request contra este repo.
+# Solo tiene efecto de bloqueo si en GitHub -> Settings -> Branches se activa
+# "Require a pull request before merging" + "Require review from Code Owners"
+# sobre `main` -- ver docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md,
+# punto 8. Ese paso es de configuración del repositorio, no de código, y no
+# se activa desde acá.
+* @DQM27
