@@ -144,6 +144,8 @@ fun PantallaProveedores(
                 viewModel.cambiarPlaca(detectado.valor)
             },
             onCerrar = { escaneandoPlaca = false },
+            mensajeInicial = "Apunte a la placa del vehículo",
+            mensajePermiso = "Se necesita permiso de cámara para escanear la placa.",
         )
         return
     }
@@ -559,8 +561,9 @@ private fun FilaProveedorActivoLocal(
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onConfirmarSalida)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(
             "Gafete ${registro.gafeteNumero}",
@@ -582,11 +585,6 @@ private fun FilaProveedorActivoLocal(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Row(modifier = Modifier.padding(top = 8.dp)) {
-            BotonBrisas(onClick = onConfirmarSalida) {
-                Text("Salida")
-            }
-        }
     }
 }
 
@@ -599,8 +597,9 @@ private fun FilaProveedorActivoRemota(remoto: IngresoProveedorRemoto, onConfirma
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onConfirmarSalida)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(
             "Gafete ${remoto.gafeteNumero}",
@@ -627,11 +626,6 @@ private fun FilaProveedorActivoRemota(remoto: IngresoProveedorRemoto, onConfirma
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.primary,
         )
-        Row(modifier = Modifier.padding(top = 8.dp)) {
-            BotonBrisas(onClick = onConfirmarSalida) {
-                Text("Salida")
-            }
-        }
     }
 }
 

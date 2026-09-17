@@ -38,8 +38,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -57,10 +59,20 @@ import kotlinx.coroutines.launch
 /// (calcomanía de número de unidad de un camión de flota, o placa de un
 /// camión de apoyo): [extraerVehiculo] decide cuál es cuál, esta pantalla
 /// no necesita saberlo de antemano.
+///
+/// `mensajeInicial`/`mensajePermiso` son configurables porque
+/// [PantallaProveedores] reusa esta misma pantalla para su OCR de placa
+/// (genérico, no específico de rutas -- ver comentario ahí), pero un
+/// proveedor nunca trae "número de unidad" (eso es sólo de la flota de
+/// rutas) -- mensaje por defecto sin cambios para no alterar Rutas, bug
+/// reportado en pruebas reales, 2026-09-17: Proveedores mostraba el
+/// mensaje de Rutas tal cual.
 @Composable
 fun PantallaEscanearVehiculoRuta(
     onVehiculoDetectado: suspend (VehiculoRutaDetectado) -> Unit,
     onCerrar: () -> Unit,
+    mensajeInicial: String = MENSAJE_INICIAL_VEHICULO,
+    mensajePermiso: String = "Se necesita permiso de cámara para escanear la placa o el número de unidad.",
 ) {
     BackHandler(onBack = onCerrar)
     val contexto = LocalContext.current
@@ -78,7 +90,11 @@ fun PantallaEscanearVehiculoRuta(
     }
 
     if (permisoConcedido) {
-        VistaCamaraVehiculoRuta(onVehiculoDetectado = onVehiculoDetectado, onCerrar = onCerrar)
+        VistaCamaraVehiculoRuta(
+            onVehiculoDetectado = onVehiculoDetectado,
+            onCerrar = onCerrar,
+            mensajeInicial = mensajeInicial,
+        )
     } else {
         Column(
             modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -86,7 +102,7 @@ fun PantallaEscanearVehiculoRuta(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                "Se necesita permiso de cámara para escanear la placa o el número de unidad.",
+                mensajePermiso,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -101,6 +117,7 @@ fun PantallaEscanearVehiculoRuta(
 private fun VistaCamaraVehiculoRuta(
     onVehiculoDetectado: suspend (VehiculoRutaDetectado) -> Unit,
     onCerrar: () -> Unit,
+    mensajeInicial: String,
 ) {
     val contexto = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -109,7 +126,7 @@ private fun VistaCamaraVehiculoRuta(
     val haptica = LocalHapticFeedback.current
     val ejecutor = remember { Executors.newSingleThreadExecutor() }
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
-    var ultimoMensaje by remember { mutableStateOf(MENSAJE_INICIAL_VEHICULO) }
+    var ultimoMensaje by remember { mutableStateOf(mensajeInicial) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
     var textoCrudoDebug by remember { mutableStateOf("") }
     val estabilizador = remember { EstabilizadorVehiculoRuta() }
@@ -120,6 +137,14 @@ private fun VistaCamaraVehiculoRuta(
     var analisisCamara by remember { mutableStateOf<ImageAnalysis?>(null) }
     var trabajoResultado by remember { mutableStateOf<Job?>(null) }
     val ejecutorPrincipal = remember { ContextCompat.getMainExecutor(contexto) }
+    // Congela el análisis en el primer frame con texto -- sólo en builds de
+    // depuración, sólo para refinar `LectorVehiculoRuta.kt` contra placas
+    // reales. Sin esto el overlay de texto crudo cambiaba de frame a frame
+    // demasiado rápido para leerlo o capturarlo con una foto (reportado en
+    // pruebas reales, 2026-09-17, con un teléfono que además no permite
+    // depuración USB para leerlo por `adb logcat` en su lugar).
+    var pausadoDebug by remember { mutableStateOf(false) }
+    val portapapeles = LocalClipboardManager.current
 
     DisposableEffect(Unit) {
         sesionActiva.set(true)
@@ -155,7 +180,7 @@ private fun VistaCamaraVehiculoRuta(
                     .build()
                     .also { analisisConstruido ->
                         analisisConstruido.setAnalyzer(ejecutor) { imagen ->
-                            if (!sesionActiva.get() || detectada.get()) {
+                            if (!sesionActiva.get() || detectada.get() || pausadoDebug) {
                                 imagen.close()
                                 return@setAnalyzer
                             }
@@ -164,9 +189,14 @@ private fun VistaCamaraVehiculoRuta(
                                 recognizer = recognizer,
                                 ejecutorPrincipal = ejecutorPrincipal,
                                 sesionActiva = sesionActiva,
-                                onTexto = { texto ->
+                                onTexto = onTexto@{ texto ->
                                     if (sesionActiva.get()) {
-                                        if (BuildConfig.DEBUG) textoCrudoDebug = texto
+                                        if (BuildConfig.DEBUG && texto.isNotBlank()) {
+                                            textoCrudoDebug = texto
+                                            android.util.Log.d("LectorVehiculoRuta", "texto crudo: $texto")
+                                            pausadoDebug = true
+                                            return@onTexto
+                                        }
                                         val resultado = estabilizador.procesarFrame(texto)
                                         if (resultado != null) {
                                             estado = EstadoEscaneo.CONFIRMADO
@@ -180,7 +210,7 @@ private fun VistaCamaraVehiculoRuta(
                                             }
                                         } else {
                                             estado = EstadoEscaneo.BUSCANDO
-                                            ultimoMensaje = MENSAJE_INICIAL_VEHICULO
+                                            ultimoMensaje = mensajeInicial
                                         }
                                     }
                                 },
@@ -224,18 +254,30 @@ private fun VistaCamaraVehiculoRuta(
             BotonDiscretoBrisas(onClick = onCerrar) { Text("Cancelar") }
         }
         if (BuildConfig.DEBUG && textoCrudoDebug.isNotBlank()) {
-            Text(
-                "DEBUG -- texto crudo de ML Kit:\n$textoCrudoDebug",
-                color = Color.White,
-                style = MaterialTheme.typography.bodySmall,
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
-                    .heightIn(max = 320.dp)
-                    .verticalScroll(rememberScrollState())
                     .background(Color.Black.copy(alpha = 0.85f))
                     .padding(12.dp),
-            )
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    "DEBUG -- texto crudo de ML Kit (pausado):\n$textoCrudoDebug",
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 260.dp)
+                        .verticalScroll(rememberScrollState()),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BotonDiscretoBrisas(
+                        onClick = { portapapeles.setText(AnnotatedString(textoCrudoDebug)) },
+                    ) { Text("Copiar") }
+                    BotonBrisas(onClick = { pausadoDebug = false }) { Text("Seguir escaneando") }
+                }
+            }
         }
     }
 }
