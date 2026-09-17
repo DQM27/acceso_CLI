@@ -94,12 +94,18 @@ fun PantallaGafetesProvisionales(
         )
 
         if (viewModel.encargadoSeleccionado == null && viewModel.resultadosEncargado.isNotEmpty()) {
+            // Tope de 6 -- mismo criterio que el buscador de Contratista: esta
+            // lista vive dentro de un `Column` sin scroll propio (a
+            // diferencia de `ContenidoModoEntrada`, que reemplaza toda la
+            // pantalla), así que sin un tope el `LazyColumn` crecía sin
+            // límite y empujaba el campo de número de gafete fuera de la
+            // pantalla -- bug reportado en pruebas reales, 2026-09-17.
             ListaConDesvanecido {
                 LazyColumn(
                     contentPadding = PaddingValues(top = 5.dp),
                     verticalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
-                    items(viewModel.resultadosEncargado, key = { it.id }) { encargado ->
+                    items(viewModel.resultadosEncargado.take(6), key = { it.id }) { encargado ->
                         FilaEncargadoProvisional(encargado, onClick = { viewModel.elegirEncargado(encargado) })
                     }
                 }
