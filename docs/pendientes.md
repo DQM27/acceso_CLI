@@ -147,6 +147,24 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   contratistas/gafetes (catálogos chicos), auditoría crece sin techo, más
   parecido a `historial` (que sí tiene lógica de carga incremental/límite,
   ver `Historial.tsx`/`Auditoria.tsx` con su banner de "truncado").
+- [ ] **El chequeo cross-device de "gafete ya ocupado en el sitio" no está
+  conectado en escritorio (hallazgo 2026-09-17).** El núcleo ya tiene las
+  cuatro variantes (`AppCore::gafete_ocupado_en_sitio`/
+  `gafete_provisional_ocupado_en_sitio`/`gafete_de_proveedor_ocupado_en_sitio`,
+  `src/application/nube.rs`) -- mejor esfuerzo, consultan Supabase en vivo
+  si OTRO dispositivo del mismo sitio ya tiene ese número de gafete en un
+  movimiento/ingreso todavía abierto, sin bloquear si no hay red. **Mobile
+  sí las usa** (`gafete_ocupado_en_sitio_con_secreto` y sus variantes en
+  `mobile/rust-core/src/lib.rs`), pero ningún comando de
+  `desktop/src-tauri/src/comandos/` las llama -- ni para contratistas, ni
+  provisional KOF, ni proveedores (encontrado revisando el modal de
+  ingreso de proveedores). Hoy en desktop, dos PCs del mismo sitio pueden
+  asignar el mismo número de gafete casi al mismo tiempo sin que ninguna
+  se entere hasta el próximo `sincronizar` -- la única red de seguridad es
+  el chequeo LOCAL (`registro_ingresos*`/tabla de gafetes propia), que no
+  ve lo que pasó en la otra PC todavía. Falta: llamar la variante
+  correspondiente justo antes de confirmar cada tipo de ingreso/entrega en
+  los comandos de escritorio, mismo punto donde mobile ya lo hace.
 - [ ] **Revisar bucket público `historial-web`.** Está documentado como público, vacío y
   sin referencias en código. Confirmar si es vestigio; si no se usa, eliminarlo desde
   Supabase.
@@ -544,6 +562,25 @@ estabilizador y clasificador.
   `ui_kit/text_input.rs`.
 - [ ] **Confirmación visual breve tras guardar/registrar.** Resaltar fila o elemento recién
   creado/editado para que el cambio no se sienta silencioso.
+- [ ] **Auditar máscaras de entrada en formularios de escritorio (pedido
+  2026-09-17).** `react-hook-form` + `zod` ya se usan en TODOS los
+  formularios (`esquema = z.object(...)` es el patrón establecido, ver
+  cualquier `Formulario*.tsx`/`*Modal.tsx`), así que la validación de
+  ESQUEMA ya existe -- lo que falta es la máscara a nivel de INPUT (evitar
+  que se pueda siquiera escribir un carácter inválido, no sólo rechazarlo
+  al enviar). Hoy es inconsistente: `Gafetes.tsx` sí filtra el buscador de
+  número con `.replace(/\D/g, "")` mientras se escribe, pero
+  `FormularioGafete.tsx` (número/desde/hasta) y `IngresoProveedorModal.tsx`
+  (`gafete_numero`) usan `<input type="number">`/texto plano sin filtrar
+  nada hasta que `zod` lo marca en rojo -- con `type="number"` además el
+  navegador deja teclear `e`/`-`/`+` (notación científica) aunque el campo
+  sea un entero positivo. Alcance: pasar una pasada por los campos
+  numéricos (cédula, números de gafete/ruta/documento) forzando
+  `inputMode="numeric"` + filtrado en `onChange` como ya hace el buscador
+  de Gafetes, y revisar si algún campo de texto necesita la regla inversa
+  (rechazar dígitos donde no corresponde, ej. nombre). No cambia la
+  librería de validación -- sigue siendo `react-hook-form`/`zod`, esto es
+  pulido de UX sobre lo que ya existe.
 - [x] **Respaldo manual y exportación de historial dejaron de congelar la UI.**
 - [x] **Frame de transición entre vistas descartado.** La navegación se conserva inmediata.
 
