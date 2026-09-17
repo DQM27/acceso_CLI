@@ -24,6 +24,16 @@ const SeccionActivaContexto = createContext(true);
 
 export const SeccionActivaProvider = SeccionActivaContexto.Provider;
 
+/** "¿Soy la sección visible ahora?", para quien necesite reaccionar al
+ * volver a activarse sin depender de `useBarraEstado` -- ver `Tabla.tsx`,
+ * que reaplica el layout guardado cada vez que esto pasa a `true` (AG Grid
+ * recalcula el ancho de columnas `flex` al remedir su contenedor, que pasa
+ * de `display: none` a visible otra vez -- eso pisa el layout guardado, que
+ * `onGridReady` sólo aplicó una vez, en el montaje inicial). */
+export function useSeccionActiva() {
+  return useContext(SeccionActivaContexto);
+}
+
 /** Publica `mensaje` en la barra de estado mientras el componente que llama
  * esto está MONTADO Y ACTIVO (ver `SeccionActivaContexto`) -- lo limpia
  * (vuelve a `null`) al desmontar o al dejar de ser la sección visible, así

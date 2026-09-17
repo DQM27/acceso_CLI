@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { useCallback, useMemo, useState } from "react";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
+import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import {
   etiquetaCampo,
@@ -62,15 +62,14 @@ export default function Auditoria() {
 
   useBarraEstado(cargando ? "Cargando…" : `${filas.length} cambio(s) auditado(s)`);
 
-  useEffect(() => {
-    let vigente = true;
+  const recargar = useCallback((estaVigente: () => boolean = () => true) => {
     // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
     // directo -- ver el mismo comentario en Activos.tsx.
-    Promise.resolve()
+    return Promise.resolve()
       .then(() => setCargando(true))
       .then(() => Promise.all([listarAuditoria(), listarAuditoriaGafetes()]))
       .then(([{ items: cambios, truncado }, incidentesGafetes]) => {
-        if (!vigente) return;
+        if (!estaVigente()) return;
         setTruncado(truncado);
         setCambiosCargados(cambios.length);
         const actuales = nombresActuales(cambios);
@@ -103,12 +102,15 @@ export default function Auditoria() {
           ),
         );
       })
-      .catch((error) => vigente && toast.error(String(error)))
-      .finally(() => vigente && setCargando(false));
-    return () => {
-      vigente = false;
-    };
+      .finally(() => estaVigente() && setCargando(false));
   }, []);
+
+  // `true`: mismo criterio que Historial.tsx/Gafetes.tsx -- sin esto, un
+  // cambio auditado hecho en otra pantalla (o en otro dispositivo del
+  // sitio) nunca se reflejaba acá salvo que se reiniciara la app, porque
+  // esta pantalla queda montada para siempre (ver `visitadas` en App.tsx) y
+  // antes sólo cargaba una vez, al montar.
+  useCargaAlCambiar(recargar, true);
 
   // useMemo a propósito — mismo motivo que Activos.tsx/Historial.tsx: si
   // `columnas` se recrea en cada render, AG Grid reaplica el orden/ancho

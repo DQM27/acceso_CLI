@@ -12,6 +12,7 @@ import type {
   GridReadyEvent,
   SortChangedEvent,
 } from "ag-grid-community";
+import { useSeccionActiva } from "../contexto/BarraEstadoContexto";
 import { useUsuarioId } from "../contexto/SesionContexto";
 import { ListaFlotante, useListaFlotante } from "./ListaFlotante";
 
@@ -282,6 +283,24 @@ function TablaBase<T>(
       evento.api.applyColumnState({ state: guardado.columnas, applyOrder: true });
     }
   }
+
+  // La app mantiene TODAS las secciones ya visitadas montadas para siempre
+  // (ocultas con CSS `display: none`, ver el doc-comment de `visitadas` en
+  // App.tsx) -- `onGridReady` sólo corre una vez, al montar, pero AG Grid
+  // recalcula el ancho de las columnas `flex` cada vez que su contenedor se
+  // remide, y eso incluye pasar de `display: none` a visible otra vez al
+  // volver a esta sección. Esa recalculación pisa el layout ya aplicado.
+  // Reaplicarlo cada vez que la sección vuelve a activarse (no sólo al
+  // montar) es lo que evita que un usuario pierda el orden/ancho que ya
+  // había acomodado con sólo cambiar de pestaña y volver.
+  const seccionActiva = useSeccionActiva();
+  useEffect(() => {
+    if (!seccionActiva || !apiRef.current) return;
+    const guardado = leerEstadoGuardado(idGrilla);
+    if (guardado?.columnas?.length) {
+      apiRef.current.applyColumnState({ state: guardado.columnas, applyOrder: true });
+    }
+  }, [seccionActiva, idGrilla]);
 
   function alMoverColumna(evento: ColumnMovedEvent<T>) {
     if (evento.finished) guardarLayout(ocultas);
