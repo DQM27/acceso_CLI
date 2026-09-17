@@ -46,8 +46,21 @@ fn iniciar_sincronizacion_automatica(app: tauri::AppHandle) {
             })
             .await;
 
-            if let Ok(Ok(resumen)) = resultado {
-                let _ = app.emit("nube://sincronizado", resumen);
+            // Antes los dos casos de error acá quedaban en silencio total --
+            // ni el usuario los veía (es automático, sin botón que falle a
+            // la vista) ni quedaba ningún rastro (ver
+            // docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md,
+            // "Observabilidad"/"nada de fallos silenciosos"). Corre después
+            // de `configurar_plugins_condicionales`, así que el archivo de
+            // log ya está activo acá.
+            match resultado {
+                Ok(Ok(resumen)) => {
+                    let _ = app.emit("nube://sincronizado", resumen);
+                }
+                Ok(Err(error)) => log::warn!("sincronización automática falló: {error}"),
+                Err(error) => {
+                    log::error!("tarea de sincronización automática no pudo ejecutarse: {error}");
+                }
             }
 
             tokio::time::sleep(INTERVALO_SINCRONIZACION_AUTOMATICA).await;
@@ -138,13 +151,20 @@ fn configurar_plugins_condicionales(app: &tauri::AppHandle) -> tauri::Result<()>
     #[cfg(desktop)]
     app.plugin(tauri_plugin_updater::Builder::new().build())?;
 
-    if cfg!(debug_assertions) {
-        app.plugin(
-            tauri_plugin_log::Builder::default()
-                .level(log::LevelFilter::Info)
-                .build(),
-        )?;
-    }
+    // Antes solo corría en debug -- en producción no quedaba ningún rastro
+    // de qué pasó cuando algo falla en un sitio real (ver
+    // docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md, "Logs
+    // útiles"/"Observabilidad"). Los targets por defecto del plugin ya
+    // escriben a un archivo rotado (`LogDir`, tope 40 KB, `KeepOne`) además
+    // de stdout -- no hace falta configurar nada de eso a mano. Solo se baja
+    // el nivel en release para no llenar el archivo con ruido de uso normal:
+    // `Warn` deja fallos y advertencias reales, no cada operación exitosa.
+    let nivel = if cfg!(debug_assertions) {
+        log::LevelFilter::Info
+    } else {
+        log::LevelFilter::Warn
+    };
+    app.plugin(tauri_plugin_log::Builder::default().level(nivel).build())?;
     Ok(())
 }
 
