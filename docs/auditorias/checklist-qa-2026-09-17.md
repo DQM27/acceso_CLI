@@ -21,7 +21,8 @@
 - [ ] **Correo para el diagnóstico crítico** — ¿creamos cuenta en Resend (gratis para este volumen) para que el zip de diagnóstico se mande solo? *(Vos dijiste "opción A" — falta el ok final para crear la cuenta)*
 - [ ] **Ambiente de staging** — confirmar que armamos el 2do proyecto Supabase gratis para probar antes de un release real *(dijiste que te gusta la idea — falta confirmar que arrancamos)*
 - [ ] **Sentry (error-tracking automático)** — ¿lo sumamos o nos alcanza con el archivo de log local por ahora? Nivel gratis alcanza para este volumen, pero es una cuenta externa más
-- [ ] **Revisión de código obligatoria en GitHub** — ¿activamos "no dejar mergear sin aprobación" en `main`? Es un checkbox en Settings del repo, no código — pero lo tenés que activar vos o decirme que lo haga
+- [ ] **Revisión de código obligatoria en GitHub** — el archivo `CODEOWNERS` ya está (`.github/CODEOWNERS`, @DQM27 como revisor por defecto). Falta el interruptor, que **no tengo forma de activar yo** (no hay herramienta para tocar configuración del repo en este entorno) — vos lo hacés en 1 minuto: GitHub → repo → **Settings → Branches → Add branch protection rule** → rama `main` → tildar **"Require a pull request before merging"** + **"Require review from Code Owners"** → Save.
+  ⚠️ **Ojo con esto:** una vez activado, ni siquiera vos podés pushear directo a `main` (ni yo, cuando trabajo con tu cuenta) — todo cambio, sin excepción, tiene que pasar por PR + tu propia aprobación como Code Owner. Si eso te complica el flujo del día a día, hay una casilla "Do not allow bypassing the above settings" que podés dejar SIN marcar para que el dueño del repo pueda saltarse la regla en un apuro.
 - [ ] **Runbook de base local dañada** — falta que confirmes qué tablas es aceptable perder si un sitio tiene que reconstruirse desde la nube (ver plan, punto 7) antes de poder diseñar la pantalla
 
 ## Trabajo técnico pendiente (no necesita tu decisión, solo tiempo)
