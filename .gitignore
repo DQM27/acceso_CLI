@@ -17,6 +17,14 @@ supabase_admin_key.txt
 supabase_signing_key.json
 nueva_clave_firma.json
 
+# Datos personales reales (empleados/contratistas) que no van a git -- se
+# usan localmente como insumo, el import real va a la DB, no al repo.
+empleados_costa_rica.sql
+contratistas_base_final_limpia_v15.sql
+
+# Configuración local de servidores MCP -- no compartida vía git.
+.mcp.json
+
 # IDE / editores
 .vscode/
 .idea/
