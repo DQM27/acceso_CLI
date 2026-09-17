@@ -45,8 +45,30 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import uniffi.control_acceso_mobile.EmpresaProveedor
+import uniffi.control_acceso_mobile.IngresoProveedorRemoto
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.RegistroIngresoProveedorActivoResumen
+
+/// Clave estable para `key` de `LazyColumn`/filtro de texto -- `Local` e
+/// `Remota` usan ids de mundos distintos (`Int` autoincremental vs `UUID`
+/// de la nube), sin esto la lista fusionada no tiene una sola noción de
+/// identidad. Mismo criterio que `claveFilaProveedorActiva` en
+/// `desktop/src/api/proveedores.ts`.
+private fun FilaProveedorActiva.clave(): String = when (this) {
+    is FilaProveedorActiva.Local -> "local-${registro.id}"
+    is FilaProveedorActiva.Remota -> "remota-${remoto.uuid}"
+}
+
+private fun FilaProveedorActiva.coincideCon(busqueda: String): Boolean = when (this) {
+    is FilaProveedorActiva.Local -> registro.cedula.contains(busqueda, ignoreCase = true) ||
+        registro.nombre.contains(busqueda, ignoreCase = true) ||
+        registro.empresaNombre.contains(busqueda, ignoreCase = true) ||
+        (registro.placa?.contains(busqueda, ignoreCase = true) == true)
+    is FilaProveedorActiva.Remota -> remoto.cedula.contains(busqueda, ignoreCase = true) ||
+        remoto.nombre.contains(busqueda, ignoreCase = true) ||
+        remoto.empresaNombre.contains(busqueda, ignoreCase = true) ||
+        (remoto.placa?.contains(busqueda, ignoreCase = true) == true)
+}
 
 /// Control de proveedores -- ver
 /// `docs/features-futuras/plan-control-proveedores.md`. Mismo esqueleto
@@ -81,8 +103,8 @@ fun PantallaProveedores(nucleo: Nucleo, secretoStore: SecretoDispositivoStore) {
     // leído -- un proveedor no trae ese distintivo, pero no vale la pena
     // rechazar una lectura válida sólo por el tipo detectado.
     var escaneandoPlaca by remember { mutableStateOf(false) }
-    var registroParaSalida by remember {
-        mutableStateOf<RegistroIngresoProveedorActivoResumen?>(null)
+    var filaParaSalida by remember {
+        mutableStateOf<FilaProveedorActiva?>(null)
     }
 
     if (escaneando) {
@@ -92,7 +114,7 @@ fun PantallaProveedores(nucleo: Nucleo, secretoStore: SecretoDispositivoStore) {
                 escaneando = false
                 val numero = documento.numeroDocumento.filter(Char::isDigit)
                     .ifBlank { documento.numeroDocumento }
-                viewModel.rellenarDesdeDocumento(numero, documento.nombre)
+                viewModel.rellenarDesdeDocumento(numero, documento.nombre, documento.apellidos)
             },
             onCerrar = { escaneando = false },
         )
@@ -125,12 +147,7 @@ fun PantallaProveedores(nucleo: Nucleo, secretoStore: SecretoDispositivoStore) {
     val activosFiltrados = if (busqueda.isBlank()) {
         viewModel.activos
     } else {
-        viewModel.activos.filter { registro ->
-            registro.cedula.contains(busqueda, ignoreCase = true) ||
-                registro.nombre.contains(busqueda, ignoreCase = true) ||
-                registro.empresaNombre.contains(busqueda, ignoreCase = true) ||
-                (registro.placa?.contains(busqueda, ignoreCase = true) == true)
-        }
+        viewModel.activos.filter { it.coincideCon(busqueda) }
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
@@ -194,10 +211,10 @@ fun PantallaProveedores(nucleo: Nucleo, secretoStore: SecretoDispositivoStore) {
                 contentPadding = PaddingValues(top = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp),
             ) {
-                items(activosFiltrados, key = { it.id }) { registro ->
+                items(activosFiltrados, key = { it.clave() }) { fila ->
                     FilaProveedorActivo(
-                        registro = registro,
-                        onConfirmarSalida = { registroParaSalida = registro },
+                        fila = fila,
+                        onConfirmarSalida = { filaParaSalida = fila },
                     )
                 }
             }
@@ -205,11 +222,11 @@ fun PantallaProveedores(nucleo: Nucleo, secretoStore: SecretoDispositivoStore) {
     }
 
     DialogoConfirmarSalidaProveedor(
-        registro = registroParaSalida,
-        onDismiss = { registroParaSalida = null },
+        fila = filaParaSalida,
+        onDismiss = { filaParaSalida = null },
         onConfirmar = {
             viewModel.registrarSalida(it)
-            registroParaSalida = null
+            filaParaSalida = null
         },
     )
 }
@@ -509,7 +526,15 @@ private fun TarjetaPasoProveedor(
 }
 
 @Composable
-private fun FilaProveedorActivo(
+private fun FilaProveedorActivo(fila: FilaProveedorActiva, onConfirmarSalida: () -> Unit) {
+    when (fila) {
+        is FilaProveedorActiva.Local -> FilaProveedorActivoLocal(fila.registro, onConfirmarSalida)
+        is FilaProveedorActiva.Remota -> FilaProveedorActivoRemota(fila.remoto, onConfirmarSalida)
+    }
+}
+
+@Composable
+private fun FilaProveedorActivoLocal(
     registro: RegistroIngresoProveedorActivoResumen,
     onConfirmarSalida: () -> Unit,
 ) {
@@ -549,13 +574,66 @@ private fun FilaProveedorActivo(
     }
 }
 
+/// Ver el doc-comment de [FilaProveedorActiva] -- un ingreso abierto por
+/// OTRO dispositivo del sitio, sin `id` local (sólo `uuid` de la nube).
+@Composable
+private fun FilaProveedorActivoRemota(remoto: IngresoProveedorRemoto, onConfirmarSalida: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            "Gafete ${remoto.gafeteNumero}",
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+        )
+        Text(
+            "${remoto.nombre} · ${remoto.cedula}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            remoto.empresaNombre + (remoto.placa?.let { " · $it" } ?: ""),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "Ingresó ${textoFechaHora(remoto.horaEntrada)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "Otro dispositivo",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Row(modifier = Modifier.padding(top = 8.dp)) {
+            BotonBrisas(onClick = onConfirmarSalida) {
+                Text("Salida")
+            }
+        }
+    }
+}
+
 @Composable
 private fun DialogoConfirmarSalidaProveedor(
-    registro: RegistroIngresoProveedorActivoResumen?,
+    fila: FilaProveedorActiva?,
     onDismiss: () -> Unit,
-    onConfirmar: (RegistroIngresoProveedorActivoResumen) -> Unit,
+    onConfirmar: (FilaProveedorActiva) -> Unit,
 ) {
-    if (registro == null) return
+    if (fila == null) return
+    val gafeteNumero = when (fila) {
+        is FilaProveedorActiva.Local -> fila.registro.gafeteNumero
+        is FilaProveedorActiva.Remota -> fila.remoto.gafeteNumero
+    }
+    val nombre = when (fila) {
+        is FilaProveedorActiva.Local -> fila.registro.nombre
+        is FilaProveedorActiva.Remota -> fila.remoto.nombre
+    }
     Dialog(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -570,13 +648,13 @@ private fun DialogoConfirmarSalidaProveedor(
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                "Gafete ${registro.gafeteNumero} · ${registro.nombre}",
+                "Gafete $gafeteNumero · $nombre",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),
             )
             BotonBrisas(
-                onClick = { onConfirmar(registro) },
+                onClick = { onConfirmar(fila) },
                 modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
             ) {
                 Text("Confirmar")

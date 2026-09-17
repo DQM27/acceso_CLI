@@ -15,9 +15,23 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.EmpresaProveedor
+import uniffi.control_acceso_mobile.IngresoProveedorRemoto
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.RegistroIngresoProveedorActivoResumen
+
+/// Fila fusionada local+remota de la lista de activos -- mismo criterio
+/// que `FilaActiva` en [ActivosViewModel]: un ingreso de proveedor abierto
+/// por OTRO dispositivo del mismo sitio nunca vive en la tabla local
+/// (`registro_ingresos_proveedor`), sólo en la caché
+/// `ingresos_proveedor_remotos` -- sin esta fusión, la lista de "activos"
+/// de esta pantalla sólo mostraba lo que este mismo dispositivo había
+/// registrado, nunca lo que otro dispositivo del sitio tenía abierto en
+/// ese momento (bug reportado en pruebas reales, 2026-09-17).
+sealed class FilaProveedorActiva {
+    data class Local(val registro: RegistroIngresoProveedorActivoResumen) : FilaProveedorActiva()
+    data class Remota(val remoto: IngresoProveedorRemoto) : FilaProveedorActiva()
+}
 
 /// Dueño del estado real de [PantallaProveedores] y de las llamadas a
 /// [Nucleo] -- mismo criterio que [GafetesProvisionalesViewModel]:
@@ -31,7 +45,7 @@ class ProveedoresViewModel(
     private val secretoStore: SecretoDispositivoStore,
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
-    var activos by mutableStateOf<List<RegistroIngresoProveedorActivoResumen>>(emptyList())
+    var activos by mutableStateOf<List<FilaProveedorActiva>>(emptyList())
         private set
     var cargando by mutableStateOf(false)
         private set
@@ -71,7 +85,11 @@ class ProveedoresViewModel(
         viewModelScope.launch {
             cargando = true
             try {
-                activos = withContext(dispatcherIO) { nucleo.listarProveedoresActivos() }
+                val (locales, remotos) = withContext(dispatcherIO) {
+                    nucleo.listarProveedoresActivos() to nucleo.listarIngresosProveedorRemotos()
+                }
+                activos = locales.map { FilaProveedorActiva.Local(it) } +
+                    remotos.map { FilaProveedorActiva.Remota(it) }
                 error = null
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
@@ -138,9 +156,19 @@ class ProveedoresViewModel(
         }
     }
 
-    fun rellenarDesdeDocumento(cedulaLeida: String?, nombreLeido: String?) {
+    /// `nombreLeido`/`apellidosLeido` llegan separados de un documento MRZ
+    /// (`DocumentoDetectado.nombre`/`.apellidos` -- ver
+    /// `LectorDocumentosIdentidad.kt`, `ResultadoMrz.aDocumentoDetectado`);
+    /// usar sólo `nombre` (como hacía antes) dejaba el campo vacío o
+    /// incompleto cada vez que el nombre de pila viajaba en un campo MRZ
+    /// distinto al apellido -- bug reportado en pruebas reales en
+    /// dispositivo (2026-09-17).
+    fun rellenarDesdeDocumento(cedulaLeida: String?, nombreLeido: String?, apellidosLeido: String? = null) {
         cedulaLeida?.let { cambiarCedula(it) }
-        nombreLeido?.let { nombre = it }
+        val nombreCompleto = listOfNotNull(nombreLeido, apellidosLeido)
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+        if (nombreCompleto.isNotBlank()) nombre = nombreCompleto
     }
 
     fun registrarIngreso(gafeteNumero: Long, onExito: () -> Unit) {
@@ -190,12 +218,29 @@ class ProveedoresViewModel(
         }
     }
 
-    fun registrarSalida(registro: RegistroIngresoProveedorActivoResumen) {
+    /// Local: cierra en `registro_ingresos_proveedor` (este dispositivo).
+    /// Remota: cierra directo contra la nube (mismo criterio que
+    /// `ActivosViewModel.confirmarSalida` para contratistas) -- nunca toca
+    /// el historial local, esa fila no es -- ni fue -- de este dispositivo.
+    fun registrarSalida(fila: FilaProveedorActiva) {
         viewModelScope.launch {
             try {
-                withContext(dispatcherIO) { nucleo.registrarSalidaProveedor(registro.id) }
+                withContext(dispatcherIO) {
+                    when (fila) {
+                        is FilaProveedorActiva.Local -> nucleo.registrarSalidaProveedor(fila.registro.id)
+                        is FilaProveedorActiva.Remota -> {
+                            val secreto = secretoStore.cargar()
+                                ?: throw SecretoDispositivoNoEncontradoException()
+                            nucleo.cerrarIngresoProveedorRemotoConSecreto(secreto, fila.remoto.uuid)
+                        }
+                    }
+                }
                 refrescarActivos()
             } catch (excepcion: NucleoException) {
+                error = excepcion.message
+            } catch (excepcion: SecretoDispositivoStoreException) {
+                error = excepcion.message
+            } catch (excepcion: SecretoDispositivoNoEncontradoException) {
                 error = excepcion.message
             }
         }
