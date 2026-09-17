@@ -25,7 +25,11 @@ import type { FiltroGafetes, GafeteResumen, TipoGafeteEntrada } from "../api";
  */
 export default function Gafetes() {
   const [texto, setTexto] = useState("");
-  const [tipo, setTipo] = useState<TipoGafeteEntrada | "">("");
+  // Sin opción "Todos los tipos" a propósito -- un número de gafete se
+  // repite entre pools (`gafetes.tipo`/`gafetes.numero` es único por PAR,
+  // no global, ver schema.rs), así que mezclar tipos en la misma vista
+  // puede confundir a cuál categoría pertenece cada fila.
+  const [tipo, setTipo] = useState<TipoGafeteEntrada>("contratista");
   const [filas, setFilas] = useState<GafeteResumen[]>([]);
   const [cargando, setCargando] = useState(true);
   const [formularioAbierto, setFormularioAbierto] = useState(false);
@@ -100,7 +104,7 @@ export default function Gafetes() {
     (estaVigente: () => boolean = () => true) => {
       setCargando(true);
       const numero = /^\d+$/.test(texto.trim()) ? Number(texto.trim()) : undefined;
-      const filtro: FiltroGafetes = { numero, tipo: tipo || undefined };
+      const filtro: FiltroGafetes = { numero, tipo };
       return buscarGafetes(filtro)
         .then((datos) => {
           if (estaVigente()) setFilas(datos);
@@ -144,12 +148,12 @@ export default function Gafetes() {
                 <div className="campo" style={{ flex: "0 1 12rem" }}>
                   <select
                     value={tipo}
-                    onChange={(evento) => setTipo(evento.target.value as TipoGafeteEntrada | "")}
+                    onChange={(evento) => setTipo(evento.target.value as TipoGafeteEntrada)}
                   >
-                    <option value="">Todos los tipos</option>
                     <option value="contratista">Contratista</option>
                     <option value="visita">Visita</option>
                     <option value="provisional_kof">Provisional KOF</option>
+                    <option value="proveedor">Proveedor</option>
                   </select>
                 </div>
               </>

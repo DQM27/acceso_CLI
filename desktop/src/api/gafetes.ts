@@ -18,12 +18,15 @@ export interface GafeteResumen {
   contratista_portador_nombre: string | null;
   visita_portador_id: number | null;
   visita_portador_nombre: string | null;
+  proveedor_portador_id: number | null;
+  proveedor_portador_nombre: string | null;
   fecha_marcado_perdido: string | null;
 }
 
 /** A quién se le asignó este gafete la última vez, sea cual sea su tipo —
- * a lo sumo uno de los dos campos de `GafeteResumen`/`IncidenteGafete`
- * tiene valor, nunca los dos.
+ * a lo sumo uno de estos tres campos de `GafeteResumen`/`IncidenteGafete`
+ * tiene valor, nunca más de uno (el `CHECK` par-exclusivo de `gafetes` en
+ * `schema.rs` lo garantiza).
  *
  * Nota: `ProvisionalKof` todavía no trae portador acá -- su ciclo es
  * entrega/devolución (`prestamos_gafete_provisional`), no
@@ -31,9 +34,16 @@ export interface GafeteResumen {
  * `src/database/queries/gafetes.rs`) todavía no hace `JOIN` contra
  * `encargados_ruta` para traer ese nombre. */
 export function nombrePortador(
-  fila: Pick<GafeteResumen, "contratista_portador_nombre" | "visita_portador_nombre">,
+  fila: Pick<
+    GafeteResumen,
+    "contratista_portador_nombre" | "visita_portador_nombre" | "proveedor_portador_nombre"
+  >,
 ): string | null {
-  return fila.contratista_portador_nombre ?? fila.visita_portador_nombre;
+  return (
+    fila.contratista_portador_nombre ??
+    fila.visita_portador_nombre ??
+    fila.proveedor_portador_nombre
+  );
 }
 
 // snake_case a propósito — espejo exacto de `TipoGafeteEntrada` (Rust,

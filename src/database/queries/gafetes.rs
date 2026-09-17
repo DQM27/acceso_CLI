@@ -20,6 +20,8 @@ pub struct GafeteResumen {
     pub contratista_portador_nombre: Option<String>,
     pub visita_portador_id: Option<i64>,
     pub visita_portador_nombre: Option<String>,
+    pub proveedor_portador_id: Option<i64>,
+    pub proveedor_portador_nombre: Option<String>,
     /// Fecha del incidente `PERDIDO` más reciente — sólo tiene sentido
     /// mostrarla cuando `estado == Perdido` (mientras el gafete esté
     /// disponible o de baja, el incidente que la generó ya fue resuelto).
@@ -75,12 +77,14 @@ impl GafetesQuery for SqliteGafetesQuery<'_> {
                 g.id, g.numero, g.tipo, g.estado,
                 g.contratista_portador_id, c.nombre,
                 g.visita_portador_id, cv.nombre,
+                g.proveedor_portador_id, rp.nombre,
                 (SELECT gi.fecha_hora FROM gafetes_incidentes gi
                  WHERE gi.gafete_id = g.id AND gi.tipo = 'PERDIDO'
                  ORDER BY gi.id DESC LIMIT 1)
              FROM gafetes g
              LEFT JOIN contratistas c ON c.id = g.contratista_portador_id
              LEFT JOIN cita_visitantes cv ON cv.id = g.visita_portador_id
+             LEFT JOIN registro_ingresos_proveedor rp ON rp.id = g.proveedor_portador_id
              {where_sql}
              ORDER BY g.numero"
         );
@@ -118,7 +122,9 @@ fn convertir_fila(row: &Row<'_>) -> rusqlite::Result<GafeteResumen> {
         contratista_portador_nombre: row.get(5)?,
         visita_portador_id: row.get(6)?,
         visita_portador_nombre: row.get(7)?,
-        fecha_marcado_perdido: row.get(8)?,
+        proveedor_portador_id: row.get(8)?,
+        proveedor_portador_nombre: row.get(9)?,
+        fecha_marcado_perdido: row.get(10)?,
     })
 }
 
@@ -189,5 +195,34 @@ mod tests {
 
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].tipo, TipoGafete::Visita);
+    }
+
+    #[test]
+    fn un_gafete_de_proveedor_asignado_trae_el_nombre_del_portador() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute_batch(
+                "INSERT INTO usuarios (id, cedula, nombre, password_hash, rol, activo)
+                 VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1);
+                 INSERT INTO empresas_proveedor (id, nombre, activo, uuid)
+                    VALUES (1, 'Maika', 1, 'uuid-empresa-1');
+                 INSERT INTO registro_ingresos_proveedor
+                    (id, cedula, nombre, empresa_id, empresa_nombre, gafete_numero,
+                     fecha_hora_ingreso, usuario_ingreso_id, usuario_ingreso_nombre, uuid)
+                 VALUES
+                    (1, '1-1111', 'Juan Perez', 1, 'Maika', 9,
+                     '2026-09-17T12:00:00Z', 1, 'Operador', 'uuid-1');
+                 INSERT INTO gafetes (numero, tipo, estado, proveedor_portador_id)
+                 VALUES (9, 'PROVEEDOR', 'PERDIDO', 1)",
+            )
+            .unwrap();
+
+        let query = SqliteGafetesQuery::new(&connection);
+        let items = query.buscar(&FiltroGafetes::default()).unwrap();
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].proveedor_portador_id, Some(1));
+        assert_eq!(items[0].proveedor_portador_nombre.as_deref(), Some("Juan Perez"));
     }
 }
