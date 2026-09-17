@@ -128,6 +128,26 @@ fn preparar_nucleo() -> (PathBuf, InstanciaGuard, Zeroizing<[u8; 32]>, AppCore) 
     (ruta_base_datos, instancia, clave_base_datos, core)
 }
 
+/// Registra los plugins que no se cargan siempre (updater fuera de móvil,
+/// logging solo en debug) -- separado de `run()` únicamente para mantenerla
+/// bajo el tope de líneas de Clippy (mismo motivo que `preparar_nucleo`).
+fn configurar_plugins_condicionales(app: &tauri::AppHandle) -> tauri::Result<()> {
+    // El updater no existe en móvil — esta app es 100% escritorio (ver
+    // el comentario de crate-type arriba), pero se guarda el gate
+    // igual, mismo criterio que el ejemplo oficial de Tauri.
+    #[cfg(desktop)]
+    app.plugin(tauri_plugin_updater::Builder::new().build())?;
+
+    if cfg!(debug_assertions) {
+        app.plugin(
+            tauri_plugin_log::Builder::default()
+                .level(log::LevelFilter::Info)
+                .build(),
+        )?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// Inicia la aplicación de escritorio y registra todos los comandos Tauri.
 ///
@@ -147,21 +167,7 @@ pub fn run() {
             clave_base_datos,
         ))
         .setup(|app| {
-            // El updater no existe en móvil — esta app es 100% escritorio (ver
-            // el comentario de crate-type arriba), pero se guarda el gate
-            // igual, mismo criterio que el ejemplo oficial de Tauri.
-            #[cfg(desktop)]
-            app.handle()
-                .plugin(tauri_plugin_updater::Builder::new().build())?;
-
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
-
+            configurar_plugins_condicionales(app.handle())?;
             iniciar_sincronizacion_automatica(app.handle().clone());
             Ok(())
         })

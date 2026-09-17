@@ -199,6 +199,11 @@ fn base_vacia_llega_a_version_actual_y_es_idempotente() {
 }
 
 #[test]
+// Rebobina el esquema a v9 a mano, SQL por SQL -- crece por diseño con cada
+// migración nueva que haya que deshacer (mismo criterio que
+// `#[allow(clippy::too_many_lines)]` en `tests/contratista_queries.rs` y en
+// `migracion_11_...` más abajo).
+#[allow(clippy::too_many_lines)]
 fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
     // MIGRACION_13 (más reciente que ésta) termina descartando
     // `auditoria_contratistas` por completo (reemplazada por
@@ -459,6 +464,9 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
 }
 
 #[test]
+// Rebobina el esquema a v11 a mano, SQL por SQL -- mismo motivo que
+// `migracion_10_...`/`migracion_11_...` arriba.
+#[allow(clippy::too_many_lines)]
 fn migracion_12_habilita_cambio_de_cedula() {
     // Igual comentario que en `migracion_10_...`: MIGRACION_13 termina
     // reemplazando `auditoria_contratistas` por `auditoria_cambios`, así que

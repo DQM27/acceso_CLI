@@ -135,9 +135,6 @@ mod tests {
             estado: None,
         }
         .construir();
-        assert_eq!(
-            filtro.tipo,
-            Some(Igualdad::Incluye(TipoGafete::Proveedor))
-        );
+        assert_eq!(filtro.tipo, Some(Igualdad::Incluye(TipoGafete::Proveedor)));
     }
 }
