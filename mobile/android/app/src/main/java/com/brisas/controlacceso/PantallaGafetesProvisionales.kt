@@ -30,6 +30,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -59,9 +61,18 @@ fun PantallaGafetesProvisionales(
         viewModel(factory = GafetesProvisionalesViewModel.factory(nucleo, secretoStore))
     var gafeteTexto by remember { mutableStateOf("") }
     var filaParaDevolver by remember { mutableStateOf<FilaGafeteProvisionalActiva?>(null) }
+    val focoGafete = remember { FocusRequester() }
     LaunchedEffect(refrescarNube) {
         if (refrescarNube > 0) {
             viewModel.refrescarActivos()
+        }
+    }
+    // Salta directo al número de gafete al elegir encargado -- guardia no
+    // tiene que tocar la pantalla para seguir con el flujo. Pedido explícito
+    // del usuario en pruebas reales, 2026-09-17.
+    LaunchedEffect(viewModel.encargadoSeleccionado) {
+        if (viewModel.encargadoSeleccionado != null) {
+            focoGafete.requestFocus()
         }
     }
 
@@ -135,7 +146,7 @@ fun PantallaGafetesProvisionales(
                 singleLine = true,
                 shape = FormaCampoBrisas,
                 colors = ColoresCampoBrisas(),
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp).focusRequester(focoGafete),
             )
 
             viewModel.error?.let { mensaje ->
