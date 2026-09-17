@@ -144,6 +144,7 @@ class ProveedoresViewModel(
         viewModelScope.launch {
             try {
                 val id = withContext(dispatcherIO) { nucleo.crearEmpresaProveedor(nombreNuevo.trim()) }
+                CambiosNube.solicitar()
                 empresaSeleccionada = EmpresaProveedor(id = id, nombre = nombreNuevo.trim(), activo = true)
                 textoEmpresa = nombreNuevo.trim()
                 resultadosEmpresa = emptyList()
@@ -195,6 +196,7 @@ class ProveedoresViewModel(
                         gafeteNumero,
                     )
                 }
+                CambiosNube.solicitar()
                 mensaje = "Ingreso registrado"
                 error = null
                 cedula = ""
@@ -235,6 +237,7 @@ class ProveedoresViewModel(
                         }
                     }
                 }
+                CambiosNube.solicitar()
                 refrescarActivos()
             } catch (excepcion: NucleoException) {
                 error = excepcion.message

@@ -3265,6 +3265,7 @@ pub struct ResumenCatalogo {
     pub usuarios_recibidos: u32,
     pub gafetes_recibidos: u32,
     pub rutas_recibidas: u32,
+    pub empresas_proveedor_recibidas: u32,
 }
 
 #[derive(serde::Deserialize)]
@@ -3363,7 +3364,19 @@ struct CatalogoRemotoDescargado {
     usuarios: Vec<FilaUsuarioRemota>,
     gafetes: Vec<FilaGafeteRemota>,
     rutas: Vec<FilaRutaRemota>,
+    empresas_proveedor: Vec<FilaEmpresaProveedorRemota>,
     marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// Catálogo por sitio, como rutas (ver `FilaRutaRemota`) -- a diferencia de
+/// `empresas` (contratistas), que es global entre sitios, cada sitio
+/// maneja su propio directorio de empresas proveedoras.
+#[derive(serde::Deserialize)]
+struct FilaEmpresaProveedorRemota {
+    id: String,
+    nombre: String,
+    activa: bool,
+    updated_at: String,
 }
 
 /// Trae empresas/contratistas/usuarios/gafetes, cada uno incremental según
@@ -3444,13 +3457,25 @@ fn descargar_catalogo_remoto(
             contexto.base_url, contexto.sitio_id
         ),
     )?;
+    // Comparte `filtro_incremental` (marca general), no una propia -- mismo
+    // criterio que rutas: catálogo por sitio, sin la complejidad de
+    // "portador pendiente" que sí justifica la marca separada de gafetes.
+    let empresas_proveedor: Vec<FilaEmpresaProveedorRemota> = obtener_json_paginado(
+        &cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/empresas_proveedor?sitio_id=eq.{}&select=id,nombre,activa,updated_at{filtro_incremental}",
+            contexto.base_url, contexto.sitio_id
+        ),
+    )?;
 
-    // Máximo `updated_at` real entre empresas/contratistas/usuarios/rutas
-    // -- gafetes lleva su propia marca por separado (`guardar_gafetes` la
-    // calcula después, capada por lo que haya quedado pendiente de
-    // resolver, ver su doc-comment). Sin filas nuevas, la marca no avanza
-    // -- preferible repetir la misma consulta (ya sabemos que no trae
-    // nada) a arriesgar perder una fila por un reloj local desviado.
+    // Máximo `updated_at` real entre empresas/contratistas/usuarios/rutas/
+    // empresas_proveedor -- gafetes lleva su propia marca por separado
+    // (`guardar_gafetes` la calcula después, capada por lo que haya
+    // quedado pendiente de resolver, ver su doc-comment). Sin filas
+    // nuevas, la marca no avanza -- preferible repetir la misma consulta
+    // (ya sabemos que no trae nada) a arriesgar perder una fila por un
+    // reloj local desviado.
     let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> =
         marca_anterior.and_then(|marca| crate::tiempo::parsear_utc(marca).ok());
     for actualizado_en in empresas
@@ -3459,6 +3484,7 @@ fn descargar_catalogo_remoto(
         .chain(contratistas.iter().map(|f| &f.updated_at))
         .chain(usuarios.iter().map(|f| &f.updated_at))
         .chain(rutas.iter().map(|f| &f.updated_at))
+        .chain(empresas_proveedor.iter().map(|f| &f.updated_at))
     {
         let actualizado_en = crate::tiempo::parsear_utc(actualizado_en)
             .map_err(|_| SincronizacionError::FechaInvalida(actualizado_en.clone()))?;
@@ -3473,6 +3499,7 @@ fn descargar_catalogo_remoto(
         usuarios,
         gafetes,
         rutas,
+        empresas_proveedor,
         marca_mas_nueva,
     })
 }
@@ -3491,6 +3518,30 @@ fn guardar_rutas(
                 uuid = COALESCE(rutas.uuid, excluded.uuid)
             ",
             params![ruta.numero, ruta.activo, ruta.id],
+        )?;
+        recibidas += 1;
+    }
+    Ok(recibidas)
+}
+
+/// Mismo patrón `ON CONFLICT(nombre)` que `guardar_rutas`/`guardar_empresas`
+/// -- si ya existe localmente una empresa con el mismo nombre (la creó
+/// este dispositivo), la actualiza y le completa el `uuid` en vez de
+/// duplicarla.
+fn guardar_empresas_proveedor(
+    transaction: &rusqlite::Transaction<'_>,
+    empresas: &[FilaEmpresaProveedorRemota],
+) -> Result<u32, SincronizacionError> {
+    let mut recibidas = 0;
+    for empresa in empresas {
+        transaction.execute(
+            "
+            INSERT INTO empresas_proveedor (nombre, activo, uuid) VALUES (?1, ?2, ?3)
+            ON CONFLICT(nombre) DO UPDATE SET
+                activo = excluded.activo,
+                uuid = COALESCE(empresas_proveedor.uuid, excluded.uuid)
+            ",
+            params![empresa.nombre, empresa.activa, empresa.id],
         )?;
         recibidas += 1;
     }
@@ -3792,12 +3843,15 @@ pub fn recibir_catalogo_del_sitio(
     let (gafetes_recibidos, marca_gafetes_nueva) =
         guardar_gafetes(&transaction, &descarga.gafetes)?;
     let rutas_recibidas = guardar_rutas(&transaction, &descarga.rutas)?;
+    let empresas_proveedor_recibidas =
+        guardar_empresas_proveedor(&transaction, &descarga.empresas_proveedor)?;
     let resumen = ResumenCatalogo {
         empresas_recibidas,
         contratistas_recibidos,
         usuarios_recibidos,
         gafetes_recibidos,
         rutas_recibidas,
+        empresas_proveedor_recibidas,
     };
 
     if let Some(marca) = descarga.marca_mas_nueva {
@@ -6764,8 +6818,9 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let base_url = format!("http://{}", listener.local_addr().unwrap());
         let servidor = thread::spawn(move || {
-            // 5 pedidos por sync: empresas/contratistas/usuarios/gafetes/rutas.
-            for paso in 0..5 {
+            // 6 pedidos por sync: empresas/contratistas/usuarios/gafetes/
+            // rutas/empresas_proveedor.
+            for paso in 0..6 {
                 let (mut socket, _) = listener.accept().unwrap();
                 socket
                     .set_read_timeout(Some(Duration::from_secs(3)))
@@ -6816,11 +6871,11 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let base_url = format!("http://{}", listener.local_addr().unwrap());
         let servidor = thread::spawn(move || {
-            // Dos syncs completos = 10 pedidos (empresas/contratistas/
-            // usuarios/gafetes/rutas, dos veces). Sólo el de gafetes trae
-            // algo, para que la marca de agua realmente tenga algo que
-            // guardar.
-            for paso in 0..10 {
+            // Dos syncs completos = 12 pedidos (empresas/contratistas/
+            // usuarios/gafetes/rutas/empresas_proveedor, dos veces). Sólo el
+            // de gafetes trae algo, para que la marca de agua realmente
+            // tenga algo que guardar.
+            for paso in 0..12 {
                 let (mut socket, _) = listener.accept().unwrap();
                 socket
                     .set_read_timeout(Some(Duration::from_secs(3)))
@@ -6839,7 +6894,7 @@ mod tests {
                         "primer sync: sin marca todavía, tiene que pedir todo"
                     );
                     r#"[{"id":"gafete-remoto","numero":26,"tipo":"CONTRATISTA","estado":"DISPONIBLE","contratista_portador_id":null,"contratista_portador_nombre":null,"visita_portador_id":null,"visita_portador_nombre":null,"updated_at":"2026-01-05T00:00:00Z"}]"#
-                } else if paso == 8 {
+                } else if paso == 9 {
                     let pedido = String::from_utf8(pedido).unwrap();
                     assert!(
                         pedido.contains("updated_at=gt.2026-01-05T00%3A00%3A00Z")
@@ -6885,6 +6940,7 @@ mod tests {
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         ]);
 
         let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
@@ -6897,6 +6953,7 @@ mod tests {
                 usuarios_recibidos: 0,
                 gafetes_recibidos: 0,
                 rutas_recibidas: 0,
+                empresas_proveedor_recibidas: 0,
             }
         );
         let (nombre_empresa, uuid_empresa): (String, Option<String>) = connection
@@ -6931,6 +6988,7 @@ mod tests {
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
              [{\"id\":\"uuid-ruta-remota\",\"numero\":79,\"activo\":true,\
              \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         ]);
 
         let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
@@ -6944,6 +7002,80 @@ mod tests {
         assert_eq!(numero, 79);
         assert_eq!(activo, 1);
         assert_eq!(uuid.as_deref(), Some("uuid-ruta-remota"));
+    }
+
+    /// El pull que le faltaba a `empresas_proveedor`: antes sólo se
+    /// empujaba (local → nube), nunca se traía de vuelta -- un catálogo
+    /// creado en un dispositivo nunca aparecía en el otro (bug reportado
+    /// en pruebas reales, 2026-09-17).
+    #[test]
+    fn recibe_empresas_proveedor_del_sitio_dentro_del_catalogo_general() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_respuestas(vec![
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-empresa-proveedor-remota\",\"nombre\":\"MayCorp\",\"activa\":true,\
+             \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+        ]);
+
+        let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(resumen.empresas_proveedor_recibidas, 1);
+        let (nombre, activo, uuid): (String, i64, String) = connection
+            .query_row(
+                "SELECT nombre, activo, uuid FROM empresas_proveedor",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(nombre, "MayCorp");
+        assert_eq!(activo, 1);
+        assert_eq!(uuid, "uuid-empresa-proveedor-remota");
+    }
+
+    /// Mismo criterio que `recibir_catalogo_fusiona_con_una_fila_local_existente_sin_duplicarla`,
+    /// pero para empresas de proveedor -- una empresa creada en ESTE
+    /// dispositivo no debe duplicarse cuando la nube confirma la misma
+    /// fila (por nombre), sólo completarle el `uuid`.
+    #[test]
+    fn recibe_empresa_proveedor_fusiona_con_una_fila_local_existente_sin_duplicarla() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO empresas_proveedor (nombre, uuid) VALUES ('MayCorp', 'uuid-local-temporal')",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_respuestas(vec![
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-empresa-proveedor-remota\",\"nombre\":\"MayCorp\",\"activa\":true,\
+             \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+        ]);
+
+        recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        let total: i64 = connection
+            .query_row("SELECT COUNT(*) FROM empresas_proveedor", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(total, 1, "no duplica la empresa que ya tenía por nombre");
+        let uuid: String = connection
+            .query_row("SELECT uuid FROM empresas_proveedor", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(
+            uuid, "uuid-local-temporal",
+            "COALESCE no pisa un uuid que ya tenía"
+        );
     }
 
     #[test]
@@ -7128,6 +7260,7 @@ mod tests {
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         ]);
 
         recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
@@ -7173,6 +7306,7 @@ mod tests {
              \"identificacion\":null,\"empresa_id\":null,\"empresa_nombre\":null,\
              \"activo\":true,\"tipo_ingreso\":null,\"fecha_vencimiento_praind\":null,\
              \"es_personal_ruta\":null,\"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
