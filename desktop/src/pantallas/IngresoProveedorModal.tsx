@@ -134,7 +134,7 @@ export default function IngresoProveedorModal({
         <div style={{ display: "flex", gap: "0.75rem" }}>
           <label className="campo" style={{ flex: 1 }}>
             Placa (opcional)
-            <input {...register("placa")} autoComplete="off" placeholder="Llegó a pie si se deja en blanco" />
+            <input {...register("placa")} autoComplete="off" placeholder="Caminando si se deja en blanco" />
           </label>
           <label className="campo" style={{ flex: "0 1 8rem" }}>
             N.° de gafete

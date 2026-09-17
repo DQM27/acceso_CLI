@@ -119,7 +119,7 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
         headerName: "Placa",
         flex: 0.8,
         minWidth: 100,
-        valueFormatter: (p) => p.value ?? "A pie",
+        valueFormatter: (p) => p.value ?? "Caminando",
       },
       { field: "gafete_numero", headerName: "Gafete", flex: 0.7, minWidth: 90 },
       {
@@ -127,7 +127,8 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
         headerName: "Fecha",
         flex: 0.9,
         minWidth: 100,
-        valueGetter: (p) => (p.data ? textoFechaDDMMYYYY(p.data.fecha_hora_ingreso) : ""),
+        valueGetter: (p) => (p.data ? fechaLocalYMD(p.data.fecha_hora_ingreso) : ""),
+        valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
       },
       {
         colId: "hora_ingreso",
@@ -176,7 +177,7 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
         headerName: "Placa",
         flex: 0.8,
         minWidth: 100,
-        valueFormatter: (p) => p.value ?? "A pie",
+        valueFormatter: (p) => p.value ?? "Caminando",
       },
       {
         field: "gafete_numero",
@@ -210,14 +211,14 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
       },
       {
         field: "usuario_ingreso_nombre",
-        headerName: "Recibió",
+        headerName: "Dio ingreso",
         flex: 1.1,
         minWidth: 120,
         valueFormatter: (p) => p.value ?? "—",
       },
       {
         field: "usuario_salida_nombre",
-        headerName: "Despidió",
+        headerName: "Dio salida",
         flex: 1.1,
         minWidth: 120,
         valueFormatter: (p) => p.value ?? "—",
