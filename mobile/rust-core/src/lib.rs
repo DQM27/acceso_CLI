@@ -2753,6 +2753,10 @@ impl Nucleo {
         let resumen_cola = control_acceso::nube::drenar_cola(&conexion, &contexto, 200)?;
         let cierres_recibidos =
             control_acceso::nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)?;
+        let _cierres_recibidos_proveedor =
+            control_acceso::nube::recibir_cierres_de_ingresos_propios_proveedor(
+                &conexion, &contexto,
+            )?;
         let remotos = control_acceso::nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
         let _remotos_proveedor =
             control_acceso::nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;
@@ -2853,6 +2857,10 @@ impl Nucleo {
         let resumen_cola = control_acceso::nube::drenar_cola(&conexion, &contexto, 200)?;
         let cierres_recibidos =
             control_acceso::nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)?;
+        let _cierres_recibidos_proveedor =
+            control_acceso::nube::recibir_cierres_de_ingresos_propios_proveedor(
+                &conexion, &contexto,
+            )?;
         let remotos = control_acceso::nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
         let _remotos_proveedor =
             control_acceso::nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;

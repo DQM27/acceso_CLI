@@ -33,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -89,9 +90,24 @@ private fun FilaProveedorActiva.coincideCon(busqueda: String): Boolean = when (t
 /// referencia): un paso por tarjeta, encabezado con círculo numerado que
 /// se pone check al completarse.
 @Composable
-fun PantallaProveedores(nucleo: Nucleo, secretoStore: SecretoDispositivoStore) {
+fun PantallaProveedores(
+    nucleo: Nucleo,
+    secretoStore: SecretoDispositivoStore,
+    refrescarNube: Int = 0,
+) {
     val viewModel: ProveedoresViewModel =
         viewModel(factory = ProveedoresViewModel.factory(nucleo, secretoStore))
+    // Sin esto, un cambio que llega de OTRO dispositivo (pulso periódico o
+    // aviso Realtime) actualiza la caché local (`ingresos_proveedor_remotos`)
+    // pero esta pantalla nunca se entera -- mismo criterio que
+    // `PantallaActivos` (bug reportado en pruebas reales, 2026-09-17: un
+    // ingreso o salida hecho en la PC no se reflejaba en el teléfono hasta
+    // salir y volver a entrar a Proveedores).
+    LaunchedEffect(refrescarNube) {
+        if (refrescarNube > 0) {
+            viewModel.refrescarActivos()
+        }
+    }
     var mostrandoFormulario by remember { mutableStateOf(false) }
     var gafeteTexto by remember { mutableStateOf("") }
     var busqueda by remember { mutableStateOf("") }

@@ -15,6 +15,9 @@ export interface ResumenSincronizacion {
   fallidos: number;
   remotos_abiertos: number;
   cierres_recibidos: number;
+  /** Mismo criterio que `cierres_recibidos`, pero para ingresos de
+   * proveedor. */
+  cierres_recibidos_proveedor: number;
   empresas_recibidas: number;
   contratistas_recibidos: number;
   gafetes_recibidos: number;

@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 43;
+pub const SCHEMA_VERSION: i64 = 44;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -371,6 +371,11 @@ fn aplicar_migraciones_posteriores_a_29(
         *version = 43;
     }
 
+    if *version == 43 {
+        aplicar_migracion_44(connection)?;
+        *version = 44;
+    }
+
     Ok(())
 }
 
@@ -672,6 +677,27 @@ fn aplicar_migracion_43(connection: &Connection) -> Result<(), SchemaError> {
     transaction.execute_batch(MIGRACION_43)?;
     transaction.execute_batch("PRAGMA user_version = 43")?;
     transaction.commit()?;
+    Ok(())
+}
+
+/// Mismo criterio que `aplicar_migracion_39`/`41`: `registro_ingresos_proveedor`
+/// se recrea para relajar su `CHECK` de salida (ver el comentario de
+/// `MIGRACION_44`).
+fn aplicar_migracion_44(connection: &Connection) -> Result<(), SchemaError> {
+    connection.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    let resultado = ejecutar_migracion_44(connection);
+    connection.execute_batch("PRAGMA foreign_keys = ON;")?;
+    resultado
+}
+
+fn ejecutar_migracion_44(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_44)?;
+    transaction.execute_batch("PRAGMA user_version = 44")?;
+    transaction.commit()?;
+    if connection.prepare("PRAGMA foreign_key_check")?.exists([])? {
+        return Err(SchemaError::MigracionStrictReferenciasInvalidas);
+    }
     Ok(())
 }
 
@@ -3534,4 +3560,107 @@ CREATE TABLE historial_ingresos_proveedor_sitio (
 
 CREATE INDEX idx_historial_ingresos_proveedor_sitio_hora_entrada
 ON historial_ingresos_proveedor_sitio(hora_entrada);
+";
+
+// Relaja el CHECK de `registro_ingresos_proveedor` para permitir
+// `usuario_salida_id IS NULL` con salida ya registrada -- mismo criterio que
+// ya tiene `registro_ingresos` para contratistas desde MIGRACION_15 (ver esa
+// migración: cuando la nube confirma una salida cerrada en OTRO dispositivo,
+// `nube::recibir_cierres_de_ingresos_propios_proveedor` no tiene ningún
+// `usuario_salida_id` LOCAL válido para esa persona -- sólo el nombre que
+// viajó en el `UPDATE` remoto. El CHECK original de MIGRACION_41 exigía
+// `usuario_salida_id IS NOT NULL` junto con la fecha/nombre, cosa que
+// contratistas nunca tuvo -- bug encontrado en pruebas reales, 2026-09-17:
+// un ingreso de proveedor cerrado por OTRO dispositivo nunca se reflejaba en
+// el dispositivo dueño porque el `UPDATE` violaba este CHECK. `SQLite` no
+// permite `ALTER TABLE ... CHECK`, se recrea la tabla entera (mismo patrón
+// que MIGRACION_39/41: `PRAGMA foreign_keys OFF/ON` porque
+// `registro_ingresos_proveedor` referencia `empresas_proveedor`/`usuarios`).
+const MIGRACION_44: &str = r"
+CREATE TABLE registro_ingresos_proveedor_nueva (
+    id INTEGER PRIMARY KEY,
+    cedula TEXT NOT NULL,
+    nombre TEXT NOT NULL,
+    empresa_id INTEGER NOT NULL REFERENCES empresas_proveedor(id) ON DELETE RESTRICT,
+    empresa_nombre TEXT NOT NULL,
+    placa TEXT,
+    gafete_numero INTEGER NOT NULL,
+    fecha_hora_ingreso TEXT NOT NULL,
+    usuario_ingreso_id INTEGER NOT NULL REFERENCES usuarios(id),
+    usuario_ingreso_nombre TEXT NOT NULL,
+    fecha_hora_salida TEXT,
+    usuario_salida_id INTEGER REFERENCES usuarios(id),
+    usuario_salida_nombre TEXT,
+    uuid TEXT NOT NULL,
+    CHECK (
+        (fecha_hora_salida IS NULL AND usuario_salida_id IS NULL AND usuario_salida_nombre IS NULL)
+        OR
+        (fecha_hora_salida IS NOT NULL AND usuario_salida_nombre IS NOT NULL)
+    ),
+    CHECK (fecha_hora_salida IS NULL OR fecha_hora_salida >= fecha_hora_ingreso)
+) STRICT;
+INSERT INTO registro_ingresos_proveedor_nueva SELECT * FROM registro_ingresos_proveedor;
+DROP TABLE registro_ingresos_proveedor;
+ALTER TABLE registro_ingresos_proveedor_nueva RENAME TO registro_ingresos_proveedor;
+
+CREATE UNIQUE INDEX idx_registro_ingresos_proveedor_uuid ON registro_ingresos_proveedor(uuid);
+CREATE UNIQUE INDEX idx_registro_ingresos_proveedor_cedula_activa
+ON registro_ingresos_proveedor(cedula) WHERE fecha_hora_salida IS NULL;
+CREATE UNIQUE INDEX idx_registro_ingresos_proveedor_gafete_activo
+ON registro_ingresos_proveedor(gafete_numero) WHERE fecha_hora_salida IS NULL;
+CREATE INDEX idx_registro_ingresos_proveedor_empresa ON registro_ingresos_proveedor(empresa_id);
+
+CREATE TRIGGER registro_ingresos_proveedor_no_eliminar
+BEFORE DELETE ON registro_ingresos_proveedor
+BEGIN
+    SELECT RAISE(ABORT, 'Los ingresos de proveedor no se pueden eliminar');
+END;
+CREATE TRIGGER registro_ingresos_proveedor_ingreso_inmutable
+BEFORE UPDATE OF
+    cedula, nombre, empresa_id, empresa_nombre, placa, gafete_numero,
+    fecha_hora_ingreso, usuario_ingreso_id, usuario_ingreso_nombre, uuid
+ON registro_ingresos_proveedor
+WHEN
+    NEW.cedula IS NOT OLD.cedula
+    OR NEW.nombre IS NOT OLD.nombre
+    OR NEW.empresa_id IS NOT OLD.empresa_id
+    OR NEW.empresa_nombre IS NOT OLD.empresa_nombre
+    OR NEW.placa IS NOT OLD.placa
+    OR NEW.gafete_numero IS NOT OLD.gafete_numero
+    OR NEW.fecha_hora_ingreso IS NOT OLD.fecha_hora_ingreso
+    OR NEW.usuario_ingreso_id IS NOT OLD.usuario_ingreso_id
+    OR NEW.usuario_ingreso_nombre IS NOT OLD.usuario_ingreso_nombre
+    OR NEW.uuid IS NOT OLD.uuid
+BEGIN
+    SELECT RAISE(ABORT, 'Los datos de ingreso del proveedor son inmutables');
+END;
+CREATE TRIGGER registro_ingresos_proveedor_salida_unica
+BEFORE UPDATE OF fecha_hora_salida, usuario_salida_id, usuario_salida_nombre
+ON registro_ingresos_proveedor
+WHEN
+    OLD.fecha_hora_salida IS NOT NULL
+    OR NEW.fecha_hora_salida IS NULL
+    OR NEW.usuario_salida_nombre IS NULL
+BEGIN
+    SELECT RAISE(ABORT, 'La salida solo puede registrarse una vez');
+END;
+CREATE TRIGGER registro_ingresos_proveedor_fecha_utc_insert
+BEFORE INSERT ON registro_ingresos_proveedor
+WHEN
+    strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_ingreso) IS NOT NEW.fecha_hora_ingreso
+    OR (
+        NEW.fecha_hora_salida IS NOT NULL
+        AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_salida) IS NOT NEW.fecha_hora_salida
+    )
+BEGIN
+    SELECT RAISE(ABORT, 'Las fechas del ingreso de proveedor deben estar normalizadas en UTC');
+END;
+CREATE TRIGGER registro_ingresos_proveedor_salida_utc
+BEFORE UPDATE OF fecha_hora_salida ON registro_ingresos_proveedor
+WHEN
+    NEW.fecha_hora_salida IS NOT NULL
+    AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_salida) IS NOT NEW.fecha_hora_salida
+BEGIN
+    SELECT RAISE(ABORT, 'La fecha de salida debe estar normalizada en UTC');
+END;
 ";

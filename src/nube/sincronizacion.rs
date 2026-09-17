@@ -1844,6 +1844,70 @@ pub fn recibir_cierres_de_ingresos_propios(
     Ok(aplicados)
 }
 
+/// Espejo de [`recibir_cierres_de_ingresos_propios`], pero contra
+/// `registro_ingresos_proveedor`/`ingresos_proveedor` -- faltaba (bug
+/// reportado en pruebas reales, 2026-09-17): sin esto, un ingreso de
+/// proveedor abierto en ESTE dispositivo y cerrado por OTRO nunca se
+/// actualizaba acá -- `recibir_ingresos_proveedor_abiertos` sólo refresca la
+/// caché de lo ajeno (`ingresos_proveedor_remotos`), no toca
+/// `registro_ingresos_proveedor` propio -- así que el dispositivo dueño del
+/// ingreso lo seguía mostrando como abierto para siempre, sin importar
+/// cuántas veces sincronizara.
+pub fn recibir_cierres_de_ingresos_propios_proveedor(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<u32, SincronizacionError> {
+    let abiertos_localmente: Vec<String> = {
+        let mut statement = connection.prepare(
+            "SELECT uuid FROM registro_ingresos_proveedor WHERE fecha_hora_salida IS NULL",
+        )?;
+        statement
+            .query_map([], |row| row.get(0))?
+            .collect::<Result<_, _>>()?
+    };
+    if abiertos_localmente.is_empty() {
+        return Ok(0);
+    }
+
+    let cliente = cliente_http();
+    let lista_uuids = abiertos_localmente.join(",");
+    let url = format!(
+        "{}/rest/v1/ingresos_proveedor?id=in.({lista_uuids})&hora_salida=not.is.null\
+         &select=id,hora_salida,usuario_salida_nombre",
+        contexto.base_url,
+    );
+    let filas: Vec<FilaCierrePropioRemoto> = obtener_json(&cliente, contexto, &url)?;
+
+    let transaction = connection.unchecked_transaction()?;
+    let mut aplicados = 0_u32;
+    for fila in &filas {
+        let nombre_salida = fila
+            .usuario_salida_nombre
+            .as_deref()
+            .unwrap_or("Salida registrada en nube");
+        let hora_salida = crate::tiempo::parsear_utc(&fila.hora_salida)
+            .map(crate::tiempo::serializar_utc)
+            .map_err(|_| SincronizacionError::FechaInvalida(fila.hora_salida.clone()))?;
+        let filas_afectadas = transaction.execute(
+            "
+            UPDATE registro_ingresos_proveedor
+            SET
+                fecha_hora_salida = ?1,
+                usuario_salida_id = NULL,
+                usuario_salida_nombre = ?2
+            WHERE uuid = ?3
+              AND fecha_hora_salida IS NULL
+            ",
+            params![hora_salida, nombre_salida, fila.id],
+        )?;
+        let filas_afectadas = u32::try_from(filas_afectadas).unwrap_or(u32::MAX);
+        aplicados = aplicados.saturating_add(filas_afectadas);
+    }
+    transaction.commit()?;
+
+    Ok(aplicados)
+}
+
 /// Refresca la caché local `ingresos_remotos` con lo que hay abierto ahora
 /// mismo en la nube para este sitio -- de *cualquier* dispositivo, ya no
 /// sólo "el otro" (`dispositivo_entrada_id=neq.<el mío>` como antes). Ese
@@ -6492,6 +6556,49 @@ mod tests {
             )
             .unwrap();
         assert_eq!(reencolados, 0);
+    }
+
+    #[test]
+    fn recibe_cierres_de_ingresos_propios_proveedor_sin_reencolar() {
+        let connection = conexion_con_un_ingreso_proveedor_activo();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-ingreso-proveedor\",\"hora_salida\":\"2026-08-01T10:00:00Z\",\
+             \"usuario_salida_nombre\":\"Operador remoto\"}]",
+        );
+
+        let aplicados = recibir_cierres_de_ingresos_propios_proveedor(
+            &connection,
+            &contexto(&base_url),
+        )
+        .unwrap();
+
+        assert_eq!(aplicados, 1);
+        let (salida, usuario_id, usuario_nombre): (String, Option<i64>, String) = connection
+            .query_row(
+                "SELECT fecha_hora_salida, usuario_salida_id, usuario_salida_nombre
+                 FROM registro_ingresos_proveedor WHERE uuid = 'uuid-ingreso-proveedor'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(salida, "2026-08-01T10:00:00Z");
+        assert_eq!(usuario_id, None);
+        assert_eq!(usuario_nombre, "Operador remoto");
+    }
+
+    #[test]
+    fn recibe_cierres_de_ingresos_propios_proveedor_sin_nada_local_no_llama_a_la_nube() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+
+        let aplicados = recibir_cierres_de_ingresos_propios_proveedor(
+            &connection,
+            &contexto("http://127.0.0.1:1"),
+        )
+        .unwrap();
+
+        assert_eq!(aplicados, 0);
     }
 
     #[test]

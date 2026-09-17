@@ -256,7 +256,7 @@ fun PantallaPrincipal(
                     0 -> PantallaActivos(nucleo, secretoStore, refrescarNube)
                     1 -> PantallaRutas(nucleo)
                     2 -> PantallaGafetesProvisionales(nucleo, secretoStore)
-                    else -> PantallaProveedores(nucleo, secretoStore)
+                    else -> PantallaProveedores(nucleo, secretoStore, refrescarNube)
                 }
             }
         }

@@ -37,6 +37,9 @@ pub struct ResumenSincronizacion {
     pub fallidos: u32,
     pub remotos_abiertos: u32,
     pub cierres_recibidos: u32,
+    /// Mismo criterio que `cierres_recibidos`, pero para ingresos de
+    /// proveedor (`nube::recibir_cierres_de_ingresos_propios_proveedor`).
+    pub cierres_recibidos_proveedor: u32,
     pub empresas_recibidas: u32,
     pub contratistas_recibidos: u32,
     pub gafetes_recibidos: u32,
@@ -231,6 +234,8 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
         .map_err(FalloSincronizacion::Mensaje)?;
     let resumen = nube::drenar_cola(&conexion, &contexto, 200)?;
     let cierres_recibidos = nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)?;
+    let cierres_recibidos_proveedor =
+        nube::recibir_cierres_de_ingresos_propios_proveedor(&conexion, &contexto)?;
     let remotos = nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
     let _remotos_proveedor = nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;
     let catalogo = nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
@@ -270,6 +275,7 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
         fallidos: resumen.fallidos,
         remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
         cierres_recibidos,
+        cierres_recibidos_proveedor,
         movimientos_historial_recibidos,
         citas_recibidas,
         historial_visitas_recibidos,
@@ -313,12 +319,13 @@ pub async fn configurar_dispositivo_inicial(
             fallidos: resumen.fallidos,
             remotos_abiertos: resumen.remotos_abiertos,
             cierres_recibidos: resumen.cierres_recibidos,
-            movimientos_historial_recibidos: resumen.movimientos_historial_recibidos,
-            citas_recibidas: resumen.citas_recibidas,
-            historial_visitas_recibidos: resumen.historial_visitas_recibidos,
             // Núcleo (`AppCore::configurar_dispositivo_inicial`) no trae este
             // campo -- mismo criterio que `conflictos_ingreso_proveedor` de
             // abajo: base recién configurada, nada que traer todavía.
+            cierres_recibidos_proveedor: 0,
+            movimientos_historial_recibidos: resumen.movimientos_historial_recibidos,
+            citas_recibidas: resumen.citas_recibidas,
+            historial_visitas_recibidos: resumen.historial_visitas_recibidos,
             historial_ingresos_proveedor_recibidos: 0,
             empresas_recibidas: resumen.empresas_recibidas,
             contratistas_recibidos: resumen.contratistas_recibidos,
