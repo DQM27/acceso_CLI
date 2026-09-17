@@ -28,6 +28,7 @@ pub mod citas;
 pub mod contratistas;
 pub mod empresas;
 pub mod gafetes;
+pub mod gafetes_provisionales;
 pub mod historial;
 pub mod ingresos;
 pub mod nube;

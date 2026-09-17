@@ -7,9 +7,9 @@ use crate::domain::resultado_acceso::MotivoDenegacion;
 use crate::models::gafete::EstadoGafete;
 use crate::services::error::{
     AutenticacionError, CitaServiceError, ContratistaServiceError, EmpresaProveedorServiceError,
-    EmpresaServiceError, EncargadoRutaServiceError, GafeteServiceError,
-    IngresoProveedorServiceError, RegistroIngresoServiceError, RutaCatalogoServiceError,
-    RutaServiceError, UsuarioServiceError, VehiculoRutaServiceError,
+    EmpresaServiceError, EncargadoRutaServiceError, GafeteProvisionalServiceError,
+    GafeteServiceError, IngresoProveedorServiceError, RegistroIngresoServiceError,
+    RutaCatalogoServiceError, RutaServiceError, UsuarioServiceError, VehiculoRutaServiceError,
 };
 
 /// `HashInvalido` va junto con `Database` a propósito: ambos son fallos de
@@ -242,6 +242,28 @@ pub fn mensaje_ruta_catalogo(error: RutaCatalogoServiceError) -> String {
         RutaConSalidaActiva => "La ruta tiene una salida activa en este momento".into(),
         OperacionNoAutorizada => "Su sesión no está autorizada para esta operación".into(),
         RutaCatalogoServiceError::Database(_) => "No se pudo guardar la ruta".into(),
+    }
+}
+
+pub fn mensaje_gafete_provisional(error: GafeteProvisionalServiceError) -> String {
+    use GafeteProvisionalServiceError::{
+        Database, EncargadoInactivo, EncargadoNoEncontrado, EncargadoYaTienePrestamoActivo,
+        GafeteYaPrestado, NumeroInvalido, OperacionNoAutorizada, PrestamoNoActivo,
+    };
+
+    match error {
+        NumeroInvalido => "El número de gafete debe ser mayor a cero".into(),
+        EncargadoNoEncontrado => "El encargado no existe en el catálogo".into(),
+        EncargadoInactivo => "El encargado está dado de baja en el catálogo".into(),
+        EncargadoYaTienePrestamoActivo => {
+            "Este encargado ya tiene un gafete provisional prestado".into()
+        }
+        GafeteYaPrestado => "Ese número de gafete ya está prestado a otra persona".into(),
+        PrestamoNoActivo => "El préstamo no está activo".into(),
+        OperacionNoAutorizada => {
+            "La sesión actual no está autorizada para realizar esta operación".into()
+        }
+        Database(_) => "No se pudo guardar el préstamo de gafete".into(),
     }
 }
 

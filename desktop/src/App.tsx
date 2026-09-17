@@ -27,6 +27,7 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { listen } from "@tauri-apps/api/event";
 import { Toaster, toast } from "sonner";
 import {
+  BadgeCheck,
   Boxes,
   Building2,
   ClipboardList,
@@ -70,6 +71,7 @@ const Gafetes = lazy(() => import("./pantallas/Gafetes"));
 const Rutas = lazy(() => import("./pantallas/Rutas"));
 const CatalogoRutas = lazy(() => import("./pantallas/CatalogoRutas"));
 const Proveedores = lazy(() => import("./pantallas/Proveedores"));
+const GafetesProvisionales = lazy(() => import("./pantallas/GafetesProvisionales"));
 const NuevoIngresoModal = lazy(() => import("./pantallas/NuevoIngresoModal"));
 const SalidaModal = lazy(() => import("./pantallas/SalidaModal"));
 
@@ -200,7 +202,8 @@ export type Seccion =
   | "empresas"
   | "gafetes"
   | "catalogoRutas"
-  | "proveedores";
+  | "proveedores"
+  | "gafetesProvisionales";
 
 /** Aplanado de autorización (ver docs/decisiones-tecnicas.md 2026-09-11):
  * ninguna sección se oculta por rol -- quien tiene una sesión válida puede
@@ -231,6 +234,7 @@ const SECCIONES: {
   { id: "gafetes", etiqueta: "Gafetes", Icono: IdCard },
   { id: "catalogoRutas", etiqueta: "Catálogo KOF", Icono: Truck },
   { id: "proveedores", etiqueta: "Proveedores", Icono: Boxes },
+  { id: "gafetesProvisionales", etiqueta: "Gafetes KOF", Icono: BadgeCheck },
 ];
 
 /**
@@ -583,8 +587,10 @@ function Shell({
                           <Gafetes />
                         ) : id === "catalogoRutas" ? (
                           <CatalogoRutas />
-                        ) : (
+                        ) : id === "proveedores" ? (
                           <Proveedores refrescarSenal={refrescarActivos} />
+                        ) : (
+                          <GafetesProvisionales refrescarSenal={refrescarActivos} />
                         )}
                       </SeccionActivaProvider>
                     </Suspense>
