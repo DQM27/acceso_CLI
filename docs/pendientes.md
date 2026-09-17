@@ -541,9 +541,17 @@ estabilizador y clasificador.
   hay respaldos locales que importar.
 - [x] ~~Respaldo automático a la 01:00 hora Costa Rica.~~ Obsoleto -- ver arriba.
 - [x] ~~Retención automática queda en 7 respaldos.~~ Obsoleto -- ver arriba.
-- [x] ~~Respaldo previo a migraciones y rollback.~~ El respaldo GENERAL se eliminó; el
-  respaldo puntual pre-migración de esquema (distinto, más chico) sigue vivo en
-  `src/database/schema.rs` -- no verificado de nuevo en este pase, sólo se corrige la nota.
+- [x] ~~Respaldo previo a migraciones y rollback.~~ **Corrección 2026-09-17, verificado
+  contra código**: la nota anterior decía que el respaldo puntual pre-migración "sigue
+  vivo" en `src/database/schema.rs` -- es falso, no está. `grep` de `TipoRespaldo`/
+  `respaldar_antes_de_migrar` en todo `src/` no encuentra ninguna función ni struct con
+  ese nombre; sólo quedaban 3 doc-comments y una variante de error
+  (`SchemaError::RespaldoPreMigracionFallido`) que la mencionaban sin que nada la
+  construyera jamás (código muerto, invisible a clippy por ser un enum público). Limpiado
+  en la rama `qa` (ver `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto
+  "Backups"). Lo único que sí sigue vivo hoy contra corrupción de esquema es la
+  atomicidad transaccional (una migración que falla revierte sola, `PRAGMA user_version`
+  incluido) -- no hay ningún archivo de respaldo real, ni general ni pre-migración.
 - [ ] **Agregados de dominio con constructores privados diferidos a V3.** Reabrir con
   concurrencia multi-terminal -- **sigue sin hacer** (revertido de `[x]` a `[ ]`,
   2026-09-13: no hay evidencia de que este ítem específico -- reforzar invariantes de
