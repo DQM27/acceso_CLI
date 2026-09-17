@@ -22,7 +22,7 @@
  *    que llevó a sacar `Sidebar.tsx` de `Shell` (que sí hace enrutamiento
  *    y orquesta modales, eso es responsabilidad suya).
  */
-import { Suspense, lazy, startTransition, useEffect, useState, ViewTransition } from "react";
+import { Suspense, lazy, startTransition, useEffect, useMemo, useState, ViewTransition } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { listen } from "@tauri-apps/api/event";
 import { Toaster, toast } from "sonner";
@@ -70,6 +70,7 @@ const Gafetes = lazy(() => import("./pantallas/Gafetes"));
 const Rutas = lazy(() => import("./pantallas/Rutas"));
 const CatalogoRutas = lazy(() => import("./pantallas/CatalogoRutas"));
 const Proveedores = lazy(() => import("./pantallas/Proveedores"));
+const PersonalizarSidebarModal = lazy(() => import("./pantallas/PersonalizarSidebarModal"));
 const NuevoIngresoModal = lazy(() => import("./pantallas/NuevoIngresoModal"));
 const SalidaModal = lazy(() => import("./pantallas/SalidaModal"));
 
@@ -96,6 +97,57 @@ function leerSidebarColapsado(): boolean {
 function guardarSidebarColapsado(colapsado: boolean) {
   try {
     localStorage.setItem(CLAVE_SIDEBAR_COLAPSADO, colapsado ? "1" : "0");
+  } catch {
+    // Ver comentario de leerSidebarColapsado.
+  }
+}
+
+const CLAVE_SIDEBAR_ORDEN = "sidebar:orden";
+const CLAVE_SIDEBAR_OCULTAS = "sidebar:ocultas";
+
+/** Filtra ids que ya no existen en `SECCIONES` -- si una sección se quita
+ * del código, el `localStorage` de una instalación vieja no debe romper el
+ * sidebar ni resucitarla como "oculta"/"reordenada" fantasma. */
+function seccionValida(id: string): id is Seccion {
+  return SECCIONES.some((seccion) => seccion.id === id);
+}
+
+/** Mismo criterio de tolerancia a fallos que `leerSidebarColapsado`. Sin
+ * guardado todavía (instalación nueva o preferencia nunca tocada): el orden
+ * por defecto es el literal de `SECCIONES`. */
+function leerSidebarOrden(): Seccion[] {
+  try {
+    const guardado = localStorage.getItem(CLAVE_SIDEBAR_ORDEN);
+    if (!guardado) return SECCIONES.map((seccion) => seccion.id);
+    const ids = JSON.parse(guardado) as unknown[];
+    return ids.filter((id): id is Seccion => typeof id === "string" && seccionValida(id));
+  } catch {
+    return SECCIONES.map((seccion) => seccion.id);
+  }
+}
+
+function guardarSidebarOrden(orden: Seccion[]) {
+  try {
+    localStorage.setItem(CLAVE_SIDEBAR_ORDEN, JSON.stringify(orden));
+  } catch {
+    // Ver comentario de leerSidebarColapsado.
+  }
+}
+
+function leerSidebarOcultas(): Seccion[] {
+  try {
+    const guardado = localStorage.getItem(CLAVE_SIDEBAR_OCULTAS);
+    if (!guardado) return [];
+    const ids = JSON.parse(guardado) as unknown[];
+    return ids.filter((id): id is Seccion => typeof id === "string" && seccionValida(id));
+  } catch {
+    return [];
+  }
+}
+
+function guardarSidebarOcultas(ocultas: Seccion[]) {
+  try {
+    localStorage.setItem(CLAVE_SIDEBAR_OCULTAS, JSON.stringify(ocultas));
   } catch {
     // Ver comentario de leerSidebarColapsado.
   }
@@ -235,6 +287,67 @@ function Shell({
       guardarSidebarColapsado(siguiente);
       return siguiente;
     });
+  }
+
+  // Sidebar "inteligente" (mostrar/ocultar + reordenar, mismo espíritu que
+  // la barra de actividad de VS Code) -- `orden` guarda TODOS los ids
+  // (incluidos los ocultos, para poder volver a mostrarlos desde el
+  // modal), `ocultas` es el subconjunto no visible. Ambos persisten aparte
+  // de `colapsado` -- son ejes independientes (una sección puede estar
+  // oculta sin importar si el sidebar está colapsado o no).
+  const [ordenSidebar, setOrdenSidebar] = useState(leerSidebarOrden);
+  const [seccionesOcultas, setSeccionesOcultas] = useState(leerSidebarOcultas);
+  const [personalizarAbierto, setPersonalizarAbierto] = useState(false);
+
+  const seccionesOrdenadas = useMemo(() => {
+    const porId = new Map(SECCIONES.map((seccion) => [seccion.id, seccion]));
+    const ordenadas = ordenSidebar
+      .map((id) => porId.get(id))
+      .filter((seccion): seccion is (typeof SECCIONES)[number] => seccion !== undefined);
+    // Cubre secciones nuevas agregadas al código después de que esta
+    // instalación ya guardó un orden -- aparecen al final en vez de
+    // desaparecer del sidebar.
+    const faltantes = SECCIONES.filter((seccion) => !ordenSidebar.includes(seccion.id));
+    return [...ordenadas, ...faltantes];
+  }, [ordenSidebar]);
+
+  const seccionesVisibles = useMemo(
+    () => seccionesOrdenadas.filter((seccion) => !seccionesOcultas.includes(seccion.id)),
+    [seccionesOrdenadas, seccionesOcultas],
+  );
+
+  // Si la sección activa se ocultó, hay que salir de ella -- de lo
+  // contrario el usuario queda viendo una pantalla que ya no tiene entrada
+  // en el sidebar para volver a elegir ni forma de saber dónde está parado.
+  useEffect(() => {
+    if (seccionesVisibles.length > 0 && !seccionesVisibles.some((s) => s.id === seccion)) {
+      cambiarSeccion(seccionesVisibles[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seccionesVisibles]);
+
+  function reordenarSidebar(orden: Seccion[]) {
+    setOrdenSidebar(orden);
+    guardarSidebarOrden(orden);
+  }
+
+  function alternarVisibilidadSeccion(id: Seccion, visible: boolean) {
+    setSeccionesOcultas((actual) => {
+      const siguiente = visible ? actual.filter((x) => x !== id) : [...actual, id];
+      // Nunca ocultar la última sección visible -- dejaría el sidebar
+      // vacío y sin forma de deshacerlo desde la UI.
+      if (siguiente.length >= SECCIONES.length) return actual;
+      guardarSidebarOcultas(siguiente);
+      return siguiente;
+    });
+  }
+
+  function restablecerSidebar() {
+    const ordenPorDefecto = SECCIONES.map((seccion) => seccion.id);
+    setOrdenSidebar(ordenPorDefecto);
+    setSeccionesOcultas([]);
+    guardarSidebarOrden(ordenPorDefecto);
+    guardarSidebarOcultas([]);
   }
 
   const [modalNuevoIngreso, setModalNuevoIngreso] = useState(false);
@@ -395,11 +508,12 @@ function Shell({
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
           <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
             <Sidebar
-              secciones={SECCIONES}
+              secciones={seccionesVisibles}
               seccionActual={seccion}
               onCambiarSeccion={cambiarSeccion}
               colapsado={colapsado}
               onToggleColapsado={alternarColapsado}
+              onAbrirPersonalizar={() => setPersonalizarAbierto(true)}
             />
 
             <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
@@ -502,6 +616,17 @@ function Shell({
               <SalidaModal
                 onRegistrado={() => setRefrescarActivos((n) => n + 1)}
                 onCerrar={() => setModalSalida(false)}
+              />
+            )}
+
+            {personalizarAbierto && (
+              <PersonalizarSidebarModal
+                secciones={seccionesOrdenadas}
+                ocultas={seccionesOcultas}
+                onReordenar={reordenarSidebar}
+                onCambiarVisibilidad={alternarVisibilidadSeccion}
+                onRestablecer={restablecerSidebar}
+                onCerrar={() => setPersonalizarAbierto(false)}
               />
             )}
           </Suspense>

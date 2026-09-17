@@ -19,6 +19,7 @@ describe("Sidebar", () => {
         onCambiarSeccion={onCambiarSeccion}
         colapsado={false}
         onToggleColapsado={() => {}}
+        onAbrirPersonalizar={() => {}}
       />,
     );
     fireEvent.click(screen.getByText("Contratistas"));
@@ -33,6 +34,7 @@ describe("Sidebar", () => {
         onCambiarSeccion={() => {}}
         colapsado={false}
         onToggleColapsado={() => {}}
+        onAbrirPersonalizar={() => {}}
       />,
     );
     expect(screen.getByText("Contratistas").closest("button")?.className).toContain(
@@ -43,6 +45,22 @@ describe("Sidebar", () => {
     );
   });
 
+  it("el botón Personalizar llama a onAbrirPersonalizar", () => {
+    const onAbrirPersonalizar = vi.fn();
+    render(
+      <Sidebar
+        secciones={secciones}
+        seccionActual="activos"
+        onCambiarSeccion={() => {}}
+        colapsado={false}
+        onToggleColapsado={() => {}}
+        onAbrirPersonalizar={onAbrirPersonalizar}
+      />,
+    );
+    fireEvent.click(screen.getByText("Personalizar"));
+    expect(onAbrirPersonalizar).toHaveBeenCalled();
+  });
+
   it("colapsado oculta las etiquetas de texto", () => {
     render(
       <Sidebar
@@ -51,6 +69,7 @@ describe("Sidebar", () => {
         onCambiarSeccion={() => {}}
         colapsado={true}
         onToggleColapsado={() => {}}
+        onAbrirPersonalizar={() => {}}
       />,
     );
     expect(screen.queryByText("Activos")).toBeNull();

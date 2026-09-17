@@ -1,3 +1,4 @@
+import { Settings } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Seccion } from "../App";
 
@@ -18,12 +19,14 @@ export default function Sidebar({
   onCambiarSeccion,
   colapsado,
   onToggleColapsado,
+  onAbrirPersonalizar,
 }: {
   secciones: { id: Seccion; etiqueta: string; Icono: LucideIcon }[];
   seccionActual: Seccion;
   onCambiarSeccion: (id: Seccion) => void;
   colapsado: boolean;
   onToggleColapsado: () => void;
+  onAbrirPersonalizar: () => void;
 }) {
   return (
     <nav className={`shell-sidebar ${colapsado ? "shell-sidebar-colapsada" : ""}`}>
@@ -46,6 +49,15 @@ export default function Sidebar({
         title="Doble click para colapsar/expandir"
         onDoubleClick={onToggleColapsado}
       />
+
+      <button
+        onClick={onAbrirPersonalizar}
+        title={colapsado ? "Personalizar barra lateral" : undefined}
+        className="nav-item"
+      >
+        <Settings size={18} strokeWidth={2} aria-hidden="true" />
+        {!colapsado && "Personalizar"}
+      </button>
     </nav>
   );
 }
