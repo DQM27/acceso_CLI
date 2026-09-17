@@ -1,7 +1,10 @@
 package com.brisas.controlacceso
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -9,10 +12,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,22 +56,26 @@ import uniffi.control_acceso_mobile.RegistroIngresoProveedorActivoResumen
 /// `DOCUMENTO_CONTRATISTA` -- el criterio de aceptación del documento es
 /// idéntico, sólo cambia a quién se le atribuye después) y SÍ se puede dar
 /// de alta una empresa nueva inline si la búsqueda no trae nada.
+///
+/// Rediseñada 2026-09-17 tras la primera prueba real en emulador: el
+/// formulario completo (cédula, nombre, empresa, placa, gafete) vivía
+/// siempre visible arriba de la lista de activos, apiñado -- ahora el
+/// estado base es igual a [PantallaActivos] (buscador + lista) y el
+/// formulario se abre aparte, en pantalla completa, con el mismo lenguaje
+/// de tarjetas numeradas de [PantallaRutas] (que el usuario señaló como
+/// referencia): un paso por tarjeta, encabezado con círculo numerado que
+/// se pone check al completarse.
 @Composable
 fun PantallaProveedores(nucleo: Nucleo, secretoStore: SecretoDispositivoStore) {
     val viewModel: ProveedoresViewModel =
         viewModel(factory = ProveedoresViewModel.factory(nucleo, secretoStore))
+    var mostrandoFormulario by remember { mutableStateOf(false) }
     var gafeteTexto by remember { mutableStateOf("") }
+    var busqueda by remember { mutableStateOf("") }
     var escaneando by remember { mutableStateOf(false) }
     var registroParaSalida by remember {
         mutableStateOf<RegistroIngresoProveedorActivoResumen?>(null)
     }
-
-    val puedeRegistrar =
-        viewModel.cedula.isNotBlank() &&
-            viewModel.nombre.isNotBlank() &&
-            viewModel.empresaSeleccionada != null &&
-            gafeteTexto.isNotBlank() &&
-            !viewModel.registrando
 
     if (escaneando) {
         PantallaEscanearCedula(
@@ -78,71 +91,53 @@ fun PantallaProveedores(nucleo: Nucleo, secretoStore: SecretoDispositivoStore) {
         return
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp),
-    ) {
-        Text(
-            "Proveedores",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(bottom = 10.dp),
+    if (mostrandoFormulario) {
+        FormularioNuevoIngresoProveedor(
+            viewModel = viewModel,
+            gafeteTexto = gafeteTexto,
+            onCambiarGafeteTexto = { gafeteTexto = it },
+            onEscanear = { escaneando = true },
+            onVolver = { mostrandoFormulario = false },
         )
+        return
+    }
 
-        BotonBrisas(
-            onClick = { escaneando = true },
+    val activosFiltrados = if (busqueda.isBlank()) {
+        viewModel.activos
+    } else {
+        viewModel.activos.filter { registro ->
+            registro.cedula.contains(busqueda, ignoreCase = true) ||
+                registro.nombre.contains(busqueda, ignoreCase = true) ||
+                registro.empresaNombre.contains(busqueda, ignoreCase = true) ||
+                (registro.placa?.contains(busqueda, ignoreCase = true) == true)
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Row(
             modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-            Text("Escanear cédula")
+            Text(
+                "Proveedores",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            BotonBrisas(onClick = { mostrandoFormulario = true }) {
+                Text("+ Nuevo ingreso")
+            }
         }
 
         TextField(
-            value = viewModel.cedula,
-            onValueChange = viewModel::cambiarCedula,
-            placeholder = { Text("Cédula") },
+            value = busqueda,
+            onValueChange = { busqueda = it },
+            placeholder = { Text("Cédula, nombre, empresa…") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,
             shape = FormaCampoBrisas,
             colors = ColoresCampoBrisas(),
-            modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas).padding(top = 12.dp),
-        )
-
-        TextField(
-            value = viewModel.nombre,
-            onValueChange = viewModel::cambiarNombre,
-            placeholder = { Text("Nombre") },
-            singleLine = true,
-            shape = FormaCampoBrisas,
-            colors = ColoresCampoBrisas(),
-            modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas).padding(top = 8.dp),
-        )
-
-        BuscadorEmpresaProveedora(
-            texto = viewModel.textoEmpresa,
-            resultados = viewModel.resultadosEmpresa,
-            creando = viewModel.creandoEmpresa,
-            onCambiarTexto = viewModel::cambiarTextoEmpresa,
-            onElegir = viewModel::elegirEmpresa,
-            onCrear = viewModel::crearEmpresa,
-        )
-
-        TextField(
-            value = viewModel.placa,
-            onValueChange = viewModel::cambiarPlaca,
-            placeholder = { Text("Placa (opcional)") },
-            singleLine = true,
-            shape = FormaCampoBrisas,
-            colors = ColoresCampoBrisas(),
-            modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas).padding(top = 8.dp),
-        )
-
-        TextField(
-            value = gafeteTexto,
-            onValueChange = { gafeteTexto = it.filter(Char::isDigit) },
-            placeholder = { Text("Número de gafete") },
-            singleLine = true,
-            shape = FormaCampoBrisas,
-            colors = ColoresCampoBrisas(),
-            modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas).padding(top = 8.dp),
+            modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas).padding(top = 10.dp),
         )
 
         viewModel.error?.let { mensaje ->
@@ -154,30 +149,12 @@ fun PantallaProveedores(nucleo: Nucleo, secretoStore: SecretoDispositivoStore) {
             )
         }
 
-        BotonBrisas(
-            onClick = {
-                val numero = gafeteTexto.toLongOrNull() ?: return@BotonBrisas
-                viewModel.registrarIngreso(numero) { gafeteTexto = "" }
-            },
-            enabled = puedeRegistrar,
-            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-        ) {
-            Text("Registrar ingreso")
-        }
-
-        Text(
-            "Proveedores activos",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 16.dp, bottom = 6.dp),
-        )
-
         ListaConDesvanecido {
             LazyColumn(
-                contentPadding = PaddingValues(top = 5.dp),
+                contentPadding = PaddingValues(top = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp),
             ) {
-                items(viewModel.activos, key = { it.id }) { registro ->
+                items(activosFiltrados, key = { it.id }) { registro ->
                     FilaProveedorActivo(
                         registro = registro,
                         onConfirmarSalida = { registroParaSalida = registro },
@@ -197,9 +174,168 @@ fun PantallaProveedores(nucleo: Nucleo, secretoStore: SecretoDispositivoStore) {
     )
 }
 
+/// Formulario en pantalla completa (mismo criterio que
+/// [PantallaNuevoContratista]: `PantallaProveedores` lo desmonta al volver,
+/// así que no hace falta que el estado de los pasos sobreviva más que eso).
+/// Tres tarjetas numeradas, mismo estilo que los "pasos" de [PantallaRutas]
+/// -- acá sí puede ir todo en un único `Column` con `verticalScroll` porque,
+/// a diferencia del estado base, no hay ningún `LazyColumn` adentro.
+@Composable
+private fun FormularioNuevoIngresoProveedor(
+    viewModel: ProveedoresViewModel,
+    gafeteTexto: String,
+    onCambiarGafeteTexto: (String) -> Unit,
+    onEscanear: () -> Unit,
+    onVolver: () -> Unit,
+) {
+    val paso1Completo = viewModel.cedula.isNotBlank() && viewModel.nombre.isNotBlank()
+    val paso2Completo = viewModel.empresaSeleccionada != null
+    val paso3Completo = gafeteTexto.isNotBlank()
+    val puedeRegistrar = paso1Completo && paso2Completo && paso3Completo && !viewModel.registrando
+
+    Column(
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+    ) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Nuevo ingreso", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            BotonDiscretoBrisas(onClick = onVolver) {
+                Text("← Volver")
+            }
+        }
+
+        Column(modifier = Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            PasoDatosProveedor(
+                completado = paso1Completo,
+                cedula = viewModel.cedula,
+                nombre = viewModel.nombre,
+                onCambiarCedula = viewModel::cambiarCedula,
+                onCambiarNombre = viewModel::cambiarNombre,
+                onEscanear = onEscanear,
+            )
+            PasoEmpresaProveedora(
+                completado = paso2Completo,
+                texto = viewModel.textoEmpresa,
+                resultados = viewModel.resultadosEmpresa,
+                creando = viewModel.creandoEmpresa,
+                onCambiarTexto = viewModel::cambiarTextoEmpresa,
+                onElegir = viewModel::elegirEmpresa,
+                onCrear = viewModel::crearEmpresa,
+            )
+            PasoVehiculoYGafete(
+                completado = paso3Completo,
+                placa = viewModel.placa,
+                onCambiarPlaca = viewModel::cambiarPlaca,
+                gafeteTexto = gafeteTexto,
+                onCambiarGafeteTexto = { onCambiarGafeteTexto(it.filter(Char::isDigit)) },
+            )
+        }
+
+        viewModel.error?.let { mensaje ->
+            Text(
+                mensaje,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+        viewModel.mensaje?.let { mensaje ->
+            Text(
+                mensaje,
+                style = MaterialTheme.typography.bodySmall,
+                color = ColorExitoBrisas,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+
+        BotonBrisas(
+            onClick = {
+                val numero = gafeteTexto.toLongOrNull() ?: return@BotonBrisas
+                viewModel.registrarIngreso(numero) { onCambiarGafeteTexto("") }
+            },
+            enabled = puedeRegistrar,
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        ) {
+            Text(if (viewModel.registrando) "Registrando…" else "Registrar ingreso")
+        }
+    }
+}
+
+/// Círculo numerado + título -- mismo patrón visual que
+/// `PasoEncabezado` de [PantallaRutas], duplicado a propósito acá (es
+/// `private` en ese archivo, y cada pantalla ya es dueña de su propio
+/// checklist -- mismo criterio que `ToggleVista` en desktop).
+@Composable
+private fun PasoEncabezadoProveedor(numero: Int, titulo: String, completado: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(if (completado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (completado) {
+                Icon(
+                    Icons.Default.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(16.dp),
+                )
+            } else {
+                Text(
+                    "$numero",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Text(titulo, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+    }
+}
+
+/// Paso 1 -- cédula y nombre, con el mismo botón de cámara cuadrado que las
+/// tarjetas de [PantallaRutas] (acá alcanza uno solo para la tarjeta: el
+/// documento trae los dos datos de una vez, igual que el carnet PRAIND en
+/// [PantallaNuevoContratista]).
+@Composable
+private fun PasoDatosProveedor(
+    completado: Boolean,
+    cedula: String,
+    nombre: String,
+    onCambiarCedula: (String) -> Unit,
+    onCambiarNombre: (String) -> Unit,
+    onEscanear: () -> Unit,
+) {
+    TarjetaPasoProveedor(onEscanear = onEscanear) {
+        PasoEncabezadoProveedor(1, "Datos del proveedor", completado)
+        TextField(
+            value = cedula,
+            onValueChange = onCambiarCedula,
+            placeholder = { Text("Cédula") },
+            singleLine = true,
+            shape = FormaCampoBrisas,
+            colors = ColoresCampoBrisas(),
+            modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
+        )
+        TextField(
+            value = nombre,
+            onValueChange = onCambiarNombre,
+            placeholder = { Text("Nombre") },
+            singleLine = true,
+            shape = FormaCampoBrisas,
+            colors = ColoresCampoBrisas(),
+            modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
+        )
+    }
+}
+
+/// Paso 2 -- mismo buscador con alta inline que ya existía, ahora dentro de
+/// su propia tarjeta numerada.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BuscadorEmpresaProveedora(
+private fun PasoEmpresaProveedora(
+    completado: Boolean,
     texto: String,
     resultados: List<EmpresaProveedor>,
     creando: Boolean,
@@ -210,7 +346,8 @@ private fun BuscadorEmpresaProveedora(
     var menuAbierto by remember { mutableStateOf(false) }
     val sinCoincidencias = texto.isNotBlank() && resultados.isEmpty()
 
-    Column(modifier = Modifier.padding(top = 8.dp)) {
+    TarjetaPasoProveedor {
+        PasoEncabezadoProveedor(2, "Empresa proveedora", completado)
         ExposedDropdownMenuBox(
             expanded = menuAbierto && resultados.isNotEmpty(),
             onExpandedChange = { menuAbierto = it },
@@ -221,7 +358,7 @@ private fun BuscadorEmpresaProveedora(
                     onCambiarTexto(it)
                     menuAbierto = true
                 },
-                placeholder = { Text("Empresa proveedora") },
+                placeholder = { Text("Nombre de la empresa") },
                 singleLine = true,
                 shape = FormaCampoBrisas,
                 colors = ColoresCampoBrisas(),
@@ -245,14 +382,82 @@ private fun BuscadorEmpresaProveedora(
                 }
             }
         }
-
         if (sinCoincidencias) {
             BotonDiscretoBrisas(
                 onClick = { onCrear(texto) },
                 enabled = !creando,
-                modifier = Modifier.padding(top = 4.dp),
             ) {
                 Text(if (creando) "Creando…" else "Crear empresa \"$texto\"")
+            }
+        }
+    }
+}
+
+/// Paso 3 -- placa (opcional) y número de gafete, sin cámara: ninguno de
+/// los dos datos sale de un documento escaneable.
+@Composable
+private fun PasoVehiculoYGafete(
+    completado: Boolean,
+    placa: String,
+    onCambiarPlaca: (String) -> Unit,
+    gafeteTexto: String,
+    onCambiarGafeteTexto: (String) -> Unit,
+) {
+    TarjetaPasoProveedor {
+        PasoEncabezadoProveedor(3, "Vehículo y gafete", completado)
+        TextField(
+            value = placa,
+            onValueChange = onCambiarPlaca,
+            placeholder = { Text("Placa (opcional)") },
+            singleLine = true,
+            shape = FormaCampoBrisas,
+            colors = ColoresCampoBrisas(),
+            modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
+        )
+        TextField(
+            value = gafeteTexto,
+            onValueChange = onCambiarGafeteTexto,
+            placeholder = { Text("Número de gafete") },
+            singleLine = true,
+            shape = FormaCampoBrisas,
+            colors = ColoresCampoBrisas(),
+            modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
+        )
+    }
+}
+
+/// Tarjeta compartida por los tres pasos -- mismo fondo/forma/padding que
+/// las tarjetas de [PantallaRutas], con un botón de cámara cuadrado
+/// opcional a la derecha (sólo el paso 1 lo usa, mismo look que
+/// `BotonCamaraCuadrado` de ese archivo -- duplicado acá por el mismo
+/// motivo que [PasoEncabezadoProveedor]: es `private` allá).
+@Composable
+private fun TarjetaPasoProveedor(
+    onEscanear: (() -> Unit)? = null,
+    contenido: @Composable () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            contenido()
+        }
+        if (onEscanear != null) {
+            Box(
+                modifier = Modifier
+                    .size(AlturaBusquedaBrisas)
+                    .border(1.dp, MaterialTheme.colorScheme.primary, FormaCampoBrisas)
+                    .clip(FormaCampoBrisas)
+                    .clickable(onClick = onEscanear),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Default.PhotoCamera, contentDescription = "Escanear", tint = MaterialTheme.colorScheme.primary)
             }
         }
     }
