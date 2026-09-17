@@ -421,7 +421,12 @@ private fun PasoEmpresaProveedora(
     onCrear: (String) -> Unit,
 ) {
     var menuAbierto by remember { mutableStateOf(false) }
-    val sinCoincidencias = texto.isNotBlank() && resultados.isEmpty()
+    // `resultados` queda vacío tanto "sin coincidencias todavía" como justo
+    // después de elegir una empresa (`elegirEmpresa` los limpia) -- sin
+    // `!completado` acá, el botón "Crear empresa" seguía apareciendo con
+    // una empresa YA seleccionada (bug reportado en pruebas reales,
+    // 2026-09-17: dejaba crear un duplicado de una empresa que ya existía).
+    val sinCoincidencias = !completado && texto.isNotBlank() && resultados.isEmpty()
 
     TarjetaPasoProveedor {
         PasoEncabezadoProveedor(2, "Empresa proveedora", completado)
@@ -551,6 +556,12 @@ private fun FilaProveedorActivo(fila: FilaProveedorActiva, onConfirmarSalida: ()
     }
 }
 
+/// Mismo orden de campos que `FilaActivoLocal`/`FilaActivoRemota`
+/// (PantallaActivos.kt, contratista) -- nombre primero (lo más importante:
+/// quién es), luego identidad + afiliación + gafete, luego cuándo entró.
+/// Antes esta tarjeta abría con "Gafete N" en vez del nombre -- pedido
+/// explícito del usuario en pruebas reales, 2026-09-17: unificar el orden
+/// de importancia entre las dos pantallas.
 @Composable
 private fun FilaProveedorActivoLocal(
     registro: RegistroIngresoProveedorActivoResumen,
@@ -565,18 +576,10 @@ private fun FilaProveedorActivoLocal(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
+        Text(registro.nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
         Text(
-            "Gafete ${registro.gafeteNumero}",
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium,
-        )
-        Text(
-            "${registro.nombre} · ${registro.cedula}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            registro.empresaNombre + (registro.placa?.let { " · $it" } ?: ""),
+            "${registro.cedula} · ${registro.empresaNombre} · Gafete ${registro.gafeteNumero}" +
+                (registro.placa?.let { " · $it" } ?: ""),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -590,6 +593,7 @@ private fun FilaProveedorActivoLocal(
 
 /// Ver el doc-comment de [FilaProveedorActiva] -- un ingreso abierto por
 /// OTRO dispositivo del sitio, sin `id` local (sólo `uuid` de la nube).
+/// Mismo orden que [FilaProveedorActivoLocal] -- ver ese doc-comment.
 @Composable
 private fun FilaProveedorActivoRemota(remoto: IngresoProveedorRemoto, onConfirmarSalida: () -> Unit) {
     Column(
@@ -601,18 +605,10 @@ private fun FilaProveedorActivoRemota(remoto: IngresoProveedorRemoto, onConfirma
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
+        Text(remoto.nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
         Text(
-            "Gafete ${remoto.gafeteNumero}",
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium,
-        )
-        Text(
-            "${remoto.nombre} · ${remoto.cedula}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            remoto.empresaNombre + (remoto.placa?.let { " · $it" } ?: ""),
+            "${remoto.cedula} · ${remoto.empresaNombre} · Gafete ${remoto.gafeteNumero}" +
+                (remoto.placa?.let { " · $it" } ?: ""),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
