@@ -33,7 +33,6 @@ import {
   History,
   IdCard,
   Route,
-  Store,
   Truck,
   UserCheck,
   Users,
@@ -71,7 +70,6 @@ const Gafetes = lazy(() => import("./pantallas/Gafetes"));
 const Rutas = lazy(() => import("./pantallas/Rutas"));
 const CatalogoRutas = lazy(() => import("./pantallas/CatalogoRutas"));
 const Proveedores = lazy(() => import("./pantallas/Proveedores"));
-const EmpresasProveedor = lazy(() => import("./pantallas/EmpresasProveedor"));
 const NuevoIngresoModal = lazy(() => import("./pantallas/NuevoIngresoModal"));
 const SalidaModal = lazy(() => import("./pantallas/SalidaModal"));
 
@@ -151,8 +149,7 @@ export type Seccion =
   | "empresas"
   | "gafetes"
   | "catalogoRutas"
-  | "proveedores"
-  | "empresasProveedor";
+  | "proveedores";
 
 /** Aplanado de autorización (ver docs/decisiones-tecnicas.md 2026-09-11):
  * ninguna sección se oculta por rol -- quien tiene una sesión válida puede
@@ -183,7 +180,6 @@ const SECCIONES: {
   { id: "gafetes", etiqueta: "Gafetes", Icono: IdCard },
   { id: "catalogoRutas", etiqueta: "Catálogo KOF", Icono: Truck },
   { id: "proveedores", etiqueta: "Proveedores", Icono: Boxes },
-  { id: "empresasProveedor", etiqueta: "Empresas proveedoras", Icono: Store },
 ];
 
 /**
@@ -465,10 +461,8 @@ function Shell({
                           <Gafetes />
                         ) : id === "catalogoRutas" ? (
                           <CatalogoRutas />
-                        ) : id === "proveedores" ? (
-                          <Proveedores refrescarSenal={refrescarActivos} />
                         ) : (
-                          <EmpresasProveedor />
+                          <Proveedores refrescarSenal={refrescarActivos} />
                         )}
                       </SeccionActivaProvider>
                     </Suspense>
