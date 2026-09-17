@@ -321,6 +321,13 @@ pub fn mensaje_nube(error: crate::nube::NubeError) -> String {
         NubeError::CredencialesInvalidas => {
             "El secreto de este dispositivo fue rechazado o revocado".into()
         }
+        NubeError::DispositivoSuspendido => {
+            "Este dispositivo fue suspendido -- contactá a un administrador".into()
+        }
+        NubeError::VersionDesactualizada => {
+            "Esta versión de la app ya no es compatible -- actualizá para seguir sincronizando"
+                .into()
+        }
         NubeError::Red(_) => "No se pudo conectar con la nube, intentá de nuevo".into(),
     }
 }
@@ -562,5 +569,22 @@ mod tests {
             mensaje_gestion_nube(error),
             "El receptor rechazó el pedido, intentá de nuevo más tarde"
         );
+    }
+
+    /// `DispositivoSuspendido`/`VersionDesactualizada` cada uno con su propio
+    /// mensaje -- no deben caer los dos en el mismo texto genérico (mismo
+    /// motivo que el test de arriba para gestión/uso), porque uno lo resuelve
+    /// un admin y el otro se resuelve actualizando la app.
+    #[cfg(feature = "nube")]
+    #[test]
+    fn dispositivo_suspendido_y_version_desactualizada_no_comparten_mensaje() {
+        use crate::nube::NubeError;
+
+        let suspendido = mensaje_nube(NubeError::DispositivoSuspendido);
+        let desactualizada = mensaje_nube(NubeError::VersionDesactualizada);
+
+        assert_ne!(suspendido, desactualizada);
+        assert!(suspendido.contains("administrador"));
+        assert!(desactualizada.contains("actualizá") || desactualizada.contains("actualiza"));
     }
 }

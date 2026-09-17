@@ -68,6 +68,7 @@ contraseñas, nunca en el repo):
 | Secret | Función que lo usa | De dónde sale |
 | --- | --- | --- |
 | `DEVICE_SIGNING_KEY` | `device-auth` | Par de llaves ES256 (JWK) generado una vez -- firma los tokens de dispositivo. Si se pierde, hay que regenerarlo Y volver a provisionar todos los dispositivos (sus tokens viejos ya no calzan con la llave pública nueva). |
+| `VERSION_MINIMA_ACEPTADA` | `device-auth` | **Opcional.** Ej. `1.6.0` -- si no está seteado, no se rechaza ninguna versión (comportamiento actual). Ver `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto 9. |
 | `CF_API_TOKEN` | `sync-access-policy` | Token de Cloudflare con permiso "Access: Apps and Policies" Edit. |
 | `CF_ACCOUNT_ID` | `sync-access-policy` | ID de la cuenta de Cloudflare. |
 | `CF_ACCESS_APP_ID` | `sync-access-policy` | ID de la app de Access "Panel Brisas". |

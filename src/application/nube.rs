@@ -848,9 +848,16 @@ impl AppCore {
     }
 
     /// Igual que [`Self::autenticar_con_cache`], pero permite adjuntar
-    /// `metadata` cuando hace falta mandarla -- sólo la activación inicial
-    /// (ver [`Self::configurar_dispositivo_inicial`]). El resto de los
-    /// llamadores pasan `None` a través de `autenticar_con_cache`.
+    /// `metadata` completa cuando hace falta mandarla -- sólo la activación
+    /// inicial (ver [`Self::configurar_dispositivo_inicial`]). El resto de
+    /// los llamadores pasan `None` a través de `autenticar_con_cache`, pero
+    /// si ya se llamó [`AppCore::establecer_version_app`], acá igual se arma
+    /// una `MetadatosDispositivo` mínima (sólo `app_version`) para que el
+    /// receptor pueda aplicar `VERSION_MINIMA_ACEPTADA` en cualquier
+    /// renovación, no sólo al activar el dispositivo -- ver
+    /// `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto 9. Sin
+    /// `establecer_version_app`, el comportamiento es exactamente el de
+    /// antes.
     fn autenticar_y_cachear(
         &self,
         secreto: &str,
@@ -874,6 +881,18 @@ impl AppCore {
             }
         }
 
+        let metadata_con_version;
+        let metadata = match (metadata, &self.version_app) {
+            (Some(metadata), _) => Some(metadata),
+            (None, Some(version)) => {
+                metadata_con_version = crate::nube::MetadatosDispositivo {
+                    app_version: Some(version.clone()),
+                    ..Default::default()
+                };
+                Some(&metadata_con_version)
+            }
+            (None, None) => None,
+        };
         let token = crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, secreto, metadata)?;
         self.aplicar_desfase_reloj(&token);
         *self

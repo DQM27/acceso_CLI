@@ -67,6 +67,12 @@ pub struct AppCore {
     reloj: Arc<dyn Reloj>,
     #[cfg(feature = "nube")]
     token_nube_cacheado: std::sync::Mutex<Option<nube::TokenCacheado>>,
+    /// Versión de la app que abrió este `AppCore` (`env!("CARGO_PKG_VERSION")`
+    /// de escritorio/móvil, cada uno la suya -- este crate no puede saberla
+    /// solo). `None` hasta que quien llama la fija con
+    /// [`Self::establecer_version_app`]. Ver esa función para el porqué.
+    #[cfg(feature = "nube")]
+    version_app: Option<String>,
 }
 
 impl AppCore {
@@ -80,7 +86,22 @@ impl AppCore {
             reloj,
             #[cfg(feature = "nube")]
             token_nube_cacheado: std::sync::Mutex::new(None),
+            #[cfg(feature = "nube")]
+            version_app: None,
         }
+    }
+
+    /// Fija la versión de la app para que viaje en CADA renovación de token
+    /// de dispositivo (`nube::autenticar_y_cachear`), no sólo en la
+    /// activación inicial -- para que el receptor pueda rechazar una versión
+    /// por debajo del mínimo aceptado en cualquier momento de la vida del
+    /// dispositivo, no sólo al configurarlo. Sin llamar a esto, el
+    /// comportamiento es exactamente el de antes (ninguna versión viaja
+    /// fuera de la activación). Ver
+    /// `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto 9.
+    #[cfg(feature = "nube")]
+    pub fn establecer_version_app(&mut self, version: impl Into<String>) {
+        self.version_app = Some(version.into());
     }
 
     pub fn abrir(path: impl AsRef<Path>) -> Result<Self, BootstrapError> {
