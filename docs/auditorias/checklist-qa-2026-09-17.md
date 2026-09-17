@@ -15,6 +15,8 @@
 - [x] Fallo silencioso corregido en la sincronización automática (errores y panics que no dejaban rastro)
 - [x] Código muerto del viejo sistema de respaldo eliminado + nota falsa en `pendientes.md` corregida
 - [x] **Corrección 2026-09-17 (tarde):** el secreto de dispositivo en Android **sí está cifrado** (Android Keystore, `SecretoDispositivoStore.kt`, desde el commit `7aed199` del 2026-09-10) -- la entrada de más abajo, agregada hoy más temprano, estaba mal: busqué solo `androidx.security`/`EncryptedFile` y no encontré el mecanismo real, que usa el API de Keystore directo. Verificado de punta a punta: la clave ya no depende de `ANDROID_ID` (se genera dentro del propio Keystore), `ANDROID_ID` solo se usa para migrar el secreto legado en texto plano una única vez, y el archivo viejo se borra después. Conectado de verdad en `AplicacionViewModel.kt:52`, no es código muerto.
+- [x] `CODEOWNERS` agregado (`.github/CODEOWNERS`, @DQM27) -- falta el interruptor en GitHub, ver más abajo
+- [x] Chequeo de versión mínima entre dispositivos -- **escritorio completo**, con tests (`cargo test --lib`, 365 passed). Mobile queda pendiente, ver más abajo
 
 ## Decisiones de negocio pendientes (no es código, es elegir)
 
@@ -27,7 +29,8 @@
 
 ## Trabajo técnico pendiente (no necesita tu decisión, solo tiempo)
 
-- [ ] Chequeo de versión mínima entre dispositivos (diseño ya está claro, ver plan punto 9)
+- [ ] **Chequeo de versión mínima en mobile** — falta que Kotlin le pase su versión real a Rust (nuevo método UniFFI + una llamada en `AplicacionViewModel.kt`). Chico y de bajo riesgo, pero toca Kotlin — decime si avanzo
+- [ ] Configurar `VERSION_MINIMA_ACEPTADA` en Supabase cuando decidan la primera versión a exigir (`supabase secrets set VERSION_MINIMA_ACEPTADA=X.Y.Z`) -- sin esto seteado, el chequeo ya está listo pero no rechaza nada
 - [ ] Diagnóstico exportable (.zip) — el botón + armar el archivo (espera el ok de Resend de arriba para la parte de "mandarlo solo")
 - [ ] Instrumentar más puntos de fallo con logs (comandos Tauri, cola de sincronización offline — plan punto 5.1/5.2)
 - [ ] Logging del fallo fatal de arranque (base dañada, candado de instancia) — hoy corre antes de que el log exista (plan punto 5.3)

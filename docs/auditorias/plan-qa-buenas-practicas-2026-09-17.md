@@ -176,6 +176,67 @@ existe** — ver punto 7 del plan.
 
 ---
 
+### 12. Chequeo de versión mínima entre dispositivos (escritorio)
+
+**Qué se buscaba:** que un dispositivo que quedó muy atrás de versión no
+pueda seguir sincronizando contra un backend que ya evolucionó más allá de
+lo que esa versión entiende, en vez de fallar con un error críptico en
+producción.
+
+**Hallazgo de diseño, antes de implementar:** `app_version` sólo viajaba en
+la activación inicial del dispositivo (`MetadatosDispositivo`, ver el
+propio doc-comment en `src/nube/cliente.rs` -- es deliberado, no un
+descuido). Un chequeo que sólo mirara eso se evaluaría UNA vez en la vida
+del dispositivo, nunca más -- inútil contra un dispositivo que se atrasa
+con el tiempo. Se resolvió sin tocar ese diseño (no se manda la metadata
+completa más seguido): se agregó un campo separado, liviano, que sí viaja
+en cada renovación.
+
+**Qué se hizo:**
+1. `supabase/functions/device-auth/index.ts` -- secret opcional
+   `VERSION_MINIMA_ACEPTADA` (no una tabla nueva -- cambia rara vez, no
+   amerita una consulta a la base en cada login). Si no está seteado, no
+   cambia nada del comportamiento actual. Compara con `versionPorDebajoDe`
+   (major.minor.patch, mismo esquema que ya usa el proyecto) y responde
+   `426 Upgrade Required` si corresponde. Fail-open a propósito: sin
+   versión mínima configurada, o sin que el cliente la mande, nunca
+   rechaza -- evita dejar afuera de golpe a dispositivos que todavía no
+   mandan la versión en cada renovación el día que esto se active.
+2. `src/nube/cliente.rs` -- dos variantes nuevas de `NubeError`
+   (`DispositivoSuspendido`, `VersionDesactualizada`) mapeadas desde los
+   status HTTP 403/426 de `device-auth`. De paso, `device_suspended` (403)
+   dejó de caer en el genérico `NubeError::Red` -- ya existía en el
+   backend pero el cliente nunca lo distinguía.
+3. `src/mensajes.rs` -- mensaje específico para cada una (uno dice
+   "contactá a un administrador", el otro "actualizá la app" -- no deben
+   compartir texto, apuntan a acciones distintas).
+4. `src/application/mod.rs`/`nube.rs` -- `AppCore::establecer_version_app`
+   (nuevo, opcional) hace que **cada** renovación de token mande
+   `app_version`, no sólo la activación -- sin llamarlo, cero cambio de
+   comportamiento.
+5. `desktop/src-tauri/src/lib.rs` (`preparar_nucleo`) -- llama a ese
+   setter con `env!("CARGO_PKG_VERSION")` de `desktop/src-tauri/Cargo.toml`
+   (`1.5.3`, igual al de `tauri.conf.json` hoy -- son campos separados que
+   no se sincronizan solos, tenerlo presente si alguna vez divergen).
+
+**Cómo se verifica:**
+```sh
+cargo test --lib --features "nube,cifrado-secreto-dispositivo"
+# 365 passed, incluye:
+#   nube::cliente::tests::dispositivo_suspendido_se_reporta_como_tal
+#   nube::cliente::tests::version_desactualizada_se_reporta_como_tal
+#   mensajes::tests::dispositivo_suspendido_y_version_desactualizada_no_comparten_mensaje
+```
+La función `versionPorDebajoDe` (Deno/TypeScript, sin dependencias de Deno)
+se verificó con 10 casos manuales por `node` -- no se instaló Deno ni un
+framework de test nuevo para una sola función (el propio criterio de este
+documento: no abrir un sistema nuevo sin necesidad real).
+
+**Lo que falta -- mobile:** ver el punto 9 más abajo (🚧), que sigue con el
+detalle completo de por qué no se tocó Kotlin todavía.
+
+---
+
 ## 🚧 Plan definido — requieren decisión o más alcance
 
 ### 5. Observabilidad — completar la instrumentación
@@ -245,20 +306,29 @@ sin que nadie más lo haya mirado.
    del repositorio, no de código, y podría bloquear al propio dueño si se
    configura mal.
 
-### 9. Compatibilidad hacia atrás entre dispositivos
+### 9. Compatibilidad hacia atrás entre dispositivos -- ✅ escritorio, 🚧 mobile
 
-**Qué falta:** con sync multi-dispositivo real (varios sitios, cada uno
-pudiendo estar en una versión de app distinta), no hay ningún chequeo de
-versión mínima. Si un dispositivo viejo manda un payload en un formato que
-uno nuevo ya no espera (o viceversa), no hay nada que lo detecte antes de
-que falle en producción.
+**Movido a "Cerrado" para escritorio, ver esa sección más abajo con el
+detalle completo de implementación y tests.** Queda acá solo lo que falta.
 
-**Plan:** agregar `version_minima_compatible` a la respuesta de
-autenticación de dispositivo (`device-auth`, Edge Function ya existente) y
-que el cliente rechace sincronizar con un aviso claro si está por debajo —
-mejor que un error de deserialización críptico. Requiere decidir la
-política de versiones soportadas (¿cuántas versiones atrás?) antes de
-implementar.
+**Lo que falta -- mobile (Android):** el mecanismo del lado del receptor
+(`device-auth`) y del núcleo Rust compartido ya sirve a los dos, sin
+cambios adicionales. Lo único que falta es que **Kotlin le pase su propia
+versión real a Rust** (`BuildConfig.VERSION_NAME`, no la del crate
+`mobile/rust-core`, que no es la misma cosa) -- hace falta:
+1. Exponer un método UniFFI nuevo (algo como
+   `Nucleo.establecerVersionApp(version: String)`) que llame al
+   `AppCore::establecer_version_app` que ya existe.
+2. Llamarlo una vez desde Kotlin, en `AplicacionViewModel.kt`, justo después
+   de `Nucleo.abrir(...)`.
+
+**Por qué no lo hice ya:** toca Kotlin, que no puedo compilar ni correr en
+este sandbox (ver el resto de este documento y `docs/auditorias/auditoria-calidad-2026-09.md`
+para el historial de por qué ahí conviene pedir confirmación antes de
+tocar, aunque este cambio puntual es mucho más chico y de menor riesgo que
+el de cifrado). Mientras tanto, mobile sigue con el comportamiento de
+siempre: manda su versión sólo al activarse, no en cada renovación --
+no es una regresión, es exactamente el estado actual.
 
 ### 10. ~~Cifrado del secreto de dispositivo en Android~~ — ya resuelto, este plan tenía la nota vieja
 
@@ -364,7 +434,7 @@ justificación (ver el análisis de `AppCore`, sesión previa):
 | 5 | Observabilidad completa | 🚧 | Fase 5.4 sí (proveedor externo) |
 | 6 | Diagnóstico exportable | 🚧 | No |
 | 7 | Runbook recuperación base local | 🚧 | Sí (qué se acepta perder) |
-| 8 | CODEOWNERS + branch protection | 🚧 | Sí (cambio de configuración del repo) |
-| 9 | Compatibilidad multi-versión | 🚧 | Sí (política de versiones soportadas) |
+| 8 | CODEOWNERS + branch protection | ✅ CODEOWNERS / 🚧 el toggle | El toggle sí (vos, en Settings del repo) |
+| 9 / 12 | Compatibilidad multi-versión | ✅ escritorio / 🚧 mobile | Mobile: no, sólo falta tocar Kotlin (confirmalo si querés que avance) |
 | 10 | Cifrado secreto Android | ✅ (ya estaba hecho, nota vieja corregida) | Test con Robolectric: sí, si se quiere sumarlo |
-| 11 | Config por ambiente (staging) | 🚧 | Sí (costo de un 2º proyecto Supabase) |
+| 11 | Config por ambiente (staging) | 🚧 (decisión tomada, falta implementar) | No -- ya dijiste que sí, 2 proyectos gratis de Supabase |

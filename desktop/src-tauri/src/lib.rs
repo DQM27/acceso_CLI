@@ -129,7 +129,7 @@ fn preparar_nucleo() -> (PathBuf, InstanciaGuard, Zeroizing<[u8; 32]>, AppCore) 
     // `application::nube::AppCore::actualizar_desfase_reloj`. Sin nube
     // configurada nunca se mide nada y este reloj se comporta igual que
     // `RelojSistema`.
-    let core = AppCore::abrir_con_reloj_cifrado(
+    let mut core = AppCore::abrir_con_reloj_cifrado(
         &ruta_base_datos,
         &clave_base_datos,
         Arc::new(RelojCorregido::nuevo()),
@@ -137,6 +137,11 @@ fn preparar_nucleo() -> (PathBuf, InstanciaGuard, Zeroizing<[u8; 32]>, AppCore) 
     .unwrap_or_else(|error| {
         mostrar_error_fatal_y_salir(&format!("No se pudo abrir la base de datos: {error}"))
     });
+    // Para que el receptor pueda aplicar `VERSION_MINIMA_ACEPTADA` en
+    // cualquier renovación de token, no sólo al activar el dispositivo --
+    // ver `AppCore::establecer_version_app` y
+    // docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md, punto 9.
+    core.establecer_version_app(env!("CARGO_PKG_VERSION"));
 
     (ruta_base_datos, instancia, clave_base_datos, core)
 }
