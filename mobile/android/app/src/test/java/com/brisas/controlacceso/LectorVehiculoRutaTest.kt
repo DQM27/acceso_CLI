@@ -68,4 +68,40 @@ class LectorVehiculoRutaTest {
     fun sinNadaReconocibleNoHayResultado() {
         assertNull(extraerVehiculo("Apunte la cámara al vehículo"))
     }
+
+    // Muestras reales del 2026-09-17 (overlay de debug de
+    // PantallaEscanearVehiculoRuta, ver comentario de `REGEX_PLACA_CARGA`
+    // en LectorVehiculoRuta.kt para el detalle de cada caso).
+
+    @Test
+    fun extraePlacaDeCargaConDigitosPartidosPorMLKit() {
+        // Placa real `CL371931`: el prefijo apilado se leyó como `E` (no
+        // `CL`) y los dígitos salieron partidos "37 1931" -- el valor
+        // resultante queda con el prefijo mal leído a propósito (campo
+        // editable, se corrige a mano), lo que importa es que ya no se
+        // pierden dígitos.
+        val texto = "FIAT\nE37 1931\nCOSTA RICA\nCENTROAMERICA"
+        val resultado = extraerVehiculo(texto)
+        assertEquals("E371931", resultado?.valor)
+        assertEquals(TipoVehiculoDetectado.PLACA, resultado?.tipo)
+    }
+
+    @Test
+    fun extraePlacaDeMotoConPrefijoMDetectado() {
+        val texto = "CoSmCA\n947\n369\nCENTROAMERIGA\nM"
+        val resultado = extraerVehiculo(texto)
+        assertEquals("M947369", resultado?.valor)
+        assertEquals(TipoVehiculoDetectado.PLACA, resultado?.tipo)
+    }
+
+    @Test
+    fun extraePlacaDeMotoSinElPrefijoMCuandoMlKitNoLoDetecta() {
+        // Segunda moto real: "807"/"ACL" salieron perfectos, pero la "M"
+        // del prefijo no apareció como línea propia esta vez -- el
+        // resultado queda sin ella en vez de fallar del todo.
+        val texto = "09TA RICA\n807\nACL\nNOANA"
+        val resultado = extraerVehiculo(texto)
+        assertEquals("807ACL", resultado?.valor)
+        assertEquals(TipoVehiculoDetectado.PLACA, resultado?.tipo)
+    }
 }

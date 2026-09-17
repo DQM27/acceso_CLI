@@ -17,14 +17,18 @@ pub use auth_supabase::{
 };
 pub use cliente::{MetadatosDispositivo, NubeError, TokenDispositivo, autenticar_dispositivo};
 pub use sincronizacion::{
-    ConflictoIngresoActivo, ConflictoMovimientoVisitaActivo, ContextoSincronizacion, IngresoRemoto,
-    ResumenCatalogo, ResumenCatalogoRutas, ResumenDrenado, SincronizacionError,
+    ConflictoIngresoActivo, ConflictoIngresoProveedorActivo, ConflictoMovimientoVisitaActivo,
+    ContextoSincronizacion, IngresoProveedorRemoto, IngresoRemoto, ResumenCatalogo,
+    ResumenCatalogoRutas, ResumenDrenado, SincronizacionError, cerrar_ingreso_proveedor_remoto,
     cerrar_ingreso_remoto, contar_fallos_permanentes, contratista_activo_en_otro_sitio,
-    contratistas_con_conflicto_activo, drenar_cola, gafete_de_visita_ocupado_en_otro_dispositivo,
-    gafete_ocupado_en_otro_dispositivo, gafete_provisional_ocupado_en_otro_dispositivo,
-    recibir_catalogo_del_sitio, recibir_catalogo_rutas_del_sitio,
-    recibir_cierres_de_ingresos_propios, recibir_citas_del_sitio, recibir_historial_del_sitio,
-    recibir_historial_visitas_del_sitio, recibir_ingresos_abiertos, usuario_sigue_activo_remoto,
+    contratistas_con_conflicto_activo, drenar_cola, gafete_de_proveedor_ocupado_en_otro_dispositivo,
+    gafete_de_visita_ocupado_en_otro_dispositivo, gafete_ocupado_en_otro_dispositivo,
+    gafete_provisional_ocupado_en_otro_dispositivo, proveedor_activo_en_otro_sitio,
+    proveedores_con_conflicto_activo, recibir_catalogo_del_sitio, recibir_catalogo_rutas_del_sitio,
+    recibir_cierres_de_ingresos_propios, recibir_cierres_de_ingresos_propios_proveedor,
+    recibir_citas_del_sitio, recibir_historial_del_sitio,
+    recibir_historial_ingresos_proveedor_del_sitio, recibir_historial_visitas_del_sitio,
+    recibir_ingresos_abiertos, recibir_ingresos_proveedor_abiertos, usuario_sigue_activo_remoto,
     visitante_activo_en_otro_sitio, visitantes_con_conflicto_activo,
 };
 

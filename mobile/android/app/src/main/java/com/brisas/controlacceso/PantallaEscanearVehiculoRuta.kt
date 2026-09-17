@@ -19,10 +19,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -57,10 +54,20 @@ import kotlinx.coroutines.launch
 /// (calcomanía de número de unidad de un camión de flota, o placa de un
 /// camión de apoyo): [extraerVehiculo] decide cuál es cuál, esta pantalla
 /// no necesita saberlo de antemano.
+///
+/// `mensajeInicial`/`mensajePermiso` son configurables porque
+/// [PantallaProveedores] reusa esta misma pantalla para su OCR de placa
+/// (genérico, no específico de rutas -- ver comentario ahí), pero un
+/// proveedor nunca trae "número de unidad" (eso es sólo de la flota de
+/// rutas) -- mensaje por defecto sin cambios para no alterar Rutas, bug
+/// reportado en pruebas reales, 2026-09-17: Proveedores mostraba el
+/// mensaje de Rutas tal cual.
 @Composable
 fun PantallaEscanearVehiculoRuta(
     onVehiculoDetectado: suspend (VehiculoRutaDetectado) -> Unit,
     onCerrar: () -> Unit,
+    mensajeInicial: String = MENSAJE_INICIAL_VEHICULO,
+    mensajePermiso: String = "Se necesita permiso de cámara para escanear la placa o el número de unidad.",
 ) {
     BackHandler(onBack = onCerrar)
     val contexto = LocalContext.current
@@ -78,7 +85,11 @@ fun PantallaEscanearVehiculoRuta(
     }
 
     if (permisoConcedido) {
-        VistaCamaraVehiculoRuta(onVehiculoDetectado = onVehiculoDetectado, onCerrar = onCerrar)
+        VistaCamaraVehiculoRuta(
+            onVehiculoDetectado = onVehiculoDetectado,
+            onCerrar = onCerrar,
+            mensajeInicial = mensajeInicial,
+        )
     } else {
         Column(
             modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -86,7 +97,7 @@ fun PantallaEscanearVehiculoRuta(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                "Se necesita permiso de cámara para escanear la placa o el número de unidad.",
+                mensajePermiso,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -101,6 +112,7 @@ fun PantallaEscanearVehiculoRuta(
 private fun VistaCamaraVehiculoRuta(
     onVehiculoDetectado: suspend (VehiculoRutaDetectado) -> Unit,
     onCerrar: () -> Unit,
+    mensajeInicial: String,
 ) {
     val contexto = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -109,9 +121,8 @@ private fun VistaCamaraVehiculoRuta(
     val haptica = LocalHapticFeedback.current
     val ejecutor = remember { Executors.newSingleThreadExecutor() }
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
-    var ultimoMensaje by remember { mutableStateOf(MENSAJE_INICIAL_VEHICULO) }
+    var ultimoMensaje by remember { mutableStateOf(mensajeInicial) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
-    var textoCrudoDebug by remember { mutableStateOf("") }
     val estabilizador = remember { EstabilizadorVehiculoRuta() }
     val detectada = remember { AtomicBoolean(false) }
     val sesionActiva = remember { AtomicBoolean(true) }
@@ -166,7 +177,6 @@ private fun VistaCamaraVehiculoRuta(
                                 sesionActiva = sesionActiva,
                                 onTexto = { texto ->
                                     if (sesionActiva.get()) {
-                                        if (BuildConfig.DEBUG) textoCrudoDebug = texto
                                         val resultado = estabilizador.procesarFrame(texto)
                                         if (resultado != null) {
                                             estado = EstadoEscaneo.CONFIRMADO
@@ -180,7 +190,7 @@ private fun VistaCamaraVehiculoRuta(
                                             }
                                         } else {
                                             estado = EstadoEscaneo.BUSCANDO
-                                            ultimoMensaje = MENSAJE_INICIAL_VEHICULO
+                                            ultimoMensaje = mensajeInicial
                                         }
                                     }
                                 },
@@ -222,20 +232,6 @@ private fun VistaCamaraVehiculoRuta(
                     .padding(12.dp),
             )
             BotonDiscretoBrisas(onClick = onCerrar) { Text("Cancelar") }
-        }
-        if (BuildConfig.DEBUG && textoCrudoDebug.isNotBlank()) {
-            Text(
-                "DEBUG -- texto crudo de ML Kit:\n$textoCrudoDebug",
-                color = Color.White,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .heightIn(max = 320.dp)
-                    .verticalScroll(rememberScrollState())
-                    .background(Color.Black.copy(alpha = 0.85f))
-                    .padding(12.dp),
-            )
         }
     }
 }

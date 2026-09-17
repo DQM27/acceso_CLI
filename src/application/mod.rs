@@ -24,6 +24,7 @@ mod gafetes_provisionales;
 mod historial;
 #[cfg(feature = "nube")]
 mod nube;
+mod proveedores;
 mod rutas;
 mod usuarios;
 

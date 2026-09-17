@@ -204,6 +204,14 @@ pub fn run() {
             comandos::rutas::registrar_retorno_ruta,
             comandos::rutas::listar_rutas_activas,
             comandos::rutas::buscar_salida_ruta,
+            comandos::proveedores::listar_empresas_proveedor,
+            comandos::proveedores::buscar_empresas_proveedor,
+            comandos::proveedores::crear_empresa_proveedor,
+            comandos::proveedores::establecer_empresa_proveedor_activa,
+            comandos::proveedores::registrar_ingreso_proveedor,
+            comandos::proveedores::registrar_salida_proveedor,
+            comandos::proveedores::listar_proveedores_activos,
+            comandos::proveedores::listar_historial_ingresos_proveedor_sitio,
             comandos::historial::listar_historial,
             comandos::historial::listar_historial_sitio,
             comandos::historial::exportar_historial,
@@ -223,6 +231,8 @@ pub fn run() {
             comandos::nube::sesion_realtime_nube,
             comandos::nube::listar_ingresos_remotos,
             comandos::nube::cerrar_ingreso_remoto,
+            comandos::nube::listar_ingresos_proveedor_remotos,
+            comandos::nube::cerrar_ingreso_proveedor_remoto,
             comandos::nube::fallos_permanentes_nube,
         ])
         .run(tauri::generate_context!())

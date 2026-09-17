@@ -268,4 +268,18 @@ class EstabilizadorLecturaTest {
         assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
         assertEquals(false, r.vencido)
     }
+
+    @Test
+    fun cedulaNacionalLeidaSoloDelFrenteAvisaQueFaltaVoltearla() {
+        // Sin MRZ en el texto (sólo lo que trae el frente con la foto): el
+        // número se lee bien, pero nunca hay nombre desde esa cara -- ver
+        // `LectorDocumentosIdentidad.leerDocumentoDeTexto`. El mensaje debe
+        // decírselo a quien opera en vez de confirmar en silencio sin nombre
+        // (bug reportado en pruebas reales, 2026-09-17).
+        val estabilizador = EstabilizadorLectura(framesRequeridos = 1)
+        val r = estabilizador.procesarFrame("TRIBUNAL SUPREMO DE ELECCIONES\n1-1234-0567\nCOSTA RICA")
+        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
+        assertEquals(null, r.documento?.nombre)
+        assertEquals("Ya tengo el número — muéstreme el reverso para el nombre", r.mensaje)
+    }
 }

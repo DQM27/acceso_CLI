@@ -31,6 +31,7 @@ use control_acceso::domain::resultado_acceso::{
 };
 use control_acceso::domain::resultado_salida_ruta::ResultadoSalidaRuta as ResultadoSalidaRutaNucleo;
 use control_acceso::models::empresa::Empresa as EmpresaNucleo;
+use control_acceso::models::empresa_proveedor::EmpresaProveedor as EmpresaProveedorNucleo;
 use control_acceso::models::encargado_ruta::EncargadoRuta as EncargadoRutaNucleo;
 use control_acceso::models::medio_ingreso::MedioIngreso as MedioIngresoNucleo;
 use control_acceso::models::prestamo_gafete_provisional::PrestamoGafeteProvisionalActivoResumen as PrestamoGafeteProvisionalActivoResumenNucleo;
@@ -38,17 +39,21 @@ use control_acceso::models::registro_ingreso::{
     MotivoResultadoIngreso as MotivoResultadoIngresoNucleo,
     ResultadoIngresoRegistrado as ResultadoIngresoRegistradoNucleo,
 };
+use control_acceso::models::registro_ingreso_proveedor::RegistroIngresoProveedorActivoResumen as RegistroIngresoProveedorActivoResumenNucleo;
 use control_acceso::models::ruta::Ruta as RutaNucleo;
 use control_acceso::models::salida_ruta::SalidaRutaActivaResumen as SalidaRutaActivaResumenNucleo;
 use control_acceso::models::tipo_ingreso::TipoIngreso as TipoIngresoNucleo;
 use control_acceso::models::usuario::RolUsuario as RolUsuarioNucleo;
+use control_acceso::nube::IngresoProveedorRemoto as IngresoProveedorRemotoNucleo;
 use control_acceso::nube::IngresoRemoto as IngresoRemotoNucleo;
 use control_acceso::services::autenticacion_service::UsuarioSesion as UsuarioSesionNucleo;
 use control_acceso::services::contratista_service::DatosContratista as DatosContratistaNucleo;
 use control_acceso::services::error::AutenticacionError as AutenticacionErrorNucleo;
 use control_acceso::services::error::ContratistaServiceError as ContratistaServiceErrorNucleo;
+use control_acceso::services::error::EmpresaProveedorServiceError as EmpresaProveedorServiceErrorNucleo;
 use control_acceso::services::error::EmpresaServiceError as EmpresaServiceErrorNucleo;
 use control_acceso::services::error::GafeteProvisionalServiceError as GafeteProvisionalServiceErrorNucleo;
+use control_acceso::services::error::IngresoProveedorServiceError as IngresoProveedorServiceErrorNucleo;
 use control_acceso::services::error::RegistroIngresoServiceError as RegistroIngresoServiceErrorNucleo;
 use control_acceso::services::error::RutaServiceError as RutaServiceErrorNucleo;
 use control_acceso::services::error::UsuarioServiceError as UsuarioServiceErrorNucleo;
@@ -371,6 +376,25 @@ impl From<EmpresaNucleo> for Empresa {
     }
 }
 
+/// Espejo de `EmpresaProveedor` -- catálogo separado de `Empresa` a
+/// propósito (`docs/features-futuras/plan-control-proveedores.md`).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct EmpresaProveedor {
+    pub id: i64,
+    pub nombre: String,
+    pub activo: bool,
+}
+
+impl From<EmpresaProveedorNucleo> for EmpresaProveedor {
+    fn from(empresa: EmpresaProveedorNucleo) -> Self {
+        Self {
+            id: empresa.id,
+            nombre: empresa.nombre,
+            activo: empresa.activo,
+        }
+    }
+}
+
 /// Espejo de `DatosContratista` — sólo alta, no edición (ver
 /// docs/plan-app-movil.md). `fecha_vencimiento_praind` viaja como texto
 /// ISO (`AAAA-MM-DD`); si no parsea se rechaza como `DatosInvalidos` antes
@@ -563,6 +587,9 @@ pub struct ResumenSincronizacion {
     /// base recién configurada, sin ingresos locales todavía) -- sólo
     /// `sincronizar_con_secreto` lo completa de verdad.
     pub conflictos_ingreso: Vec<ConflictoIngresoActivo>,
+    /// Mismo criterio que `conflictos_ingreso`, pero para ingresos de
+    /// proveedor -- ver `control_acceso::nube::proveedores_con_conflicto_activo`.
+    pub conflictos_ingreso_proveedor: Vec<ConflictoIngresoProveedorActivo>,
 }
 
 /// Espejo de `control_acceso::nube::ConflictoIngresoActivo`.
@@ -578,6 +605,24 @@ impl From<control_acceso::nube::ConflictoIngresoActivo> for ConflictoIngresoActi
         Self {
             cedula: conflicto.cedula,
             contratista_nombre: conflicto.contratista_nombre,
+            sitio_conflicto: conflicto.sitio_conflicto,
+        }
+    }
+}
+
+/// Espejo de `control_acceso::nube::ConflictoIngresoProveedorActivo`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ConflictoIngresoProveedorActivo {
+    pub cedula: String,
+    pub nombre: String,
+    pub sitio_conflicto: String,
+}
+
+impl From<control_acceso::nube::ConflictoIngresoProveedorActivo> for ConflictoIngresoProveedorActivo {
+    fn from(conflicto: control_acceso::nube::ConflictoIngresoProveedorActivo) -> Self {
+        Self {
+            cedula: conflicto.cedula,
+            nombre: conflicto.nombre,
             sitio_conflicto: conflicto.sitio_conflicto,
         }
     }
@@ -601,6 +646,7 @@ impl From<ResumenSincronizacionNucleo> for ResumenSincronizacion {
             tipo: resumen.tipo,
             sesion_expulsada: resumen.sesion_expulsada,
             conflictos_ingreso: Vec::new(),
+            conflictos_ingreso_proveedor: Vec::new(),
         }
     }
 }
@@ -647,6 +693,35 @@ impl From<IngresoRemotoNucleo> for IngresoRemoto {
         Self {
             uuid: remoto.uuid,
             contratista_nombre: remoto.contratista_nombre,
+            hora_entrada: remoto.hora_entrada,
+            usuario_entrada_nombre: remoto.usuario_entrada_nombre,
+        }
+    }
+}
+
+/// Espejo de [`IngresoRemoto`], pero para el ciclo de proveedores -- ver
+/// `IngresoProveedorRemotoNucleo`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct IngresoProveedorRemoto {
+    pub uuid: String,
+    pub cedula: String,
+    pub nombre: String,
+    pub empresa_nombre: String,
+    pub placa: Option<String>,
+    pub gafete_numero: i64,
+    pub hora_entrada: String,
+    pub usuario_entrada_nombre: String,
+}
+
+impl From<IngresoProveedorRemotoNucleo> for IngresoProveedorRemoto {
+    fn from(remoto: IngresoProveedorRemotoNucleo) -> Self {
+        Self {
+            uuid: remoto.uuid,
+            cedula: remoto.cedula,
+            nombre: remoto.nombre,
+            empresa_nombre: remoto.empresa_nombre,
+            placa: remoto.placa,
+            gafete_numero: remoto.gafete_numero,
             hora_entrada: remoto.hora_entrada,
             usuario_entrada_nombre: remoto.usuario_entrada_nombre,
         }
@@ -806,6 +881,33 @@ impl From<PrestamoGafeteProvisionalActivoResumenNucleo> for PrestamoGafeteProvis
     }
 }
 
+/// Espejo de `RegistroIngresoProveedorActivoResumen` -- fila de "proveedores
+/// activos" (ingresos de proveedor sin salida todavía).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct RegistroIngresoProveedorActivoResumen {
+    pub id: i64,
+    pub cedula: String,
+    pub nombre: String,
+    pub empresa_nombre: String,
+    pub placa: Option<String>,
+    pub gafete_numero: i64,
+    pub fecha_hora_ingreso: String,
+}
+
+impl From<RegistroIngresoProveedorActivoResumenNucleo> for RegistroIngresoProveedorActivoResumen {
+    fn from(activo: RegistroIngresoProveedorActivoResumenNucleo) -> Self {
+        Self {
+            id: activo.id,
+            cedula: activo.cedula,
+            nombre: activo.nombre,
+            empresa_nombre: activo.empresa_nombre,
+            placa: activo.placa,
+            gafete_numero: activo.gafete_numero,
+            fecha_hora_ingreso: activo.fecha_hora_ingreso.to_rfc3339(),
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 #[uniffi(flat_error)]
 pub enum NucleoError {
@@ -954,6 +1056,22 @@ impl From<RutaServiceErrorNucleo> for NucleoError {
 
 impl From<GafeteProvisionalServiceErrorNucleo> for NucleoError {
     fn from(error: GafeteProvisionalServiceErrorNucleo) -> Self {
+        Self::Interno {
+            mensaje: error.to_string(),
+        }
+    }
+}
+
+impl From<EmpresaProveedorServiceErrorNucleo> for NucleoError {
+    fn from(error: EmpresaProveedorServiceErrorNucleo) -> Self {
+        Self::Interno {
+            mensaje: error.to_string(),
+        }
+    }
+}
+
+impl From<IngresoProveedorServiceErrorNucleo> for NucleoError {
+    fn from(error: IngresoProveedorServiceErrorNucleo) -> Self {
         Self::Interno {
             mensaje: error.to_string(),
         }
@@ -1498,6 +1616,73 @@ impl Nucleo {
             .collect())
     }
 
+    /// Selector con autocompletado del wizard de proveedores (Paso 2:
+    /// empresa) -- espejo de `AppCore::buscar_empresas_proveedor`.
+    pub fn buscar_empresas_proveedor(
+        &self,
+        texto: String,
+    ) -> Result<Vec<EmpresaProveedor>, NucleoError> {
+        Ok(self
+            .core_lock()
+            .buscar_empresas_proveedor(texto.trim())
+            .map_err(|origen| NucleoError::Interno {
+                mensaje: origen.to_string(),
+            })?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
+    /// Alta inline de empresa proveedora desde el mismo selector -- espejo
+    /// de `AppCore::crear_empresa_proveedor`.
+    pub fn crear_empresa_proveedor(&self, nombre: String) -> Result<i64, NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self.core_lock().crear_empresa_proveedor(&actor, &nombre)?)
+    }
+
+    /// Registra el ingreso (apertura) del ciclo de un proveedor -- espejo
+    /// de `AppCore::registrar_ingreso_proveedor`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn registrar_ingreso_proveedor(
+        &self,
+        cedula: String,
+        nombre: String,
+        empresa_id: i64,
+        placa: Option<String>,
+        gafete_numero: i64,
+    ) -> Result<i64, NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self.core_lock().registrar_ingreso_proveedor(
+            &actor,
+            &cedula,
+            &nombre,
+            empresa_id,
+            placa,
+            gafete_numero,
+        )?)
+    }
+
+    /// Registra la salida (cierre) de un ingreso de proveedor activo --
+    /// espejo de `AppCore::registrar_salida_proveedor`.
+    pub fn registrar_salida_proveedor(&self, registro_id: i64) -> Result<(), NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self
+            .core_lock()
+            .registrar_salida_proveedor(&actor, registro_id)?)
+    }
+
+    /// Sin actor -- es una lectura, mismo criterio que `listar_rutas_activas`.
+    pub fn listar_proveedores_activos(
+        &self,
+    ) -> Result<Vec<RegistroIngresoProveedorActivoResumen>, NucleoError> {
+        Ok(self
+            .core_lock()
+            .listar_proveedores_activos()?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
     pub fn listar_empresas(&self) -> Result<Vec<Empresa>, NucleoError> {
         Ok(self
             .core_lock()
@@ -1742,6 +1927,7 @@ impl Nucleo {
             // `From<ResumenSincronizacionNucleo>` arriba y que el equivalente
             // en desktop/src-tauri/src/comandos/nube.rs.
             conflictos_ingreso: Vec::new(),
+            conflictos_ingreso_proveedor: Vec::new(),
         })
     }
 
@@ -1899,6 +2085,18 @@ impl Nucleo {
             .collect())
     }
 
+    /// Espejo de [`Self::listar_ingresos_remotos`], pero contra la caché
+    /// `ingresos_proveedor_remotos`.
+    pub fn listar_ingresos_proveedor_remotos(&self) -> Result<Vec<IngresoProveedorRemoto>, NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self
+            .core_lock()
+            .listar_ingresos_proveedor_remotos(&actor)?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
     /// Chequeo en vivo (no la caché local) de si `gafete_numero` ya está
     /// activo en este sitio del lado de OTRO dispositivo -- llamar justo
     /// antes de `registrar_ingreso` cuando el ingreso lleva gafete. Cada
@@ -2016,6 +2214,41 @@ impl Nucleo {
         })
     }
 
+    /// Mismo criterio que `gafete_ocupado_en_sitio_con_secreto`, pero para
+    /// gafetes de proveedor -- llamar justo antes de
+    /// `registrar_ingreso_proveedor`. Ver
+    /// `docs/features-futuras/plan-control-proveedores.md`.
+    pub fn gafete_de_proveedor_ocupado_en_sitio_con_secreto(
+        &self,
+        secreto: String,
+        gafete_numero: i64,
+    ) -> Result<bool, NucleoError> {
+        if secreto.trim().is_empty() {
+            return Ok(false);
+        }
+        let actor = self.actor_autenticado()?;
+        self.core_lock().autorizar_uso_nube(&actor)?;
+        let token = self
+            .autenticar_con_cache(&secreto)
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })?;
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::BASE_URL,
+            apikey: control_acceso::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        control_acceso::nube::gafete_de_proveedor_ocupado_en_otro_dispositivo(
+            &contexto,
+            gafete_numero,
+        )
+        .map_err(|error| NucleoError::Interno {
+            mensaje: error.to_string(),
+        })
+    }
+
     /// Chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo cruzado
     /// de ingresos abiertos entre sitios") -- mismo patrón que
     /// `gafete_ocupado_en_sitio_con_secreto`, pero de mejor esfuerzo: sin
@@ -2042,6 +2275,30 @@ impl Nucleo {
             sitio_id: &token.sitio_id,
         };
         control_acceso::nube::contratista_activo_en_otro_sitio(&contexto, &cedula)
+            .ok()
+            .flatten()
+    }
+
+    /// Espejo de [`Self::contratista_activo_en_otro_sitio_con_secreto`],
+    /// pero contra `ingresos_proveedor` -- llamar justo antes de
+    /// `registrar_ingreso_proveedor`.
+    pub fn proveedor_activo_en_otro_sitio_con_secreto(
+        &self,
+        secreto: String,
+        cedula: String,
+    ) -> Option<String> {
+        if secreto.trim().is_empty() {
+            return None;
+        }
+        let token = self.autenticar_con_cache(&secreto).ok()?;
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::BASE_URL,
+            apikey: control_acceso::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        control_acceso::nube::proveedor_activo_en_otro_sitio(&contexto, &cedula)
             .ok()
             .flatten()
     }
@@ -2087,6 +2344,55 @@ impl Nucleo {
             .map_err(|error| NucleoError::Interno {
                 mensaje: error.to_string(),
             })?;
+        Ok(())
+    }
+
+    /// Espejo de [`Self::cerrar_ingreso_remoto`], pero contra
+    /// `ingresos_proveedor`.
+    pub fn cerrar_ingreso_proveedor_remoto(
+        &self,
+        directorio: String,
+        uuid: String,
+    ) -> Result<(), NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self.core_lock().cerrar_ingreso_proveedor_remoto(
+            &actor,
+            Some(std::path::Path::new(&directorio)),
+            &uuid,
+        )?)
+    }
+
+    /// Espejo de [`Self::cerrar_ingreso_remoto_con_secreto`], pero contra
+    /// `ingresos_proveedor`.
+    pub fn cerrar_ingreso_proveedor_remoto_con_secreto(
+        &self,
+        secreto: String,
+        uuid: String,
+    ) -> Result<(), NucleoError> {
+        let actor = self.actor_autenticado()?;
+        self.core_lock().autorizar_uso_nube(&actor)?;
+        let token = self
+            .autenticar_con_cache(&secreto)
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })?;
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::BASE_URL,
+            apikey: control_acceso::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        let conexion = self.conexion_secundaria()?;
+        control_acceso::nube::cerrar_ingreso_proveedor_remoto(
+            &conexion,
+            &contexto,
+            &uuid,
+            &actor.nombre,
+        )
+        .map_err(|error| NucleoError::Interno {
+            mensaje: error.to_string(),
+        })?;
         Ok(())
     }
 }
@@ -2447,7 +2753,13 @@ impl Nucleo {
         let resumen_cola = control_acceso::nube::drenar_cola(&conexion, &contexto, 200)?;
         let cierres_recibidos =
             control_acceso::nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)?;
+        let _cierres_recibidos_proveedor =
+            control_acceso::nube::recibir_cierres_de_ingresos_propios_proveedor(
+                &conexion, &contexto,
+            )?;
         let remotos = control_acceso::nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
+        let _remotos_proveedor =
+            control_acceso::nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;
         let catalogo = control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
         let movimientos_historial_recibidos =
             control_acceso::nube::recibir_historial_del_sitio(&conexion, &contexto)?;
@@ -2470,6 +2782,12 @@ impl Nucleo {
                 .unwrap_or_default()
                 .into_iter()
                 .map(ConflictoIngresoActivo::from)
+                .collect();
+        let conflictos_ingreso_proveedor =
+            control_acceso::nube::proveedores_con_conflicto_activo(&conexion, &contexto)
+                .unwrap_or_default()
+                .into_iter()
+                .map(ConflictoIngresoProveedorActivo::from)
                 .collect();
 
         // Igual que en escritorio: si esta sincronización trajo la baja de
@@ -2497,6 +2815,7 @@ impl Nucleo {
             tipo: token.tipo,
             sesion_expulsada,
             conflictos_ingreso,
+            conflictos_ingreso_proveedor,
         })
     }
 
@@ -2538,7 +2857,13 @@ impl Nucleo {
         let resumen_cola = control_acceso::nube::drenar_cola(&conexion, &contexto, 200)?;
         let cierres_recibidos =
             control_acceso::nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)?;
+        let _cierres_recibidos_proveedor =
+            control_acceso::nube::recibir_cierres_de_ingresos_propios_proveedor(
+                &conexion, &contexto,
+            )?;
         let remotos = control_acceso::nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
+        let _remotos_proveedor =
+            control_acceso::nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;
         let catalogo = control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
         let movimientos_historial_recibidos =
             control_acceso::nube::recibir_historial_del_sitio(&conexion, &contexto)?;
@@ -2551,6 +2876,12 @@ impl Nucleo {
         // un sync que por lo demás anduvo.
         let conflictos_ingreso =
             control_acceso::nube::contratistas_con_conflicto_activo(&conexion, &contexto)
+                .unwrap_or_default()
+                .into_iter()
+                .map(Into::into)
+                .collect();
+        let conflictos_ingreso_proveedor =
+            control_acceso::nube::proveedores_con_conflicto_activo(&conexion, &contexto)
                 .unwrap_or_default()
                 .into_iter()
                 .map(Into::into)
@@ -2577,6 +2908,7 @@ impl Nucleo {
             tipo: token.tipo,
             sesion_expulsada,
             conflictos_ingreso,
+            conflictos_ingreso_proveedor,
         })
     }
 }
@@ -3172,6 +3504,105 @@ mod tests {
         let nucleo = nucleo_con_actor_y_ruta_79();
 
         let resultado = nucleo.entregar_gafete_provisional(999, 12);
+
+        assert!(matches!(resultado, Err(NucleoError::Interno { .. })));
+    }
+
+    fn nucleo_con_actor_empresa_proveedora_y_gafete() -> Nucleo {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
+                     'ROOT', 1
+                 );
+                 INSERT INTO empresas_proveedor (nombre, activo, uuid) VALUES ('Maika', 1, 'uuid-empresa-proveedor');
+                 INSERT INTO gafetes (numero, tipo, estado) VALUES (7, 'PROVEEDOR', 'DISPONIBLE');",
+            )
+            .unwrap();
+        drop(conexion);
+
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
+            .unwrap();
+        nucleo
+    }
+
+    #[test]
+    fn buscar_empresas_proveedor_encuentra_por_nombre() {
+        let nucleo = nucleo_con_actor_empresa_proveedora_y_gafete();
+
+        let resultados = nucleo.buscar_empresas_proveedor("maika".to_string()).unwrap();
+
+        assert_eq!(resultados.len(), 1);
+        assert_eq!(resultados[0].nombre, "Maika");
+    }
+
+    #[test]
+    fn crear_empresa_proveedor_y_buscarla_redondea_el_viaje() {
+        let nucleo = nucleo_con_actor_empresa_proveedora_y_gafete();
+
+        nucleo
+            .crear_empresa_proveedor("Dos Pinos".to_string())
+            .unwrap();
+
+        let resultados = nucleo
+            .buscar_empresas_proveedor("dos pinos".to_string())
+            .unwrap();
+        assert_eq!(resultados.len(), 1);
+    }
+
+    #[test]
+    fn registrar_ingreso_y_salida_de_proveedor_redondea_el_viaje() {
+        let nucleo = nucleo_con_actor_empresa_proveedora_y_gafete();
+        let empresa = nucleo
+            .buscar_empresas_proveedor("maika".to_string())
+            .unwrap()
+            .into_iter()
+            .next()
+            .unwrap();
+
+        let registro_id = nucleo
+            .registrar_ingreso_proveedor(
+                "1-1111".to_string(),
+                "Juan Perez".to_string(),
+                empresa.id,
+                None,
+                7,
+            )
+            .unwrap();
+
+        let activos = nucleo.listar_proveedores_activos().unwrap();
+        assert_eq!(activos.len(), 1);
+        assert_eq!(activos[0].id, registro_id);
+        assert_eq!(activos[0].gafete_numero, 7);
+
+        nucleo.registrar_salida_proveedor(registro_id).unwrap();
+
+        assert_eq!(nucleo.listar_proveedores_activos().unwrap(), Vec::new());
+    }
+
+    #[test]
+    fn registrar_ingreso_proveedor_con_empresa_inexistente_falla() {
+        let nucleo = nucleo_con_actor_empresa_proveedora_y_gafete();
+
+        let resultado = nucleo.registrar_ingreso_proveedor(
+            "1-1111".to_string(),
+            "Juan Perez".to_string(),
+            999,
+            None,
+            7,
+        );
 
         assert!(matches!(resultado, Err(NucleoError::Interno { .. })));
     }

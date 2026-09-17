@@ -37,6 +37,9 @@ pub struct ResumenSincronizacion {
     pub fallidos: u32,
     pub remotos_abiertos: u32,
     pub cierres_recibidos: u32,
+    /// Mismo criterio que `cierres_recibidos`, pero para ingresos de
+    /// proveedor (`nube::recibir_cierres_de_ingresos_propios_proveedor`).
+    pub cierres_recibidos_proveedor: u32,
     pub empresas_recibidas: u32,
     pub contratistas_recibidos: u32,
     pub gafetes_recibidos: u32,
@@ -48,6 +51,9 @@ pub struct ResumenSincronizacion {
     pub citas_recibidas: u32,
     /// Ver `application::nube::ResumenSincronizacion::historial_visitas_recibidos`.
     pub historial_visitas_recibidos: u32,
+    /// Mismo criterio que `historial_visitas_recibidos`, pero para ingresos
+    /// de proveedor (`nube::recibir_historial_ingresos_proveedor_del_sitio`).
+    pub historial_ingresos_proveedor_recibidos: u32,
     pub sitio_id: String,
     pub dispositivo_id: String,
     pub tipo: String,
@@ -67,6 +73,9 @@ pub struct ResumenSincronizacion {
     /// quedó activo en este dispositivo mientras estaba offline y que
     /// también terminó activo en otro sitio.
     pub conflictos_movimiento_visita: Vec<nube::ConflictoMovimientoVisitaActivo>,
+    /// Mismo criterio que `conflictos_ingreso`, pero para ingresos de
+    /// proveedor (`nube::proveedores_con_conflicto_activo`).
+    pub conflictos_ingreso_proveedor: Vec<nube::ConflictoIngresoProveedorActivo>,
 }
 
 /// Datos temporales para que el frontend abra un canal Realtime privado.
@@ -96,6 +105,20 @@ pub struct IngresoRemoto {
     pub tipo_ingreso: Option<String>,
     pub medio_ingreso: Option<String>,
     pub gafete_numero: Option<i64>,
+}
+
+/// Espejo de `nube::IngresoProveedorRemoto` -- mismo criterio que
+/// `IngresoRemoto` arriba, pero para el ciclo de proveedores.
+#[derive(serde::Serialize)]
+pub struct IngresoProveedorRemoto {
+    pub uuid: String,
+    pub cedula: String,
+    pub nombre: String,
+    pub empresa_nombre: String,
+    pub placa: Option<String>,
+    pub gafete_numero: i64,
+    pub hora_entrada: String,
+    pub usuario_entrada_nombre: String,
 }
 
 /// Autentica este dispositivo contra el receptor -- un solo lugar para no
@@ -211,13 +234,18 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
         .map_err(FalloSincronizacion::Mensaje)?;
     let resumen = nube::drenar_cola(&conexion, &contexto, 200)?;
     let cierres_recibidos = nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)?;
+    let cierres_recibidos_proveedor =
+        nube::recibir_cierres_de_ingresos_propios_proveedor(&conexion, &contexto)?;
     let remotos = nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
+    let _remotos_proveedor = nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;
     let catalogo = nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
     let catalogo_rutas = nube::recibir_catalogo_rutas_del_sitio(&conexion, &contexto)?;
     let movimientos_historial_recibidos = nube::recibir_historial_del_sitio(&conexion, &contexto)?;
     let citas_recibidas = nube::recibir_citas_del_sitio(&conexion, &contexto)?;
     let historial_visitas_recibidos =
         nube::recibir_historial_visitas_del_sitio(&conexion, &contexto)?;
+    let historial_ingresos_proveedor_recibidos =
+        nube::recibir_historial_ingresos_proveedor_del_sitio(&conexion, &contexto)?;
     // Mejor esfuerzo a propósito -- ya se llegó hasta acá con la nube
     // respondiendo bien, pero si este chequeo puntual falla no tiene
     // sentido tumbar un sync que por lo demás anduvo. Vacío en ese caso, no
@@ -226,6 +254,8 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
         nube::contratistas_con_conflicto_activo(&conexion, &contexto).unwrap_or_default();
     let conflictos_movimiento_visita =
         nube::visitantes_con_conflicto_activo(&conexion, &contexto).unwrap_or_default();
+    let conflictos_ingreso_proveedor =
+        nube::proveedores_con_conflicto_activo(&conexion, &contexto).unwrap_or_default();
 
     // Si a quien disparó esto lo desactivaron en otro dispositivo, el
     // catálogo recién recibido ya lo refleja -- lo saca de la sesión acá
@@ -245,9 +275,11 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
         fallidos: resumen.fallidos,
         remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
         cierres_recibidos,
+        cierres_recibidos_proveedor,
         movimientos_historial_recibidos,
         citas_recibidas,
         historial_visitas_recibidos,
+        historial_ingresos_proveedor_recibidos,
         empresas_recibidas: catalogo.empresas_recibidas,
         contratistas_recibidos: catalogo.contratistas_recibidos,
         gafetes_recibidos: catalogo.gafetes_recibidos,
@@ -259,6 +291,7 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
         sesion_expulsada,
         conflictos_ingreso,
         conflictos_movimiento_visita,
+        conflictos_ingreso_proveedor,
     })
 }
 
@@ -286,9 +319,14 @@ pub async fn configurar_dispositivo_inicial(
             fallidos: resumen.fallidos,
             remotos_abiertos: resumen.remotos_abiertos,
             cierres_recibidos: resumen.cierres_recibidos,
+            // Núcleo (`AppCore::configurar_dispositivo_inicial`) no trae este
+            // campo -- mismo criterio que `conflictos_ingreso_proveedor` de
+            // abajo: base recién configurada, nada que traer todavía.
+            cierres_recibidos_proveedor: 0,
             movimientos_historial_recibidos: resumen.movimientos_historial_recibidos,
             citas_recibidas: resumen.citas_recibidas,
             historial_visitas_recibidos: resumen.historial_visitas_recibidos,
+            historial_ingresos_proveedor_recibidos: 0,
             empresas_recibidas: resumen.empresas_recibidas,
             contratistas_recibidos: resumen.contratistas_recibidos,
             gafetes_recibidos: resumen.gafetes_recibidos,
@@ -303,6 +341,7 @@ pub async fn configurar_dispositivo_inicial(
             // otro sitio en este momento.
             conflictos_ingreso: Vec::new(),
             conflictos_movimiento_visita: Vec::new(),
+            conflictos_ingreso_proveedor: Vec::new(),
         })
     })
     .await
@@ -404,5 +443,59 @@ pub fn cerrar_ingreso_remoto(uuid: String, state: tauri::State<GuiState>) -> Res
     };
     let conexion = state.conexion_secundaria()?;
     nube::cerrar_ingreso_remoto(&conexion, &contexto, &uuid, &actor.nombre)
+        .map_err(mensaje_sincronizacion)
+}
+
+/// Espejo de `listar_ingresos_remotos`, pero contra la caché
+/// `ingresos_proveedor_remotos`.
+#[tauri::command]
+pub fn listar_ingresos_proveedor_remotos(
+    state: tauri::State<GuiState>,
+) -> Result<Vec<IngresoProveedorRemoto>, String> {
+    state.sesion_activa()?;
+    let conexion = state.conexion_secundaria()?;
+    let mut statement = conexion
+        .prepare(
+            "SELECT uuid, cedula, nombre, empresa_nombre, placa, gafete_numero,
+                    hora_entrada, usuario_entrada_nombre
+             FROM ingresos_proveedor_remotos ORDER BY hora_entrada",
+        )
+        .map_err(|error| error.to_string())?;
+    let filas = statement
+        .query_map([], |row| {
+            Ok(IngresoProveedorRemoto {
+                uuid: row.get(0)?,
+                cedula: row.get(1)?,
+                nombre: row.get(2)?,
+                empresa_nombre: row.get(3)?,
+                placa: row.get(4)?,
+                gafete_numero: row.get(5)?,
+                hora_entrada: row.get(6)?,
+                usuario_entrada_nombre: row.get(7)?,
+            })
+        })
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    Ok(filas)
+}
+
+/// Espejo de `cerrar_ingreso_remoto`, pero contra `ingresos_proveedor`.
+#[tauri::command]
+pub fn cerrar_ingreso_proveedor_remoto(
+    uuid: String,
+    state: tauri::State<GuiState>,
+) -> Result<(), String> {
+    let actor = state.sesion_activa()?;
+    let token = autenticar(&state)?;
+    let contexto = nube::ContextoSincronizacion {
+        base_url: nube::BASE_URL,
+        apikey: nube::APIKEY,
+        token: &token.access_token,
+        dispositivo_id: &token.dispositivo_id,
+        sitio_id: &token.sitio_id,
+    };
+    let conexion = state.conexion_secundaria()?;
+    nube::cerrar_ingreso_proveedor_remoto(&conexion, &contexto, &uuid, &actor.nombre)
         .map_err(mensaje_sincronizacion)
 }

@@ -450,9 +450,15 @@ private const val DEMORA_AVISO_VENCIDO_MS = 1200L
 private const val DEMORA_REARMAR_ESCANEO_CONTINUO_MS = 900L
 private const val FRAMES_AUSENCIA_PARA_REPETIR = 3
 
+// El reverso (con el MRZ -- las líneas de texto tipo código de barras) trae
+// nombre Y cédula en un solo escaneo con checksum verificado; el frente
+// (con la foto) sólo trae el número. Guiar hacia el reverso desde el
+// mensaje inicial evita que quien opera tenga que enterarse por su cuenta
+// (ver el aviso en `EstabilizadorLectura.mensajeDeConfirmacion` para cuando
+// igual termina mostrando el frente).
 private fun mensajeInicialEscaneo(modo: ModoEscaneoDocumento): String =
     when (modo) {
-        ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA -> "Apunte al documento"
+        ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA -> "Muéstreme el reverso de la cédula"
         ModoEscaneoDocumento.GAFETE_CONTRATISTA -> "Apunte al gafete"
     }
 

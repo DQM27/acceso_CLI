@@ -133,14 +133,30 @@ class EstabilizadorLectura(
     /// documento vencido igual se identificó correctamente (por eso sigue
     /// siendo CONFIRMADO, no INVALIDO), pero quien opera necesita saberlo de
     /// inmediato sin tener que leer la fecha en la pantalla por su cuenta.
+    ///
+    /// Caso especial: cédula nacional leída del FRENTE (sin MRZ) sólo trae
+    /// número, nunca nombre (`LectorDocumentosIdentidad.leerDocumentoDeTexto`
+    /// no lo extrae de esa cara a propósito -- el nombre confiable sale del
+    /// MRZ con checksum verificado). Sin este aviso, quien opera no tenía
+    /// forma de saber que le faltaba el nombre hasta llenar el formulario a
+    /// mano -- bug reportado en pruebas reales, 2026-09-17 (confirmado que
+    /// el MRZ del reverso sí lee todo bien; el problema era que nadie sabía
+    /// que había que voltear la cédula).
     private fun mensajeDeConfirmacion(
         documento: DocumentoDetectado,
         hoy: FechaDocumento,
     ): Pair<String, Boolean> {
-        val nombre = documento.tipo.nombreLegible()
+        val nombreTipo = documento.tipo.nombreLegible()
         val vencimiento = documento.vencimiento
         val vencido = vencimiento != null && vencimiento.estaVencida(hoy)
-        val mensaje = if (vencido) "$nombre confirmado — DOCUMENTO VENCIDO" else "$nombre confirmado"
+        val faltaNombrePorFrente = documento.tipo == TipoDocumento.CEDULA_NACIONAL &&
+            documento.fuenteDatos == FuenteDatos.OCR_FRENTE &&
+            documento.nombre == null
+        val mensaje = when {
+            vencido -> "$nombreTipo confirmado — DOCUMENTO VENCIDO"
+            faltaNombrePorFrente -> "Ya tengo el número — muéstreme el reverso para el nombre"
+            else -> "$nombreTipo confirmado"
+        }
         return mensaje to vencido
     }
 

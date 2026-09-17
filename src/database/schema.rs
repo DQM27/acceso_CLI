@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 40;
+pub const SCHEMA_VERSION: i64 = 44;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -356,6 +356,26 @@ fn aplicar_migraciones_posteriores_a_29(
         *version = 40;
     }
 
+    if *version == 40 {
+        aplicar_migracion_41(connection)?;
+        *version = 41;
+    }
+
+    if *version == 41 {
+        aplicar_migracion_42(connection)?;
+        *version = 42;
+    }
+
+    if *version == 42 {
+        aplicar_migracion_43(connection)?;
+        *version = 43;
+    }
+
+    if *version == 43 {
+        aplicar_migracion_44(connection)?;
+        *version = 44;
+    }
+
     Ok(())
 }
 
@@ -615,6 +635,69 @@ fn aplicar_migracion_40(connection: &Connection) -> Result<(), SchemaError> {
     transaction.execute_batch(MIGRACION_40)?;
     transaction.execute_batch("PRAGMA user_version = 40")?;
     transaction.commit()?;
+    Ok(())
+}
+
+/// Mismo criterio que `aplicar_migracion_39`: `gafetes`/`gafetes_incidentes`
+/// se recrean para sumar `proveedor_portador_id` -- completa la cadena de
+/// control de proveedores (`docs/features-futuras/plan-control-proveedores.md`).
+fn aplicar_migracion_41(connection: &Connection) -> Result<(), SchemaError> {
+    connection.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    let resultado = ejecutar_migracion_41(connection);
+    connection.execute_batch("PRAGMA foreign_keys = ON;")?;
+    resultado
+}
+
+fn ejecutar_migracion_41(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_41)?;
+    transaction.execute_batch("PRAGMA user_version = 41")?;
+    transaction.commit()?;
+    if connection.prepare("PRAGMA foreign_key_check")?.exists([])? {
+        return Err(SchemaError::MigracionStrictReferenciasInvalidas);
+    }
+    Ok(())
+}
+
+/// Agrega `ingresos_proveedor_remotos` -- tabla nueva, sin recrear nada
+/// existente, así que no hace falta el paréntesis `foreign_keys = OFF/ON`
+/// que sí necesitan las migraciones que recrean una tabla con FKs activas.
+fn aplicar_migracion_42(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_42)?;
+    transaction.execute_batch("PRAGMA user_version = 42")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Agrega `historial_ingresos_proveedor_sitio` -- tabla nueva + una columna
+/// en `sincronizacion_estado`, sin recrear nada existente.
+fn aplicar_migracion_43(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_43)?;
+    transaction.execute_batch("PRAGMA user_version = 43")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Mismo criterio que `aplicar_migracion_39`/`41`: `registro_ingresos_proveedor`
+/// se recrea para relajar su `CHECK` de salida (ver el comentario de
+/// `MIGRACION_44`).
+fn aplicar_migracion_44(connection: &Connection) -> Result<(), SchemaError> {
+    connection.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    let resultado = ejecutar_migracion_44(connection);
+    connection.execute_batch("PRAGMA foreign_keys = ON;")?;
+    resultado
+}
+
+fn ejecutar_migracion_44(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_44)?;
+    transaction.execute_batch("PRAGMA user_version = 44")?;
+    transaction.commit()?;
+    if connection.prepare("PRAGMA foreign_key_check")?.exists([])? {
+        return Err(SchemaError::MigracionStrictReferenciasInvalidas);
+    }
     Ok(())
 }
 
@@ -3142,6 +3225,251 @@ BEGIN
 END;
 ";
 
+// Control de proveedores (docs/features-futuras/plan-control-proveedores.md)
+// -- completa la cadena que el esquema sólo anticipaba a medias para
+// PROVEEDOR (ver el comentario de MIGRACION_35/39): ahora sí existe la
+// entidad, así que gafetes/gafetes_incidentes ganan su columna de portador
+// real. A diferencia de PROVISIONAL_KOF (portador = catálogo real,
+// encargados_ruta), acá el portador apunta a un registro TRANSACCIONAL
+// (`registro_ingresos_proveedor`, la visita puntual) -- pedido explícito
+// del usuario: no hay catálogo de personas, cada colaborador es distinto.
+//
+// `empresas_proveedor`: catálogo separado a propósito de `empresas` (el
+// usuario fue explícito: "son empresas aparte de la de los colaboradores")
+// -- mismo shape mínimo que `vehiculos_ruta`/`encargados_ruta` (sin FTS5,
+// catálogo chico, `PLEGAR(nombre) LIKE ...` alcanza para el buscador).
+//
+// `registro_ingresos_proveedor`: mismo espíritu que `movimientos_visita` --
+// snapshot puro (cédula/nombre vienen del OCR o tecleados, sin FK a ningún
+// catálogo de personas), sin PRAIND/SWAT/tipo_ingreso (eso es exclusivo de
+// contratistas). `gafete_numero` es NOT NULL sin condición (a diferencia de
+// contratistas, acá siempre es obligatorio -- pedido explícito del
+// usuario). `placa` nullable: la ausencia ya comunica "llegó a pie", no
+// hace falta un `medio_ingreso` aparte. Dos índices únicos parciales (no
+// uno) porque acá hay DOS invariantes independientes que proteger a la vez:
+// ni la misma cédula ni el mismo número de gafete pueden tener dos ingresos
+// abiertos simultáneos.
+const MIGRACION_41: &str = r"
+CREATE TABLE empresas_proveedor (
+    id INTEGER PRIMARY KEY,
+    nombre TEXT NOT NULL UNIQUE,
+    activo INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1)),
+    uuid TEXT NOT NULL
+) STRICT;
+CREATE UNIQUE INDEX idx_empresas_proveedor_uuid ON empresas_proveedor(uuid);
+
+CREATE TABLE registro_ingresos_proveedor (
+    id INTEGER PRIMARY KEY,
+    cedula TEXT NOT NULL,
+    nombre TEXT NOT NULL,
+    empresa_id INTEGER NOT NULL REFERENCES empresas_proveedor(id) ON DELETE RESTRICT,
+    empresa_nombre TEXT NOT NULL,
+    placa TEXT,
+    gafete_numero INTEGER NOT NULL,
+    fecha_hora_ingreso TEXT NOT NULL,
+    usuario_ingreso_id INTEGER NOT NULL REFERENCES usuarios(id),
+    usuario_ingreso_nombre TEXT NOT NULL,
+    fecha_hora_salida TEXT,
+    usuario_salida_id INTEGER REFERENCES usuarios(id),
+    usuario_salida_nombre TEXT,
+    uuid TEXT NOT NULL,
+    CHECK (
+        (fecha_hora_salida IS NULL AND usuario_salida_id IS NULL AND usuario_salida_nombre IS NULL)
+        OR
+        (fecha_hora_salida IS NOT NULL AND usuario_salida_id IS NOT NULL
+            AND usuario_salida_nombre IS NOT NULL)
+    ),
+    CHECK (fecha_hora_salida IS NULL OR fecha_hora_salida >= fecha_hora_ingreso)
+) STRICT;
+CREATE UNIQUE INDEX idx_registro_ingresos_proveedor_uuid ON registro_ingresos_proveedor(uuid);
+-- Ni la misma cédula ni el mismo gafete pueden tener dos ingresos de
+-- proveedor abiertos a la vez.
+CREATE UNIQUE INDEX idx_registro_ingresos_proveedor_cedula_activa
+ON registro_ingresos_proveedor(cedula) WHERE fecha_hora_salida IS NULL;
+CREATE UNIQUE INDEX idx_registro_ingresos_proveedor_gafete_activo
+ON registro_ingresos_proveedor(gafete_numero) WHERE fecha_hora_salida IS NULL;
+CREATE INDEX idx_registro_ingresos_proveedor_empresa ON registro_ingresos_proveedor(empresa_id);
+
+CREATE TRIGGER registro_ingresos_proveedor_no_eliminar
+BEFORE DELETE ON registro_ingresos_proveedor
+BEGIN
+    SELECT RAISE(ABORT, 'Los ingresos de proveedor no se pueden eliminar');
+END;
+CREATE TRIGGER registro_ingresos_proveedor_ingreso_inmutable
+BEFORE UPDATE OF
+    cedula, nombre, empresa_id, empresa_nombre, placa, gafete_numero,
+    fecha_hora_ingreso, usuario_ingreso_id, usuario_ingreso_nombre, uuid
+ON registro_ingresos_proveedor
+WHEN
+    NEW.cedula IS NOT OLD.cedula
+    OR NEW.nombre IS NOT OLD.nombre
+    OR NEW.empresa_id IS NOT OLD.empresa_id
+    OR NEW.empresa_nombre IS NOT OLD.empresa_nombre
+    OR NEW.placa IS NOT OLD.placa
+    OR NEW.gafete_numero IS NOT OLD.gafete_numero
+    OR NEW.fecha_hora_ingreso IS NOT OLD.fecha_hora_ingreso
+    OR NEW.usuario_ingreso_id IS NOT OLD.usuario_ingreso_id
+    OR NEW.usuario_ingreso_nombre IS NOT OLD.usuario_ingreso_nombre
+    OR NEW.uuid IS NOT OLD.uuid
+BEGIN
+    SELECT RAISE(ABORT, 'Los datos de ingreso del proveedor son inmutables');
+END;
+CREATE TRIGGER registro_ingresos_proveedor_salida_unica
+BEFORE UPDATE OF fecha_hora_salida, usuario_salida_id, usuario_salida_nombre
+ON registro_ingresos_proveedor
+WHEN
+    OLD.fecha_hora_salida IS NOT NULL
+    OR NEW.fecha_hora_salida IS NULL
+    OR NEW.usuario_salida_nombre IS NULL
+BEGIN
+    SELECT RAISE(ABORT, 'La salida solo puede registrarse una vez');
+END;
+CREATE TRIGGER registro_ingresos_proveedor_fecha_utc_insert
+BEFORE INSERT ON registro_ingresos_proveedor
+WHEN
+    strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_ingreso) IS NOT NEW.fecha_hora_ingreso
+    OR (
+        NEW.fecha_hora_salida IS NOT NULL
+        AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_salida) IS NOT NEW.fecha_hora_salida
+    )
+BEGIN
+    SELECT RAISE(ABORT, 'Las fechas del ingreso de proveedor deben estar normalizadas en UTC');
+END;
+CREATE TRIGGER registro_ingresos_proveedor_salida_utc
+BEFORE UPDATE OF fecha_hora_salida ON registro_ingresos_proveedor
+WHEN
+    NEW.fecha_hora_salida IS NOT NULL
+    AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_salida) IS NOT NEW.fecha_hora_salida
+BEGIN
+    SELECT RAISE(ABORT, 'La fecha de salida debe estar normalizada en UTC');
+END;
+
+CREATE TABLE gafetes_nueva (
+    id INTEGER PRIMARY KEY,
+    numero INTEGER NOT NULL,
+    tipo TEXT NOT NULL CHECK (tipo IN ('CONTRATISTA', 'VISITA', 'PROVEEDOR', 'PROVISIONAL_KOF')),
+    estado TEXT NOT NULL CHECK (estado IN ('DISPONIBLE', 'PERDIDO', 'DE_BAJA')),
+    contratista_portador_id INTEGER REFERENCES contratistas(id) ON DELETE RESTRICT,
+    visita_portador_id INTEGER REFERENCES cita_visitantes(id) ON DELETE RESTRICT,
+    encargado_portador_id INTEGER REFERENCES encargados_ruta(id) ON DELETE RESTRICT,
+    proveedor_portador_id INTEGER REFERENCES registro_ingresos_proveedor(id) ON DELETE RESTRICT,
+    uuid TEXT,
+    CHECK (
+        (tipo = 'CONTRATISTA'
+            AND visita_portador_id IS NULL AND encargado_portador_id IS NULL
+            AND proveedor_portador_id IS NULL)
+        OR (tipo = 'VISITA'
+            AND contratista_portador_id IS NULL AND encargado_portador_id IS NULL
+            AND proveedor_portador_id IS NULL)
+        OR (tipo = 'PROVEEDOR'
+            AND contratista_portador_id IS NULL AND visita_portador_id IS NULL
+            AND encargado_portador_id IS NULL)
+        OR (tipo = 'PROVISIONAL_KOF'
+            AND contratista_portador_id IS NULL AND visita_portador_id IS NULL
+            AND proveedor_portador_id IS NULL)
+    ),
+    CHECK (
+        (estado = 'PERDIDO'
+            AND (contratista_portador_id IS NOT NULL OR visita_portador_id IS NOT NULL
+                OR encargado_portador_id IS NOT NULL OR proveedor_portador_id IS NOT NULL))
+        OR (estado <> 'PERDIDO'
+            AND contratista_portador_id IS NULL AND visita_portador_id IS NULL
+            AND encargado_portador_id IS NULL AND proveedor_portador_id IS NULL)
+    )
+) STRICT;
+INSERT INTO gafetes_nueva (
+    id, numero, tipo, estado, contratista_portador_id, visita_portador_id,
+    encargado_portador_id, proveedor_portador_id, uuid
+)
+SELECT id, numero, tipo, estado, contratista_portador_id, visita_portador_id,
+    encargado_portador_id, NULL, uuid
+FROM gafetes;
+DROP TABLE gafetes;
+ALTER TABLE gafetes_nueva RENAME TO gafetes;
+CREATE UNIQUE INDEX idx_gafetes_numero_tipo ON gafetes(numero, tipo);
+CREATE UNIQUE INDEX idx_gafetes_uuid ON gafetes(uuid);
+CREATE INDEX idx_gafetes_estado ON gafetes(estado);
+CREATE INDEX idx_gafetes_contratista_portador
+ON gafetes(contratista_portador_id) WHERE contratista_portador_id IS NOT NULL;
+CREATE INDEX idx_gafetes_visita_portador
+ON gafetes(visita_portador_id) WHERE visita_portador_id IS NOT NULL;
+CREATE INDEX idx_gafetes_encargado_portador
+ON gafetes(encargado_portador_id) WHERE encargado_portador_id IS NOT NULL;
+CREATE INDEX idx_gafetes_proveedor_portador
+ON gafetes(proveedor_portador_id) WHERE proveedor_portador_id IS NOT NULL;
+
+CREATE TABLE gafetes_incidentes_nueva (
+    id INTEGER PRIMARY KEY,
+    gafete_id INTEGER NOT NULL REFERENCES gafetes(id) ON DELETE RESTRICT,
+    tipo TEXT NOT NULL CHECK (tipo IN ('PERDIDO', 'RESUELTO')),
+    fecha_hora TEXT NOT NULL,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+    contratista_id INTEGER REFERENCES contratistas(id) ON DELETE RESTRICT,
+    visita_portador_id INTEGER REFERENCES cita_visitantes(id) ON DELETE RESTRICT,
+    encargado_portador_id INTEGER REFERENCES encargados_ruta(id) ON DELETE RESTRICT,
+    proveedor_portador_id INTEGER REFERENCES registro_ingresos_proveedor(id) ON DELETE RESTRICT,
+    motivo_resolucion TEXT CHECK (
+        motivo_resolucion IS NULL OR motivo_resolucion IN ('PAGADO', 'APARECIDO')
+    ),
+    CHECK (
+        (tipo = 'PERDIDO'
+            AND (contratista_id IS NOT NULL OR visita_portador_id IS NOT NULL
+                OR encargado_portador_id IS NOT NULL OR proveedor_portador_id IS NOT NULL)
+            AND motivo_resolucion IS NULL)
+        OR (tipo = 'RESUELTO'
+            AND contratista_id IS NULL AND visita_portador_id IS NULL
+            AND encargado_portador_id IS NULL AND proveedor_portador_id IS NULL
+            AND motivo_resolucion IS NOT NULL)
+    )
+) STRICT;
+INSERT INTO gafetes_incidentes_nueva (
+    id, gafete_id, tipo, fecha_hora, usuario_id, contratista_id, visita_portador_id,
+    encargado_portador_id, proveedor_portador_id, motivo_resolucion
+)
+SELECT id, gafete_id, tipo, fecha_hora, usuario_id, contratista_id, visita_portador_id,
+    encargado_portador_id, NULL, motivo_resolucion
+FROM gafetes_incidentes;
+DROP TABLE gafetes_incidentes;
+ALTER TABLE gafetes_incidentes_nueva RENAME TO gafetes_incidentes;
+CREATE INDEX idx_gafetes_incidentes_gafete ON gafetes_incidentes(gafete_id, id DESC);
+CREATE INDEX idx_gafetes_incidentes_fecha ON gafetes_incidentes(fecha_hora DESC, id DESC);
+
+CREATE TABLE cola_salida_nueva (
+    id INTEGER PRIMARY KEY,
+    entidad TEXT NOT NULL CHECK (
+        entidad IN (
+            'contratista', 'ingreso', 'empresa', 'gafete', 'usuario', 'movimiento_visita',
+            'vehiculo_ruta', 'encargado_ruta', 'salida_ruta', 'ruta', 'prestamo_gafete_provisional',
+            'empresa_proveedor', 'ingreso_proveedor'
+        )
+    ),
+    entidad_uuid TEXT NOT NULL,
+    operacion TEXT NOT NULL CHECK (operacion IN ('crear', 'actualizar', 'cerrar')),
+    estado TEXT NOT NULL DEFAULT 'pendiente'
+        CHECK (estado IN ('pendiente', 'enviado', 'fallido')),
+    intentos INTEGER NOT NULL DEFAULT 0 CHECK (intentos >= 0),
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    ultimo_error TEXT,
+    proximo_intento_en TEXT GENERATED ALWAYS AS (
+        datetime(actualizado_en, '+' || MIN(intentos * 15, 1440) || ' minutes')
+    ) STORED
+) STRICT;
+INSERT INTO cola_salida_nueva (
+    id, entidad, entidad_uuid, operacion, estado, intentos,
+    creado_en, actualizado_en, ultimo_error
+)
+SELECT
+    id, entidad, entidad_uuid, operacion, estado, intentos,
+    creado_en, actualizado_en, ultimo_error
+FROM cola_salida;
+DROP TABLE cola_salida;
+ALTER TABLE cola_salida_nueva RENAME TO cola_salida;
+CREATE INDEX idx_cola_salida_pendientes
+ON cola_salida(proximo_intento_en)
+WHERE estado = 'pendiente';
+";
+
 const MIGRACION_40: &str = r"
 CREATE TABLE cola_salida_nueva (
     id INTEGER PRIMARY KEY,
@@ -3176,4 +3504,163 @@ ALTER TABLE cola_salida_nueva RENAME TO cola_salida;
 CREATE INDEX idx_cola_salida_pendientes
 ON cola_salida(proximo_intento_en)
 WHERE estado = 'pendiente';
+";
+
+/// Caché local de ingresos de proveedor abiertos por OTRO dispositivo del
+/// mismo sitio -- mismo criterio que `ingresos_remotos` (contratistas):
+/// `nube::recibir_ingresos_proveedor_abiertos` reemplaza su contenido
+/// entero en cada sync, `nube::cerrar_ingreso_proveedor_remoto` borra la
+/// fila puntual al cerrarla. Sin FK a ningún catálogo local a propósito --
+/// un ingreso remoto no vive en `registro_ingresos_proveedor` de este
+/// dispositivo, es sólo lo mínimo para mostrarlo en "Proveedores" y poder
+/// cerrarlo. Tabla nueva (no una recreación de otra existente), por eso no
+/// hace falta el patrón `_nueva`/`DROP`/`RENAME` de otras migraciones.
+const MIGRACION_42: &str = r"
+CREATE TABLE ingresos_proveedor_remotos (
+    uuid TEXT PRIMARY KEY,
+    sitio_id TEXT NOT NULL,
+    cedula TEXT NOT NULL,
+    nombre TEXT NOT NULL,
+    empresa_nombre TEXT NOT NULL,
+    placa TEXT,
+    gafete_numero INTEGER NOT NULL,
+    hora_entrada TEXT NOT NULL,
+    usuario_entrada_nombre TEXT NOT NULL,
+    dispositivo_entrada_id TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL
+) STRICT;
+";
+
+/// Caché de lectura del historial de ingresos de proveedor del sitio --
+/// mismo rol que `historial_visitas_sitio` (`MIGRACION_33`): trae TODO
+/// ingreso de proveedor (abierto o cerrado) del sitio, de cualquier
+/// dispositivo, vía sync incremental con su propia marca de agua. Sólo se
+/// llena en escritorio -- mismo criterio explícito que
+/// `historial_visitas_sitio` (`mobile/rust-core/src/lib.rs`: "el celular es
+/// para acciones rápidas, auditar historial le corresponde a la PC").
+const MIGRACION_43: &str = r"
+ALTER TABLE sincronizacion_estado ADD COLUMN historial_ingresos_proveedor_actualizado_hasta TEXT;
+
+CREATE TABLE historial_ingresos_proveedor_sitio (
+    uuid TEXT PRIMARY KEY,
+    sitio_id TEXT NOT NULL,
+    cedula TEXT NOT NULL,
+    nombre TEXT NOT NULL,
+    empresa_nombre TEXT,
+    placa TEXT,
+    gafete_numero INTEGER,
+    hora_entrada TEXT NOT NULL,
+    hora_salida TEXT,
+    usuario_entrada_nombre TEXT,
+    usuario_salida_nombre TEXT,
+    dispositivo_entrada_id TEXT NOT NULL,
+    dispositivo_salida_id TEXT,
+    actualizado_en TEXT NOT NULL
+) STRICT;
+
+CREATE INDEX idx_historial_ingresos_proveedor_sitio_hora_entrada
+ON historial_ingresos_proveedor_sitio(hora_entrada);
+";
+
+// Relaja el CHECK de `registro_ingresos_proveedor` para permitir
+// `usuario_salida_id IS NULL` con salida ya registrada -- mismo criterio que
+// ya tiene `registro_ingresos` para contratistas desde MIGRACION_15 (ver esa
+// migración: cuando la nube confirma una salida cerrada en OTRO dispositivo,
+// `nube::recibir_cierres_de_ingresos_propios_proveedor` no tiene ningún
+// `usuario_salida_id` LOCAL válido para esa persona -- sólo el nombre que
+// viajó en el `UPDATE` remoto. El CHECK original de MIGRACION_41 exigía
+// `usuario_salida_id IS NOT NULL` junto con la fecha/nombre, cosa que
+// contratistas nunca tuvo -- bug encontrado en pruebas reales, 2026-09-17:
+// un ingreso de proveedor cerrado por OTRO dispositivo nunca se reflejaba en
+// el dispositivo dueño porque el `UPDATE` violaba este CHECK. `SQLite` no
+// permite `ALTER TABLE ... CHECK`, se recrea la tabla entera (mismo patrón
+// que MIGRACION_39/41: `PRAGMA foreign_keys OFF/ON` porque
+// `registro_ingresos_proveedor` referencia `empresas_proveedor`/`usuarios`).
+const MIGRACION_44: &str = r"
+CREATE TABLE registro_ingresos_proveedor_nueva (
+    id INTEGER PRIMARY KEY,
+    cedula TEXT NOT NULL,
+    nombre TEXT NOT NULL,
+    empresa_id INTEGER NOT NULL REFERENCES empresas_proveedor(id) ON DELETE RESTRICT,
+    empresa_nombre TEXT NOT NULL,
+    placa TEXT,
+    gafete_numero INTEGER NOT NULL,
+    fecha_hora_ingreso TEXT NOT NULL,
+    usuario_ingreso_id INTEGER NOT NULL REFERENCES usuarios(id),
+    usuario_ingreso_nombre TEXT NOT NULL,
+    fecha_hora_salida TEXT,
+    usuario_salida_id INTEGER REFERENCES usuarios(id),
+    usuario_salida_nombre TEXT,
+    uuid TEXT NOT NULL,
+    CHECK (
+        (fecha_hora_salida IS NULL AND usuario_salida_id IS NULL AND usuario_salida_nombre IS NULL)
+        OR
+        (fecha_hora_salida IS NOT NULL AND usuario_salida_nombre IS NOT NULL)
+    ),
+    CHECK (fecha_hora_salida IS NULL OR fecha_hora_salida >= fecha_hora_ingreso)
+) STRICT;
+INSERT INTO registro_ingresos_proveedor_nueva SELECT * FROM registro_ingresos_proveedor;
+DROP TABLE registro_ingresos_proveedor;
+ALTER TABLE registro_ingresos_proveedor_nueva RENAME TO registro_ingresos_proveedor;
+
+CREATE UNIQUE INDEX idx_registro_ingresos_proveedor_uuid ON registro_ingresos_proveedor(uuid);
+CREATE UNIQUE INDEX idx_registro_ingresos_proveedor_cedula_activa
+ON registro_ingresos_proveedor(cedula) WHERE fecha_hora_salida IS NULL;
+CREATE UNIQUE INDEX idx_registro_ingresos_proveedor_gafete_activo
+ON registro_ingresos_proveedor(gafete_numero) WHERE fecha_hora_salida IS NULL;
+CREATE INDEX idx_registro_ingresos_proveedor_empresa ON registro_ingresos_proveedor(empresa_id);
+
+CREATE TRIGGER registro_ingresos_proveedor_no_eliminar
+BEFORE DELETE ON registro_ingresos_proveedor
+BEGIN
+    SELECT RAISE(ABORT, 'Los ingresos de proveedor no se pueden eliminar');
+END;
+CREATE TRIGGER registro_ingresos_proveedor_ingreso_inmutable
+BEFORE UPDATE OF
+    cedula, nombre, empresa_id, empresa_nombre, placa, gafete_numero,
+    fecha_hora_ingreso, usuario_ingreso_id, usuario_ingreso_nombre, uuid
+ON registro_ingresos_proveedor
+WHEN
+    NEW.cedula IS NOT OLD.cedula
+    OR NEW.nombre IS NOT OLD.nombre
+    OR NEW.empresa_id IS NOT OLD.empresa_id
+    OR NEW.empresa_nombre IS NOT OLD.empresa_nombre
+    OR NEW.placa IS NOT OLD.placa
+    OR NEW.gafete_numero IS NOT OLD.gafete_numero
+    OR NEW.fecha_hora_ingreso IS NOT OLD.fecha_hora_ingreso
+    OR NEW.usuario_ingreso_id IS NOT OLD.usuario_ingreso_id
+    OR NEW.usuario_ingreso_nombre IS NOT OLD.usuario_ingreso_nombre
+    OR NEW.uuid IS NOT OLD.uuid
+BEGIN
+    SELECT RAISE(ABORT, 'Los datos de ingreso del proveedor son inmutables');
+END;
+CREATE TRIGGER registro_ingresos_proveedor_salida_unica
+BEFORE UPDATE OF fecha_hora_salida, usuario_salida_id, usuario_salida_nombre
+ON registro_ingresos_proveedor
+WHEN
+    OLD.fecha_hora_salida IS NOT NULL
+    OR NEW.fecha_hora_salida IS NULL
+    OR NEW.usuario_salida_nombre IS NULL
+BEGIN
+    SELECT RAISE(ABORT, 'La salida solo puede registrarse una vez');
+END;
+CREATE TRIGGER registro_ingresos_proveedor_fecha_utc_insert
+BEFORE INSERT ON registro_ingresos_proveedor
+WHEN
+    strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_ingreso) IS NOT NEW.fecha_hora_ingreso
+    OR (
+        NEW.fecha_hora_salida IS NOT NULL
+        AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_salida) IS NOT NEW.fecha_hora_salida
+    )
+BEGIN
+    SELECT RAISE(ABORT, 'Las fechas del ingreso de proveedor deben estar normalizadas en UTC');
+END;
+CREATE TRIGGER registro_ingresos_proveedor_salida_utc
+BEFORE UPDATE OF fecha_hora_salida ON registro_ingresos_proveedor
+WHEN
+    NEW.fecha_hora_salida IS NOT NULL
+    AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_salida) IS NOT NEW.fecha_hora_salida
+BEGIN
+    SELECT RAISE(ABORT, 'La fecha de salida debe estar normalizada en UTC');
+END;
 ";

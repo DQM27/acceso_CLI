@@ -92,6 +92,11 @@ impl GafetesIncidentesWriter for SqliteGafetesIncidentes<'_> {
                  VALUES (?1, 'PERDIDO', ?2, ?3, ?4)",
                 params![gafete_id, serializar_utc(fecha_hora), usuario_id, encargado_id],
             ),
+            PortadorGafete::Proveedor(registro_ingreso_proveedor_id) => self.connection.execute(
+                "INSERT INTO gafetes_incidentes (gafete_id, tipo, fecha_hora, usuario_id, proveedor_portador_id)
+                 VALUES (?1, 'PERDIDO', ?2, ?3, ?4)",
+                params![gafete_id, serializar_utc(fecha_hora), usuario_id, registro_ingreso_proveedor_id],
+            ),
         }?;
         Ok(())
     }

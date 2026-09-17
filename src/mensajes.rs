@@ -6,9 +6,10 @@ use crate::domain::cita::MotivoDenegacionVisita;
 use crate::domain::resultado_acceso::MotivoDenegacion;
 use crate::models::gafete::EstadoGafete;
 use crate::services::error::{
-    AutenticacionError, CitaServiceError, ContratistaServiceError, EmpresaServiceError,
-    EncargadoRutaServiceError, GafeteServiceError, RegistroIngresoServiceError,
-    RutaCatalogoServiceError, RutaServiceError, UsuarioServiceError, VehiculoRutaServiceError,
+    AutenticacionError, CitaServiceError, ContratistaServiceError, EmpresaProveedorServiceError,
+    EmpresaServiceError, EncargadoRutaServiceError, GafeteServiceError,
+    IngresoProveedorServiceError, RegistroIngresoServiceError, RutaCatalogoServiceError,
+    RutaServiceError, UsuarioServiceError, VehiculoRutaServiceError,
 };
 
 /// `HashInvalido` va junto con `Database` a propósito: ambos son fallos de
@@ -244,6 +245,48 @@ pub fn mensaje_ruta_catalogo(error: RutaCatalogoServiceError) -> String {
     }
 }
 
+pub fn mensaje_empresa_proveedor(error: EmpresaProveedorServiceError) -> String {
+    use EmpresaProveedorServiceError::{
+        EmpresaNoEncontrada, NombreDuplicado, NombreEmpresaVacio, OperacionNoAutorizada,
+    };
+
+    match error {
+        NombreEmpresaVacio => "El nombre de la empresa es obligatorio".into(),
+        NombreDuplicado => "El nombre de la empresa ya existe".into(),
+        EmpresaNoEncontrada => "Empresa proveedora no encontrada".into(),
+        OperacionNoAutorizada => {
+            "La sesión actual no está autorizada para realizar esta operación".into()
+        }
+        EmpresaProveedorServiceError::Database(_) => "No se pudo guardar la empresa".into(),
+    }
+}
+
+pub fn mensaje_ingreso_proveedor(error: IngresoProveedorServiceError) -> String {
+    use IngresoProveedorServiceError::{
+        CedulaVacia, EmpresaInactiva, EmpresaNoEncontrada, GafeteNoDisponible, GafeteNoRegistrado,
+        GafeteOcupado, IngresoActivo, NombreVacio, OperadorNoAutorizado, RegistroNoActivo,
+        RelojRetrocedido, SalidaAnteriorAIngreso,
+    };
+
+    match error {
+        CedulaVacia => "La cédula es obligatoria".into(),
+        NombreVacio => "El nombre es obligatorio".into(),
+        EmpresaNoEncontrada => "Empresa proveedora no encontrada".into(),
+        EmpresaInactiva => "La empresa proveedora está dada de baja".into(),
+        IngresoActivo => "Esta cédula ya tiene un ingreso de proveedor activo".into(),
+        GafeteOcupado => "El gafete ya está asignado a otro ingreso de proveedor".into(),
+        GafeteNoRegistrado => "El gafete no está registrado en el catálogo".into(),
+        GafeteNoDisponible(_) => "El gafete no está disponible".into(),
+        RegistroNoActivo => "El ingreso de proveedor no está activo".into(),
+        SalidaAnteriorAIngreso => "La salida no puede ser anterior al ingreso".into(),
+        RelojRetrocedido => "Revise la fecha y hora del equipo antes de continuar".into(),
+        OperadorNoAutorizado => {
+            "La sesión que registra el movimiento no existe o está inactiva".into()
+        }
+        IngresoProveedorServiceError::Database(_) => "No se pudo registrar el movimiento".into(),
+    }
+}
+
 /// `RespuestaInesperada` trae el cuerpo crudo de la respuesta del receptor
 /// (puede incluir detalles internos de Postgres/PostgREST) -- nunca pasa a
 /// pantalla, mismo criterio que el resto de este módulo con los errores de
@@ -406,6 +449,41 @@ mod tests {
         assert_eq!(
             mensaje_ruta(RutaServiceError::OperadorNoAutorizado),
             "La sesión que registra el movimiento no existe o está inactiva"
+        );
+    }
+
+    #[test]
+    fn los_mensajes_de_proveedores_conservan_su_motivo() {
+        assert_eq!(
+            mensaje_empresa_proveedor(EmpresaProveedorServiceError::NombreDuplicado),
+            "El nombre de la empresa ya existe"
+        );
+        assert_eq!(
+            mensaje_ingreso_proveedor(IngresoProveedorServiceError::GafeteOcupado),
+            "El gafete ya está asignado a otro ingreso de proveedor"
+        );
+        assert_eq!(
+            mensaje_ingreso_proveedor(IngresoProveedorServiceError::OperadorNoAutorizado),
+            "La sesión que registra el movimiento no existe o está inactiva"
+        );
+    }
+
+    #[test]
+    fn los_errores_tecnicos_de_proveedores_no_exponen_detalles() {
+        let empresa = EmpresaProveedorServiceError::Database(DatabaseError::FechaCorrupta(
+            "detalle interno".into(),
+        ));
+        let ingreso = IngresoProveedorServiceError::Database(DatabaseError::FechaCorrupta(
+            "detalle interno".into(),
+        ));
+
+        assert_eq!(
+            mensaje_empresa_proveedor(empresa),
+            "No se pudo guardar la empresa"
+        );
+        assert_eq!(
+            mensaje_ingreso_proveedor(ingreso),
+            "No se pudo registrar el movimiento"
         );
     }
 

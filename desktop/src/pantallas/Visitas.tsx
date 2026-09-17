@@ -220,8 +220,8 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
         valueGetter: (p) => (p.data?.fecha_hora_salida ? textoHora(p.data.fecha_hora_salida) : ""),
         valueFormatter: (p) => p.value || "—",
       },
-      { field: "usuario_entrada_nombre", headerName: "Recibió", flex: 1.1, minWidth: 120, valueFormatter: (p) => p.value ?? "—" },
-      { field: "usuario_salida_nombre", headerName: "Despidió", flex: 1.1, minWidth: 120, valueFormatter: (p) => p.value ?? "—" },
+      { field: "usuario_entrada_nombre", headerName: "Dio ingreso", flex: 1.1, minWidth: 120, valueFormatter: (p) => p.value ?? "—" },
+      { field: "usuario_salida_nombre", headerName: "Dio salida", flex: 1.1, minWidth: 120, valueFormatter: (p) => p.value ?? "—" },
     ],
     [],
   );

@@ -129,6 +129,42 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   No es una tarea chica: migración + función SQL + wiring de Realtime +
   cambios en Rust core (nube:: nuevo + extender el chequeo de
   "sigue activo") + desktop + mobile. Retomar en una pasada dedicada.
+- [ ] **Auditoría (`auditoria_cambios`/`gafetes_incidentes`) no se sincroniza
+  entre dispositivos (hallazgo 2026-09-17, sin implementar).** Hoy las dos
+  tablas son puramente locales -- no aparecen en `src/nube/sincronizacion.rs`
+  ni tienen espejo en `supabase/migrations/` (`gafetes_incidentes` lo dice
+  explícito en el propio código, `src/nube/sincronizacion.rs:716-719`: sólo
+  el estado ACTUAL de un gafete viaja, no su historial de incidentes). Cada
+  PC/dispositivo de un mismo sitio tiene su propio registro de auditoría,
+  sin vista consolidada. No es un bug -- fue así desde que se implementó --
+  pero conviene revisar si conviene centralizarlo el día que un sitio real
+  opere con más de un dispositivo y alguien necesite ver "quién cambió qué"
+  sin pararse frente a cada PC. Diseño no arrancado: probablemente tabla
+  espejo + `cola_salida` sumando `'auditoria_cambio'`/`'incidente_gafete'`
+  a su `CHECK`, mismo patrón que `movimiento_visita`/`ruta` (ver
+  `src/database/schema.rs`, comentarios "Suma ... al CHECK de
+  `cola_salida.entidad`"). Ojo con el volumen -- a diferencia de
+  contratistas/gafetes (catálogos chicos), auditoría crece sin techo, más
+  parecido a `historial` (que sí tiene lógica de carga incremental/límite,
+  ver `Historial.tsx`/`Auditoria.tsx` con su banner de "truncado").
+- [ ] **El chequeo cross-device de "gafete ya ocupado en el sitio" no está
+  conectado en escritorio (hallazgo 2026-09-17).** El núcleo ya tiene las
+  cuatro variantes (`AppCore::gafete_ocupado_en_sitio`/
+  `gafete_provisional_ocupado_en_sitio`/`gafete_de_proveedor_ocupado_en_sitio`,
+  `src/application/nube.rs`) -- mejor esfuerzo, consultan Supabase en vivo
+  si OTRO dispositivo del mismo sitio ya tiene ese número de gafete en un
+  movimiento/ingreso todavía abierto, sin bloquear si no hay red. **Mobile
+  sí las usa** (`gafete_ocupado_en_sitio_con_secreto` y sus variantes en
+  `mobile/rust-core/src/lib.rs`), pero ningún comando de
+  `desktop/src-tauri/src/comandos/` las llama -- ni para contratistas, ni
+  provisional KOF, ni proveedores (encontrado revisando el modal de
+  ingreso de proveedores). Hoy en desktop, dos PCs del mismo sitio pueden
+  asignar el mismo número de gafete casi al mismo tiempo sin que ninguna
+  se entere hasta el próximo `sincronizar` -- la única red de seguridad es
+  el chequeo LOCAL (`registro_ingresos*`/tabla de gafetes propia), que no
+  ve lo que pasó en la otra PC todavía. Falta: llamar la variante
+  correspondiente justo antes de confirmar cada tipo de ingreso/entrega en
+  los comandos de escritorio, mismo punto donde mobile ya lo hace.
 - [ ] **Revisar bucket público `historial-web`.** Está documentado como público, vacío y
   sin referencias en código. Confirmar si es vestigio; si no se usa, eliminarlo desde
   Supabase.
@@ -439,6 +475,20 @@ estabilizador y clasificador.
 
 ## Escritorio, Tauri y empaquetado
 
+- [ ] **Marcar perdido/resolver no existe todavía para gafetes de Proveedor
+  (hallazgo 2026-09-17).** `GafeteServiceError`/`AppCore` sólo exponen
+  `marcar_gafete_perdido_contratista`/`marcar_gafete_perdido_visita` -- no
+  hay `marcar_gafete_perdido_proveedor`. Si un gafete tipo Proveedor se
+  pierde hoy, no hay forma de registrarlo desde ninguna interfaz (el
+  `CHECK` par-exclusivo de `gafetes` en `schema.rs` ya soporta el caso,
+  `proveedor_portador_id` incluido -- ver `src/database/queries/gafetes.rs`,
+  que ya trae ese nombre para la columna "Asignado a" desde este mismo
+  commit). Falta: método en `AppCore` (mismo molde que
+  `marcar_gafete_perdido_visita`, eligiendo un `registro_ingresos_proveedor`
+  activo como portador en vez de una cita/contratista), comando Tauri, y
+  UI en `GestionGafeteModal.tsx` para elegir el ingreso de proveedor
+  (buscar por cédula/nombre, no hay catálogo de personas para autocompletar
+  -- mismo criterio que el resto de "control de proveedores").
 - [ ] **Verificar actualización con otra instancia abierta.** El riesgo quizá no aplica
   por cómo `relaunch()` reinicia el proceso, pero falta una prueba real.
 - [x] **Instalador único que incluya CLI y GUI omitido para v1.** Lujo fuera del alcance;
@@ -512,6 +562,25 @@ estabilizador y clasificador.
   `ui_kit/text_input.rs`.
 - [ ] **Confirmación visual breve tras guardar/registrar.** Resaltar fila o elemento recién
   creado/editado para que el cambio no se sienta silencioso.
+- [ ] **Auditar máscaras de entrada en formularios de escritorio (pedido
+  2026-09-17).** `react-hook-form` + `zod` ya se usan en TODOS los
+  formularios (`esquema = z.object(...)` es el patrón establecido, ver
+  cualquier `Formulario*.tsx`/`*Modal.tsx`), así que la validación de
+  ESQUEMA ya existe -- lo que falta es la máscara a nivel de INPUT (evitar
+  que se pueda siquiera escribir un carácter inválido, no sólo rechazarlo
+  al enviar). Hoy es inconsistente: `Gafetes.tsx` sí filtra el buscador de
+  número con `.replace(/\D/g, "")` mientras se escribe, pero
+  `FormularioGafete.tsx` (número/desde/hasta) y `IngresoProveedorModal.tsx`
+  (`gafete_numero`) usan `<input type="number">`/texto plano sin filtrar
+  nada hasta que `zod` lo marca en rojo -- con `type="number"` además el
+  navegador deja teclear `e`/`-`/`+` (notación científica) aunque el campo
+  sea un entero positivo. Alcance: pasar una pasada por los campos
+  numéricos (cédula, números de gafete/ruta/documento) forzando
+  `inputMode="numeric"` + filtrado en `onChange` como ya hace el buscador
+  de Gafetes, y revisar si algún campo de texto necesita la regla inversa
+  (rechazar dígitos donde no corresponde, ej. nombre). No cambia la
+  librería de validación -- sigue siendo `react-hook-form`/`zod`, esto es
+  pulido de UX sobre lo que ya existe.
 - [x] **Respaldo manual y exportación de historial dejaron de congelar la UI.**
 - [x] **Frame de transición entre vistas descartado.** La navegación se conserva inmediata.
 
