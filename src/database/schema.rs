@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 44;
+pub const SCHEMA_VERSION: i64 = 46;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -376,6 +376,16 @@ fn aplicar_migraciones_posteriores_a_29(
         *version = 44;
     }
 
+    if *version == 44 {
+        aplicar_migracion_45(connection)?;
+        *version = 45;
+    }
+
+    if *version == 45 {
+        aplicar_migracion_46(connection)?;
+        *version = 46;
+    }
+
     Ok(())
 }
 
@@ -694,6 +704,45 @@ fn ejecutar_migracion_44(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_44)?;
     transaction.execute_batch("PRAGMA user_version = 44")?;
+    transaction.commit()?;
+    if connection.prepare("PRAGMA foreign_key_check")?.exists([])? {
+        return Err(SchemaError::MigracionStrictReferenciasInvalidas);
+    }
+    Ok(())
+}
+
+/// Agrega `prestamos_gafete_provisional_remotos` -- tabla nueva, sin
+/// recrear nada existente. Faltaba por completo desde que se creó el
+/// módulo de gafetes provisionales KOF (MIGRACION_39/40): sin esta caché
+/// no había forma de que un dispositivo se enterara de un préstamo que
+/// OTRO entregó -- ver el comentario de `recibir_prestamos_gafete_provisional_abiertos`
+/// en `nube::sincronizacion`. Bug reportado en pruebas reales, 2026-09-17.
+fn aplicar_migracion_45(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_45)?;
+    transaction.execute_batch("PRAGMA user_version = 45")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Mismo criterio que `aplicar_migracion_44`: `prestamos_gafete_provisional`
+/// se recrea para relajar su `CHECK` de devolución -- exigía
+/// `usuario_devolucion_id IS NOT NULL` junto con la fecha/nombre, cosa que
+/// `registro_ingresos`/`registro_ingresos_proveedor` nunca exigieron (un
+/// cierre remoto no siempre trae un id de usuario LOCAL válido, sólo el
+/// nombre). Mismo bug, mismo fix, tabla distinta -- bug reportado en
+/// pruebas reales, 2026-09-17.
+fn aplicar_migracion_46(connection: &Connection) -> Result<(), SchemaError> {
+    connection.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    let resultado = ejecutar_migracion_46(connection);
+    connection.execute_batch("PRAGMA foreign_keys = ON;")?;
+    resultado
+}
+
+fn ejecutar_migracion_46(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_46)?;
+    transaction.execute_batch("PRAGMA user_version = 46")?;
     transaction.commit()?;
     if connection.prepare("PRAGMA foreign_key_check")?.exists([])? {
         return Err(SchemaError::MigracionStrictReferenciasInvalidas);
@@ -3662,5 +3711,110 @@ WHEN
     AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_salida) IS NOT NEW.fecha_hora_salida
 BEGIN
     SELECT RAISE(ABORT, 'La fecha de salida debe estar normalizada en UTC');
+END;
+";
+
+/// Caché de préstamos de gafete provisional KOF abiertos por OTRO
+/// dispositivo del sitio -- mismo rol que `ingresos_proveedor_remotos`
+/// (MIGRACION_41). Ver el comentario de
+/// `recibir_prestamos_gafete_provisional_abiertos` en `nube::sincronizacion`.
+const MIGRACION_45: &str = r"
+CREATE TABLE prestamos_gafete_provisional_remotos (
+    uuid TEXT PRIMARY KEY,
+    sitio_id TEXT NOT NULL,
+    encargado_nombre TEXT NOT NULL,
+    encargado_codigo_empleado TEXT NOT NULL,
+    gafete_numero INTEGER NOT NULL,
+    hora_entrega TEXT NOT NULL,
+    usuario_entrega_nombre TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL
+) STRICT;
+";
+
+// Relaja el CHECK de `prestamos_gafete_provisional` -- ver el comentario de
+// `aplicar_migracion_46` arriba.
+const MIGRACION_46: &str = r"
+CREATE TABLE prestamos_gafete_provisional_nueva (
+    id INTEGER PRIMARY KEY,
+    encargado_id INTEGER NOT NULL REFERENCES encargados_ruta(id) ON DELETE RESTRICT,
+    encargado_nombre TEXT NOT NULL,
+    encargado_codigo_empleado TEXT NOT NULL,
+    gafete_numero INTEGER NOT NULL,
+    fecha_hora_entrega TEXT NOT NULL,
+    usuario_entrega_id INTEGER NOT NULL REFERENCES usuarios(id),
+    usuario_entrega_nombre TEXT NOT NULL,
+    fecha_hora_devolucion TEXT,
+    usuario_devolucion_id INTEGER REFERENCES usuarios(id),
+    usuario_devolucion_nombre TEXT,
+    uuid TEXT NOT NULL,
+    CHECK (
+        (fecha_hora_devolucion IS NULL
+            AND usuario_devolucion_id IS NULL AND usuario_devolucion_nombre IS NULL)
+        OR
+        (fecha_hora_devolucion IS NOT NULL AND usuario_devolucion_nombre IS NOT NULL)
+    ),
+    CHECK (fecha_hora_devolucion IS NULL OR fecha_hora_devolucion >= fecha_hora_entrega)
+) STRICT;
+INSERT INTO prestamos_gafete_provisional_nueva SELECT * FROM prestamos_gafete_provisional;
+DROP TABLE prestamos_gafete_provisional;
+ALTER TABLE prestamos_gafete_provisional_nueva RENAME TO prestamos_gafete_provisional;
+
+CREATE UNIQUE INDEX idx_prestamos_gafete_provisional_uuid ON prestamos_gafete_provisional(uuid);
+CREATE UNIQUE INDEX idx_prestamos_gafete_provisional_encargado_activo
+ON prestamos_gafete_provisional(encargado_id) WHERE fecha_hora_devolucion IS NULL;
+CREATE UNIQUE INDEX idx_prestamos_gafete_provisional_numero_activo
+ON prestamos_gafete_provisional(gafete_numero) WHERE fecha_hora_devolucion IS NULL;
+CREATE INDEX idx_prestamos_gafete_provisional_encargado ON prestamos_gafete_provisional(encargado_id);
+
+CREATE TRIGGER prestamos_gafete_provisional_no_eliminar
+BEFORE DELETE ON prestamos_gafete_provisional
+BEGIN
+    SELECT RAISE(ABORT, 'Los prestamos de gafete provisional no se pueden eliminar');
+END;
+CREATE TRIGGER prestamos_gafete_provisional_entrega_inmutable
+BEFORE UPDATE OF
+    encargado_id, encargado_nombre, encargado_codigo_empleado, gafete_numero,
+    fecha_hora_entrega, usuario_entrega_id, usuario_entrega_nombre, uuid
+ON prestamos_gafete_provisional
+WHEN
+    NEW.encargado_id IS NOT OLD.encargado_id
+    OR NEW.encargado_nombre IS NOT OLD.encargado_nombre
+    OR NEW.encargado_codigo_empleado IS NOT OLD.encargado_codigo_empleado
+    OR NEW.gafete_numero IS NOT OLD.gafete_numero
+    OR NEW.fecha_hora_entrega IS NOT OLD.fecha_hora_entrega
+    OR NEW.usuario_entrega_id IS NOT OLD.usuario_entrega_id
+    OR NEW.usuario_entrega_nombre IS NOT OLD.usuario_entrega_nombre
+    OR NEW.uuid IS NOT OLD.uuid
+BEGIN
+    SELECT RAISE(ABORT, 'Los datos de entrega del prestamo son inmutables');
+END;
+CREATE TRIGGER prestamos_gafete_provisional_devolucion_unica
+BEFORE UPDATE OF fecha_hora_devolucion, usuario_devolucion_id, usuario_devolucion_nombre
+ON prestamos_gafete_provisional
+WHEN
+    OLD.fecha_hora_devolucion IS NOT NULL
+    OR NEW.fecha_hora_devolucion IS NULL
+    OR NEW.usuario_devolucion_nombre IS NULL
+BEGIN
+    SELECT RAISE(ABORT, 'La devolucion solo puede registrarse una vez');
+END;
+CREATE TRIGGER prestamos_gafete_provisional_fecha_utc_insert
+BEFORE INSERT ON prestamos_gafete_provisional
+WHEN
+    strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_entrega) IS NOT NEW.fecha_hora_entrega
+    OR (
+        NEW.fecha_hora_devolucion IS NOT NULL
+        AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_devolucion) IS NOT NEW.fecha_hora_devolucion
+    )
+BEGIN
+    SELECT RAISE(ABORT, 'Las fechas del prestamo deben estar normalizadas en UTC');
+END;
+CREATE TRIGGER prestamos_gafete_provisional_devolucion_utc
+BEFORE UPDATE OF fecha_hora_devolucion ON prestamos_gafete_provisional
+WHEN
+    NEW.fecha_hora_devolucion IS NOT NULL
+    AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_devolucion) IS NOT NEW.fecha_hora_devolucion
+BEGIN
+    SELECT RAISE(ABORT, 'La fecha de devolucion debe estar normalizada en UTC');
 END;
 ";

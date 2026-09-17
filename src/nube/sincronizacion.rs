@@ -4268,6 +4268,211 @@ pub fn cerrar_ingreso_proveedor_remoto(
     Ok(())
 }
 
+// ---- Gafetes provisionales KOF: sync entre dispositivos ----
+//
+// Faltaba por completo -- sólo existían el push (`enviar_prestamo_gafete_provisional`/
+// `enviar_cierre_prestamo_gafete_provisional`) y el chequeo en vivo
+// (`gafete_provisional_ocupado_en_otro_dispositivo`), pero nada traía de
+// vuelta lo que OTRO dispositivo entregó/devolvió -- un préstamo hecho en
+// el celular nunca aparecía en la PC (ni viceversa), y un préstamo cerrado
+// por otro dispositivo se quedaba "abierto" para siempre del lado de quien
+// lo entregó. Mismo patrón exacto que `ingresos_proveedor_remotos`/
+// `recibir_cierres_de_ingresos_propios_proveedor` -- bug reportado en
+// pruebas reales, 2026-09-17 ("yo sabía que no estaba sincronizada").
+
+/// Fila cacheada localmente de un préstamo de gafete provisional todavía
+/// abierto, entregado por OTRO dispositivo de este mismo sitio -- mismo
+/// criterio que [`IngresoProveedorRemoto`], pero contra
+/// `prestamos_gafete_provisional_remotos`/`prestamos_gafete_provisional`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrestamoGafeteProvisionalRemoto {
+    pub uuid: String,
+    pub encargado_nombre: String,
+    pub encargado_codigo_empleado: String,
+    pub gafete_numero: i64,
+    pub hora_entrega: String,
+    pub usuario_entrega_nombre: String,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaPrestamoGafeteProvisionalRemoto {
+    id: String,
+    encargado_nombre: String,
+    encargado_codigo_empleado: String,
+    gafete_numero: i64,
+    hora_entrega: String,
+    usuario_entrega_nombre: String,
+}
+
+/// Espejo de [`recibir_ingresos_proveedor_abiertos`], pero contra
+/// `prestamos_gafete_provisional` -- misma lógica de "traer todo lo
+/// abierto del sitio y descartar lo que ya vive local", mismo reemplazo
+/// completo de la caché en una sola transacción.
+pub fn recibir_prestamos_gafete_provisional_abiertos(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<Vec<PrestamoGafeteProvisionalRemoto>, SincronizacionError> {
+    let cliente = cliente_http();
+    let url = format!(
+        "{}/rest/v1/prestamos_gafete_provisional?sitio_id=eq.{}&hora_devolucion=is.null\
+         &select=id,encargado_nombre,encargado_codigo_empleado,gafete_numero,hora_entrega,\
+         usuario_entrega_nombre",
+        contexto.base_url, contexto.sitio_id,
+    );
+    let filas: Vec<FilaPrestamoGafeteProvisionalRemoto> = obtener_json(&cliente, contexto, &url)?;
+
+    let transaction = connection.unchecked_transaction()?;
+    transaction.execute(
+        "DELETE FROM prestamos_gafete_provisional_remotos WHERE sitio_id = ?1",
+        params![contexto.sitio_id],
+    )?;
+    let mut remotos = Vec::with_capacity(filas.len());
+    for fila in filas {
+        let existe_localmente: bool = transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM prestamos_gafete_provisional WHERE uuid = ?1)",
+            params![fila.id],
+            |row| row.get(0),
+        )?;
+        if existe_localmente {
+            continue;
+        }
+        let hora_entrega = crate::tiempo::parsear_utc(&fila.hora_entrega)
+            .map(crate::tiempo::serializar_utc)
+            .map_err(|_| SincronizacionError::FechaInvalida(fila.hora_entrega.clone()))?;
+        transaction.execute(
+            "
+            INSERT INTO prestamos_gafete_provisional_remotos (
+                uuid, sitio_id, encargado_nombre, encargado_codigo_empleado, gafete_numero,
+                hora_entrega, usuario_entrega_nombre, actualizado_en
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            ",
+            params![
+                fila.id,
+                contexto.sitio_id,
+                fila.encargado_nombre,
+                fila.encargado_codigo_empleado,
+                fila.gafete_numero,
+                hora_entrega,
+                fila.usuario_entrega_nombre,
+            ],
+        )?;
+        remotos.push(PrestamoGafeteProvisionalRemoto {
+            uuid: fila.id,
+            encargado_nombre: fila.encargado_nombre,
+            encargado_codigo_empleado: fila.encargado_codigo_empleado,
+            gafete_numero: fila.gafete_numero,
+            hora_entrega,
+            usuario_entrega_nombre: fila.usuario_entrega_nombre,
+        });
+    }
+    transaction.commit()?;
+
+    Ok(remotos)
+}
+
+#[derive(serde::Deserialize)]
+struct FilaDevolucionPropiaRemota {
+    id: String,
+    hora_devolucion: String,
+    usuario_devolucion_nombre: Option<String>,
+}
+
+/// Espejo de [`recibir_cierres_de_ingresos_propios_proveedor`], pero para
+/// devoluciones de préstamos de gafete provisional que ESTE dispositivo
+/// entregó y OTRO dispositivo devolvió.
+pub fn recibir_devoluciones_propias_gafete_provisional(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<u32, SincronizacionError> {
+    let abiertos_localmente: Vec<String> = {
+        let mut statement = connection.prepare(
+            "SELECT uuid FROM prestamos_gafete_provisional WHERE fecha_hora_devolucion IS NULL",
+        )?;
+        statement
+            .query_map([], |row| row.get(0))?
+            .collect::<Result<_, _>>()?
+    };
+    if abiertos_localmente.is_empty() {
+        return Ok(0);
+    }
+
+    let cliente = cliente_http();
+    let lista_uuids = abiertos_localmente.join(",");
+    let url = format!(
+        "{}/rest/v1/prestamos_gafete_provisional?id=in.({lista_uuids})&hora_devolucion=not.is.null\
+         &select=id,hora_devolucion,usuario_devolucion_nombre",
+        contexto.base_url,
+    );
+    let filas: Vec<FilaDevolucionPropiaRemota> = obtener_json(&cliente, contexto, &url)?;
+
+    let transaction = connection.unchecked_transaction()?;
+    let mut aplicados = 0_u32;
+    for fila in &filas {
+        let nombre_devolucion = fila
+            .usuario_devolucion_nombre
+            .as_deref()
+            .unwrap_or("Devolución registrada en nube");
+        let hora_devolucion = crate::tiempo::parsear_utc(&fila.hora_devolucion)
+            .map(crate::tiempo::serializar_utc)
+            .map_err(|_| SincronizacionError::FechaInvalida(fila.hora_devolucion.clone()))?;
+        let filas_afectadas = transaction.execute(
+            "
+            UPDATE prestamos_gafete_provisional
+            SET
+                fecha_hora_devolucion = ?1,
+                usuario_devolucion_id = NULL,
+                usuario_devolucion_nombre = ?2
+            WHERE uuid = ?3
+              AND fecha_hora_devolucion IS NULL
+            ",
+            params![hora_devolucion, nombre_devolucion, fila.id],
+        )?;
+        let filas_afectadas = u32::try_from(filas_afectadas).unwrap_or(u32::MAX);
+        aplicados = aplicados.saturating_add(filas_afectadas);
+    }
+    transaction.commit()?;
+
+    Ok(aplicados)
+}
+
+/// Espejo de [`cerrar_ingreso_proveedor_remoto`], pero para registrar la
+/// devolución de un préstamo de gafete provisional que OTRO dispositivo
+/// entregó.
+pub fn cerrar_prestamo_gafete_provisional_remoto(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+    usuario_devolucion_nombre: &str,
+) -> Result<(), SincronizacionError> {
+    let cliente = cliente_http();
+    let cuerpo = json!({
+        "hora_devolucion": crate::tiempo::serializar_utc(chrono::Utc::now()),
+        "dispositivo_devolucion_id": contexto.dispositivo_id,
+        "usuario_devolucion_nombre": usuario_devolucion_nombre,
+    });
+
+    let url = format!(
+        "{}/rest/v1/prestamos_gafete_provisional?id=eq.{uuid}&hora_devolucion=is.null",
+        contexto.base_url
+    );
+    let respuesta = cliente
+        .patch(url)
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)?;
+
+    connection.execute(
+        "DELETE FROM prestamos_gafete_provisional_remotos WHERE uuid = ?1",
+        params![uuid],
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -6593,6 +6798,102 @@ mod tests {
         initialize_database(&connection).unwrap();
 
         let aplicados = recibir_cierres_de_ingresos_propios_proveedor(
+            &connection,
+            &contexto("http://127.0.0.1:1"),
+        )
+        .unwrap();
+
+        assert_eq!(aplicados, 0);
+    }
+
+    #[test]
+    fn recibe_prestamos_gafete_provisional_abiertos_del_otro_dispositivo_y_los_cachea() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-remoto\",\"encargado_nombre\":\"Kendall Morales\",\
+             \"encargado_codigo_empleado\":\"5366536\",\"gafete_numero\":4,\
+             \"hora_entrega\":\"2026-01-01T08:00:00Z\",\"usuario_entrega_nombre\":\"Op PC\"}]",
+        );
+
+        let recibidos =
+            recibir_prestamos_gafete_provisional_abiertos(&connection, &contexto(&base_url))
+                .unwrap();
+
+        assert_eq!(recibidos.len(), 1);
+        assert_eq!(recibidos[0].uuid, "uuid-remoto");
+        assert_eq!(recibidos[0].encargado_nombre, "Kendall Morales");
+        assert_eq!(recibidos[0].gafete_numero, 4);
+        let cacheados: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM prestamos_gafete_provisional_remotos",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(cacheados, 1);
+    }
+
+    fn conexion_con_un_prestamo_gafete_provisional_activo() -> Connection {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute_batch(
+                "
+                INSERT INTO usuarios (id, cedula, nombre, password_hash, rol, activo)
+                VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1);
+                INSERT INTO encargados_ruta (id, codigo_empleado, nombre, activo, uuid)
+                VALUES (1, '5366536', 'Kendall Morales', 1, 'uuid-encargado');
+                INSERT INTO prestamos_gafete_provisional (
+                    id, encargado_id, encargado_nombre, encargado_codigo_empleado,
+                    gafete_numero, fecha_hora_entrega, usuario_entrega_id,
+                    usuario_entrega_nombre, uuid
+                ) VALUES (
+                    1, 1, 'Kendall Morales', '5366536', 4,
+                    '2026-08-01T08:00:00Z', 1, 'Operador', 'uuid-prestamo'
+                );
+                ",
+            )
+            .unwrap();
+        connection
+    }
+
+    #[test]
+    fn recibe_devoluciones_propias_gafete_provisional_sin_reencolar() {
+        let connection = conexion_con_un_prestamo_gafete_provisional_activo();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-prestamo\",\"hora_devolucion\":\"2026-08-01T10:00:00Z\",\
+             \"usuario_devolucion_nombre\":\"Operador remoto\"}]",
+        );
+
+        let aplicados = recibir_devoluciones_propias_gafete_provisional(
+            &connection,
+            &contexto(&base_url),
+        )
+        .unwrap();
+
+        assert_eq!(aplicados, 1);
+        let (devolucion, usuario_id, usuario_nombre): (String, Option<i64>, String) = connection
+            .query_row(
+                "SELECT fecha_hora_devolucion, usuario_devolucion_id, usuario_devolucion_nombre
+                 FROM prestamos_gafete_provisional WHERE uuid = 'uuid-prestamo'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(devolucion, "2026-08-01T10:00:00Z");
+        assert_eq!(usuario_id, None);
+        assert_eq!(usuario_nombre, "Operador remoto");
+    }
+
+    #[test]
+    fn recibe_devoluciones_propias_gafete_provisional_sin_nada_local_no_llama_a_la_nube() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+
+        let aplicados = recibir_devoluciones_propias_gafete_provisional(
             &connection,
             &contexto("http://127.0.0.1:1"),
         )

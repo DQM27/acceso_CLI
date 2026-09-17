@@ -4,10 +4,10 @@ import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import {
-  listarGafetesProvisionalesActivos,
-  registrarDevolucionGafeteProvisional,
+  cerrarFilaGafeteProvisionalActiva,
+  listarTodosLosGafetesProvisionalesActivos,
 } from "../api/gafetesProvisionales";
-import type { PrestamoGafeteProvisionalActivoResumen } from "../api/gafetesProvisionales";
+import type { FilaGafeteProvisionalActiva } from "../api/gafetesProvisionales";
 import { textoFechaDDMMYYYY, textoHora, fechaLocalYMD } from "../tiempo";
 
 const EntregarGafeteProvisionalModal = lazy(() => import("./EntregarGafeteProvisionalModal"));
@@ -21,6 +21,12 @@ const EntregarGafeteProvisionalModal = lazy(() => import("./EntregarGafeteProvis
  * convención ya establecida de escritorio (botón de acción en la columna,
  * ver `Proveedores.tsx`/`Rutas.tsx`), no la de mobile.
  *
+ * La lista de "prestados" fusiona locales + lo que otro dispositivo del
+ * sitio tiene abierto ahora (`listarTodosLosGafetesProvisionalesActivos`),
+ * mismo criterio que `listarTodosLosProveedoresActivos` -- faltaba por
+ * completo hasta esta sesión (bug reportado en pruebas reales,
+ * 2026-09-17: un préstamo hecho en el celular nunca aparecía acá).
+ *
  * Sin vista de "Historial" aparte -- a diferencia de Proveedores/Visitas,
  * el volumen de este flujo es bajo (uno o dos olvidos por turno, no
  * decenas), no amerita una segunda grilla; quien necesite auditar
@@ -28,7 +34,7 @@ const EntregarGafeteProvisionalModal = lazy(() => import("./EntregarGafeteProvis
  * Supabase directamente.
  */
 export default function GafetesProvisionales({ refrescarSenal }: { refrescarSenal?: number }) {
-  const [filas, setFilas] = useState<PrestamoGafeteProvisionalActivoResumen[]>([]);
+  const [filas, setFilas] = useState<FilaGafeteProvisionalActiva[]>([]);
   const [cargando, setCargando] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [busqueda, setBusqueda] = useState("");
@@ -37,7 +43,7 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
 
   const recargar = useCallback(() => {
     setCargando(true);
-    return listarGafetesProvisionalesActivos()
+    return listarTodosLosGafetesProvisionalesActivos()
       .then(setFilas)
       .finally(() => setCargando(false));
   }, []);
@@ -55,9 +61,9 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
   }, [refrescarSenal, recargar]);
 
   const registrarDevolucion = useCallback(
-    async (fila: PrestamoGafeteProvisionalActivoResumen) => {
+    async (fila: FilaGafeteProvisionalActiva) => {
       try {
-        await registrarDevolucionGafeteProvisional(fila.id);
+        await cerrarFilaGafeteProvisionalActiva(fila);
         await recargar();
       } catch (error) {
         toast.error(String(error));
@@ -66,7 +72,7 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
     [recargar],
   );
 
-  const columnas: ColDef<PrestamoGafeteProvisionalActivoResumen>[] = useMemo(
+  const columnas: ColDef<FilaGafeteProvisionalActiva>[] = useMemo(
     () => [
       {
         field: "encargado_nombre",
@@ -103,7 +109,7 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
         minWidth: 110,
         filter: false,
         sortable: false,
-        cellRenderer: (p: ICellRendererParams<PrestamoGafeteProvisionalActivoResumen>) => {
+        cellRenderer: (p: ICellRendererParams<FilaGafeteProvisionalActiva>) => {
           const fila = p.data;
           return fila ? (
             <button
@@ -125,7 +131,7 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
-          <Tabla<PrestamoGafeteProvisionalActivoResumen>
+          <Tabla<FilaGafeteProvisionalActiva>
             id="gafetes-provisionales-activos"
             columnas={columnas}
             filas={filas}

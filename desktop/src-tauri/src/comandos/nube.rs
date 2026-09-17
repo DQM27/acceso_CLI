@@ -121,6 +121,19 @@ pub struct IngresoProveedorRemoto {
     pub usuario_entrada_nombre: String,
 }
 
+/// Espejo de `nube::PrestamoGafeteProvisionalRemoto` -- mismo criterio que
+/// `IngresoRemoto`/`IngresoProveedorRemoto`, pero para el ciclo de
+/// entrega/devolución de gafetes provisionales KOF.
+#[derive(serde::Serialize)]
+pub struct PrestamoGafeteProvisionalRemoto {
+    pub uuid: String,
+    pub encargado_nombre: String,
+    pub encargado_codigo_empleado: String,
+    pub gafete_numero: i64,
+    pub hora_entrega: String,
+    pub usuario_entrega_nombre: String,
+}
+
 /// Autentica este dispositivo contra el receptor -- un solo lugar para no
 /// repetir "cargar secreto + pedir token" en cada función de este archivo.
 /// Autoriza con `Operacion::UsarNube` (cualquier rol), no
@@ -238,6 +251,10 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
         nube::recibir_cierres_de_ingresos_propios_proveedor(&conexion, &contexto)?;
     let remotos = nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
     let _remotos_proveedor = nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;
+    let _remotos_gafete_provisional =
+        nube::recibir_prestamos_gafete_provisional_abiertos(&conexion, &contexto)?;
+    let _devoluciones_propias_gafete_provisional =
+        nube::recibir_devoluciones_propias_gafete_provisional(&conexion, &contexto)?;
     let catalogo = nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
     let catalogo_rutas = nube::recibir_catalogo_rutas_del_sitio(&conexion, &contexto)?;
     let movimientos_historial_recibidos = nube::recibir_historial_del_sitio(&conexion, &contexto)?;
@@ -497,5 +514,58 @@ pub fn cerrar_ingreso_proveedor_remoto(
     };
     let conexion = state.conexion_secundaria()?;
     nube::cerrar_ingreso_proveedor_remoto(&conexion, &contexto, &uuid, &actor.nombre)
+        .map_err(mensaje_sincronizacion)
+}
+
+/// Espejo de `listar_ingresos_proveedor_remotos`, pero contra la caché
+/// `prestamos_gafete_provisional_remotos`.
+#[tauri::command]
+pub fn listar_prestamos_gafete_provisional_remotos(
+    state: tauri::State<GuiState>,
+) -> Result<Vec<PrestamoGafeteProvisionalRemoto>, String> {
+    state.sesion_activa()?;
+    let conexion = state.conexion_secundaria()?;
+    let mut statement = conexion
+        .prepare(
+            "SELECT uuid, encargado_nombre, encargado_codigo_empleado, gafete_numero,
+                    hora_entrega, usuario_entrega_nombre
+             FROM prestamos_gafete_provisional_remotos ORDER BY hora_entrega",
+        )
+        .map_err(|error| error.to_string())?;
+    let filas = statement
+        .query_map([], |row| {
+            Ok(PrestamoGafeteProvisionalRemoto {
+                uuid: row.get(0)?,
+                encargado_nombre: row.get(1)?,
+                encargado_codigo_empleado: row.get(2)?,
+                gafete_numero: row.get(3)?,
+                hora_entrega: row.get(4)?,
+                usuario_entrega_nombre: row.get(5)?,
+            })
+        })
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    Ok(filas)
+}
+
+/// Espejo de `cerrar_ingreso_proveedor_remoto`, pero contra
+/// `prestamos_gafete_provisional`.
+#[tauri::command]
+pub fn cerrar_prestamo_gafete_provisional_remoto(
+    uuid: String,
+    state: tauri::State<GuiState>,
+) -> Result<(), String> {
+    let actor = state.sesion_activa()?;
+    let token = autenticar(&state)?;
+    let contexto = nube::ContextoSincronizacion {
+        base_url: nube::BASE_URL,
+        apikey: nube::APIKEY,
+        token: &token.access_token,
+        dispositivo_id: &token.dispositivo_id,
+        sitio_id: &token.sitio_id,
+    };
+    let conexion = state.conexion_secundaria()?;
+    nube::cerrar_prestamo_gafete_provisional_remoto(&conexion, &contexto, &uuid, &actor.nombre)
         .map_err(mensaje_sincronizacion)
 }

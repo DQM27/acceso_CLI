@@ -45,6 +45,7 @@ use control_acceso::models::salida_ruta::SalidaRutaActivaResumen as SalidaRutaAc
 use control_acceso::models::tipo_ingreso::TipoIngreso as TipoIngresoNucleo;
 use control_acceso::models::usuario::RolUsuario as RolUsuarioNucleo;
 use control_acceso::nube::IngresoProveedorRemoto as IngresoProveedorRemotoNucleo;
+use control_acceso::nube::PrestamoGafeteProvisionalRemoto as PrestamoGafeteProvisionalRemotoNucleo;
 use control_acceso::nube::IngresoRemoto as IngresoRemotoNucleo;
 use control_acceso::services::autenticacion_service::UsuarioSesion as UsuarioSesionNucleo;
 use control_acceso::services::contratista_service::DatosContratista as DatosContratistaNucleo;
@@ -724,6 +725,32 @@ impl From<IngresoProveedorRemotoNucleo> for IngresoProveedorRemoto {
             gafete_numero: remoto.gafete_numero,
             hora_entrada: remoto.hora_entrada,
             usuario_entrada_nombre: remoto.usuario_entrada_nombre,
+        }
+    }
+}
+
+/// Espejo de [`IngresoProveedorRemoto`], pero para el ciclo de
+/// entrega/devolución de gafetes provisionales KOF -- ver
+/// `PrestamoGafeteProvisionalRemotoNucleo`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PrestamoGafeteProvisionalRemoto {
+    pub uuid: String,
+    pub encargado_nombre: String,
+    pub encargado_codigo_empleado: String,
+    pub gafete_numero: i64,
+    pub hora_entrega: String,
+    pub usuario_entrega_nombre: String,
+}
+
+impl From<PrestamoGafeteProvisionalRemotoNucleo> for PrestamoGafeteProvisionalRemoto {
+    fn from(remoto: PrestamoGafeteProvisionalRemotoNucleo) -> Self {
+        Self {
+            uuid: remoto.uuid,
+            encargado_nombre: remoto.encargado_nombre,
+            encargado_codigo_empleado: remoto.encargado_codigo_empleado,
+            gafete_numero: remoto.gafete_numero,
+            hora_entrega: remoto.hora_entrega,
+            usuario_entrega_nombre: remoto.usuario_entrega_nombre,
         }
     }
 }
@@ -2105,6 +2132,20 @@ impl Nucleo {
             .collect())
     }
 
+    /// Espejo de [`Self::listar_ingresos_proveedor_remotos`], pero contra
+    /// la caché `prestamos_gafete_provisional_remotos`.
+    pub fn listar_prestamos_gafete_provisional_remotos(
+        &self,
+    ) -> Result<Vec<PrestamoGafeteProvisionalRemoto>, NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self
+            .core_lock()
+            .listar_prestamos_gafete_provisional_remotos(&actor)?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
     /// Chequeo en vivo (no la caché local) de si `gafete_numero` ya está
     /// activo en este sitio del lado de OTRO dispositivo -- llamar justo
     /// antes de `registrar_ingreso` cuando el ingreso lleva gafete. Cada
@@ -2393,6 +2434,55 @@ impl Nucleo {
         };
         let conexion = self.conexion_secundaria()?;
         control_acceso::nube::cerrar_ingreso_proveedor_remoto(
+            &conexion,
+            &contexto,
+            &uuid,
+            &actor.nombre,
+        )
+        .map_err(|error| NucleoError::Interno {
+            mensaje: error.to_string(),
+        })?;
+        Ok(())
+    }
+
+    /// Espejo de [`Self::cerrar_ingreso_proveedor_remoto`], pero contra
+    /// `prestamos_gafete_provisional`.
+    pub fn cerrar_prestamo_gafete_provisional_remoto(
+        &self,
+        directorio: String,
+        uuid: String,
+    ) -> Result<(), NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self.core_lock().cerrar_prestamo_gafete_provisional_remoto(
+            &actor,
+            Some(std::path::Path::new(&directorio)),
+            &uuid,
+        )?)
+    }
+
+    /// Espejo de [`Self::cerrar_ingreso_proveedor_remoto_con_secreto`],
+    /// pero contra `prestamos_gafete_provisional`.
+    pub fn cerrar_prestamo_gafete_provisional_remoto_con_secreto(
+        &self,
+        secreto: String,
+        uuid: String,
+    ) -> Result<(), NucleoError> {
+        let actor = self.actor_autenticado()?;
+        self.core_lock().autorizar_uso_nube(&actor)?;
+        let token = self
+            .autenticar_con_cache(&secreto)
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })?;
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::BASE_URL,
+            apikey: control_acceso::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        let conexion = self.conexion_secundaria()?;
+        control_acceso::nube::cerrar_prestamo_gafete_provisional_remoto(
             &conexion,
             &contexto,
             &uuid,
@@ -2768,6 +2858,14 @@ impl Nucleo {
         let remotos = control_acceso::nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
         let _remotos_proveedor =
             control_acceso::nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;
+        let _remotos_gafete_provisional =
+            control_acceso::nube::recibir_prestamos_gafete_provisional_abiertos(
+                &conexion, &contexto,
+            )?;
+        let _devoluciones_propias_gafete_provisional =
+            control_acceso::nube::recibir_devoluciones_propias_gafete_provisional(
+                &conexion, &contexto,
+            )?;
         let catalogo = control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
         // Faltaba -- `encargados_ruta`/`vehiculos_ruta` nunca se traían de
         // vuelta en mobile, así que el buscador de "Gafetes KOF" (que
@@ -2880,6 +2978,14 @@ impl Nucleo {
         let remotos = control_acceso::nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
         let _remotos_proveedor =
             control_acceso::nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;
+        let _remotos_gafete_provisional =
+            control_acceso::nube::recibir_prestamos_gafete_provisional_abiertos(
+                &conexion, &contexto,
+            )?;
+        let _devoluciones_propias_gafete_provisional =
+            control_acceso::nube::recibir_devoluciones_propias_gafete_provisional(
+                &conexion, &contexto,
+            )?;
         let catalogo = control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
         // Ver el comentario del otro método de sync en este mismo archivo
         // sobre por qué hacía falta esto (buscador de "Gafetes KOF" sin

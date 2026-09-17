@@ -701,6 +701,10 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_remoto_con_secreto(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_prestamo_gafete_provisional_remoto(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_prestamo_gafete_provisional_remoto_con_secreto(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial(
@@ -740,6 +744,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_proveedor_remotos(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_remotos(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_prestamos_gafete_provisional_remotos(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_proveedores_activos(
     ): Int
@@ -831,6 +837,10 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_remoto_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_prestamo_gafete_provisional_remoto(`ptr`: Long,`directorio`: RustBuffer.ByValue,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_prestamo_gafete_provisional_remoto_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -870,6 +880,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_proveedor_remotos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_remotos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_prestamos_gafete_provisional_remotos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_proveedores_activos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1068,6 +1080,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_remoto_con_secreto() != 121) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_prestamo_gafete_provisional_remoto() != 32891) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_prestamo_gafete_provisional_remoto_con_secreto() != 51951) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion() != 60001) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1126,6 +1144,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_remotos() != 40530) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_prestamos_gafete_provisional_remotos() != 22618) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_proveedores_activos() != 58098) {
@@ -1738,6 +1759,18 @@ public interface NucleoInterface {
     fun `cerrarIngresoRemotoConSecreto`(`secreto`: kotlin.String, `uuid`: kotlin.String)
     
     /**
+     * Espejo de [`Self::cerrar_ingreso_proveedor_remoto`], pero contra
+     * `prestamos_gafete_provisional`.
+     */
+    fun `cerrarPrestamoGafeteProvisionalRemoto`(`directorio`: kotlin.String, `uuid`: kotlin.String)
+    
+    /**
+     * Espejo de [`Self::cerrar_ingreso_proveedor_remoto_con_secreto`],
+     * pero contra `prestamos_gafete_provisional`.
+     */
+    fun `cerrarPrestamoGafeteProvisionalRemotoConSecreto`(`secreto`: kotlin.String, `uuid`: kotlin.String)
+    
+    /**
      * Sólo olvida el actor en memoria — el `AppCore`/la conexión `SQLite`
      * se quedan abiertos (son del teléfono, no de la sesión) para que
      * `Nucleo::autenticar` pueda loguear al siguiente usuario sin
@@ -1892,6 +1925,12 @@ public interface NucleoInterface {
      * red para mostrarla, ya la llenó la última `sincronizar_con_nube`.
      */
     fun `listarIngresosRemotos`(): List<IngresoRemoto>
+    
+    /**
+     * Espejo de [`Self::listar_ingresos_proveedor_remotos`], pero contra
+     * la caché `prestamos_gafete_provisional_remotos`.
+     */
+    fun `listarPrestamosGafeteProvisionalRemotos`(): List<PrestamoGafeteProvisionalRemoto>
     
     /**
      * Sin actor -- es una lectura, mismo criterio que `listar_rutas_activas`.
@@ -2447,6 +2486,44 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Espejo de [`Self::cerrar_ingreso_proveedor_remoto`], pero contra
+     * `prestamos_gafete_provisional`.
+     */
+    @Throws(NucleoException::class)override fun `cerrarPrestamoGafeteProvisionalRemoto`(`directorio`: kotlin.String, `uuid`: kotlin.String)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_prestamo_gafete_provisional_remoto(
+        it,
+        
+        FfiConverterString.lower(`directorio`),
+        FfiConverterString.lower(`uuid`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Espejo de [`Self::cerrar_ingreso_proveedor_remoto_con_secreto`],
+     * pero contra `prestamos_gafete_provisional`.
+     */
+    @Throws(NucleoException::class)override fun `cerrarPrestamoGafeteProvisionalRemotoConSecreto`(`secreto`: kotlin.String, `uuid`: kotlin.String)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_prestamo_gafete_provisional_remoto_con_secreto(
+        it,
+        
+        FfiConverterString.lower(`secreto`),
+        FfiConverterString.lower(`uuid`),_status)
+}
+    }
+    
+    
+
+    
+    /**
      * Sólo olvida el actor en memoria — el `AppCore`/la conexión `SQLite`
      * se quedan abiertos (son del teléfono, no de la sesión) para que
      * `Nucleo::autenticar` pueda loguear al siguiente usuario sin
@@ -2860,6 +2937,24 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_remotos(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Espejo de [`Self::listar_ingresos_proveedor_remotos`], pero contra
+     * la caché `prestamos_gafete_provisional_remotos`.
+     */
+    @Throws(NucleoException::class)override fun `listarPrestamosGafeteProvisionalRemotos`(): List<PrestamoGafeteProvisionalRemoto> {
+            return FfiConverterSequenceTypePrestamoGafeteProvisionalRemoto.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_prestamos_gafete_provisional_remotos(
         it,
         _status)
 }
@@ -4249,6 +4344,69 @@ public object FfiConverterTypePrestamoGafeteProvisionalActivoResumen: FfiConvert
             FfiConverterString.write(value.`encargadoCodigoEmpleado`, buf)
             FfiConverterLong.write(value.`gafeteNumero`, buf)
             FfiConverterString.write(value.`fechaHoraEntrega`, buf)
+    }
+}
+
+
+
+/**
+ * Espejo de [`IngresoProveedorRemoto`], pero para el ciclo de
+ * entrega/devolución de gafetes provisionales KOF -- ver
+ * `PrestamoGafeteProvisionalRemotoNucleo`.
+ */
+data class PrestamoGafeteProvisionalRemoto (
+    var `uuid`: kotlin.String
+    , 
+    var `encargadoNombre`: kotlin.String
+    , 
+    var `encargadoCodigoEmpleado`: kotlin.String
+    , 
+    var `gafeteNumero`: kotlin.Long
+    , 
+    var `horaEntrega`: kotlin.String
+    , 
+    var `usuarioEntregaNombre`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePrestamoGafeteProvisionalRemoto: FfiConverterRustBuffer<PrestamoGafeteProvisionalRemoto> {
+    override fun read(buf: ByteBuffer): PrestamoGafeteProvisionalRemoto {
+        return PrestamoGafeteProvisionalRemoto(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PrestamoGafeteProvisionalRemoto) = (
+            FfiConverterString.allocationSize(value.`uuid`) +
+            FfiConverterString.allocationSize(value.`encargadoNombre`) +
+            FfiConverterString.allocationSize(value.`encargadoCodigoEmpleado`) +
+            FfiConverterLong.allocationSize(value.`gafeteNumero`) +
+            FfiConverterString.allocationSize(value.`horaEntrega`) +
+            FfiConverterString.allocationSize(value.`usuarioEntregaNombre`)
+    )
+
+    override fun write(value: PrestamoGafeteProvisionalRemoto, buf: ByteBuffer) {
+            FfiConverterString.write(value.`uuid`, buf)
+            FfiConverterString.write(value.`encargadoNombre`, buf)
+            FfiConverterString.write(value.`encargadoCodigoEmpleado`, buf)
+            FfiConverterLong.write(value.`gafeteNumero`, buf)
+            FfiConverterString.write(value.`horaEntrega`, buf)
+            FfiConverterString.write(value.`usuarioEntregaNombre`, buf)
     }
 }
 
@@ -5932,6 +6090,34 @@ public object FfiConverterSequenceTypePrestamoGafeteProvisionalActivoResumen: Ff
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypePrestamoGafeteProvisionalActivoResumen.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypePrestamoGafeteProvisionalRemoto: FfiConverterRustBuffer<List<PrestamoGafeteProvisionalRemoto>> {
+    override fun read(buf: ByteBuffer): List<PrestamoGafeteProvisionalRemoto> {
+        val len = buf.getInt()
+        return List<PrestamoGafeteProvisionalRemoto>(len) {
+            FfiConverterTypePrestamoGafeteProvisionalRemoto.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<PrestamoGafeteProvisionalRemoto>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypePrestamoGafeteProvisionalRemoto.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<PrestamoGafeteProvisionalRemoto>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypePrestamoGafeteProvisionalRemoto.write(it, buf)
         }
     }
 }

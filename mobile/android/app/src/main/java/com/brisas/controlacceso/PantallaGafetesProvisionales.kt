@@ -37,6 +37,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import uniffi.control_acceso_mobile.EncargadoRuta
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.PrestamoGafeteProvisionalActivoResumen
+import uniffi.control_acceso_mobile.PrestamoGafeteProvisionalRemoto
 
 /// Entrega/devolución de gafetes provisionales KOF -- ver
 /// `docs/features-futuras/plan-gafetes-provisionales-kof.md`. Resuelve el
@@ -57,7 +58,7 @@ fun PantallaGafetesProvisionales(
     val viewModel: GafetesProvisionalesViewModel =
         viewModel(factory = GafetesProvisionalesViewModel.factory(nucleo, secretoStore))
     var gafeteTexto by remember { mutableStateOf("") }
-    var prestamoParaDevolver by remember { mutableStateOf<PrestamoGafeteProvisionalActivoResumen?>(null) }
+    var filaParaDevolver by remember { mutableStateOf<FilaGafeteProvisionalActiva?>(null) }
     LaunchedEffect(refrescarNube) {
         if (refrescarNube > 0) {
             viewModel.refrescarActivos()
@@ -120,14 +121,21 @@ fun PantallaGafetesProvisionales(
                 modifier = Modifier.padding(top = 4.dp),
             )
 
+            // Sin `.height(AlturaBusquedaBrisas)` a propósito -- ese alto
+            // (50.dp, ver ControlesBrisas.kt) queda por debajo del mínimo
+            // cómodo de `TextField` de Material3 cuando el campo no tiene
+            // `leadingIcon` (a diferencia del buscador de arriba, que sí
+            // tiene uno): el placeholder terminaba recortado contra el borde
+            // superior del campo en vez de centrado -- bug reportado en
+            // pruebas reales, 2026-09-17 ("el input... sale cortado").
             TextField(
                 value = gafeteTexto,
                 onValueChange = { gafeteTexto = it.filter(Char::isDigit) },
-                placeholder = { Text("Número de gafete provisional") },
+                placeholder = { Text("Número de gafete") },
                 singleLine = true,
                 shape = FormaCampoBrisas,
                 colors = ColoresCampoBrisas(),
-                modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas).padding(top = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             )
 
             viewModel.error?.let { mensaje ->
@@ -151,22 +159,18 @@ fun PantallaGafetesProvisionales(
             }
         }
 
-        Text(
-            "Gafetes prestados",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 16.dp, bottom = 6.dp),
-        )
-
+        // Sin encabezado "Gafetes prestados" -- pedido explícito del usuario
+        // en pruebas reales, 2026-09-17: dejarlo limpio, igual que la lista
+        // de activos de Contratista (que tampoco tiene título propio).
         ListaConDesvanecido {
             LazyColumn(
-                contentPadding = PaddingValues(top = 5.dp),
+                contentPadding = PaddingValues(top = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp),
             ) {
-                items(viewModel.activos, key = { it.id }) { prestamo ->
+                items(viewModel.activos, key = { it.clave() }) { fila ->
                     FilaPrestamoGafeteProvisional(
-                        prestamo = prestamo,
-                        onConfirmarDevolucion = { prestamoParaDevolver = prestamo },
+                        fila = fila,
+                        onConfirmarDevolucion = { filaParaDevolver = fila },
                     )
                 }
             }
@@ -174,13 +178,18 @@ fun PantallaGafetesProvisionales(
     }
 
     DialogoConfirmarDevolucionGafeteProvisional(
-        prestamo = prestamoParaDevolver,
-        onDismiss = { prestamoParaDevolver = null },
+        fila = filaParaDevolver,
+        onDismiss = { filaParaDevolver = null },
         onConfirmar = {
             viewModel.registrarDevolucion(it)
-            prestamoParaDevolver = null
+            filaParaDevolver = null
         },
     )
+}
+
+private fun FilaGafeteProvisionalActiva.clave(): String = when (this) {
+    is FilaGafeteProvisionalActiva.Local -> "local-${prestamo.id}"
+    is FilaGafeteProvisionalActiva.Remota -> "remota-${remoto.uuid}"
 }
 
 /// Mismo estilo que `FilaContratista` (PantallaActivos.kt, modo Ingreso) --
@@ -207,12 +216,25 @@ private fun FilaEncargadoProvisional(encargado: EncargadoRuta, onClick: () -> Un
 
 @Composable
 private fun FilaPrestamoGafeteProvisional(
+    fila: FilaGafeteProvisionalActiva,
+    onConfirmarDevolucion: () -> Unit,
+) {
+    when (fila) {
+        is FilaGafeteProvisionalActiva.Local ->
+            FilaPrestamoGafeteProvisionalLocal(fila.prestamo, onConfirmarDevolucion)
+        is FilaGafeteProvisionalActiva.Remota ->
+            FilaPrestamoGafeteProvisionalRemota(fila.remoto, onConfirmarDevolucion)
+    }
+}
+
+/// Mismo orden e interacción que las tarjetas de Contratista/Proveedores:
+/// nombre primero, tarjeta completa tocable (sin botón "Devolver" aparte)
+/// -- pedido explícito del usuario en pruebas reales, 2026-09-17.
+@Composable
+private fun FilaPrestamoGafeteProvisionalLocal(
     prestamo: PrestamoGafeteProvisionalActivoResumen,
     onConfirmarDevolucion: () -> Unit,
 ) {
-    // Mismo orden e interacción que las tarjetas de Contratista/Proveedores:
-    // nombre primero, tarjeta completa tocable (sin botón "Devolver" aparte)
-    // -- pedido explícito del usuario en pruebas reales, 2026-09-17.
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -236,16 +258,52 @@ private fun FilaPrestamoGafeteProvisional(
     }
 }
 
+/// Ver el doc-comment de [FilaGafeteProvisionalActiva] -- un préstamo
+/// entregado por OTRO dispositivo del sitio, sin `id` local (sólo `uuid`
+/// de la nube). Mismo orden que [FilaPrestamoGafeteProvisionalLocal].
+@Composable
+private fun FilaPrestamoGafeteProvisionalRemota(
+    remoto: PrestamoGafeteProvisionalRemoto,
+    onConfirmarDevolucion: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onConfirmarDevolucion)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(remoto.encargadoNombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        Text(
+            "${remoto.encargadoCodigoEmpleado} · Gafete ${remoto.gafeteNumero}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "Entregado ${textoFechaHora(remoto.horaEntrega)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "Otro dispositivo",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
 /// Mismo layout que `DialogoConfirmarSalida`/`DialogoConfirmarSalidaProveedor`
 /// -- ícono circular, título "Registrar devolución", info completa en vez de
 /// sólo "Gafete N · nombre".
 @Composable
 private fun DialogoConfirmarDevolucionGafeteProvisional(
-    prestamo: PrestamoGafeteProvisionalActivoResumen?,
+    fila: FilaGafeteProvisionalActiva?,
     onDismiss: () -> Unit,
-    onConfirmar: (PrestamoGafeteProvisionalActivoResumen) -> Unit,
+    onConfirmar: (FilaGafeteProvisionalActiva) -> Unit,
 ) {
-    if (prestamo == null) return
+    if (fila == null) return
     Dialog(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -270,13 +328,18 @@ private fun DialogoConfirmarDevolucionGafeteProvisional(
                 modifier = Modifier.padding(top = 16.dp),
             )
             Text(
-                "${prestamo.encargadoNombre} · ${prestamo.encargadoCodigoEmpleado} · Gafete ${prestamo.gafeteNumero}",
+                when (fila) {
+                    is FilaGafeteProvisionalActiva.Local ->
+                        "${fila.prestamo.encargadoNombre} · ${fila.prestamo.encargadoCodigoEmpleado} · Gafete ${fila.prestamo.gafeteNumero}"
+                    is FilaGafeteProvisionalActiva.Remota ->
+                        "${fila.remoto.encargadoNombre} · registrado en otro dispositivo de la unidad operativa"
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),
             )
             BotonBrisas(
-                onClick = { onConfirmar(prestamo) },
+                onClick = { onConfirmar(fila) },
                 modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
             ) {
                 Text("Confirmar")

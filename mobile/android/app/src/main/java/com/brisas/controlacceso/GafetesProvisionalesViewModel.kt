@@ -18,6 +18,20 @@ import uniffi.control_acceso_mobile.EncargadoRuta
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.PrestamoGafeteProvisionalActivoResumen
+import uniffi.control_acceso_mobile.PrestamoGafeteProvisionalRemoto
+
+/// Fila fusionada local+remota de la lista de "prestados" -- mismo criterio
+/// que `FilaProveedorActiva`/`FilaActiva`: un préstamo entregado por OTRO
+/// dispositivo del mismo sitio nunca vive en la tabla local
+/// (`prestamos_gafete_provisional`), sólo en la caché
+/// `prestamos_gafete_provisional_remotos` -- sin esta fusión, la sincronización
+/// de gafetes provisionales quedaba completamente rota entre dispositivos
+/// (bug reportado en pruebas reales, 2026-09-17: "yo sabía que no estaba
+/// sincronizada").
+sealed class FilaGafeteProvisionalActiva {
+    data class Local(val prestamo: PrestamoGafeteProvisionalActivoResumen) : FilaGafeteProvisionalActiva()
+    data class Remota(val remoto: PrestamoGafeteProvisionalRemoto) : FilaGafeteProvisionalActiva()
+}
 
 /// Dueño del estado real de [PantallaGafetesProvisionales] y de las
 /// llamadas a [Nucleo] -- mismo criterio que [RutasViewModel]: el
@@ -30,7 +44,7 @@ class GafetesProvisionalesViewModel(
     private val secretoStore: SecretoDispositivoStore,
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
-    var activos by mutableStateOf<List<PrestamoGafeteProvisionalActivoResumen>>(emptyList())
+    var activos by mutableStateOf<List<FilaGafeteProvisionalActiva>>(emptyList())
         private set
     var cargando by mutableStateOf(false)
         private set
@@ -62,7 +76,12 @@ class GafetesProvisionalesViewModel(
         viewModelScope.launch {
             cargando = true
             try {
-                activos = withContext(dispatcherIO) { nucleo.listarGafetesProvisionalesActivos() }
+                val (locales, remotos) = withContext(dispatcherIO) {
+                    nucleo.listarGafetesProvisionalesActivos() to
+                        nucleo.listarPrestamosGafeteProvisionalRemotos()
+                }
+                activos = locales.map { FilaGafeteProvisionalActiva.Local(it) } +
+                    remotos.map { FilaGafeteProvisionalActiva.Remota(it) }
                 error = null
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
@@ -138,13 +157,31 @@ class GafetesProvisionalesViewModel(
         }
     }
 
-    fun registrarDevolucion(prestamo: PrestamoGafeteProvisionalActivoResumen) {
+    /// Local: cierra en `prestamos_gafete_provisional` (este dispositivo).
+    /// Remota: cierra directo contra la nube (mismo criterio que
+    /// `ProveedoresViewModel.registrarSalida`) -- nunca toca el préstamo
+    /// local, ese registro no es -- ni fue -- de este dispositivo.
+    fun registrarDevolucion(fila: FilaGafeteProvisionalActiva) {
         viewModelScope.launch {
             try {
-                withContext(dispatcherIO) { nucleo.registrarDevolucionGafeteProvisional(prestamo.id) }
+                withContext(dispatcherIO) {
+                    when (fila) {
+                        is FilaGafeteProvisionalActiva.Local ->
+                            nucleo.registrarDevolucionGafeteProvisional(fila.prestamo.id)
+                        is FilaGafeteProvisionalActiva.Remota -> {
+                            val secreto = secretoStore.cargar()
+                                ?: throw SecretoDispositivoNoEncontradoException()
+                            nucleo.cerrarPrestamoGafeteProvisionalRemotoConSecreto(secreto, fila.remoto.uuid)
+                        }
+                    }
+                }
                 CambiosNube.solicitar()
                 refrescarActivos()
             } catch (excepcion: NucleoException) {
+                error = excepcion.message
+            } catch (excepcion: SecretoDispositivoStoreException) {
+                error = excepcion.message
+            } catch (excepcion: SecretoDispositivoNoEncontradoException) {
                 error = excepcion.message
             }
         }

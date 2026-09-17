@@ -18,7 +18,7 @@ use std::path::Path;
 
 use crate::database::error::DatabaseError;
 use crate::domain::autorizacion::Operacion;
-use crate::nube::{IngresoProveedorRemoto, IngresoRemoto};
+use crate::nube::{IngresoProveedorRemoto, IngresoRemoto, PrestamoGafeteProvisionalRemoto};
 use crate::services::autenticacion_service::UsuarioSesion;
 
 use super::{AppCore, verificar_actor_activo};
@@ -589,6 +589,67 @@ impl AppCore {
             sitio_id: &token.sitio_id,
         };
         crate::nube::cerrar_ingreso_proveedor_remoto(
+            &self.connection,
+            &contexto,
+            uuid,
+            &actor.nombre,
+        )?;
+        Ok(())
+    }
+
+    /// Espejo de [`Self::listar_ingresos_proveedor_remotos`], pero contra
+    /// la caché `prestamos_gafete_provisional_remotos`.
+    pub fn listar_prestamos_gafete_provisional_remotos(
+        &self,
+        actor: &UsuarioSesion,
+    ) -> Result<Vec<PrestamoGafeteProvisionalRemoto>, GestionNubeError> {
+        self.autorizar_uso_nube(actor)?;
+        let mut statement = self.connection.prepare(
+            "SELECT uuid, encargado_nombre, encargado_codigo_empleado, gafete_numero,
+                    hora_entrega, usuario_entrega_nombre
+             FROM prestamos_gafete_provisional_remotos ORDER BY hora_entrega",
+        )?;
+        let filas = statement
+            .query_map([], |row| {
+                Ok(PrestamoGafeteProvisionalRemoto {
+                    uuid: row.get(0)?,
+                    encargado_nombre: row.get(1)?,
+                    encargado_codigo_empleado: row.get(2)?,
+                    gafete_numero: row.get(3)?,
+                    hora_entrega: row.get(4)?,
+                    usuario_entrega_nombre: row.get(5)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(filas)
+    }
+
+    /// Espejo de [`Self::cerrar_ingreso_proveedor_remoto`], pero contra
+    /// `prestamos_gafete_provisional`.
+    pub fn cerrar_prestamo_gafete_provisional_remoto(
+        &self,
+        actor: &UsuarioSesion,
+        directorio: Option<&Path>,
+        uuid: &str,
+    ) -> Result<(), GestionNubeError> {
+        self.autorizar_uso_nube(actor)?;
+
+        let secreto = directorio
+            .map_or_else(
+                crate::nube::credenciales::cargar_secreto,
+                crate::nube::credenciales::cargar_secreto_en,
+            )
+            .ok_or(GestionNubeError::SinSecreto)?;
+        let token = self.autenticar_con_cache(&secreto)?;
+
+        let contexto = crate::nube::ContextoSincronizacion {
+            base_url: crate::nube::BASE_URL,
+            apikey: crate::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        crate::nube::cerrar_prestamo_gafete_provisional_remoto(
             &self.connection,
             &contexto,
             uuid,
