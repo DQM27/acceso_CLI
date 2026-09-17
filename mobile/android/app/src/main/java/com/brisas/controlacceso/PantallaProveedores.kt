@@ -328,7 +328,15 @@ private fun FormularioNuevoIngresoProveedor(
         BotonBrisas(
             onClick = {
                 val numero = gafeteTexto.toLongOrNull() ?: return@BotonBrisas
-                viewModel.registrarIngreso(numero) { onCambiarGafeteTexto("") }
+                // Antes sólo limpiaba el gafete y dejaba el formulario abierto,
+                // como si se fuera a registrar otro ingreso -- pedido explícito
+                // del usuario en pruebas reales, 2026-09-17: cerrar y volver a
+                // la lista de activos, igual que se espera del alta de
+                // contratista.
+                viewModel.registrarIngreso(numero) {
+                    onCambiarGafeteTexto("")
+                    onVolver()
+                }
             },
             enabled = puedeRegistrar,
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
