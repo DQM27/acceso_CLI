@@ -24,15 +24,19 @@ impl From<EstadoGafeteEntrada> for EstadoGafete {
     }
 }
 
-/// Espejo de `TipoGafete` -- mismo criterio que `EstadoGafeteEntrada`. Sin
-/// `Proveedor` todavía en el filtro de entrada: el CHECK de la base ya lo
-/// acepta a futuro, pero no hay comando de alta para esa categoría hasta
-/// que exista la entidad `proveedor`.
+/// Espejo de `TipoGafete` -- mismo criterio que `EstadoGafeteEntrada`. El
+/// catálogo (crear/listar/filtrar) es genérico sobre `TipoGafete`
+/// (`AppCore::crear_gafete`/`crear_gafetes_rango`), así que agregar un
+/// valor acá sólo abre la puerta en este DTO de entrada -- ya lo hizo
+/// `ProvisionalKof`, y ahora `Proveedor` (docs/features-futuras/plan-control-proveedores.md)
+/// desde que existe la entidad `registro_ingresos_proveedor`.
 #[derive(serde::Deserialize, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum TipoGafeteEntrada {
     Contratista,
     Visita,
+    ProvisionalKof,
+    Proveedor,
 }
 
 impl From<TipoGafeteEntrada> for TipoGafete {
@@ -40,6 +44,8 @@ impl From<TipoGafeteEntrada> for TipoGafete {
         match tipo {
             TipoGafeteEntrada::Contratista => Self::Contratista,
             TipoGafeteEntrada::Visita => Self::Visita,
+            TipoGafeteEntrada::ProvisionalKof => Self::ProvisionalKof,
+            TipoGafeteEntrada::Proveedor => Self::Proveedor,
         }
     }
 }
@@ -105,5 +111,30 @@ mod tests {
         }
         .construir();
         assert_eq!(filtro.tipo, Some(Igualdad::Incluye(TipoGafete::Visita)));
+    }
+
+    #[test]
+    fn tipo_provisional_kof_se_mapea_a_igualdad_incluye() {
+        let filtro = FiltroGafetesEntrada {
+            numero: None,
+            tipo: Some(TipoGafeteEntrada::ProvisionalKof),
+            estado: None,
+        }
+        .construir();
+        assert_eq!(
+            filtro.tipo,
+            Some(Igualdad::Incluye(TipoGafete::ProvisionalKof))
+        );
+    }
+
+    #[test]
+    fn tipo_proveedor_se_mapea_a_igualdad_incluye() {
+        let filtro = FiltroGafetesEntrada {
+            numero: None,
+            tipo: Some(TipoGafeteEntrada::Proveedor),
+            estado: None,
+        }
+        .construir();
+        assert_eq!(filtro.tipo, Some(Igualdad::Incluye(TipoGafete::Proveedor)));
     }
 }

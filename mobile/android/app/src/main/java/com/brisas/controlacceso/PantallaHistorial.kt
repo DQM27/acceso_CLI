@@ -2,16 +2,20 @@ package com.brisas.controlacceso
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
@@ -34,16 +38,15 @@ fun PantallaHistorial(nucleo: Nucleo, refrescarNube: Int = 0) {
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        OutlinedTextField(
+        TextField(
             value = viewModel.texto,
             onValueChange = { viewModel.cambiarTexto(it) },
-            label = { Text("Cédula o nombre") },
+            label = null,
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                focusedLabelColor = MaterialTheme.colorScheme.primary,
-            ),
-            modifier = Modifier.fillMaxWidth(),
+            shape = FormaCampoBrisas,
+            colors = ColoresCampoBrisas(),
+            modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
         )
         if (viewModel.cargando) {
             Text(
@@ -63,10 +66,12 @@ fun PantallaHistorial(nucleo: Nucleo, refrescarNube: Int = 0) {
             )
         }
 
-        LazyColumn(modifier = Modifier.padding(top = 12.dp)) {
-            items(viewModel.movimientos, key = { it.clave }) { movimiento ->
-                FilaMovimiento(movimiento)
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+        ListaConDesvanecido {
+            LazyColumn(contentPadding = PaddingValues(top = 12.dp)) {
+                items(viewModel.movimientos, key = { it.clave }) { movimiento ->
+                    FilaMovimiento(movimiento)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                }
             }
         }
     }

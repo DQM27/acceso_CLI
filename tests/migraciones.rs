@@ -199,6 +199,11 @@ fn base_vacia_llega_a_version_actual_y_es_idempotente() {
 }
 
 #[test]
+// Rebobina el esquema a v9 a mano, SQL por SQL -- crece por diseño con cada
+// migración nueva que haya que deshacer (mismo criterio que
+// `#[allow(clippy::too_many_lines)]` en `tests/contratista_queries.rs` y en
+// `migracion_11_...` más abajo).
+#[allow(clippy::too_many_lines)]
 fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
     // MIGRACION_13 (más reciente que ésta) termina descartando
     // `auditoria_contratistas` por completo (reemplazada por
@@ -238,11 +243,31 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
              -- arriba ya las creó, hay que soltarlas antes de simular v9.
              DROP TABLE gafetes_incidentes;
              DROP TABLE gafetes;
+             -- MIGRACION_39/41/42/43/45 (que corren al final al rebobinar)
+             -- crean el módulo de gafetes provisionales KOF y el de
+             -- proveedores desde cero -- mismo motivo que gafetes/
+             -- gafetes_incidentes arriba. Orden de FK: el hijo primero
+             -- (`registro_ingresos_proveedor` referencia `empresas_proveedor`).
+             DROP TABLE prestamos_gafete_provisional;
+             DROP TABLE prestamos_gafete_provisional_remotos;
+             DROP TABLE registro_ingresos_proveedor;
+             DROP TABLE empresas_proveedor;
+             DROP TABLE ingresos_proveedor_remotos;
+             DROP TABLE historial_ingresos_proveedor_sitio;
              -- Mismo motivo con MIGRACION_17/18, que crean `cola_salida` e
              -- `ingresos_remotos` desde cero -- ya existen por el
              -- `initialize_database` de arriba.
              DROP TABLE cola_salida;
              DROP TABLE ingresos_remotos;
+             -- MIGRACION_36 (que corre al final al rebobinar) crea
+             -- `salidas_ruta`/`vehiculos_ruta`/`encargados_ruta` desde cero,
+             -- y MIGRACION_38 suma `rutas` -- mismo motivo que
+             -- cola_salida/ingresos_remotos/gafetes arriba. Orden de FK: el
+             -- hijo primero.
+             DROP TABLE salidas_ruta;
+             DROP TABLE rutas;
+             DROP TABLE vehiculos_ruta;
+             DROP TABLE encargados_ruta;
              -- MIGRACION_16/19 (que corren después de ésta al rebobinar) le
              -- agregan `uuid` a contratistas/registro_ingresos/empresas -- el
              -- `initialize_database` de arriba ya las dejó con esas columnas,
@@ -348,9 +373,26 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
              DROP TABLE gafetes_incidentes;
              DROP TABLE gafetes;
              -- Mismo motivo que en `migracion_10_...`: soltar lo que
+             -- MIGRACION_39/41/42/43/45 ya crearon antes de simular v10.
+             -- Orden de FK: el hijo primero (`registro_ingresos_proveedor`
+             -- referencia `empresas_proveedor`).
+             DROP TABLE prestamos_gafete_provisional;
+             DROP TABLE prestamos_gafete_provisional_remotos;
+             DROP TABLE registro_ingresos_proveedor;
+             DROP TABLE empresas_proveedor;
+             DROP TABLE ingresos_proveedor_remotos;
+             DROP TABLE historial_ingresos_proveedor_sitio;
+             -- Mismo motivo que en `migracion_10_...`: soltar lo que
              -- MIGRACION_17/18 ya crearon antes de simular v10.
              DROP TABLE cola_salida;
              DROP TABLE ingresos_remotos;
+             -- Mismo motivo que en `migracion_10_...`: soltar lo que
+             -- MIGRACION_36 ya creó antes de simular v10. Orden de FK: el
+             -- hijo primero.
+             DROP TABLE salidas_ruta;
+             DROP TABLE rutas;
+             DROP TABLE vehiculos_ruta;
+             DROP TABLE encargados_ruta;
              -- Mismo motivo que en `migracion_10_...`: soltar `uuid` de
              -- contratistas/registro_ingresos/empresas antes de simular v10.
              DROP INDEX idx_empresas_uuid;
@@ -422,6 +464,9 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
 }
 
 #[test]
+// Rebobina el esquema a v11 a mano, SQL por SQL -- mismo motivo que
+// `migracion_10_...`/`migracion_11_...` arriba.
+#[allow(clippy::too_many_lines)]
 fn migracion_12_habilita_cambio_de_cedula() {
     // Igual comentario que en `migracion_10_...`: MIGRACION_13 termina
     // reemplazando `auditoria_contratistas` por `auditoria_cambios`, así que
@@ -461,9 +506,26 @@ fn migracion_12_habilita_cambio_de_cedula() {
              DROP TABLE gafetes_incidentes;
              DROP TABLE gafetes;
              -- Mismo motivo que en `migracion_10_...`: soltar lo que
+             -- MIGRACION_39/41/42/43/45 ya crearon antes de simular v11.
+             -- Orden de FK: el hijo primero (`registro_ingresos_proveedor`
+             -- referencia `empresas_proveedor`).
+             DROP TABLE prestamos_gafete_provisional;
+             DROP TABLE prestamos_gafete_provisional_remotos;
+             DROP TABLE registro_ingresos_proveedor;
+             DROP TABLE empresas_proveedor;
+             DROP TABLE ingresos_proveedor_remotos;
+             DROP TABLE historial_ingresos_proveedor_sitio;
+             -- Mismo motivo que en `migracion_10_...`: soltar lo que
              -- MIGRACION_17/18 ya crearon antes de simular v11.
              DROP TABLE cola_salida;
              DROP TABLE ingresos_remotos;
+             -- Mismo motivo que en `migracion_10_...`: soltar lo que
+             -- MIGRACION_36 ya creó antes de simular v11. Orden de FK: el
+             -- hijo primero.
+             DROP TABLE salidas_ruta;
+             DROP TABLE rutas;
+             DROP TABLE vehiculos_ruta;
+             DROP TABLE encargados_ruta;
              -- Mismo motivo que en `migracion_10_...`: soltar `uuid` de
              -- contratistas/registro_ingresos/empresas antes de simular v11.
              DROP INDEX idx_empresas_uuid;
@@ -743,6 +805,84 @@ fn migracion_15_deja_tablas_strict_sin_romper_claves_foraneas() {
     }
 }
 
+/// DDL de `gafetes`/`gafetes_incidentes` (forma anterior a `MIGRACION_35`) +
+/// `cola_salida`/`sincronizacion_estado` (formas acumuladas hasta v34) --
+/// separado de `base_version_34_con_gafete_perdido` sólo para mantenerla
+/// bajo el tope de líneas de Clippy (`too_many_lines`); sin cambio de
+/// contenido.
+const DDL_GAFETES_Y_COLAS_V34: &str = "
+CREATE TABLE gafetes (
+    id INTEGER PRIMARY KEY,
+    numero INTEGER NOT NULL UNIQUE,
+    estado TEXT NOT NULL CHECK (estado IN ('DISPONIBLE', 'PERDIDO', 'DE_BAJA')),
+    contratista_deudor_id INTEGER REFERENCES contratistas(id) ON DELETE RESTRICT,
+    uuid TEXT,
+    CHECK (
+        (estado = 'PERDIDO' AND contratista_deudor_id IS NOT NULL)
+        OR (estado <> 'PERDIDO' AND contratista_deudor_id IS NULL)
+    )
+) STRICT;
+CREATE UNIQUE INDEX idx_gafetes_uuid ON gafetes(uuid);
+
+CREATE TABLE gafetes_incidentes (
+    id INTEGER PRIMARY KEY,
+    gafete_id INTEGER NOT NULL REFERENCES gafetes(id) ON DELETE RESTRICT,
+    tipo TEXT NOT NULL CHECK (tipo IN ('PERDIDO', 'RESUELTO')),
+    fecha_hora TEXT NOT NULL,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+    contratista_id INTEGER REFERENCES contratistas(id) ON DELETE RESTRICT,
+    motivo_resolucion TEXT CHECK (
+        motivo_resolucion IS NULL OR motivo_resolucion IN ('PAGADO', 'APARECIDO')
+    ),
+    CHECK (
+        (tipo = 'PERDIDO' AND contratista_id IS NOT NULL AND motivo_resolucion IS NULL)
+        OR (tipo = 'RESUELTO' AND contratista_id IS NULL AND motivo_resolucion IS NOT NULL)
+    )
+) STRICT;
+
+-- MIGRACION_36 (que corre al final, después de MIGRACION_35, al migrar
+-- desde v34) recrea `cola_salida` (le suma 3 entidades nuevas al CHECK) --
+-- esta base minimalista nunca la creó, a diferencia de una base real que
+-- ya la tendría desde MIGRACION_17/18. Forma exacta de MIGRACION_30 (la
+-- última que la tocó antes de v34).
+CREATE TABLE cola_salida (
+    id INTEGER PRIMARY KEY,
+    entidad TEXT NOT NULL CHECK (
+        entidad IN ('contratista', 'ingreso', 'empresa', 'gafete', 'usuario', 'movimiento_visita')
+    ),
+    entidad_uuid TEXT NOT NULL,
+    operacion TEXT NOT NULL CHECK (operacion IN ('crear', 'actualizar', 'cerrar')),
+    estado TEXT NOT NULL DEFAULT 'pendiente'
+        CHECK (estado IN ('pendiente', 'enviado', 'fallido')),
+    intentos INTEGER NOT NULL DEFAULT 0 CHECK (intentos >= 0),
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    ultimo_error TEXT,
+    proximo_intento_en TEXT GENERATED ALWAYS AS (
+        datetime(actualizado_en, '+' || MIN(intentos * 15, 1440) || ' minutes')
+    ) STORED
+) STRICT;
+CREATE INDEX idx_cola_salida_pendientes
+ON cola_salida(proximo_intento_en)
+WHERE estado = 'pendiente';
+
+-- MIGRACION_37 (después de MIGRACION_36, al migrar desde v34) agrega una
+-- columna a `sincronizacion_estado` -- esta base minimalista tampoco la
+-- tenía, mismo motivo que `cola_salida` arriba. Forma exacta acumulada
+-- hasta MIGRACION_33 (la última que la tocó antes de v34).
+CREATE TABLE sincronizacion_estado (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    catalogo_actualizado_hasta TEXT,
+    historial_actualizado_hasta TEXT,
+    gafetes_actualizado_hasta TEXT,
+    citas_actualizado_hasta TEXT,
+    historial_visitas_actualizado_hasta TEXT
+) STRICT;
+INSERT INTO sincronizacion_estado (id, catalogo_actualizado_hasta) VALUES (1, NULL);
+
+PRAGMA user_version = 34;
+";
+
 /// Regresión de `MIGRACION_35` (`gafetes` gana `tipo` + portador de visita,
 /// la unicidad pasa de `numero` a `(numero, tipo)`): una base congelada en
 /// versión 34 con un gafete `PERDIDO` real (contratista deudor incluido)
@@ -779,42 +919,7 @@ fn base_version_34_con_gafete_perdido() -> Connection {
     connection
         .execute_batch(&ddl_de("cita_visitantes"))
         .unwrap();
-    connection
-        .execute_batch(
-            "
-            CREATE TABLE gafetes (
-                id INTEGER PRIMARY KEY,
-                numero INTEGER NOT NULL UNIQUE,
-                estado TEXT NOT NULL CHECK (estado IN ('DISPONIBLE', 'PERDIDO', 'DE_BAJA')),
-                contratista_deudor_id INTEGER REFERENCES contratistas(id) ON DELETE RESTRICT,
-                uuid TEXT,
-                CHECK (
-                    (estado = 'PERDIDO' AND contratista_deudor_id IS NOT NULL)
-                    OR (estado <> 'PERDIDO' AND contratista_deudor_id IS NULL)
-                )
-            ) STRICT;
-            CREATE UNIQUE INDEX idx_gafetes_uuid ON gafetes(uuid);
-
-            CREATE TABLE gafetes_incidentes (
-                id INTEGER PRIMARY KEY,
-                gafete_id INTEGER NOT NULL REFERENCES gafetes(id) ON DELETE RESTRICT,
-                tipo TEXT NOT NULL CHECK (tipo IN ('PERDIDO', 'RESUELTO')),
-                fecha_hora TEXT NOT NULL,
-                usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
-                contratista_id INTEGER REFERENCES contratistas(id) ON DELETE RESTRICT,
-                motivo_resolucion TEXT CHECK (
-                    motivo_resolucion IS NULL OR motivo_resolucion IN ('PAGADO', 'APARECIDO')
-                ),
-                CHECK (
-                    (tipo = 'PERDIDO' AND contratista_id IS NOT NULL AND motivo_resolucion IS NULL)
-                    OR (tipo = 'RESUELTO' AND contratista_id IS NULL AND motivo_resolucion IS NOT NULL)
-                )
-            ) STRICT;
-
-            PRAGMA user_version = 34;
-            ",
-        )
-        .unwrap();
+    connection.execute_batch(DDL_GAFETES_Y_COLAS_V34).unwrap();
     insertar_referencias(&connection);
     connection
         .execute(

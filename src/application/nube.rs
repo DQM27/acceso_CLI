@@ -18,7 +18,7 @@ use std::path::Path;
 
 use crate::database::error::DatabaseError;
 use crate::domain::autorizacion::Operacion;
-use crate::nube::IngresoRemoto;
+use crate::nube::{IngresoProveedorRemoto, IngresoRemoto, PrestamoGafeteProvisionalRemoto};
 use crate::services::autenticacion_service::UsuarioSesion;
 
 use super::{AppCore, verificar_actor_activo};
@@ -131,6 +131,10 @@ pub struct ResumenSincronizacion {
     pub empresas_recibidas: u32,
     pub contratistas_recibidos: u32,
     pub gafetes_recibidos: u32,
+    /// Vehículos/encargados KOF del catálogo de rutas recibidos -- ver
+    /// `nube::recibir_catalogo_rutas_del_sitio`.
+    pub vehiculos_ruta_recibidos: u32,
+    pub encargados_ruta_recibidos: u32,
     pub movimientos_historial_recibidos: u32,
     /// Citas nuevas/actualizadas recibidas para el punto de acceso (con sus
     /// visitantes) -- ver `nube::recibir_citas_del_sitio`.
@@ -295,6 +299,7 @@ impl AppCore {
             sitio_id: &token.sitio_id,
         };
         crate::nube::recibir_catalogo_del_sitio(&self.connection, &contexto)?;
+        crate::nube::recibir_catalogo_rutas_del_sitio(&self.connection, &contexto)?;
         Ok(())
     }
 
@@ -328,7 +333,11 @@ impl AppCore {
         let cierres_recibidos =
             crate::nube::recibir_cierres_de_ingresos_propios(&self.connection, &contexto)?;
         let remotos = crate::nube::recibir_ingresos_abiertos(&self.connection, &contexto)?;
+        let _remotos_proveedor =
+            crate::nube::recibir_ingresos_proveedor_abiertos(&self.connection, &contexto)?;
         let catalogo = crate::nube::recibir_catalogo_del_sitio(&self.connection, &contexto)?;
+        let catalogo_rutas =
+            crate::nube::recibir_catalogo_rutas_del_sitio(&self.connection, &contexto)?;
         let movimientos_historial_recibidos =
             crate::nube::recibir_historial_del_sitio(&self.connection, &contexto)?;
         let citas_recibidas = crate::nube::recibir_citas_del_sitio(&self.connection, &contexto)?;
@@ -343,6 +352,8 @@ impl AppCore {
             empresas_recibidas: catalogo.empresas_recibidas,
             contratistas_recibidos: catalogo.contratistas_recibidos,
             gafetes_recibidos: catalogo.gafetes_recibidos,
+            vehiculos_ruta_recibidos: catalogo_rutas.vehiculos_recibidos,
+            encargados_ruta_recibidos: catalogo_rutas.encargados_recibidos,
             movimientos_historial_recibidos,
             citas_recibidas,
             historial_visitas_recibidos,
@@ -408,6 +419,8 @@ impl AppCore {
             sitio_id: &token.sitio_id,
         };
         let catalogo = crate::nube::recibir_catalogo_del_sitio(&self.connection, &contexto)?;
+        let catalogo_rutas =
+            crate::nube::recibir_catalogo_rutas_del_sitio(&self.connection, &contexto)?;
 
         Ok(ResumenSincronizacion {
             enviados: 0,
@@ -417,6 +430,8 @@ impl AppCore {
             empresas_recibidas: catalogo.empresas_recibidas,
             contratistas_recibidos: catalogo.contratistas_recibidos,
             gafetes_recibidos: catalogo.gafetes_recibidos,
+            vehiculos_ruta_recibidos: catalogo_rutas.vehiculos_recibidos,
+            encargados_ruta_recibidos: catalogo_rutas.encargados_recibidos,
             movimientos_historial_recibidos: 0,
             citas_recibidas: 0,
             historial_visitas_recibidos: 0,
@@ -519,6 +534,130 @@ impl AppCore {
         Ok(filas)
     }
 
+    /// Espejo de [`Self::listar_ingresos_remotos`], pero contra la caché
+    /// `ingresos_proveedor_remotos`.
+    pub fn listar_ingresos_proveedor_remotos(
+        &self,
+        actor: &UsuarioSesion,
+    ) -> Result<Vec<IngresoProveedorRemoto>, GestionNubeError> {
+        self.autorizar_uso_nube(actor)?;
+        let mut statement = self.connection.prepare(
+            "SELECT uuid, cedula, nombre, empresa_nombre, placa, gafete_numero,
+                    hora_entrada, usuario_entrada_nombre
+             FROM ingresos_proveedor_remotos ORDER BY hora_entrada",
+        )?;
+        let filas = statement
+            .query_map([], |row| {
+                Ok(IngresoProveedorRemoto {
+                    uuid: row.get(0)?,
+                    cedula: row.get(1)?,
+                    nombre: row.get(2)?,
+                    empresa_nombre: row.get(3)?,
+                    placa: row.get(4)?,
+                    gafete_numero: row.get(5)?,
+                    hora_entrada: row.get(6)?,
+                    usuario_entrada_nombre: row.get(7)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(filas)
+    }
+
+    /// Espejo de [`Self::cerrar_ingreso_remoto`], pero contra
+    /// `ingresos_proveedor`.
+    pub fn cerrar_ingreso_proveedor_remoto(
+        &self,
+        actor: &UsuarioSesion,
+        directorio: Option<&Path>,
+        uuid: &str,
+    ) -> Result<(), GestionNubeError> {
+        self.autorizar_uso_nube(actor)?;
+
+        let secreto = directorio
+            .map_or_else(
+                crate::nube::credenciales::cargar_secreto,
+                crate::nube::credenciales::cargar_secreto_en,
+            )
+            .ok_or(GestionNubeError::SinSecreto)?;
+        let token = self.autenticar_con_cache(&secreto)?;
+
+        let contexto = crate::nube::ContextoSincronizacion {
+            base_url: crate::nube::BASE_URL,
+            apikey: crate::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        crate::nube::cerrar_ingreso_proveedor_remoto(
+            &self.connection,
+            &contexto,
+            uuid,
+            &actor.nombre,
+        )?;
+        Ok(())
+    }
+
+    /// Espejo de [`Self::listar_ingresos_proveedor_remotos`], pero contra
+    /// la caché `prestamos_gafete_provisional_remotos`.
+    pub fn listar_prestamos_gafete_provisional_remotos(
+        &self,
+        actor: &UsuarioSesion,
+    ) -> Result<Vec<PrestamoGafeteProvisionalRemoto>, GestionNubeError> {
+        self.autorizar_uso_nube(actor)?;
+        let mut statement = self.connection.prepare(
+            "SELECT uuid, encargado_nombre, encargado_codigo_empleado, gafete_numero,
+                    hora_entrega, usuario_entrega_nombre
+             FROM prestamos_gafete_provisional_remotos ORDER BY hora_entrega",
+        )?;
+        let filas = statement
+            .query_map([], |row| {
+                Ok(PrestamoGafeteProvisionalRemoto {
+                    uuid: row.get(0)?,
+                    encargado_nombre: row.get(1)?,
+                    encargado_codigo_empleado: row.get(2)?,
+                    gafete_numero: row.get(3)?,
+                    hora_entrega: row.get(4)?,
+                    usuario_entrega_nombre: row.get(5)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(filas)
+    }
+
+    /// Espejo de [`Self::cerrar_ingreso_proveedor_remoto`], pero contra
+    /// `prestamos_gafete_provisional`.
+    pub fn cerrar_prestamo_gafete_provisional_remoto(
+        &self,
+        actor: &UsuarioSesion,
+        directorio: Option<&Path>,
+        uuid: &str,
+    ) -> Result<(), GestionNubeError> {
+        self.autorizar_uso_nube(actor)?;
+
+        let secreto = directorio
+            .map_or_else(
+                crate::nube::credenciales::cargar_secreto,
+                crate::nube::credenciales::cargar_secreto_en,
+            )
+            .ok_or(GestionNubeError::SinSecreto)?;
+        let token = self.autenticar_con_cache(&secreto)?;
+
+        let contexto = crate::nube::ContextoSincronizacion {
+            base_url: crate::nube::BASE_URL,
+            apikey: crate::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        crate::nube::cerrar_prestamo_gafete_provisional_remoto(
+            &self.connection,
+            &contexto,
+            uuid,
+            &actor.nombre,
+        )?;
+        Ok(())
+    }
+
     /// Chequeo en vivo (no la caché local) de si `gafete_numero` ya está
     /// activo en este sitio del lado de OTRO dispositivo -- ver
     /// `nube::gafete_ocupado_en_otro_dispositivo`. Pensada para llamarse
@@ -557,6 +696,68 @@ impl AppCore {
             &contexto,
             gafete_numero,
         )?)
+    }
+
+    /// Mismo criterio y misma forma que `gafete_ocupado_en_sitio`, pero
+    /// para gafetes provisionales KOF -- ver
+    /// `nube::gafete_provisional_ocupado_en_otro_dispositivo`. Pensada para
+    /// llamarse justo antes de confirmar la entrega de un gafete
+    /// provisional.
+    pub fn gafete_provisional_ocupado_en_sitio(
+        &self,
+        actor: &UsuarioSesion,
+        directorio: Option<&Path>,
+        gafete_numero: i64,
+    ) -> Result<bool, GestionNubeError> {
+        self.autorizar_uso_nube(actor)?;
+        let secreto = directorio.map_or_else(
+            crate::nube::credenciales::cargar_secreto,
+            crate::nube::credenciales::cargar_secreto_en,
+        );
+        let Some(secreto) = secreto else {
+            return Ok(false);
+        };
+        let token = self.autenticar_con_cache(&secreto)?;
+        let contexto = crate::nube::ContextoSincronizacion {
+            base_url: crate::nube::BASE_URL,
+            apikey: crate::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        Ok(crate::nube::gafete_provisional_ocupado_en_otro_dispositivo(
+            &contexto,
+            gafete_numero,
+        )?)
+    }
+
+    /// Mismo criterio y misma forma que `gafete_ocupado_en_sitio`, pero
+    /// para gafetes de proveedor -- ver
+    /// `nube::gafete_de_proveedor_ocupado_en_otro_dispositivo`. Pensada
+    /// para llamarse justo antes de confirmar un ingreso de proveedor.
+    pub fn gafete_de_proveedor_ocupado_en_sitio(
+        &self,
+        actor: &UsuarioSesion,
+        directorio: Option<&Path>,
+        gafete_numero: i64,
+    ) -> Result<bool, GestionNubeError> {
+        self.autorizar_uso_nube(actor)?;
+        let secreto = directorio.map_or_else(
+            crate::nube::credenciales::cargar_secreto,
+            crate::nube::credenciales::cargar_secreto_en,
+        );
+        let Some(secreto) = secreto else {
+            return Ok(false);
+        };
+        let token = self.autenticar_con_cache(&secreto)?;
+        let contexto = crate::nube::ContextoSincronizacion {
+            base_url: crate::nube::BASE_URL,
+            apikey: crate::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        Ok(crate::nube::gafete_de_proveedor_ocupado_en_otro_dispositivo(&contexto, gafete_numero)?)
     }
 
     /// Cierra, contra la nube, un ingreso abierto por el otro dispositivo

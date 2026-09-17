@@ -349,7 +349,6 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
                             )
                         }
                         CambiosNube.solicitar()
-                        mensaje = "Contratista registrado: $nombre"
                         cedula = ""
                         nombre = ""
                         empresaSeleccionada = null
@@ -357,6 +356,11 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
                         fechaPraind = ""
                         personalRuta = false
                         tieneAcceso = true
+                        // Antes se quedaba en el formulario como si se fuera a
+                        // dar de alta otro contratista -- pedido explícito del
+                        // usuario en pruebas reales, 2026-09-17: cerrar y
+                        // volver a la lista de activos al terminar.
+                        onVolver()
                     } catch (excepcion: NucleoException) {
                         error = excepcion.message
                     } finally {

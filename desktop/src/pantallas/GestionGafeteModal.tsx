@@ -48,6 +48,18 @@ export default function GestionGafeteModal({
   const [enviando, setEnviando] = useState(false);
 
   const esVisita = gafete.tipo === "Visita";
+  // Un gafete provisional KOF no se marca perdido/resuelto con este flujo
+  // -- su ciclo es entrega/devolución (`prestamos_gafete_provisional`), no
+  // "asignar un portador que debe responder por él". Mostrar el botón acá
+  // lo haría caer por accidente en la búsqueda de contratista (rama
+  // `!esVisita`), que no tiene sentido para este tipo -- se oculta hasta
+  // que exista un flujo de entrega/devolución propio en desktop.
+  const esProvisionalKof = gafete.tipo === "ProvisionalKof";
+  // Mismo criterio que ProvisionalKof: el ciclo de un gafete de proveedor
+  // es ingreso/salida (`registro_ingresos_proveedor`), no un portador que
+  // se le asigna para marcarlo perdido -- se oculta hasta que exista un
+  // flujo de ingreso/salida propio en desktop.
+  const esProveedor = gafete.tipo === "Proveedor";
   const listaVisible = !esVisita && buscandoPortador && filtro.trim().length > 0;
   const { campoRef, posicion: posicionLista } = useListaFlotante(listaVisible);
   const { resaltado, setResaltado, manejarTecla } = useNavegacionFlechas(
@@ -156,14 +168,16 @@ export default function GestionGafeteModal({
             >
               Dar de baja
             </button>
-            <button
-              type="button"
-              className="boton"
-              disabled={enviando}
-              onClick={() => setBuscandoPortador(true)}
-            >
-              Marcar perdido…
-            </button>
+            {!esProvisionalKof && !esProveedor && (
+              <button
+                type="button"
+                className="boton"
+                disabled={enviando}
+                onClick={() => setBuscandoPortador(true)}
+              >
+                Marcar perdido…
+              </button>
+            )}
           </div>
         )}
 

@@ -6,8 +6,10 @@ use crate::domain::cita::MotivoDenegacionVisita;
 use crate::domain::resultado_acceso::MotivoDenegacion;
 use crate::models::gafete::EstadoGafete;
 use crate::services::error::{
-    AutenticacionError, CitaServiceError, ContratistaServiceError, EmpresaServiceError,
-    GafeteServiceError, RegistroIngresoServiceError, UsuarioServiceError,
+    AutenticacionError, CitaServiceError, ContratistaServiceError, EmpresaProveedorServiceError,
+    EmpresaServiceError, EncargadoRutaServiceError, GafeteProvisionalServiceError,
+    GafeteServiceError, IngresoProveedorServiceError, RegistroIngresoServiceError,
+    RutaCatalogoServiceError, RutaServiceError, UsuarioServiceError, VehiculoRutaServiceError,
 };
 
 /// `HashInvalido` va junto con `Database` a propósito: ambos son fallos de
@@ -178,6 +180,135 @@ pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
     }
 }
 
+pub fn mensaje_vehiculo_ruta(error: VehiculoRutaServiceError) -> String {
+    match error {
+        VehiculoRutaServiceError::OperacionNoAutorizada => {
+            "Su sesión no está autorizada para esta operación".into()
+        }
+        VehiculoRutaServiceError::Database(_) => "No se pudo guardar el vehículo".into(),
+    }
+}
+
+pub fn mensaje_encargado_ruta(error: EncargadoRutaServiceError) -> String {
+    match error {
+        EncargadoRutaServiceError::OperacionNoAutorizada => {
+            "Su sesión no está autorizada para esta operación".into()
+        }
+        EncargadoRutaServiceError::Database(_) => "No se pudo guardar el encargado".into(),
+    }
+}
+
+pub fn mensaje_ruta(error: RutaServiceError) -> String {
+    use RutaServiceError::{
+        DocumentoRequiereAutorizacion, DocumentoYaRegistrado, EncargadoVacio, NumeroDocumentoVacio,
+        OperadorNoAutorizado, PlacaVacia, RelojRetrocedido, RetornoAnteriorASalida, RutaInactiva,
+        RutaNoEncontrada, SalidaNoActiva, VehiculoYaEnRuta,
+    };
+
+    match error {
+        PlacaVacia => "La placa del vehículo es obligatoria".into(),
+        EncargadoVacio => "El nombre del encargado es obligatorio".into(),
+        NumeroDocumentoVacio => "El número de documento es obligatorio".into(),
+        VehiculoYaEnRuta => "Este vehículo ya tiene una salida de ruta activa".into(),
+        DocumentoYaRegistrado => {
+            "Ya existe una salida registrada con ese número de documento".into()
+        }
+        DocumentoRequiereAutorizacion => {
+            "El documento no es de hoy -- confirme que cuenta con el correo de autorización".into()
+        }
+        RutaNoEncontrada => "El número de ruta no existe en el catálogo".into(),
+        RutaInactiva => "El número de ruta está dado de baja".into(),
+        SalidaNoActiva => "La salida de ruta ya no está activa".into(),
+        RetornoAnteriorASalida => "El retorno no puede ser anterior a la salida".into(),
+        RelojRetrocedido => "Revise la fecha y hora del equipo antes de continuar".into(),
+        OperadorNoAutorizado => {
+            "La sesión que registra el movimiento no existe o está inactiva".into()
+        }
+        RutaServiceError::Database(_) => "No se pudo registrar el movimiento de la ruta".into(),
+    }
+}
+
+pub fn mensaje_ruta_catalogo(error: RutaCatalogoServiceError) -> String {
+    use RutaCatalogoServiceError::{
+        NumeroDuplicado, NumeroInvalido, OperacionNoAutorizada, RangoInvalido, RutaConSalidaActiva,
+        RutaNoEncontrada,
+    };
+
+    match error {
+        NumeroInvalido => "El número de ruta debe ser mayor a cero".into(),
+        NumeroDuplicado => "Ya existe una ruta con ese número".into(),
+        RangoInvalido => "El rango de números no es válido".into(),
+        RutaNoEncontrada => "La ruta ya no existe".into(),
+        RutaConSalidaActiva => "La ruta tiene una salida activa en este momento".into(),
+        OperacionNoAutorizada => "Su sesión no está autorizada para esta operación".into(),
+        RutaCatalogoServiceError::Database(_) => "No se pudo guardar la ruta".into(),
+    }
+}
+
+pub fn mensaje_gafete_provisional(error: GafeteProvisionalServiceError) -> String {
+    use GafeteProvisionalServiceError::{
+        Database, EncargadoInactivo, EncargadoNoEncontrado, EncargadoYaTienePrestamoActivo,
+        GafeteYaPrestado, NumeroInvalido, OperacionNoAutorizada, PrestamoNoActivo,
+    };
+
+    match error {
+        NumeroInvalido => "El número de gafete debe ser mayor a cero".into(),
+        EncargadoNoEncontrado => "El encargado no existe en el catálogo".into(),
+        EncargadoInactivo => "El encargado está dado de baja en el catálogo".into(),
+        EncargadoYaTienePrestamoActivo => {
+            "Este encargado ya tiene un gafete provisional prestado".into()
+        }
+        GafeteYaPrestado => "Ese número de gafete ya está prestado a otra persona".into(),
+        PrestamoNoActivo => "El préstamo no está activo".into(),
+        OperacionNoAutorizada => {
+            "La sesión actual no está autorizada para realizar esta operación".into()
+        }
+        Database(_) => "No se pudo guardar el préstamo de gafete".into(),
+    }
+}
+
+pub fn mensaje_empresa_proveedor(error: EmpresaProveedorServiceError) -> String {
+    use EmpresaProveedorServiceError::{
+        EmpresaNoEncontrada, NombreDuplicado, NombreEmpresaVacio, OperacionNoAutorizada,
+    };
+
+    match error {
+        NombreEmpresaVacio => "El nombre de la empresa es obligatorio".into(),
+        NombreDuplicado => "El nombre de la empresa ya existe".into(),
+        EmpresaNoEncontrada => "Empresa proveedora no encontrada".into(),
+        OperacionNoAutorizada => {
+            "La sesión actual no está autorizada para realizar esta operación".into()
+        }
+        EmpresaProveedorServiceError::Database(_) => "No se pudo guardar la empresa".into(),
+    }
+}
+
+pub fn mensaje_ingreso_proveedor(error: IngresoProveedorServiceError) -> String {
+    use IngresoProveedorServiceError::{
+        CedulaVacia, EmpresaInactiva, EmpresaNoEncontrada, GafeteNoDisponible, GafeteNoRegistrado,
+        GafeteOcupado, IngresoActivo, NombreVacio, OperadorNoAutorizado, RegistroNoActivo,
+        RelojRetrocedido, SalidaAnteriorAIngreso,
+    };
+
+    match error {
+        CedulaVacia => "La cédula es obligatoria".into(),
+        NombreVacio => "El nombre es obligatorio".into(),
+        EmpresaNoEncontrada => "Empresa proveedora no encontrada".into(),
+        EmpresaInactiva => "La empresa proveedora está dada de baja".into(),
+        IngresoActivo => "Esta cédula ya tiene un ingreso de proveedor activo".into(),
+        GafeteOcupado => "El gafete ya está asignado a otro ingreso de proveedor".into(),
+        GafeteNoRegistrado => "El gafete no está registrado en el catálogo".into(),
+        GafeteNoDisponible(_) => "El gafete no está disponible".into(),
+        RegistroNoActivo => "El ingreso de proveedor no está activo".into(),
+        SalidaAnteriorAIngreso => "La salida no puede ser anterior al ingreso".into(),
+        RelojRetrocedido => "Revise la fecha y hora del equipo antes de continuar".into(),
+        OperadorNoAutorizado => {
+            "La sesión que registra el movimiento no existe o está inactiva".into()
+        }
+        IngresoProveedorServiceError::Database(_) => "No se pudo registrar el movimiento".into(),
+    }
+}
+
 /// `RespuestaInesperada` trae el cuerpo crudo de la respuesta del receptor
 /// (puede incluir detalles internos de Postgres/PostgREST) -- nunca pasa a
 /// pantalla, mismo criterio que el resto de este módulo con los errores de
@@ -305,6 +436,76 @@ mod tests {
                 MotivoDenegacion::PraindNoRegistrado,
             )),
             "PRAIND sin fecha registrada"
+        );
+    }
+
+    #[test]
+    fn los_errores_tecnicos_de_rutas_no_exponen_detalles() {
+        let vehiculo = VehiculoRutaServiceError::Database(DatabaseError::FechaCorrupta(
+            "detalle interno".into(),
+        ));
+        let encargado = EncargadoRutaServiceError::Database(DatabaseError::FechaCorrupta(
+            "detalle interno".into(),
+        ));
+
+        assert_eq!(
+            mensaje_vehiculo_ruta(vehiculo),
+            "No se pudo guardar el vehículo"
+        );
+        assert_eq!(
+            mensaje_encargado_ruta(encargado),
+            "No se pudo guardar el encargado"
+        );
+    }
+
+    #[test]
+    fn los_mensajes_de_ruta_conservan_su_motivo() {
+        assert_eq!(
+            mensaje_ruta(RutaServiceError::VehiculoYaEnRuta),
+            "Este vehículo ya tiene una salida de ruta activa"
+        );
+        assert_eq!(
+            mensaje_ruta(RutaServiceError::RelojRetrocedido),
+            "Revise la fecha y hora del equipo antes de continuar"
+        );
+        assert_eq!(
+            mensaje_ruta(RutaServiceError::OperadorNoAutorizado),
+            "La sesión que registra el movimiento no existe o está inactiva"
+        );
+    }
+
+    #[test]
+    fn los_mensajes_de_proveedores_conservan_su_motivo() {
+        assert_eq!(
+            mensaje_empresa_proveedor(EmpresaProveedorServiceError::NombreDuplicado),
+            "El nombre de la empresa ya existe"
+        );
+        assert_eq!(
+            mensaje_ingreso_proveedor(IngresoProveedorServiceError::GafeteOcupado),
+            "El gafete ya está asignado a otro ingreso de proveedor"
+        );
+        assert_eq!(
+            mensaje_ingreso_proveedor(IngresoProveedorServiceError::OperadorNoAutorizado),
+            "La sesión que registra el movimiento no existe o está inactiva"
+        );
+    }
+
+    #[test]
+    fn los_errores_tecnicos_de_proveedores_no_exponen_detalles() {
+        let empresa = EmpresaProveedorServiceError::Database(DatabaseError::FechaCorrupta(
+            "detalle interno".into(),
+        ));
+        let ingreso = IngresoProveedorServiceError::Database(DatabaseError::FechaCorrupta(
+            "detalle interno".into(),
+        ));
+
+        assert_eq!(
+            mensaje_empresa_proveedor(empresa),
+            "No se pudo guardar la empresa"
+        );
+        assert_eq!(
+            mensaje_ingreso_proveedor(ingreso),
+            "No se pudo registrar el movimiento"
         );
     }
 

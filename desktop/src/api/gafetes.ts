@@ -4,11 +4,8 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type EstadoGafete = "Disponible" | "Perdido" | "DeBaja";
 
-/** Pool físico al que pertenece el gafete — espejo de `TipoGafete` (Rust).
- * Sin "Proveedor" todavía del lado de entrada: el backend ya acepta ese
- * valor en el CHECK de la base a futuro, pero no hay comando de alta para
- * esa categoría hasta que exista la entidad `proveedor`. */
-export type TipoGafete = "Contratista" | "Visita";
+/** Pool físico al que pertenece el gafete — espejo de `TipoGafete` (Rust). */
+export type TipoGafete = "Contratista" | "Visita" | "ProvisionalKof" | "Proveedor";
 
 export type MotivoResolucionGafete = "Pagado" | "Aparecido";
 
@@ -21,22 +18,37 @@ export interface GafeteResumen {
   contratista_portador_nombre: string | null;
   visita_portador_id: number | null;
   visita_portador_nombre: string | null;
+  proveedor_portador_id: number | null;
+  proveedor_portador_nombre: string | null;
   fecha_marcado_perdido: string | null;
 }
 
 /** A quién se le asignó este gafete la última vez, sea cual sea su tipo —
- * a lo sumo uno de los dos campos de `GafeteResumen`/`IncidenteGafete`
- * tiene valor, nunca los dos. */
+ * a lo sumo uno de estos tres campos de `GafeteResumen`/`IncidenteGafete`
+ * tiene valor, nunca más de uno (el `CHECK` par-exclusivo de `gafetes` en
+ * `schema.rs` lo garantiza).
+ *
+ * Nota: `ProvisionalKof` todavía no trae portador acá -- su ciclo es
+ * entrega/devolución (`prestamos_gafete_provisional`), no
+ * marcar-perdido/resolver, y la consulta de este catálogo (`buscar_gafetes`,
+ * `src/database/queries/gafetes.rs`) todavía no hace `JOIN` contra
+ * `encargados_ruta` para traer ese nombre. */
 export function nombrePortador(
-  fila: Pick<GafeteResumen, "contratista_portador_nombre" | "visita_portador_nombre">,
+  fila: Pick<
+    GafeteResumen,
+    "contratista_portador_nombre" | "visita_portador_nombre" | "proveedor_portador_nombre"
+  >,
 ): string | null {
-  return fila.contratista_portador_nombre ?? fila.visita_portador_nombre;
+  return (
+    fila.contratista_portador_nombre ??
+    fila.visita_portador_nombre ??
+    fila.proveedor_portador_nombre
+  );
 }
 
 // snake_case a propósito — espejo exacto de `TipoGafeteEntrada` (Rust,
-// `#[serde(rename_all = "snake_case")]`). Sin "proveedor" -- mismo motivo
-// que `TipoGafete` arriba.
-export type TipoGafeteEntrada = "contratista" | "visita";
+// `#[serde(rename_all = "snake_case")]`).
+export type TipoGafeteEntrada = "contratista" | "visita" | "provisional_kof" | "proveedor";
 
 export interface FiltroGafetes {
   numero?: number;

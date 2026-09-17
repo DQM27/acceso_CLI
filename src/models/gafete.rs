@@ -45,15 +45,19 @@ impl EstadoGafete {
 /// distinto tipo son objetos físicos distintos que repiten la misma
 /// numeración (el "7 verde" de contratista y el "7 rojo" de visita
 /// coexisten), por eso la unicidad real es `(numero, tipo)`, no `numero`
-/// solo. Sin `Proveedor` con columna de portador todavía -- no existe
-/// tabla `proveedores`, pero el valor ya se acepta en el `CHECK` de la
-/// base para no tener que volver a tocar el esquema cuando exista.
+/// solo. `ProvisionalKof` tiene su columna de portador propia
+/// (`encargado_portador_id`, hacia `encargados_ruta`) desde `MIGRACION_39`
+/// -- ver `docs/features-futuras/plan-gafetes-provisionales-kof.md`.
+/// `Proveedor` tiene la suya (`proveedor_portador_id`, hacia
+/// `registro_ingresos_proveedor`) desde `MIGRACION_41` -- ver
+/// `docs/features-futuras/plan-control-proveedores.md`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TipoGafete {
     Contratista,
     Visita,
     Proveedor,
+    ProvisionalKof,
 }
 
 impl TipoGafete {
@@ -62,6 +66,7 @@ impl TipoGafete {
             Self::Contratista => "CONTRATISTA",
             Self::Visita => "VISITA",
             Self::Proveedor => "PROVEEDOR",
+            Self::ProvisionalKof => "PROVISIONAL_KOF",
         }
     }
 
@@ -70,6 +75,7 @@ impl TipoGafete {
             "CONTRATISTA" => Some(Self::Contratista),
             "VISITA" => Some(Self::Visita),
             "PROVEEDOR" => Some(Self::Proveedor),
+            "PROVISIONAL_KOF" => Some(Self::ProvisionalKof),
             _ => None,
         }
     }
@@ -81,6 +87,7 @@ impl TipoGafete {
             "contratista" | "contratistas" => Some(Self::Contratista),
             "visita" | "visitas" => Some(Self::Visita),
             "proveedor" | "proveedores" => Some(Self::Proveedor),
+            "provisional_kof" | "provisional" | "kof" => Some(Self::ProvisionalKof),
             _ => None,
         }
     }
@@ -89,12 +96,20 @@ impl TipoGafete {
 /// A quién se le asignó un gafete la última vez -- para trazabilidad si se
 /// pierde, no para llevar cuentas de dinero (por eso no se llama
 /// "deudor"). Cada variante corresponde a una de las columnas FK reales de
-/// `gafetes` (`contratista_portador_id`/`visita_portador_id`); sin
-/// `Proveedor(i64)` todavía por lo mismo que [`TipoGafete::Proveedor`].
+/// `gafetes` (`contratista_portador_id`/`visita_portador_id`/
+/// `encargado_portador_id`/`proveedor_portador_id`). `ProvisionalKof(i64)`
+/// apunta a un catálogo real (`encargados_ruta`, la persona KOF sí se
+/// repite); `Proveedor(i64)` en cambio apunta a un registro TRANSACCIONAL
+/// (`registro_ingresos_proveedor.id`, la visita puntual) y no a un catálogo
+/// de personas -- pedido explícito del usuario: el colaborador de un
+/// proveedor nunca se repite, así que no existe (ni debe existir) una tabla
+/// de personas para este caso.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PortadorGafete {
     Contratista(i64),
     Visita(i64),
+    ProvisionalKof(i64),
+    Proveedor(i64),
 }
 
 /// Motivo por el que se cierra un incidente de pérdida (`gafetes_incidentes`,
@@ -160,24 +175,32 @@ pub struct Gafete {
     pub numero: i64,
     pub tipo: TipoGafete,
     pub estado: EstadoGafete,
-    /// Sólo una de las dos puede ser `Some`, y únicamente cuando
+    /// A lo sumo una de las tres puede ser `Some`, y únicamente cuando
     /// `estado == Perdido` -- los `CHECK`s del esquema imponen las mismas
     /// reglas del lado de `SQLite` (tipo↔columna y estado↔portador), esto
     /// sólo las refleja en Rust. Usar [`Gafete::portador`] en vez de leer
     /// estos campos directamente.
     pub contratista_portador_id: Option<i64>,
     pub visita_portador_id: Option<i64>,
+    pub encargado_portador_id: Option<i64>,
+    pub proveedor_portador_id: Option<i64>,
 }
 
 impl Gafete {
     /// A quién se le asignó este gafete la última vez, si a alguien --
-    /// `None` si está `Disponible`/`DeBaja`. Deriva de las dos columnas en
+    /// `None` si está `Disponible`/`DeBaja`. Deriva de las cuatro columnas en
     /// vez de guardarse aparte porque el `CHECK` del esquema ya garantiza
     /// que a lo sumo una está seteada.
     pub fn portador(&self) -> Option<PortadorGafete> {
-        self.contratista_portador_id.map_or_else(
-            || self.visita_portador_id.map(PortadorGafete::Visita),
-            |id| Some(PortadorGafete::Contratista(id)),
-        )
+        if let Some(id) = self.contratista_portador_id {
+            return Some(PortadorGafete::Contratista(id));
+        }
+        if let Some(id) = self.visita_portador_id {
+            return Some(PortadorGafete::Visita(id));
+        }
+        if let Some(id) = self.encargado_portador_id {
+            return Some(PortadorGafete::ProvisionalKof(id));
+        }
+        self.proveedor_portador_id.map(PortadorGafete::Proveedor)
     }
 }

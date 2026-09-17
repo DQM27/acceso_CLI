@@ -15,12 +15,20 @@ export interface ResumenSincronizacion {
   fallidos: number;
   remotos_abiertos: number;
   cierres_recibidos: number;
+  /** Mismo criterio que `cierres_recibidos`, pero para ingresos de
+   * proveedor. */
+  cierres_recibidos_proveedor: number;
   empresas_recibidas: number;
   contratistas_recibidos: number;
   gafetes_recibidos: number;
+  vehiculos_ruta_recibidos: number;
+  encargados_ruta_recibidos: number;
   movimientos_historial_recibidos: number;
   citas_recibidas: number;
   historial_visitas_recibidos: number;
+  /** Mismo criterio que `historial_visitas_recibidos`, pero para ingresos
+   * de proveedor. */
+  historial_ingresos_proveedor_recibidos: number;
   sitio_id: string;
   dispositivo_id: string;
   tipo: string;
@@ -38,6 +46,10 @@ export interface ResumenSincronizacion {
    * visita -- un visitante que quedó activo en este dispositivo pero que
    * la nube dice que también está activo en otro sitio. */
   conflictos_movimiento_visita: ConflictoMovimientoVisitaActivo[];
+  /** Mismo criterio que `conflictos_ingreso`, pero para ingresos de
+   * proveedor -- una cédula que quedó activa en este dispositivo pero que
+   * la nube dice que también está activa en otro sitio. */
+  conflictos_ingreso_proveedor: ConflictoIngresoProveedorActivo[];
 }
 
 export interface ConflictoIngresoActivo {
@@ -49,6 +61,12 @@ export interface ConflictoIngresoActivo {
 export interface ConflictoMovimientoVisitaActivo {
   cedula: string;
   visitante_nombre: string;
+  sitio_conflicto: string;
+}
+
+export interface ConflictoIngresoProveedorActivo {
+  cedula: string;
+  nombre: string;
   sitio_conflicto: string;
 }
 
@@ -77,6 +95,21 @@ export interface IngresoRemoto {
   tipo_ingreso: string | null;
   medio_ingreso: string | null;
   gafete_numero: number | null;
+}
+
+/** Espejo de `IngresoRemoto`, pero para el ciclo de proveedores -- ver
+ * `database::schema`, tabla `ingresos_proveedor_remotos`, y
+ * `nube::sincronizacion::IngresoProveedorRemoto`. */
+export interface IngresoProveedorRemoto {
+  uuid: string;
+  cedula: string;
+  nombre: string;
+  empresa_nombre: string;
+  placa: string | null;
+  gafete_numero: number;
+  /** ISO 8601 (UTC). */
+  hora_entrada: string;
+  usuario_entrada_nombre: string;
 }
 
 /** La nube guarda `tipo_ingreso`/`medio_ingreso` en el formato que usa
@@ -134,6 +167,14 @@ export function listarIngresosRemotos(): Promise<IngresoRemoto[]> {
 
 export function cerrarIngresoRemoto(uuid: string): Promise<void> {
   return invoke("cerrar_ingreso_remoto", { uuid });
+}
+
+export function listarIngresosProveedorRemotos(): Promise<IngresoProveedorRemoto[]> {
+  return invoke("listar_ingresos_proveedor_remotos");
+}
+
+export function cerrarIngresoProveedorRemoto(uuid: string): Promise<void> {
+  return invoke("cerrar_ingreso_proveedor_remoto", { uuid });
 }
 
 /** Filas de la cola que ya agotaron los reintentos automáticos y quedaron

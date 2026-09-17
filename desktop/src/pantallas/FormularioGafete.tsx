@@ -25,7 +25,7 @@ const numeroValido = (valor: string) => {
 export const esquema = z
   .object({
     modo: z.enum(["individual", "rango"]),
-    tipo: z.enum(["contratista", "visita"]),
+    tipo: z.enum(["contratista", "visita", "provisional_kof", "proveedor"]),
     numero: z.string(),
     desde: z.string(),
     hasta: z.string(),
@@ -113,6 +113,8 @@ export default function FormularioGafete({
           <select {...register("tipo")}>
             <option value="contratista">Contratista</option>
             <option value="visita">Visita</option>
+            <option value="provisional_kof">Provisional KOF</option>
+            <option value="proveedor">Proveedor</option>
           </select>
         </label>
 

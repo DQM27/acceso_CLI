@@ -1,9 +1,16 @@
 pub mod cita;
 pub mod contratista;
 pub mod empresa;
+pub mod empresa_proveedor;
+pub mod encargado_ruta;
 pub mod gafete;
 pub mod medio_ingreso;
 pub mod movimiento_visita;
+pub mod prestamo_gafete_provisional;
 pub mod registro_ingreso;
+pub mod registro_ingreso_proveedor;
+pub mod ruta;
+pub mod salida_ruta;
 pub mod tipo_ingreso;
 pub mod usuario;
+pub mod vehiculo_ruta;

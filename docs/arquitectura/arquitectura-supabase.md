@@ -15,8 +15,9 @@ documento es el mapa: la foto completa de cómo encajan todas las piezas HOY.
 ## 1. Qué es esto y para qué existe
 
 `control-acceso-nube` es la base de datos en la nube (Postgres, vía Supabase)
-que le da a un sistema de control de acceso físico (garitas/recepciones de
-varios sitios) tres cosas que SQLite local, por sí solo, no puede dar:
+que le da a un sistema de control de acceso físico (puntos de acceso/
+recepciones de varios sitios) tres cosas que SQLite local, por sí solo,
+no puede dar:
 
 1. **Sincronización entre dispositivos y sitios** — un contratista dado de
    baja en un sitio queda dado de baja en todos; un administrador ve el

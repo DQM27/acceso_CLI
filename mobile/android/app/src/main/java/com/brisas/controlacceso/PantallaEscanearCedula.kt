@@ -357,7 +357,7 @@ private fun construirAnalizadorOcr(
 /// `ProcessCameraProvider` está listo, y arranca el enfoque continuo --
 /// todo lo que depende de esa espera asíncrona vive acá, separado de cómo
 /// se arma el analizador ([construirAnalizadorOcr]).
-private fun iniciarCamara(
+fun iniciarCamara(
     ctx: android.content.Context,
     previewView: PreviewView,
     lifecycleOwner: androidx.lifecycle.LifecycleOwner,
@@ -450,9 +450,15 @@ private const val DEMORA_AVISO_VENCIDO_MS = 1200L
 private const val DEMORA_REARMAR_ESCANEO_CONTINUO_MS = 900L
 private const val FRAMES_AUSENCIA_PARA_REPETIR = 3
 
+// El reverso (con el MRZ -- las líneas de texto tipo código de barras) trae
+// nombre Y cédula en un solo escaneo con checksum verificado; el frente
+// (con la foto) sólo trae el número. Guiar hacia el reverso desde el
+// mensaje inicial evita que quien opera tenga que enterarse por su cuenta
+// (ver el aviso en `EstabilizadorLectura.mensajeDeConfirmacion` para cuando
+// igual termina mostrando el frente).
 private fun mensajeInicialEscaneo(modo: ModoEscaneoDocumento): String =
     when (modo) {
-        ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA -> "Apunte al documento"
+        ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA -> "Muéstreme el reverso de la cédula"
         ModoEscaneoDocumento.GAFETE_CONTRATISTA -> "Apunte al gafete"
     }
 
@@ -483,8 +489,14 @@ private fun mensajeProcesadoContinuo(modo: ModoEscaneoDocumento, valor: String):
 /// que no es thread-safe y asume ejecución serializada en un único hilo; más
 /// vale que esa garantía sea explícita acá que depender de un comportamiento
 /// por defecto de una librería externa.
+// No `private` -- [analizarCedula] no conoce nada de cédulas ni de
+// documentos de identidad (sólo entrega texto crudo de ML Kit), así que
+// otros perfiles de OCR aislados (ver LectorComprobanteRuta.kt /
+// PantallaEscanearComprobanteRuta.kt) la reusan en vez de duplicar el
+// manejo de `ImageProxy`/`InputImage`/hilos. Mismo motivo para
+// [iniciarCamara] más arriba.
 @androidx.annotation.OptIn(ExperimentalGetImage::class)
-private fun analizarCedula(
+fun analizarCedula(
     imagen: ImageProxy,
     recognizer: com.google.mlkit.vision.text.TextRecognizer,
     ejecutorPrincipal: java.util.concurrent.Executor,

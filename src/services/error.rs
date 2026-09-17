@@ -195,6 +195,183 @@ pub enum CitaServiceError {
 }
 
 #[derive(Debug, thiserror::Error)]
+pub enum RutaServiceError {
+    #[error("La placa del vehículo es obligatoria")]
+    PlacaVacia,
+    #[error("El nombre del encargado es obligatorio")]
+    EncargadoVacio,
+    #[error("El número de documento es obligatorio")]
+    NumeroDocumentoVacio,
+    /// Mismo criterio que `RegistroIngresoServiceError::IngresoActivo`, pero
+    /// por placa (texto), no por catálogo -- un vehículo sin match en
+    /// `vehiculos_ruta` igual puede quedar "ya en ruta".
+    #[error("Este vehículo ya tiene una salida de ruta activa")]
+    VehiculoYaEnRuta,
+    #[error("Ya existe una salida registrada con ese número de documento")]
+    DocumentoYaRegistrado,
+    /// La fecha del documento no coincide con hoy y no se marcó tener el
+    /// correo de autorización -- la UI ya debería haber bloqueado el botón
+    /// de confirmar antes de llegar acá (ver
+    /// `docs/planes-implementados/plan-control-rutas.md`, "Bloqueo
+    /// transitorio por documento vencido"); esto es el resguardo del lado
+    /// del servicio, mismo espíritu que `RegistroIngresoService` no confía
+    /// en una verificación previa de la pantalla.
+    #[error("El documento no es de hoy y no se indicó tener el correo de autorización")]
+    DocumentoRequiereAutorizacion,
+    /// Bloqueante a propósito (pedido explícito del usuario, 2026-09-15):
+    /// a diferencia de vehículo/encargado, el número de ruta debe existir
+    /// en el catálogo (`rutas`) -- mismo criterio que
+    /// `RegistroIngresoServiceError::ContratistaNoEncontrado`.
+    #[error("El número de ruta no existe en el catálogo")]
+    RutaNoEncontrada,
+    #[error("El número de ruta está dado de baja")]
+    RutaInactiva,
+    #[error("La salida de ruta no está activa")]
+    SalidaNoActiva,
+    #[error("El retorno no puede ser anterior a la salida")]
+    RetornoAnteriorASalida,
+    /// Comprobación de sanidad de todo el sistema (¿el reloj de la máquina
+    /// retrocedió respecto al último movimiento conocido, de cualquier
+    /// dominio?), no una regla de negocio de una salida puntual -- mismo
+    /// criterio que `RegistroIngresoServiceError::RelojRetrocedido`/
+    /// `CitaServiceError::RelojRetrocedido`. La genera
+    /// `application::rutas`, no `RutaService`.
+    #[error("El reloj del equipo está atrasado respecto al último movimiento registrado")]
+    RelojRetrocedido,
+    /// Mismo criterio que `CitaServiceError::OperadorNoAutorizado`/
+    /// `RegistroIngresoServiceError::OperadorNoAutorizado`.
+    #[error("La sesión que registra el movimiento no existe o está inactiva")]
+    OperadorNoAutorizado,
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+}
+
+/// Catálogo de vehículos de ruta -- mismo molde mínimo que
+/// `EmpresaServiceError`, sin reglas de negocio propias más allá de "el
+/// actor sigue activo" y lo que ya exige el esquema (placa/número de
+/// unidad únicos).
+#[derive(Debug, thiserror::Error)]
+pub enum VehiculoRutaServiceError {
+    #[error("Su sesión no está autorizada para esta operación")]
+    OperacionNoAutorizada,
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+}
+
+/// Catálogo de encargados de ruta (personal KOF) -- mismo criterio que
+/// `VehiculoRutaServiceError`.
+#[derive(Debug, thiserror::Error)]
+pub enum EncargadoRutaServiceError {
+    #[error("Su sesión no está autorizada para esta operación")]
+    OperacionNoAutorizada,
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+}
+
+/// Catálogo de números de ruta -- mismo molde que `GafeteServiceError`
+/// (alta individual/por rango, dar de baja con resguardo si está en uso),
+/// pero sin los estados de "portador" que sí tiene un gafete (una ruta no
+/// se pierde, sólo se habilita/deshabilita).
+#[derive(Debug, thiserror::Error)]
+pub enum RutaCatalogoServiceError {
+    #[error("El número de ruta debe ser mayor a cero")]
+    NumeroInvalido,
+    #[error("Ya existe una ruta con ese número")]
+    NumeroDuplicado,
+    #[error("El rango de números no es válido")]
+    RangoInvalido,
+    #[error("La ruta ya no existe")]
+    RutaNoEncontrada,
+    /// Dar de baja una ruta con una salida activa dejaría el catálogo
+    /// contradiciendo un movimiento en curso -- mismo criterio que
+    /// `GafeteServiceError::GafeteConIngresoActivo`.
+    #[error("La ruta tiene una salida activa en este momento")]
+    RutaConSalidaActiva,
+    #[error("La sesión actual no está autorizada para realizar esta operación")]
+    OperacionNoAutorizada,
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+}
+
+/// Entrega/devolución de gafetes provisionales KOF -- mucho más simple que
+/// `RutaServiceError`: sin PRAIND, sin bloqueo por documento, sin reloj
+/// cruzado entre dominios (pedido explícito del usuario: "no hay más
+/// verificación que la humana"). Ver
+/// `docs/features-futuras/plan-gafetes-provisionales-kof.md`.
+#[derive(Debug, thiserror::Error)]
+pub enum GafeteProvisionalServiceError {
+    #[error("El número de gafete debe ser mayor a cero")]
+    NumeroInvalido,
+    #[error("El encargado no existe en el catálogo")]
+    EncargadoNoEncontrado,
+    #[error("El encargado está dado de baja en el catálogo")]
+    EncargadoInactivo,
+    #[error("Este encargado ya tiene un gafete provisional prestado")]
+    EncargadoYaTienePrestamoActivo,
+    #[error("Ese número de gafete ya está prestado a otra persona")]
+    GafeteYaPrestado,
+    #[error("El préstamo no está activo")]
+    PrestamoNoActivo,
+    #[error("La sesión actual no está autorizada para realizar esta operación")]
+    OperacionNoAutorizada,
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+}
+
+/// Catálogo de empresas proveedoras
+/// (`docs/features-futuras/plan-control-proveedores.md`) -- mismo molde
+/// mínimo que `EmpresaServiceError`, catálogo separado a propósito.
+#[derive(Debug, thiserror::Error)]
+pub enum EmpresaProveedorServiceError {
+    #[error("Empresa proveedora no encontrada")]
+    EmpresaNoEncontrada,
+    #[error("El nombre de la empresa es obligatorio")]
+    NombreEmpresaVacio,
+    #[error("El nombre de la empresa ya existe")]
+    NombreDuplicado,
+    #[error("La sesión actual no está autorizada para realizar esta operación")]
+    OperacionNoAutorizada,
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+}
+
+/// Ingreso/salida de proveedores
+/// (`docs/features-futuras/plan-control-proveedores.md`) -- mismo espíritu
+/// que `CitaServiceError`: sin PRAIND/bloqueos de contratista, el gafete es
+/// siempre obligatorio (a diferencia de `RegistroIngresoServiceError`, que
+/// lo hace condicional a `requiere_gafete`).
+#[derive(Debug, thiserror::Error)]
+pub enum IngresoProveedorServiceError {
+    #[error("La cédula es obligatoria")]
+    CedulaVacia,
+    #[error("El nombre es obligatorio")]
+    NombreVacio,
+    #[error("Empresa proveedora no encontrada")]
+    EmpresaNoEncontrada,
+    #[error("La empresa proveedora está dada de baja")]
+    EmpresaInactiva,
+    #[error("Esta cédula ya tiene un ingreso de proveedor activo")]
+    IngresoActivo,
+    #[error("El gafete ya está asignado a otro ingreso de proveedor")]
+    GafeteOcupado,
+    /// El número no existe en el catálogo (`gafetes`, tipo `PROVEEDOR`).
+    #[error("El gafete no está registrado en el catálogo")]
+    GafeteNoRegistrado,
+    #[error("El gafete no está disponible: {0:?}")]
+    GafeteNoDisponible(EstadoGafete),
+    #[error("El ingreso de proveedor no está activo")]
+    RegistroNoActivo,
+    #[error("La salida no puede ser anterior al ingreso")]
+    SalidaAnteriorAIngreso,
+    #[error("El reloj del equipo está atrasado respecto al último movimiento registrado")]
+    RelojRetrocedido,
+    #[error("La sesión que registra el movimiento no existe o está inactiva")]
+    OperadorNoAutorizado,
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+}
+
+#[derive(Debug, thiserror::Error)]
 pub enum GafeteServiceError {
     #[error("El número de gafete debe ser mayor a cero")]
     NumeroInvalido,

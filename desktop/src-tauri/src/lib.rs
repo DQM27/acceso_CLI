@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -6,6 +7,7 @@ use control_acceso::database::connection::ruta_base_datos;
 use control_acceso::instancia::InstanciaGuard;
 use control_acceso::tiempo::RelojCorregido;
 use tauri::{Emitter, Manager};
+use zeroize::Zeroizing;
 
 #[cfg(windows)]
 mod clave_cifrado;
@@ -78,13 +80,11 @@ fn mostrar_error_fatal_y_salir(mensaje: &str) -> ! {
     std::process::exit(1)
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-/// Inicia la aplicación de escritorio y registra todos los comandos Tauri.
-///
-/// # Panics
-///
-/// Tauri finaliza el arranque si no puede construir o ejecutar su runtime.
-pub fn run() {
+/// Resuelve ruta/candado de instancia/clave de cifrado y abre `AppCore` --
+/// separado de `run()` únicamente para mantenerla bajo el tope de líneas de
+/// Clippy (`too_many_lines`); sin lógica propia, es el mismo arranque que
+/// antes vivía inline.
+fn preparar_nucleo() -> (PathBuf, InstanciaGuard, Zeroizing<[u8; 32]>, AppCore) {
     let ruta_base_datos = ruta_base_datos().unwrap_or_else(|error| {
         mostrar_error_fatal_y_salir(&format!(
             "No se pudo resolver la ruta de la base de datos: {error}"
@@ -125,6 +125,38 @@ pub fn run() {
         mostrar_error_fatal_y_salir(&format!("No se pudo abrir la base de datos: {error}"))
     });
 
+    (ruta_base_datos, instancia, clave_base_datos, core)
+}
+
+/// Registra los plugins que no se cargan siempre (updater fuera de móvil,
+/// logging solo en debug) -- separado de `run()` únicamente para mantenerla
+/// bajo el tope de líneas de Clippy (mismo motivo que `preparar_nucleo`).
+fn configurar_plugins_condicionales(app: &tauri::AppHandle) -> tauri::Result<()> {
+    // El updater no existe en móvil — esta app es 100% escritorio (ver
+    // el comentario de crate-type arriba), pero se guarda el gate
+    // igual, mismo criterio que el ejemplo oficial de Tauri.
+    #[cfg(desktop)]
+    app.plugin(tauri_plugin_updater::Builder::new().build())?;
+
+    if cfg!(debug_assertions) {
+        app.plugin(
+            tauri_plugin_log::Builder::default()
+                .level(log::LevelFilter::Info)
+                .build(),
+        )?;
+    }
+    Ok(())
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// Inicia la aplicación de escritorio y registra todos los comandos Tauri.
+///
+/// # Panics
+///
+/// Tauri finaliza el arranque si no puede construir o ejecutar su runtime.
+pub fn run() {
+    let (ruta_base_datos, instancia, clave_base_datos, core) = preparar_nucleo();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
@@ -135,21 +167,7 @@ pub fn run() {
             clave_base_datos,
         ))
         .setup(|app| {
-            // El updater no existe en móvil — esta app es 100% escritorio (ver
-            // el comentario de crate-type arriba), pero se guarda el gate
-            // igual, mismo criterio que el ejemplo oficial de Tauri.
-            #[cfg(desktop)]
-            app.handle()
-                .plugin(tauri_plugin_updater::Builder::new().build())?;
-
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
-
+            configurar_plugins_condicionales(app.handle())?;
             iniciar_sincronizacion_automatica(app.handle().clone());
             Ok(())
         })
@@ -177,6 +195,33 @@ pub fn run() {
             comandos::citas::listar_visitas_activas,
             comandos::citas::listar_historial_visitas_sitio,
             comandos::citas::listar_agenda_visitas,
+            comandos::rutas::listar_vehiculos_ruta,
+            comandos::rutas::crear_vehiculo_ruta,
+            comandos::rutas::actualizar_vehiculo_ruta,
+            comandos::rutas::listar_encargados_ruta,
+            comandos::rutas::crear_encargado_ruta,
+            comandos::rutas::actualizar_encargado_ruta,
+            comandos::rutas::listar_rutas,
+            comandos::rutas::crear_ruta,
+            comandos::rutas::crear_rutas_rango,
+            comandos::rutas::dar_de_baja_ruta,
+            comandos::rutas::reactivar_ruta,
+            comandos::rutas::registrar_salida_ruta,
+            comandos::rutas::registrar_retorno_ruta,
+            comandos::rutas::listar_rutas_activas,
+            comandos::rutas::buscar_salida_ruta,
+            comandos::proveedores::listar_empresas_proveedor,
+            comandos::proveedores::buscar_empresas_proveedor,
+            comandos::proveedores::crear_empresa_proveedor,
+            comandos::proveedores::establecer_empresa_proveedor_activa,
+            comandos::proveedores::registrar_ingreso_proveedor,
+            comandos::proveedores::registrar_salida_proveedor,
+            comandos::proveedores::listar_proveedores_activos,
+            comandos::proveedores::listar_historial_ingresos_proveedor_sitio,
+            comandos::gafetes_provisionales::buscar_encargados_ruta_provisional,
+            comandos::gafetes_provisionales::entregar_gafete_provisional,
+            comandos::gafetes_provisionales::registrar_devolucion_gafete_provisional,
+            comandos::gafetes_provisionales::listar_gafetes_provisionales_activos,
             comandos::historial::listar_historial,
             comandos::historial::listar_historial_sitio,
             comandos::historial::exportar_historial,
@@ -196,6 +241,10 @@ pub fn run() {
             comandos::nube::sesion_realtime_nube,
             comandos::nube::listar_ingresos_remotos,
             comandos::nube::cerrar_ingreso_remoto,
+            comandos::nube::listar_ingresos_proveedor_remotos,
+            comandos::nube::cerrar_ingreso_proveedor_remoto,
+            comandos::nube::listar_prestamos_gafete_provisional_remotos,
+            comandos::nube::cerrar_prestamo_gafete_provisional_remoto,
             comandos::nube::fallos_permanentes_nube,
         ])
         .run(tauri::generate_context!())

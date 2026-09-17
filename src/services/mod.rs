@@ -3,9 +3,13 @@ pub mod cita_service;
 pub mod contratista_service;
 #[cfg(feature = "dev-auth")]
 pub mod dev_auth;
+pub mod empresa_proveedor_service;
 pub mod empresa_service;
 pub mod error;
+pub mod gafete_provisional_service;
 pub mod gafete_service;
+pub mod ingreso_proveedor_service;
 pub mod password;
 pub mod registro_ingreso_service;
+pub mod ruta_service;
 pub mod usuario_service;

@@ -142,8 +142,13 @@ fn destino_lote(entidad: &str, operacion: &str) -> Option<(&'static str, Option<
         ("contratista", _) => Some(("contratistas", Some("identificacion"))),
         ("gafete", _) => Some(("gafetes", Some("sitio_id,numero"))),
         ("usuario", _) => Some(("usuarios", Some("cedula"))),
-        ("ingreso", "cerrar") => None,
+        ("ingreso" | "salida_ruta", "cerrar") => None,
         ("ingreso", _) => Some(("ingresos", None)),
+        ("ruta", _) => Some(("rutas", Some("numero"))),
+        ("vehiculo_ruta", _) => Some(("vehiculos_ruta", Some("placa"))),
+        ("encargado_ruta", _) => Some(("encargados_ruta", Some("codigo_empleado"))),
+        ("salida_ruta", _) => Some(("salidas_ruta", None)),
+        ("empresa_proveedor", _) => Some(("empresas_proveedor", Some("nombre"))),
         _ => None,
     }
 }
@@ -165,6 +170,10 @@ fn construir_cuerpo(
         "gafete" => construir_cuerpo_gafete(connection, contexto, uuid),
         "usuario" => construir_cuerpo_usuario(connection, contexto, uuid),
         "ingreso" => construir_cuerpo_ingreso(connection, contexto, uuid),
+        "ruta" => construir_cuerpo_ruta(connection, contexto, uuid),
+        "vehiculo_ruta" => construir_cuerpo_vehiculo_ruta(connection, contexto, uuid),
+        "encargado_ruta" => construir_cuerpo_encargado_ruta(connection, contexto, uuid),
+        "empresa_proveedor" => construir_cuerpo_empresa_proveedor(connection, contexto, uuid),
         otra => unreachable!("destino_lote ya filtró entidades sin lote (recibido: {otra})"),
     }
 }
@@ -283,11 +292,40 @@ fn procesar_fila_individual(
             enviar_cierre_ingreso(cliente, connection, contexto, &fila.entidad_uuid)
         }
         ("ingreso", _) => enviar_ingreso(cliente, connection, contexto, &fila.entidad_uuid),
+        ("ruta", _) => enviar_ruta(cliente, connection, contexto, &fila.entidad_uuid),
         ("movimiento_visita", "cerrar") => {
             enviar_cierre_movimiento_visita(cliente, connection, contexto, &fila.entidad_uuid)
         }
         ("movimiento_visita", _) => {
             enviar_movimiento_visita(cliente, connection, contexto, &fila.entidad_uuid)
+        }
+        ("vehiculo_ruta", _) => {
+            enviar_vehiculo_ruta(cliente, connection, contexto, &fila.entidad_uuid)
+        }
+        ("encargado_ruta", _) => {
+            enviar_encargado_ruta(cliente, connection, contexto, &fila.entidad_uuid)
+        }
+        ("salida_ruta", "cerrar") => {
+            enviar_cierre_salida_ruta(cliente, connection, contexto, &fila.entidad_uuid)
+        }
+        ("salida_ruta", _) => enviar_salida_ruta(cliente, connection, contexto, &fila.entidad_uuid),
+        ("prestamo_gafete_provisional", "cerrar") => enviar_cierre_prestamo_gafete_provisional(
+            cliente,
+            connection,
+            contexto,
+            &fila.entidad_uuid,
+        ),
+        ("prestamo_gafete_provisional", _) => {
+            enviar_prestamo_gafete_provisional(cliente, connection, contexto, &fila.entidad_uuid)
+        }
+        ("empresa_proveedor", _) => {
+            enviar_empresa_proveedor(cliente, connection, contexto, &fila.entidad_uuid)
+        }
+        ("ingreso_proveedor", "cerrar") => {
+            enviar_cierre_ingreso_proveedor(cliente, connection, contexto, &fila.entidad_uuid)
+        }
+        ("ingreso_proveedor", _) => {
+            enviar_ingreso_proveedor(cliente, connection, contexto, &fila.entidad_uuid)
         }
         _ => Ok(()),
     };
@@ -1100,6 +1138,600 @@ fn enviar_cierre_movimiento_visita(
     exigir_2xx(respuesta)
 }
 
+/// Préstamos de gafete provisional KOF (cola, alta): mismo armazón que
+/// `enviar_movimiento_visita`. `encargado_id` local es un `INTEGER` (fila
+/// de `encargados_ruta`); lo que viaja al servidor es su `uuid` -- misma
+/// resolución que `enviar_movimiento_visita` hace con `cita_visitante_id`.
+#[allow(clippy::type_complexity)]
+fn enviar_prestamo_gafete_provisional(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let (
+        encargado_id_local,
+        encargado_nombre,
+        encargado_codigo_empleado,
+        gafete_numero,
+        fecha_hora_entrega,
+        usuario_entrega_nombre,
+    ): (i64, String, String, i64, String, String) = connection.query_row(
+        "
+        SELECT encargado_id, encargado_nombre, encargado_codigo_empleado, gafete_numero,
+               fecha_hora_entrega, usuario_entrega_nombre
+        FROM prestamos_gafete_provisional
+        WHERE uuid = ?1
+        ",
+        params![uuid],
+        |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+            ))
+        },
+    )?;
+    let encargado_uuid: String = connection.query_row(
+        "SELECT uuid FROM encargados_ruta WHERE id = ?1",
+        params![encargado_id_local],
+        |row| row.get(0),
+    )?;
+
+    let cuerpo = json!({
+        "id": uuid,
+        "sitio_id": contexto.sitio_id,
+        "dispositivo_entrega_id": contexto.dispositivo_id,
+        "encargado_id": encargado_uuid,
+        "encargado_nombre": encargado_nombre,
+        "encargado_codigo_empleado": encargado_codigo_empleado,
+        "gafete_numero": gafete_numero,
+        "hora_entrega": fecha_hora_entrega,
+        "usuario_entrega_nombre": usuario_entrega_nombre,
+    });
+
+    let respuesta = cliente
+        .post(format!(
+            "{}/rest/v1/prestamos_gafete_provisional",
+            contexto.base_url
+        ))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Préstamos de gafete provisional KOF (cola), cierre: mismo criterio de
+/// "primero en llegar gana" que `enviar_cierre_movimiento_visita` -- el
+/// filtro `hora_devolucion=is.null` hace que un cierre que llega tarde (el
+/// otro dispositivo del sitio ya lo cerró) no afecte ninguna fila en vez de
+/// fallar.
+fn enviar_cierre_prestamo_gafete_provisional(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let (fecha_hora_devolucion, usuario_devolucion_nombre): (Option<String>, Option<String>) =
+        connection.query_row(
+            "SELECT fecha_hora_devolucion, usuario_devolucion_nombre
+             FROM prestamos_gafete_provisional WHERE uuid = ?1",
+            params![uuid],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+
+    let cuerpo = json!({
+        "hora_devolucion": fecha_hora_devolucion,
+        "dispositivo_devolucion_id": contexto.dispositivo_id,
+        "usuario_devolucion_nombre": usuario_devolucion_nombre,
+    });
+
+    let url = format!(
+        "{}/rest/v1/prestamos_gafete_provisional?id=eq.{uuid}&hora_devolucion=is.null",
+        contexto.base_url
+    );
+
+    let respuesta = cliente
+        .patch(url)
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Empresas proveedoras (`docs/features-futuras/plan-control-proveedores.md`,
+/// espejo): mismo criterio de `upsert` que `enviar_empresa` -- catálogo
+/// separado a propósito, `on_conflict=nombre` por el mismo motivo (sin
+/// constraint de unicidad remota más que el `id`).
+fn construir_cuerpo_empresa_proveedor(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<Value, SincronizacionError> {
+    let (nombre, activo): (String, i64) = connection.query_row(
+        "SELECT nombre, activo FROM empresas_proveedor WHERE uuid = ?1",
+        params![uuid],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    Ok(json!({
+        "id": uuid,
+        "sitio_id": contexto.sitio_id,
+        "dispositivo_origen_id": contexto.dispositivo_id,
+        "nombre": nombre,
+        "activa": activo != 0,
+    }))
+}
+
+fn enviar_empresa_proveedor(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let cuerpo = construir_cuerpo_empresa_proveedor(connection, contexto, uuid)?;
+
+    let respuesta = cliente
+        .post(format!(
+            "{}/rest/v1/empresas_proveedor?on_conflict=nombre",
+            contexto.base_url
+        ))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Ingresos de proveedor (`docs/features-futuras/plan-control-proveedores.md`,
+/// cola, alta): mismo armazón que `enviar_movimiento_visita` -- mismo
+/// vocabulario entrada/salida (no entrega/devolución, eso es exclusivo de
+/// KOF). `empresa_id` local es un `INTEGER` (fila de `empresas_proveedor`);
+/// lo que viaja al servidor es su `uuid` -- misma resolución que
+/// `enviar_movimiento_visita` hace con `cita_visitante_id`.
+#[allow(clippy::type_complexity)]
+fn enviar_ingreso_proveedor(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let (
+        cedula,
+        nombre,
+        empresa_id_local,
+        empresa_nombre,
+        placa,
+        gafete_numero,
+        fecha_hora_ingreso,
+        usuario_ingreso_nombre,
+    ): (
+        String,
+        String,
+        i64,
+        String,
+        Option<String>,
+        i64,
+        String,
+        String,
+    ) = connection.query_row(
+        "
+        SELECT cedula, nombre, empresa_id, empresa_nombre, placa, gafete_numero,
+               fecha_hora_ingreso, usuario_ingreso_nombre
+        FROM registro_ingresos_proveedor
+        WHERE uuid = ?1
+        ",
+        params![uuid],
+        |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+                row.get(7)?,
+            ))
+        },
+    )?;
+    let empresa_uuid: String = connection.query_row(
+        "SELECT uuid FROM empresas_proveedor WHERE id = ?1",
+        params![empresa_id_local],
+        |row| row.get(0),
+    )?;
+
+    let cuerpo = json!({
+        "id": uuid,
+        "sitio_id": contexto.sitio_id,
+        "dispositivo_entrada_id": contexto.dispositivo_id,
+        "cedula": cedula,
+        "nombre": nombre,
+        "empresa_id": empresa_uuid,
+        "empresa_nombre": empresa_nombre,
+        "placa": placa,
+        "gafete_numero": gafete_numero,
+        "hora_entrada": fecha_hora_ingreso,
+        "usuario_entrada_nombre": usuario_ingreso_nombre,
+    });
+
+    let respuesta = cliente
+        .post(format!("{}/rest/v1/ingresos_proveedor", contexto.base_url))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Ingresos de proveedor (cola), cierre: mismo criterio de "primero en
+/// llegar gana" que `enviar_cierre_movimiento_visita` -- el filtro
+/// `hora_salida=is.null` hace que un cierre que llega tarde (el otro
+/// dispositivo del sitio ya lo cerró) no afecte ninguna fila en vez de
+/// fallar.
+fn enviar_cierre_ingreso_proveedor(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let (fecha_hora_salida, usuario_salida_nombre): (Option<String>, Option<String>) = connection
+        .query_row(
+        "SELECT fecha_hora_salida, usuario_salida_nombre
+             FROM registro_ingresos_proveedor WHERE uuid = ?1",
+        params![uuid],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    let cuerpo = json!({
+        "hora_salida": fecha_hora_salida,
+        "dispositivo_salida_id": contexto.dispositivo_id,
+        "usuario_salida_nombre": usuario_salida_nombre,
+    });
+
+    let url = format!(
+        "{}/rest/v1/ingresos_proveedor?id=eq.{uuid}&hora_salida=is.null",
+        contexto.base_url
+    );
+
+    let respuesta = cliente
+        .patch(url)
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Catálogo de números de ruta (`docs/planes-implementados/plan-control-rutas.md`,
+/// pedido explícito del usuario, 2026-09-15) -- a diferencia de
+/// vehículos/encargados (globales, `upsert` por clave natural sin
+/// `sitio_id`), este catálogo SÍ es por sitio (como `gafetes`): cada fila
+/// remota lleva `sitio_id`/`dispositivo_origen_id` y el `on_conflict` es
+/// sólo `numero` (la migración de Supabase declara `UNIQUE(numero)` SIN
+/// `sitio_id` a propósito -- dos sitios nunca comparten el mismo número
+/// de ruta, ver la migración `catalogo_rutas_numeros_validos`).
+fn construir_cuerpo_ruta(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<Value, SincronizacionError> {
+    let (numero, activo): (i64, i64) = connection.query_row(
+        "SELECT numero, activo FROM rutas WHERE uuid = ?1",
+        params![uuid],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    Ok(json!({
+        "id": uuid,
+        "sitio_id": contexto.sitio_id,
+        "dispositivo_origen_id": contexto.dispositivo_id,
+        "numero": numero,
+        "activo": activo != 0,
+    }))
+}
+
+/// `on_conflict=numero` -- ver el doc-comment de `construir_cuerpo_ruta`:
+/// la unicidad remota real es sólo por número, no por `(sitio_id, numero)`
+/// como `gafetes`.
+fn enviar_ruta(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let cuerpo = construir_cuerpo_ruta(connection, contexto, uuid)?;
+
+    let respuesta = cliente
+        .post(format!(
+            "{}/rest/v1/rutas?on_conflict=numero",
+            contexto.base_url
+        ))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Control de rutas (`docs/planes-implementados/plan-control-rutas.md`) --
+/// mismo espíritu que empresas (catálogo simple, `upsert` por clave
+/// natural) para vehículos/encargados, y que
+/// `enviar_movimiento_visita`/`enviar_cierre_movimiento_visita` para el
+/// ciclo salida/retorno.
+fn construir_cuerpo_vehiculo_ruta(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<Value, SincronizacionError> {
+    let (numero_unidad, placa, activo): (Option<String>, String, i64) = connection.query_row(
+        "SELECT numero_unidad, placa, activo FROM vehiculos_ruta WHERE uuid = ?1",
+        params![uuid],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    )?;
+
+    Ok(json!({
+        "id": uuid,
+        "sitio_id": contexto.sitio_id,
+        "dispositivo_origen_id": contexto.dispositivo_id,
+        "numero_unidad": numero_unidad,
+        "placa": placa,
+        "activo": activo != 0,
+    }))
+}
+
+/// `on_conflict=placa` -- mismo motivo que `enviar_empresa`: sin esto, dos
+/// bases locales sin el mismo `uuid` para el mismo vehículo generan cada
+/// una un `id` propio y el upsert por PK las acepta como vehículos
+/// distintos en vez de fusionarlas.
+fn enviar_vehiculo_ruta(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let cuerpo = construir_cuerpo_vehiculo_ruta(connection, contexto, uuid)?;
+
+    let respuesta = cliente
+        .post(format!(
+            "{}/rest/v1/vehiculos_ruta?on_conflict=placa",
+            contexto.base_url
+        ))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+fn construir_cuerpo_encargado_ruta(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<Value, SincronizacionError> {
+    let (codigo_empleado, nombre, cedula, activo): (String, String, Option<String>, i64) =
+        connection.query_row(
+            "SELECT codigo_empleado, nombre, cedula, activo FROM encargados_ruta WHERE uuid = ?1",
+            params![uuid],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )?;
+
+    Ok(json!({
+        "id": uuid,
+        "sitio_id": contexto.sitio_id,
+        "dispositivo_origen_id": contexto.dispositivo_id,
+        "codigo_empleado": codigo_empleado,
+        "nombre": nombre,
+        "cedula": cedula,
+        "activo": activo != 0,
+    }))
+}
+
+/// `on_conflict=codigo_empleado` -- mismo motivo que `enviar_vehiculo_ruta`.
+fn enviar_encargado_ruta(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let cuerpo = construir_cuerpo_encargado_ruta(connection, contexto, uuid)?;
+
+    let respuesta = cliente
+        .post(format!(
+            "{}/rest/v1/encargados_ruta?on_conflict=codigo_empleado",
+            contexto.base_url
+        ))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Fila cruda para armar el cuerpo remoto de una salida de ruta -- struct
+/// en vez de una tupla de 13 elementos (`clippy::type_complexity`).
+struct FilaSalidaRutaLocal {
+    vehiculo_id: Option<i64>,
+    vehiculo_placa: String,
+    vehiculo_numero_unidad: Option<String>,
+    encargado_id: Option<i64>,
+    encargado_nombre: String,
+    numero_ruta: i64,
+    sub_numero: i64,
+    numero_documento: String,
+    fecha_documento: String,
+    resultado: String,
+    motivo_resultado: Option<String>,
+    fecha_hora_salida: String,
+    usuario_salida_nombre: String,
+}
+
+fn construir_cuerpo_salida_ruta(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<Value, SincronizacionError> {
+    let fila: FilaSalidaRutaLocal = connection.query_row(
+        "SELECT vehiculo_id, vehiculo_placa, vehiculo_numero_unidad, encargado_id,
+                encargado_nombre, numero_ruta, sub_numero, numero_documento,
+                fecha_documento, resultado, motivo_resultado, fecha_hora_salida,
+                usuario_salida_nombre
+         FROM salidas_ruta WHERE uuid = ?1",
+        params![uuid],
+        |row| {
+            Ok(FilaSalidaRutaLocal {
+                vehiculo_id: row.get(0)?,
+                vehiculo_placa: row.get(1)?,
+                vehiculo_numero_unidad: row.get(2)?,
+                encargado_id: row.get(3)?,
+                encargado_nombre: row.get(4)?,
+                numero_ruta: row.get(5)?,
+                sub_numero: row.get(6)?,
+                numero_documento: row.get(7)?,
+                fecha_documento: row.get(8)?,
+                resultado: row.get(9)?,
+                motivo_resultado: row.get(10)?,
+                fecha_hora_salida: row.get(11)?,
+                usuario_salida_nombre: row.get(12)?,
+            })
+        },
+    )?;
+
+    // El catálogo es consultivo (ver `RutaService`): si hubo match local se
+    // manda el uuid real de esa fila; si no, `None` viaja tal cual -- la
+    // nube no exige que `vehiculo_id`/`encargado_id` existan (mismas
+    // columnas nullable del lado de la migración de Supabase).
+    let vehiculo_uuid: Option<String> = fila
+        .vehiculo_id
+        .map(|id| {
+            connection.query_row(
+                "SELECT uuid FROM vehiculos_ruta WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+        })
+        .transpose()?;
+    let encargado_uuid: Option<String> = fila
+        .encargado_id
+        .map(|id| {
+            connection.query_row(
+                "SELECT uuid FROM encargados_ruta WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+        })
+        .transpose()?;
+
+    Ok(json!({
+        "id": uuid,
+        "sitio_id": contexto.sitio_id,
+        "dispositivo_salida_id": contexto.dispositivo_id,
+        "vehiculo_id": vehiculo_uuid,
+        "vehiculo_placa": fila.vehiculo_placa,
+        "vehiculo_numero_unidad": fila.vehiculo_numero_unidad,
+        "encargado_id": encargado_uuid,
+        "encargado_nombre": fila.encargado_nombre,
+        "numero_ruta": fila.numero_ruta,
+        "sub_numero": fila.sub_numero,
+        "numero_documento": fila.numero_documento,
+        "fecha_documento": fila.fecha_documento,
+        "resultado": fila.resultado,
+        "motivo_resultado": fila.motivo_resultado,
+        "hora_salida": fila.fecha_hora_salida,
+        "usuario_salida_nombre": fila.usuario_salida_nombre,
+    }))
+}
+
+fn enviar_salida_ruta(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let cuerpo = construir_cuerpo_salida_ruta(connection, contexto, uuid)?;
+
+    let respuesta = cliente
+        .post(format!("{}/rest/v1/salidas_ruta", contexto.base_url))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Cierre (cola), mismo criterio "primero en llegar gana" que
+/// `enviar_cierre_ingreso`/`enviar_cierre_movimiento_visita` -- el filtro
+/// `hora_retorno=is.null` hace que un cierre que llega tarde (otro
+/// dispositivo ya cerró esta salida) no afecte ninguna fila en vez de
+/// fallar.
+fn enviar_cierre_salida_ruta(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let (fecha_hora_retorno, usuario_retorno_nombre): (Option<String>, Option<String>) = connection
+        .query_row(
+            "SELECT fecha_hora_retorno, usuario_retorno_nombre FROM salidas_ruta WHERE uuid = ?1",
+            params![uuid],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+
+    let cuerpo = json!({
+        "hora_retorno": fecha_hora_retorno,
+        "dispositivo_retorno_id": contexto.dispositivo_id,
+        "usuario_retorno_nombre": usuario_retorno_nombre,
+    });
+
+    let url = format!(
+        "{}/rest/v1/salidas_ruta?id=eq.{uuid}&hora_retorno=is.null",
+        contexto.base_url
+    );
+
+    let respuesta = cliente
+        .patch(url)
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
 /// Fila cacheada localmente de un ingreso todavía abierto, creado por el
 /// otro dispositivo de este mismo sitio -- ver `ingresos_remotos` en
 /// `database::schema` sobre por qué esto no es una fila de
@@ -1212,6 +1844,70 @@ pub fn recibir_cierres_de_ingresos_propios(
     Ok(aplicados)
 }
 
+/// Espejo de [`recibir_cierres_de_ingresos_propios`], pero contra
+/// `registro_ingresos_proveedor`/`ingresos_proveedor` -- faltaba (bug
+/// reportado en pruebas reales, 2026-09-17): sin esto, un ingreso de
+/// proveedor abierto en ESTE dispositivo y cerrado por OTRO nunca se
+/// actualizaba acá -- `recibir_ingresos_proveedor_abiertos` sólo refresca la
+/// caché de lo ajeno (`ingresos_proveedor_remotos`), no toca
+/// `registro_ingresos_proveedor` propio -- así que el dispositivo dueño del
+/// ingreso lo seguía mostrando como abierto para siempre, sin importar
+/// cuántas veces sincronizara.
+pub fn recibir_cierres_de_ingresos_propios_proveedor(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<u32, SincronizacionError> {
+    let abiertos_localmente: Vec<String> = {
+        let mut statement = connection.prepare(
+            "SELECT uuid FROM registro_ingresos_proveedor WHERE fecha_hora_salida IS NULL",
+        )?;
+        statement
+            .query_map([], |row| row.get(0))?
+            .collect::<Result<_, _>>()?
+    };
+    if abiertos_localmente.is_empty() {
+        return Ok(0);
+    }
+
+    let cliente = cliente_http();
+    let lista_uuids = abiertos_localmente.join(",");
+    let url = format!(
+        "{}/rest/v1/ingresos_proveedor?id=in.({lista_uuids})&hora_salida=not.is.null\
+         &select=id,hora_salida,usuario_salida_nombre",
+        contexto.base_url,
+    );
+    let filas: Vec<FilaCierrePropioRemoto> = obtener_json(&cliente, contexto, &url)?;
+
+    let transaction = connection.unchecked_transaction()?;
+    let mut aplicados = 0_u32;
+    for fila in &filas {
+        let nombre_salida = fila
+            .usuario_salida_nombre
+            .as_deref()
+            .unwrap_or("Salida registrada en nube");
+        let hora_salida = crate::tiempo::parsear_utc(&fila.hora_salida)
+            .map(crate::tiempo::serializar_utc)
+            .map_err(|_| SincronizacionError::FechaInvalida(fila.hora_salida.clone()))?;
+        let filas_afectadas = transaction.execute(
+            "
+            UPDATE registro_ingresos_proveedor
+            SET
+                fecha_hora_salida = ?1,
+                usuario_salida_id = NULL,
+                usuario_salida_nombre = ?2
+            WHERE uuid = ?3
+              AND fecha_hora_salida IS NULL
+            ",
+            params![hora_salida, nombre_salida, fila.id],
+        )?;
+        let filas_afectadas = u32::try_from(filas_afectadas).unwrap_or(u32::MAX);
+        aplicados = aplicados.saturating_add(filas_afectadas);
+    }
+    transaction.commit()?;
+
+    Ok(aplicados)
+}
+
 /// Refresca la caché local `ingresos_remotos` con lo que hay abierto ahora
 /// mismo en la nube para este sitio -- de *cualquier* dispositivo, ya no
 /// sólo "el otro" (`dispositivo_entrada_id=neq.<el mío>` como antes). Ese
@@ -1304,6 +2000,106 @@ pub fn recibir_ingresos_abiertos(
     Ok(remotos)
 }
 
+/// Fila cacheada localmente de un ingreso de proveedor todavía abierto,
+/// creado por el otro dispositivo de este mismo sitio -- mismo criterio que
+/// [`IngresoRemoto`], pero contra `ingresos_proveedor_remotos`/
+/// `ingresos_proveedor` (ver `docs/features-futuras/plan-control-proveedores.md`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IngresoProveedorRemoto {
+    pub uuid: String,
+    pub cedula: String,
+    pub nombre: String,
+    pub empresa_nombre: String,
+    pub placa: Option<String>,
+    pub gafete_numero: i64,
+    pub hora_entrada: String,
+    pub usuario_entrada_nombre: String,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaIngresoProveedorRemoto {
+    id: String,
+    cedula: String,
+    nombre: String,
+    empresa_nombre: String,
+    placa: Option<String>,
+    gafete_numero: i64,
+    hora_entrada: String,
+    usuario_entrada_nombre: String,
+    dispositivo_entrada_id: String,
+}
+
+/// Espejo de [`recibir_ingresos_abiertos`], pero contra `ingresos_proveedor`
+/// -- misma lógica de "traer todo lo abierto del sitio y descartar lo que
+/// ya vive local" (reinstalación de app incluida), mismo reemplazo completo
+/// de la caché en una sola transacción.
+pub fn recibir_ingresos_proveedor_abiertos(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<Vec<IngresoProveedorRemoto>, SincronizacionError> {
+    let cliente = cliente_http();
+    let url = format!(
+        "{}/rest/v1/ingresos_proveedor?sitio_id=eq.{}&hora_salida=is.null\
+         &select=id,cedula,nombre,empresa_nombre,placa,gafete_numero,hora_entrada,\
+         usuario_entrada_nombre,dispositivo_entrada_id",
+        contexto.base_url, contexto.sitio_id,
+    );
+    let filas: Vec<FilaIngresoProveedorRemoto> = obtener_json(&cliente, contexto, &url)?;
+
+    let transaction = connection.unchecked_transaction()?;
+    transaction.execute(
+        "DELETE FROM ingresos_proveedor_remotos WHERE sitio_id = ?1",
+        params![contexto.sitio_id],
+    )?;
+    let mut remotos = Vec::with_capacity(filas.len());
+    for fila in filas {
+        let existe_localmente: bool = transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM registro_ingresos_proveedor WHERE uuid = ?1)",
+            params![fila.id],
+            |row| row.get(0),
+        )?;
+        if existe_localmente {
+            continue;
+        }
+        let hora_entrada = crate::tiempo::parsear_utc(&fila.hora_entrada)
+            .map(crate::tiempo::serializar_utc)
+            .map_err(|_| SincronizacionError::FechaInvalida(fila.hora_entrada.clone()))?;
+        transaction.execute(
+            "
+            INSERT INTO ingresos_proveedor_remotos (
+                uuid, sitio_id, cedula, nombre, empresa_nombre, placa, gafete_numero,
+                hora_entrada, usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            ",
+            params![
+                fila.id,
+                contexto.sitio_id,
+                fila.cedula,
+                fila.nombre,
+                fila.empresa_nombre,
+                fila.placa,
+                fila.gafete_numero,
+                hora_entrada,
+                fila.usuario_entrada_nombre,
+                fila.dispositivo_entrada_id,
+            ],
+        )?;
+        remotos.push(IngresoProveedorRemoto {
+            uuid: fila.id,
+            cedula: fila.cedula,
+            nombre: fila.nombre,
+            empresa_nombre: fila.empresa_nombre,
+            placa: fila.placa,
+            gafete_numero: fila.gafete_numero,
+            hora_entrada,
+            usuario_entrada_nombre: fila.usuario_entrada_nombre,
+        });
+    }
+    transaction.commit()?;
+
+    Ok(remotos)
+}
+
 #[derive(serde::Deserialize)]
 struct FilaGafeteOcupado {
     #[allow(dead_code)]
@@ -1339,52 +2135,99 @@ pub fn usuario_sigue_activo_remoto(
     Ok(filas.first().is_none_or(|fila| fila.activo))
 }
 
-/// Consulta en vivo -- no la caché local `ingresos_remotos` (que sólo se
-/// refresca en cada sync y podría estar desactualizada por minutos) -- si
-/// `numero` ya tiene un ingreso abierto en este sitio, creado por *otro*
-/// dispositivo. Pensada para llamarse justo antes de confirmar un ingreso
-/// nuevo con gafete: dos dispositivos del mismo sitio comparten el mismo
-/// rango de gafetes físicos, pero cada uno valida contra su propia base
-/// `SQLite` (`idx_registro_ingresos_gafete_activo`), que nunca ve lo que
-/// hizo el otro hasta sincronizar -- de ahí que ambos pudieran aceptar el
-/// mismo número como activo a la vez. No reserva nada del lado del
-/// receptor: sigue existiendo una ventana muy angosta entre esta consulta
-/// y que el ingreso realmente se drene a la cola de salida (ver
-/// `drenar_cola`), pero cierra el caso normal (no perfectamente
-/// simultáneo) que sí se pudo reproducir.
-pub fn gafete_ocupado_en_otro_dispositivo(
+/// Consulta en vivo -- no una caché local que sólo se refresca en cada sync
+/// y podría estar desactualizada por minutos -- si `numero` ya está activo
+/// en este sitio del lado de *otro* dispositivo, para cualquier tabla que
+/// siga el mismo molde (un gafete numerado + una columna que marca cierre +
+/// una columna de dispositivo de apertura). Todas las variantes de
+/// "gafete ocupado" (contratista, visita, provisional KOF, proveedor)
+/// comparten esta misma regla de negocio -- mismo sitio, no se puede entregar dos veces,
+/// hay que vigilar que un dispositivo no dé un gafete que otro ya asignó --
+/// así que comparten esta única consulta parametrizada por tabla/columnas
+/// en vez de tres copias casi idénticas. Pensada para llamarse justo antes
+/// de confirmar la apertura de un ciclo con gafete: cada dispositivo sólo
+/// valida contra su propia base `SQLite`, que nunca ve lo que hizo otro
+/// hasta sincronizar -- de ahí que dos pudieran aceptar el mismo número
+/// como activo a la vez. No reserva nada del lado del receptor: sigue
+/// existiendo una ventana muy angosta entre esta consulta y que la
+/// apertura realmente se drene a la cola de salida (ver `drenar_cola`),
+/// pero cierra el caso normal (no perfectamente simultáneo) que sí se pudo
+/// reproducir.
+fn gafete_ocupado_en_otro_dispositivo_en(
     contexto: &ContextoSincronizacion<'_>,
+    tabla: &str,
+    columna_dispositivo_apertura: &str,
+    columna_cierre: &str,
     numero: i64,
 ) -> Result<bool, SincronizacionError> {
     let cliente = cliente_http();
     let url = format!(
-        "{}/rest/v1/ingresos?sitio_id=eq.{}&dispositivo_entrada_id=neq.{}&hora_salida=is.null\
-         &gafete_numero=eq.{numero}&select=id&limit=1",
+        "{}/rest/v1/{tabla}?sitio_id=eq.{}&{columna_dispositivo_apertura}=neq.{}\
+         &{columna_cierre}=is.null&gafete_numero=eq.{numero}&select=id&limit=1",
         contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
     );
     let filas: Vec<FilaGafeteOcupado> = obtener_json(&cliente, contexto, &url)?;
     Ok(!filas.is_empty())
 }
 
-/// Mismo criterio y misma forma que `gafete_ocupado_en_otro_dispositivo`,
-/// pero contra `movimientos_visita`: dos dispositivos del mismo sitio
-/// comparten el mismo rango de gafetes físicos de visita, y cada uno sólo
-/// valida contra su propia base `SQLite`
-/// (`idx_movimientos_visita_gafete_activo`), que nunca ve lo que hizo el
-/// otro hasta sincronizar. Pensada para llamarse justo antes de confirmar
-/// una entrada de visita con gafete.
+/// Variante contra `ingresos` (gafetes de contratista).
+pub fn gafete_ocupado_en_otro_dispositivo(
+    contexto: &ContextoSincronizacion<'_>,
+    numero: i64,
+) -> Result<bool, SincronizacionError> {
+    gafete_ocupado_en_otro_dispositivo_en(
+        contexto,
+        "ingresos",
+        "dispositivo_entrada_id",
+        "hora_salida",
+        numero,
+    )
+}
+
+/// Variante contra `movimientos_visita` (gafetes de visita).
 pub fn gafete_de_visita_ocupado_en_otro_dispositivo(
     contexto: &ContextoSincronizacion<'_>,
     numero: i64,
 ) -> Result<bool, SincronizacionError> {
-    let cliente = cliente_http();
-    let url = format!(
-        "{}/rest/v1/movimientos_visita?sitio_id=eq.{}&dispositivo_entrada_id=neq.{}\
-         &hora_salida=is.null&gafete_numero=eq.{numero}&select=id&limit=1",
-        contexto.base_url, contexto.sitio_id, contexto.dispositivo_id,
-    );
-    let filas: Vec<FilaGafeteOcupado> = obtener_json(&cliente, contexto, &url)?;
-    Ok(!filas.is_empty())
+    gafete_ocupado_en_otro_dispositivo_en(
+        contexto,
+        "movimientos_visita",
+        "dispositivo_entrada_id",
+        "hora_salida",
+        numero,
+    )
+}
+
+/// Variante contra `prestamos_gafete_provisional` (gafetes provisionales
+/// KOF) -- ver `docs/features-futuras/plan-gafetes-provisionales-kof.md`.
+pub fn gafete_provisional_ocupado_en_otro_dispositivo(
+    contexto: &ContextoSincronizacion<'_>,
+    numero: i64,
+) -> Result<bool, SincronizacionError> {
+    gafete_ocupado_en_otro_dispositivo_en(
+        contexto,
+        "prestamos_gafete_provisional",
+        "dispositivo_entrega_id",
+        "hora_devolucion",
+        numero,
+    )
+}
+
+/// Variante contra `ingresos_proveedor` (gafetes de proveedor) -- ver
+/// `docs/features-futuras/plan-control-proveedores.md`. Mismo vocabulario
+/// entrada/salida que `movimientos_visita` (no entrega/devolución, eso es
+/// exclusivo de KOF).
+pub fn gafete_de_proveedor_ocupado_en_otro_dispositivo(
+    contexto: &ContextoSincronizacion<'_>,
+    numero: i64,
+) -> Result<bool, SincronizacionError> {
+    gafete_ocupado_en_otro_dispositivo_en(
+        contexto,
+        "ingresos_proveedor",
+        "dispositivo_entrada_id",
+        "hora_salida",
+        numero,
+    )
 }
 
 #[derive(serde::Deserialize)]
@@ -1590,6 +2433,92 @@ pub fn visitantes_con_conflicto_activo(
             Some(ConflictoMovimientoVisitaActivo {
                 cedula,
                 visitante_nombre: nombre,
+                sitio_conflicto: sitio,
+            })
+        })
+        .collect())
+}
+
+/// Espejo de [`contratista_activo_en_otro_sitio`]/[`visitante_activo_en_otro_sitio`],
+/// pero contra `ingresos_proveedor` -- misma cédula, no puede estar activa
+/// físicamente en dos sitios a la vez.
+pub fn proveedor_activo_en_otro_sitio(
+    contexto: &ContextoSincronizacion<'_>,
+    cedula: &str,
+) -> Result<Option<String>, SincronizacionError> {
+    let cliente = cliente_http();
+    let url = format!(
+        "{}/rest/v1/ingresos_proveedor?cedula=eq.{cedula}&sitio_id=neq.{}\
+         &hora_salida=is.null&select=sitios(nombre)&limit=1",
+        contexto.base_url, contexto.sitio_id,
+    );
+    let filas: Vec<FilaIngresoActivoOtroSitio> = obtener_json(&cliente, contexto, &url)?;
+    Ok(filas
+        .into_iter()
+        .next()
+        .and_then(|fila| fila.sitios)
+        .map(|sitio| sitio.nombre))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct ConflictoIngresoProveedorActivo {
+    pub cedula: String,
+    pub nombre: String,
+    /// Sitio donde ESTE mismo dispositivo también lo tiene activo ahora
+    /// mismo -- no necesariamente el único conflicto que existe.
+    pub sitio_conflicto: String,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaConflictoProveedorActivo {
+    cedula: Option<String>,
+    sitios: Option<SitioEmbebido>,
+}
+
+/// Espejo de [`contratistas_con_conflicto_activo`]/[`visitantes_con_conflicto_activo`],
+/// pero contra `ingresos_proveedor`.
+pub fn proveedores_con_conflicto_activo(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<Vec<ConflictoIngresoProveedorActivo>, SincronizacionError> {
+    let mut statement = connection.prepare(
+        "SELECT cedula, nombre FROM registro_ingresos_proveedor
+         WHERE fecha_hora_salida IS NULL",
+    )?;
+    let activos_locales: Vec<(String, String)> = statement
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<Result<_, _>>()?;
+    drop(statement);
+    if activos_locales.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let cedulas = activos_locales
+        .iter()
+        .map(|(cedula, _)| cedula.as_str())
+        .collect::<Vec<_>>()
+        .join(",");
+    let cliente = cliente_http();
+    let url = format!(
+        "{}/rest/v1/ingresos_proveedor?cedula=in.({cedulas})&sitio_id=neq.{}\
+         &hora_salida=is.null&select=cedula,sitios(nombre)",
+        contexto.base_url, contexto.sitio_id,
+    );
+    let filas: Vec<FilaConflictoProveedorActivo> = obtener_json(&cliente, contexto, &url)?;
+
+    Ok(filas
+        .into_iter()
+        .filter_map(|fila| {
+            let cedula = fila.cedula?;
+            let sitio = fila.sitios?.nombre;
+            let nombre = activos_locales
+                .iter()
+                .find(|(c, _)| *c == cedula)
+                .map(|(_, nombre)| nombre.clone())?;
+            Some(ConflictoIngresoProveedorActivo {
+                cedula,
+                nombre,
                 sitio_conflicto: sitio,
             })
         })
@@ -2011,6 +2940,178 @@ fn aplicar_pagina_historial_visitas(
     Ok((recibidos, marca_mas_nueva))
 }
 
+#[derive(serde::Deserialize)]
+struct FilaHistorialIngresoProveedorRemota {
+    id: String,
+    cedula: String,
+    nombre: String,
+    empresa_nombre: Option<String>,
+    placa: Option<String>,
+    gafete_numero: Option<i64>,
+    hora_entrada: String,
+    hora_salida: Option<String>,
+    usuario_entrada_nombre: Option<String>,
+    usuario_salida_nombre: Option<String>,
+    dispositivo_entrada_id: String,
+    dispositivo_salida_id: Option<String>,
+    updated_at: String,
+}
+
+/// Análogo a `FilaHistorialVisitaResultado`.
+enum FilaHistorialIngresoProveedorResultado {
+    Omitida,
+    Aplicada {
+        actualizado_en: Option<chrono::DateTime<chrono::Utc>>,
+    },
+}
+
+/// Espejo de `guardar_fila_historial_visita`, pero contra
+/// `historial_ingresos_proveedor_sitio`.
+fn guardar_fila_historial_ingreso_proveedor(
+    transaction: &rusqlite::Transaction<'_>,
+    contexto: &ContextoSincronizacion<'_>,
+    fila: &FilaHistorialIngresoProveedorRemota,
+    ahora: &str,
+) -> Result<FilaHistorialIngresoProveedorResultado, SincronizacionError> {
+    let Ok(hora_entrada) =
+        crate::tiempo::parsear_utc(&fila.hora_entrada).map(crate::tiempo::serializar_utc)
+    else {
+        return Ok(FilaHistorialIngresoProveedorResultado::Omitida);
+    };
+    let hora_salida = match fila
+        .hora_salida
+        .as_deref()
+        .map(crate::tiempo::parsear_utc)
+        .transpose()
+    {
+        Ok(valor) => valor.map(crate::tiempo::serializar_utc),
+        Err(_) => return Ok(FilaHistorialIngresoProveedorResultado::Omitida),
+    };
+
+    transaction.execute(
+        "
+        INSERT INTO historial_ingresos_proveedor_sitio (
+            uuid, sitio_id, cedula, nombre, empresa_nombre, placa, gafete_numero,
+            hora_entrada, hora_salida, usuario_entrada_nombre, usuario_salida_nombre,
+            dispositivo_entrada_id, dispositivo_salida_id, actualizado_en
+        ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)
+        ON CONFLICT(uuid) DO UPDATE SET
+            hora_salida = excluded.hora_salida,
+            usuario_salida_nombre = excluded.usuario_salida_nombre,
+            dispositivo_salida_id = excluded.dispositivo_salida_id,
+            actualizado_en = excluded.actualizado_en
+        ",
+        params![
+            fila.id,
+            contexto.sitio_id,
+            fila.cedula,
+            fila.nombre,
+            fila.empresa_nombre,
+            fila.placa,
+            fila.gafete_numero,
+            hora_entrada,
+            hora_salida,
+            fila.usuario_entrada_nombre,
+            fila.usuario_salida_nombre,
+            fila.dispositivo_entrada_id,
+            fila.dispositivo_salida_id,
+            ahora,
+        ],
+    )?;
+
+    Ok(FilaHistorialIngresoProveedorResultado::Aplicada {
+        actualizado_en: crate::tiempo::parsear_utc(&fila.updated_at).ok(),
+    })
+}
+
+/// Espejo de `recibir_historial_visitas_del_sitio`, pero contra
+/// `ingresos_proveedor` -- mismo mecanismo incremental (marca de agua
+/// propia, `historial_ingresos_proveedor_actualizado_hasta`, mismo
+/// traslape de `DIAS_TRASLAPE_HISTORIAL` días). Sólo tiene sentido
+/// llamarla en escritorio -- ver el doc-comment de `MIGRACION_43`.
+pub fn recibir_historial_ingresos_proveedor_del_sitio(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<u32, SincronizacionError> {
+    let cliente = cliente_http();
+
+    let marca_anterior: Option<String> = connection.query_row(
+        "SELECT historial_ingresos_proveedor_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let ahora_remoto_seguro = chrono::Utc::now();
+    let marca_consulta =
+        marca_historial_para_consulta(marca_anterior.as_deref(), ahora_remoto_seguro);
+    let filtro_incremental = marca_consulta
+        .as_ref()
+        .map(|marca| format!("&updated_at=gt.{}", crate::tiempo::serializar_utc(*marca)))
+        .unwrap_or_default();
+
+    let url = format!(
+        "{}/rest/v1/ingresos_proveedor?sitio_id=eq.{}{filtro_incremental}\
+         &select=id,cedula,nombre,empresa_nombre,placa,gafete_numero,hora_entrada,hora_salida,\
+         usuario_entrada_nombre,usuario_salida_nombre,dispositivo_entrada_id,\
+         dispositivo_salida_id,updated_at",
+        contexto.base_url, contexto.sitio_id,
+    );
+    let mut recibidos_total = 0_u32;
+    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_consulta;
+    obtener_json_paginado_con(
+        &cliente,
+        contexto,
+        &url,
+        |pagina: Vec<FilaHistorialIngresoProveedorRemota>| {
+            let (recibidos, marca_actualizada) = aplicar_pagina_historial_ingresos_proveedor(
+                connection,
+                contexto,
+                &pagina,
+                marca_mas_nueva,
+            )?;
+            recibidos_total += recibidos;
+            marca_mas_nueva = marca_actualizada;
+            Ok(())
+        },
+    )?;
+
+    Ok(recibidos_total)
+}
+
+/// Espejo de `aplicar_pagina_historial_visitas`.
+fn aplicar_pagina_historial_ingresos_proveedor(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    pagina: &[FilaHistorialIngresoProveedorRemota],
+    marca_previa: Option<chrono::DateTime<chrono::Utc>>,
+) -> Result<(u32, Option<chrono::DateTime<chrono::Utc>>), SincronizacionError> {
+    let transaction = connection.unchecked_transaction()?;
+    let mut recibidos = 0_u32;
+    let ahora = crate::tiempo::serializar_utc(chrono::Utc::now());
+    let mut marca_mas_nueva = marca_previa;
+    for fila in pagina {
+        let FilaHistorialIngresoProveedorResultado::Aplicada { actualizado_en } =
+            guardar_fila_historial_ingreso_proveedor(&transaction, contexto, fila, &ahora)?
+        else {
+            continue;
+        };
+        recibidos += 1;
+        if let Some(actualizado_en) = actualizado_en
+            && marca_mas_nueva.is_none_or(|marca| actualizado_en > marca)
+        {
+            marca_mas_nueva = Some(actualizado_en);
+        }
+    }
+
+    if let Some(marca) = marca_mas_nueva {
+        transaction.execute(
+            "UPDATE sincronizacion_estado SET historial_ingresos_proveedor_actualizado_hasta = ?1 WHERE id = 1",
+            params![crate::tiempo::serializar_utc(marca)],
+        )?;
+    }
+    transaction.commit()?;
+    Ok((recibidos, marca_mas_nueva))
+}
+
 /// Nombre del anfitrión, embebido vía `PostgREST`
 /// (`anfitrion:anfitriones!citas_anfitrion_correo_fkey(nombre)`) -- la
 /// política de `anfitriones` que deja leerlo desde un dispositivo del sitio
@@ -2227,6 +3328,8 @@ pub struct ResumenCatalogo {
     pub contratistas_recibidos: u32,
     pub usuarios_recibidos: u32,
     pub gafetes_recibidos: u32,
+    pub rutas_recibidas: u32,
+    pub empresas_proveedor_recibidas: u32,
 }
 
 #[derive(serde::Deserialize)]
@@ -2285,6 +3388,18 @@ struct FilaGafeteRemota {
     updated_at: String,
 }
 
+/// Catálogo de rutas -- por sitio, como gafetes (ver
+/// `construir_cuerpo_ruta`), pero sin la complejidad de "portador
+/// pendiente" -- comparte la marca general (`filtro_incremental`), no una
+/// propia.
+#[derive(serde::Deserialize)]
+struct FilaRutaRemota {
+    id: String,
+    numero: i64,
+    activo: bool,
+    updated_at: String,
+}
+
 /// Trae de la nube las empresas y contratistas de *este mismo sitio* que
 /// este dispositivo todavía no tiene localmente -- el "pull" que le
 /// faltaba al espejo (hasta ahora sólo empujaba: local → nube, nunca al
@@ -2312,7 +3427,20 @@ struct CatalogoRemotoDescargado {
     contratistas: Vec<FilaContratistaRemota>,
     usuarios: Vec<FilaUsuarioRemota>,
     gafetes: Vec<FilaGafeteRemota>,
+    rutas: Vec<FilaRutaRemota>,
+    empresas_proveedor: Vec<FilaEmpresaProveedorRemota>,
     marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// Catálogo por sitio, como rutas (ver `FilaRutaRemota`) -- a diferencia de
+/// `empresas` (contratistas), que es global entre sitios, cada sitio
+/// maneja su propio directorio de empresas proveedoras.
+#[derive(serde::Deserialize)]
+struct FilaEmpresaProveedorRemota {
+    id: String,
+    nombre: String,
+    activa: bool,
+    updated_at: String,
 }
 
 /// Trae empresas/contratistas/usuarios/gafetes, cada uno incremental según
@@ -2382,13 +3510,36 @@ fn descargar_catalogo_remoto(
             contexto.base_url, contexto.sitio_id
         ),
     )?;
+    // Comparte `filtro_incremental` (marca general), no una propia -- ver
+    // el doc-comment de `FilaRutaRemota`. Con `sitio_id=eq...`, mismo
+    // motivo que gafetes: catálogo por sitio.
+    let rutas: Vec<FilaRutaRemota> = obtener_json_paginado(
+        &cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/rutas?sitio_id=eq.{}&select=id,numero,activo,updated_at{filtro_incremental}",
+            contexto.base_url, contexto.sitio_id
+        ),
+    )?;
+    // Comparte `filtro_incremental` (marca general), no una propia -- mismo
+    // criterio que rutas: catálogo por sitio, sin la complejidad de
+    // "portador pendiente" que sí justifica la marca separada de gafetes.
+    let empresas_proveedor: Vec<FilaEmpresaProveedorRemota> = obtener_json_paginado(
+        &cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/empresas_proveedor?sitio_id=eq.{}&select=id,nombre,activa,updated_at{filtro_incremental}",
+            contexto.base_url, contexto.sitio_id
+        ),
+    )?;
 
-    // Máximo `updated_at` real entre empresas/contratistas/usuarios --
-    // gafetes lleva su propia marca por separado (`guardar_gafetes` la
-    // calcula después, capada por lo que haya quedado pendiente de
-    // resolver, ver su doc-comment). Sin filas nuevas, la marca no avanza
-    // -- preferible repetir la misma consulta (ya sabemos que no trae
-    // nada) a arriesgar perder una fila por un reloj local desviado.
+    // Máximo `updated_at` real entre empresas/contratistas/usuarios/rutas/
+    // empresas_proveedor -- gafetes lleva su propia marca por separado
+    // (`guardar_gafetes` la calcula después, capada por lo que haya
+    // quedado pendiente de resolver, ver su doc-comment). Sin filas
+    // nuevas, la marca no avanza -- preferible repetir la misma consulta
+    // (ya sabemos que no trae nada) a arriesgar perder una fila por un
+    // reloj local desviado.
     let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> =
         marca_anterior.and_then(|marca| crate::tiempo::parsear_utc(marca).ok());
     for actualizado_en in empresas
@@ -2396,6 +3547,8 @@ fn descargar_catalogo_remoto(
         .map(|f| &f.updated_at)
         .chain(contratistas.iter().map(|f| &f.updated_at))
         .chain(usuarios.iter().map(|f| &f.updated_at))
+        .chain(rutas.iter().map(|f| &f.updated_at))
+        .chain(empresas_proveedor.iter().map(|f| &f.updated_at))
     {
         let actualizado_en = crate::tiempo::parsear_utc(actualizado_en)
             .map_err(|_| SincronizacionError::FechaInvalida(actualizado_en.clone()))?;
@@ -2409,8 +3562,54 @@ fn descargar_catalogo_remoto(
         contratistas,
         usuarios,
         gafetes,
+        rutas,
+        empresas_proveedor,
         marca_mas_nueva,
     })
+}
+
+fn guardar_rutas(
+    transaction: &rusqlite::Transaction<'_>,
+    rutas: &[FilaRutaRemota],
+) -> Result<u32, SincronizacionError> {
+    let mut recibidas = 0;
+    for ruta in rutas {
+        transaction.execute(
+            "
+            INSERT INTO rutas (numero, activo, uuid) VALUES (?1, ?2, ?3)
+            ON CONFLICT(numero) DO UPDATE SET
+                activo = excluded.activo,
+                uuid = COALESCE(rutas.uuid, excluded.uuid)
+            ",
+            params![ruta.numero, ruta.activo, ruta.id],
+        )?;
+        recibidas += 1;
+    }
+    Ok(recibidas)
+}
+
+/// Mismo patrón `ON CONFLICT(nombre)` que `guardar_rutas`/`guardar_empresas`
+/// -- si ya existe localmente una empresa con el mismo nombre (la creó
+/// este dispositivo), la actualiza y le completa el `uuid` en vez de
+/// duplicarla.
+fn guardar_empresas_proveedor(
+    transaction: &rusqlite::Transaction<'_>,
+    empresas: &[FilaEmpresaProveedorRemota],
+) -> Result<u32, SincronizacionError> {
+    let mut recibidas = 0;
+    for empresa in empresas {
+        transaction.execute(
+            "
+            INSERT INTO empresas_proveedor (nombre, activo, uuid) VALUES (?1, ?2, ?3)
+            ON CONFLICT(nombre) DO UPDATE SET
+                activo = excluded.activo,
+                uuid = COALESCE(empresas_proveedor.uuid, excluded.uuid)
+            ",
+            params![empresa.nombre, empresa.activa, empresa.id],
+        )?;
+        recibidas += 1;
+    }
+    Ok(recibidas)
 }
 
 fn guardar_empresas(
@@ -2707,11 +3906,16 @@ pub fn recibir_catalogo_del_sitio(
     let usuarios_recibidos = guardar_usuarios(&transaction, &descarga.usuarios)?;
     let (gafetes_recibidos, marca_gafetes_nueva) =
         guardar_gafetes(&transaction, &descarga.gafetes)?;
+    let rutas_recibidas = guardar_rutas(&transaction, &descarga.rutas)?;
+    let empresas_proveedor_recibidas =
+        guardar_empresas_proveedor(&transaction, &descarga.empresas_proveedor)?;
     let resumen = ResumenCatalogo {
         empresas_recibidas,
         contratistas_recibidos,
         usuarios_recibidos,
         gafetes_recibidos,
+        rutas_recibidas,
+        empresas_proveedor_recibidas,
     };
 
     if let Some(marca) = descarga.marca_mas_nueva {
@@ -2729,6 +3933,184 @@ pub fn recibir_catalogo_del_sitio(
 
     transaction.commit()?;
     Ok(resumen)
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct ResumenCatalogoRutas {
+    pub vehiculos_recibidos: u32,
+    pub encargados_recibidos: u32,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaVehiculoRutaRemota {
+    id: String,
+    numero_unidad: Option<String>,
+    placa: String,
+    activo: bool,
+    updated_at: String,
+}
+
+/// Sin `cedula` en el `SELECT` a propósito -- el catálogo remoto la trae
+/// siempre `NULL` (pedido explícito del usuario, 2026-09-15: "es solo
+/// nombre y código de empleado, la cédula ya me indicaron que no va") y el
+/// formulario de escritorio tampoco la captura -- no hay ningún dato real
+/// que este pull pudiera traer para esa columna.
+#[derive(serde::Deserialize)]
+struct FilaEncargadoRutaRemota {
+    id: String,
+    codigo_empleado: String,
+    nombre: String,
+    activo: bool,
+    updated_at: String,
+}
+
+struct CatalogoRutasRemotoDescargado {
+    vehiculos: Vec<FilaVehiculoRutaRemota>,
+    encargados: Vec<FilaEncargadoRutaRemota>,
+    marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// Trae vehículos/encargados de ruta que este dispositivo todavía no tiene
+/// localmente -- mismo motivo que `descargar_catalogo_remoto`
+/// (empresas/contratistas/usuarios): hasta ahora `vehiculos_ruta`/
+/// `encargados_ruta` sólo empujaban (local -> nube), nunca al revés. Sin
+/// `sitio_id=eq...` a propósito -- ambas tablas son globales (ver
+/// `docs/planes-implementados/plan-control-rutas.md`, "Alcance de RLS por tabla"),
+/// mismo criterio que empresas/contratistas.
+fn descargar_catalogo_rutas_remoto(
+    contexto: &ContextoSincronizacion<'_>,
+    marca_anterior: Option<&str>,
+) -> Result<CatalogoRutasRemotoDescargado, SincronizacionError> {
+    let cliente = cliente_http();
+    let filtro_incremental = marca_anterior
+        .map(|marca| format!("&updated_at=gt.{marca}"))
+        .unwrap_or_default();
+
+    let vehiculos: Vec<FilaVehiculoRutaRemota> = obtener_json_paginado(
+        &cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/vehiculos_ruta?select=id,numero_unidad,placa,activo,updated_at{filtro_incremental}",
+            contexto.base_url
+        ),
+    )?;
+    let encargados: Vec<FilaEncargadoRutaRemota> = obtener_json_paginado(
+        &cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/encargados_ruta?select=id,codigo_empleado,nombre,activo,updated_at{filtro_incremental}",
+            contexto.base_url
+        ),
+    )?;
+
+    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> =
+        marca_anterior.and_then(|marca| crate::tiempo::parsear_utc(marca).ok());
+    for actualizado_en in vehiculos
+        .iter()
+        .map(|f| &f.updated_at)
+        .chain(encargados.iter().map(|f| &f.updated_at))
+    {
+        let actualizado_en = crate::tiempo::parsear_utc(actualizado_en)
+            .map_err(|_| SincronizacionError::FechaInvalida(actualizado_en.clone()))?;
+        if marca_mas_nueva.is_none_or(|marca| actualizado_en > marca) {
+            marca_mas_nueva = Some(actualizado_en);
+        }
+    }
+
+    Ok(CatalogoRutasRemotoDescargado {
+        vehiculos,
+        encargados,
+        marca_mas_nueva,
+    })
+}
+
+fn guardar_vehiculos_ruta(
+    transaction: &rusqlite::Transaction<'_>,
+    vehiculos: &[FilaVehiculoRutaRemota],
+) -> Result<u32, SincronizacionError> {
+    let mut recibidos = 0;
+    for vehiculo in vehiculos {
+        transaction.execute(
+            "
+            INSERT INTO vehiculos_ruta (numero_unidad, placa, activo, uuid)
+            VALUES (?1, ?2, ?3, ?4)
+            ON CONFLICT(placa) DO UPDATE SET
+                numero_unidad = excluded.numero_unidad,
+                activo = excluded.activo,
+                uuid = COALESCE(vehiculos_ruta.uuid, excluded.uuid)
+            ",
+            params![
+                vehiculo.numero_unidad,
+                vehiculo.placa,
+                vehiculo.activo,
+                vehiculo.id,
+            ],
+        )?;
+        recibidos += 1;
+    }
+    Ok(recibidos)
+}
+
+fn guardar_encargados_ruta(
+    transaction: &rusqlite::Transaction<'_>,
+    encargados: &[FilaEncargadoRutaRemota],
+) -> Result<u32, SincronizacionError> {
+    let mut recibidos = 0;
+    for encargado in encargados {
+        transaction.execute(
+            "
+            INSERT INTO encargados_ruta (codigo_empleado, nombre, activo, uuid)
+            VALUES (?1, ?2, ?3, ?4)
+            ON CONFLICT(codigo_empleado) DO UPDATE SET
+                nombre = excluded.nombre,
+                activo = excluded.activo,
+                uuid = COALESCE(encargados_ruta.uuid, excluded.uuid)
+            ",
+            params![
+                encargado.codigo_empleado,
+                encargado.nombre,
+                encargado.activo,
+                encargado.id,
+            ],
+        )?;
+        recibidos += 1;
+    }
+    Ok(recibidos)
+}
+
+/// Espejo de `recibir_catalogo_del_sitio`, separado en su propia función
+/// (no sumado a esa) porque nace después y con marca de agua propia
+/// (`catalogo_rutas_actualizado_hasta`, `MIGRACION_37`) -- mismo criterio que
+/// `gafetes_actualizado_hasta`/`historial_visitas_actualizado_hasta`: ritmo
+/// de sync independiente, sin depender de que el cursor del resto del
+/// catálogo ya existiera cuando este dominio se sumó.
+pub fn recibir_catalogo_rutas_del_sitio(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<ResumenCatalogoRutas, SincronizacionError> {
+    let marca_anterior: Option<String> = connection.query_row(
+        "SELECT catalogo_rutas_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let descarga = descargar_catalogo_rutas_remoto(contexto, marca_anterior.as_deref())?;
+
+    let transaction = connection.unchecked_transaction()?;
+    let vehiculos_recibidos = guardar_vehiculos_ruta(&transaction, &descarga.vehiculos)?;
+    let encargados_recibidos = guardar_encargados_ruta(&transaction, &descarga.encargados)?;
+
+    if let Some(marca) = descarga.marca_mas_nueva {
+        transaction.execute(
+            "UPDATE sincronizacion_estado SET catalogo_rutas_actualizado_hasta = ?1 WHERE id = 1",
+            params![crate::tiempo::serializar_utc(marca)],
+        )?;
+    }
+
+    transaction.commit()?;
+    Ok(ResumenCatalogoRutas {
+        vehiculos_recibidos,
+        encargados_recibidos,
+    })
 }
 
 /// Índice en memoria de una tabla local por `uuid` y por `nombre`,
@@ -2845,6 +4227,247 @@ pub fn cerrar_ingreso_remoto(
 
     connection.execute(
         "DELETE FROM ingresos_remotos WHERE uuid = ?1",
+        params![uuid],
+    )?;
+    Ok(())
+}
+
+/// Espejo de [`cerrar_ingreso_remoto`], pero contra `ingresos_proveedor`.
+pub fn cerrar_ingreso_proveedor_remoto(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+    usuario_salida_nombre: &str,
+) -> Result<(), SincronizacionError> {
+    let cliente = cliente_http();
+    let cuerpo = json!({
+        "hora_salida": crate::tiempo::serializar_utc(chrono::Utc::now()),
+        "dispositivo_salida_id": contexto.dispositivo_id,
+        "usuario_salida_nombre": usuario_salida_nombre,
+    });
+
+    let url = format!(
+        "{}/rest/v1/ingresos_proveedor?id=eq.{uuid}&hora_salida=is.null",
+        contexto.base_url
+    );
+    let respuesta = cliente
+        .patch(url)
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)?;
+
+    connection.execute(
+        "DELETE FROM ingresos_proveedor_remotos WHERE uuid = ?1",
+        params![uuid],
+    )?;
+    Ok(())
+}
+
+// ---- Gafetes provisionales KOF: sync entre dispositivos ----
+//
+// Faltaba por completo -- sólo existían el push (`enviar_prestamo_gafete_provisional`/
+// `enviar_cierre_prestamo_gafete_provisional`) y el chequeo en vivo
+// (`gafete_provisional_ocupado_en_otro_dispositivo`), pero nada traía de
+// vuelta lo que OTRO dispositivo entregó/devolvió -- un préstamo hecho en
+// el celular nunca aparecía en la PC (ni viceversa), y un préstamo cerrado
+// por otro dispositivo se quedaba "abierto" para siempre del lado de quien
+// lo entregó. Mismo patrón exacto que `ingresos_proveedor_remotos`/
+// `recibir_cierres_de_ingresos_propios_proveedor` -- bug reportado en
+// pruebas reales, 2026-09-17 ("yo sabía que no estaba sincronizada").
+
+/// Fila cacheada localmente de un préstamo de gafete provisional todavía
+/// abierto, entregado por OTRO dispositivo de este mismo sitio -- mismo
+/// criterio que [`IngresoProveedorRemoto`], pero contra
+/// `prestamos_gafete_provisional_remotos`/`prestamos_gafete_provisional`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrestamoGafeteProvisionalRemoto {
+    pub uuid: String,
+    pub encargado_nombre: String,
+    pub encargado_codigo_empleado: String,
+    pub gafete_numero: i64,
+    pub hora_entrega: String,
+    pub usuario_entrega_nombre: String,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaPrestamoGafeteProvisionalRemoto {
+    id: String,
+    encargado_nombre: String,
+    encargado_codigo_empleado: String,
+    gafete_numero: i64,
+    hora_entrega: String,
+    usuario_entrega_nombre: String,
+}
+
+/// Espejo de [`recibir_ingresos_proveedor_abiertos`], pero contra
+/// `prestamos_gafete_provisional` -- misma lógica de "traer todo lo
+/// abierto del sitio y descartar lo que ya vive local", mismo reemplazo
+/// completo de la caché en una sola transacción.
+pub fn recibir_prestamos_gafete_provisional_abiertos(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<Vec<PrestamoGafeteProvisionalRemoto>, SincronizacionError> {
+    let cliente = cliente_http();
+    let url = format!(
+        "{}/rest/v1/prestamos_gafete_provisional?sitio_id=eq.{}&hora_devolucion=is.null\
+         &select=id,encargado_nombre,encargado_codigo_empleado,gafete_numero,hora_entrega,\
+         usuario_entrega_nombre",
+        contexto.base_url, contexto.sitio_id,
+    );
+    let filas: Vec<FilaPrestamoGafeteProvisionalRemoto> = obtener_json(&cliente, contexto, &url)?;
+
+    let transaction = connection.unchecked_transaction()?;
+    transaction.execute(
+        "DELETE FROM prestamos_gafete_provisional_remotos WHERE sitio_id = ?1",
+        params![contexto.sitio_id],
+    )?;
+    let mut remotos = Vec::with_capacity(filas.len());
+    for fila in filas {
+        let existe_localmente: bool = transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM prestamos_gafete_provisional WHERE uuid = ?1)",
+            params![fila.id],
+            |row| row.get(0),
+        )?;
+        if existe_localmente {
+            continue;
+        }
+        let hora_entrega = crate::tiempo::parsear_utc(&fila.hora_entrega)
+            .map(crate::tiempo::serializar_utc)
+            .map_err(|_| SincronizacionError::FechaInvalida(fila.hora_entrega.clone()))?;
+        transaction.execute(
+            "
+            INSERT INTO prestamos_gafete_provisional_remotos (
+                uuid, sitio_id, encargado_nombre, encargado_codigo_empleado, gafete_numero,
+                hora_entrega, usuario_entrega_nombre, actualizado_en
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            ",
+            params![
+                fila.id,
+                contexto.sitio_id,
+                fila.encargado_nombre,
+                fila.encargado_codigo_empleado,
+                fila.gafete_numero,
+                hora_entrega,
+                fila.usuario_entrega_nombre,
+            ],
+        )?;
+        remotos.push(PrestamoGafeteProvisionalRemoto {
+            uuid: fila.id,
+            encargado_nombre: fila.encargado_nombre,
+            encargado_codigo_empleado: fila.encargado_codigo_empleado,
+            gafete_numero: fila.gafete_numero,
+            hora_entrega,
+            usuario_entrega_nombre: fila.usuario_entrega_nombre,
+        });
+    }
+    transaction.commit()?;
+
+    Ok(remotos)
+}
+
+#[derive(serde::Deserialize)]
+struct FilaDevolucionPropiaRemota {
+    id: String,
+    hora_devolucion: String,
+    usuario_devolucion_nombre: Option<String>,
+}
+
+/// Espejo de [`recibir_cierres_de_ingresos_propios_proveedor`], pero para
+/// devoluciones de préstamos de gafete provisional que ESTE dispositivo
+/// entregó y OTRO dispositivo devolvió.
+pub fn recibir_devoluciones_propias_gafete_provisional(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<u32, SincronizacionError> {
+    let abiertos_localmente: Vec<String> = {
+        let mut statement = connection.prepare(
+            "SELECT uuid FROM prestamos_gafete_provisional WHERE fecha_hora_devolucion IS NULL",
+        )?;
+        statement
+            .query_map([], |row| row.get(0))?
+            .collect::<Result<_, _>>()?
+    };
+    if abiertos_localmente.is_empty() {
+        return Ok(0);
+    }
+
+    let cliente = cliente_http();
+    let lista_uuids = abiertos_localmente.join(",");
+    let url = format!(
+        "{}/rest/v1/prestamos_gafete_provisional?id=in.({lista_uuids})&hora_devolucion=not.is.null\
+         &select=id,hora_devolucion,usuario_devolucion_nombre",
+        contexto.base_url,
+    );
+    let filas: Vec<FilaDevolucionPropiaRemota> = obtener_json(&cliente, contexto, &url)?;
+
+    let transaction = connection.unchecked_transaction()?;
+    let mut aplicados = 0_u32;
+    for fila in &filas {
+        let nombre_devolucion = fila
+            .usuario_devolucion_nombre
+            .as_deref()
+            .unwrap_or("Devolución registrada en nube");
+        let hora_devolucion = crate::tiempo::parsear_utc(&fila.hora_devolucion)
+            .map(crate::tiempo::serializar_utc)
+            .map_err(|_| SincronizacionError::FechaInvalida(fila.hora_devolucion.clone()))?;
+        let filas_afectadas = transaction.execute(
+            "
+            UPDATE prestamos_gafete_provisional
+            SET
+                fecha_hora_devolucion = ?1,
+                usuario_devolucion_id = NULL,
+                usuario_devolucion_nombre = ?2
+            WHERE uuid = ?3
+              AND fecha_hora_devolucion IS NULL
+            ",
+            params![hora_devolucion, nombre_devolucion, fila.id],
+        )?;
+        let filas_afectadas = u32::try_from(filas_afectadas).unwrap_or(u32::MAX);
+        aplicados = aplicados.saturating_add(filas_afectadas);
+    }
+    transaction.commit()?;
+
+    Ok(aplicados)
+}
+
+/// Espejo de [`cerrar_ingreso_proveedor_remoto`], pero para registrar la
+/// devolución de un préstamo de gafete provisional que OTRO dispositivo
+/// entregó.
+pub fn cerrar_prestamo_gafete_provisional_remoto(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+    usuario_devolucion_nombre: &str,
+) -> Result<(), SincronizacionError> {
+    let cliente = cliente_http();
+    let cuerpo = json!({
+        "hora_devolucion": crate::tiempo::serializar_utc(chrono::Utc::now()),
+        "dispositivo_devolucion_id": contexto.dispositivo_id,
+        "usuario_devolucion_nombre": usuario_devolucion_nombre,
+    });
+
+    let url = format!(
+        "{}/rest/v1/prestamos_gafete_provisional?id=eq.{uuid}&hora_devolucion=is.null",
+        contexto.base_url
+    );
+    let respuesta = cliente
+        .patch(url)
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)?;
+
+    connection.execute(
+        "DELETE FROM prestamos_gafete_provisional_remotos WHERE uuid = ?1",
         params![uuid],
     )?;
     Ok(())
@@ -3437,6 +5060,478 @@ mod tests {
     }
 
     #[test]
+    fn envia_una_ruta_pendiente_y_la_marca_enviada() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO rutas (numero, activo, uuid) VALUES (79, 1, 'uuid-ruta-79')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, creado_en, actualizado_en
+                ) VALUES ('ruta', 'uuid-ruta-79', 'crear', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        let estado: String = connection
+            .query_row("SELECT estado FROM cola_salida", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(estado, "enviado");
+    }
+
+    #[test]
+    fn envia_un_vehiculo_ruta_pendiente_y_lo_marca_enviado() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO vehiculos_ruta (numero_unidad, placa, activo, uuid)
+                 VALUES ('22906', 'C12345', 1, 'uuid-vehiculo')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, creado_en, actualizado_en
+                ) VALUES ('vehiculo_ruta', 'uuid-vehiculo', 'crear', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        let estado: String = connection
+            .query_row("SELECT estado FROM cola_salida", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(estado, "enviado");
+    }
+
+    #[test]
+    fn envia_un_encargado_ruta_pendiente_y_lo_marca_enviado() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO encargados_ruta (codigo_empleado, nombre, activo, uuid)
+                 VALUES ('5040017', 'Michael Araya Retana', 1, 'uuid-encargado')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, creado_en, actualizado_en
+                ) VALUES ('encargado_ruta', 'uuid-encargado', 'crear', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        let estado: String = connection
+            .query_row("SELECT estado FROM cola_salida", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(estado, "enviado");
+    }
+
+    #[test]
+    fn envia_una_empresa_proveedor_pendiente_y_la_marca_enviada() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO empresas_proveedor (nombre, activo, uuid)
+                 VALUES ('Maika', 1, 'uuid-empresa-proveedor')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, creado_en, actualizado_en
+                ) VALUES ('empresa_proveedor', 'uuid-empresa-proveedor', 'crear', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        let estado: String = connection
+            .query_row("SELECT estado FROM cola_salida", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(estado, "enviado");
+    }
+
+    /// Ingreso de proveedor listo para encolar, mismo criterio que
+    /// `conexion_con_movimiento_de_visita` -- `fecha_hora_salida` en `Some`
+    /// simula un ingreso ya cerrado, listo para el cierre.
+    fn conexion_con_ingreso_proveedor(fecha_hora_salida: Option<&str>) -> (Connection, String) {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo)
+                 VALUES ('1', 'Guardia', 'h', 'OPERADOR', 1)",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO empresas_proveedor (id, nombre, activo, uuid)
+                 VALUES (1, 'Maika', 1, 'uuid-empresa-proveedor')",
+                [],
+            )
+            .unwrap();
+        let usuario_salida_id = fecha_hora_salida.is_some().then_some(1_i64);
+        let usuario_salida_nombre = fecha_hora_salida.is_some().then_some("Guardia");
+        connection
+            .execute(
+                "INSERT INTO registro_ingresos_proveedor (
+                    uuid, cedula, nombre, empresa_id, empresa_nombre, placa, gafete_numero,
+                    fecha_hora_ingreso, usuario_ingreso_id, usuario_ingreso_nombre,
+                    fecha_hora_salida, usuario_salida_id, usuario_salida_nombre
+                ) VALUES (
+                    'uuid-ingreso-proveedor', '1-2345', 'Juan Perez', 1, 'Maika', NULL, 12,
+                    '2026-01-01T08:00:00Z', 1, 'Guardia',
+                    ?1, ?2, ?3
+                )",
+                params![fecha_hora_salida, usuario_salida_id, usuario_salida_nombre],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, creado_en, actualizado_en
+                ) VALUES (
+                    'ingreso_proveedor', 'uuid-ingreso-proveedor', ?1,
+                    '2026-01-01T08:00:00Z', '2026-01-01T08:00:00Z'
+                )",
+                params![if fecha_hora_salida.is_some() {
+                    "cerrar"
+                } else {
+                    "crear"
+                }],
+            )
+            .unwrap();
+        (connection, "uuid-ingreso-proveedor".to_string())
+    }
+
+    #[test]
+    fn envia_la_apertura_de_un_ingreso_proveedor() {
+        let (connection, _) = conexion_con_ingreso_proveedor(None);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.starts_with("POST /rest/v1/ingresos_proveedor "));
+            let cuerpo = "[]";
+            write!(
+                socket,
+                "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn envia_el_cierre_de_un_ingreso_proveedor() {
+        let (connection, _) = conexion_con_ingreso_proveedor(Some("2026-01-01T09:00:00Z"));
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.starts_with(
+                "PATCH /rest/v1/ingresos_proveedor?id=eq.uuid-ingreso-proveedor&hora_salida=is.null "
+            ));
+            write!(
+                socket,
+                "HTTP/1.1 204 No Content\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
+            )
+            .unwrap();
+        });
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn gafete_de_proveedor_ocupado_en_otro_dispositivo_excluye_este_dispositivo() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.contains("/rest/v1/ingresos_proveedor?"));
+            assert!(pedido.contains("sitio_id=eq.sitio-1"));
+            assert!(pedido.contains("dispositivo_entrada_id=neq.dispositivo-1"));
+            assert!(pedido.contains("gafete_numero=eq.12"));
+            let cuerpo = "[{\"id\":\"uuid-ingreso-proveedor\"}]";
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        let ocupado =
+            gafete_de_proveedor_ocupado_en_otro_dispositivo(&contexto(&base_url), 12).unwrap();
+
+        assert!(ocupado);
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn gafete_de_proveedor_ocupado_en_otro_dispositivo_sin_conflicto_devuelve_false() {
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let ocupado =
+            gafete_de_proveedor_ocupado_en_otro_dispositivo(&contexto(&base_url), 12).unwrap();
+
+        assert!(!ocupado);
+    }
+
+    /// Salida de ruta lista para encolar (sin match de catálogo, mismo
+    /// caso más común según `RutaService`) -- devuelve el `uuid` de la
+    /// salida. `fecha_hora_retorno` en `Some` simula una salida que ya
+    /// está lista para el cierre.
+    fn conexion_con_salida_ruta(fecha_hora_retorno: Option<&str>) -> (Connection, String) {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo)
+                 VALUES ('1', 'Guardia', 'h', 'OPERADOR', 1)",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO rutas (id, numero, uuid) VALUES (1, 79, 'uuid-ruta-79')",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO salidas_ruta (
+                    uuid, vehiculo_placa, vehiculo_numero_unidad, encargado_nombre,
+                    ruta_id, numero_ruta, sub_numero, numero_documento, fecha_documento,
+                    resultado, fecha_hora_salida, usuario_salida_id, usuario_salida_nombre,
+                    fecha_hora_retorno, usuario_retorno_id, usuario_retorno_nombre
+                ) VALUES (
+                    'uuid-salida', 'C12345', '22906', 'Carlos Balmaceda',
+                    1, 79, 1, '700101452', '2026-09-15',
+                    'PERMITIDO', '2026-09-15T12:00:00Z', 1, 'Guardia',
+                    ?1, ?2, ?3
+                )",
+                params![
+                    fecha_hora_retorno,
+                    fecha_hora_retorno.map(|_| 1_i64),
+                    fecha_hora_retorno.map(|_| "Guardia"),
+                ],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, creado_en, actualizado_en
+                ) VALUES (
+                    'salida_ruta', 'uuid-salida', ?1,
+                    '2026-09-15T12:00:00Z', '2026-09-15T12:00:00Z'
+                )",
+                params![if fecha_hora_retorno.is_some() {
+                    "cerrar"
+                } else {
+                    "crear"
+                }],
+            )
+            .unwrap();
+        (connection, "uuid-salida".to_string())
+    }
+
+    #[test]
+    fn envia_la_apertura_de_una_salida_ruta() {
+        let (connection, _) = conexion_con_salida_ruta(None);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.starts_with("POST /rest/v1/salidas_ruta "));
+            let cuerpo = "[]";
+            write!(
+                socket,
+                "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn envia_el_cierre_de_una_salida_ruta() {
+        let (connection, _) = conexion_con_salida_ruta(Some("2026-09-15T18:00:00Z"));
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.starts_with(
+                "PATCH /rest/v1/salidas_ruta?id=eq.uuid-salida&hora_retorno=is.null "
+            ));
+            write!(
+                socket,
+                "HTTP/1.1 204 No Content\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
+            )
+            .unwrap();
+        });
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenDrenado {
+                enviados: 1,
+                fallidos: 0
+            }
+        );
+        servidor.join().unwrap();
+    }
+
+    #[test]
     fn envia_la_apertura_de_un_ingreso() {
         let (connection, contratista_uuid) = conexion_con_contratista();
         connection.execute("DELETE FROM cola_salida", []).unwrap();
@@ -3502,6 +5597,35 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM ingresos_remotos", [], |row| {
                 row.get(0)
             })
+            .unwrap();
+        assert_eq!(cacheados, 1);
+    }
+
+    #[test]
+    fn recibe_ingresos_proveedor_abiertos_del_otro_dispositivo_y_los_cachea() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-remoto\",\"cedula\":\"1-1111\",\"nombre\":\"Juan Perez\",\
+             \"empresa_nombre\":\"Maika\",\"placa\":null,\"gafete_numero\":9,\
+             \"hora_entrada\":\"2026-01-01T08:00:00Z\",\"usuario_entrada_nombre\":\"Op PC\",\
+             \"dispositivo_entrada_id\":\"otro-dispositivo\"}]",
+        );
+
+        let recibidos =
+            recibir_ingresos_proveedor_abiertos(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(recibidos.len(), 1);
+        assert_eq!(recibidos[0].uuid, "uuid-remoto");
+        assert_eq!(recibidos[0].nombre, "Juan Perez");
+        assert_eq!(recibidos[0].gafete_numero, 9);
+        let cacheados: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM ingresos_proveedor_remotos",
+                [],
+                |row| row.get(0),
+            )
             .unwrap();
         assert_eq!(cacheados, 1);
     }
@@ -4023,6 +6147,115 @@ mod tests {
     }
 
     #[test]
+    fn recibe_el_historial_de_ingresos_proveedor_del_sitio_y_lo_guarda_local() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"ingreso-proveedor-1\",\"cedula\":\"1-1111\",\
+             \"nombre\":\"Proveedor Remoto\",\"empresa_nombre\":\"Maika\",\"placa\":null,\
+             \"gafete_numero\":9,\"hora_entrada\":\"2026-01-01T08:00:00Z\",\
+             \"hora_salida\":null,\"usuario_entrada_nombre\":\"Guardia\",\
+             \"usuario_salida_nombre\":null,\"dispositivo_entrada_id\":\"otro-dispositivo\",\
+             \"dispositivo_salida_id\":null,\"updated_at\":\"2026-01-01T08:00:05Z\"}]",
+        );
+
+        let recibidos =
+            recibir_historial_ingresos_proveedor_del_sitio(&connection, &contexto(&base_url))
+                .unwrap();
+
+        assert_eq!(recibidos, 1);
+        let (cedula, nombre, empresa): (String, String, Option<String>) = connection
+            .query_row(
+                "SELECT cedula, nombre, empresa_nombre
+                 FROM historial_ingresos_proveedor_sitio WHERE uuid = 'ingreso-proveedor-1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(cedula, "1-1111");
+        assert_eq!(nombre, "Proveedor Remoto");
+        assert_eq!(empresa.as_deref(), Some("Maika"));
+    }
+
+    #[test]
+    fn una_fila_de_historial_de_ingresos_proveedor_con_fecha_ilegible_se_omite_sin_abortar_las_demas()
+     {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"prov-malo\",\"cedula\":\"1-1111\",\"nombre\":\"X\",\
+             \"empresa_nombre\":null,\"placa\":null,\"gafete_numero\":null,\
+             \"hora_entrada\":\"no-es-una-fecha\",\"hora_salida\":null,\
+             \"usuario_entrada_nombre\":null,\"usuario_salida_nombre\":null,\
+             \"dispositivo_entrada_id\":\"otro-dispositivo\",\"dispositivo_salida_id\":null,\
+             \"updated_at\":\"2026-01-01T08:00:00Z\"},\
+             {\"id\":\"prov-bueno\",\"cedula\":\"1-2222\",\"nombre\":\"Y\",\
+             \"empresa_nombre\":null,\"placa\":null,\"gafete_numero\":null,\
+             \"hora_entrada\":\"2026-01-01T08:00:00Z\",\"hora_salida\":null,\
+             \"usuario_entrada_nombre\":null,\"usuario_salida_nombre\":null,\
+             \"dispositivo_entrada_id\":\"otro-dispositivo\",\"dispositivo_salida_id\":null,\
+             \"updated_at\":\"2026-01-01T08:00:05Z\"}]",
+        );
+
+        let recibidos =
+            recibir_historial_ingresos_proveedor_del_sitio(&connection, &contexto(&base_url))
+                .unwrap();
+
+        assert_eq!(recibidos, 1, "la fila con hora_entrada ilegible no cuenta");
+        let total: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM historial_ingresos_proveedor_sitio",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(total, 1, "solo se guardó la fila válida");
+    }
+
+    #[test]
+    fn segunda_sincronizacion_de_historial_de_ingresos_proveedor_pide_solo_lo_actualizado_desde_la_marca_previa()
+     {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "UPDATE sincronizacion_estado SET historial_ingresos_proveedor_actualizado_hasta = '2026-09-09T08:00:00Z' WHERE id = 1",
+                [],
+            )
+            .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.contains("/ingresos_proveedor?sitio_id=eq.sitio-1"));
+            assert!(pedido.contains("updated_at=gt."));
+            let cuerpo = "[]";
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        recibir_historial_ingresos_proveedor_del_sitio(&connection, &contexto(&base_url)).unwrap();
+        servidor.join().unwrap();
+    }
+
+    #[test]
     fn usuario_sigue_activo_remoto_lee_el_booleano_de_una_sola_fila() {
         let base_url = servidor_de_una_respuesta(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
@@ -4213,6 +6446,56 @@ mod tests {
     }
 
     #[test]
+    fn gafete_provisional_ocupado_en_otro_dispositivo_consulta_la_tabla_y_columnas_correctas() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.contains("GET /rest/v1/prestamos_gafete_provisional?"));
+            assert!(pedido.contains("sitio_id=eq.sitio-1"));
+            assert!(pedido.contains("dispositivo_entrega_id=neq.dispositivo-1"));
+            assert!(pedido.contains("hora_devolucion=is.null"));
+            assert!(pedido.contains("gafete_numero=eq.12"));
+            let cuerpo = "[{\"id\":\"uuid-prestamo\"}]";
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        let ocupado =
+            gafete_provisional_ocupado_en_otro_dispositivo(&contexto(&base_url), 12).unwrap();
+
+        assert!(ocupado);
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn gafete_provisional_ocupado_en_otro_dispositivo_sin_conflicto_devuelve_false() {
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let ocupado =
+            gafete_provisional_ocupado_en_otro_dispositivo(&contexto(&base_url), 12).unwrap();
+
+        assert!(!ocupado);
+    }
+
+    #[test]
     fn visitante_activo_en_otro_sitio_excluye_el_sitio_actual_en_la_url() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let base_url = format!("http://{}", listener.local_addr().unwrap());
@@ -4320,6 +6603,106 @@ mod tests {
     }
 
     #[test]
+    fn proveedor_activo_en_otro_sitio_excluye_el_sitio_actual_en_la_url() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.contains("cedula=eq.1-2345"));
+            assert!(pedido.contains("sitio_id=neq.sitio-1"));
+            assert!(pedido.contains("hora_salida=is.null"));
+            let cuerpo = "[{\"sitios\":{\"nombre\":\"Cartago\"}}]";
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        let sitio = proveedor_activo_en_otro_sitio(&contexto(&base_url), "1-2345").unwrap();
+
+        assert_eq!(sitio, Some("Cartago".to_string()));
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn proveedor_activo_en_otro_sitio_sin_conflicto_devuelve_none() {
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        let sitio = proveedor_activo_en_otro_sitio(&contexto(&base_url), "1-2345").unwrap();
+
+        assert_eq!(sitio, None);
+    }
+
+    fn conexion_con_un_ingreso_proveedor_activo() -> Connection {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute_batch(
+                "
+                INSERT INTO usuarios (id, cedula, nombre, password_hash, rol, activo)
+                VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1);
+                INSERT INTO empresas_proveedor (id, nombre, activo, uuid)
+                VALUES (1, 'Maika', 1, 'uuid-empresa-proveedor');
+                INSERT INTO registro_ingresos_proveedor (
+                    id, cedula, nombre, empresa_id, empresa_nombre, gafete_numero,
+                    fecha_hora_ingreso, usuario_ingreso_id, usuario_ingreso_nombre, uuid
+                ) VALUES (
+                    1, '1-2345', 'Juan Perez', 1, 'Maika', 9,
+                    '2026-08-01T08:00:00Z', 1, 'Operador', 'uuid-ingreso-proveedor'
+                );
+                ",
+            )
+            .unwrap();
+        connection
+    }
+
+    #[test]
+    fn proveedores_con_conflicto_activo_solo_incluye_a_quien_de_verdad_choca() {
+        let connection = conexion_con_un_ingreso_proveedor_activo();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"cedula\":\"1-2345\",\"sitios\":{\"nombre\":\"Cartago\"}}]",
+        );
+
+        let conflictos =
+            proveedores_con_conflicto_activo(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(
+            conflictos,
+            vec![ConflictoIngresoProveedorActivo {
+                cedula: "1-2345".to_string(),
+                nombre: "Juan Perez".to_string(),
+                sitio_conflicto: "Cartago".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn proveedores_con_conflicto_activo_sin_nada_local_no_llama_a_la_nube() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let conflictos =
+            proveedores_con_conflicto_activo(&connection, &contexto("http://127.0.0.1:1")).unwrap();
+
+        assert_eq!(conflictos, Vec::new());
+    }
+
+    #[test]
     fn recibe_cierres_de_ingresos_propios_sin_reencolar() {
         let connection = Connection::open_in_memory().unwrap();
         initialize_database(&connection).unwrap();
@@ -4379,6 +6762,141 @@ mod tests {
             )
             .unwrap();
         assert_eq!(reencolados, 0);
+    }
+
+    #[test]
+    fn recibe_cierres_de_ingresos_propios_proveedor_sin_reencolar() {
+        let connection = conexion_con_un_ingreso_proveedor_activo();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-ingreso-proveedor\",\"hora_salida\":\"2026-08-01T10:00:00Z\",\
+             \"usuario_salida_nombre\":\"Operador remoto\"}]",
+        );
+
+        let aplicados =
+            recibir_cierres_de_ingresos_propios_proveedor(&connection, &contexto(&base_url))
+                .unwrap();
+
+        assert_eq!(aplicados, 1);
+        let (salida, usuario_id, usuario_nombre): (String, Option<i64>, String) = connection
+            .query_row(
+                "SELECT fecha_hora_salida, usuario_salida_id, usuario_salida_nombre
+                 FROM registro_ingresos_proveedor WHERE uuid = 'uuid-ingreso-proveedor'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(salida, "2026-08-01T10:00:00Z");
+        assert_eq!(usuario_id, None);
+        assert_eq!(usuario_nombre, "Operador remoto");
+    }
+
+    #[test]
+    fn recibe_cierres_de_ingresos_propios_proveedor_sin_nada_local_no_llama_a_la_nube() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+
+        let aplicados = recibir_cierres_de_ingresos_propios_proveedor(
+            &connection,
+            &contexto("http://127.0.0.1:1"),
+        )
+        .unwrap();
+
+        assert_eq!(aplicados, 0);
+    }
+
+    #[test]
+    fn recibe_prestamos_gafete_provisional_abiertos_del_otro_dispositivo_y_los_cachea() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-remoto\",\"encargado_nombre\":\"Kendall Morales\",\
+             \"encargado_codigo_empleado\":\"5366536\",\"gafete_numero\":4,\
+             \"hora_entrega\":\"2026-01-01T08:00:00Z\",\"usuario_entrega_nombre\":\"Op PC\"}]",
+        );
+
+        let recibidos =
+            recibir_prestamos_gafete_provisional_abiertos(&connection, &contexto(&base_url))
+                .unwrap();
+
+        assert_eq!(recibidos.len(), 1);
+        assert_eq!(recibidos[0].uuid, "uuid-remoto");
+        assert_eq!(recibidos[0].encargado_nombre, "Kendall Morales");
+        assert_eq!(recibidos[0].gafete_numero, 4);
+        let cacheados: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM prestamos_gafete_provisional_remotos",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(cacheados, 1);
+    }
+
+    fn conexion_con_un_prestamo_gafete_provisional_activo() -> Connection {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute_batch(
+                "
+                INSERT INTO usuarios (id, cedula, nombre, password_hash, rol, activo)
+                VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1);
+                INSERT INTO encargados_ruta (id, codigo_empleado, nombre, activo, uuid)
+                VALUES (1, '5366536', 'Kendall Morales', 1, 'uuid-encargado');
+                INSERT INTO prestamos_gafete_provisional (
+                    id, encargado_id, encargado_nombre, encargado_codigo_empleado,
+                    gafete_numero, fecha_hora_entrega, usuario_entrega_id,
+                    usuario_entrega_nombre, uuid
+                ) VALUES (
+                    1, 1, 'Kendall Morales', '5366536', 4,
+                    '2026-08-01T08:00:00Z', 1, 'Operador', 'uuid-prestamo'
+                );
+                ",
+            )
+            .unwrap();
+        connection
+    }
+
+    #[test]
+    fn recibe_devoluciones_propias_gafete_provisional_sin_reencolar() {
+        let connection = conexion_con_un_prestamo_gafete_provisional_activo();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-prestamo\",\"hora_devolucion\":\"2026-08-01T10:00:00Z\",\
+             \"usuario_devolucion_nombre\":\"Operador remoto\"}]",
+        );
+
+        let aplicados =
+            recibir_devoluciones_propias_gafete_provisional(&connection, &contexto(&base_url))
+                .unwrap();
+
+        assert_eq!(aplicados, 1);
+        let (devolucion, usuario_id, usuario_nombre): (String, Option<i64>, String) = connection
+            .query_row(
+                "SELECT fecha_hora_devolucion, usuario_devolucion_id, usuario_devolucion_nombre
+                 FROM prestamos_gafete_provisional WHERE uuid = 'uuid-prestamo'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(devolucion, "2026-08-01T10:00:00Z");
+        assert_eq!(usuario_id, None);
+        assert_eq!(usuario_nombre, "Operador remoto");
+    }
+
+    #[test]
+    fn recibe_devoluciones_propias_gafete_provisional_sin_nada_local_no_llama_a_la_nube() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+
+        let aplicados = recibir_devoluciones_propias_gafete_provisional(
+            &connection,
+            &contexto("http://127.0.0.1:1"),
+        )
+        .unwrap();
+
+        assert_eq!(aplicados, 0);
     }
 
     #[test]
@@ -4481,6 +6999,44 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM ingresos_remotos", [], |row| {
                 row.get(0)
             })
+            .unwrap();
+        assert_eq!(cacheados, 0);
+    }
+
+    #[test]
+    fn cierra_un_ingreso_proveedor_remoto_y_lo_saca_de_la_cache() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO ingresos_proveedor_remotos (
+                    uuid, sitio_id, cedula, nombre, empresa_nombre, placa, gafete_numero,
+                    hora_entrada, usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en
+                ) VALUES (
+                    'uuid-remoto', 'sitio-1', '1-1111', 'Juan Perez', 'Maika', NULL, 9,
+                    '2026-01-01T08:00:00Z', 'Op PC', 'otro-dispositivo', '2026-01-01T08:00:00Z'
+                )",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        cerrar_ingreso_proveedor_remoto(
+            &connection,
+            &contexto(&base_url),
+            "uuid-remoto",
+            "Op Celular",
+        )
+        .unwrap();
+
+        let cacheados: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM ingresos_proveedor_remotos",
+                [],
+                |row| row.get(0),
+            )
             .unwrap();
         assert_eq!(cacheados, 0);
     }
@@ -4669,7 +7225,9 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let base_url = format!("http://{}", listener.local_addr().unwrap());
         let servidor = thread::spawn(move || {
-            for paso in 0..4 {
+            // 6 pedidos por sync: empresas/contratistas/usuarios/gafetes/
+            // rutas/empresas_proveedor.
+            for paso in 0..6 {
                 let (mut socket, _) = listener.accept().unwrap();
                 socket
                     .set_read_timeout(Some(Duration::from_secs(3)))
@@ -4720,10 +7278,11 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let base_url = format!("http://{}", listener.local_addr().unwrap());
         let servidor = thread::spawn(move || {
-            // Dos syncs completos = 8 pedidos (empresas/contratistas/
-            // usuarios/gafetes, dos veces). Sólo el de gafetes trae algo,
-            // para que la marca de agua realmente tenga algo que guardar.
-            for paso in 0..8 {
+            // Dos syncs completos = 12 pedidos (empresas/contratistas/
+            // usuarios/gafetes/rutas/empresas_proveedor, dos veces). Sólo el
+            // de gafetes trae algo, para que la marca de agua realmente
+            // tenga algo que guardar.
+            for paso in 0..12 {
                 let (mut socket, _) = listener.accept().unwrap();
                 socket
                     .set_read_timeout(Some(Duration::from_secs(3)))
@@ -4742,7 +7301,7 @@ mod tests {
                         "primer sync: sin marca todavía, tiene que pedir todo"
                     );
                     r#"[{"id":"gafete-remoto","numero":26,"tipo":"CONTRATISTA","estado":"DISPONIBLE","contratista_portador_id":null,"contratista_portador_nombre":null,"visita_portador_id":null,"visita_portador_nombre":null,"updated_at":"2026-01-05T00:00:00Z"}]"#
-                } else if paso == 7 {
+                } else if paso == 9 {
                     let pedido = String::from_utf8(pedido).unwrap();
                     assert!(
                         pedido.contains("updated_at=gt.2026-01-05T00%3A00%3A00Z")
@@ -4787,6 +7346,8 @@ mod tests {
              \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         ]);
 
         let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
@@ -4798,6 +7359,8 @@ mod tests {
                 contratistas_recibidos: 1,
                 usuarios_recibidos: 0,
                 gafetes_recibidos: 0,
+                rutas_recibidas: 0,
+                empresas_proveedor_recibidas: 0,
             }
         );
         let (nombre_empresa, uuid_empresa): (String, Option<String>) = connection
@@ -4818,6 +7381,261 @@ mod tests {
         assert_eq!(cedula, "1-1111");
         assert_eq!(tipo_ingreso, "SWAT");
         assert_eq!(uuid_contratista.as_deref(), Some("uuid-contratista-remoto"));
+    }
+
+    #[test]
+    fn recibe_numeros_de_ruta_del_sitio_dentro_del_catalogo_general() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_respuestas(vec![
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-ruta-remota\",\"numero\":79,\"activo\":true,\
+             \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        ]);
+
+        let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(resumen.rutas_recibidas, 1);
+        let (numero, activo, uuid): (i64, i64, Option<String>) = connection
+            .query_row("SELECT numero, activo, uuid FROM rutas", [], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            })
+            .unwrap();
+        assert_eq!(numero, 79);
+        assert_eq!(activo, 1);
+        assert_eq!(uuid.as_deref(), Some("uuid-ruta-remota"));
+    }
+
+    /// El pull que le faltaba a `empresas_proveedor`: antes sólo se
+    /// empujaba (local → nube), nunca se traía de vuelta -- un catálogo
+    /// creado en un dispositivo nunca aparecía en el otro (bug reportado
+    /// en pruebas reales, 2026-09-17).
+    #[test]
+    fn recibe_empresas_proveedor_del_sitio_dentro_del_catalogo_general() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_respuestas(vec![
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-empresa-proveedor-remota\",\"nombre\":\"MayCorp\",\"activa\":true,\
+             \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+        ]);
+
+        let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(resumen.empresas_proveedor_recibidas, 1);
+        let (nombre, activo, uuid): (String, i64, String) = connection
+            .query_row(
+                "SELECT nombre, activo, uuid FROM empresas_proveedor",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(nombre, "MayCorp");
+        assert_eq!(activo, 1);
+        assert_eq!(uuid, "uuid-empresa-proveedor-remota");
+    }
+
+    /// Mismo criterio que `recibir_catalogo_fusiona_con_una_fila_local_existente_sin_duplicarla`,
+    /// pero para empresas de proveedor -- una empresa creada en ESTE
+    /// dispositivo no debe duplicarse cuando la nube confirma la misma
+    /// fila (por nombre), sólo completarle el `uuid`.
+    #[test]
+    fn recibe_empresa_proveedor_fusiona_con_una_fila_local_existente_sin_duplicarla() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO empresas_proveedor (nombre, uuid) VALUES ('MayCorp', 'uuid-local-temporal')",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_respuestas(vec![
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-empresa-proveedor-remota\",\"nombre\":\"MayCorp\",\"activa\":true,\
+             \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+        ]);
+
+        recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        let total: i64 = connection
+            .query_row("SELECT COUNT(*) FROM empresas_proveedor", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(total, 1, "no duplica la empresa que ya tenía por nombre");
+        let uuid: String = connection
+            .query_row("SELECT uuid FROM empresas_proveedor", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(
+            uuid, "uuid-local-temporal",
+            "COALESCE no pisa un uuid que ya tenía"
+        );
+    }
+
+    #[test]
+    fn recibe_catalogo_rutas_del_sitio_y_lo_guarda_local() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_respuestas(vec![
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-vehiculo-remoto\",\"numero_unidad\":\"22906\",\"placa\":\"C12345\",\
+             \"activo\":true,\"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-encargado-remoto\",\"codigo_empleado\":\"5040017\",\
+             \"nombre\":\"Michael Araya Retana\",\"activo\":true,\
+             \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+        ]);
+
+        let resumen = recibir_catalogo_rutas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(
+            resumen,
+            ResumenCatalogoRutas {
+                vehiculos_recibidos: 1,
+                encargados_recibidos: 1,
+            }
+        );
+        let (placa, uuid_vehiculo): (String, Option<String>) = connection
+            .query_row("SELECT placa, uuid FROM vehiculos_ruta", [], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(placa, "C12345");
+        assert_eq!(uuid_vehiculo.as_deref(), Some("uuid-vehiculo-remoto"));
+        let (codigo, nombre, cedula): (String, String, Option<String>) = connection
+            .query_row(
+                "SELECT codigo_empleado, nombre, cedula FROM encargados_ruta",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(codigo, "5040017");
+        assert_eq!(nombre, "Michael Araya Retana");
+        assert_eq!(cedula, None, "el catálogo remoto nunca trae cédula");
+        let marca_guardada: Option<String> = connection
+            .query_row(
+                "SELECT catalogo_rutas_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(marca_guardada.as_deref(), Some("2026-01-01T00:00:00Z"));
+    }
+
+    #[test]
+    fn recibir_catalogo_rutas_fusiona_un_vehiculo_local_existente_por_placa_sin_duplicarlo() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO vehiculos_ruta (numero_unidad, placa, uuid)
+                 VALUES (NULL, 'C12345', 'uuid-local-viejo')",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_respuestas(vec![
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-vehiculo-remoto\",\"numero_unidad\":\"22906\",\"placa\":\"C12345\",\
+             \"activo\":true,\"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        ]);
+
+        recibir_catalogo_rutas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        let total: i64 = connection
+            .query_row("SELECT COUNT(*) FROM vehiculos_ruta", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(total, 1, "no duplica el vehículo que ya tenía por placa");
+        let (numero_unidad, uuid): (Option<String>, Option<String>) = connection
+            .query_row(
+                "SELECT numero_unidad, uuid FROM vehiculos_ruta",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            numero_unidad.as_deref(),
+            Some("22906"),
+            "la fila local se actualiza con lo remoto"
+        );
+        assert_eq!(
+            uuid.as_deref(),
+            Some("uuid-local-viejo"),
+            "un uuid local ya existente nunca se pisa"
+        );
+    }
+
+    #[test]
+    fn segundo_sync_de_catalogo_rutas_pide_solo_lo_nuevo_con_la_marca_guardada() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            // Primer sync = 2 pedidos (vehículos/encargados) sin marca;
+            // segundo sync = 2 más, ya con `updated_at=gt.` de la marca que
+            // dejó el primero.
+            for paso in 0..4 {
+                let (mut socket, _) = listener.accept().unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                let mut pedido = Vec::new();
+                let mut buffer = [0; 4096];
+                while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                    let leidos = socket.read(&mut buffer).unwrap();
+                    assert!(leidos > 0);
+                    pedido.extend_from_slice(&buffer[..leidos]);
+                }
+                let cuerpo = if paso == 0 {
+                    let pedido = String::from_utf8(pedido).unwrap();
+                    assert!(
+                        !pedido.contains("updated_at=gt."),
+                        "primer sync: sin marca todavía, tiene que pedir todo"
+                    );
+                    r#"[{"id":"uuid-vehiculo-remoto","numero_unidad":"22906","placa":"C12345","activo":true,"updated_at":"2026-01-05T00:00:00Z"}]"#
+                } else if paso == 2 {
+                    let pedido = String::from_utf8(pedido).unwrap();
+                    assert!(
+                        pedido.contains("updated_at=gt.2026-01-05T00%3A00%3A00Z")
+                            || pedido.contains("updated_at=gt.2026-01-05T00:00:00Z"),
+                        "segundo sync: tiene que arrastrar la marca que dejó el primero -- pedido real: {pedido}"
+                    );
+                    "[]"
+                } else {
+                    "[]"
+                };
+                write!(socket, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}", cuerpo.len()).unwrap();
+            }
+        });
+
+        recibir_catalogo_rutas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+        let marca_guardada: Option<String> = connection
+            .query_row(
+                "SELECT catalogo_rutas_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(marca_guardada.as_deref(), Some("2026-01-05T00:00:00Z"));
+
+        recibir_catalogo_rutas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+        servidor.join().unwrap();
     }
 
     #[test]
@@ -4848,6 +7666,8 @@ mod tests {
              \"empresa_nombre\":\"Empresa Remota\",\"activo\":true,\"tipo_ingreso\":\"SWAT\",\
              \"fecha_vencimiento_praind\":null,\"es_personal_ruta\":false,\
              \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         ]);
@@ -4895,6 +7715,8 @@ mod tests {
              \"identificacion\":null,\"empresa_id\":null,\"empresa_nombre\":null,\
              \"activo\":true,\"tipo_ingreso\":null,\"fecha_vencimiento_praind\":null,\
              \"es_personal_ruta\":null,\"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         ]);
