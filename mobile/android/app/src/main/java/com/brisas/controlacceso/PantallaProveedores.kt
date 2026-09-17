@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DropdownMenu
@@ -73,6 +74,13 @@ fun PantallaProveedores(nucleo: Nucleo, secretoStore: SecretoDispositivoStore) {
     var gafeteTexto by remember { mutableStateOf("") }
     var busqueda by remember { mutableStateOf("") }
     var escaneando by remember { mutableStateOf(false) }
+    // Mismo lector que el paso 3 de [PantallaRutas] (`extraerVehiculo`,
+    // `LectorVehiculoRuta.kt`) -- genérico, no específico de rutas. Acá
+    // sólo interesa la placa: si el OCR detecta un número de unidad
+    // (calcomanía de flota) en vez de una placa, igual se usa el texto
+    // leído -- un proveedor no trae ese distintivo, pero no vale la pena
+    // rechazar una lectura válida sólo por el tipo detectado.
+    var escaneandoPlaca by remember { mutableStateOf(false) }
     var registroParaSalida by remember {
         mutableStateOf<RegistroIngresoProveedorActivoResumen?>(null)
     }
@@ -91,12 +99,24 @@ fun PantallaProveedores(nucleo: Nucleo, secretoStore: SecretoDispositivoStore) {
         return
     }
 
+    if (escaneandoPlaca) {
+        PantallaEscanearVehiculoRuta(
+            onVehiculoDetectado = { detectado ->
+                escaneandoPlaca = false
+                viewModel.cambiarPlaca(detectado.valor)
+            },
+            onCerrar = { escaneandoPlaca = false },
+        )
+        return
+    }
+
     if (mostrandoFormulario) {
         FormularioNuevoIngresoProveedor(
             viewModel = viewModel,
             gafeteTexto = gafeteTexto,
             onCambiarGafeteTexto = { gafeteTexto = it },
             onEscanear = { escaneando = true },
+            onEscanearPlaca = { escaneandoPlaca = true },
             onVolver = { mostrandoFormulario = false },
         )
         return
@@ -114,31 +134,51 @@ fun PantallaProveedores(nucleo: Nucleo, secretoStore: SecretoDispositivoStore) {
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Text(
+            "Proveedores",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                "Proveedores",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
+            // Sin `.height(AlturaBusquedaBrisas)` a propósito -- combinado
+            // con `leadingIcon` (a diferencia del buscador de
+            // `PantallaActivos`, que no tiene `placeholder`) ese alto
+            // dejaba el texto del placeholder recortado, casi invisible.
+            TextField(
+                value = busqueda,
+                onValueChange = { busqueda = it },
+                placeholder = { Text("Cédula, nombre, empresa…") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                singleLine = true,
+                shape = FormaCampoBrisas,
+                colors = ColoresCampoBrisas(),
+                modifier = Modifier.weight(1f),
             )
-            BotonBrisas(onClick = { mostrandoFormulario = true }) {
-                Text("+ Nuevo ingreso")
+            // Mismo look que `BotonCamaraCuadrado` de [PantallaRutas]
+            // (cuadrado, borde y ícono en el color primario) -- pedido
+            // explícito del usuario en vez del botón "+ Nuevo ingreso"
+            // ancho de antes, para que quede al lado del buscador como el
+            // botón de cámara junto al buscador de [PantallaActivos].
+            Box(
+                modifier = Modifier
+                    .size(AlturaBusquedaBrisas)
+                    .border(1.dp, MaterialTheme.colorScheme.primary, FormaCampoBrisas)
+                    .clip(FormaCampoBrisas)
+                    .clickable(onClick = { mostrandoFormulario = true }),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Default.PersonAdd,
+                    contentDescription = "Nuevo ingreso de proveedor",
+                    tint = MaterialTheme.colorScheme.primary,
+                )
             }
         }
-
-        TextField(
-            value = busqueda,
-            onValueChange = { busqueda = it },
-            placeholder = { Text("Cédula, nombre, empresa…") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            singleLine = true,
-            shape = FormaCampoBrisas,
-            colors = ColoresCampoBrisas(),
-            modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas).padding(top = 10.dp),
-        )
 
         viewModel.error?.let { mensaje ->
             Text(
@@ -186,6 +226,7 @@ private fun FormularioNuevoIngresoProveedor(
     gafeteTexto: String,
     onCambiarGafeteTexto: (String) -> Unit,
     onEscanear: () -> Unit,
+    onEscanearPlaca: () -> Unit,
     onVolver: () -> Unit,
 ) {
     val paso1Completo = viewModel.cedula.isNotBlank() && viewModel.nombre.isNotBlank()
@@ -226,6 +267,7 @@ private fun FormularioNuevoIngresoProveedor(
                 completado = paso3Completo,
                 placa = viewModel.placa,
                 onCambiarPlaca = viewModel::cambiarPlaca,
+                onEscanearPlaca = onEscanearPlaca,
                 gafeteTexto = gafeteTexto,
                 onCambiarGafeteTexto = { onCambiarGafeteTexto(it.filter(Char::isDigit)) },
             )
@@ -393,17 +435,19 @@ private fun PasoEmpresaProveedora(
     }
 }
 
-/// Paso 3 -- placa (opcional) y número de gafete, sin cámara: ninguno de
-/// los dos datos sale de un documento escaneable.
+/// Paso 3 -- placa (opcional, con OCR: mismo lector de `PantallaRutas`,
+/// `extraerVehiculo`/`LectorVehiculoRuta.kt`, genérico) y número de gafete
+/// (siempre tipeado -- no sale de ningún documento).
 @Composable
 private fun PasoVehiculoYGafete(
     completado: Boolean,
     placa: String,
     onCambiarPlaca: (String) -> Unit,
+    onEscanearPlaca: () -> Unit,
     gafeteTexto: String,
     onCambiarGafeteTexto: (String) -> Unit,
 ) {
-    TarjetaPasoProveedor {
+    TarjetaPasoProveedor(onEscanear = onEscanearPlaca) {
         PasoEncabezadoProveedor(3, "Vehículo y gafete", completado)
         TextField(
             value = placa,
@@ -428,9 +472,10 @@ private fun PasoVehiculoYGafete(
 
 /// Tarjeta compartida por los tres pasos -- mismo fondo/forma/padding que
 /// las tarjetas de [PantallaRutas], con un botón de cámara cuadrado
-/// opcional a la derecha (sólo el paso 1 lo usa, mismo look que
-/// `BotonCamaraCuadrado` de ese archivo -- duplicado acá por el mismo
-/// motivo que [PasoEncabezadoProveedor]: es `private` allá).
+/// opcional a la derecha (pasos 1 y 3, el paso 2 no tiene nada
+/// escaneable), mismo look que `BotonCamaraCuadrado` de ese archivo --
+/// duplicado acá por el mismo motivo que [PasoEncabezadoProveedor]: es
+/// `private` allá).
 @Composable
 private fun TarjetaPasoProveedor(
     onEscanear: (() -> Unit)? = null,
