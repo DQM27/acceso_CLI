@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 41;
+pub const SCHEMA_VERSION: i64 = 42;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -361,6 +361,11 @@ fn aplicar_migraciones_posteriores_a_29(
         *version = 41;
     }
 
+    if *version == 41 {
+        aplicar_migracion_42(connection)?;
+        *version = 42;
+    }
+
     Ok(())
 }
 
@@ -641,6 +646,17 @@ fn ejecutar_migracion_41(connection: &Connection) -> Result<(), SchemaError> {
     if connection.prepare("PRAGMA foreign_key_check")?.exists([])? {
         return Err(SchemaError::MigracionStrictReferenciasInvalidas);
     }
+    Ok(())
+}
+
+/// Agrega `ingresos_proveedor_remotos` -- tabla nueva, sin recrear nada
+/// existente, así que no hace falta el paréntesis `foreign_keys = OFF/ON`
+/// que sí necesitan las migraciones que recrean una tabla con FKs activas.
+fn aplicar_migracion_42(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_42)?;
+    transaction.execute_batch("PRAGMA user_version = 42")?;
+    transaction.commit()?;
     Ok(())
 }
 
@@ -3447,4 +3463,29 @@ ALTER TABLE cola_salida_nueva RENAME TO cola_salida;
 CREATE INDEX idx_cola_salida_pendientes
 ON cola_salida(proximo_intento_en)
 WHERE estado = 'pendiente';
+";
+
+/// Caché local de ingresos de proveedor abiertos por OTRO dispositivo del
+/// mismo sitio -- mismo criterio que `ingresos_remotos` (contratistas):
+/// `nube::recibir_ingresos_proveedor_abiertos` reemplaza su contenido
+/// entero en cada sync, `nube::cerrar_ingreso_proveedor_remoto` borra la
+/// fila puntual al cerrarla. Sin FK a ningún catálogo local a propósito --
+/// un ingreso remoto no vive en `registro_ingresos_proveedor` de este
+/// dispositivo, es sólo lo mínimo para mostrarlo en "Proveedores" y poder
+/// cerrarlo. Tabla nueva (no una recreación de otra existente), por eso no
+/// hace falta el patrón `_nueva`/`DROP`/`RENAME` de otras migraciones.
+const MIGRACION_42: &str = r"
+CREATE TABLE ingresos_proveedor_remotos (
+    uuid TEXT PRIMARY KEY,
+    sitio_id TEXT NOT NULL,
+    cedula TEXT NOT NULL,
+    nombre TEXT NOT NULL,
+    empresa_nombre TEXT NOT NULL,
+    placa TEXT,
+    gafete_numero INTEGER NOT NULL,
+    hora_entrada TEXT NOT NULL,
+    usuario_entrada_nombre TEXT NOT NULL,
+    dispositivo_entrada_id TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL
+) STRICT;
 ";

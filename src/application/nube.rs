@@ -18,7 +18,7 @@ use std::path::Path;
 
 use crate::database::error::DatabaseError;
 use crate::domain::autorizacion::Operacion;
-use crate::nube::IngresoRemoto;
+use crate::nube::{IngresoProveedorRemoto, IngresoRemoto};
 use crate::services::autenticacion_service::UsuarioSesion;
 
 use super::{AppCore, verificar_actor_activo};
@@ -333,6 +333,8 @@ impl AppCore {
         let cierres_recibidos =
             crate::nube::recibir_cierres_de_ingresos_propios(&self.connection, &contexto)?;
         let remotos = crate::nube::recibir_ingresos_abiertos(&self.connection, &contexto)?;
+        let _remotos_proveedor =
+            crate::nube::recibir_ingresos_proveedor_abiertos(&self.connection, &contexto)?;
         let catalogo = crate::nube::recibir_catalogo_del_sitio(&self.connection, &contexto)?;
         let catalogo_rutas =
             crate::nube::recibir_catalogo_rutas_del_sitio(&self.connection, &contexto)?;
@@ -530,6 +532,69 @@ impl AppCore {
             })?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(filas)
+    }
+
+    /// Espejo de [`Self::listar_ingresos_remotos`], pero contra la caché
+    /// `ingresos_proveedor_remotos`.
+    pub fn listar_ingresos_proveedor_remotos(
+        &self,
+        actor: &UsuarioSesion,
+    ) -> Result<Vec<IngresoProveedorRemoto>, GestionNubeError> {
+        self.autorizar_uso_nube(actor)?;
+        let mut statement = self.connection.prepare(
+            "SELECT uuid, cedula, nombre, empresa_nombre, placa, gafete_numero,
+                    hora_entrada, usuario_entrada_nombre
+             FROM ingresos_proveedor_remotos ORDER BY hora_entrada",
+        )?;
+        let filas = statement
+            .query_map([], |row| {
+                Ok(IngresoProveedorRemoto {
+                    uuid: row.get(0)?,
+                    cedula: row.get(1)?,
+                    nombre: row.get(2)?,
+                    empresa_nombre: row.get(3)?,
+                    placa: row.get(4)?,
+                    gafete_numero: row.get(5)?,
+                    hora_entrada: row.get(6)?,
+                    usuario_entrada_nombre: row.get(7)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(filas)
+    }
+
+    /// Espejo de [`Self::cerrar_ingreso_remoto`], pero contra
+    /// `ingresos_proveedor`.
+    pub fn cerrar_ingreso_proveedor_remoto(
+        &self,
+        actor: &UsuarioSesion,
+        directorio: Option<&Path>,
+        uuid: &str,
+    ) -> Result<(), GestionNubeError> {
+        self.autorizar_uso_nube(actor)?;
+
+        let secreto = directorio
+            .map_or_else(
+                crate::nube::credenciales::cargar_secreto,
+                crate::nube::credenciales::cargar_secreto_en,
+            )
+            .ok_or(GestionNubeError::SinSecreto)?;
+        let token = self.autenticar_con_cache(&secreto)?;
+
+        let contexto = crate::nube::ContextoSincronizacion {
+            base_url: crate::nube::BASE_URL,
+            apikey: crate::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        crate::nube::cerrar_ingreso_proveedor_remoto(
+            &self.connection,
+            &contexto,
+            uuid,
+            &actor.nombre,
+        )?;
+        Ok(())
     }
 
     /// Chequeo en vivo (no la caché local) de si `gafete_numero` ya está

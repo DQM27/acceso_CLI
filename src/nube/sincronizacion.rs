@@ -1936,6 +1936,106 @@ pub fn recibir_ingresos_abiertos(
     Ok(remotos)
 }
 
+/// Fila cacheada localmente de un ingreso de proveedor todavía abierto,
+/// creado por el otro dispositivo de este mismo sitio -- mismo criterio que
+/// [`IngresoRemoto`], pero contra `ingresos_proveedor_remotos`/
+/// `ingresos_proveedor` (ver `docs/features-futuras/plan-control-proveedores.md`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IngresoProveedorRemoto {
+    pub uuid: String,
+    pub cedula: String,
+    pub nombre: String,
+    pub empresa_nombre: String,
+    pub placa: Option<String>,
+    pub gafete_numero: i64,
+    pub hora_entrada: String,
+    pub usuario_entrada_nombre: String,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaIngresoProveedorRemoto {
+    id: String,
+    cedula: String,
+    nombre: String,
+    empresa_nombre: String,
+    placa: Option<String>,
+    gafete_numero: i64,
+    hora_entrada: String,
+    usuario_entrada_nombre: String,
+    dispositivo_entrada_id: String,
+}
+
+/// Espejo de [`recibir_ingresos_abiertos`], pero contra `ingresos_proveedor`
+/// -- misma lógica de "traer todo lo abierto del sitio y descartar lo que
+/// ya vive local" (reinstalación de app incluida), mismo reemplazo completo
+/// de la caché en una sola transacción.
+pub fn recibir_ingresos_proveedor_abiertos(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<Vec<IngresoProveedorRemoto>, SincronizacionError> {
+    let cliente = cliente_http();
+    let url = format!(
+        "{}/rest/v1/ingresos_proveedor?sitio_id=eq.{}&hora_salida=is.null\
+         &select=id,cedula,nombre,empresa_nombre,placa,gafete_numero,hora_entrada,\
+         usuario_entrada_nombre,dispositivo_entrada_id",
+        contexto.base_url, contexto.sitio_id,
+    );
+    let filas: Vec<FilaIngresoProveedorRemoto> = obtener_json(&cliente, contexto, &url)?;
+
+    let transaction = connection.unchecked_transaction()?;
+    transaction.execute(
+        "DELETE FROM ingresos_proveedor_remotos WHERE sitio_id = ?1",
+        params![contexto.sitio_id],
+    )?;
+    let mut remotos = Vec::with_capacity(filas.len());
+    for fila in filas {
+        let existe_localmente: bool = transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM registro_ingresos_proveedor WHERE uuid = ?1)",
+            params![fila.id],
+            |row| row.get(0),
+        )?;
+        if existe_localmente {
+            continue;
+        }
+        let hora_entrada = crate::tiempo::parsear_utc(&fila.hora_entrada)
+            .map(crate::tiempo::serializar_utc)
+            .map_err(|_| SincronizacionError::FechaInvalida(fila.hora_entrada.clone()))?;
+        transaction.execute(
+            "
+            INSERT INTO ingresos_proveedor_remotos (
+                uuid, sitio_id, cedula, nombre, empresa_nombre, placa, gafete_numero,
+                hora_entrada, usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            ",
+            params![
+                fila.id,
+                contexto.sitio_id,
+                fila.cedula,
+                fila.nombre,
+                fila.empresa_nombre,
+                fila.placa,
+                fila.gafete_numero,
+                hora_entrada,
+                fila.usuario_entrada_nombre,
+                fila.dispositivo_entrada_id,
+            ],
+        )?;
+        remotos.push(IngresoProveedorRemoto {
+            uuid: fila.id,
+            cedula: fila.cedula,
+            nombre: fila.nombre,
+            empresa_nombre: fila.empresa_nombre,
+            placa: fila.placa,
+            gafete_numero: fila.gafete_numero,
+            hora_entrada,
+            usuario_entrada_nombre: fila.usuario_entrada_nombre,
+        });
+    }
+    transaction.commit()?;
+
+    Ok(remotos)
+}
+
 #[derive(serde::Deserialize)]
 struct FilaGafeteOcupado {
     #[allow(dead_code)]
@@ -3756,6 +3856,42 @@ pub fn cerrar_ingreso_remoto(
     Ok(())
 }
 
+/// Espejo de [`cerrar_ingreso_remoto`], pero contra `ingresos_proveedor`.
+pub fn cerrar_ingreso_proveedor_remoto(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+    usuario_salida_nombre: &str,
+) -> Result<(), SincronizacionError> {
+    let cliente = cliente_http();
+    let cuerpo = json!({
+        "hora_salida": crate::tiempo::serializar_utc(chrono::Utc::now()),
+        "dispositivo_salida_id": contexto.dispositivo_id,
+        "usuario_salida_nombre": usuario_salida_nombre,
+    });
+
+    let url = format!(
+        "{}/rest/v1/ingresos_proveedor?id=eq.{uuid}&hora_salida=is.null",
+        contexto.base_url
+    );
+    let respuesta = cliente
+        .patch(url)
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)?;
+
+    connection.execute(
+        "DELETE FROM ingresos_proveedor_remotos WHERE uuid = ?1",
+        params![uuid],
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -4885,6 +5021,33 @@ mod tests {
     }
 
     #[test]
+    fn recibe_ingresos_proveedor_abiertos_del_otro_dispositivo_y_los_cachea() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-remoto\",\"cedula\":\"1-1111\",\"nombre\":\"Juan Perez\",\
+             \"empresa_nombre\":\"Maika\",\"placa\":null,\"gafete_numero\":9,\
+             \"hora_entrada\":\"2026-01-01T08:00:00Z\",\"usuario_entrada_nombre\":\"Op PC\",\
+             \"dispositivo_entrada_id\":\"otro-dispositivo\"}]",
+        );
+
+        let recibidos =
+            recibir_ingresos_proveedor_abiertos(&connection, &contexto(&base_url)).unwrap();
+
+        assert_eq!(recibidos.len(), 1);
+        assert_eq!(recibidos[0].uuid, "uuid-remoto");
+        assert_eq!(recibidos[0].nombre, "Juan Perez");
+        assert_eq!(recibidos[0].gafete_numero, 9);
+        let cacheados: i64 = connection
+            .query_row("SELECT COUNT(*) FROM ingresos_proveedor_remotos", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(cacheados, 1);
+    }
+
+    #[test]
     fn recibir_reemplaza_la_cache_del_sitio_por_completo() {
         let connection = Connection::open_in_memory().unwrap();
         initialize_database(&connection).unwrap();
@@ -5907,6 +6070,42 @@ mod tests {
 
         let cacheados: i64 = connection
             .query_row("SELECT COUNT(*) FROM ingresos_remotos", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(cacheados, 0);
+    }
+
+    #[test]
+    fn cierra_un_ingreso_proveedor_remoto_y_lo_saca_de_la_cache() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO ingresos_proveedor_remotos (
+                    uuid, sitio_id, cedula, nombre, empresa_nombre, placa, gafete_numero,
+                    hora_entrada, usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en
+                ) VALUES (
+                    'uuid-remoto', 'sitio-1', '1-1111', 'Juan Perez', 'Maika', NULL, 9,
+                    '2026-01-01T08:00:00Z', 'Op PC', 'otro-dispositivo', '2026-01-01T08:00:00Z'
+                )",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        );
+
+        cerrar_ingreso_proveedor_remoto(
+            &connection,
+            &contexto(&base_url),
+            "uuid-remoto",
+            "Op Celular",
+        )
+        .unwrap();
+
+        let cacheados: i64 = connection
+            .query_row("SELECT COUNT(*) FROM ingresos_proveedor_remotos", [], |row| {
                 row.get(0)
             })
             .unwrap();
