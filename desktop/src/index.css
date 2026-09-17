@@ -258,6 +258,17 @@ input {
   width: 3.75rem;
 }
 
+/* Versión instalada -- ver VersionFooter.tsx. Mismo tono apagado que el
+   resto de texto secundario del sidebar, centrada, sin competir visualmente
+   con las secciones de arriba. */
+.shell-sidebar-version {
+  padding: 0.5rem 0;
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--muted);
+  user-select: text;
+}
+
 /* Barra de estado — de lado a lado, debajo de sidebar + contenido, mismo
    lugar que la de VSC. A propósito SIN fondo/borde propio (a diferencia de
    `.shell-sidebar`/la grilla, que sí son tarjetas): vive directo sobre
