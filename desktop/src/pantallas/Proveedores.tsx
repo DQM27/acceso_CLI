@@ -3,8 +3,8 @@ import { toast } from "sonner";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
-import { listarProveedoresActivos, registrarSalidaProveedor } from "../api/proveedores";
-import type { ProveedorActivoResumen } from "../api/proveedores";
+import { cerrarFilaProveedorActiva, listarTodosLosProveedoresActivos } from "../api/proveedores";
+import type { FilaProveedorActiva } from "../api/proveedores";
 import { textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
 const IngresoProveedorModal = lazy(() => import("./IngresoProveedorModal"));
@@ -13,10 +13,14 @@ const IngresoProveedorModal = lazy(() => import("./IngresoProveedorModal"));
  * Pantalla operativa de proveedores -- mismo patrón que Rutas.tsx: grilla de
  * "activos" + botón "+ Ingreso" que abre el registro en un modal, y un botón
  * directo "Salida" por fila. `refrescarSenal` (de `Shell`) recarga sola
- * cuando llega cualquier sincronización, igual que Activos/Rutas.
+ * cuando llega cualquier sincronización, igual que Activos/Rutas. La lista
+ * fusiona locales + los que otro dispositivo del sitio tiene abiertos ahora
+ * (`listarTodosLosProveedoresActivos`), mismo criterio que
+ * `listarTodosLosActivos` para contratistas -- un ingreso abierto en otra
+ * PC/celular del mismo sitio debe verse y poder cerrarse desde acá también.
  */
 export default function Proveedores({ refrescarSenal }: { refrescarSenal?: number }) {
-  const [filas, setFilas] = useState<ProveedorActivoResumen[]>([]);
+  const [filas, setFilas] = useState<FilaProveedorActiva[]>([]);
   const [cargando, setCargando] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [busqueda, setBusqueda] = useState("");
@@ -26,7 +30,7 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
   const recargar = useCallback(() => {
     return Promise.resolve()
       .then(() => setCargando(true))
-      .then(() => listarProveedoresActivos())
+      .then(() => listarTodosLosProveedoresActivos())
       .then(setFilas)
       .finally(() => setCargando(false));
   }, []);
@@ -40,9 +44,9 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
   }, [refrescarSenal, recargar]);
 
   const registrarSalida = useCallback(
-    async (fila: ProveedorActivoResumen) => {
+    async (fila: FilaProveedorActiva) => {
       try {
-        await registrarSalidaProveedor(fila.id);
+        await cerrarFilaProveedorActiva(fila);
         await recargar();
       } catch (error) {
         toast.error(String(error));
@@ -51,7 +55,7 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
     [recargar],
   );
 
-  const columnas: ColDef<ProveedorActivoResumen>[] = useMemo(
+  const columnas: ColDef<FilaProveedorActiva>[] = useMemo(
     () => [
       { field: "cedula", headerName: "Cédula", flex: 0.9, minWidth: 110, cellStyle: { textAlign: "left" } },
       { field: "nombre", headerName: "Nombre", flex: 1.4, minWidth: 160, cellStyle: { textAlign: "left" } },
@@ -84,7 +88,7 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
         minWidth: 110,
         filter: false,
         sortable: false,
-        cellRenderer: (p: ICellRendererParams<ProveedorActivoResumen>) => {
+        cellRenderer: (p: ICellRendererParams<FilaProveedorActiva>) => {
           const fila = p.data;
           return fila ? (
             <button
@@ -106,7 +110,7 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
-          <Tabla<ProveedorActivoResumen>
+          <Tabla<FilaProveedorActiva>
             id="proveedores-activos"
             columnas={columnas}
             filas={filas}

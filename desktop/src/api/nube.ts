@@ -81,6 +81,21 @@ export interface IngresoRemoto {
   gafete_numero: number | null;
 }
 
+/** Espejo de `IngresoRemoto`, pero para el ciclo de proveedores -- ver
+ * `database::schema`, tabla `ingresos_proveedor_remotos`, y
+ * `nube::sincronizacion::IngresoProveedorRemoto`. */
+export interface IngresoProveedorRemoto {
+  uuid: string;
+  cedula: string;
+  nombre: string;
+  empresa_nombre: string;
+  placa: string | null;
+  gafete_numero: number;
+  /** ISO 8601 (UTC). */
+  hora_entrada: string;
+  usuario_entrada_nombre: string;
+}
+
 /** La nube guarda `tipo_ingreso`/`medio_ingreso` en el formato que usa
  * Supabase (`PRAIND`, `IN_HOUSE`, `CAMINANDO`...), no en el `TipoIngreso`/
  * `MedioIngreso` que espera esta app (`Praind`, `InHouse`, `Caminando`) --
@@ -136,6 +151,14 @@ export function listarIngresosRemotos(): Promise<IngresoRemoto[]> {
 
 export function cerrarIngresoRemoto(uuid: string): Promise<void> {
   return invoke("cerrar_ingreso_remoto", { uuid });
+}
+
+export function listarIngresosProveedorRemotos(): Promise<IngresoProveedorRemoto[]> {
+  return invoke("listar_ingresos_proveedor_remotos");
+}
+
+export function cerrarIngresoProveedorRemoto(uuid: string): Promise<void> {
+  return invoke("cerrar_ingreso_proveedor_remoto", { uuid });
 }
 
 /** Filas de la cola que ya agotaron los reintentos automáticos y quedaron

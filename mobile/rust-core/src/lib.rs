@@ -44,6 +44,7 @@ use control_acceso::models::ruta::Ruta as RutaNucleo;
 use control_acceso::models::salida_ruta::SalidaRutaActivaResumen as SalidaRutaActivaResumenNucleo;
 use control_acceso::models::tipo_ingreso::TipoIngreso as TipoIngresoNucleo;
 use control_acceso::models::usuario::RolUsuario as RolUsuarioNucleo;
+use control_acceso::nube::IngresoProveedorRemoto as IngresoProveedorRemotoNucleo;
 use control_acceso::nube::IngresoRemoto as IngresoRemotoNucleo;
 use control_acceso::services::autenticacion_service::UsuarioSesion as UsuarioSesionNucleo;
 use control_acceso::services::contratista_service::DatosContratista as DatosContratistaNucleo;
@@ -670,6 +671,35 @@ impl From<IngresoRemotoNucleo> for IngresoRemoto {
         Self {
             uuid: remoto.uuid,
             contratista_nombre: remoto.contratista_nombre,
+            hora_entrada: remoto.hora_entrada,
+            usuario_entrada_nombre: remoto.usuario_entrada_nombre,
+        }
+    }
+}
+
+/// Espejo de [`IngresoRemoto`], pero para el ciclo de proveedores -- ver
+/// `IngresoProveedorRemotoNucleo`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct IngresoProveedorRemoto {
+    pub uuid: String,
+    pub cedula: String,
+    pub nombre: String,
+    pub empresa_nombre: String,
+    pub placa: Option<String>,
+    pub gafete_numero: i64,
+    pub hora_entrada: String,
+    pub usuario_entrada_nombre: String,
+}
+
+impl From<IngresoProveedorRemotoNucleo> for IngresoProveedorRemoto {
+    fn from(remoto: IngresoProveedorRemotoNucleo) -> Self {
+        Self {
+            uuid: remoto.uuid,
+            cedula: remoto.cedula,
+            nombre: remoto.nombre,
+            empresa_nombre: remoto.empresa_nombre,
+            placa: remoto.placa,
+            gafete_numero: remoto.gafete_numero,
             hora_entrada: remoto.hora_entrada,
             usuario_entrada_nombre: remoto.usuario_entrada_nombre,
         }
@@ -2032,6 +2062,18 @@ impl Nucleo {
             .collect())
     }
 
+    /// Espejo de [`Self::listar_ingresos_remotos`], pero contra la caché
+    /// `ingresos_proveedor_remotos`.
+    pub fn listar_ingresos_proveedor_remotos(&self) -> Result<Vec<IngresoProveedorRemoto>, NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self
+            .core_lock()
+            .listar_ingresos_proveedor_remotos(&actor)?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
     /// Chequeo en vivo (no la caché local) de si `gafete_numero` ya está
     /// activo en este sitio del lado de OTRO dispositivo -- llamar justo
     /// antes de `registrar_ingreso` cuando el ingreso lleva gafete. Cada
@@ -2255,6 +2297,55 @@ impl Nucleo {
             .map_err(|error| NucleoError::Interno {
                 mensaje: error.to_string(),
             })?;
+        Ok(())
+    }
+
+    /// Espejo de [`Self::cerrar_ingreso_remoto`], pero contra
+    /// `ingresos_proveedor`.
+    pub fn cerrar_ingreso_proveedor_remoto(
+        &self,
+        directorio: String,
+        uuid: String,
+    ) -> Result<(), NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self.core_lock().cerrar_ingreso_proveedor_remoto(
+            &actor,
+            Some(std::path::Path::new(&directorio)),
+            &uuid,
+        )?)
+    }
+
+    /// Espejo de [`Self::cerrar_ingreso_remoto_con_secreto`], pero contra
+    /// `ingresos_proveedor`.
+    pub fn cerrar_ingreso_proveedor_remoto_con_secreto(
+        &self,
+        secreto: String,
+        uuid: String,
+    ) -> Result<(), NucleoError> {
+        let actor = self.actor_autenticado()?;
+        self.core_lock().autorizar_uso_nube(&actor)?;
+        let token = self
+            .autenticar_con_cache(&secreto)
+            .map_err(|error| NucleoError::Interno {
+                mensaje: error.to_string(),
+            })?;
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::BASE_URL,
+            apikey: control_acceso::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        let conexion = self.conexion_secundaria()?;
+        control_acceso::nube::cerrar_ingreso_proveedor_remoto(
+            &conexion,
+            &contexto,
+            &uuid,
+            &actor.nombre,
+        )
+        .map_err(|error| NucleoError::Interno {
+            mensaje: error.to_string(),
+        })?;
         Ok(())
     }
 }
@@ -2616,6 +2707,8 @@ impl Nucleo {
         let cierres_recibidos =
             control_acceso::nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)?;
         let remotos = control_acceso::nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
+        let _remotos_proveedor =
+            control_acceso::nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;
         let catalogo = control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
         let movimientos_historial_recibidos =
             control_acceso::nube::recibir_historial_del_sitio(&conexion, &contexto)?;
@@ -2707,6 +2800,8 @@ impl Nucleo {
         let cierres_recibidos =
             control_acceso::nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)?;
         let remotos = control_acceso::nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
+        let _remotos_proveedor =
+            control_acceso::nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;
         let catalogo = control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
         let movimientos_historial_recibidos =
             control_acceso::nube::recibir_historial_del_sitio(&conexion, &contexto)?;

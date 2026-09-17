@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { solicitarSincronizacionNube } from "../eventosNube";
+import { cerrarIngresoProveedorRemoto, listarIngresosProveedorRemotos } from "./nube";
+import type { IngresoProveedorRemoto } from "./nube";
 
 // Espejo de comandos/proveedores.rs y dto/proveedores.rs — ver también
 // src/application/proveedores.rs y src/models/{empresa_proveedor,registro_ingreso_proveedor}.rs
@@ -71,4 +73,73 @@ export async function registrarSalidaProveedor(id: number): Promise<void> {
 
 export function listarProveedoresActivos(): Promise<ProveedorActivoResumen[]> {
   return invoke("listar_proveedores_activos");
+}
+
+// ---- Local + remoto fusionados -- mismo criterio que api/activos.ts para
+// contratistas: un ingreso abierto por el OTRO dispositivo del mismo sitio
+// nunca vive en `registro_ingresos_proveedor` de este, sólo en la caché
+// `ingresos_proveedor_remotos` -- se fusionan acá para que la pantalla
+// "Proveedores" muestre y pueda cerrar ambos sin distinguir de dónde vino
+// cada fila. ----
+
+export interface FilaProveedorLocal extends ProveedorActivoResumen {
+  origen: "local";
+}
+
+export interface FilaProveedorRemota {
+  origen: "remoto";
+  uuid_remoto: string;
+  id: null;
+  cedula: string;
+  nombre: string;
+  empresa_nombre: string;
+  placa: string | null;
+  gafete_numero: number;
+  fecha_hora_ingreso: string;
+}
+
+export type FilaProveedorActiva = FilaProveedorLocal | FilaProveedorRemota;
+
+function filaProveedorDesdeLocal(item: ProveedorActivoResumen): FilaProveedorActiva {
+  return { ...item, origen: "local" };
+}
+
+function filaProveedorDesdeRemoto(remoto: IngresoProveedorRemoto): FilaProveedorActiva {
+  return {
+    origen: "remoto",
+    uuid_remoto: remoto.uuid,
+    id: null,
+    cedula: remoto.cedula,
+    nombre: remoto.nombre,
+    empresa_nombre: remoto.empresa_nombre,
+    placa: remoto.placa,
+    gafete_numero: remoto.gafete_numero,
+    fecha_hora_ingreso: remoto.hora_entrada,
+  };
+}
+
+/** Clave estable para listas de React (`key`) y grillas -- `id` es `null`
+ * en una remota, así que no alcanza solo. */
+export function claveFilaProveedorActiva(fila: FilaProveedorActiva): string {
+  return fila.origen === "local" ? `local-${fila.id}` : `remoto-${fila.uuid_remoto}`;
+}
+
+export async function listarTodosLosProveedoresActivos(): Promise<FilaProveedorActiva[]> {
+  const [locales, remotos] = await Promise.all([
+    listarProveedoresActivos(),
+    listarIngresosProveedorRemotos(),
+  ]);
+  return [...locales.map(filaProveedorDesdeLocal), ...remotos.map(filaProveedorDesdeRemoto)];
+}
+
+/** Local: cierra en `registro_ingresos_proveedor` (este dispositivo).
+ * Remota: cierra directo contra la nube (`cerrarIngresoProveedorRemoto`) --
+ * nunca toca el historial local, esa fila no es -- ni fue -- de este
+ * dispositivo. */
+export async function cerrarFilaProveedorActiva(fila: FilaProveedorActiva): Promise<void> {
+  if (fila.origen === "local") {
+    await registrarSalidaProveedor(fila.id);
+  } else {
+    await cerrarIngresoProveedorRemoto(fila.uuid_remoto);
+  }
 }

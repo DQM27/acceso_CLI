@@ -230,6 +230,8 @@ pub fn run() {
             comandos::nube::sesion_realtime_nube,
             comandos::nube::listar_ingresos_remotos,
             comandos::nube::cerrar_ingreso_remoto,
+            comandos::nube::listar_ingresos_proveedor_remotos,
+            comandos::nube::cerrar_ingreso_proveedor_remoto,
             comandos::nube::fallos_permanentes_nube,
         ])
         .run(tauri::generate_context!())
