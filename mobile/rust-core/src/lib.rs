@@ -587,6 +587,9 @@ pub struct ResumenSincronizacion {
     /// base recién configurada, sin ingresos locales todavía) -- sólo
     /// `sincronizar_con_secreto` lo completa de verdad.
     pub conflictos_ingreso: Vec<ConflictoIngresoActivo>,
+    /// Mismo criterio que `conflictos_ingreso`, pero para ingresos de
+    /// proveedor -- ver `control_acceso::nube::proveedores_con_conflicto_activo`.
+    pub conflictos_ingreso_proveedor: Vec<ConflictoIngresoProveedorActivo>,
 }
 
 /// Espejo de `control_acceso::nube::ConflictoIngresoActivo`.
@@ -602,6 +605,24 @@ impl From<control_acceso::nube::ConflictoIngresoActivo> for ConflictoIngresoActi
         Self {
             cedula: conflicto.cedula,
             contratista_nombre: conflicto.contratista_nombre,
+            sitio_conflicto: conflicto.sitio_conflicto,
+        }
+    }
+}
+
+/// Espejo de `control_acceso::nube::ConflictoIngresoProveedorActivo`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ConflictoIngresoProveedorActivo {
+    pub cedula: String,
+    pub nombre: String,
+    pub sitio_conflicto: String,
+}
+
+impl From<control_acceso::nube::ConflictoIngresoProveedorActivo> for ConflictoIngresoProveedorActivo {
+    fn from(conflicto: control_acceso::nube::ConflictoIngresoProveedorActivo) -> Self {
+        Self {
+            cedula: conflicto.cedula,
+            nombre: conflicto.nombre,
             sitio_conflicto: conflicto.sitio_conflicto,
         }
     }
@@ -625,6 +646,7 @@ impl From<ResumenSincronizacionNucleo> for ResumenSincronizacion {
             tipo: resumen.tipo,
             sesion_expulsada: resumen.sesion_expulsada,
             conflictos_ingreso: Vec::new(),
+            conflictos_ingreso_proveedor: Vec::new(),
         }
     }
 }
@@ -1905,6 +1927,7 @@ impl Nucleo {
             // `From<ResumenSincronizacionNucleo>` arriba y que el equivalente
             // en desktop/src-tauri/src/comandos/nube.rs.
             conflictos_ingreso: Vec::new(),
+            conflictos_ingreso_proveedor: Vec::new(),
         })
     }
 
@@ -2252,6 +2275,30 @@ impl Nucleo {
             sitio_id: &token.sitio_id,
         };
         control_acceso::nube::contratista_activo_en_otro_sitio(&contexto, &cedula)
+            .ok()
+            .flatten()
+    }
+
+    /// Espejo de [`Self::contratista_activo_en_otro_sitio_con_secreto`],
+    /// pero contra `ingresos_proveedor` -- llamar justo antes de
+    /// `registrar_ingreso_proveedor`.
+    pub fn proveedor_activo_en_otro_sitio_con_secreto(
+        &self,
+        secreto: String,
+        cedula: String,
+    ) -> Option<String> {
+        if secreto.trim().is_empty() {
+            return None;
+        }
+        let token = self.autenticar_con_cache(&secreto).ok()?;
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::BASE_URL,
+            apikey: control_acceso::nube::APIKEY,
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        control_acceso::nube::proveedor_activo_en_otro_sitio(&contexto, &cedula)
             .ok()
             .flatten()
     }
@@ -2732,6 +2779,12 @@ impl Nucleo {
                 .into_iter()
                 .map(ConflictoIngresoActivo::from)
                 .collect();
+        let conflictos_ingreso_proveedor =
+            control_acceso::nube::proveedores_con_conflicto_activo(&conexion, &contexto)
+                .unwrap_or_default()
+                .into_iter()
+                .map(ConflictoIngresoProveedorActivo::from)
+                .collect();
 
         // Igual que en escritorio: si esta sincronización trajo la baja de
         // quien la disparó, la sesión de ESTE teléfono se cierra sola acá
@@ -2758,6 +2811,7 @@ impl Nucleo {
             tipo: token.tipo,
             sesion_expulsada,
             conflictos_ingreso,
+            conflictos_ingreso_proveedor,
         })
     }
 
@@ -2818,6 +2872,12 @@ impl Nucleo {
                 .into_iter()
                 .map(Into::into)
                 .collect();
+        let conflictos_ingreso_proveedor =
+            control_acceso::nube::proveedores_con_conflicto_activo(&conexion, &contexto)
+                .unwrap_or_default()
+                .into_iter()
+                .map(Into::into)
+                .collect();
 
         let sesion_expulsada = !self.core_lock().sesion_sigue_activa(&actor);
         if sesion_expulsada {
@@ -2840,6 +2900,7 @@ impl Nucleo {
             tipo: token.tipo,
             sesion_expulsada,
             conflictos_ingreso,
+            conflictos_ingreso_proveedor,
         })
     }
 }
