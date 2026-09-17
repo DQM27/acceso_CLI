@@ -6,8 +6,6 @@ import Modal from "../componentes/Modal";
 import { listarEmpresasProveedor, registrarIngresoProveedor } from "../api/proveedores";
 import type { EmpresaProveedor } from "../api/proveedores";
 
-const MAX_RESULTADOS = 6;
-
 interface ValoresFormulario {
   cedula: string;
   nombre: string;
@@ -57,43 +55,25 @@ export default function IngresoProveedorModal({
       .catch(() => {});
   }, []);
 
-  // Combobox simple -- un `<select>` nativo en vez del buscador con lista
-  // flotante que usan Rutas/Encargados: acá el catálogo de empresas
-  // proveedoras es chico y ese mecanismo (portal + blur con `setTimeout` +
-  // navegación con flechas) resultó frágil en la práctica -- el click sobre
-  // un resultado no siempre alcanzaba a registrarse antes de que el blur del
-  // campo cerrara la lista. Un `<select>` nativo no tiene esa carrera: el
-  // navegador maneja el click/selección solo, sin lógica propia que pueda
-  // desincronizarse. `filtro` sólo acota qué opciones aparecen (máximo
-  // `MAX_RESULTADOS`), el valor real sigue siendo `empresaId`.
-  const [filtroEmpresa, setFiltroEmpresa] = useState("");
-  const [empresaId, setEmpresaId] = useState<number | null>(null);
+  // Combobox nativo -- `<input list>` + `<datalist>` en vez del buscador con
+  // lista flotante que usan Rutas/Encargados (portal + blur con `setTimeout`
+  // + navegación con flechas): ese mecanismo resultó frágil en la práctica
+  // (el click sobre un resultado no siempre alcanzaba a registrarse antes de
+  // que el blur cerrara la lista) y, a diferencia de un `<select size={N}>`,
+  // el desplegable del navegador es un overlay -- no reserva espacio ni
+  // cambia el layout del modal aunque el catálogo tenga muchas empresas. El
+  // filtrado y el límite de opciones visibles los resuelve el propio
+  // navegador; acá sólo hace falta convertir el texto elegido de vuelta a un
+  // id real, sin catálogo la persona pudo haber tecleado cualquier cosa que
+  // no calce con ninguna empresa.
+  const [empresaTexto, setEmpresaTexto] = useState("");
   const [errorEmpresa, setErrorEmpresa] = useState<string | null>(null);
 
-  const resultadosEmpresa = useMemo(() => {
-    const texto = filtroEmpresa.trim().toLowerCase();
-    const filtradas = texto
-      ? empresas.filter((empresa) => empresa.nombre.toLowerCase().includes(texto))
-      : empresas;
-    return filtradas.slice(0, MAX_RESULTADOS);
-  }, [filtroEmpresa, empresas]);
-
-  // Si el filtro cambia y la empresa ya elegida deja de estar en las
-  // opciones visibles, el `<select>` la pierde de todos modos (el navegador
-  // no puede mostrar seleccionada una `<option>` que ya no existe) -- limpiar
-  // el estado acá evita que quede un `empresaId` "fantasma" sin reflejo en
-  // pantalla.
-  useEffect(() => {
-    // `Promise.resolve().then(...)` en vez de llamar `setEmpresaId` directo
-    // -- ver el mismo comentario en Activos.tsx.
-    Promise.resolve().then(() => {
-      setEmpresaId((actual) =>
-        actual !== null && resultadosEmpresa.some((empresa) => empresa.id === actual)
-          ? actual
-          : null,
-      );
-    });
-  }, [resultadosEmpresa]);
+  const empresaId = useMemo(() => {
+    const texto = empresaTexto.trim().toLowerCase();
+    if (!texto) return null;
+    return empresas.find((empresa) => empresa.nombre.toLowerCase() === texto)?.id ?? null;
+  }, [empresaTexto, empresas]);
 
   async function alGuardar(valores: ValoresFormulario) {
     if (!empresaId) {
@@ -137,30 +117,17 @@ export default function IngresoProveedorModal({
         <label className="campo">
           Empresa
           <input
-            value={filtroEmpresa}
-            onChange={(evento) => setFiltroEmpresa(evento.target.value)}
+            list="empresas-proveedor-datalist"
+            value={empresaTexto}
+            onChange={(evento) => setEmpresaTexto(evento.target.value)}
             autoComplete="off"
-            placeholder="Escriba para filtrar…"
+            placeholder="Escriba para buscar en el catálogo…"
           />
-        </label>
-        <label className="campo">
-          <select
-            size={Math.min(MAX_RESULTADOS, Math.max(resultadosEmpresa.length, 1))}
-            value={empresaId ?? ""}
-            onChange={(evento) => setEmpresaId(Number(evento.target.value))}
-          >
-            {resultadosEmpresa.length === 0 ? (
-              <option value="" disabled>
-                Sin resultados
-              </option>
-            ) : (
-              resultadosEmpresa.map((empresa) => (
-                <option key={empresa.id} value={empresa.id}>
-                  {empresa.nombre}
-                </option>
-              ))
-            )}
-          </select>
+          <datalist id="empresas-proveedor-datalist">
+            {empresas.map((empresa) => (
+              <option key={empresa.id} value={empresa.nombre} />
+            ))}
+          </datalist>
         </label>
         {errorEmpresa && <span style={{ color: "var(--error)" }}>{errorEmpresa}</span>}
 
