@@ -3,23 +3,14 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Modal from "../componentes/Modal";
-import {
-  FilaListaFlotante,
-  ListaFlotante,
-  SinResultados,
-  useListaFlotante,
-  useNavegacionFlechas,
-} from "../componentes/ListaFlotante";
 import { listarEmpresasProveedor, registrarIngresoProveedor } from "../api/proveedores";
 import type { EmpresaProveedor } from "../api/proveedores";
 
 const MAX_RESULTADOS = 6;
-const CIERRE_LISTA_MS = 120;
 
 interface ValoresFormulario {
   cedula: string;
   nombre: string;
-  empresa_texto: string;
   placa: string;
   gafete_numero: number;
 }
@@ -31,7 +22,6 @@ interface ValoresFormulario {
 const esquema = z.object({
   cedula: z.string().min(1, "La cédula es obligatoria"),
   nombre: z.string().min(1, "El nombre es obligatorio"),
-  empresa_texto: z.string().min(1, "Elija una empresa del catálogo"),
   placa: z.string(),
   gafete_numero: z
     .number()
@@ -48,8 +38,6 @@ export default function IngresoProveedorModal({
   const {
     register,
     handleSubmit,
-    watch,
-    setValue,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<ValoresFormulario>({
@@ -57,63 +45,62 @@ export default function IngresoProveedorModal({
     defaultValues: {
       cedula: "",
       nombre: "",
-      empresa_texto: "",
       placa: "",
       gafete_numero: Number.NaN,
     },
   });
 
   const [empresas, setEmpresas] = useState<EmpresaProveedor[]>([]);
-  const [empresaId, setEmpresaId] = useState<number | null>(null);
   useEffect(() => {
     listarEmpresasProveedor()
       .then((datos) => setEmpresas(datos.filter((empresa) => empresa.activo)))
       .catch(() => {});
   }, []);
 
-  const empresaTexto = watch("empresa_texto");
-  const [campoEmpresaEnfocado, setCampoEmpresaEnfocado] = useState(false);
-
-  // Si el texto ya no coincide con la empresa elegida (la borró o siguió
-  // escribiendo), hay que volver a exigir una elección del catálogo antes
-  // de guardar -- mismo criterio que impide mandar un `empresa_id` viejo.
-  useEffect(() => {
-    setEmpresaId((actual) => {
-      if (actual === null) return actual;
-      const seleccionada = empresas.find((empresa) => empresa.id === actual);
-      return seleccionada && seleccionada.nombre === empresaTexto ? actual : null;
-    });
-  }, [empresaTexto, empresas]);
+  // Combobox simple -- un `<select>` nativo en vez del buscador con lista
+  // flotante que usan Rutas/Encargados: acá el catálogo de empresas
+  // proveedoras es chico y ese mecanismo (portal + blur con `setTimeout` +
+  // navegación con flechas) resultó frágil en la práctica -- el click sobre
+  // un resultado no siempre alcanzaba a registrarse antes de que el blur del
+  // campo cerrara la lista. Un `<select>` nativo no tiene esa carrera: el
+  // navegador maneja el click/selección solo, sin lógica propia que pueda
+  // desincronizarse. `filtro` sólo acota qué opciones aparecen (máximo
+  // `MAX_RESULTADOS`), el valor real sigue siendo `empresaId`.
+  const [filtroEmpresa, setFiltroEmpresa] = useState("");
+  const [empresaId, setEmpresaId] = useState<number | null>(null);
+  const [errorEmpresa, setErrorEmpresa] = useState<string | null>(null);
 
   const resultadosEmpresa = useMemo(() => {
-    const texto = empresaTexto.trim().toLowerCase();
-    if (!texto) return [];
-    return empresas
-      .filter((empresa) => empresa.nombre.toLowerCase().includes(texto))
-      .slice(0, MAX_RESULTADOS);
-  }, [empresaTexto, empresas]);
+    const texto = filtroEmpresa.trim().toLowerCase();
+    const filtradas = texto
+      ? empresas.filter((empresa) => empresa.nombre.toLowerCase().includes(texto))
+      : empresas;
+    return filtradas.slice(0, MAX_RESULTADOS);
+  }, [filtroEmpresa, empresas]);
 
-  const listaEmpresaVisible = campoEmpresaEnfocado && resultadosEmpresa.length > 0;
-  const { campoRef: campoEmpresaRef, posicion: posicionEmpresa } =
-    useListaFlotante(listaEmpresaVisible);
-
-  function elegirEmpresa(empresa: EmpresaProveedor) {
-    setValue("empresa_texto", empresa.nombre);
-    setEmpresaId(empresa.id);
-    setCampoEmpresaEnfocado(false);
-  }
-
-  const {
-    resaltado: resaltadoEmpresa,
-    setResaltado: setResaltadoEmpresa,
-    manejarTecla: manejarTeclaEmpresa,
-  } = useNavegacionFlechas(resultadosEmpresa, listaEmpresaVisible, elegirEmpresa);
+  // Si el filtro cambia y la empresa ya elegida deja de estar en las
+  // opciones visibles, el `<select>` la pierde de todos modos (el navegador
+  // no puede mostrar seleccionada una `<option>` que ya no existe) -- limpiar
+  // el estado acá evita que quede un `empresaId` "fantasma" sin reflejo en
+  // pantalla.
+  useEffect(() => {
+    // `Promise.resolve().then(...)` en vez de llamar `setEmpresaId` directo
+    // -- ver el mismo comentario en Activos.tsx.
+    Promise.resolve().then(() => {
+      setEmpresaId((actual) =>
+        actual !== null && resultadosEmpresa.some((empresa) => empresa.id === actual)
+          ? actual
+          : null,
+      );
+    });
+  }, [resultadosEmpresa]);
 
   async function alGuardar(valores: ValoresFormulario) {
     if (!empresaId) {
-      setError("empresa_texto", { message: "Elija una empresa del catálogo" });
+      setErrorEmpresa("Elija una empresa del catálogo");
       return;
     }
+    setErrorEmpresa(null);
     try {
       await registrarIngresoProveedor({
         cedula: valores.cedula.trim(),
@@ -147,37 +134,35 @@ export default function IngresoProveedorModal({
           </label>
         </div>
 
-        <div ref={campoEmpresaRef}>
-          <label className="campo">
-            Empresa
-            <input
-              {...register("empresa_texto")}
-              autoComplete="off"
-              placeholder="Escriba para buscar en el catálogo…"
-              onFocus={() => setCampoEmpresaEnfocado(true)}
-              onBlur={() => setTimeout(() => setCampoEmpresaEnfocado(false), CIERRE_LISTA_MS)}
-              onKeyDown={manejarTeclaEmpresa}
-            />
-          </label>
-          {errors.empresa_texto && (
-            <span style={{ color: "var(--error)" }}>{errors.empresa_texto.message}</span>
-          )}
-        </div>
-        {listaEmpresaVisible && posicionEmpresa && (
-          <ListaFlotante posicion={posicionEmpresa}>
-            {resultadosEmpresa.length === 0 && <SinResultados />}
-            {resultadosEmpresa.map((empresa, indice) => (
-              <FilaListaFlotante
-                key={empresa.id}
-                resaltada={indice === resaltadoEmpresa}
-                onClick={() => elegirEmpresa(empresa)}
-                onMouseEnter={() => setResaltadoEmpresa(indice)}
-              >
-                <span>{empresa.nombre}</span>
-              </FilaListaFlotante>
-            ))}
-          </ListaFlotante>
-        )}
+        <label className="campo">
+          Empresa
+          <input
+            value={filtroEmpresa}
+            onChange={(evento) => setFiltroEmpresa(evento.target.value)}
+            autoComplete="off"
+            placeholder="Escriba para filtrar…"
+          />
+        </label>
+        <label className="campo">
+          <select
+            size={Math.min(MAX_RESULTADOS, Math.max(resultadosEmpresa.length, 1))}
+            value={empresaId ?? ""}
+            onChange={(evento) => setEmpresaId(Number(evento.target.value))}
+          >
+            {resultadosEmpresa.length === 0 ? (
+              <option value="" disabled>
+                Sin resultados
+              </option>
+            ) : (
+              resultadosEmpresa.map((empresa) => (
+                <option key={empresa.id} value={empresa.id}>
+                  {empresa.nombre}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+        {errorEmpresa && <span style={{ color: "var(--error)" }}>{errorEmpresa}</span>}
 
         <div style={{ display: "flex", gap: "0.75rem" }}>
           <label className="campo" style={{ flex: 1 }}>
