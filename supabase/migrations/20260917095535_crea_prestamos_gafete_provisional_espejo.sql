@@ -55,7 +55,7 @@ create policy "leer prestamos_gafete_provisional del propio sitio o admin"
   to authenticated
   using (
     sitio_id = ((select auth.jwt()) ->> 'sitio_id')::uuid
-    or public.es_admin_global()
+    or private.es_admin_global()
   );
 
 create policy "actualizar prestamos_gafete_provisional del propio sitio"
