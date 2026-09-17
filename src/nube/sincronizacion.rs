@@ -2876,6 +2876,178 @@ fn aplicar_pagina_historial_visitas(
     Ok((recibidos, marca_mas_nueva))
 }
 
+#[derive(serde::Deserialize)]
+struct FilaHistorialIngresoProveedorRemota {
+    id: String,
+    cedula: String,
+    nombre: String,
+    empresa_nombre: Option<String>,
+    placa: Option<String>,
+    gafete_numero: Option<i64>,
+    hora_entrada: String,
+    hora_salida: Option<String>,
+    usuario_entrada_nombre: Option<String>,
+    usuario_salida_nombre: Option<String>,
+    dispositivo_entrada_id: String,
+    dispositivo_salida_id: Option<String>,
+    updated_at: String,
+}
+
+/// Análogo a `FilaHistorialVisitaResultado`.
+enum FilaHistorialIngresoProveedorResultado {
+    Omitida,
+    Aplicada {
+        actualizado_en: Option<chrono::DateTime<chrono::Utc>>,
+    },
+}
+
+/// Espejo de `guardar_fila_historial_visita`, pero contra
+/// `historial_ingresos_proveedor_sitio`.
+fn guardar_fila_historial_ingreso_proveedor(
+    transaction: &rusqlite::Transaction<'_>,
+    contexto: &ContextoSincronizacion<'_>,
+    fila: &FilaHistorialIngresoProveedorRemota,
+    ahora: &str,
+) -> Result<FilaHistorialIngresoProveedorResultado, SincronizacionError> {
+    let Ok(hora_entrada) =
+        crate::tiempo::parsear_utc(&fila.hora_entrada).map(crate::tiempo::serializar_utc)
+    else {
+        return Ok(FilaHistorialIngresoProveedorResultado::Omitida);
+    };
+    let hora_salida = match fila
+        .hora_salida
+        .as_deref()
+        .map(crate::tiempo::parsear_utc)
+        .transpose()
+    {
+        Ok(valor) => valor.map(crate::tiempo::serializar_utc),
+        Err(_) => return Ok(FilaHistorialIngresoProveedorResultado::Omitida),
+    };
+
+    transaction.execute(
+        "
+        INSERT INTO historial_ingresos_proveedor_sitio (
+            uuid, sitio_id, cedula, nombre, empresa_nombre, placa, gafete_numero,
+            hora_entrada, hora_salida, usuario_entrada_nombre, usuario_salida_nombre,
+            dispositivo_entrada_id, dispositivo_salida_id, actualizado_en
+        ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)
+        ON CONFLICT(uuid) DO UPDATE SET
+            hora_salida = excluded.hora_salida,
+            usuario_salida_nombre = excluded.usuario_salida_nombre,
+            dispositivo_salida_id = excluded.dispositivo_salida_id,
+            actualizado_en = excluded.actualizado_en
+        ",
+        params![
+            fila.id,
+            contexto.sitio_id,
+            fila.cedula,
+            fila.nombre,
+            fila.empresa_nombre,
+            fila.placa,
+            fila.gafete_numero,
+            hora_entrada,
+            hora_salida,
+            fila.usuario_entrada_nombre,
+            fila.usuario_salida_nombre,
+            fila.dispositivo_entrada_id,
+            fila.dispositivo_salida_id,
+            ahora,
+        ],
+    )?;
+
+    Ok(FilaHistorialIngresoProveedorResultado::Aplicada {
+        actualizado_en: crate::tiempo::parsear_utc(&fila.updated_at).ok(),
+    })
+}
+
+/// Espejo de `recibir_historial_visitas_del_sitio`, pero contra
+/// `ingresos_proveedor` -- mismo mecanismo incremental (marca de agua
+/// propia, `historial_ingresos_proveedor_actualizado_hasta`, mismo
+/// traslape de `DIAS_TRASLAPE_HISTORIAL` días). Sólo tiene sentido
+/// llamarla en escritorio -- ver el doc-comment de `MIGRACION_43`.
+pub fn recibir_historial_ingresos_proveedor_del_sitio(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<u32, SincronizacionError> {
+    let cliente = cliente_http();
+
+    let marca_anterior: Option<String> = connection.query_row(
+        "SELECT historial_ingresos_proveedor_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let ahora_remoto_seguro = chrono::Utc::now();
+    let marca_consulta =
+        marca_historial_para_consulta(marca_anterior.as_deref(), ahora_remoto_seguro);
+    let filtro_incremental = marca_consulta
+        .as_ref()
+        .map(|marca| format!("&updated_at=gt.{}", crate::tiempo::serializar_utc(*marca)))
+        .unwrap_or_default();
+
+    let url = format!(
+        "{}/rest/v1/ingresos_proveedor?sitio_id=eq.{}{filtro_incremental}\
+         &select=id,cedula,nombre,empresa_nombre,placa,gafete_numero,hora_entrada,hora_salida,\
+         usuario_entrada_nombre,usuario_salida_nombre,dispositivo_entrada_id,\
+         dispositivo_salida_id,updated_at",
+        contexto.base_url, contexto.sitio_id,
+    );
+    let mut recibidos_total = 0_u32;
+    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_consulta;
+    obtener_json_paginado_con(
+        &cliente,
+        contexto,
+        &url,
+        |pagina: Vec<FilaHistorialIngresoProveedorRemota>| {
+            let (recibidos, marca_actualizada) = aplicar_pagina_historial_ingresos_proveedor(
+                connection,
+                contexto,
+                &pagina,
+                marca_mas_nueva,
+            )?;
+            recibidos_total += recibidos;
+            marca_mas_nueva = marca_actualizada;
+            Ok(())
+        },
+    )?;
+
+    Ok(recibidos_total)
+}
+
+/// Espejo de `aplicar_pagina_historial_visitas`.
+fn aplicar_pagina_historial_ingresos_proveedor(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    pagina: &[FilaHistorialIngresoProveedorRemota],
+    marca_previa: Option<chrono::DateTime<chrono::Utc>>,
+) -> Result<(u32, Option<chrono::DateTime<chrono::Utc>>), SincronizacionError> {
+    let transaction = connection.unchecked_transaction()?;
+    let mut recibidos = 0_u32;
+    let ahora = crate::tiempo::serializar_utc(chrono::Utc::now());
+    let mut marca_mas_nueva = marca_previa;
+    for fila in pagina {
+        let FilaHistorialIngresoProveedorResultado::Aplicada { actualizado_en } =
+            guardar_fila_historial_ingreso_proveedor(&transaction, contexto, fila, &ahora)?
+        else {
+            continue;
+        };
+        recibidos += 1;
+        if let Some(actualizado_en) = actualizado_en
+            && marca_mas_nueva.is_none_or(|marca| actualizado_en > marca)
+        {
+            marca_mas_nueva = Some(actualizado_en);
+        }
+    }
+
+    if let Some(marca) = marca_mas_nueva {
+        transaction.execute(
+            "UPDATE sincronizacion_estado SET historial_ingresos_proveedor_actualizado_hasta = ?1 WHERE id = 1",
+            params![crate::tiempo::serializar_utc(marca)],
+        )?;
+    }
+    transaction.commit()?;
+    Ok((recibidos, marca_mas_nueva))
+}
+
 /// Nombre del anfitrión, embebido vía `PostgREST`
 /// (`anfitrion:anfitriones!citas_anfitrion_correo_fkey(nombre)`) -- la
 /// política de `anfitriones` que deja leerlo desde un dispositivo del sitio
@@ -5646,6 +5818,115 @@ mod tests {
         });
 
         recibir_historial_visitas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+        servidor.join().unwrap();
+    }
+
+    #[test]
+    fn recibe_el_historial_de_ingresos_proveedor_del_sitio_y_lo_guarda_local() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"ingreso-proveedor-1\",\"cedula\":\"1-1111\",\
+             \"nombre\":\"Proveedor Remoto\",\"empresa_nombre\":\"Maika\",\"placa\":null,\
+             \"gafete_numero\":9,\"hora_entrada\":\"2026-01-01T08:00:00Z\",\
+             \"hora_salida\":null,\"usuario_entrada_nombre\":\"Guardia\",\
+             \"usuario_salida_nombre\":null,\"dispositivo_entrada_id\":\"otro-dispositivo\",\
+             \"dispositivo_salida_id\":null,\"updated_at\":\"2026-01-01T08:00:05Z\"}]",
+        );
+
+        let recibidos =
+            recibir_historial_ingresos_proveedor_del_sitio(&connection, &contexto(&base_url))
+                .unwrap();
+
+        assert_eq!(recibidos, 1);
+        let (cedula, nombre, empresa): (String, String, Option<String>) = connection
+            .query_row(
+                "SELECT cedula, nombre, empresa_nombre
+                 FROM historial_ingresos_proveedor_sitio WHERE uuid = 'ingreso-proveedor-1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(cedula, "1-1111");
+        assert_eq!(nombre, "Proveedor Remoto");
+        assert_eq!(empresa.as_deref(), Some("Maika"));
+    }
+
+    #[test]
+    fn una_fila_de_historial_de_ingresos_proveedor_con_fecha_ilegible_se_omite_sin_abortar_las_demas()
+     {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"prov-malo\",\"cedula\":\"1-1111\",\"nombre\":\"X\",\
+             \"empresa_nombre\":null,\"placa\":null,\"gafete_numero\":null,\
+             \"hora_entrada\":\"no-es-una-fecha\",\"hora_salida\":null,\
+             \"usuario_entrada_nombre\":null,\"usuario_salida_nombre\":null,\
+             \"dispositivo_entrada_id\":\"otro-dispositivo\",\"dispositivo_salida_id\":null,\
+             \"updated_at\":\"2026-01-01T08:00:00Z\"},\
+             {\"id\":\"prov-bueno\",\"cedula\":\"1-2222\",\"nombre\":\"Y\",\
+             \"empresa_nombre\":null,\"placa\":null,\"gafete_numero\":null,\
+             \"hora_entrada\":\"2026-01-01T08:00:00Z\",\"hora_salida\":null,\
+             \"usuario_entrada_nombre\":null,\"usuario_salida_nombre\":null,\
+             \"dispositivo_entrada_id\":\"otro-dispositivo\",\"dispositivo_salida_id\":null,\
+             \"updated_at\":\"2026-01-01T08:00:05Z\"}]",
+        );
+
+        let recibidos =
+            recibir_historial_ingresos_proveedor_del_sitio(&connection, &contexto(&base_url))
+                .unwrap();
+
+        assert_eq!(recibidos, 1, "la fila con hora_entrada ilegible no cuenta");
+        let total: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM historial_ingresos_proveedor_sitio",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(total, 1, "solo se guardó la fila válida");
+    }
+
+    #[test]
+    fn segunda_sincronizacion_de_historial_de_ingresos_proveedor_pide_solo_lo_actualizado_desde_la_marca_previa()
+     {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "UPDATE sincronizacion_estado SET historial_ingresos_proveedor_actualizado_hasta = '2026-09-09T08:00:00Z' WHERE id = 1",
+                [],
+            )
+            .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(pedido.contains("/ingresos_proveedor?sitio_id=eq.sitio-1"));
+            assert!(pedido.contains("updated_at=gt."));
+            let cuerpo = "[]";
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        recibir_historial_ingresos_proveedor_del_sitio(&connection, &contexto(&base_url)).unwrap();
         servidor.join().unwrap();
     }
 

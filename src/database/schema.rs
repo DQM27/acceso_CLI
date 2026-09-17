@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 42;
+pub const SCHEMA_VERSION: i64 = 43;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -366,6 +366,11 @@ fn aplicar_migraciones_posteriores_a_29(
         *version = 42;
     }
 
+    if *version == 42 {
+        aplicar_migracion_43(connection)?;
+        *version = 43;
+    }
+
     Ok(())
 }
 
@@ -656,6 +661,16 @@ fn aplicar_migracion_42(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_42)?;
     transaction.execute_batch("PRAGMA user_version = 42")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Agrega `historial_ingresos_proveedor_sitio` -- tabla nueva + una columna
+/// en `sincronizacion_estado`, sin recrear nada existente.
+fn aplicar_migracion_43(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_43)?;
+    transaction.execute_batch("PRAGMA user_version = 43")?;
     transaction.commit()?;
     Ok(())
 }
@@ -3488,4 +3503,35 @@ CREATE TABLE ingresos_proveedor_remotos (
     dispositivo_entrada_id TEXT NOT NULL,
     actualizado_en TEXT NOT NULL
 ) STRICT;
+";
+
+/// Caché de lectura del historial de ingresos de proveedor del sitio --
+/// mismo rol que `historial_visitas_sitio` (`MIGRACION_33`): trae TODO
+/// ingreso de proveedor (abierto o cerrado) del sitio, de cualquier
+/// dispositivo, vía sync incremental con su propia marca de agua. Sólo se
+/// llena en escritorio -- mismo criterio explícito que
+/// `historial_visitas_sitio` (`mobile/rust-core/src/lib.rs`: "el celular es
+/// para acciones rápidas, auditar historial le corresponde a la PC").
+const MIGRACION_43: &str = r"
+ALTER TABLE sincronizacion_estado ADD COLUMN historial_ingresos_proveedor_actualizado_hasta TEXT;
+
+CREATE TABLE historial_ingresos_proveedor_sitio (
+    uuid TEXT PRIMARY KEY,
+    sitio_id TEXT NOT NULL,
+    cedula TEXT NOT NULL,
+    nombre TEXT NOT NULL,
+    empresa_nombre TEXT,
+    placa TEXT,
+    gafete_numero INTEGER,
+    hora_entrada TEXT NOT NULL,
+    hora_salida TEXT,
+    usuario_entrada_nombre TEXT,
+    usuario_salida_nombre TEXT,
+    dispositivo_entrada_id TEXT NOT NULL,
+    dispositivo_salida_id TEXT,
+    actualizado_en TEXT NOT NULL
+) STRICT;
+
+CREATE INDEX idx_historial_ingresos_proveedor_sitio_hora_entrada
+ON historial_ingresos_proveedor_sitio(hora_entrada);
 ";
