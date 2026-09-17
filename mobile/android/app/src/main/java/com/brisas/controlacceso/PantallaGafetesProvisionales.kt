@@ -1,25 +1,28 @@
 package com.brisas.controlacceso
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,11 +49,20 @@ import uniffi.control_acceso_mobile.PrestamoGafeteProvisionalActivoResumen
 /// [PantallaRutas]: un solo campo bloqueante (encargado), sin OCR, sin
 /// wizard de pasos -- un formulario y una lista.
 @Composable
-fun PantallaGafetesProvisionales(nucleo: Nucleo, secretoStore: SecretoDispositivoStore) {
+fun PantallaGafetesProvisionales(
+    nucleo: Nucleo,
+    secretoStore: SecretoDispositivoStore,
+    refrescarNube: Int = 0,
+) {
     val viewModel: GafetesProvisionalesViewModel =
         viewModel(factory = GafetesProvisionalesViewModel.factory(nucleo, secretoStore))
     var gafeteTexto by remember { mutableStateOf("") }
     var prestamoParaDevolver by remember { mutableStateOf<PrestamoGafeteProvisionalActivoResumen?>(null) }
+    LaunchedEffect(refrescarNube) {
+        if (refrescarNube > 0) {
+            viewModel.refrescarActivos()
+        }
+    }
 
     val puedeEntregar =
         viewModel.encargadoSeleccionado != null && gafeteTexto.isNotBlank() && !viewModel.registrando
@@ -63,12 +75,36 @@ fun PantallaGafetesProvisionales(nucleo: Nucleo, secretoStore: SecretoDispositiv
             modifier = Modifier.padding(bottom = 10.dp),
         )
 
-        BuscadorEncargadoProvisional(
-            texto = viewModel.textoEncargado,
-            onCambiarTexto = viewModel::cambiarTextoEncargado,
-            resultados = viewModel.resultadosEncargado,
-            onElegir = viewModel::elegirEncargado,
+        // Mismo look que el buscador de `PantallaActivos`/`PantallaProveedores`
+        // (ícono de lupa, mismo campo/alto) pero sin el botón de cámara -- acá
+        // no hay documento que escanear, sólo nombre/código escrito. Los
+        // resultados salen como tarjetas tocables abajo (igual que
+        // `FilaContratista` en modo Ingreso), no en un menú desplegable --
+        // pedido explícito del usuario en pruebas reales, 2026-09-17:
+        // unificar el look de esta pantalla con el de Contratista.
+        TextField(
+            value = viewModel.textoEncargado,
+            onValueChange = viewModel::cambiarTextoEncargado,
+            placeholder = { Text("Nombre o código de empleado") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            singleLine = true,
+            shape = FormaCampoBrisas,
+            colors = ColoresCampoBrisas(),
+            modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
         )
+
+        if (viewModel.encargadoSeleccionado == null && viewModel.resultadosEncargado.isNotEmpty()) {
+            ListaConDesvanecido {
+                LazyColumn(
+                    contentPadding = PaddingValues(top = 5.dp),
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    items(viewModel.resultadosEncargado, key = { it.id }) { encargado ->
+                        FilaEncargadoProvisional(encargado, onClick = { viewModel.elegirEncargado(encargado) })
+                    }
+                }
+            }
+        }
 
         viewModel.encargadoSeleccionado?.let { encargado ->
             Text(
@@ -77,36 +113,36 @@ fun PantallaGafetesProvisionales(nucleo: Nucleo, secretoStore: SecretoDispositiv
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
             )
-        }
 
-        TextField(
-            value = gafeteTexto,
-            onValueChange = { gafeteTexto = it.filter(Char::isDigit) },
-            placeholder = { Text("Número de gafete provisional") },
-            singleLine = true,
-            shape = FormaCampoBrisas,
-            colors = ColoresCampoBrisas(),
-            modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas).padding(top = 8.dp),
-        )
-
-        viewModel.error?.let { mensaje ->
-            Text(
-                mensaje,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 8.dp),
+            TextField(
+                value = gafeteTexto,
+                onValueChange = { gafeteTexto = it.filter(Char::isDigit) },
+                placeholder = { Text("Número de gafete provisional") },
+                singleLine = true,
+                shape = FormaCampoBrisas,
+                colors = ColoresCampoBrisas(),
+                modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas).padding(top = 8.dp),
             )
-        }
 
-        BotonBrisas(
-            onClick = {
-                val numero = gafeteTexto.toLongOrNull() ?: return@BotonBrisas
-                viewModel.entregar(numero) { gafeteTexto = "" }
-            },
-            enabled = puedeEntregar,
-            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-        ) {
-            Text("Entregar")
+            viewModel.error?.let { mensaje ->
+                Text(
+                    mensaje,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+
+            BotonBrisas(
+                onClick = {
+                    val numero = gafeteTexto.toLongOrNull() ?: return@BotonBrisas
+                    viewModel.entregar(numero) { gafeteTexto = "" }
+                },
+                enabled = puedeEntregar,
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            ) {
+                Text("Entregar")
+            }
         }
 
         Text(
@@ -141,53 +177,25 @@ fun PantallaGafetesProvisionales(nucleo: Nucleo, secretoStore: SecretoDispositiv
     )
 }
 
-/// Mismo componente visual que `PasoEncargado` de `PantallaRutas.kt`, sin
-/// el número de paso ni el botón de cámara -- ese `@Composable` es privado
-/// a ese archivo (mismo caso ya documentado en la exploración de este
-/// módulo), así que se duplica el mínimo necesario en vez de exportarlo.
-@OptIn(ExperimentalMaterial3Api::class)
+/// Mismo estilo que `FilaContratista` (PantallaActivos.kt, modo Ingreso) --
+/// nombre primero, código de empleado abajo, tarjeta completa tocable.
 @Composable
-private fun BuscadorEncargadoProvisional(
-    texto: String,
-    onCambiarTexto: (String) -> Unit,
-    resultados: List<EncargadoRuta>,
-    onElegir: (EncargadoRuta) -> Unit,
-) {
-    var menuAbierto by remember { mutableStateOf(false) }
-
-    ExposedDropdownMenuBox(
-        expanded = menuAbierto && resultados.isNotEmpty(),
-        onExpandedChange = { menuAbierto = it },
+private fun FilaEncargadoProvisional(encargado: EncargadoRuta, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        TextField(
-            value = texto,
-            onValueChange = {
-                onCambiarTexto(it)
-                menuAbierto = true
-            },
-            placeholder = { Text("Nombre o código de empleado") },
-            singleLine = true,
-            shape = FormaCampoBrisas,
-            colors = ColoresCampoBrisas(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(AlturaBusquedaBrisas)
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
+        Text(encargado.nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        Text(
+            "Código de empleado: ${encargado.codigoEmpleado}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        DropdownMenu(
-            expanded = menuAbierto && resultados.isNotEmpty(),
-            onDismissRequest = { menuAbierto = false },
-        ) {
-            resultados.forEach { encargado ->
-                DropdownMenuItem(
-                    text = { Text("${encargado.nombre} · ${encargado.codigoEmpleado}") },
-                    onClick = {
-                        onElegir(encargado)
-                        menuAbierto = false
-                    },
-                )
-            }
-        }
     }
 }
 
@@ -196,21 +204,21 @@ private fun FilaPrestamoGafeteProvisional(
     prestamo: PrestamoGafeteProvisionalActivoResumen,
     onConfirmarDevolucion: () -> Unit,
 ) {
+    // Mismo orden e interacción que las tarjetas de Contratista/Proveedores:
+    // nombre primero, tarjeta completa tocable (sin botón "Devolver" aparte)
+    // -- pedido explícito del usuario en pruebas reales, 2026-09-17.
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onConfirmarDevolucion)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
+        Text(prestamo.encargadoNombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
         Text(
-            "Gafete ${prestamo.gafeteNumero}",
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium,
-        )
-        Text(
-            "${prestamo.encargadoNombre} · ${prestamo.encargadoCodigoEmpleado}",
+            "${prestamo.encargadoCodigoEmpleado} · Gafete ${prestamo.gafeteNumero}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -219,14 +227,12 @@ private fun FilaPrestamoGafeteProvisional(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Row(modifier = Modifier.padding(top = 8.dp)) {
-            BotonBrisas(onClick = onConfirmarDevolucion) {
-                Text("Devolver")
-            }
-        }
     }
 }
 
+/// Mismo layout que `DialogoConfirmarSalida`/`DialogoConfirmarSalidaProveedor`
+/// -- ícono circular, título "Registrar devolución", info completa en vez de
+/// sólo "Gafete N · nombre".
 @Composable
 private fun DialogoConfirmarDevolucionGafeteProvisional(
     prestamo: PrestamoGafeteProvisionalActivoResumen?,
@@ -242,13 +248,23 @@ private fun DialogoConfirmarDevolucionGafeteProvisional(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            }
             Text(
-                "Confirmar devolución",
+                "Registrar devolución",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 16.dp),
             )
             Text(
-                "Gafete ${prestamo.gafeteNumero} · ${prestamo.encargadoNombre}",
+                "${prestamo.encargadoNombre} · ${prestamo.encargadoCodigoEmpleado} · Gafete ${prestamo.gafeteNumero}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),

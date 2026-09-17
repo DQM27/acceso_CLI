@@ -117,6 +117,7 @@ class GafetesProvisionalesViewModel(
                     }
                     nucleo.entregarGafeteProvisional(encargado.id, gafeteNumero)
                 }
+                CambiosNube.solicitar()
                 mensaje = "Gafete entregado"
                 error = null
                 textoEncargado = ""
@@ -141,6 +142,7 @@ class GafetesProvisionalesViewModel(
         viewModelScope.launch {
             try {
                 withContext(dispatcherIO) { nucleo.registrarDevolucionGafeteProvisional(prestamo.id) }
+                CambiosNube.solicitar()
                 refrescarActivos()
             } catch (excepcion: NucleoException) {
                 error = excepcion.message

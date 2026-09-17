@@ -255,7 +255,7 @@ fun PantallaPrincipal(
                 when (pestana) {
                     0 -> PantallaActivos(nucleo, secretoStore, refrescarNube)
                     1 -> PantallaRutas(nucleo)
-                    2 -> PantallaGafetesProvisionales(nucleo, secretoStore)
+                    2 -> PantallaGafetesProvisionales(nucleo, secretoStore, refrescarNube)
                     else -> PantallaProveedores(nucleo, secretoStore, refrescarNube)
                 }
             }
