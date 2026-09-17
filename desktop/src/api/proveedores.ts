@@ -143,3 +143,36 @@ export async function cerrarFilaProveedorActiva(fila: FilaProveedorActiva): Prom
     await cerrarIngresoProveedorRemoto(fila.uuid_remoto);
   }
 }
+
+// ---- Historial (exclusivo de escritorio) ----
+
+/** Espejo de `comandos::proveedores::HistorialIngresoProveedorRemoto` -- un
+ * ingreso de proveedor (abierto o cerrado) leído de la caché local
+ * `historial_ingresos_proveedor_sitio`, la misma que sincroniza
+ * `nube::recibir_historial_ingresos_proveedor_del_sitio`. Sólo se llena en
+ * PC -- el celular no trae esto (mismo criterio que
+ * `MovimientoHistorialVisitaRemoto`, ver `api/citas.ts`), así que este
+ * comando ni siquiera existe del lado móvil. */
+export interface HistorialIngresoProveedorRemoto {
+  uuid: string;
+  cedula: string;
+  nombre: string;
+  empresa_nombre: string | null;
+  placa: string | null;
+  gafete_numero: number | null;
+  /** ISO 8601 (UTC). */
+  fecha_hora_ingreso: string;
+  fecha_hora_salida: string | null;
+  usuario_ingreso_nombre: string | null;
+  usuario_salida_nombre: string | null;
+}
+
+export function listarHistorialIngresosProveedorSitio(
+  desde?: string,
+  hasta?: string,
+): Promise<HistorialIngresoProveedorRemoto[]> {
+  return invoke("listar_historial_ingresos_proveedor_sitio", {
+    desde: desde ?? null,
+    hasta: hasta ?? null,
+  });
+}

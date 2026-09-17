@@ -211,6 +211,7 @@ pub fn run() {
             comandos::proveedores::registrar_ingreso_proveedor,
             comandos::proveedores::registrar_salida_proveedor,
             comandos::proveedores::listar_proveedores_activos,
+            comandos::proveedores::listar_historial_ingresos_proveedor_sitio,
             comandos::historial::listar_historial,
             comandos::historial::listar_historial_sitio,
             comandos::historial::exportar_historial,

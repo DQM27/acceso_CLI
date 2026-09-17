@@ -48,6 +48,9 @@ pub struct ResumenSincronizacion {
     pub citas_recibidas: u32,
     /// Ver `application::nube::ResumenSincronizacion::historial_visitas_recibidos`.
     pub historial_visitas_recibidos: u32,
+    /// Mismo criterio que `historial_visitas_recibidos`, pero para ingresos
+    /// de proveedor (`nube::recibir_historial_ingresos_proveedor_del_sitio`).
+    pub historial_ingresos_proveedor_recibidos: u32,
     pub sitio_id: String,
     pub dispositivo_id: String,
     pub tipo: String,
@@ -236,6 +239,8 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
     let citas_recibidas = nube::recibir_citas_del_sitio(&conexion, &contexto)?;
     let historial_visitas_recibidos =
         nube::recibir_historial_visitas_del_sitio(&conexion, &contexto)?;
+    let historial_ingresos_proveedor_recibidos =
+        nube::recibir_historial_ingresos_proveedor_del_sitio(&conexion, &contexto)?;
     // Mejor esfuerzo a propósito -- ya se llegó hasta acá con la nube
     // respondiendo bien, pero si este chequeo puntual falla no tiene
     // sentido tumbar un sync que por lo demás anduvo. Vacío en ese caso, no
@@ -268,6 +273,7 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
         movimientos_historial_recibidos,
         citas_recibidas,
         historial_visitas_recibidos,
+        historial_ingresos_proveedor_recibidos,
         empresas_recibidas: catalogo.empresas_recibidas,
         contratistas_recibidos: catalogo.contratistas_recibidos,
         gafetes_recibidos: catalogo.gafetes_recibidos,
@@ -310,6 +316,10 @@ pub async fn configurar_dispositivo_inicial(
             movimientos_historial_recibidos: resumen.movimientos_historial_recibidos,
             citas_recibidas: resumen.citas_recibidas,
             historial_visitas_recibidos: resumen.historial_visitas_recibidos,
+            // Núcleo (`AppCore::configurar_dispositivo_inicial`) no trae este
+            // campo -- mismo criterio que `conflictos_ingreso_proveedor` de
+            // abajo: base recién configurada, nada que traer todavía.
+            historial_ingresos_proveedor_recibidos: 0,
             empresas_recibidas: resumen.empresas_recibidas,
             contratistas_recibidos: resumen.contratistas_recibidos,
             gafetes_recibidos: resumen.gafetes_recibidos,

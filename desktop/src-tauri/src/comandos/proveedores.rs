@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use control_acceso::mensajes::{
     mensaje_empresa_proveedor, mensaje_gestion_nube, mensaje_ingreso_proveedor,
     mensaje_sincronizacion,
@@ -5,7 +6,9 @@ use control_acceso::mensajes::{
 use control_acceso::models::empresa_proveedor::EmpresaProveedor;
 use control_acceso::models::registro_ingreso_proveedor::RegistroIngresoProveedorActivoResumen;
 use control_acceso::nube;
+use rusqlite::params;
 
+use crate::comandos::historial::rango_utc;
 use crate::dto::proveedores::SolicitudIngresoProveedorEntrada;
 use crate::estado::GuiState;
 
@@ -186,4 +189,70 @@ pub fn listar_proveedores_activos(
         .core()
         .listar_proveedores_activos()
         .map_err(mensaje_ingreso_proveedor)
+}
+
+// ---- Historial (exclusivo de escritorio) ----
+
+/// Espejo de `historial_ingresos_proveedor_sitio` -- análogo a
+/// `comandos::citas::MovimientoHistorialVisitaRemoto`, mismo criterio: sin
+/// límite ni filtro de texto, la grilla (AG Grid) filtra del lado del
+/// cliente. Sólo tiene sentido en PC -- el celular nunca sincroniza esta
+/// caché (ver el doc-comment de `MIGRACION_43` en `database::schema`), así
+/// que ahí siempre estaría vacía; este comando no existe del lado móvil.
+#[derive(serde::Serialize)]
+pub struct HistorialIngresoProveedorRemoto {
+    pub uuid: String,
+    pub cedula: String,
+    pub nombre: String,
+    pub empresa_nombre: Option<String>,
+    pub placa: Option<String>,
+    pub gafete_numero: Option<i64>,
+    pub fecha_hora_ingreso: String,
+    pub fecha_hora_salida: Option<String>,
+    pub usuario_ingreso_nombre: Option<String>,
+    pub usuario_salida_nombre: Option<String>,
+}
+
+#[tauri::command]
+pub fn listar_historial_ingresos_proveedor_sitio(
+    desde: Option<NaiveDate>,
+    hasta: Option<NaiveDate>,
+    state: tauri::State<GuiState>,
+) -> Result<Vec<HistorialIngresoProveedorRemoto>, String> {
+    state.sesion_activa()?;
+    let (desde_utc, hasta_utc) = rango_utc(desde, hasta).map_err(|error| error.to_string())?;
+    let conexion = state.conexion_secundaria()?;
+    let mut statement = conexion
+        .prepare(
+            "SELECT uuid, cedula, nombre, empresa_nombre, placa, gafete_numero,
+                    hora_entrada, hora_salida, usuario_entrada_nombre, usuario_salida_nombre
+             FROM historial_ingresos_proveedor_sitio
+             WHERE hora_entrada >= ?1 AND hora_entrada < ?2
+             ORDER BY hora_entrada DESC",
+        )
+        .map_err(|error| error.to_string())?;
+    statement
+        .query_map(
+            params![
+                control_acceso::tiempo::serializar_utc(desde_utc),
+                control_acceso::tiempo::serializar_utc(hasta_utc)
+            ],
+            |row| {
+                Ok(HistorialIngresoProveedorRemoto {
+                    uuid: row.get(0)?,
+                    cedula: row.get(1)?,
+                    nombre: row.get(2)?,
+                    empresa_nombre: row.get(3)?,
+                    placa: row.get(4)?,
+                    gafete_numero: row.get(5)?,
+                    fecha_hora_ingreso: row.get(6)?,
+                    fecha_hora_salida: row.get(7)?,
+                    usuario_ingreso_nombre: row.get(8)?,
+                    usuario_salida_nombre: row.get(9)?,
+                })
+            },
+        )
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
 }

@@ -23,6 +23,9 @@ export interface ResumenSincronizacion {
   movimientos_historial_recibidos: number;
   citas_recibidas: number;
   historial_visitas_recibidos: number;
+  /** Mismo criterio que `historial_visitas_recibidos`, pero para ingresos
+   * de proveedor. */
+  historial_ingresos_proveedor_recibidos: number;
   sitio_id: string;
   dispositivo_id: string;
   tipo: string;
