@@ -10,16 +10,21 @@ name: Build de prueba (desktop)
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-desktop-test:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Instalar toolchain de Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (2026-09-18)
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: |
             desktop/src-tauri
@@ -30,7 +35,7 @@ jobs:
         run: cargo build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
 
       - name: Instalar Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: npm
@@ -45,7 +50,7 @@ jobs:
         run: npm run tauri build
 
       - name: Subir el instalador como artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ControlAcceso-Brisas-desktop-${{ github.sha }}
           path: |

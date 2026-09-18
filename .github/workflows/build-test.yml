@@ -19,31 +19,36 @@ on:
         type: boolean
         default: true
 
+permissions:
+  contents: read
+
 jobs:
   build-android-test:
     if: ${{ inputs.build_mobile }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Instalar JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Instalar toolchain de Rust para Android
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (2026-09-18)
         with:
           targets: aarch64-linux-android,x86_64-linux-android
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: mobile/rust-core
 
       - name: Instalar NDK
         id: ndk
-        uses: nttld/setup-ndk@v1
+        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1
         with:
           ndk-version: r27
 
@@ -66,7 +71,7 @@ jobs:
         run: ./gradlew assembleDebug
 
       - name: Subir el APK como artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ControlAcceso-Brisas-debug-${{ github.sha }}
           path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
@@ -76,12 +81,14 @@ jobs:
     if: ${{ inputs.build_desktop }}
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Instalar toolchain de Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (2026-09-18)
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: |
             desktop/src-tauri
@@ -92,7 +99,7 @@ jobs:
         run: cargo build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
 
       - name: Instalar Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: npm
@@ -110,7 +117,7 @@ jobs:
         run: npm run tauri build
 
       - name: Subir el instalador como artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ControlAcceso-Brisas-desktop-${{ github.sha }}
           path: |
