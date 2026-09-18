@@ -80,7 +80,12 @@ sha2 = { version = "0.11", default-features = false, optional = true }
 # DPAPI (`CryptProtectData`/`CryptUnprotectData`) para proteger el secreto
 # de dispositivo en disco -- ver `cifrado-secreto-dispositivo` arriba y
 # `nube::credenciales`. Misma versión que ya fija `desktop/src-tauri`.
-windows = { version = "=0.62.2", features = [
+# DIFERIDO a propósito (ver docs/pendientes.md): `desktop/src-tauri` fija su
+# propio `windows`/`webview2-com` a lo que `wry` (vía tauri) trae
+# transitivamente -- hoy `windows 0.61.3`. Bumpear esta copia sola generaría
+# dos versiones de `windows` en el árbol; se sube junto con
+# `desktop/src-tauri` cuando `wry` adopte `windows` 0.62.
+windows = { version = "=0.61.3", features = [
     "Win32_Security_Cryptography",
     "Win32_Foundation",
 ], optional = true }
