@@ -391,21 +391,21 @@ fn configurar_plugins_condicionales(app: &tauri::AppHandle) -> tauri::Result<()>
 /// para mantenerla bajo el tope de líneas de Clippy (mismo motivo que
 /// `preparar_nucleo`/`configurar_plugins_condicionales`).
 fn inicializar_sentry() -> sentry::ClientInitGuard {
+    // `ClientOptions` es `#[non_exhaustive]` desde sentry 0.49 -- ya no se
+    // puede construir con la sintaxis de struct literal, sólo con este
+    // builder. `traces_sampling_strategy` queda en su default
+    // (`TracesSamplingStrategy::Disabled`), equivalente al viejo
+    // `traces_sample_rate: 0.0` (sólo error-tracking, sin performance
+    // tracing).
     sentry::init((
         SENTRY_DSN,
-        sentry::ClientOptions {
-            release: sentry::release_name!(),
-            environment: Some(
-                if cfg!(debug_assertions) {
-                    "development"
-                } else {
-                    "production"
-                }
-                .into(),
-            ),
-            traces_sample_rate: 0.0,
-            ..Default::default()
-        },
+        sentry::ClientOptions::new()
+            .maybe_release(sentry::release_name!())
+            .environment(if cfg!(debug_assertions) {
+                "development"
+            } else {
+                "production"
+            }),
     ))
 }
 

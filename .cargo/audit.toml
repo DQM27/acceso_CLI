@@ -1,0 +1,14 @@
+# Configuración de `cargo audit` (ver .github/workflows/ci.yml, job "test").
+[advisories]
+ignore = [
+    # RUSTSEC-2023-0071 ("Marvin Attack", timing side-channel en RSA PKCS#1
+    # v1.5 decryption) -- llega transitivamente por la feature "rust_crypto"
+    # de `jsonwebtoken` (ver Cargo.toml, dependencia `jsonwebtoken`), que
+    # trae soporte de RSA junto con el de curvas elípticas aunque este
+    # proyecto sólo verifica JWT firmados con ES256 (ver
+    # nube::auth_supabase::verificar_token_offline -- Supabase Auth usa
+    # claves EC P-256). El crate `rsa` nunca se usa para descifrar nada
+    # acá, así que el ataque de temporización no aplica; no hay upgrade
+    # disponible que lo arregle (RustSec lo marca "no fixed upgrade").
+    "RUSTSEC-2023-0071",
+]
