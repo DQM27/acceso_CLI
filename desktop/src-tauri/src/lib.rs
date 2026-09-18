@@ -18,6 +18,18 @@ mod pdf;
 
 use estado::GuiState;
 
+/// DSN del proyecto `control-acceso-desktop` en Sentry -- no es un secreto
+/// (está pensado para ir embebido en el cliente, misma lógica que la
+/// publishable key de Supabase en `web/`), pero se deja overrideable en
+/// tiempo de compilación por si algún día se separa un proyecto de Sentry
+/// para QA/staging.
+const SENTRY_DSN: &str = match option_env!("SENTRY_DSN") {
+    Some(dsn) => dsn,
+    None => {
+        "https://644be3689422e0fa65551a7f3f8a28ff@o4512103124041728.ingest.us.sentry.io/4512104588115968"
+    }
+};
+
 /// Cada cuánto reintenta la sincronización automática mientras la app sigue
 /// abierta. Realtime dispara sincronizaciones bajo demanda, pero este pulso
 /// queda como respaldo cuando el socket no está conectado o se pierde un
@@ -57,9 +69,19 @@ fn iniciar_sincronizacion_automatica(app: tauri::AppHandle) {
                 Ok(Ok(resumen)) => {
                     let _ = app.emit("nube://sincronizado", resumen);
                 }
-                Ok(Err(error)) => log::warn!("sincronización automática falló: {error}"),
+                Ok(Err(error)) => {
+                    log::warn!("sincronización automática falló: {error}");
+                    sentry::capture_message(
+                        &format!("sincronización automática falló: {error}"),
+                        sentry::Level::Warning,
+                    );
+                }
                 Err(error) => {
                     log::error!("tarea de sincronización automática no pudo ejecutarse: {error}");
+                    sentry::capture_message(
+                        &format!("tarea de sincronización automática no pudo ejecutarse: {error}"),
+                        sentry::Level::Error,
+                    );
                 }
             }
 
@@ -173,6 +195,31 @@ fn configurar_plugins_condicionales(app: &tauri::AppHandle) -> tauri::Result<()>
     Ok(())
 }
 
+/// Guarda viva hasta que `run()` retorna (recién ahí termina el proceso) --
+/// en el `Drop` hace flush de eventos pendientes antes de cerrar. Captura
+/// panics automáticamente (feature "panic" de `sentry`, activa por default)
+/// desde que se llama esto en adelante -- separada de `run()` únicamente
+/// para mantenerla bajo el tope de líneas de Clippy (mismo motivo que
+/// `preparar_nucleo`/`configurar_plugins_condicionales`).
+fn inicializar_sentry() -> sentry::ClientInitGuard {
+    sentry::init((
+        SENTRY_DSN,
+        sentry::ClientOptions {
+            release: sentry::release_name!(),
+            environment: Some(
+                if cfg!(debug_assertions) {
+                    "development"
+                } else {
+                    "production"
+                }
+                .into(),
+            ),
+            traces_sample_rate: 0.0,
+            ..Default::default()
+        },
+    ))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// Inicia la aplicación de escritorio y registra todos los comandos Tauri.
 ///
@@ -180,6 +227,7 @@ fn configurar_plugins_condicionales(app: &tauri::AppHandle) -> tauri::Result<()>
 ///
 /// Tauri finaliza el arranque si no puede construir o ejecutar su runtime.
 pub fn run() {
+    let _guardia_sentry = inicializar_sentry();
     let (ruta_base_datos, instancia, clave_base_datos, core) = preparar_nucleo();
 
     tauri::Builder::default()

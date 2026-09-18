@@ -76,6 +76,12 @@ tauri-plugin-dialog = "2.7.2"
 # aporta `relaunch()` para reiniciar la app después de instalar.
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+# Error-tracking (docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md,
+# punto 5.4). Captura panics automáticamente (feature "panic", parte del
+# default) además de los envíos explícitos en `iniciar_sincronizacion_automatica`.
+# `traces_sample_rate = 0.0` en la init: solo error-tracking, sin performance
+# tracing (evita gastar cuota del plan gratis en algo que no se usa).
+sentry = "0.36"
 url = "=2.5.8"
 tokio = { version = "=1.53.1", features = ["sync", "time"] }
 

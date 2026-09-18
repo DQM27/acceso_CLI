@@ -251,7 +251,57 @@ real. Falta cubrirlo donde más importa.
 | 5.1 | Loguear cada `Err(...)` que un comando Tauri le devuelve al frontend (`desktop/src-tauri/src/comandos/*.rs`) — hoy el error viaja al toast del usuario pero no queda registrado | Provocar un error real (ej. cédula duplicada) y confirmar la línea en el log |
 | 5.2 | Loguear los reintentos agotados/fallidos de `cola_salida` (la cola de sync offline) | Simular sitio sin internet, confirmar que cada intento fallido deja rastro, no solo el contador `intentos` en la DB |
 | 5.3 | Logging para el fallo fatal de arranque (`mostrar_error_fatal_y_salir`) — hoy corre ANTES de que el plugin de logs exista, así que un fallo ahí (base dañada, candado de instancia tomado) sigue sin dejar archivo | Escribir directo a un archivo simple (sin depender del plugin, que todavía no está inicializado en ese punto) antes de mostrar el diálogo |
-| 5.4 (decisión de negocio) | Evaluar un servicio externo de error-tracking (ej. Sentry) para que un fallo real llegue como notificación en vez de esperar que alguien revise el log de un sitio | Requiere elegir proveedor y aceptar el costo/exposición de datos — no se decide unilateralmente acá |
+| 5.4 ✅ | Error-tracking externo (Sentry) — cerrado 2026-09-17, ver detalle abajo | -- |
+
+### 5.4 — Sentry, cerrado (2026-09-17)
+
+**Qué se hizo:** cuenta creada por el usuario, dos proyectos vía el MCP de
+Sentry (`create_project`, team `dqm27`):
+
+- **Escritorio** (`control-acceso-desktop`, plataforma Rust) —
+  `desktop/src-tauri/Cargo.toml` agrega `sentry = "0.36"`.
+  `desktop/src-tauri/src/lib.rs`: función nueva `inicializar_sentry()`
+  (separada de `run()` por el mismo motivo que `preparar_nucleo` --
+  tope de líneas de Clippy), guarda `sentry::ClientInitGuard` viva durante
+  toda la vida del proceso (hace flush al salir). Captura panics
+  automáticamente (feature `panic`, default). Los dos fallos silenciosos
+  reales de `iniciar_sincronizacion_automatica` (punto 3 de este documento)
+  ahora también van a Sentry con `sentry::capture_message`, no solo al log
+  local. `traces_sample_rate = 0.0` a propósito: solo error-tracking, nada
+  de performance tracing (cuida cuota del plan gratis).
+- **Mobile** (`control-acceso-mobile`, plataforma Android) --
+  `mobile/android/app/build.gradle.kts` agrega
+  `io.sentry:sentry-android:8.9.0`; init 100% declarativo vía `meta-data`
+  en `AndroidManifest.xml` (sin tocar ninguna Activity/Application) --
+  captura crashes no manejados desde el primer arranque tras instalar.
+  `sentryEnvironment` viaja por `manifestPlaceholders`
+  (`debug`→"development", `release`→"production"), mismo criterio que
+  `cfg!(debug_assertions)` del lado de escritorio.
+
+El DSN de cada proyecto queda embebido en el cliente a propósito -- no es
+secreto (mismo criterio que la publishable key de Supabase en `web/`), es
+lo que el SDK necesita para saber a dónde mandar los eventos.
+
+**Cómo se verificó (en esta PC, no en un sandbox sin Windows/Android SDK
+como se pensó en un primer momento):**
+```sh
+cd desktop/src-tauri && cargo fmt --check && cargo clippy --all-targets && cargo audit
+# limpio; cargo audit sigue con los mismos 7 avisos "unmaintained"
+# pre-existentes documentados en la auditoría de endurecimiento, ninguno
+# nuevo por sentry.
+cd mobile/android && ./gradlew :app:assembleDebug
+# BUILD SUCCESSFUL -- confirma que sentry-android 8.9.0 resuelve, compila
+# y empaqueta libsentry-android.so/libsentry.so en el APK.
+cargo test-plano --lib --features "nube,cifrado-secreto-dispositivo"
+# 369 passed -- nada del crate raíz se rompió.
+```
+
+**Ojo con la cuenta de Sentry (no técnico, para no perderlo de vista):** al
+crearla quedó en un trial del plan Business (13 días, sin tarjeta
+cargada) en vez de caer directo en el plan gratis. Sin tarjeta no hay
+riesgo de cobro automático -- al vencer el trial baja sola al plan
+gratuito real. Ojo con no tocar el botón "Confirmar" de la pantalla de
+selección de plan mientras tanto, porque activaría el plan pago.
 
 ### 6. Diagnóstico exportable para soporte
 
