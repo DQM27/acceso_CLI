@@ -20,7 +20,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.brisas.controlacceso"
+        applicationId = "com.dqm27.lattis"
         // Dispositivo real conocido: Samsung A25 5G (arm64) — ver
         // docs/plan-app-movil.md. jniLibs trae arm64-v8a (dispositivo real)
         // y x86_64 (emulador de desarrollo).

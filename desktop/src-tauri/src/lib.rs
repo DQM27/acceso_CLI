@@ -112,7 +112,7 @@ fn registrar_fallo_fatal_en_archivo(mensaje: &str) {
         return;
     };
     let directorio = std::path::Path::new(&local_app_data)
-        .join("com.dqm27.controlaccesobrisas.desktop")
+        .join("com.dqm27.lattis.desktop")
         .join("logs");
     if std::fs::create_dir_all(&directorio).is_err() {
         return;

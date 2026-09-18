@@ -33,6 +33,7 @@ import {
   ClipboardList,
   History,
   IdCard,
+  Loader2,
   Route,
   Truck,
   UserCheck,
@@ -40,6 +41,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import marca from "./assets/marca.png";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
 import SelectorTema from "./componentes/SelectorTema";
@@ -171,7 +173,22 @@ export default function App() {
   }, []);
 
   if (pantalla.tipo === "cargando") {
-    return null;
+    // Reemplaza el `return null` de antes -- mientras Rust abre la base y
+    // corre migraciones (puede tardar varios segundos, sobre todo en el
+    // primer arranque o si hubo que recuperar una base dañada), la ventana
+    // quedaba con el interior en blanco hasta que esto resolvía (reportado
+    // 2026-09-18). Mismo fondo/tarjeta que Login para que no haya un salto
+    // visual raro al pasar de esta pantalla a la siguiente.
+    return (
+      <div className="grid min-h-full place-items-center bg-fondo px-6 py-10 text-texto">
+        <div className="flex flex-col items-center gap-4">
+          <div className="marca-sello" aria-hidden="true">
+            <img src={marca} alt="" />
+          </div>
+          <Loader2 className="size-6 animate-spin text-muted" aria-hidden="true" />
+        </div>
+      </div>
+    );
   }
 
   if (pantalla.tipo === "requiere-configuracion-inicial") {
