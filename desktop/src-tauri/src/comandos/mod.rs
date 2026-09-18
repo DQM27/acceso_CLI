@@ -16,11 +16,26 @@
 //!    mano — `core()` recupera el mutex si otro comando lo dejó envenenado
 //!    por un panic (ver `estado.rs`).
 //! 3. Errores: mapealos con el `mensaje_*` de `control_acceso::mensajes` que
-//!    corresponda al dominio. Sólo usar `.map_err(|e| e.to_string())` cuando
-//!    no exista un `mensaje_*` para ese tipo de error (p. ej. `SchemaError`).
+//!    corresponda al dominio. Cuando no exista un `mensaje_*` para ese tipo
+//!    de error (p. ej. `SchemaError`, `rusqlite::Error` suelto), usar
+//!    `mensaje_generico` de este módulo en vez de `.map_err(|e| e.to_string())`
+//!    a mano -- deja el mismo rastro en el log que `mensaje_*` (ver
+//!    `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto 5.1):
+//!    estos son, por definición, errores sin variante de negocio detrás, así
+//!    que categóricamente son técnicos/inesperados.
 //! 4. Sin lógica propia: si un comando empieza a necesitar algo más que
 //!    "armar el DTO de entrada y llamar a `AppCore`", esa lógica va al
 //!    núcleo (`application`/`services`), no acá.
+
+/// Ver el punto 3 de la convención de arriba. Loguea antes de convertir a
+/// texto para el frontend -- mismo criterio que las variantes técnicas de
+/// `control_acceso::mensajes::mensaje_*`, sólo que acá el error entero es
+/// técnico (no hay variantes de negocio que filtrar).
+pub fn mensaje_generico<E: std::fmt::Display>(error: E) -> String {
+    let mensaje = error.to_string();
+    log::error!("{mensaje}");
+    mensaje
+}
 
 pub mod auditoria;
 pub mod autenticacion;

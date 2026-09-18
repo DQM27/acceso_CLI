@@ -248,10 +248,94 @@ real. Falta cubrirlo donde más importa.
 
 | Fase | Qué | Criterio de aceptación |
 |---|---|---|
-| 5.1 | Loguear cada `Err(...)` que un comando Tauri le devuelve al frontend (`desktop/src-tauri/src/comandos/*.rs`) — hoy el error viaja al toast del usuario pero no queda registrado | Provocar un error real (ej. cédula duplicada) y confirmar la línea en el log |
-| 5.2 | Loguear los reintentos agotados/fallidos de `cola_salida` (la cola de sync offline) | Simular sitio sin internet, confirmar que cada intento fallido deja rastro, no solo el contador `intentos` en la DB |
-| 5.3 | Logging para el fallo fatal de arranque (`mostrar_error_fatal_y_salir`) — hoy corre ANTES de que el plugin de logs exista, así que un fallo ahí (base dañada, candado de instancia tomado) sigue sin dejar archivo | Escribir directo a un archivo simple (sin depender del plugin, que todavía no está inicializado en ese punto) antes de mostrar el diálogo |
+| 5.1 ✅ | Loguear cada `Err(...)` que un comando Tauri le devuelve al frontend, y su equivalente mobile (`NucleoError::Interno`) | Ver detalle abajo |
+| 5.2 ✅ | Loguear los reintentos agotados/fallidos de `cola_salida` (la cola de sync offline) | Ver detalle abajo |
+| 5.3 ✅ | Logging para el fallo fatal de arranque (`mostrar_error_fatal_y_salir`) | Ver detalle abajo |
 | 5.4 ✅ | Error-tracking externo (Sentry) — cerrado 2026-09-17, ver detalle abajo | -- |
+
+### 5.1/5.2/5.3 — instrumentación de logs, escritorio y mobile (2026-09-17)
+
+**Criterio general (evita ruido):** sólo se loguean fallos técnicos/inesperados
+(base de datos, red, E/S, parseo) -- un rechazo de negocio normal (cédula
+duplicada, sesión no autorizada, gafete ocupado) es el flujo esperado, no un
+fallo, y loguear cada uno sería puro ruido que tapa lo que sí importa.
+
+**5.1, escritorio -- `src/mensajes.rs` (compartido con mobile):** este
+archivo ya era el cuello de botella por donde pasa todo error de servicio
+antes de convertirse en un mensaje para una interfaz -- y ya distinguía
+`Database(_)`/técnico de negocio en cada `match` (para no exponer detalles
+de `SQLite` en pantalla). Se agregó `log::error!`/`log::warn!` exactamente
+en esas ramas técnicas, capturando el error real (antes se descartaba con
+`_`). Se agregó `log = "0.4"` al crate raíz.
+
+**5.1, escritorio -- comandos que no pasan por `mensajes.rs`:** 34 sitios
+en `desktop/src-tauri/src/comandos/*.rs` hacían
+`.map_err(|error| error.to_string())` a mano (`rusqlite::Error` suelto,
+errores de parseo de fecha, E/S) -- por definición, sin variante de negocio
+detrás, categóricamente técnicos. Se agregó `comandos::mensaje_generico`
+(loguea y convierte) y se reemplazaron los 34 sitios por
+`.map_err(super::mensaje_generico)`. Convención documentada en
+`comandos/mod.rs`.
+
+**5.1, mobile -- `mobile/rust-core/src/lib.rs`:** mismo criterio, mismo
+problema: 44 sitios construían `NucleoError::Interno { mensaje: error.to_string() }`
+a mano. Se agregó la función `interno()` (loguea y devuelve el `String`) y
+se reemplazaron los 44 con `mensaje: interno(error)` (dos mensajes de
+negocio hardcodeados, sin error real detrás, quedaron sin tocar a
+propósito). Para que esos `log::` no caigan en el vacío, se agregó
+`android_logger` (sólo para `cfg(target_os = "android")`) inicializado en
+`Nucleo::abrir()` -- el primer método que llama Kotlin, tag
+`control_acceso_mobile` (`adb logcat -s control_acceso_mobile`), mismo
+criterio de nivel que escritorio (`Info` en debug, `Warn` en release).
+
+**5.2 -- `src/nube/sincronizacion.rs`, drenado de `cola_salida`:** el
+`Err(error)` del envío de cada fila sólo quedaba en la columna
+`ultimo_error` de la propia fila -- nadie se enteraba salvo que fuera a
+mirar la cola a mano. Ahora, además: `log::warn!` en cada reintento
+transitorio (todavía le quedan intentos) y `log::error!` cuando agota los
+[`INTENTOS_ANTES_DE_FALLO_PERMANENTE`] y queda `fallido` de forma
+permanente -- ese es el caso realmente crítico (esa fila no se reintenta
+más sola).
+
+**5.3 -- `mostrar_error_fatal_y_salir` (escritorio):** corre antes de que
+exista una `AppHandle` (por lo tanto, antes de que `tauri_plugin_log` pueda
+inicializarse), así que no podía usar el mecanismo normal. Se agregó
+`registrar_fallo_fatal_en_archivo` (sólo Windows): escribe directo a
+`%LOCALAPPDATA%\com.dqm27.controlaccesobrisas.desktop\logs\fallo-fatal-arranque.log`,
+mismo directorio donde el plugin deja los suyos una vez que arranca.
+Cualquier fallo dentro de esa función (no se pudo leer `LOCALAPPDATA`, no
+se pudo crear el archivo) se descarta en silencio a propósito -- no puede
+convertirse ella misma en un segundo punto de fallo en el peor momento del
+arranque. Además, como `inicializar_sentry()` ya corrió antes de
+`preparar_nucleo()` (ver 5.4), este mismo punto ahora también manda
+`sentry::capture_message(..., Level::Fatal)` -- un fallo fatal de arranque
+en un sitio real llega como notificación, no sólo como archivo local.
+
+**Cómo se verificó (en esta PC):**
+```sh
+# Crate raíz + comandos de escritorio
+cargo clippy --no-default-features --features "nube,sqlite-plano" --all-targets   # limpio
+cargo fmt --check                                                                  # limpio
+cargo test-plano --lib --features "nube,cifrado-secreto-dispositivo"               # 369 passed
+cd desktop/src-tauri && cargo clippy --all-targets && cargo fmt --check            # limpio
+
+# mobile/rust-core
+cd mobile/rust-core
+cargo clippy --no-default-features --features sqlite-plano --all-targets          # limpio
+cargo fmt --check                                                                  # limpio
+cargo ndk -t aarch64-linux-android build --release --no-default-features --features sqlite-plano
+# Finished -- confirma que android_logger cross-compila de verdad para Android,
+# no sólo para el host.
+
+cd mobile/android && ./gradlew :app:assembleDebug   # BUILD SUCCESSFUL
+```
+`cargo test-mobile-plano` corrió 22 tests, 21 passed -- el único que falló
+(`registrar_salida_y_retorno_de_ruta_redondea_el_viaje`) es un bug de
+timing preexistente y no relacionado: el fixture arma `fecha_documento` con
+`chrono::Utc::now()` (calendario UTC) mientras la regla de negocio compara
+contra "hoy en Costa Rica" (UTC-6) -- falla sólo durante la ventana
+~00:00-06:00 UTC en que ambos calendarios difieren. No se tocó como parte
+de este cambio.
 
 ### 5.4 — Sentry, cerrado (2026-09-17)
 
@@ -481,7 +565,7 @@ justificación (ver el análisis de `AppCore`, sesión previa):
 | 2 | `cargo fmt --check` en todos los jobs | ✅ | No |
 | 3 | Logs en producción + 1 fallo silencioso corregido | ✅ (alcance acotado) | No |
 | 4 | Backups: código muerto limpiado, doc corregido | ✅ | No |
-| 5 | Observabilidad completa | 🚧 | Fase 5.4 sí (proveedor externo) |
+| 5 | Observabilidad completa (5.1/5.2/5.3 logs + 5.4 Sentry) | ✅ | No |
 | 6 | Diagnóstico exportable | 🚧 | No |
 | 7 | Runbook recuperación base local | 🚧 | Sí (qué se acepta perder) |
 | 8 | CODEOWNERS + branch protection | ✅ CODEOWNERS / 🚧 el toggle | El toggle sí (vos, en Settings del repo) |

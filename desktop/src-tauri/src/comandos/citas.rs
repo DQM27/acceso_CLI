@@ -200,7 +200,7 @@ pub fn listar_historial_visitas_sitio(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<MovimientoHistorialVisitaRemoto>, String> {
     state.sesion_activa()?;
-    let (desde_utc, hasta_utc) = rango_utc(desde, hasta).map_err(|error| error.to_string())?;
+    let (desde_utc, hasta_utc) = rango_utc(desde, hasta).map_err(super::mensaje_generico)?;
     let conexion = state.conexion_secundaria()?;
     let mut statement = conexion
         .prepare(
@@ -211,7 +211,7 @@ pub fn listar_historial_visitas_sitio(
              WHERE hora_entrada >= ?1 AND hora_entrada < ?2
              ORDER BY hora_entrada DESC",
         )
-        .map_err(|error| error.to_string())?;
+        .map_err(super::mensaje_generico)?;
     statement
         .query_map(
             params![
@@ -234,9 +234,9 @@ pub fn listar_historial_visitas_sitio(
                 })
             },
         )
-        .map_err(|error| error.to_string())?
+        .map_err(super::mensaje_generico)?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| error.to_string())
+        .map_err(super::mensaje_generico)
 }
 
 /// Agenda de visitas programadas -- lectura pura de `citas`/`cita_visitantes`

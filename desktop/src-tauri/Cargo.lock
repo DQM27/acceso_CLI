@@ -533,6 +533,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "jsonwebtoken",
+ "log",
  "machine-uid",
  "rand_core 0.6.4",
  "reqwest 0.12.28",

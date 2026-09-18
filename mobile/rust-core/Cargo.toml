@@ -44,12 +44,26 @@ control_acceso = { path = "../..", default-features = false, features = ["nube"]
 uniffi = "0.32.0"
 thiserror = "2"
 chrono = "0.4.45"
+# Fachada de logging (ver `interno()` más arriba y `log` en el Cargo.toml
+# del crate raíz) -- sin `android_logger` instalado como backend, estas
+# llamadas serían no-op. Ver `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`,
+# punto 5.1 (espejo mobile de lo ya conectado en desktop).
+log = "0.4"
 # Misma version que declara el crate raiz (Cargo.toml de la raiz del repo)
 # y que desktop/src-tauri -- necesaria para abrir una segunda conexion al
 # mismo archivo (ver Nucleo::conexion_secundaria) con el MISMO tipo
 # `rusqlite::Connection` que usa `control_acceso::application::AppCore`
 # internamente, no una version incompatible.
 rusqlite = "0.40.2"
+
+[target.'cfg(target_os = "android")'.dependencies]
+# Backend real de `log` en Android -- vuelca al mismo Logcat que ve
+# `adb logcat`, filtrable por el tag de abajo. Sólo se agrega para el
+# target Android (el mismo crate también compila para el host en los tests
+# de este archivo -- ver `compilarNucleoParaHost` en
+# mobile/android/app/build.gradle.kts -- donde no hace falta ni tendría
+# dónde escribir).
+android_logger = "0.15"
 
 [dev-dependencies]
 tempfile = "3"

@@ -90,11 +90,50 @@ fn iniciar_sincronizacion_automatica(app: tauri::AppHandle) {
     });
 }
 
+/// Deja rastro de un fallo fatal de arranque en un archivo propio, sin
+/// depender de `tauri_plugin_log` -- a esta altura todavía no existe
+/// (`configurar_plugins_condicionales` corre recién dentro de `.setup()`,
+/// después de tener una `AppHandle`; ver
+/// docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md, punto 5.3).
+/// Mismo directorio (`%LOCALAPPDATA%\<identifier>\logs`) donde el plugin
+/// deja los suyos una vez que arranca, para que quien busque logs de este
+/// sitio los encuentre todos juntos. Cualquier fallo acá adentro (no se
+/// pudo leer `LOCALAPPDATA`, no se pudo crear el directorio/archivo) se
+/// descarta en silencio a propósito: esta función corre en el peor
+/// momento posible del arranque, no puede volverse ella misma un segundo
+/// punto de fallo.
+#[cfg(windows)]
+fn registrar_fallo_fatal_en_archivo(mensaje: &str) {
+    use std::io::Write;
+
+    let Ok(local_app_data) = std::env::var("LOCALAPPDATA") else {
+        return;
+    };
+    let directorio = std::path::Path::new(&local_app_data)
+        .join("com.dqm27.controlaccesobrisas.desktop")
+        .join("logs");
+    if std::fs::create_dir_all(&directorio).is_err() {
+        return;
+    }
+    let Ok(mut archivo) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(directorio.join("fallo-fatal-arranque.log"))
+    else {
+        return;
+    };
+    let _ = writeln!(archivo, "[{}] {mensaje}", chrono::Utc::now().to_rfc3339());
+}
+
 /// Muestra un diálogo nativo con el error y termina el proceso — para los
 /// fallos de arranque previos a `tauri::Builder` (base dañada/bloqueada,
 /// doble instancia), donde antes había un `.expect()`/`panic!` crudo sin
 /// ventana ni mensaje legible para quien no lee consola.
 fn mostrar_error_fatal_y_salir(mensaje: &str) -> ! {
+    #[cfg(windows)]
+    registrar_fallo_fatal_en_archivo(mensaje);
+    sentry::capture_message(mensaje, sentry::Level::Fatal);
+
     #[cfg(windows)]
     {
         use windows::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};

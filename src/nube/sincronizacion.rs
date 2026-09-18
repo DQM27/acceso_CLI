@@ -339,11 +339,31 @@ fn procesar_fila_individual(
             // "pendiente" de nuevo -- no "fallido" -- para que
             // `pendientes()` la vuelva a considerar más adelante, sujeta
             // al backoff según cuántas veces ya falló.
-            let estado = if fila.intentos + 1 >= INTENTOS_ANTES_DE_FALLO_PERMANENTE {
-                "fallido"
+            let agota_reintentos = fila.intentos + 1 >= INTENTOS_ANTES_DE_FALLO_PERMANENTE;
+            let estado = if agota_reintentos { "fallido" } else { "pendiente" };
+            // Antes esto sólo quedaba en `ultimo_error` (columna de la
+            // propia fila) -- nadie se enteraba salvo que fuera a mirar la
+            // cola a mano. Ver
+            // docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md, punto
+            // 5.2. El caso "fallido" es el crítico de verdad: esa fila no
+            // se va a reintentar más sola, alguien tiene que intervenir.
+            if agota_reintentos {
+                log::error!(
+                    "cola_salida: fila {} ({} {}) agotó sus reintentos y quedó fallida de forma permanente: {error}",
+                    fila.id,
+                    fila.entidad,
+                    fila.entidad_uuid,
+                );
             } else {
-                "pendiente"
-            };
+                log::warn!(
+                    "cola_salida: fila {} ({} {}) falló, intento {} de {}: {error}",
+                    fila.id,
+                    fila.entidad,
+                    fila.entidad_uuid,
+                    fila.intentos + 1,
+                    INTENTOS_ANTES_DE_FALLO_PERMANENTE,
+                );
+            }
             marcar(connection, fila.id, estado, Some(&error.to_string()))?;
             resumen.fallidos += 1;
         }

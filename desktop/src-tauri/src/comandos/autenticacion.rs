@@ -18,7 +18,7 @@ pub fn requiere_configuracion_inicial(state: tauri::State<GuiState>) -> Result<b
     state
         .core()
         .requiere_configuracion_inicial()
-        .map_err(|error| error.to_string())
+        .map_err(super::mensaje_generico)
 }
 
 /// Ya no distingue `sin_password_local` -- `login` resuelve las dos ramas
@@ -319,8 +319,8 @@ pub async fn cambiar_password_supabase(
         )
     })
     .await
-    .map_err(|error| error.to_string())?
-    .map_err(|error| error.to_string())
+    .map_err(super::mensaje_generico)?
+    .map_err(super::mensaje_generico)
 }
 
 #[tauri::command]

@@ -32,8 +32,8 @@
 - [ ] **Chequeo de versión mínima en mobile** — falta que Kotlin le pase su versión real a Rust (nuevo método UniFFI + una llamada en `AplicacionViewModel.kt`). Chico y de bajo riesgo, pero toca Kotlin — decime si avanzo
 - [ ] Configurar `VERSION_MINIMA_ACEPTADA` en Supabase cuando decidan la primera versión a exigir (`supabase secrets set VERSION_MINIMA_ACEPTADA=X.Y.Z`) -- sin esto seteado, el chequeo ya está listo pero no rechaza nada
 - [ ] Diagnóstico exportable (.zip) — el botón + armar el archivo (espera el ok de Resend de arriba para la parte de "mandarlo solo")
-- [ ] Instrumentar más puntos de fallo con logs (comandos Tauri, cola de sincronización offline — plan punto 5.1/5.2)
-- [ ] Logging del fallo fatal de arranque (base dañada, candado de instancia) — hoy corre antes de que el log exista (plan punto 5.3)
+- [x] **Instrumentar más puntos de fallo con logs, escritorio y mobile (2026-09-17).** Ver detalle técnico en `plan-qa-buenas-practicas-2026-09-17.md`, puntos 5.1/5.2/5.3.
+- [x] **Logging del fallo fatal de arranque (2026-09-17).** Archivo propio en `%LOCALAPPDATA%\<identifier>\logs\fallo-fatal-arranque.log`, sin depender del plugin (que a esa altura no existe todavía) -- más `sentry::capture_message` (ya inicializado en ese punto). Ver punto 5.3.
 - [ ] ~~Cifrado del secreto de dispositivo en Android~~ **Ya está hecho — ver corrección arriba.** Lo único real que falta: no hay test automatizado de `AndroidKeystoreSecretoDispositivoStore` (no se puede sin Robolectric, que el proyecto no tiene) — decidir si vale la pena sumarlo
 - [ ] Variables de entorno para `web`/`web-visitas` (para poder apuntar a staging sin editar código) — depende de que el proyecto de staging ya exista
 

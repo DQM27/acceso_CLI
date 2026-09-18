@@ -1,6 +1,16 @@
 //! Mensajes de error en español, compartidos por cualquier interfaz (TUI
 //! clásica, CLI, futura GUI): traducen errores de servicio a texto
 //! accionable sin exponer detalles internos de base de datos.
+//!
+//! Además, este es el cuello de botella por donde pasa TODO error de
+//! servicio antes de llegar a una interfaz (TUI, comandos Tauri de
+//! escritorio, y la mayoría de las llamadas `UniFFI` de mobile) -- por eso es
+//! el lugar correcto para loguear el detalle técnico que el mensaje al
+//! usuario nunca expone (`docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`,
+//! punto 5.1). Sólo se loguean las variantes técnicas/inesperadas
+//! (`Database`, `Red`, `Io`, etc.) -- un rechazo de negocio normal (cédula
+//! duplicada, sesión no autorizada) no es un fallo, es el flujo esperado, y
+//! loguear cada uno sería puro ruido.
 
 use crate::domain::cita::MotivoDenegacionVisita;
 use crate::domain::resultado_acceso::MotivoDenegacion;
@@ -25,7 +35,12 @@ pub fn mensaje_autenticacion(error: AutenticacionError) -> String {
         AutenticacionError::SinPasswordLocal => {
             "Todavía no tenés contraseña en este dispositivo -- fijá una para continuar".into()
         }
-        AutenticacionError::HashInvalido | AutenticacionError::Database(_) => {
+        AutenticacionError::HashInvalido => {
+            log::error!("autenticación: hash de contraseña almacenado inválido");
+            "No se pudo iniciar sesión, intentá de nuevo".into()
+        }
+        AutenticacionError::Database(error) => {
+            log::error!("autenticación: {error}");
             "No se pudo iniciar sesión, intentá de nuevo".into()
         }
     }
@@ -39,7 +54,10 @@ pub fn mensaje_empresa(error: EmpresaServiceError) -> String {
         EmpresaServiceError::OperacionNoAutorizada => {
             "Su sesión no está autorizada para esta operación".into()
         }
-        EmpresaServiceError::Database(_) => "No se pudo guardar la empresa".into(),
+        EmpresaServiceError::Database(error) => {
+            log::error!("empresa: {error}");
+            "No se pudo guardar la empresa".into()
+        }
     }
 }
 
@@ -57,7 +75,10 @@ pub fn mensaje_contratista(error: ContratistaServiceError) -> String {
         PraindRequerido => "Fecha PRAIND requerida".into(),
         CedulaDuplicada => "Ya existe un contratista con esa cédula".into(),
         OperacionNoAutorizada => "Su sesión no está autorizada para esta operación".into(),
-        Database(_) => "No se pudo guardar el contratista".into(),
+        Database(error) => {
+            log::error!("contratista: {error}");
+            "No se pudo guardar el contratista".into()
+        }
     }
 }
 
@@ -76,6 +97,12 @@ pub fn mensaje_usuario(error: UsuarioServiceError) -> String {
         UsuarioServiceError::OperacionNoAutorizada => {
             "Su sesión no está autorizada para gestionar ese usuario".into()
         }
+        UsuarioServiceError::ConfiguracionInicialRequerida => {
+            "Se requiere crear el usuario ROOT inicial".into()
+        }
+        UsuarioServiceError::ConfiguracionInicialYaRealizada => {
+            "La configuración inicial ya fue realizada".into()
+        }
         UsuarioServiceError::PasswordActualIncorrecta => {
             "La contraseña actual es incorrecta".into()
         }
@@ -83,7 +110,14 @@ pub fn mensaje_usuario(error: UsuarioServiceError) -> String {
         UsuarioServiceError::YaTienePasswordLocal => {
             "Este usuario ya tiene contraseña en este dispositivo".into()
         }
-        _ => "No se pudo guardar el usuario".into(),
+        UsuarioServiceError::Password(error) => {
+            log::error!("usuario: {error}");
+            "No se pudo guardar el usuario".into()
+        }
+        UsuarioServiceError::Database(error) => {
+            log::error!("usuario: {error}");
+            "No se pudo guardar el usuario".into()
+        }
     }
 }
 
@@ -107,7 +141,10 @@ pub fn mensaje_gafete(error: GafeteServiceError) -> String {
         GafeteServiceError::OperacionNoAutorizada => {
             "Su sesión no está autorizada para esta operación".into()
         }
-        GafeteServiceError::Database(_) => "No se pudo guardar el gafete".into(),
+        GafeteServiceError::Database(error) => {
+            log::error!("gafete: {error}");
+            "No se pudo guardar el gafete".into()
+        }
     }
 }
 
@@ -118,6 +155,10 @@ pub fn mensaje_salida(error: RegistroIngresoServiceError) -> String {
         RegistroNoActivo => "El ingreso ya no está activo".into(),
         SalidaAnteriorAIngreso => "La salida no puede ser anterior al ingreso".into(),
         RelojRetrocedido => "Revise la fecha y hora del equipo antes de continuar".into(),
+        RegistroIngresoServiceError::Database(error) => {
+            log::error!("salida: {error}");
+            "No se pudo registrar la salida".into()
+        }
         _ => "No se pudo registrar la salida".into(),
     }
 }
@@ -149,7 +190,10 @@ pub fn mensaje_cita(error: CitaServiceError) -> String {
         OperadorNoAutorizado => {
             "La sesión que registra el movimiento no existe o está inactiva".into()
         }
-        _ => "No se pudo registrar el movimiento de la visita".into(),
+        CitaServiceError::Database(error) => {
+            log::error!("cita: {error}");
+            "No se pudo registrar el movimiento de la visita".into()
+        }
     }
 }
 
@@ -176,6 +220,10 @@ pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
             "PRAIND sin fecha registrada".into()
         }
         RelojRetrocedido => "Revise la fecha y hora del equipo antes de continuar".into(),
+        RegistroIngresoServiceError::Database(error) => {
+            log::error!("ingreso: {error}");
+            "No se pudo registrar el ingreso".into()
+        }
         _ => "No se pudo registrar el ingreso".into(),
     }
 }
@@ -185,7 +233,10 @@ pub fn mensaje_vehiculo_ruta(error: VehiculoRutaServiceError) -> String {
         VehiculoRutaServiceError::OperacionNoAutorizada => {
             "Su sesión no está autorizada para esta operación".into()
         }
-        VehiculoRutaServiceError::Database(_) => "No se pudo guardar el vehículo".into(),
+        VehiculoRutaServiceError::Database(error) => {
+            log::error!("vehículo de ruta: {error}");
+            "No se pudo guardar el vehículo".into()
+        }
     }
 }
 
@@ -194,7 +245,10 @@ pub fn mensaje_encargado_ruta(error: EncargadoRutaServiceError) -> String {
         EncargadoRutaServiceError::OperacionNoAutorizada => {
             "Su sesión no está autorizada para esta operación".into()
         }
-        EncargadoRutaServiceError::Database(_) => "No se pudo guardar el encargado".into(),
+        EncargadoRutaServiceError::Database(error) => {
+            log::error!("encargado de ruta: {error}");
+            "No se pudo guardar el encargado".into()
+        }
     }
 }
 
@@ -224,7 +278,10 @@ pub fn mensaje_ruta(error: RutaServiceError) -> String {
         OperadorNoAutorizado => {
             "La sesión que registra el movimiento no existe o está inactiva".into()
         }
-        RutaServiceError::Database(_) => "No se pudo registrar el movimiento de la ruta".into(),
+        RutaServiceError::Database(error) => {
+            log::error!("ruta: {error}");
+            "No se pudo registrar el movimiento de la ruta".into()
+        }
     }
 }
 
@@ -241,7 +298,10 @@ pub fn mensaje_ruta_catalogo(error: RutaCatalogoServiceError) -> String {
         RutaNoEncontrada => "La ruta ya no existe".into(),
         RutaConSalidaActiva => "La ruta tiene una salida activa en este momento".into(),
         OperacionNoAutorizada => "Su sesión no está autorizada para esta operación".into(),
-        RutaCatalogoServiceError::Database(_) => "No se pudo guardar la ruta".into(),
+        RutaCatalogoServiceError::Database(error) => {
+            log::error!("catálogo de rutas: {error}");
+            "No se pudo guardar la ruta".into()
+        }
     }
 }
 
@@ -263,7 +323,10 @@ pub fn mensaje_gafete_provisional(error: GafeteProvisionalServiceError) -> Strin
         OperacionNoAutorizada => {
             "La sesión actual no está autorizada para realizar esta operación".into()
         }
-        Database(_) => "No se pudo guardar el préstamo de gafete".into(),
+        Database(error) => {
+            log::error!("gafete provisional: {error}");
+            "No se pudo guardar el préstamo de gafete".into()
+        }
     }
 }
 
@@ -279,7 +342,10 @@ pub fn mensaje_empresa_proveedor(error: EmpresaProveedorServiceError) -> String 
         OperacionNoAutorizada => {
             "La sesión actual no está autorizada para realizar esta operación".into()
         }
-        EmpresaProveedorServiceError::Database(_) => "No se pudo guardar la empresa".into(),
+        EmpresaProveedorServiceError::Database(error) => {
+            log::error!("empresa proveedora: {error}");
+            "No se pudo guardar la empresa".into()
+        }
     }
 }
 
@@ -305,7 +371,10 @@ pub fn mensaje_ingreso_proveedor(error: IngresoProveedorServiceError) -> String 
         OperadorNoAutorizado => {
             "La sesión que registra el movimiento no existe o está inactiva".into()
         }
-        IngresoProveedorServiceError::Database(_) => "No se pudo registrar el movimiento".into(),
+        IngresoProveedorServiceError::Database(error) => {
+            log::error!("ingreso de proveedor: {error}");
+            "No se pudo registrar el movimiento".into()
+        }
     }
 }
 
@@ -328,7 +397,10 @@ pub fn mensaje_nube(error: crate::nube::NubeError) -> String {
             "Esta versión de la app ya no es compatible -- actualizá para seguir sincronizando"
                 .into()
         }
-        NubeError::Red(_) => "No se pudo conectar con la nube, intentá de nuevo".into(),
+        NubeError::Red(error) => {
+            log::warn!("nube: {error}");
+            "No se pudo conectar con la nube, intentá de nuevo".into()
+        }
     }
 }
 
@@ -337,12 +409,17 @@ pub fn mensaje_sincronizacion(error: crate::nube::SincronizacionError) -> String
     use crate::nube::SincronizacionError;
 
     match error {
-        SincronizacionError::BaseLocal(_) => "No se pudo leer la base de datos local".into(),
+        SincronizacionError::BaseLocal(error) => {
+            log::error!("sincronización: {error}");
+            "No se pudo leer la base de datos local".into()
+        }
         SincronizacionError::Red(error) => mensaje_nube(error),
-        SincronizacionError::RespuestaInesperada { .. } => {
+        SincronizacionError::RespuestaInesperada { status, cuerpo } => {
+            log::error!("sincronización: respuesta inesperada del receptor ({status}): {cuerpo}");
             "El receptor rechazó el pedido, intentá de nuevo más tarde".into()
         }
-        SincronizacionError::FechaInvalida(_) => {
+        SincronizacionError::FechaInvalida(error) => {
+            log::error!("sincronización: fecha inválida del receptor: {error}");
             "El receptor mandó una fecha que no se pudo interpretar, intentá de nuevo más tarde"
                 .into()
         }
@@ -360,13 +437,21 @@ pub fn mensaje_gestion_nube(error: crate::application::GestionNubeError) -> Stri
         GestionNubeError::UsoNoAutorizado => {
             "Su sesión no está autorizada para usar la nube".into()
         }
-        GestionNubeError::Sqlite(_) | GestionNubeError::Usuario(_) => {
+        GestionNubeError::Sqlite(error) => {
+            log::error!("gestión de nube: {error}");
+            "No se pudo leer la base de datos local".into()
+        }
+        GestionNubeError::Usuario(error) => {
+            log::error!("gestión de nube: {error}");
             "No se pudo leer la base de datos local".into()
         }
         GestionNubeError::SinSecreto => {
             "Todavía no se guardó el secreto de este dispositivo".into()
         }
-        GestionNubeError::Io(_) => "No se pudo guardar el secreto localmente".into(),
+        GestionNubeError::Io(error) => {
+            log::error!("gestión de nube: {error}");
+            "No se pudo guardar el secreto localmente".into()
+        }
         GestionNubeError::Autenticacion(error) => mensaje_nube(error),
         GestionNubeError::Sincronizacion(error) => mensaje_sincronizacion(error),
         GestionNubeError::YaConfigurado => {

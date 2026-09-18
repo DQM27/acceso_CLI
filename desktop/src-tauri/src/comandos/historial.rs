@@ -57,10 +57,10 @@ pub fn listar_historial(
     state: tauri::State<GuiState>,
 ) -> Result<CargaCompleta<MovimientoIngresoResumen>, String> {
     state.sesion_activa()?;
-    let (desde_utc, hasta_utc) = rango_utc(desde, hasta).map_err(|error| error.to_string())?;
+    let (desde_utc, hasta_utc) = rango_utc(desde, hasta).map_err(super::mensaje_generico)?;
     let conexion = state.conexion_secundaria()?;
     buscar_historial_completo_con_conexion(&conexion, &FiltroHistorial::nuevo(desde_utc, hasta_utc))
-        .map_err(|error| error.to_string())
+        .map_err(super::mensaje_generico)
 }
 
 /// Espejo de `historial_sitio` (ver `database::schema`, migración 25) --
@@ -97,7 +97,7 @@ pub fn listar_historial_sitio(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<MovimientoHistorialRemoto>, String> {
     state.sesion_activa()?;
-    let (desde_utc, hasta_utc) = rango_utc(desde, hasta).map_err(|error| error.to_string())?;
+    let (desde_utc, hasta_utc) = rango_utc(desde, hasta).map_err(super::mensaje_generico)?;
     let conexion = state.conexion_secundaria()?;
     let mut statement = conexion
         .prepare(
@@ -108,7 +108,7 @@ pub fn listar_historial_sitio(
              WHERE hora_entrada >= ?1 AND hora_entrada < ?2
              ORDER BY hora_entrada DESC",
         )
-        .map_err(|error| error.to_string())?;
+        .map_err(super::mensaje_generico)?;
     let filas = statement
         .query_map(
             params![
@@ -132,9 +132,9 @@ pub fn listar_historial_sitio(
                 })
             },
         )
-        .map_err(|error| error.to_string())?
+        .map_err(super::mensaje_generico)?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| error.to_string())?;
+        .map_err(super::mensaje_generico)?;
     Ok(filas)
 }
 
@@ -166,7 +166,7 @@ pub fn exportar_historial(
         .iter()
         .filter_map(|clave| ColumnaHistorial::from_clave(clave))
         .collect();
-    let (desde_utc, hasta_utc) = rango_utc(desde, hasta).map_err(|error| error.to_string())?;
+    let (desde_utc, hasta_utc) = rango_utc(desde, hasta).map_err(super::mensaje_generico)?;
     let destino = PathBuf::from(destino);
     let respaldo = RespaldoDestino::apartar(&destino)?;
     // Conexión propia (ver `GuiState::conexion_secundaria`): armar el XLSX
@@ -182,7 +182,7 @@ pub fn exportar_historial(
         &columnas,
         &destino,
     )
-    .map_err(|error| error.to_string());
+    .map_err(super::mensaje_generico);
     if resultado.is_ok() {
         respaldo.confirmar();
     }
@@ -215,7 +215,7 @@ impl RespaldoDestino {
                 std::process::id()
             );
             let ruta_respaldo = destino.with_file_name(nombre);
-            std::fs::rename(destino, &ruta_respaldo).map_err(|error| error.to_string())?;
+            std::fs::rename(destino, &ruta_respaldo).map_err(super::mensaje_generico)?;
             Some(ruta_respaldo)
         } else {
             None
@@ -275,7 +275,7 @@ pub async fn exportar_historial_pdf(
     if columnas.is_empty() {
         return Err(ExportarHistorialError::SinColumnas.to_string());
     }
-    let (desde_utc, hasta_utc) = rango_utc(desde, hasta).map_err(|error| error.to_string())?;
+    let (desde_utc, hasta_utc) = rango_utc(desde, hasta).map_err(super::mensaje_generico)?;
     // La consulta a SQLite es trabajo bloqueante — con un historial grande
     // puede tardar lo suficiente como para acaparar un hilo del runtime de
     // tokio si corriera inline en esta función `async` (a diferencia de
@@ -297,8 +297,8 @@ pub async fn exportar_historial_pdf(
         )
     })
     .await
-    .map_err(|error| error.to_string())?
-    .map_err(|error| error.to_string())?;
+    .map_err(super::mensaje_generico)?
+    .map_err(super::mensaje_generico)?;
     let html =
         pdf::html::generar_html(&movimientos, &columnas, &sesion.nombre, &filtro_descripcion);
     let destino = PathBuf::from(destino);

@@ -970,6 +970,19 @@ pub enum NucleoError {
     Interno { mensaje: String },
 }
 
+/// Punto de paso de casi todo `NucleoError::Interno` de este archivo --
+/// loguea el detalle técnico antes de convertirlo a texto para Kotlin
+/// (ver `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto
+/// 5.1: mismo criterio que `mensaje_generico` del lado de escritorio y las
+/// variantes técnicas de `control_acceso::mensajes::mensaje_*`). Sin
+/// backend de logging instalado (`inicializar_logging`, más abajo, todavía
+/// no se llamó desde Kotlin) esto es no-op: no cambia nada por sí solo.
+fn interno<E: std::fmt::Display>(error: E) -> String {
+    let mensaje = error.to_string();
+    log::error!("{mensaje}");
+    mensaje
+}
+
 impl From<AutenticacionErrorNucleo> for NucleoError {
     fn from(error: AutenticacionErrorNucleo) -> Self {
         match error {
@@ -977,7 +990,7 @@ impl From<AutenticacionErrorNucleo> for NucleoError {
             AutenticacionErrorNucleo::UsuarioInactivo => Self::UsuarioInactivo,
             AutenticacionErrorNucleo::SinPasswordLocal => Self::SinPasswordLocal,
             otro => Self::Interno {
-                mensaje: otro.to_string(),
+                mensaje: interno(otro),
             },
         }
     }
@@ -990,7 +1003,7 @@ impl From<control_acceso::nube::AuthSupabaseError> for NucleoError {
                 Self::CredencialesInvalidas
             }
             otro => Self::Interno {
-                mensaje: otro.to_string(),
+                mensaje: interno(otro),
             },
         }
     }
@@ -1014,7 +1027,7 @@ impl From<control_acceso::nube::SincronizacionError> for FalloSincronizacion {
             Self::TokenVencido
         } else {
             Self::Nucleo(NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             })
         }
     }
@@ -1046,7 +1059,7 @@ fn convertir_fallo_sincronizacion(fallo: FalloSincronizacion) -> NucleoError {
 impl From<RegistroIngresoServiceErrorNucleo> for NucleoError {
     fn from(error: RegistroIngresoServiceErrorNucleo) -> Self {
         Self::Interno {
-            mensaje: error.to_string(),
+            mensaje: interno(error),
         }
     }
 }
@@ -1054,7 +1067,7 @@ impl From<RegistroIngresoServiceErrorNucleo> for NucleoError {
 impl From<ContratistaServiceErrorNucleo> for NucleoError {
     fn from(error: ContratistaServiceErrorNucleo) -> Self {
         Self::Interno {
-            mensaje: error.to_string(),
+            mensaje: interno(error),
         }
     }
 }
@@ -1062,7 +1075,7 @@ impl From<ContratistaServiceErrorNucleo> for NucleoError {
 impl From<EmpresaServiceErrorNucleo> for NucleoError {
     fn from(error: EmpresaServiceErrorNucleo) -> Self {
         Self::Interno {
-            mensaje: error.to_string(),
+            mensaje: interno(error),
         }
     }
 }
@@ -1070,7 +1083,7 @@ impl From<EmpresaServiceErrorNucleo> for NucleoError {
 impl From<UsuarioServiceErrorNucleo> for NucleoError {
     fn from(error: UsuarioServiceErrorNucleo) -> Self {
         Self::Interno {
-            mensaje: error.to_string(),
+            mensaje: interno(error),
         }
     }
 }
@@ -1078,7 +1091,7 @@ impl From<UsuarioServiceErrorNucleo> for NucleoError {
 impl From<RutaServiceErrorNucleo> for NucleoError {
     fn from(error: RutaServiceErrorNucleo) -> Self {
         Self::Interno {
-            mensaje: error.to_string(),
+            mensaje: interno(error),
         }
     }
 }
@@ -1086,7 +1099,7 @@ impl From<RutaServiceErrorNucleo> for NucleoError {
 impl From<GafeteProvisionalServiceErrorNucleo> for NucleoError {
     fn from(error: GafeteProvisionalServiceErrorNucleo) -> Self {
         Self::Interno {
-            mensaje: error.to_string(),
+            mensaje: interno(error),
         }
     }
 }
@@ -1094,7 +1107,7 @@ impl From<GafeteProvisionalServiceErrorNucleo> for NucleoError {
 impl From<EmpresaProveedorServiceErrorNucleo> for NucleoError {
     fn from(error: EmpresaProveedorServiceErrorNucleo) -> Self {
         Self::Interno {
-            mensaje: error.to_string(),
+            mensaje: interno(error),
         }
     }
 }
@@ -1102,7 +1115,7 @@ impl From<EmpresaProveedorServiceErrorNucleo> for NucleoError {
 impl From<IngresoProveedorServiceErrorNucleo> for NucleoError {
     fn from(error: IngresoProveedorServiceErrorNucleo) -> Self {
         Self::Interno {
-            mensaje: error.to_string(),
+            mensaje: interno(error),
         }
     }
 }
@@ -1195,6 +1208,27 @@ pub struct Nucleo {
 impl Nucleo {
     #[uniffi::constructor]
     pub fn abrir(ruta_base_datos: String) -> Result<Self, NucleoError> {
+        // Backend real de `log` (ver `interno()` más arriba) -- vuelca a
+        // Logcat, filtrable con `adb logcat -s control_acceso_mobile`.
+        // `abrir()` es el primer método que llama Kotlin (ver
+        // `ARQUITECTURA.md`), así que es el lugar natural para esto; sin
+        // backend, todo `log::` de este crate era no-op hasta ahora. Mismo
+        // criterio de nivel que `configurar_plugins_condicionales` en
+        // escritorio: más ruido en debug, sólo advertencias/errores reales
+        // en release. `init_once` tolera llamadas repetidas (no rompe si
+        // Kotlin llega a instanciar `Nucleo` más de una vez en el mismo
+        // proceso).
+        #[cfg(target_os = "android")]
+        android_logger::init_once(
+            android_logger::Config::default()
+                .with_max_level(if cfg!(debug_assertions) {
+                    log::LevelFilter::Info
+                } else {
+                    log::LevelFilter::Warn
+                })
+                .with_tag("control_acceso_mobile"),
+        );
+
         // `RelojCorregido`, no `RelojSistema` -- un teléfono con la hora mal
         // puesta manualmente (o sin datos/GPS para que Android la ajuste
         // solo) tiene el mismo problema que se vio en escritorio: cada
@@ -1205,7 +1239,7 @@ impl Nucleo {
             std::sync::Arc::new(RelojCorregido::nuevo()),
         )
         .map_err(|origen| NucleoError::Apertura {
-            mensaje: origen.to_string(),
+            mensaje: interno(origen),
         })?;
         Ok(Self {
             core: Mutex::new(core),
@@ -1465,7 +1499,7 @@ impl Nucleo {
             .core_lock()
             .buscar_contratistas(&filtro)
             .map_err(|origen| NucleoError::Interno {
-                mensaje: origen.to_string(),
+                mensaje: interno(origen),
             })?;
         Ok(pagina.items.into_iter().map(Into::into).collect())
     }
@@ -1508,7 +1542,7 @@ impl Nucleo {
             .core_lock()
             .listar_ingresos_activos(&filtro)
             .map_err(|origen| NucleoError::Interno {
-                mensaje: origen.to_string(),
+                mensaje: interno(origen),
             })?;
         Ok(lista.items.into_iter().map(Into::into).collect())
     }
@@ -1528,7 +1562,7 @@ impl Nucleo {
             .core_lock()
             .buscar_encargados_ruta(texto.trim())
             .map_err(|origen| NucleoError::Interno {
-                mensaje: origen.to_string(),
+                mensaje: interno(origen),
             })?
             .into_iter()
             .map(Into::into)
@@ -1545,7 +1579,7 @@ impl Nucleo {
             .core_lock()
             .buscar_rutas(texto.trim())
             .map_err(|origen| NucleoError::Interno {
-                mensaje: origen.to_string(),
+                mensaje: interno(origen),
             })?
             .into_iter()
             .map(Into::into)
@@ -1658,7 +1692,7 @@ impl Nucleo {
             .core_lock()
             .buscar_empresas_proveedor(texto.trim())
             .map_err(|origen| NucleoError::Interno {
-                mensaje: origen.to_string(),
+                mensaje: interno(origen),
             })?
             .into_iter()
             .map(Into::into)
@@ -1792,7 +1826,7 @@ impl Nucleo {
             .core_lock()
             .buscar_historial(&filtro)
             .map_err(|origen| NucleoError::Interno {
-                mensaje: origen.to_string(),
+                mensaje: interno(origen),
             })?;
         Ok(pagina.items.into_iter().map(Into::into).collect())
     }
@@ -1920,7 +1954,7 @@ impl Nucleo {
         let token = self
             .autenticar_y_cachear(&secreto, Some(&metadata))
             .map_err(|error| NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             })?;
         if let Some(desfase_ms) = token.desfase_reloj_ms {
             self.core_lock().actualizar_desfase_reloj(desfase_ms);
@@ -1936,14 +1970,14 @@ impl Nucleo {
         let conexion = self.conexion_secundaria()?;
         let catalogo = control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto)
             .map_err(|error| NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             })?;
         // Mismo motivo que en `sincronizar_con_secreto` -- sin esto, un
         // dispositivo recién configurado tampoco traía encargados/vehículos
         // de ruta hasta el próximo pulso de sync.
         control_acceso::nube::recibir_catalogo_rutas_del_sitio(&conexion, &contexto).map_err(
             |error| NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             },
         )?;
 
@@ -2024,7 +2058,7 @@ impl Nucleo {
     pub fn borrar_secreto_dispositivo_legado(&self, directorio: String) -> Result<(), NucleoError> {
         control_acceso::nube::credenciales::borrar_secreto_en(std::path::Path::new(&directorio))
             .map_err(|error| NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             })
     }
 
@@ -2094,7 +2128,7 @@ impl Nucleo {
         let token = self
             .autenticar_con_cache(&secreto)
             .map_err(|error| NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             })?;
         if let Some(desfase_ms) = token.desfase_reloj_ms {
             self.core_lock().actualizar_desfase_reloj(desfase_ms);
@@ -2184,7 +2218,7 @@ impl Nucleo {
         let token = self
             .autenticar_con_cache(&secreto)
             .map_err(|error| NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             })?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
             base_url: control_acceso::nube::BASE_URL,
@@ -2200,7 +2234,7 @@ impl Nucleo {
         // `application::nube::AppCore::gafete_ocupado_en_sitio`.
         control_acceso::nube::gafete_ocupado_en_otro_dispositivo(&contexto, gafete_numero).map_err(
             |error| NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             },
         )
     }
@@ -2219,7 +2253,7 @@ impl Nucleo {
         let token = self
             .autenticar_con_cache(&secreto)
             .map_err(|error| NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             })?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
             base_url: control_acceso::nube::BASE_URL,
@@ -2230,7 +2264,7 @@ impl Nucleo {
         };
         control_acceso::nube::gafete_ocupado_en_otro_dispositivo(&contexto, gafete_numero).map_err(
             |error| NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             },
         )
     }
@@ -2252,7 +2286,7 @@ impl Nucleo {
         let token = self
             .autenticar_con_cache(&secreto)
             .map_err(|error| NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             })?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
             base_url: control_acceso::nube::BASE_URL,
@@ -2266,7 +2300,7 @@ impl Nucleo {
             gafete_numero,
         )
         .map_err(|error| NucleoError::Interno {
-            mensaje: error.to_string(),
+            mensaje: interno(error),
         })
     }
 
@@ -2287,7 +2321,7 @@ impl Nucleo {
         let token = self
             .autenticar_con_cache(&secreto)
             .map_err(|error| NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             })?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
             base_url: control_acceso::nube::BASE_URL,
@@ -2301,7 +2335,7 @@ impl Nucleo {
             gafete_numero,
         )
         .map_err(|error| NucleoError::Interno {
-            mensaje: error.to_string(),
+            mensaje: interno(error),
         })
     }
 
@@ -2386,7 +2420,7 @@ impl Nucleo {
         let token = self
             .autenticar_con_cache(&secreto)
             .map_err(|error| NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             })?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
             base_url: control_acceso::nube::BASE_URL,
@@ -2398,7 +2432,7 @@ impl Nucleo {
         let conexion = self.conexion_secundaria()?;
         control_acceso::nube::cerrar_ingreso_remoto(&conexion, &contexto, &uuid, &actor.nombre)
             .map_err(|error| NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             })?;
         Ok(())
     }
@@ -2430,7 +2464,7 @@ impl Nucleo {
         let token = self
             .autenticar_con_cache(&secreto)
             .map_err(|error| NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             })?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
             base_url: control_acceso::nube::BASE_URL,
@@ -2447,7 +2481,7 @@ impl Nucleo {
             &actor.nombre,
         )
         .map_err(|error| NucleoError::Interno {
-            mensaje: error.to_string(),
+            mensaje: interno(error),
         })?;
         Ok(())
     }
@@ -2479,7 +2513,7 @@ impl Nucleo {
         let token = self
             .autenticar_con_cache(&secreto)
             .map_err(|error| NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             })?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
             base_url: control_acceso::nube::BASE_URL,
@@ -2496,7 +2530,7 @@ impl Nucleo {
             &actor.nombre,
         )
         .map_err(|error| NucleoError::Interno {
-            mensaje: error.to_string(),
+            mensaje: interno(error),
         })?;
         Ok(())
     }
@@ -2587,7 +2621,7 @@ impl Nucleo {
         identificador_dispositivo: &str,
     ) -> Result<(), NucleoError> {
         let mapear_nube = |error: control_acceso::nube::NubeError| NucleoError::Interno {
-            mensaje: error.to_string(),
+            mensaje: interno(error),
         };
         let secreto = control_acceso::nube::credenciales::cargar_secreto_en_con_identificador(
             std::path::Path::new(directorio),
@@ -2607,7 +2641,7 @@ impl Nucleo {
         let conexion = self.conexion_secundaria()?;
         control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto).map_err(
             |error| NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             },
         )?;
         Ok(())
@@ -2615,7 +2649,7 @@ impl Nucleo {
 
     fn refrescar_catalogo_sin_sesion_con_secreto(&self, secreto: &str) -> Result<(), NucleoError> {
         let mapear_nube = |error: control_acceso::nube::NubeError| NucleoError::Interno {
-            mensaje: error.to_string(),
+            mensaje: interno(error),
         };
         let token = self.autenticar_con_cache(secreto).map_err(mapear_nube)?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
@@ -2628,7 +2662,7 @@ impl Nucleo {
         let conexion = self.conexion_secundaria()?;
         control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto).map_err(
             |error| NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             },
         )?;
         Ok(())
@@ -2658,7 +2692,7 @@ impl Nucleo {
             None,
         )
         .map_err(|error| NucleoError::Interno {
-            mensaje: error.to_string(),
+            mensaje: interno(error),
         })
     }
 
@@ -2836,7 +2870,7 @@ impl Nucleo {
         })?;
         let token = self.autenticar_con_cache(&secreto).map_err(|error| {
             FalloSincronizacion::Nucleo(NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             })
         })?;
         if let Some(desfase_ms) = token.desfase_reloj_ms {
@@ -2960,7 +2994,7 @@ impl Nucleo {
 
         let token = self.autenticar_con_cache(secreto).map_err(|error| {
             FalloSincronizacion::Nucleo(NucleoError::Interno {
-                mensaje: error.to_string(),
+                mensaje: interno(error),
             })
         })?;
         if let Some(desfase_ms) = token.desfase_reloj_ms {
