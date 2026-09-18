@@ -12,7 +12,7 @@ describe("VersionFooter", () => {
     const { container } = render(<VersionFooter colapsado />);
     await waitFor(() =>
       expect(container.querySelector(".shell-sidebar-version")?.getAttribute("title")).toBe(
-        "Control de Acceso v0.0.0-test",
+        "Lattis v0.0.0-test",
       ),
     );
     expect(screen.queryByText("v0.0.0-test")).toBeNull();

@@ -175,7 +175,7 @@ fun PantallaPrincipal(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "Brisas Control de Acceso",
+                    "Lattis",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

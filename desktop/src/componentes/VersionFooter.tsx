@@ -24,7 +24,7 @@ export default function VersionFooter({ colapsado }: { colapsado: boolean }) {
   if (!version) return null;
 
   return (
-    <div className="shell-sidebar-version" title={`Control de Acceso v${version}`}>
+    <div className="shell-sidebar-version" title={`Lattis v${version}`}>
       {!colapsado && `v${version}`}
     </div>
   );

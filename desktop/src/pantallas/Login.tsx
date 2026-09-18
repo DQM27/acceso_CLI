@@ -184,8 +184,7 @@ export default function Login({
             <img src={marca} alt="" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-texto">Control de acceso</h1>
-            <p className="text-sm text-muted">Brisas</p>
+            <h1 className="text-lg font-semibold text-texto">Lattis</h1>
           </div>
         </div>
 

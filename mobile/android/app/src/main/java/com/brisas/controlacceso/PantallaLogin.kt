@@ -76,15 +76,10 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispo
         )
 
         Text(
-            "Control de acceso",
+            "Lattis",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(top = 16.dp),
-        )
-        Text(
-            "Brisas",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         TextField(
