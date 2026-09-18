@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Loader2 } from "lucide-react";
 import Modal from "../componentes/Modal";
 import {
   FilaListaFlotante,
@@ -64,6 +65,10 @@ export default function NuevoIngresoModal({
 }) {
   const [filtro, setFiltro] = useState("");
   const [resultados, setResultados] = useState<ContratistaResumen[]>([]);
+  // Señal chica mientras pasan los DEBOUNCE_MS antes de buscar -- sin esto
+  // la búsqueda se siente muda entre que se deja de tipear y aparece algo
+  // (docs/pendientes.md, "Spinner durante debounce de búsqueda").
+  const [buscando, setBuscando] = useState(false);
   const [seleccion, setSeleccion] = useState<Seleccion>({ tipo: "ninguna" });
   const [medio, setMedio] = useState<MedioIngreso>("Caminando");
   const [gafeteTexto, setGafeteTexto] = useState("");
@@ -95,13 +100,18 @@ export default function NuevoIngresoModal({
     if (!filtro.trim()) {
       // `Promise.resolve().then(...)` en vez de llamar `setResultados([])`
       // directo -- ver el mismo comentario en Activos.tsx.
-      Promise.resolve().then(() => setResultados([]));
+      Promise.resolve().then(() => {
+        setResultados([]);
+        setBuscando(false);
+      });
       return;
     }
+    Promise.resolve().then(() => setBuscando(true));
     const id = setTimeout(() => {
       buscarContratistas({ texto: filtro })
         .then((pagina) => setResultados(pagina.items.slice(0, MAX_RESULTADOS)))
-        .catch((error) => setError(String(error)));
+        .catch((error) => setError(String(error)))
+        .finally(() => setBuscando(false));
     }, DEBOUNCE_MS);
     return () => clearTimeout(id);
   }, [filtro]);
@@ -169,14 +179,31 @@ export default function NuevoIngresoModal({
         <div ref={campoRef}>
           <label className="campo">
             Buscar contratista
-            <input
-              ref={buscadorRef}
-              value={filtro}
-              onChange={(evento) => cambiarFiltro(evento.target.value)}
-              onKeyDown={manejarTeclaBuscador}
-              autoFocus
-              placeholder="Cédula o nombre…"
-            />
+            <div style={{ position: "relative" }}>
+              <input
+                ref={buscadorRef}
+                value={filtro}
+                onChange={(evento) => cambiarFiltro(evento.target.value)}
+                onKeyDown={manejarTeclaBuscador}
+                autoFocus
+                placeholder="Cédula o nombre…"
+              />
+              {buscando && (
+                <Loader2
+                  size={14}
+                  strokeWidth={2}
+                  aria-hidden="true"
+                  className="girando"
+                  style={{
+                    position: "absolute",
+                    right: "0.6rem",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: "var(--muted)",
+                  }}
+                />
+              )}
+            </div>
           </label>
         </div>
 
