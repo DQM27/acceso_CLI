@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ChangeEvent } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -124,6 +125,18 @@ export default function SalidaRutaModal({
       tiene_correo_autorizacion: false,
     },
   });
+
+  // `type="number"` deja teclear "e"/"-"/"+" (notación científica) aunque
+  // el campo sea un entero positivo -- texto + filtrado en onChange, mismo
+  // criterio que FormularioGafete.tsx/IngresoProveedorModal.tsx
+  // (docs/pendientes.md, "Auditar máscaras de entrada").
+  const registroSubNumero = register("sub_numero", {
+    setValueAs: (valor: string) => (valor === "" ? Number.NaN : Number(valor)),
+  });
+  const alCambiarSubNumero = (evento: ChangeEvent<HTMLInputElement>) => {
+    evento.target.value = evento.target.value.replace(/\D/g, "");
+    registroSubNumero.onChange(evento);
+  };
 
   const [vehiculos, setVehiculos] = useState<VehiculoRuta[]>([]);
   const [encargados, setEncargados] = useState<EncargadoRuta[]>([]);
@@ -291,7 +304,7 @@ export default function SalidaRutaModal({
             </label>
             <label className="campo" style={{ flex: "0 1 6rem" }}>
               Sub-número
-              <input type="number" min={1} {...register("sub_numero", { valueAsNumber: true })} />
+              <input {...registroSubNumero} onChange={alCambiarSubNumero} inputMode="numeric" />
               {errors.sub_numero && (
                 <span style={{ color: "var(--error)" }}>{errors.sub_numero.message}</span>
               )}

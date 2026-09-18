@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ChangeEvent } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -38,8 +39,23 @@ export default function EntregarGafeteProvisionalModal({
     formState: { errors, isSubmitting },
   } = useForm<ValoresFormulario>({
     resolver: zodResolver(esquema),
-    defaultValues: { gafete_numero: Number.NaN },
+    // String vacío, no NaN -- con `type="number"` el DOM mostraba NaN en
+    // blanco solo, pero con `type="text"` (ver abajo) NaN se refleja
+    // literal como el string "NaN" en el campo (docs/pendientes.md,
+    // "Auditar máscaras de entrada" -- mismo fix que IngresoProveedorModal).
+    defaultValues: { gafete_numero: "" as unknown as number },
   });
+
+  // `type="number"` deja teclear "e"/"-"/"+" (notación científica) aunque
+  // el campo sea un entero positivo -- texto + filtrado en onChange, mismo
+  // criterio que FormularioGafete.tsx/IngresoProveedorModal.tsx.
+  const registroGafeteNumero = register("gafete_numero", {
+    setValueAs: (valor: string) => (valor === "" ? Number.NaN : Number(valor)),
+  });
+  const alCambiarGafeteNumero = (evento: ChangeEvent<HTMLInputElement>) => {
+    evento.target.value = evento.target.value.replace(/\D/g, "");
+    registroGafeteNumero.onChange(evento);
+  };
 
   const [encargados, setEncargados] = useState<EncargadoRuta[]>([]);
   useEffect(() => {
@@ -106,7 +122,11 @@ export default function EntregarGafeteProvisionalModal({
 
         <label className="campo" style={{ flex: "0 1 10rem" }}>
           N.° de gafete provisional
-          <input type="number" min={1} {...register("gafete_numero", { valueAsNumber: true })} />
+          <input
+            {...registroGafeteNumero}
+            onChange={alCambiarGafeteNumero}
+            inputMode="numeric"
+          />
           {errors.gafete_numero && (
             <span style={{ color: "var(--error)" }}>{errors.gafete_numero.message}</span>
           )}
