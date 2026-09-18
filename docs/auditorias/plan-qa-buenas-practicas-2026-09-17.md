@@ -402,28 +402,35 @@ datos de personas). Un botón en la UI que lo genere y abra la carpeta.
 una DB de prueba y confirme que contiene los 3 archivos esperados, sin
 cédulas ni nombres reales en el JSON de `cola_salida`.
 
-### 7. Runbook de recuperación — base local corrupta
+### 7. ✅ Runbook de recuperación — base local corrupta (cerrado 2026-09-17)
 
-**Qué existe hoy:** `docs/recuperacion-supabase.md` cubre muy bien el lado
-nube (reconstruir el proyecto Supabase entero desde las migraciones
-versionadas). **Lo que falta es el espejo para el sitio**: qué hacer si el
-`.db` local de una PC se corrompe o el disco falla, dado que — punto 4 —
-no hay respaldo local de ningún tipo.
+**Decisión del usuario:** aceptable perder `auditoria_cambios`/
+`auditoria_contratistas`/`gafetes_incidentes` y lo que quedara sin subir en
+`cola_salida` si un sitio tiene que reconstruirse desde cero -- queda
+anotado como "a valorar más adelante", no un pendiente activo.
 
-**Plan:**
-1. Documentar el camino real de recuperación hoy: reinstalar, dejar que
-   `AppCore::abrir` cree una base nueva, y confiar en que la sincronización
-   con la nube (`nube::recibir_*`) repuebla lo que ese sitio necesita ver.
-2. Determinar y documentar QUÉ se pierde en ese camino (¿historial que solo
-   vivía local? ¿algo que no viaja a la nube?) — esto requiere revisar qué
-   tablas tienen contraparte remota y cuáles no.
-3. Recién con (2) resuelto, decidir si vale la pena un respaldo local
-   liviano (ej. copiar el `.db` cifrado a una carpeta de red 1 vez al día)
-   o si depender de la nube es aceptable como está.
+**Qué se hizo:** `docs/recuperacion-sitio-local.md` -- runbook completo,
+espejo de `docs/recuperacion-supabase.md`. El hallazgo importante que
+justificaba el punto 8 de este plan (definir el "método de seguridad" de
+la restauración, no sólo el mecánico): en escritorio, `db_key.dat` Y
+`dispositivo-nube.secret` viven en la MISMA carpeta que `control_acceso.db`
+(`%LOCALAPPDATA%\ControlAcceso\`) -- un evento que destruye la base
+normalmente destruye también el secreto de dispositivo. La recuperación
+real no es "reinstalar y listo": ese dispositivo queda sin forma de
+autenticarse como sí mismo, y hay que tratarlo como un dispositivo nuevo
+vía `admin-provision-device` (mismo `sitio_nombre`, resuelve por `upsert`
+al `sitio_id` que ya tenía toda la historia). Esto es una propiedad de
+seguridad correcta, no un defecto: no existe ningún atajo de recuperación
+que evite pasar por la misma autorización de administrador que dar de alta
+un dispositivo nuevo.
 
-**Por qué no se implementa ya:** el paso 2 es información que no está en
-el código — requiere que alguien del equipo confirme qué se considera
-aceptable perder. No es una decisión técnica que se tome sola.
+El runbook también documenta la secuencia real de qué vuelve cuándo:
+catálogo completo inmediato en la activación
+(`recibir_catalogo_del_sitio`/`recibir_catalogo_rutas_del_sitio`), historial
+de movimientos dentro de los ~2 minutos siguientes vía la sincronización
+automática en segundo plano (`iniciar_sincronizacion_automatica`) -- no
+hace falta ninguna acción manual extra para eso, sólo tener el dispositivo
+activado y la app abierta.
 
 ### 8. Revisión de código — falta un gate estructural
 
@@ -567,7 +574,7 @@ justificación (ver el análisis de `AppCore`, sesión previa):
 | 4 | Backups: código muerto limpiado, doc corregido | ✅ | No |
 | 5 | Observabilidad completa (5.1/5.2/5.3 logs + 5.4 Sentry) | ✅ | No |
 | 6 | Diagnóstico exportable | 🚧 | No |
-| 7 | Runbook recuperación base local | 🚧 | Sí (qué se acepta perder) |
+| 7 | Runbook recuperación base local | ✅ | No |
 | 8 | CODEOWNERS + branch protection | ✅ CODEOWNERS / 🚧 el toggle | El toggle sí (vos, en Settings del repo) |
 | 9 / 12 | Compatibilidad multi-versión | ✅ escritorio / 🚧 mobile | Mobile: no, sólo falta tocar Kotlin (confirmalo si querés que avance) |
 | 10 | Cifrado secreto Android | ✅ (ya estaba hecho, nota vieja corregida) | Test con Robolectric: sí, si se quiere sumarlo |
