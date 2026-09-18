@@ -54,7 +54,6 @@ import {
   buscarActualizacion,
   cerrarSesion,
   instalarActualizacion,
-  mostrarVentanaPrincipal,
   requiereConfiguracionInicial,
   sincronizarConNube,
 } from "./api";
@@ -172,12 +171,13 @@ export default function App() {
         setPantalla({ tipo: "login" });
       })
       .finally(() => {
-        // Recién acá hay algo real que mostrar -- antes la ventana
-        // principal quedaba visible desde el arranque con el interior en
-        // blanco mientras el WebView cargaba. El splash (ventana aparte,
-        // HTML estático sin bundle de JS) se ve casi al instante y tapa
-        // ese hueco.
-        mostrarVentanaPrincipal().catch(console.error);
+        // No dispara el cierre del splash antes de tiempo a propósito --
+        // eso corría una carrera contra el propio pintado de React
+        // (reportado 2026-09-18: el splash quedaba flotando arriba de la
+        // principal para siempre). El timer fijo de 3 segundos en
+        // `setup()` (lib.rs) es el único que cierra el splash; esto sólo
+        // sirve de límite superior para el spinner cuando la carga real
+        // tarda MÁS que esos 3 segundos.
       });
   }, []);
 

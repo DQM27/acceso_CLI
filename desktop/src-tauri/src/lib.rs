@@ -264,22 +264,54 @@ fn abrir_nucleo_con_recuperacion(
     }
 }
 
-/// Cierra la ventana de splash y muestra la ventana principal -- invocado
-/// desde `App.tsx` una vez que React resolvió `requiereConfiguracionInicial`
-/// (o sea, cuando ya hay algo real para mostrar). Sin esto, la ventana
-/// principal (visible desde el arranque) se veía en blanco mientras el
-/// `WebView` terminaba de cargar/arrancar React -- el splash es HTML estático
-/// sin bundle de JS, aparece casi al instante (reportado 2026-09-18).
-#[tauri::command]
-fn mostrar_ventana_principal(app: tauri::AppHandle) -> Result<(), String> {
+/// Cierra el splash (si sigue abierto) y muestra/enfoca la principal (si
+/// todavía estaba oculta) -- idempotente, la llaman tanto el timer fijo de
+/// `setup()` como el comando de abajo, cualquiera que llegue primero gana y
+/// el otro no hace nada.
+fn cerrar_splash_y_mostrar_principal(app: &tauri::AppHandle) {
     if let Some(splash) = app.get_webview_window("splashscreen") {
         let _ = splash.close();
     }
     if let Some(principal) = app.get_webview_window("main") {
-        principal.show().map_err(|error| error.to_string())?;
-        principal.set_focus().map_err(|error| error.to_string())?;
+        let _ = principal.show();
+        let _ = principal.set_focus();
     }
-    Ok(())
+}
+
+/// Adelanta el cierre del splash desde `App.tsx` una vez que React resolvió
+/// `requiereConfiguracionInicial` -- si React está listo antes de los 3
+/// segundos fijos del timer de `setup()`, no hace falta esperarlo.
+#[tauri::command]
+fn mostrar_ventana_principal(app: tauri::AppHandle) {
+    cerrar_splash_y_mostrar_principal(&app);
+}
+
+/// Arma el cierre garantizado del splash -- antes dependía de que el
+/// frontend invocara `mostrar_ventana_principal` en el momento justo
+/// (reportado 2026-09-18: quedaba flotando arriba de la ventana principal
+/// para siempre, y si se cerraba la principal el splash sobrevivía solo,
+/// sin nada que lo cierre). Un timer fijo acá no depende de esa carrera:
+/// pase lo que pase en el frontend, a los 3 segundos el splash se cierra y
+/// la principal se muestra.
+fn configurar_cierre_de_splash(app: &tauri::App) {
+    let handle = app.handle().clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        cerrar_splash_y_mostrar_principal(&handle);
+    });
+    if let Some(principal) = app.get_webview_window("main") {
+        let handle_para_cierre = app.handle().clone();
+        principal.on_window_event(move |evento| {
+            // Si cierran la principal antes de que pase el timer de arriba
+            // (ej. durante esos 3 segundos), el splash queda huérfano
+            // manteniendo vivo el proceso -- lo cierra también.
+            if matches!(evento, tauri::WindowEvent::Destroyed)
+                && let Some(splash) = handle_para_cierre.get_webview_window("splashscreen")
+            {
+                let _ = splash.close();
+            }
+        });
+    }
 }
 
 /// Resuelve ruta/candado de instancia/clave de cifrado y abre `AppCore` --
@@ -399,6 +431,7 @@ pub fn run() {
         .setup(|app| {
             configurar_plugins_condicionales(app.handle())?;
             iniciar_sincronizacion_automatica(app.handle().clone());
+            configurar_cierre_de_splash(app);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
