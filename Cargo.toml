@@ -50,9 +50,9 @@ chrono-tz = "0.10.4"
 # de las dos no arrastra ningún motor por accidente. Se elimina `backup` de
 # rusqlite deliberadamente (Brisas no usa el mecanismo propio de la crate).
 rusqlite = { version = "0.40.2", default-features = false, features = ["functions"] }
-argon2 = "0.5"
+argon2 = "0.6"
 rand_core = { version = "0.6", features = ["getrandom"] }
-rust_xlsxwriter = { version = "0.98.2", features = ["chrono", "constant_memory"] }
+rust_xlsxwriter = { version = "0.99.1", features = ["chrono", "constant_memory"] }
 tempfile = "3"
 thiserror = "2"
 # Fachada de logging, compartida por escritorio (tauri-plugin-log) y mobile
@@ -67,7 +67,11 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 # Verificación offline de los JWT que emite Supabase Auth (ES256, claves
 # asimétricas -- ya confirmado que el proyecto las tiene:
 # /auth/v1/.well-known/jwks.json devuelve 3 claves públicas EC).
-jsonwebtoken = { version = "9", optional = true }
+# "rust_crypto": backend puro Rust (RustCrypto), sin dependencia de un
+# compilador de C/cmake -- evita repetir el dolor de cross-compile de
+# OpenSSL que ya documenta docs/pendientes.md para Android/Windows.
+# "aws_lc_rs" sería la otra opción soportada, pero trae ese mismo problema.
+jsonwebtoken = { version = "11", optional = true, features = ["rust_crypto"] }
 machine-uid = { version = "0.6", optional = true }
 aes-gcm = { version = "0.11", default-features = false, features = ["aes", "alloc"], optional = true }
 sha2 = { version = "0.11", default-features = false, optional = true }
@@ -76,7 +80,7 @@ sha2 = { version = "0.11", default-features = false, optional = true }
 # DPAPI (`CryptProtectData`/`CryptUnprotectData`) para proteger el secreto
 # de dispositivo en disco -- ver `cifrado-secreto-dispositivo` arriba y
 # `nube::credenciales`. Misma versión que ya fija `desktop/src-tauri`.
-windows = { version = "=0.61.3", features = [
+windows = { version = "=0.62.2", features = [
     "Win32_Security_Cryptography",
     "Win32_Foundation",
 ], optional = true }

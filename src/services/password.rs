@@ -1,7 +1,6 @@
 use argon2::Argon2;
-use argon2::password_hash::{
-    PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng,
-};
+use argon2::password_hash::phc::PasswordHash;
+use argon2::password_hash::{Error as PasswordHashError, PasswordHasher, PasswordVerifier};
 
 use super::error::PasswordError;
 
@@ -16,9 +15,8 @@ use super::error::PasswordError;
 pub const SIN_PASSWORD_LOCAL: &str = "SIN_PASSWORD_LOCAL";
 
 pub fn generar_hash(password: &str) -> Result<String, PasswordError> {
-    let salt = SaltString::generate(&mut OsRng);
     Argon2::default()
-        .hash_password(password.as_bytes(), &salt)
+        .hash_password(password.as_bytes())
         .map(|hash| hash.to_string())
         .map_err(|_| PasswordError::GeneracionHash)
 }
@@ -38,7 +36,7 @@ pub fn verificar_password(password: &str, hash: &str) -> Result<bool, PasswordEr
 
     match Argon2::default().verify_password(password.as_bytes(), &hash) {
         Ok(()) => Ok(true),
-        Err(argon2::password_hash::Error::Password) => Ok(false),
+        Err(PasswordHashError::PasswordInvalid) => Ok(false),
         Err(_) => Err(PasswordError::HashInvalido),
     }
 }
