@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import Modal from "../componentes/Modal";
 import {
   FilaListaFlotante,
@@ -43,6 +44,10 @@ export default function GestionGafeteModal({
   const [buscandoPortador, setBuscandoPortador] = useState(false);
   const [filtro, setFiltro] = useState("");
   const [resultados, setResultados] = useState<ContratistaResumen[]>([]);
+  // Señal chica mientras pasan los DEBOUNCE_MS antes de buscar -- sin esto
+  // la búsqueda se siente muda entre que se deja de tipear y aparece algo
+  // (docs/pendientes.md, "Spinner durante debounce de búsqueda").
+  const [cargandoResultados, setCargandoResultados] = useState(false);
   const [cedulaVisita, setCedulaVisita] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -72,13 +77,18 @@ export default function GestionGafeteModal({
     if (esVisita || !buscandoPortador || !filtro.trim()) {
       // `Promise.resolve().then(...)` en vez de llamar `setResultados([])`
       // directo -- ver el mismo comentario en Activos.tsx.
-      Promise.resolve().then(() => setResultados([]));
+      Promise.resolve().then(() => {
+        setResultados([]);
+        setCargandoResultados(false);
+      });
       return;
     }
+    Promise.resolve().then(() => setCargandoResultados(true));
     const id = setTimeout(() => {
       buscarContratistas({ texto: filtro })
         .then((pagina) => setResultados(pagina.items.slice(0, MAX_RESULTADOS)))
-        .catch((error) => setError(String(error)));
+        .catch((error) => setError(String(error)))
+        .finally(() => setCargandoResultados(false));
     }, DEBOUNCE_MS);
     return () => clearTimeout(id);
   }, [filtro, buscandoPortador, esVisita]);
@@ -208,13 +218,30 @@ export default function GestionGafeteModal({
           <div ref={campoRef}>
             <label className="campo">
               Asignado a · cédula o nombre
-              <input
-                value={filtro}
-                onChange={(evento) => setFiltro(evento.target.value)}
-                onKeyDown={manejarTecla}
-                autoFocus
-                placeholder="Cédula o nombre…"
-              />
+              <div style={{ position: "relative" }}>
+                <input
+                  value={filtro}
+                  onChange={(evento) => setFiltro(evento.target.value)}
+                  onKeyDown={manejarTecla}
+                  autoFocus
+                  placeholder="Cédula o nombre…"
+                />
+                {cargandoResultados && (
+                  <Loader2
+                    size={14}
+                    strokeWidth={2}
+                    aria-hidden="true"
+                    className="girando"
+                    style={{
+                      position: "absolute",
+                      right: "0.6rem",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      color: "var(--muted)",
+                    }}
+                  />
+                )}
+              </div>
             </label>
             {listaVisible && posicionLista && (
               <ListaFlotante posicion={posicionLista}>
