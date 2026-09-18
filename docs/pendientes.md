@@ -639,6 +639,22 @@ estabilizador y clasificador.
   pulido de UX sobre lo que ya existe.
 - [x] **Respaldo manual y exportación de historial dejaron de congelar la UI.**
 - [x] **Frame de transición entre vistas descartado.** La navegación se conserva inmediata.
+- [ ] **Cachear en Cloudflare para `web/` y `web-visitas/` (2026-09-18,
+  pedido explícito -- asumir que los visitantes tienen conexión mala).**
+  Ambas webs corren en Cloudflare Pages. Capas posibles, de menor a mayor
+  esfuerzo:
+  1. `Cache-Control` agresivo/inmutable para los assets con hash del build
+     de Vite (son cacheables para siempre, cada versión tiene nombre
+     distinto) -- gratis, sin riesgo, no está configurado explícitamente
+     todavía.
+  2. Compresión/optimización de imágenes (Cloudflare Polish) si alguna de
+     las dos termina mostrando fotos (cédulas/contratistas).
+  3. Cachear en el borde (Cloudflare Worker) sólo las consultas de
+     lectura que son iguales para cualquier usuario (ej. catálogo de
+     sitios/rutas) -- **nunca** nada que dependa de RLS/sesión, eso
+     rompería el modelo de permisos por sitio que ya existe.
+  Prioridad: seguridad primero, después velocidad -- no tocar nada de
+  RLS/autorización para ganar cache.
 
 ## Roadmap fuera del alcance actual
 
