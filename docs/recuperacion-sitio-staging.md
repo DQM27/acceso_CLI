@@ -73,47 +73,72 @@ Dos pasos, los dos manuales:
    si hace falta el detalle completo de por qué son dos sistemas
    separados (JWT secret legacy vs. signing keys).
 
-### 2. Google OAuth -- diferido a propósito
+### 2. Google OAuth -- cerrado (2026-09-18)
 
-El panel web (`web/`) no se prueba contra staging por ahora -- pedido
-explícito del usuario (2026-09-18), es la parte más pesada de configurar
-(un Client ID/Secret de Google Cloud aparte, apuntando a esta URL) y
-staging es principalmente para probar sync de escritorio/mobile
-(contratistas, ingresos, gafetes, rutas, proveedores), no el panel.
+Cliente OAuth "Cliente web 2" creado en el proyecto de Google Cloud
+`mega-brisas`, con el único redirect URI necesario:
+`https://pmrytjktlyiuikxuuxpr.supabase.co/auth/v1/callback` (y
+`http://localhost:5173` como JavaScript origin autorizado, para probar el
+panel local). Client ID/Secret cargados en **Authentication → Providers →
+Google** del proyecto de staging (el secret no se documenta acá, solo
+vive en Supabase y en la consola de Google -- si hace falta rotarlo,
+Google Cloud Console → Clientes → ese cliente → regenerar).
 
-### 3. Cloudflare Access -- fuera de alcance
+Probado de punta a punta: login real contra `http://localhost:5173`
+(panel apuntado a staging vía `web/.env.local`, ver más abajo) entra
+correctamente y muestra el panel (vacío de datos, como corresponde a un
+proyecto nuevo).
 
-`sync-access-policy` está desplegada pero sin sus secrets
-(`CF_API_TOKEN`/`CF_ACCOUNT_ID`/`CF_ACCESS_APP_ID`/`CF_ACCESS_POLICY_ID`,
-`WEBHOOK_SHARED_SECRET`). Cualquier INSERT/UPDATE/DELETE en
-`administradores_panel` va a fallar (`sync_access_policy()` hace `raise
-exception` si faltan los secretos de Vault) -- irrelevante mientras nadie
-inserte administradores acá, que es el caso mientras Google OAuth siga
-diferido.
+`administradores_panel` en staging tiene un solo correo autorizado por
+ahora (el del probador). Insertar más así:
+`insert into public.administradores_panel (correo, creado_en) values ('correo@ejemplo.com', now());`
+-- pero antes hace falta el paso 3 de abajo (los dos secretos de Vault),
+si no el trigger `sync_access_policy()` corta el INSERT con una
+excepción.
+
+### 3. Cloudflare Access -- sigue fuera de alcance, pero el trigger ya no bloquea
+
+`sync-access-policy` (la Edge Function) sigue desplegada sin sus secrets
+reales (`CF_API_TOKEN`/`CF_ACCOUNT_ID`/`CF_ACCESS_APP_ID`/`CF_ACCESS_POLICY_ID`).
+Sí se cargaron los dos secretos de **Vault** que el trigger de Postgres
+necesita para no abortar la transacción
+(`sync_access_policy_apikey`/`sync_access_policy_webhook_secret`, valores
+aleatorios generados con `gen_random_bytes`, sin relación con los
+secrets reales de Cloudflare) -- el trigger dispara el `net.http_post`
+de forma asíncrona (`pg_net`), así que el INSERT/UPDATE/DELETE en
+`administradores_panel` funciona igual aunque esa llamada después falle
+puertas adentro (401, porque `WEBHOOK_SHARED_SECRET` no está seteado
+como secret de la función). Cuando se decida armar Cloudflare Access de
+verdad para staging, hay que reemplazar esos dos secretos de Vault por
+los reales y sí setear los `CF_*`/`WEBHOOK_SHARED_SECRET` de la función
+(`supabase secrets set ...`).
 
 ## Cómo apuntar las apps a este proyecto
 
-Todavía no implementado -- `src/nube/mod.rs` (`BASE_URL`/`APIKEY`,
-compartido por desktop y móvil) y `web/src/lib/supabase.ts` tienen la URL
-de producción hardcodeada. Ver punto 11 de
-`docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md` -- variables de
-entorno para poder elegir el proyecto sin editar código, ya decidido que
-sí pero pendiente de implementar.
+Ya implementado (punto 11 del plan de QA, cerrado 2026-09-18) -- ver
+`docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`. En resumen:
 
-Mientras tanto, para una prueba puntual: cambiar a mano `BASE_URL`/`APIKEY`
-en `src/nube/mod.rs` a los de este proyecto
-(`https://pmrytjktlyiuikxuuxpr.supabase.co` / la publishable key de acá),
-compilar, probar, y **revertir antes de commitear** -- no dejar nunca un
-commit real apuntando a staging.
+- **Desktop/mobile:** variables de entorno
+  `CONTROL_ACCESO_SUPABASE_URL`/`CONTROL_ACCESO_SUPABASE_APIKEY` (leídas
+  por `src/nube/mod.rs`, `OnceLock`, sin recompilar nada distinto --
+  solo hay que exportarlas antes de correr/compilar). Sin ellas, cae al
+  default de producción.
+- **Web/web-visitas:** crear `.env.local` (gitignored, no tocar el
+  `.env` versionado) con:
+  ```
+  VITE_SUPABASE_URL=https://pmrytjktlyiuikxuuxpr.supabase.co
+  VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_29DwMvfyj8Jq--LBcqxtBA_pTwWrDH4
+  ```
+  Vite lo recoge solo con `npm run dev`/`npm run build`.
 
 ## Cómo probar de punta a punta una vez cargado el `DEVICE_SIGNING_KEY`
 
-1. Llamar `admin-provision-device` (con un JWT de un admin en
-   `administradores_panel` -- pero esa tabla está vacía en staging y
-   Google OAuth está diferido, así que por ahora esta función sólo se
-   puede probar con el `service_role` key directo, no desde el panel
-   real) con `sitio_nombre`/`tipo`/`etiqueta` para generar el primer
-   secreto de dispositivo.
+1. Llamar `admin-provision-device` con `sitio_nombre`/`tipo`/`etiqueta`
+   para generar el primer secreto de dispositivo -- ya se puede hacer
+   desde el panel real (`http://localhost:5173` apuntado a staging,
+   logueado con Google) en vez de necesitar el `service_role` key
+   directo, ahora que `administradores_panel` tiene al menos un correo
+   autorizado.
 2. Activar un dispositivo (desktop o mobile, apuntado a este proyecto,
    ver arriba) con ese secreto.
 3. Confirmar que trae el catálogo (vacío, es un proyecto nuevo) y que
