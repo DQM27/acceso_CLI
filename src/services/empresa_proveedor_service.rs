@@ -62,19 +62,30 @@ where
         Ok(self.empresas.establecer_activo(id, false)?)
     }
 
-    pub fn listar(
-        &self,
-        solo_activos: bool,
-    ) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
-        Ok(self.empresas.listar(solo_activos)?)
+    /// Para la grilla de administración -- trae activas e inactivas, así se
+    /// puede reactivar una. `listar_seleccionables` es la contraparte para
+    /// un selector de wizard, donde una empresa inactiva nunca es una
+    /// opción válida. La decisión de cuál pedir es de negocio, no de la
+    /// pantalla -- por eso son dos métodos con nombre propio en vez de un
+    /// parámetro `bool` que cualquier llamador podría pasar sin pensarlo.
+    pub fn listar(&self) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
+        Ok(self.empresas.listar(false)?)
     }
 
-    pub fn buscar(
+    pub fn listar_seleccionables(&self) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
+        Ok(self.empresas.listar(true)?)
+    }
+
+    /// Mismo criterio que `listar`/`listar_seleccionables`.
+    pub fn buscar(&self, texto: &str) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
+        Ok(self.empresas.buscar(texto, false)?)
+    }
+
+    pub fn buscar_seleccionables(
         &self,
         texto: &str,
-        solo_activos: bool,
     ) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
-        Ok(self.empresas.buscar(texto, solo_activos)?)
+        Ok(self.empresas.buscar(texto, true)?)
     }
 }
 
@@ -182,5 +193,23 @@ mod tests {
 
         servicio.activar(id).unwrap();
         assert!(servicio.buscar_por_id(id).unwrap().activo);
+    }
+
+    /// `listar`/`buscar` (administración) traen todo; `_seleccionables`
+    /// (wizard) omite las inactivas. La decisión de cuál usar es del
+    /// servicio, no de quien lo llama.
+    #[test]
+    fn seleccionables_omiten_las_desactivadas_pero_administracion_las_incluye() {
+        let connection = conexion();
+        let repo = SqliteEmpresaProveedorRepository::new(&connection);
+        let servicio = EmpresaProveedorService::new(&repo);
+        servicio.crear("Maika").unwrap();
+        let id_dos_pinos = servicio.crear("Dos Pinos").unwrap();
+        servicio.desactivar(id_dos_pinos).unwrap();
+
+        assert_eq!(servicio.listar().unwrap().len(), 2);
+        assert_eq!(servicio.listar_seleccionables().unwrap().len(), 1);
+        assert_eq!(servicio.buscar("pinos").unwrap().len(), 1);
+        assert!(servicio.buscar_seleccionables("pinos").unwrap().is_empty());
     }
 }

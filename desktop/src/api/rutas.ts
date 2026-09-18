@@ -45,11 +45,16 @@ export interface Ruta {
   activo: boolean;
 }
 
-/** `soloActivos`: mismo criterio que `listarEncargadosRuta` -- un selector
- * de wizard pide `true` (un vehículo desactivado no es opción válida para
- * una salida nueva), el catálogo de administración pide `false`. */
-export function listarVehiculosRuta(soloActivos: boolean): Promise<VehiculoRuta[]> {
-  return invoke("listar_vehiculos_ruta", { soloActivos });
+/** Para la grilla de administración -- trae activos e inactivos.
+ * `listarVehiculosRutaSeleccionables` es la contraparte para el selector de
+ * salida de ruta, donde un vehículo desactivado nunca es una opción válida
+ * -- esa decisión la toma el núcleo, no quien llama. */
+export function listarVehiculosRuta(): Promise<VehiculoRuta[]> {
+  return invoke("listar_vehiculos_ruta");
+}
+
+export function listarVehiculosRutaSeleccionables(): Promise<VehiculoRuta[]> {
+  return invoke("listar_vehiculos_ruta_seleccionables");
 }
 
 export async function crearVehiculoRuta(datos: DatosVehiculoRuta): Promise<number> {
@@ -63,12 +68,16 @@ export async function actualizarVehiculoRuta(id: number, datos: DatosVehiculoRut
   solicitarSincronizacionNube();
 }
 
-/** `soloActivos`: el núcleo filtra directamente (ver
- * `EmpresaProveedorRepository::listar`) -- un selector de un wizard (elegir
- * encargado para una salida nueva) debe pedir `true`; el catálogo de
- * administración pide `false`. */
-export function listarEncargadosRuta(soloActivos: boolean): Promise<EncargadoRuta[]> {
-  return invoke("listar_encargados_ruta", { soloActivos });
+/** Para la grilla de administración -- trae activos e inactivos.
+ * `listarEncargadosRutaSeleccionables` es la contraparte para un selector
+ * de wizard (elegir encargado para una salida nueva), donde uno desactivado
+ * nunca es una opción válida -- esa decisión la toma el núcleo. */
+export function listarEncargadosRuta(): Promise<EncargadoRuta[]> {
+  return invoke("listar_encargados_ruta");
+}
+
+export function listarEncargadosRutaSeleccionables(): Promise<EncargadoRuta[]> {
+  return invoke("listar_encargados_ruta_seleccionables");
 }
 
 export async function crearEncargadoRuta(datos: DatosEncargadoRuta): Promise<number> {
@@ -85,11 +94,16 @@ export async function actualizarEncargadoRuta(
   solicitarSincronizacionNube();
 }
 
-/** `soloActivos`: mismo criterio que `listarEncargadosRuta` -- un selector
- * de wizard pide `true` (una ruta dada de baja no es opción válida para una
- * salida nueva), el catálogo de administración pide `false`. */
-export function listarRutas(soloActivos: boolean): Promise<Ruta[]> {
-  return invoke("listar_rutas", { soloActivos });
+/** Para la grilla de administración -- trae activas y dadas de baja.
+ * `listarRutasSeleccionables` es la contraparte para el selector de salida
+ * de ruta, donde una ruta dada de baja nunca es una opción válida -- esa
+ * decisión la toma el núcleo. */
+export function listarRutas(): Promise<Ruta[]> {
+  return invoke("listar_rutas");
+}
+
+export function listarRutasSeleccionables(): Promise<Ruta[]> {
+  return invoke("listar_rutas_seleccionables");
 }
 
 export async function crearRuta(numero: number): Promise<number> {

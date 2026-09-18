@@ -11,7 +11,12 @@ import {
   useListaFlotante,
   useNavegacionFlechas,
 } from "../componentes/ListaFlotante";
-import { listarEncargadosRuta, listarRutas, listarVehiculosRuta, registrarSalidaRuta } from "../api";
+import {
+  listarEncargadosRutaSeleccionables,
+  listarRutasSeleccionables,
+  listarVehiculosRutaSeleccionables,
+  registrarSalidaRuta,
+} from "../api";
 import type { EncargadoRuta, Ruta, VehiculoRuta } from "../api";
 import { fechaYMD } from "../tiempo";
 
@@ -142,11 +147,9 @@ export default function SalidaRutaModal({
   const [encargados, setEncargados] = useState<EncargadoRuta[]>([]);
   const [rutasActivas, setRutasActivas] = useState<Ruta[]>([]);
   useEffect(() => {
-    // El núcleo filtra los desactivados/dadas de baja (`soloActivos: true`)
-    // -- no queda del lado de la pantalla decidir eso.
-    listarVehiculosRuta(true).then(setVehiculos).catch(() => {});
-    listarEncargadosRuta(true).then(setEncargados).catch(() => {});
-    listarRutas(true).then(setRutasActivas).catch(() => {});
+    listarVehiculosRutaSeleccionables().then(setVehiculos).catch(() => {});
+    listarEncargadosRutaSeleccionables().then(setEncargados).catch(() => {});
+    listarRutasSeleccionables().then(setRutasActivas).catch(() => {});
   }, []);
 
   const placaTexto = watch("vehiculo_placa");

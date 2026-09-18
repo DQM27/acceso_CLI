@@ -4,7 +4,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Modal from "../componentes/Modal";
-import { listarEmpresasProveedor, registrarIngresoProveedor } from "../api/proveedores";
+import { listarEmpresasProveedorSeleccionables, registrarIngresoProveedor } from "../api/proveedores";
 import type { EmpresaProveedor } from "../api/proveedores";
 
 interface ValoresFormulario {
@@ -68,9 +68,7 @@ export default function IngresoProveedorModal({
 
   const [empresas, setEmpresas] = useState<EmpresaProveedor[]>([]);
   useEffect(() => {
-    // El núcleo filtra las inactivas (`soloActivos: true`) -- no queda del
-    // lado de la pantalla decidir eso.
-    listarEmpresasProveedor(true)
+    listarEmpresasProveedorSeleccionables()
       .then(setEmpresas)
       .catch(() => {});
   }, []);

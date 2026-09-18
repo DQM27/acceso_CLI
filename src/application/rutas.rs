@@ -12,7 +12,7 @@ use crate::database::error::DatabaseError;
 use crate::database::repositories::encargado_ruta_repository::{
     EncargadoRutaRepository, SqliteEncargadoRutaRepository,
 };
-use crate::database::repositories::ruta_repository::{RutaRepository, SqliteRutaRepository};
+use crate::database::repositories::ruta_repository::SqliteRutaRepository;
 use crate::database::repositories::salida_ruta_repository::{
     SqliteSalidaRutaRepository, ultimo_instante_salida_ruta,
 };
@@ -24,12 +24,14 @@ use crate::models::ruta::Ruta;
 use crate::models::salida_ruta::{SalidaRuta, SalidaRutaActivaResumen};
 use crate::models::vehiculo_ruta::VehiculoRuta;
 use crate::services::autenticacion_service::UsuarioSesion;
+use crate::services::encargado_ruta_service::EncargadoRutaService;
 use crate::services::error::{
     EncargadoRutaServiceError, RutaCatalogoServiceError, RutaServiceError, VehiculoRutaServiceError,
 };
 use crate::services::ruta_service::{
     ResultadoRegistroSalidaRuta, RutaCatalogoService, RutaService, SolicitudSalidaRuta,
 };
+use crate::services::vehiculo_ruta_service::VehiculoRutaService;
 
 use super::{AppCore, verificar_actor_activo};
 
@@ -37,13 +39,19 @@ impl AppCore {
     // ---- Catálogo: vehículos ----
 
     /// Sin `actor`, mismo criterio que `AppCore::listar_empresas`: es una
-    /// lectura, no una operación que autorizar. `solo_activos`: ver
-    /// doc-comment de `EmpresaProveedorRepository::listar`.
-    pub fn listar_vehiculos_ruta(
-        &self,
-        solo_activos: bool,
-    ) -> Result<Vec<VehiculoRuta>, DatabaseError> {
-        SqliteVehiculoRutaRepository::new(&self.connection).listar(solo_activos)
+    /// lectura, no una operación que autorizar. Para la grilla de
+    /// administración -- trae activos e inactivos.
+    /// `listar_vehiculos_ruta_seleccionables` es la contraparte para el
+    /// selector de salida de ruta, donde un vehículo desactivado nunca es
+    /// una opción válida -- la decisión vive en `VehiculoRutaService`.
+    pub fn listar_vehiculos_ruta(&self) -> Result<Vec<VehiculoRuta>, DatabaseError> {
+        let repositorio = SqliteVehiculoRutaRepository::new(&self.connection);
+        VehiculoRutaService::new(&repositorio).listar()
+    }
+
+    pub fn listar_vehiculos_ruta_seleccionables(&self) -> Result<Vec<VehiculoRuta>, DatabaseError> {
+        let repositorio = SqliteVehiculoRutaRepository::new(&self.connection);
+        VehiculoRutaService::new(&repositorio).listar_seleccionables()
     }
 
     pub fn crear_vehiculo_ruta(
@@ -85,24 +93,35 @@ impl AppCore {
 
     // ---- Catálogo: encargados (personal KOF) ----
 
-    /// `solo_activos`: ver doc-comment de `EmpresaProveedorRepository::listar`.
-    pub fn listar_encargados_ruta(
-        &self,
-        solo_activos: bool,
-    ) -> Result<Vec<EncargadoRuta>, DatabaseError> {
-        SqliteEncargadoRutaRepository::new(&self.connection).listar(solo_activos)
+    /// Para la grilla de administración -- trae activos e inactivos.
+    /// `listar_encargados_ruta_seleccionables` es la contraparte para un
+    /// selector de wizard -- la decisión vive en `EncargadoRutaService`.
+    pub fn listar_encargados_ruta(&self) -> Result<Vec<EncargadoRuta>, DatabaseError> {
+        let repositorio = SqliteEncargadoRutaRepository::new(&self.connection);
+        EncargadoRutaService::new(&repositorio).listar()
+    }
+
+    pub fn listar_encargados_ruta_seleccionables(&self) -> Result<Vec<EncargadoRuta>, DatabaseError> {
+        let repositorio = SqliteEncargadoRutaRepository::new(&self.connection);
+        EncargadoRutaService::new(&repositorio).listar_seleccionables()
     }
 
     /// Sin `actor`, mismo criterio que `listar_encargados_ruta` -- lectura,
-    /// no autoriza nada. Pensado para el buscador del checklist mobile
-    /// (nombre o código de empleado), ver el doc-comment del trait.
-    /// `solo_activos`: ver doc-comment de `EmpresaProveedorRepository::listar`.
-    pub fn buscar_encargados_ruta(
+    /// no autoriza nada. Buscador de la grilla de administración (nombre o
+    /// código de empleado). `buscar_encargados_ruta_seleccionables` es la
+    /// contraparte para el selector del checklist mobile/gafete
+    /// provisional, ver el doc-comment del trait.
+    pub fn buscar_encargados_ruta(&self, texto: &str) -> Result<Vec<EncargadoRuta>, DatabaseError> {
+        let repositorio = SqliteEncargadoRutaRepository::new(&self.connection);
+        EncargadoRutaService::new(&repositorio).buscar(texto)
+    }
+
+    pub fn buscar_encargados_ruta_seleccionables(
         &self,
         texto: &str,
-        solo_activos: bool,
     ) -> Result<Vec<EncargadoRuta>, DatabaseError> {
-        SqliteEncargadoRutaRepository::new(&self.connection).buscar(texto, solo_activos)
+        let repositorio = SqliteEncargadoRutaRepository::new(&self.connection);
+        EncargadoRutaService::new(&repositorio).buscar_seleccionables(texto)
     }
 
     pub fn crear_encargado_ruta(
@@ -144,16 +163,31 @@ impl AppCore {
 
     // ---- Catálogo: números de ruta (bloqueante, ver ruta_service.rs) ----
 
-    /// `solo_activos`: ver doc-comment de `EmpresaProveedorRepository::listar`.
-    pub fn listar_rutas(&self, solo_activos: bool) -> Result<Vec<Ruta>, DatabaseError> {
-        SqliteRutaRepository::new(&self.connection).listar(solo_activos)
+    /// Para la grilla de administración -- trae activas y dadas de baja.
+    /// `listar_rutas_seleccionables` es la contraparte para el checklist
+    /// mobile -- la decisión vive en `RutaCatalogoService`.
+    pub fn listar_rutas(&self) -> Result<Vec<Ruta>, RutaCatalogoServiceError> {
+        let repositorio = SqliteRutaRepository::new(&self.connection);
+        RutaCatalogoService::new(&repositorio).listar()
     }
 
-    /// Sin `actor`, mismo criterio que `listar_rutas` -- lectura. Pensado
-    /// para el buscador del checklist mobile (número parcial). `solo_activos`:
-    /// ver doc-comment de `EmpresaProveedorRepository::listar`.
-    pub fn buscar_rutas(&self, texto: &str, solo_activos: bool) -> Result<Vec<Ruta>, DatabaseError> {
-        SqliteRutaRepository::new(&self.connection).buscar(texto, solo_activos)
+    pub fn listar_rutas_seleccionables(&self) -> Result<Vec<Ruta>, RutaCatalogoServiceError> {
+        let repositorio = SqliteRutaRepository::new(&self.connection);
+        RutaCatalogoService::new(&repositorio).listar_seleccionables()
+    }
+
+    /// Sin `actor`, mismo criterio que `listar_rutas` -- lectura. Buscador
+    /// de la grilla de administración (número parcial).
+    /// `buscar_rutas_seleccionables` es la contraparte para el checklist
+    /// mobile.
+    pub fn buscar_rutas(&self, texto: &str) -> Result<Vec<Ruta>, RutaCatalogoServiceError> {
+        let repositorio = SqliteRutaRepository::new(&self.connection);
+        RutaCatalogoService::new(&repositorio).buscar(texto)
+    }
+
+    pub fn buscar_rutas_seleccionables(&self, texto: &str) -> Result<Vec<Ruta>, RutaCatalogoServiceError> {
+        let repositorio = SqliteRutaRepository::new(&self.connection);
+        RutaCatalogoService::new(&repositorio).buscar_seleccionables(texto)
     }
 
     pub fn crear_ruta(
@@ -362,6 +396,7 @@ fn verificar_operador_activo(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::database::repositories::ruta_repository::RutaRepository;
     use crate::database::schema::initialize_database;
     use crate::services::autenticacion_service::UsuarioSesion;
     use crate::tiempo::RelojFijo;
@@ -459,7 +494,7 @@ mod tests {
         )
         .unwrap();
 
-        let vehiculos = core.listar_vehiculos_ruta(false).unwrap();
+        let vehiculos = core.listar_vehiculos_ruta().unwrap();
         assert_eq!(vehiculos.len(), 1);
         assert_eq!(vehiculos[0].placa, "C12345");
     }
@@ -480,7 +515,7 @@ mod tests {
         )
         .unwrap();
 
-        let encargados = core.listar_encargados_ruta(false).unwrap();
+        let encargados = core.listar_encargados_ruta().unwrap();
         assert_eq!(encargados.len(), 1);
         assert_eq!(encargados[0].codigo_empleado, "5040017");
     }
@@ -500,9 +535,9 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(core.buscar_encargados_ruta("araya", false).unwrap().len(), 1);
-        assert_eq!(core.buscar_encargados_ruta("5040", false).unwrap().len(), 1);
-        assert!(core.buscar_encargados_ruta("nadie", false).unwrap().is_empty());
+        assert_eq!(core.buscar_encargados_ruta("araya").unwrap().len(), 1);
+        assert_eq!(core.buscar_encargados_ruta("5040").unwrap().len(), 1);
+        assert!(core.buscar_encargados_ruta("nadie").unwrap().is_empty());
     }
 
     #[test]
@@ -510,8 +545,8 @@ mod tests {
         let (core, _actor) = nucleo_con_usuario();
 
         // La 79 ya existe (fixture).
-        assert_eq!(core.buscar_rutas("79", false).unwrap().len(), 1);
-        assert!(core.buscar_rutas("222", false).unwrap().is_empty());
+        assert_eq!(core.buscar_rutas("79").unwrap().len(), 1);
+        assert!(core.buscar_rutas("222").unwrap().is_empty());
     }
 
     #[test]
@@ -541,7 +576,7 @@ mod tests {
 
         core.crear_ruta(&actor, 120).unwrap();
 
-        let rutas = core.listar_rutas(false).unwrap();
+        let rutas = core.listar_rutas().unwrap();
         assert_eq!(rutas.len(), 2, "79 (del fixture) + 120");
         assert!(rutas.iter().any(|r| r.numero == 120));
     }
@@ -560,7 +595,7 @@ mod tests {
         let error = core.crear_rutas_rango(&actor, 78, 80).unwrap_err();
 
         assert!(matches!(error, RutaCatalogoServiceError::NumeroDuplicado));
-        let rutas = core.listar_rutas(false).unwrap();
+        let rutas = core.listar_rutas().unwrap();
         assert_eq!(
             rutas.iter().map(|r| r.numero).collect::<Vec<_>>(),
             vec![79],
@@ -575,14 +610,14 @@ mod tests {
         let ids = core.crear_rutas_rango(&actor, 100, 102).unwrap();
 
         assert_eq!(ids.len(), 3);
-        assert_eq!(core.listar_rutas(false).unwrap().len(), 4, "79 (fixture) + 3");
+        assert_eq!(core.listar_rutas().unwrap().len(), 4, "79 (fixture) + 3");
     }
 
     #[test]
     fn dar_de_baja_y_reactivar_ruta_redondean_el_viaje() {
         let (core, actor) = nucleo_con_usuario();
         let ruta_id = core
-            .listar_rutas(false)
+            .listar_rutas()
             .unwrap()
             .into_iter()
             .find(|r| r.numero == 79)
@@ -590,10 +625,10 @@ mod tests {
             .id;
 
         core.dar_de_baja_ruta(&actor, ruta_id).unwrap();
-        assert!(!core.listar_rutas(false).unwrap()[0].activo);
+        assert!(!core.listar_rutas().unwrap()[0].activo);
 
         core.reactivar_ruta(&actor, ruta_id).unwrap();
-        assert!(core.listar_rutas(false).unwrap()[0].activo);
+        assert!(core.listar_rutas().unwrap()[0].activo);
     }
 
     #[test]
@@ -601,7 +636,7 @@ mod tests {
         let (core, actor) = nucleo_con_usuario();
         core.registrar_salida_ruta(&actor, solicitud("C12345", "700101452"))
             .unwrap();
-        let ruta_id = core.listar_rutas(false).unwrap()[0].id;
+        let ruta_id = core.listar_rutas().unwrap()[0].id;
 
         let error = core.dar_de_baja_ruta(&actor, ruta_id).unwrap_err();
 

@@ -14,17 +14,27 @@ use crate::estado::GuiState;
 // ---- Catálogo: vehículos ----
 
 #[tauri::command]
-pub fn listar_vehiculos_ruta(
-    solo_activos: bool,
-    state: tauri::State<GuiState>,
-) -> Result<Vec<VehiculoRuta>, String> {
+pub fn listar_vehiculos_ruta(state: tauri::State<GuiState>) -> Result<Vec<VehiculoRuta>, String> {
     state.sesion_activa()?;
     // Sin `mensaje_*` propio a propósito, mismo criterio que
     // `listar_visitas_activas`: es una lectura simple que devuelve
     // `DatabaseError` directo, no un `*ServiceError` de negocio.
     state
         .core()
-        .listar_vehiculos_ruta(solo_activos)
+        .listar_vehiculos_ruta()
+        .map_err(|_| "No se pudo cargar la lista de vehículos".to_string())
+}
+
+/// Para el selector de salida de ruta -- un vehículo desactivado nunca es
+/// una opción válida, ver `VehiculoRutaService::listar_seleccionables`.
+#[tauri::command]
+pub fn listar_vehiculos_ruta_seleccionables(
+    state: tauri::State<GuiState>,
+) -> Result<Vec<VehiculoRuta>, String> {
+    state.sesion_activa()?;
+    state
+        .core()
+        .listar_vehiculos_ruta_seleccionables()
         .map_err(|_| "No se pudo cargar la lista de vehículos".to_string())
 }
 
@@ -56,14 +66,25 @@ pub fn actualizar_vehiculo_ruta(
 // ---- Catálogo: encargados (personal KOF) ----
 
 #[tauri::command]
-pub fn listar_encargados_ruta(
-    solo_activos: bool,
+pub fn listar_encargados_ruta(state: tauri::State<GuiState>) -> Result<Vec<EncargadoRuta>, String> {
+    state.sesion_activa()?;
+    state
+        .core()
+        .listar_encargados_ruta()
+        .map_err(|_| "No se pudo cargar la lista de encargados".to_string())
+}
+
+/// Para un selector de wizard (entrega de gafete provisional, salida de
+/// ruta) -- un encargado desactivado nunca es una opción válida, ver
+/// `EncargadoRutaService::listar_seleccionables`.
+#[tauri::command]
+pub fn listar_encargados_ruta_seleccionables(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<EncargadoRuta>, String> {
     state.sesion_activa()?;
     state
         .core()
-        .listar_encargados_ruta(solo_activos)
+        .listar_encargados_ruta_seleccionables()
         .map_err(|_| "No se pudo cargar la lista de encargados".to_string())
 }
 
@@ -95,14 +116,22 @@ pub fn actualizar_encargado_ruta(
 // ---- Catálogo: números de ruta ----
 
 #[tauri::command]
-pub fn listar_rutas(
-    solo_activos: bool,
-    state: tauri::State<GuiState>,
-) -> Result<Vec<Ruta>, String> {
+pub fn listar_rutas(state: tauri::State<GuiState>) -> Result<Vec<Ruta>, String> {
     state.sesion_activa()?;
     state
         .core()
-        .listar_rutas(solo_activos)
+        .listar_rutas()
+        .map_err(|_| "No se pudo cargar la lista de rutas".to_string())
+}
+
+/// Para el selector de salida de ruta -- una ruta dada de baja nunca es una
+/// opción válida, ver `RutaCatalogoService::listar_seleccionables`.
+#[tauri::command]
+pub fn listar_rutas_seleccionables(state: tauri::State<GuiState>) -> Result<Vec<Ruta>, String> {
+    state.sesion_activa()?;
+    state
+        .core()
+        .listar_rutas_seleccionables()
         .map_err(|_| "No se pudo cargar la lista de rutas".to_string())
 }
 

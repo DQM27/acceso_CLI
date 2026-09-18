@@ -36,20 +36,21 @@ export interface SolicitudIngresoProveedor {
   gafete_numero: number;
 }
 
-/** `soloActivos`: el núcleo filtra directamente (ver
- * `EmpresaProveedorRepository::listar`) -- un selector de un wizard (elegir
- * empresa para un ingreso nuevo) debe pedir `true`; la grilla de
- * administración (activar/desactivar) pide `false` para poder ver y
- * reactivar las inactivas. */
-export function listarEmpresasProveedor(soloActivos: boolean): Promise<EmpresaProveedor[]> {
-  return invoke("listar_empresas_proveedor", { soloActivos });
+/** Para la grilla de administración -- trae activas e inactivas, así se
+ * puede reactivar una. `listarEmpresasProveedorSeleccionables` es la
+ * contraparte para un selector de wizard (elegir empresa para un ingreso
+ * nuevo), donde una empresa inactiva nunca es una opción válida -- esa
+ * decisión la toma el núcleo (`EmpresaProveedorService`), no quien llama. */
+export function listarEmpresasProveedor(): Promise<EmpresaProveedor[]> {
+  return invoke("listar_empresas_proveedor");
 }
 
-export function buscarEmpresasProveedor(
-  texto: string,
-  soloActivos: boolean,
-): Promise<EmpresaProveedor[]> {
-  return invoke("buscar_empresas_proveedor", { texto, soloActivos });
+export function listarEmpresasProveedorSeleccionables(): Promise<EmpresaProveedor[]> {
+  return invoke("listar_empresas_proveedor_seleccionables");
+}
+
+export function buscarEmpresasProveedor(texto: string): Promise<EmpresaProveedor[]> {
+  return invoke("buscar_empresas_proveedor", { texto });
 }
 
 export async function crearEmpresaProveedor(nombre: string): Promise<number> {

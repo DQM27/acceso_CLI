@@ -89,26 +89,38 @@ fn proveedor_activo_en_otro_sitio(state: &GuiState, cedula: &str) -> Option<Stri
 
 #[tauri::command]
 pub fn listar_empresas_proveedor(
-    solo_activos: bool,
     state: tauri::State<GuiState>,
 ) -> Result<Vec<EmpresaProveedor>, String> {
     state.sesion_activa()?;
     state
         .core()
-        .listar_empresas_proveedor(solo_activos)
+        .listar_empresas_proveedor()
+        .map_err(|_| "No se pudo cargar la lista de empresas".to_string())
+}
+
+/// Para un selector de wizard (elegir empresa para un ingreso nuevo) -- una
+/// empresa desactivada nunca es una opción válida, ver
+/// `EmpresaProveedorService::listar_seleccionables`.
+#[tauri::command]
+pub fn listar_empresas_proveedor_seleccionables(
+    state: tauri::State<GuiState>,
+) -> Result<Vec<EmpresaProveedor>, String> {
+    state.sesion_activa()?;
+    state
+        .core()
+        .listar_empresas_proveedor_seleccionables()
         .map_err(|_| "No se pudo cargar la lista de empresas".to_string())
 }
 
 #[tauri::command]
 pub fn buscar_empresas_proveedor(
     texto: String,
-    solo_activos: bool,
     state: tauri::State<GuiState>,
 ) -> Result<Vec<EmpresaProveedor>, String> {
     state.sesion_activa()?;
     state
         .core()
-        .buscar_empresas_proveedor(&texto, solo_activos)
+        .buscar_empresas_proveedor(&texto)
         .map_err(|_| "No se pudo cargar la lista de empresas".to_string())
 }
 
