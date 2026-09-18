@@ -340,7 +340,11 @@ fn procesar_fila_individual(
             // `pendientes()` la vuelva a considerar más adelante, sujeta
             // al backoff según cuántas veces ya falló.
             let agota_reintentos = fila.intentos + 1 >= INTENTOS_ANTES_DE_FALLO_PERMANENTE;
-            let estado = if agota_reintentos { "fallido" } else { "pendiente" };
+            let estado = if agota_reintentos {
+                "fallido"
+            } else {
+                "pendiente"
+            };
             // Antes esto sólo quedaba en `ultimo_error` (columna de la
             // propia fila) -- nadie se enteraba salvo que fuera a mirar la
             // cola a mano. Ver

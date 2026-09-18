@@ -222,16 +222,38 @@ mod dpapi {
     }
 }
 
-/// Resuelve `%LOCALAPPDATA%\ControlAcceso`. `None` si la variable de
-/// entorno no está definida o no es una ruta absoluta — mismo criterio de
-/// `PreferencesStore::load_default`.
-fn directorio_default() -> Option<PathBuf> {
-    let root = std::env::var_os(crate::database::connection::LOCAL_APP_DATA_ENV)?;
+/// Variable de entorno del perfil "roaming" de Windows -- deliberadamente
+/// DISTINTA de `LOCAL_APP_DATA_ENV` (donde vive `control_acceso.db`, ver
+/// `database::connection`). Hasta 2026-09-18 este secreto vivía en la misma
+/// carpeta que la base: un evento que corrompe/borra esa carpeta (disco,
+/// reinstalación que hace `rd /s` sobre ella) se llevaba puesto también el
+/// secreto que autentica a este dispositivo -- la "recuperación" dejaba de
+/// ser "reconstruir desde la nube" y pasaba a ser "este dispositivo ya no
+/// puede ni pedir sus propios datos" (ver `docs/recuperacion-sitio-local.md`).
+/// `%APPDATA%` es un árbol de directorios distinto de `%LOCALAPPDATA%` --
+/// borrar/corromper la carpeta local de la app no lo toca. Mismo criterio
+/// aplicado a `db_key.dat` en `desktop/src-tauri/src/clave_cifrado.rs`
+/// (misma carpeta, mismo motivo).
+pub const ROAMING_APP_DATA_ENV: &str = "APPDATA";
+
+/// Público para que `desktop/src-tauri` pueda resolver la MISMA carpeta al
+/// guardar `db_key.dat` -- ambos secretos separados de la base, pero juntos
+/// entre sí no reintroduce el problema: lo que importa es no compartir
+/// carpeta con `control_acceso.db`, no aislarse mutuamente (ninguno de los
+/// dos expone nada si se copian juntos -- DPAPI liga cada uno al usuario de
+/// Windows que lo creó).
+#[must_use]
+pub fn directorio_credenciales_roaming() -> Option<PathBuf> {
+    let root = std::env::var_os(ROAMING_APP_DATA_ENV)?;
     let root = PathBuf::from(root);
     if !root.is_absolute() {
         return None;
     }
     Some(root.join("ControlAcceso"))
+}
+
+fn directorio_default() -> Option<PathBuf> {
+    directorio_credenciales_roaming()
 }
 
 /// Machine GUID de Windows -- ya NO se usa para derivar ninguna clave de
@@ -244,15 +266,15 @@ pub fn identificador_de_esta_maquina() -> Option<String> {
     machine_uid::get().ok()
 }
 
-/// Sólo válido en escritorio, donde `%LOCALAPPDATA%` existe. En Android no
-/// hay esa variable de entorno — el lado móvil usa
+/// Sólo válido en escritorio, donde `%APPDATA%` existe. En Android no hay
+/// esa variable de entorno — el lado móvil usa
 /// [`guardar_secreto_en_con_identificador`]/[`cargar_secreto_en_con_identificador`]
 /// con el directorio que ya le pasa Kotlin para abrir la base `SQLite`
 /// (mismo criterio, misma carpeta) y con `Settings.Secure.ANDROID_ID` como
 /// identificador.
 pub fn guardar_secreto(secreto: &str) -> io::Result<()> {
-    let directorio = directorio_default()
-        .ok_or_else(|| io::Error::other("no se pudo resolver %LOCALAPPDATA%"))?;
+    let directorio =
+        directorio_default().ok_or_else(|| io::Error::other("no se pudo resolver %APPDATA%"))?;
     guardar_secreto_en(&directorio, secreto)
 }
 

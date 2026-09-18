@@ -174,15 +174,26 @@ fn preparar_nucleo() -> (PathBuf, InstanciaGuard, Zeroizing<[u8; 32]>, AppCore) 
     // adivinable (Machine GUID, usuario, MAC...) -- 32 bytes aleatorios,
     // generados una sola vez y protegidos en disco con DPAPI (scope del
     // usuario actual de Windows). Ver `clave_cifrado.rs` para el porqué.
-    let directorio_base_datos = ruta_base_datos.parent().unwrap_or_else(|| {
-        mostrar_error_fatal_y_salir("No se pudo resolver el directorio de la base de datos")
-    });
-    let clave_base_datos = clave_cifrado::resolver_clave(directorio_base_datos, &ruta_base_datos)
-        .unwrap_or_else(|error| {
-            mostrar_error_fatal_y_salir(&format!(
-                "No se pudo resolver la clave de cifrado de la base de datos: {error}"
-            ))
-        });
+    //
+    // Deliberadamente NO vive en la misma carpeta que `control_acceso.db`
+    // (`directorio_base_datos`, `%LOCALAPPDATA%`) desde 2026-09-18: un
+    // evento que corrompe/borra esa carpeta se llevaba puesto tanto la
+    // clave como el secreto de dispositivo (ver
+    // `control_acceso::nube::credenciales::directorio_credenciales_roaming`
+    // y `docs/recuperacion-sitio-local.md`). `%APPDATA%` es un árbol
+    // separado -- mismo motivo, misma carpeta que ese secreto.
+    let directorio_credenciales =
+        control_acceso::nube::credenciales::directorio_credenciales_roaming().unwrap_or_else(
+            || mostrar_error_fatal_y_salir("No se pudo resolver el directorio %APPDATA%"),
+        );
+    let clave_base_datos =
+        clave_cifrado::resolver_clave(&directorio_credenciales, &ruta_base_datos).unwrap_or_else(
+            |error| {
+                mostrar_error_fatal_y_salir(&format!(
+                    "No se pudo resolver la clave de cifrado de la base de datos: {error}"
+                ))
+            },
+        );
     // `RelojCorregido`, no `RelojSistema`: en equipos cuyo reloj de Windows
     // no se puede corregir (visto en producción, ~11 min adelantado y sin
     // sincronizar), cada autenticación contra la nube mide el desfase real
