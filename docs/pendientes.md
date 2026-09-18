@@ -320,6 +320,29 @@ aspiracional -- lo que sigue sin marcar todavía no corrió.
   (no falla el job), semanal + al tocar algún `Cargo.toml`/`Cargo.lock` en
   `main`. Mismo caveat que `zizmor`: no se pudo probar localmente (mismo
   límite del sandbox), verificar el primer run.
+- [ ] **4 upgrades de Dependabot deliberadamente NO mergeados (2026-09-18) --
+  cada uno rompe la compilación, revisar con calma antes de intentarlos de
+  nuevo.** El primer escaneo de Dependabot agrupó parches inofensivos junto
+  con saltos de versión mayores en el mismo PR; se cerraron los 3 PRs de
+  grupo (`cargo-raiz`, `cargo-desktop`) y se pidió con
+  `@dependabot ignore <paquete> major version` que el próximo ciclo los
+  regenere sin estos 4 paquetes, hasta que se decida encararlos:
+  - **`jsonwebtoken` 9.3.1 → 11.0.0** (`src/nube/`, firma/valida tokens de
+    `device-auth`) -- API rota entre v9 y v11 (elegir crypto backend,
+    `EncodingKey`/`DecodingKey` renombrados). Código de seguridad crítico,
+    no forzar un merge de grupo.
+  - **`argon2` 0.5.3 → 0.6.0** (`src/services/password.rs`, hash de
+    contraseñas) -- rompe en compilación real:
+    `argon2::password_hash::SaltString`/`rand_core` cambiaron de módulo,
+    `Error::Password` ya no existe. Mismo criterio que `jsonwebtoken`.
+  - **`sentry` 0.36.0 → 0.49.2** (`desktop/src-tauri`) -- elimina el campo
+    `ClientOptions.traces_sample_rate` que se usa en
+    `inicializar_sentry()` (ver punto 5.4 de
+    `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`).
+  - **`webview2-com` 0.38.2 → 0.39.1** (`desktop/src-tauri`, junto con
+    `windows` 0.61.3 → 0.62.2 en el mismo grupo) -- rompe con
+    `.cast()` ya no disponible en `ICoreWebView2` y un struct que dejó de
+    ser exhaustive.
 
 ## Panel web y modelo multi-sitio
 
