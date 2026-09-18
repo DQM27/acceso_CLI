@@ -168,9 +168,11 @@ multiple_unsafe_ops_per_block = "deny"
 webview2-com = "=0.38.2"
 # "Win32_Security_Cryptography"/"Win32_Foundation": DPAPI (CryptProtectData/
 # CryptUnprotectData) para proteger la clave de SQLCipher en disco -- ver
-# clave_cifrado.rs.
+# clave_cifrado.rs. Ya NO trae "Win32_UI_WindowsAndMessaging" -- los
+# diálogos nativos (mostrar_error_fatal_y_salir/confirmar_reconstruccion_desde_nube
+# en lib.rs) dejaron el MessageBoxW crudo (feo, look de Windows 95) por
+# rfd, que en Windows usa TaskDialogIndirect (el diálogo moderno).
 windows = { version = "=0.61.3", features = [
-    "Win32_UI_WindowsAndMessaging",
     "Win32_Security_Cryptography",
     "Win32_Foundation",
 ] }
@@ -179,6 +181,11 @@ windows = { version = "=0.61.3", features = [
 # apenas se usa (zeroize) -- ver clave_cifrado.rs.
 rand_core = { version = "0.6", features = ["getrandom"] }
 zeroize = "1"
+# Mismo diálogo nativo que ya usa tauri-plugin-dialog por debajo (pineado a
+# la misma versión para no duplicarlo en el árbol) -- acá se llama standalone,
+# sin AppHandle, porque estos dos diálogos corren ANTES de que exista
+# tauri::Builder (ver preparar_nucleo/mostrar_error_fatal_y_salir).
+rfd = "=0.16.0"
 
 [profile.release]
 opt-level = 3
