@@ -81,7 +81,7 @@ tauri-plugin-process = "2"
 # default) además de los envíos explícitos en `iniciar_sincronizacion_automatica`.
 # `traces_sample_rate = 0.0` en la init: solo error-tracking, sin performance
 # tracing (evita gastar cuota del plan gratis en algo que no se usa).
-sentry = "0.36"
+sentry = "0.49"
 url = "=2.5.8"
 tokio = { version = "=1.53.1", features = ["sync", "time"] }
 
@@ -165,11 +165,11 @@ multiple_unsafe_ops_per_block = "deny"
 # motor de tipografía nuevo (ver docs/pendientes.md). Versiones
 # fijadas a lo que `wry` ya trae transitivamente (ver Cargo.lock) — dos
 # copias de estas crates en el árbol sería un dolor de cabeza innecesario.
-webview2-com = "=0.38.2"
+webview2-com = "=0.39.1"
 # "Win32_Security_Cryptography"/"Win32_Foundation": DPAPI (CryptProtectData/
 # CryptUnprotectData) para proteger la clave de SQLCipher en disco -- ver
 # clave_cifrado.rs.
-windows = { version = "=0.61.3", features = [
+windows = { version = "=0.62.2", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_Security_Cryptography",
     "Win32_Foundation",
