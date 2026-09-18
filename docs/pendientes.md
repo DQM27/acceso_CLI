@@ -302,6 +302,24 @@ aspiracional -- lo que sigue sin marcar todavía no corrió.
   exposición real a inyección/XSS). El núcleo Rust queda fuera de este
   workflow a propósito -- clippy + `cargo-audit` ya lo cubren y el soporte
   de CodeQL para Rust no es lo bastante maduro todavía para este flujo.
+- [x] **`zizmor` -- seguridad de los propios workflows de GitHub Actions
+  (2026-09-17).** `.github/workflows/zizmor.yml` -- ninguna de las
+  herramientas de arriba mira el YAML de CI en sí; `zizmor` busca patrones
+  de inyección de comandos vía inputs no confiables (ej. título/body de un
+  PR ejecutándose sin querer dentro de un `run:`). SARIF a la pestaña
+  Security, push/PR a `main` + cron semanal. No se pudo compilar/correr
+  localmente para probarlo antes de commitear (el `cargo install` se cortó
+  solo por límite del sandbox de esta sesión, no un problema real del
+  crate) -- usa el método oficial (`pipx run zizmor`, ubuntu-latest ya trae
+  `pipx`), verificar que el primer run en CI pase en verde.
+- [x] **`cargo-geiger` -- superficie de `unsafe` en dependencias
+  (2026-09-17).** `.github/workflows/cargo-geiger.yml` -- audita `unsafe`
+  en TODO el árbol de dependencias de los 3 crates, no sólo el código
+  propio (eso ya lo cubren `undocumented_unsafe_blocks`/
+  `multiple_unsafe_ops_per_block` en cada `Cargo.toml`). Sólo informativo
+  (no falla el job), semanal + al tocar algún `Cargo.toml`/`Cargo.lock` en
+  `main`. Mismo caveat que `zizmor`: no se pudo probar localmente (mismo
+  límite del sandbox), verificar el primer run.
 
 ## Panel web y modelo multi-sitio
 
