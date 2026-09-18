@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -15,6 +15,8 @@ mod comandos;
 mod dto;
 mod estado;
 mod pdf;
+#[cfg(windows)]
+mod recuperacion_local;
 
 use estado::GuiState;
 
@@ -154,6 +156,114 @@ fn mostrar_error_fatal_y_salir(mensaje: &str) -> ! {
     std::process::exit(1)
 }
 
+/// Resuelve la clave y abre `AppCore` una vez -- sin recuperación, eso vive
+/// en `abrir_nucleo_con_recuperacion`. Unifica el error de `resolver_clave`
+/// (`ErrorClaveBaseDatos`) y el de `abrir_con_reloj_cifrado`
+/// (`BootstrapError`) a `String` porque a quien llama sólo le interesa
+/// mostrarlo/reintentar, no distinguir de cuál de los dos vino.
+#[cfg(windows)]
+fn intentar_abrir_nucleo(
+    directorio_credenciales: &Path,
+    ruta_base_datos: &Path,
+) -> Result<(Zeroizing<[u8; 32]>, AppCore), String> {
+    let clave = clave_cifrado::resolver_clave(directorio_credenciales, ruta_base_datos)
+        .map_err(|error| error.to_string())?;
+    // `RelojCorregido`, no `RelojSistema`: en equipos cuyo reloj de Windows
+    // no se puede corregir (visto en producción, ~11 min adelantado y sin
+    // sincronizar), cada autenticación contra la nube mide el desfase real
+    // contra el receptor y lo aplica acá -- ver
+    // `application::nube::AppCore::actualizar_desfase_reloj`. Sin nube
+    // configurada nunca se mide nada y este reloj se comporta igual que
+    // `RelojSistema`.
+    let core = AppCore::abrir_con_reloj_cifrado(
+        ruta_base_datos,
+        &clave,
+        Arc::new(RelojCorregido::nuevo()),
+    )
+    .map_err(|error| error.to_string())?;
+    Ok((clave, core))
+}
+
+/// Diálogo nativo Sí/No: ofrece reconstruir el sitio desde la nube tras un
+/// fallo real de apertura (ver `intentar_abrir_nucleo`). No expone el error
+/// técnico crudo -- mismo criterio que `mensajes::mensaje_*`, eso ya quedó
+/// en el log/Sentry (`abrir_nucleo_con_recuperacion`).
+#[cfg(windows)]
+fn confirmar_reconstruccion_desde_nube() -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::{IDYES, MB_ICONWARNING, MB_YESNO, MessageBoxW};
+    use windows::core::HSTRING;
+
+    let texto = HSTRING::from(
+        "No se pudo abrir la base de datos local de este sitio (posible corrupción).\n\n\
+         ¿Reconstruirla desde la nube?\n\n\
+         Se va a perder, de forma permanente, el historial de auditoría y de \
+         incidentes de gafetes de ESTE dispositivo, y cualquier operación \
+         reciente que todavía no se hubiera subido. Todo lo demás \
+         (contratistas, ingresos, gafetes, rutas, préstamos, etc.) se vuelve \
+         a bajar solo, sin pasos adicionales.\n\n\
+         Se guarda una copia del archivo dañado por si se puede rescatar más \
+         adelante.",
+    );
+    let titulo = HSTRING::from("Control de Acceso — Base de datos dañada");
+    // SAFETY: mismo criterio que `mostrar_error_fatal_y_salir` -- `HSTRING`
+    // válidas y vivas hasta el final del bloque; `None` como `hwnd` es
+    // válido sin ventana padre.
+    let resultado = unsafe { MessageBoxW(None, &texto, &titulo, MB_YESNO | MB_ICONWARNING) };
+    resultado == IDYES
+}
+
+/// En cualquier plataforma sin este diálogo (no debería alcanzarse -- la
+/// app es Windows-only, ver el resto de este archivo), la respuesta segura
+/// por defecto es no destruir nada.
+#[cfg(not(windows))]
+fn confirmar_reconstruccion_desde_nube() -> bool {
+    false
+}
+
+/// Envoltorio de `intentar_abrir_nucleo` con un único reintento tras
+/// ofrecer reconstruir desde la nube -- ver
+/// `docs/recuperacion-sitio-local.md`. Separada de `preparar_nucleo` por el
+/// mismo motivo que el resto de las funciones de esta sección (tope de
+/// líneas de Clippy).
+fn abrir_nucleo_con_recuperacion(
+    directorio_credenciales: &Path,
+    ruta_base_datos: &Path,
+) -> (Zeroizing<[u8; 32]>, AppCore) {
+    #[cfg(not(windows))]
+    {
+        intentar_abrir_nucleo(directorio_credenciales, ruta_base_datos)
+            .unwrap_or_else(|error| mostrar_error_fatal_y_salir(&error))
+    }
+    #[cfg(windows)]
+    {
+        let error_original = match intentar_abrir_nucleo(directorio_credenciales, ruta_base_datos) {
+            Ok(resultado) => return resultado,
+            Err(error) => error,
+        };
+        log::error!("no se pudo abrir la base de datos local: {error_original}");
+        sentry::capture_message(
+            &format!("no se pudo abrir la base de datos local: {error_original}"),
+            sentry::Level::Error,
+        );
+        if !confirmar_reconstruccion_desde_nube() {
+            mostrar_error_fatal_y_salir(&error_original);
+        }
+        if let Err(error) = recuperacion_local::poner_en_cuarentena_y_reiniciar(
+            ruta_base_datos,
+            directorio_credenciales,
+        ) {
+            mostrar_error_fatal_y_salir(&format!(
+                "No se pudo preparar el sitio para reconstruirlo: {error}"
+            ));
+        }
+        intentar_abrir_nucleo(directorio_credenciales, ruta_base_datos).unwrap_or_else(|error| {
+            mostrar_error_fatal_y_salir(&format!(
+                "Tampoco se pudo crear una base nueva tras reconstruir: {error}"
+            ))
+        })
+    }
+}
+
 /// Resuelve ruta/candado de instancia/clave de cifrado y abre `AppCore` --
 /// separado de `run()` únicamente para mantenerla bajo el tope de líneas de
 /// Clippy (`too_many_lines`); sin lógica propia, es el mismo arranque que
@@ -186,29 +296,8 @@ fn preparar_nucleo() -> (PathBuf, InstanciaGuard, Zeroizing<[u8; 32]>, AppCore) 
         control_acceso::nube::credenciales::directorio_credenciales_roaming().unwrap_or_else(
             || mostrar_error_fatal_y_salir("No se pudo resolver el directorio %APPDATA%"),
         );
-    let clave_base_datos =
-        clave_cifrado::resolver_clave(&directorio_credenciales, &ruta_base_datos).unwrap_or_else(
-            |error| {
-                mostrar_error_fatal_y_salir(&format!(
-                    "No se pudo resolver la clave de cifrado de la base de datos: {error}"
-                ))
-            },
-        );
-    // `RelojCorregido`, no `RelojSistema`: en equipos cuyo reloj de Windows
-    // no se puede corregir (visto en producción, ~11 min adelantado y sin
-    // sincronizar), cada autenticación contra la nube mide el desfase real
-    // contra el receptor y lo aplica acá -- ver
-    // `application::nube::AppCore::actualizar_desfase_reloj`. Sin nube
-    // configurada nunca se mide nada y este reloj se comporta igual que
-    // `RelojSistema`.
-    let mut core = AppCore::abrir_con_reloj_cifrado(
-        &ruta_base_datos,
-        &clave_base_datos,
-        Arc::new(RelojCorregido::nuevo()),
-    )
-    .unwrap_or_else(|error| {
-        mostrar_error_fatal_y_salir(&format!("No se pudo abrir la base de datos: {error}"))
-    });
+    let (clave_base_datos, mut core) =
+        abrir_nucleo_con_recuperacion(&directorio_credenciales, &ruta_base_datos);
     // Para que el receptor pueda aplicar `VERSION_MINIMA_ACEPTADA` en
     // cualquier renovación de token, no sólo al activar el dispositivo --
     // ver `AppCore::establecer_version_app` y

@@ -35,7 +35,10 @@ use windows::Win32::Security::Cryptography::{
 };
 use zeroize::Zeroizing;
 
-const NOMBRE_ARCHIVO_CLAVE: &str = "db_key.dat";
+/// `pub(crate)` para que `recuperacion_local` sepa qué archivo poner en
+/// cuarentena junto con `control_acceso.db` -- una sola fuente de verdad
+/// para el nombre, en vez de repetir el literal.
+pub const NOMBRE_ARCHIVO_CLAVE: &str = "db_key.dat";
 const LONGITUD_CLAVE: usize = 32;
 
 #[derive(Debug, thiserror::Error)]

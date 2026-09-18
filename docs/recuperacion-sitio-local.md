@@ -32,7 +32,41 @@ la misma puerta de entrada, con la misma autorización de administrador,
 que dar de alta un dispositivo nuevo desde cero. No hay un camino más
 débil escondido para el caso de emergencia.
 
-## Procedimiento
+## Detección y cuarentena automáticas (escritorio, 2026-09-18)
+
+Ya no hace falta seguir el procedimiento de abajo a mano desde el primer
+síntoma. Si `AppCore::abrir_con_reloj_cifrado` o `clave_cifrado::resolver_clave`
+fallan al arrancar, la app:
+
+1. Loguea el error técnico real y lo manda a Sentry.
+2. Muestra un diálogo nativo Sí/No: ofrece reconstruir desde la nube,
+   explicando qué se pierde (auditoría/incidentes/lo que no llegó a subir).
+3. Si el usuario dice que sí: copia `control_acceso.db` y `db_key.dat` (el
+   que exista de los dos) a
+   `<carpeta de la base>\respaldos-corruptos\<timestamp>\` -- para un
+   rescate manual posterior con herramientas de recuperación de `SQLite`,
+   sin garantía de que sirva pero sin costo real de intentarlo -- y borra
+   los originales.
+4. Reintenta abrir una vez más. Como ya no quedan `control_acceso.db` ni
+   `db_key.dat`, esto crea una base nueva y una clave nueva, exactamente el
+   mismo camino que un sitio nunca activado -- de ahí en adelante sigue el
+   flujo normal de "requiere configuración inicial" (activar con secreto de
+   dispositivo, pantalla ya existente, sin código nuevo).
+5. Si el usuario dice que no, o si el reintento del paso 4 también falla,
+   se muestra el error fatal de siempre (mismo mensaje/log/Sentry que
+   cualquier otro fallo de arranque).
+
+El secreto de dispositivo (`dispositivo-nube.secret`) NO se toca en este
+proceso -- sigue en `%APPDATA%`, separado desde el fix de arriba. En el
+caso más común (se corrompió sólo la base, no todo el perfil), el
+dispositivo puede reactivarse con su secreto de siempre en la pantalla de
+configuración inicial, sin que un administrador tenga que intervenir.
+
+Implementación: `desktop/src-tauri/src/recuperacion_local.rs` (cuarentena +
+borrado, con tests) y `desktop/src-tauri/src/lib.rs`
+(`abrir_nucleo_con_recuperacion`/`confirmar_reconstruccion_desde_nube`).
+
+## Procedimiento (manual, si el diálogo automático no aplica)
 
 1. **Si el dispositivo viejo todavía es alcanzable de algún modo** (ej. el
    disco murió pero se pudo copiar el secreto antes), revocarlo con
