@@ -88,7 +88,7 @@ jobs:
         with:
           projectPath: desktop
           tagName: ${{ inputs.version || github.ref_name }}
-          releaseName: "Control de Acceso Brisas ${{ inputs.version || github.ref_name }}"
+          releaseName: "Lattis ${{ inputs.version || github.ref_name }}"
           releaseBody: "Ver desktop/docs/pendientes.md / CHANGELOG en el repo para el detalle de esta versión."
           # Borrador sólo en el disparo manual de emergencia (workflow_dispatch,
           # puede correr sobre una rama sin mergear/revisar del todo) -- un
@@ -187,14 +187,14 @@ jobs:
         run: ./gradlew assembleRelease
 
       - name: Preparar el APK para la Release
-        run: cp mobile/android/app/build/outputs/apk/release/app-release.apk ControlAcceso-Brisas-${{ inputs.version || github.ref_name }}.apk
+        run: cp mobile/android/app/build/outputs/apk/release/app-release.apk Lattis-${{ inputs.version || github.ref_name }}.apk
 
       - name: Adjuntar el APK a la Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ inputs.version || github.ref_name }}
-          name: "Control de Acceso Brisas ${{ inputs.version || github.ref_name }}"
+          name: "Lattis ${{ inputs.version || github.ref_name }}"
           # Mismo criterio que build-gui: borrador sólo en el disparo manual
           # de emergencia, un push de tag normal publica directo.
           draft: ${{ github.event_name == 'workflow_dispatch' }}
-          files: ControlAcceso-Brisas-${{ inputs.version || github.ref_name }}.apk
+          files: Lattis-${{ inputs.version || github.ref_name }}.apk
