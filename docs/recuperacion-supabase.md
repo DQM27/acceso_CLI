@@ -37,6 +37,44 @@ como `es_admin_global`/`sitios_de_cita`/`anfitrion_de_cita`), la extensión
 `pg_net`, todo. Verificado el 2026-09-12: se comparó 1:1 cada migración
 local contra `supabase_migrations.schema_migrations` de producción, sin
 faltantes -- este runbook es reproducible de verdad, no solo en teoría.
+
+**Corrección 2026-09-18, verificado de punta a punta contra un proyecto
+nuevo de verdad** (no sólo comparando versiones -- ver
+`docs/recuperacion-sitio-staging.md`): un `supabase db push`/`apply_migration`
+estricto en orden ROMPE en dos puntos, ninguno de los dos nuevo, los dos ya
+señalados en comentarios de migraciones existentes pero nunca corregidos de
+verdad:
+
+1. **El esquema `private` se creó a mano en producción** (dashboard/SQL
+   editor), nunca por una migración. La migración que lo "documenta"
+   (`20260912011504_documenta_creacion_esquema_private.sql`, con un
+   `create schema if not exists private`) es **cronológicamente posterior**
+   a la primera migración que ya lo necesita
+   (`20260906044549_avisa_cambio_nube_segun_quien_escribe_no_quien_creo_la_fila.sql`,
+   `private.emitir_cambio_nube_sitio`). Un rebuild desde cero revienta ahí
+   con `3F000: schema "private" does not exist`.
+2. **La política `"dispositivos reciben broadcast de su sitio"` de
+   `realtime.messages` tampoco nació de una migración** -- se creó fuera de
+   banda (probablemente el asistente de Realtime Authorization del
+   dashboard). La primera migración que la toca
+   (`20260905091122_corregir_autorizacion_realtime.sql`) hace `ALTER POLICY`
+   sobre algo que en un proyecto nuevo todavía no existe -- revienta con
+   `42704: policy ... does not exist`.
+
+**Arreglo aplicado y verificado** (proyecto de staging real, reconstruido
+de cero): antes de aplicar las migraciones en orden,
+1. `create schema if not exists private;` (no-op cuando corre después la
+   migración real que ya lo hace).
+2. `create policy "dispositivos reciben broadcast de su sitio" on
+   realtime.messages for select to authenticated using (...)` con la
+   definición exacta confirmada contra `pg_policy` de producción (ver esa
+   migración más abajo en el historial para la definición completa) --
+   antes de que la migración `corregir_autorizacion_realtime.sql` la
+   altere.
+
+Si en algún momento se agrega Terraform/otro IaC para esto, estos dos
+pasos tienen que ir explícitos ahí también -- no están capturados en
+ninguna migración versionada.
 Verificá al final con `supabase/tests/*.sql` (ver `docs/auditorias/realtime-verificado.md`
 para cómo correrlos) que las políticas quedaron como se espera.
 

@@ -578,4 +578,4 @@ justificación (ver el análisis de `AppCore`, sesión previa):
 | 8 | CODEOWNERS + branch protection | ✅ CODEOWNERS / 🚧 el toggle | El toggle sí (vos, en Settings del repo) |
 | 9 / 12 | Compatibilidad multi-versión | ✅ escritorio / 🚧 mobile | Mobile: no, sólo falta tocar Kotlin (confirmalo si querés que avance) |
 | 10 | Cifrado secreto Android | ✅ (ya estaba hecho, nota vieja corregida) | Test con Robolectric: sí, si se quiere sumarlo |
-| 11 | Config por ambiente (staging) | 🚧 (decisión tomada, falta implementar) | No -- ya dijiste que sí, 2 proyectos gratis de Supabase |
+| 11 | Config por ambiente (staging) | 🚧 proyecto creado (`docs/recuperacion-sitio-staging.md`), falta la variable de entorno para apuntar las apps ahí sin editar código | No -- ya dijiste que sí |
