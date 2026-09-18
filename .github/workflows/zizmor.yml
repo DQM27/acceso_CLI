@@ -36,7 +36,7 @@ jobs:
           pipx run zizmor --format sarif .github/workflows/ > zizmor-results.sarif
 
       - name: Subir resultados a GitHub Code Scanning
-        uses: github/codeql-action/upload-sarif@faaca9a8f6edddba5725ffe5adefdab6669a2eca # v3
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
         with:
           sarif_file: zizmor-results.sarif
           category: zizmor
