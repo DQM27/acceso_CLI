@@ -142,7 +142,12 @@ class RutasViewModelTest {
                 // Debe ser "hoy" para no chocar con el bloqueo transitorio por
                 // documento vencido (`RutaServiceError::DocumentoRequiereAutorizacion`)
                 // -- una fecha fija se vence sola al día siguiente de escribirla.
-                fechaDocumento = java.time.LocalDate.now().toString(),
+                // Zona horaria explícita de Costa Rica, no la del sistema del
+                // runner (UTC en CI) -- el núcleo Rust define "hoy" con esa
+                // zona (`fecha_costa_rica`), y entre 00:00 y 06:00 UTC ese
+                // "hoy" todavía es "ayer" en CR, lo que hacía fallar este test
+                // de forma intermitente según la hora en que corriera CI.
+                fechaDocumento = java.time.LocalDate.now(java.time.ZoneId.of("America/Costa_Rica")).toString(),
                 tieneCorreoAutorizacion = false,
             ),
             onExito = { onExitoLlamado = true },

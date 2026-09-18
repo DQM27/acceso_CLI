@@ -19,6 +19,8 @@ jobs:
   cargo-geiger:
     name: Superficie de unsafe en dependencias (${{ matrix.crate }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -40,11 +42,13 @@ jobs:
             directorio: mobile/rust-core
             features: "sqlite-plano"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (2026-09-18)
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: ${{ matrix.directorio }}
 

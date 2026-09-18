@@ -1,3 +1,7 @@
+# Herramientas de desarrollo descargadas localmente (ej. gh CLI), no forman
+# parte del proyecto
+/.tools/
+
 # Rust
 /target/
 # Vendor-lib de SQLite3MC (ver sqlite3mc-vendor-lib/build.rs): la lib estática
