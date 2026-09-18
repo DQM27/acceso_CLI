@@ -3573,7 +3573,17 @@ mod tests {
             numero_ruta: 79,
             sub_numero: 1,
             numero_documento: numero_documento.to_string(),
-            fecha_documento: chrono::Utc::now().format("%Y-%m-%d").to_string(),
+            // No usar `chrono::Utc::now()` para "hoy" acá -- la validación
+            // real (`RutaService::registrar_salida`) compara contra
+            // `fecha_costa_rica(fecha_hora_salida)` (UTC-6), no contra el
+            // día calendario UTC. Entre 00:00 y 06:00 UTC ambos difieren en
+            // un día, y este test fallaba exactamente en esa ventana
+            // (`DocumentoRequiereAutorizacion` inesperado) -- no era un bug
+            // de `interno()`/logging, es un desfase de huso horario en el
+            // propio fixture.
+            fecha_documento: control_acceso::tiempo::fecha_costa_rica(chrono::Utc::now())
+                .format("%Y-%m-%d")
+                .to_string(),
             tiene_correo_autorizacion: false,
         }
     }
