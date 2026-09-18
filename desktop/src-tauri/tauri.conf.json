@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "control-acceso-desktop",
+  "productName": "Lattis",
   "version": "1.6.0",
   "identifier": "com.dqm27.lattis.desktop",
   "build": {
@@ -37,7 +37,10 @@
     "createUpdaterArtifacts": true,
     "windows": {
       "nsis": {
-        "installerIcon": "icons/icon.ico"
+        "installerIcon": "icons/icon.ico",
+        "languages": ["Spanish"],
+        "headerImage": "icons/nsis-header.bmp",
+        "sidebarImage": "icons/nsis-sidebar.bmp"
       }
     }
   },
