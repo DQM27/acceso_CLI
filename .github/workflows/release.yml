@@ -187,7 +187,14 @@ jobs:
         run: ./gradlew assembleRelease
 
       - name: Preparar el APK para la Release
-        run: cp mobile/android/app/build/outputs/apk/release/app-release.apk Lattis-${{ inputs.version || github.ref_name }}.apk
+        env:
+          # Nunca interpolar inputs.version directo en un `run:` -- es texto
+          # libre que cualquiera puede escribir al disparar el workflow
+          # manual, y quedaria pegado literal en el script de shell
+          # (inyeccion de comandos, hallazgo real de zizmor 2026-09-18). Con
+          # env: pasa como valor de variable, no como codigo.
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
+        run: cp mobile/android/app/build/outputs/apk/release/app-release.apk "Lattis-${RELEASE_VERSION}.apk"
 
       - name: Adjuntar el APK a la Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
