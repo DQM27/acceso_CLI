@@ -612,31 +612,35 @@ estabilizador y clasificador.
 
 ## UX y percepción de velocidad
 
-- [ ] **Spinner durante debounce de búsqueda.** Señal pequeña mientras pasan los 120ms de
-  debounce.
-- [ ] **Parpadeo de cursor en formularios.** Login ya lo tiene; extender el patrón a
-  `ui_kit/text_input.rs`.
+- [x] **Spinner durante debounce de búsqueda (2026-09-18).** `NuevoIngresoModal.tsx` y
+  `GestionGafeteModal.tsx` (los dos únicos buscadores con `DEBOUNCE_MS = 120` explícito)
+  agregan un `Loader2` girando -- mismo patrón/CSS `.girando` que ya usaba `BarraNube.tsx`
+  para el ícono de sincronizar -- mientras el debounce corre y la búsqueda está en vuelo.
+  Ver PR #46.
+- [x] **Parpadeo de cursor en formularios: obsoleto (2026-09-18).** La entrada decía
+  "Login ya lo tiene; extender el patrón a `ui_kit/text_input.rs`", pero ese módulo (TUI
+  clásica) ya no existe -- se eliminó por completo en el commit `a98d7d9`
+  ("retira CLI y TUI clásica del crate raíz"). Esta entrada quedó vieja sin actualizarse
+  tras esa eliminación; no aplica más.
 - [ ] **Confirmación visual breve tras guardar/registrar.** Resaltar fila o elemento recién
   creado/editado para que el cambio no se sienta silencioso.
-- [ ] **Auditar máscaras de entrada en formularios de escritorio (pedido
-  2026-09-17).** `react-hook-form` + `zod` ya se usan en TODOS los
+- [x] **Auditar máscaras de entrada en formularios de escritorio (pedido
+  2026-09-17, resuelto 2026-09-18).** `react-hook-form` + `zod` ya se usan en TODOS los
   formularios (`esquema = z.object(...)` es el patrón establecido, ver
   cualquier `Formulario*.tsx`/`*Modal.tsx`), así que la validación de
-  ESQUEMA ya existe -- lo que falta es la máscara a nivel de INPUT (evitar
-  que se pueda siquiera escribir un carácter inválido, no sólo rechazarlo
-  al enviar). Hoy es inconsistente: `Gafetes.tsx` sí filtra el buscador de
-  número con `.replace(/\D/g, "")` mientras se escribe, pero
-  `FormularioGafete.tsx` (número/desde/hasta) y `IngresoProveedorModal.tsx`
-  (`gafete_numero`) usan `<input type="number">`/texto plano sin filtrar
-  nada hasta que `zod` lo marca en rojo -- con `type="number"` además el
-  navegador deja teclear `e`/`-`/`+` (notación científica) aunque el campo
-  sea un entero positivo. Alcance: pasar una pasada por los campos
-  numéricos (cédula, números de gafete/ruta/documento) forzando
-  `inputMode="numeric"` + filtrado en `onChange` como ya hace el buscador
-  de Gafetes, y revisar si algún campo de texto necesita la regla inversa
-  (rechazar dígitos donde no corresponde, ej. nombre). No cambia la
-  librería de validación -- sigue siendo `react-hook-form`/`zod`, esto es
-  pulido de UX sobre lo que ya existe.
+  ESQUEMA ya existía -- lo que faltaba era la máscara a nivel de INPUT. Pasada completa por
+  los 4 campos que usaban `<input type="number">`/texto plano sin filtrar
+  (`FormularioGafete.tsx` número/desde/hasta, `IngresoProveedorModal.tsx`,
+  `EntregarGafeteProvisionalModal.tsx` y `SalidaRutaModal.tsx` -- confirmado con
+  `grep 'type="number"'` que no queda ninguno más en `desktop/src/pantallas`, lo que
+  sigue con ese tipo son `<select>` nativos, sin nada que filtrar): ahora todos usan
+  `inputMode="numeric"` + filtrado en `onChange` como ya hacía el buscador de Gafetes.
+  De paso se encontró y corrigió un bug real: el `defaultValue: NaN` que servía como
+  "vacío" con `type="number"` (el DOM lo mostraba en blanco solo) se mostraba literal
+  como el string "NaN" en un input de texto -- confirmado montando el input real con una
+  prueba descartable antes de tocar el componente. Ver PR #45.
+  No se tocó la regla inversa (rechazar dígitos en campos de texto, ej. nombre) -- no se
+  encontró ningún caso real de eso en la pasada.
 - [x] **Respaldo manual y exportación de historial dejaron de congelar la UI.**
 - [x] **Frame de transición entre vistas descartado.** La navegación se conserva inmediata.
 - [ ] **Cachear en Cloudflare para `web/` y `web-visitas/` (2026-09-18,
