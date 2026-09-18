@@ -511,22 +511,47 @@ sumar Robolectric, el criterio de aceptación sería: un test que guarde un
 secreto, lo recupere, y otro que confirme la migración+borrado del
 archivo legado — sin tocar un dispositivo real.
 
-### 11. Configuración por ambiente
+### 11. ✅ Configuración por ambiente (cerrado 2026-09-18)
 
-**Qué falta:** `web/src/lib/supabase.ts` y `web-visitas/` tienen la URL y
-la *publishable key* de Supabase hardcodeadas — un solo ambiente (producción)
-sin forma de apuntar a un proyecto de staging para probar antes de un
-release. (La clave en sí no es el problema — es pública a propósito, ver
-el punto de seguridad #14 del análisis original — el problema es no poder
-apuntar a otro proyecto sin editar código.)
+**Lo que había:** `src/nube/mod.rs` (`BASE_URL`/`APIKEY`, compartido por
+escritorio y móvil, ver `docs/recuperacion-sitio-staging.md`) y
+`web/src/lib/supabase.ts`/`web-visitas/src/lib/supabase.ts` tenían la URL
+y la *publishable key* de Supabase hardcodeadas -- un solo ambiente
+(producción), sin forma de apuntar a un proyecto de staging sin editar y
+recompilar código. (La clave en sí nunca fue el problema -- es pública a
+propósito -- el problema era no poder elegir el proyecto.)
 
-**Plan:** variables de entorno de Vite (`import.meta.env.VITE_SUPABASE_URL`
-/ `VITE_SUPABASE_PUBLISHABLE_KEY`), con el valor actual como default en
-`.env.production` versionado (no es secreto) y la posibilidad de un
-`.env.local` (gitignored) para apuntar a un proyecto de staging al
-desarrollar. Requiere decidir si vale la pena mantener un segundo proyecto
-Supabase de staging (costo) — `docs/recuperacion-supabase.md` ya deja el
-runbook listo para levantarlo el día que se decida.
+**Escritorio/móvil:** `BASE_URL`/`APIKEY` pasaron de `const` a funciones
+(`base_url()`/`apikey()`) que leen `CONTROL_ACCESO_SUPABASE_URL`/
+`CONTROL_ACCESO_SUPABASE_APIKEY` una vez por proceso (`OnceLock`), con el
+valor de producción como default si no están seteadas -- mismo criterio
+que `database::connection::DATABASE_PATH_ENV`. Se tocaron los ~90 sitios
+que usaban las constantes directo (comandos de escritorio, `mobile/rust-core`,
+`application::nube`) para llamar a la función en vez de la constante.
+Parte pura (`resolver_base_url`/`resolver_apikey`) separada de la lectura
+de entorno para poder testearla sin mutar variables de entorno globales
+-- 4 tests nuevos.
+
+**Web/web-visitas:** `import.meta.env.VITE_SUPABASE_URL`/
+`VITE_SUPABASE_PUBLISHABLE_KEY`, con el valor de producción como default
+en un `.env` versionado a propósito en cada carpeta (excepción explícita
+en `.gitignore`, que por lo demás ignora todo `.env*`) y la posibilidad de
+un `.env.local` (gitignored) para apuntar a staging al desarrollar, sin
+tocar el archivo versionado.
+
+**Cómo se verificó:** `cargo clippy`/`cargo fmt --check` limpios en los 3
+crates Rust, `cargo test-plano --lib` con los 4 tests nuevos pasando
+(369+4 en total), `npm run build` (`tsc` + `vite build`) exitoso en `web`
+y `web-visitas` con la URL de producción confirmada embebida en el bundle
+final, y las suites de Vitest completas de ambos (75 + 30 tests) en verde.
+
+El proyecto de staging (`control-acceso-staging`) ya existe y fue probado
+de punta a punta (`device-auth` firma, Postgres confía en la firma, RLS
+scopea correctamente) -- ver `docs/recuperacion-sitio-staging.md` para
+el detalle completo, incluidos dos bugs reales de reproducibilidad de
+migraciones encontrados en el proceso (también corregidos en
+`docs/recuperacion-supabase.md`) y un drift real entre git y producción
+en una Edge Function.
 
 ---
 
@@ -578,4 +603,4 @@ justificación (ver el análisis de `AppCore`, sesión previa):
 | 8 | CODEOWNERS + branch protection | ✅ CODEOWNERS / 🚧 el toggle | El toggle sí (vos, en Settings del repo) |
 | 9 / 12 | Compatibilidad multi-versión | ✅ escritorio / 🚧 mobile | Mobile: no, sólo falta tocar Kotlin (confirmalo si querés que avance) |
 | 10 | Cifrado secreto Android | ✅ (ya estaba hecho, nota vieja corregida) | Test con Robolectric: sí, si se quiere sumarlo |
-| 11 | Config por ambiente (staging) | 🚧 proyecto creado (`docs/recuperacion-sitio-staging.md`), falta la variable de entorno para apuntar las apps ahí sin editar código | No -- ya dijiste que sí |
+| 11 | ✅ Config por ambiente (staging) | ✅ proyecto creado + variables de entorno implementadas en escritorio/mobile (`CONTROL_ACCESO_SUPABASE_URL`/`_APIKEY`) y web/web-visitas (`.env`/`.env.local`) | No |

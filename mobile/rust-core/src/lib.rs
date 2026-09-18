@@ -1336,8 +1336,8 @@ impl Nucleo {
             .and_then(|secreto| {
                 let token = self.autenticar_con_cache(&secreto).ok()?;
                 let contexto = control_acceso::nube::ContextoSincronizacion {
-                    base_url: control_acceso::nube::BASE_URL,
-                    apikey: control_acceso::nube::APIKEY,
+                    base_url: control_acceso::nube::base_url(),
+                    apikey: control_acceso::nube::apikey(),
                     token: &token.access_token,
                     dispositivo_id: &token.dispositivo_id,
                     sitio_id: &token.sitio_id,
@@ -1403,8 +1403,8 @@ impl Nucleo {
             token
                 .and_then(|token| {
                     let contexto = control_acceso::nube::ContextoSincronizacion {
-                        base_url: control_acceso::nube::BASE_URL,
-                        apikey: control_acceso::nube::APIKEY,
+                        base_url: control_acceso::nube::base_url(),
+                        apikey: control_acceso::nube::apikey(),
                         token: &token.access_token,
                         dispositivo_id: &token.dispositivo_id,
                         sitio_id: &token.sitio_id,
@@ -1443,8 +1443,8 @@ impl Nucleo {
             .ok_or(NucleoError::SesionSupabaseVencida)?;
 
         control_acceso::nube::cambiar_password(
-            control_acceso::nube::BASE_URL,
-            control_acceso::nube::APIKEY,
+            control_acceso::nube::base_url(),
+            control_acceso::nube::apikey(),
             &access_token,
             &sesion.cedula,
             &password_actual,
@@ -1961,8 +1961,8 @@ impl Nucleo {
         }
 
         let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::BASE_URL,
-            apikey: control_acceso::nube::APIKEY,
+            base_url: control_acceso::nube::base_url(),
+            apikey: control_acceso::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -2136,8 +2136,8 @@ impl Nucleo {
         let topic = format!("sitio:{}", token.sitio_id);
 
         Ok(SesionRealtimeNube {
-            base_url: control_acceso::nube::BASE_URL.to_string(),
-            apikey: control_acceso::nube::APIKEY.to_string(),
+            base_url: control_acceso::nube::base_url().to_string(),
+            apikey: control_acceso::nube::apikey().to_string(),
             access_token: token.access_token,
             expires_in: token.expires_in,
             sitio_id: token.sitio_id,
@@ -2221,8 +2221,8 @@ impl Nucleo {
                 mensaje: interno(error),
             })?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::BASE_URL,
-            apikey: control_acceso::nube::APIKEY,
+            base_url: control_acceso::nube::base_url(),
+            apikey: control_acceso::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -2256,8 +2256,8 @@ impl Nucleo {
                 mensaje: interno(error),
             })?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::BASE_URL,
-            apikey: control_acceso::nube::APIKEY,
+            base_url: control_acceso::nube::base_url(),
+            apikey: control_acceso::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -2289,8 +2289,8 @@ impl Nucleo {
                 mensaje: interno(error),
             })?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::BASE_URL,
-            apikey: control_acceso::nube::APIKEY,
+            base_url: control_acceso::nube::base_url(),
+            apikey: control_acceso::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -2324,8 +2324,8 @@ impl Nucleo {
                 mensaje: interno(error),
             })?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::BASE_URL,
-            apikey: control_acceso::nube::APIKEY,
+            base_url: control_acceso::nube::base_url(),
+            apikey: control_acceso::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -2358,8 +2358,8 @@ impl Nucleo {
         }
         let token = self.autenticar_con_cache(&secreto).ok()?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::BASE_URL,
-            apikey: control_acceso::nube::APIKEY,
+            base_url: control_acceso::nube::base_url(),
+            apikey: control_acceso::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -2382,8 +2382,8 @@ impl Nucleo {
         }
         let token = self.autenticar_con_cache(&secreto).ok()?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::BASE_URL,
-            apikey: control_acceso::nube::APIKEY,
+            base_url: control_acceso::nube::base_url(),
+            apikey: control_acceso::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -2423,8 +2423,8 @@ impl Nucleo {
                 mensaje: interno(error),
             })?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::BASE_URL,
-            apikey: control_acceso::nube::APIKEY,
+            base_url: control_acceso::nube::base_url(),
+            apikey: control_acceso::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -2467,8 +2467,8 @@ impl Nucleo {
                 mensaje: interno(error),
             })?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::BASE_URL,
-            apikey: control_acceso::nube::APIKEY,
+            base_url: control_acceso::nube::base_url(),
+            apikey: control_acceso::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -2516,8 +2516,8 @@ impl Nucleo {
                 mensaje: interno(error),
             })?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::BASE_URL,
-            apikey: control_acceso::nube::APIKEY,
+            base_url: control_acceso::nube::base_url(),
+            apikey: control_acceso::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -2592,7 +2592,7 @@ impl Nucleo {
         }
 
         let token = control_acceso::nube::autenticar_dispositivo(
-            control_acceso::nube::BASE_URL,
+            control_acceso::nube::base_url(),
             secreto,
             metadata,
         )?;
@@ -2632,8 +2632,8 @@ impl Nucleo {
         })?;
         let token = self.autenticar_con_cache(&secreto).map_err(mapear_nube)?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::BASE_URL,
-            apikey: control_acceso::nube::APIKEY,
+            base_url: control_acceso::nube::base_url(),
+            apikey: control_acceso::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -2653,8 +2653,8 @@ impl Nucleo {
         };
         let token = self.autenticar_con_cache(secreto).map_err(mapear_nube)?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::BASE_URL,
-            apikey: control_acceso::nube::APIKEY,
+            base_url: control_acceso::nube::base_url(),
+            apikey: control_acceso::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -2781,8 +2781,8 @@ impl Nucleo {
         refrescar_catalogo: &dyn Fn() -> Result<(), NucleoError>,
     ) -> Result<ResultadoLogin, NucleoError> {
         let sesion_supabase = control_acceso::nube::login(
-            control_acceso::nube::BASE_URL,
-            control_acceso::nube::APIKEY,
+            control_acceso::nube::base_url(),
+            control_acceso::nube::apikey(),
             cedula,
             password,
         )?;
@@ -2851,8 +2851,8 @@ impl Nucleo {
         // Supabase o sin red, no hace nada.
         if let Some(refresh_token) = self.refresh_token_supabase()
             && let Ok(sesion) = control_acceso::nube::refrescar(
-                control_acceso::nube::BASE_URL,
-                control_acceso::nube::APIKEY,
+                control_acceso::nube::base_url(),
+                control_acceso::nube::apikey(),
                 &refresh_token,
             )
         {
@@ -2878,8 +2878,8 @@ impl Nucleo {
         }
 
         let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::BASE_URL,
-            apikey: control_acceso::nube::APIKEY,
+            base_url: control_acceso::nube::base_url(),
+            apikey: control_acceso::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -2984,8 +2984,8 @@ impl Nucleo {
         // Ver el comentario del otro método de sync en este mismo archivo.
         if let Some(refresh_token) = self.refresh_token_supabase()
             && let Ok(sesion) = control_acceso::nube::refrescar(
-                control_acceso::nube::BASE_URL,
-                control_acceso::nube::APIKEY,
+                control_acceso::nube::base_url(),
+                control_acceso::nube::apikey(),
                 &refresh_token,
             )
         {
@@ -3002,8 +3002,8 @@ impl Nucleo {
         }
 
         let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::BASE_URL,
-            apikey: control_acceso::nube::APIKEY,
+            base_url: control_acceso::nube::base_url(),
+            apikey: control_acceso::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,

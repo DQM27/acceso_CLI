@@ -44,8 +44,8 @@ fn gafete_proveedor_libre_en_otro_dispositivo(
         state.core().actualizar_desfase_reloj(desfase_ms);
     }
     let contexto = nube::ContextoSincronizacion {
-        base_url: nube::BASE_URL,
-        apikey: nube::APIKEY,
+        base_url: nube::base_url(),
+        apikey: nube::apikey(),
         token: &token.access_token,
         dispositivo_id: &token.dispositivo_id,
         sitio_id: &token.sitio_id,
@@ -74,8 +74,8 @@ fn proveedor_activo_en_otro_sitio(state: &GuiState, cedula: &str) -> Option<Stri
         state.core().actualizar_desfase_reloj(desfase_ms);
     }
     let contexto = nube::ContextoSincronizacion {
-        base_url: nube::BASE_URL,
-        apikey: nube::APIKEY,
+        base_url: nube::base_url(),
+        apikey: nube::apikey(),
         token: &token.access_token,
         dispositivo_id: &token.dispositivo_id,
         sitio_id: &token.sitio_id,
