@@ -1,0 +1,68 @@
+version: 2
+
+updates:
+  # Crate raiz (nucleo de dominio, compartido por desktop y mobile)
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      cargo-raiz:
+        patterns:
+          - "*"
+
+  - package-ecosystem: cargo
+    directory: /desktop/src-tauri
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      cargo-desktop:
+        patterns:
+          - "*"
+
+  - package-ecosystem: cargo
+    directory: /mobile/rust-core
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      cargo-mobile:
+        patterns:
+          - "*"
+
+  - package-ecosystem: npm
+    directory: /desktop
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-desktop:
+        patterns:
+          - "*"
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-web:
+        patterns:
+          - "*"
+
+  - package-ecosystem: npm
+    directory: /web-visitas
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-web-visitas:
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

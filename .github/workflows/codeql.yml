@@ -1,0 +1,40 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Corre aparte de cada push/PR para atrapar CVEs/patrones nuevos en
+    # codigo que ya esta en main y no se volvio a tocar.
+    - cron: "0 6 * * 1"
+
+jobs:
+  analyze:
+    name: Analizar (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # Cubre web/, web-visitas/ y las Edge Functions de Supabase
+        # (Deno/TypeScript). El nucleo Rust no esta soportado como
+        # lenguaje estable de CodeQL para este flujo; clippy + cargo-audit
+        # ya lo cubren (ver docs/pendientes.md).
+        language: ["javascript-typescript"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Inicializar CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Analizar
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

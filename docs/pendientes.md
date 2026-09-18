@@ -285,16 +285,23 @@ aspiracional -- lo que sigue sin marcar todavía no corrió.
   0 errores y ya está wireado en `ci.yml`/`web.yml`. Detalle en los commits
   `fix(desktop)`/`feat(web)`/`feat(web-visitas)` del 2026-09-12.
 - [ ] **`cargo-deny` (licencias + dependencias duplicadas/baneadas) -- evaluado y
-  descartado por ahora**, no por falta de valor sino por alcance: se optó por
-  `cargo-audit` (más simple, sin archivo de configuración) para esta primera
-  pasada. Si más adelante se quiere el chequeo de licencias también, agregar
-  `cargo-deny` es el paso natural siguiente.
-- [ ] **Dependabot -- no agregado.** No hay `.github/dependabot.yml` -- hoy nadie se
-  entera si una dependencia ya instalada saca un CVE nuevo *después* de este commit
-  (`cargo audit` en CI sólo protege código nuevo que se pushee).
-- [ ] **CodeQL (SAST) -- no agregado.** Análisis estático más profundo que
-  clippy/ESLint (patrones de inyección, etc.), gratis vía GitHub Actions. Ni
-  evaluado en detalle todavía, sólo mencionado como opción.
+  descartado a propósito (2026-09-17), no reabrir sin una razón nueva.** No es
+  un producto que se redistribuya ni tiene requisitos de compliance de
+  licencias, así que el beneficio es bajo frente a `cargo-audit`, que ya
+  cubre lo que sí importa (CVEs conocidos). Si algún día se distribuye el
+  binario a terceros, agregar `cargo-deny` es el paso natural siguiente.
+- [x] **Dependabot (2026-09-17).** `.github/dependabot.yml` -- `cargo` en los
+  3 crates (raíz, `desktop/src-tauri`, `mobile/rust-core`), `npm` en los 3
+  frontends (`desktop`, `web`, `web-visitas`) y `github-actions`, todos
+  semanales. Cierra el hueco real: `cargo audit`/ESLint en CI sólo protegen
+  código que se pushea, esto avisa de un CVE nuevo en una dependencia que ya
+  estaba instalada.
+- [x] **CodeQL -- SAST (2026-09-17).** `.github/workflows/codeql.yml` --
+  `javascript-typescript` en push/PR a `main` + cron semanal, cubre `web`,
+  `web-visitas` y las Edge Functions de Supabase (la superficie con más
+  exposición real a inyección/XSS). El núcleo Rust queda fuera de este
+  workflow a propósito -- clippy + `cargo-audit` ya lo cubren y el soporte
+  de CodeQL para Rust no es lo bastante maduro todavía para este flujo.
 
 ## Panel web y modelo multi-sitio
 
