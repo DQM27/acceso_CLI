@@ -1,3 +1,4 @@
+import type { ChangeEvent } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -77,6 +78,20 @@ export default function FormularioGafete({
   });
   const modo = watch("modo");
 
+  // Filtra caracteres no numéricos al tipear, mismo criterio que el
+  // buscador de Gafetes.tsx -- evita que se pueda siquiera escribir una
+  // letra en vez de sólo rechazarla al enviar (docs/pendientes.md, "Auditar
+  // máscaras de entrada").
+  const registroNumero = register("numero");
+  const registroDesde = register("desde");
+  const registroHasta = register("hasta");
+  const soloDigitos =
+    (registro: { onChange: (evento: ChangeEvent<HTMLInputElement>) => void }) =>
+    (evento: ChangeEvent<HTMLInputElement>) => {
+      evento.target.value = evento.target.value.replace(/\D/g, "");
+      registro.onChange(evento);
+    };
+
   async function alGuardar(valores: ValoresFormulario) {
     try {
       if (valores.modo === "individual") {
@@ -121,7 +136,12 @@ export default function FormularioGafete({
         {modo === "individual" ? (
           <label className="campo">
             Número de gafete
-            <input {...register("numero")} inputMode="numeric" autoFocus />
+            <input
+              {...registroNumero}
+              onChange={soloDigitos(registroNumero)}
+              inputMode="numeric"
+              autoFocus
+            />
             {errors.numero && (
               <span style={{ color: "var(--error)" }}>{errors.numero.message}</span>
             )}
@@ -130,14 +150,19 @@ export default function FormularioGafete({
           <div style={{ display: "flex", gap: "0.75rem" }}>
             <label className="campo" style={{ flex: 1 }}>
               Desde
-              <input {...register("desde")} inputMode="numeric" autoFocus />
+              <input
+                {...registroDesde}
+                onChange={soloDigitos(registroDesde)}
+                inputMode="numeric"
+                autoFocus
+              />
               {errors.desde && (
                 <span style={{ color: "var(--error)" }}>{errors.desde.message}</span>
               )}
             </label>
             <label className="campo" style={{ flex: 1 }}>
               Hasta
-              <input {...register("hasta")} inputMode="numeric" />
+              <input {...registroHasta} onChange={soloDigitos(registroHasta)} inputMode="numeric" />
               {errors.hasta && (
                 <span style={{ color: "var(--error)" }}>{errors.hasta.message}</span>
               )}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ChangeEvent } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -44,9 +45,26 @@ export default function IngresoProveedorModal({
       cedula: "",
       nombre: "",
       placa: "",
-      gafete_numero: Number.NaN,
+      // Antes NaN (con `type="number"` el DOM lo mostraba vacío solo).
+      // Con `type="text"` (ver abajo) un valor NaN se refleja literal como
+      // el string "NaN" en el campo -- string vacío evita ese problema, y
+      // `setValueAs` (abajo) lo convierte de vuelta a NaN si el campo queda
+      // vacío al validar.
+      gafete_numero: "" as unknown as number,
     },
   });
+
+  // `type="number"` deja teclear "e"/"-"/"+" (notación científica) aunque
+  // el campo sea un entero positivo -- mismo criterio que
+  // FormularioGafete.tsx: texto + filtrado en onChange, en vez de confiar
+  // en el input nativo (docs/pendientes.md, "Auditar máscaras de entrada").
+  const registroGafeteNumero = register("gafete_numero", {
+    setValueAs: (valor: string) => (valor === "" ? Number.NaN : Number(valor)),
+  });
+  const alCambiarGafeteNumero = (evento: ChangeEvent<HTMLInputElement>) => {
+    evento.target.value = evento.target.value.replace(/\D/g, "");
+    registroGafeteNumero.onChange(evento);
+  };
 
   const [empresas, setEmpresas] = useState<EmpresaProveedor[]>([]);
   useEffect(() => {
@@ -138,7 +156,11 @@ export default function IngresoProveedorModal({
           </label>
           <label className="campo" style={{ flex: "0 1 8rem" }}>
             N.° de gafete
-            <input type="number" min={1} {...register("gafete_numero", { valueAsNumber: true })} />
+            <input
+              {...registroGafeteNumero}
+              onChange={alCambiarGafeteNumero}
+              inputMode="numeric"
+            />
             {errors.gafete_numero && (
               <span style={{ color: "var(--error)" }}>{errors.gafete_numero.message}</span>
             )}
